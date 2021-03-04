@@ -1,0 +1,12 @@
+class cls{
+  Type type;
+  int x;
+}
+
+enum Color{
+  WHITE ,BLACK
+}
+
+int main(){
+  return 0;
+}
