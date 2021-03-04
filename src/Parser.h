@@ -3,17 +3,16 @@
 #include "Lexer.h"
 #include "Ast.h"
 
-class Parser{
+class Parser
+{
 public:
   Lexer lex;
 
-
-  Token read(){
+  Token read()
+  {
     return lex.next();
   }
 
   Unit parseUnit();
   Statement parseStmt();
-  
-  
 };

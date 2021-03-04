@@ -4,55 +4,68 @@
 #include <string>
 #include "Ast_all.h"
 
-class Expression{};
-class Statement{};
+class Expression
+{
+};
+class Statement
+{
+};
 
-class SimpleName : Expression{
+class SimpleName : Expression
+{
   std::string name;
 };
 
-class Name : Expression{
-  Name* scope;
+class Name : Expression
+{
+  Name *scope;
   SimpleName name;
 };
 
-class ImportStmt{
+class ImportStmt
+{
   std::string s;
   bool isStar;
-  std::string* as;
+  std::string *as;
 };
 
 //class,interface,enum
-class BaseDecl{
+class BaseDecl
+{
   std::string name;
 };
 
-class Type{
+class Type
+{
   std::string type;
   std::vector<Type> typeArgs;
   bool isTypeVar;
 };
 
-class Field{
+class Field
+{
   Type type;
   std::string name;
-  Expression* expr;
+  Expression *expr;
 };
 
-class Param{
+class Param
+{
   Type type;
   std::string name;
   bool isOptional;
-  Expression* defVal;
+  Expression *defVal;
 };
 
-class Method{
+class Method
+{
   Type type;
   std::string name;
   std::vector<Param> params;
 };
 
-class Unit{
+class Unit
+{
 public:
   std::vector<ImportStmt> imports;
   std::vector<BaseDecl> types;
@@ -60,109 +73,127 @@ public:
   std::vector<Statement> stmts;
 };
 
-
-
-class TypeDecl:public BaseDecl{
+class TypeDecl : public BaseDecl
+{
   bool isInterface;
   std::vector<Type> typeArgs;
   std::vector<Field> fields;
   std::vector<Method> method;
 };
 
-class EnumDecl: public BaseDecl{
+class EnumDecl : public BaseDecl
+{
   std::vector<std::string> cons;
 };
 
-class Literal{
+class Literal
+{
   std::string val;
   bool isBool;
   bool isInt;
   bool isFloat;
 };
 
-class NullLit : Expression{};
+class NullLit : Expression
+{
+};
 
-
-class ExprStmt{
+class ExprStmt
+{
   Expression expr;
 };
 
-class Assign{
+class Assign
+{
   Expression left;
   Expression right;
   std::string op;
 };
 
-class VarDecl{
+class VarDecl
+{
   Type type;
   std::string name;
-  Expression* right;
+  Expression *right;
 };
 
-class Unary{
+class Unary
+{
   std::string op;
   Expression expr;
 };
 
-class Infix{
+class Infix
+{
   Expression left;
   Expression right;
   std::string op;
 };
 
-class Postfix{
+class Postfix
+{
   std::string op;
   Expression expr;
 };
 
-class MethodCall{
-	Expression* scope;
-	std::string name;
-	std::vector<Expression> args;
+class MethodCall
+{
+  Expression *scope;
+  std::string name;
+  std::vector<Expression> args;
 };
 
-class FieldAccess{
+class FieldAccess
+{
   Expression scope;
   std::string name;
 };
 
-class Block{
+class Block
+{
   std::vector<Statement> list;
 };
 
-class IfStmt{
+class IfStmt
+{
   Expression expr;
   Statement thenStmt;
-  Statement* elseStmt;
+  Statement *elseStmt;
 };
 
-class WhileStmt{
+class WhileStmt
+{
   Expression expr;
-  Statement* body;
+  Statement *body;
 };
 
-class DoWhile{
+class DoWhile
+{
   Expression expr;
   Block body;
 };
 
-class ForStmt{
+class ForStmt
+{
   std::vector<VarDecl> decl;
-  Expression* cond;
+  Expression *cond;
   std::vector<Expression> updaters;
 };
 
-class ForEach{
+class ForEach
+{
   VarDecl decl;
   Expression expr;
 };
 
-class SwitchStmt{
+class SwitchStmt
+{
   Expression expr;
   std::vector<Case> cases;
 };
 
-class Case : Statement{
+class Case : Statement
+{
   Expression expr;
-  Statement body;//can be case
+  Statement body; //can be case
 };

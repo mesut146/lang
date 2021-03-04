@@ -2,30 +2,92 @@
 
 #include <string>
 
-
-enum TokenType{
-  EOF2,IDENT,
-  CLASS,ENUM,INTERFACE,
-  CHAR,BYTE,INT,LONG,FLOAT,DOUBLE,SHORT,BOOLEAN,
-  TRUE,FALSE,NULL_LIT,INTEGER_LIT,FLOAT_LIT,CHAR_LIT,STRING_LIT,
-  COMMENT,IMPORT,RETURN,BREAK,CONTINUE,
-  FUNC,LET,VAR,
-  IF_KW,ELSE_KW,FOR,WHILE,DO,SWITCH,CASE,AS,
-  EQ,PLUS,MINUS,MUL,DIV,POW,PERCENT,BANG,QUES,SEMI,COLON,QUOTE1,QUOTE2,
-  AND,OR,ANDAND,OROR,EQEQ,PLUSEQ,MINUSEQ,MULEQ,DIVEQ,POWEQ,PERCENTEQ,
-  LT,GT,LTLT,GTGT,COMMA,DOT,
-  LPAREN,RPAREN,LBRACKET,RBRACKET,LBRACE,RBRACE
+enum TokenType
+{
+  EOF2,
+  IDENT,
+  CLASS,
+  ENUM,
+  INTERFACE,
+  CHAR,
+  BYTE,
+  INT,
+  LONG,
+  FLOAT,
+  DOUBLE,
+  SHORT,
+  BOOLEAN,
+  TRUE,
+  FALSE,
+  NULL_LIT,
+  INTEGER_LIT,
+  FLOAT_LIT,
+  CHAR_LIT,
+  STRING_LIT,
+  COMMENT,
+  IMPORT,
+  RETURN,
+  BREAK,
+  CONTINUE,
+  FUNC,
+  LET,
+  VAR,
+  IF_KW,
+  ELSE_KW,
+  FOR,
+  WHILE,
+  DO,
+  SWITCH,
+  CASE,
+  AS,
+  EQ,
+  PLUS,
+  MINUS,
+  MUL,
+  DIV,
+  POW,
+  PERCENT,
+  BANG,
+  QUES,
+  SEMI,
+  COLON,
+  QUOTE1,
+  QUOTE2,
+  AND,
+  OR,
+  ANDAND,
+  OROR,
+  EQEQ,
+  PLUSEQ,
+  MINUSEQ,
+  MULEQ,
+  DIVEQ,
+  POWEQ,
+  PERCENTEQ,
+  LT,
+  GT,
+  LTLT,
+  GTGT,
+  COMMA,
+  DOT,
+  LPAREN,
+  RPAREN,
+  LBRACKET,
+  RBRACKET,
+  LBRACE,
+  RBRACE
 };
 
-
-class Token{
+class Token
+{
 public:
   std::string value;
   TokenType type;
-  Token(TokenType t):type(t){}
-  Token(TokenType t,std::string s):type(t),value(s){}
+  Token(TokenType t) : type(t) {}
+  Token(TokenType t, std::string s) : type(t), value(s) {}
 
-  bool is(TokenType t){
+  bool is(TokenType t)
+  {
     return t == type;
   }
 };

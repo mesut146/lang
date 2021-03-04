@@ -37,4 +37,3 @@ class SwitchStmt;
 class Case;
 
 class ClassCreation;
-
