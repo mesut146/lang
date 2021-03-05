@@ -5,21 +5,24 @@ ImportStmt Parser::parseImport()
   ImportStmt res;
   consume(IMPORT);
   std::string s = next()->value;
-  Token* t = next();
-  if(t->is(AS)){
-  	std::string alias = next()->value;
+  Token *t = next();
+  if (t->is(AS))
+  {
+    std::string alias = next()->value;
   }
   return res;
 }
 
-TypeDecl Parser::parseTypeDecl() {
+TypeDecl Parser::parseTypeDecl()
+{
   TypeDecl res;
   return res;
 }
 
-EnumDecl Parser::parseEnumDecl(){
+EnumDecl Parser::parseEnumDecl()
+{
   EnumDecl res;
-  
+
   return res;
 }
 

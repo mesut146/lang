@@ -1,30 +1,5 @@
 #include "Lexer.h"
-
-TokenType op(char c)
-{
-    switch (c)
-    {
-    case '=':
-        return EQ;
-    case '{':
-        return LBRACE;
-    case '}':
-        return RBRACE;
-    case '(':
-        return LPAREN;
-    case ')':
-        return RPAREN;
-    case ';':
-        return SEMI;
-    case ',':
-        return COMMA;
-    case '.':
-        return DOT;
-    case ':':
-        return COLON;
-    }
-    return EOF2;
-}
+#include <map>
 
 TokenType kw(std::string &s)
 {
@@ -75,36 +50,31 @@ TokenType kw(std::string &s)
     return EOF2;
 }
 
-Token* Lexer::readNumber()
+Token *Lexer::readNumber()
 {
     bool dot = false;
-    int a = pos++;
-    while (1)
+    int start = pos;
+    pos++;
+    char c = peek();
+    while (isdigit(c) || c == '.')
     {
-        char c = peek();
-        if (!isdigit(c) && c != '.')
-        {
-            break;
-        }
         dot |= (c == '.');
         pos++;
+        c = peek();
     }
-    return new Token(dot ? FLOAT_LIT : INTEGER_LIT, str(a, pos));
+    return new Token(dot ? FLOAT_LIT : INTEGER_LIT, str(start, pos));
 }
 
-Token* Lexer::readIdent()
+Token *Lexer::readIdent()
 {
     TokenType type;
     int a = pos;
     pos++;
-    while (1)
+    char c = peek();
+    while (isalpha(c) || c == '_' || isdigit(c))
     {
-        char c = peek();
-        if (!isalpha(c) && c != '_' && !isdigit(c))
-        {
-            break;
-        }
         pos++;
+        c = peek();
     }
     std::string s = str(a, pos);
     type = kw(s);
@@ -115,61 +85,98 @@ Token* Lexer::readIdent()
     return new Token(type, s);
 }
 
-
-Token* Lexer::lineComment()
+Token *Lexer::lineComment()
 {
-    int a = pos;
+    int start = pos;
     pos += 2;
-    while (1)
+    char c = peek();
+    while (c != '\n' && c != '\0')
     {
-        char c = peek();
-        if (c == '\n' || c == '\0')
-        {
-            break;
-        }
         pos++;
+        c = peek();
     }
-    return new Token(COMMENT, str(a, pos));
+    return new Token(COMMENT, str(start, pos));
 }
 
-Token* Lexer::next()
+Token *Lexer::readOp()
 {
-    //std::cout<<"read\n";
-    TokenType type;
+    std::string s = str(pos, pos + 3);
+
+    int off = pos;
+    //can be length of 1 to 3
+    for (int i = s.length(); i > 0; i--)
+    {
+        auto it = ops.find(s);
+        if (it != ops.end())
+        {
+            pos += i;
+            return new Token(it->second, it->first);
+        }
+        s.pop_back();
+    }
+    //never
+    throw std::invalid_argument("readOp() failed with buffer: " + s);
+}
+
+Token *Lexer::next()
+{
+    if (pos == buf.length())
+    {
+        return new Token(EOF2);
+    }
     char c = peek();
-    //std::cout << "c="<<c<<"\n";
     if (c == '\0')
         return new Token(EOF2);
     if (c == ' ' || c == '\r' || c == '\n' || c == '\t')
     {
         pos++;
+        if (c == '\n')
+        {
+            line++;
+        }
+        else if (c == '\r')
+        {
+            if (pos < buf.length() && buf[pos] == '\n')
+            {
+                line++;
+                pos++;
+            }
+        }
         return next();
     }
     int off = pos;
-    type = op(c);
-    if (type != EOF2)
+    Token *token;
+    if (isalpha(c) || c == '_')
     {
-        return new Token(type, str(pos, ++pos));
-    }
-    else if (isalpha(c) || c == '_')
-    {
-        return readIdent();
+        token = readIdent();
     }
     else if (isdigit(c))
     {
-        return readNumber();
+        token = readNumber();
     }
     else if (c == '/')
     {
         char c2 = buf[pos + 1];
         if (c2 == '/')
         {
-            return lineComment();
+            token = lineComment();
         }
-        else if(c2 == '*'){
+        else if (c2 == '*')
+        {
+            auto it = buf.find("*/", pos + 2);
+            if (it != std::string::npos)
+            {
+                token = new Token(COMMENT, str(pos, it + 2));
+                pos = it + 2;
+            }
+            else
+            {
+                throw std::runtime_error("unclosed block comment at line " + std::to_string(line));
+            }
         }
-        else{
-            return new Token(DIV,str(pos,++pos));
+        else
+        {
+            token = new Token(DIV, str(pos, ++pos));
         }
     }
     else if (c == '\'')
@@ -183,11 +190,21 @@ Token* Lexer::next()
         else
         {
         }
-        return new Token(CHAR_LIT, str(a, pos));
+        token = new Token(CHAR_LIT, str(a, pos));
     }
     else if (c == '"')
     {
-        return new Token(STRING_LIT, eat("\""));
+        token = new Token(STRING_LIT, eat("\""));
     }
-    return new Token(EOF2);
+    else if (ops.find(std::string(1, c)) != ops.end())
+    {
+        token = readOp();
+    }
+    else
+    {
+        throw "unexpected char: " + c;
+    }
+    token->start = off;
+    token->end = pos;
+    return token;
 }

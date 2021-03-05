@@ -2,7 +2,11 @@ import string as str
 
 //line comment
 
-float pi = 3.1414;
+float pi = 3.1415;
+
+/*block comment
+line2
+*/
 
 class Node{
   Node next;

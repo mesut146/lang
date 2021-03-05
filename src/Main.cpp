@@ -2,20 +2,31 @@
 #include "Parser.h"
 #include "Lexer.h"
 
-int main()
+void lex(std::string &path)
 {
-  std::string path("../test");
+  Lexer lexer(path);
+
+  for (;;)
+  {
+    Token t = *lexer.next();
+    if (t.is(EOF2))
+      break;
+    printf("type=%d val='%s'\n", t.type, t.value.c_str());
+    //std::cout << "type=" << t.type << " val='" << t.value << "'\n";
+  }
+}
+
+void parse(std::string &path)
+{
   Lexer lexer(path);
   Parser parser(lexer);
   parser.parseUnit();
-  /*
-  for(;;)
-  {
-    Token t = lexer.next();
-    if (t.is(EOF2))
-      break;
-      printf("type=%d val='%s'\n",t.type,t.value.c_str());
-      //std::cout << "type=" << t.type << " val='" << t.value << "'\n";
-  }*/
+}
+
+int main()
+{
+  std::string path("../test");
+  lex(path);
+  //parse(path);
   return 0;
 }
