@@ -83,6 +83,7 @@ class TypeDecl : public BaseDecl
 
 class EnumDecl : public BaseDecl
 {
+	public:
   std::vector<std::string> cons;
 };
 

@@ -52,6 +52,8 @@ TokenType kw(std::string &s)
         return NULL_LIT;
     if (s == "import")
         return IMPORT;
+    if (s == "as")
+        return AS;
     if (s == "return")
         return RETURN;
     if (s == "continue")
@@ -73,7 +75,7 @@ TokenType kw(std::string &s)
     return EOF2;
 }
 
-Token Lexer::readNumber()
+Token* Lexer::readNumber()
 {
     bool dot = false;
     int a = pos++;
@@ -87,17 +89,18 @@ Token Lexer::readNumber()
         dot |= (c == '.');
         pos++;
     }
-    return Token(dot ? FLOAT_LIT : INTEGER_LIT, str(a, pos - 1));
+    return new Token(dot ? FLOAT_LIT : INTEGER_LIT, str(a, pos));
 }
 
-Token Lexer::readIdent()
+Token* Lexer::readIdent()
 {
     TokenType type;
     int a = pos;
+    pos++;
     while (1)
     {
         char c = peek();
-        if (!isalpha(c))
+        if (!isalpha(c) && c != '_' && !isdigit(c))
         {
             break;
         }
@@ -109,44 +112,46 @@ Token Lexer::readIdent()
     {
         type = IDENT;
     }
-    return Token(type, s);
+    return new Token(type, s);
 }
 
-Token Lexer::lineComment()
+
+Token* Lexer::lineComment()
 {
-    int a;
+    int a = pos;
+    pos += 2;
     while (1)
     {
         char c = peek();
-        if (c == '\n')
+        if (c == '\n' || c == '\0')
         {
             break;
         }
         pos++;
     }
-    return Token(COMMENT, str(a, pos));
+    return new Token(COMMENT, str(a, pos));
 }
 
-Token Lexer::next()
+Token* Lexer::next()
 {
     //std::cout<<"read\n";
     TokenType type;
     char c = peek();
     //std::cout << "c="<<c<<"\n";
     if (c == '\0')
-        return Token(EOF2);
+        return new Token(EOF2);
     if (c == ' ' || c == '\r' || c == '\n' || c == '\t')
     {
         pos++;
         return next();
     }
-
+    int off = pos;
     type = op(c);
     if (type != EOF2)
     {
-        return Token(type, str(pos, pos++));
+        return new Token(type, str(pos, ++pos));
     }
-    else if (isalpha(c))
+    else if (isalpha(c) || c == '_')
     {
         return readIdent();
     }
@@ -156,11 +161,15 @@ Token Lexer::next()
     }
     else if (c == '/')
     {
-        char c2 = peek();
+        char c2 = buf[pos + 1];
         if (c2 == '/')
         {
-            pos++;
             return lineComment();
+        }
+        else if(c2 == '*'){
+        }
+        else{
+            return new Token(DIV,str(pos,++pos));
         }
     }
     else if (c == '\'')
@@ -174,11 +183,11 @@ Token Lexer::next()
         else
         {
         }
-        return Token(CHAR_LIT, str(a, pos));
+        return new Token(CHAR_LIT, str(a, pos));
     }
     else if (c == '"')
     {
-        return Token(STRING_LIT, eat("\""));
+        return new Token(STRING_LIT, eat("\""));
     }
-    return Token(EOF2);
+    return new Token(EOF2);
 }

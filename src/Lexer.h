@@ -43,8 +43,8 @@ public:
     return str(a, pos);
   }
 
-  Token next();
-  Token readNumber();
-  Token readIdent();
-  Token lineComment();
+  Token* next();
+  Token* readNumber();
+  Token* readIdent();
+  Token* lineComment();
 };

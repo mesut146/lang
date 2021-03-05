@@ -26,6 +26,7 @@ enum TokenType
   STRING_LIT,
   COMMENT,
   IMPORT,
+  AS,
   RETURN,
   BREAK,
   CONTINUE,
@@ -39,7 +40,6 @@ enum TokenType
   DO,
   SWITCH,
   CASE,
-  AS,
   EQ,
   PLUS,
   MINUS,
@@ -64,6 +64,10 @@ enum TokenType
   DIVEQ,
   POWEQ,
   PERCENTEQ,
+  LTEQ,
+  GTEQ,
+  LTLTEQ,
+  GTGTEQ,
   LT,
   GT,
   LTLT,
@@ -83,6 +87,8 @@ class Token
 public:
   std::string value;
   TokenType type;
+  int start;
+  int end;
   Token(TokenType t) : type(t) {}
   Token(TokenType t, std::string s) : type(t), value(s) {}
 

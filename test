@@ -1,14 +1,35 @@
 import string as str
 
-class cls{
-  Type type;
-  int x;
+//line comment
+
+float pi = 3.1414;
+
+class Node{
+  Node next;
+  int value;
+}
+
+Node make(){
+  Node n{value=1};
+  for(int i=2;i<=5;i++){
+    n.next = {value=i};
+    n = n.next;
+  }
+}
+
+void test(){
+  Node n1 = {value=5};
+  Node n2 = Node{value=6};
 }
 
 enum Color{
-  WHITE ,BLACK
+  WHITE,
+  BLACK
 }
 
 int main(){
+  int x = 5;
+  int y = x;
+  print(x);
   return 0;
 }
