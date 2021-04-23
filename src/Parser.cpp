@@ -1,35 +1,46 @@
 #include "Parser.h"
+#include <iostream>
+
+void log(const char* msg){
+  std::cout << m << "\n";
+}  
 
 ImportStmt Parser::parseImport()
 {
+  log("parseImport");
   ImportStmt res;
   consume(IMPORT);
-  std::string s = next()->value;
-  Token *t = next();
+  res.s = name();
+  Token *t = peek();
   if (t->is(AS))
   {
-    std::string alias = next()->value;
+    consume(AS);
+    res.as = name();
   }
   return res;
 }
 
-TypeDecl Parser::parseTypeDecl()
+TypeDecl* Parser::parseTypeDecl()
 {
-  TypeDecl res;
+  TypeDecl* res = new TypeDecl;
+  pop();//class or interface
+  res->name = name();
   return res;
 }
 
-EnumDecl Parser::parseEnumDecl()
+EnumDecl* Parser::parseEnumDecl()
 {
-  EnumDecl res;
-
+  EnumDecl* res = new EnumDecl;
+  consume(ENUM);
+  res->name = name();
   return res;
 }
 
 Unit Parser::parseUnit()
 {
+  std::cout<<"unit\n";
   Unit res;
-  Token t = *next();
+  Token t = *peek();
   if (t.is(IMPORT))
   {
     while (t.is(IMPORT))

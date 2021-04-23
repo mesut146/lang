@@ -115,7 +115,7 @@ Token *Lexer::readOp()
         s.pop_back();
     }
     //never
-    throw std::invalid_argument("readOp() failed with buffer: " + s);
+    throw std::invalid_argument(std::string("readOp() failed with buffer: " )+ s);
 }
 
 Token *Lexer::next()
@@ -176,7 +176,8 @@ Token *Lexer::next()
         }
         else
         {
-            token = new Token(DIV, str(pos, ++pos));
+            token = new Token(DIV, str(pos, pos+1));
+            pos++;
         }
     }
     else if (c == '\'')
@@ -202,7 +203,7 @@ Token *Lexer::next()
     }
     else
     {
-        throw "unexpected char: " + c;
+        throw std::string("unexpected char: ") + c;
     }
     token->start = off;
     token->end = pos;

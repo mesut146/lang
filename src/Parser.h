@@ -2,44 +2,66 @@
 
 #include "Lexer.h"
 #include "Ast.h"
+#include <iostream>
 
 class Parser
 {
 public:
   Lexer lex;
-  Token *la;
+  std::vector<Token *> la;
+  int laPos = 0;
 
-  Parser(Lexer lexer) : lex(lexer) {}
+  Parser(Lexer& lexer) : lex(lexer) {}
 
-  Token *next()
+   //read and set as la
+  Token *read()
   {
-    la = lex.next();
-    if (la->is(COMMENT))
+    Token* t = lex.next();
+    if (t->is(COMMENT))
     {
-      return next();
+      return read();
     }
-    return la;
+    return t;
   }
 
+  void fill(int k){
+    int need = k - la.size();
+    for(int i = 0; i < need;i++){
+      la.push_back(read());
+    }
+  }
+
+  Token *pop()
+  {
+    fill(1);
+    laPos=0;
+    Token* t = la[0];
+    la.erase(la.begin());
+    return t;
+  }
+
+  //read la without consuming
   Token *peek()
   {
-    if (la)
-      return la;
-    return next();
+    fill(laPos + 1);
+    return la[laPos++];
   }
 
   Token *consume(TokenType tt)
   {
-    Token *t = peek();
-    la = nullptr;
+    Token *t = pop();
     if (t->is(tt))
       return t;
-    throw std::string("unexpected") + t->value;
+    throw std::string("unexpected token ") + *t->value + " was expecting " + std::to_string(tt);
+  }
+
+  std::string* name(){
+    return consume(IDENT)->value;
   }
 
   Unit parseUnit();
   Statement parseStmt();
   ImportStmt parseImport();
-  TypeDecl parseTypeDecl();
-  EnumDecl parseEnumDecl();
+  TypeDecl *parseTypeDecl();
+  EnumDecl *parseEnumDecl();
 };

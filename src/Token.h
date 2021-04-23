@@ -88,12 +88,12 @@ enum TokenType
 class Token
 {
 public:
-  std::string value;
+  std::string* value;
   TokenType type;
   int start;
   int end;
   Token(TokenType t) : type(t) {}
-  Token(TokenType t, std::string s) : type(t), value(s) {}
+  Token(TokenType t, std::string s) : type(t), value(new std::string(s)) {}
 
   bool is(TokenType t)
   {

@@ -6,171 +6,219 @@
 
 class Expression
 {
+  public:
+  virtual std::string print() = 0;
 };
 class Statement
 {
+  public:
+  virtual std::string print() = 0;
 };
 
 class SimpleName : Expression
 {
-  std::string name;
+  public:
+  std::string* name;
+  
+  std::string print();
 };
 
 class Name : Expression
 {
+  public:
   Name *scope;
-  SimpleName name;
+  std::string* name;
+  
+  std::string print();
 };
 
 class ImportStmt
 {
-  std::string s;
+  public:
+  
+  std::string* s;
   bool isStar;
   std::string *as;
-};
-
-//class,interface,enum
-class BaseDecl
-{
-  std::string name;
+  std::string print();
 };
 
 class Type
 {
-  std::string type;
-  std::vector<Type> typeArgs;
+  public:
+  std::string* type;
+  std::vector<Type*> typeArgs;
   bool isTypeVar;
+  bool isPrim;
+  bool isVoid;
+  
+  std::string print();
 };
 
 class Field
 {
+  public:
   Type type;
-  std::string name;
+  std::string* name;
   Expression *expr;
+  
+  std::string print();
 };
 
 class Param
 {
+  public:
   Type type;
-  std::string name;
+  std::string* name;
   bool isOptional;
   Expression *defVal;
+  
+  std::string print();
 };
 
 class Method
 {
+  public:
   Type type;
-  std::string name;
+  std::string* name;
   std::vector<Param> params;
+  Block* body;
+  
+  std::string print();
 };
 
 class Unit
 {
 public:
   std::vector<ImportStmt> imports;
-  std::vector<BaseDecl> types;
+  std::vector<BaseDecl*> types;
   std::vector<Method> methods;
-  std::vector<Statement> stmts;
+  std::vector<Statement*> stmts;
+  
+  std::string print();
+};
+
+class BaseDecl{
+  public:
+  virtual std::string print() = 0;
 };
 
 class TypeDecl : public BaseDecl
 {
+  public:
+  std::string* name;
   bool isInterface;
   std::vector<Type> typeArgs;
   std::vector<Field> fields;
-  std::vector<Method> method;
+  std::vector<Method> methods;
+  std::vector<BaseDecl*> types;
+  
+  std::string print();
 };
 
 class EnumDecl : public BaseDecl
 {
 public:
+  std::string* name;
   std::vector<std::string> cons;
+  
+  std::string print();
 };
 
 class Literal
 {
-  std::string val;
+  std::string* val;
   bool isBool;
   bool isInt;
   bool isFloat;
+  
+  std::string print();
 };
 
 class NullLit : Expression
 {
+  std::string print();
 };
 
 class ExprStmt
 {
-  Expression expr;
+  Expression* expr;
+  std::string print();
 };
 
-class Assign
-{
-  Expression left;
-  Expression right;
-  std::string op;
-};
 
 class VarDecl
 {
   Type type;
-  std::string name;
+  std::string* name;
   Expression *right;
+  
+  std::string print();
 };
 
 class Unary
 {
   std::string op;
-  Expression expr;
+  Expression* expr;
+  
+  std::string print();
 };
 
 class Infix
 {
-  Expression left;
-  Expression right;
+  Expression* left;
+  Expression* right;
   std::string op;
 };
 
 class Postfix
 {
   std::string op;
-  Expression expr;
+  Expression *expr;
+  
+  std::string print();
 };
 
 class MethodCall
 {
   Expression *scope;
   std::string name;
-  std::vector<Expression> args;
+  std::vector<Expression*> args;
+  
+  std::string print();
 };
 
 class FieldAccess
 {
-  Expression scope;
+  Expression *scope;
   std::string name;
+  
+  std::string print();
 };
 
 class Block
 {
-  std::vector<Statement> list;
+public:
+  std::vector<Statement*> list;
+  
+  std::string print();
 };
 
 class IfStmt
 {
-  Expression expr;
-  Statement thenStmt;
+  Expression *expr;
+  Statement *thenStmt;
   Statement *elseStmt;
 };
 
 class WhileStmt
 {
-  Expression expr;
+  Expression *expr;
   Statement *body;
 };
 
 class DoWhile
 {
-  Expression expr;
+  Expression *expr;
   Block body;
 };
 
@@ -178,23 +226,23 @@ class ForStmt
 {
   std::vector<VarDecl> decl;
   Expression *cond;
-  std::vector<Expression> updaters;
+  std::vector<Expression*> updaters;
 };
 
 class ForEach
 {
   VarDecl decl;
-  Expression expr;
+  Expression *expr;
 };
 
 class SwitchStmt
 {
-  Expression expr;
+  Expression *expr;
   std::vector<Case> cases;
 };
 
-class Case : Statement
+class Case : public Statement
 {
-  Expression expr;
-  Statement body; //can be case
+  Expression* expr;
+  Statement *body; //can be case
 };
