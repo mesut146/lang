@@ -36,7 +36,7 @@ class ImportStmt
 {
   public:
   
-  std::string* s;
+  std::string* file;
   bool isStar;
   std::string *as;
   std::string print();

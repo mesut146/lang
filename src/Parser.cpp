@@ -2,7 +2,11 @@
 #include <iostream>
 
 void log(const char* msg){
-  std::cout << m << "\n";
+  std::cout << msg << "\n";
+}
+
+void log(const std::string& msg){
+  std::cout << msg << "\n";
 }  
 
 ImportStmt Parser::parseImport()
@@ -10,7 +14,7 @@ ImportStmt Parser::parseImport()
   log("parseImport");
   ImportStmt res;
   consume(IMPORT);
-  res.s = name();
+  res.file = name();
   Token *t = peek();
   if (t->is(AS))
   {
@@ -36,25 +40,36 @@ EnumDecl* Parser::parseEnumDecl()
   return res;
 }
 
+Statement* Parser::parseStmt(){
+  
+  
+}  
+
 Unit Parser::parseUnit()
 {
   std::cout<<"unit\n";
   Unit res;
   Token t = *peek();
-  if (t.is(IMPORT))
-  {
+  
     while (t.is(IMPORT))
     {
       res.imports.push_back(parseImport());
+      t=*peek();
     }
-  }
-  else if (t.is(CLASS) || t.is(INTERFACE))
+  while(1){
+    laPos=0;
+    t=*peek();
+  if (t.is(CLASS) || t.is(INTERFACE))
   {
     res.types.push_back(parseTypeDecl());
   }
   else if (t.is(ENUM))
   {
     res.types.push_back(parseEnumDecl());
+  }
+  else{
+    throw std::string("unexpected " + *t.value);
+  }
   }
   return res;
 }

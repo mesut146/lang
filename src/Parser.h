@@ -8,33 +8,26 @@ class Parser
 {
 public:
   Lexer lex;
-  std::vector<Token *> la;
+  std::vector<Token*> la;
   int laPos = 0;
 
-  Parser(Lexer& lexer) : lex(lexer) {}
-
-   //read and set as la
-  Token *read()
-  {
-    Token* t = lex.next();
-    if (t->is(COMMENT))
-    {
-      return read();
-    }
-    return t;
+  Parser(Lexer& lexer) : lex(lexer) {
+    read();
   }
 
-  void fill(int k){
-    int need = k - la.size();
-    for(int i = 0; i < need;i++){
-      la.push_back(read());
+  void read()
+  {
+    while(1){
+      Token* t = lex.next();
+      if(t->is(EOF2)) return;
+      if (t->is(COMMENT)) continue;
+      la.push_back(t);
     }
   }
 
   Token *pop()
   {
-    fill(1);
-    laPos=0;
+    laPos = 0;
     Token* t = la[0];
     la.erase(la.begin());
     return t;
@@ -43,7 +36,6 @@ public:
   //read la without consuming
   Token *peek()
   {
-    fill(laPos + 1);
     return la[laPos++];
   }
 
@@ -58,9 +50,16 @@ public:
   std::string* name(){
     return consume(IDENT)->value;
   }
+  
+  Type type(){
+    Token t = *pop();
+    Type type;
+    type.type = t.value;
+    return type;
+  }  
 
   Unit parseUnit();
-  Statement parseStmt();
+  Statement* parseStmt();
   ImportStmt parseImport();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();

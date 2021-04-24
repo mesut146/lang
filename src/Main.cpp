@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstring>
 #include "Parser.h"
 #include "Lexer.h"
 
@@ -29,10 +30,13 @@ void parse(std::string &path)
   }
 }
 
-int main()
+int main(int argc,char** args)
 {
   std::string path("../test");
-  //lex(path);
-  parse(path);
+  if(argc > 1 && strcmp(args[1],"lex") == 0){
+      lex(path);
+  }else{
+    parse(path);
+  }
   return 0;
 }
