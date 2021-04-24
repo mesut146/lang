@@ -88,7 +88,7 @@ enum TokenType
 class Token
 {
 public:
-  std::string* value;
+  std::string *value;
   TokenType type;
   int start;
   int end;

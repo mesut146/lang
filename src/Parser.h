@@ -7,36 +7,45 @@
 class Parser
 {
 public:
-  Lexer lex;
-  std::vector<Token*> la;
+  Lexer lexer;
+  std::vector<Token *> tokens;
   int laPos = 0;
 
-  Parser(Lexer& lexer) : lex(lexer) {
+  Parser(Lexer &lexer) : lexer(lexer)
+  {
     read();
+  }
+
+  void reset()
+  {
+    laPos = 0;
   }
 
   void read()
   {
-    while(1){
-      Token* t = lex.next();
-      if(t->is(EOF2)) return;
-      if (t->is(COMMENT)) continue;
-      la.push_back(t);
+    while (1)
+    {
+      Token *t = lexer.next();
+      if (t->is(EOF2))
+        return;
+      if (t->is(COMMENT))
+        continue;
+      tokens.push_back(t);
     }
   }
 
   Token *pop()
   {
-    laPos = 0;
-    Token* t = la[0];
-    la.erase(la.begin());
+    reset();
+    Token *t = tokens[0];
+    tokens.erase(tokens.begin());
     return t;
   }
 
-  //read la without consuming
+  //read a token without consuming
   Token *peek()
   {
-    return la[laPos++];
+    return tokens[laPos++];
   }
 
   Token *consume(TokenType tt)
@@ -47,19 +56,21 @@ public:
     throw std::string("unexpected token ") + *t->value + " was expecting " + std::to_string(tt);
   }
 
-  std::string* name(){
+  std::string *name()
+  {
     return consume(IDENT)->value;
   }
-  
-  Type type(){
+
+  Type type()
+  {
     Token t = *pop();
     Type type;
     type.type = t.value;
     return type;
-  }  
+  }
 
   Unit parseUnit();
-  Statement* parseStmt();
+  Statement *parseStmt();
   ImportStmt parseImport();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();

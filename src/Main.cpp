@@ -13,29 +13,34 @@ void lex(std::string &path)
     if (t.is(EOF2))
       break;
     printf("type=%d val='%s'\n", t.type, t.value->c_str());
-    //std::cout << "type=" << t.type << " val='" << t.value << "'\n";
   }
 }
 
 void parse(std::string &path)
 {
-  try{
-  Lexer lexer(path);
-  Parser parser(lexer);
-  Unit u = parser.parseUnit();
-  std::cout << u.print();
-  
-  }catch(std::string s){
-    std::cout << s;;
+  try
+  {
+    Lexer lexer(path);
+    Parser parser(lexer);
+    Unit u = parser.parseUnit();
+    std::cout << u.print();
+  }
+  catch (std::string s)
+  {
+    std::cout << s;
+    ;
   }
 }
 
-int main(int argc,char** args)
+int main(int argc, char **args)
 {
   std::string path("../test");
-  if(argc > 1 && strcmp(args[1],"lex") == 0){
-      lex(path);
-  }else{
+  if (argc > 1 && strcmp(args[1], "lex") == 0)
+  {
+    lex(path);
+  }
+  else
+  {
     parse(path);
   }
   return 0;

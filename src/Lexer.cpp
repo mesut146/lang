@@ -115,7 +115,7 @@ Token *Lexer::readOp()
         s.pop_back();
     }
     //never
-    throw std::invalid_argument(std::string("readOp() failed with buffer: " )+ s);
+    throw std::invalid_argument(std::string("readOp() failed with buffer: ") + s);
 }
 
 Token *Lexer::next()
@@ -176,7 +176,7 @@ Token *Lexer::next()
         }
         else
         {
-            token = new Token(DIV, str(pos, pos+1));
+            token = new Token(DIV, str(pos, pos + 1));
             pos++;
         }
     }

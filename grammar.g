@@ -11,15 +11,18 @@ topStmt:
   stmt | method | typeDecl | enumDecl;
 
 enumDecl:
-  "enum" name "{" name ("," name)* "}"
+  "enum" name "{" name ("," name)* "}";
 
 type:
-  prim | qName | generic | "void" | "var" | "let";
+  prim | qname | generic | "void" | "var" | "let";
 
 prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double" | sizedInt;
 
+refType:
+  generic | qname;
+
 generic:
-  qName "<" type ("," type)* ">";
+  qname "<" type ("," type)* ">";
 
 typeDecl:
   ("class" | "interface") name (":" type ("," type)*)? "{" classMember* "}";
@@ -33,6 +36,7 @@ method:
 param:
   type name ("?" | "=" expr)?;
 
+//statements-------------------------------------------
 block:
   "{" stmt* "}";
 
@@ -49,16 +53,17 @@ whileStmt:
   "while" "(" expr ")" stmt;
 
 forStmt:
-  "for" "(" varDecl? ";" expr ";" exprs? ")" stmt;
+  "for" "(" varDecl? ";" expr? ";" exprs? ")" stmt;
 
-//expr-----------------------------------------------
+//expressions-----------------------------------------------
 varDecl:
   type varDeclFrag+;
+
 varDeclFrag:
   name ("=" expr)?;
 
 expr:
- assign | infix | postfix | prefix | fieldAccess | qName | methodCall | literal | ternary | varDec l creation;
+ assign | infix | postfix | prefix | fieldAccess | qname | methodCall | literal | ternary | varDec l creation | arrayAccess;
 
 methodCall:
   (expr ".")? name "(" args? ")";
@@ -70,9 +75,9 @@ fieldAccess:
   expr "." name;
 
 assign:
-  (qName | fieldAccess )  ("=" | "+=" |  "-="  |  "*=" |  "/=" | "^=" | "&=" | "|=" | "<<=" | ">>=") expr;
+  (qname | fieldAccess )  ("=" | "+=" |  "-="  |  "*=" |  "/=" | "^=" | "&=" | "|=" | "<<=" | ">>=") expr;
 
-qName: name ( "." name)*;
+qname: name ( "." name)*;
 
 postfix:
   expr ("++" | "--");
@@ -81,7 +86,10 @@ prefix:
   ("++" | "--") expr;
 
 infix:
-  expr ("+" |  "-" |  "*" | "/" | "^" | "%" | "&" |  "|" | "&&" | "||" | "!=" | "<" | ">" | "<<" | ">>") expr;
+  expr infixOp expr;
+
+infixOp:
+  "+" |  "-" |  "*" | "/" | "^" | "%" | "&" |  "|" | "&&" | "||" | "!=" | "<" | ">" | "<<" | ">>";
 
 unary:
  ("-" | "!" | "~") expr;
@@ -99,7 +107,13 @@ creation:
   type "(" args ")" | type "{" "}";
 
 arrowFunc:
-  names? "==>" stmt;
+  names? "=>" stmt;
+
+array:
+  "[" exprs? "]";
+
+arrayAccess:
+  expr "[" expr "]";  
 
 
   

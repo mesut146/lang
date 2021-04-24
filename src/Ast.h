@@ -6,37 +6,36 @@
 
 class Expression
 {
-  public:
+public:
   virtual std::string print() = 0;
 };
 class Statement
 {
-  public:
+public:
   virtual std::string print() = 0;
 };
 
-class SimpleName : Expression
+class SimpleName : public Expression
 {
-  public:
-  std::string* name;
-  
+public:
+  std::string *name;
+
   std::string print();
 };
 
-class Name : Expression
+class Name : public Expression
 {
-  public:
+public:
   Name *scope;
-  std::string* name;
-  
+  std::string *name;
+
   std::string print();
 };
 
 class ImportStmt
 {
-  public:
-  
-  std::string* file;
+public:
+  std::string *file;
   bool isStar;
   std::string *as;
   std::string print();
@@ -44,45 +43,45 @@ class ImportStmt
 
 class Type
 {
-  public:
-  std::string* type;
-  std::vector<Type*> typeArgs;
+public:
+  std::string *type;
+  std::vector<Type *> typeArgs;
   bool isTypeVar;
   bool isPrim;
   bool isVoid;
-  
+
   std::string print();
 };
 
 class Field
 {
-  public:
+public:
   Type type;
-  std::string* name;
+  std::string *name;
   Expression *expr;
-  
+
   std::string print();
 };
 
 class Param
 {
-  public:
+public:
   Type type;
-  std::string* name;
+  std::string *name;
   bool isOptional;
   Expression *defVal;
-  
+
   std::string print();
 };
 
 class Method
 {
-  public:
+public:
   Type type;
-  std::string* name;
+  std::string *name;
   std::vector<Param> params;
-  Block* body;
-  
+  Block *body;
+
   std::string print();
 };
 
@@ -90,159 +89,189 @@ class Unit
 {
 public:
   std::vector<ImportStmt> imports;
-  std::vector<BaseDecl*> types;
+  std::vector<BaseDecl *> types;
   std::vector<Method> methods;
-  std::vector<Statement*> stmts;
-  
+  std::vector<Statement *> stmts;
+
   std::string print();
 };
 
-class BaseDecl{
-  public:
+class BaseDecl
+{
+public:
   virtual std::string print() = 0;
 };
 
 class TypeDecl : public BaseDecl
 {
-  public:
-  std::string* name;
+public:
+  std::string *name;
   bool isInterface;
   std::vector<Type> typeArgs;
   std::vector<Field> fields;
   std::vector<Method> methods;
-  std::vector<BaseDecl*> types;
-  
+  std::vector<BaseDecl *> types;
+
   std::string print();
 };
 
 class EnumDecl : public BaseDecl
 {
 public:
-  std::string* name;
+  std::string *name;
   std::vector<std::string> cons;
-  
+
   std::string print();
 };
 
-class Literal
+class Literal : public Expression
 {
-  std::string* val;
+public:
+  std::string *val;
   bool isBool;
   bool isInt;
   bool isFloat;
-  
+
   std::string print();
 };
 
-class NullLit : Expression
-{
-  std::string print();
-};
-
-class ExprStmt
-{
-  Expression* expr;
-  std::string print();
-};
-
-
-class VarDecl
-{
-  Type type;
-  std::string* name;
-  Expression *right;
-  
-  std::string print();
-};
-
-class Unary
-{
-  std::string op;
-  Expression* expr;
-  
-  std::string print();
-};
-
-class Infix
-{
-  Expression* left;
-  Expression* right;
-  std::string op;
-};
-
-class Postfix
-{
-  std::string op;
-  Expression *expr;
-  
-  std::string print();
-};
-
-class MethodCall
-{
-  Expression *scope;
-  std::string name;
-  std::vector<Expression*> args;
-  
-  std::string print();
-};
-
-class FieldAccess
-{
-  Expression *scope;
-  std::string name;
-  
-  std::string print();
-};
-
-class Block
+class NullLit : public Expression
 {
 public:
-  std::vector<Statement*> list;
-  
   std::string print();
 };
 
-class IfStmt
+class ExprStmt : public Statement
 {
+public:
+  Expression *expr;
+  std::string print();
+};
+
+class VarDecl : public Expression
+{
+public:
+  Type type;
+  std::string *name;
+  Expression *right;
+
+  std::string print();
+};
+
+class Unary : public Expression
+{
+public:
+  std::string op;
+  Expression *expr;
+
+  std::string print();
+};
+
+class Infix : public Expression
+{
+public:
+  Expression *left;
+  Expression *right;
+  std::string op;
+};
+
+class Postfix : public Expression
+{
+public:
+  std::string op;
+  Expression *expr;
+
+  std::string print();
+};
+
+class MethodCall : public Expression
+{
+public:
+  Expression *scope;
+  std::string name;
+  std::vector<Expression *> args;
+
+  std::string print();
+};
+
+class FieldAccess : public Expression
+{
+public:
+  Expression *scope;
+  std::string name;
+
+  std::string print();
+};
+
+class Block : public Statement
+{
+public:
+  std::vector<Statement *> list;
+
+  std::string print();
+};
+
+class IfStmt : public Statement
+{
+public:
   Expression *expr;
   Statement *thenStmt;
   Statement *elseStmt;
+
+  std::string print();
 };
 
-class WhileStmt
+class WhileStmt : public Statement
 {
+public:
   Expression *expr;
   Statement *body;
+
+  std::string print();
 };
 
-class DoWhile
+class DoWhile : public Statement
 {
+public:
   Expression *expr;
   Block body;
+
+  std::string print();
 };
 
-class ForStmt
+class ForStmt : public Statement
 {
+public:
   std::vector<VarDecl> decl;
   Expression *cond;
-  std::vector<Expression*> updaters;
+  std::vector<Expression *> updaters;
+
+  std::string print();
 };
 
-class ForEach
+class ForEach : public Statement
 {
+public:
   VarDecl decl;
   Expression *expr;
+
+  std::string print();
 };
 
-class SwitchStmt
+class SwitchStmt : public Statement
 {
+public:
   Expression *expr;
   std::vector<Case> cases;
+
+  std::string print();
 };
 
 class Case : public Statement
 {
-  Expression* expr;
+public:
+  Expression *expr;
   Statement *body; //can be case
+
+  std::string print();
 };
