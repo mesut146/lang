@@ -25,7 +25,7 @@ generic:
   qname "<" type ("," type)* ">";
 
 typeDecl:
-  ("class" | "interface") name (":" type ("," type)*)? "{" classMember* "}";
+  ("class" | "interface") name (":" refType ("," refType)*)? "{" classMember* "}";
 
 classMember:
   field | method | typeDecl | enumDecl;
@@ -75,7 +75,9 @@ fieldAccess:
   expr "." name;
 
 assign:
-  (qname | fieldAccess )  ("=" | "+=" |  "-="  |  "*=" |  "/=" | "^=" | "&=" | "|=" | "<<=" | ">>=") expr;
+  (qname | fieldAccess ) assignOp  expr;
+
+assignOp: "=" | "+=" |  "-="  |  "*=" |  "/=" | "^=" | "&=" | "|=" | "<<=" | ">>=";
 
 qname: name ( "." name)*;
 
@@ -107,7 +109,8 @@ creation:
   type "(" args ")" | type "{" "}";
 
 arrowFunc:
-  names? "=>" stmt;
+  names? "=>" (stmt | expr);
+| ( names? ) "==>" (stmt | expr);
 
 array:
   "[" exprs? "]";

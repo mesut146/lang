@@ -76,6 +76,33 @@ IfStmt parseIf(Parser &p)
   return res;
 }
 
+Method parseMethod(Parser& p){
+  Method res;
+  res.type = parseType(p);
+  res.name=p.name();
+  consume(LPAREN);
+  while(1){
+    Token t=peek();
+    if(t.is(LBRACE)){
+      res.body=parseBlock(p);
+      break;
+    }
+    else{
+      Param prm;
+      res.params.push_back(prm);
+      prm.type=parseType(p);
+      prm.name=p.name();
+      t=*peek();
+      if(t.is(EQ)){
+        prm.defVal=p.parseExpr();
+      }
+      else if(t.is(QUES)){
+        prm.isDefault=true;
+      }
+    }
+  }
+  return res;  
+}  
 
 Unit Parser::parseUnit()
 {
@@ -102,6 +129,15 @@ Unit Parser::parseUnit()
     }
     else
     {
+      //stmt,method
+      peek();peek();
+      if(peek()->is(LPAREN)){
+        res.methods.push_back(parseMethod(this));
+      }
+      else{
+        reset();
+        res.stmts.push_back(parseStmt(this));
+      }
       throw std::string("unexpected " + *t.value);
     }
   }

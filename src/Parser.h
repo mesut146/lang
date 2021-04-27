@@ -3,6 +3,7 @@
 #include "Lexer.h"
 #include "Ast.h"
 #include <iostream>
+#include <cstdarg>
 
 class Parser
 {
@@ -55,6 +56,17 @@ public:
       return t;
     throw std::string("unexpected token ") + *t->value + " was expecting " + std::to_string(tt);
   }
+  
+  bool is(std::initializer_list<TokenType> rest){
+    for(TokenType &tt:rest){
+      if(!peek()->is(tt)) return false
+    }
+    return true;
+  } 
+  
+  void reset(){
+    laPos=0;
+  }  
 
   std::string *name()
   {
@@ -71,6 +83,7 @@ public:
 
   Unit parseUnit();
   Statement *parseStmt();
+  Expr* parseExpr();
   ImportStmt parseImport();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();
