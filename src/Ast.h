@@ -23,9 +23,10 @@ public:
   std::string print();
 };
 
-class Name : public Expression{
+class Name : public Expression
+{
 public:
-virtual std::string print() = 0;
+  virtual std::string print() = 0;
 };
 
 class SimpleName : public Name
@@ -54,43 +55,48 @@ public:
   std::string print();
 };
 
-class Type : public Expression{
-  public:
-  virtual bool isVar(){return false;};
+class Type : public Expression
+{
+public:
+  virtual bool isVar() { return false; };
   //virtual bool isTypeVar() = 0;
-  virtual bool isPrim(){return false;};
-  virtual bool isVoid(){return false;};
+  virtual bool isPrim() { return false; };
+  virtual bool isVoid() { return false; };
 
   virtual std::string print() = 0;
 };
 
-class SimpleType: public Type
+class SimpleType : public Type
 {
 public:
   std::string *type;
-  bool isVar(){
+  bool isVar()
+  {
     return *type == "var";
   }
   bool isTypeVar;
-  bool isPrim(){
-    return *type == "int" ||  *type == "long" ||  *type == "char" ||  *type == "byte" ||
-     *type == "short"  || *type == "float" ||  *type == "double";
+  bool isPrim()
+  {
+    return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
+           *type == "short" || *type == "float" || *type == "double";
   }
-  bool isVoid(){
+  bool isVoid()
+  {
     return *type == "void";
   }
 
   std::string print();
 };
 
-class RefType : public Type{
+class RefType : public Type
+{
 public:
-  Name* name;
+  Name *name;
   std::vector<Type *> typeArgs;
   std::string print();
 };
 
-class Field: public VarDecl
+/*class Field: public VarDecl
 {
 public:
   Type *type;
@@ -98,7 +104,7 @@ public:
   Expression *expr;
 
   std::string print();
-};
+};*/
 
 class Param
 {
@@ -144,9 +150,9 @@ class TypeDecl : public BaseDecl
 public:
   std::string *name;
   bool isInterface;
-  std::vector<Type*> typeArgs;
-  std::vector<Type*> baseTypes; 
-  std::vector<VarDecl> fields;
+  std::vector<Type *> typeArgs;
+  std::vector<Type *> baseTypes;
+  std::vector<VarDecl *> fields;
   std::vector<Method> methods;
   std::vector<BaseDecl *> types;
 
@@ -242,9 +248,10 @@ public:
   std::string print();
 };
 
-class ParExpr : public Expression{
+class ParExpr : public Expression
+{
 public:
-  Expression* expr;
+  Expression *expr;
   std::string print();
 };
 

@@ -59,14 +59,14 @@ public:
     throw std::string("unexpected token ") + t->print() + " was expecting " + std::to_string(tt);
   }
 
-  std::string* name()
+  std::string *name()
   {
     return consume(IDENT)->value;
   }
 
   Unit parseUnit();
   Statement *parseStmt();
-  Expression* parseExpr();
+  Expression *parseExpr();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();
 };

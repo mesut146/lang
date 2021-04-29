@@ -14,16 +14,16 @@ class Node{
 }
 
 Node make(){
-  Node n{value=1};
+  //Node n{value=1};
   for(int i=2;i<=5;i++){
-    n.next = {value=i};
+    //n.next = {value=i};
     n = n.next;
   }
 }
 
 void test(){
-  Node n1{value=5};
-  Node n2 = new Node{value=6};
+  //Node n1{value=5};
+  //Node n2 = new Node{value=6};
 }
 
 enum Color{

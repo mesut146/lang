@@ -2,7 +2,6 @@
 #include <cstring>
 #include "Parser.h"
 #include "Lexer.h"
-#include "stacktrace.h"
 
 void lex(std::string &path)
 {
@@ -29,7 +28,7 @@ void parse(std::string &path)
   catch (std::string s)
   {
     std::cout << "err:" << s << "\n";
-    print_stacktrace();
+    //print_stacktrace();
   }
 }
 

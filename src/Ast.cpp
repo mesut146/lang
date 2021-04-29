@@ -68,10 +68,10 @@ std::string ExprStmt::print(){
   return expr->print() + ";";
 }
 
-std::string Field::print()
+/*std::string Field::print()
 {
   return type->print() + " " + *name + (expr == nullptr ? "" : expr->print()) + ";";
-}
+}*/
 
 std::string Block::print()
 {

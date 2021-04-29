@@ -103,13 +103,14 @@ public:
 
   bool is(std::initializer_list<TokenType> t)
   {
-    for(TokenType tt:t)
-      if(tt == type) return true;
+    for (TokenType tt : t)
+      if (tt == type)
+        return true;
     return false;
   }
 
-  std::string print(){
+  std::string print()
+  {
     return std::to_string(type) + ": " + *value;
   }
-
 };
