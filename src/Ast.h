@@ -90,7 +90,7 @@ public:
   std::string print();
 };
 
-class Field
+class Field: public VarDecl
 {
 public:
   Type *type;
@@ -115,7 +115,7 @@ class Method
 {
 public:
   Type *type;
-  std::string *name;
+  std::string name;
   std::vector<Param> params;
   Block body;
 
@@ -145,7 +145,8 @@ public:
   std::string *name;
   bool isInterface;
   std::vector<Type*> typeArgs;
-  std::vector<Field> fields;
+  std::vector<Type*> baseTypes; 
+  std::vector<VarDecl> fields;
   std::vector<Method> methods;
   std::vector<BaseDecl *> types;
 
@@ -164,11 +165,12 @@ public:
 class Literal : public Expression
 {
 public:
-  std::string *val;
+  std::string val;
   bool isBool;
   bool isInt;
   bool isFloat;
-
+  bool isStr;
+  bool isChar;
   std::string print();
 };
 
@@ -189,7 +191,7 @@ class VarDecl : public Expression
 {
 public:
   Type *type;
-  std::string *name;
+  std::string name;
   Expression *right;
 
   std::string print();
@@ -240,7 +242,11 @@ public:
   std::string print();
 };
 
-
+class ParExpr : public Expression{
+public:
+  Expression* expr;
+  std::string print();
+};
 
 class IfStmt : public Statement
 {

@@ -4,6 +4,7 @@
 #include "Ast.h"
 #include <iostream>
 #include <cstdarg>
+#include "stacktrace.h"
 
 class Parser
 {
@@ -54,17 +55,11 @@ public:
     Token *t = pop();
     if (t->is(tt))
       return t;
-    throw std::string("unexpected token ") + *t->value + " was expecting " + std::to_string(tt);
+    print_stacktrace();
+    throw std::string("unexpected token ") + t->print() + " was expecting " + std::to_string(tt);
   }
-  
-  bool is(std::initializer_list<TokenType> rest){
-    for(TokenType tt:rest){
-      if(!peek()->is(tt)) return false;
-    }
-    return true;
-  } 
 
-  std::string *name()
+  std::string* name()
   {
     return consume(IDENT)->value;
   }

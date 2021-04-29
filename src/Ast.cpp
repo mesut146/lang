@@ -47,6 +47,27 @@ std::string QName::print()
   return scope->print() + "." + *name;
 }
 
+std::string Literal::print(){
+  std::string s;
+  s.append(val);
+  return s;
+}
+
+std::string VarDecl::print(){
+  std::string s;
+  s.append(type->print());
+  s.append(name);
+  if(right != nullptr){
+    s.append("=");
+    s.append(right->print());
+  }
+  return s;
+}
+
+std::string ExprStmt::print(){
+  return expr->print() + ";";
+}
+
 std::string Field::print()
 {
   return type->print() + " " + *name + (expr == nullptr ? "" : expr->print()) + ";";
@@ -107,7 +128,7 @@ std::string Method::print()
   std::string s;
   s.append(type->print());
   s.append(" ");
-  s.append(*name);
+  s.append(name);
   s.append("(");
   s.append(join(params, " "));
   s.append(")");
@@ -129,6 +150,10 @@ std::string Param::print()
     s.append(defVal->print());
   }
   return s;
+}
+
+std::string ParExpr::print(){
+  return std::string("(" + expr->print() + ")");
 }
 
 std::string Unit::print()

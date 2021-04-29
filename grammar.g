@@ -14,7 +14,7 @@ enumDecl:
   "enum" name "{" name ("," name)* "}";
 
 type:
-  prim | qname | generic | "void" | "var" | "let";
+  prim | refType | "void" | "var" | "let";
 
 prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double" | sizedInt;
 
@@ -22,16 +22,22 @@ refType:
   generic | qname;
 
 generic:
-  qname "<" type ("," type)* ">";
+  qname generics;
+
+generics:
+  "<" type ("," type)* ">";
 
 typeDecl:
-  ("class" | "interface") name (":" refType ("," refType)*)? "{" classMember* "}";
+  ("class" | "interface") name generics? (":" refType ("," refType)*)? "{" classMember* "}";
 
 classMember:
   field | method | typeDecl | enumDecl;
 
+field:
+  varDecl ";";
+
 method:
-  type name "(" param* ")" block;
+  type refType "(" param* ")" block;
 
 param:
   type name ("?" | "=" expr)?;

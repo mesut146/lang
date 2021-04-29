@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 2.8)
 project(lang)
 
 set(CMAKE_CXX_FLAGS "-std=c++11 -g")
+set(CMAKE_LINKER_FLAGS "-rdynamic")
 
 file(GLOB src
   src/*.cpp

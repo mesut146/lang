@@ -107,4 +107,9 @@ public:
       if(tt == type) return true;
     return false;
   }
+
+  std::string print(){
+    return std::to_string(type) + ": " + *value;
+  }
+
 };

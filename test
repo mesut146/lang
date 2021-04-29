@@ -9,7 +9,7 @@ line2
 */
 
 class Node{
-  Node next;
+  Node2 next;
   int value;
 }
 
@@ -22,8 +22,8 @@ Node make(){
 }
 
 void test(){
-  Node n1 = {value=5};
-  Node n2 = Node{value=6};
+  Node n1{value=5};
+  Node n2 = new Node{value=6};
 }
 
 enum Color{
