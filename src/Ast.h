@@ -1,63 +1,55 @@
 #pragma once
 
-#include <vector>
-#include <string>
 #include "Ast_all.h"
+#include <string>
+#include <vector>
 
-class Expression
-{
-public:
+class Expression {
+  public:
   virtual std::string print() = 0;
 };
-class Statement
-{
-public:
+class Statement {
+  public:
   virtual std::string print() = 0;
 };
 
-class Block : public Statement
-{
-public:
+class Block : public Statement {
+  public:
   std::vector<Statement *> list;
 
   std::string print();
 };
 
-class Name : public Expression
-{
-public:
+class Name : public Expression {
+  public:
   virtual std::string print() = 0;
 };
 
-class SimpleName : public Name
-{
-public:
+class SimpleName : public Name {
+  public:
   std::string *name;
 
   std::string print();
 };
 
-class QName : public Name
-{
-public:
+class QName : public Name {
+  public:
   Name *scope;
   std::string *name;
 
   std::string print();
 };
 
-class ImportStmt
-{
-public:
+class ImportStmt {
+  public:
   std::string *file;
   bool isStar;
   std::string *as;
   std::string print();
 };
 
-class Type : public Expression
-{
-public:
+class Type : public Expression {
+  public:
   virtual bool isVar() { return false; };
   //virtual bool isTypeVar() = 0;
   virtual bool isPrim() { return false; };
@@ -66,31 +58,26 @@ public:
   virtual std::string print() = 0;
 };
 
-class SimpleType : public Type
-{
-public:
+class SimpleType : public Type {
+  public:
   std::string *type;
-  bool isVar()
-  {
+  bool isVar() {
     return *type == "var";
   }
   bool isTypeVar;
-  bool isPrim()
-  {
+  bool isPrim() {
     return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
            *type == "short" || *type == "float" || *type == "double";
   }
-  bool isVoid()
-  {
+  bool isVoid() {
     return *type == "void";
   }
 
   std::string print();
 };
 
-class RefType : public Type
-{
-public:
+class RefType : public Type {
+  public:
   Name *name;
   std::vector<Type *> typeArgs;
   std::string print();
@@ -106,9 +93,8 @@ public:
   std::string print();
 };*/
 
-class Param
-{
-public:
+class Param {
+  public:
   Type *type;
   std::string *name;
   bool isOptional;
@@ -117,9 +103,8 @@ public:
   std::string print();
 };
 
-class Method
-{
-public:
+class Method {
+  public:
   Type *type;
   std::string name;
   std::vector<Param> params;
@@ -128,9 +113,8 @@ public:
   std::string print();
 };
 
-class Unit
-{
-public:
+class Unit {
+  public:
   std::vector<ImportStmt> imports;
   std::vector<BaseDecl *> types;
   std::vector<Method> methods;
@@ -139,15 +123,13 @@ public:
   std::string print();
 };
 
-class BaseDecl
-{
-public:
+class BaseDecl {
+  public:
   virtual std::string print() = 0;
 };
 
-class TypeDecl : public BaseDecl
-{
-public:
+class TypeDecl : public BaseDecl {
+  public:
   std::string *name;
   bool isInterface;
   std::vector<Type *> typeArgs;
@@ -159,18 +141,16 @@ public:
   std::string print();
 };
 
-class EnumDecl : public BaseDecl
-{
-public:
+class EnumDecl : public BaseDecl {
+  public:
   std::string *name;
   std::vector<std::string> cons;
 
   std::string print();
 };
 
-class Literal : public Expression
-{
-public:
+class Literal : public Expression {
+  public:
   std::string val;
   bool isBool;
   bool isInt;
@@ -180,58 +160,53 @@ public:
   std::string print();
 };
 
-class NullLit : public Expression
-{
-public:
+class NullLit : public Expression {
+  public:
   std::string print();
 };
 
-class ExprStmt : public Statement
-{
-public:
+class ExprStmt : public Statement {
+  public:
   Expression *expr;
-  std::string print();
+  std::string print() override;
 };
 
-class VarDecl : public Expression
-{
-public:
+class VarDecl : public Expression {
+  public:
   Type *type;
   std::string name;
   Expression *right;
 
-  std::string print();
+  std::string print() override;
 };
 
-class Unary : public Expression
-{
-public:
+class Unary : public Expression {
+  public:
   std::string op;
   Expression *expr;
 
-  std::string print();
+  std::string print() override;
 };
 
-class Infix : public Expression
-{
-public:
+class Infix : public Expression {
+  public:
   Expression *left;
   Expression *right;
   std::string op;
+
+  std::string print() override;
 };
 
-class Postfix : public Expression
-{
-public:
+class Postfix : public Expression {
+  public:
   std::string op;
   Expression *expr;
 
-  std::string print();
+  std::string print() override;
 };
 
-class MethodCall : public Expression
-{
-public:
+class MethodCall : public Expression {
+  public:
   Expression *scope;
   std::string name;
   std::vector<Expression *> args;
@@ -239,25 +214,22 @@ public:
   std::string print();
 };
 
-class FieldAccess : public Expression
-{
-public:
+class FieldAccess : public Expression {
+  public:
   Expression *scope;
   std::string name;
 
   std::string print();
 };
 
-class ParExpr : public Expression
-{
-public:
+class ParExpr : public Expression {
+  public:
   Expression *expr;
   std::string print();
 };
 
-class IfStmt : public Statement
-{
-public:
+class IfStmt : public Statement {
+  public:
   Expression *expr;
   Statement *thenStmt;
   Statement *elseStmt;
@@ -265,57 +237,53 @@ public:
   std::string print();
 };
 
-class WhileStmt : public Statement
-{
-public:
+class WhileStmt : public Statement {
+  public:
   Expression *expr;
   Statement *body;
 
   std::string print();
 };
 
-class DoWhile : public Statement
-{
-public:
+class DoWhile : public Statement {
+  public:
   Expression *expr;
   Block body;
 
   std::string print();
 };
 
-class ForStmt : public Statement
-{
-public:
+class ForStmt : public Statement {
+  public:
   std::vector<VarDecl> decl;
   Expression *cond;
   std::vector<Expression *> updaters;
+  Statement *body;
 
   std::string print();
 };
 
-class ForEach : public Statement
-{
-public:
+class ForEach : public Statement {
+  public:
   VarDecl decl;
   Expression *expr;
+  Statement *body;
 
   std::string print();
 };
 
-class SwitchStmt : public Statement
-{
-public:
+class SwitchStmt : public Statement {
+  public:
   Expression *expr;
   std::vector<Case> cases;
 
   std::string print();
 };
 
-class Case : public Statement
-{
-public:
+class Case : public Statement {
+  public:
   Expression *expr;
-  Statement *body; //can be case
+  Statement *body;//can be case
 
   std::string print();
 };

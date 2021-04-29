@@ -1,32 +1,27 @@
 #pragma once
 
-#include "Lexer.h"
 #include "Ast.h"
-#include <iostream>
-#include <cstdarg>
+#include "Lexer.h"
 #include "stacktrace.h"
+#include <cstdarg>
+#include <iostream>
 
-class Parser
-{
-public:
+class Parser {
+  public:
   Lexer lexer;
   std::vector<Token *> tokens;
   int laPos = 0;
 
-  Parser(Lexer &lexer) : lexer(lexer)
-  {
+  Parser(Lexer &lexer) : lexer(lexer) {
     read();
   }
 
-  void reset()
-  {
+  void reset() {
     laPos = 0;
   }
 
-  void read()
-  {
-    while (1)
-    {
+  void read() {
+    while (true) {
       Token *t = lexer.next();
       if (t->is(EOF2))
         return;
@@ -36,8 +31,7 @@ public:
     }
   }
 
-  Token *pop()
-  {
+  Token *pop() {
     reset();
     Token *t = tokens[0];
     tokens.erase(tokens.begin());
@@ -45,22 +39,22 @@ public:
   }
 
   //read a token without consuming
-  Token *peek()
-  {
+  Token *peek() {
     return tokens[laPos++];
   }
 
-  Token *consume(TokenType tt)
-  {
-    Token *t = pop();
-    if (t->is(tt))
-      return t;
-    print_stacktrace();
-    throw std::string("unexpected token ") + t->print() + " was expecting " + std::to_string(tt);
+  Token *first() {
+    return tokens[0];
   }
 
-  std::string *name()
-  {
+  Token *consume(TokenType tt) {
+    Token *t = pop();
+    if (t->is(tt)) return t;
+    print_stacktrace();
+    throw std::string("unexpected token ") + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt);
+  }
+
+  std::string *name() {
     return consume(IDENT)->value;
   }
 

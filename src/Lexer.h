@@ -1,19 +1,17 @@
 #pragma once
 
-#include <fstream>
-#include <sstream>
-#include <map>
 #include "Token.h"
+#include <fstream>
+#include <map>
+#include <sstream>
 
-class Lexer
-{
-public:
+class Lexer {
+  public:
   std::string buf;
   int pos = 0;
   int line = 1;
 
-  Lexer(const std::string &path)
-  {
+  Lexer(const std::string &path) {
     std::fstream stream;
     stream.open(path, std::fstream::in);
     std::stringstream ss;
@@ -23,23 +21,19 @@ public:
     init();
   }
 
-  char peek()
-  {
+  char peek() {
     return buf[pos];
   }
 
-  char read()
-  {
+  char read() {
     return buf[pos++];
   }
 
-  std::string str(int a, int b)
-  {
+  std::string str(int a, int b) {
     return buf.substr(a, b - a);
   }
 
-  std::string eat(std::string end)
-  {
+  std::string eat(std::string end) {
     char c;
     int a;
     return str(a, pos);
@@ -53,8 +47,7 @@ public:
 
   std::map<std::string, TokenType> ops;
 
-  void init()
-  {
+  void init() {
     ops["{"] = LBRACE;
     ops["}"] = RBRACE;
     ops["("] = LPAREN;
