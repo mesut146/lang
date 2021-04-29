@@ -58,33 +58,20 @@ public:
   }
   
   bool is(std::initializer_list<TokenType> rest){
-    for(TokenType &tt:rest){
-      if(!peek()->is(tt)) return false
+    for(TokenType tt:rest){
+      if(!peek()->is(tt)) return false;
     }
     return true;
   } 
-  
-  void reset(){
-    laPos=0;
-  }  
 
   std::string *name()
   {
     return consume(IDENT)->value;
   }
 
-  Type type()
-  {
-    Token t = *pop();
-    Type type;
-    type.type = t.value;
-    return type;
-  }
-
   Unit parseUnit();
   Statement *parseStmt();
-  Expr* parseExpr();
-  ImportStmt parseImport();
+  Expression* parseExpr();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();
 };

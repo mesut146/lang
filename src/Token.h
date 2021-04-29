@@ -9,6 +9,7 @@ enum TokenType
   CLASS,
   ENUM,
   INTERFACE,
+  VOID,
   CHAR,
   BYTE,
   INT,
@@ -98,5 +99,12 @@ public:
   bool is(TokenType t)
   {
     return t == type;
+  }
+
+  bool is(std::initializer_list<TokenType> t)
+  {
+    for(TokenType tt:t)
+      if(tt == type) return true;
+    return false;
   }
 };

@@ -42,14 +42,14 @@ std::string SimpleName::print()
   return *name;
 }
 
-std::string Name::print()
+std::string QName::print()
 {
   return scope->print() + "." + *name;
 }
 
 std::string Field::print()
 {
-  return type.print() + " " + *name + (expr == nullptr ? "" : expr->print()) + ";";
+  return type->print() + " " + *name + (expr == nullptr ? "" : expr->print()) + ";";
 }
 
 std::string Block::print()
@@ -72,10 +72,14 @@ std::string EnumDecl::print()
   return s;
 }
 
-std::string Type::print()
+std::string SimpleType::print(){
+  return *type;
+}
+
+std::string RefType::print()
 {
   std::string s;
-  s.append(*type);
+  s.append(name->print());
   if (!typeArgs.empty())
   {
     s.append("<");
@@ -101,20 +105,20 @@ std::string TypeDecl::print()
 std::string Method::print()
 {
   std::string s;
-  s.append(type.print());
+  s.append(type->print());
   s.append(" ");
   s.append(*name);
   s.append("(");
   s.append(join(params, " "));
   s.append(")");
-  s.append(body->print());
+  s.append(body.print());
   return s;
 }
 
 std::string Param::print()
 {
   std::string s;
-  s.append(type.print());
+  s.append(type->print());
   s.append(" ");
   s.append(*name);
   if (isOptional)

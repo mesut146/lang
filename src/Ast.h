@@ -15,7 +15,20 @@ public:
   virtual std::string print() = 0;
 };
 
-class SimpleName : public Expression
+class Block : public Statement
+{
+public:
+  std::vector<Statement *> list;
+
+  std::string print();
+};
+
+class Name : public Expression{
+public:
+virtual std::string print() = 0;
+};
+
+class SimpleName : public Name
 {
 public:
   std::string *name;
@@ -23,7 +36,7 @@ public:
   std::string print();
 };
 
-class Name : public Expression
+class QName : public Name
 {
 public:
   Name *scope;
@@ -41,22 +54,46 @@ public:
   std::string print();
 };
 
-class Type
+class Type : public Expression{
+  public:
+  virtual bool isVar(){return false;};
+  //virtual bool isTypeVar() = 0;
+  virtual bool isPrim(){return false;};
+  virtual bool isVoid(){return false;};
+
+  virtual std::string print() = 0;
+};
+
+class SimpleType: public Type
 {
 public:
   std::string *type;
-  std::vector<Type *> typeArgs;
+  bool isVar(){
+    return *type == "var";
+  }
   bool isTypeVar;
-  bool isPrim;
-  bool isVoid;
+  bool isPrim(){
+    return *type == "int" ||  *type == "long" ||  *type == "char" ||  *type == "byte" ||
+     *type == "short"  || *type == "float" ||  *type == "double";
+  }
+  bool isVoid(){
+    return *type == "void";
+  }
 
+  std::string print();
+};
+
+class RefType : public Type{
+public:
+  Name* name;
+  std::vector<Type *> typeArgs;
   std::string print();
 };
 
 class Field
 {
 public:
-  Type type;
+  Type *type;
   std::string *name;
   Expression *expr;
 
@@ -66,7 +103,7 @@ public:
 class Param
 {
 public:
-  Type type;
+  Type *type;
   std::string *name;
   bool isOptional;
   Expression *defVal;
@@ -77,10 +114,10 @@ public:
 class Method
 {
 public:
-  Type type;
+  Type *type;
   std::string *name;
   std::vector<Param> params;
-  Block *body;
+  Block body;
 
   std::string print();
 };
@@ -107,7 +144,7 @@ class TypeDecl : public BaseDecl
 public:
   std::string *name;
   bool isInterface;
-  std::vector<Type> typeArgs;
+  std::vector<Type*> typeArgs;
   std::vector<Field> fields;
   std::vector<Method> methods;
   std::vector<BaseDecl *> types;
@@ -151,7 +188,7 @@ public:
 class VarDecl : public Expression
 {
 public:
-  Type type;
+  Type *type;
   std::string *name;
   Expression *right;
 
@@ -203,13 +240,7 @@ public:
   std::string print();
 };
 
-class Block : public Statement
-{
-public:
-  std::vector<Statement *> list;
 
-  std::string print();
-};
 
 class IfStmt : public Statement
 {
