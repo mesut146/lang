@@ -169,17 +169,26 @@ class ExprStmt : public Statement {
   public:
   Expression *expr;
   std::string print() override;
-  ExprStmt(Expression* e) : expr(e){}
+  ExprStmt(Expression *e) : expr(e) {}
+};
+
+class Fragment {
+  public:
+  Fragment(std::string basicString, Expression *pExpression);
+  std::string name;
+  Expression *right;
+
+  std::string print();
 };
 
 class VarDecl : public Expression {
   public:
   Type *type;
-  std::string name;
-  Expression *right;
+  std::vector<Fragment> list;
 
   std::string print() override;
 };
+
 
 class Unary : public Expression {
   public:
@@ -221,7 +230,7 @@ class MethodCall : public Expression {
   std::string name;
   std::vector<Expression *> args;
 
-  std::string print();
+  std::string print() override;
 };
 
 class FieldAccess : public Expression {
@@ -235,7 +244,26 @@ class FieldAccess : public Expression {
 class ParExpr : public Expression {
   public:
   Expression *expr;
-  std::string print();
+  std::string print() override;
+};
+
+class ReturnStmt : public Statement {
+  public:
+  Expression *expr;
+  std::string print() override;
+};
+
+class ContinueStmt : public Statement {
+  public:
+  std::string *label;
+  std::string print() override;
+};
+
+class BreakStmt : public Statement {
+  public:
+  std::string *label;
+
+  std::string print() override;
 };
 
 class IfStmt : public Statement {
@@ -244,7 +272,7 @@ class IfStmt : public Statement {
   Statement *thenStmt;
   Statement *elseStmt;
 
-  std::string print();
+  std::string print() override;
 };
 
 class WhileStmt : public Statement {
@@ -252,7 +280,7 @@ class WhileStmt : public Statement {
   Expression *expr;
   Statement *body;
 
-  std::string print();
+  std::string print() override;
 };
 
 class DoWhile : public Statement {
@@ -260,17 +288,17 @@ class DoWhile : public Statement {
   Expression *expr;
   Block body;
 
-  std::string print();
+  std::string print() override;
 };
 
 class ForStmt : public Statement {
   public:
-  std::vector<VarDecl> decl;
+  VarDecl *decl;
   Expression *cond;
   std::vector<Expression *> updaters;
   Statement *body;
 
-  std::string print();
+  std::string print() override;
 };
 
 class ForEach : public Statement {
@@ -279,7 +307,7 @@ class ForEach : public Statement {
   Expression *expr;
   Statement *body;
 
-  std::string print();
+  std::string print() override;
 };
 
 class SwitchStmt : public Statement {
@@ -287,7 +315,7 @@ class SwitchStmt : public Statement {
   Expression *expr;
   std::vector<Case> cases;
 
-  std::string print();
+  std::string print() override;
 };
 
 class Case : public Statement {

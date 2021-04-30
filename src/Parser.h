@@ -40,10 +40,12 @@ class Parser {
 
   //read a token without consuming
   Token *peek() {
+    if (tokens.size() == 0) return nullptr;
     return tokens[laPos++];
   }
 
   Token *first() {
+    if (tokens.size() == 0) return nullptr;
     return tokens[0];
   }
 

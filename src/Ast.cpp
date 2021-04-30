@@ -1,35 +1,5 @@
 #include "Ast.h"
-
-template<class T>
-std::string join(std::vector<T> &arr, const char *sep) {
-  std::string s;
-  for (int i = 0; i < arr.size(); i++) {
-    s.append(arr[i].print());
-    if (i < arr.size() - 1)
-      s.append(sep);
-  }
-  return s;
-}
-template<class T>
-std::string join(std::vector<T *> &arr, const char *sep) {
-  std::string s;
-  for (int i = 0; i < arr.size(); i++) {
-    s.append(arr[i]->print());
-    if (i < arr.size() - 1)
-      s.append(sep);
-  }
-  return s;
-}
-
-std::string join(std::vector<std::string> &arr, const char *sep) {
-  std::string s;
-  for (int i = 0; i < arr.size(); i++) {
-    s.append(arr[i]);
-    if (i < arr.size() - 1)
-      s.append(sep);
-  }
-  return s;
-}
+#include "Util.h"
 
 std::string SimpleName::print() {
   return *name;
@@ -48,28 +18,28 @@ std::string Literal::print() {
 std::string VarDecl::print() {
   std::string s;
   s.append(type->print());
-  s.append(name);
-  if (right != nullptr) {
-    s.append("=");
-    s.append(right->print());
-  }
+  s.append(" ");
+  s.append(join(list, ", "));
   return s;
+}
+
+std::string Fragment::print() {
+  return name + (right == nullptr ? "" : " = " + right->print());
+}
+Fragment::Fragment(std::string name, Expression *expr) : name(name), right(expr) {
 }
 
 std::string ExprStmt::print() {
   return expr->print() + ";";
 }
 
-/*std::string Field::print()
-{
-  return type->print() + " " + *name + (expr == nullptr ? "" : expr->print()) + ";";
-}*/
-
 std::string Block::print() {
   std::string s;
   s.append("{\n");
-  s.append(join(list, "\n"));
-  s.append("}");
+  for (int i = 0; i < list.size(); ++i) {
+    printBody(s, list[i]);
+  }
+  s.append("\n}");
   return s;
 }
 
@@ -78,8 +48,8 @@ std::string EnumDecl::print() {
   s.append("enum ");
   s.append(*name);
   s.append("{\n");
-  s.append(join(cons, ",\n"));
-  s.append("}");
+  s.append(join(cons, ",\n", "  "));
+  s.append("\n}");
   return s;
 }
 
@@ -103,9 +73,11 @@ std::string TypeDecl::print() {
   s.append(isInterface ? "interface " : "class ");
   s.append(*name);
   s.append("{\n");
-  s.append(join(fields, "\n"));
-  s.append(join(methods, "\n"));
-  s.append(join(types, "\n"));
+  for (auto var : fields) {
+    s.append("  ").append(var->print()).append(";\n");
+  }
+  s.append(join(methods, "\n\n", "  "));
+  s.append(join(types, "\n\n", "  "));
   s.append("\n}");
   return s;
 }
@@ -143,9 +115,12 @@ std::string ParExpr::print() {
 std::string Unit::print() {
   std::string s;
   s.append(join(imports, "\n"));
-  s.append(join(methods, "\n"));
+  s.append("\n\n");
+  s.append(join(types, "\n\n"));
+  s.append("\n");
+  s.append(join(methods, "\n\n"));
+  s.append("\n\n");
   s.append(join(stmts, "\n"));
-  s.append(join(types, "\n"));
   return s;
 }
 
@@ -157,7 +132,6 @@ std::string ImportStmt::print() {
     s.append(" as ");
     s.append(*as);
   }
-
   return s;
 }
 
@@ -173,8 +147,8 @@ std::string IfStmt::print() {
 std::string ForStmt::print() {
   std::string s;
   s.append("for(");
-  if (!decl.empty()) {
-    s.append(decl[0].print());
+  if (decl != nullptr) {
+    s.append(decl->print());
   }
   s.append(";");
   if (cond != nullptr) {
@@ -184,8 +158,8 @@ std::string ForStmt::print() {
   if (!updaters.empty()) {
     s.append(join(updaters, ", "));
   }
-  s.append(")\n");
-  s.append(body->print());
+  s.append(")");
+  printBody(s, body);
   return s;
 }
 
@@ -227,4 +201,20 @@ std::string MethodCall::print() {
 }
 std::string WhileStmt::print() {
   return "while(" + expr->print() + ")\n" + body->print();
+}
+std::string ReturnStmt::print() {
+  if (expr == nullptr) return "return";
+  return "return " + expr->print() + ";";
+}
+std::string ContinueStmt::print() {
+  if (label == nullptr) return "continue";
+  return "continue " + *label;
+}
+
+std::string BreakStmt::print() {
+  if (label == nullptr) return "break";
+  return "break " + *label;
+}
+std::string DoWhile::print() {
+  return "do" + body.print() + "\nwhile(" + expr->print() + ");";
 }
