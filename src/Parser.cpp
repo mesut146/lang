@@ -25,7 +25,7 @@ bool isPrim(Token &t) {
 }
 
 bool isType(Parser &p) {
-  Token t = *p.peek();
+  Token t = *p.first();
   if (isPrim(t) || t.is({VOID, LET, VAR})) {
     return true;
   }
@@ -52,7 +52,7 @@ Literal *parseLit(Parser &p) {
 Name *qname(Parser &p) {
   auto *s = new SimpleName;
   s->name = p.consume(IDENT)->value;
-  if (p.peek()->is(DOT)) {
+  if (p.first()->is(DOT)) {
     Name *cur = s;
     while (p.peek()->is(DOT) && p.peek()->is(IDENT)) {
       p.consume(DOT);
@@ -103,6 +103,16 @@ Type *parseType(Parser &p) {
   } else {
     return refType(p);
   }
+}
+
+Block* parseBlock(Parser &p) {
+  Block* res=new Block;
+  p.consume(LBRACE);
+  while (!p.first()->is(RBRACE)) {
+    res->list.push_back(p.parseStmt());
+  }
+  p.consume(RBRACE);
+  return res;
 }
 
 Expression *parsePar(Parser &p) {
@@ -168,6 +178,16 @@ EnumDecl *Parser::parseEnumDecl() {
   auto *res = new EnumDecl;
   consume(ENUM);
   res->name = name();
+  log("enum decl=" + *res->name);
+  consume(LBRACE);
+  if(!first()->is(RBRACE)){
+    res->cons.push_back(*name());
+    while(first()->is(COMMA)){
+      consume(COMMA);
+      res->cons.push_back(*name());
+    }
+  }
+  consume(RBRACE);
   return res;
 }
 
@@ -177,11 +197,16 @@ MethodCall simpleCall(Parser &p, Expression *scope) {
 }
 
 bool isOp(std::string &s) {
-  return s == "+";
+  return s == "+" || s == "-" || s=="<=";
+}
+
+bool isAssign(std::string &s) {
+  return s == "=" || s == "+=" || s == "-=";
 }
 
 Expression *Parser::parseExpr() {
-  log("parseExpr");
+  reset();
+  log("parseExpr " + *first()->value);
   Token t = *peek();
   //parse primary
   Expression *prim;
@@ -189,6 +214,7 @@ Expression *Parser::parseExpr() {
     prim = parseLit(*this);
   } else if (t.is(IDENT)) {
     Name *name = qname(*this);
+    prim = name;
     if (first()->is(DOT)) {
       consume(DOT);
       //method call,field access
@@ -200,17 +226,37 @@ Expression *Parser::parseExpr() {
       prim = call;
       consume(RPAREN);
     }
-  } else {
+  } else if(t.is({PLUSPLUS,MINUSMINUS,PLUS,MINUS,TILDE,BANG})){
+      auto* p=new Unary;
+      p->op=*pop()->value;
+      p->expr=parseExpr();
+    }
+
+  else {
     throw std::string("invalid expr " + *t.value);
   }
+  log("prim ="+prim->print());
   if (isOp(*first()->value)) {
     Infix *infix = new Infix;
     infix->left = prim;
     infix->op = *pop()->value;
     infix->right = parseExpr();
-    return infix;
+    prim = infix;
   }
-  return nullptr;
+  else if(first()->is({PLUSPLUS, MINUSMINUS})){
+    auto* post = new Postfix;
+    post->expr = prim;
+    post->op = *pop()->value;
+    prim = post;
+  }else if(isAssign(*first()->value)){
+    auto* a=new Assign;
+    a->left = prim;
+    a->op = *pop()->value;
+    a->right = parseExpr();
+    prim = a;
+  }
+  log("expr="+prim->print());
+  return prim;
 }
 
 Statement *parseFor(Parser &p) {
@@ -265,12 +311,31 @@ std::vector<Expression *> exprList(Parser &p) {
 
 Statement *Parser::parseStmt() {
   reset();
-  log("parseStmt");
+  log("parseStmt " + *first()->value);
   Token t = *peek();
   if (t.is(IF_KW)) {
-  } else if (t.is(FOR)) {
+  }
+  else if (t.is(FOR)) {
     return parseFor(*this);
   }
+  else if(t.is(IDENT)){
+    Expression* e = parseExpr();
+    if(first()->is(SEMI)){
+      consume(SEMI);
+      return new ExprStmt(e);
+    }
+    else if(first()->is({EQ,PLUSEQ,MINUSEQ,ANDEQ,OREQ,LTLTEQ,GTGTEQ})){
+      auto* as=new Assign;
+      as->left = e;
+      as->op = *pop()->value;
+      consume(SEMI);
+      return new ExprStmt(as);
+    }
+  }
+  else if(t.is(LBRACE)){
+    return parseBlock(*this);
+  }
+  throw std::string("invalid stmt "+*t.value);
   return nullptr;
 }
 
@@ -291,14 +356,15 @@ IfStmt parseIf(Parser &p) {
   return res;
 }
 
-Block parseBlock(Parser &p) {
-  Block res;
-  p.consume(LBRACE);
-  while (!p.peek()->is(RBRACE)) {
-    res.list.push_back(p.parseStmt());
+Param parseParam(Parser& p){
+  Param prm;
+  prm.type = parseType(p);   
+  prm.name = p.name();
+  if (p.first()->is(EQ)) {
+    p.consume(EQ);
+    prm.defVal = p.parseExpr();
   }
-  p.consume(RBRACE);
-  return res;
+  return prm;
 }
 
 Method parseMethod(Parser &p, Type *type, RefType *name) {
@@ -306,24 +372,18 @@ Method parseMethod(Parser &p, Type *type, RefType *name) {
   res.type = type;
   res.name = name->print();
   p.consume(LPAREN);
-  while (1) {
-    Token t = *p.peek();
-    if (t.is(RPAREN)) {
-      p.consume(RPAREN);
-      break;
-    }
-    Param prm;
-    res.params.push_back(prm);
-    prm.type = parseType(p);
-    prm.name = p.name();
-    t = *p.peek();
-    if (t.is(EQ)) {
-      prm.defVal = p.parseExpr();
+  if (!p.first()->is(RPAREN)) {
+    res.params.push_back(parseParam(p));
+    while(p.first()->is(COMMA)){
+      p.consume(COMMA);
+      res.params.push_back(parseParam(p));
     }
   }
-  res.body = parseBlock(p);
+  p.consume(RPAREN);
+  res.body = *parseBlock(p);
   return res;
 }
+
 VarDecl *varDecl(Parser &p) {
   VarDecl *res = new VarDecl;
   res->type = parseType(p);
@@ -340,7 +400,7 @@ VarDecl *varDecl(Parser &p, Type *type, RefType *nm) {
   res->type = type;
   res->name = nm->print();
   log("varDecl " + res->name);
-  if (p.peek()->is(EQ)) {
+  if (p.first()->is(EQ)) {
     p.consume(EQ);
     res->right = p.parseExpr();
   }
@@ -350,19 +410,16 @@ VarDecl *varDecl(Parser &p, Type *type, RefType *nm) {
 Unit Parser::parseUnit() {
   log("unit");
   Unit res;
-  Token *t = peek();
 
-  while (t->is(IMPORT)) {
+  while (first()->is(IMPORT)) {
     res.imports.push_back(parseImport(*this));
-    t = peek();
   }
-  while (1) {
+  
+  while (first()!=nullptr) {
     //top level decl
     //type decl or stmt
     reset();
-    t = peek();
-    if (t == nullptr)
-      break;
+    Token *t = peek();
     if (t->is(CLASS) || t->is(INTERFACE)) {
       res.types.push_back(parseTypeDecl());
     } else if (t->is(ENUM)) {
@@ -372,18 +429,13 @@ Unit Parser::parseUnit() {
       if (isType(*this)) {
         Type *type = parseType(*this);
         RefType *nm = refType(*this);
-        reset();
-        if (peek()->is(LPAREN)) {
+        if (first()->is(LPAREN)) {
           res.methods.push_back(parseMethod(*this, type, nm));
         } else {
-          reset();
-          ExprStmt *e = new ExprStmt;
-          e->expr = varDecl(*this, type, nm);
+          res.stmts.push_back(new ExprStmt(varDecl(*this,type,nm)));
           consume(SEMI);
-          res.stmts.push_back(e);
         }
       } else {
-        reset();
         res.stmts.push_back(parseStmt());
       }
       //throw std::string("unexpected " + *t->value);

@@ -49,6 +49,8 @@ enum TokenType {
     PERCENT,
     BANG,
     TILDE,
+    PLUSPLUS,
+    MINUSMINUS,
     QUES,
     SEMI,
     COLON,

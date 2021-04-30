@@ -169,6 +169,7 @@ class ExprStmt : public Statement {
   public:
   Expression *expr;
   std::string print() override;
+  ExprStmt(Expression* e) : expr(e){}
 };
 
 class VarDecl : public Expression {
@@ -184,6 +185,15 @@ class Unary : public Expression {
   public:
   std::string op;
   Expression *expr;
+
+  std::string print() override;
+};
+
+class Assign : public Expression {
+  public:
+  Expression *left;
+  Expression *right;
+  std::string op;
 
   std::string print() override;
 };

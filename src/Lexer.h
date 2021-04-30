@@ -68,6 +68,9 @@ class Lexer {
     ops["^"] = POW;
     ops["%"] = PERCENT;
 
+    ops["++"] = PLUSPLUS;
+    ops["--"] = MINUSMINUS;
+
     ops["="] = EQ;
     ops["=="] = EQEQ;
     ops["+="] = PLUSEQ;
@@ -85,6 +88,8 @@ class Lexer {
     ops[">"] = GT;
     ops["<<"] = LTLT;
     ops[">>"] = GTGT;
+    ops["<="] = LTEQ;
+    ops[">="] = GTEQ;
 
     ops["|"] = OR;
     ops["&"] = AND;

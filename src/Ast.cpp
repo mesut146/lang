@@ -203,6 +203,9 @@ std::string ForEach::print() {
 std::string Infix::print() {
   return left->print() + " " + op + " " + right->print();
 }
+std::string Assign::print() {
+  return left->print() + " " + op + " " + right->print();
+}
 std::string Unary::print() {
   return op + expr->print();
 }
