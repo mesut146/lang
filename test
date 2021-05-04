@@ -2,6 +2,8 @@ import file as util
 
 //line comment
 
+a.b.c();
+
 float pi = 3.1415;
 {
 for(int i=2;i<=5;i++){

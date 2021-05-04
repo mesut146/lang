@@ -309,19 +309,3 @@ class ForEach : public Statement {
 
   std::string print() override;
 };
-
-class SwitchStmt : public Statement {
-  public:
-  Expression *expr;
-  std::vector<Case> cases;
-
-  std::string print() override;
-};
-
-class Case : public Statement {
-  public:
-  Expression *expr;
-  Statement *body;//can be case
-
-  std::string print();
-};

@@ -29,7 +29,7 @@ bool isPrim(Token &t) {
 }
 
 bool isType(Parser &p) {
-  Token t = *p.first();
+  Token t = *p.peek();
   if (isPrim(t) || t.is({VOID, LET, VAR})) {
     return true;
   }
@@ -457,6 +457,14 @@ Unit Parser::parseUnit() {
       res.types.push_back(parseEnumDecl());
     } else {
       //stmt,method
+      if (t->is(IDENT)) {
+        Name *nm = qname(*this);
+        Type *type = parseType(*this);
+        //could be method decl
+
+      } else {
+        res.stmts.push_back(parseStmt());
+      }
       if (isType(*this)) {
         Type *type = parseType(*this);
         RefType *nm = refType(*this);
