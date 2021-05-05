@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 
 template<class T>
 std::string join(std::vector<T> &arr, const char *sep, const char *indent = "") {
@@ -69,4 +70,16 @@ void printBody(std::string &buf, const std::string &to) {
       pos = tmp;
     }
   }
+}
+
+bool debug = false;
+
+void log(const char *msg) {
+  if (debug)
+    std::cout << msg << "\n";
+}
+
+void log(const std::string &msg) {
+  if (debug)
+    std::cout << msg << "\n";
 }

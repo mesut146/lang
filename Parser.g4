@@ -1,5 +1,10 @@
 parser grammar Parser;
-import Lexer;
+
+options{
+ tokenVocab=Lexer;
+}
+
+//import Lexer;
 
 unit:
   importStmt* topStmt*;
@@ -76,7 +81,18 @@ varDeclFrag:
   name ('=' expr)?;
 
 expr:
- assign | infix | postfix | prefix | fieldAccess | qname | methodCall | literal | ternary | varDecl creation | arrayAccess;
+ assign
+ | infix
+ | postfix
+ | prefix
+ | fieldAccess
+ | qname
+ | methodCall
+ | literal
+ | ternary
+ | varDecl
+ | creation
+ | arrayAccess;
 
 methodCall:
   (expr '.')? name '(' args? ')';
@@ -126,5 +142,4 @@ array:
 
 arrayAccess:
   expr '[' expr ']';
-
 

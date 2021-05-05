@@ -34,14 +34,14 @@ AT: '@';
 COLONCOLON: '::';
 
 // §3.12 Operators
-ASSIGN: '=';
+
 GT: '>';
 LT: '<';
 BANG: '!';
 TILDE: '~';
 QUESTION: '?';
 COLON: ':';
-ARROW: '->';
+ARROW: '=>';
 EQUAL: '==';
 LE: '<=';
 GE: '>=';
@@ -58,8 +58,11 @@ BITAND: '&';
 BITOR: '|';
 CARET: '^';
 MOD: '%';
-//LSHIFT : '<<'; RSHIFT : '>>'; URSHIFT : '>>>';
+LSHIFT : '<<';
+RSHIFT : '>>';
+STARSTAR: '**';
 
+ASSIGN: '=';
 ADD_ASSIGN: '+=';
 SUB_ASSIGN: '-=';
 MUL_ASSIGN: '*=';
@@ -80,7 +83,8 @@ INT: 'int';
 LONG: 'long';
 FLOAT: 'float';
 DOUBLE: 'double';
-BOOLEAN: 'boolean';
+BOOLEAN: 'boolean' | 'bool';
+VOID: 'void';
 
 //literals
 BOOLEAN_LIT: 'true' | 'false';

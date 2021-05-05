@@ -103,7 +103,7 @@ class Param {
   std::string print();
 };
 
-class Method {
+class Method : public Statement {
   public:
   Type *type;
   std::string name;
@@ -130,7 +130,7 @@ class BaseDecl {
 
 class TypeDecl : public BaseDecl {
   public:
-  std::string *name;
+  std::string name;
   bool isInterface;
   std::vector<Type *> typeArgs;
   std::vector<Type *> baseTypes;

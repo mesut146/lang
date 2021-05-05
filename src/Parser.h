@@ -61,8 +61,6 @@ class Parser {
   }
 
   Unit parseUnit();
-  Statement *parseStmt();
-  Expression *parseExpr();
   TypeDecl *parseTypeDecl();
   EnumDecl *parseEnumDecl();
 };

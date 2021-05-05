@@ -14,4 +14,4 @@ include_directories(
         ${PROJECT_SOURCE_DIR}/src
 )
 
-add_executable(lang ${src})
+add_executable(lang ${src} src/ExprParser.cpp)

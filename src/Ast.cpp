@@ -71,7 +71,13 @@ std::string RefType::print() {
 std::string TypeDecl::print() {
   std::string s;
   s.append(isInterface ? "interface " : "class ");
-  s.append(*name);
+  s.append(name);
+  if (!typeArgs.empty()) {
+    s.append("<").append(join(typeArgs, ", ")).append(">");
+  }
+  if (baseTypes.empty()) {
+    s.append(" : ").append(join(baseTypes, ", "));
+  }
   s.append("{\n");
   for (auto var : fields) {
     s.append("  ").append(var->print()).append(";\n");
