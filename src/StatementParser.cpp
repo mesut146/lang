@@ -1,5 +1,5 @@
 #include "StatementParser.h"
-#include "Ast.h"
+#include "ExprParser.h"
 #include "Parser.h"
 #include "Token.h"
 #include "Util.h"
@@ -71,33 +71,59 @@ Statement *parseFor(Parser *p) {
   }
 }
 
+Param parseParam(Parser *p) {
+  Param prm;
+  prm.type = parseType(p);
+  prm.name = p->name();
+  if (p->first()->is(EQ)) {
+    p->consume(EQ);
+    prm.defVal = parseExpr(p);
+  }
+  return prm;
+}
+
+Method *parseMethod(Parser *p, Type *type, RefType *name) {
+  log("parseMethod = " + name->print());
+  Method *res = new Method;
+  res->type = type;
+  res->name = name->print();
+  p->consume(LPAREN);
+  if (!p->first()->is(RPAREN)) {
+    res->params.push_back(parseParam(p));
+    while (p->first()->is(COMMA)) {
+      p->consume(COMMA);
+      res->params.push_back(parseParam(p));
+    }
+  }
+  p->consume(RPAREN);
+  res->body = *parseBlock(p);
+  return res;
+}
+
 Statement *parseStmt(Parser *p) {
-  p->reset();
   log("parseStmt " + *p->first()->value);
+  p->reset();
   Token t = *p->peek();
   if (t.is(IF_KW)) {
     return parseIf(p);
   } else if (t.is(FOR)) {
     return parseFor(p);
-  } else if (t.is(IDENT)) {
-    Expression *e = parseExpr(p);
-    if (p->first()->is(SEMI)) {
-      p->consume(SEMI);
-      return new ExprStmt(e);
-    } else if (p->first()->is({EQ, PLUSEQ, MINUSEQ, ANDEQ, OREQ, LTLTEQ, GTGTEQ})) {
-      auto *as = new Assign;
-      as->left = e;
-      as->op = *p->pop()->value;
-      p->consume(SEMI);
-      return new ExprStmt(as);
-    }
   } else if (t.is(LBRACE)) {
     return parseBlock(p);
   } else if (isType(p)) {
-    //var decl
-    auto decl = varDecl(p);
-    p->consume(SEMI);
-    return new ExprStmt(decl);
+    //var decl,method decl
+    auto type = parseType(p);
+    auto r = refType(p);
+    if (p->first()->is({EQ, SEMI})) {
+      //var decl
+      auto var = varDecl(p, type, r);
+      p->consume(SEMI);
+      return new ExprStmt(var);
+    } else if (p->first()->is(LPAREN)) {
+      //method decl
+      return parseMethod(p, type, r);
+    }
+
   } else if (t.is(RETURN)) {
     auto ret = new ReturnStmt;
     p->consume(RETURN);
@@ -122,6 +148,18 @@ Statement *parseStmt(Parser *p) {
     }
     p->consume(SEMI);
     return ret;
+  } else if (t.is(IDENT)) {
+    Expression *e = parseExpr(p);
+    if (p->first()->is(SEMI)) {
+      p->consume(SEMI);
+      return new ExprStmt(e);
+    } else if (p->first()->is({EQ, PLUSEQ, MINUSEQ, ANDEQ, OREQ, LTLTEQ, GTGTEQ})) {
+      auto *as = new Assign;
+      as->left = e;
+      as->op = *p->pop()->value;
+      p->consume(SEMI);
+      return new ExprStmt(as);
+    }
   }
-  throw std::string("invalid stmt " + *t.value);
+  throw std::string("invalid stmt " + *t.value + " line:" + std::to_string(t.line));
 }

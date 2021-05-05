@@ -1,5 +1,6 @@
-#ifndef LANG_VISITOR_H
-#define LANG_VISITOR_H
+#pragma once
+
+#include "Ast.h"
 
 class Visitor {
 
@@ -7,6 +8,3 @@ class Visitor {
 
   virtual void visitStmt(Stmt *) = 0;
 };
-
-
-#endif//LANG_VISITOR_H

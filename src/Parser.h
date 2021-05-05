@@ -11,16 +11,17 @@ class Parser {
   Lexer lexer;
   std::vector<Token *> tokens;
   int laPos = 0;
+  int line;
 
   Parser(Lexer &lexer) : lexer(lexer) {
-    read();
+    fill();
   }
 
   void reset() {
     laPos = 0;
   }
 
-  void read() {
+  void fill() {
     while (true) {
       Token *t = lexer.next();
       if (t->is(EOF2))

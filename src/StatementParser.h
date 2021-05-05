@@ -1,7 +1,8 @@
 #pragma once
 
-#include "ExprParser.h"
-#include "Util.h"
+#include "Ast.h"
+
+class Parser;
 
 Statement *parseStmt(Parser *);
 Block *parseBlock(Parser *p);

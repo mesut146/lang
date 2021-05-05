@@ -1,8 +1,6 @@
 #include "ExprParser.h"
-#include "Ast.h"
 #include "Parser.h"
 #include "Token.h"
-#include "Util.h"
 
 bool isOp(std::string &s) {
   return s == "+" || s == "-" || s == "<=";
@@ -71,7 +69,7 @@ Name *qname(Parser *p) {
       p->consume(DOT);
       auto *tmp = new QName;
       tmp->scope = cur;
-      tmp->name = p->consume(IDENT)->value;
+      tmp->name = *p->consume(IDENT)->value;
       cur = tmp;
     }
     return cur;
@@ -113,13 +111,19 @@ RefType *refType(Parser *p) {
   return res;
 }
 
-Expression *parseExpr(Parser *p) {
-  log("parseExpr " + *p->first()->value);
+Expression *primary(Parser *p) {
+  log("parsePrimary " + *p->first()->value);
   Token t = *p->first();
-  //parse primary
   Expression *prim;
   if (isLit(t)) {
     prim = parseLit(p);
+  } else if (t.is({PLUSPLUS, MINUSMINUS, PLUS, MINUS, TILDE, BANG})) {
+    auto unary = new Unary;
+    unary->op = *p->pop()->value;
+    unary->expr = parseExpr(p);
+    prim = unary;
+  } else if (t.is(LPAREN)) {
+    prim = parsePar(p);
   } else if (t.is(IDENT)) {
     Name *name = qname(p);
     prim = name;
@@ -129,23 +133,30 @@ Expression *parseExpr(Parser *p) {
     } else if (p->first()->is(LPAREN)) {
       p->consume(LPAREN);
       auto call = new MethodCall;
-      call->args = exprList(p);
-      call->name = name->print();
+      if (!p->first()->is(RPAREN)) {
+        call->args = exprList(p);
+      }
+      if (auto nm = dynamic_cast<QName *>(name)) {
+        call->name = nm->name;
+        call->scope = nm->scope;
+      } else {
+        call->name = name->print();
+      }
       prim = call;
       p->consume(RPAREN);
     }
-  } else if (t.is({PLUSPLUS, MINUSMINUS, PLUS, MINUS, TILDE, BANG})) {
-    auto unary = new Unary;
-    unary->op = *p->pop()->value;
-    unary->expr = parseExpr(p);
-    prim = unary;
-  } else if (t.is(LPAREN)) {
-    prim = parsePar(p);
+  } else {
+    throw std::string("invalid expr " + *t.value + " line: " + std::to_string(t.line));
   }
+  return prim;
+}
 
-  else {
-    throw std::string("invalid expr " + *t.value);
-  }
+Expression *parseExpr(Parser *p) {
+  log("parseExpr " + *p->first()->value);
+  Token t = *p->first();
+  //parse primary
+  Expression *prim = primary(p);
+
   //log("prim =" + prim->print());
   if (isOp(*p->first()->value)) {
     auto infix = new Infix;

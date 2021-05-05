@@ -6,7 +6,7 @@ std::string SimpleName::print() {
 }
 
 std::string QName::print() {
-  return scope->print() + "." + *name;
+  return scope->print() + "." + name;
 }
 
 std::string Literal::print() {

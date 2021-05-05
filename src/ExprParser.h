@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Ast.h"
-#include "StatementParser.h"
 #include "Util.h"
 
 class Parser;

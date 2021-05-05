@@ -9,7 +9,7 @@ Method parseMethod(Parser &p, Type *type, RefType *name);
 
 ImportStmt parseImport(Parser &p) {
   log("parseImport");
-  ImportStmt res{};
+  ImportStmt res;
   p.consume(IMPORT);
   res.file = p.name();
   if (p.first()->is(AS)) {
@@ -36,16 +36,17 @@ TypeDecl *Parser::parseTypeDecl() {
   consume(LBRACE);
   //members
   while (!first()->is(RBRACE)) {
-    if (isType(this)) {
-      auto type = parseType(this);
-      RefType *nm = refType(this);
-      if (first()->is(LPAREN)) {
-        res->methods.push_back(parseMethod(*this, type, nm));
-      } else {
-        res->fields.push_back(varDecl(this, type, nm));
-        consume(SEMI);
-      }
+    if (first()->is(CLASS)) {
+      res->types.push_back(parseTypeDecl());
+    } else if (first()->is(ENUM)) {
+      res->types.push_back(parseEnumDecl());
     } else {
+      auto stmt = parseStmt(this);
+      if (auto meth = dynamic_cast<Method *>(stmt)) {
+        res->methods.push_back(*meth);
+      } else {
+        res->fields.push_back(reinterpret_cast<VarDecl *const>(stmt));
+      }
     }
   }
   consume(RBRACE);
@@ -68,42 +69,6 @@ EnumDecl *Parser::parseEnumDecl() {
   consume(RBRACE);
   return res;
 }
-
-MethodCall simpleCall(Parser &p, Expression *scope) {
-  MethodCall res;
-  return res;
-}
-
-
-Param parseParam(Parser &p) {
-  Param prm;
-  prm.type = parseType(&p);
-  prm.name = p.name();
-  if (p.first()->is(EQ)) {
-    p.consume(EQ);
-    prm.defVal = parseExpr(&p);
-  }
-  return prm;
-}
-
-Method parseMethod(Parser &p, Type *type, RefType *name) {
-  Method res;
-  res.type = type;
-  res.name = name->print();
-  log("parseMethod = " + name->print());
-  p.consume(LPAREN);
-  if (!p.first()->is(RPAREN)) {
-    res.params.push_back(parseParam(p));
-    while (p.first()->is(COMMA)) {
-      p.consume(COMMA);
-      res.params.push_back(parseParam(p));
-    }
-  }
-  p.consume(RPAREN);
-  res.body = *parseBlock(&p);
-  return res;
-}
-
 
 Unit Parser::parseUnit() {
   log("unit");

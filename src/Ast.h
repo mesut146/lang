@@ -35,7 +35,7 @@ class SimpleName : public Name {
 class QName : public Name {
   public:
   Name *scope;
-  std::string *name;
+  std::string name;
 
   std::string print();
 };
@@ -174,7 +174,7 @@ class ExprStmt : public Statement {
 
 class Fragment {
   public:
-  Fragment(std::string basicString, Expression *pExpression);
+  Fragment(std::string, Expression*);
   std::string name;
   Expression *right;
 
