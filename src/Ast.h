@@ -5,82 +5,82 @@
 #include <vector>
 
 class Expression {
-  public:
-  virtual std::string print() = 0;
+public:
+    virtual std::string print() = 0;
 };
 class Statement {
-  public:
-  virtual std::string print() = 0;
+public:
+    virtual std::string print() = 0;
 };
 
 class Block : public Statement {
-  public:
-  std::vector<Statement *> list;
+public:
+    std::vector<Statement *> list;
 
-  std::string print();
+    std::string print();
 };
 
 class Name : public Expression {
-  public:
-  virtual std::string print() = 0;
+public:
+    virtual std::string print() = 0;
 };
 
 class SimpleName : public Name {
-  public:
-  std::string *name;
+public:
+    std::string *name;
 
-  std::string print();
+    std::string print();
 };
 
 class QName : public Name {
-  public:
-  Name *scope;
-  std::string name;
+public:
+    Name *scope;
+    std::string name;
 
-  std::string print();
+    std::string print();
 };
 
 class ImportStmt {
-  public:
-  std::string *file;
-  bool isStar;
-  std::string *as;
-  std::string print();
+public:
+    std::string *file;
+    bool isStar;
+    std::string *as;
+    std::string print();
 };
 
 class Type : public Expression {
-  public:
-  virtual bool isVar() { return false; };
-  //virtual bool isTypeVar() = 0;
-  virtual bool isPrim() { return false; };
-  virtual bool isVoid() { return false; };
+public:
+    virtual bool isVar() { return false; };
+    //virtual bool isTypeVar() = 0;
+    virtual bool isPrim() { return false; };
+    virtual bool isVoid() { return false; };
 
-  virtual std::string print() = 0;
+    virtual std::string print() = 0;
 };
 
 class SimpleType : public Type {
-  public:
-  std::string *type;
-  bool isVar() {
-    return *type == "var";
-  }
-  bool isTypeVar;
-  bool isPrim() {
-    return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
-           *type == "short" || *type == "float" || *type == "double";
-  }
-  bool isVoid() {
-    return *type == "void";
-  }
+public:
+    std::string *type;
+    bool isVar() {
+        return *type == "var";
+    }
+    bool isTypeVar;
+    bool isPrim() {
+        return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
+               *type == "short" || *type == "float" || *type == "double";
+    }
+    bool isVoid() {
+        return *type == "void";
+    }
 
-  std::string print();
+    std::string print();
 };
 
 class RefType : public Type {
-  public:
-  Name *name;
-  std::vector<Type *> typeArgs;
-  std::string print();
+public:
+    Name *name;
+    std::vector<Type *> typeArgs;
+    std::string print();
 };
 
 /*class Field: public VarDecl
@@ -94,218 +94,218 @@ public:
 };*/
 
 class Param {
-  public:
-  Type *type;
-  std::string *name;
-  bool isOptional;
-  Expression *defVal;
+public:
+    Type *type;
+    std::string *name;
+    bool isOptional;
+    Expression *defVal;
 
-  std::string print();
+    std::string print();
 };
 
 class Method : public Statement {
-  public:
-  Type *type;
-  std::string name;
-  std::vector<Param> params;
-  Block body;
+public:
+    Type *type;
+    std::string name;
+    std::vector<Param> params;
+    Block *body;
 
-  std::string print();
+    std::string print();
 };
 
 class Unit {
-  public:
-  std::vector<ImportStmt> imports;
-  std::vector<BaseDecl *> types;
-  std::vector<Method> methods;
-  std::vector<Statement *> stmts;
+public:
+    std::vector<ImportStmt> imports;
+    std::vector<BaseDecl *> types;
+    std::vector<Method> methods;
+    std::vector<Statement *> stmts;
 
-  std::string print();
+    std::string print();
 };
 
 class BaseDecl {
-  public:
-  virtual std::string print() = 0;
+public:
+    virtual std::string print() = 0;
 };
 
 class TypeDecl : public BaseDecl {
-  public:
-  std::string name;
-  bool isInterface;
-  std::vector<Type *> typeArgs;
-  std::vector<Type *> baseTypes;
-  std::vector<VarDecl *> fields;
-  std::vector<Method> methods;
-  std::vector<BaseDecl *> types;
+public:
+    std::string name;
+    bool isInterface;
+    std::vector<Type *> typeArgs;
+    std::vector<Type *> baseTypes;
+    std::vector<VarDecl *> fields;
+    std::vector<Method> methods;
+    std::vector<BaseDecl *> types;
 
-  std::string print();
+    std::string print();
 };
 
 class EnumDecl : public BaseDecl {
-  public:
-  std::string *name;
-  std::vector<std::string> cons;
+public:
+    std::string *name;
+    std::vector<std::string> cons;
 
-  std::string print();
+    std::string print();
 };
 
 class Literal : public Expression {
-  public:
-  std::string val;
-  bool isBool;
-  bool isInt;
-  bool isFloat;
-  bool isStr;
-  bool isChar;
-  std::string print();
+public:
+    std::string val;
+    bool isBool;
+    bool isInt;
+    bool isFloat;
+    bool isStr;
+    bool isChar;
+    std::string print();
 };
 
 class NullLit : public Expression {
-  public:
-  std::string print();
+public:
+    std::string print();
 };
 
 class ExprStmt : public Statement {
-  public:
-  Expression *expr;
-  std::string print() override;
-  ExprStmt(Expression *e) : expr(e) {}
+public:
+    Expression *expr;
+    std::string print() override;
+    ExprStmt(Expression *e) : expr(e) {}
 };
 
 class Fragment {
-  public:
-  Fragment(std::string, Expression*);
-  std::string name;
-  Expression *right;
+public:
+    Fragment(std::string, Expression *);
+    std::string name;
+    Expression *right;
 
-  std::string print();
+    std::string print();
 };
 
 class VarDecl : public Expression {
-  public:
-  Type *type;
-  std::vector<Fragment> list;
+public:
+    Type *type;
+    std::vector<Fragment> list;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 
 class Unary : public Expression {
-  public:
-  std::string op;
-  Expression *expr;
+public:
+    std::string op;
+    Expression *expr;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class Assign : public Expression {
-  public:
-  Expression *left;
-  Expression *right;
-  std::string op;
+public:
+    Expression *left;
+    Expression *right;
+    std::string op;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class Infix : public Expression {
-  public:
-  Expression *left;
-  Expression *right;
-  std::string op;
+public:
+    Expression *left;
+    Expression *right;
+    std::string op;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class Postfix : public Expression {
-  public:
-  std::string op;
-  Expression *expr;
+public:
+    std::string op;
+    Expression *expr;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class MethodCall : public Expression {
-  public:
-  Expression *scope;
-  std::string name;
-  std::vector<Expression *> args;
+public:
+    Expression *scope;
+    std::string name;
+    std::vector<Expression *> args;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class FieldAccess : public Expression {
-  public:
-  Expression *scope;
-  std::string name;
+public:
+    Expression *scope;
+    std::string name;
 
-  std::string print();
+    std::string print();
 };
 
 class ParExpr : public Expression {
-  public:
-  Expression *expr;
-  std::string print() override;
+public:
+    Expression *expr;
+    std::string print() override;
 };
 
 class ReturnStmt : public Statement {
-  public:
-  Expression *expr;
-  std::string print() override;
+public:
+    Expression *expr;
+    std::string print() override;
 };
 
 class ContinueStmt : public Statement {
-  public:
-  std::string *label;
-  std::string print() override;
+public:
+    std::string *label;
+    std::string print() override;
 };
 
 class BreakStmt : public Statement {
-  public:
-  std::string *label;
+public:
+    std::string *label;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class IfStmt : public Statement {
-  public:
-  Expression *expr;
-  Statement *thenStmt;
-  Statement *elseStmt;
+public:
+    Expression *expr;
+    Statement *thenStmt;
+    Statement *elseStmt;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class WhileStmt : public Statement {
-  public:
-  Expression *expr;
-  Statement *body;
+public:
+    Expression *expr;
+    Statement *body;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class DoWhile : public Statement {
-  public:
-  Expression *expr;
-  Block body;
+public:
+    Expression *expr;
+    Block body;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class ForStmt : public Statement {
-  public:
-  VarDecl *decl;
-  Expression *cond;
-  std::vector<Expression *> updaters;
-  Statement *body;
+public:
+    VarDecl *decl;
+    Expression *cond;
+    std::vector<Expression *> updaters;
+    Statement *body;
 
-  std::string print() override;
+    std::string print() override;
 };
 
 class ForEach : public Statement {
-  public:
-  VarDecl decl;
-  Expression *expr;
-  Statement *body;
+public:
+    VarDecl decl;
+    Expression *expr;
+    Statement *body;
 
-  std::string print() override;
+    std::string print() override;
 };

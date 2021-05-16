@@ -8,26 +8,26 @@
 
 template<class T>
 std::string join(std::vector<T> &arr, const char *sep, const char *indent = "") {
-  std::string s;
-  for (int i = 0; i < arr.size(); i++) {
-    s.append(indent);
-    s.append(arr[i].print());
-    if (i < arr.size() - 1)
-      s.append(sep);
-  }
-  return s;
+    std::string s;
+    for (int i = 0; i < arr.size(); i++) {
+        s.append(indent);
+        s.append(arr[i].print());
+        if (i < arr.size() - 1)
+            s.append(sep);
+    }
+    return s;
 }
 
 template<class T>
 std::string join(std::vector<T *> &arr, const char *sep, const char *indent = "") {
-  std::string s;
-  for (int i = 0; i < arr.size(); i++) {
-    s.append(indent);
-    s.append(arr[i]->print());
-    if (i < arr.size() - 1)
-      s.append(sep);
-  }
-  return s;
+    std::string s;
+    for (int i = 0; i < arr.size(); i++) {
+        s.append(indent);
+        s.append(arr[i]->print());
+        if (i < arr.size() - 1)
+            s.append(sep);
+    }
+    return s;
 }
 
 

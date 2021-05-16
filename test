@@ -2,18 +2,17 @@ import file as util
 
 //line comment
 
-a.b.c();
+/*block comment
+line2
+*/
 
-float pi = 3.1415;
+a.b.c();
+var pi = 3.1415;
 
 for(int i=2;i<=5;i++){
   //n.next = {value=i};
   n = n.next;
 }
-
-/*block comment
-line2
-*/
 
 class Node<T>{
   Node2 next;

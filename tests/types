@@ -1,0 +1,13 @@
+class Node<T>{
+  Node2 next;
+  int value;
+}
+
+enum Color{
+  WHITE,
+  BLACK
+}
+
+class a{
+  int calc();
+}
