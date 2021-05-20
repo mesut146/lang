@@ -114,19 +114,6 @@ Statement *parseStmt(Parser *p) {
         return parseFor(p);
     } else if (t.is(LBRACE)) {
         return parseBlock(p);
-    } else if (isType(p)) {
-        //var decl,method decl
-        auto type = parseType(p);
-        auto r = refType(p);
-        if (p->first()->is({EQ, SEMI})) {
-            //var decl
-            auto var = varDecl(p, type, r);
-            p->consume(SEMI);
-            return new ExprStmt(var);
-        } else if (p->first()->is(LPAREN)) {
-            //method decl
-            return parseMethod(p, type, r);
-        }
     } else if (t.is(RETURN)) {
         auto ret = new ReturnStmt;
         p->consume(RETURN);
@@ -151,7 +138,21 @@ Statement *parseStmt(Parser *p) {
         }
         p->consume(SEMI);
         return ret;
-    } else if (t.is(IDENT)) {
+    } else if (isType(p)) {
+        //var decl,method decl
+        auto type = parseType(p);
+        auto r = refType(p);
+        if (p->first()->is({EQ, SEMI})) {
+            //var decl
+            auto var = varDecl(p, type, r);
+            p->consume(SEMI);
+            return new ExprStmt(var);
+        } else if (p->first()->is(LPAREN)) {
+            //method decl
+            return parseMethod(p, type, r);
+        }
+    }
+    else if (t.is(IDENT)) {
         Expression *e = parseExpr(p);
         if (p->first()->is(SEMI)) {
             p->consume(SEMI);
