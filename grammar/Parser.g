@@ -87,9 +87,7 @@ fieldAccess: (arrayAccess | methodCall2) ("." IDENT)+;
 arrayAccess: (arrayAccess | methodCall2) ("[" E "]")+;
 
 expr:
-| fieldAccess
-| arrayAccess
-| methodCall2
+| PRIM ("." IDENT ("(" ")")? | "[" E "]")*
 | expr ("++" | "--") #post
 | ("+" | "-" | "++" | "--" | "!" | "~" | "(" type ")" expr) expr #unary
 | expr ("*" | "/" | "%") expr %left
@@ -104,7 +102,6 @@ expr:
 | expr "||" expr %left
 | expr "?" expr ":" expr %right
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %right
-| PRIM
 ;*/
 
 PRIM: literal | qname | "(" expr ")" | methodCall;

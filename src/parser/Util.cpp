@@ -26,9 +26,12 @@ void printBody(std::string &buf, Statement *stmt);
 
 void printBody(std::string &buf, Block *block) {
     buf.append("{\n");
+    auto i = 0;
     for (Statement *statement : block->list) {
         printBody(buf, statement);
-        buf.append("\n");
+        if (i < block->list.size() - 1)
+            buf.append("\n");
+        i++;
     }
     buf.append("}");
 }

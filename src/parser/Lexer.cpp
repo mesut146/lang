@@ -154,15 +154,29 @@ Token *Lexer::next() {
             pos++;
         }
     } else if (c == '\'') {
-        int a = ++pos;
-        c = read();
-        if (c == '\\') {//hex
+        auto a = pos;
+        pos++;
+        while (pos < buf.size()) {
             c = read();
-        } else {
+            if (c == '\\') {
+                pos++;
+            } else if (c == '"') {
+                break;
+            }
         }
         token = new Token(CHAR_LIT, str(a, pos));
     } else if (c == '"') {
-        token = new Token(STRING_LIT, eat("\""));
+        auto a = pos;
+        pos++;
+        while (pos < buf.size()) {
+            c = read();
+            if (c == '\\') {
+                pos++;
+            } else if (c == '"') {
+                break;
+            }
+        }
+        token = new Token(STRING_LIT, str(a, pos));
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {

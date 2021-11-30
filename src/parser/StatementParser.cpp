@@ -110,18 +110,13 @@ Statement *parseStmt(Parser *p) {
         //var decl
         auto var = p->parseVarDecl();
         return var;
-    } else if (t.is(IDENT)) {
+    } else {
         Expression *e = parseExpr(p);
         if (p->first()->is(SEMI)) {
             p->consume(SEMI);
             return new ExprStmt(e);
-        } else if (p->first()->is({EQ, PLUSEQ, MINUSEQ, ANDEQ, OREQ, LTLTEQ, GTGTEQ})) {
-            auto *as = new Assign;
-            as->left = e;
-            as->op = *p->pop()->value;
-            p->consume(SEMI);
-            return new ExprStmt(as);
         }
+        throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(t.line));
     }
     throw std::string("invalid stmt " + *t.value + " line:" + std::to_string(t.line));
 }

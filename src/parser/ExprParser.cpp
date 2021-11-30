@@ -1,14 +1,6 @@
 #include "ExprParser.h"
 #include "Parser.h"
-#include "Token.h"
 
-bool isOp(std::string &s) {
-    return s == "+" || s == "-" || s == "<=";
-}
-
-bool isAssign(std::string &s) {
-    return s == "=" || s == "+=" | s == "-=" | s == "*=" | s == "/=" | s == "%=" | s == "&=" | s == "^=" | s == "|=" | s == "<<=" | s == ">>=" | s == ">>>=";
-}
 
 std::vector<Expression *> exprList(Parser *p) {
     std::vector<Expression *> res;
@@ -111,6 +103,14 @@ RefType *refType(Parser *p) {
     return res;
 }
 
+Entry parseEntry(Parser *p) {
+    Entry e;
+    e.key = parseExpr(p);
+    p->consume(COLON);
+    e.value = parseExpr(p);
+    return e;
+}
+
 Expression *PRIM(Parser *p) {
     log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
@@ -132,11 +132,40 @@ Expression *PRIM(Parser *p) {
             }
             p->consume(RPAREN);
             return res;
+        } else if (p->is(LBRACE)) {
+            auto res = new ObjExpr;
+            res->name = *id;
+            p->consume(LBRACE);
+            res->entries.push_back(parseEntry(p));
+            while (p->is(COMMA)) {
+                p->consume(COMMA);
+                res->entries.push_back(parseEntry(p));
+            }
+            p->consume(RBRACE);
+            return res;
         } else {
             auto *s = new SimpleName;
             s->name = id;
             return s;
         }
+    } else if (p->is(LBRACE)) {
+        auto res = new AnonyObjExpr;
+        p->consume(LBRACE);
+        res->entries.push_back(parseEntry(p));
+        while (p->is(COMMA)) {
+            p->consume(COMMA);
+            res->entries.push_back(parseEntry(p));
+        }
+        p->consume(RBRACE);
+        return res;
+    } else if (p->is(LBRACKET)) {
+        auto res = new ArrayExpr;
+        p->consume(LBRACKET);
+        if (!p->is(RBRACKET)) {
+            res->list = exprList(p);
+        }
+        p->consume(RBRACKET);
+        return res;
     } else {
         throw std::string("invalid primary " + *p->first()->value + " line: " + std::to_string(p->first()->line));
     }
@@ -358,6 +387,10 @@ Expression *expr1(Parser *p) {
         lhs = t;
     }
     return lhs;
+}
+
+bool isAssign(std::string &s) {
+    return s == "=" || s == "+=" | s == "-=" | s == "*=" | s == "/=" | s == "%=" | s == "&=" | s == "^=" | s == "|=" | s == "<<=" | s == ">>=" | s == ">>>=";
 }
 
 //expr1 (op expr)?

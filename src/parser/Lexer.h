@@ -57,6 +57,7 @@ public:
         ops["."] = DOT;
         ops[","] = COMMA;
         ops[";"] = SEMI;
+        ops[":"] = COLON;
         ops["?"] = QUES;
         ops["!"] = BANG;
         ops["~"] = TILDE;

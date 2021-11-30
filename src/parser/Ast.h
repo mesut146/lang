@@ -83,15 +83,6 @@ public:
     std::string print();
 };
 
-/*class Field: public VarDecl
-{
-public:
-  Type *type;
-  std::string *name;
-  Expression *expr;
-
-  std::string print();
-};*/
 
 class Param {
 public:
@@ -266,9 +257,37 @@ public:
     std::string print();
 };
 
+class ArrayExpr : public Expression {
+public:
+    std::vector<Expression*> list;
+
+    std::string print();
+};
+
 class ParExpr : public Expression {
 public:
     Expression *expr;
+    std::string print() override;
+};
+
+class Entry {
+public:
+    Expression *key;
+    Expression *value;
+
+    std::string print();
+};
+
+class ObjExpr : public Expression {
+public:
+    std::string name;
+    std::vector<Entry> entries;
+    std::string print() override;
+};
+
+class AnonyObjExpr : public Expression {
+public:
+    std::vector<Entry> entries;
     std::string print() override;
 };
 

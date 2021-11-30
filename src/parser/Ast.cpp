@@ -1,5 +1,5 @@
-#include "Ast.h"
-#include "Util.h"
+#include "parser/Ast.h"
+#include "parser/Util.h"
 
 std::string SimpleName::print() {
     return *name;
@@ -144,6 +144,28 @@ std::string ParExpr::print() {
     return std::string("(" + expr->print() + ")");
 }
 
+std::string ObjExpr::print() {
+    std::string s;
+    s.append(name);
+    s.append("{");
+    s.append(join(entries, ", "));
+    s.append("}");
+    return s;
+}
+
+std::string AnonyObjExpr::print() {
+    std::string s;
+    s.append("{");
+    s.append(join(entries, ", "));
+    s.append("}");
+    return s;
+}
+
+std::string Entry::print() {
+    return key->print() + ":" + value->print();
+}
+
+
 std::string Unit::print() {
     std::string s;
     s.append(join(imports, "\n"));
@@ -241,6 +263,9 @@ std::string MethodCall::print() {
 }
 std::string ArrayAccess::print() {
     return array->print() + "[" + index->print() + "]";
+}
+std::string ArrayExpr::print() {
+    return "[" + join(list,", ") + "]";
 }
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
