@@ -117,7 +117,7 @@ class Unit {
 public:
     std::vector<ImportStmt> imports;
     std::vector<BaseDecl *> types;
-    std::vector<Method> methods;
+    std::vector<Method *> methods;
     std::vector<Statement *> stmts;
 
     std::string print();
@@ -135,7 +135,7 @@ public:
     std::vector<Type *> typeArgs;
     std::vector<Type *> baseTypes;
     std::vector<VarDecl *> fields;
-    std::vector<Method> methods;
+    std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
 
     std::string print();
@@ -174,16 +174,24 @@ public:
 
 class Fragment {
 public:
-    Fragment(std::string, Expression *);
+    Fragment(std::string, Type *, Expression *);
     std::string name;
+    Type *type;
     Expression *right;
 
     std::string print();
 };
 
-class VarDecl : public Expression {
+class VarDecl : public Statement {
 public:
-    Type *type;
+    bool isVar;
+    std::vector<Fragment> list;
+
+    std::string print() override;
+};
+class VarDeclExpr : public Statement {
+public:
+    bool isVar;
     std::vector<Fragment> list;
 
     std::string print() override;
@@ -224,6 +232,15 @@ public:
     std::string print() override;
 };
 
+class Ternary : public Expression {
+public:
+    Expression *cond;
+    Expression *thenExpr;
+    Expression *elseExpr;
+
+    std::string print() override;
+};
+
 class MethodCall : public Expression {
 public:
     Expression *scope;
@@ -237,6 +254,14 @@ class FieldAccess : public Expression {
 public:
     Expression *scope;
     std::string name;
+
+    std::string print();
+};
+
+class ArrayAccess : public Expression {
+public:
+    Expression *array;
+    Expression *index;
 
     std::string print();
 };
@@ -293,7 +318,7 @@ public:
 
 class ForStmt : public Statement {
 public:
-    VarDecl *decl;
+    VarDeclExpr *decl;
     Expression *cond;
     std::vector<Expression *> updaters;
     Statement *body;
@@ -303,7 +328,7 @@ public:
 
 class ForEach : public Statement {
 public:
-    VarDecl decl;
+    VarDeclExpr *decl;
     Expression *expr;
     Statement *body;
 

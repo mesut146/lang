@@ -6,8 +6,6 @@
 class Parser;
 
 Type *parseType(Parser *p);
-VarDecl *varDecl(Parser *p, Type *type, RefType *nm);
-VarDecl *varDecl(Parser *p);
 RefType *refType(Parser *p);
 
 Expression *parseExpr(Parser *p);

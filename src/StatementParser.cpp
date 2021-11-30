@@ -33,10 +33,10 @@ Statement *parseFor(Parser *p) {
     log("forstmt");
     p->consume(FOR);
     p->consume(LPAREN);
-    VarDecl *var;
+    VarDeclExpr *var;
     bool simple = true;
     if (isType(p)) {
-        var = varDecl(p);
+        var = p->parseVarDeclExpr();
         if (p->first()->is(SEMI)) {
             //simple for
             simple = true;
@@ -48,7 +48,7 @@ Statement *parseFor(Parser *p) {
 
     if (simple) {
         p->consume(SEMI);
-        auto *res = new ForStmt;
+        auto res = new ForStmt;
         res->decl = var;
         if (!p->first()->is(SEMI)) {
             res->cond = parseExpr(p);
@@ -61,8 +61,8 @@ Statement *parseFor(Parser *p) {
         res->body = parseStmt(p);
         return res;
     } else {
-        auto *res = new ForEach;
-        res->decl = *var;
+        auto res = new ForEach;
+        res->decl = var;
         p->consume(COLON);
         res->expr = parseExpr(p);
         p->consume(RPAREN);
@@ -71,38 +71,6 @@ Statement *parseFor(Parser *p) {
     }
 }
 
-Param parseParam(Parser *p) {
-    Param prm;
-    prm.type = parseType(p);
-    prm.name = p->name();
-    if (p->first()->is(EQ)) {
-        p->consume(EQ);
-        prm.defVal = parseExpr(p);
-    }
-    return prm;
-}
-
-Method *parseMethod(Parser *p, Type *type, RefType *name) {
-    log("parseMethod = " + name->print());
-    Method *res = new Method;
-    res->type = type;
-    res->name = name->print();
-    p->consume(LPAREN);
-    if (!p->first()->is(RPAREN)) {
-        res->params.push_back(parseParam(p));
-        while (p->first()->is(COMMA)) {
-            p->consume(COMMA);
-            res->params.push_back(parseParam(p));
-        }
-    }
-    p->consume(RPAREN);
-    if (p->first()->is(SEMI)) {
-        p->consume(SEMI);
-    } else {
-        res->body = parseBlock(p);
-    }
-    return res;
-}
 
 Statement *parseStmt(Parser *p) {
     log("parseStmt " + *p->first()->value);
@@ -138,21 +106,11 @@ Statement *parseStmt(Parser *p) {
         }
         p->consume(SEMI);
         return ret;
-    } else if (isType(p)) {
-        //var decl,method decl
-        auto type = parseType(p);
-        auto r = refType(p);
-        if (p->first()->is({EQ, SEMI})) {
-            //var decl
-            auto var = varDecl(p, type, r);
-            p->consume(SEMI);
-            return new ExprStmt(var);
-        } else if (p->first()->is(LPAREN)) {
-            //method decl
-            return parseMethod(p, type, r);
-        }
-    }
-    else if (t.is(IDENT)) {
+    } else if (t.is({VAR, LET})) {
+        //var decl
+        auto var = p->parseVarDecl();
+        return var;
+    } else if (t.is(IDENT)) {
         Expression *e = parseExpr(p);
         if (p->first()->is(SEMI)) {
             p->consume(SEMI);

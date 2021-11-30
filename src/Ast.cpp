@@ -17,16 +17,29 @@ std::string Literal::print() {
 
 std::string VarDecl::print() {
     std::string s;
-    s.append(type->print());
+    s.append(isVar ? "var" : "let");
+    s.append(" ");
+    s.append(join(list, ", "));
+    s.append(";");
+    return s;
+}
+
+std::string VarDeclExpr::print() {
+    std::string s;
+    s.append(isVar ? "var" : "let");
     s.append(" ");
     s.append(join(list, ", "));
     return s;
 }
 
 std::string Fragment::print() {
-    return name + (right == nullptr ? "" : " = " + right->print());
+    if (type == nullptr) {
+        return name + (right == nullptr ? "" : " = " + right->print());
+    } else {
+        return name + ":" + type->print() + (right == nullptr ? "" : " = " + right->print());
+    }
 }
-Fragment::Fragment(std::string name, Expression *expr) : name(name), right(expr) {
+Fragment::Fragment(std::string name, Type *type, Expression *expr) : name(name), type(type), right(expr) {
 }
 
 std::string ExprStmt::print() {
@@ -97,12 +110,14 @@ std::string TypeDecl::print() {
 
 std::string Method::print() {
     std::string s;
-    s.append(type->print());
-    s.append(" ");
+    s.append("fn");
     s.append(name);
+    s.append(" ");
     s.append("(");
     s.append(join(params, " "));
     s.append(")");
+    s.append(" : ");
+    s.append(type->print());
     if (body == nullptr) {
         s.append(";");
     } else {
@@ -191,7 +206,7 @@ std::string ForStmt::print() {
 std::string ForEach::print() {
     std::string s;
     s.append("for(");
-    s.append(decl.print());
+    s.append(decl->print());
     s.append(":");
     s.append(expr->print());
     s.append(")\n");
@@ -223,6 +238,12 @@ std::string MethodCall::print() {
     } else {
         return scope->print() + "." + name + "(" + join(args, ", ") + ")";
     }
+}
+std::string ArrayAccess::print() {
+    return array->print() + "[" + index->print() + "]";
+}
+std::string Ternary::print() {
+    return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
 }
 std::string WhileStmt::print() {
     return "while(" + expr->print() + ")\n" + body->print();

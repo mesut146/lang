@@ -24,7 +24,7 @@ public:
     void fill() {
         while (true) {
             Token *t = lexer.next();
-            if (t->is(EOF2))
+            if (t->is(EOF_))
                 return;
             if (t->is(COMMENT))
                 continue;
@@ -49,6 +49,14 @@ public:
         if (tokens.size() == 0) return nullptr;
         return tokens[0];
     }
+    bool is(TokenType t) {
+        return first()->is(t);
+    }
+
+    bool is(std::initializer_list<TokenType> t) {
+        return first()->is(t);
+    }
+
 
     Token *consume(TokenType tt) {
         Token *t = pop();
@@ -64,4 +72,8 @@ public:
     Unit parseUnit();
     TypeDecl *parseTypeDecl();
     EnumDecl *parseEnumDecl();
+
+    VarDecl *parseVarDecl();
+    VarDeclExpr *parseVarDeclExpr();
+    Method *parseMethod();
 };

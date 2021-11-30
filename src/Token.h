@@ -3,7 +3,7 @@
 #include <string>
 
 enum TokenType {
-    EOF2,
+    EOF_,
     IDENT,
     CLASS,
     ENUM,
@@ -33,6 +33,7 @@ enum TokenType {
     FUNC,
     LET,
     VAR,
+    FN,
     IF_KW,
     ELSE_KW,
     FOR,
@@ -61,6 +62,7 @@ enum TokenType {
     ANDAND,
     OROR,
     EQEQ,
+    NOTEQ,
     PLUSEQ,
     MINUSEQ,
     MULEQ,

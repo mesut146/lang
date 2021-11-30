@@ -1,6 +1,6 @@
 #include "Util.h"
 
-bool debug = false;
+bool debug = true;
 
 void log(const char *msg) {
     if (debug)

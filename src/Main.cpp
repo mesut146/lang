@@ -8,7 +8,7 @@ void lex(std::string &path) {
 
     for (;;) {
         Token t = *lexer.next();
-        if (t.is(EOF2))
+        if (t.is(EOF_))
             break;
         printf("type=%d val='%s'\n", t.type, t.value->c_str());
     }
@@ -19,7 +19,7 @@ void parse(std::string &path) {
         Lexer lexer(path);
         Parser parser(lexer);
         Unit u = parser.parseUnit();
-        std::cout << u.print();
+        std::cout << u.print() << "\n";
     } catch (std::string s) {
         std::cout << "err:" << s << "\n";
         //print_stacktrace();
@@ -29,6 +29,7 @@ void parse(std::string &path) {
 int main(int argc, char **args) {
     //std::string path("../tests/types");
     std::string path("../tests/stmts");
+    //std::string path("../tests/exprs");
     if (argc > 1 && strcmp(args[1], "lex") == 0) {
         lex(path);
     } else {
