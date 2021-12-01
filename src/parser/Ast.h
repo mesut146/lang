@@ -59,6 +59,8 @@ public:
 
 class Type : public Expression {
 public:
+    int arrayLevel = 0;
+
     virtual bool isVar() { return false; };
     //virtual bool isTypeVar() = 0;
     virtual bool isPrim() { return false; };
@@ -91,7 +93,6 @@ public:
     std::vector<Type *> typeArgs;
     std::string print();
 };
-
 
 class Param {
 public:
@@ -182,7 +183,7 @@ class Fragment {
 public:
     std::string name;
     Type *type;
-    Expression *rhs;
+    Expression *rhs = nullptr;
 
     std::string print();
 };

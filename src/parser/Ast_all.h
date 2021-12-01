@@ -10,7 +10,6 @@ class FieldDecl;
 class Method;
 
 class Literal;
-class NullLit;
 class Name;
 class SimpleName;
 class Type;
@@ -35,5 +34,3 @@ class ForEach;
 class DoWhile;
 class SwitchStmt;
 class Case;
-
-class ClassCreation;

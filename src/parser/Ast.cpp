@@ -52,7 +52,7 @@ std::string Block::print() {
     std::string s;
     s.append("{\n");
     for (int i = 0; i < list.size(); ++i) {
-        printBody(s, list[i]);
+        printIdent(list[i]->print(), s);
     }
     s.append("\n}");
     return s;
@@ -68,8 +68,16 @@ std::string EnumDecl::print() {
     return s;
 }
 
+std::string dims(Type *type) {
+    std::string s;
+    for (int i = 0; i < type->arrayLevel; i++) {
+        s.append("[]");
+    }
+    return s;
+}
+
 std::string SimpleType::print() {
-    return *type;
+    return *type + dims(this);
 }
 
 std::string RefType::print() {
@@ -80,6 +88,7 @@ std::string RefType::print() {
         s.append(join(typeArgs, ", "));
         s.append(">");
     }
+    s.append(dims(this));
     return s;
 }
 
@@ -329,12 +338,16 @@ std::string ArrayAccess::print() {
 std::string ArrayExpr::print() {
     return "[" + join(list, ", ") + "]";
 }
+
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
 }
 
 std::string WhileStmt::print() {
-    return "while(" + expr->print() + ")\n" + body->print();
+    std::string s;
+    s.append("while(").append(expr->print()).append(")");
+    printBody(s, body);
+    return s;
 }
 
 std::string ReturnStmt::print() {

@@ -44,3 +44,16 @@ void printBody(std::string &buf, Statement *stmt) {
         printBody(buf, b);
     }
 }
+
+void printIdent(std::string &&str, std::string &buf) {
+    int start = 0;
+    auto end = str.find('\n');
+    while (end != std::string::npos) {
+        std::string line = str.substr(start, end - start);
+        buf.append("    ").append(line).append("\n");
+        start = end + 1;
+        end = str.find('\n', start);
+    }
+    std::string line = str.substr(start, end - start);
+    buf.append("    ").append(line).append("\n");
+}

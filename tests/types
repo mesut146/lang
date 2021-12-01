@@ -2,10 +2,18 @@ import * from "util"
 import * as util from "util"
 import format as fmt from "util"
 
-
 class Node<T>{
   next?: Node<T>;
   value: int = 0;
+}
+
+func makeNode(arr: int[]): Node<int>{
+  var pos: int = 0;
+  var res: Node<int> = Node{value: arr[pos++]};
+  while(pos < arr.size){
+    res = Node{value: arr[pos++], next: res};
+  }
+  return res;
 }
 
 enum Color{
@@ -13,8 +21,8 @@ enum Color{
   BLACK
 }
 
-class a{
-  func calc();
+interface a{
+  func calc(): int;
 }
 
 

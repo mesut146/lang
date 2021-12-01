@@ -54,22 +54,29 @@ Name *Parser::qname() {
 }
 
 Type *Parser::parseType() {
+    Type *res;
     if (isPrim(*first())) {
         auto *s = new SimpleType;
         s->type = pop()->value;
-        return s;
+        res = s;
     } else {
-        return refType();
+        res = refType();
     }
+    while (is(LBRACKET)) {
+        consume(LBRACKET);
+        consume(RBRACKET);
+        res->arrayLevel++;
+    }
+    return res;
 }
 
 std::vector<Type *> Parser::generics() {
     std::vector<Type *> list;
     consume(LT);
-    list.push_back(refType());
+    list.push_back(parseType());
     while (first()->is(COMMA)) {
         consume(COMMA);
-        list.push_back(refType());
+        list.push_back(parseType());
     }
     consume(GT);
     return list;
