@@ -10,15 +10,9 @@ class Parser {
 public:
     Lexer lexer;
     std::vector<Token *> tokens;
-    int laPos = 0;
-    int line;
 
     Parser(Lexer &lexer) : lexer(lexer) {
         fill();
-    }
-
-    void reset() {
-        laPos = 0;
     }
 
     void fill() {
@@ -33,16 +27,9 @@ public:
     }
 
     Token *pop() {
-        reset();
         Token *t = tokens[0];
         tokens.erase(tokens.begin());
         return t;
-    }
-
-    //read a token without consuming
-    Token *peek() {
-        if (tokens.size() == 0) return nullptr;
-        return tokens[laPos++];
     }
 
     Token *first() {
@@ -56,7 +43,6 @@ public:
     bool is(std::initializer_list<TokenType> t) {
         return first()->is(t);
     }
-
 
     Token *consume(TokenType tt) {
         Token *t = pop();
@@ -74,6 +60,8 @@ public:
 
     Unit parseUnit();
 
+    ImportStmt parseImport();
+
     TypeDecl *parseTypeDecl();
 
     EnumDecl *parseEnumDecl();
@@ -90,6 +78,8 @@ public:
 
     Expression *parseExpr();
 
+    std::vector<Expression *> exprList();
+
     Type *parseType();
 
     std::vector<Type *> generics();
@@ -99,4 +89,8 @@ public:
     Name *qname();
 
     bool isPrim(Token &t);
+
+    Statement *parseStmt();
+
+    Block *parseBlock();
 };

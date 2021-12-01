@@ -1,17 +1,14 @@
-#include "StatementParser.h"
-#include "ExprParser.h"
 #include "Parser.h"
-#include "Token.h"
 #include "Util.h"
 
 
-Block *parseBlock(Parser *p) {
+Block *Parser::parseBlock() {
     auto res = new Block;
-    p->consume(LBRACE);
-    while (!p->first()->is(RBRACE)) {
-        res->list.push_back(parseStmt(p));
+    consume(LBRACE);
+    while (!is(RBRACE)) {
+        res->list.push_back(parseStmt());
     }
-    p->consume(RBRACE);
+    consume(RBRACE);
     return res;
 }
 
@@ -21,10 +18,10 @@ IfStmt *parseIf(Parser *p) {
     p->consume(LPAREN);
     res->expr = p->parseExpr();
     p->consume(RPAREN);
-    res->thenStmt = parseStmt(p);
+    res->thenStmt = p->parseStmt();
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
-        res->elseStmt = parseStmt(p);
+        res->elseStmt = p->parseStmt();
     }
     return res;
 }
@@ -54,10 +51,10 @@ Statement *parseFor(Parser *p) {
         }
         p->consume(SEMI);
         if (!p->first()->is(RPAREN)) {
-            res->updaters = exprList(p);
+            res->updaters = p->exprList();
         }
         p->consume(RPAREN);
-        res->body = parseStmt(p);
+        res->body = p->parseStmt();
         return res;
     } else {
         auto res = new ForEach;
@@ -65,7 +62,7 @@ Statement *parseFor(Parser *p) {
         p->consume(COLON);
         res->expr = p->parseExpr();
         p->consume(RPAREN);
-        res->body = parseStmt(p);
+        res->body = p->parseStmt();
         return res;
     }
 }
@@ -76,14 +73,14 @@ WhileStmt *parseWhile(Parser *p) {
     p->consume(LPAREN);
     res->expr = p->parseExpr();
     p->consume(RPAREN);
-    res->body = parseBlock(p);
+    res->body = p->parseBlock();
     return res;
 }
 
 DoWhile *parseDoWhile(Parser *p) {
     auto res = new DoWhile;
     p->consume(DO);
-    res->body = parseBlock(p);
+    res->body = p->parseBlock();
     p->consume(WHILE);
     p->consume(LPAREN);
     res->expr = p->parseExpr();
@@ -98,69 +95,68 @@ CatchStmt parseCatch(Parser *p) {
     p->consume(LPAREN);
     res.param = p->parseParam();
     p->consume(RPAREN);
-    res.block = parseBlock(p);
+    res.block =  p->parseBlock();
     return res;
 }
 
 
-Statement *parseStmt(Parser *p) {
-    log("parseStmt " + *p->first()->value);
-    p->reset();
-    Token t = *p->peek();
+Statement *Parser::parseStmt() {
+    log("parseStmt " + *first()->value);
+    Token t = *first();
     if (t.is(IF_KW)) {
-        return parseIf(p);
+        return parseIf(this);
     } else if (t.is(FOR)) {
-        return parseFor(p);
+        return parseFor(this);
     } else if (t.is(WHILE)) {
-        return parseWhile(p);
+        return parseWhile(this);
     } else if (t.is(DO)) {
-        return parseDoWhile(p);
+        return parseDoWhile(this);
     } else if (t.is(LBRACE)) {
-        return parseBlock(p);
+        return parseBlock();
     } else if (t.is(RETURN)) {
         auto ret = new ReturnStmt;
-        p->consume(RETURN);
-        if (!p->first()->is(SEMI)) {
-            ret->expr = p->parseExpr();
+        consume(RETURN);
+        if (!is(SEMI)) {
+            ret->expr = parseExpr();
         }
-        p->consume(SEMI);
+        consume(SEMI);
         return ret;
     } else if (t.is(CONTINUE)) {
         auto ret = new ContinueStmt;
-        p->consume(CONTINUE);
-        if (!p->first()->is(SEMI)) {
-            ret->label = p->name();
+        consume(CONTINUE);
+        if (!is(SEMI)) {
+            ret->label = name();
         }
-        p->consume(SEMI);
+        consume(SEMI);
         return ret;
     } else if (t.is(BREAK)) {
         auto ret = new BreakStmt;
-        p->consume(BREAK);
-        if (!p->first()->is(SEMI)) {
-            ret->label = p->name();
+        consume(BREAK);
+        if (!first()->is(SEMI)) {
+            ret->label = name();
         }
-        p->consume(SEMI);
+        consume(SEMI);
         return ret;
     } else if (t.is(TRY)) {
         auto res = new TryStmt;
-        p->consume(TRY);
-        res->block = parseBlock(p);
-        while (p->is(CATCH)) {
-            res->catches.push_back(parseCatch(p));
+        consume(TRY);
+        res->block = parseBlock();
+        while (is(CATCH)) {
+            res->catches.push_back(parseCatch(this));
         }
         return res;
     } else if (t.is(THROW)) {
         auto res = new ThrowStmt;
-        p->consume(THROW);
-        res->expr = p->parseExpr();
-        p->consume(SEMI);
+        consume(THROW);
+        res->expr = parseExpr();
+        consume(SEMI);
         return res;
     } else if (t.is({VAR, LET})) {
-        return p->parseVarDecl();
+        return parseVarDecl();
     } else {
-        Expression *e = p->parseExpr();
-        if (p->first()->is(SEMI)) {
-            p->consume(SEMI);
+        Expression *e = parseExpr();
+        if (is(SEMI)) {
+            consume(SEMI);
             return new ExprStmt(e);
         }
         throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(t.line));

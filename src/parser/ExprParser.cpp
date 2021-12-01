@@ -1,16 +1,15 @@
-#include "ExprParser.h"
 #include "Parser.h"
-#include "StatementParser.h"
+#include "Util.h"
 
 
 ArrowFunction *parseArrow(Parser *p);
 
-std::vector<Expression *> exprList(Parser *p) {
+std::vector<Expression *> Parser::exprList() {
     std::vector<Expression *> res;
-    res.push_back(p->parseExpr());
-    while (p->is(COMMA)) {
-        p->consume(COMMA);
-        res.push_back(p->parseExpr());
+    res.push_back(parseExpr());
+    while (is(COMMA)) {
+        consume(COMMA);
+        res.push_back(parseExpr());
     }
     return res;
 }
@@ -41,7 +40,7 @@ Name *Parser::qname() {
     res->name = *name();
     if (is(DOT)) {
         Name *cur = res;
-        while (peek()->is(DOT)) {
+        while (is(DOT)) {
             consume(DOT);
             auto *tmp = new QName;
             tmp->scope = cur;
@@ -121,7 +120,7 @@ Expression *PRIM(Parser *p) {
             res->name = *id;
             p->consume(LPAREN);
             if (!p->is(RPAREN)) {
-                res->args = exprList(p);
+                res->args = p->exprList();
             }
             p->consume(RPAREN);
             return res;
@@ -155,7 +154,7 @@ Expression *PRIM(Parser *p) {
         auto res = new ArrayExpr;
         p->consume(LBRACKET);
         if (!p->is(RBRACKET)) {
-            res->list = exprList(p);
+            res->list = p->exprList();
         }
         p->consume(RBRACKET);
         return res;
@@ -183,7 +182,7 @@ Expression *PRIM2(Parser *p) {
                 res->name = *name;
                 p->consume(LPAREN);
                 if (!p->is(RPAREN)) {
-                    res->args = exprList(p);
+                    res->args = p->exprList();
                 }
                 p->consume(RPAREN);
                 lhs = res;
@@ -235,7 +234,7 @@ Expression *expr12(Parser *p) {
 //expr12 ("*" | "/" | "%" expr12)*
 Expression *expr11(Parser *p) {
     Expression *lhs = expr12(p);
-    while (p->is({MUL, DIV, PERCENT})) {
+    while (p->is({STAR, DIV, PERCENT})) {
         auto res = new Infix;
         res->left = lhs;
         res->op = *p->pop()->value;
@@ -418,7 +417,7 @@ ArrowFunction *parseArrow(Parser *p) {
     p->consume(RPAREN);
     p->consume(ARROW);
     if (p->is(LBRACE)) {
-        res->block = parseBlock(p);
+        res->block = p->parseBlock();
     } else {
         res->expr = p->parseExpr();
     }

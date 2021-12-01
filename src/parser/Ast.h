@@ -39,12 +39,21 @@ public:
 
     std::string print();
 };
+class NamedImport {
+public:
+    std::string name;
+    std::string *as = nullptr;
+
+    std::string print();
+};
 
 class ImportStmt {
 public:
-    std::string *file;
+    std::vector<NamedImport> namedImports;
+    std::string from;
     bool isStar;
-    std::string *as;
+    std::string *as = nullptr;
+
     std::string print();
 };
 

@@ -3,8 +3,11 @@ include "Lexer.g"
 unit: 
   importStmt* topStmt*;
 
+importName: name ("as" name)?;
+
 importStmt: 
-  "import" name ("as" name)?;
+  "import" importName ("," importName)* "from" STRING_LIT
+| "import" "*" ("as" name)? "from" STRING_LIT;
 
 name: IDENT;
 
@@ -79,13 +82,9 @@ varDeclFrag:
 singleVar:
   ("let" | "var") name ":" realType;
 
-expr: PRIM0;
+expr: "import";
 
 /*
-methodCall2: (fieldAccess | arrayAccess) ("." IDENT "(" ")")+;
-fieldAccess: (arrayAccess | methodCall2) ("." IDENT)+;
-arrayAccess: (arrayAccess | methodCall2) ("[" E "]")+;
-
 expr:
 | PRIM ("." IDENT ("(" ")")? | "[" E "]")*
 | expr ("++" | "--") #post

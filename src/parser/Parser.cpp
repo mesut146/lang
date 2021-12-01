@@ -1,17 +1,45 @@
 #include "Parser.h"
-#include "StatementParser.h"
 #include "Util.h"
 
-//"import" "from" string_lit
-ImportStmt parseImport(Parser &p) {
+std::string *strLit(Parser *p) {
+    auto t = p->consume(STRING_LIT);
+    return new std::string(t->value->begin() + 1, t->value->end() - 1);
+}
+
+//name ("as" name)?;
+NamedImport namedImport(Parser *p) {
+    NamedImport res;
+    res.name = *p->name();
+    if (p->is(AS)) {
+        p->consume(AS);
+        res.as = p->name();
+    }
+    return res;
+}
+
+//"import" importName ("," importName)* "from" STRING_LIT
+//"import" "*" ("as" name)? "from" STRING_LIT
+ImportStmt Parser::parseImport() {
     log("parseImport");
     ImportStmt res;
-    p.consume(IMPORT);
-    res.file = p.name();
-    if (p.is(AS)) {
-        p.consume(AS);
-        res.as = p.name();
+    consume(IMPORT);
+    if (is(STAR)) {
+        consume(STAR);
+        res.isStar = true;
+        if (is(AS)) {
+            consume(AS);
+            res.as = name();
+        }
+    } else {
+        res.isStar = false;
+        res.namedImports.push_back(namedImport(this));
+        while (is(COMMA)) {
+            consume(COMMA);
+            res.namedImports.push_back(namedImport(this));
+        }
     }
+    consume(FROM);
+    res.from = *strLit(this);
     return res;
 }
 
@@ -40,7 +68,9 @@ TypeDecl *Parser::parseTypeDecl() {
     auto *res = new TypeDecl;
     res->isInterface = pop()->is(INTERFACE);
     res->name = *name();
-    res->typeArgs = generics();
+    if (is(LT)) {
+        res->typeArgs = generics();
+    }
     log("type decl = " + res->name);
     if (first()->is(COLON)) {
         consume(COLON);
@@ -88,23 +118,22 @@ EnumDecl *Parser::parseEnumDecl() {
 Unit Parser::parseUnit() {
     Unit res;
 
-    while (first()->is(IMPORT)) {
-        res.imports.push_back(parseImport(*this));
+    while (first() != nullptr && is(IMPORT)) {
+        res.imports.push_back(parseImport());
     }
 
     while (first() != nullptr) {
         //top level decl
-        Token *t = first();
-        if (t->is(CLASS) || t->is(INTERFACE)) {
+        if (is({CLASS, INTERFACE})) {
             res.types.push_back(parseTypeDecl());
-        } else if (t->is(ENUM)) {
+        } else if (is(ENUM)) {
             res.types.push_back(parseEnumDecl());
-        } else if (t->is({VAR, LET})) {
+        } else if (is({VAR, LET})) {
             res.stmts.push_back(parseVarDecl());
-        } else if (t->is(FUNC)) {
+        } else if (is(FUNC)) {
             res.methods.push_back(parseMethod());
         } else {
-            auto stmt = parseStmt(this);
+            auto stmt = parseStmt();
             res.stmts.push_back(stmt);
         }
     }
@@ -152,7 +181,7 @@ Method *Parser::parseMethod() {
         //interface
         consume(SEMI);
     } else {
-        res->body = parseBlock(this);
+        res->body = parseBlock();
     }
     return res;
 }

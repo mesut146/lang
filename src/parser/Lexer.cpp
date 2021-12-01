@@ -22,12 +22,16 @@ TokenType kw(std::string &s) {
         return FLOAT;
     if (s == "double")
         return DOUBLE;
+    if (s == "short")
+        return SHORT;
     if (s == "null")
         return NULL_LIT;
     if (s == "import")
         return IMPORT;
     if (s == "as")
         return AS;
+    if (s == "from")
+        return FROM;
     if (s == "return")
         return RETURN;
     if (s == "continue")
@@ -56,6 +60,10 @@ TokenType kw(std::string &s) {
         return CATCH;
     if (s == "throw")
         return THROW;
+    if (s == "switch")
+        return SWITCH;
+    if (s == "case")
+        return CASE;
     return EOF_;
 }
 

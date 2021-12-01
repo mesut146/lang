@@ -1,5 +1,5 @@
 token {
-	//keywords
+  //keywords
   CLASS: 'class';
   ENUM: 'enum';
   INTERFACE: 'interface';
@@ -51,7 +51,7 @@ token {
   DEC: '--';
   ADD: '+';
   SUB: '-';
-  MUL: '*';
+  STAR: '*';
   DIV: '/';
   BITAND: '&';
   BITOR: '|';

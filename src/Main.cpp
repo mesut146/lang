@@ -26,9 +26,9 @@ void parse(std::string &path) {
 }
 
 int main(int argc, char **args) {
-    //std::string path("../tests/types");
+    std::string path("../tests/types");
     //std::string path("../tests/stmts");
-    std::string path("../tests/exprs");
+    //std::string path("../tests/exprs");
     if (argc > 1 && strcmp(args[1], "lex") == 0) {
         lex(path);
     } else {

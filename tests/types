@@ -1,3 +1,8 @@
+import * from "util"
+import * as util from "util"
+import format as fmt from "util"
+
+
 class Node<T>{
   next?: Node<T>;
   value: int = 0;

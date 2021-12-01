@@ -64,7 +64,7 @@ public:
 
         ops["+"] = PLUS;
         ops["-"] = MINUS;
-        ops["*"] = MUL;
+        ops["*"] = STAR;
         ops["/"] = DIV;
         ops["^"] = POW;
         ops["%"] = PERCENT;

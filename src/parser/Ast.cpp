@@ -221,14 +221,28 @@ std::string Unit::print() {
     return s;
 }
 
+std::string NamedImport::print() {
+    if (as != nullptr) {
+        return name + " as " + *as;
+    } else {
+        return name;
+    }
+}
+
 std::string ImportStmt::print() {
     std::string s;
     s.append("import ");
-    s.append(*file);
-    if (as != nullptr) {
-        s.append(" as ");
-        s.append(*as);
+    if (isStar) {
+        s.append("* ");
+        if (as != nullptr) {
+            s.append("as ").append(*as);
+        }
+    } else {
+        s.append(join(namedImports, ", "));
     }
+
+    s.append(" from ");
+    s.append("\"").append(from).append("\"");
     return s;
 }
 
