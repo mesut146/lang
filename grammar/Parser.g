@@ -100,8 +100,8 @@ expr:
 | expr "|" expr %left
 | expr "&&" expr %left
 | expr "||" expr %left
-| expr "?" expr ":" expr %right
-| expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %right
+| expr "?" expr ":" expr %rhs
+| expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
 ;*/
 
 PRIM: literal | qname | "(" expr ")" | methodCall;

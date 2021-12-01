@@ -6,7 +6,7 @@
 
 
 Block *parseBlock(Parser *p) {
-    Block *res = new Block;
+    auto res = new Block;
     p->consume(LBRACE);
     while (!p->first()->is(RBRACE)) {
         res->list.push_back(parseStmt(p));
@@ -16,13 +16,13 @@ Block *parseBlock(Parser *p) {
 }
 
 IfStmt *parseIf(Parser *p) {
-    IfStmt *res = new IfStmt;
+    auto res = new IfStmt;
     p->consume(IF_KW);
     p->consume(LPAREN);
     res->expr = p->parseExpr();
     p->consume(RPAREN);
     res->thenStmt = parseStmt(p);
-    if (p->first()->is(ELSE_KW)) {
+    if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
         res->elseStmt = parseStmt(p);
     }
@@ -30,23 +30,22 @@ IfStmt *parseIf(Parser *p) {
 }
 
 Statement *parseFor(Parser *p) {
-    log("forstmt");
     p->consume(FOR);
     p->consume(LPAREN);
     VarDeclExpr *var;
-    bool simple = true;
-    if (isType(p)) {
+    bool normalFor = true;
+    if (p->is({VAR, LET})) {
         var = p->parseVarDeclExpr();
-        if (p->first()->is(SEMI)) {
+        if (p->is(SEMI)) {
             //simple for
-            simple = true;
+            normalFor = true;
         } else {
             //foreach
-            simple = false;
+            normalFor = false;
         }
     }
 
-    if (simple) {
+    if (normalFor) {
         p->consume(SEMI);
         auto res = new ForStmt;
         res->decl = var;
@@ -71,15 +70,38 @@ Statement *parseFor(Parser *p) {
     }
 }
 
+WhileStmt *parseWhile(Parser *p) {
+    auto res = new WhileStmt;
+    p->consume(WHILE);
+    p->consume(LPAREN);
+    res->expr = p->parseExpr();
+    p->consume(RPAREN);
+    res->body = parseBlock(p);
+    return res;
+}
+
+DoWhile *parseDoWhile(Parser *p) {
+    auto res = new DoWhile;
+    p->consume(DO);
+    res->body = parseBlock(p);
+    p->consume(WHILE);
+    p->consume(LPAREN);
+    res->expr = p->parseExpr();
+    p->consume(RPAREN);
+    p->consume(SEMI);
+    return res;
+}
+
 CatchStmt parseCatch(Parser *p) {
     CatchStmt res;
     p->consume(CATCH);
     p->consume(LPAREN);
-
+    res.param = p->parseParam();
     p->consume(RPAREN);
     res.block = parseBlock(p);
     return res;
 }
+
 
 Statement *parseStmt(Parser *p) {
     log("parseStmt " + *p->first()->value);
@@ -89,6 +111,10 @@ Statement *parseStmt(Parser *p) {
         return parseIf(p);
     } else if (t.is(FOR)) {
         return parseFor(p);
+    } else if (t.is(WHILE)) {
+        return parseWhile(p);
+    } else if (t.is(DO)) {
+        return parseDoWhile(p);
     } else if (t.is(LBRACE)) {
         return parseBlock(p);
     } else if (t.is(RETURN)) {
@@ -130,9 +156,7 @@ Statement *parseStmt(Parser *p) {
         p->consume(SEMI);
         return res;
     } else if (t.is({VAR, LET})) {
-        //var decl
-        auto var = p->parseVarDecl();
-        return var;
+        return p->parseVarDecl();
     } else {
         Expression *e = p->parseExpr();
         if (p->first()->is(SEMI)) {
@@ -141,5 +165,4 @@ Statement *parseStmt(Parser *p) {
         }
         throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(t.line));
     }
-    throw std::string("invalid stmt " + *t.value + " line:" + std::to_string(t.line));
 }

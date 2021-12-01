@@ -8,7 +8,7 @@ ArrowFunction *parseArrow(Parser *p);
 std::vector<Expression *> exprList(Parser *p) {
     std::vector<Expression *> res;
     res.push_back(p->parseExpr());
-    while (p->first()->is(COMMA)) {
+    while (p->is(COMMA)) {
         p->consume(COMMA);
         res.push_back(p->parseExpr());
     }
@@ -19,19 +19,8 @@ bool isLit(Token &t) {
     return t.is({FLOAT_LIT, INTEGER_LIT, CHAR_LIT, STRING_LIT, TRUE, FALSE});
 }
 
-bool isPrim(Token &t) {
-    return t.is({INT, LONG, FLOAT, DOUBLE, CHAR, BYTE});
-}
-
-bool isType(Parser *p) {
-    Token t = *p->peek();
-    if (isPrim(t) || t.is({VOID, LET, VAR})) {
-        return true;
-    }
-    if (t.is(IDENT)) {
-        return true;
-    }
-    return false;
+bool Parser::isPrim(Token &t) {
+    return t.is({INT, LONG, FLOAT, DOUBLE, CHAR, BYTE, VOID});
 }
 
 Literal *parseLit(Parser *p) {
@@ -46,54 +35,54 @@ Literal *parseLit(Parser *p) {
     return res;
 }
 
-//simple or  qualified name
-Name *qname(Parser *p) {
-    auto *s = new SimpleName;
-    s->name = p->consume(IDENT)->value;
-    if (p->first()->is(DOT)) {
-        Name *cur = s;
-        while (p->peek()->is(DOT) && p->peek()->is(IDENT)) {
-            p->consume(DOT);
+//name ("." name)*
+Name *Parser::qname() {
+    auto *res = new SimpleName;
+    res->name = *name();
+    if (is(DOT)) {
+        Name *cur = res;
+        while (peek()->is(DOT)) {
+            consume(DOT);
             auto *tmp = new QName;
             tmp->scope = cur;
-            tmp->name = *p->consume(IDENT)->value;
+            tmp->name = *name();
             cur = tmp;
         }
         return cur;
     } else {
-        return s;
+        return res;
     }
 }
 
-Type *parseType(Parser *p) {
-    Token t = *p->first();
-    if (isPrim(t) || t.is({VOID, LET, VAR})) {
-        p->pop();
+Type *Parser::parseType() {
+    if (isPrim(*first())) {
         auto *s = new SimpleType;
-        s->type = t.value;
+        s->type = pop()->value;
         return s;
     } else {
-        return refType(p);
+        return refType();
     }
 }
 
-std::vector<Type *> generics(Parser *p) {
+std::vector<Type *> Parser::generics() {
     std::vector<Type *> list;
-    p->consume(LT);
-    list.push_back(parseType(p));
-    while (p->first()->is(COMMA)) {
-        p->consume(COMMA);
-        list.push_back(parseType(p));
+    consume(LT);
+    list.push_back(refType());
+    while (first()->is(COMMA)) {
+        consume(COMMA);
+        list.push_back(refType());
     }
-    p->consume(GT);
+    consume(GT);
     return list;
 }
 
-RefType *refType(Parser *p) {
+//real type,not prim
+// qname generics?
+RefType *Parser::refType() {
     auto *res = new RefType;
-    res->name = qname(p);
-    if (p->first()->is(LT)) {
-        res->typeArgs = generics(p);
+    res->name = qname();
+    if (is(LT)) {
+        res->typeArgs = generics();
     }
     return res;
 }
@@ -148,9 +137,9 @@ Expression *PRIM(Parser *p) {
             p->consume(RBRACE);
             return res;
         } else {
-            auto *s = new SimpleName;
-            s->name = id;
-            return s;
+            auto *res = new SimpleName;
+            res->name = *id;
+            return res;
         }
     } else if (p->is(LBRACE)) {
         auto res = new AnonyObjExpr;
@@ -385,7 +374,7 @@ Expression *expr2(Parser *p) {
 //ternary
 Expression *expr1(Parser *p) {
     Expression *lhs = expr2(p);
-    if (p->first()->is(QUES)) {
+    if (p->is(QUES)) {
         Ternary *t = new Ternary;
         t->cond = lhs;
         p->consume(QUES);
@@ -401,10 +390,9 @@ bool isAssign(std::string &s) {
     return s == "=" || s == "+=" | s == "-=" | s == "*=" | s == "/=" | s == "%=" | s == "&=" | s == "^=" | s == "|=" | s == "<<=" | s == ">>=" | s == ">>>=";
 }
 
-//expr1 (op expr)?
+//expr1 (assignOp expr)?
 Expression *Parser::parseExpr() {
     log("parseExpr " + *first()->value);
-    Token t = *first();
     Expression *res = expr1(this);
     if (isAssign(*first()->value)) {
         auto assign = new Assign;
@@ -416,12 +404,13 @@ Expression *Parser::parseExpr() {
     return res;
 }
 
+//'(' params? ')' => (block | expr)
 ArrowFunction *parseArrow(Parser *p) {
     auto res = new ArrowFunction;
     p->consume(LPAREN);
-    if (!p->first()->is(RPAREN)) {
+    if (!p->is(RPAREN)) {
         res->params.push_back(p->parseParam());
-        while (p->first()->is(COMMA)) {
+        while (p->is(COMMA)) {
             p->consume(COMMA);
             res->params.push_back(p->parseParam());
         }

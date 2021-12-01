@@ -27,7 +27,7 @@ public:
 
 class SimpleName : public Name {
 public:
-    std::string *name;
+    std::string name;
 
     std::string print();
 };
@@ -162,11 +162,6 @@ public:
     std::string print();
 };
 
-class NullLit : public Expression {
-public:
-    std::string print();
-};
-
 class ExprStmt : public Statement {
 public:
     Expression *expr;
@@ -176,24 +171,23 @@ public:
 
 class Fragment {
 public:
-    Fragment(std::string, Type *, Expression *);
     std::string name;
     Type *type;
-    Expression *right;
+    Expression *rhs;
 
     std::string print();
 };
 
 class VarDecl : public Statement {
 public:
-    bool isVar;
+    bool isVar = false;
     std::vector<Fragment> list;
 
     std::string print() override;
 };
 class VarDeclExpr : public Statement {
 public:
-    bool isVar;
+    bool isVar = false;
     std::vector<Fragment> list;
 
     std::string print() override;
@@ -353,7 +347,7 @@ public:
 class DoWhile : public Statement {
 public:
     Expression *expr;
-    Block body;
+    Block *body;
 
     std::string print() override;
 };
@@ -387,7 +381,7 @@ public:
 class CatchStmt : public Statement {
 public:
     Block *block;
-
+    Param param;
     std::string print() override;
 };
 

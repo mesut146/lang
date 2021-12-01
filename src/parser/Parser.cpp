@@ -1,16 +1,14 @@
 #include "Parser.h"
-#include "ExprParser.h"
 #include "StatementParser.h"
 #include "Util.h"
 
-Method parseMethod(Parser p);
-
+//"import" "from" string_lit
 ImportStmt parseImport(Parser &p) {
     log("parseImport");
     ImportStmt res;
     p.consume(IMPORT);
     res.file = p.name();
-    if (p.first()->is(AS)) {
+    if (p.is(AS)) {
         p.consume(AS);
         res.as = p.name();
     }
@@ -19,7 +17,6 @@ ImportStmt parseImport(Parser &p) {
 
 //name ":" type ("=" expr)?;
 FieldDecl *Parser::parseFieldDecl() {
-    log("varDecl");
     auto res = new FieldDecl;
     res->name = *name();
     if (is(QUES)) {
@@ -28,7 +25,7 @@ FieldDecl *Parser::parseFieldDecl() {
     }
     if (is(COLON)) {
         consume(COLON);
-        res->type = parseType(this);
+        res->type = parseType();
     }
     if (is(EQ)) {
         consume(EQ);
@@ -38,18 +35,18 @@ FieldDecl *Parser::parseFieldDecl() {
     return res;
 }
 
+// ("class" | "interface") name typeArgs? (":")? "{" member* "}"
 TypeDecl *Parser::parseTypeDecl() {
     auto *res = new TypeDecl;
     res->isInterface = pop()->is(INTERFACE);
-    auto name = refType(this);
-    res->name = name->name->print();
-    res->typeArgs = name->typeArgs;
+    res->name = *name();
+    res->typeArgs = generics();
     log("type decl = " + res->name);
     if (first()->is(COLON)) {
         consume(COLON);
-        res->baseTypes.push_back(refType(this));
+        res->baseTypes.push_back(refType());
         while (first()->is(COMMA)) {
-            res->baseTypes.push_back(refType(this));
+            res->baseTypes.push_back(refType());
         }
     }
     consume(LBRACE);
@@ -89,7 +86,6 @@ EnumDecl *Parser::parseEnumDecl() {
 }
 
 Unit Parser::parseUnit() {
-    log("unit");
     Unit res;
 
     while (first()->is(IMPORT)) {
@@ -98,7 +94,6 @@ Unit Parser::parseUnit() {
 
     while (first() != nullptr) {
         //top level decl
-        //type decl or stmt
         Token *t = first();
         if (t->is(CLASS) || t->is(INTERFACE)) {
             res.types.push_back(parseTypeDecl());
@@ -112,28 +107,28 @@ Unit Parser::parseUnit() {
             auto stmt = parseStmt(this);
             res.stmts.push_back(stmt);
         }
-        //throw std::string("unexpected " + *t->value);
     }
     return res;
 }
 
+//name "?"? ":" type ("=" expr)?
 Param Parser::parseParam() {
-    Param prm;
-    prm.name = *name();
+    Param res;
+    res.name = *name();
     if (is(QUES)) {
         consume(QUES);
-        prm.isOptional = true;
+        res.isOptional = true;
     }
     consume(COLON);
-    prm.type = parseType(this);
+    res.type = parseType();
     if (first()->is(EQ)) {
         consume(EQ);
-        prm.defVal = parseExpr();
+        res.defVal = parseExpr();
     }
-    return prm;
+    return res;
 }
 
-//"fn" name refType "(" param* ")" ":" type block
+//"func" name "(" params* ")" (":" type)? (block | ";")
 Method *Parser::parseMethod() {
     consume(FUNC);
     Method *res = new Method;
@@ -151,7 +146,7 @@ Method *Parser::parseMethod() {
     //can be auto type
     if (is(COLON)) {
         consume(COLON);
-        res->type = parseType(this);
+        res->type = parseType();
     }
     if (first()->is(SEMI)) {
         //interface
@@ -164,18 +159,17 @@ Method *Parser::parseMethod() {
 
 //name (":" realType)? ("=" expr)?;
 Fragment frag(Parser *p) {
-    auto name = p->name();
-    Type *type = nullptr;
+    Fragment res;
+    res.name = *p->name();
     if (p->is(COLON)) {
         p->consume(COLON);
-        type = parseType(p);
+        res.type = p->parseType();
     }
-    Expression *right = nullptr;
     if (p->is(EQ)) {
         p->consume(EQ);
-        right = p->parseExpr();
+        res.rhs = p->parseExpr();
     }
-    return Fragment(*name, type, right);
+    return res;
 }
 
 //("let" | "var") varDeclFrag ("," varDeclFrag)*;
@@ -190,10 +184,14 @@ VarDecl *Parser::parseVarDecl() {
 
 //("let" | "var") varDeclFrag ("," varDeclFrag)*;
 VarDeclExpr *Parser::parseVarDeclExpr() {
-    auto pre = pop();//var or let
-    log("varDecl");
     auto res = new VarDeclExpr;
-    res->isVar = pre->is(VAR);
+    if (is(VAR)) {
+        consume(VAR);
+        res->isVar = true;
+    } else {
+        consume(LET);
+        res->isVar = false;
+    }
     res->list.push_back(frag(this));
     //rest if any
     while (is(COMMA)) {

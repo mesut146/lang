@@ -89,4 +89,14 @@ public:
     VarDeclExpr *parseVarDeclExpr();
 
     Expression *parseExpr();
+
+    Type *parseType();
+
+    std::vector<Type *> generics();
+
+    RefType *refType();
+
+    Name *qname();
+
+    bool isPrim(Token &t);
 };

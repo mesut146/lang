@@ -2,7 +2,7 @@
 #include "parser/Util.h"
 
 std::string SimpleName::print() {
-    return *name;
+    return name;
 }
 
 std::string QName::print() {
@@ -33,13 +33,15 @@ std::string VarDeclExpr::print() {
 }
 
 std::string Fragment::print() {
-    if (type == nullptr) {
-        return name + (right == nullptr ? "" : " = " + right->print());
-    } else {
-        return name + ":" + type->print() + (right == nullptr ? "" : " = " + right->print());
+    std::string s;
+    s.append(name);
+    if (type != nullptr) {
+        s.append(":").append(type->print());
     }
-}
-Fragment::Fragment(std::string name, Type *type, Expression *expr) : name(name), type(type), right(expr) {
+    if (rhs != nullptr) {
+        s.append(" = ").append(rhs->print());
+    }
+    return s;
 }
 
 std::string ExprStmt::print() {
@@ -158,6 +160,7 @@ std::string Param::print() {
     }
     return s;
 }
+
 std::string ArrowFunction::print() {
     std::string s;
     s.append("(");
@@ -271,24 +274,26 @@ std::string ForEach::print() {
 std::string Infix::print() {
     return left->print() + " " + op + " " + right->print();
 }
+
 std::string Assign::print() {
     return left->print() + " " + op + " " + right->print();
 }
+
 std::string Unary::print() {
     return op + expr->print();
 }
+
 std::string Postfix::print() {
     return expr->print() + op;
 }
-std::string NullLit::print() {
-    return "null";
-}
+
 std::string FieldAccess::print() {
     if (isOptional) {
         return scope->print() + "?." + name;
     }
     return scope->print() + "." + name;
 }
+
 std::string MethodCall::print() {
     if (scope == nullptr) {
         return name + "(" + join(args, ", ") + ")";
@@ -299,22 +304,30 @@ std::string MethodCall::print() {
         return scope->print() + "." + name + "(" + join(args, ", ") + ")";
     }
 }
+
 std::string ArrayAccess::print() {
+    if (isOptional) {
+        return array->print() + "?[" + index->print() + "]";
+    }
     return array->print() + "[" + index->print() + "]";
 }
+
 std::string ArrayExpr::print() {
     return "[" + join(list, ", ") + "]";
 }
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
 }
+
 std::string WhileStmt::print() {
     return "while(" + expr->print() + ")\n" + body->print();
 }
+
 std::string ReturnStmt::print() {
     if (expr == nullptr) return "return";
     return "return " + expr->print() + ";";
 }
+
 std::string ContinueStmt::print() {
     if (label == nullptr) return "continue";
     return "continue " + *label;
@@ -324,8 +337,9 @@ std::string BreakStmt::print() {
     if (label == nullptr) return "break";
     return "break " + *label;
 }
+
 std::string DoWhile::print() {
-    return "do" + body.print() + "\nwhile(" + expr->print() + ");";
+    return "do" + body->print() + "\nwhile(" + expr->print() + ");";
 }
 
 std::string ThrowStmt::print() {
@@ -333,8 +347,9 @@ std::string ThrowStmt::print() {
 }
 
 std::string CatchStmt::print() {
-    return "catch()" + block->print();
+    return "catch(" + param.print() + ")" + block->print();
 }
+
 std::string TryStmt::print() {
     return "try " + block->print() + join(catches, "\n");
 }
