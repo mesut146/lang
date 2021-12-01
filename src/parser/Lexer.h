@@ -97,5 +97,7 @@ public:
         ops["&"] = AND;
         ops["||"] = OROR;
         ops["&&"] = ANDAND;
+
+        ops["=>"] = ARROW;
     }
 };

@@ -44,13 +44,18 @@ TokenType kw(std::string &s) {
         return DO;
     if (s == "break")
         return BREAK;
-    if (s == "fn")
-        return FN;
+    if (s == "fn" || s == "func" || s == "fun" || s == "function")
+        return FUNC;
     if (s == "let")
         return LET;
     if (s == "var")
         return VAR;
-
+    if (s == "try")
+        return TRY;
+    if (s == "catch")
+        return CATCH;
+    if (s == "throw")
+        return THROW;
     return EOF_;
 }
 

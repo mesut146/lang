@@ -1,6 +1,6 @@
 class Node<T>{
-  Node2 next;
-  int value;
+  next?: Node<T>;
+  value: int = 0;
 }
 
 enum Color{
@@ -9,5 +9,23 @@ enum Color{
 }
 
 class a{
-  int calc();
+  func calc();
 }
+
+
+func calc(a:int,b:int,carry?:int) : int
+{
+  if(carry){
+    return a + b + carry;
+  }
+  else{
+    return a + b;
+  }
+}
+
+func def(a:int = 0);
+
+calc(1,2);
+calc(1,2,3);
+def();
+def(5);

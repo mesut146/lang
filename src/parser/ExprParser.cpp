@@ -1,22 +1,17 @@
 #include "ExprParser.h"
 #include "Parser.h"
+#include "StatementParser.h"
 
+
+ArrowFunction *parseArrow(Parser *p);
 
 std::vector<Expression *> exprList(Parser *p) {
     std::vector<Expression *> res;
-    res.push_back(parseExpr(p));
+    res.push_back(p->parseExpr());
     while (p->first()->is(COMMA)) {
         p->consume(COMMA);
-        res.push_back(parseExpr(p));
+        res.push_back(p->parseExpr());
     }
-    return res;
-}
-
-Expression *parsePar(Parser *p) {
-    auto *res = new ParExpr;
-    p->consume(LPAREN);
-    res->expr = parseExpr(p);
-    p->consume(RPAREN);
     return res;
 }
 
@@ -104,19 +99,28 @@ RefType *refType(Parser *p) {
 }
 
 Entry parseEntry(Parser *p) {
+    //todo key not expr,lit,ident
     Entry e;
-    e.key = parseExpr(p);
+    e.key = p->parseExpr();
     p->consume(COLON);
-    e.value = parseExpr(p);
+    e.value = p->parseExpr();
     return e;
 }
 
 Expression *PRIM(Parser *p) {
     log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
+        //ParExpr or arrow function
+        for (int i = 1; i < p->tokens.size(); i++) {
+            if (i < p->tokens.size() - 1 &&
+                p->tokens[i]->is(RPAREN) &&
+                p->tokens[i + 1]->is(ARROW)) {
+                return parseArrow(p);
+            }
+        }
         auto res = new ParExpr;
         p->consume(LPAREN);
-        res->expr = parseExpr(p);
+        res->expr = p->parseExpr();
         p->consume(RPAREN);
         return res;
     } else if (isLit(*p->first())) {
@@ -174,12 +178,18 @@ Expression *PRIM(Parser *p) {
 //PRIM (dot name ('(' ')')? | [ E ])*
 Expression *PRIM2(Parser *p) {
     Expression *lhs = PRIM(p);
-    while (p->is({DOT, LBRACKET})) {
+    while (p->is({DOT, LBRACKET}) || p->is(QUES) && p->tokens[1]->is({DOT, LBRACKET})) {
+        bool isOptional = false;
+        if (p->is(QUES) && p->tokens[1]->is({DOT, LBRACKET})) {
+            p->consume(QUES);
+            isOptional = true;
+        }
         if (p->is(DOT)) {
             p->consume(DOT);
             auto name = p->name();
             if (p->is(LPAREN)) {
                 auto res = new MethodCall;
+                res->isOptional = isOptional;
                 res->scope = lhs;
                 res->name = *name;
                 p->consume(LPAREN);
@@ -190,15 +200,17 @@ Expression *PRIM2(Parser *p) {
                 lhs = res;
             } else {
                 auto res = new FieldAccess;
+                res->isOptional = isOptional;
                 res->scope = lhs;
                 res->name = *name;
                 lhs = res;
             }
         } else {
             auto res = new ArrayAccess;
+            res->isOptional = isOptional;
             res->array = lhs;
             p->consume(LBRACKET);
-            res->index = parseExpr(p);
+            res->index = p->parseExpr();
             p->consume(RBRACKET);
             lhs = res;
         }
@@ -219,17 +231,13 @@ Expression *expr13(Parser *p) {
     return lhs;
 }
 
-//("+" | "-" | "++" | "--" | "!" | "~" | "(" type ")" expr12) expr #unary
+//("+" | "-" | "++" | "--" | "!" | "~") expr #unary
 Expression *expr12(Parser *p) {
     if (p->is({PLUS, MINUS, PLUSPLUS, MINUSMINUS, BANG, TILDE})) {
         auto res = new Unary;
         res->op = *p->pop()->value;
         res->expr = expr12(p);
         return res;
-    } else if (p->is(LPAREN)) {
-        //cast or paren
-        //after closig pare there must e idet
-        throw std::string("not yet");
     } else {
         return expr13(p);
     }
@@ -381,7 +389,7 @@ Expression *expr1(Parser *p) {
         Ternary *t = new Ternary;
         t->cond = lhs;
         p->consume(QUES);
-        t->thenExpr = parseExpr(p);
+        t->thenExpr = p->parseExpr();
         p->consume(COLON);
         t->elseExpr = expr1(p);
         lhs = t;
@@ -394,16 +402,36 @@ bool isAssign(std::string &s) {
 }
 
 //expr1 (op expr)?
-Expression *parseExpr(Parser *p) {
-    log("parseExpr " + *p->first()->value);
-    Token t = *p->first();
-    Expression *res = expr1(p);
-    if (isAssign(*p->first()->value)) {
+Expression *Parser::parseExpr() {
+    log("parseExpr " + *first()->value);
+    Token t = *first();
+    Expression *res = expr1(this);
+    if (isAssign(*first()->value)) {
         auto assign = new Assign;
         assign->left = res;
-        assign->op = *p->pop()->value;
-        assign->right = parseExpr(p);
+        assign->op = *pop()->value;
+        assign->right = parseExpr();
         res = assign;
+    }
+    return res;
+}
+
+ArrowFunction *parseArrow(Parser *p) {
+    auto res = new ArrowFunction;
+    p->consume(LPAREN);
+    if (!p->first()->is(RPAREN)) {
+        res->params.push_back(p->parseParam());
+        while (p->first()->is(COMMA)) {
+            p->consume(COMMA);
+            res->params.push_back(p->parseParam());
+        }
+    }
+    p->consume(RPAREN);
+    p->consume(ARROW);
+    if (p->is(LBRACE)) {
+        res->block = parseBlock(p);
+    } else {
+        res->expr = p->parseExpr();
     }
     return res;
 }

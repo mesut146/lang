@@ -66,14 +66,27 @@ public:
     }
 
     std::string *name() {
+        if (is({VAR, LET, FUNC})) {
+            return pop()->value;
+        }
         return consume(IDENT)->value;
     }
 
     Unit parseUnit();
+
     TypeDecl *parseTypeDecl();
+
     EnumDecl *parseEnumDecl();
 
-    VarDecl *parseVarDecl();
-    VarDeclExpr *parseVarDeclExpr();
+    FieldDecl *parseFieldDecl();
+
     Method *parseMethod();
+
+    Param parseParam();
+
+    VarDecl *parseVarDecl();
+
+    VarDeclExpr *parseVarDeclExpr();
+
+    Expression *parseExpr();
 };

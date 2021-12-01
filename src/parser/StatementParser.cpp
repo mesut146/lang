@@ -19,7 +19,7 @@ IfStmt *parseIf(Parser *p) {
     IfStmt *res = new IfStmt;
     p->consume(IF_KW);
     p->consume(LPAREN);
-    res->expr = parseExpr(p);
+    res->expr = p->parseExpr();
     p->consume(RPAREN);
     res->thenStmt = parseStmt(p);
     if (p->first()->is(ELSE_KW)) {
@@ -51,7 +51,7 @@ Statement *parseFor(Parser *p) {
         auto res = new ForStmt;
         res->decl = var;
         if (!p->first()->is(SEMI)) {
-            res->cond = parseExpr(p);
+            res->cond = p->parseExpr();
         }
         p->consume(SEMI);
         if (!p->first()->is(RPAREN)) {
@@ -64,13 +64,22 @@ Statement *parseFor(Parser *p) {
         auto res = new ForEach;
         res->decl = var;
         p->consume(COLON);
-        res->expr = parseExpr(p);
+        res->expr = p->parseExpr();
         p->consume(RPAREN);
         res->body = parseStmt(p);
         return res;
     }
 }
 
+CatchStmt parseCatch(Parser *p) {
+    CatchStmt res;
+    p->consume(CATCH);
+    p->consume(LPAREN);
+
+    p->consume(RPAREN);
+    res.block = parseBlock(p);
+    return res;
+}
 
 Statement *parseStmt(Parser *p) {
     log("parseStmt " + *p->first()->value);
@@ -86,7 +95,7 @@ Statement *parseStmt(Parser *p) {
         auto ret = new ReturnStmt;
         p->consume(RETURN);
         if (!p->first()->is(SEMI)) {
-            ret->expr = parseExpr(p);
+            ret->expr = p->parseExpr();
         }
         p->consume(SEMI);
         return ret;
@@ -106,12 +115,26 @@ Statement *parseStmt(Parser *p) {
         }
         p->consume(SEMI);
         return ret;
+    } else if (t.is(TRY)) {
+        auto res = new TryStmt;
+        p->consume(TRY);
+        res->block = parseBlock(p);
+        while (p->is(CATCH)) {
+            res->catches.push_back(parseCatch(p));
+        }
+        return res;
+    } else if (t.is(THROW)) {
+        auto res = new ThrowStmt;
+        p->consume(THROW);
+        res->expr = p->parseExpr();
+        p->consume(SEMI);
+        return res;
     } else if (t.is({VAR, LET})) {
         //var decl
         auto var = p->parseVarDecl();
         return var;
     } else {
-        Expression *e = parseExpr(p);
+        Expression *e = p->parseExpr();
         if (p->first()->is(SEMI)) {
             p->consume(SEMI);
             return new ExprStmt(e);

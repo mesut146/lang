@@ -33,7 +33,6 @@ enum TokenType {
     FUNC,
     LET,
     VAR,
-    FN,
     IF_KW,
     ELSE_KW,
     FOR,
@@ -41,6 +40,9 @@ enum TokenType {
     DO,
     SWITCH,
     CASE,
+    THROW,
+    TRY,
+    CATCH,
     EQ,
     PLUS,
     MINUS,
@@ -86,7 +88,8 @@ enum TokenType {
     LBRACKET,
     RBRACKET,
     LBRACE,
-    RBRACE
+    RBRACE,
+    ARROW,
 };
 
 class Token {

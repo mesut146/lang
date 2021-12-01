@@ -93,7 +93,7 @@ std::string TypeDecl::print() {
     }
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
-        s.append("  ").append(fields.at(i)->print()).append(";");
+        s.append("  ").append(fields[i]->print());
         if (i < fields.size() - 1) s.append("\n");
     }
     if (!methods.empty()) {
@@ -108,16 +108,35 @@ std::string TypeDecl::print() {
     return s;
 }
 
+std::string FieldDecl::print() {
+    std::string s;
+    s.append(name);
+    if (isOptional) {
+        s.append("?");
+    }
+    if (type != nullptr) {
+        s.append(": ");
+        s.append(type->print());
+    }
+    if (expr != nullptr) {
+        s.append(" = ");
+        s.append(expr->print());
+    }
+    s.append(";");
+    return s;
+}
+
 std::string Method::print() {
     std::string s;
-    s.append("fn");
+    s.append("func ");
     s.append(name);
-    s.append(" ");
     s.append("(");
-    s.append(join(params, " "));
+    s.append(join(params, ", "));
     s.append(")");
-    s.append(" : ");
-    s.append(type->print());
+    if (type != nullptr) {
+        s.append(": ");
+        s.append(type->print());
+    }
     if (body == nullptr) {
         s.append(";");
     } else {
@@ -128,14 +147,27 @@ std::string Method::print() {
 
 std::string Param::print() {
     std::string s;
-    s.append(type->print());
-    s.append(" ");
-    s.append(*name);
+    s.append(name);
     if (isOptional)
         s.append("?");
+    s.append(": ");
+    s.append(type->print());
     if (defVal != nullptr) {
         s.append(" = ");
         s.append(defVal->print());
+    }
+    return s;
+}
+std::string ArrowFunction::print() {
+    std::string s;
+    s.append("(");
+    s.append(join(params, ", "));
+    s.append(")");
+    s.append(" => ");
+    if (block != nullptr) {
+        s.append(block->print());
+    } else {
+        s.append(expr->print());
     }
     return s;
 }
@@ -252,12 +284,18 @@ std::string NullLit::print() {
     return "null";
 }
 std::string FieldAccess::print() {
+    if (isOptional) {
+        return scope->print() + "?." + name;
+    }
     return scope->print() + "." + name;
 }
 std::string MethodCall::print() {
     if (scope == nullptr) {
         return name + "(" + join(args, ", ") + ")";
     } else {
+        if (isOptional) {
+            return scope->print() + "?." + name + "(" + join(args, ", ") + ")";
+        }
         return scope->print() + "." + name + "(" + join(args, ", ") + ")";
     }
 }
@@ -265,7 +303,7 @@ std::string ArrayAccess::print() {
     return array->print() + "[" + index->print() + "]";
 }
 std::string ArrayExpr::print() {
-    return "[" + join(list,", ") + "]";
+    return "[" + join(list, ", ") + "]";
 }
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
@@ -288,4 +326,15 @@ std::string BreakStmt::print() {
 }
 std::string DoWhile::print() {
     return "do" + body.print() + "\nwhile(" + expr->print() + ");";
+}
+
+std::string ThrowStmt::print() {
+    return "throw " + expr->print() + ";";
+}
+
+std::string CatchStmt::print() {
+    return "catch()" + block->print();
+}
+std::string TryStmt::print() {
+    return "try " + block->print() + join(catches, "\n");
 }

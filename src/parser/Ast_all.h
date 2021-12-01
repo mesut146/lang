@@ -6,7 +6,7 @@ class BaseDecl;
 class TypeDecl;
 class EnumDecl;
 
-class Field;
+class FieldDecl;
 class Method;
 
 class Literal;

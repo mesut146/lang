@@ -17,6 +17,27 @@ ImportStmt parseImport(Parser &p) {
     return res;
 }
 
+//name ":" type ("=" expr)?;
+FieldDecl *Parser::parseFieldDecl() {
+    log("varDecl");
+    auto res = new FieldDecl;
+    res->name = *name();
+    if (is(QUES)) {
+        consume(QUES);
+        res->isOptional = true;
+    }
+    if (is(COLON)) {
+        consume(COLON);
+        res->type = parseType(this);
+    }
+    if (is(EQ)) {
+        consume(EQ);
+        res->expr = parseExpr();
+    }
+    consume(SEMI);
+    return res;
+}
+
 TypeDecl *Parser::parseTypeDecl() {
     auto *res = new TypeDecl;
     res->isInterface = pop()->is(INTERFACE);
@@ -38,10 +59,12 @@ TypeDecl *Parser::parseTypeDecl() {
             res->types.push_back(parseTypeDecl());
         } else if (first()->is(ENUM)) {
             res->types.push_back(parseEnumDecl());
-        } else if (first()->is({VAR, LET})) {
-            res->fields.push_back(parseVarDecl());
-        } else if (first()->is(FN)) {
+        } else if (first()->is(FUNC)) {
             res->methods.push_back(parseMethod());
+        } else if (is(IDENT)) {
+            res->fields.push_back(parseFieldDecl());
+        } else {
+            throw std::string("invalid class member: " + *first()->value);
         }
     }
     consume(RBRACE);
@@ -83,7 +106,7 @@ Unit Parser::parseUnit() {
             res.types.push_back(parseEnumDecl());
         } else if (t->is({VAR, LET})) {
             res.stmts.push_back(parseVarDecl());
-        } else if (t->is(FN)) {
+        } else if (t->is(FUNC)) {
             res.methods.push_back(parseMethod());
         } else {
             auto stmt = parseStmt(this);
@@ -94,34 +117,42 @@ Unit Parser::parseUnit() {
     return res;
 }
 
-Param parseParam(Parser *p) {
+Param Parser::parseParam() {
     Param prm;
-    prm.type = parseType(p);
-    prm.name = p->name();
-    if (p->first()->is(EQ)) {
-        p->consume(EQ);
-        prm.defVal = parseExpr(p);
+    prm.name = *name();
+    if (is(QUES)) {
+        consume(QUES);
+        prm.isOptional = true;
+    }
+    consume(COLON);
+    prm.type = parseType(this);
+    if (first()->is(EQ)) {
+        consume(EQ);
+        prm.defVal = parseExpr();
     }
     return prm;
 }
 
 //"fn" name refType "(" param* ")" ":" type block
 Method *Parser::parseMethod() {
-    consume(FN);
+    consume(FUNC);
     Method *res = new Method;
     res->name = *name();
     log("parseMethod = " + res->name);
     consume(LPAREN);
     if (!first()->is(RPAREN)) {
-        res->params.push_back(parseParam(this));
+        res->params.push_back(parseParam());
         while (first()->is(COMMA)) {
             consume(COMMA);
-            res->params.push_back(parseParam(this));
+            res->params.push_back(parseParam());
         }
     }
     consume(RPAREN);
-    consume(COLON);
-    res->type = parseType(this);
+    //can be auto type
+    if (is(COLON)) {
+        consume(COLON);
+        res->type = parseType(this);
+    }
     if (first()->is(SEMI)) {
         //interface
         consume(SEMI);
@@ -134,7 +165,6 @@ Method *Parser::parseMethod() {
 //name (":" realType)? ("=" expr)?;
 Fragment frag(Parser *p) {
     auto name = p->name();
-    log("varDecl frag= " + *name);
     Type *type = nullptr;
     if (p->is(COLON)) {
         p->consume(COLON);
@@ -143,7 +173,7 @@ Fragment frag(Parser *p) {
     Expression *right = nullptr;
     if (p->is(EQ)) {
         p->consume(EQ);
-        right = parseExpr(p);
+        right = p->parseExpr();
     }
     return Fragment(*name, type, right);
 }

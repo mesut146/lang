@@ -8,6 +8,5 @@ class Parser;
 Type *parseType(Parser *p);
 RefType *refType(Parser *p);
 
-Expression *parseExpr(Parser *p);
 bool isType(Parser *p);
 std::vector<Expression *> exprList(Parser *p);

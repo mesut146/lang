@@ -87,19 +87,19 @@ public:
 class Param {
 public:
     Type *type;
-    std::string *name;
-    bool isOptional;
-    Expression *defVal;
+    std::string name;
+    bool isOptional = false;
+    Expression *defVal = nullptr;
 
     std::string print();
 };
 
-class Method : public Statement {
+class Method {
 public:
     Type *type;
     std::string name;
     std::vector<Param> params;
-    Block *body;
+    Block *body = nullptr;
 
     std::string print();
 };
@@ -125,7 +125,7 @@ public:
     bool isInterface;
     std::vector<Type *> typeArgs;
     std::vector<Type *> baseTypes;
-    std::vector<VarDecl *> fields;
+    std::vector<FieldDecl *> fields;
     std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
 
@@ -140,6 +140,16 @@ public:
     std::string print();
 };
 
+class FieldDecl {
+public:
+    std::string name;
+    bool isOptional;
+    Type *type;
+    Expression *expr;
+
+    std::string print();
+};
+
 class Literal : public Expression {
 public:
     std::string val;
@@ -148,6 +158,7 @@ public:
     bool isFloat;
     bool isStr;
     bool isChar;
+
     std::string print();
 };
 
@@ -237,6 +248,7 @@ public:
     Expression *scope;
     std::string name;
     std::vector<Expression *> args;
+    bool isOptional = false;
 
     std::string print() override;
 };
@@ -245,6 +257,7 @@ class FieldAccess : public Expression {
 public:
     Expression *scope;
     std::string name;
+    bool isOptional = false;
 
     std::string print();
 };
@@ -253,13 +266,14 @@ class ArrayAccess : public Expression {
 public:
     Expression *array;
     Expression *index;
+    bool isOptional = false;
 
     std::string print();
 };
 
 class ArrayExpr : public Expression {
 public:
-    std::vector<Expression*> list;
+    std::vector<Expression *> list;
 
     std::string print();
 };
@@ -267,6 +281,15 @@ public:
 class ParExpr : public Expression {
 public:
     Expression *expr;
+    std::string print() override;
+};
+
+class ArrowFunction : public Expression {
+public:
+    std::vector<Param> params;
+    Block *block = nullptr;
+    Expression *expr = nullptr;
+
     std::string print() override;
 };
 
@@ -350,6 +373,28 @@ public:
     VarDeclExpr *decl;
     Expression *expr;
     Statement *body;
+
+    std::string print() override;
+};
+
+class ThrowStmt : public Statement {
+public:
+    Expression *expr;
+
+    std::string print() override;
+};
+
+class CatchStmt : public Statement {
+public:
+    Block *block;
+
+    std::string print() override;
+};
+
+class TryStmt : public Statement {
+public:
+    Block *block;
+    std::vector<CatchStmt> catches;
 
     std::string print() override;
 };
