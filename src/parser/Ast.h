@@ -108,6 +108,7 @@ class Method {
 public:
     Type *type;
     std::string name;
+    std::vector<Type *> typeArgs;
     std::vector<Param> params;
     Block *body = nullptr;
 
@@ -175,6 +176,7 @@ public:
 class ExprStmt : public Statement {
 public:
     Expression *expr;
+
     std::string print() override;
     ExprStmt(Expression *e) : expr(e) {}
 };
@@ -182,7 +184,7 @@ public:
 class Fragment {
 public:
     std::string name;
-    Type *type;
+    Type *type = nullptr;
     Expression *rhs = nullptr;
 
     std::string print();
@@ -249,7 +251,7 @@ public:
 
 class MethodCall : public Expression {
 public:
-    Expression *scope;
+    Expression *scope = nullptr;
     std::string name;
     std::vector<Expression *> args;
     bool isOptional = false;
@@ -309,30 +311,45 @@ class ObjExpr : public Expression {
 public:
     std::string name;
     std::vector<Entry> entries;
+
     std::string print() override;
 };
 
 class AnonyObjExpr : public Expression {
 public:
     std::vector<Entry> entries;
+
     std::string print() override;
 };
 
+/*class XmlElement : public Expression {
+public:
+    std::string name;
+    std::string text;
+    std::vector<std::pair<std::string, std::string>> attributes;
+    std::vector<XmlElement *> children;
+    bool isShort;
+
+    std::string print() override;
+};*/
+
 class ReturnStmt : public Statement {
 public:
-    Expression *expr;
+    Expression *expr = nullptr;
+
     std::string print() override;
 };
 
 class ContinueStmt : public Statement {
 public:
-    std::string *label;
+    std::string *label = nullptr;
+
     std::string print() override;
 };
 
 class BreakStmt : public Statement {
 public:
-    std::string *label;
+    std::string *label = nullptr;
 
     std::string print() override;
 };
@@ -341,7 +358,7 @@ class IfStmt : public Statement {
 public:
     Expression *expr;
     Statement *thenStmt;
-    Statement *elseStmt;
+    Statement *elseStmt = nullptr;
 
     std::string print() override;
 };
@@ -364,8 +381,8 @@ public:
 
 class ForStmt : public Statement {
 public:
-    VarDeclExpr *decl;
-    Expression *cond;
+    VarDeclExpr *decl = nullptr;
+    Expression *cond = nullptr;
     std::vector<Expression *> updaters;
     Statement *body;
 
@@ -392,6 +409,7 @@ class CatchStmt : public Statement {
 public:
     Block *block;
     Param param;
+    
     std::string print() override;
 };
 

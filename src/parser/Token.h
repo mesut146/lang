@@ -109,8 +109,7 @@ public:
 
     bool is(std::initializer_list<TokenType> t) {
         for (TokenType tt : t)
-            if (tt == type)
-                return true;
+            if (tt == type) return true;
         return false;
     }
 

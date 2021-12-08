@@ -1,8 +1,8 @@
 #include "Parser.h"
 #include "Util.h"
 
-std::string *strLit(Parser *p) {
-    auto t = p->consume(STRING_LIT);
+std::string *Parser::strLit() {
+    auto t = consume(STRING_LIT);
     return new std::string(t->value->begin() + 1, t->value->end() - 1);
 }
 
@@ -39,7 +39,7 @@ ImportStmt Parser::parseImport() {
         }
     }
     consume(FROM);
-    res.from = *strLit(this);
+    res.from = *strLit();
     return res;
 }
 
@@ -141,15 +141,18 @@ Unit Parser::parseUnit() {
 }
 
 //name "?"? ":" type ("=" expr)?
-Param Parser::parseParam() {
+Param Parser::parseParam(bool requireType) {
     Param res;
     res.name = *name();
     if (is(QUES)) {
         consume(QUES);
         res.isOptional = true;
     }
-    consume(COLON);
-    res.type = parseType();
+    if (requireType || is(COLON)) {
+        consume(COLON);
+        res.type = parseType();
+    }
+
     if (first()->is(EQ)) {
         consume(EQ);
         res.defVal = parseExpr();
@@ -162,13 +165,17 @@ Method *Parser::parseMethod() {
     consume(FUNC);
     Method *res = new Method;
     res->name = *name();
+    if (is(LT)) {
+        res->typeArgs = generics();
+    }
+
     log("parseMethod = " + res->name);
     consume(LPAREN);
     if (!first()->is(RPAREN)) {
-        res->params.push_back(parseParam());
+        res->params.push_back(parseParam(true));
         while (first()->is(COMMA)) {
             consume(COMMA);
-            res->params.push_back(parseParam());
+            res->params.push_back(parseParam(true));
         }
     }
     consume(RPAREN);

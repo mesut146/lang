@@ -58,6 +58,8 @@ public:
         return consume(IDENT)->value;
     }
 
+    std::string *strLit();
+
     Unit parseUnit();
 
     ImportStmt parseImport();
@@ -70,7 +72,7 @@ public:
 
     Method *parseMethod();
 
-    Param parseParam();
+    Param parseParam(bool requireType);
 
     VarDecl *parseVarDecl();
 

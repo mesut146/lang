@@ -1,4 +1,5 @@
 #include "parser/Parser.h"
+#include "parser/Util.h"
 #include <cstring>
 #include <iostream>
 
@@ -26,12 +27,18 @@ void parse(std::string &path) {
 }
 
 int main(int argc, char **args) {
-    std::string path("../tests/types");
-    //std::string path("../tests/stmts");
-    //std::string path("../tests/exprs");
-    if (argc > 1 && strcmp(args[1], "lex") == 0) {
-        lex(path);
+    if (argc > 1 && strcmp(args[1], "parse") == 0) {
+        debug = false;
+        auto s = std::string(args[2]);
+        parse(s);
     } else {
+        debug = true;
+        std::string path;
+        path = "../tests/types";
+        path = "/home/mesut/Desktop/lang/doc/join";
+        //std::string path("../tests/stmts");
+        //std::string path("../tests/exprs");
+        //lex(path);
         parse(path);
     }
     return 0;

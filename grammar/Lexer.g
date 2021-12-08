@@ -38,13 +38,13 @@ token {
   LT: '<';
   BANG: '!';
   TILDE: '~';
-  QUESTION: '?';
+  QUES: '?';
   COLON: ':';
   ARROW: '=>';
-  EQUAL: '==';
-  LE: '<=';
-  GE: '>=';
-  NOTEQUAL: '!=';
+  EQEQ: '==';
+  LTEQ: '<=';
+  GTEQ: '>=';
+  NOTEQ: '!=';
   AND: '&&';
   OR: '||';
   INC: '++';

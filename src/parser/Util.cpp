@@ -1,7 +1,5 @@
 #include "Util.h"
 
-bool debug = false;
-
 void log(const char *msg) {
     if (debug)
         std::cout << msg << std::endl;

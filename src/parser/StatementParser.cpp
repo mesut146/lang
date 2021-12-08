@@ -93,7 +93,7 @@ CatchStmt parseCatch(Parser *p) {
     CatchStmt res;
     p->consume(CATCH);
     p->consume(LPAREN);
-    res.param = p->parseParam();
+    res.param = p->parseParam(true);
     p->consume(RPAREN);
     res.block =  p->parseBlock();
     return res;

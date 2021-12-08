@@ -141,6 +141,11 @@ std::string Method::print() {
     std::string s;
     s.append("func ");
     s.append(name);
+    if (!typeArgs.empty()) {
+        s.append("<");
+        s.append(join(typeArgs, ","));
+        s.append(">");
+    }
     s.append("(");
     s.append(join(params, ", "));
     s.append(")");
@@ -159,10 +164,14 @@ std::string Method::print() {
 std::string Param::print() {
     std::string s;
     s.append(name);
-    if (isOptional)
+    if (isOptional) {
         s.append("?");
-    s.append(": ");
-    s.append(type->print());
+    }
+    if (type != nullptr) {
+        s.append(": ");
+        s.append(type->print());
+    }
+
     if (defVal != nullptr) {
         s.append(" = ");
         s.append(defVal->print());

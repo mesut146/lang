@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+static bool debug = true;
+
 
 template<class T>
 std::string join(std::vector<T> &arr, const char *sep, const char *indent = "") {

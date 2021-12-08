@@ -137,6 +137,10 @@ names:
 array:
   "[" exprs? "]";
 
+xmlElement: "<" name attr* "/" ">"
+        |   "<" name attr* ">" xmlElement* | text "<" "/" name ">";
+attr: name "=" STRING_LIT;
+
 
 
   

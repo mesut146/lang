@@ -103,7 +103,7 @@ Entry parseEntry(Parser *p) {
 }
 
 Expression *PRIM(Parser *p) {
-    log("parsePrimary " + *p->first()->value);
+    //log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
         //ParExpr or arrow function
         for (int i = 1; i < p->tokens.size(); i++) {
@@ -407,6 +407,7 @@ Expression *Parser::parseExpr() {
         assign->right = parseExpr();
         res = assign;
     }
+    log("expr=" + res->print());
     return res;
 }
 
@@ -415,10 +416,10 @@ ArrowFunction *parseArrow(Parser *p) {
     auto res = new ArrowFunction;
     p->consume(LPAREN);
     if (!p->is(RPAREN)) {
-        res->params.push_back(p->parseParam());
+        res->params.push_back(p->parseParam(false));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->params.push_back(p->parseParam());
+            res->params.push_back(p->parseParam(false));
         }
     }
     p->consume(RPAREN);
@@ -430,3 +431,25 @@ ArrowFunction *parseArrow(Parser *p) {
     }
     return res;
 }
+
+/*XmlElement *parseXml(Parser *p) {
+    auto res = new XmlElement;
+    p->consume(LT);
+    res->name = *p->name();
+    while (p->is(IDENT)) {
+        auto key = p->name();
+        auto val = p->strLit();
+        res->attributes.push_back(std::make_pair(*key, *val));
+    }
+    if (p->is(DIV)) {
+        p->consume(DIV);
+        p->consume(GT);
+    } else {
+        p->consume(GT);
+        while (p->is(LT)) {
+            res->children.push_back(parseXml(p));
+        }
+        p->consume(LT);
+    }
+    return res;
+}*/
