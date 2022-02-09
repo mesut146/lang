@@ -26,6 +26,15 @@ void parse(std::string &path) {
     }
 }
 
+void resolveTest(){
+  std::string path="../tests/resolv";
+  Lexer lexer(path);
+  Parser parser(lexer);
+  Unit u = parser.parseUnit();
+  Resolver r(u);
+  r.resolveAll();
+}  
+
 int main(int argc, char **args) {
     if (argc > 1 && strcmp(args[1], "parse") == 0) {
         debug = false;

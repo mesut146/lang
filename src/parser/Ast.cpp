@@ -1,6 +1,130 @@
 #include "parser/Ast.h"
 #include "parser/Util.h"
 
+std::string Unit::print() {
+    std::string s;
+    s.append(join(imports, "\n"));
+    if (!types.empty()) {
+        if (!imports.empty()) s.append("\n\n");
+        s.append(join(types, "\n\n"));
+    }
+
+    s.append("\n");
+    if (!methods.empty()) {
+        if (!types.empty()) s.append("\n");
+        s.append(join(methods, "\n\n"));
+    }
+    if (!stmts.empty()) {
+        s.append("\n\n");
+        s.append(join(stmts, "\n"));
+    }
+    return s;
+}
+
+std::string NamedImport::print() {
+    if (as != nullptr) {
+        return name + " as " + *as;
+    } else {
+        return name;
+    }
+}
+
+std::string ImportStmt::print() {
+    std::string s;
+    s.append("import ");
+    if (isStar) {
+        s.append("* ");
+        if (as != nullptr) {
+            s.append("as ").append(*as);
+        }
+    } else {
+        s.append(join(namedImports, ", "));
+    }
+
+    s.append(" from ");
+    s.append("\"").append(from).append("\"");
+    return s;
+}
+
+std::string EnumDecl::print() {
+    std::string s;
+    s.append("enum ");
+    s.append(*name);
+    s.append("{\n");
+    s.append(join(cons, ",\n", "  "));
+    s.append("\n}");
+    return s;
+}
+
+std::string TypeDecl::print() {
+    std::string s;
+    s.append(isInterface ? "interface " : "class ");
+    s.append(name);
+    if (!typeArgs.empty()) {
+        s.append("<").append(join(typeArgs, ", ")).append(">");
+    }
+    if (!baseTypes.empty()) {
+        s.append(" : ").append(join(baseTypes, ", "));
+    }
+    s.append("{\n");
+    for (int i = 0; i < fields.size(); i++) {
+        s.append("  ").append(fields[i]->print());
+        if (i < fields.size() - 1) s.append("\n");
+    }
+    if (!methods.empty()) {
+        if (!fields.empty()) s.append("\n");
+        s.append(join(methods, "\n\n", "  "));
+    }
+    if (!types.empty()) {
+        if (!methods.empty()) s.append("\n");
+        s.append(join(types, "\n\n", "  "));
+    }
+    s.append("\n}");
+    return s;
+}
+
+std::string FieldDecl::print() {
+    std::string s;
+    s.append(name);
+    if (isOptional) {
+        s.append("?");
+    }
+    if (type != nullptr) {
+        s.append(": ");
+        s.append(type->print());
+    }
+    if (expr != nullptr) {
+        s.append(" = ");
+        s.append(expr->print());
+    }
+    s.append(";");
+    return s;
+}
+
+std::string Method::print() {
+    std::string s;
+    s.append("func ");
+    s.append(name);
+    if (!typeArgs.empty()) {
+        s.append("<");
+        s.append(join(typeArgs, ","));
+        s.append(">");
+    }
+    s.append("(");
+    s.append(join(params, ", "));
+    s.append(")");
+    if (type != nullptr) {
+        s.append(": ");
+        s.append(type->print());
+    }
+    if (body == nullptr) {
+        s.append(";");
+    } else {
+        s.append(body->print());
+    }
+    return s;
+}
+
 std::string SimpleName::print() {
     return name;
 }
@@ -86,16 +210,6 @@ void* Block::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitBlock(this, arg);
 }
 
-std::string EnumDecl::print() {
-    std::string s;
-    s.append("enum ");
-    s.append(*name);
-    s.append("{\n");
-    s.append(join(cons, ",\n", "  "));
-    s.append("\n}");
-    return s;
-}
-
 std::string dims(Type *type) {
     std::string s;
     for (int i = 0; i < type->arrayLevel; i++) {
@@ -128,74 +242,6 @@ void* RefType::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitRefType(this, arg);
 }
 
-std::string TypeDecl::print() {
-    std::string s;
-    s.append(isInterface ? "interface " : "class ");
-    s.append(name);
-    if (!typeArgs.empty()) {
-        s.append("<").append(join(typeArgs, ", ")).append(">");
-    }
-    if (!baseTypes.empty()) {
-        s.append(" : ").append(join(baseTypes, ", "));
-    }
-    s.append("{\n");
-    for (int i = 0; i < fields.size(); i++) {
-        s.append("  ").append(fields[i]->print());
-        if (i < fields.size() - 1) s.append("\n");
-    }
-    if (!methods.empty()) {
-        if (!fields.empty()) s.append("\n");
-        s.append(join(methods, "\n\n", "  "));
-    }
-    if (!types.empty()) {
-        if (!methods.empty()) s.append("\n");
-        s.append(join(types, "\n\n", "  "));
-    }
-    s.append("\n}");
-    return s;
-}
-
-std::string FieldDecl::print() {
-    std::string s;
-    s.append(name);
-    if (isOptional) {
-        s.append("?");
-    }
-    if (type != nullptr) {
-        s.append(": ");
-        s.append(type->print());
-    }
-    if (expr != nullptr) {
-        s.append(" = ");
-        s.append(expr->print());
-    }
-    s.append(";");
-    return s;
-}
-
-std::string Method::print() {
-    std::string s;
-    s.append("func ");
-    s.append(name);
-    if (!typeArgs.empty()) {
-        s.append("<");
-        s.append(join(typeArgs, ","));
-        s.append(">");
-    }
-    s.append("(");
-    s.append(join(params, ", "));
-    s.append(")");
-    if (type != nullptr) {
-        s.append(": ");
-        s.append(type->print());
-    }
-    if (body == nullptr) {
-        s.append(";");
-    } else {
-        s.append(body->print());
-    }
-    return s;
-}
 
 std::string Param::print() {
     std::string s;
@@ -270,51 +316,6 @@ std::string Entry::print() {
     return key->print() + ":" + value->print();
 }
 
-
-std::string Unit::print() {
-    std::string s;
-    s.append(join(imports, "\n"));
-    if (!types.empty()) {
-        if (!imports.empty()) s.append("\n\n");
-        s.append(join(types, "\n\n"));
-    }
-
-    s.append("\n");
-    if (!methods.empty()) {
-        if (!types.empty()) s.append("\n");
-        s.append(join(methods, "\n\n"));
-    }
-    if (!stmts.empty()) {
-        s.append("\n\n");
-        s.append(join(stmts, "\n"));
-    }
-    return s;
-}
-
-std::string NamedImport::print() {
-    if (as != nullptr) {
-        return name + " as " + *as;
-    } else {
-        return name;
-    }
-}
-
-std::string ImportStmt::print() {
-    std::string s;
-    s.append("import ");
-    if (isStar) {
-        s.append("* ");
-        if (as != nullptr) {
-            s.append("as ").append(*as);
-        }
-    } else {
-        s.append(join(namedImports, ", "));
-    }
-
-    s.append(" from ");
-    s.append("\"").append(from).append("\"");
-    return s;
-}
 
 std::string IfStmt::print() {
     std::string s;

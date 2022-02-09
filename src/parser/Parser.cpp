@@ -100,6 +100,7 @@ TypeDecl *Parser::parseTypeDecl() {
 
 EnumDecl *Parser::parseEnumDecl() {
     auto *res = new EnumDecl;
+    res->isEnum = true;
     consume(ENUM);
     res->name = name();
     log("enum decl = " + *res->name);

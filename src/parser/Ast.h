@@ -137,12 +137,15 @@ public:
     std::vector<BaseDecl *> types;
     std::vector<Method *> methods;
     std::vector<Statement *> stmts;
+    std::string path;
 
     std::string print();
 };
 
 class BaseDecl {
 public:
+    bool isEnum = false;
+    
     virtual std::string print() = 0;
 };
 
@@ -156,7 +159,7 @@ public:
     std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
 
-    std::string print();
+    std::string print() override;
 };
 
 class EnumDecl : public BaseDecl {
@@ -164,7 +167,7 @@ public:
     std::string *name;
     std::vector<std::string> cons;
 
-    std::string print();
+    std::string print() override;
 };
 
 class FieldDecl {

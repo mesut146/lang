@@ -1,4 +1,4 @@
-obj.first().second().field = 5;
+var f = obj.first().second().field;
 a.b.c();
 
 var pi = 3.1415;
