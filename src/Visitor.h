@@ -4,6 +4,7 @@
 
 template<class R, class A>
 class Visitor {
+public:
 
     virtual R visitBlock(Block *, A arg) = 0;
 
@@ -13,10 +14,16 @@ class Visitor {
 
     virtual R visitExprStmt(ExprStmt *, A arg) = 0;
 
-    virtual R visitImportStmt(ImportStmt *, A arg) = 0;
+    virtual R visitLiteral(Literal* lit, A arg) = 0;
 
-    virtual R visitImportStmt(ImportStmt *, A arg) = 0;
+    virtual R visitSimpleName(SimpleName* sn, A arg) = 0;
 
+    virtual R visitQName(QName* qn, A arg) = 0;
+
+    virtual R visitSimpleType(SimpleType* sn, A arg) = 0;
+
+    virtual R visitRefType(RefType* sn, A arg) = 0;
+    
     virtual R visitVarDecl(VarDecl *, A arg) = 0;
 
     virtual R visitVarDeclExpr(VarDeclExpr *, A arg) = 0;
@@ -41,6 +48,8 @@ class Visitor {
 
     virtual R visitParExpr(ParExpr *, A arg) = 0;
 
+    virtual R visitArrowFunction(ArrowFunction* sn, A arg) = 0;
+
     virtual R visitObjExpr(ObjExpr *, A arg) = 0;
 
     virtual R visitAnonyObjExpr(AnonyObjExpr *, A arg) = 0;
@@ -60,4 +69,10 @@ class Visitor {
     virtual R visitForStmt(ForStmt *, A arg) = 0;
 
     virtual R visitForEach(ForEach *, A arg) = 0;
+
+    virtual R visitTryStmt(TryStmt* sn, A arg) = 0;
+
+    virtual R visitThrowStmt(ThrowStmt* sn, A arg) = 0;
+
+    virtual R visitCatchStmt(CatchStmt* sn, A arg) = 0;
 };

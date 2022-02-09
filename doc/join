@@ -1,4 +1,4 @@
-trait iter<T>{
+class iter<T>{
   bool has();
   
   T next();

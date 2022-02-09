@@ -29,13 +29,13 @@ void parse(std::string &path) {
 int main(int argc, char **args) {
     if (argc > 1 && strcmp(args[1], "parse") == 0) {
         debug = false;
-        auto s = std::string(args[2]);
-        parse(s);
+        auto path = std::string(args[2]);
+        parse(path);
     } else {
         debug = true;
         std::string path;
         path = "../tests/types";
-        path = "/home/mesut/Desktop/lang/doc/join";
+        //path = "../doc/join";
         //std::string path("../tests/stmts");
         //std::string path("../tests/exprs");
         //lex(path);
