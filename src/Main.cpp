@@ -1,5 +1,6 @@
 #include "parser/Parser.h"
 #include "parser/Util.h"
+#include "Resolver.h"
 #include <cstring>
 #include <iostream>
 
@@ -27,7 +28,7 @@ void parse(std::string &path) {
 }
 
 void resolveTest(){
-  std::string path="../tests/resolv";
+  std::string path="../tests/resolve1";
   Lexer lexer(path);
   Parser parser(lexer);
   Unit u = parser.parseUnit();
@@ -36,10 +37,15 @@ void resolveTest(){
 }  
 
 int main(int argc, char **args) {
-    if (argc > 1 && strcmp(args[1], "parse") == 0) {
+    if (argc > 1) {
+      if(strcmp(args[1], "parse") == 0){
         debug = false;
         auto path = std::string(args[2]);
         parse(path);
+      }
+      else{
+            resolveTest();
+       }
     } else {
         debug = true;
         std::string path;

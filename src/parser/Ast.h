@@ -5,6 +5,81 @@
 #include <string>
 #include <vector>
 
+
+
+class Unit {
+public:
+    std::vector<ImportStmt> imports;
+    std::vector<BaseDecl *> types;
+    std::vector<Method *> methods;
+    std::vector<Statement *> stmts;
+    std::string path;
+
+    std::string print();
+};
+
+class BaseDecl {
+public:
+    bool isEnum = false;
+    
+    virtual std::string print() = 0;
+    virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
+};
+
+class TypeDecl : public BaseDecl {
+public:
+    std::string name;
+    bool isInterface;
+    std::vector<Type *> typeArgs;
+    std::vector<Type *> baseTypes;
+    std::vector<FieldDecl *> fields;
+    std::vector<Method *> methods;
+    std::vector<BaseDecl *> types;
+
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
+};
+
+class EnumDecl : public BaseDecl {
+public:
+    std::string *name;
+    std::vector<std::string> cons;
+
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
+};
+
+class FieldDecl {
+public:
+    std::string name;
+    bool isOptional;
+    Type *type;
+    Expression *expr;
+
+    std::string print();
+};
+
+class Method {
+public:
+    Type *type;
+    std::string name;
+    std::vector<Type *> typeArgs;
+    std::vector<Param> params;
+    Block *body = nullptr;
+
+    std::string print();
+};
+
+class Param {
+public:
+    Type *type;
+    std::string name;
+    bool isOptional = false;
+    Expression *defVal = nullptr;
+
+    std::string print();
+};
+
 class Expression {
 public:
     virtual std::string print() = 0;
@@ -110,75 +185,6 @@ public:
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 
-class Param {
-public:
-    Type *type;
-    std::string name;
-    bool isOptional = false;
-    Expression *defVal = nullptr;
-
-    std::string print();
-};
-
-class Method {
-public:
-    Type *type;
-    std::string name;
-    std::vector<Type *> typeArgs;
-    std::vector<Param> params;
-    Block *body = nullptr;
-
-    std::string print();
-};
-
-class Unit {
-public:
-    std::vector<ImportStmt> imports;
-    std::vector<BaseDecl *> types;
-    std::vector<Method *> methods;
-    std::vector<Statement *> stmts;
-    std::string path;
-
-    std::string print();
-};
-
-class BaseDecl {
-public:
-    bool isEnum = false;
-    
-    virtual std::string print() = 0;
-};
-
-class TypeDecl : public BaseDecl {
-public:
-    std::string name;
-    bool isInterface;
-    std::vector<Type *> typeArgs;
-    std::vector<Type *> baseTypes;
-    std::vector<FieldDecl *> fields;
-    std::vector<Method *> methods;
-    std::vector<BaseDecl *> types;
-
-    std::string print() override;
-};
-
-class EnumDecl : public BaseDecl {
-public:
-    std::string *name;
-    std::vector<std::string> cons;
-
-    std::string print() override;
-};
-
-class FieldDecl {
-public:
-    std::string name;
-    bool isOptional;
-    Type *type;
-    Expression *expr;
-
-    std::string print();
-};
 
 class Literal : public Expression {
 public:

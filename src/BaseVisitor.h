@@ -1,77 +1,94 @@
+#pragma once
+
 #include "Visitor.h"
 
 template <class R, class A>
 class BaseVisitor : public Visitor<R, A>{
 public:
 
-    virtual R visitBlock(Block *, A arg) ;
-
-    virtual R visitImportStmt(ImportStmt *, A arg) ;
-
-    virtual R visitMethod(Method *, A arg) ;
-
-    virtual R visitExprStmt(ExprStmt *, A arg) ;
-
-    virtual R visitLiteral(Literal* lit, A arg) ;
-
-    virtual R visitSimpleName(SimpleName* sn, A arg) ;
-
-    virtual R visitQName(QName* qn, A arg) ;
-
-    virtual R visitSimpleType(SimpleType* sn, A arg) ;
-
-    virtual R visitRefType(RefType* sn, A arg) ;
+    virtual R visitUnit(Unit* unit, A arg) { 
+      for(auto t : unit->types){
+        t->accept((Visitor<R,A>*)this, unit);
+      }
+      return nullptr;
+    }
     
-    virtual R visitVarDecl(VarDecl *, A arg) ;
+    virtual R visitImportStmt(ImportStmt *, A arg) { return nullptr; }
+    
+    virtual R visitBaseDecl(BaseDecl*, A arg) { return nullptr; }
+    
+    virtual R visitTypeDecl(TypeDecl*, A arg) { return nullptr; }
+    
+    virtual R visitEnumDecl(EnumDecl*, A arg) { return nullptr; }
+    
+    virtual R visitFieldDecl(FieldDecl*, A arg) { return nullptr; }
+    
+    virtual R visitMethod(Method*, A arg) { return nullptr; }
 
-    virtual R visitVarDeclExpr(VarDeclExpr *, A arg) ;
+    virtual R visitBlock(Block *, A arg) { return nullptr; }
 
-    virtual R visitUnary(Unary *, A arg) ;
+    virtual R visitExprStmt(ExprStmt *, A arg) { return nullptr; }
 
-    virtual R visitAssign(Assign *, A arg) ;
+    virtual R visitLiteral(Literal* lit, A arg) { return nullptr; }
 
-    virtual R visitInfix(Infix *, A arg) ;
+    virtual R visitSimpleName(SimpleName* sn, A arg) { return nullptr; }
 
-    virtual R visitPostfix(Postfix *, A arg) ;
+    virtual R visitQName(QName* qn, A arg) { return nullptr; }
 
-    virtual R visitTernary(Ternary *, A arg) ;
+    virtual R visitSimpleType(SimpleType* sn, A arg) { return nullptr; }
 
-    virtual R visitMethodCall(MethodCall *, A arg) ;
+    virtual R visitRefType(RefType* sn, A arg) { return nullptr; }
+    
+    virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 
-    virtual R visitFieldAccess(FieldAccess *, A arg) ;
+    virtual R visitVarDeclExpr(VarDeclExpr *, A arg) { return nullptr; }
 
-    virtual R visitArrayAccess(ArrayAccess *, A arg) ;
+    virtual R visitUnary(Unary *, A arg) { return nullptr; }
 
-    virtual R visitArrayExpr(ArrayExpr *, A arg) ;
+    virtual R visitAssign(Assign *, A arg) { return nullptr; }
 
-    virtual R visitParExpr(ParExpr *, A arg) ;
+    virtual R visitInfix(Infix *, A arg) { return nullptr; }
 
-    virtual R visitArrowFunction(ArrowFunction* sn, A arg) ;
+    virtual R visitPostfix(Postfix *, A arg) { return nullptr; }
 
-    virtual R visitObjExpr(ObjExpr *, A arg) ;
+    virtual R visitTernary(Ternary *, A arg) { return nullptr; }
 
-    virtual R visitAnonyObjExpr(AnonyObjExpr *, A arg) ;
+    virtual R visitMethodCall(MethodCall *, A arg) { return nullptr; }
 
-    virtual R visitReturnStmt(ReturnStmt *, A arg) ;
+    virtual R visitFieldAccess(FieldAccess *, A arg) { return nullptr; }
 
-    virtual R visitContinueStmt(ContinueStmt *, A arg) ;
+    virtual R visitArrayAccess(ArrayAccess *, A arg) { return nullptr; }
 
-    virtual R visitBreakStmt(BreakStmt *, A arg) ;
+    virtual R visitArrayExpr(ArrayExpr *, A arg) { return nullptr; }
 
-    virtual R visitIfStmt(IfStmt *, A arg) ;
+    virtual R visitParExpr(ParExpr *, A arg) { return nullptr; }
 
-    virtual R visitWhileStmt(WhileStmt *, A arg) ;
+    virtual R visitArrowFunction(ArrowFunction* sn, A arg) { return nullptr; }
 
-    virtual R visitDoWhile(DoWhile *, A arg) ;
+    virtual R visitObjExpr(ObjExpr *, A arg) { return nullptr; }
 
-    virtual R visitForStmt(ForStmt *, A arg) ;
+    virtual R visitAnonyObjExpr(AnonyObjExpr *, A arg) { return nullptr; }
 
-    virtual R visitForEach(ForEach *, A arg) ;
+    virtual R visitReturnStmt(ReturnStmt *, A arg) { return nullptr; }
 
-    virtual R visitTryStmt(TryStmt* sn, A arg) ;
+    virtual R visitContinueStmt(ContinueStmt *, A arg) { return nullptr; }
 
-    virtual R visitThrowStmt(ThrowStmt* sn, A arg) ;
+    virtual R visitBreakStmt(BreakStmt *, A arg) { return nullptr; }
 
-    virtual R visitCatchStmt(CatchStmt* sn, A arg) ;
+    virtual R visitIfStmt(IfStmt *, A arg) { return nullptr; }
+
+    virtual R visitWhileStmt(WhileStmt *, A arg) { return nullptr; }
+
+    virtual R visitDoWhile(DoWhile *, A arg) { return nullptr; }
+
+    virtual R visitForStmt(ForStmt *, A arg) { return nullptr; }
+
+    virtual R visitForEach(ForEach *, A arg) { return nullptr; }
+
+    virtual R visitTryStmt(TryStmt* sn, A arg) { return nullptr; }
+
+    virtual R visitThrowStmt(ThrowStmt* sn, A arg) { return nullptr; }
+
+    virtual R visitCatchStmt(CatchStmt* sn, A arg) { return nullptr; }
 
 };

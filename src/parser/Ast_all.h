@@ -8,6 +8,7 @@ class EnumDecl;
 
 class FieldDecl;
 class Method;
+class Param;
 
 class Literal;
 class Name;

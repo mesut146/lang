@@ -17,7 +17,7 @@ static inline void print_stacktrace(FILE *out = stderr, unsigned int max_frames 
   void *addrlist[max_frames + 1];
 
   // retrieve current stack addresses
-  int addrlen = backtrace(addrlist, sizeof(addrlist) / sizeof(void *));
+  int addrlen = backtrace(addrlist, max_frames+1/*sizeof(addrlist)*/ / sizeof(void *));
 
   if (addrlen == 0) {
     fprintf(out, "  <empty, possibly corrupt>\n");

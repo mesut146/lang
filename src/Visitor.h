@@ -6,11 +6,21 @@ template<class R, class A>
 class Visitor {
 public:
 
-    virtual R visitBlock(Block *, A arg) = 0;
-
+    virtual R visitUnit(Unit* unit, A arg) = 0;
+    
     virtual R visitImportStmt(ImportStmt *, A arg) = 0;
+    
+    virtual R visitBaseDecl(BaseDecl*, A arg) = 0;
+    
+    virtual R visitTypeDecl(TypeDecl*, A arg) = 0;
+    
+    virtual R visitEnumDecl(EnumDecl*, A arg) = 0;
+    
+    virtual R visitFieldDecl(FieldDecl*, A arg) = 0;
+    
+    virtual R visitMethod(Method*, A arg) = 0;
 
-    virtual R visitMethod(Method *, A arg) = 0;
+    virtual R visitBlock(Block *, A arg) = 0;
 
     virtual R visitExprStmt(ExprStmt *, A arg) = 0;
 

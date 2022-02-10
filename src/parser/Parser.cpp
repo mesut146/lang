@@ -145,6 +145,7 @@ Unit Parser::parseUnit() {
 Param Parser::parseParam(bool requireType) {
     Param res;
     res.name = *name();
+    log("param = " + res.name);
     if (is(QUES)) {
         consume(QUES);
         res.isOptional = true;
@@ -154,7 +155,7 @@ Param Parser::parseParam(bool requireType) {
         res.type = parseType();
     }
 
-    if (first()->is(EQ)) {
+    if (is(EQ)) {
         consume(EQ);
         res.defVal = parseExpr();
     }

@@ -1,0 +1,8 @@
+var pi = 3.14;
+
+var pi2 = pi* 2;
+
+
+func area(r: int){
+  return pi * r * r;
+}

@@ -1,14 +1,18 @@
-#include "Ast.h"
-#include "Visitor.h"
+#pragma once
+
+#include "parser/Ast.h"
+#include "BaseVisitor.h"
+#include <map>
 
 class RType{
 public:
   Unit* unit;
   Type* type;
   TypeDecl* targetType;
+  Method* targetMethod;
 };
 
-class Resolver : public BaseVisitor<RType*, void*>{
+class Resolver : public BaseVisitor<void*, void*>{
 public:
      Unit& unit;
      std::map<VarDecl*, RType> varMap;
@@ -17,6 +21,7 @@ public:
      static std::map<Unit*, Resolver> resolverMap;
 
      Resolver(Unit& unit);
+     virtual ~Resolver();
      
      void resolveAll();
      
@@ -24,9 +29,9 @@ public:
      
      void resolveTypeDecl(TypeDecl* td);
      
-     void resolveMethod(Merhod* m);
+     void resolveMethod(Method* m);
 
-     RType* visitLiteral(Literal* lit, void* arg) ;
+     //RType* visitLiteral(Literal* lit, void* arg) ;
 
      
 };

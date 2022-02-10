@@ -56,6 +56,10 @@ std::string EnumDecl::print() {
     return s;
 }
 
+void* EnumDecl::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitEnumDecl(this, arg);
+}
+
 std::string TypeDecl::print() {
     std::string s;
     s.append(isInterface ? "interface " : "class ");
@@ -81,6 +85,10 @@ std::string TypeDecl::print() {
     }
     s.append("\n}");
     return s;
+}
+
+void* TypeDecl::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitTypeDecl(this, arg);
 }
 
 std::string FieldDecl::print() {
