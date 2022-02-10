@@ -133,6 +133,10 @@ std::string Method::print() {
     return s;
 }
 
+bool Name::isSimple(){ return false; }
+
+SimpleName::SimpleName(std::string name) : name(name){}
+
 std::string SimpleName::print() {
     return name;
 }
@@ -140,6 +144,10 @@ std::string SimpleName::print() {
 void* SimpleName::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitSimpleName(this, arg);
 }
+
+bool SimpleName::isSimple(){ return true; }
+
+QName::QName(Name* scope, std::string name) : scope(scope), name(name){}
 
 std::string QName::print() {
     return scope->print() + "." + name;

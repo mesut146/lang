@@ -16,15 +16,10 @@ void lex(std::string &path) {
 }
 
 void parse(std::string &path) {
-    try {
         Lexer lexer(path);
         Parser parser(lexer);
         Unit u = parser.parseUnit();
         std::cout << u.print() << "\n";
-    } catch (std::string s) {
-        std::cout << "err:" << s << "\n";
-        //print_stacktrace();
-    }
 }
 
 void resolveTest(){
@@ -37,6 +32,7 @@ void resolveTest(){
 }  
 
 int main(int argc, char **args) {
+  try{
     if (argc > 1) {
       if(strcmp(args[1], "parse") == 0){
         debug = false;
@@ -55,6 +51,10 @@ int main(int argc, char **args) {
         //std::string path("../tests/exprs");
         //lex(path);
         parse(path);
+    }
+    } catch (std::string s) {
+        std::cout << "err:" << s << "\n";
+        //print_stacktrace();
     }
     return 0;
 }

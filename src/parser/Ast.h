@@ -105,6 +105,7 @@ public:
 
 class Name : public Expression {
 public:
+    virtual bool isSimple();
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) override = 0;
 };
@@ -113,6 +114,8 @@ class SimpleName : public Name {
 public:
     std::string name;
 
+    SimpleName(std::string name);
+    bool isSimple() override;
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
@@ -122,6 +125,7 @@ public:
     Name *scope;
     std::string name;
 
+    QName(Name* scope, std::string name);
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
@@ -152,6 +156,7 @@ public:
     //virtual bool isTypeVar() = 0;
     virtual bool isPrim() { return false; };
     virtual bool isVoid() { return false; };
+    virtual bool isString() { return false; }
 
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
@@ -160,13 +165,11 @@ public:
 class SimpleType : public Type {
 public:
     std::string *type;
-    bool isVar() {
-        return *type == "var";
-    }
     bool isTypeVar;
+    
     bool isPrim() {
         return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
-               *type == "short" || *type == "float" || *type == "double";
+               *type == "short" || *type == "float" || *type == "double" || *type == "bool";
     }
     bool isVoid() {
         return *type == "void";
@@ -180,6 +183,10 @@ class RefType : public Type {
 public:
     Name *name;
     std::vector<Type *> typeArgs;
+    
+    bool isString(){
+      return name->print() == "core.string";
+    }
     
     std::string print();
     void* accept(Visitor<void*, void*>* v, void* arg) override;

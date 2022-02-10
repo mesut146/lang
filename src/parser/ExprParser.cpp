@@ -36,15 +36,12 @@ Literal *parseLit(Parser *p) {
 
 //name ("." name)*
 Name *Parser::qname() {
-    auto *res = new SimpleName;
-    res->name = *name();
+    auto *res = new SimpleName(*name());
     if (is(DOT)) {
         Name *cur = res;
         while (is(DOT)) {
             consume(DOT);
-            auto *tmp = new QName;
-            tmp->scope = cur;
-            tmp->name = *name();
+            auto *tmp = new QName(cur, *name());
             cur = tmp;
         }
         return cur;
@@ -143,8 +140,7 @@ Expression *PRIM(Parser *p) {
             p->consume(RBRACE);
             return res;
         } else {
-            auto *res = new SimpleName;
-            res->name = *id;
+            auto *res = new SimpleName(*id);
             return res;
         }
     } else if (p->is(LBRACE)) {

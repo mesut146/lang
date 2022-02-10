@@ -47,7 +47,10 @@ public:
 
     virtual R visitAssign(Assign *, A arg) { return nullptr; }
 
-    virtual R visitInfix(Infix *, A arg) { return nullptr; }
+    virtual R visitInfix(Infix *infix, A arg) {
+      infix->left->accept(this, infix);
+      infix->right->accept(this, infix);
+    }
 
     virtual R visitPostfix(Postfix *, A arg) { return nullptr; }
 

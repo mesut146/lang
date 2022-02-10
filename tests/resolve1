@@ -1,6 +1,8 @@
 var pi = 3.14;
 
-var pi2 = pi* 2;
+var pi2 = pi * 2;
+
+pi = 3.1415;
 
 
 func area(r: int){
