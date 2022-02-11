@@ -412,10 +412,10 @@ ArrowFunction *parseArrow(Parser *p) {
     auto res = new ArrowFunction;
     p->consume(LPAREN);
     if (!p->is(RPAREN)) {
-        res->params.push_back(p->parseParam(false));
+        res->params.push_back(p->parseParam(false, nullptr, res));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->params.push_back(p->parseParam(false));
+            res->params.push_back(p->parseParam(false, nullptr, res));
         }
     }
     p->consume(RPAREN);

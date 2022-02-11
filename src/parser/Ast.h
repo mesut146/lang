@@ -21,6 +21,7 @@ public:
 class BaseDecl {
 public:
     bool isEnum = false;
+    BaseDecl* parent = nullptr;
     
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
@@ -66,6 +67,7 @@ public:
     std::vector<Type *> typeArgs;
     std::vector<Param> params;
     Block *body = nullptr;
+    BaseDecl* parent= nullptr;
 
     std::string print();
 };
@@ -76,6 +78,8 @@ public:
     std::string name;
     bool isOptional = false;
     Expression *defVal = nullptr;
+    Method* method = nullptr;
+    ArrowFunction* arrow = nullptr;
 
     std::string print();
 };
@@ -84,14 +88,12 @@ class Expression {
 public:
     virtual std::string print() = 0;
     
-    //template <class R, class A>
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
 };
 class Statement {
 public:
     virtual std::string print() = 0;
     
-    //template <class R, class A>
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
 };
 
@@ -152,11 +154,11 @@ class Type : public Expression {
 public:
     int arrayLevel = 0;
 
-    virtual bool isVar() { return false; };
-    //virtual bool isTypeVar() = 0;
+    virtual bool isTypeVar(){ return false; }
     virtual bool isPrim() { return false; };
     virtual bool isVoid() { return false; };
     virtual bool isString() { return false; }
+    virtual bool isSimple() { return false; }
 
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
@@ -165,7 +167,9 @@ public:
 class SimpleType : public Type {
 public:
     std::string *type;
-    bool isTypeVar;
+    bool isTypeVar_;
+    
+    bool isTypeVar() { return isTypeVar_; }
     
     bool isPrim() {
         return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||

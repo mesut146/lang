@@ -19,8 +19,11 @@ public:
      std::map<VarDecl*, RType> varMap;
      std::map<Type*, RType> typeMap;
      std::map<Param*, RType> paramMap;
+     std::map<Method*, RType*> methodMap;//return types
      std::map<Expression*, RType*> exprMap;
-     std::vector<VarDecl*> scope;
+     std::vector<VarDecl*> globals;
+     std::vector<VarDecl*> scope;//function level
+     TypeDecl* curClass = nullptr;
      static std::map<Unit*, Resolver> resolverMap;
 
      Resolver(Unit& unit);
@@ -33,7 +36,8 @@ public:
      
      void resolveTypeDecl(TypeDecl* td);
      
-     void resolveMethod(Method* m);
+     void* visitMethod(Method* m, void* arg);
+     RType* visitParam(Param& p);
      
      RType* resolveScoped(Expression* expr, std::vector<VarDecl*> scope);
 
@@ -41,5 +45,6 @@ public:
      void* visitInfix(Infix * infix, void* arg);
      void* visitAssign(Assign *as, void* arg);
      void* visitSimpleName(SimpleName *sn, void* arg);
+     void* visitMethodCall(MethodCall *mc, void* arg);
      
 };

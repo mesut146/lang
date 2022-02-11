@@ -142,8 +142,10 @@ Unit Parser::parseUnit() {
 }
 
 //name "?"? ":" type ("=" expr)?
-Param Parser::parseParam(bool requireType) {
+Param Parser::parseParam(bool requireType, Method* m, ArrowFunction* af) {
     Param res;
+    res.method = m;
+    res.arrow = af;
     res.name = *name();
     log("param = " + res.name);
     if (is(QUES)) {
@@ -174,10 +176,10 @@ Method *Parser::parseMethod() {
     log("parseMethod = " + res->name);
     consume(LPAREN);
     if (!first()->is(RPAREN)) {
-        res->params.push_back(parseParam(true));
+        res->params.push_back(parseParam(true, res, nullptr));
         while (first()->is(COMMA)) {
             consume(COMMA);
-            res->params.push_back(parseParam(true));
+            res->params.push_back(parseParam(true, res, nullptr));
         }
     }
     consume(RPAREN);

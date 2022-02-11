@@ -72,7 +72,7 @@ public:
 
     Method *parseMethod();
 
-    Param parseParam(bool requireType);
+    Param parseParam(bool requireType, Method* m, ArrowFunction* af);
 
     VarDecl *parseVarDecl();
 
