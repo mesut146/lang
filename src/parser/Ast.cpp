@@ -49,7 +49,7 @@ std::string ImportStmt::print() {
 std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
-    s.append(*name);
+    s.append(name);
     s.append("{\n");
     s.append(join(cons, ",\n", "  "));
     s.append("\n}");

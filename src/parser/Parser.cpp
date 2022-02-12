@@ -84,8 +84,10 @@ TypeDecl *Parser::parseTypeDecl() {
     while (!first()->is(RBRACE)) {
         if (first()->is(CLASS)) {
             res->types.push_back(parseTypeDecl());
+            (*res->types.end())->parent = res;
         } else if (first()->is(ENUM)) {
             res->types.push_back(parseEnumDecl());
+            (*res->types.end())->parent = res;
         } else if (first()->is(FUNC)) {
             res->methods.push_back(parseMethod());
         } else if (is(IDENT)) {
@@ -102,8 +104,8 @@ EnumDecl *Parser::parseEnumDecl() {
     auto *res = new EnumDecl;
     res->isEnum = true;
     consume(ENUM);
-    res->name = name();
-    log("enum decl = " + *res->name);
+    res->name = *name();
+    log("enum decl = " + res->name);
     consume(LBRACE);
     if (!first()->is(RBRACE)) {
         res->cons.push_back(*name());

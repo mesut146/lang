@@ -23,7 +23,8 @@ void parse(std::string &path) {
 }
 
 void resolveTest(){
-  std::string path="../tests/resolve1";
+  //std::string path="../tests/resolve1";
+  std::string path="../tests/resolveClass";
   Lexer lexer(path);
   Parser parser(lexer);
   Unit u = parser.parseUnit();

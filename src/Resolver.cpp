@@ -1,8 +1,25 @@
 #include "Resolver.h"
 #include <iostream>
 
+void Scope::add(Fragment* f){
+  list.push_back(f);
+}
+void Scope::clear(){
+  list.clear();
+}
+Fragment* Scope::find(std::string& name){
+  for(Fragment* f : list){
+    if(f->name == name) return f;
+  }
+  return nullptr;
+}
+
+
+
 Resolver::Resolver(Unit& unit) : unit(unit){}
-Resolver::~Resolver() = default;
+Resolver::~Resolver(){
+  
+}
 
 RType* makeSimple(const std::string& name){
   SimpleType* st = new SimpleType;
@@ -13,89 +30,137 @@ RType* makeSimple(const std::string& name){
 }
 
 void normalize(Unit& unit){
-  std::vector<Statement*> newList;
-  for(Statement* st : unit.stmts){
-    auto v = dynamic_cast<VarDecl*>(st);
-    if(v == nullptr) continue;
-    if(v){
-      if(v->list.size() > 1){
-      for(Fragment f : v->list){
-        VarDecl* vd = new VarDecl;
-        vd->isVar = v->isVar;
-        vd->list.push_back(f);
-        newList.push_back((Statement*)vd);
-      }//for
-      }//if
-      else{
-        newList.push_back(st);
-      }
-    }  
-  }  
+  
+}
+
+void Resolver::dump(){
+  for(auto &p : varMap){
+    std::cout << "var: " << p.first->name << " = " << p.second->type->print() << "\n";
+  }
+  for(auto &p : fieldMap){
+    std::cout << "field: " << p.first->name << " = " << p.second->type->print() << "\n";
+  }
+  for(auto& p:methodMap){
+    std::cout << "method: " << p.first->name << " = " << p.second->type->print() << "\n";
+    for(Param& prm:p.first->params){
+      std::cout << "param: " << prm.name << " = " <<  paramMap[&prm]->type->print() << "\n";
+    }
+  }
+}
+
+void Resolver::dropScope(){
+  curScope()->clear();
+  scopes.erase(scopes.end());
+}
+
+Scope* Resolver::curScope(){
+  return scopes[scopes.size() - 1];
 }
 
 void Resolver::resolveAll(){
-  
+  scopes.push_back(new Scope);
   for(Statement* st : unit.stmts){
-    //scope
-    auto v = dynamic_cast<VarDecl*>(st);
-    if(v){
-      for(Fragment f : v->list){
-        if(f.type == nullptr){
-        }
-        if(f.rhs != nullptr){
-          resolveScoped(f.rhs, globals);
-        }
-      }  
-      globals.push_back(v);
-    }  
+    auto vd = dynamic_cast<VarDecl*>(st);
+    if(vd){
+      resolveVar(vd);
+    }
+    else{
+      st->accept(this, nullptr);
+    }
   }//for
   
   for(BaseDecl* bd : unit.types){
     if(bd->isEnum){
     }else{
       TypeDecl* td = dynamic_cast<TypeDecl*>(bd);
-      resolveTypeDecl(td);
+      visitTypeDecl(td);
     } 
   }
   for(Method* m : unit.methods){
     visitMethod(m, nullptr);
   }
   
- 
-  
+ dump();
 }
 
-RType* Resolver::resolveScoped(Expression* expr, std::vector<VarDecl*> scope){
-  this->scope = scope;
+RType* Resolver::resolveScoped(Expression* expr){
   return (RType*)expr->accept(this, nullptr);
 }
 
-void Resolver::resolveTypeDecl(TypeDecl* td){}
+RType* Resolver::visitTypeDecl(TypeDecl* td){
+  auto res = new RType;
+  res->targetDecl = td;
+  if(td->parent != nullptr){
+    auto pt = visitTypeDecl(dynamic_cast<TypeDecl*>(td->parent));
+    //auto qn = new QName();
+    auto qt = new RefType;
+    //qt->name = qn;
+    //res->type = 
+  }else{
+    res = makeSimple(td->name);
+    res->unit = &unit;
+  }
+  for(FieldDecl* fd : td->fields){
+    visitFieldDecl(fd, td);
+  }
+  for(Method* m : td->methods){
+    visitMethod(m, td);
+  }
+  for(BaseDecl* bd : td->types){
+    bd->accept(this, td);
+  }
+  return res;
+}
      
 void* Resolver::visitMethod(Method* m, void* arg){
-  RType* res;
+  curMethod = m;
+  RType* res =nullptr;
+  
+  for(Param& prm:m->params){
+    visitParam(prm);
+  }  
+  
   if(m->type != nullptr){
     res = (RType*)m->type->accept(this, m);
   }
-  else{
-    //infer from return statement
-    for(Statement* st:m->body->list){
+  scopes.push_back(new Scope);
+  for(Statement* st:m->body->list){
       auto ret = dynamic_cast<ReturnStmt*>(st);
       if(ret){
+        RType* tmp;
         if(ret->expr == nullptr){
-          res = makeSimple("void");
+          tmp = makeSimple("void");
         }else{
-          res = (RType*)ret->expr->accept(this, ret);
+          tmp = resolveScoped(ret->expr);
         }
-        //todo multiple return compatibility
+        if(res == nullptr){
+          res = tmp;
+        }
       }
-    }
+      else{
+        st->accept(this, nullptr);
+      }
+        //todo multiple return compatibility
+    }//for
     if(res == nullptr){
       //no return, so void
       res = makeSimple("void");
     }
-  }
+  methodMap[m] = res;
+  dropScope();
+  curMethod = nullptr;
   return res;
+}
+
+RType* Resolver::visitParam(Param& p){
+  if(p.method != nullptr){
+    auto res =  resolveType(p.type);
+    paramMap[&p] = res;
+    return res;
+  }
+  else{
+    throw std::string("todo arrow param type");
+  }
 }
 
 void* Resolver::visitAssign(Assign * as, void* arg){
@@ -166,56 +231,87 @@ RType* Resolver::resolveType(Type* type){
   if(type->isPrim() || type->isVoid()){
     res->type = type;
   }
-  else if(type->isString()){
+  else if(type->isString() || type->print() == "string"){
     auto ref = new RefType;
     ref->name = new QName(new SimpleName("core"), "string");
     res->type = ref;
   }else {
-    throw std::string("todo resolveType");
+    throw std::string("todo resolveType: " + type->print());
   }
-  
   return res;
 }
 
-RType* Resolver::resolveVar(VarDecl* vd){
-  Fragment f = vd->list.at(0);
-  if(f.type != nullptr){
-    return resolveType(f.type);
+void* Resolver::visitFieldDecl(FieldDecl* fd, void* arg){
+  RType* res;
+  if(fd->type != nullptr){
+    res = resolveType(fd->type);
   }
   else{
-    if(f.rhs == nullptr){
+    if(fd->expr == nullptr){
+      throw std::string("can not infer field type because rhs is absent");
+    }
+    res = resolveScoped(fd->expr);
+  }
+  fieldMap[fd] = res;
+  //curScope()->add(f);
+}
+
+RType* Resolver::resolveFrag(Fragment* f){
+  RType* res;
+  if(f->type != nullptr){
+    res = resolveType(f->type);
+  }
+  else{
+    if(f->rhs == nullptr){
       throw std::string("can not infer var type because rhs is absent");
     }
-    return resolveScoped(f.rhs, std::vector<VarDecl*>());//todo scope
+    res = resolveScoped(f->rhs);
+  }
+  varMap[f] = res;
+  curScope()->add(f);
+}
+
+void Resolver::resolveVar(VarDecl* vd){
+  for(Fragment &f : vd->list){
+    resolveFrag(&f);
   }
 }  
 
 void* Resolver::visitSimpleName(SimpleName *sn, void* arg){
   //check for local variable
-  for(VarDecl* vd : scope){
-    for(Fragment f : vd->list){
-      if(f.name == sn->name){
-        std::cout << "local var\n";
-        RType *res = resolveVar(vd);
-        res->targetVar = vd;
+  for(auto it = scopes.rbegin();it != scopes.rend();++it){
+    auto f = (*it)->find(sn->name);
+    if(f){
+        std::cout << "found var\n";
+        RType *res = resolveFrag(f);
+        res->targetVar = f;
         exprMap[sn] = res;
         return res;
+    }
+  }
+  //method parameter
+  if(curMethod != nullptr){
+    for(Param& p : curMethod->params){
+      if(p.name == sn->name){
+        std::cout << "param\n";
+        return visitParam(p);
       }
     }
   }
-  //check for global variable
-  for(VarDecl* vd : globals){
-    for(Fragment f : vd->list){
-      if(f.name == sn->name){
-        std::cout << "global var\n";
-        RType *res = resolveVar(vd);
-        res->targetVar = vd;
-        exprMap[sn] = res;
-        return res;
-      }
-    }
-  }
+  //class fields
   throw std::string("unknown identifier: ") + sn->name;
+}
+
+void* Resolver::visitQName(QName *qn, void* arg){
+  RType* scp = (RType*)qn->scope->accept(this, qn);
+  TypeDecl* td = scp->targetDecl;
+  for(FieldDecl* field : td->fields){
+    if(field->name == qn->name){
+      auto res = (RType*)visitFieldDecl(field, td);
+      return res;
+    }
+  }
+  throw std::string("can't resolve " + qn->name + " in " + td->name);
 }
 
 void* Resolver::visitLiteral(Literal *lit, void* arg){
@@ -239,15 +335,6 @@ void* Resolver::visitLiteral(Literal *lit, void* arg){
     }
   }
   return res;
-}
-
-RType* Resolver::visitParam(Param& p){
-  if(p.method != nullptr){
-    return resolveType(p.type);
-  }
-  else{
-    throw std::string("todo arrow param type");
-  }
 }
 
 bool isSame(RType* rt1, RType* rt2){
@@ -295,5 +382,25 @@ void* Resolver::visitMethodCall(MethodCall *mc, void* arg){
     //todo
     throw std::string("method:  "+ mc->name + " not found in type: " + rt->type->print());
   }
+}
+
+void* Resolver::visitObjExpr(ObjExpr* o, void* arg){
+  auto res = new RType;
+  if(curClass == nullptr){
+    //global symbol
+    for(BaseDecl* bd : unit.types){
+      if(bd->isEnum) continue;
+      TypeDecl* td = dynamic_cast<TypeDecl*>(bd);
+      if(td->name == o->name){
+        return visitTypeDecl(td);
+      }
+    }
+  }else{
+    //inside method
+    if(curClass->name == o->name){
+      return visitTypeDecl(curClass);
+    }
+  }
+  throw std::string("unresolved class type: " + o->name);
 }
      

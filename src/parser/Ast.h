@@ -43,7 +43,7 @@ public:
 
 class EnumDecl : public BaseDecl {
 public:
-    std::string *name;
+    std::string name;
     std::vector<std::string> cons;
 
     std::string print() override;
@@ -62,7 +62,7 @@ public:
 
 class Method {
 public:
-    Type *type;
+    Type *type = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
     std::vector<Param> params;
@@ -225,6 +225,8 @@ public:
     std::string name;
     Type *type = nullptr;
     Expression *rhs = nullptr;
+    bool isOptional = false;
+    VarDecl* vd;
 
     std::string print();
 };
