@@ -91,27 +91,10 @@ void* TypeDecl::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitTypeDecl(this, arg);
 }
 
-std::string FieldDecl::print() {
-    std::string s;
-    s.append(name);
-    if (isOptional) {
-        s.append("?");
-    }
-    if (type != nullptr) {
-        s.append(": ");
-        s.append(type->print());
-    }
-    if (expr != nullptr) {
-        s.append(" = ");
-        s.append(expr->print());
-    }
-    s.append(";");
-    return s;
-}
-
 std::string Method::print() {
     std::string s;
-    s.append("func ");
+    s.append(type->print());
+    s.append(" ");
     s.append(name);
     if (!typeArgs.empty()) {
         s.append("<");
@@ -121,10 +104,6 @@ std::string Method::print() {
     s.append("(");
     s.append(join(params, ", "));
     s.append(")");
-    if (type != nullptr) {
-        s.append(": ");
-        s.append(type->print());
-    }
     if (body == nullptr) {
         s.append(";");
     } else {
@@ -169,7 +148,7 @@ void* Literal::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string VarDecl::print() {
     std::string s;
-    s.append(isVar ? "var" : "let");
+    s.append(type->print());
     s.append(" ");
     s.append(join(list, ", "));
     s.append(";");
@@ -182,7 +161,7 @@ void* VarDecl::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string VarDeclExpr::print() {
     std::string s;
-    s.append(isVar ? "var" : "let");
+    s.append(type->print());
     s.append(" ");
     s.append(join(list, ", "));
     return s;
@@ -195,9 +174,6 @@ void* VarDeclExpr::accept(Visitor<void*, void*>* v, void* arg){
 std::string Fragment::print() {
     std::string s;
     s.append(name);
-    if (type != nullptr) {
-        s.append(":").append(type->print());
-    }
     if (rhs != nullptr) {
         s.append(" = ").append(rhs->print());
     }
@@ -226,23 +202,23 @@ void* Block::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitBlock(this, arg);
 }
 
-std::string dims(Type *type) {
+std::string printDims(Type *type) {
     std::string s;
-    for (int i = 0; i < type->arrayLevel; i++) {
-        s.append("[]");
+    for (Expression* e : type->dims) {
+        s.append("[");
+        if(e != nullptr){
+          s.append(e->print());
+        }
+        s.append("]");
     }
     return s;
 }
 
-std::string SimpleType::print() {
-    return *type + dims(this);
+void* Type::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitType(this, arg);
 }
 
-void* SimpleType::accept(Visitor<void*, void*>* v, void* arg){
-  return v->visitSimpleType(this, arg);
-}
-
-std::string RefType::print() {
+std::string Type::print() {
     std::string s;
     s.append(name->print());
     if (!typeArgs.empty()) {
@@ -250,26 +226,21 @@ std::string RefType::print() {
         s.append(join(typeArgs, ", "));
         s.append(">");
     }
-    s.append(dims(this));
+    s.append(printDims(this));
+    if(isNullable){
+      s.append("?");
+    }
     return s;
 }
 
-void* RefType::accept(Visitor<void*, void*>* v, void* arg){
-  return v->visitRefType(this, arg);
-}
-
-
 std::string Param::print() {
     std::string s;
+    s.append(type->print());
+    s.append(" ");
     s.append(name);
     if (isOptional) {
         s.append("?");
     }
-    if (type != nullptr) {
-        s.append(": ");
-        s.append(type->print());
-    }
-
     if (defVal != nullptr) {
         s.append(" = ");
         s.append(defVal->print());
@@ -305,7 +276,7 @@ void* ParExpr::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string ObjExpr::print() {
     std::string s;
-    s.append(name);
+    s.append(type->print());
     s.append("{");
     s.append(join(entries, ", "));
     s.append("}");

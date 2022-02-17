@@ -35,9 +35,7 @@ public:
 
     virtual R visitQName(QName* qn, A arg) { return nullptr; }
 
-    virtual R visitSimpleType(SimpleType* sn, A arg) { return nullptr; }
-
-    virtual R visitRefType(RefType* sn, A arg) { return nullptr; }
+    virtual R visitType(Type* type, A arg) { return nullptr; }
     
     virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 

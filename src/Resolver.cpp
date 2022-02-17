@@ -22,8 +22,8 @@ Resolver::~Resolver(){
 }
 
 RType* makeSimple(const std::string& name){
-  SimpleType* st = new SimpleType;
-  st->type = new std::string(name);
+  Type* st = new Type;
+  st->name = new SimpleName(name);
   RType* res = new RType;
   res->type = st;
   return res;
@@ -35,11 +35,13 @@ void normalize(Unit& unit){
 
 void Resolver::dump(){
   for(auto &p : varMap){
-    std::cout << "var: " << p.first->name << " = " << p.second->type->print() << "\n";
+    for(Fragment& f:p.first->list){
+      std::cout << "var: " << f.name << " = " << p.second->type->print() << "\n";
+    }
   }
-  for(auto &p : fieldMap){
+  /*for(auto &p : fieldMap){
     std::cout << "field: " << p.first->name << " = " << p.second->type->print() << "\n";
-  }
+  }*/
   for(auto& p:methodMap){
     std::cout << "method: " << p.first->name << " = " << p.second->type->print() << "\n";
     for(Param& prm:p.first->params){
@@ -62,7 +64,7 @@ void Resolver::resolveAll(){
   for(Statement* st : unit.stmts){
     auto vd = dynamic_cast<VarDecl*>(st);
     if(vd){
-      resolveVar(vd);
+      visitVarDecl(vd, nullptr);
     }
     else{
       st->accept(this, nullptr);
@@ -92,16 +94,16 @@ RType* Resolver::visitTypeDecl(TypeDecl* td){
   res->targetDecl = td;
   if(td->parent != nullptr){
     auto pt = visitTypeDecl(dynamic_cast<TypeDecl*>(td->parent));
-    //auto qn = new QName();
-    auto qt = new RefType;
-    //qt->name = qn;
-    //res->type = 
+    auto qn = new QName(pt->type->name, td->name);//todo scope is type
+    auto qt = new Type;
+    qt->name = qn;
+    res->type = qt;
   }else{
     res = makeSimple(td->name);
     res->unit = &unit;
   }
-  for(FieldDecl* fd : td->fields){
-    visitFieldDecl(fd, td);
+  for(VarDecl* fd : td->fields){
+    visitVarDecl(fd, td);
   }
   for(Method* m : td->methods){
     visitMethod(m, td);
@@ -119,33 +121,11 @@ void* Resolver::visitMethod(Method* m, void* arg){
   for(Param& prm:m->params){
     visitParam(prm);
   }  
-  
-  if(m->type != nullptr){
-    res = (RType*)m->type->accept(this, m);
-  }
+  res = (RType*)m->type->accept(this, m);
   scopes.push_back(new Scope);
   for(Statement* st:m->body->list){
-      auto ret = dynamic_cast<ReturnStmt*>(st);
-      if(ret){
-        RType* tmp;
-        if(ret->expr == nullptr){
-          tmp = makeSimple("void");
-        }else{
-          tmp = resolveScoped(ret->expr);
-        }
-        if(res == nullptr){
-          res = tmp;
-        }
-      }
-      else{
-        st->accept(this, nullptr);
-      }
-        //todo multiple return compatibility
-    }//for
-    if(res == nullptr){
-      //no return, so void
-      res = makeSimple("void");
-    }
+    st->accept(this, nullptr);
+  }//for
   methodMap[m] = res;
   dropScope();
   curMethod = nullptr;
@@ -173,51 +153,57 @@ void* Resolver::visitAssign(Assign * as, void* arg){
 
 void* Resolver::visitInfix(Infix * infix, void* arg){
   std::cout << "visitInfix = " << infix->print() << "\n";
-  RType* t1 = (RType*)infix->left->accept(this, infix);
-  RType* t2 = (RType*)infix->right->accept(this, infix);
-  if(t1->type->isVoid() || t2->type->isVoid()){
+  RType* rt1 = (RType*)infix->left->accept(this, infix);
+  RType* rt2 = (RType*)infix->right->accept(this, infix);
+  if(rt1->type->isVoid() || rt2->type->isVoid()){
     throw std::string("operation on void type");
   }
-  if(infix->op == "+" && (t1->type->isString() || t2->type->isString())){
+  if(infix->op == "+" && (rt1->type->isString() || rt2->type->isString())){
     //string concat
-    auto res = new RType;
-    auto ref = new RefType;
+    return rt1;
+    /*auto res = new RType;
+    auto ref = new Type;
     res->type = ref;
-    return res;
+    return res;*/
   }
 
-  if(t1->type->isPrim()){
-    if(t2->type->isPrim()){
-      SimpleType* s1 = (SimpleType*)t1->type;
-      SimpleType* s2 = (SimpleType*)t2->type;
-      if(*s1->type == *s2->type){
-        return makeSimple(*s1->type);
+  if(rt1->type->isPrim()){
+    if(rt2->type->isPrim()){
+      auto s1 = rt1->type->print();
+      auto s2 = rt2->type->print();
+      if(s1 == s2){
+        return makeSimple(s1);
       }
       std::string arr[] = {"double", "float", "long", "int", "short", "char", "byte", "bool"};
-      if(*s1->type == "double" || *s2->type == "double"){
+      for(auto t : arr){
+        if(s1 == t || s2 == t){
+          return makeSimple(t);
+        }
+      }
+      /*if(s1 == "double" || s2 == "double"){
         return makeSimple("double");
       }
-      if(*s1->type == "float" || *s2->type == "float"){
+      if(s1 == "float" || s2 == "float"){
         return makeSimple("float");
       }
-      if(*s1->type == "long" || *s2->type == "long"){
+      if(s1 == "long" || s2 == "long"){
         return makeSimple("long");
       }
-      if(*s1->type == "int" || *s2->type == "int"){
+      if(s1 == "int" || s2 == "int"){
         return makeSimple("int");
       }
-      if(*s1->type == "short" || *s2->type == "short"){
+      if(s1 == "short" || s2 == "short"){
         return makeSimple("short");
       }
-      if(*s1->type == "char" || *s2->type == "char"){
+      if(s1 == "char" || s2 == "char"){
         return makeSimple("char");
       }
-      if(*s1->type == "byte" || *s2->type == "byte"){
+      if(s1 == "byte" || s2 == "byte"){
         return makeSimple("byte");
       }
-      if(*s1->type == "bool" || *s2->type == "bool"){
+      if(s1 == "bool" || s2 == "bool"){
         return makeSimple("bool");
-      }
+      }*/
     }else{
     }
   }
@@ -232,7 +218,7 @@ RType* Resolver::resolveType(Type* type){
     res->type = type;
   }
   else if(type->isString() || type->print() == "string"){
-    auto ref = new RefType;
+    auto ref = new Type;
     ref->name = new QName(new SimpleName("core"), "string");
     res->type = ref;
   }else {
@@ -241,40 +227,23 @@ RType* Resolver::resolveType(Type* type){
   return res;
 }
 
-void* Resolver::visitFieldDecl(FieldDecl* fd, void* arg){
-  RType* res;
-  if(fd->type != nullptr){
-    res = resolveType(fd->type);
-  }
-  else{
-    if(fd->expr == nullptr){
-      throw std::string("can not infer field type because rhs is absent");
-    }
-    res = resolveScoped(fd->expr);
-  }
-  fieldMap[fd] = res;
-  //curScope()->add(f);
-}
-
 RType* Resolver::resolveFrag(Fragment* f){
-  RType* res;
-  if(f->type != nullptr){
-    res = resolveType(f->type);
-  }
-  else{
-    if(f->rhs == nullptr){
-      throw std::string("can not infer var type because rhs is absent");
-    }
+  RType* res = nullptr;
+  if(f->rhs != nullptr){
     res = resolveScoped(f->rhs);
   }
-  varMap[f] = res;
+  //res->targetVar = f;
+  //varMap[f] = res;
   curScope()->add(f);
+  return res;
 }
 
-void Resolver::resolveVar(VarDecl* vd){
+void* Resolver::visitVarDecl(VarDecl* vd, void* arg){
+  auto res = resolveType(vd->type);
   for(Fragment &f : vd->list){
     resolveFrag(&f);
   }
+  return res;
 }  
 
 void* Resolver::visitSimpleName(SimpleName *sn, void* arg){
@@ -299,16 +268,36 @@ void* Resolver::visitSimpleName(SimpleName *sn, void* arg){
     }
   }
   //class fields
+  if(curClass != nullptr){
+    for(VarDecl* field:curClass->fields){
+      for(Fragment& f: field->list){
+        if(f.name == sn->name){
+          std::cout << "field\n";
+          return visitVarDecl(field, nullptr);
+        }
+      }
+    }
+  }
   throw std::string("unknown identifier: ") + sn->name;
 }
 
 void* Resolver::visitQName(QName *qn, void* arg){
   RType* scp = (RType*)qn->scope->accept(this, qn);
+  if(scp->type->isArray()){
+    if(qn->name == "size" || qn->name == "length"){
+      return makeSimple("int");
+    }else{
+      throw std::string("invalid array method: " + qn->name);
+    }
+  }
   TypeDecl* td = scp->targetDecl;
-  for(FieldDecl* field : td->fields){
-    if(field->name == qn->name){
-      auto res = (RType*)visitFieldDecl(field, td);
-      return res;
+  if(td == nullptr) throw std::string("td is null");
+  for(VarDecl* field : td->fields){
+    for(Fragment& f:field->list){
+      if(f.name == qn->name){
+        auto res = (RType*)visitVarDecl(field, td);
+        return res;
+      }
     }
   }
   throw std::string("can't resolve " + qn->name + " in " + td->name);
@@ -316,23 +305,22 @@ void* Resolver::visitQName(QName *qn, void* arg){
 
 void* Resolver::visitLiteral(Literal *lit, void* arg){
   RType* res = new RType;
-  
+  auto type = new Type;
+  res->type = type;
   if(lit->isStr){
-    auto ref = new RefType;
-    ref->name = new QName(new SimpleName("core"), "string");
-    res->type = ref;
+    type->name = new QName(new SimpleName("core"), "string");
   }else{
-    SimpleType* st = new SimpleType;
-    res->type = st;
+    std::string s;
     if(lit->isBool){
-      st->type = new std::string("bool");
+      s = "bool";
     }else  if(lit->isFloat){
-      st->type = new std::string("float");
+      s = "float";
     }else  if(lit->isInt){
-      st->type = new std::string("int");
+      s = "int";
     }else  if(lit->isChar){
-      st->type == new std::string("char");
+      s = "char";
     }
+    type->name = new SimpleName(s);
   }
   return res;
 }
@@ -360,18 +348,13 @@ void* Resolver::visitMethodCall(MethodCall *mc, void* arg){
     //friend method
     for(Method* m : curClass->methods){
       if(isSame(this, mc, m)){
-        auto res = new RType;
-        res->targetMethod = m;
-        res->targetDecl = curClass;
-        return res;
+        return visitMethod(m, nullptr);
       }
     }//for
     //global method
     for(Method* m: unit.methods){
       if(isSame(this, mc, m)){
-        auto res = new RType;
-        res->targetMethod = m;
-        return res;
+        return visitMethod(m, nullptr);
       }
     }
   }
@@ -385,22 +368,6 @@ void* Resolver::visitMethodCall(MethodCall *mc, void* arg){
 }
 
 void* Resolver::visitObjExpr(ObjExpr* o, void* arg){
-  auto res = new RType;
-  if(curClass == nullptr){
-    //global symbol
-    for(BaseDecl* bd : unit.types){
-      if(bd->isEnum) continue;
-      TypeDecl* td = dynamic_cast<TypeDecl*>(bd);
-      if(td->name == o->name){
-        return visitTypeDecl(td);
-      }
-    }
-  }else{
-    //inside method
-    if(curClass->name == o->name){
-      return visitTypeDecl(curClass);
-    }
-  }
-  throw std::string("unresolved class type: " + o->name);
-}
+  return resolveType(o->type);
+}  
      

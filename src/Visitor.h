@@ -30,9 +30,7 @@ public:
 
     virtual R visitQName(QName* qn, A arg) = 0;
 
-    virtual R visitSimpleType(SimpleType* sn, A arg) = 0;
-
-    virtual R visitRefType(RefType* sn, A arg) = 0;
+    virtual R visitType(Type* type, A arg) = 0;
     
     virtual R visitVarDecl(VarDecl *, A arg) = 0;
 

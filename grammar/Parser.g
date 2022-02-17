@@ -16,24 +16,25 @@ topStmt:
   stmt | methodDecl | typeDecl | enumDecl;
 
 enumDecl:
-  "enum" name "{" name ("," name)* "}";
+  "enum" name "{" enumEntry ("," enumEntry)* "}";
 
-type:
-  prim | refType | "void" | "var" | "let";
-  
-realType:
-  prim | refType;
+enumEntry: simpleEnumEntry | namedEnumEntry | valuedEnumEntry;
+simpleEnumEntry: name;
+namedEnumEntry: name "{" param ("," param)* "}";
+valuedEnumEntry: "(" type ("," type)* ")";
+
+type: qname generic? arraySuffix?
+        | prim arraySuffix?;
+
+generic: "<" type ("," type)* ">";
+
+arraySuffix: ("[" expr? "]")+;
+
+varType: type | "var" | "let";
 
 prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double";
 
-refType:
-  generic | qname;
-
-generic:
-  qname generics;
-
-generics:
-  "<" type ("," type)* ">";
+refType: name generic?;
 
 typeDecl:
   ("class" | "interface") name generics? (":" refType ("," refType)*)? "{" classMember* "}";
@@ -45,7 +46,9 @@ field:
   varDecl ";";
 
 methodDecl:
-  "fn" name "(" param* ")" ":" type block;
+  ("void" | type) name generic? "(" params* ")" block;
+
+params: param ("," param)*;
 
 param:
   type name ("?" | "=" expr)?;
@@ -74,13 +77,11 @@ forEachStmt:
 
 //expressions-----------------------------------------------
 varDecl:
-  ("let" | "var") varDeclFrag ("," varDeclFrag)*;
+  varType varDeclFrag ("," varDeclFrag)*;
 
 varDeclFrag:
-  name (":" realType)? ("=" expr)?;
+  name ("=" expr | "?")?;
   
-singleVar:
-  ("let" | "var") name ":" realType;
 
 expr: "import";
 
@@ -136,6 +137,8 @@ names:
 
 array:
   "[" exprs? "]";
+
+methodReference: type "::" name;
 
 xmlElement: "<" name attr* "/" ">"
         |   "<" name attr* ">" xmlElement* | text "<" "/" name ">";

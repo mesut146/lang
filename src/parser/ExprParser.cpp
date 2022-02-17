@@ -50,19 +50,48 @@ Name *Parser::qname() {
     }
 }
 
+Type* Parser::varType(){
+  if(is({VAR, LET})){
+    auto res = new Type;
+    res->name = new SimpleName(*pop()->value);
+    return res;
+  }
+  else {
+    return parseType();
+  }
+}
+
+Type *Parser::refType(){
+  Type *res = new Type;
+  res->name = qname();
+  if (is(LT)) {
+    res->typeArgs = generics();
+  }
+  return res;
+}
+
 Type *Parser::parseType() {
-    Type *res;
+    Type *res = new Type;
     if (isPrim(*first())) {
-        auto *s = new SimpleType;
-        s->type = pop()->value;
-        res = s;
+        res->name = new SimpleName(*pop()->value);
     } else {
-        res = refType();
+        res->name = qname();
+        if (is(LT)) {
+          res->typeArgs = generics();
+        }
     }
     while (is(LBRACKET)) {
         consume(LBRACKET);
+        if(!is(RBRACKET)){
+          res->dims.push_back(parseExpr());
+        }else{
+          res->dims.push_back(nullptr);
+        }
         consume(RBRACKET);
-        res->arrayLevel++;
+    }
+    if(is(QUES)){
+      pop();
+      res->isNullable = true;
     }
     return res;
 }
@@ -71,23 +100,12 @@ std::vector<Type *> Parser::generics() {
     std::vector<Type *> list;
     consume(LT);
     list.push_back(parseType());
-    while (first()->is(COMMA)) {
+    while (is(COMMA)) {
         consume(COMMA);
         list.push_back(parseType());
     }
     consume(GT);
     return list;
-}
-
-//real type,not prim
-// qname generics?
-RefType *Parser::refType() {
-    auto *res = new RefType;
-    res->name = qname();
-    if (is(LT)) {
-        res->typeArgs = generics();
-    }
-    return res;
 }
 
 Entry parseEntry(Parser *p) {
@@ -97,6 +115,23 @@ Entry parseEntry(Parser *p) {
     p->consume(COLON);
     e.value = p->parseExpr();
     return e;
+}
+
+bool isObj(Parser* p){
+  p->backup = true;
+  try{
+  if(!p->is(IDENT)){
+    p->restore();
+    return false;
+  }
+  p->parseType();
+  if(p->is(LBRACE)){
+    p->restore();
+    return true;
+  }
+  }catch(...){}
+  p->restore();
+  return false;
 }
 
 Expression *PRIM(Parser *p) {
@@ -117,7 +152,19 @@ Expression *PRIM(Parser *p) {
         return res;
     } else if (isLit(*p->first())) {
         return parseLit(p);
-    } else if (p->is(IDENT)) {
+    } else if (isObj(p)) {
+            auto res = new ObjExpr;
+            res->type = p->parseType();
+            p->consume(LBRACE);
+            res->entries.push_back(parseEntry(p));
+            while (p->is(COMMA)) {
+                p->consume(COMMA);
+                res->entries.push_back(parseEntry(p));
+            }
+            p->consume(RBRACE);
+            return res;
+        } 
+       else if (p->is(IDENT)) {
         auto id = p->pop()->value;
         if (p->is(LPAREN)) {
             auto res = new MethodCall;
@@ -127,17 +174,6 @@ Expression *PRIM(Parser *p) {
                 res->args = p->exprList();
             }
             p->consume(RPAREN);
-            return res;
-        } else if (p->is(LBRACE)) {
-            auto res = new ObjExpr;
-            res->name = *id;
-            p->consume(LBRACE);
-            res->entries.push_back(parseEntry(p));
-            while (p->is(COMMA)) {
-                p->consume(COMMA);
-                res->entries.push_back(parseEntry(p));
-            }
-            p->consume(RBRACE);
             return res;
         } else {
             auto *res = new SimpleName(*id);
@@ -412,10 +448,10 @@ ArrowFunction *parseArrow(Parser *p) {
     auto res = new ArrowFunction;
     p->consume(LPAREN);
     if (!p->is(RPAREN)) {
-        res->params.push_back(p->parseParam(false, nullptr, res));
+        res->params.push_back(p->arrowParam(res));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->params.push_back(p->parseParam(false, nullptr, res));
+            res->params.push_back(p->arrowParam(res));
         }
     }
     p->consume(RPAREN);
@@ -427,6 +463,25 @@ ArrowFunction *parseArrow(Parser *p) {
     }
     return res;
 }
+
+//varType name "?"? ("=" expr)?
+Param Parser::arrowParam(ArrowFunction* af) {
+    Param res;
+    res.arrow = af;
+    res.type = varType();
+    res.name = *name();
+    log("param = " + res.name);
+    if (is(QUES)) {
+        consume(QUES);
+        res.isOptional = true;
+    }
+    else if (is(EQ)) {
+        consume(EQ);
+        res.defVal = parseExpr();
+    }
+    return res;
+}
+
 
 /*XmlElement *parseXml(Parser *p) {
     auto res = new XmlElement;

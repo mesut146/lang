@@ -33,7 +33,7 @@ public:
     bool isInterface;
     std::vector<Type *> typeArgs;
     std::vector<Type *> baseTypes;
-    std::vector<FieldDecl *> fields;
+    std::vector<VarDecl *> fields;
     std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
 
@@ -48,16 +48,6 @@ public:
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
-};
-
-class FieldDecl {
-public:
-    std::string name;
-    bool isOptional;
-    Type *type;
-    Expression *expr;
-
-    std::string print();
 };
 
 class Method {
@@ -152,38 +142,45 @@ public:
 
 class Type : public Expression {
 public:
-    int arrayLevel = 0;
+    Name *name;
+    std::vector<Type *> typeArgs;
+    std::vector<Expression*> dims;
+    bool isTypeVar_ = false;
+    bool isNullable = false;
 
-    virtual bool isTypeVar(){ return false; }
-    virtual bool isPrim() { return false; };
-    virtual bool isVoid() { return false; };
-    virtual bool isString() { return false; }
-    virtual bool isSimple() { return false; }
-
-    virtual std::string print() = 0;
-    virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
-};
-
-class SimpleType : public Type {
-public:
-    std::string *type;
-    bool isTypeVar_;
-    
-    bool isTypeVar() { return isTypeVar_; }
-    
     bool isPrim() {
-        return *type == "int" || *type == "long" || *type == "char" || *type == "byte" ||
-               *type == "short" || *type == "float" || *type == "double" || *type == "bool";
-    }
-    bool isVoid() {
-        return *type == "void";
-    }
+      auto type = print();
+      return type == "int" || type == "long" || type == "char" || type == "byte" ||
+               type == "short" || type == "float" || type == "double" || type == "bool";
+    } 
+    bool isVoid() { return print() == "void"; };
+    bool isString() { return print() == "core.string"; }
+    bool isArray() { return !dims.empty(); }
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 
-class RefType : public Type {
+/*class SimpleType : public Type {
+public:
+    std::string type;
+    bool isTypeVar_;
+    
+    bool isTypeVar() { return isTypeVar_; }
+    
+    bool isPrim() {
+        return type == "int" || type == "long" || type == "char" || type == "byte" ||
+               type == "short" || type == "float" || type == "double" || type == "bool";
+    }
+    bool isVoid() {
+        return type == "void";
+    }
+
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
+};*/
+
+/*class RefType : public Type {
 public:
     Name *name;
     std::vector<Type *> typeArgs;
@@ -194,7 +191,7 @@ public:
     
     std::string print();
     void* accept(Visitor<void*, void*>* v, void* arg) override;
-};
+};*/
 
 
 class Literal : public Expression {
@@ -223,7 +220,6 @@ public:
 class Fragment {
 public:
     std::string name;
-    Type *type = nullptr;
     Expression *rhs = nullptr;
     bool isOptional = false;
     VarDecl* vd;
@@ -233,7 +229,7 @@ public:
 
 class VarDecl : public Statement {
 public:
-    bool isVar = false;
+    Type* type;
     std::vector<Fragment> list;
 
     std::string print() override;
@@ -242,7 +238,7 @@ public:
 
 class VarDeclExpr : public Statement {
 public:
-    bool isVar = false;
+    Type* type;
     std::vector<Fragment> list;
 
     std::string print() override;
@@ -365,7 +361,7 @@ public:
 
 class ObjExpr : public Expression {
 public:
-    std::string name;
+    Type* type;
     std::vector<Entry> entries;
 
     std::string print() override;

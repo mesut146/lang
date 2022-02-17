@@ -7,10 +7,10 @@
 class RType{
 public:
   Unit* unit;
-  Type* type;
-  TypeDecl* targetDecl;
-  Method* targetMethod;
-  Fragment* targetVar;
+  Type* type = nullptr;
+  TypeDecl* targetDecl = nullptr;
+  Method* targetMethod = nullptr;
+  Fragment* targetVar = nullptr;
 };
 
 class Scope{
@@ -25,11 +25,11 @@ public:
 class Resolver : public BaseVisitor<void*, void*>{
 public:
      Unit& unit;
-     std::map<Fragment*, RType*> varMap;
+     std::map<VarDecl*, RType*> varMap;
      std::map<Type*, RType*> typeMap;
      std::map<Param*, RType*> paramMap;
      std::map<Method*, RType*> methodMap;//return types
-     std::map<FieldDecl*, RType*> fieldMap;
+     //std::map<VarDecl*, RType*> fieldMap;
      std::map<Expression*, RType*> exprMap;
      std::vector<Scope*> scopes;
      TypeDecl* curClass = nullptr;
@@ -47,11 +47,10 @@ public:
      void resolveAll();
      
      RType* resolveType(Type* type);
-     void resolveVar(VarDecl* vd);
+     void* visitVarDecl(VarDecl* vd, void* arg);
      RType* resolveFrag(Fragment* f);
      
      RType* visitTypeDecl(TypeDecl* td);
-     void* visitFieldDecl(FieldDecl* fd, void* arg);
      //void* visitEnumDecl(EnumDecl* ed, void* arg);
      
      void* visitMethod(Method* m, void* arg);

@@ -10,6 +10,8 @@ class Parser {
 public:
     Lexer lexer;
     std::vector<Token *> tokens;
+    std::vector<Token*> backups;
+    bool backup = false;
 
     Parser(Lexer &lexer) : lexer(lexer) {
         fill();
@@ -29,6 +31,9 @@ public:
     Token *pop() {
         Token *t = tokens[0];
         tokens.erase(tokens.begin());
+        if(backup){
+          backups.push_back(t);
+        }
         return t;
     }
 
@@ -36,6 +41,7 @@ public:
         if (tokens.size() == 0) return nullptr;
         return tokens[0];
     }
+    
     bool is(TokenType t) {
         return first()->is(t);
     }
@@ -50,9 +56,19 @@ public:
         print_stacktrace();
         throw std::string("unexpected token ") + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt);
     }
+    
+    void discard(){
+      backup = false;
+      backups.clear();
+    }
+    
+    void restore(){
+      tokens.insert(tokens.begin(), backups.begin(), backups.end());
+      discard();
+    }
 
     std::string *name() {
-        if (is({VAR, LET, FUNC})) {
+        if (is({VAR, LET})) {
             return pop()->value;
         }
         return consume(IDENT)->value;
@@ -71,10 +87,13 @@ public:
     FieldDecl *parseFieldDecl();
 
     Method *parseMethod();
+    bool isMethod();
 
-    Param parseParam(bool requireType, Method* m, ArrowFunction* af);
+    Param parseParam(Method* m);
+    Param arrowParam(ArrowFunction* af);
 
     VarDecl *parseVarDecl();
+    bool isVarDecl();
 
     VarDeclExpr *parseVarDeclExpr();
 
@@ -83,10 +102,10 @@ public:
     std::vector<Expression *> exprList();
 
     Type *parseType();
+    Type* varType();
+    Type* refType();
 
     std::vector<Type *> generics();
-
-    RefType *refType();
 
     Name *qname();
 

@@ -1,19 +1,23 @@
+var cur = Node<int>{value: arr[pos++]};
+
 import * from "util"
 import * as util from "util"
 import format as fmt from "util"
 
 class Node<T>{
-  next?: Node<T>;
-  value: int = 0;
+  Node<T>? next;
+  T value;
 }
 
-func makeNode(arr: int[]): Node<int>{
-  var pos: int = 0;
-  var res: Node<int> = Node{value: arr[pos++]};
+Node<int> makeNode(int[] arr){
+  var pos = 0;
+  var cur = Node<int>{value: arr[pos++]};
+  var head = cur;
   while(pos < arr.size){
-    res = Node{value: arr[pos++], next: res};
+    cur.next = Node<int>{value: arr[pos++]};
+    cur = cur.next;
   }
-  return res;
+  return head;
 }
 
 enum Color{
@@ -22,11 +26,11 @@ enum Color{
 }
 
 interface a{
-  func calc(): int;
+  int calc();
 }
 
 
-func calc(a:int,b:int,carry?:int) : int
+int calc(int a, int b, int carry?)
 {
   if(carry){
     return a + b + carry;
@@ -36,7 +40,7 @@ func calc(a:int,b:int,carry?:int) : int
   }
 }
 
-func def(a:int = 0);
+void def(int a = 0);
 
 calc(1,2);
 calc(1,2,3);

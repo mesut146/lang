@@ -56,6 +56,8 @@ int main(int argc, char **args) {
     } catch (std::string s) {
         std::cout << "err:" << s << "\n";
         //print_stacktrace();
-    }
+    }catch(...){
+       print_stacktrace();
+     }
     return 0;
 }
