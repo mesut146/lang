@@ -53,7 +53,9 @@ TokenType kw(std::string &s) {
     if (s == "let")
         return LET;
     if (s == "var")
-        return VAR;
+	    return VAR;
+    if(s == "const")
+    	return CONST_KW;
     if (s == "try")
         return TRY;
     if (s == "catch")

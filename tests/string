@@ -6,7 +6,7 @@ class string{
     return count;
   }
 
-  string concat(string s){
+  func concat(string s): string{
     var buf: char[count + s.length()];
     Array.copy(arr, 0, buf, 0, count);
     Array.copy(s.arr, count, buf, s.count);

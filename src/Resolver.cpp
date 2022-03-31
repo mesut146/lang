@@ -21,11 +21,15 @@ Resolver::~Resolver(){
   
 }
 
-RType* makeSimple(const std::string& name){
-  Type* st = new Type;
-  st->name = new SimpleName(name);
+Type* simpleType(const std::string name){
+    auto res = new Type;
+    res->name = name;
+    return res;
+}    
+
+RType* makeSimple(const std::string name){
   RType* res = new RType;
-  res->type = st;
+  res->type = simpleType(name);
   return res;
 }
 
@@ -34,18 +38,16 @@ void normalize(Unit& unit){
 }
 
 void Resolver::dump(){
-  for(auto &p : varMap){
-    for(Fragment& f:p.first->list){
-      std::cout << "var: " << f.name << " = " << p.second->type->print() << "\n";
-    }
+  for(auto f : varMap){
+      std::cout << "var: " << f.first->name << " = " << f.second->type->print() << "\n";
   }
   /*for(auto &p : fieldMap){
     std::cout << "field: " << p.first->name << " = " << p.second->type->print() << "\n";
   }*/
   for(auto& p:methodMap){
     std::cout << "method: " << p.first->name << " = " << p.second->type->print() << "\n";
-    for(Param& prm:p.first->params){
-      std::cout << "param: " << prm.name << " = " <<  paramMap[&prm]->type->print() << "\n";
+    for(Param* prm:p.first->params){
+      std::cout << "param: " << prm->name << " = " <<  paramMap[prm]->type->print() << "\n";
     }
   }
 }
@@ -72,11 +74,7 @@ void Resolver::resolveAll(){
   }//for
   
   for(BaseDecl* bd : unit.types){
-    if(bd->isEnum){
-    }else{
-      TypeDecl* td = dynamic_cast<TypeDecl*>(bd);
-      visitTypeDecl(td);
-    } 
+    visitBaseDecl(bd, nullptr);
   }
   for(Method* m : unit.methods){
     visitMethod(m, nullptr);
@@ -89,36 +87,64 @@ RType* Resolver::resolveScoped(Expression* expr){
   return (RType*)expr->accept(this, nullptr);
 }
 
+void* Resolver::visitBaseDecl(BaseDecl* bd, void* arg){
+	if(bd->isEnum){
+		return visitEnumDecl(dynamic_cast<EnumDecl*>(bd));
+	}else{
+		return visitTypeDecl(dynamic_cast<TypeDecl*>(bd));
+	}
+}
+
+RType* Resolver::visitCommon(BaseDecl* bd){
+	auto res = new RType;
+	res->targetDecl = bd;
+	if(bd->parent != nullptr){
+    	//qualified type
+	    auto pt = (RType*)visitBaseDecl(bd->parent, nullptr);
+  	  auto type = new Type;
+        type->scope = pt->type;
+  	  type->name = bd->name;
+  	  res->type = type;
+    }else{
+   	 res = makeSimple(bd->name);
+   	 res->unit = &unit;
+    }
+	return res;
+}
+
+RType* Resolver::visitEnumDecl(EnumDecl* ed){
+	auto backup = curDecl;
+	curDecl = ed;
+	auto res = visitCommon(ed);
+	for(Method* m : ed->methods){
+    	visitMethod(m, ed);
+    }
+	curDecl = backup;
+	return res;
+}
+
 RType* Resolver::visitTypeDecl(TypeDecl* td){
-  auto res = new RType;
-  res->targetDecl = td;
-  if(td->parent != nullptr){
-    auto pt = visitTypeDecl(dynamic_cast<TypeDecl*>(td->parent));
-    auto qn = new QName(pt->type->name, td->name);//todo scope is type
-    auto qt = new Type;
-    qt->name = qn;
-    res->type = qt;
-  }else{
-    res = makeSimple(td->name);
-    res->unit = &unit;
-  }
-  for(VarDecl* fd : td->fields){
-    visitVarDecl(fd, td);
-  }
-  for(Method* m : td->methods){
-    visitMethod(m, td);
-  }
-  for(BaseDecl* bd : td->types){
-    bd->accept(this, td);
-  }
-  return res;
+	auto backup = curDecl;
+	curDecl = td;
+    auto res = visitCommon(td);
+    for(VarDecl* fd : td->fields){
+        visitVarDecl(fd->decl, td);
+    }
+    for(Method* m : td->methods){
+        visitMethod(m, td);
+    }
+    for(BaseDecl* bd : td->types){
+        bd->accept(this, td);
+    }
+    curDecl = backup;
+    return res;
 }
      
 void* Resolver::visitMethod(Method* m, void* arg){
   curMethod = m;
   RType* res =nullptr;
   
-  for(Param& prm:m->params){
+  for(Param* prm:m->params){
     visitParam(prm);
   }  
   res = (RType*)m->type->accept(this, m);
@@ -132,10 +158,10 @@ void* Resolver::visitMethod(Method* m, void* arg){
   return res;
 }
 
-RType* Resolver::visitParam(Param& p){
-  if(p.method != nullptr){
-    auto res =  resolveType(p.type);
-    paramMap[&p] = res;
+RType* Resolver::visitParam(Param* p){
+  if(p->method != nullptr){
+    auto res =  resolveType(p->type);
+    paramMap[p] = res;
     return res;
   }
   else{
@@ -219,10 +245,37 @@ RType* Resolver::resolveType(Type* type){
   }
   else if(type->isString() || type->print() == "string"){
     auto ref = new Type;
-    ref->name = new QName(new SimpleName("core"), "string");
+    ref->scope = simpleType("core");
+    ref->name = "string";
     res->type = ref;
   }else {
-    throw std::string("todo resolveType: " + type->print());
+      if(type->scope == nullptr){
+      	if(curDecl != nullptr){
+  			if(curDecl->name == type->name){
+  				return (RType*)visitBaseDecl(curDecl, nullptr);
+  			}else{
+  			//inner
+  			}
+  		}else{
+  			for(auto bd : unit.types){
+  				if(bd->name == type->name){
+  					return (RType*)visitBaseDecl(bd, nullptr);
+  				}else{
+  				//inner
+  				}
+  			}
+  		}
+      }else{
+          auto st = (RType*)type->scope->accept(this, nullptr);
+          for(auto bd : st->targetDecl->types){
+              if(bd->name == type->name){
+                  res->type = type;
+                  res->targetDecl = bd;
+                  return res;
+              }    
+          }    
+      }    
+      throw std::string("todo resolveType: " + type->print());
   }
   return res;
 }
@@ -238,13 +291,16 @@ RType* Resolver::resolveFrag(Fragment* f){
   return res;
 }
 
-void* Resolver::visitVarDecl(VarDecl* vd, void* arg){
-  auto res = resolveType(vd->type);
-  for(Fragment &f : vd->list){
-    resolveFrag(&f);
+void* Resolver::visitVarDecl(VarDeclExpr* vd, void* arg){
+  for(Fragment *f : vd->list){
+    resolveFrag(f);
   }
-  return res;
-}  
+  return nullptr;
+}
+
+void* Resolver::visitVarDecl(VarDecl* vd, void* arg){
+	visitVarDecl(vd->decl, arg);
+}
 
 void* Resolver::visitSimpleName(SimpleName *sn, void* arg){
   //check for local variable
@@ -260,23 +316,29 @@ void* Resolver::visitSimpleName(SimpleName *sn, void* arg){
   }
   //method parameter
   if(curMethod != nullptr){
-    for(Param& p : curMethod->params){
-      if(p.name == sn->name){
+    for(Param* p : curMethod->params){
+      if(p->name == sn->name){
         std::cout << "param\n";
         return visitParam(p);
       }
     }
   }
   //class fields
-  if(curClass != nullptr){
-    for(VarDecl* field:curClass->fields){
-      for(Fragment& f: field->list){
-        if(f.name == sn->name){
-          std::cout << "field\n";
-          return visitVarDecl(field, nullptr);
-        }
+  if(curDecl != nullptr){
+      if(curDecl->isEnum){
+          auto ed = dynamic_cast<EnumDecl*>(curDecl);
       }
-    }
+      else{
+          auto td = dynamic_cast<TypeDecl*>(curDecl);
+          for(VarDecl* field : td->fields){
+              for(Fragment* f: field->decl->list){
+                  if(f->name == sn->name){
+                      std::cout << "field\n";
+                      return resolveFrag(f);
+                  }
+              }
+          }
+      }
   }
   throw std::string("unknown identifier: ") + sn->name;
 }
@@ -287,20 +349,26 @@ void* Resolver::visitQName(QName *qn, void* arg){
     if(qn->name == "size" || qn->name == "length"){
       return makeSimple("int");
     }else{
+        //todo more methods
       throw std::string("invalid array method: " + qn->name);
     }
   }
-  TypeDecl* td = scp->targetDecl;
-  if(td == nullptr) throw std::string("td is null");
-  for(VarDecl* field : td->fields){
-    for(Fragment& f:field->list){
-      if(f.name == qn->name){
-        auto res = (RType*)visitVarDecl(field, td);
-        return res;
+  auto bd = scp->targetDecl;
+  if(bd == nullptr) throw std::string("bd is null");
+  if(bd->isEnum){
+      throw std::string("visitQName todo enum field");
+  }else{
+      auto td = dynamic_cast<TypeDecl*>(bd);
+      for(VarDecl* field : td->fields){
+          for(Fragment* f : field->decl->list){
+              if(f->name == qn->name){
+                  auto res = (RType*)resolveFrag(f);
+                  return res;
+              }
+          }
       }
-    }
   }
-  throw std::string("can't resolve " + qn->name + " in " + td->name);
+  throw std::string("can't resolve " + qn->name + " in " + bd->name);
 }
 
 void* Resolver::visitLiteral(Literal *lit, void* arg){
@@ -308,7 +376,8 @@ void* Resolver::visitLiteral(Literal *lit, void* arg){
   auto type = new Type;
   res->type = type;
   if(lit->isStr){
-    type->name = new QName(new SimpleName("core"), "string");
+      type->scope = simpleType("core");
+      type->name = "string";
   }else{
     std::string s;
     if(lit->isBool){
@@ -320,7 +389,7 @@ void* Resolver::visitLiteral(Literal *lit, void* arg){
     }else  if(lit->isChar){
       s = "char";
     }
-    type->name = new SimpleName(s);
+    type->name = s;
   }
   return res;
 }
@@ -344,9 +413,9 @@ bool isSame(Resolver* r, MethodCall* mc, Method* m){
 
 void* Resolver::visitMethodCall(MethodCall *mc, void* arg){
   if(mc->scope == nullptr){
-  if(curClass != nullptr){
+  if(curDecl != nullptr){
     //friend method
-    for(Method* m : curClass->methods){
+    for(Method* m : curDecl->methods){
       if(isSame(this, mc, m)){
         return visitMethod(m, nullptr);
       }

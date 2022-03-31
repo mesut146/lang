@@ -31,7 +31,7 @@ Statement *parseFor(Parser *p) {
     p->consume(LPAREN);
     VarDeclExpr *var;
     bool normalFor = true;
-    if (p->is({VAR, LET})) {
+    if (p->is({VAR, LET, CONST_KW})) {
         var = p->parseVarDeclExpr();
         if (p->is(SEMI)) {
             //simple for
@@ -154,7 +154,7 @@ Statement *Parser::parseStmt() {
         res->expr = parseExpr();
         consume(SEMI);
         return res;
-    } else if (t.is({VAR, LET})) {
+    } else if (t.is({VAR, LET, CONST_KW})) {
         return parseVarDecl();
     } else {
         Expression *e = parseExpr();

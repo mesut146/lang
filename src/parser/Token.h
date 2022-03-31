@@ -34,6 +34,7 @@ enum TokenType {
     FUNC,
     LET,
     VAR,
+    CONST_KW,
     IF_KW,
     ELSE_KW,
     FOR,

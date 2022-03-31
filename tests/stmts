@@ -2,11 +2,11 @@ var f = obj.first().second().field;
 a.b.c();
 
 var pi = 3.1415;
-let anony={x:1,y:5};
-Point obj= {x:1,y:5};
-let map = {"a":"c","d":"e"};
-let p = Point{x:1,y:5};
-List<string> l;
+let anony={x: 1, y: 5};
+let obj: Point = {x: 1, y: 5};
+let map = {"a": "c", "d": "e"};
+let p = Point{x: 1, y: 5};
+let l: List<string>;
 
 for(let i=2;i<=5;i++){
   //n.next = {value=i};

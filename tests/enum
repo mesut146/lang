@@ -1,0 +1,24 @@
+enum Op<T>{
+  None,
+  Some(val: T)
+}
+
+let op = Op.None;
+let som = Op.Some(5);
+
+enum Person{
+  A(name: string, age: int),
+  B(p: Person),
+  C;
+}
+
+enum Color{
+ RED, BLUE, YELLOW;
+
+ func isRGB(): bool{
+   return this == RED || this == BLUE;
+ }
+}
+
+let c = Color.RED;
+let rgb = c.isRGB();

@@ -50,7 +50,7 @@ Name *Parser::qname() {
     }
 }
 
-Type* Parser::varType(){
+/*Type* Parser::varType(){
   if(is({VAR, LET})){
     auto res = new Type;
     res->name = new SimpleName(*pop()->value);
@@ -59,25 +59,44 @@ Type* Parser::varType(){
   else {
     return parseType();
   }
-}
+}*/
 
 Type *Parser::refType(){
   Type *res = new Type;
-  res->name = qname();
-  if (is(LT)) {
-    res->typeArgs = generics();
+  res->name = *consume(IDENT)->value;
+  while(is({DOT, LT})){
+      if (is(LT)) {
+          res->typeArgs = generics();
+      }
+      else{
+          consume(DOT);
+          auto tmp = new Type;
+          tmp->name = *consume(IDENT)->value;
+          tmp->scope = res;
+          res = tmp;
+      }
   }
   return res;
 }
 
 Type *Parser::parseType() {
-    Type *res = new Type;
+    auto res = new Type;
     if (isPrim(*first())) {
-        res->name = new SimpleName(*pop()->value);
+        res->name = *pop()->value;
     } else {
-        res->name = qname();
-        if (is(LT)) {
-          res->typeArgs = generics();
+        res->name = *consume(IDENT)->value;
+        
+        while(is({DOT, LT})){
+            if (is(LT)) {
+                res->typeArgs = generics();
+            }
+            else{
+                consume(DOT);
+                auto tmp = new Type;
+                tmp->name = *consume(IDENT)->value;
+                tmp->scope = res;
+                res = tmp;
+            }
         }
     }
     while (is(LBRACKET)) {
@@ -468,9 +487,12 @@ ArrowFunction *parseArrow(Parser *p) {
 Param Parser::arrowParam(ArrowFunction* af) {
     Param res;
     res.arrow = af;
-    res.type = varType();
     res.name = *name();
     log("param = " + res.name);
+    if(is(COLON)){
+        consume(COLON);
+        res.type = parseType();
+    }    
     if (is(QUES)) {
         consume(QUES);
         res.isOptional = true;

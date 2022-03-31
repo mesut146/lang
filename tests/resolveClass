@@ -1,13 +1,13 @@
 class Person{
-  age: int;
-  name: string;
+  let age: int;
+  let name: string;
 
 
   func test(){
     var x = age;
-    var obj = Person{age:25, name: "john"};
+    var obj = Person{age: 25, name: "john"};
     var nm = obj.name;
   }
 }
 
-var p1 = Person{age:25, name: "john"};
+var p1 = Person{age: 25, name: "john"};

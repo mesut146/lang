@@ -20,8 +20,11 @@ public:
 
 class BaseDecl {
 public:
+	std::string name;
     bool isEnum = false;
     BaseDecl* parent = nullptr;
+    std::vector<Method *> methods;
+    std::vector<BaseDecl *> types;
     
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
@@ -29,22 +32,30 @@ public:
 
 class TypeDecl : public BaseDecl {
 public:
-    std::string name;
+    
     bool isInterface;
     std::vector<Type *> typeArgs;
     std::vector<Type *> baseTypes;
     std::vector<VarDecl *> fields;
-    std::vector<Method *> methods;
-    std::vector<BaseDecl *> types;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 
+class EnumEntry{
+public:
+	std::string name;
+	std::vector<Param*> params;
+	int ordinal;
+	
+	bool isStruct() { params.size() > 0; }
+	std::string print();
+};
+
 class EnumDecl : public BaseDecl {
 public:
-    std::string name;
-    std::vector<std::string> cons;
+    std::vector<EnumEntry*> cons;
+    std::vector<Type *> typeArgs;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -55,7 +66,7 @@ public:
     Type *type = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
-    std::vector<Param> params;
+    std::vector<Param*> params;
     Block *body = nullptr;
     BaseDecl* parent= nullptr;
 
@@ -142,7 +153,8 @@ public:
 
 class Type : public Expression {
 public:
-    Name *name;
+    Type* scope = nullptr;
+    std::string name;
     std::vector<Type *> typeArgs;
     std::vector<Expression*> dims;
     bool isTypeVar_ = false;
@@ -220,6 +232,7 @@ public:
 class Fragment {
 public:
     std::string name;
+    Type* type;
     Expression *rhs = nullptr;
     bool isOptional = false;
     VarDecl* vd;
@@ -229,8 +242,7 @@ public:
 
 class VarDecl : public Statement {
 public:
-    Type* type;
-    std::vector<Fragment> list;
+    VarDeclExpr* decl;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -238,8 +250,8 @@ public:
 
 class VarDeclExpr : public Statement {
 public:
-    Type* type;
-    std::vector<Fragment> list;
+    bool isVar = false, isLet = false, isConst = false;
+    std::vector<Fragment*> list;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;

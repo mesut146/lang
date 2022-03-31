@@ -8,7 +8,7 @@ class RType{
 public:
   Unit* unit;
   Type* type = nullptr;
-  TypeDecl* targetDecl = nullptr;
+  BaseDecl* targetDecl = nullptr;
   Method* targetMethod = nullptr;
   Fragment* targetVar = nullptr;
 };
@@ -22,17 +22,26 @@ public:
   Fragment* find(std::string& name);
 };
 
+class TypeScope{
+public:
+  std::vector<BaseDecl*> list;
+  
+  void add(BaseDecl* f);
+  void clear();
+  Fragment* find(std::string& name);
+};
+
 class Resolver : public BaseVisitor<void*, void*>{
 public:
      Unit& unit;
-     std::map<VarDecl*, RType*> varMap;
+     std::map<Fragment*, RType*> varMap;
      std::map<Type*, RType*> typeMap;
      std::map<Param*, RType*> paramMap;
      std::map<Method*, RType*> methodMap;//return types
      //std::map<VarDecl*, RType*> fieldMap;
      std::map<Expression*, RType*> exprMap;
      std::vector<Scope*> scopes;
-     TypeDecl* curClass = nullptr;
+     BaseDecl* curDecl = nullptr;
      Method* curMethod = nullptr;
      static std::map<Unit*, Resolver> resolverMap;
 
@@ -47,14 +56,17 @@ public:
      void resolveAll();
      
      RType* resolveType(Type* type);
+     void* visitVarDecl(VarDeclExpr* vd, void* arg);
      void* visitVarDecl(VarDecl* vd, void* arg);
      RType* resolveFrag(Fragment* f);
      
      RType* visitTypeDecl(TypeDecl* td);
-     //void* visitEnumDecl(EnumDecl* ed, void* arg);
+     RType* visitEnumDecl(EnumDecl* ed);
+     void* visitBaseDecl(BaseDecl* bd, void* arg);
+     RType* visitCommon(BaseDecl* bd);
      
      void* visitMethod(Method* m, void* arg);
-     RType* visitParam(Param& p);
+     RType* visitParam(Param* p);
      
      RType* resolveScoped(Expression* expr);
 

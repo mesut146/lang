@@ -89,7 +89,7 @@ public:
     Method *parseMethod();
     bool isMethod();
 
-    Param parseParam(Method* m);
+    Param* parseParam(Method* m);
     Param arrowParam(ArrowFunction* af);
 
     VarDecl *parseVarDecl();

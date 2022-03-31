@@ -50,14 +50,31 @@ std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
     s.append(name);
+    if(!typeArgs.empty()){
+  	  s.append("<").append(join(typeArgs, ", ")).append(">");
+    }
     s.append("{\n");
     s.append(join(cons, ",\n", "  "));
+    s.append(";");
+    //body
+    s.append(join(methods, "\n\n"));
     s.append("\n}");
     return s;
 }
 
 void* EnumDecl::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitEnumDecl(this, arg);
+}
+
+std::string EnumEntry::print() {
+    std::string s;
+    s.append(name);
+    if(isStruct()){
+        s.append("(");
+        s.append(join(params, ", "));
+        s.append(")");
+    }    
+    return s;
 }
 
 std::string TypeDecl::print() {
@@ -147,12 +164,7 @@ void* Literal::accept(Visitor<void*, void*>* v, void* arg){
 }
 
 std::string VarDecl::print() {
-    std::string s;
-    s.append(type->print());
-    s.append(" ");
-    s.append(join(list, ", "));
-    s.append(";");
-    return s;
+    return decl->print() + ";";
 }
 
 void* VarDecl::accept(Visitor<void*, void*>* v, void* arg){
@@ -161,7 +173,7 @@ void* VarDecl::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string VarDeclExpr::print() {
     std::string s;
-    s.append(type->print());
+    s.append(isVar ? "var" : (isConst ? "const" : "let"));
     s.append(" ");
     s.append(join(list, ", "));
     return s;
@@ -174,6 +186,9 @@ void* VarDeclExpr::accept(Visitor<void*, void*>* v, void* arg){
 std::string Fragment::print() {
     std::string s;
     s.append(name);
+    if(type != nullptr){
+    	s.append(" : ").append(type->print());
+    }	
     if (rhs != nullptr) {
         s.append(" = ").append(rhs->print());
     }
@@ -220,7 +235,10 @@ void* Type::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string Type::print() {
     std::string s;
-    s.append(name->print());
+    if(scope){
+        s.append(scope->print());
+    }    
+    s.append(name);
     if (!typeArgs.empty()) {
         s.append("<");
         s.append(join(typeArgs, ", "));
