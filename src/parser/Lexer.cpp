@@ -8,6 +8,7 @@ TokenType kw(std::string &s) {
         return ENUM;
     if (s == "interface")
         return INTERFACE;
+    if(s == "static") return STATIC;
     if (s == "bool")
         return BOOLEAN;
     if (s == "true")

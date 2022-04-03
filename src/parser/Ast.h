@@ -18,6 +18,24 @@ public:
     std::string print();
 };
 
+class NamedImport {
+public:
+    std::string name;
+    std::string *as = nullptr;
+
+    std::string print();
+};
+
+class ImportStmt {
+public:
+    std::vector<NamedImport> namedImports;
+    std::string from;
+    bool isStar;
+    std::string *as = nullptr;
+
+    std::string print();
+};
+
 class BaseDecl {
 public:
 	std::string name;
@@ -27,7 +45,7 @@ public:
     std::vector<BaseDecl *> types;
     
     virtual std::string print() = 0;
-    virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
+    virtual void* accept(Visitor<void*, void*>* v, void* arg);
 };
 
 class TypeDecl : public BaseDecl {
@@ -63,6 +81,7 @@ public:
 
 class Method {
 public:
+    bool isStatic = false;
     Type *type = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
@@ -71,11 +90,12 @@ public:
     BaseDecl* parent= nullptr;
 
     std::string print();
+    void* accept(Visitor<void*, void*>* v, void* arg);
 };
 
 class Param {
 public:
-    Type *type;
+    Type *type = nullptr;
     std::string name;
     bool isOptional = false;
     Expression *defVal = nullptr;
@@ -83,6 +103,7 @@ public:
     ArrowFunction* arrow = nullptr;
 
     std::string print();
+    void* accept(Visitor<void*, void*>* v, void* arg);
 };
 
 class Expression {
@@ -108,6 +129,8 @@ public:
 
 class Name : public Expression {
 public:
+    std::vector<Type *> typeArgs;
+    
     virtual bool isSimple();
     virtual std::string print() = 0;
     virtual void* accept(Visitor<void*, void*>* v, void* arg) override = 0;
@@ -133,22 +156,13 @@ public:
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 
-class NamedImport {
+class ArrowType: public Expression{
 public:
-    std::string name;
-    std::string *as = nullptr;
-
-    std::string print();
-};
-
-class ImportStmt {
-public:
-    std::vector<NamedImport> namedImports;
-    std::string from;
-    bool isStar;
-    std::string *as = nullptr;
-
-    std::string print();
+    std::vector<Type*> params;
+    Type* type = nullptr;
+    
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 
 class Type : public Expression {
@@ -159,6 +173,7 @@ public:
     std::vector<Expression*> dims;
     bool isTypeVar_ = false;
     bool isNullable = false;
+    ArrowType* arrow = nullptr;
 
     bool isPrim() {
       auto type = print();
@@ -166,12 +181,13 @@ public:
                type == "short" || type == "float" || type == "double" || type == "bool";
     } 
     bool isVoid() { return print() == "void"; };
-    bool isString() { return print() == "core.string"; }
+    bool isString() { return print() == "core/string"; }
     bool isArray() { return !dims.empty(); }
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
+
 
 /*class SimpleType : public Type {
 public:
@@ -205,7 +221,6 @@ public:
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };*/
 
-
 class Literal : public Expression {
 public:
     std::string val;
@@ -232,10 +247,10 @@ public:
 class Fragment {
 public:
     std::string name;
-    Type* type;
+    Type* type = nullptr;
     Expression *rhs = nullptr;
     bool isOptional = false;
-    VarDecl* vd;
+    VarDecl* vd = nullptr;
 
     std::string print();
 };
@@ -251,6 +266,7 @@ public:
 class VarDeclExpr : public Statement {
 public:
     bool isVar = false, isLet = false, isConst = false;
+    bool isStatic = false;
     std::vector<Fragment*> list;
 
     std::string print() override;
@@ -312,6 +328,7 @@ public:
     std::string name;
     std::vector<Expression *> args;
     bool isOptional = false;
+    std::vector<Type*> typeArgs; 
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -340,6 +357,15 @@ public:
 class ArrayExpr : public Expression {
 public:
     std::vector<Expression *> list;
+
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
+};
+
+class ArrayCreation : public Expression {
+public:
+    Type* type;
+    std::vector<Expression*> dims;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;

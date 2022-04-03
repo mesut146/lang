@@ -19,7 +19,7 @@ bool isLit(Token &t) {
 }
 
 bool Parser::isPrim(Token &t) {
-    return t.is({INT, LONG, FLOAT, DOUBLE, CHAR, BYTE, VOID});
+    return t.is({BOOLEAN, INT, LONG, FLOAT, DOUBLE, CHAR, BYTE, VOID});
 }
 
 Literal *parseLit(Parser *p) {
@@ -34,9 +34,21 @@ Literal *parseLit(Parser *p) {
     return res;
 }
 
+bool isTypeArg(Parser* p, TokenType next){
+    p->backup();
+    try{
+        p->generics();
+        p->consume(next);
+        p->restore();
+        return true;
+    }catch(...){}
+    p->restore();
+    return false;
+}
+
 //name ("." name)*
 Name *Parser::qname() {
-    auto *res = new SimpleName(*name());
+    auto res = new SimpleName(*name());
     if (is(DOT)) {
         Name *cur = res;
         while (is(DOT)) {
@@ -79,11 +91,39 @@ Type *Parser::refType(){
   return res;
 }
 
+//"func" "<" type ">" "(" param ("," param)* ")"
+ArrowType* parseArrowType(Parser* p){
+    auto res = new ArrowType;
+    p->consume(FUNC);
+    if(p->is(LT)){
+        p->consume(LT);
+        res->type = p->parseType();
+        p->consume(GT);
+    }else{
+        res->type = new Type;
+        res->type->name = "void";
+    }    
+    p->consume(LPAREN);
+    if(!p->is(RPAREN)){
+        res->params.push_back(p->parseType());
+        while(p->is(COMMA)){
+            p->consume(COMMA);
+            res->params.push_back(p->parseType());
+        }    
+    }    
+    p->consume(RPAREN);
+    return res;
+}    
+
 Type *Parser::parseType() {
     auto res = new Type;
     if (isPrim(*first())) {
         res->name = *pop()->value;
-    } else {
+    }
+    else if(is(FUNC)){
+        res->arrow = parseArrowType(this);
+    }    
+    else {
         res->name = *consume(IDENT)->value;
         
         while(is({DOT, LT})){
@@ -137,27 +177,29 @@ Entry parseEntry(Parser *p) {
 }
 
 bool isObj(Parser* p){
-  p->backup = true;
-  try{
-  if(!p->is(IDENT)){
+    //if(true) return false;
+    p->backup();
+    try{
+        if(!p->is(IDENT)){
+            p->restore();
+            return false;
+        }
+        p->parseType();
+        if(p->is(LBRACE)){
+            p->restore();
+            return true;
+        }
+    }catch(...){}
     p->restore();
     return false;
-  }
-  p->parseType();
-  if(p->is(LBRACE)){
-    p->restore();
-    return true;
-  }
-  }catch(...){}
-  p->restore();
-  return false;
 }
 
+//"(" expr ")" | arrow | literal | objCreation | anonyObj | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
     //log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
         //ParExpr or arrow function
-        for (int i = 1; i < p->tokens.size(); i++) {
+        for (int i = p->pos + 1; i < p->tokens.size(); i++) {
             if (i < p->tokens.size() - 1 &&
                 p->tokens[i]->is(RPAREN) &&
                 p->tokens[i + 1]->is(ARROW)) {
@@ -172,6 +214,7 @@ Expression *PRIM(Parser *p) {
     } else if (isLit(*p->first())) {
         return parseLit(p);
     } else if (isObj(p)) {
+            std::cout << "ObjExpr\n";
             auto res = new ObjExpr;
             res->type = p->parseType();
             p->consume(LBRACE);
@@ -182,12 +225,15 @@ Expression *PRIM(Parser *p) {
             }
             p->consume(RBRACE);
             return res;
-        } 
-       else if (p->is(IDENT)) {
+      } 
+     else if (p->is(IDENT)) {
         auto id = p->pop()->value;
-        if (p->is(LPAREN)) {
+        if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
             auto res = new MethodCall;
             res->name = *id;
+            if(p->is(LT)){
+                res->typeArgs = p->generics();
+            }    
             p->consume(LPAREN);
             if (!p->is(RPAREN)) {
                 res->args = p->exprList();
@@ -216,28 +262,92 @@ Expression *PRIM(Parser *p) {
         }
         p->consume(RBRACKET);
         return res;
-    } else {
+    }else if(p->is(FUNC)){
+        auto res = new ArrayCreation;
+        res->type = p->parseType();
+        while(p->is(LBRACKET)){
+            p->pop();
+            res->dims.push_back(p->parseExpr());
+            p->consume(RBRACKET);
+        }    
+        return res;
+    }
+    else {
         throw std::string("invalid primary " + *p->first()->value + " line: " + std::to_string(p->first()->line));
     }
 }
 
+/*int peekType(Parser* p, int pos){
+    if (isPrim(*p->tokens[pos])) {
+        pos++;
+    }
+    else if(is(FUNC)){
+        pos = peekArrowType(p, pos);
+    }    
+    else {
+        if(!p->tokens[pos++]->is(IDENT)) return -1;
+        
+        while(p->tokens[pos]->is({DOT, LT})){
+            if (is(LT)) {
+                res->typeArgs = generics();
+            }
+            else{
+                consume(DOT);
+                auto tmp = new Type;
+                tmp->name = *consume(IDENT)->value;
+                tmp->scope = res;
+                res = tmp;
+            }
+        }
+    }
+    while (is(LBRACKET)) {
+        consume(LBRACKET);
+        if(!is(RBRACKET)){
+          res->dims.push_back(parseExpr());
+        }else{
+          res->dims.push_back(nullptr);
+        }
+        consume(RBRACKET);
+    }
+    if(is(QUES)){
+      pop();
+      res->isNullable = true;
+    }
+    return res;
+}*/
+
+/*bool isTypeArg(Parser* p){
+    int pos = p->pos;
+    if(!p->tokens[pos++]->is(LT)) return false;
+    int np = peekType(p, pos);
+    if(np == -1) return false;
+    pos = np;
+    return p->tokens[pos]->is(GT);
+} */
+
 //PRIM (dot name ('(' ')')? | [ E ])*
 Expression *PRIM2(Parser *p) {
     Expression *lhs = PRIM(p);
-    while (p->is({DOT, LBRACKET}) || p->is(QUES) && p->tokens[1]->is({DOT, LBRACKET})) {
+    if(lhs->print() == "arr2"){
+        std::cout << "arr2\n";
+    }    
+    while (p->is({DOT, LBRACKET}) || p->is({QUES}, {DOT, LBRACKET})) {
         bool isOptional = false;
-        if (p->is(QUES) && p->tokens[1]->is({DOT, LBRACKET})) {
+        if (p->is({QUES}, {DOT, LBRACKET})) {
             p->consume(QUES);
             isOptional = true;
         }
         if (p->is(DOT)) {
             p->consume(DOT);
             auto name = p->name();
-            if (p->is(LPAREN)) {
+            if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
                 auto res = new MethodCall;
                 res->isOptional = isOptional;
                 res->scope = lhs;
                 res->name = *name;
+                if(p->is(LT)){
+                    res->typeArgs = p->generics();
+                }    
                 p->consume(LPAREN);
                 if (!p->is(RPAREN)) {
                     res->args = p->exprList();

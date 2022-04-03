@@ -26,21 +26,29 @@ IfStmt *parseIf(Parser *p) {
     return res;
 }
 
+bool isForEach(Parser* p){
+    int pos = p->pos;
+    if(p->is({VAR, LET, CONST_KW})) pos++;
+    if(!p->tokens[pos++]->is(IDENT)) return false;
+    return p->tokens[pos]->is(COLON);
+}
+
 Statement *parseFor(Parser *p) {
     p->consume(FOR);
     p->consume(LPAREN);
     VarDeclExpr *var;
-    bool normalFor = true;
-    if (p->is({VAR, LET, CONST_KW})) {
+    bool normalFor;
+    if (isForEach(p)) {
+        var = new VarDeclExpr;
+        if(p->is({VAR, LET, CONST_KW})) p->pop();
+        auto f = new Fragment;
+        f->name = *p->name();
+        var->list.push_back(f);
+        normalFor = false;
+    }else{
         var = p->parseVarDeclExpr();
-        if (p->is(SEMI)) {
-            //simple for
-            normalFor = true;
-        } else {
-            //foreach
-            normalFor = false;
-        }
-    }
+        normalFor = true;
+    }    
 
     if (normalFor) {
         p->consume(SEMI);
@@ -105,18 +113,17 @@ CatchStmt parseCatch(Parser *p) {
 
 Statement *Parser::parseStmt() {
     log("parseStmt " + *first()->value);
-    Token t = *first();
-    if (t.is(IF_KW)) {
+    if (is(IF_KW)) {
         return parseIf(this);
-    } else if (t.is(FOR)) {
+    } else if (is(FOR)) {
         return parseFor(this);
-    } else if (t.is(WHILE)) {
+    } else if (is(WHILE)) {
         return parseWhile(this);
-    } else if (t.is(DO)) {
+    } else if (is(DO)) {
         return parseDoWhile(this);
-    } else if (t.is(LBRACE)) {
+    } else if (is(LBRACE)) {
         return parseBlock();
-    } else if (t.is(RETURN)) {
+    } else if (is(RETURN)) {
         auto ret = new ReturnStmt;
         consume(RETURN);
         if (!is(SEMI)) {
@@ -124,7 +131,7 @@ Statement *Parser::parseStmt() {
         }
         consume(SEMI);
         return ret;
-    } else if (t.is(CONTINUE)) {
+    } else if (is(CONTINUE)) {
         auto ret = new ContinueStmt;
         consume(CONTINUE);
         if (!is(SEMI)) {
@@ -132,15 +139,15 @@ Statement *Parser::parseStmt() {
         }
         consume(SEMI);
         return ret;
-    } else if (t.is(BREAK)) {
+    } else if (is(BREAK)) {
         auto ret = new BreakStmt;
         consume(BREAK);
-        if (!first()->is(SEMI)) {
+        if (!is(SEMI)) {
             ret->label = name();
         }
         consume(SEMI);
         return ret;
-    } else if (t.is(TRY)) {
+    } else if (is(TRY)) {
         auto res = new TryStmt;
         consume(TRY);
         res->block = parseBlock();
@@ -148,13 +155,13 @@ Statement *Parser::parseStmt() {
             res->catches.push_back(parseCatch(this));
         }
         return res;
-    } else if (t.is(THROW)) {
+    } else if (is(THROW)) {
         auto res = new ThrowStmt;
         consume(THROW);
         res->expr = parseExpr();
         consume(SEMI);
         return res;
-    } else if (t.is({VAR, LET, CONST_KW})) {
+    } else if (isVarDecl()) {
         return parseVarDecl();
     } else {
         Expression *e = parseExpr();
@@ -162,6 +169,6 @@ Statement *Parser::parseStmt() {
             consume(SEMI);
             return new ExprStmt(e);
         }
-        throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(t.line));
+        throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(first()->line));
     }
 }

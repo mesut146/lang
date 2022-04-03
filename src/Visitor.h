@@ -19,6 +19,8 @@ public:
     virtual R visitFieldDecl(FieldDecl*, A arg) = 0;
     
     virtual R visitMethod(Method*, A arg) = 0;
+    
+    virtual R visitParam(Param*, A arg) = 0;
 
     virtual R visitBlock(Block *, A arg) = 0;
 
@@ -31,6 +33,8 @@ public:
     virtual R visitQName(QName* qn, A arg) = 0;
 
     virtual R visitType(Type* type, A arg) = 0;
+    
+    virtual R visitArrowType(ArrowType* type, A arg) = 0;
     
     virtual R visitVarDecl(VarDecl *, A arg) = 0;
 
@@ -53,6 +57,8 @@ public:
     virtual R visitArrayAccess(ArrayAccess *, A arg) = 0;
 
     virtual R visitArrayExpr(ArrayExpr *, A arg) = 0;
+    
+    virtual R visitArrayCreation(ArrayCreation *, A arg) = 0;
 
     virtual R visitParExpr(ParExpr *, A arg) = 0;
 

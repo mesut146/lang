@@ -1,0 +1,67 @@
+class List<T>{
+  let arr: T[10];
+  let count: int = 0;
+
+  func expand(max: int){
+    if(arr.length < max){
+      let tmp: T[max];
+      Array.copy(arr, 0, tmp, 0, count);
+      arr = tmp;
+    }
+  }
+
+  func add(e: T){
+    expand(count + 1);
+    arr[count++] = e;
+  }
+
+  func add(list: List<T>){
+    for(let e : list){
+        add(e);
+    }
+  }
+
+  func add(arr: T[]){
+    for(let e : arr){
+        add(e);
+    }
+  }
+
+  func get(pos: int): T{
+    if(pos >= count) throw Exception("index out of bounds");
+    return arr[pos];
+  }
+
+  func clear(){
+    //todo dealloc
+    count = 0;
+  }
+
+  func size(): int{
+    return count;
+  }
+
+  func indexOf(e: T): int{
+    for(let i=0;i < count;i++){
+      if(arr[i] == e) return i;
+    }
+    return -1;
+  }
+
+  func filter(f: func<bool>(T)): List<T>{
+    let res = List<T>();
+    for(let e : this){
+      if(f(e)) res.add(e);
+    }
+    return res;
+  }
+
+  func map<R>(f: func<R>(T)): List<R>{
+    let res = List<R>{arr: T[count], count: 0};
+    for(let e : this){
+      res.add(f(e));
+    }
+    return res;
+  }
+  
+}

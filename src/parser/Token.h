@@ -8,6 +8,7 @@ enum TokenType {
     CLASS,
     ENUM,
     INTERFACE,
+    STATIC,
     VOID,
     CHAR,
     BYTE,

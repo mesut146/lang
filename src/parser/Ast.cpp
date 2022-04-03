@@ -46,6 +46,10 @@ std::string ImportStmt::print() {
     return s;
 }
 
+void* BaseDecl::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitBaseDecl(this, arg);
+}
+
 std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
@@ -110,8 +114,8 @@ void* TypeDecl::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string Method::print() {
     std::string s;
-    s.append(type->print());
-    s.append(" ");
+    if(isStatic) s.append("static ");
+    s.append("func ");
     s.append(name);
     if (!typeArgs.empty()) {
         s.append("<");
@@ -121,12 +125,20 @@ std::string Method::print() {
     s.append("(");
     s.append(join(params, ", "));
     s.append(")");
+    if(type){
+        s.append(": ");
+        s.append(type->print());
+    }    
     if (body == nullptr) {
         s.append(";");
     } else {
         s.append(body->print());
     }
     return s;
+}
+
+void* Method::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitMethod(this, arg);
 }
 
 bool Name::isSimple(){ return false; }
@@ -173,6 +185,7 @@ void* VarDecl::accept(Visitor<void*, void*>* v, void* arg){
 
 std::string VarDeclExpr::print() {
     std::string s;
+    if(isStatic) s.append("static ");
     s.append(isVar ? "var" : (isConst ? "const" : "let"));
     s.append(" ");
     s.append(join(list, ", "));
@@ -217,9 +230,9 @@ void* Block::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitBlock(this, arg);
 }
 
-std::string printDims(Type *type) {
+std::string printDims(std::vector<Expression*> &dims) {
     std::string s;
-    for (Expression* e : type->dims) {
+    for (Expression* e : dims) {
         s.append("[");
         if(e != nullptr){
           s.append(e->print());
@@ -229,14 +242,31 @@ std::string printDims(Type *type) {
     return s;
 }
 
+void* ArrowType::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitArrowType(this, arg);
+}
+
+std::string ArrowType::print() {
+    std::string s;
+    s.append("func");
+    if(type) s.append("<").append(type->print()).append(">");
+    s.append("(");
+    s.append(join(params, ", "));
+    s.append(")");
+    return s;
+}
+
 void* Type::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitType(this, arg);
 }
 
 std::string Type::print() {
     std::string s;
+    if(arrow){
+        s.append(arrow->print());
+    }else{
     if(scope){
-        s.append(scope->print());
+        s.append(scope->print()).append(".");
     }    
     s.append(name);
     if (!typeArgs.empty()) {
@@ -244,7 +274,8 @@ std::string Type::print() {
         s.append(join(typeArgs, ", "));
         s.append(">");
     }
-    s.append(printDims(this));
+    }
+    s.append(printDims(dims));
     if(isNullable){
       s.append("?");
     }
@@ -253,17 +284,23 @@ std::string Type::print() {
 
 std::string Param::print() {
     std::string s;
-    s.append(type->print());
-    s.append(" ");
     s.append(name);
     if (isOptional) {
         s.append("?");
+    }
+    if(type){
+        s.append(": ");
+        s.append(type->print());
     }
     if (defVal != nullptr) {
         s.append(" = ");
         s.append(defVal->print());
     }
     return s;
+}
+
+void* Param::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitParam(this, arg);
 }
 
 std::string ArrowFunction::print() {
@@ -318,7 +355,7 @@ void* AnonyObjExpr::accept(Visitor<void*, void*>* v, void* arg){
 }
 
 std::string Entry::print() {
-    return key->print() + ":" + value->print();
+    return key->print() + ": " + value->print();
 }
 
 
@@ -362,7 +399,7 @@ std::string ForEach::print() {
     std::string s;
     s.append("for(");
     s.append(decl->print());
-    s.append(":");
+    s.append(" : ");
     s.append(expr->print());
     s.append(")\n");
     s.append(body->print());
@@ -417,14 +454,18 @@ void* FieldAccess::accept(Visitor<void*, void*>* v, void* arg){
 }
 
 std::string MethodCall::print() {
-    if (scope == nullptr) {
-        return name + "(" + join(args, ", ") + ")";
-    } else {
+    std::string s;
+    if (scope) {
+        s.append(scope->print());
         if (isOptional) {
-            return scope->print() + "?." + name + "(" + join(args, ", ") + ")";
+            s.append("?");
         }
-        return scope->print() + "." + name + "(" + join(args, ", ") + ")";
+        s.append(".");
     }
+    s.append(name);
+    if(!typeArgs.empty()) s.append("<" + join(typeArgs, ", ") + ">");
+    s.append("(" + join(args, ", ") + ")");
+    return s;
 }
 
 void* MethodCall::accept(Visitor<void*, void*>* v, void* arg){
@@ -448,6 +489,14 @@ std::string ArrayExpr::print() {
 
 void* ArrayExpr::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitArrayExpr(this, arg);
+}
+
+std::string ArrayCreation::print() {
+    return type->print() + printDims(dims);
+}
+
+void* ArrayCreation::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitArrayCreation(this, arg);
 }
 
 std::string Ternary::print() {

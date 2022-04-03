@@ -27,7 +27,7 @@ public:
 
     virtual R visitBlock(Block *, A arg) { return nullptr; }
 
-    virtual R visitExprStmt(ExprStmt *, A arg) { return nullptr; }
+    virtual R visitExprStmt(ExprStmt *es, A arg) { return es->expr->accept(this, arg); }
 
     virtual R visitLiteral(Literal* lit, A arg) { return nullptr; }
 
@@ -36,6 +36,8 @@ public:
     virtual R visitQName(QName* qn, A arg) { return nullptr; }
 
     virtual R visitType(Type* type, A arg) { return nullptr; }
+    
+    virtual R visitArrowType(ArrowType* type, A arg) { return nullptr; }
     
     virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 
@@ -61,6 +63,8 @@ public:
     virtual R visitArrayAccess(ArrayAccess *, A arg) { return nullptr; }
 
     virtual R visitArrayExpr(ArrayExpr *, A arg) { return nullptr; }
+    
+    virtual R visitArrayCreation(ArrayCreation *, A arg) { return nullptr; }
 
     virtual R visitParExpr(ParExpr *, A arg) { return nullptr; }
 

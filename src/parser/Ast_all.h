@@ -15,6 +15,7 @@ class Name;
 class SimpleName;
 class QName;
 class Type;
+class ArrowType;
 class SimpleType;
 class RefType;
 
@@ -32,6 +33,7 @@ class MethodCall;
 class FieldAccess;
 class ArrayAccess;
 class ArrayExpr;
+class ArrayCreation;
 class ExprStmt;
 class ParExpr;
 class ObjExpr;

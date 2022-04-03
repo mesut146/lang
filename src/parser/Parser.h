@@ -10,8 +10,9 @@ class Parser {
 public:
     Lexer lexer;
     std::vector<Token *> tokens;
-    std::vector<Token*> backups;
-    bool backup = false;
+    int pos = 0;
+    int mark = 0;
+    bool isMarked = false;
 
     Parser(Lexer &lexer) : lexer(lexer) {
         fill();
@@ -29,17 +30,14 @@ public:
     }
 
     Token *pop() {
-        Token *t = tokens[0];
-        tokens.erase(tokens.begin());
-        if(backup){
-          backups.push_back(t);
-        }
+        Token *t = tokens[pos];
+        pos++;
         return t;
     }
 
     Token *first() {
         if (tokens.size() == 0) return nullptr;
-        return tokens[0];
+        return tokens[pos];
     }
     
     bool is(TokenType t) {
@@ -49,23 +47,30 @@ public:
     bool is(std::initializer_list<TokenType> t) {
         return first()->is(t);
     }
+    
+    bool is(std::initializer_list<TokenType> t1, std::initializer_list<TokenType> t2) {
+        return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
+    }
 
     Token *consume(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return t;
-        print_stacktrace();
+        if(!isMarked)
+            print_stacktrace();
         throw std::string("unexpected token ") + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt);
     }
     
-    void discard(){
-      backup = false;
-      backups.clear();
+    void backup(){
+        if(isMarked) throw std::string("alredy marked");
+        isMarked = true;
+        mark = pos;
     }
     
     void restore(){
-      tokens.insert(tokens.begin(), backups.begin(), backups.end());
-      discard();
-    }
+        if(!isMarked) throw std::string("not marked");
+        pos = mark;
+        isMarked = false;
+    }    
 
     std::string *name() {
         if (is({VAR, LET})) {
@@ -76,7 +81,7 @@ public:
 
     std::string *strLit();
 
-    Unit parseUnit();
+    Unit* parseUnit();
 
     ImportStmt parseImport();
 

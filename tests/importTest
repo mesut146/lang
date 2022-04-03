@@ -1,0 +1,4 @@
+import * from "core/string"
+import * from "core/*"
+
+let s: string;

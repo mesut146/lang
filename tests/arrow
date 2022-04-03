@@ -1,0 +1,17 @@
+let add = (a: int, b: int) => a + b;
+let div = (a: int, b: int) => {
+    if(b == 0){
+        throw err;
+    }
+    return a / b;
+};
+
+let s = add(5, 6);
+
+func apply(x: int, f: func<int>(int, long), y: int){
+  return f(x, y);
+}
+
+apply(7, (a, b) => a - b, 3);
+
+let arr = func<void>()[5];

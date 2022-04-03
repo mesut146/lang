@@ -62,7 +62,7 @@ ImportStmt Parser::parseImport() {
 
 // ("class" | "interface") name typeArgs? (":")? "{" member* "}"
 TypeDecl *Parser::parseTypeDecl() {
-    auto *res = new TypeDecl;
+    auto res = new TypeDecl;
     res->isInterface = pop()->is(INTERFACE);
     res->name = *name();
     if (is(LT)) {
@@ -81,11 +81,13 @@ TypeDecl *Parser::parseTypeDecl() {
     //members
     while (!is(RBRACE)) {
         if (is(CLASS)) {
-            res->types.push_back(parseTypeDecl());
-            (*res->types.end())->parent = res;
+            auto td = parseTypeDecl();
+            td->parent = res;
+            res->types.push_back(td);
         } else if (is(ENUM)) {
-            res->types.push_back(parseEnumDecl());
-            (*res->types.end())->parent = res;
+            auto td = parseEnumDecl();
+            td->parent = res;
+            res->types.push_back(td);
         }else if (isVarDecl()) {
             res->fields.push_back(parseVarDecl());
         } else if (isMethod()) {
@@ -139,33 +141,35 @@ EnumDecl *Parser::parseEnumDecl() {
 }
 
 bool Parser::isVarDecl(){
-     return is({VAR, LET, CONST_KW});
+    if(is({STATIC}, {VAR, LET, CONST_KW})) return true;
+    return is({VAR, LET, CONST_KW});
 }
 
 bool Parser::isMethod(){
-  return is(FUNC);
+    if(is({STATIC}, {FUNC})) return true;    
+    return is(FUNC);
 }
 
-Unit Parser::parseUnit() {
-    Unit res;
+Unit* Parser::parseUnit() {
+    auto res = new Unit;
 
     while (first() != nullptr && is(IMPORT)) {
-        res.imports.push_back(parseImport());
+        res->imports.push_back(parseImport());
     }
 
     while (first() != nullptr) {
         //top level decl
         if (is({CLASS, INTERFACE})) {
-            res.types.push_back(parseTypeDecl());
+            res->types.push_back(parseTypeDecl());
         } else if (is(ENUM)) {
-            res.types.push_back(parseEnumDecl());
+            res->types.push_back(parseEnumDecl());
         } else if (isVarDecl()) {
-            res.stmts.push_back(parseVarDecl());
+            res->stmts.push_back(parseVarDecl());
         } else if (isMethod()) {
-            res.methods.push_back(parseMethod());
+            res->methods.push_back(parseMethod());
         } else {
             auto stmt = parseStmt();
-            res.stmts.push_back(stmt);
+            res->stmts.push_back(stmt);
         }
     }
     return res;
@@ -193,6 +197,10 @@ Param* Parser::parseParam(Method* m) {
 //(type | void) name generics? "(" params* ")" (block | ";")
 Method *Parser::parseMethod() {
     Method *res = new Method;
+    if(is(STATIC)){
+        consume(STATIC);
+        res->isStatic = true;
+    }    
     consume(FUNC);
     res->name = *name();
     if (is(LT)) {
@@ -209,6 +217,14 @@ Method *Parser::parseMethod() {
         }
     }
     consume(RPAREN);
+    if(is(COLON)){
+        consume(COLON);
+        res->type = parseType();
+    }else{
+        //default is void
+        res->type = new Type;
+        res->type->name = "void";
+    }    
     if (is(SEMI)) {
         //interface
         consume(SEMI);
@@ -244,6 +260,10 @@ VarDecl *Parser::parseVarDecl() {
 //varType varDeclFrag ("," varDeclFrag)*;
 VarDeclExpr *Parser::parseVarDeclExpr() {
     auto res = new VarDeclExpr;
+    if(is(STATIC)){
+        consume(STATIC);
+        res->isStatic = true;
+    }
     if(is(VAR)) res->isVar = true;
     else if(is(LET)) res->isLet = true;
     else if(is(CONST_KW)) res->isConst = true;

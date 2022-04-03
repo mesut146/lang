@@ -18,16 +18,18 @@ void lex(std::string &path) {
 void parse(std::string &path) {
         Lexer lexer(path);
         Parser parser(lexer);
-        Unit u = parser.parseUnit();
-        std::cout << u.print() << "\n";
+        Unit* u = parser.parseUnit();
+        std::cout << u->print() << "\n";
 }
 
 void resolveTest(){
   //std::string path="../tests/resolve1";
-  std::string path="../tests/resolveClass";
+  //std::string path="../tests/resolveClass";
+  std::string path="../tests/arrow";
+  //std::string path="../tests/core/List";
   Lexer lexer(path);
   Parser parser(lexer);
-  Unit u = parser.parseUnit();
+  Unit* u = parser.parseUnit();
   Resolver r(u);
   r.resolveAll();
 }  
@@ -36,7 +38,7 @@ int main(int argc, char **args) {
   try{
     if (argc > 1) {
       if(strcmp(args[1], "parse") == 0){
-        debug = false;
+        debug = true;
         auto path = std::string(args[2]);
         parse(path);
       }
