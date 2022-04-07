@@ -1,4 +1,5 @@
-import * from "core/string"
-import * from "core/*"
+import arrow
 
-let s: string;
+add(4, 5);
+
+arrow.div(10, 2);

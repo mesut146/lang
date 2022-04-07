@@ -5,6 +5,29 @@
 #include <map>
 #include <memory>
 
+class Symbol;
+class RType;
+class Resolver;
+
+class Symbol{
+public:
+    Method* m = nullptr;
+    Fragment* f = nullptr;
+    Param* prm = nullptr;
+    BaseDecl* decl = nullptr;
+    ImportStmt* imp = nullptr;
+    Resolver* resolver;
+    
+    Symbol(Method* m, Resolver* r): m(m), resolver(r){}
+    Symbol(Fragment* f, Resolver* r): f(f), resolver(r){}
+    Symbol(Param* prm, Resolver* r): prm(prm), resolver(r){}
+    Symbol(BaseDecl* bd, Resolver* r): decl(bd), resolver(r){}
+    Symbol(ImportStmt* imp): imp(imp){}
+    
+    template <class T>
+    RType* resolve(T e){ e->accept(resolver, nullptr); }
+};
+
 class RType{
 public:
   Unit* unit = nullptr;
@@ -12,6 +35,9 @@ public:
   BaseDecl* targetDecl = nullptr;
   Method* targetMethod = nullptr;
   Fragment* targetVar = nullptr;
+  
+  RType(){}
+  RType(Type* t): type(t){}
 };
 
 class Scope{
@@ -46,10 +72,15 @@ public:
      BaseDecl* curDecl = nullptr;
      Method* curMethod = nullptr;
      ArrowFunction* arrow = nullptr;
-     //static std::map<Unit*, Resolver> resolverMap;
+     static std::map<std::string, Resolver*> resolverMap;
+     static std::string root;
 
      Resolver(Unit* unit);
      virtual ~Resolver();
+     
+     static Resolver* getResolver(std::string path);
+     void other(std::string name, std::vector<Symbol> res);
+     std::vector<Symbol> find(std::string& name);
      
      void dump();
      
@@ -59,16 +90,16 @@ public:
      void init();
      void resolveAll();
      
-     RType* param(std::string name);
-     RType* field(std::string name);
-     RType* local(std::string name);
-     Method* method(std::string name);
+     void param(std::string name, std::vector<Symbol> res);
+     void field(std::string name, std::vector<Symbol> res);
+     void local(std::string name, std::vector<Symbol> res);
+     void method(std::string name, std::vector<Symbol> res);
      RType* find(Type* type, BaseDecl* bd);
      RType* resolveType(Type* type);
      void* visitType(Type* type, void* arg);
      void* visitVarDeclExpr(VarDeclExpr* vd, void* arg);
      void* visitVarDecl(VarDecl* vd, void* arg);
-     RType* resolveFrag(Fragment* f);
+     void* visitFragment(Fragment* f, void* arg);
      
      void* visitTypeDecl(TypeDecl* td, void* arg);
      void* visitEnumDecl(EnumDecl* ed, void* arg);
@@ -90,5 +121,6 @@ public:
      void* visitObjExpr(ObjExpr* o, void* arg);
      void* visitFieldAccess(FieldAccess* fa, void* arg);
      void* visitArrayCreation(ArrayCreation *ac, void* arg);
+     void* visitAsExpr(AsExpr* as, void* arg);
      
 };

@@ -2,19 +2,19 @@
 #include <map>
 
 TokenType kw(std::string &s) {
-    if (s == "class")
-        return CLASS;
-    if (s == "enum")
-        return ENUM;
-    if (s == "interface")
-        return INTERFACE;
+    if (s == "class")  return CLASS;
+    if (s == "enum") return ENUM;
+    if (s == "interface") return INTERFACE;
     if(s == "static") return STATIC;
-    if (s == "bool")
-        return BOOLEAN;
-    if (s == "true")
-        return TRUE;
+    if (s == "bool") return BOOLEAN;
+    if (s == "true") return TRUE;
     if (s == "false")
         return FALSE;
+    if(s == "i8") return I8;
+    if(s == "i16") return I16;
+    if(s == "i32") return I32;
+    if(s == "f32") return F32;
+    if(s == "f64") return F64;
     if (s == "long")
         return LONG;
     if (s == "int")

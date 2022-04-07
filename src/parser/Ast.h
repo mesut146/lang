@@ -18,7 +18,7 @@ public:
     std::string print();
 };
 
-class NamedImport {
+class ImportAlias {
 public:
     std::string name;
     std::string *as = nullptr;
@@ -26,13 +26,23 @@ public:
     std::string print();
 };
 
+class NormalImport{
+public:
+    Name* path;
+    std::string* as = nullptr;
+};
+
+class SymbolImport{
+public:
+    Name* path;
+    std::vector<ImportAlias> entries;
+};
+
 class ImportStmt {
 public:
-    std::vector<NamedImport> namedImports;
-    std::string from;
-    bool isStar;
-    std::string *as = nullptr;
-
+    NormalImport* normal = nullptr;
+    SymbolImport* sym = nullptr;
+    
     std::string print();
 };
 
@@ -139,6 +149,7 @@ public:
 class SimpleName : public Name {
 public:
     std::string name;
+    void* parent = nullptr;
 
     SimpleName(std::string name);
     bool isSimple() override;
@@ -253,6 +264,7 @@ public:
     VarDecl* vd = nullptr;
 
     std::string print();
+    void* accept(Visitor<void*, void*>* v, void* arg);
 };
 
 class VarDecl : public Statement {
@@ -298,6 +310,15 @@ public:
     Expression *left;
     Expression *right;
     std::string op;
+
+    std::string print() override;
+    void* accept(Visitor<void*, void*>* v, void* arg) override;
+};
+
+class AsExpr : public Expression {
+public:
+    Expression *expr;
+    Type *type;
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -381,7 +402,7 @@ public:
 
 class ArrowFunction : public Expression {
 public:
-    std::vector<Param> params;
+    std::vector<Param*> params;
     Block *block = nullptr;
     Expression *expr = nullptr;
 

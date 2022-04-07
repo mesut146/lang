@@ -9,6 +9,12 @@ enum TokenType {
     ENUM,
     INTERFACE,
     STATIC,
+    I8,  //byte
+    I16, //short
+    I32, //int
+    I64, //long
+    F32, //float
+    F64, //double
     VOID,
     CHAR,
     BYTE,

@@ -42,6 +42,8 @@ public:
     virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 
     virtual R visitVarDeclExpr(VarDeclExpr *, A arg) { return nullptr; }
+    
+    virtual R visitFragment(Fragment *, A arg) { return nullptr; }
 
     virtual R visitUnary(Unary *, A arg) { return nullptr; }
 

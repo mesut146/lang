@@ -48,30 +48,13 @@ bool isTypeArg(Parser* p, TokenType next){
 
 //name ("." name)*
 Name *Parser::qname() {
-    auto res = new SimpleName(*name());
-    if (is(DOT)) {
-        Name *cur = res;
-        while (is(DOT)) {
-            consume(DOT);
-            auto *tmp = new QName(cur, *name());
-            cur = tmp;
-        }
-        return cur;
-    } else {
-        return res;
+    Name* res = new SimpleName(*name());
+    while (is({DOT}, {IDENT})) {
+        consume(DOT);
+        res = new QName(res, *name());
     }
-}
-
-/*Type* Parser::varType(){
-  if(is({VAR, LET})){
-    auto res = new Type;
-    res->name = new SimpleName(*pop()->value);
     return res;
-  }
-  else {
-    return parseType();
-  }
-}*/
+}
 
 Type *Parser::refType(){
   Type *res = new Type;
@@ -211,7 +194,10 @@ Expression *PRIM(Parser *p) {
         res->expr = p->parseExpr();
         p->consume(RPAREN);
         return res;
-    } else if (isLit(*p->first())) {
+    }else if(p->is({IDENT}, {ARROW})){
+        return parseArrow(p);
+    }
+    else if (isLit(*p->first())) {
         return parseLit(p);
     } else if (isObj(p)) {
             std::cout << "ObjExpr\n";
@@ -328,9 +314,6 @@ Expression *PRIM(Parser *p) {
 //PRIM (dot name ('(' ')')? | [ E ])*
 Expression *PRIM2(Parser *p) {
     Expression *lhs = PRIM(p);
-    if(lhs->print() == "arr2"){
-        std::cout << "arr2\n";
-    }    
     while (p->is({DOT, LBRACKET}) || p->is({QUES}, {DOT, LBRACKET})) {
         bool isOptional = false;
         if (p->is({QUES}, {DOT, LBRACKET})) {
@@ -374,10 +357,22 @@ Expression *PRIM2(Parser *p) {
     return lhs;
 }
 
+//expr ("as" type)?
+Expression* asExpr(Parser* p){
+    Expression *lhs = PRIM2(p);
+    if (p->is(AS)) {
+        auto res = new AsExpr;
+        res->expr = lhs;
+        p->consume(AS);
+        res->type = p->parseType();
+        lhs = res;
+    }
+    return lhs;
+}
 
 //expr14 ("++" | "--")* #post
 Expression *expr13(Parser *p) {
-    Expression *lhs = PRIM2(p);
+    Expression *lhs = asExpr(p);
     while (p->is({PLUSPLUS, MINUSMINUS})) {
         auto res = new Postfix;
         res->op = *p->pop()->value;
@@ -575,14 +570,18 @@ Expression *Parser::parseExpr() {
 //'(' params? ')' => (block | expr)
 ArrowFunction *parseArrow(Parser *p) {
     auto res = new ArrowFunction;
-    p->consume(LPAREN);
-    if (!p->is(RPAREN)) {
-        res->params.push_back(p->arrowParam(res));
-        while (p->is(COMMA)) {
-            p->consume(COMMA);
+    if(p->is(LPAREN)){
+        p->consume(LPAREN);
+        if (!p->is(RPAREN)) {
             res->params.push_back(p->arrowParam(res));
+            while (p->is(COMMA)) {
+                p->consume(COMMA);
+                res->params.push_back(p->arrowParam(res));
+            }
         }
-    }
+    }else{
+        res->params.push_back(p->arrowParam(res));
+    }    
     p->consume(RPAREN);
     p->consume(ARROW);
     if (p->is(LBRACE)) {
@@ -594,22 +593,22 @@ ArrowFunction *parseArrow(Parser *p) {
 }
 
 //varType name "?"? ("=" expr)?
-Param Parser::arrowParam(ArrowFunction* af) {
-    Param res;
-    res.arrow = af;
-    res.name = *name();
-    log("param = " + res.name);
+Param* Parser::arrowParam(ArrowFunction* af) {
+    auto res = new Param;
+    res->arrow = af;
+    res->name = *name();
+    log("param = " + res->name);
     if(is(COLON)){
         consume(COLON);
-        res.type = parseType();
+        res->type = parseType();
     }    
     if (is(QUES)) {
         consume(QUES);
-        res.isOptional = true;
+        res->isOptional = true;
     }
     else if (is(EQ)) {
         consume(EQ);
-        res.defVal = parseExpr();
+        res->defVal = parseExpr();
     }
     return res;
 }

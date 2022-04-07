@@ -12,4 +12,10 @@ class Array{
     }
   }
 
+  static func max<T>(arr: T[]){
+    let res = int.max;
+    for(let x : arr) res = int.max(res, x);
+    return res;
+  }
+
 }

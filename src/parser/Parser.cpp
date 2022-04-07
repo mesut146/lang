@@ -7,8 +7,8 @@ std::string *Parser::strLit() {
 }
 
 //name ("as" name)?;
-NamedImport namedImport(Parser *p) {
-    NamedImport res;
+ImportAlias aliased(Parser *p) {
+    ImportAlias res;
     res.name = *p->name();
     if (p->is(AS)) {
         p->consume(AS);
@@ -23,23 +23,27 @@ ImportStmt Parser::parseImport() {
     log("parseImport");
     ImportStmt res;
     consume(IMPORT);
-    if (is(STAR)) {
-        consume(STAR);
-        res.isStar = true;
-        if (is(AS)) {
-            consume(AS);
-            res.as = name();
-        }
-    } else {
-        res.isStar = false;
-        res.namedImports.push_back(namedImport(this));
+    auto path = qname();
+    if (is(LBRACE)) {
+        auto sym = new SymbolImport;
+        sym->path = path;
+        consume(LBRACE);
+        sym->entries.push_back(aliased(this));
         while (is(COMMA)) {
             consume(COMMA);
-            res.namedImports.push_back(namedImport(this));
+            sym->entries.push_back(aliased(this));
         }
+        consume(RBRACE);
+        res.sym = sym;
+    } else {
+        auto normal = new NormalImport;
+        normal->path = path;
+        if (is(AS)) {
+            consume(AS);
+            normal->as = name();
+        }
+        res.normal = normal;
     }
-    consume(FROM);
-    res.from = *strLit();
     return res;
 }
 

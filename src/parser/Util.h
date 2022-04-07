@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-static bool debug = true;
+static bool debug = false;
 
 
 template<class T>

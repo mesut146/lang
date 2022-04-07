@@ -1,17 +1,30 @@
 let add = (a: int, b: int) => a + b;
 let div = (a: int, b: int) => {
     if(b == 0){
-        throw err;
+        throw "division by zero";
     }
     return a / b;
 };
 
 let s = add(5, 6);
 
-func apply(x: int, f: func<int>(int, long), y: int){
+func apply(f: func<int>(int, long), x: int, y: int){
   return f(x, y);
 }
 
-apply(7, (a, b) => a - b, 3);
+apply((a, b) => a - b, 7, 3);
 
-let arr = func<void>()[5];
+//let arr = func<void>()[5];
+
+
+class A{
+
+  func test(p: byte){}
+
+  func a(){
+    let test = (p: int) => {};
+    test(5 as int);
+    test(5 as byte);
+  }
+
+}

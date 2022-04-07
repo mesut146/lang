@@ -21,8 +21,8 @@ std::string Unit::print() {
     return s;
 }
 
-std::string NamedImport::print() {
-    if (as != nullptr) {
+std::string ImportAlias::print() {
+    if (as) {
         return name + " as " + *as;
     } else {
         return name;
@@ -32,17 +32,17 @@ std::string NamedImport::print() {
 std::string ImportStmt::print() {
     std::string s;
     s.append("import ");
-    if (isStar) {
-        s.append("* ");
-        if (as != nullptr) {
-            s.append("as ").append(*as);
+    if (normal) {
+        s.append(normal->path->print());
+        if (normal->as) {
+            s.append("as ").append(*normal->as);
         }
     } else {
-        s.append(join(namedImports, ", "));
-    }
-
-    s.append(" from ");
-    s.append("\"").append(from).append("\"");
+        s.append(sym->path->print());
+        s.append(".{");
+        s.append(join(sym->entries, ", "));
+        s.append("}");
+   }
     return s;
 }
 
@@ -206,6 +206,10 @@ std::string Fragment::print() {
         s.append(" = ").append(rhs->print());
     }
     return s;
+}
+
+void* Fragment::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitFragment(this, arg);
 }
 
 std::string ExprStmt::print() {
@@ -416,6 +420,14 @@ std::string Infix::print() {
 
 void* Infix::accept(Visitor<void*, void*>* v, void* arg){
   return v->visitInfix(this, arg);
+}
+
+std::string AsExpr::print() {
+    return expr->print() + " as " + type->print();
+}
+
+void* AsExpr::accept(Visitor<void*, void*>* v, void* arg){
+  return v->visitAsExpr(this, arg);
 }
 
 std::string Assign::print() {

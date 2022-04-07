@@ -22,11 +22,16 @@ void parse(std::string &path) {
         std::cout << u->print() << "\n";
 }
 
+std::string Resolver::root;
+
 void resolveTest(){
+    debug = false;
   //std::string path="../tests/resolve1";
   //std::string path="../tests/resolveClass";
-  std::string path="../tests/arrow";
+  //std::string path="../tests/arrow";
+  std::string path="../tests/importTest";
   //std::string path="../tests/core/List";
+  Resolver::root = "../tests";
   Lexer lexer(path);
   Parser parser(lexer);
   Unit* u = parser.parseUnit();

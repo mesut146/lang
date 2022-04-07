@@ -39,13 +39,17 @@ public:
     virtual R visitVarDecl(VarDecl *, A arg) = 0;
 
     virtual R visitVarDeclExpr(VarDeclExpr *, A arg) = 0;
+    
+    virtual R visitFragment(Fragment *, A arg) = 0;
 
     virtual R visitUnary(Unary *, A arg) = 0;
 
     virtual R visitAssign(Assign *, A arg) = 0;
 
     virtual R visitInfix(Infix *, A arg) = 0;
-
+    
+    virtual R visitAsExpr(AsExpr *, A arg) = 0;
+    
     virtual R visitPostfix(Postfix *, A arg) = 0;
 
     virtual R visitTernary(Ternary *, A arg) = 0;
