@@ -83,7 +83,7 @@ public:
 
     Unit* parseUnit();
 
-    ImportStmt parseImport();
+    ImportStmt* parseImport();
 
     TypeDecl *parseTypeDecl();
 

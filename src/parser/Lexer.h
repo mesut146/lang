@@ -4,6 +4,7 @@
 #include <fstream>
 #include <map>
 #include <sstream>
+#include <system_error>
 
 class Lexer {
 public:
@@ -13,6 +14,7 @@ public:
 
     Lexer(const std::string &path) {
         std::fstream stream;
+        if(!stream) throw std::system_error(errno, std::system_category(), "failed to open "+path);
         stream.open(path, std::fstream::in);
         std::stringstream ss;
         ss << stream.rdbuf();

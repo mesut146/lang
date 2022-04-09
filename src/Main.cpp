@@ -30,13 +30,11 @@ void resolveTest(){
   //std::string path="../tests/resolveClass";
   //std::string path="../tests/arrow";
   std::string path="../tests/importTest";
+  //std::string path="../tests/a";
   //std::string path="../tests/core/List";
   Resolver::root = "../tests";
-  Lexer lexer(path);
-  Parser parser(lexer);
-  Unit* u = parser.parseUnit();
-  Resolver r(u);
-  r.resolveAll();
+  Resolver* r = Resolver::getResolver(path) ;
+  r->resolveAll();
 }  
 
 int main(int argc, char **args) {

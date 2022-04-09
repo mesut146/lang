@@ -9,7 +9,7 @@
 
 class Unit {
 public:
-    std::vector<ImportStmt> imports;
+    std::vector<ImportStmt*> imports;
     std::vector<BaseDecl *> types;
     std::vector<Method *> methods;
     std::vector<Statement *> stmts;

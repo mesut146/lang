@@ -22,7 +22,7 @@ public:
     Symbol(Fragment* f, Resolver* r): f(f), resolver(r){}
     Symbol(Param* prm, Resolver* r): prm(prm), resolver(r){}
     Symbol(BaseDecl* bd, Resolver* r): decl(bd), resolver(r){}
-    Symbol(ImportStmt* imp): imp(imp){}
+    Symbol(ImportStmt* imp, Resolver* r): imp(imp), resolver(r){}
     
     template <class T>
     RType* resolve(T e){ e->accept(resolver, nullptr); }
@@ -35,6 +35,8 @@ public:
   BaseDecl* targetDecl = nullptr;
   Method* targetMethod = nullptr;
   Fragment* targetVar = nullptr;
+  bool isImport = false;
+  std::vector<Symbol> arr;
   
   RType(){}
   RType(Type* t): type(t){}
@@ -48,15 +50,6 @@ public:
   void clear();
   Fragment* find(std::string& name);
 };
-
-/*class TypeScope{
-public:
-  std::vector<BaseDecl*> list;
-  
-  void add(BaseDecl* f);
-  void clear();
-  Fragment* find(std::string& name);
-};*/
 
 class Resolver : public BaseVisitor<void*, void*>{
 public:
@@ -72,6 +65,7 @@ public:
      BaseDecl* curDecl = nullptr;
      Method* curMethod = nullptr;
      ArrowFunction* arrow = nullptr;
+     bool fromOther = false;
      static std::map<std::string, Resolver*> resolverMap;
      static std::string root;
 
@@ -79,8 +73,8 @@ public:
      virtual ~Resolver();
      
      static Resolver* getResolver(std::string path);
-     void other(std::string name, std::vector<Symbol> res);
-     std::vector<Symbol> find(std::string& name);
+     void other(std::string name, std::vector<Symbol> &res);
+     std::vector<Symbol> find(std::string& name, bool checkOthers);
      
      void dump();
      
@@ -90,11 +84,12 @@ public:
      void init();
      void resolveAll();
      
-     void param(std::string name, std::vector<Symbol> res);
-     void field(std::string name, std::vector<Symbol> res);
-     void local(std::string name, std::vector<Symbol> res);
-     void method(std::string name, std::vector<Symbol> res);
+     void param(std::string name, std::vector<Symbol> &res);
+     void field(std::string name, std::vector<Symbol> &res);
+     void local(std::string name, std::vector<Symbol> &res);
+     void method(std::string name, std::vector<Symbol> &res);
      RType* find(Type* type, BaseDecl* bd);
+     
      RType* resolveType(Type* type);
      void* visitType(Type* type, void* arg);
      void* visitVarDeclExpr(VarDeclExpr* vd, void* arg);

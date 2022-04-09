@@ -19,9 +19,9 @@ ImportAlias aliased(Parser *p) {
 
 //"import" importName ("," importName)* "from" STRING_LIT
 //"import" "*" ("as" name)? "from" STRING_LIT
-ImportStmt Parser::parseImport() {
+ImportStmt* Parser::parseImport() {
     log("parseImport");
-    ImportStmt res;
+    auto res = new ImportStmt;
     consume(IMPORT);
     auto path = qname();
     if (is(LBRACE)) {
@@ -34,7 +34,7 @@ ImportStmt Parser::parseImport() {
             sym->entries.push_back(aliased(this));
         }
         consume(RBRACE);
-        res.sym = sym;
+        res->sym = sym;
     } else {
         auto normal = new NormalImport;
         normal->path = path;
@@ -42,7 +42,7 @@ ImportStmt Parser::parseImport() {
             consume(AS);
             normal->as = name();
         }
-        res.normal = normal;
+        res->normal = normal;
     }
     return res;
 }

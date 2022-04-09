@@ -3,3 +3,5 @@ import arrow
 add(4, 5);
 
 arrow.div(10, 2);
+
+let s = arrow.s;
