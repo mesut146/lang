@@ -1,6 +1,6 @@
+#include "Resolver.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
-#include "Resolver.h"
 #include <cstring>
 #include <iostream>
 
@@ -16,53 +16,50 @@ void lex(std::string &path) {
 }
 
 void parse(std::string &path) {
-        Lexer lexer(path);
-        Parser parser(lexer);
-        Unit* u = parser.parseUnit();
-        std::cout << u->print() << "\n";
+    log("parsing " + path);
+    Lexer lexer(path);
+    Parser parser(lexer);
+    Unit *u = parser.parseUnit();
+    std::cout << u->print() << "\n";
 }
 
 std::string Resolver::root;
 
-void resolveTest(){
+void resolveTest() {
     debug = false;
-  //std::string path="../tests/resolve1";
-  //std::string path="../tests/resolveClass";
-  //std::string path="../tests/arrow";
-  std::string path="../tests/importTest";
-  //std::string path="../tests/a";
-  //std::string path="../tests/core/List";
-  Resolver::root = "../tests";
-  Resolver* r = Resolver::getResolver(path) ;
-  r->resolveAll();
-}  
+    //std::string path="../tests/resolve1";
+    //std::string path="../tests/resolveClass";
+    //std::string path="../tests/arrow";
+    std::string path = "../tests/importTest";
+    //std::string path="../tests/a";
+    //std::string path="../tests/core/List";
+    Resolver::root = "../tests";
+    Resolver *r = Resolver::getResolver(path);
+    r->resolveAll();
+}
 
 int main(int argc, char **args) {
-  try{
-    if (argc > 1) {
-      if(strcmp(args[1], "parse") == 0){
-        debug = true;
-        auto path = std::string(args[2]);
-        parse(path);
-      }
-      else{
-            resolveTest();
-       }
-    } else {
-        debug = true;
-        std::string path;
-        path = "../tests/types";
-        //path = "../doc/join";
-        //std::string path("../tests/stmts");
-        //std::string path("../tests/exprs");
-        //lex(path);
-        parse(path);
+    try {
+        if (argc > 1) {
+            if (strcmp(args[1], "parse") == 0) {
+                debug = true;
+                auto path = std::string(args[2]);
+                parse(path);
+            } else {
+                resolveTest();
+            }
+        } else {
+            debug = true;
+            std::string path;
+            path = "../tests/types";
+            //path = "../doc/join";
+            //std::string path("../tests/stmts");
+            //std::string path("../tests/exprs");
+            //lex(path);
+            parse(path);
+        }
+    } catch (std::exception &e) {
+        std::cout << "err:" << e.what() << "\n";
     }
-    } catch (std::string s) {
-        std::cout << "err:" << s << "\n";
-        //print_stacktrace();
-    }catch(...){
-       print_stacktrace();
-     }
     return 0;
 }

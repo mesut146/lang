@@ -52,6 +52,7 @@ public:
     virtual R visitInfix(Infix *infix, A arg) {
       infix->left->accept(this, infix);
       infix->right->accept(this, infix);
+      return nullptr;
     }
 
     virtual R visitPostfix(Postfix *, A arg) { return nullptr; }

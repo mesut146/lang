@@ -2,7 +2,6 @@
 
 #include "Ast.h"
 #include "Lexer.h"
-#include "stacktrace.h"
 #include <cstdarg>
 #include <iostream>
 
@@ -14,7 +13,7 @@ public:
     int mark = 0;
     bool isMarked = false;
 
-    Parser(Lexer &lexer) : lexer(lexer) {
+    explicit Parser(Lexer &lexer) : lexer(lexer) {
         fill();
     }
 
@@ -36,7 +35,7 @@ public:
     }
 
     Token *first() {
-        if (tokens.size() == 0) return nullptr;
+        if (tokens.empty()) return nullptr;
         return tokens[pos];
     }
     
@@ -55,19 +54,20 @@ public:
     Token *consume(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return t;
-        if(!isMarked)
-            print_stacktrace();
-        throw std::string("unexpected token ") + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt);
+        if(!isMarked){
+
+        }
+        throw std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt));
     }
     
     void backup(){
-        if(isMarked) throw std::string("alredy marked");
+        if(isMarked) throw std::runtime_error("already marked");
         isMarked = true;
         mark = pos;
     }
     
     void restore(){
-        if(!isMarked) throw std::string("not marked");
+        if(!isMarked) throw std::runtime_error("not marked");
         pos = mark;
         isMarked = false;
     }    
@@ -89,7 +89,7 @@ public:
 
     EnumDecl *parseEnumDecl();
 
-    FieldDecl *parseFieldDecl();
+    //FieldDecl *parseFieldDecl();
 
     Method *parseMethod();
     bool isMethod();
@@ -107,14 +107,14 @@ public:
     std::vector<Expression *> exprList();
 
     Type *parseType();
-    Type* varType();
+    //Type* varType();
     Type* refType();
 
     std::vector<Type *> generics();
 
     Name *qname();
 
-    bool isPrim(Token &t);
+    static bool isPrim(Token &t);
 
     Statement *parseStmt();
 

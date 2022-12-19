@@ -6,7 +6,6 @@
 #include <vector>
 
 
-
 class Unit {
 public:
     std::vector<ImportStmt*> imports;
@@ -76,7 +75,7 @@ public:
 	std::vector<Param*> params;
 	int ordinal;
 	
-	bool isStruct() { params.size() > 0; }
+    bool isStruct() const { return !params.empty(); }
 	std::string print();
 };
 
@@ -142,8 +141,8 @@ public:
     std::vector<Type *> typeArgs;
     
     virtual bool isSimple();
-    virtual std::string print() = 0;
-    virtual void* accept(Visitor<void*, void*>* v, void* arg) override = 0;
+    std::string print() override = 0;
+    void* accept(Visitor<void*, void*>* v, void* arg) override = 0;
 };
 
 class SimpleName : public Name {
@@ -151,7 +150,8 @@ public:
     std::string name;
     void* parent = nullptr;
 
-    SimpleName(std::string name);
+    explicit SimpleName(std::string name);
+
     bool isSimple() override;
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -163,6 +163,7 @@ public:
     std::string name;
 
     QName(Name* scope, std::string name);
+
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
@@ -193,7 +194,7 @@ public:
     } 
     bool isVoid() { return print() == "void"; };
     bool isString() { return print() == "core/string"; }
-    bool isArray() { return !dims.empty(); }
+    bool isArray() const { return !dims.empty(); }
 
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
@@ -252,7 +253,7 @@ public:
     std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
     
-    ExprStmt(Expression *e) : expr(e) {}
+    explicit ExprStmt(Expression *e) : expr(e) {}
 };
 
 class Fragment {
@@ -361,7 +362,7 @@ public:
     std::string name;
     bool isOptional = false;
 
-    std::string print();
+    std::string print() override;
     void* accept(Visitor<void*, void*>* v, void* arg) override;
 };
 

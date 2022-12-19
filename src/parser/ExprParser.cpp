@@ -1,3 +1,5 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "misc-no-recursion"
 #include "Parser.h"
 #include "Util.h"
 
@@ -23,7 +25,7 @@ bool Parser::isPrim(Token &t) {
 }
 
 Literal *parseLit(Parser *p) {
-    Literal *res = new Literal;
+    auto *res = new Literal;
     Token t = *p->pop();
     res->val = *t.value;
     res->isFloat = t.is(FLOAT_LIT);
@@ -152,7 +154,7 @@ std::vector<Type *> Parser::generics() {
 
 Entry parseEntry(Parser *p) {
     //todo key not expr,lit,ident
-    Entry e;
+    Entry e{};
     e.key = p->parseExpr();
     p->consume(COLON);
     e.value = p->parseExpr();
@@ -217,7 +219,7 @@ Expression *PRIM(Parser *p) {
         if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
             auto res = new MethodCall;
             res->name = *id;
-            if(p->is(LT)){
+            if(p->is(LT)){//todo
                 res->typeArgs = p->generics();
             }    
             p->consume(LPAREN);
@@ -259,7 +261,7 @@ Expression *PRIM(Parser *p) {
         return res;
     }
     else {
-        throw std::string("invalid primary " + *p->first()->value + " line: " + std::to_string(p->first()->line));
+        throw std::runtime_error("invalid primary " + *p->first()->value + " line: " + std::to_string(p->first()->line));
     }
 }
 
@@ -537,7 +539,7 @@ Expression *expr2(Parser *p) {
 Expression *expr1(Parser *p) {
     Expression *lhs = expr2(p);
     if (p->is(QUES)) {
-        Ternary *t = new Ternary;
+        auto *t = new Ternary;
         t->cond = lhs;
         p->consume(QUES);
         t->thenExpr = p->parseExpr();
@@ -635,3 +637,5 @@ Param* Parser::arrowParam(ArrowFunction* af) {
     }
     return res;
 }*/
+
+#pragma clang diagnostic pop

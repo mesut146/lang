@@ -97,7 +97,7 @@ TypeDecl *Parser::parseTypeDecl() {
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
         }else{
-            throw std::string("invalid class member: " + *first()->value);
+            throw std::runtime_error("invalid class member: " + *first()->value);
         }
     }
     consume(RBRACE);
@@ -116,6 +116,7 @@ EnumEntry* parseEnumEntry(Parser* p){
         }
 		p->consume(RPAREN);
 	}
+    return res;
 }
 
 EnumDecl *Parser::parseEnumDecl() {
@@ -200,7 +201,7 @@ Param* Parser::parseParam(Method* m) {
 
 //(type | void) name generics? "(" params* ")" (block | ";")
 Method *Parser::parseMethod() {
-    Method *res = new Method;
+    auto *res = new Method;
     if(is(STATIC)){
         consume(STATIC);
         res->isStatic = true;

@@ -25,7 +25,9 @@ public:
     Symbol(ImportStmt* imp, Resolver* r): imp(imp), resolver(r){}
     
     template <class T>
-    RType* resolve(T e){ e->accept(resolver, nullptr); }
+    RType* resolve(T e){
+        return (RType*)e->accept(resolver, nullptr);
+    }
 };
 
 class RType{
@@ -38,8 +40,8 @@ public:
   bool isImport = false;
   std::vector<Symbol> arr;
   
-  RType(){}
-  RType(Type* t): type(t){}
+  RType()= default;
+  explicit RType(Type* t): type(t){}
 };
 
 class Scope{
@@ -69,11 +71,11 @@ public:
      static std::map<std::string, Resolver*> resolverMap;
      static std::string root;
 
-     Resolver(Unit* unit);
+     explicit Resolver(Unit* unit);
      virtual ~Resolver();
      
-     static Resolver* getResolver(std::string path);
-     void other(std::string name, std::vector<Symbol> &res);
+     static Resolver* getResolver(const std::string& path);
+     void other(std::string name, std::vector<Symbol> &res) const;
      std::vector<Symbol> find(std::string& name, bool checkOthers);
      
      void dump();
@@ -84,38 +86,38 @@ public:
      void init();
      void resolveAll();
      
-     void param(std::string name, std::vector<Symbol> &res);
-     void field(std::string name, std::vector<Symbol> &res);
+     void param(const std::string& name, std::vector<Symbol> &res);
+     void field(const std::string& name, std::vector<Symbol> &res);
      void local(std::string name, std::vector<Symbol> &res);
-     void method(std::string name, std::vector<Symbol> &res);
+     void method(const std::string& name, std::vector<Symbol> &res);
      RType* find(Type* type, BaseDecl* bd);
      
      RType* resolveType(Type* type);
-     void* visitType(Type* type, void* arg);
-     void* visitVarDeclExpr(VarDeclExpr* vd, void* arg);
-     void* visitVarDecl(VarDecl* vd, void* arg);
-     void* visitFragment(Fragment* f, void* arg);
+     void* visitType(Type* type, void* arg) override;
+     void* visitVarDeclExpr(VarDeclExpr* vd, void* arg) override;
+     void* visitVarDecl(VarDecl* vd, void* arg) override;
+     void* visitFragment(Fragment* f, void* arg) override;
      
-     void* visitTypeDecl(TypeDecl* td, void* arg);
-     void* visitEnumDecl(EnumDecl* ed, void* arg);
-     void* visitBaseDecl(BaseDecl* bd, void* arg);
+     void* visitTypeDecl(TypeDecl* td, void* arg) override;
+     void* visitEnumDecl(EnumDecl* ed, void* arg) override;
+     void* visitBaseDecl(BaseDecl* bd, void* arg) override;
      RType* visitCommon(BaseDecl* bd);
      
-     void* visitMethod(Method* m, void* arg);
-     void* visitParam(Param* p, void* arg);
-     void* visitArrowFunction(ArrowFunction* af, void* arg);
+     void* visitMethod(Method* m, void* arg) override;
+     void* visitParam(Param* p, void* arg) override;
+     void* visitArrowFunction(ArrowFunction* af, void* arg) override;
      
      RType* resolveScoped(Expression* expr);
 
-     void* visitLiteral(Literal* lit, void* arg) ;
-     void* visitInfix(Infix * infix, void* arg);
-     void* visitAssign(Assign *as, void* arg);
-     void* visitSimpleName(SimpleName *sn, void* arg);
-     void* visitQName(QName *sn, void* arg);
-     void* visitMethodCall(MethodCall *mc, void* arg);
-     void* visitObjExpr(ObjExpr* o, void* arg);
-     void* visitFieldAccess(FieldAccess* fa, void* arg);
-     void* visitArrayCreation(ArrayCreation *ac, void* arg);
-     void* visitAsExpr(AsExpr* as, void* arg);
+     void* visitLiteral(Literal* lit, void* arg) override ;
+     void* visitInfix(Infix * infix, void* arg) override;
+     void* visitAssign(Assign *as, void* arg) override;
+     void* visitSimpleName(SimpleName *sn, void* arg) override;
+     void* visitQName(QName *sn, void* arg) override;
+     void* visitMethodCall(MethodCall *mc, void* arg) override;
+     void* visitObjExpr(ObjExpr* o, void* arg) override;
+     void* visitFieldAccess(FieldAccess* fa, void* arg) override;
+     void* visitArrayCreation(ArrayCreation *ac, void* arg) override;
+     void* visitAsExpr(AsExpr* as, void* arg) override;
      
 };
