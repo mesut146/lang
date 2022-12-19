@@ -12,7 +12,7 @@ public:
     int pos = 0;
     int line = 1;
 
-    Lexer(const std::string &path) {
+    explicit Lexer(const std::string &path) {
         std::fstream stream;
         if(!stream) throw std::system_error(errno, std::system_category(), "failed to open "+path);
         stream.open(path, std::fstream::in);
@@ -31,7 +31,7 @@ public:
         return buf[pos++];
     }
 
-    std::string str(int a, int b) {
+    std::string str(int a, int b) const {
         return buf.substr(a, b - a);
     }
 

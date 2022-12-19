@@ -6,9 +6,20 @@
 #include <vector>
 
 
+class FieldDecl {
+public:
+    std::string name;
+    Type *type;
+    bool isOptional = false;
+
+    std::string print() const;
+
+    virtual void *accept(Visitor<void *, void *> *v, void *arg);
+};
+
 class Unit {
 public:
-    std::vector<ImportStmt*> imports;
+    std::vector<ImportStmt *> imports;
     std::vector<BaseDecl *> types;
     std::vector<Method *> methods;
     std::vector<Statement *> stmts;
@@ -25,67 +36,66 @@ public:
     std::string print();
 };
 
-class NormalImport{
+class NormalImport {
 public:
-    Name* path;
-    std::string* as = nullptr;
+    Name *path;
+    std::string *as = nullptr;
 };
 
-class SymbolImport{
+class SymbolImport {
 public:
-    Name* path;
+    Name *path;
     std::vector<ImportAlias> entries;
 };
 
 class ImportStmt {
 public:
-    NormalImport* normal = nullptr;
-    SymbolImport* sym = nullptr;
-    
+    NormalImport *normal = nullptr;
+    SymbolImport *sym = nullptr;
+
     std::string print();
 };
 
 class BaseDecl {
 public:
-	std::string name;
+    std::string name;
     bool isEnum = false;
-    BaseDecl* parent = nullptr;
+    BaseDecl *parent = nullptr;
     std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
-    
+
     virtual std::string print() = 0;
-    virtual void* accept(Visitor<void*, void*>* v, void* arg);
+    virtual void *accept(Visitor<void *, void *> *v, void *arg);
 };
 
 class TypeDecl : public BaseDecl {
 public:
-    
     bool isInterface;
     std::vector<Type *> typeArgs;
     std::vector<Type *> baseTypes;
-    std::vector<VarDecl *> fields;
+    std::vector<FieldDecl *> fields;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-class EnumEntry{
+class EnumEntry {
 public:
-	std::string name;
-	std::vector<Param*> params;
-	int ordinal;
-	
+    std::string name;
+    std::vector<Param *> params;
+    int ordinal;
+
     bool isStruct() const { return !params.empty(); }
-	std::string print();
+    std::string print();
 };
 
 class EnumDecl : public BaseDecl {
 public:
-    std::vector<EnumEntry*> cons;
+    std::vector<EnumEntry *> cons;
     std::vector<Type *> typeArgs;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Method {
@@ -94,12 +104,12 @@ public:
     Type *type = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
-    std::vector<Param*> params;
+    std::vector<Param *> params;
     Block *body = nullptr;
-    BaseDecl* parent= nullptr;
+    BaseDecl *parent = nullptr;
 
     std::string print();
-    void* accept(Visitor<void*, void*>* v, void* arg);
+    void *accept(Visitor<void *, void *> *v, void *arg);
 };
 
 class Param {
@@ -108,24 +118,24 @@ public:
     std::string name;
     bool isOptional = false;
     Expression *defVal = nullptr;
-    Method* method = nullptr;
-    ArrowFunction* arrow = nullptr;
+    Method *method = nullptr;
+    ArrowFunction *arrow = nullptr;
 
     std::string print();
-    void* accept(Visitor<void*, void*>* v, void* arg);
+    void *accept(Visitor<void *, void *> *v, void *arg);
 };
 
 class Expression {
 public:
     virtual std::string print() = 0;
-    
-    virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
+
+    virtual void *accept(Visitor<void *, void *> *v, void *arg) = 0;
 };
 class Statement {
 public:
     virtual std::string print() = 0;
-    
-    virtual void* accept(Visitor<void*, void*>* v, void* arg) = 0;
+
+    virtual void *accept(Visitor<void *, void *> *v, void *arg) = 0;
 };
 
 class Block : public Statement {
@@ -133,28 +143,28 @@ public:
     std::vector<Statement *> list;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Name : public Expression {
 public:
     std::vector<Type *> typeArgs;
-    
+
     virtual bool isSimple();
     std::string print() override = 0;
-    void* accept(Visitor<void*, void*>* v, void* arg) override = 0;
+    void *accept(Visitor<void *, void *> *v, void *arg) override = 0;
 };
 
 class SimpleName : public Name {
 public:
     std::string name;
-    void* parent = nullptr;
+    void *parent = nullptr;
 
     explicit SimpleName(std::string name);
 
     bool isSimple() override;
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class QName : public Name {
@@ -162,42 +172,62 @@ public:
     Name *scope;
     std::string name;
 
-    QName(Name* scope, std::string name);
+    QName(Name *scope, std::string name);
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-class ArrowType: public Expression{
+class RefExpr : public Expression {
 public:
-    std::vector<Type*> params;
-    Type* type = nullptr;
-    
+    Expression *expr;
+
+    RefExpr(Expression *expr) : expr(expr){};
+
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+
+class DerefExpr : public Expression {
+public:
+    Expression *expr;
+
+    DerefExpr(Expression *expr) : expr(expr){};
+
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+
+class ArrowType : public Expression {
+public:
+    std::vector<Type *> params;
+    Type *type = nullptr;
+
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Type : public Expression {
 public:
-    Type* scope = nullptr;
+    Type *scope = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
-    std::vector<Expression*> dims;
-    bool isTypeVar_ = false;
+    std::vector<Expression *> dims;
     bool isNullable = false;
-    ArrowType* arrow = nullptr;
+    bool isPointer = false;
+    ArrowType *arrow = nullptr;
 
     bool isPrim() {
-      auto type = print();
-      return type == "int" || type == "long" || type == "char" || type == "byte" ||
+        auto type = print();
+        return type == "int" || type == "long" || type == "char" || type == "byte" ||
                type == "short" || type == "float" || type == "double" || type == "bool";
-    } 
+    }
     bool isVoid() { return print() == "void"; };
     bool isString() { return print() == "core/string"; }
     bool isArray() const { return !dims.empty(); }
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 
@@ -243,7 +273,7 @@ public:
     bool isChar;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ExprStmt : public Statement {
@@ -251,39 +281,39 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
-    
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+
     explicit ExprStmt(Expression *e) : expr(e) {}
 };
 
 class Fragment {
 public:
     std::string name;
-    Type* type = nullptr;
+    Type *type = nullptr;
     Expression *rhs = nullptr;
     bool isOptional = false;
-    VarDecl* vd = nullptr;
+    VarDecl *vd = nullptr;
 
     std::string print();
-    void* accept(Visitor<void*, void*>* v, void* arg);
+    void *accept(Visitor<void *, void *> *v, void *arg);
 };
 
 class VarDecl : public Statement {
 public:
-    VarDeclExpr* decl;
+    VarDeclExpr *decl;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class VarDeclExpr : public Statement {
 public:
-    bool isVar = false, isLet = false, isConst = false;
+    bool isConst = false;
     bool isStatic = false;
-    std::vector<Fragment*> list;
+    std::vector<Fragment *> list;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 
@@ -293,7 +323,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Assign : public Expression {
@@ -303,7 +333,7 @@ public:
     std::string op;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Infix : public Expression {
@@ -313,7 +343,7 @@ public:
     std::string op;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class AsExpr : public Expression {
@@ -322,7 +352,7 @@ public:
     Type *type;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Postfix : public Expression {
@@ -331,7 +361,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Ternary : public Expression {
@@ -341,7 +371,7 @@ public:
     Expression *elseExpr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class MethodCall : public Expression {
@@ -350,10 +380,10 @@ public:
     std::string name;
     std::vector<Expression *> args;
     bool isOptional = false;
-    std::vector<Type*> typeArgs; 
+    std::vector<Type *> typeArgs;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class FieldAccess : public Expression {
@@ -363,7 +393,7 @@ public:
     bool isOptional = false;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ArrayAccess : public Expression {
@@ -373,7 +403,7 @@ public:
     bool isOptional = false;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ArrayExpr : public Expression {
@@ -381,39 +411,39 @@ public:
     std::vector<Expression *> list;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ArrayCreation : public Expression {
 public:
-    Type* type;
-    std::vector<Expression*> dims;
+    Type *type;
+    std::vector<Expression *> dims;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ParExpr : public Expression {
 public:
     Expression *expr;
-    
+
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ArrowFunction : public Expression {
 public:
-    std::vector<Param*> params;
+    std::vector<Param *> params;
     Block *block = nullptr;
     Expression *expr = nullptr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class Entry {
 public:
-    Expression *key;
+    std::string key;
     Expression *value;
 
     std::string print();
@@ -421,19 +451,28 @@ public:
 
 class ObjExpr : public Expression {
 public:
-    Type* type;
+    Type *type;
     std::vector<Entry> entries;
+    bool isPointer = false;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-class AnonyObjExpr : public Expression {
+class MapEntry {
 public:
-    std::vector<Entry> entries;
+    Expression *key;
+    Expression *value;
+
+    std::string print();
+};
+
+class MapExpr : public Expression {
+public:
+    std::vector<MapEntry> entries;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 /*class XmlElement : public Expression {
@@ -452,7 +491,7 @@ public:
     Expression *expr = nullptr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ContinueStmt : public Statement {
@@ -460,7 +499,7 @@ public:
     std::string *label = nullptr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class BreakStmt : public Statement {
@@ -468,7 +507,7 @@ public:
     std::string *label = nullptr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class IfStmt : public Statement {
@@ -478,7 +517,7 @@ public:
     Statement *elseStmt = nullptr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class WhileStmt : public Statement {
@@ -487,7 +526,7 @@ public:
     Statement *body;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class DoWhile : public Statement {
@@ -496,7 +535,7 @@ public:
     Block *body;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ForStmt : public Statement {
@@ -507,7 +546,7 @@ public:
     Statement *body;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ForEach : public Statement {
@@ -517,7 +556,7 @@ public:
     Statement *body;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class ThrowStmt : public Statement {
@@ -525,16 +564,16 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class CatchStmt : public Statement {
 public:
     Block *block;
     Param param;
-    
+
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 class TryStmt : public Statement {
@@ -543,5 +582,5 @@ public:
     std::vector<CatchStmt> catches;
 
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };

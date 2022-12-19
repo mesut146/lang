@@ -15,12 +15,14 @@ void lex(std::string &path) {
     }
 }
 
-void parse(std::string &path) {
-    log("parsing " + path);
+void parse(const std::string &path, bool print = false) {
+    info("parsing " + path);
     Lexer lexer(path);
     Parser parser(lexer);
     Unit *u = parser.parseUnit();
-    std::cout << u->print() << "\n";
+    if (print) {
+        std::cout << u->print() << "\n";
+    }
 }
 
 std::string Resolver::root;
@@ -50,13 +52,9 @@ int main(int argc, char **args) {
             }
         } else {
             debug = true;
-            std::string path;
-            path = "../tests/types";
-            //path = "../doc/join";
-            //std::string path("../tests/stmts");
-            //std::string path("../tests/exprs");
-            //lex(path);
-            parse(path);
+            parse("../tests/exprs");
+            parse("../tests/stmts");
+            parse("../tests/types");
         }
     } catch (std::exception &e) {
         std::cout << "err:" << e.what() << "\n";

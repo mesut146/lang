@@ -5,6 +5,10 @@ void log(const char *msg) {
         std::cout << msg << std::endl;
 }
 
+void info(const std::string &msg) {
+    std::cout << msg << std::endl;
+}
+
 void log(const std::string &msg) {
     if (debug)
         std::cout << msg << std::endl;

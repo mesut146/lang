@@ -28,7 +28,7 @@ IfStmt *parseIf(Parser *p) {
 
 bool isForEach(Parser* p){
     int pos = p->pos;
-    if(p->is({VAR, LET, CONST_KW})) pos++;
+    if(p->is({ LET, CONST_KW})) pos++;
     if(!p->tokens[pos++]->is(IDENT)) return false;
     return p->tokens[pos]->is(COLON);
 }
@@ -40,7 +40,7 @@ Statement *parseFor(Parser *p) {
     bool normalFor;
     if (isForEach(p)) {
         var = new VarDeclExpr;
-        if(p->is({VAR, LET, CONST_KW})) p->pop();
+        if(p->is({ LET, CONST_KW})) p->pop();
         auto f = new Fragment;
         f->name = *p->name();
         var->list.push_back(f);
@@ -164,11 +164,11 @@ Statement *Parser::parseStmt() {
     } else if (isVarDecl()) {
         return parseVarDecl();
     } else {
-        Expression *e = parseExpr();
+        auto *e = parseExpr();
         if (is(SEMI)) {
             consume(SEMI);
             return new ExprStmt(e);
         }
-        throw std::string("invalid stmt " + e->print() + " line:" + std::to_string(first()->line));
+        throw std::runtime_error("invalid stmt " + e->print() + " line:" + std::to_string(first()->line));
     }
 }

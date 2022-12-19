@@ -42,5 +42,5 @@ void printBody(std::string &buf, Block *block);
 void printIdent(std::string &&str, std::string &buf);
 
 void log(const char *msg);
-
 void log(const std::string &msg);
+void info(const std::string &msg);

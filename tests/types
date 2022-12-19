@@ -1,18 +1,14 @@
-var cur = Node<int>{value: arr[pos++]};
-
-import * from "util"
-import * as util from "util"
-import format as fmt from "util"
+let cur = Node<int>{value: arr[pos++]};
 
 class Node<T>{
-  Node<T>? next;
-  T value;
+  next?: Node<T>;
+  value: T;
 }
 
-Node<int> makeNode(int[] arr){
-  var pos = 0;
-  var cur = Node<int>{value: arr[pos++]};
-  var head = cur;
+func makeNode(arr: int[]): Node<int>{
+  let pos = 0;
+  let cur = Node<int>{value: arr[pos++]};
+  let head = cur;
   while(pos < arr.size){
     cur.next = Node<int>{value: arr[pos++]};
     cur = cur.next;
@@ -22,15 +18,15 @@ Node<int> makeNode(int[] arr){
 
 enum Color{
   WHITE,
-  BLACK
+  BLACK;
 }
 
 interface a{
-  int calc();
+  func calc(): int;
 }
 
 
-int calc(int a, int b, int carry?)
+func calc(a: int, b: int, carry?: int): int
 {
   if(carry){
     return a + b + carry;
@@ -40,7 +36,7 @@ int calc(int a, int b, int carry?)
   }
 }
 
-void def(int a = 0);
+func def(a: int = 0);
 
 calc(1,2);
 calc(1,2,3);

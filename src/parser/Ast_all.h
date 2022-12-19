@@ -26,6 +26,8 @@ class Assign;
 class VarDecl;
 class VarDeclExpr;
 class Fragment;
+class RefExpr;
+class DerefExpr;
 class Unary;
 class Infix;
 class AsExpr;
@@ -39,7 +41,7 @@ class ArrayCreation;
 class ExprStmt;
 class ParExpr;
 class ObjExpr;
-class AnonyObjExpr;
+class MapExpr;
 class ArrowFunction;
 
 class Block;

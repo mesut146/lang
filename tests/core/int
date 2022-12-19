@@ -1,11 +1,11 @@
-const min: int = -2147483648;
-const max: int = 2147483647;
+const MIN: int = -2147483648;
+const MAX: int = 2147483647;
 
-func min<T: '<='>(a: T, b: T): T{
+func min<T>(a: T, b: T): T{
   return a <= b ? a : b;
 }
 
-func max<T: GTE>(a: T, b: T): T{
+func max<T>(a: T, b: T): T{
   return a >= b ? a : b;
 }
 

@@ -2,15 +2,15 @@
 #include <list>
 
 #include "Resolver.h"
-#include "parser/Util.h"
 #include "parser/Parser.h"
+#include "parser/Util.h"
 
-void Scope::add(Fragment* f) { list.push_back(f); }
+void Scope::add(Fragment *f) { list.push_back(f); }
 
 void Scope::clear() { list.clear(); }
 
-Fragment* Scope::find(std::string& name) {
-    for (auto* f : list) {
+Fragment *Scope::find(std::string &name) {
+    for (auto *f : list) {
         if (f->name == name) return f;
     }
     return nullptr;
@@ -20,19 +20,19 @@ class IncompleteType : public Type {
     std::string print() override { return "@incomplete"; }
 };
 
-std::map<std::string, Resolver*> Resolver::resolverMap;
+std::map<std::string, Resolver *> Resolver::resolverMap;
 
-Resolver::Resolver(Unit* unit) : unit(unit) {}
+Resolver::Resolver(Unit *unit) : unit(unit) {}
 Resolver::~Resolver() = default;
 
-Type* simpleType(const std::string name) {
+Type *simpleType(const std::string name) {
     auto res = new Type;
     res->name = name;
     return res;
 }
 
-RType* makeSimple(const std::string name) {
-    auto* res = new RType;
+RType *makeSimple(const std::string name) {
+    auto *res = new RType;
     res->type = simpleType(name);
     return res;
 }
@@ -46,10 +46,10 @@ void Resolver::dump() {
       std::cout << "field: " << p.first->name << " = " <<
     p.second->type->print() << "\n";
     }*/
-    for (auto& p : methodMap) {
+    for (auto &p : methodMap) {
         std::cout << "method: " << p.first->name << " = "
                   << p.second->type->print() << "\n";
-        for (Param* prm : p.first->params) {
+        for (Param *prm : p.first->params) {
             std::cout << "param: " << prm->name << " = "
                       << paramMap[prm]->type->print() << "\n";
         }
@@ -67,11 +67,11 @@ std::shared_ptr<Scope> Resolver::curScope() {
 
 void Resolver::resolveAll() {
     init();
-    for (auto* bd : unit->types) {
+    for (auto *bd : unit->types) {
         visitBaseDecl(bd, nullptr);
     }
 
-    for (auto* m : unit->methods) {
+    for (auto *m : unit->methods) {
         visitMethod(m, nullptr);
     }
 
@@ -80,31 +80,31 @@ void Resolver::resolveAll() {
 
 void Resolver::init() {
     scopes.push_back(std::shared_ptr<Scope>(new Scope));
-    for (auto* st : unit->stmts) {
+    for (auto *st : unit->stmts) {
         st->accept(this, nullptr);
     }
 }
 
-RType* Resolver::resolveScoped(Expression* expr) {
-    return (RType*)expr->accept(this, nullptr);
+RType *Resolver::resolveScoped(Expression *expr) {
+    return (RType *) expr->accept(this, nullptr);
 }
 
-void* Resolver::visitBaseDecl(BaseDecl* bd, void* arg) {
+void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
     auto it = declMap.find(bd);
     if (it != declMap.end()) return (*it).second;
     std::cout << "visitBaseDecl: " << bd->name << "\n";
     if (bd->isEnum) {
-        return visitEnumDecl(dynamic_cast<EnumDecl*>(bd), arg);
+        return visitEnumDecl(dynamic_cast<EnumDecl *>(bd), arg);
     } else {
-        return visitTypeDecl(dynamic_cast<TypeDecl*>(bd), arg);
+        return visitTypeDecl(dynamic_cast<TypeDecl *>(bd), arg);
     }
 }
 
-RType* Resolver::visitCommon(BaseDecl* bd) {
+RType *Resolver::visitCommon(BaseDecl *bd) {
     auto res = new RType;
     if (bd->parent != nullptr) {
         // qualified type
-        auto pt = (RType*)visitBaseDecl(bd->parent, nullptr);
+        auto pt = (RType *) visitBaseDecl(bd->parent, nullptr);
         auto type = new Type;
         type->scope = pt->type;
         type->name = bd->name;
@@ -117,40 +117,40 @@ RType* Resolver::visitCommon(BaseDecl* bd) {
     return res;
 }
 
-void* Resolver::visitEnumDecl(EnumDecl* ed, void* arg) {
-    auto it = declMap.find((BaseDecl*)ed);
+void *Resolver::visitEnumDecl(EnumDecl *ed, void *arg) {
+    auto it = declMap.find((BaseDecl *) ed);
     if (it != declMap.end()) return (*it).second;
     auto backup = curDecl;
     curDecl = ed;
     auto res = visitCommon(ed);
-    for (auto* m : ed->methods) {
+    for (auto *m : ed->methods) {
         visitMethod(m, ed);
     }
     curDecl = backup;
     return res;
 }
 
-void* Resolver::visitTypeDecl(TypeDecl* td, void* arg) {
-    auto it = declMap.find((BaseDecl*)td);
+void *Resolver::visitTypeDecl(TypeDecl *td, void *arg) {
+    auto it = declMap.find((BaseDecl *) td);
     if (it != declMap.end()) return (*it).second;
     auto backup = curDecl;
     curDecl = td;
     auto res = visitCommon(td);
-    declMap[(BaseDecl*)td] = res;
-    for (VarDecl* fd : td->fields) {
-        fd->accept(this, nullptr);
-    }
-    for (Method* m : td->methods) {
+    declMap[(BaseDecl *) td] = res;
+    //    for (auto *fd : td->fields) {
+    //        fd->accept(this, nullptr);
+    //    }
+    for (auto *m : td->methods) {
         m->accept(this, nullptr);
     }
-    for (BaseDecl* bd : td->types) {
+    for (auto *bd : td->types) {
         bd->accept(this, td);
     }
     curDecl = backup;
     return res;
 }
 
-ArrowType* funcType(Method* m) {
+ArrowType *funcType(Method *m) {
     auto arrow = new ArrowType;
     for (auto prm : m->params) {
         arrow->params.push_back(prm->type);
@@ -159,7 +159,7 @@ ArrowType* funcType(Method* m) {
     return arrow;
 }
 
-Type* funcType2(Method* m) {
+Type *funcType2(Method *m) {
     auto arrow = new ArrowType;
     for (auto prm : m->params) {
         arrow->params.push_back(prm->type);
@@ -170,18 +170,18 @@ Type* funcType2(Method* m) {
     return res;
 }
 
-void* Resolver::visitMethod(Method* m, void* arg) {
+void *Resolver::visitMethod(Method *m, void *arg) {
     auto backup = curMethod;
     curMethod = m;
-    RType* res = nullptr;
+    RType *res = nullptr;
 
-    for (auto* prm : m->params) {
+    for (auto *prm : m->params) {
         prm->accept(this, nullptr);
     }
-    res = (RType*)m->type->accept(this, m);
+    res = (RType *) m->type->accept(this, m);
     if (m->body) {
         scopes.push_back(std::make_shared<Scope>());
-        for (auto* st : m->body->list) {
+        for (auto *st : m->body->list) {
             st->accept(this, nullptr);
         }
         dropScope();
@@ -191,7 +191,7 @@ void* Resolver::visitMethod(Method* m, void* arg) {
     return res;
 }
 
-void* Resolver::visitParam(Param* p, void* arg) {
+void *Resolver::visitParam(Param *p, void *arg) {
     if (p->type == nullptr) return new RType(new IncompleteType);
     if (p->method) {
         auto res = resolveType(p->type);
@@ -205,17 +205,17 @@ void* Resolver::visitParam(Param* p, void* arg) {
     }
 }
 
-void* Resolver::visitAssign(Assign* as, void* arg) {
-    auto* t1 = (RType*)as->left->accept(this, as);
-    auto* t2 = (RType*)as->right->accept(this, as);
+void *Resolver::visitAssign(Assign *as, void *arg) {
+    auto *t1 = (RType *) as->left->accept(this, as);
+    auto *t2 = (RType *) as->right->accept(this, as);
     // return t1 because t2 is going to be autocast to t1 ultimately
     return t1;
 }
 
-void* Resolver::visitInfix(Infix* infix, void* arg) {
+void *Resolver::visitInfix(Infix *infix, void *arg) {
     std::cout << "visitInfix = " << infix->print() << "\n";
-    auto* rt1 = (RType*)infix->left->accept(this, infix);
-    auto* rt2 = (RType*)infix->right->accept(this, infix);
+    auto *rt1 = (RType *) infix->left->accept(this, infix);
+    auto *rt2 = (RType *) infix->right->accept(this, infix);
     if (rt1->type->isVoid() || rt2->type->isVoid()) {
         throw std::runtime_error("operation on void type");
     }
@@ -225,37 +225,37 @@ void* Resolver::visitInfix(Infix* infix, void* arg) {
     }
 
     if (rt1->type->isPrim()) {
-        if(!rt2->type->isPrim()){
+        if (!rt2->type->isPrim()) {
             throw std::runtime_error("infix on prim and non prim types");
         }
-            auto s1 = rt1->type->print();
-            auto s2 = rt2->type->print();
-            if (s1 == s2) {
-                return makeSimple(s1);
+        auto s1 = rt1->type->print();
+        auto s2 = rt2->type->print();
+        if (s1 == s2) {
+            return makeSimple(s1);
+        }
+        std::string arr[] = {"double", "float", "long", "int",
+                             "short", "char", "byte", "bool"};
+        for (auto &t : arr) {
+            if (s1 == t || s2 == t) {
+                return makeSimple(t);
             }
-            std::string arr[] = {"double", "float", "long", "int",
-                                 "short",  "char",  "byte", "bool"};
-            for (auto& t : arr) {
-                if (s1 == t || s2 == t) {
-                    return makeSimple(t);
-                }
-            }
-        
+        }
+
     } else {
     }
-    throw std::runtime_error("visitInfix: "+infix->print());
+    throw std::runtime_error("visitInfix: " + infix->print());
 }
 
-void* Resolver::visitType(Type* type, void* arg) { return resolveType(type); }
+void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 
-RType* Resolver::find(Type* type, BaseDecl* bd) {
+RType *Resolver::find(Type *type, BaseDecl *bd) {
     if (bd->name == type->name) {
-        return (RType*)visitBaseDecl(bd, nullptr);
+        return (RType *) visitBaseDecl(bd, nullptr);
     }
     // inner
     for (auto inner : bd->types) {
         if (inner->name == type->name) {
-            return (RType*)visitBaseDecl(inner, nullptr);
+            return (RType *) visitBaseDecl(inner, nullptr);
         }
     }
     if (bd->parent) {
@@ -275,11 +275,11 @@ RType* Resolver::find(Type* type, BaseDecl* bd) {
     return nullptr;
 }
 
-RType* Resolver::resolveType(Type* type) {
+RType *Resolver::resolveType(Type *type) {
     auto it = typeMap.find(type);
     if (it != typeMap.end()) return (*it).second;
     std::cout << "resolveType: " << type->print() << "\n";
-    RType* res = nullptr;
+    RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
         res = new RType;
         res->type = type;
@@ -303,13 +303,13 @@ RType* Resolver::resolveType(Type* type) {
                 }
             }
         } else {
-            auto st = (RType*)type->scope->accept(this, nullptr);
+            auto st = (RType *) type->scope->accept(this, nullptr);
             for (auto bd : st->targetDecl->types) {
                 if (bd->name == type->name) {
                     /*res = new RType;
                     res->type = type;
                     res->targetDecl = bd;*/
-                    res = (RType*)bd->accept(this, nullptr);
+                    res = (RType *) bd->accept(this, nullptr);
                     break;
                 }
             }
@@ -320,17 +320,17 @@ RType* Resolver::resolveType(Type* type) {
     return res;
 }
 
-void* Resolver::visitFragment(Fragment* f, void* arg) {
+void *Resolver::visitFragment(Fragment *f, void *arg) {
     auto it = varMap.find(f);
     if (it != varMap.end()) return (*it).second;
     log("visitFragment: " + f->print());
-    RType* res;
+    RType *res;
     if (f->type) {
-        res = (RType*)f->type->accept(this, nullptr);
+        res = (RType *) f->type->accept(this, nullptr);
     } else {
         if (f->rhs) {
-            res = (RType*)f->rhs->accept(this, nullptr);
-            if(!res->arr.empty()){
+            res = (RType *) f->rhs->accept(this, nullptr);
+            if (!res->arr.empty()) {
             }
         } else {
             throw std::runtime_error("fragment neither has type nor rhs");
@@ -339,29 +339,29 @@ void* Resolver::visitFragment(Fragment* f, void* arg) {
     res->targetVar = f;
     // res->targetDecl = curDecl;//todo?
     varMap[f] = res;
-    if(!scopes.empty()) curScope()->add(f);
+    if (!scopes.empty()) curScope()->add(f);
     return res;
 }
 
-void* Resolver::visitVarDeclExpr(VarDeclExpr* vd, void* arg) {
-    for (Fragment* f : vd->list) {
+void *Resolver::visitVarDeclExpr(VarDeclExpr *vd, void *arg) {
+    for (Fragment *f : vd->list) {
         f->accept(this, arg);
     }
     return nullptr;
 }
 
-void* Resolver::visitVarDecl(VarDecl* vd, void* arg) {
+void *Resolver::visitVarDecl(VarDecl *vd, void *arg) {
     return visitVarDeclExpr(vd->decl, arg);
 }
 
-void Resolver::local(std::string name, std::vector<Symbol>& res) {
-    if(fromOther){
+void Resolver::local(std::string name, std::vector<Symbol> &res) {
+    if (fromOther) {
         //other import, need to resolved differently
-        for(auto st : unit->stmts){
-            auto vd = dynamic_cast<VarDecl*>(st);
-            if(!vd) continue;
-            for(auto* f : vd->decl->list){
-                if(f->name == name){
+        for (auto st : unit->stmts) {
+            auto vd = dynamic_cast<VarDecl *>(st);
+            if (!vd) continue;
+            for (auto *f : vd->decl->list) {
+                if (f->name == name) {
                     res.push_back(Symbol(f, this));
                     return;
                 }
@@ -378,17 +378,17 @@ void Resolver::local(std::string name, std::vector<Symbol>& res) {
     }
 }
 
-void Resolver::param(const std::string& name, std::vector<Symbol> &res) {
+void Resolver::param(const std::string &name, std::vector<Symbol> &res) {
     // method or lambda parameter
     if (curMethod) {
-        for (auto* p : curMethod->params) {
+        for (auto *p : curMethod->params) {
             if (p->name == name) {
                 res.push_back(Symbol(p, this));
             }
         }
     }
     if (arrow) {
-        for (auto* p : arrow->params) {
+        for (auto *p : arrow->params) {
             if (p->name == name) {
                 res.push_back(Symbol(p, this));
             }
@@ -396,46 +396,46 @@ void Resolver::param(const std::string& name, std::vector<Symbol> &res) {
     }
 }
 
-void Resolver::field(const std::string& name, std::vector<Symbol> &res) {
+void Resolver::field(const std::string &name, std::vector<Symbol> &res) {
     if (!curDecl) return;
     if (curDecl->isEnum) {
-        auto ed = dynamic_cast<EnumDecl*>(curDecl);
+        auto ed = dynamic_cast<EnumDecl *>(curDecl);
     } else {
-        auto td = dynamic_cast<TypeDecl*>(curDecl);
-        for (auto* field : td->fields) {
-            for (auto* f : field->decl->list) {
-                if (f->name == name) {
-                    res.push_back(Symbol(f, this));
-                }
+        auto td = dynamic_cast<TypeDecl *>(curDecl);
+        for (auto *f : td->fields) {
+            if (f->name == name) {
+                res.push_back(Symbol(f, this));
             }
         }
     }
 }
 
-void Resolver::method(const std::string& name, std::vector<Symbol>& res) {
+void Resolver::method(const std::string &name, std::vector<Symbol> &res) {
     if (!curDecl) return;
-    for (auto* m : curDecl->methods) {
+    for (auto *m : curDecl->methods) {
         if (m->name == name) res.push_back(Symbol(m, this));
     }
 }
 
-void* Resolver::visitSimpleName(SimpleName* sn, void* arg) {
+void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
     auto arr = find(sn->name, true);
-    if(arr.empty()) throw std::runtime_error("unknown identifier: " + sn->name);
-    if(arr.size() == 1){
+    if (arr.empty()) throw std::runtime_error("unknown identifier: " + sn->name);
+    if (arr.size() == 1) {
         auto s = arr[0];
-        if(s.prm)  return s.resolve(s.prm);
-        else if(s.f) return s.resolve(s.f);
-        else if(s.m) return s.resolve(s.m);
-        else if(s.decl) return s.resolve(s.decl);
-        else if(s.imp){
+        if (s.prm) return s.resolve(s.prm);
+        else if (s.f)
+            return s.resolve(s.f);
+        else if (s.m)
+            return s.resolve(s.m);
+        else if (s.decl)
+            return s.resolve(s.decl);
+        else if (s.imp) {
             auto res = new RType;
             res->arr.push_back(s);
             return res;
-        }
-        else throw std::runtime_error("unexpected state");
-    }
-    else{
+        } else
+            throw std::runtime_error("unexpected state");
+    } else {
         auto res = new RType;
         res->arr = arr;
         return res;
@@ -443,8 +443,8 @@ void* Resolver::visitSimpleName(SimpleName* sn, void* arg) {
     }
 }
 
-void* Resolver::visitQName(QName* qn, void* arg) {
-    auto* scp = (RType*)qn->scope->accept(this, qn);
+void *Resolver::visitQName(QName *qn, void *arg) {
+    auto *scp = (RType *) qn->scope->accept(this, qn);
     if (scp->type->isArray()) {
         if (qn->name == "size" || qn->name == "length") {
             return makeSimple("int");
@@ -458,13 +458,11 @@ void* Resolver::visitQName(QName* qn, void* arg) {
     if (bd->isEnum) {
         throw std::runtime_error("visitQName todo enum field");
     } else {
-        auto td = dynamic_cast<TypeDecl*>(bd);
-        for (auto* field : td->fields) {
-            for (auto* f : field->decl->list) {
-                if (f->name == qn->name) {
-                    auto res = (RType*)f->accept(this, nullptr);
-                    return res;
-                }
+        auto td = dynamic_cast<TypeDecl *>(bd);
+        for (auto *f : td->fields) {
+            if (f->name == qn->name) {
+                auto res = (RType *) f->accept(this, nullptr);
+                return res;
             }
         }
     }
@@ -472,11 +470,11 @@ void* Resolver::visitQName(QName* qn, void* arg) {
 }
 
 
-void* Resolver::visitFieldAccess(FieldAccess* fa, void* arg) {
-    auto scp = (RType*)fa->scope->accept(this, nullptr);
+void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
+    auto scp = (RType *) fa->scope->accept(this, nullptr);
     std::vector<Symbol> arr;
-    if(scp->isImport){
-        Resolver* r = getResolver(scp->unit->path);
+    if (scp->isImport) {
+        Resolver *r = getResolver(scp->unit->path);
         auto tmp = r->find(fa->name, false);
         auto res = new RType;
         res->arr = tmp;
@@ -484,26 +482,24 @@ void* Resolver::visitFieldAccess(FieldAccess* fa, void* arg) {
     }
     auto decl = scp->targetDecl;
     if (decl->isEnum) {
-        auto ed = dynamic_cast<EnumDecl*>(decl);
+        auto ed = dynamic_cast<EnumDecl *>(decl);
     } else {
-        auto td = dynamic_cast<TypeDecl*>(decl);
+        auto td = dynamic_cast<TypeDecl *>(decl);
         for (auto v : td->fields) {
-            for (auto frag : v->decl->list) {
-                if (frag->name == fa->name) {
-                    return frag->accept(this, nullptr);
-                }
+            if (v->name == fa->name) {
+                return v->accept(this, nullptr);
             }
         }
-        for (Method* m : td->methods) {
+        for (Method *m : td->methods) {
             if (m->name == fa->name) return funcType(m);
         }
     }
     throw std::runtime_error("invalid field " + fa->name + " in " +
-                      scp->type->print());
+                             scp->type->print());
 }
 
-void* Resolver::visitLiteral(Literal* lit, void* arg) {
-    auto* res = new RType;
+void *Resolver::visitLiteral(Literal *lit, void *arg) {
+    auto *res = new RType;
     auto type = new Type;
     res->type = type;
     if (lit->isStr) {
@@ -525,28 +521,28 @@ void* Resolver::visitLiteral(Literal* lit, void* arg) {
     return res;
 }
 
-bool isSame(Type* t1, Type* t2) { return t1->print() == t2->print(); }
+bool isSame(Type *t1, Type *t2) { return t1->print() == t2->print(); }
 
-bool isSame(RType* rt1, RType* rt2) {
-    Type* t1 = rt1->type;
-    Type* t2 = rt2->type;
+bool isSame(RType *rt1, RType *rt2) {
+    Type *t1 = rt1->type;
+    Type *t2 = rt2->type;
     return t1->print() == t2->print();
 }
 
-bool subType(Type* type, Type* sub) {
-    if (dynamic_cast<IncompleteType*>(type)) return true;
+bool subType(Type *type, Type *sub) {
+    if (dynamic_cast<IncompleteType *>(type)) return true;
     if (type->arrow) {
         if (!sub->arrow) return false;
         auto arrow = type->arrow;
         auto arrow2 = sub->arrow;
         if (arrow->params.size() != arrow2->params.size()) return false;
-        if (!dynamic_cast<IncompleteType*>(arrow->type) &&
+        if (!dynamic_cast<IncompleteType *>(arrow->type) &&
             !isSame(arrow->type, arrow2->type))
             return false;
         for (int i = 0; i < arrow->params.size(); i++) {
-            Type* t1 = arrow->params[i];
-            Type* t2 = arrow2->params[i];
-            if (dynamic_cast<IncompleteType*>(t1)) continue;  // to be inferred
+            Type *t1 = arrow->params[i];
+            Type *t2 = arrow2->params[i];
+            if (dynamic_cast<IncompleteType *>(t1)) continue;// to be inferred
             if (t1->print() != t2->print()) return false;
         }
         return true;
@@ -557,8 +553,13 @@ bool subType(Type* type, Type* sub) {
     if (type->isPrim()) {
         if (!sub->isPrim()) return false;
         std::map<std::string, int> sizeMap{
-            {"byte", 1}, {"char", 2},  {"short", 2}, {"int", 4},
-            {"long", 8}, {"float", 4}, {"double", 8}};
+                {"byte", 1},
+                {"char", 2},
+                {"short", 2},
+                {"int", 4},
+                {"long", 8},
+                {"float", 4},
+                {"double", 8}};
         if (type->name == "bool") return false;
         // auto cast to larger size
         if (sizeMap[type->name] <= sizeMap[sub->name]) {
@@ -571,51 +572,51 @@ bool subType(Type* type, Type* sub) {
     throw std::runtime_error("subtype " + type->print() + " sub: " + sub->print());
 }
 
-bool isSame(Resolver* r, MethodCall* mc, Method* m) {
+bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
     for (int i = 0; i < mc->args.size(); i++) {
-        auto* t1 = (RType*)mc->args[i]->accept(r, mc);
-        auto* t2 = (RType*)m->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;  // to be inferred
+        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
+        auto *t2 = (RType *) m->params[i]->accept(r, nullptr);
+        if (t1->type == nullptr) continue;// to be inferred
         if (!subType(t1->type, t2->type)) return false;
     }
     return true;
 }
 
-bool isSame(Resolver* r, MethodCall* mc, ArrowType* sig) {
+bool isSame(Resolver *r, MethodCall *mc, ArrowType *sig) {
     if (mc->args.size() != sig->params.size()) return false;
     for (int i = 0; i < mc->args.size(); i++) {
-        auto* t1 = (RType*)mc->args[i]->accept(r, mc);
-        auto* t2 = (RType*)sig->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;  // to be inferred
+        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
+        auto *t2 = (RType *) sig->params[i]->accept(r, nullptr);
+        if (t1->type == nullptr) continue;// to be inferred
         if (!subType(t1->type, t2->type)) return false;
     }
     return true;
 }
-bool isSameFull(Resolver* r, MethodCall* mc, ArrowType* sig) {
+bool isSameFull(Resolver *r, MethodCall *mc, ArrowType *sig) {
     if (mc->args.size() != sig->params.size()) return false;
     for (int i = 0; i < mc->args.size(); i++) {
-        auto* t1 = (RType*)mc->args[i]->accept(r, mc);
-        auto* t2 = (RType*)sig->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;  // to be inferred
+        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
+        auto *t2 = (RType *) sig->params[i]->accept(r, nullptr);
+        if (t1->type == nullptr) continue;// to be inferred
         if (!isSame(t1->type, t2->type)) return false;
     }
     return true;
 }
-bool isSame1(MethodCall* mc, Method* m) {
+bool isSame1(MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
     return true;
 }
 
-void bind(MethodCall* mc, Type* sig) {
+void bind(MethodCall *mc, Type *sig) {
     for (int i = 0; i < mc->args.size(); i++) {
-        Expression* arg = mc->args[i];
-        auto arrow = dynamic_cast<ArrowFunction*>(arg);
+        Expression *arg = mc->args[i];
+        auto arrow = dynamic_cast<ArrowFunction *>(arg);
         if (!arrow) continue;
-        ArrowType* arg2 = sig->arrow->params[i]->arrow;
-        for (int j =0;j< arrow->params.size();j++) {
+        ArrowType *arg2 = sig->arrow->params[i]->arrow;
+        for (int j = 0; j < arrow->params.size(); j++) {
             auto prm = arrow->params[j];
             if (!prm->type) {
                 prm->type = arg2->params[j];
@@ -625,21 +626,21 @@ void bind(MethodCall* mc, Type* sig) {
     }
 }
 
-std::string toPath(Name* nm){
-    if(nm->isSimple()){
-        return dynamic_cast<SimpleName*>(nm)->name;
-    }else{
-        auto q = dynamic_cast<QName*>(nm);
+std::string toPath(Name *nm) {
+    if (nm->isSimple()) {
+        return dynamic_cast<SimpleName *>(nm)->name;
+    } else {
+        auto q = dynamic_cast<QName *>(nm);
         return toPath(q->scope) + "/" + q->name;
     }
 }
 
-Resolver* Resolver::getResolver(const std::string& path){
+Resolver *Resolver::getResolver(const std::string &path) {
     auto it = resolverMap.find(path);
-    if(it != resolverMap.end()) return (*it).second;
+    if (it != resolverMap.end()) return (*it).second;
     Lexer lexer(path);
     Parser parser(lexer);
-    Unit* u = parser.parseUnit();
+    Unit *u = parser.parseUnit();
     u->path = path;
     auto r = new Resolver(u);
     //r->resolveAll();
@@ -647,29 +648,29 @@ Resolver* Resolver::getResolver(const std::string& path){
     return r;
 }
 
-void imports(std::string& name, std::vector<Symbol>& res, Resolver* r){
-    for(ImportStmt* is : r->unit->imports){
-        if(is->normal){
-            if(is->normal->path->isSimple()){
-                auto  s = dynamic_cast<SimpleName*>(is->normal->path);
-                if(s->name == name) res.push_back(Symbol(is, r));
-            }else{
-                auto * q = dynamic_cast<QName*>(is->normal->path);
-                if(q->name == name) res.push_back(Symbol(is, r));
+void imports(std::string &name, std::vector<Symbol> &res, Resolver *r) {
+    for (ImportStmt *is : r->unit->imports) {
+        if (is->normal) {
+            if (is->normal->path->isSimple()) {
+                auto s = dynamic_cast<SimpleName *>(is->normal->path);
+                if (s->name == name) res.push_back(Symbol(is, r));
+            } else {
+                auto *q = dynamic_cast<QName *>(is->normal->path);
+                if (q->name == name) res.push_back(Symbol(is, r));
             }
-        }else{
+        } else {
             throw std::runtime_error("import2");
         }
     }
 }
 
-std::vector<Symbol> Resolver::find(std::string& name, bool checkOthers){
+std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
     std::vector<Symbol> res;
-    for(auto bd : unit->types){
-        if(bd->name == name) res.push_back(Symbol(bd, this));
+    for (auto bd : unit->types) {
+        if (bd->name == name) res.push_back(Symbol(bd, this));
     }
-    for(auto m : unit->methods){
-        if(m->name == name) res.push_back(Symbol(m, this));
+    for (auto m : unit->methods) {
+        if (m->name == name) res.push_back(Symbol(m, this));
     }
     // for local variable
     local(name, res);
@@ -680,43 +681,43 @@ std::vector<Symbol> Resolver::find(std::string& name, bool checkOthers){
     // class methods
     method(name, res);
     imports(name, res, this);
-    if(checkOthers) other(name, res);
+    if (checkOthers) other(name, res);
     return res;
 }
 
-void Resolver::other(std::string name, std::vector<Symbol>& res) const{
-    for(ImportStmt* is : unit->imports){
-        if(is->normal){
-            Resolver* r = getResolver(root +"/" +toPath(is->normal->path));
+void Resolver::other(std::string name, std::vector<Symbol> &res) const {
+    for (ImportStmt *is : unit->imports) {
+        if (is->normal) {
+            Resolver *r = getResolver(root + "/" + toPath(is->normal->path));
             r->fromOther = true;
             auto arr = r->find(name, false);
             r->fromOther = false;
             res.insert(res.end(), arr.begin(), arr.end());
-        }else{
+        } else {
             throw std::runtime_error("import2");
         }
     }
 }
 
-std::vector<std::string> split(Name* path){
+std::vector<std::string> split(Name *path) {
     std::list<std::string> res;
-    while(true){
-        if(path->isSimple()){
+    while (true) {
+        if (path->isSimple()) {
             res.push_front(path->print());
             break;
-        }else{
-            auto* q = dynamic_cast<QName*>(path);
+        } else {
+            auto *q = dynamic_cast<QName *>(path);
             res.push_front(q->name);
             path = q->scope;
         }
     }
-    return {res.begin(),res.end()};
+    return {res.begin(), res.end()};
 }
 
-std::pair<std::string, Name*> split2(Name* name){
+std::pair<std::string, Name *> split2(Name *name) {
     auto arr = split(name);
-    auto* cur = (Name*)new SimpleName(arr[1]);
-    for(int i = 2;i < arr.size();i++){
+    auto *cur = (Name *) new SimpleName(arr[1]);
+    for (int i = 2; i < arr.size(); i++) {
         cur = new QName(cur, arr[i]);
     }
     return std::make_pair(arr[0], cur);
@@ -739,51 +740,50 @@ std::pair<std::string, Name*> split2(Name* name){
     }
 }*/
 
-std::vector<Type*> filter(std::vector<Symbol>& syms, MethodCall* mc, Resolver* r){
-    std::vector<Type*> list;
-    for(auto& s : syms){
-            if(s.m){
-                if(isSame(r, mc, s.m)) list.push_back(funcType2(s.m));
-            }else if(s.f){
-                auto t = s.resolve(s.f)->type;
-                if(isSame(r, mc, t->arrow)) list.push_back(t);
-            }
-            else if(s.prm){
-                auto t = s.resolve(s.prm)->type;
-                if(isSame(r, mc, t->arrow)) list.push_back(t);
-            }
+std::vector<Type *> filter(std::vector<Symbol> &syms, MethodCall *mc, Resolver *r) {
+    std::vector<Type *> list;
+    for (auto &s : syms) {
+        if (s.m) {
+            if (isSame(r, mc, s.m)) list.push_back(funcType2(s.m));
+        } else if (s.f) {
+            auto t = s.resolve(s.f)->type;
+            if (isSame(r, mc, t->arrow)) list.push_back(t);
+        } else if (s.prm) {
+            auto t = s.resolve(s.prm)->type;
+            if (isSame(r, mc, t->arrow)) list.push_back(t);
         }
-        return list;
+    }
+    return list;
 }
 
-void* Resolver::visitMethodCall(MethodCall* mc, void* arg) {
+void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     std::cout << "visitMethodCall " << mc->name << "\n";
-    Type* target = nullptr;
-    std::vector<Type*> list;  // candidates
+    Type *target = nullptr;
+    std::vector<Type *> list;// candidates
     if (mc->scope) {
-        auto* scp = (RType*)mc->scope->accept(this, mc);
-        if(!scp->arr.empty()){
-            for(auto s : scp->arr){
-                if(s.imp){
-                    auto* r = getResolver(s.imp->normal->path->print());
+        auto *scp = (RType *) mc->scope->accept(this, mc);
+        if (!scp->arr.empty()) {
+            for (auto s : scp->arr) {
+                if (s.imp) {
+                    auto *r = getResolver(s.imp->normal->path->print());
                     auto arr = r->find(mc->name, false);
                     auto tt = filter(arr, mc, this);
-                    for(auto t : tt){
+                    for (auto t : tt) {
                     }
                 }
             }
             throw std::runtime_error("mc scope is ?");
         }
         // todo
-        for (auto* m : scp->targetDecl->methods) {
+        for (auto *m : scp->targetDecl->methods) {
             if (isSame(this, mc, m)) list.push_back(funcType2(m));
         }
         if (list.empty())
             throw std::runtime_error("method:  " + mc->name +
-                              " not found in type: " + scp->type->print());
+                                     " not found in type: " + scp->type->print());
         if (list.size() > 1)
             throw std::runtime_error("more than one candidate method for " + mc->name +
-                              "in " + scp->type->print());
+                                     "in " + scp->type->print());
         auto sig = list[0];
         return sig->accept(this, nullptr);
     } else {
@@ -803,24 +803,24 @@ void* Resolver::visitMethodCall(MethodCall* mc, void* arg) {
         }
 
         throw std::runtime_error("method:  " + mc->name + " has " +
-                          std::to_string(list.size()) + " candidates");
+                                 std::to_string(list.size()) + " candidates");
     }
 }
 
-RType* inferType(Block* b, Resolver* r) {
+RType *inferType(Block *b, Resolver *r) {
     for (auto st : b->list) {
         st->accept(r, nullptr);
-        auto ret = dynamic_cast<ReturnStmt*>(st);
+        auto ret = dynamic_cast<ReturnStmt *>(st);
         if (ret) {
             if (ret->expr) {
-                return (RType*)ret->expr->accept(r, nullptr);
+                return (RType *) ret->expr->accept(r, nullptr);
             }
         }
     }
     return makeSimple("void");
 }
 
-void* Resolver::visitArrowFunction(ArrowFunction* af, void* arg) {
+void *Resolver::visitArrowFunction(ArrowFunction *af, void *arg) {
     auto type = new Type;
     auto t = new ArrowType;
     type->arrow = t;
@@ -830,7 +830,7 @@ void* Resolver::visitArrowFunction(ArrowFunction* af, void* arg) {
             needInfer = true;
             t->params.push_back(new IncompleteType);
         } else {
-            t->params.push_back(((RType*)prm->accept(this, nullptr))->type);
+            t->params.push_back(((RType *) prm->accept(this, nullptr))->type);
         }
     }
     if (!needInfer) {
@@ -838,7 +838,7 @@ void* Resolver::visitArrowFunction(ArrowFunction* af, void* arg) {
         if (af->block) {
             t->type = inferType(af->block, this)->type;
         } else {
-            t->type = ((RType*)af->expr->accept(this, nullptr))->type;
+            t->type = ((RType *) af->expr->accept(this, nullptr))->type;
         }
         arrow = nullptr;
     } else {
@@ -847,22 +847,28 @@ void* Resolver::visitArrowFunction(ArrowFunction* af, void* arg) {
     return new RType(type);
 }
 
-void* Resolver::visitObjExpr(ObjExpr* o, void* arg) {
-    for (auto& e : o->entries) {
+void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
+    for (auto &e : o->entries) {
         e.value->accept(this, nullptr);
     }
     return resolveType(o->type);
 }
 
-void* Resolver::visitArrayCreation(ArrayCreation* ac, void* arg) {
+void *Resolver::visitArrayCreation(ArrayCreation *ac, void *arg) {
     for (auto e : ac->dims) {
         e->accept(this, nullptr);
     }
     return ac->type->accept(this, nullptr);
 }
 
-void* Resolver::visitAsExpr(AsExpr* as, void* arg) {
-    auto left = (RType*)as->expr->accept(this, nullptr);
-    auto right = (RType*)as->type->accept(this, nullptr);
+void *Resolver::visitAsExpr(AsExpr *as, void *arg) {
+    auto left = (RType *) as->expr->accept(this, nullptr);
+    auto right = (RType *) as->type->accept(this, nullptr);
     return right;
+}
+void *Resolver::visitRefExpr(RefExpr *as, void *arg) {
+    return nullptr;
+}
+void *Resolver::visitDerefExpr(DerefExpr *as, void *arg) {
+    return nullptr;
 }

@@ -35,10 +35,10 @@ public:
     }
 
     Token *first() {
-        if (tokens.empty()) return nullptr;
+        if (tokens.empty() || pos >= tokens.size()) return nullptr;
         return tokens[pos];
     }
-    
+
     bool is(TokenType t) {
         return first()->is(t);
     }
@@ -46,7 +46,7 @@ public:
     bool is(std::initializer_list<TokenType> t) {
         return first()->is(t);
     }
-    
+
     bool is(std::initializer_list<TokenType> t1, std::initializer_list<TokenType> t2) {
         return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
     }
@@ -54,26 +54,25 @@ public:
     Token *consume(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return t;
-        if(!isMarked){
-
+        if (!isMarked) {
         }
-        throw std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + std::to_string(tt));
+        throw std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt));
     }
-    
-    void backup(){
-        if(isMarked) throw std::runtime_error("already marked");
+
+    void backup() {
+        if (isMarked) throw std::runtime_error("already marked");
         isMarked = true;
         mark = pos;
     }
-    
-    void restore(){
-        if(!isMarked) throw std::runtime_error("not marked");
+
+    void restore() {
+        if (!isMarked) throw std::runtime_error("not marked");
         pos = mark;
         isMarked = false;
-    }    
+    }
 
     std::string *name() {
-        if (is({VAR, LET})) {
+        if (is({LET})) {
             return pop()->value;
         }
         return consume(IDENT)->value;
@@ -81,9 +80,9 @@ public:
 
     std::string *strLit();
 
-    Unit* parseUnit();
+    Unit *parseUnit();
 
-    ImportStmt* parseImport();
+    ImportStmt *parseImport();
 
     TypeDecl *parseTypeDecl();
 
@@ -94,8 +93,8 @@ public:
     Method *parseMethod();
     bool isMethod();
 
-    Param* parseParam(Method* m);
-    Param* arrowParam(ArrowFunction* af);
+    Param *parseParam(Method *m);
+    Param *arrowParam(ArrowFunction *af);
 
     VarDecl *parseVarDecl();
     bool isVarDecl();
@@ -108,7 +107,7 @@ public:
 
     Type *parseType();
     //Type* varType();
-    Type* refType();
+    Type *refType();
 
     std::vector<Type *> generics();
 

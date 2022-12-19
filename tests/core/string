@@ -1,40 +1,44 @@
-class string{
+class String{
   arr: char[];
   count: int;
+
+  func newString(arr: char[]){
+
+  }
 
   func length(): int{
     return count;
   }
 
-  func concat(string s): string{
-    var buf: char[count + s.length()];
+  func concat(s: String): String{
+    let buf: char[count + s.length()];
     Array.copy(arr, 0, buf, 0, count);
     Array.copy(s.arr, count, buf, s.count);
-    return string{arr : buf, count: buf.length};
+    return String{arr : buf, count: buf.length};
   }
 
-  func indexOf(s: string, off: int = 0): int{}
+  func indexOf(s: String, off: int = 0): int{}
   func indexOf(c: char, off: int): int{}
-  func lastIndexOf(s: string, off: int = s.lengh() - 1): int{}
+  func lastIndexOf(s: String, off: int = s.lengh() - 1): int{}
   func lastIndexOf(c: char, off: int): int{}
-  func indexOf(s: string, off: int): int{}
+  func indexOf(s: String, off: int): int{}
 
-  func contains(s: string): bool{
+  func contains(s: String): bool{
     return indexOf(s) != -1;
   }
 
   func substr(from: int, to: int): int{
     var buf: char[count - to - from];
-    return string{arr : buf, count: buf.length};
+    return String{arr : buf, count: buf.length};
   }
 
   func reverse(): int{
     var buf: char[] = Array.copy(arr);
     Array.reverse(buf);
-    return string{arr : buf, count: buf.length};
+    return String{arr : buf, count: buf.length};
   }
 
-  func indexOf(s: string, off: int): int{}
+  func indexOf(s: String, off: int): int{}
   
   
 }

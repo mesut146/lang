@@ -13,6 +13,7 @@ class Symbol{
 public:
     Method* m = nullptr;
     Fragment* f = nullptr;
+    FieldDecl* field = nullptr;
     Param* prm = nullptr;
     BaseDecl* decl = nullptr;
     ImportStmt* imp = nullptr;
@@ -20,6 +21,7 @@ public:
     
     Symbol(Method* m, Resolver* r): m(m), resolver(r){}
     Symbol(Fragment* f, Resolver* r): f(f), resolver(r){}
+    Symbol(FieldDecl* f, Resolver* r): field(f), resolver(r){}
     Symbol(Param* prm, Resolver* r): prm(prm), resolver(r){}
     Symbol(BaseDecl* bd, Resolver* r): decl(bd), resolver(r){}
     Symbol(ImportStmt* imp, Resolver* r): imp(imp), resolver(r){}
@@ -119,5 +121,7 @@ public:
      void* visitFieldAccess(FieldAccess* fa, void* arg) override;
      void* visitArrayCreation(ArrayCreation *ac, void* arg) override;
      void* visitAsExpr(AsExpr* as, void* arg) override;
-     
+     void* visitRefExpr(RefExpr* as, void* arg) override;
+     void* visitDerefExpr(DerefExpr* as, void* arg) override;
+
 };

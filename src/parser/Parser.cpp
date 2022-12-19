@@ -19,7 +19,7 @@ ImportAlias aliased(Parser *p) {
 
 //"import" importName ("," importName)* "from" STRING_LIT
 //"import" "*" ("as" name)? "from" STRING_LIT
-ImportStmt* Parser::parseImport() {
+ImportStmt *Parser::parseImport() {
     log("parseImport");
     auto res = new ImportStmt;
     consume(IMPORT);
@@ -64,6 +64,19 @@ ImportStmt* Parser::parseImport() {
     return res;
 }*/
 
+FieldDecl *parseField(Parser *p) {
+    auto res = new FieldDecl;
+    res->name = *p->consume(IDENT)->value;
+    if (p->is(QUES)) {
+        p->consume(QUES);
+        res->isOptional = true;
+    }
+    p->consume(COLON);
+    res->type = p->parseType();
+    p->consume(SEMI);
+    return res;
+}
+
 // ("class" | "interface") name typeArgs? (":")? "{" member* "}"
 TypeDecl *Parser::parseTypeDecl() {
     auto res = new TypeDecl;
@@ -77,13 +90,13 @@ TypeDecl *Parser::parseTypeDecl() {
         consume(COLON);
         res->baseTypes.push_back(refType());
         while (is(COMMA)) {
-          //interfaces
+            //interfaces
             res->baseTypes.push_back(refType());
         }
     }
     consume(LBRACE);
     //members
-    while (!is(RBRACE)) {
+    while (first() != nullptr && !is(RBRACE)) {
         if (is(CLASS)) {
             auto td = parseTypeDecl();
             td->parent = res;
@@ -92,30 +105,30 @@ TypeDecl *Parser::parseTypeDecl() {
             auto td = parseEnumDecl();
             td->parent = res;
             res->types.push_back(td);
-        }else if (isVarDecl()) {
-            res->fields.push_back(parseVarDecl());
+        } else if (is(IDENT)) {
+            res->fields.push_back(parseField(this));
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
-        }else{
-            throw std::runtime_error("invalid class member: " + *first()->value);
+        } else {
+            throw std::runtime_error("invalid class member: " + first()->print());
         }
     }
     consume(RBRACE);
     return res;
 }
 
-EnumEntry* parseEnumEntry(Parser* p){
-	auto res = new EnumEntry;
-	res->name = *p->name();
-	if(p->is(LPAREN)){
-		p->consume(LPAREN);
-		res->params.push_back(p->parseParam(nullptr));
+EnumEntry *parseEnumEntry(Parser *p) {
+    auto res = new EnumEntry;
+    res->name = *p->name();
+    if (p->is(LPAREN)) {
+        p->consume(LPAREN);
+        res->params.push_back(p->parseParam(nullptr));
         while (p->is(COMMA)) {
             p->consume(COMMA);
             res->params.push_back(p->parseParam(nullptr));
         }
-		p->consume(RPAREN);
-	}
+        p->consume(RPAREN);
+    }
     return res;
 }
 
@@ -125,10 +138,10 @@ EnumDecl *Parser::parseEnumDecl() {
     consume(ENUM);
     res->name = *name();
     log("enum decl = " + res->name);
-    if(is(LT)){
-    	res->typeArgs = generics();
-    	consume(GT);
-    }	
+    if (is(LT)) {
+        res->typeArgs = generics();
+        consume(GT);
+    }
     consume(LBRACE);
     if (!is(RBRACE)) {
         res->cons.push_back(parseEnumEntry(this));
@@ -138,24 +151,24 @@ EnumDecl *Parser::parseEnumDecl() {
         }
     }
     consume(SEMI);
-    while(isMethod()){
-    	res->methods.push_back(parseMethod());
-    }	
+    while (isMethod()) {
+        res->methods.push_back(parseMethod());
+    }
     consume(RBRACE);
     return res;
 }
 
-bool Parser::isVarDecl(){
-    if(is({STATIC}, {VAR, LET, CONST_KW})) return true;
-    return is({VAR, LET, CONST_KW});
+bool Parser::isVarDecl() {
+    if (is({STATIC}, {LET, CONST_KW})) return true;
+    return is({LET, CONST_KW});
 }
 
-bool Parser::isMethod(){
-    if(is({STATIC}, {FUNC})) return true;    
+bool Parser::isMethod() {
+    if (is({STATIC}, {FUNC})) return true;
     return is(FUNC);
 }
 
-Unit* Parser::parseUnit() {
+Unit *Parser::parseUnit() {
     auto res = new Unit;
 
     while (first() != nullptr && is(IMPORT)) {
@@ -181,7 +194,7 @@ Unit* Parser::parseUnit() {
 }
 
 //type name "?"? ":" type ("=" expr)?
-Param* Parser::parseParam(Method* m) {
+Param *Parser::parseParam(Method *m) {
     auto res = new Param;
     res->method = m;
     res->name = *name();
@@ -202,10 +215,10 @@ Param* Parser::parseParam(Method* m) {
 //(type | void) name generics? "(" params* ")" (block | ";")
 Method *Parser::parseMethod() {
     auto *res = new Method;
-    if(is(STATIC)){
+    if (is(STATIC)) {
         consume(STATIC);
         res->isStatic = true;
-    }    
+    }
     consume(FUNC);
     res->name = *name();
     if (is(LT)) {
@@ -222,14 +235,14 @@ Method *Parser::parseMethod() {
         }
     }
     consume(RPAREN);
-    if(is(COLON)){
+    if (is(COLON)) {
         consume(COLON);
         res->type = parseType();
-    }else{
+    } else {
         //default is void
         res->type = new Type;
         res->type->name = "void";
-    }    
+    }
     if (is(SEMI)) {
         //interface
         consume(SEMI);
@@ -240,13 +253,13 @@ Method *Parser::parseMethod() {
 }
 
 //name (":" type)? ("=" expr)?;
-Fragment* frag(Parser *p) {
+Fragment *frag(Parser *p) {
     auto res = new Fragment;
     res->name = *p->name();
-    if(p->is(COLON)){
-    	p->consume(COLON);
-    	res->type = p->parseType();
-    }	
+    if (p->is(COLON)) {
+        p->consume(COLON);
+        res->type = p->parseType();
+    }
     if (p->is(EQ)) {
         p->consume(EQ);
         res->rhs = p->parseExpr();
@@ -265,15 +278,16 @@ VarDecl *Parser::parseVarDecl() {
 //varType varDeclFrag ("," varDeclFrag)*;
 VarDeclExpr *Parser::parseVarDeclExpr() {
     auto res = new VarDeclExpr;
-    if(is(STATIC)){
+    if (is(STATIC)) {
         consume(STATIC);
         res->isStatic = true;
     }
-    if(is(VAR)) res->isVar = true;
-    else if(is(LET)) res->isLet = true;
-    else if(is(CONST_KW)) res->isConst = true;
-    else throw std::runtime_error("invalid var declaration");
-    pop();
+    if (is(CONST_KW)) {
+        consume(CONST_KW);
+        res->isConst = true;
+    } else {
+        consume(LET);
+    }
     res->list.push_back(frag(this));
     //rest if any
     while (is(COMMA)) {

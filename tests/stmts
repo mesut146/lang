@@ -1,19 +1,23 @@
-var f = obj.first().second().field;
-a.b.c();
+let pi = 3.1415;
 
-var pi = 3.1415;
-let anony={x: 1, y: 5};
-let obj: Point = {x: 1, y: 5};
+func test(){
+  //stack allocated, inferred
+  let p = Point{x: 1, y: 5};
+  //stack with explicit type
+  let obj: Point = {x: 1, y: 5};
+  //heap, inferred
+  let ptr = new Point{x: 1, y: 5};
+  //heap with explicit type
+  let ptr2: Point* = new Point{x: 1, y: 5};
+
+  //generic
+  let gen = new A<B*>{a: new B{b: 5}};
+}
 let map = {"a": "c", "d": "e"};
-let p = Point{x: 1, y: 5};
-let l: List<string>;
+let list: List<string>;
 
-for(let i=2;i<=5;i++){
-  //n.next = {value=i};
-  n = n.next;
+for(let i = 2;i <= 5;i++){
+  list.add(i.toString());
 }
 
-pi = 2;
-
-//a(),a.b()
-
+pi = 3;

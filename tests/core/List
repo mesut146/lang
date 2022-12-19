@@ -1,6 +1,6 @@
 class List<T>{
-  let arr: T[10];
-  let count: int = 0;
+  arr: T[10];
+  count: int = 0;
 
   func expand(max: int){
     if(arr.length < max){

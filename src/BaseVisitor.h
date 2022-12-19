@@ -75,7 +75,7 @@ public:
 
     virtual R visitObjExpr(ObjExpr *, A arg) { return nullptr; }
 
-    virtual R visitAnonyObjExpr(AnonyObjExpr *, A arg) { return nullptr; }
+    virtual R visitAnonyObjExpr(MapExpr *, A arg) { return nullptr; }
 
     virtual R visitReturnStmt(ReturnStmt *, A arg) { return nullptr; }
 

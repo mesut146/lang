@@ -1,0 +1,10 @@
+func test(){
+  //fixed sized
+  let arr = [1, 2, 3];
+  print(arr);
+}
+
+//takes slice
+func print(arr: int[]){
+
+}

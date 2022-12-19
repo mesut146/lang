@@ -2,19 +2,19 @@
 #include <map>
 
 TokenType kw(std::string &s) {
-    if (s == "class")  return CLASS;
+    if (s == "class") return CLASS;
     if (s == "enum") return ENUM;
     if (s == "interface") return INTERFACE;
-    if(s == "static") return STATIC;
+    if (s == "static") return STATIC;
     if (s == "bool") return BOOLEAN;
     if (s == "true") return TRUE;
     if (s == "false")
         return FALSE;
-    if(s == "i8") return I8;
-    if(s == "i16") return I16;
-    if(s == "i32") return I32;
-    if(s == "f32") return F32;
-    if(s == "f64") return F64;
+    if (s == "i8") return I8;
+    if (s == "i16") return I16;
+    if (s == "i32") return I32;
+    if (s == "f32") return F32;
+    if (s == "f64") return F64;
     if (s == "long")
         return LONG;
     if (s == "int")
@@ -49,14 +49,14 @@ TokenType kw(std::string &s) {
         return DO;
     if (s == "break")
         return BREAK;
-    if (s == "fn" || s == "func" || s == "fun" || s == "function")
+    if (s == "fn" || s == "func")
         return FUNC;
     if (s == "let")
         return LET;
-    if (s == "var")
-	    return VAR;
-    if(s == "const")
-    	return CONST_KW;
+    if (s == "new")
+        return NEW;
+    if (s == "const")
+        return CONST_KW;
     if (s == "try")
         return TRY;
     if (s == "catch")
@@ -116,7 +116,7 @@ Token *Lexer::readOp() {
 
     int off = pos;
     //can be length of 1 to 3
-    for (int i = s.length(); i > 0; i--) {
+    for (int i = (int) s.length(); i > 0; i--) {
         auto it = ops.find(s);
         if (it != ops.end()) {
             pos += i;
@@ -196,7 +196,7 @@ Token *Lexer::next() {
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {
-        throw std::string("unexpected char: ") + c;
+        throw std::runtime_error("unexpected char: " + std::string(&c));
     }
     token->start = off;
     token->end = pos;

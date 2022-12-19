@@ -1,6 +1,8 @@
 #pragma once
 
+#include <stdexcept>
 #include <string>
+#include <utility>
 
 enum TokenType {
     EOF_,
@@ -9,12 +11,12 @@ enum TokenType {
     ENUM,
     INTERFACE,
     STATIC,
-    I8,  //byte
-    I16, //short
-    I32, //int
-    I64, //long
-    F32, //float
-    F64, //double
+    I8, //byte
+    I16,//short
+    I32,//int
+    I64,//long
+    F32,//float
+    F64,//double
     VOID,
     CHAR,
     BYTE,
@@ -40,8 +42,8 @@ enum TokenType {
     CONTINUE,
     FUNC,
     LET,
-    VAR,
     CONST_KW,
+    NEW,
     IF_KW,
     ELSE_KW,
     FOR,
@@ -99,6 +101,8 @@ enum TokenType {
     ARROW,
 };
 
+std::string printType(TokenType t);
+
 class Token {
 public:
     std::string *value;
@@ -109,19 +113,20 @@ public:
 
     Token(TokenType t) : type(t) {}
 
-    Token(TokenType t, std::string s) : type(t), value(new std::string(s)) {}
+    Token(TokenType t, std::string s) : type(t), value(new std::string(std::move(s))) {}
 
-    bool is(TokenType t) {
+    bool is(TokenType t) const {
         return t == type;
     }
 
-    bool is(std::initializer_list<TokenType> t) {
-        for (TokenType tt : t)
+    bool is(std::initializer_list<TokenType> t) const {
+        for (auto tt : t) {
             if (tt == type) return true;
+        }
         return false;
     }
 
-    std::string print() {
-        return std::to_string(type) + ": " + *value;
+    std::string print() const {
+        return printType(type) + ": " + *value;
     }
 };
