@@ -15,8 +15,8 @@ class Array<T>{
   }
 
   static func max<T>(arr: T[]){
-    let res = int.MAX;
-    for(let x : arr) res = int.max(res, x);
+    let res = MAX; //int.MAX;
+    for(let x : arr) res = max(res, x);
     return res;
   }
 

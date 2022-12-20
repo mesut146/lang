@@ -210,7 +210,7 @@ Expression *PRIM(Parser *p) {
         return makeObj(p, true);
     } else if (isObj(p)) {
         return makeObj(p, false);
-    } else if (p->is(IDENT)) {
+    } else if (p->is({IDENT, FROM})) {
         auto id = p->pop()->value;
         if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
             auto res = new MethodCall;

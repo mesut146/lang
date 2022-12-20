@@ -1,0 +1,62 @@
+class String{
+  arr: char[];
+  length: int;
+
+  func newString(arr: char[]): String{
+    return String{arr: arr, length: arr.length};
+  }
+
+  func size(): int{
+    return length;
+  }
+
+  func concat(s: String): String{
+    let buf = char[length + s.length()];
+    Array.copy(arr, 0, buf, 0, length);
+    Array.copy(s.arr, length, buf, s.length);
+    return String{arr : buf, length: buf.length};
+  }
+
+  func indexOf(s: String, off: int = 0): int?{
+
+  }
+
+  func indexOf(c: char, off: int = 0): int?{
+    for(let i = off; i < length();i++){
+      if(arr[i] == c){
+        return i;
+      }
+    }
+    return None;
+  }
+
+  func lastIndexOf(s: String, off: int = s.lengh() - 1): int?{
+
+  }
+
+  func lastIndexOf(c: char, off: int = length): int?{
+    for(let i = off - 1;i >= 0;i--){
+      if(arr[i] == c){
+        return i;
+      }
+    }
+    return None;
+  }
+
+  func contains(s: String): bool{
+    return indexOf(s).isSome();
+  }
+
+  func substr(from: int, to: int): String{
+    let buf = char[length - to - from];
+    return String{arr : buf, length: buf.length};
+  }
+
+  func reverse(): String{
+    let buf: char[] = Array.copy(arr);
+    Array.reverse(buf);
+    return String{arr: buf, length: buf.length};
+  }
+
+  
+}

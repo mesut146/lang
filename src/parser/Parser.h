@@ -75,6 +75,9 @@ public:
     }
 
     std::string *name() {
+        if(is(FROM)){
+            return consume(FROM)->value;
+        }
         return consume(IDENT)->value;
     }
 

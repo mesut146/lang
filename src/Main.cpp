@@ -15,7 +15,7 @@ void lex(std::string &path) {
     }
 }
 
-void parse(const std::string &path, bool print = true) {
+void parse(const std::string &path, bool print = false) {
     info("parsing " + path);
     Lexer lexer(path);
     Parser parser(lexer);
@@ -77,10 +77,12 @@ int main(int argc, char **args) {
             }
         } else {
             debug = true;
-            //parse("../tests/exprs");
-            //parse("../tests/Optional");
-            //parse("../tests/stmts");
+            parse("../tests/exprs");
+            parse("../tests/stmts");
             parse("../tests/types");
+            parse("../tests/core/Array");
+            parse("../tests/core/Optional");
+            parse("../tests/core/String");
         }
     } catch (std::exception &e) {
         std::cout << "err:" << e.what() << "\n";

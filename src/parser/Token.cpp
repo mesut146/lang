@@ -10,6 +10,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(NEW)
         TOKEN_CASE(LET)
         TOKEN_CASE(RETURN)
+        TOKEN_CASE(FROM)
 
         TOKEN_CASE(BOOLEAN)
         TOKEN_CASE(INT)
@@ -74,5 +75,5 @@ std::string printType(TokenType t) {
 
         TOKEN_CASE(IDENT)
     }
-    throw std::runtime_error("printType" + std::to_string(t));
+    return "error type(" + std::to_string(t) + ")";
 }
