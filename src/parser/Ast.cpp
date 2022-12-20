@@ -398,15 +398,32 @@ std::string Entry::print() {
     return key + ": " + value->print();
 }
 
-std::string IfStmt::print() {
+std::string IfLetStmt::print() {
     std::string s;
-    s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
+    s.append("if let ");
+    s.append(type->print());
+    s.append("(");
+    s.append(join(args, ", "));
+    s.append(") = ");
+    s.append(rhs->print());
+    s.append(thenStmt->print());
     if (elseStmt != nullptr) {
         s.append("else ").append(elseStmt->print());
     }
     return s;
 }
 
+std::string IfStmt::print() {
+    std::string s; s.append("if ").append(expr->print()).append(" ").append(thenStmt->print());
+    if (elseStmt != nullptr) {
+        s.append("else ").append(elseStmt->print());
+    }
+    return s;
+}
+void *IfLetStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    //return v->visitIfLetStmt(this, arg);
+    return nullptr;
+}
 void *IfStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitIfStmt(this, arg);
 }

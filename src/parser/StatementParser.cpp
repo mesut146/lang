@@ -12,6 +12,29 @@ Block *Parser::parseBlock() {
     return res;
 }
 
+IfLetStmt *parseIfLet(Parser *p) {
+    auto res = new IfLetStmt;
+    p->consume(IF_KW);
+    p->consume(LET);
+    res->type = p->parseType();
+    p->consume(LPAREN);
+    res->args.push_back(*p->consume(IDENT)->value);
+    while(p->is(COMMA)){
+      p->consume(COMMA);
+      res->args.push_back(*p->consume(IDENT)->value);
+    }
+    p->consume(RPAREN);
+    p->consume(EQ);
+    res->rhs = p->parseExpr();
+    
+    res->thenStmt = p->parseBlock();
+    if (p->is(ELSE_KW)) {
+        p->consume(ELSE_KW);
+        res->elseStmt = p->parseStmt();
+    }
+    return res;
+}
+
 IfStmt *parseIf(Parser *p) {
     auto res = new IfStmt;
     p->consume(IF_KW);
@@ -114,6 +137,9 @@ CatchStmt parseCatch(Parser *p) {
 Statement *Parser::parseStmt() {
     log("parseStmt " + *first()->value);
     if (is(IF_KW)) {
+        if(is({IF_KW}, {LET})){
+          return parseIfLet(this);
+        }
         return parseIf(this);
     } else if (is(FOR)) {
         return parseFor(this);

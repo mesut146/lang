@@ -1,0 +1,18 @@
+enum Optional<T>{
+  None,
+  Some(val: T);
+
+  func unwrap(): T{
+    if let Some(val) = this{
+      return val;
+    }
+    throw err;
+  }
+
+  func isSome(): bool{
+    if let Some(val) = asd{
+      return true;
+    }
+    return false;
+  }
+}

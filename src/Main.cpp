@@ -53,6 +53,7 @@ int main(int argc, char **args) {
         } else {
             debug = true;
             parse("../tests/exprs");
+            parse("../tests/Optional");
             parse("../tests/stmts");
             parse("../tests/types");
         }

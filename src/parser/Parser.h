@@ -40,14 +40,17 @@ public:
     }
 
     bool is(TokenType t) {
+        if(first()==nullptr) return false;
         return first()->is(t);
     }
 
     bool is(std::initializer_list<TokenType> t) {
+        if(first()==nullptr) return false;
         return first()->is(t);
     }
 
     bool is(std::initializer_list<TokenType> t1, std::initializer_list<TokenType> t2) {
+        if(first()==nullptr || pos+1>=tokens.size()) return false;
         return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
     }
 

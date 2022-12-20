@@ -140,7 +140,7 @@ EnumDecl *Parser::parseEnumDecl() {
     log("enum decl = " + res->name);
     if (is(LT)) {
         res->typeArgs = generics();
-        consume(GT);
+        //consume(GT);
     }
     consume(LBRACE);
     if (!is(RBRACE)) {

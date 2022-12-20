@@ -1,4 +1,5 @@
 let pi = 3.1415;
+pi = 3;
 
 func test(){
   //stack allocated, inferred
@@ -20,4 +21,11 @@ for(let i = 2;i <= 5;i++){
   list.add(i.toString());
 }
 
-pi = 3;
+let opt: int?;
+if(flag){
+  opt = 5;
+}
+
+if(opt){
+ let real: int = opt?;
+}

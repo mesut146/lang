@@ -510,6 +510,18 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
+class IfLetStmt : public Statement {
+public:
+    Type* type;
+    std::vector<std::string> args;
+    Expression *rhs;
+    Statement *thenStmt;
+    Statement *elseStmt = nullptr;
+
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+
 class IfStmt : public Statement {
 public:
     Expression *expr;
