@@ -66,11 +66,7 @@ ImportStmt *Parser::parseImport() {
 
 FieldDecl *parseField(Parser *p) {
     auto res = new FieldDecl;
-    res->name = *p->consume(IDENT)->value;
-    if (p->is(QUES)) {
-        p->consume(QUES);
-        res->isOptional = true;
-    }
+    res->name = *p->name();
     p->consume(COLON);
     res->type = p->parseType();
     p->consume(SEMI);
@@ -117,15 +113,23 @@ TypeDecl *Parser::parseTypeDecl() {
     return res;
 }
 
+EnumParam *parseEnumParam(Parser *p) {
+    auto res = new EnumParam;
+    res->name = *p->name();
+    p->consume(COLON);
+    res->type = p->parseType();
+    return res;
+}
+
 EnumEntry *parseEnumEntry(Parser *p) {
     auto res = new EnumEntry;
     res->name = *p->name();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
-        res->params.push_back(p->parseParam(nullptr));
+        res->params.push_back(parseEnumParam(p));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->params.push_back(p->parseParam(nullptr));
+            res->params.push_back(parseEnumParam(p));
         }
         p->consume(RPAREN);
     }
@@ -140,7 +144,6 @@ EnumDecl *Parser::parseEnumDecl() {
     log("enum decl = " + res->name);
     if (is(LT)) {
         res->typeArgs = generics();
-        //consume(GT);
     }
     consume(LBRACE);
     if (!is(RBRACE)) {
@@ -193,19 +196,18 @@ Unit *Parser::parseUnit() {
     return res;
 }
 
-//type name "?"? ":" type ("=" expr)?
+//name ":" type ("=" expr)?
 Param *Parser::parseParam(Method *m) {
     auto res = new Param;
     res->method = m;
     res->name = *name();
     log("param = " + res->name);
-    if (is(QUES)) {
-        consume(QUES);
-        res->isOptional = true;
-    }
     consume(COLON);
     res->type = parseType();
     if (is(EQ)) {
+        if (res->type->isOptional) {
+            throw std::runtime_error("param: " + res->name + " has both optional type and default value");
+        }
         consume(EQ);
         res->defVal = parseExpr();
     }

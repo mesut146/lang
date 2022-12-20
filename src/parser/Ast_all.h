@@ -15,7 +15,6 @@ class Name;
 class SimpleName;
 class QName;
 class Type;
-class ArrowType;
 class SimpleType;
 class RefType;
 
@@ -42,7 +41,6 @@ class ExprStmt;
 class ParExpr;
 class ObjExpr;
 class MapExpr;
-class ArrowFunction;
 
 class Block;
 class IfStmt;
@@ -55,6 +53,3 @@ class Case;
 class ReturnStmt;
 class ContinueStmt;
 class BreakStmt;
-class TryStmt;
-class ThrowStmt;
-class CatchStmt;

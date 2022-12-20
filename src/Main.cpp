@@ -40,7 +40,30 @@ void resolveTest() {
     r->resolveAll();
 }
 
+class Node {
+public:
+    int val;
+    Node *next = nullptr;
+
+    static Node make() {
+        auto node = Node{.val = 5};
+        auto next = Node{.val = 6};
+        node.next = &next;
+        return node;
+    }
+
+    void print() {
+        std::cout << val;
+        if (next != nullptr) {
+            std::cout << ", ";
+            next->print();
+        }
+    }
+};
+
 int main(int argc, char **args) {
+    auto node = Node::make();
+    node.print();
     try {
         if (argc > 1) {
             if (strcmp(args[1], "parse") == 0) {

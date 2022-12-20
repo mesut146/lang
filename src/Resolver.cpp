@@ -150,26 +150,6 @@ void *Resolver::visitTypeDecl(TypeDecl *td, void *arg) {
     return res;
 }
 
-ArrowType *funcType(Method *m) {
-    auto arrow = new ArrowType;
-    for (auto prm : m->params) {
-        arrow->params.push_back(prm->type);
-    }
-    arrow->type = m->type;
-    return arrow;
-}
-
-Type *funcType2(Method *m) {
-    auto arrow = new ArrowType;
-    for (auto prm : m->params) {
-        arrow->params.push_back(prm->type);
-    }
-    arrow->type = m->type;
-    auto res = new Type;
-    res->arrow = arrow;
-    return res;
-}
-
 void *Resolver::visitMethod(Method *m, void *arg) {
     auto backup = curMethod;
     curMethod = m;
@@ -289,9 +269,6 @@ RType *Resolver::resolveType(Type *type) {
         ref->scope = simpleType("core");
         ref->name = "string";
         res->type = ref;
-    } else if (type->arrow) {
-        res = new RType;
-        res->type = type;
     } else {
         if (type->scope == nullptr) {
             if (curDecl != nullptr) {
@@ -387,13 +364,6 @@ void Resolver::param(const std::string &name, std::vector<Symbol> &res) {
             }
         }
     }
-    if (arrow) {
-        for (auto *p : arrow->params) {
-            if (p->name == name) {
-                res.push_back(Symbol(p, this));
-            }
-        }
-    }
 }
 
 void Resolver::field(const std::string &name, std::vector<Symbol> &res) {
@@ -474,7 +444,7 @@ void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
     auto scp = (RType *) fa->scope->accept(this, nullptr);
     std::vector<Symbol> arr;
     if (scp->isImport) {
-        Resolver *r = getResolver(scp->unit->path);
+        auto *r = getResolver(scp->unit->path);
         auto tmp = r->find(fa->name, false);
         auto res = new RType;
         res->arr = tmp;
@@ -489,9 +459,6 @@ void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
             if (v->name == fa->name) {
                 return v->accept(this, nullptr);
             }
-        }
-        for (Method *m : td->methods) {
-            if (m->name == fa->name) return funcType(m);
         }
     }
     throw std::runtime_error("invalid field " + fa->name + " in " +
@@ -531,22 +498,6 @@ bool isSame(RType *rt1, RType *rt2) {
 
 bool subType(Type *type, Type *sub) {
     if (dynamic_cast<IncompleteType *>(type)) return true;
-    if (type->arrow) {
-        if (!sub->arrow) return false;
-        auto arrow = type->arrow;
-        auto arrow2 = sub->arrow;
-        if (arrow->params.size() != arrow2->params.size()) return false;
-        if (!dynamic_cast<IncompleteType *>(arrow->type) &&
-            !isSame(arrow->type, arrow2->type))
-            return false;
-        for (int i = 0; i < arrow->params.size(); i++) {
-            Type *t1 = arrow->params[i];
-            Type *t2 = arrow2->params[i];
-            if (dynamic_cast<IncompleteType *>(t1)) continue;// to be inferred
-            if (t1->print() != t2->print()) return false;
-        }
-        return true;
-    }
     if (type->print() == sub->print()) return true;
     if (type->isVoid()) return false;
     if (type->isArray()) return false;
@@ -584,46 +535,10 @@ bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     return true;
 }
 
-bool isSame(Resolver *r, MethodCall *mc, ArrowType *sig) {
-    if (mc->args.size() != sig->params.size()) return false;
-    for (int i = 0; i < mc->args.size(); i++) {
-        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
-        auto *t2 = (RType *) sig->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;// to be inferred
-        if (!subType(t1->type, t2->type)) return false;
-    }
-    return true;
-}
-bool isSameFull(Resolver *r, MethodCall *mc, ArrowType *sig) {
-    if (mc->args.size() != sig->params.size()) return false;
-    for (int i = 0; i < mc->args.size(); i++) {
-        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
-        auto *t2 = (RType *) sig->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;// to be inferred
-        if (!isSame(t1->type, t2->type)) return false;
-    }
-    return true;
-}
 bool isSame1(MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
     return true;
-}
-
-void bind(MethodCall *mc, Type *sig) {
-    for (int i = 0; i < mc->args.size(); i++) {
-        Expression *arg = mc->args[i];
-        auto arrow = dynamic_cast<ArrowFunction *>(arg);
-        if (!arrow) continue;
-        ArrowType *arg2 = sig->arrow->params[i]->arrow;
-        for (int j = 0; j < arrow->params.size(); j++) {
-            auto prm = arrow->params[j];
-            if (!prm->type) {
-                prm->type = arg2->params[j];
-                std::cout << "inferred: " + prm->print() + "\n";
-            }
-        }
-    }
 }
 
 std::string toPath(Name *nm) {
@@ -740,22 +655,6 @@ std::pair<std::string, Name *> split2(Name *name) {
     }
 }*/
 
-std::vector<Type *> filter(std::vector<Symbol> &syms, MethodCall *mc, Resolver *r) {
-    std::vector<Type *> list;
-    for (auto &s : syms) {
-        if (s.m) {
-            if (isSame(r, mc, s.m)) list.push_back(funcType2(s.m));
-        } else if (s.f) {
-            auto t = s.resolve(s.f)->type;
-            if (isSame(r, mc, t->arrow)) list.push_back(t);
-        } else if (s.prm) {
-            auto t = s.resolve(s.prm)->type;
-            if (isSame(r, mc, t->arrow)) list.push_back(t);
-        }
-    }
-    return list;
-}
-
 void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     std::cout << "visitMethodCall " << mc->name << "\n";
     Type *target = nullptr;
@@ -767,16 +666,9 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
                 if (s.imp) {
                     auto *r = getResolver(s.imp->normal->path->print());
                     auto arr = r->find(mc->name, false);
-                    auto tt = filter(arr, mc, this);
-                    for (auto t : tt) {
-                    }
                 }
             }
             throw std::runtime_error("mc scope is ?");
-        }
-        // todo
-        for (auto *m : scp->targetDecl->methods) {
-            if (isSame(this, mc, m)) list.push_back(funcType2(m));
         }
         if (list.empty())
             throw std::runtime_error("method:  " + mc->name +
@@ -788,18 +680,10 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
         return sig->accept(this, nullptr);
     } else {
         auto syms = find(mc->name, true);
-        list = filter(syms, mc, this);
-        if (list.empty())
+        if (syms.empty())
             throw std::runtime_error("method:  " + mc->name + " not found");
-        // find most compatible
-        for (auto sig : list) {
-            if (isSameFull(this, mc, sig->arrow)) {
-                return sig->accept(this, nullptr);
-            }
-        }
-        if (list.size() == 1) {
-            bind(mc, list[0]);
-            return list[0]->accept(this, nullptr);
+        if (syms.size() == 1) {
+            //todo
         }
 
         throw std::runtime_error("method:  " + mc->name + " has " +
@@ -818,33 +702,6 @@ RType *inferType(Block *b, Resolver *r) {
         }
     }
     return makeSimple("void");
-}
-
-void *Resolver::visitArrowFunction(ArrowFunction *af, void *arg) {
-    auto type = new Type;
-    auto t = new ArrowType;
-    type->arrow = t;
-    bool needInfer = false;
-    for (auto prm : af->params) {
-        if (!prm->type) {
-            needInfer = true;
-            t->params.push_back(new IncompleteType);
-        } else {
-            t->params.push_back(((RType *) prm->accept(this, nullptr))->type);
-        }
-    }
-    if (!needInfer) {
-        arrow = af;
-        if (af->block) {
-            t->type = inferType(af->block, this)->type;
-        } else {
-            t->type = ((RType *) af->expr->accept(this, nullptr))->type;
-        }
-        arrow = nullptr;
-    } else {
-        t->type = new IncompleteType;
-    }
-    return new RType(type);
 }
 
 void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {

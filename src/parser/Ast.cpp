@@ -4,31 +4,16 @@
 std::string RefExpr::print() {
     return "&" + expr->print();
 }
-void *RefExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitRefExpr(this, arg);
-}
-
 std::string DerefExpr::print() {
     return "*" + expr->print();
 }
-
-void *DerefExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitDerefExpr(this, arg);
-}
-
-void *FieldDecl::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitFieldDecl(this, arg);
+std::string UnwrapExpr::print() {
+    return expr->print() + "!";
 }
 
 std::string FieldDecl::print() const {
-    if (isOptional) {
-        return name + "?: " + type->print();
-    } else {
-        return name + ": " + type->print();
-    }
+    return name + ": " + type->print();
 }
-
-//visit
 
 std::string Unit::print() {
     std::string s;
@@ -75,9 +60,6 @@ std::string ImportStmt::print() {
     return s;
 }
 
-void *BaseDecl::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitBaseDecl(this, arg);
-}
 
 std::string EnumDecl::print() {
     std::string s;
@@ -95,10 +77,6 @@ std::string EnumDecl::print() {
     return s;
 }
 
-void *EnumDecl::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitEnumDecl(this, arg);
-}
-
 std::string EnumEntry::print() {
     std::string s;
     s.append(name);
@@ -108,6 +86,10 @@ std::string EnumEntry::print() {
         s.append(")");
     }
     return s;
+}
+
+std::string EnumParam::print() {
+    return name + ": " + type->print();
 }
 
 std::string TypeDecl::print() {
@@ -137,10 +119,6 @@ std::string TypeDecl::print() {
     return s;
 }
 
-void *TypeDecl::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitTypeDecl(this, arg);
-}
-
 std::string Method::print() {
     std::string s;
     if (isStatic) s.append("static ");
@@ -166,32 +144,12 @@ std::string Method::print() {
     return s;
 }
 
-void *Method::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitMethod(this, arg);
-}
-
-bool Name::isSimple() { return false; }
-
-SimpleName::SimpleName(std::string name) : name(name) {}
-
 std::string SimpleName::print() {
     return name;
 }
 
-void *SimpleName::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitSimpleName(this, arg);
-}
-
-bool SimpleName::isSimple() { return true; }
-
-QName::QName(Name *scope, std::string name) : scope(scope), name(name) {}
-
 std::string QName::print() {
     return scope->print() + "." + name;
-}
-
-void *QName::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitQName(this, arg);
 }
 
 std::string Literal::print() {
@@ -200,17 +158,11 @@ std::string Literal::print() {
     return s;
 }
 
-void *Literal::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitLiteral(this, arg);
-}
 
 std::string VarDecl::print() {
     return decl->print() + ";";
 }
 
-void *VarDecl::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitVarDecl(this, arg);
-}
 
 std::string VarDeclExpr::print() {
     std::string s;
@@ -221,9 +173,6 @@ std::string VarDeclExpr::print() {
     return s;
 }
 
-void *VarDeclExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitVarDeclExpr(this, arg);
-}
 
 std::string Fragment::print() {
     std::string s;
@@ -237,16 +186,8 @@ std::string Fragment::print() {
     return s;
 }
 
-void *Fragment::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitFragment(this, arg);
-}
-
 std::string ExprStmt::print() {
     return expr->print() + ";";
-}
-
-void *ExprStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitExprStmt(this, arg);
 }
 
 std::string Block::print() {
@@ -259,9 +200,6 @@ std::string Block::print() {
     return s;
 }
 
-void *Block::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitBlock(this, arg);
-}
 
 std::string printDims(std::vector<Expression *> &dims) {
     std::string s;
@@ -275,41 +213,19 @@ std::string printDims(std::vector<Expression *> &dims) {
     return s;
 }
 
-void *ArrowType::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitArrowType(this, arg);
-}
-
-std::string ArrowType::print() {
-    std::string s;
-    s.append("func");
-    if (type) s.append("<").append(type->print()).append(">");
-    s.append("(");
-    s.append(join(params, ", "));
-    s.append(")");
-    return s;
-}
-
-void *Type::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitType(this, arg);
-}
-
 std::string Type::print() {
     std::string s;
-    if (arrow) {
-        s.append(arrow->print());
-    } else {
-        if (scope) {
-            s.append(scope->print()).append(".");
-        }
-        s.append(name);
-        if (!typeArgs.empty()) {
-            s.append("<");
-            s.append(join(typeArgs, ", "));
-            s.append(">");
-        }
+    if (scope) {
+        s.append(scope->print()).append(".");
+    }
+    s.append(name);
+    if (!typeArgs.empty()) {
+        s.append("<");
+        s.append(join(typeArgs, ", "));
+        s.append(">");
     }
     s.append(printDims(dims));
-    if (isNullable) {
+    if (isOptional) {
         s.append("?");
     }
     if (isPointer) {
@@ -321,13 +237,9 @@ std::string Type::print() {
 std::string Param::print() {
     std::string s;
     s.append(name);
-    if (isOptional) {
-        s.append("?");
-    }
-    if (type) {
-        s.append(": ");
-        s.append(type->print());
-    }
+    s.append(": ");
+    s.append(type->print());
+
     if (defVal != nullptr) {
         s.append(" = ");
         s.append(defVal->print());
@@ -335,34 +247,8 @@ std::string Param::print() {
     return s;
 }
 
-void *Param::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitParam(this, arg);
-}
-
-std::string ArrowFunction::print() {
-    std::string s;
-    s.append("(");
-    s.append(join(params, ", "));
-    s.append(")");
-    s.append(" => ");
-    if (block != nullptr) {
-        s.append(block->print());
-    } else {
-        s.append(expr->print());
-    }
-    return s;
-}
-
-void *ArrowFunction::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitArrowFunction(this, arg);
-}
-
 std::string ParExpr::print() {
     return std::string("(" + expr->print() + ")");
-}
-
-void *ParExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitParExpr(this, arg);
 }
 
 std::string ObjExpr::print() {
@@ -374,20 +260,12 @@ std::string ObjExpr::print() {
     return s;
 }
 
-void *ObjExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitObjExpr(this, arg);
-}
-
 std::string MapExpr::print() {
     std::string s;
     s.append("{");
     s.append(join(entries, ", "));
     s.append("}");
     return s;
-}
-
-void *MapExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitAnonyObjExpr(this, arg);
 }
 
 std::string MapEntry::print() {
@@ -414,18 +292,12 @@ std::string IfLetStmt::print() {
 }
 
 std::string IfStmt::print() {
-    std::string s; s.append("if ").append(expr->print()).append(" ").append(thenStmt->print());
+    std::string s;
+    s.append("if ").append(expr->print()).append(" ").append(thenStmt->print());
     if (elseStmt != nullptr) {
         s.append("else ").append(elseStmt->print());
     }
     return s;
-}
-void *IfLetStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    //return v->visitIfLetStmt(this, arg);
-    return nullptr;
-}
-void *IfStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitIfStmt(this, arg);
 }
 
 std::string ForStmt::print() {
@@ -447,10 +319,6 @@ std::string ForStmt::print() {
     return s;
 }
 
-void *ForStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitForStmt(this, arg);
-}
-
 std::string ForEach::print() {
     std::string s;
     s.append("for(");
@@ -461,49 +329,24 @@ std::string ForEach::print() {
     s.append(body->print());
     return s;
 }
-
-void *ForEach::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitForEach(this, arg);
-}
-
 std::string Infix::print() {
     return left->print() + " " + op + " " + right->print();
-}
-
-void *Infix::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitInfix(this, arg);
 }
 
 std::string AsExpr::print() {
     return expr->print() + " as " + type->print();
 }
 
-void *AsExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitAsExpr(this, arg);
-}
-
 std::string Assign::print() {
     return left->print() + " " + op + " " + right->print();
-}
-
-void *Assign::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitAssign(this, arg);
 }
 
 std::string Unary::print() {
     return op + expr->print();
 }
 
-void *Unary::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitUnary(this, arg);
-}
-
 std::string Postfix::print() {
     return expr->print() + op;
-}
-
-void *Postfix::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitPostfix(this, arg);
 }
 
 std::string FieldAccess::print() {
@@ -511,10 +354,6 @@ std::string FieldAccess::print() {
         return scope->print() + "?." + name;
     }
     return scope->print() + "." + name;
-}
-
-void *FieldAccess::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitFieldAccess(this, arg);
 }
 
 std::string MethodCall::print() {
@@ -532,10 +371,6 @@ std::string MethodCall::print() {
     return s;
 }
 
-void *MethodCall::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitMethodCall(this, arg);
-}
-
 std::string ArrayAccess::print() {
     if (isOptional) {
         return array->print() + "?[" + index->print() + "]";
@@ -543,32 +378,17 @@ std::string ArrayAccess::print() {
     return array->print() + "[" + index->print() + "]";
 }
 
-void *ArrayAccess::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitArrayAccess(this, arg);
-}
-
 std::string ArrayExpr::print() {
     return "[" + join(list, ", ") + "]";
-}
-
-void *ArrayExpr::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitArrayExpr(this, arg);
 }
 
 std::string ArrayCreation::print() {
     return type->print() + printDims(dims);
 }
 
-void *ArrayCreation::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitArrayCreation(this, arg);
-}
 
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
-}
-
-void *Ternary::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitTernary(this, arg);
 }
 
 std::string WhileStmt::print() {
@@ -578,17 +398,9 @@ std::string WhileStmt::print() {
     return s;
 }
 
-void *WhileStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitWhileStmt(this, arg);
-}
-
 std::string ReturnStmt::print() {
     if (expr == nullptr) return "return";
     return "return " + expr->print() + ";";
-}
-
-void *ReturnStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitReturnStmt(this, arg);
 }
 
 std::string ContinueStmt::print() {
@@ -596,47 +408,152 @@ std::string ContinueStmt::print() {
     return "continue " + *label;
 }
 
-void *ContinueStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitContinueStmt(this, arg);
-}
-
 std::string BreakStmt::print() {
     if (label == nullptr) return "break";
     return "break " + *label;
 }
 
-void *BreakStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitBreakStmt(this, arg);
-}
 
 std::string DoWhile::print() {
     return "do" + body->print() + "\nwhile(" + expr->print() + ");";
 }
 
+//accept------------------------------------
+void *BreakStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitBreakStmt(this, arg);
+}
+void *ArrayExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitArrayExpr(this, arg);
+}
+void *ReturnStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitReturnStmt(this, arg);
+}
+
+void *ContinueStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitContinueStmt(this, arg);
+}
 void *DoWhile::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitDoWhile(this, arg);
 }
 
-std::string ThrowStmt::print() {
-    return "throw " + expr->print() + ";";
+void *RefExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitRefExpr(this, arg);
 }
 
-void *ThrowStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitThrowStmt(this, arg);
+void *DerefExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitDerefExpr(this, arg);
+}
+void *BaseDecl::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitBaseDecl(this, arg);
 }
 
-std::string CatchStmt::print() {
-    return "catch(" + param.print() + ")" + block->print();
+void *UnwrapExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    //return v->visitUnwrapExpr(this, arg);
+    throw std::runtime_error("UnwrapExpr::accept");
 }
 
-void *CatchStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitCatchStmt(this, arg);
+void *FieldDecl::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitFieldDecl(this, arg);
+}
+void *VarDeclExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitVarDeclExpr(this, arg);
+}
+void *VarDecl::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitVarDecl(this, arg);
+}
+void *Literal::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitLiteral(this, arg);
+}
+void *QName::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitQName(this, arg);
+}
+void *SimpleName::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitSimpleName(this, arg);
+}
+void *Method::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitMethod(this, arg);
+}
+void *TypeDecl::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitTypeDecl(this, arg);
+}
+void *EnumDecl::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitEnumDecl(this, arg);
+}
+void *ExprStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitExprStmt(this, arg);
 }
 
-std::string TryStmt::print() {
-    return "try " + block->print() + join(catches, "\n");
+void *Block::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitBlock(this, arg);
 }
 
-void *TryStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    return v->visitTryStmt(this, arg);
+void *Type::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitType(this, arg);
+}
+void *MapExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitAnonyObjExpr(this, arg);
+}
+void *ObjExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitObjExpr(this, arg);
+}
+void *Param::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitParam(this, arg);
+}
+
+void *ParExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitParExpr(this, arg);
+}
+void *Fragment::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitFragment(this, arg);
+}
+void *ForStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitForStmt(this, arg);
+}
+void *IfLetStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    //return v->visitIfLetStmt(this, arg);
+    return nullptr;
+}
+void *IfStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitIfStmt(this, arg);
+}
+void *ForEach::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitForEach(this, arg);
+}
+
+void *Infix::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitInfix(this, arg);
+}
+void *AsExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitAsExpr(this, arg);
+}
+
+void *Assign::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitAssign(this, arg);
+}
+void *ArrayCreation::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitArrayCreation(this, arg);
+}
+void *ArrayAccess::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitArrayAccess(this, arg);
+}
+void *MethodCall::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitMethodCall(this, arg);
+}
+void *Unary::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitUnary(this, arg);
+}
+
+void *Postfix::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitPostfix(this, arg);
+}
+
+void *FieldAccess::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitFieldAccess(this, arg);
+}
+void *Ternary::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitTernary(this, arg);
+}
+
+void *WhileStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitWhileStmt(this, arg);
 }

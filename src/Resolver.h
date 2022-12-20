@@ -68,7 +68,6 @@ public:
      std::vector<std::shared_ptr<Scope>> scopes;
      BaseDecl* curDecl = nullptr;
      Method* curMethod = nullptr;
-     ArrowFunction* arrow = nullptr;
      bool fromOther = false;
      static std::map<std::string, Resolver*> resolverMap;
      static std::string root;
@@ -107,7 +106,6 @@ public:
      
      void* visitMethod(Method* m, void* arg) override;
      void* visitParam(Param* p, void* arg) override;
-     void* visitArrowFunction(ArrowFunction* af, void* arg) override;
      
      RType* resolveScoped(Expression* expr);
 

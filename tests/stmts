@@ -27,5 +27,6 @@ if(flag){
 }
 
 if(opt){
- let real: int = opt?;
+ let real: int = opt!;
+ let real: int = opt.unwrap();
 }

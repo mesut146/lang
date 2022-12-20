@@ -3,16 +3,21 @@ enum Optional<T>{
   Some(val: T);
 
   func unwrap(): T{
-    if let Some(val) = this{
+    if let Some(val) = (this){
       return val;
     }
-    throw err;
+    panic(err);
   }
 
   func isSome(): bool{
-    if let Some(val) = asd{
+    return !isNone();
+  }
+
+  func isNone(): bool{
+    if let None = (this){
       return true;
     }
     return false;
   }
 }
+

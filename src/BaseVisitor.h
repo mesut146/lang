@@ -37,8 +37,6 @@ public:
 
     virtual R visitType(Type* type, A arg) { return nullptr; }
     
-    virtual R visitArrowType(ArrowType* type, A arg) { return nullptr; }
-    
     virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 
     virtual R visitVarDeclExpr(VarDeclExpr *, A arg) { return nullptr; }
@@ -71,8 +69,6 @@ public:
 
     virtual R visitParExpr(ParExpr *, A arg) { return nullptr; }
 
-    virtual R visitArrowFunction(ArrowFunction* sn, A arg) { return nullptr; }
-
     virtual R visitObjExpr(ObjExpr *, A arg) { return nullptr; }
 
     virtual R visitAnonyObjExpr(MapExpr *, A arg) { return nullptr; }
@@ -92,11 +88,5 @@ public:
     virtual R visitForStmt(ForStmt *, A arg) { return nullptr; }
 
     virtual R visitForEach(ForEach *, A arg) { return nullptr; }
-
-    virtual R visitTryStmt(TryStmt* sn, A arg) { return nullptr; }
-
-    virtual R visitThrowStmt(ThrowStmt* sn, A arg) { return nullptr; }
-
-    virtual R visitCatchStmt(CatchStmt* sn, A arg) { return nullptr; }
 
 };

@@ -40,17 +40,17 @@ public:
     }
 
     bool is(TokenType t) {
-        if(first()==nullptr) return false;
+        if (first() == nullptr) return false;
         return first()->is(t);
     }
 
     bool is(std::initializer_list<TokenType> t) {
-        if(first()==nullptr) return false;
+        if (first() == nullptr) return false;
         return first()->is(t);
     }
 
     bool is(std::initializer_list<TokenType> t1, std::initializer_list<TokenType> t2) {
-        if(first()==nullptr || pos+1>=tokens.size()) return false;
+        if (first() == nullptr || pos + 1 >= tokens.size()) return false;
         return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
     }
 
@@ -75,9 +75,6 @@ public:
     }
 
     std::string *name() {
-        if (is({LET})) {
-            return pop()->value;
-        }
         return consume(IDENT)->value;
     }
 
@@ -91,13 +88,10 @@ public:
 
     EnumDecl *parseEnumDecl();
 
-    //FieldDecl *parseFieldDecl();
-
     Method *parseMethod();
     bool isMethod();
 
     Param *parseParam(Method *m);
-    Param *arrowParam(ArrowFunction *af);
 
     VarDecl *parseVarDecl();
     bool isVarDecl();
@@ -109,7 +103,6 @@ public:
     std::vector<Expression *> exprList();
 
     Type *parseType();
-    //Type* varType();
     Type *refType();
 
     std::vector<Type *> generics();

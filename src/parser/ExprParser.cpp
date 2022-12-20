@@ -4,8 +4,6 @@
 #include "Util.h"
 
 
-ArrowFunction *parseArrow(Parser *p);
-
 std::vector<Expression *> Parser::exprList() {
     std::vector<Expression *> res;
     res.push_back(parseExpr());
@@ -75,36 +73,10 @@ Type *Parser::refType() {
     return res;
 }
 
-//"func" "<" type ">" "(" param ("," param)* ")"
-ArrowType *parseArrowType(Parser *p) {
-    auto res = new ArrowType;
-    p->consume(FUNC);
-    if (p->is(LT)) {
-        p->consume(LT);
-        res->type = p->parseType();
-        p->consume(GT);
-    } else {
-        res->type = new Type;
-        res->type->name = "void";
-    }
-    p->consume(LPAREN);
-    if (!p->is(RPAREN)) {
-        res->params.push_back(p->parseType());
-        while (p->is(COMMA)) {
-            p->consume(COMMA);
-            res->params.push_back(p->parseType());
-        }
-    }
-    p->consume(RPAREN);
-    return res;
-}
-
 Type *Parser::parseType() {
     auto res = new Type;
     if (isPrim(*first())) {
         res->name = *pop()->value;
-    } else if (is(FUNC)) {
-        res->arrow = parseArrowType(this);
     } else {
         res->name = *consume(IDENT)->value;
         while (is({DOT, LT})) {
@@ -130,7 +102,7 @@ Type *Parser::parseType() {
     }
     if (is(QUES)) {
         pop();
-        res->isNullable = true;
+        res->isOptional = true;
     }
     if (is(STAR)) {
         pop();
@@ -202,25 +174,30 @@ ObjExpr *makeObj(Parser *p, bool isPointer) {
     return res;
 }
 
-//"(" expr ")" | arrow | literal | objCreation | anonyObj | arrayCreation | name | mc
+Expression *parseCall(Parser *p, std::string name) {
+    auto res = new MethodCall;
+    res->name = name;
+    if (p->is(LT)) {
+        res->typeArgs = p->generics();
+    }
+    p->consume(LPAREN);
+    if (!p->is(RPAREN)) {
+        res->args = p->exprList();
+    }
+    p->consume(RPAREN);
+    return res;
+}
+
+//"(" expr ")" | arrow | literal | objCreation | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
     //log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
-        //ParExpr or arrow function
-        for (int i = p->pos + 1; i < p->tokens.size(); i++) {
-            if (i < p->tokens.size() - 1 &&
-                p->tokens[i]->is(RPAREN) &&
-                p->tokens[i + 1]->is(ARROW)) {
-                return parseArrow(p);
-            }
-        }
+        //ParExpr
         auto res = new ParExpr;
         p->consume(LPAREN);
         res->expr = p->parseExpr();
         p->consume(RPAREN);
         return res;
-    } else if (p->is({IDENT}, {ARROW})) {
-        return parseArrow(p);
     } else if (isLit(p->first())) {
         return parseLit(p);
     } else if (p->is(NEW)) {
@@ -233,7 +210,7 @@ Expression *PRIM(Parser *p) {
         if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
             auto res = new MethodCall;
             res->name = *id;
-            if (p->is(LT)) {//todo
+            if (p->is(LT)) {
                 res->typeArgs = p->generics();
             }
             p->consume(LPAREN);
@@ -278,54 +255,6 @@ Expression *PRIM(Parser *p) {
     }
 }
 
-/*int peekType(Parser* p, int pos){
-    if (isPrim(*p->tokens[pos])) {
-        pos++;
-    }
-    else if(is(FUNC)){
-        pos = peekArrowType(p, pos);
-    }    
-    else {
-        if(!p->tokens[pos++]->is(IDENT)) return -1;
-        
-        while(p->tokens[pos]->is({DOT, LT})){
-            if (is(LT)) {
-                res->typeArgs = generics();
-            }
-            else{
-                consume(DOT);
-                auto tmp = new Type;
-                tmp->name = *consume(IDENT)->value;
-                tmp->scope = res;
-                res = tmp;
-            }
-        }
-    }
-    while (is(LBRACKET)) {
-        consume(LBRACKET);
-        if(!is(RBRACKET)){
-          res->dims.push_back(parseExpr());
-        }else{
-          res->dims.push_back(nullptr);
-        }
-        consume(RBRACKET);
-    }
-    if(is(QUES)){
-      pop();
-      res->isNullable = true;
-    }
-    return res;
-}*/
-
-/*bool isTypeArg(Parser* p){
-    int pos = p->pos;
-    if(!p->tokens[pos++]->is(LT)) return false;
-    int np = peekType(p, pos);
-    if(np == -1) return false;
-    pos = np;
-    return p->tokens[pos]->is(GT);
-} */
-
 //PRIM ('.' name ('(' args? ')')? | [ E ])*
 Expression *PRIM2(Parser *p) {
     Expression *lhs = PRIM(p);
@@ -369,13 +298,19 @@ Expression *PRIM2(Parser *p) {
             lhs = res;
         }
     }
+    if (p->is(BANG)) {
+        p->consume(BANG);
+        auto res = new UnwrapExpr;
+        res->expr = lhs;
+        return res;
+    }
     return lhs;
 }
 
 RefExpr *parseRef(Parser *p) {
     p->consume(AND);
     auto expr = p->parseExpr();
-    if (dynamic_cast<Name *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) ||dynamic_cast<ObjExpr *>(expr)) {
+    if (dynamic_cast<Name *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
         return new RefExpr(expr);
     }
     throw std::runtime_error("cannot take reference of " + expr->print());
@@ -609,72 +544,5 @@ Expression *Parser::parseExpr() {
     return res;
 }
 
-//'(' params? ')' => (block | expr)
-ArrowFunction *parseArrow(Parser *p) {
-    auto res = new ArrowFunction;
-    if (p->is(LPAREN)) {
-        p->consume(LPAREN);
-        if (!p->is(RPAREN)) {
-            res->params.push_back(p->arrowParam(res));
-            while (p->is(COMMA)) {
-                p->consume(COMMA);
-                res->params.push_back(p->arrowParam(res));
-            }
-        }
-    } else {
-        res->params.push_back(p->arrowParam(res));
-    }
-    p->consume(RPAREN);
-    p->consume(ARROW);
-    if (p->is(LBRACE)) {
-        res->block = p->parseBlock();
-    } else {
-        res->expr = p->parseExpr();
-    }
-    return res;
-}
-
-//varType name "?"? ("=" expr)?
-Param *Parser::arrowParam(ArrowFunction *af) {
-    auto res = new Param;
-    res->arrow = af;
-    res->name = *name();
-    log("param = " + res->name);
-    if (is(COLON)) {
-        consume(COLON);
-        res->type = parseType();
-    }
-    if (is(QUES)) {
-        consume(QUES);
-        res->isOptional = true;
-    } else if (is(EQ)) {
-        consume(EQ);
-        res->defVal = parseExpr();
-    }
-    return res;
-}
-
-
-/*XmlElement *parseXml(Parser *p) {
-    auto res = new XmlElement;
-    p->consume(LT);
-    res->name = *p->name();
-    while (p->is(IDENT)) {
-        auto key = p->name();
-        auto val = p->strLit();
-        res->attributes.push_back(std::make_pair(*key, *val));
-    }
-    if (p->is(DIV)) {
-        p->consume(DIV);
-        p->consume(GT);
-    } else {
-        p->consume(GT);
-        while (p->is(LT)) {
-            res->children.push_back(parseXml(p));
-        }
-        p->consume(LT);
-    }
-    return res;
-}*/
 
 #pragma clang diagnostic pop

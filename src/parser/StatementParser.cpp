@@ -12,21 +12,27 @@ Block *Parser::parseBlock() {
     return res;
 }
 
+//destructure enum
 IfLetStmt *parseIfLet(Parser *p) {
     auto res = new IfLetStmt;
     p->consume(IF_KW);
     p->consume(LET);
     res->type = p->parseType();
-    p->consume(LPAREN);
-    res->args.push_back(*p->consume(IDENT)->value);
-    while(p->is(COMMA)){
-      p->consume(COMMA);
-      res->args.push_back(*p->consume(IDENT)->value);
+    if (p->is(LPAREN)) {
+        p->consume(LPAREN);
+        res->args.push_back(*p->name());
+        while (p->is(COMMA)) {
+            p->consume(COMMA);
+            res->args.push_back(*p->name());
+        }
+        p->consume(RPAREN);
     }
-    p->consume(RPAREN);
     p->consume(EQ);
+    //need lparen to distinguish from objExpr
+    p->consume(LPAREN);
     res->rhs = p->parseExpr();
-    
+    p->consume(RPAREN);
+
     res->thenStmt = p->parseBlock();
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
@@ -49,10 +55,10 @@ IfStmt *parseIf(Parser *p) {
     return res;
 }
 
-bool isForEach(Parser* p){
+bool isForEach(Parser *p) {
     int pos = p->pos;
-    if(p->is({ LET, CONST_KW})) pos++;
-    if(!p->tokens[pos++]->is(IDENT)) return false;
+    if (p->is({LET, CONST_KW})) pos++;
+    if (!p->tokens[pos++]->is(IDENT)) return false;
     return p->tokens[pos]->is(COLON);
 }
 
@@ -63,15 +69,15 @@ Statement *parseFor(Parser *p) {
     bool normalFor;
     if (isForEach(p)) {
         var = new VarDeclExpr;
-        if(p->is({ LET, CONST_KW})) p->pop();
+        if (p->is({LET, CONST_KW})) p->pop();
         auto f = new Fragment;
         f->name = *p->name();
         var->list.push_back(f);
         normalFor = false;
-    }else{
+    } else {
         var = p->parseVarDeclExpr();
         normalFor = true;
-    }    
+    }
 
     if (normalFor) {
         p->consume(SEMI);
@@ -120,25 +126,12 @@ DoWhile *parseDoWhile(Parser *p) {
     return res;
 }
 
-CatchStmt parseCatch(Parser *p) {
-    CatchStmt res;
-    p->consume(CATCH);
-    p->consume(LPAREN);
-    Param prm;
-    prm.type = p->refType();
-    prm.name = *p->name();
-    res.param = prm;
-    p->consume(RPAREN);
-    res.block =  p->parseBlock();
-    return res;
-}
-
 
 Statement *Parser::parseStmt() {
     log("parseStmt " + *first()->value);
     if (is(IF_KW)) {
-        if(is({IF_KW}, {LET})){
-          return parseIfLet(this);
+        if (is({IF_KW}, {LET})) {
+            return parseIfLet(this);
         }
         return parseIf(this);
     } else if (is(FOR)) {
@@ -173,20 +166,6 @@ Statement *Parser::parseStmt() {
         }
         consume(SEMI);
         return ret;
-    } else if (is(TRY)) {
-        auto res = new TryStmt;
-        consume(TRY);
-        res->block = parseBlock();
-        while (is(CATCH)) {
-            res->catches.push_back(parseCatch(this));
-        }
-        return res;
-    } else if (is(THROW)) {
-        auto res = new ThrowStmt;
-        consume(THROW);
-        res->expr = parseExpr();
-        consume(SEMI);
-        return res;
     } else if (isVarDecl()) {
         return parseVarDecl();
     } else {

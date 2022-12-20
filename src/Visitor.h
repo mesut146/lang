@@ -33,7 +33,6 @@ public:
 
     virtual R visitType(Type *type, A arg) = 0;
 
-    virtual R visitArrowType(ArrowType *type, A arg) = 0;
 
     virtual R visitVarDecl(VarDecl *, A arg) = 0;
 
@@ -69,8 +68,6 @@ public:
 
     virtual R visitParExpr(ParExpr *, A arg) = 0;
 
-    virtual R visitArrowFunction(ArrowFunction *sn, A arg) = 0;
-
     virtual R visitObjExpr(ObjExpr *, A arg) = 0;
 
     virtual R visitAnonyObjExpr(MapExpr *, A arg) = 0;
@@ -93,9 +90,4 @@ public:
 
     virtual R visitForEach(ForEach *, A arg) = 0;
 
-    virtual R visitTryStmt(TryStmt *sn, A arg) = 0;
-
-    virtual R visitThrowStmt(ThrowStmt *sn, A arg) = 0;
-
-    virtual R visitCatchStmt(CatchStmt *sn, A arg) = 0;
 };

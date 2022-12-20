@@ -1,8 +1,6 @@
-let cur = Node<int>{value: arr[pos++]};
-
 class Node<T>{
-  next?: Node<T>;
   value: T;
+  next: Node<T>?;
 }
 
 func makeNode(arr: int[]): Node<int>{
@@ -25,8 +23,7 @@ interface a{
   func calc(): int;
 }
 
-
-func calc(a: int, b: int, carry?: int): int
+func calc(a: int, b: int, carry: int?): int
 {
   if(carry){
     return a + b + carry;
