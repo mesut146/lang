@@ -15,7 +15,7 @@ func test(){
   let gen = new A<B*>{a: new B{b: 5}};
 }
 let map = {"a": "c", "d": "e"};
-let list: List<string>;
+let list: List<String>;
 
 for(let i = 2;i <= 5;i++){
   list.add(i.toString());

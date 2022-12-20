@@ -205,7 +205,7 @@ Param *Parser::parseParam(Method *m) {
     consume(COLON);
     res->type = parseType();
     if (is(EQ)) {
-        if (res->type->isOptional) {
+        if (res->type->isOptional()) {
             throw std::runtime_error("param: " + res->name + " has both optional type and default value");
         }
         consume(EQ);

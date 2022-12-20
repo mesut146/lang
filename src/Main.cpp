@@ -15,7 +15,7 @@ void lex(std::string &path) {
     }
 }
 
-void parse(const std::string &path, bool print = false) {
+void parse(const std::string &path, bool print = true) {
     info("parsing " + path);
     Lexer lexer(path);
     Parser parser(lexer);
@@ -47,8 +47,10 @@ public:
 
     static Node make() {
         auto node = Node{.val = 5};
-        auto next = Node{.val = 6};
-        node.next = &next;
+        auto next = new Node{.val = 6};
+        auto next2 = new Node{.val = 7};
+        node.next = next;
+        next->next = next2;
         return node;
     }
 
@@ -57,13 +59,13 @@ public:
         if (next != nullptr) {
             std::cout << ", ";
             next->print();
+        } else {
+            std::cout << std::endl;
         }
     }
 };
 
 int main(int argc, char **args) {
-    auto node = Node::make();
-    node.print();
     try {
         if (argc > 1) {
             if (strcmp(args[1], "parse") == 0) {
@@ -75,9 +77,9 @@ int main(int argc, char **args) {
             }
         } else {
             debug = true;
-            parse("../tests/exprs");
-            parse("../tests/Optional");
-            parse("../tests/stmts");
+            //parse("../tests/exprs");
+            //parse("../tests/Optional");
+            //parse("../tests/stmts");
             parse("../tests/types");
         }
     } catch (std::exception &e) {

@@ -78,10 +78,10 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-class EnumParam{
+class EnumParam {
 public:
     std::string name;
-    Type* type;
+    Type *type;
 
     std::string print();
 };
@@ -209,20 +209,14 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-//class PointerType : Expression {
-//public:
-//    Type *type;
-//
-//};
-
 class Type : public Expression {
 public:
     Type *scope = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
     std::vector<Expression *> dims;
-    bool isOptional = false;
-    bool isPointer = false;
+
+    virtual bool isOptional() { return false; }
 
     bool isPrim() {
         auto type = print();
@@ -236,7 +230,22 @@ public:
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
+class PointerType : public Type {
+public:
+    Type *type;
 
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+class OptionType : public Type {
+public:
+    Type *type;
+
+    bool isOptional() override { return true; }
+
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
 
 /*class SimpleType : public Type {
 public:

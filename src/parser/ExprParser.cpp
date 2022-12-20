@@ -100,13 +100,18 @@ Type *Parser::parseType() {
         }
         consume(RBRACKET);
     }
-    if (is(QUES)) {
-        pop();
-        res->isOptional = true;
-    }
-    if (is(STAR)) {
-        pop();
-        res->isPointer = true;
+    while (is(STAR) || is(QUES)) {
+        if (is(STAR)) {
+            consume(STAR);
+            auto tmp = new PointerType;
+            tmp->type = res;
+            res = tmp;
+        } else if (is(QUES)) {
+            consume(QUES);
+            auto tmp = new OptionType;
+            tmp->type = res;
+            res = tmp;
+        }
     }
     return res;
 }

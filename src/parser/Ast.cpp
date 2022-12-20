@@ -70,9 +70,12 @@ std::string EnumDecl::print() {
     }
     s.append("{\n");
     s.append(join(cons, ",\n", "  "));
-    s.append(";");
+    s.append(";\n");
     //body
-    s.append(join(methods, "\n\n"));
+    if (!methods.empty()) {
+        s.append("\n");
+    }
+    s.append(join(methods, "\n\n", "  "));
     s.append("\n}");
     return s;
 }
@@ -213,6 +216,13 @@ std::string printDims(std::vector<Expression *> &dims) {
     return s;
 }
 
+std::string PointerType::print() {
+    return type->print() + "*";
+}
+std::string OptionType::print() {
+    return type->print() + "?";
+}
+
 std::string Type::print() {
     std::string s;
     if (scope) {
@@ -225,12 +235,6 @@ std::string Type::print() {
         s.append(">");
     }
     s.append(printDims(dims));
-    if (isOptional) {
-        s.append("?");
-    }
-    if (isPointer) {
-        s.append("*");
-    }
     return s;
 }
 
@@ -253,6 +257,9 @@ std::string ParExpr::print() {
 
 std::string ObjExpr::print() {
     std::string s;
+    if(isPointer){
+        s.append("new ");
+    }
     s.append(type->print());
     s.append("{");
     s.append(join(entries, ", "));
@@ -280,9 +287,12 @@ std::string IfLetStmt::print() {
     std::string s;
     s.append("if let ");
     s.append(type->print());
-    s.append("(");
-    s.append(join(args, ", "));
-    s.append(") = ");
+    if(!args.empty()){
+        s.append("(");
+        s.append(join(args, ", "));
+        s.append(")");
+    }
+    s.append(" = ");
     s.append(rhs->print());
     s.append(thenStmt->print());
     if (elseStmt != nullptr) {
@@ -293,7 +303,7 @@ std::string IfLetStmt::print() {
 
 std::string IfStmt::print() {
     std::string s;
-    s.append("if ").append(expr->print()).append(" ").append(thenStmt->print());
+    s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
     if (elseStmt != nullptr) {
         s.append("else ").append(elseStmt->print());
     }
@@ -556,4 +566,11 @@ void *Ternary::accept(Visitor<void *, void *> *v, void *arg) {
 
 void *WhileStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitWhileStmt(this, arg);
+}
+
+void *PointerType::accept(Visitor<void *, void *> *v, void *arg) {
+    throw std::runtime_error("todo");
+}
+void *OptionType::accept(Visitor<void *, void *> *v, void *arg) {
+    throw std::runtime_error("todo");
 }

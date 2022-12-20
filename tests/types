@@ -1,14 +1,14 @@
 class Node<T>{
   value: T;
-  next: Node<T>?;
+  next: Node<T>*?;
 }
 
 func makeNode(arr: int[]): Node<int>{
   let pos = 0;
-  let cur = Node<int>{value: arr[pos++]};
-  let head = cur;
-  while(pos < arr.size){
-    cur.next = Node<int>{value: arr[pos++]};
+  let head = Node<int>{value: arr[pos++]};
+  let cur = &head;
+  while(pos < arr.length){
+    cur.next = new Node<int>{value: arr[pos++]};
     cur = cur.next;
   }
   return head;
@@ -33,7 +33,7 @@ func calc(a: int, b: int, carry: int?): int
   }
 }
 
-func def(a: int = 0);
+func def(a: int = 0){}
 
 calc(1,2);
 calc(1,2,3);
