@@ -135,6 +135,7 @@ Entry parseEntry(Parser *p) {
     e.value = p->parseExpr();
     return e;
 }
+
 MapEntry parseMapEntry(Parser *p) {
     //lit,ident
     MapEntry e{};
@@ -165,10 +166,10 @@ bool isObj(Parser *p) {
     return false;
 }
 
-ObjExpr *makeObj(Parser *p, bool isPointer) {
+Expression *makeObj(Parser *p, bool isPointer, Type* type) {
     auto res = new ObjExpr;
     res->isPointer = isPointer;
-    res->type = p->parseType();
+    res->type = type;
     p->consume(LBRACE);
     res->entries.push_back(parseEntry(p));
     while (p->is(COMMA)) {
@@ -177,6 +178,22 @@ ObjExpr *makeObj(Parser *p, bool isPointer) {
     }
     p->consume(RBRACE);
     return res;
+}
+
+Expression *makeObj(Parser *p, bool isPointer) {
+  return makeObj(p, isPointer, p->parseType());
+}
+
+Expression* makeAlloc(Parser* p){
+  p->consume(NEW);
+  auto type = p->parseType();
+  if(type->isArray()){
+    auto res = new ArrayCreation;
+    res->type = type;
+    
+    return res;
+  }
+  return makeObj(p, true, type);
 }
 
 Expression *parseCall(Parser *p, std::string name) {
@@ -206,8 +223,7 @@ Expression *PRIM(Parser *p) {
     } else if (isLit(p->first())) {
         return parseLit(p);
     } else if (p->is(NEW)) {
-        p->consume(NEW);
-        return makeObj(p, true);
+        return makeAlloc(p);
     } else if (isObj(p)) {
         return makeObj(p, false);
     } else if (p->is({IDENT, FROM})) {

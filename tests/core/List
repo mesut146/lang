@@ -1,10 +1,10 @@
 class List<T>{
-  arr: T[10];
-  count: int = 0;
+  arr: T[];
+  count: int;
 
   func expand(max: int){
     if(arr.length < max){
-      let tmp: T[max];
+      let tmp = new T[max];
       Array.copy(arr, 0, tmp, 0, count);
       arr = tmp;
     }
@@ -28,7 +28,7 @@ class List<T>{
   }
 
   func get(pos: int): T{
-    if(pos >= count) throw Exception("index out of bounds");
+    if(pos >= count) panic("index out of bounds");
     return arr[pos];
   }
 
@@ -48,7 +48,7 @@ class List<T>{
     return -1;
   }
 
-  func filter(f: func<bool>(T)): List<T>{
+  /*func filter(f: func<bool>(T)): List<T>{
     let res = List<T>();
     for(let e : this){
       if(f(e)) res.add(e);
@@ -63,5 +63,5 @@ class List<T>{
     }
     return res;
   }
-  
+  */
 }

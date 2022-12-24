@@ -434,6 +434,7 @@ class ArrayCreation : public Expression {
 public:
     Type *type;
     std::vector<Expression *> dims;
+    bool isPointer = false;
 
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;

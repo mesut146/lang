@@ -83,6 +83,7 @@ int main(int argc, char **args) {
             parse("../tests/core/Array");
             parse("../tests/core/Optional");
             parse("../tests/core/String");
+            parse("../tests/core/List");
         }
     } catch (std::exception &e) {
         std::cout << "err:" << e.what() << "\n";

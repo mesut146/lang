@@ -1,0 +1,12 @@
+class HashMap<K,V>{
+  arr: Entry<K,V>[];
+  size: int;
+
+  func put(k: K, v: V){
+
+  }
+
+  func get(k: K): V{
+
+  }
+}

@@ -393,7 +393,10 @@ std::string ArrayExpr::print() {
 }
 
 std::string ArrayCreation::print() {
-    return type->print() + printDims(dims);
+    std::string s;
+    if(isPointer) s.append("new ");
+    s.append(type->print() + printDims(dims));
+    return s;
 }
 
 
