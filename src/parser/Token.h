@@ -36,6 +36,7 @@ enum TokenType {
     COMMENT,
     IMPORT,
     AS,
+    ASSERT_KW,
     FROM,
     RETURN,
     BREAK,

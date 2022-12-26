@@ -327,10 +327,11 @@ Expression *PRIM2(Parser *p) {
     }
     return lhs;
 }
+Expression *parseLhs(Parser *p);
 
 RefExpr *parseRef(Parser *p) {
     p->consume(AND);
-    auto expr = p->parseExpr();
+    auto expr = parseLhs(p);
     if (dynamic_cast<Name *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
         return new RefExpr(expr);
     }
@@ -339,8 +340,12 @@ RefExpr *parseRef(Parser *p) {
 
 DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
-    auto expr = p->parseExpr();
-    if (dynamic_cast<Name *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<MethodCall *>(expr)) {
+    auto expr = parseLhs(p);
+    if (dynamic_cast<Name *>(expr) || 
+         dynamic_cast<FieldAccess *>(expr) || 
+         dynamic_cast<MethodCall *>(expr) ||
+         dynamic_cast<ParExpr *>(expr)||
+         dynamic_cast<DerefExpr*>(expr)) {
         return new DerefExpr(expr);
     }
     throw std::runtime_error("cannot dereference " + expr->print());

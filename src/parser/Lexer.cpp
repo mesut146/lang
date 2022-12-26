@@ -2,6 +2,7 @@
 #include <map>
 
 TokenType kw(std::string &s) {
+    if (s == "assert") return ASSERT_KW;
     if (s == "class") return CLASS;
     if (s == "enum") return ENUM;
     if (s == "interface") return INTERFACE;

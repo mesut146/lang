@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Ast_all.h"
-#include "Visitor.h"
+//#include "Visitor.h"
 #include <string>
 #include <vector>
 
+template<class R, class A>
+class Visitor;
 
 class FieldDecl {
 public:
@@ -566,4 +568,12 @@ public:
 
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+
+class AssertStmt: public Statement {
+public:
+  Expression* expr;
+
+  std::string print() override;
+  void *accept(Visitor<void *, void *> *v, void *arg) override;
 };

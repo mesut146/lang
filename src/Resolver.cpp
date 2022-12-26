@@ -684,6 +684,9 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
             throw std::runtime_error("method:  " + mc->name + " not found");
         if (syms.size() == 1) {
             //todo
+            auto r = syms[0];
+            auto rt = r.m->accept(this, nullptr);
+            return rt;
         }
 
         throw std::runtime_error("method:  " + mc->name + " has " +

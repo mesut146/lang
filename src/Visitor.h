@@ -2,6 +2,9 @@
 
 #include "parser/Ast.h"
 
+
+#define def { return nullptr; }
+
 template<class R, class A>
 class Visitor {
 public:
@@ -19,11 +22,7 @@ public:
 
     virtual R visitMethod(Method *, A arg) = 0;
 
-    virtual R visitParam(Param *, A arg) = 0;
-
-    virtual R visitBlock(Block *, A arg) = 0;
-
-    virtual R visitExprStmt(ExprStmt *, A arg) = 0;
+    virtual R visitParam(Param *, A arg){return nullptr;};
 
     virtual R visitLiteral(Literal *lit, A arg) = 0;
 
@@ -40,9 +39,9 @@ public:
 
     virtual R visitFragment(Fragment *, A arg) = 0;
 
-    virtual R visitRefExpr(RefExpr *e, A arg) = 0;
+    virtual R visitRefExpr(RefExpr *e, A arg) def
 
-    virtual R visitDerefExpr(DerefExpr *e, A arg) = 0;
+    virtual R visitDerefExpr(DerefExpr *e, A arg) def
 
     virtual R visitUnary(Unary *, A arg) = 0;
 
@@ -50,7 +49,7 @@ public:
 
     virtual R visitInfix(Infix *, A arg) = 0;
 
-    virtual R visitAsExpr(AsExpr *, A arg) = 0;
+    virtual R visitAsExpr(AsExpr *, A arg) def;
 
     virtual R visitPostfix(Postfix *, A arg) = 0;
 
@@ -73,7 +72,9 @@ public:
     virtual R visitAnonyObjExpr(MapExpr *, A arg) = 0;
 
     //statements
-
+    virtual R visitBlock(Block *, A arg) = 0;
+    virtual R visitExprStmt(ExprStmt *, A arg) = 0;
+    virtual R visitAssertStmt(AssertStmt *a, A arg) def
     virtual R visitReturnStmt(ReturnStmt *, A arg) = 0;
 
     virtual R visitContinueStmt(ContinueStmt *, A arg) = 0;

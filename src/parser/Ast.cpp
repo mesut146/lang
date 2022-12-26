@@ -1,5 +1,6 @@
 #include "parser/Ast.h"
 #include "parser/Util.h"
+#include "Visitor.h"
 
 std::string RefExpr::print() {
     return "&" + expr->print();
@@ -431,7 +432,15 @@ std::string DoWhile::print() {
     return "do" + body->print() + "\nwhile(" + expr->print() + ");";
 }
 
+std::string AssertStmt::print() {
+  return "assert " + expr->print() + ";";
+}
+
 //accept------------------------------------
+
+void *AssertStmt::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitAssertStmt(this, arg);
+}
 void *BreakStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitBreakStmt(this, arg);
 }

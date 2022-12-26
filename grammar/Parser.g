@@ -11,47 +11,46 @@ importStmt:
 
 name: IDENT;
 
-//no field bc varDecl is same
 topStmt:
   stmt | methodDecl | typeDecl | enumDecl;
 
 enumDecl:
-  "enum" name "{" enumEntry ("," enumEntry)* "}";
+  "enum" name generic? "{" enumEntry ("," enumEntry)* "}";
 
-enumEntry: simpleEnumEntry | namedEnumEntry | valuedEnumEntry;
-simpleEnumEntry: name;
+enumEntry: name | namedEnumEntry | valuedEnumEntry;
+
 namedEnumEntry: name "{" param ("," param)* "}";
+
 valuedEnumEntry: "(" type ("," type)* ")";
 
 type: qname generic? arraySuffix?
         | prim arraySuffix?;
 
+
 generic: "<" type ("," type)* ">";
 
 arraySuffix: ("[" expr? "]")+;
 
-varType: type | "var" | "let";
+prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double" | "i8" | "i16" | "i32" | "i64" | u8 u16 u32 u64;
 
-prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double";
-
-refType: name generic?;
+refType: name generic? ("::" name generic?)*;
 
 typeDecl:
-  ("class" | "interface") name generics? (":" refType ("," refType)*)? "{" classMember* "}";
+  ("class" | "interface") name generic? "{" classMember* "}";
 
 classMember:
   field | methodDecl | typeDecl | enumDecl;
 
 field:
-  varDecl ";";
+  name ":" type ("=" expr)?;
 
 methodDecl:
-  ("void" | type) name generic? "(" params* ")" block;
+  "func" name generic? "(" params* ")" block;
 
 params: param ("," param)*;
 
 param:
-  type name ("?" | "=" expr)?;
+  name ":" type ("?" | "=" expr)?;
 
 //statements-------------------------------------------
 block:
@@ -73,11 +72,11 @@ forStmt:
   "for" "(" varDecl? ";" expr? ";" exprs? ")" stmt;
   
 forEachStmt:
-  "for" "(" type name ":" expr ")" stmt;  
+  "for" "(" "let" name ":" expr ")" stmt;  
 
 //expressions-----------------------------------------------
 varDecl:
-  varType varDeclFrag ("," varDeclFrag)*;
+  "let" varDeclFrag ("," varDeclFrag)*;
 
 varDeclFrag:
   name ("=" expr | "?")?;
@@ -87,9 +86,10 @@ expr: "import";
 
 /*
 expr:
-| PRIM ("." IDENT ("(" ")")? | "[" E "]")*
+| PRIM ("." IDENT ("(" args? ")")? | "[" expr "]")*
+| expr "as" type
 | expr ("++" | "--") #post
-| ("+" | "-" | "++" | "--" | "!" | "~" | "(" type ")" expr) expr #unary
+| ("+" | "-" | "++" | "--" | "!" | "~") expr #unary
 | expr ("*" | "/" | "%") expr %left
 | expr ("+" | "-") expr %left
 | expr ("<<" | ">" ">" | ">" ">" ">") expr %left
@@ -104,7 +104,7 @@ expr:
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
 ;*/
 
-PRIM: literal | qname | "(" expr ")" | methodCall;
+PRIM: literal | refType | "(" expr ")" | methodCall;
 
 methodCall: name "(" args? ")";
 
@@ -139,11 +139,3 @@ array:
   "[" exprs? "]";
 
 methodReference: type "::" name;
-
-xmlElement: "<" name attr* "/" ">"
-        |   "<" name attr* ">" xmlElement* | text "<" "/" name ">";
-attr: name "=" STRING_LIT;
-
-
-
-  

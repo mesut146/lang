@@ -129,6 +129,13 @@ DoWhile *parseDoWhile(Parser *p) {
 
 Statement *Parser::parseStmt() {
     log("parseStmt " + *first()->value);
+    if(is(ASSERT_KW)){
+      consume(ASSERT_KW);
+      auto a = new AssertStmt;
+      a->expr=parseExpr();
+      consume(SEMI);
+      return a;
+    }
     if (is(IF_KW)) {
         if (is({IF_KW}, {LET})) {
             return parseIfLet(this);
