@@ -159,6 +159,7 @@ void *Resolver::visitMethod(Method *m, void *arg) {
         prm->accept(this, nullptr);
     }
     res = (RType *) m->type->accept(this, m);
+    res->targetMethod = m;
     if (m->body) {
         scopes.push_back(std::make_shared<Scope>());
         for (auto *st : m->body->list) {
