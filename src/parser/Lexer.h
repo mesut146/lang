@@ -35,12 +35,6 @@ public:
         return buf.substr(a, b - a);
     }
 
-    std::string eat(std::string end) {
-        char c;
-        int a;
-        return str(a, pos);
-    }
-
     Token *next();
     Token *readNumber();
     Token *readIdent();
@@ -101,5 +95,6 @@ public:
         ops["&&"] = ANDAND;
 
         ops["=>"] = ARROW;
+        ops["::"] = COLON2;
     }
 };

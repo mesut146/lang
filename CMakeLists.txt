@@ -11,10 +11,20 @@ file(GLOB src src/*.cpp src/parser/*.cpp)
 
 include_directories(${PROJECT_SOURCE_DIR}/src)
 
+add_executable(lang ${src})
+
 if (WIN32)
 
 else ()
-    #find_package(LLVM REQUIRED CONFIG)
+    find_package(LLVM REQUIRED CONFIG)
+    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+    message(STATUS "inc: ${LLVM_INCLUDE_DIRS}")
+    include_directories(${LLVM_INCLUDE_DIRS})
+
+    llvm_map_components_to_libnames(llvm_libs support core irreader)
+    message(STATUS "libs: ${llvm_libs}")
+
+    target_link_libraries(lang ${llvm_libs})
 endif()
 
-add_executable(lang ${src})
+

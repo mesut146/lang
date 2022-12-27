@@ -456,6 +456,8 @@ public:
     std::string key;
     Expression *value;
 
+    bool hasKey() { return !key.empty(); }
+
     std::string print();
 };
 

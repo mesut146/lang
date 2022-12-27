@@ -35,6 +35,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(RBRACKET)
         TOKEN_CASE(COMMA)
         TOKEN_CASE(COLON)
+        TOKEN_CASE(COLON2)
         TOKEN_CASE(LBRACE)
         TOKEN_CASE(RBRACE)
         TOKEN_CASE(LPAREN)

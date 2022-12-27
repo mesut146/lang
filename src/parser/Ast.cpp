@@ -281,7 +281,10 @@ std::string MapEntry::print() {
 }
 
 std::string Entry::print() {
-    return key + ": " + value->print();
+    if(hasKey()){
+        return key + ": " + value->print();
+    }
+    return value->print();
 }
 
 std::string IfLetStmt::print() {

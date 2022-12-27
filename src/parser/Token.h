@@ -69,6 +69,7 @@ enum TokenType {
     QUES,
     SEMI,
     COLON,
+    COLON2,
     AND,
     OR,
     ANDAND,

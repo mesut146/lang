@@ -79,11 +79,11 @@ Type *Parser::parseType() {
         res->name = *pop()->value;
     } else {
         res->name = *consume(IDENT)->value;
-        while (is({DOT, LT})) {
+        while (is({COLON2, LT})) {
             if (is(LT)) {
                 res->typeArgs = generics();
             } else {
-                consume(DOT);
+                consume(COLON2);
                 auto tmp = new Type;
                 tmp->name = *consume(IDENT)->value;
                 tmp->scope = res;
@@ -130,9 +130,14 @@ std::vector<Type *> Parser::generics() {
 
 Entry parseEntry(Parser *p) {
     Entry e{};
-    e.key = *p->consume(IDENT)->value;
-    p->consume(COLON);
-    e.value = p->parseExpr();
+    if (p->is({IDENT}, {COLON})) {
+        e.key = *p->consume(IDENT)->value;
+        p->consume(COLON);
+        e.value = p->parseExpr();
+    } else {
+        //single expr
+        e.value = p->parseExpr();
+    }
     return e;
 }
 
@@ -166,7 +171,7 @@ bool isObj(Parser *p) {
     return false;
 }
 
-Expression *makeObj(Parser *p, bool isPointer, Type* type) {
+Expression *makeObj(Parser *p, bool isPointer, Type *type) {
     auto res = new ObjExpr;
     res->isPointer = isPointer;
     res->type = type;
@@ -176,24 +181,25 @@ Expression *makeObj(Parser *p, bool isPointer, Type* type) {
         p->consume(COMMA);
         res->entries.push_back(parseEntry(p));
     }
+    //todo check entry keys for mix
     p->consume(RBRACE);
     return res;
 }
 
 Expression *makeObj(Parser *p, bool isPointer) {
-  return makeObj(p, isPointer, p->parseType());
+    return makeObj(p, isPointer, p->parseType());
 }
 
-Expression* makeAlloc(Parser* p){
-  p->consume(NEW);
-  auto type = p->parseType();
-  if(type->isArray()){
-    auto res = new ArrayCreation;
-    res->type = type;
-    
-    return res;
-  }
-  return makeObj(p, true, type);
+Expression *makeAlloc(Parser *p) {
+    p->consume(NEW);
+    auto type = p->parseType();
+    if (type->isArray()) {
+        auto res = new ArrayCreation;
+        res->type = type;
+
+        return res;
+    }
+    return makeObj(p, true, type);
 }
 
 Expression *parseCall(Parser *p, std::string name) {
@@ -341,11 +347,11 @@ RefExpr *parseRef(Parser *p) {
 DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
     auto expr = parseLhs(p);
-    if (dynamic_cast<Name *>(expr) || 
-         dynamic_cast<FieldAccess *>(expr) || 
-         dynamic_cast<MethodCall *>(expr) ||
-         dynamic_cast<ParExpr *>(expr)||
-         dynamic_cast<DerefExpr*>(expr)) {
+    if (dynamic_cast<Name *>(expr) ||
+        dynamic_cast<FieldAccess *>(expr) ||
+        dynamic_cast<MethodCall *>(expr) ||
+        dynamic_cast<ParExpr *>(expr) ||
+        dynamic_cast<DerefExpr *>(expr)) {
         return new DerefExpr(expr);
     }
     throw std::runtime_error("cannot dereference " + expr->print());

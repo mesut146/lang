@@ -1,3 +1,4 @@
+#include "Compiler.h"
 #include "Converter.h"
 #include "Resolver.h"
 #include "parser/Parser.h"
@@ -72,24 +73,39 @@ void convert() {
     c.outDir = "../out";
     c.convertAll();
 }
+void compile() {
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.compileAll();
+}
+
+void parseTest() {
+    debug = true;
+    parse("../tests/exprs");
+    parse("../tests/stmts");
+    parse("../tests/types");
+    parse("../tests/core/Array");
+    parse("../tests/core/Optional");
+    parse("../tests/core/String");
+    parse("../tests/core/List");
+}
 
 int main(int argc, char **args) {
     try {
-        if (argc > 1) {
-            if (strcmp(args[1], "c") == 0) {
-                convert();
-            } else {
-                resolveTest();
-            }
+        if (argc == 1) {
+            compile();
+            return 0;
+        }
+        auto arg = std::string(args[1]);
+        if (arg == "cnv") {
+            convert();
+        } else if (arg == "parse") {
+            parseTest();
+        } else if (arg == "resolve") {
+            resolveTest();
         } else {
-            debug = true;
-            parse("../tests/exprs");
-            parse("../tests/stmts");
-            parse("../tests/types");
-            parse("../tests/core/Array");
-            parse("../tests/core/Optional");
-            parse("../tests/core/String");
-            parse("../tests/core/List");
+            std::cerr << "invalid cmd: " << arg;
         }
     } catch (std::exception &e) {
         std::cout << "err:" << e.what() << "\n";

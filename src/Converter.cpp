@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-std::string getName(const std::string &path) {
+static std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
 }

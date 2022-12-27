@@ -22,7 +22,7 @@ func main(): int{
   //assert *(&sum(5, 6)) == 11;
   let obj: A = A{a: 5, b: 6};
 
-  let en: E = E::B(5, 6);
-  let en2: E = E::C(10);
+  let en: E = E::B{a: 5, b: 6};
+  let en2: E = E::C{10};
   return 0;
 }
