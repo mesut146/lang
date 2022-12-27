@@ -1,7 +1,7 @@
+#include "Converter.h"
 #include "Resolver.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
-#include "Converter.h"
 #include <cstring>
 #include <iostream>
 
@@ -9,7 +9,7 @@ void lex(std::string &path) {
     Lexer lexer(path);
 
     for (;;) {
-        Token& t = *lexer.next();
+        Token &t = *lexer.next();
         if (t.is(EOF_))
             break;
         printf("type=%d off=%d val='%s'\n", t.type, t.start, t.value->c_str());
@@ -66,11 +66,11 @@ public:
     }
 };
 
-void convert(){
- Converter c;
- c.srcDir="../tests/src";
- c.outDir="../out";
- c.convertAll();
+void convert() {
+    Converter c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.convertAll();
 }
 
 int main(int argc, char **args) {

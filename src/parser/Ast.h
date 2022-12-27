@@ -570,10 +570,10 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-class AssertStmt: public Statement {
+class AssertStmt : public Statement {
 public:
-  Expression* expr;
+    Expression *expr;
 
-  std::string print() override;
-  void *accept(Visitor<void *, void *> *v, void *arg) override;
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
 };

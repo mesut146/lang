@@ -181,7 +181,6 @@ void *Resolver::visitParam(Param *p, void *arg) {
         // todo infer?
         auto res = resolveType(p->type);
         return res;
-        // throw std::string("todo arrow param type");
     }
 }
 
@@ -601,9 +600,9 @@ std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
 }
 
 void Resolver::other(std::string name, std::vector<Symbol> &res) const {
-    for (ImportStmt *is : unit->imports) {
+    for (auto *is : unit->imports) {
         if (is->normal) {
-            Resolver *r = getResolver(root + "/" + toPath(is->normal->path));
+            auto *r = getResolver(root + "/" + toPath(is->normal->path));
             r->fromOther = true;
             auto arr = r->find(name, false);
             r->fromOther = false;
@@ -655,43 +654,58 @@ std::pair<std::string, Name *> split2(Name *name) {
     }
 }*/
 
+RType *scopedMethod(MethodCall *mc, Resolver *r) {
+    //    auto *scp = (RType *) mc->scope->accept(r, mc);
+    //    if (!scp->arr.empty()) {
+    //        for (auto s : scp->arr) {
+    //            if (s.imp) {
+    //                auto *re = r->getResolver(s.imp->normal->path->print());
+    //                auto arr = re->find(mc->name, false);
+    //            }
+    //        }
+    //    }
+    throw std::runtime_error("scopedMethod");
+}
+
 void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     std::cout << "visitMethodCall " << mc->name << "\n";
-    Type *target = nullptr;
-    std::vector<Type *> list;// candidates
     if (mc->scope) {
-        auto *scp = (RType *) mc->scope->accept(this, mc);
-        if (!scp->arr.empty()) {
-            for (auto s : scp->arr) {
-                if (s.imp) {
-                    auto *r = getResolver(s.imp->normal->path->print());
-                    auto arr = r->find(mc->name, false);
-                }
-            }
-            throw std::runtime_error("mc scope is ?");
-        }
-        if (list.empty())
-            throw std::runtime_error("method:  " + mc->name +
-                                     " not found in type: " + scp->type->print());
-        if (list.size() > 1)
-            throw std::runtime_error("more than one candidate method for " + mc->name +
-                                     "in " + scp->type->print());
-        auto sig = list[0];
-        return sig->accept(this, nullptr);
-    } else {
-        auto syms = find(mc->name, true);
-        if (syms.empty())
-            throw std::runtime_error("method:  " + mc->name + " not found");
-        if (syms.size() == 1) {
-            //todo
-            auto r = syms[0];
-            auto rt = r.m->accept(this, nullptr);
-            return rt;
-        }
-
-        throw std::runtime_error("method:  " + mc->name + " has " +
-                                 std::to_string(list.size()) + " candidates");
+        return scopedMethod(mc, this);
     }
+    Type *target = nullptr;
+    std::vector<Type *> list;  // candidates
+    std::vector<Method *> cand;// candidates
+    for (auto m : unit->methods) {
+        if (m->name == mc->name) {
+            cand.push_back(m);
+        }
+    }
+    if (curDecl) {
+        for (auto m : curDecl->methods) {
+            if (m->name == mc->name) {
+                cand.push_back(m);
+            }
+        }
+    }
+    if (cand.empty()) {
+        throw std::runtime_error("method:  " + mc->name + " not found");
+    }
+    //filter
+    std::vector<Method *> real;
+    for (auto c : cand) {
+        if (isSame(this, mc, c)) {
+            real.push_back(c);
+        }
+    }
+    if (real.size() == 1) {
+        return real[0]->accept(this, arg);
+    }
+    if (real.empty()) {
+        //print cand
+        throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
+    }
+    throw std::runtime_error("method:  " + mc->name + " has " +
+                             std::to_string(list.size()) + " candidates");
 }
 
 RType *inferType(Block *b, Resolver *r) {
@@ -715,20 +729,29 @@ void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
 }
 
 void *Resolver::visitArrayCreation(ArrayCreation *ac, void *arg) {
-    for (auto e : ac->dims) {
+    for (auto &e : ac->dims) {
         e->accept(this, nullptr);
     }
     return ac->type->accept(this, nullptr);
 }
 
 void *Resolver::visitAsExpr(AsExpr *as, void *arg) {
-    auto left = (RType *) as->expr->accept(this, nullptr);
+    //auto left = (RType *) as->expr->accept(this, nullptr);
     auto right = (RType *) as->type->accept(this, nullptr);
     return right;
 }
+
 void *Resolver::visitRefExpr(RefExpr *as, void *arg) {
-    return nullptr;
+    auto inner = (RType *) as->expr->accept(this, arg);
+    auto type = new PointerType{};
+    type->type = inner->type;
+    inner->type = type;
+    return inner;
 }
+
 void *Resolver::visitDerefExpr(DerefExpr *as, void *arg) {
-    return nullptr;
+    auto inner = (RType *) as->expr->accept(this, arg);
+    auto ptr = dynamic_cast<PointerType *>(inner->type);
+    return ptr->type;
+    ;
 }
