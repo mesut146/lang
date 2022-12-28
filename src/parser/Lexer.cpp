@@ -129,6 +129,11 @@ Token *Lexer::readOp() {
     throw std::invalid_argument(std::string("readOp() failed with buffer: ") + s);
 }
 
+char checkEscape(char c){
+    if(c=='n') return '\n';
+    throw std::runtime_error(std::string("invalid escape: \\")+c);
+}
+
 Token *Lexer::next() {
     if (pos == buf.length()) {
         return new Token(EOF_);
@@ -183,17 +188,24 @@ Token *Lexer::next() {
         }
         token = new Token(CHAR_LIT, str(a, pos));
     } else if (c == '"') {
+        std::string s;
+        s.append(1, c);
         auto a = pos;
         pos++;
         while (pos < buf.size()) {
             c = read();
             if (c == '\\') {
+                auto c2=checkEscape(buf[pos]);
+                s.append(1, c2);
                 pos++;
             } else if (c == '"') {
+                s.append(1, c);
                 break;
+            }else{
+                s.append(1, c);
             }
         }
-        token = new Token(STRING_LIT, str(a, pos));
+        token = new Token(STRING_LIT, s);
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {

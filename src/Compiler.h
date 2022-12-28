@@ -21,4 +21,5 @@ struct Compiler: public BaseVisitor<void*,void*>{
     void* visitSimpleName(SimpleName *n, void* arg) override;
     void* visitMethodCall(MethodCall *n, void* arg) override;
     void* visitLiteral(Literal *n, void* arg) override;
+    void* visitAssertStmt(AssertStmt *n, void* arg) override;
 };

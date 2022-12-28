@@ -186,8 +186,12 @@ void* Compiler::visitInfix(Infix *i, void* arg) {
     if(i->op=="+"){
         return Builder->CreateAdd(l,r, "addtmp");
     }
+    if(i->op == "=="){
+       return Builder-> CreateICmpEQ(l,r,"eqtmp");
+    }
     throw std::runtime_error("infix: "+i->print());
 }
+
 void* Compiler::visitSimpleName(SimpleName *n, void* arg){
     auto it = NamedValues.find(n->name);
     if(it==NamedValues.end()){
@@ -211,7 +215,6 @@ void* Compiler::visitMethodCall(MethodCall *mc, void* arg){
     llvm:: Function* f;
     if(mc->name=="print"){
         f = printf_prototype(*TheContext, TheModule.get());
-        
     }else{
     auto resolv=new Resolver(unit);
     auto rt = (RType*)mc->accept (resolv, nullptr);
@@ -268,4 +271,10 @@ void* Compiler::visitLiteral(Literal *n, void* arg){
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     }
     throw std:: runtime_error("literal: "+n->print());
+}
+
+void* Compiler::visitAssertStmt(AssertStmt *n, void* arg){
+    auto str = n->expr->print();
+    auto e = (llvm::Value*)n->expr->accept (this, nullptr);
+    return nullptr;
 }

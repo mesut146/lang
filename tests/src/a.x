@@ -15,7 +15,7 @@ enum E{
 
 func main(): int{
   assert sum(2,3) == 5;
-  print("%d", sum(2, 3));
+  print("%d\n", sum(2, 3));
   let a: int = 5;
   let ptr: int* = &a;
   assert *ptr == 5;
