@@ -160,13 +160,13 @@ void *Resolver::visitMethod(Method *m, void *arg) {
     }
     res = (RType *) m->type->accept(this, m);
     res->targetMethod = m;
-    if (m->body) {
+    /*if (m->body) {
         scopes.push_back(std::make_shared<Scope>());
         for (auto *st : m->body->list) {
             st->accept(this, nullptr);
         }
         dropScope();
-    }
+    }*/
     methodMap[m] = res;
     curMethod = backup;
     return res;

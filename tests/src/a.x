@@ -1,28 +1,60 @@
-func sum(a: int, b: int): int{
-  return a + b;
-}
-
 class A{
  a: int;
  b: int;
 }
 
-enum E{
+/*enum E{
  A,
  B(a: int, b: byte),
  C(a: long);
+}*/
+
+func sum(a: int, b: int): int{
+  return a + b;
+}
+
+func varTest(){
+  let a: int = 5;
+  print("a=%d a+1=%d\n", a, a+1);
+  assert a == 5;
+
+  a = 6;
+  print("a=6=>%d\n", a);
+
+  let ptr: int* = &a;
+  assert *ptr == 6;
+  print("*ptr=%d\n", *ptr);
+}
+
+func infix(){
+  let a: int = 2;
+  let b: int = 11;
+  assert a+3==5;
+  assert a*5==10;
+  assert 10-a==8;
+  assert 6/a==3;
+  assert 15 % (a*a) == 3;
+  assert (14 & b) == 10;
+  assert (14 | b) ==15 ;
+  assert (14^b)==5;
+  assert (a<<3)==16;
+  //assert (b>>1)==5;
 }
 
 func main(): int{
+  varTest();
+  infix();
   assert sum(2,3) == 5;
-  print("%d\n", sum(2, 3));
-  let a: int = 5;
-  let ptr: int* = &a;
-  assert *ptr == 5;
+  print("sum=%d\n", sum(2, 3));
+  
   //assert *(&sum(5, 6)) == 11;
   let obj: A = A{a: 5, b: 6};
-
+  print("A.a=%d, A.b=%d\n", obj.a, obj.b);
+  obj.a=10;
+  print("A.a=%d, A.b=%d\n", obj.a, obj.b);
+  //let objCopy=obj.clone();
+  /*
   let en: E = E::B{a: 5, b: 6};
-  let en2: E = E::C{10};
+  let en2: E = E::C{10};*/
   return 0;
 }
