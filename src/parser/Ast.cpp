@@ -535,8 +535,7 @@ void *ForStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitForStmt(this, arg);
 }
 void *IfLetStmt::accept(Visitor<void *, void *> *v, void *arg) {
-    //return v->visitIfLetStmt(this, arg);
-    return nullptr;
+    return v->visitIfLetStmt(this, arg);
 }
 void *IfStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitIfStmt(this, arg);

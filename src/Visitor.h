@@ -82,6 +82,8 @@ public:
     virtual R visitBreakStmt(BreakStmt *, A arg) = 0;
 
     virtual R visitIfStmt(IfStmt *, A arg) = 0;
+    
+    virtual R visitIfLetStmt(IfLetStmt *, A arg) def
 
     virtual R visitWhileStmt(WhileStmt *, A arg) = 0;
 

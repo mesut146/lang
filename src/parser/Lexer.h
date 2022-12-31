@@ -85,7 +85,7 @@ public:
         ops["<"] = LT;
         ops[">"] = GT;
         ops["<<"] = LTLT;
-        ops[">>"] = GTGT;
+        //ops[">>"] = GTGT;
         ops["<="] = LTEQ;
         ops[">="] = GTEQ;
 

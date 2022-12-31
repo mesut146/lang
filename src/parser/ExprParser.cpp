@@ -232,7 +232,30 @@ Expression *PRIM(Parser *p) {
         return makeAlloc(p);
     } else if (isObj(p)) {
         return makeObj(p, false);
-    } else if (p->is({IDENT, FROM})) {
+    } else if(p->is({IDENT},{COLON2})){
+        auto t = p->parseType();
+        if(p->is(LPAREN)){
+            auto res = new MethodCall;
+            res->scope = t->scope;
+            res->name = t->name;
+            if (p->is(LT)) {
+                res->typeArgs = p->generics();
+            }
+            p->consume(LPAREN);
+            if (!p->is(RPAREN)) {
+                res->args = p->exprList();
+            }
+            p->consume(RPAREN);
+            return res;
+        }else{
+            //static field access, or enum variant
+            /*auto res = new FieldAccess;
+            res->scope=t->scope;
+            res->name=t->name;*/
+            return t;
+        }
+    } 
+    else if (p->is({IDENT, FROM})) {
         auto id = p->pop()->value;
         if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
             auto res = new MethodCall;
@@ -250,7 +273,7 @@ Expression *PRIM(Parser *p) {
             auto *res = new SimpleName(*id);
             return res;
         }
-    } else if (p->is(LBRACE)) {
+    }else if (p->is(LBRACE)) {
         auto res = new MapExpr;
         p->consume(LBRACE);
         res->entries.push_back(parseMapEntry(p));
