@@ -105,14 +105,18 @@ llvm::Type *mapType(Type *t) {
         return llvm::PointerType::get(mapType(ptr->type), 0);
     }
     auto s = t->print();
-    if (!t->isPrim()) {
+    if (t->isVoid()) return llvm::Type::getVoidTy(*ctx);
+    if (t->isPrim()) {
+        if (s == "byte" || s == "i8") return getInt(8);
+        if (s == "short" || s == "i16") return getInt(16);
+        if (s == "int" || s == "i32") return getInt(32);
+        if (s == "long" || s == "i64") return getInt(64);
+    } else {
         auto it = classMap.find(s);
         if (it != classMap.end()) {
             return it->second;
         }
     }
-    if (s == "int") return llvm::Type::getInt32Ty(*ctx);
-    if (s == "void") return llvm::Type::getVoidTy(*ctx);
     throw std::runtime_error("mapType: " + s);
 }
 
@@ -353,6 +357,7 @@ void *Compiler::visitBlock(Block *b, void *arg) {
 
 void *Compiler::visitReturnStmt(ReturnStmt *t, void *arg) {
     if (t->expr) {
+        expect = func->getReturnType();
         auto val = (llvm::Value *) t->expr->accept(this, nullptr);
         Builder->CreateRet(val);
     } else {
@@ -479,7 +484,10 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
         return makeStr(trimmed);
     }
     if (n->isInt) {
-        auto intType = llvm::IntegerType::get(*ctx, 32);
+        auto bits = expect->getScalarSizeInBits();
+        std::cout << "expect: " << bits << std::endl;
+
+        auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     }
     throw std::runtime_error("literal: " + n->print());
@@ -559,12 +567,26 @@ int findVariant(EnumDecl *decl, std::string name) {
 }
 
 void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
-    ty->print(llvm::outs(), true, true);
+    //ty->print(llvm::outs(), true, true);
     //ty->dump();
-    ptr->dump();
+    //ptr->dump();
     std::vector<llvm::Value *> ordidx = {makeInt(0), makeInt(0)};
     auto ordPtr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, ordidx, "", BB);
     Builder->CreateStore(makeInt(index), ordPtr);
+}
+
+llvm::Value *implicit(llvm::Value *val, llvm::Type *target) {
+    auto src = val->getType();
+    if (src->isIntegerTy()) {
+        if (!target->isIntegerTy()) {
+            throw std::runtime_error("src is integer but target is not");
+        }
+        if (llvm::isa<llvm::Constant>(val)) {
+            std::cout << "isa" << std::endl;
+        }
+        return Builder->CreateBitCast(val, target->getPointerTo());
+    }
+    throw std::runtime_error("cant do implicit cast from ");
 }
 
 void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
@@ -583,10 +605,15 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
         for (int i = 0; i < variant->params.size(); i++) {
             auto cons = variant->params[i];
             std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
-            auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType(), dataPtr, entIdx, "", BB);
+
+            dataPtr->getType()->dump();
+            auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx, "", BB);
             auto targetTy = mapType(cons->type);
-            auto cast = Builder->CreateBitCast(entPtr, targetTy);
+            expect = targetTy;
             auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
+            //todo bitcast to target type
+            //auto val2 = implicit(val, targetTy);
+            auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
             Builder->CreateStore(val, cast);
             offset += size(cons->type);
         }
@@ -596,9 +623,7 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         int i = 0;
         for (auto &e : n->entries) {
-            std::vector<llvm::Value *> idx;
-            idx.push_back(makeInt(0));
-            idx.push_back(makeInt(i));
+            std::vector<llvm::Value *> idx = {makeInt(0), makeInt(i)};
             auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx, "", BB);
             auto val = (llvm::Value *) e.value->accept(this, nullptr);
             Builder->CreateStore(val, eptr);
@@ -642,9 +667,7 @@ void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
     auto sct = it->second;
     int index = findIndex(sct, n->name, resolv);
 
-    std::vector<llvm::Value *> idx;
-    idx.push_back(makeInt(0));
-    idx.push_back(makeInt(index));
+    std::vector<llvm::Value *> idx = {makeInt(0), makeInt(index)};
     auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, sc, idx, "", BB);
     return eptr;
 }
@@ -702,14 +725,14 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
         //declare vars
         auto &params = variant->params;
         std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
-        //auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", BB);
+        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", BB);
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
             auto prm = params[i];
             std::vector<llvm::Value *> idx = {makeInt(0), makeInt(offset)};
-            //auto ptr=llvm::GetElementPtrInst::CreateInBounds(ty, dataPtr, idx,"", BB);
-            //NamedValues[f->name] = ptr;
+            auto ptr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, idx, "", BB);
+            NamedValues[prm->name] = ptr;
         }
     }
     b->thenStmt->accept(this, nullptr);

@@ -13,6 +13,7 @@ struct Compiler: public BaseVisitor<void*,void*>{
     llvm::Function* func;
     Method* curMethod;
     Resolver* resolv;
+    llvm::Type* expect;
 
     void compileAll();
     void compile(const std::string &path);

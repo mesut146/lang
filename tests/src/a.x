@@ -9,7 +9,7 @@ enum E{
  C(a: long);
 }
 
-func sum(a: int, b: int): int{
+/*func sum(a: int, b: int): int{
   return a + b;
 }
 
@@ -36,7 +36,7 @@ func infix(){
   assert (14^b)==5;
   assert (a<<3)==16;
   assert (b>>1)==5;
-}
+}*/
 
 func enumTest(){
   //let a: E = E::A;
@@ -48,15 +48,15 @@ func enumTest(){
   }*/
   let b: E = E::B{a: 5, b: 6};
   //let c: E = E::C{10};
-  /*if let E::B(p1,p2) = (b){
+  if let E::B(p1,p2) = (b){
     print("b is E::B a=%d b=%d\n",p1,p2);
     p1=10;
     print("b is E::B a=%d b=%d\n",p1,p2);
   }else{
     print("b is not E::B \n");
-  }*/
+  }
 }
-
+/*
 func ifTest(x: int, y: int){
   if(x<5){
     print("%d < 5\n", x);
@@ -68,20 +68,20 @@ func ifTest(x: int, y: int){
     print("in else(!(%d<6))\n", y);
   }
   print("after 2nd if\n");
-}
+}*/
 
 func main(): int{
-  varTest();
-  infix();
-  ifTest(4, 6);
-  assert sum(2,3) == 5;
-  print("sum=%d\n", sum(2, 3));
+  //varTest();
+  //infix();
+  //ifTest(4, 6);
+  //assert sum(2,3) == 5;
+  //print("sum=%d\n", sum(2, 3));
   
   //assert *(&sum(5, 6)) == 11;
-  let obj: A = A{a: 5, b: 6};
+  /*let obj: A = A{a: 5, b: 6};
   print("A.a=%d, A.b=%d\n", obj.a, obj.b);
   obj.a=10;
-  print("A.a=%d, A.b=%d\n", obj.a, obj.b);
+  print("A.a=%d, A.b=%d\n", obj.a, obj.b);*/
   //let objCopy=obj.clone();
   enumTest();
   return 0;
