@@ -92,7 +92,7 @@ RType *Resolver::resolveScoped(Expression *expr) {
 void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
     auto it = declMap.find(bd);
     if (it != declMap.end()) return (*it).second;
-    std::cout << "visitBaseDecl: " << bd->name << "\n";
+    //std::cout << "visitBaseDecl: " << bd->name << "\n";
     if (bd->isEnum) {
         return visitEnumDecl(dynamic_cast<EnumDecl *>(bd), arg);
     } else {

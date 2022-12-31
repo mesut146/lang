@@ -89,6 +89,7 @@ void parseTest() {
     parse("../tests/core/Optional");
     parse("../tests/core/String");
     parse("../tests/core/List");
+    parse("../tests/src/a.x", true);
 }
 
 int main(int argc, char **args) {

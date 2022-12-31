@@ -107,7 +107,7 @@ llvm::Type *mapType(Type *t) {
     auto s = t->print();
     if (t->isVoid()) return llvm::Type::getVoidTy(*ctx);
     if (t->isPrim()) {
-        if (s == "byte" || s == "i8") return getInt(8);
+        if (s == "byte" || s == "i8" || s=="bool") return getInt(8);
         if (s == "short" || s == "i16") return getInt(16);
         if (s == "int" || s == "i32") return getInt(32);
         if (s == "long" || s == "i64") return getInt(64);
@@ -118,6 +118,17 @@ llvm::Type *mapType(Type *t) {
         }
     }
     throw std::runtime_error("mapType: " + s);
+}
+
+llvm::Value* branch(llvm::Value* val){
+    auto ty = llvm::cast<llvm::IntegerType>(val->getType());
+    if(ty){
+       auto w = ty->getBitWidth();
+       if(w!=1){
+           return Builder->CreateTrunc(val, getInt(1));
+       }
+    }
+    return val;
 }
 
 static void make_printf_prototype() {
@@ -171,7 +182,7 @@ static void exit_prototype() {
 }*/
 static int size(Type *type) {
     auto s = type->print();
-    if (s == "byte") return 1;
+    if (s == "byte" || s=="bool") return 1;
     if (s == "int") return 4;
     if (s == "long") return 8;
     throw std::runtime_error("size(" + s + ")");
@@ -389,6 +400,7 @@ void *Compiler::visitParExpr(ParExpr *i, void *arg) {
 }
 
 void *Compiler::visitInfix(Infix *i, void *arg) {
+    print("infix :"+i->print());
     auto l = loadPtr(i->left);
     auto r = loadPtr(i->right);
     if (i->op == "+") {
@@ -444,6 +456,7 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
 
 void *Compiler::visitAssign(Assign *i, void *arg) {
     auto l = (llvm::Value *) i->left->accept(this, nullptr);
+    expect = l->getType()->getPointerElementType();
     auto r = (llvm::Value *) i->right->accept(this, nullptr);
     if (i->op == "=") return Builder->CreateStore(r, l);
 
@@ -453,6 +466,9 @@ void *Compiler::visitAssign(Assign *i, void *arg) {
 void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
     auto it = NamedValues.find(n->name);
     if (it == NamedValues.end()) {
+        for(auto &[n,v]:NamedValues){
+            std::cout << n<<", ";
+        }
         throw std::runtime_error("unknown ref: " + n->name);
     }
     return it->second;
@@ -482,13 +498,16 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
     if (n->isStr) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
-    }
-    if (n->isInt) {
+    }else if (n->isInt) {
         auto bits = expect->getScalarSizeInBits();
         std::cout << "expect: " << bits << std::endl;
 
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
+    }else if(n->isBool){
+        auto intType = llvm::IntegerType::get(*ctx, 8);
+        auto bval = n->val == "true" ? 1:0;
+        return llvm::ConstantInt::get(intType, bval);
     }
     throw std::runtime_error("literal: " + n->print());
 }
@@ -673,13 +692,13 @@ void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
 }
 
 void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
-    auto cond = loadPtr(b->expr);
+    auto cond =  branch(loadPtr(b->expr));
 
-    auto then = llvm::BasicBlock::Create(*ctx, "lb1", func);
+    auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(*ctx, "lb2");
+    auto next = llvm::BasicBlock::Create(*ctx, "");
     if (b->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(*ctx, "lb3");
+        elsebb = llvm::BasicBlock::Create(*ctx, "");
         Builder->CreateCondBr(cond, then, elsebb);
     } else {
         Builder->CreateCondBr(cond, then, next);
@@ -709,30 +728,37 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
     auto index = findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 
-    auto then = llvm::BasicBlock::Create(*ctx, "lb1", func);
+    auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(*ctx, "lb2");
+    auto next = llvm::BasicBlock::Create(*ctx, "");
     if (b->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(*ctx, "lb3");
-        Builder->CreateCondBr(cmp, then, elsebb);
+        elsebb = llvm::BasicBlock::Create(*ctx, "");
+        Builder->CreateCondBr(branch(cmp), then, elsebb);
     } else {
-        Builder->CreateCondBr(cmp, then, next);
+        Builder->CreateCondBr(branch(cmp), then, next);
     }
     Builder->SetInsertPoint(then);
+    BB=then;
 
     auto variant = decl->variants[index];
     if (!variant->params.empty()) {
         //declare vars
         auto &params = variant->params;
         std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
-        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", BB);
+        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", getBB());
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
             auto prm = params[i];
+            auto argName = b->args[i];
             std::vector<llvm::Value *> idx = {makeInt(0), makeInt(offset)};
-            auto ptr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, idx, "", BB);
-            NamedValues[prm->name] = ptr;
+            auto ptr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, idx, "", getBB ());
+            //bitcast to real type
+            auto targetTy = mapType(prm->type);
+            auto ptrReal = Builder->CreateBitCast(ptr, targetTy->getPointerTo());
+            NamedValues[argName] = ptrReal;
+            
+            offset+= size(prm->type);
         }
     }
     b->thenStmt->accept(this, nullptr);

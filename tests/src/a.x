@@ -39,15 +39,14 @@ func infix(){
 }*/
 
 func enumTest(){
-  //let a: E = E::A;
-  /*if let E::A = (a){
+  let a: E = E::A;
+  if let E::A = (a){
     print("a is E::A\n");
     //return;
   }else{
     print("a is not E::A\n");
-  }*/
+  }
   let b: E = E::B{a: 5, b: 6};
-  //let c: E = E::C{10};
   if let E::B(p1,p2) = (b){
     print("b is E::B a=%d b=%d\n",p1,p2);
     p1=10;
@@ -55,6 +54,10 @@ func enumTest(){
   }else{
     print("b is not E::B \n");
   }
+  let c: E = E::C{100};
+  if let E::C(p3) = (c){
+    print("c is E::C a=%ld\n", p3);
+  }else print("c is not E::C\n");
 }
 /*
 func ifTest(x: int, y: int){
@@ -70,8 +73,17 @@ func ifTest(x: int, y: int){
   print("after 2nd if\n");
 }*/
 
+func condTest(){
+  let b: bool = true;
+  if(b){
+    print("b=true\n");
+  }
+  let c: bool = b&&true;
+}
+
 func main(): int{
   //varTest();
+  condTest();
   //infix();
   //ifTest(4, 6);
   //assert sum(2,3) == 5;
@@ -83,6 +95,6 @@ func main(): int{
   obj.a=10;
   print("A.a=%d, A.b=%d\n", obj.a, obj.b);*/
   //let objCopy=obj.clone();
-  enumTest();
+  //enumTest();
   return 0;
 }
