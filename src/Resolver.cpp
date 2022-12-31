@@ -258,7 +258,7 @@ RType *Resolver::find(Type *type, BaseDecl *bd) {
 RType *Resolver::resolveType(Type *type) {
     auto it = typeMap.find(type);
     if (it != typeMap.end()) return (*it).second;
-    std::cout << "resolveType: " << type->print() << "\n";
+    //std::cout << "resolveType: " << type->print() << "\n";
     RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
         res = new RType;

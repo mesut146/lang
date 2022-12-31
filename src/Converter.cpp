@@ -53,7 +53,7 @@ int size(Type *type) {
 
 int size(EnumDecl *e) {
     int res = 0;
-    for (auto ee : e->cons) {
+    for (auto ee : e->variants) {
         if (ee->params.empty()) continue;
         int cur = 0;
         for (auto ep : ee->params) {
@@ -73,7 +73,7 @@ void Converter::header(const std::string &name) {
         hs << "struct " << bd->name << "{\n";
         if (bd->isEnum) {
             auto e = (EnumDecl *) bd;
-            int cnt = e->cons.size();
+            int cnt = e->variants.size();
             hs << "  int ord;\n";
             int sz = size(e);
             hs << "  char data[" << sz << "];\n";

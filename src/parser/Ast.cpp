@@ -70,7 +70,7 @@ std::string EnumDecl::print() {
         s.append("<").append(join(typeArgs, ", ")).append(">");
     }
     s.append("{\n");
-    s.append(join(cons, ",\n", "  "));
+    s.append(join(variants, ",\n", "  "));
     s.append(";\n");
     //body
     if (!methods.empty()) {
@@ -81,7 +81,7 @@ std::string EnumDecl::print() {
     return s;
 }
 
-std::string EnumEntry::print() {
+std::string EnumVariant::print() {
     std::string s;
     s.append(name);
     if (isStruct()) {

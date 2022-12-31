@@ -121,8 +121,8 @@ EnumParam *parseEnumParam(Parser *p) {
     return res;
 }
 
-EnumEntry *parseEnumEntry(Parser *p) {
-    auto res = new EnumEntry;
+EnumVariant *parseEnumEntry(Parser *p) {
+    auto res = new EnumVariant;
     res->name = *p->name();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
@@ -147,10 +147,10 @@ EnumDecl *Parser::parseEnumDecl() {
     }
     consume(LBRACE);
     if (!is(RBRACE)) {
-        res->cons.push_back(parseEnumEntry(this));
+        res->variants.push_back(parseEnumEntry(this));
         while (is(COMMA)) {
             consume(COMMA);
-            res->cons.push_back(parseEnumEntry(this));
+            res->variants.push_back(parseEnumEntry(this));
         }
     }
     consume(SEMI);

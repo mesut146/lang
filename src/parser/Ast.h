@@ -88,7 +88,7 @@ public:
     std::string print();
 };
 
-class EnumEntry {
+class EnumVariant {
 public:
     std::string name;
     std::vector<EnumParam *> params;
@@ -99,7 +99,7 @@ public:
 
 class EnumDecl : public BaseDecl {
 public:
-    std::vector<EnumEntry *> cons;
+    std::vector<EnumVariant *> variants;
 
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;

@@ -35,8 +35,8 @@ void Compiler::compileAll() {
     }
 }
 
-static std::unique_ptr<llvm::LLVMContext> TheContext;
-static std::unique_ptr<llvm::Module> TheModule;
+static std::unique_ptr<llvm::LLVMContext> ctx;
+static std::unique_ptr<llvm::Module> mod;
 static std::unique_ptr<llvm::IRBuilder<>> Builder;
 static std::map<std::string, Type *> Locals;
 static std::map<std::string, llvm::Value *> NamedValues;
@@ -49,15 +49,48 @@ int strCnt = 0;
 
 static void InitializeModule() {
     // Open a new context and module.
-    TheContext = std::make_unique<llvm::LLVMContext>();
-    TheModule = std::make_unique<llvm::Module>("test", *TheContext);
+    ctx = std::make_unique<llvm::LLVMContext>();
+    mod = std::make_unique<llvm::Module>("test", *ctx);
 
     // Create a new builder for the module.
-    Builder = std::make_unique<llvm::IRBuilder<>>(*TheContext);
+    Builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
+}
+
+llvm::Value *makeStr(std::string str) {
+    //0. Def
+    auto charType = llvm::IntegerType::get(*ctx, 8);
+    //1. Initialize chars vector
+    std::vector<llvm::Constant *> chars(str.length());
+    for (unsigned int i = 0; i < str.size(); i++) {
+        chars[i] = llvm::ConstantInt::get(charType, str[i]);
+    }
+    //1b. add a zero terminator too
+    chars.push_back(llvm::ConstantInt::get(charType, 0));
+    //2. Initialize the string from the characters
+    auto stringType = llvm::ArrayType::get(charType, chars.size());
+
+    //3. Create the declaration statement
+    auto name = std::string(".str") + std::to_string(++strCnt);
+    auto glob = (llvm::GlobalVariable *) mod->getOrInsertGlobal(name, stringType);
+    glob->setInitializer(llvm::ConstantArray::get(stringType, chars));
+    glob->setConstant(true);
+    glob->setLinkage(llvm::GlobalValue::LinkageTypes::PrivateLinkage);
+    glob->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+    //4. Return a cast to an i8*
+    return llvm::ConstantExpr::getBitCast(glob, charType->getPointerTo());
+}
+
+llvm::ConstantInt *makeInt(int val) {
+    auto intType = llvm::IntegerType::get(*ctx, 32);
+    return llvm::ConstantInt::get(intType, val);
 }
 
 llvm::Type *getTy() {
-    return llvm::Type::getInt32Ty(*TheContext);
+    return llvm::Type::getInt32Ty(*ctx);
+}
+
+llvm::Type *getInt(int bit) {
+    return llvm::IntegerType::get(*ctx, bit);
 }
 
 llvm::Type *getElem(llvm::Type *t) {
@@ -72,36 +105,36 @@ llvm::Type *mapType(Type *t) {
         return llvm::PointerType::get(mapType(ptr->type), 0);
     }
     auto s = t->print();
-    if(!t->isPrim()){
+    if (!t->isPrim()) {
         auto it = classMap.find(s);
-        if(it!=classMap.end()){
+        if (it != classMap.end()) {
             return it->second;
         }
     }
-    if (s == "int") return llvm::Type::getInt32Ty(*TheContext);
-    if (s == "void") return llvm::Type::getVoidTy(*TheContext);
+    if (s == "int") return llvm::Type::getInt32Ty(*ctx);
+    if (s == "void") return llvm::Type::getVoidTy(*ctx);
     throw std::runtime_error("mapType: " + s);
 }
 
 static void make_printf_prototype() {
-    auto pty = llvm::PointerType::get(llvm::IntegerType::get(*TheContext, 8), 0);
+    auto pty = llvm::PointerType::get(llvm::IntegerType::get(*ctx, 8), 0);
     std::vector<llvm::Type *> args;
     args.push_back(pty);
-    auto ret = llvm::IntegerType::get(*TheContext, 32);
+    auto ret = llvm::IntegerType::get(*ctx, 32);
     auto ft =
-                llvm::FunctionType::get(ret, args, true);
-        auto *f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", TheModule.get());
-        f->setCallingConv(llvm::CallingConv::C);
+            llvm::FunctionType::get(ret, args, true);
+    auto *f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", mod.get());
+    f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     f->setAttributes(attr);
     printf_proto = f;
 }
 
-static  void exit_prototype() {
+static void exit_prototype() {
     //auto *Pty = llvm::PointerType::get(llvm::IntegerType::get(mod->getContext(), 8), 0);
-    auto vt = llvm::Type::getVoidTy(*TheContext);
-    auto ft = llvm::FunctionType::get(vt, llvm::IntegerType::get(*TheContext, 32), false);
-    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", TheModule.get());
+    auto vt = llvm::Type::getVoidTy(*ctx);
+    auto ft = llvm::FunctionType::get(vt, llvm::IntegerType::get(*ctx, 32), false);
+    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", mod.get());
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     f->setAttributes(attr);
@@ -142,7 +175,7 @@ static int size(Type *type) {
 
 static int size(EnumDecl *e) {
     int res = 0;
-    for (auto ee : e->cons) {
+    for (auto ee : e->variants) {
         if (ee->params.empty()) continue;
         int cur = 0;
         for (auto ep : ee->params) {
@@ -152,31 +185,31 @@ static int size(EnumDecl *e) {
     }
     return res;
 }
-void print(const std::string& msg){
-    std::cout<<msg<<std::endl;
+void print(const std::string &msg) {
+    std::cout << msg << std::endl;
 }
 
 void createProtos(Unit *unit) {
-    for(auto bd:unit->types){
-        std::vector<llvm::Type*> elems;
-        auto ed = dynamic_cast<EnumDecl*>(bd);
-        print("proto " +bd->name);
-        if(ed){
+    for (auto bd : unit->types) {
+        std::vector<llvm::Type *> elems;
+        auto ed = dynamic_cast<EnumDecl *>(bd);
+        print("proto " + bd->name);
+        if (ed) {
             int sz = size(ed);
-            std::cout<<"sizeof enum="<<sz<<std::endl;
+            std::cout << "sizeof enum=" << sz << std::endl;
             elems.push_back(getTy());
-            auto charType = llvm::IntegerType::get(*TheContext, 8);
+            auto charType = llvm::IntegerType::get(*ctx, 8);
             auto stringType = llvm::ArrayType::get(charType, sz);
             elems.push_back(stringType);
-        }else{
-            auto td = dynamic_cast<TypeDecl*>(bd);
-            for(auto field:td->fields){
+        } else {
+            auto td = dynamic_cast<TypeDecl *>(bd);
+            for (auto field : td->fields) {
                 elems.push_back(mapType(field->type));
             }
-            print(std::to_string(td->fields.size())+" fields");
+            print(std::to_string(td->fields.size()) + " fields");
         }
-        auto ty = llvm::StructType::create(*TheContext, elems, bd->name);
-        classMap[bd->name]=ty;
+        auto ty = llvm::StructType::create(*ctx, elems, bd->name);
+        classMap[bd->name] = ty;
         ty->dump();
     }
     for (auto m : unit->methods) {
@@ -187,7 +220,7 @@ void createProtos(Unit *unit) {
         auto retType = mapType(m->type);
         auto FT =
                 llvm::FunctionType::get(retType, argTypes, false);
-        auto *f = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, m->name, TheModule.get());
+        auto *f = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, m->name, mod.get());
         unsigned Idx = 0;
         for (auto &Arg : f->args()) {
             Arg.setName(m->params[Idx++]->name);
@@ -207,7 +240,7 @@ void initParams(Method *m) {
         auto val = &arg;
         Builder->CreateStore(val, ptr);
         NamedValues[prm->name] = ptr;
-        Locals[prm->name]=prm->type;
+        Locals[prm->name] = prm->type;
         i++;
     }
 }
@@ -227,23 +260,22 @@ void Compiler::compile(const std::string &path) {
     Lexer lexer(path);
     Parser parser(lexer);
     unit = parser.parseUnit();
-    //todo
+
     InitializeModule();
     createProtos(unit);
-    std::cout<<"done protos"<<std::endl;
-    resolv=new Resolver (unit);
+    resolv = new Resolver(unit);
     for (auto m : unit->methods) {
-        resolv->curMethod=m;
-        curMethod= m;
+        resolv->curMethod = m;
+        curMethod = m;
         func = funcMap[m];
-        BB = llvm::BasicBlock::Create(*TheContext, "entry", func);
+        BB = llvm::BasicBlock::Create(*ctx, "entry", func);
         Builder->SetInsertPoint(BB);
         NamedValues.clear();
         Locals.clear();
         initParams(m);
-        /*for (auto &Arg : func->args())
-    NamedValues[std::string(Arg.getName())] = &Arg;*/
-
+        //        for (auto &Arg : func->args()){
+        //            NamedValues[std::string(Arg.getName())] = &Arg;
+        //        }
         m->body->accept(this, nullptr);
         if (m->type->print() == "void") {
             //todo insert ret in ast in other pass
@@ -253,9 +285,9 @@ void Compiler::compile(const std::string &path) {
         std::cout << "verified: " << m->name << std::endl;
     }
     //TheModule->print(,nullptr);
-    TheModule->dump();
-    llvm::verifyModule(*TheModule, &llvm::outs());
-    
+    mod->dump();
+    llvm::verifyModule(*mod, &llvm::outs());
+
     auto TargetTriple = llvm::sys::getDefaultTargetTriple();
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -277,8 +309,8 @@ void Compiler::compile(const std::string &path) {
     llvm::TargetOptions opt;
     auto RM = llvm::Optional<llvm::Reloc::Model>();
     auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
-    TheModule->setDataLayout(TargetMachine->createDataLayout());
-    TheModule->setTargetTriple(TargetTriple);
+    mod->setDataLayout(TargetMachine->createDataLayout());
+    mod->setTargetTriple(TargetTriple);
 
     auto Filename = name + ".o";
     std::error_code EC;
@@ -296,8 +328,13 @@ void Compiler::compile(const std::string &path) {
         std::cerr << "TargetMachine can't emit a file of this type";
         exit(1);
     }
-    pass.run(*TheModule);
+    pass.run(*mod);
     dest.flush();
+    std::cout << "writing " << Filename << std::endl;
+}
+
+llvm::BasicBlock *getBB() {
+    return Builder->GetInsertBlock();
 }
 
 void *Compiler::visitBlock(Block *b, void *arg) {
@@ -315,8 +352,12 @@ void *Compiler::visitBlock(Block *b, void *arg) {
 }
 
 void *Compiler::visitReturnStmt(ReturnStmt *t, void *arg) {
-    auto val = (llvm::Value *) t->expr->accept(this, nullptr);
-    Builder->CreateRet(val);
+    if (t->expr) {
+        auto val = (llvm::Value *) t->expr->accept(this, nullptr);
+        Builder->CreateRet(val);
+    } else {
+        Builder->CreateRetVoid();
+    }
     return nullptr;
 }
 
@@ -330,15 +371,15 @@ llvm::Value *load(llvm::Value *val) {
     return Builder->CreateLoad(ty, val);
 }
 
-llvm::Value *Compiler::loadPtr( Expression *e) {
-    auto val =(llvm::Value *)e->accept (this, nullptr);
+llvm::Value *Compiler::loadPtr(Expression *e) {
+    auto val = (llvm::Value *) e->accept(this, nullptr);
     if (dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e)) {
         return load(val);
     }
     return val;
 }
 
-void* Compiler::visitParExpr(ParExpr *i, void* arg){
+void *Compiler::visitParExpr(ParExpr *i, void *arg) {
     return i->expr->accept(this, nullptr);
 }
 
@@ -348,14 +389,14 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     if (i->op == "+") {
         return Builder->CreateNSWAdd(l, r);
     }
+    if (i->op == "-") {
+        return Builder->CreateNSWSub(l, r);
+    }
     if (i->op == "*") {
-        return Builder->CreateMul(l, r);
+        return Builder->CreateNSWMul(l, r);
     }
     if (i->op == "/") {
         return Builder->CreateSDiv(l, r);
-    }
-    if (i->op == "-") {
-        return Builder->CreateSub(l, r);
     }
     if (i->op == "%") {
         return Builder->CreateSRem(l, r);
@@ -378,17 +419,29 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     if (i->op == "==") {
         return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, l, r);
     }
+    if (i->op == "!=") {
+        return Builder->CreateCmp(llvm::CmpInst::ICMP_NE, l, r);
+    }
     if (i->op == "<") {
         return Builder->CreateCmp(llvm::CmpInst::ICMP_SLT, l, r);
+    }
+    if (i->op == ">") {
+        return Builder->CreateCmp(llvm::CmpInst::ICMP_SGT, l, r);
+    }
+    if (i->op == "<=") {
+        return Builder->CreateCmp(llvm::CmpInst::ICMP_SLE, l, r);
+    }
+    if (i->op == ">=") {
+        return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
     }
     throw std::runtime_error("infix: " + i->print());
 }
 
-void* Compiler::visitAssign(Assign *i, void* arg){
-    auto l =(llvm:: Value*) i->left->accept (this, nullptr);
-    auto r=(llvm:: Value*) i->right->accept (this, nullptr);
-    if(i->op == "=") return Builder->CreateStore(r, l);
-    
+void *Compiler::visitAssign(Assign *i, void *arg) {
+    auto l = (llvm::Value *) i->left->accept(this, nullptr);
+    auto r = (llvm::Value *) i->right->accept(this, nullptr);
+    if (i->op == "=") return Builder->CreateStore(r, l);
+
     throw std::runtime_error("assign: " + i->print());
 }
 
@@ -397,8 +450,7 @@ void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
     if (it == NamedValues.end()) {
         throw std::runtime_error("unknown ref: " + n->name);
     }
-    auto v = it->second;
-    return v;
+    return it->second;
 }
 
 void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
@@ -406,7 +458,6 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     if (mc->name == "print") {
         f = printf_proto;
     } else {
-        auto resolv = new Resolver(unit);
         auto rt = (RType *) mc->accept(resolv, nullptr);
         f = funcMap[rt->targetMethod];
     }
@@ -415,49 +466,20 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
         auto a = mc->args[i];
         auto av = loadPtr(a);
         args.push_back(av);
-        if (!args.back())
+        if (!args.back()) {
             throw std::runtime_error("arg null: " + a->print());
+        }
     }
     return Builder->CreateCall(f, args);
 }
 
-llvm::Value *makeStr(std::string str) {
-    //0. Def
-    auto charType = llvm::IntegerType::get(*TheContext, 8);
-    //1. Initialize chars vector
-    std::vector<llvm::Constant *> chars(str.length());
-    for (unsigned int i = 0; i < str.size(); i++) {
-        chars[i] = llvm::ConstantInt::get(charType, str[i]);
-    }
-    //1b. add a zero terminator too
-    chars.push_back(llvm::ConstantInt::get(charType, 0));
-    //2. Initialize the string from the characters
-    auto stringType = llvm::ArrayType::get(charType, chars.size());
-
-    //3. Create the declaration statement
-    auto name = std::string(".str") + std::to_string(++strCnt);
-    auto glob = (llvm::GlobalVariable *) TheModule->getOrInsertGlobal(name, stringType);
-    glob->setInitializer(llvm::ConstantArray::get(stringType, chars));
-    glob->setConstant(true);
-    glob->setLinkage(llvm::GlobalValue::LinkageTypes::PrivateLinkage);
-    glob->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-    //4. Return a cast to an i8*
-    return llvm::ConstantExpr::getBitCast(glob, charType->getPointerTo());
-}
-
-llvm::ConstantInt *makeInt(int val) {
-    auto intType = llvm::IntegerType::get(*TheContext, 32);
-    return llvm::ConstantInt::get(intType, val);
-}
-
 void *Compiler::visitLiteral(Literal *n, void *arg) {
     if (n->isStr) {
-        //auto ptr = llvm::PointerType::get(llvm::IntegerType::get(*TheContext, 8), 0);
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
     }
     if (n->isInt) {
-        auto intType = llvm::IntegerType::get(*TheContext, 32);
+        auto intType = llvm::IntegerType::get(*ctx, 32);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     }
     throw std::runtime_error("literal: " + n->print());
@@ -466,14 +488,14 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
 void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
     auto str = n->expr->print();
     auto cond = loadPtr(n->expr);
-    auto then = llvm::BasicBlock::Create(*TheContext, "lb1", func);
-    auto next = llvm::BasicBlock::Create(*TheContext, "lb2");
+    auto then = llvm::BasicBlock::Create(*ctx, "", func);
+    auto next = llvm::BasicBlock::Create(*ctx, "");
     Builder->CreateCondBr(cond, next, then);
     Builder->SetInsertPoint(then);
     //print error and exit
     auto msg = std::string("assertion ") + str + " failed\n";
     std::vector<llvm::Value *> pr_args = {makeStr(msg)};
-    Builder->CreateCall(printf_proto, pr_args, "calltmp");
+    Builder->CreateCall(printf_proto, pr_args, "");
     std::vector<llvm::Value *> args = {makeInt(1)};
     Builder->CreateCall(exit_proto, args);
     Builder->CreateUnreachable();
@@ -485,19 +507,19 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
 
 void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
-        if(!f->rhs) throw std:: runtime_error("var '"+f->name+"' has no initializer");
+        if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
         auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
-        Locals[f->name]=f->type;
-            //depends on rhs type; copy,ptr...
-            /*if(llvm::dyn_cast<llvm::AllocaInst>(val)){
+        Locals[f->name] = f->type;
+        //depends on rhs type; copy,ptr...
+        /*if(llvm::dyn_cast<llvm::AllocaInst>(val)){
                 NamedValues[f->name] = val;
                 continue;
             }*/
-            if(dynamic_cast<ObjExpr*>(f->rhs) || dynamic_cast<Type*>(f->rhs)){
-                NamedValues[f->name] = val;
-                continue;
-            }
-        
+        if (dynamic_cast<ObjExpr *>(f->rhs) || dynamic_cast<Type *>(f->rhs)) {
+            NamedValues[f->name] = val;
+            continue;
+        }
+
         auto ty = mapType(f->type);
         auto ptr = Builder->CreateAlloca(ty);
         Builder->CreateStore(val, ptr);
@@ -522,132 +544,127 @@ void *Compiler::visitDerefExpr(DerefExpr *n, void *arg) {
     return Builder->CreateLoad(ty, val);
 }
 
-llvm::Value* allocEnum(){
-    return nullptr;
+EnumDecl *findEnum(Type *type, Resolver *resolv) {
+    auto rt = (RType *) type->accept(resolv, nullptr);
+    return dynamic_cast<EnumDecl *>(rt->targetDecl);
 }
 
-EnumDecl* findEnum(Type* type, Resolver* resolv){
-  auto rt=(RType*)type->accept(resolv, nullptr);
-  return dynamic_cast<EnumDecl*>(rt->targetDecl);
-}
-
-int findVariant(EnumDecl* decl, std::string name){
-    for(int i=0;i<decl->cons.size();i++){
-        if(decl->cons[i]->name==name){
+int findVariant(EnumDecl *decl, std::string name) {
+    for (int i = 0; i < decl->variants.size(); i++) {
+        if (decl->variants[i]->name == name) {
             return i;
         }
     }
-    throw std:: runtime_error("unknown variant: "+name+ " of type "+decl->name);
+    throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
 }
 
-llvm::Value* enumVarPtr(){
-    
+void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
+    ty->print(llvm::outs(), true, true);
+    //ty->dump();
+    ptr->dump();
+    std::vector<llvm::Value *> ordidx = {makeInt(0), makeInt(0)};
+    auto ordPtr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, ordidx, "", BB);
+    Builder->CreateStore(makeInt(index), ordPtr);
 }
 
-void* Compiler::visitObjExpr(ObjExpr *n, void* arg){
+void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     //enum or class
-    if(n->type->scope){
-        auto ty = mapType(n->type->scope);
+    if (n->type->scope) {
+        auto enumTy = mapType(n->type->scope);
         auto decl = findEnum(n->type->scope, resolv);
         auto index = findVariant(decl, n->type->name);
-        auto ptr = Builder->CreateAlloca(ty, (unsigned)0);
-        std::vector<llvm:: Value*> ordidx={makeInt(0), makeInt(0)};
-        auto ordTy =llvm:: PointerType::get(getTy(), (unsigned)0);
-        auto ordPtr=llvm::GetElementPtrInst::CreateInBounds(ty, ptr, ordidx,"", BB);
-        Builder->CreateStore (makeInt(index), ordPtr);
-        std::vector<llvm:: Value*> dataIdx={makeInt(0), makeInt(1)};
-        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, dataIdx,"", BB);
-        
-        int offset= 0;
-        for(int i=0;i<decl->cons.size();i++){
-            auto cons = decl->cons[i];
-            std::vector<llvm:: Value*> entIdx={makeInt(0), makeInt(offset)};
-            auto entPtr=llvm::GetElementPtrInst::CreateInBounds(ty, dataPtr, entIdx,"", BB);
+        auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
+
+        setOrdinal(index, ptr, enumTy);
+        std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
+        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(enumTy, ptr, dataIdx, "", BB);
+        auto variant = decl->variants[index];
+        int offset = 0;
+        for (int i = 0; i < variant->params.size(); i++) {
+            auto cons = variant->params[i];
+            std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
+            auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType(), dataPtr, entIdx, "", BB);
             auto targetTy = mapType(cons->type);
-            int cast = Builder->CreateBitCast(entPtr, targetTy);
-            auto val = (llvm::Value*)n->entries[i].value->accept (this, nullptr);
-            Builder->CreateStore (val, cast);
-            offset+= size (cons->type);
+            auto cast = Builder->CreateBitCast(entPtr, targetTy);
+            auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
+            Builder->CreateStore(val, cast);
+            offset += size(cons->type);
         }
         return ptr;
-    }else{
-    auto ty = mapType(n->type);
-    auto ptr = Builder->CreateAlloca(ty, (unsigned)0);
-    int i=0;
-    for(auto &e:n->entries){
-        std::vector<llvm:: Value*> idx;
-        idx.push_back(makeInt(0));
-        idx.push_back(makeInt(i));
-        auto eptr=llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx,"", BB);
-        auto val = (llvm::Value*)e.value->accept (this, nullptr);
-        Builder->CreateStore (val, eptr);
-        i++;
-    }
-    return ptr;
+    } else {
+        auto ty = mapType(n->type);
+        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        int i = 0;
+        for (auto &e : n->entries) {
+            std::vector<llvm::Value *> idx;
+            idx.push_back(makeInt(0));
+            idx.push_back(makeInt(i));
+            auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx, "", BB);
+            auto val = (llvm::Value *) e.value->accept(this, nullptr);
+            Builder->CreateStore(val, eptr);
+            i++;
+        }
+        return ptr;
     }
 }
 
-int findIndex(Type* type, std::string name, Resolver* resolv){
-    auto sctt=(RType*)type->accept(resolv, nullptr);
-    auto td=dynamic_cast<TypeDecl*>(sctt->targetDecl);
-    for(int i=0;i<td->fields.size();i++){
-        if(td->fields[i]->name==name){
+int findIndex(Type *type, std::string name, Resolver *resolv) {
+    auto sctt = (RType *) type->accept(resolv, nullptr);
+    auto td = dynamic_cast<TypeDecl *>(sctt->targetDecl);
+    for (int i = 0; i < td->fields.size(); i++) {
+        if (td->fields[i]->name == name) {
             return i;
         }
     }
-    throw std:: runtime_error("unknown field: "+name+ " of type "+type->print());
+    throw std::runtime_error("unknown field: " + name + " of type " + type->print());
 }
 
-
-void* Compiler::visitType(Type *n, void* arg){
-    if(!n->scope) throw std:: runtime_error("type has no scope");
+void *Compiler::visitType(Type *n, void *arg) {
+    if (!n->scope) throw std::runtime_error("type has no scope");
     //todo scope, resolv
-    auto sct=mapType(n->scope);
-    if(!sct) throw std:: runtime_error("type not found: "+n->scope->print());
-    //enum variant
+    auto enumTy = mapType(n->scope);
+    if (!enumTy) throw std::runtime_error("type not found: " + n->scope->print());
+    //enum variant without struct
+    auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
     int index = findVariant(findEnum(n->scope, resolv), n->name);
-    auto ptr = Builder->CreateAlloca(sct, (unsigned)0);
-    std::vector<llvm:: Value*> idx={makeInt(0), makeInt(0)};
-    auto ordTy =llvm:: PointerType::get(getTy(), (unsigned)0);
-    auto ordPtr=llvm::GetElementPtrInst::CreateInBounds(sct, ptr, idx,"", BB);
-    Builder->CreateStore (makeInt(index), ordPtr);
+    setOrdinal(index, ptr, enumTy);
     return ptr;
 }
 
-void* Compiler::visitFieldAccess(FieldAccess *n, void* arg){
-    auto sc = (llvm::Value*)n->scope->accept(this, nullptr);
-    auto ty = sc->getType ()->getPointerElementType();
-    auto sn = dynamic_cast<SimpleName*>( n->scope);
-    if(!sn) throw std:: runtime_error("FA: "+n->print());
+void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
+    auto sc = (llvm::Value *) n->scope->accept(this, nullptr);
+    auto ty = sc->getType()->getPointerElementType();
+    auto sn = dynamic_cast<SimpleName *>(n->scope);
+    if (!sn) throw std::runtime_error("FA: " + n->print());
     //local,param
     auto it = Locals.find(sn->name);
-    if(it==Locals.end()) throw std:: runtime_error(sn->name + " not found");
-    auto sct=it->second;
+    if (it == Locals.end()) throw std::runtime_error(sn->name + " not found");
+    auto sct = it->second;
     int index = findIndex(sct, n->name, resolv);
-    
-    std::vector<llvm:: Value*> idx;
+
+    std::vector<llvm::Value *> idx;
     idx.push_back(makeInt(0));
     idx.push_back(makeInt(index));
-    auto eptr=llvm::GetElementPtrInst::CreateInBounds(ty, sc, idx,"", BB);
+    auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, sc, idx, "", BB);
     return eptr;
 }
 
-void* Compiler:: visitIfStmt(IfStmt *b, void* arg){
+void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     auto cond = loadPtr(b->expr);
-    
-    auto then = llvm::BasicBlock::Create(*TheContext, "lb1", func);
-    llvm::BasicBlock* elsebb;
-    auto next = llvm::BasicBlock::Create(*TheContext, "lb2");
-    if(b->elseStmt){
-        elsebb = llvm::BasicBlock::Create(*TheContext, "lb3");
+
+    auto then = llvm::BasicBlock::Create(*ctx, "lb1", func);
+    llvm::BasicBlock *elsebb;
+    auto next = llvm::BasicBlock::Create(*ctx, "lb2");
+    if (b->elseStmt) {
+        elsebb = llvm::BasicBlock::Create(*ctx, "lb3");
         Builder->CreateCondBr(cond, then, elsebb);
-    }else{
+    } else {
         Builder->CreateCondBr(cond, then, next);
     }
     Builder->SetInsertPoint(then);
     b->thenStmt->accept(this, nullptr);
     Builder->CreateBr(next);
-    if(b->elseStmt){
+    if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         b->elseStmt->accept(this, nullptr);
@@ -659,43 +676,45 @@ void* Compiler:: visitIfStmt(IfStmt *b, void* arg){
     return nullptr;
 }
 
-void* Compiler::visitIfLetStmt(IfLetStmt *b, void* arg){
-    auto rhs = (llvm::Value*)b->rhs->accept(this, nullptr);
-    std::vector<llvm:: Value*> idx;
-    idx.push_back(makeInt(0));
-    idx.push_back(makeInt(0));
-    auto ty = rhs->getType ()->getPointerElementType();
-    auto ordptr=llvm::GetElementPtrInst::CreateInBounds(ty, rhs, idx,"", BB);
-    auto ord=Builder->CreateLoad(getTy(), ordptr);
+void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
+    auto rhs = (llvm::Value *) b->rhs->accept(this, nullptr);
+    std::vector<llvm::Value *> idx = {makeInt(0), makeInt(0)};
+    auto ty = rhs->getType()->getPointerElementType();
+    auto ordptr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, idx, "", BB);
+    auto ord = Builder->CreateLoad(getTy(), ordptr);
     auto decl = findEnum(b->type->scope, resolv);
-    auto index= findVariant(decl, b->type->name);
+    auto index = findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
-    
-    auto then = llvm::BasicBlock::Create(*TheContext, "lb1", func);
-    llvm::BasicBlock* elsebb;
-    auto next = llvm::BasicBlock::Create(*TheContext, "lb2");
-    if(b->elseStmt){
-        elsebb = llvm::BasicBlock::Create(*TheContext, "lb3");
+
+    auto then = llvm::BasicBlock::Create(*ctx, "lb1", func);
+    llvm::BasicBlock *elsebb;
+    auto next = llvm::BasicBlock::Create(*ctx, "lb2");
+    if (b->elseStmt) {
+        elsebb = llvm::BasicBlock::Create(*ctx, "lb3");
         Builder->CreateCondBr(cmp, then, elsebb);
-    }else{
+    } else {
         Builder->CreateCondBr(cmp, then, next);
     }
     Builder->SetInsertPoint(then);
-    //declare vars
-    auto &params= c:decl->cons[index]->params;
-    std::vector<llvm::Value*> idxData={makeInt(0), makeInt(1)};
-    auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", BB);
-    int offset = 0;
-    for(int i=0;i<params.size();i++){
-        //regular var decl
-        auto prm = params[i];
-        std::vector<llvm::Value*> idx={makeInt(0), makeInt(i)};
-        //auto ptr=llvm::GetElementPtrInst::CreateInBounds(ty, dataPtr, idx,"", BB);
-        //NamedValues[f->name] = ptr;
+
+    auto variant = decl->variants[index];
+    if (!variant->params.empty()) {
+        //declare vars
+        auto &params = variant->params;
+        std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
+        //auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", BB);
+        int offset = 0;
+        for (int i = 0; i < params.size(); i++) {
+            //regular var decl
+            auto prm = params[i];
+            std::vector<llvm::Value *> idx = {makeInt(0), makeInt(offset)};
+            //auto ptr=llvm::GetElementPtrInst::CreateInBounds(ty, dataPtr, idx,"", BB);
+            //NamedValues[f->name] = ptr;
+        }
     }
     b->thenStmt->accept(this, nullptr);
     Builder->CreateBr(next);
-    if(b->elseStmt){
+    if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         b->elseStmt->accept(this, nullptr);
@@ -703,6 +722,6 @@ void* Compiler::visitIfLetStmt(IfLetStmt *b, void* arg){
     }
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    BB=next;
+    BB = next;
     return nullptr;
 }
