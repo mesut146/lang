@@ -73,12 +73,21 @@ func ifTest(x: int, y: int){
   print("after 2nd if\n");
 }*/
 
+func getTrue(): bool {
+  print("getTrue\n");
+  return true;
+}
+func getFalse(): bool {
+  print("getFalse\n");
+  return false;
+}
+
 func condTest(){
-  let b: bool = true;
-  if(b){
-    print("b=true\n");
-  }
-  let c: bool = b&&true;
+  let a: bool = true;
+  let b: bool = false;
+  assert getTrue()&&getTrue();
+  assert getTrue() || getFalse();
+  assert getFalse() || getTrue();
 }
 
 func main(): int{

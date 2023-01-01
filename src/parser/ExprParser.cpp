@@ -457,6 +457,7 @@ Expression *expr9(Parser *p) {
     Expression *lhs = expr10(p);
     while (p->is({LTLT, GT})) {
         std::string ops = *p->pop()->value;
+        //todo >>, in while
         if (ops == ">") {
             ops = ">>";
             p->consume(GT);
@@ -547,6 +548,7 @@ Expression *expr3(Parser *p) {
         res->left = lhs;
         res->op = *p->pop()->value;
         res->right = expr4(p);
+        lhs = res;
     }
     return lhs;
 }

@@ -27,6 +27,7 @@ struct Compiler: public BaseVisitor<void*,void*>{
     void* visitIfLetStmt(IfLetStmt *b, void* arg) override;
     
     void* visitParExpr(ParExpr *i, void* arg) override;
+    llvm::Value* andOr(llvm::Value* l, llvm::Value* r, bool isand);
     void* visitInfix(Infix *i, void* arg) override;
     void* visitAssign(Assign *i, void* arg) override;
     void* visitSimpleName(SimpleName *n, void* arg) override;

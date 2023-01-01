@@ -399,8 +399,32 @@ void *Compiler::visitParExpr(ParExpr *i, void *arg) {
     return i->expr->accept(this, nullptr);
 }
 
+llvm::Value* Compiler::andOr(llvm::Value* l, llvm::Value* r, bool isand){
+    auto bb=getBB();
+        auto then = llvm::BasicBlock::Create(*ctx, "", func);
+        auto next = llvm::BasicBlock::Create(*ctx, "");
+        if(isand){
+            Builder->CreateCondBr(branch(l), then, next);
+        }else{
+            Builder->CreateCondBr(branch(l), next, then);
+        }
+        Builder->SetInsertPoint(then);
+        BB=then;
+        //Builder->CreateLoad();
+        //auto rr=load(r);
+        auto rbit=Builder->CreateTrunc(r, getInt(1));
+        Builder->CreateBr(next);
+        Builder->SetInsertPoint(next);
+        func->getBasicBlockList().push_back(next);
+        BB=next;
+        auto phi=Builder->CreatePHI(getInt(1), 2);
+        phi->addIncoming(isand?Builder->getFalse():Builder->getTrue(), bb);
+        phi->addIncoming(rbit, then);
+        auto ext=Builder->CreateZExt(phi, getInt(8));
+    return ext;
+}
+
 void *Compiler::visitInfix(Infix *i, void *arg) {
-    print("infix :"+i->print());
     auto l = loadPtr(i->left);
     auto r = loadPtr(i->right);
     if (i->op == "+") {
@@ -450,6 +474,14 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     }
     if (i->op == ">=") {
         return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
+    }
+    if(i->op == "&&"){
+        //res=(l==true?r:false)
+        return andOr(l,r,true);
+    }
+    if(i->op== "||"){
+        //res=(l==true?true:r)
+        return andOr(l,r,false);
     }
     throw std::runtime_error("infix: " + i->print());
 }
@@ -517,7 +549,7 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
     auto cond = loadPtr(n->expr);
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    Builder->CreateCondBr(cond, next, then);
+    Builder->CreateCondBr(branch(cond), next, then);
     Builder->SetInsertPoint(then);
     //print error and exit
     auto msg = std::string("assertion ") + str + " failed\n";
@@ -594,7 +626,7 @@ void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
     Builder->CreateStore(makeInt(index), ordPtr);
 }
 
-llvm::Value *implicit(llvm::Value *val, llvm::Type *target) {
+/*llvm::Value *implicit(llvm::Value *val, llvm::Type *target) {
     auto src = val->getType();
     if (src->isIntegerTy()) {
         if (!target->isIntegerTy()) {
@@ -606,7 +638,7 @@ llvm::Value *implicit(llvm::Value *val, llvm::Type *target) {
         return Builder->CreateBitCast(val, target->getPointerTo());
     }
     throw std::runtime_error("cant do implicit cast from ");
-}
+}*/
 
 void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     //enum or class
@@ -625,7 +657,6 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
             auto cons = variant->params[i];
             std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
 
-            dataPtr->getType()->dump();
             auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx, "", BB);
             auto targetTy = mapType(cons->type);
             expect = targetTy;
@@ -762,6 +793,10 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
         }
     }
     b->thenStmt->accept(this, nullptr);
+    //clear params
+    for(auto &p:b->args){
+        NamedValues.erase(p);
+    }
     Builder->CreateBr(next);
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
