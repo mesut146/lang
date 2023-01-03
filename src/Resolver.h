@@ -3,6 +3,7 @@
 #include "BaseVisitor.h"
 #include "parser/Ast.h"
 #include <map>
+#include <unordered_map>
 #include <memory>
 #include <variant>
 
@@ -61,9 +62,9 @@ public:
     std::map<std::string, RType *> typeMap;
     std::map<Param *, RType *> paramMap;
     //std::map<EnumParam *, RType *> paramMap;
-    std::map<Method *, RType *> methodMap;//return types
+    std::unordered_map<Method *, RType *> methodMap;//return types
     //std::map<FieldDecl*, RType*> fieldMap;
-    std::map<Expression *, RType *> exprMap;
+    std::unordered_map<Expression *, RType *> exprMap;
     std::vector<std::shared_ptr<Scope>> scopes;
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
@@ -97,6 +98,7 @@ public:
 
     void *visitMethod(Method *m, void *arg) override;
     void *visitParam(Param *p, void *arg) override;
+    //void *visitEnumParam(EnumParam *p, void *arg) override;
 
     RType *resolveScoped(Expression *expr);
 
@@ -112,4 +114,7 @@ public:
     void *visitAsExpr(AsExpr *as, void *arg) override;
     void *visitRefExpr(RefExpr *as, void *arg) override;
     void *visitDerefExpr(DerefExpr *as, void *arg) override;
+    void *visitAssertStmt(AssertStmt *as, void *arg) override;
+    void *visitIfLetStmt(IfLetStmt *as, void *arg) override;
+    void *visitParExpr(ParExpr *as, void *arg) override;
 };

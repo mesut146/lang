@@ -5,7 +5,7 @@ class A{
 
 enum E{
  A,
- B(a: int, b: byte),
+ B(a: int, b: int),
  C(a: long);
 }
 
@@ -48,18 +48,21 @@ func enumTest(){
   }
   let b: E = E::B{a: 5, b: 6};
   if let E::B(p1,p2) = (b){
+    assert (p1==5)&&(p2==6);
     print("b is E::B a=%d b=%d\n",p1,p2);
     p1=10;
     print("b is E::B a=%d b=%d\n",p1,p2);
+    assert (p1==10)&&(p2==6);
   }else{
     print("b is not E::B \n");
   }
   let c: E = E::C{100};
   if let E::C(p3) = (c){
+    assert p3==100;
     print("c is E::C a=%ld\n", p3);
   }else print("c is not E::C\n");
 }
-/*
+
 func ifTest(x: int, y: int){
   if(x<5){
     print("%d < 5\n", x);
@@ -71,23 +74,33 @@ func ifTest(x: int, y: int){
     print("in else(!(%d<6))\n", y);
   }
   print("after 2nd if\n");
-}*/
+}
 
 func getTrue(cnt: int*): bool {
   print("getTrue\n");
+  *cnt = *cnt + 1;
   return true;
 }
-func getFalse(): bool {
+func getFalse(cnt: int*): bool {
   print("getFalse\n");
+  *cnt = *cnt + 1;
   return false;
 }
 
 func condTest(){
-  let cnt: int = 0;
-  assert (getFalse()&&getTrue(&cnt))==false;
-  //assert getTrue() && getTrue();
-  //assert getTrue() || getFalse();
-  //assert getFalse() || getTrue();
+  let c1: int = 0;
+  let c2: int = 0;
+  assert (getFalse(&c2)&&getTrue(&c1))==false;
+  assert c1 == 0 && c2 == 1;
+ 
+  assert getTrue(&c1) && getTrue(&c1);
+  assert c1 == 2 && c2 == 1;
+  
+  assert getTrue(&c1) || getFalse(&c2);
+  assert c1==3 && c2==1;
+
+  assert getFalse(&c2) || getTrue(&c1);
+  assert c1==4&&c2==2;
 }
 
 func main(): int{
@@ -104,6 +117,6 @@ func main(): int{
   obj.a=10;
   print("A.a=%d, A.b=%d\n", obj.a, obj.b);*/
   //let objCopy=obj.clone();
-  //enumTest();
+  enumTest();
   return 0;
 }

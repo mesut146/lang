@@ -556,7 +556,6 @@ Expression *expr2(Parser *p) {
     return lhs;
 }
 
-
 //ternary
 Expression *expr1(Parser *p) {
     Expression *lhs = expr2(p);

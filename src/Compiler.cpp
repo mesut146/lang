@@ -514,6 +514,8 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
         f = printf_proto;
     } else {
         auto rt = (RType *) mc->accept(resolv, nullptr);
+        print ("c call: "+mc->name + " f: "+rt->targetMethod->name);
+        print(resolv->exprMap[mc]->targetMethod->name);
         f = funcMap[rt->targetMethod];
     }
     std::vector<llvm::Value *> args;

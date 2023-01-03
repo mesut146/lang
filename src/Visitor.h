@@ -1,10 +1,12 @@
 #pragma once
 
 #include "parser/Ast.h"
-
+#include <stdexcept>
 
 #define def \
     { return nullptr; }
+#define todo(name) \
+  { throw std::runtime_error(std::string("todo: ")+name); }
 
 template<class R, class A>
 class Visitor {
@@ -42,7 +44,7 @@ public:
 
     virtual R visitRefExpr(RefExpr *e, A arg) def
 
-            virtual R visitDerefExpr(DerefExpr *e, A arg) def
+            virtual R visitDerefExpr(DerefExpr *e, A arg) todo("deref")
 
             virtual R visitUnary(Unary *, A arg) = 0;
 
@@ -50,7 +52,7 @@ public:
 
     virtual R visitInfix(Infix *, A arg) = 0;
 
-    virtual R visitAsExpr(AsExpr *, A arg) def;
+    virtual R visitAsExpr(AsExpr *, A arg) todo("as")
 
     virtual R visitPostfix(Postfix *, A arg) = 0;
 
@@ -75,8 +77,8 @@ public:
     //statements
     virtual R visitBlock(Block *, A arg) = 0;
     virtual R visitExprStmt(ExprStmt *, A arg) = 0;
-    virtual R visitAssertStmt(AssertStmt *a, A arg) def
-            virtual R visitReturnStmt(ReturnStmt *, A arg) = 0;
+    virtual R visitAssertStmt(AssertStmt *a, A arg) todo("assert")
+    virtual R visitReturnStmt(ReturnStmt *, A arg) = 0;
 
     virtual R visitContinueStmt(ContinueStmt *, A arg) = 0;
 
@@ -84,13 +86,13 @@ public:
 
     virtual R visitIfStmt(IfStmt *, A arg) = 0;
 
-    virtual R visitIfLetStmt(IfLetStmt *, A arg) def
+    virtual R visitIfLetStmt(IfLetStmt *, A arg) todo("if let")
 
-            virtual R visitWhileStmt(WhileStmt *, A arg) = 0;
+    virtual R visitWhileStmt(WhileStmt *, A arg) todo("WhileStmt")
 
-    virtual R visitDoWhile(DoWhile *, A arg) = 0;
+    virtual R visitDoWhile(DoWhile *, A arg) todo("DoWhile")
 
-    virtual R visitForStmt(ForStmt *, A arg) = 0;
+    virtual R visitForStmt(ForStmt *, A arg) todo("ForStmt")
 
-    virtual R visitForEach(ForEach *, A arg) = 0;
+    virtual R visitForEach(ForEach *, A arg) todo("for each")
 };

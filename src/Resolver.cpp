@@ -9,10 +9,28 @@ void Scope::add(VarHolder *f) { list.push_back(f); }
 
 void Scope::clear() { list.clear(); }
 
+std::string nameOf(VarHolder* vh){
+    auto f = std::get_if<Fragment *>(vh);
+        if (f) return (*f)->name;
+        auto p = std::get_if<Param *>(vh);
+        if (p) return (*f)->name;
+        auto fd = std::get_if<FieldDecl *>(vh);
+        if (fd) return (*f)->name;
+        auto ep = std::get_if<EnumParam *>(vh);
+        if (ep) return (*f)->name;
+   return "#none#";
+}
+
 VarHolder *Scope::find(std::string &name) {
     for (auto vh : list) {
         auto f = std::get_if<Fragment *>(vh);
         if (f && (*f)->name == name) return vh;
+        auto p = std::get_if<Param *>(vh);
+        if (p && (*p)->name == name) return vh;
+        auto fd = std::get_if<FieldDecl *>(vh);
+        if (fd && (*fd)->name == name) return vh;
+        auto ep = std::get_if<EnumParam *>(vh);
+        if (ep && (*ep)->name == name) return vh;
     }
     return nullptr;
 }
@@ -21,6 +39,34 @@ std::map<std::string, Resolver *> Resolver::resolverMap;
 
 Resolver::Resolver(Unit *unit) : unit(unit) {}
 Resolver::~Resolver() = default;
+
+Type *clone(Type *type) {
+    auto ptr = dynamic_cast<PointerType *>(type);
+    if (ptr) {
+        auto res = new PointerType;
+        res->type = clone(ptr->type);
+        return res;
+    } else {
+        auto res = new Type;
+        if(type->scope){
+          res->scope = clone(type->scope);
+        }
+        res->name = type->name;
+        res->dims.insert(res->dims.end(), type->dims.begin(), type->dims.end());
+        res->typeArgs.insert(res->typeArgs.end(), type->typeArgs.begin(), type->typeArgs.end());
+        return res;
+    }
+}
+
+RType *clone(RType *rt) {
+    auto res = new RType;
+    res->type = clone(rt->type);
+    res->unit = rt->unit;
+    res->targetDecl = rt->targetDecl;
+    res->targetMethod = rt->targetMethod;
+    res->targetVar = rt->targetVar;
+    return res;
+}
 
 Type *simpleType(const std::string name) {
     auto res = new Type;
@@ -35,9 +81,14 @@ RType *makeSimple(const std::string name) {
 }
 
 void Resolver::dump() {
+    for(auto scope:scopes){
+        for(auto vh:scope->list){
+            std::cout << "var :"<<nameOf(vh)<<std::endl;
+        }
+    }
     for (auto f : varMap) {
         std::cout << "var: " << f.first->name << " = "
-                  << f.second->type->print() << "\n";
+                  << f.second->type->print() << std::endl;
     }
     /*for(auto &p : fieldMap){
       std::cout << "field: " << p.first->name << " = " <<
@@ -45,10 +96,10 @@ void Resolver::dump() {
     }*/
     for (auto &p : methodMap) {
         std::cout << "method: " << p.first->name << " = "
-                  << p.second->type->print() << "\n";
+                  << p.second->type->print() << std::endl;
         for (auto *prm : p.first->params) {
             std::cout << "param: " << prm->name << " = "
-                      << paramMap[prm]->type->print() << "\n";
+                      << paramMap[prm]->type->print() << std::endl;
         }
     }
 }
@@ -115,13 +166,12 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
     return typeMap[bd->name];
 }
 
-
 void *Resolver::visitMethod(Method *m, void *arg) {
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     auto backup = curMethod;
     curMethod = m;
-    RType *res = (RType *) m->type->accept(this, m);
+    RType *res = clone((RType *) m->type->accept(this, m));
     res->targetMethod = m;
     newScope();
     for (auto *prm : m->params) {
@@ -140,7 +190,7 @@ void *Resolver::visitMethod(Method *m, void *arg) {
 }
 
 void *Resolver::visitParam(Param *p, void *arg) {
-    auto res = resolveType(p->type);
+    auto res = clone(resolveType(p->type));
     paramMap[p] = res;
     return res;
 }
@@ -153,9 +203,11 @@ void *Resolver::visitAssign(Assign *as, void *arg) {
 }
 
 void *Resolver::visitInfix(Infix *infix, void *arg) {
-    //std::cout << "visitInfix = " << infix->print() << "\n";
+    std::cout << "visitInfix = " << infix->print() << std::endl;
     auto *rt1 = (RType *) infix->left->accept(this, infix);
     auto *rt2 = (RType *) infix->right->accept(this, infix);
+    if(!rt1->type) throw std::runtime_error("lhs null");
+    if(!rt2->type) throw std::runtime_error("rhs null");
     if (rt1->type->isVoid() || rt2->type->isVoid()) {
         throw std::runtime_error("operation on void type");
     }
@@ -188,33 +240,6 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
 
 void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 
-
-Type *clone(Type *type) {
-    auto ptr = dynamic_cast<PointerType *>(type);
-    if (ptr) {
-        auto res = new PointerType;
-        res->type = clone(ptr->type);
-        return res;
-    } else {
-        auto res = new Type;
-        res->scope = type->scope;
-        res->name = type->name;
-        res->dims.insert(res->dims.end(), type->dims.begin(), type->dims.end());
-        res->typeArgs.insert(res->typeArgs.end(), type->typeArgs.begin(), type->typeArgs.end());
-        return res;
-    }
-}
-
-RType *clone(RType *rt) {
-    auto res = new RType;
-    res->type = clone(rt->type);
-    res->unit = rt->unit;
-    res->targetDecl = rt->targetDecl;
-    res->targetMethod = rt->targetMethod;
-    res->targetVar = rt->targetVar;
-    return res;
-}
-
 RType *Resolver::resolveType(Type *type) {
     auto it = typeMap.find(type->print());
     if (it != typeMap.end()) return it->second;
@@ -236,6 +261,17 @@ RType *Resolver::resolveType(Type *type) {
                 //todo is import
             } else {
                 auto st = (RType *) type->scope->accept(this, nullptr);
+                auto bd=st->targetDecl;
+                if(bd->isEnum){
+                    auto ed = dynamic_cast<EnumDecl*>(bd);
+                    bool found = false;
+                    for(auto ev:ed->variants){
+                        if(ev->name==type->name){
+                            found=true;
+                            res=(RType*)visitBaseDecl(ed, nullptr);
+                        }
+                    }
+                }
             }
         }
     }
@@ -251,15 +287,15 @@ void *Resolver::visitFragment(Fragment *f, void *arg) {
     RType *res;
     if (f->type) {
         res = (RType *) f->type->accept(this, nullptr);
-    } else {
-        if (f->rhs) {
-            res = (RType *) f->rhs->accept(this, nullptr);
-            if (!res->arr.empty()) {
-            }
-        } else {
+    }
+    if (f->rhs) {
+            auto r = (RType *) f->rhs->accept(this, nullptr);
+            if(!res) res = r;
+    }
+ 
+     if(!res) {
             throw std::runtime_error("fragment neither has type nor rhs");
         }
-    }
     res->targetVar = f;
     // res->targetDecl = curDecl;//todo?
     varMap[f] = res;
@@ -281,6 +317,7 @@ void *Resolver::visitVarDecl(VarDecl *vd, void *arg) {
 void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
     auto arr = find(sn->name, true);
     if (arr.empty()) {
+        dump();
         throw std::runtime_error("unknown identifier: " + sn->name);
     }
     if (arr.size() == 1) {
@@ -289,6 +326,18 @@ void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
             auto frag = std::get_if<Fragment *>(s.v);
             if (frag) {
                 return s.resolve(*frag);
+            }
+            auto prm = std::get_if<Param *>(s.v);
+            if (prm) {
+                return s.resolve(*prm);
+            }
+            auto field = std::get_if<FieldDecl *>(s.v);
+            if (field) {
+                return s.resolve(*field);
+            }
+            auto ep = std::get_if<EnumParam *>(s.v);
+            if (ep) {
+                //return s.resolve(*ep);
             }
         } else if (s.m) {
             return s.resolve(s.m);
@@ -357,7 +406,6 @@ void *Resolver::visitLiteral(Literal *lit, void *arg) {
     }
     return res;
 }
-
 
 bool subType(Type *type, Type *sub) {
     if (type->print() == sub->print()) return true;
@@ -548,7 +596,7 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     if (real.size() == 1) {
         auto res = (RType *) real[0]->accept(this, arg);
         exprMap[mc] = res;
-        std::cout << "resolved call " << mc->name << std::endl;
+        std::cout << "resolved call " << mc->name << "to: "<<res->targetMethod->name<<std::endl;
         return res;
     }
     if (real.empty()) {
@@ -580,7 +628,7 @@ void *Resolver::visitAsExpr(AsExpr *as, void *arg) {
 }
 
 void *Resolver::visitRefExpr(RefExpr *as, void *arg) {
-    auto inner = (RType *) as->expr->accept(this, arg);
+    auto inner = clone((RType *) as->expr->accept(this, arg));
     auto type = new PointerType{};
     type->type = inner->type;
     inner->type = type;
@@ -588,7 +636,26 @@ void *Resolver::visitRefExpr(RefExpr *as, void *arg) {
 }
 
 void *Resolver::visitDerefExpr(DerefExpr *as, void *arg) {
-    auto inner = (RType *) as->expr->accept(this, arg);
-    auto ptr = dynamic_cast<PointerType *>(inner->type);
-    return ptr->type;
+    auto res = clone((RType *) as->expr->accept(this, arg));
+    auto inner = res->type;
+    auto ptr = dynamic_cast<PointerType *>(inner);
+    if(!ptr) throw std::runtime_error("deref is not pointer: ");
+    res->type=ptr->type;
+    return res;
+}
+
+void *Resolver::visitAssertStmt(AssertStmt *as, void *arg){
+  as->expr->accept (this, nullptr);
+  return nullptr;
+}
+
+void *Resolver::visitIfLetStmt(IfLetStmt *as, void *arg) {
+    as->thenStmt->accept(this, nullptr);
+    if(as->elseStmt){
+        as->elseStmt->accept (this, nullptr);
+    }
+    return nullptr;
+}
+void *Resolver::visitParExpr(ParExpr *as, void *arg){
+    return as->expr->accept(this, nullptr);
 }
