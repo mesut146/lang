@@ -63,7 +63,6 @@ public:
     std::vector<Type *> typeArgs;
     bool isEnum = false;
     std::vector<Method *> methods;
-    std::vector<BaseDecl *> types;
 
     virtual std::string print() = 0;
     virtual void *accept(Visitor<void *, void *> *v, void *arg);

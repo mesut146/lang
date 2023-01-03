@@ -17,13 +17,14 @@ ImportAlias aliased(Parser *p) {
     return res;
 }
 
+
 //"import" importName ("," importName)* "from" STRING_LIT
 //"import" "*" ("as" name)? "from" STRING_LIT
 ImportStmt *Parser::parseImport() {
     log("parseImport");
     auto res = new ImportStmt;
     consume(IMPORT);
-    auto path = qname();
+/*     auto path = qname();
     if (is(LBRACE)) {
         auto sym = new SymbolImport;
         sym->path = path;
@@ -43,7 +44,7 @@ ImportStmt *Parser::parseImport() {
             normal->as = name();
         }
         res->normal = normal;
-    }
+    } */
     return res;
 }
 

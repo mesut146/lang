@@ -279,6 +279,7 @@ void Compiler::compile(const std::string &path) {
     InitializeModule();
     createProtos(unit);
     resolv = new Resolver(unit);
+    resolv->resolveAll();
     for (auto m : unit->methods) {
         resolv->curMethod = m;
         curMethod = m;

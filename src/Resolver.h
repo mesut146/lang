@@ -10,7 +10,7 @@ class Symbol;
 class RType;
 class Resolver;
 
-typedef std::variant<Fragment *, FieldDecl *, EnumParam *, Param*> VarHolder;
+typedef std::variant<Fragment *, FieldDecl *, EnumParam *, Param *> VarHolder;
 
 class Symbol {
 public:
@@ -47,17 +47,16 @@ public:
 
 class Scope {
 public:
-    std::vector<VarHolder> list;
+    std::vector<VarHolder *> list;
     //~Scope();
-    void add(VarHolder f);
+    void add(VarHolder *f);
     void clear();
-    VarHolder* find(std::string &name);
+    VarHolder *find(std::string &name);
 };
 
 class Resolver : public BaseVisitor<void *, void *> {
 public:
     Unit *unit;
-    std::map<BaseDecl *, RType *> declMap;
     std::map<Fragment *, RType *> varMap;
     std::map<std::string, RType *> typeMap;
     std::map<Param *, RType *> paramMap;
@@ -81,17 +80,12 @@ public:
 
     void dump();
 
-    std::shared_ptr<Scope> curScope();
+    void newScope();
     void dropScope();
+    std::shared_ptr<Scope> curScope();
 
     void init();
     void resolveAll();
-
-    void param(const std::string &name, std::vector<Symbol> &res);
-    void field(const std::string &name, std::vector<Symbol> &res);
-    void local(std::string name, std::vector<Symbol> &res);
-    void method(const std::string &name, std::vector<Symbol> &res);
-    RType *find(Type *type, BaseDecl *bd);
 
     RType *resolveType(Type *type);
     void *visitType(Type *type, void *arg) override;
@@ -99,10 +93,7 @@ public:
     void *visitVarDecl(VarDecl *vd, void *arg) override;
     void *visitFragment(Fragment *f, void *arg) override;
 
-    void *visitTypeDecl(TypeDecl *td, void *arg) override;
-    void *visitEnumDecl(EnumDecl *ed, void *arg) override;
     void *visitBaseDecl(BaseDecl *bd, void *arg) override;
-    RType *visitCommon(BaseDecl *bd);
 
     void *visitMethod(Method *m, void *arg) override;
     void *visitParam(Param *p, void *arg) override;

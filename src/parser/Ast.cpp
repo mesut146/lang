@@ -112,10 +112,6 @@ std::string TypeDecl::print() {
         if (!fields.empty()) s.append("\n");
         s.append(join(methods, "\n\n", "  "));
     }
-    if (!types.empty()) {
-        if (!methods.empty()) s.append("\n");
-        s.append(join(types, "\n\n", "  "));
-    }
     s.append("\n}");
     return s;
 }
