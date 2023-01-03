@@ -46,16 +46,6 @@ bool isTypeArg(Parser *p, TokenType next) {
     return false;
 }
 
-//name ("." name)*
-Name *Parser::qname() {
-    Name *res = new SimpleName(*name());
-    while (is({DOT}, {IDENT})) {
-        consume(DOT);
-        res = new QName(res, *name());
-    }
-    return res;
-}
-
 Type *Parser::refType() {
     Type *res = new Type;
     res->name = *consume(IDENT)->value;

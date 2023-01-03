@@ -106,7 +106,7 @@ void Converter::header(const std::string &name) {
     hs.close();
 }
 
-void Converter::source( const std::string &name) {
+void Converter::source(const std::string &name) {
     auto cpp = outDir + "/" + name + ".cpp";
     ss.open(cpp.c_str(), ss.out);
     ss << "#include \"" << name << ".h\"\n";
@@ -147,8 +147,8 @@ void Converter::convert(const std::string &path) {
     Lexer lexer(path);
     Parser parser(lexer);
     unit = parser.parseUnit();
-    header( name);
-    source( name);
+    header(name);
+    source(name);
 }
 
 void Converter::convertAll() {

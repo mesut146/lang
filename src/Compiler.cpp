@@ -107,7 +107,7 @@ llvm::Type *mapType(Type *t) {
     auto s = t->print();
     if (t->isVoid()) return llvm::Type::getVoidTy(*ctx);
     if (t->isPrim()) {
-        if (s == "byte" || s == "i8" || s=="bool") return getInt(8);
+        if (s == "byte" || s == "i8" || s == "bool") return getInt(8);
         if (s == "short" || s == "i16") return getInt(16);
         if (s == "int" || s == "i32") return getInt(32);
         if (s == "long" || s == "i64") return getInt(64);
@@ -120,13 +120,13 @@ llvm::Type *mapType(Type *t) {
     throw std::runtime_error("mapType: " + s);
 }
 
-llvm::Value* branch(llvm::Value* val){
+llvm::Value *branch(llvm::Value *val) {
     auto ty = llvm::cast<llvm::IntegerType>(val->getType());
-    if(ty){
-       auto w = ty->getBitWidth();
-       if(w!=1){
-           return Builder->CreateTrunc(val, getInt(1));
-       }
+    if (ty) {
+        auto w = ty->getBitWidth();
+        if (w != 1) {
+            return Builder->CreateTrunc(val, getInt(1));
+        }
     }
     return val;
 }
@@ -182,7 +182,7 @@ static void exit_prototype() {
 }*/
 static int size(Type *type) {
     auto s = type->print();
-    if (s == "byte" || s=="bool") return 1;
+    if (s == "byte" || s == "bool") return 1;
     if (s == "int") return 4;
     if (s == "long") return 8;
     throw std::runtime_error("size(" + s + ")");
@@ -399,32 +399,41 @@ void *Compiler::visitParExpr(ParExpr *i, void *arg) {
     return i->expr->accept(this, nullptr);
 }
 
-llvm::Value* Compiler::andOr(llvm::Value* l, llvm::Value* r, bool isand){
-    auto bb=getBB();
-        auto then = llvm::BasicBlock::Create(*ctx, "", func);
-        auto next = llvm::BasicBlock::Create(*ctx, "");
-        if(isand){
-            Builder->CreateCondBr(branch(l), then, next);
-        }else{
-            Builder->CreateCondBr(branch(l), next, then);
-        }
-        Builder->SetInsertPoint(then);
-        BB=then;
-        //Builder->CreateLoad();
-        //auto rr=load(r);
-        auto rbit=Builder->CreateTrunc(r, getInt(1));
-        Builder->CreateBr(next);
-        Builder->SetInsertPoint(next);
-        func->getBasicBlockList().push_back(next);
-        BB=next;
-        auto phi=Builder->CreatePHI(getInt(1), 2);
-        phi->addIncoming(isand?Builder->getFalse():Builder->getTrue(), bb);
-        phi->addIncoming(rbit, then);
-        auto ext=Builder->CreateZExt(phi, getInt(8));
+llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
+    auto l = loadPtr(left);
+    auto bb = getBB();
+    auto then = llvm::BasicBlock::Create(*ctx, "", func);
+    auto next = llvm::BasicBlock::Create(*ctx, "");
+    if (isand) {
+        Builder->CreateCondBr(branch(l), then, next);
+    } else {
+        Builder->CreateCondBr(branch(l), next, then);
+    }
+    Builder->SetInsertPoint(then);
+    BB = then;
+    //Builder->CreateLoad();
+    auto r = loadPtr(right);
+    auto rbit = Builder->CreateTrunc(r, getInt(1));
+    Builder->CreateBr(next);
+    Builder->SetInsertPoint(next);
+    func->getBasicBlockList().push_back(next);
+    BB = next;
+    auto phi = Builder->CreatePHI(getInt(1), 2);
+    phi->addIncoming(isand ? Builder->getFalse() : Builder->getTrue(), bb);
+    phi->addIncoming(rbit, then);
+    auto ext = Builder->CreateZExt(phi, getInt(8));
     return ext;
 }
 
 void *Compiler::visitInfix(Infix *i, void *arg) {
+    if (i->op == "&&") {
+        //res=(l==true?r:false)
+        return andOr(i->left, i->right, true);
+    }
+    if (i->op == "||") {
+        //res=(l==true?true:r)
+        return andOr(i->left, i->right, false);
+    }
     auto l = loadPtr(i->left);
     auto r = loadPtr(i->right);
     if (i->op == "+") {
@@ -475,14 +484,6 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     if (i->op == ">=") {
         return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
     }
-    if(i->op == "&&"){
-        //res=(l==true?r:false)
-        return andOr(l,r,true);
-    }
-    if(i->op== "||"){
-        //res=(l==true?true:r)
-        return andOr(l,r,false);
-    }
     throw std::runtime_error("infix: " + i->print());
 }
 
@@ -498,8 +499,8 @@ void *Compiler::visitAssign(Assign *i, void *arg) {
 void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
     auto it = NamedValues.find(n->name);
     if (it == NamedValues.end()) {
-        for(auto &[n,v]:NamedValues){
-            std::cout << n<<", ";
+        for (auto &[n, v] : NamedValues) {
+            std::cout << n << ", ";
         }
         throw std::runtime_error("unknown ref: " + n->name);
     }
@@ -530,15 +531,15 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
     if (n->isStr) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
-    }else if (n->isInt) {
+    } else if (n->isInt) {
         auto bits = expect->getScalarSizeInBits();
         std::cout << "expect: " << bits << std::endl;
 
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
-    }else if(n->isBool){
+    } else if (n->isBool) {
         auto intType = llvm::IntegerType::get(*ctx, 8);
-        auto bval = n->val == "true" ? 1:0;
+        auto bval = n->val == "true" ? 1 : 0;
         return llvm::ConstantInt::get(intType, bval);
     }
     throw std::runtime_error("literal: " + n->print());
@@ -567,6 +568,7 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
 void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
         if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
+        expect = mapType(f->type);
         auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
         Locals[f->name] = f->type;
         //depends on rhs type; copy,ptr...
@@ -723,7 +725,7 @@ void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
 }
 
 void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
-    auto cond =  branch(loadPtr(b->expr));
+    auto cond = branch(loadPtr(b->expr));
 
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
@@ -769,7 +771,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
         Builder->CreateCondBr(branch(cmp), then, next);
     }
     Builder->SetInsertPoint(then);
-    BB=then;
+    BB = then;
 
     auto variant = decl->variants[index];
     if (!variant->params.empty()) {
@@ -783,18 +785,18 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
             auto prm = params[i];
             auto argName = b->args[i];
             std::vector<llvm::Value *> idx = {makeInt(0), makeInt(offset)};
-            auto ptr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, idx, "", getBB ());
+            auto ptr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, idx, "", getBB());
             //bitcast to real type
             auto targetTy = mapType(prm->type);
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy->getPointerTo());
             NamedValues[argName] = ptrReal;
-            
-            offset+= size(prm->type);
+
+            offset += size(prm->type);
         }
     }
     b->thenStmt->accept(this, nullptr);
     //clear params
-    for(auto &p:b->args){
+    for (auto &p : b->args) {
         NamedValues.erase(p);
     }
     Builder->CreateBr(next);

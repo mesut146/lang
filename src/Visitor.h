@@ -3,7 +3,8 @@
 #include "parser/Ast.h"
 
 
-#define def { return nullptr; }
+#define def \
+    { return nullptr; }
 
 template<class R, class A>
 class Visitor {
@@ -22,7 +23,7 @@ public:
 
     virtual R visitMethod(Method *, A arg) = 0;
 
-    virtual R visitParam(Param *, A arg){return nullptr;};
+    virtual R visitParam(Param *, A arg) { return nullptr; };
 
     virtual R visitLiteral(Literal *lit, A arg) = 0;
 
@@ -41,9 +42,9 @@ public:
 
     virtual R visitRefExpr(RefExpr *e, A arg) def
 
-    virtual R visitDerefExpr(DerefExpr *e, A arg) def
+            virtual R visitDerefExpr(DerefExpr *e, A arg) def
 
-    virtual R visitUnary(Unary *, A arg) = 0;
+            virtual R visitUnary(Unary *, A arg) = 0;
 
     virtual R visitAssign(Assign *, A arg) = 0;
 
@@ -75,22 +76,21 @@ public:
     virtual R visitBlock(Block *, A arg) = 0;
     virtual R visitExprStmt(ExprStmt *, A arg) = 0;
     virtual R visitAssertStmt(AssertStmt *a, A arg) def
-    virtual R visitReturnStmt(ReturnStmt *, A arg) = 0;
+            virtual R visitReturnStmt(ReturnStmt *, A arg) = 0;
 
     virtual R visitContinueStmt(ContinueStmt *, A arg) = 0;
 
     virtual R visitBreakStmt(BreakStmt *, A arg) = 0;
 
     virtual R visitIfStmt(IfStmt *, A arg) = 0;
-    
+
     virtual R visitIfLetStmt(IfLetStmt *, A arg) def
 
-    virtual R visitWhileStmt(WhileStmt *, A arg) = 0;
+            virtual R visitWhileStmt(WhileStmt *, A arg) = 0;
 
     virtual R visitDoWhile(DoWhile *, A arg) = 0;
 
     virtual R visitForStmt(ForStmt *, A arg) = 0;
 
     virtual R visitForEach(ForEach *, A arg) = 0;
-
 };

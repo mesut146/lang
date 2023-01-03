@@ -4,25 +4,24 @@
 #include "parser/Ast.h"
 #include <map>
 #include <memory>
+#include <variant>
 
 class Symbol;
 class RType;
 class Resolver;
 
+typedef std::variant<Fragment *, FieldDecl *, EnumParam *, Param*> VarHolder;
+
 class Symbol {
 public:
     Method *m = nullptr;
-    Fragment *f = nullptr;
-    FieldDecl *field = nullptr;
-    Param *prm = nullptr;
+    VarHolder *v = nullptr;
     BaseDecl *decl = nullptr;
     ImportStmt *imp = nullptr;
     Resolver *resolver;
 
     Symbol(Method *m, Resolver *r) : m(m), resolver(r) {}
-    Symbol(Fragment *f, Resolver *r) : f(f), resolver(r) {}
-    Symbol(FieldDecl *f, Resolver *r) : field(f), resolver(r) {}
-    Symbol(Param *prm, Resolver *r) : prm(prm), resolver(r) {}
+    Symbol(VarHolder *f, Resolver *r) : v(f), resolver(r) {}
     Symbol(BaseDecl *bd, Resolver *r) : decl(bd), resolver(r) {}
     Symbol(ImportStmt *imp, Resolver *r) : imp(imp), resolver(r) {}
 
@@ -48,11 +47,11 @@ public:
 
 class Scope {
 public:
-    std::vector<Fragment *> list;
+    std::vector<VarHolder> list;
     //~Scope();
-    void add(Fragment *f);
+    void add(VarHolder f);
     void clear();
-    Fragment *find(std::string &name);
+    VarHolder* find(std::string &name);
 };
 
 class Resolver : public BaseVisitor<void *, void *> {
@@ -60,10 +59,11 @@ public:
     Unit *unit;
     std::map<BaseDecl *, RType *> declMap;
     std::map<Fragment *, RType *> varMap;
-    std::map<Type *, RType *> typeMap;
+    std::map<std::string, RType *> typeMap;
     std::map<Param *, RType *> paramMap;
+    //std::map<EnumParam *, RType *> paramMap;
     std::map<Method *, RType *> methodMap;//return types
-    //std::map<VarDecl*, RType*> fieldMap;
+    //std::map<FieldDecl*, RType*> fieldMap;
     std::map<Expression *, RType *> exprMap;
     std::vector<std::shared_ptr<Scope>> scopes;
     BaseDecl *curDecl = nullptr;
@@ -113,7 +113,7 @@ public:
     void *visitInfix(Infix *infix, void *arg) override;
     void *visitAssign(Assign *as, void *arg) override;
     void *visitSimpleName(SimpleName *sn, void *arg) override;
-    void *visitQName(QName *sn, void *arg) override;
+    //void *visitQName(QName *sn, void *arg) override;
     void *visitMethodCall(MethodCall *mc, void *arg) override;
     void *visitObjExpr(ObjExpr *o, void *arg) override;
     void *visitFieldAccess(FieldAccess *fa, void *arg) override;

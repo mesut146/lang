@@ -2,45 +2,44 @@
 
 #include "Visitor.h"
 
-template <class R, class A>
-class BaseVisitor : public Visitor<R, A>{
+template<class R, class A>
+class BaseVisitor : public Visitor<R, A> {
 public:
-
-    virtual R visitUnit(Unit* unit, A arg) { 
-      for(auto t : unit->types){
-        t->accept((Visitor<R,A>*)this, unit);
-      }
-      return nullptr;
+    virtual R visitUnit(Unit *unit, A arg) {
+        for (auto t : unit->types) {
+            t->accept((Visitor<R, A> *) this, unit);
+        }
+        return nullptr;
     }
-    
+
     virtual R visitImportStmt(ImportStmt *, A arg) { return nullptr; }
-    
-    virtual R visitBaseDecl(BaseDecl*, A arg) { return nullptr; }
-    
-    virtual R visitTypeDecl(TypeDecl*, A arg) { return nullptr; }
-    
-    virtual R visitEnumDecl(EnumDecl*, A arg) { return nullptr; }
-    
-    virtual R visitFieldDecl(FieldDecl*, A arg) { return nullptr; }
-    
-    virtual R visitMethod(Method*, A arg) { return nullptr; }
+
+    virtual R visitBaseDecl(BaseDecl *, A arg) { return nullptr; }
+
+    virtual R visitTypeDecl(TypeDecl *, A arg) { return nullptr; }
+
+    virtual R visitEnumDecl(EnumDecl *, A arg) { return nullptr; }
+
+    virtual R visitFieldDecl(FieldDecl *, A arg) { return nullptr; }
+
+    virtual R visitMethod(Method *, A arg) { return nullptr; }
 
     virtual R visitBlock(Block *, A arg) { return nullptr; }
 
     virtual R visitExprStmt(ExprStmt *es, A arg) { return es->expr->accept(this, arg); }
 
-    virtual R visitLiteral(Literal* lit, A arg) { return nullptr; }
+    virtual R visitLiteral(Literal *lit, A arg) { return nullptr; }
 
-    virtual R visitSimpleName(SimpleName* sn, A arg) { return nullptr; }
+    virtual R visitSimpleName(SimpleName *sn, A arg) { return nullptr; }
 
-    virtual R visitQName(QName* qn, A arg) { return nullptr; }
+    virtual R visitQName(QName *qn, A arg) { return nullptr; }
 
-    virtual R visitType(Type* type, A arg) { return nullptr; }
-    
+    virtual R visitType(Type *type, A arg) { return nullptr; }
+
     virtual R visitVarDecl(VarDecl *, A arg) { return nullptr; }
 
     virtual R visitVarDeclExpr(VarDeclExpr *, A arg) { return nullptr; }
-    
+
     virtual R visitFragment(Fragment *, A arg) { return nullptr; }
 
     virtual R visitUnary(Unary *, A arg) { return nullptr; }
@@ -48,9 +47,9 @@ public:
     virtual R visitAssign(Assign *, A arg) { return nullptr; }
 
     virtual R visitInfix(Infix *infix, A arg) {
-      infix->left->accept(this, infix);
-      infix->right->accept(this, infix);
-      return nullptr;
+        infix->left->accept(this, infix);
+        infix->right->accept(this, infix);
+        return nullptr;
     }
 
     virtual R visitPostfix(Postfix *, A arg) { return nullptr; }
@@ -64,7 +63,7 @@ public:
     virtual R visitArrayAccess(ArrayAccess *, A arg) { return nullptr; }
 
     virtual R visitArrayExpr(ArrayExpr *, A arg) { return nullptr; }
-    
+
     virtual R visitArrayCreation(ArrayCreation *, A arg) { return nullptr; }
 
     virtual R visitParExpr(ParExpr *, A arg) { return nullptr; }
@@ -88,5 +87,4 @@ public:
     virtual R visitForStmt(ForStmt *, A arg) { return nullptr; }
 
     virtual R visitForEach(ForEach *, A arg) { return nullptr; }
-
 };

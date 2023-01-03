@@ -82,26 +82,10 @@ TypeDecl *Parser::parseTypeDecl() {
         res->typeArgs = generics();
     }
     log("type decl = " + res->name);
-    if (is(COLON)) {
-        consume(COLON);
-        res->baseTypes.push_back(refType());
-        while (is(COMMA)) {
-            //interfaces
-            res->baseTypes.push_back(refType());
-        }
-    }
     consume(LBRACE);
     //members
     while (first() != nullptr && !is(RBRACE)) {
-        if (is(CLASS)) {
-            auto td = parseTypeDecl();
-            td->parent = res;
-            res->types.push_back(td);
-        } else if (is(ENUM)) {
-            auto td = parseEnumDecl();
-            td->parent = res;
-            res->types.push_back(td);
-        } else if (is(IDENT)) {
+        if (is(IDENT)) {
             res->fields.push_back(parseField(this));
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());

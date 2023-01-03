@@ -110,8 +110,6 @@ public:
 
     std::vector<Type *> generics();
 
-    Name *qname();
-
     static bool isPrim(Token &t);
 
     Statement *parseStmt();

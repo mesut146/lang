@@ -62,7 +62,6 @@ public:
     std::string name;
     std::vector<Type *> typeArgs;
     bool isEnum = false;
-    BaseDecl *parent = nullptr;
     std::vector<Method *> methods;
     std::vector<BaseDecl *> types;
 
@@ -73,7 +72,6 @@ public:
 class TypeDecl : public BaseDecl {
 public:
     bool isInterface;
-    std::vector<Type *> baseTypes;
     std::vector<FieldDecl *> fields;
 
     std::string print() override;
@@ -334,7 +332,6 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
-
 class Unary : public Expression {
 public:
     std::string op;
@@ -449,7 +446,6 @@ public:
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
-
 
 class Entry {
 public:

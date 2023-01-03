@@ -61,7 +61,6 @@ std::string ImportStmt::print() {
     return s;
 }
 
-
 std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
@@ -103,9 +102,7 @@ std::string TypeDecl::print() {
     if (!typeArgs.empty()) {
         s.append("<").append(join(typeArgs, ", ")).append(">");
     }
-    if (!baseTypes.empty()) {
-        s.append(" : ").append(join(baseTypes, ", "));
-    }
+    
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
         s.append("  ").append(fields[i]->print());
@@ -203,7 +200,6 @@ std::string Block::print() {
     s.append("\n}");
     return s;
 }
-
 
 std::string printDims(std::vector<Expression *> &dims) {
     std::string s;
@@ -403,7 +399,6 @@ std::string ArrayCreation::print() {
     return s;
 }
 
-
 std::string Ternary::print() {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
 }
@@ -429,7 +424,6 @@ std::string BreakStmt::print() {
     if (label == nullptr) return "break";
     return "break " + *label;
 }
-
 
 std::string DoWhile::print() {
     return "do" + body->print() + "\nwhile(" + expr->print() + ");";
