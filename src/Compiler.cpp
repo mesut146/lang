@@ -522,12 +522,50 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     throw std::runtime_error("infix: " + i->print());
 }
 
+void *Compiler::visitUnary(Unary *u, void *arg) {
+    auto v = (llvm::Value *) u->expr->accept(this, nullptr);
+    auto val = v;
+    if (isVar(u->expr)) {
+        val = load(v);
+    }
+
+    if (u->op == "+") return val;
+    if (u->op == "-") {
+        return Builder->CreateNSWSub(makeInt(0), val);
+    }
+    if (u->op == "++") {
+        auto tmp = Builder->CreateNSWAdd(val, makeInt(1));
+        Builder->CreateStore(tmp, v);
+        return tmp;
+    }
+    if (u->op == "--") {
+        auto tmp = Builder->CreateNSWSub(val, makeInt(1));
+        Builder->CreateStore(tmp, v);
+        return tmp;
+    }
+    if (u->op == "!") {
+        auto trunc = Builder->CreateTrunc(val, getInt(1));
+        auto xorr = Builder->CreateXor(trunc, Builder->getTrue());
+        auto zext = Builder->CreateZExt(xorr, getInt(8));
+        return zext;
+    }
+    if (u->op == "~") {
+        return Builder->CreateXor(val, makeInt(-1));
+    }
+    throw std::runtime_error("Unary: " + u->print());
+}
+
 void *Compiler::visitAssign(Assign *i, void *arg) {
     auto l = (llvm::Value *) i->left->accept(this, nullptr);
     expect = l->getType()->getPointerElementType();
     auto r = (llvm::Value *) i->right->accept(this, nullptr);
-    expect = nullptr;
-    if (i->op == "=") return Builder->CreateStore(r, l);
+    if (i->op == "=") {
+        return Builder->CreateStore(r, l);
+    }
+    if (i->op == "+=") {
+        auto tmp = Builder->CreateNSWAdd(loadPtr(l), r);
+        return Builder->CreateStore(tmp, l);
+    }
 
     throw std::runtime_error("assign: " + i->print());
 }

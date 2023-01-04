@@ -30,6 +30,7 @@ struct Compiler : public Visitor<void *, void *> {
     void *visitParExpr(ParExpr *i, void *arg) override;
     llvm::Value *andOr(Expression *l, Expression *r, bool isand);
     void *visitInfix(Infix *i, void *arg) override;
+    void *visitUnary(Unary *u, void *arg) override;
     void *visitAssign(Assign *i, void *arg) override;
     void *visitSimpleName(SimpleName *n, void *arg) override;
     void *visitMethodCall(MethodCall *n, void *arg) override;

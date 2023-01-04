@@ -132,6 +132,7 @@ public:
 
     void *visitLiteral(Literal *lit, void *arg) override;
     void *visitInfix(Infix *infix, void *arg) override;
+    void *visitUnary(Unary *u, void *arg) override;
     void *visitAssign(Assign *as, void *arg) override;
     void *visitSimpleName(SimpleName *sn, void *arg) override;
     //void *visitQName(QName *sn, void *arg) override;

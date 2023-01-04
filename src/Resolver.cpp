@@ -263,6 +263,15 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
     throw std::runtime_error("visitInfix: " + infix->print());
 }
 
+void *Resolver::visitUnary(Unary *u, void *arg) {
+    auto it = exprMap.find(u);
+    if (it != exprMap.end()) return it->second;
+    //todo check unsigned
+    auto res = resolveScoped(u->expr);
+    exprMap[u] = res;
+    return res;
+}
+
 void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 
 RType *Resolver::resolveType(Type *type) {

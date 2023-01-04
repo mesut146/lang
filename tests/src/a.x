@@ -39,6 +39,14 @@ func infix(){
   assert (a<<3)==16;
   assert (b>>1)==5;
   print("infix done\n");
+
+  assert -a == -2;
+  assert ++a == 3;
+  assert a == 3;
+  assert --a == 2;
+  assert a == 2;
+  a += 1;
+  assert a == 3;
 }
 
 func enumTest(){
