@@ -751,12 +751,6 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     }
 }
 
-int findIndex(Type *type, std::string &name, Resolver *resolv) {
-    auto sctt = (RType *) type->accept(resolv, nullptr);
-    auto td = dynamic_cast<TypeDecl *>(sctt->targetDecl);
-    return fieldIndex(td, name);
-}
-
 void *Compiler::visitType(Type *n, void *arg) {
     if (!n->scope) throw std::runtime_error("type has no scope");
     //todo scope, resolv
@@ -770,18 +764,29 @@ void *Compiler::visitType(Type *n, void *arg) {
 }
 
 void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
-    auto sc = (llvm::Value *) n->scope->accept(this, nullptr);
-    auto ty = sc->getType()->getPointerElementType();
     auto sn = dynamic_cast<SimpleName *>(n->scope);
     if (!sn) throw std::runtime_error("FA: " + n->print());
     //local,param
     auto it = Locals.find(sn->name);
     if (it == Locals.end()) throw std::runtime_error(sn->name + " not found");
     auto sct = it->second;
-    int index = findIndex(sct, n->name, resolv);
+    auto rt = (RType *) sct->accept(resolv, nullptr);
+    auto decl = rt->targetDecl;
 
+    int index;
+    if (decl->isEnum) {
+        if (n->name != "index") {
+            throw std::runtime_error("unknown enum field " + n->print());
+        }
+        index = 0;
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(decl);
+        index = fieldIndex(td, n->name);
+    }
+    auto scopeVar = (llvm::Value *) n->scope->accept(this, nullptr);
+    auto ty = scopeVar->getType()->getPointerElementType();
     std::vector<llvm::Value *> idx = {makeInt(0), makeInt(index)};
-    auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, sc, idx, "", BB);
+    auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, scopeVar, idx, "", BB);
     return eptr;
 }
 
@@ -891,4 +896,14 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
     func->getBasicBlockList().push_back(next);
     BB = next;
     return nullptr;
+}
+
+void *Compiler::visitIsExpr(IsExpr *ie, void *arg) {
+    auto decl = findEnum(ie->type->scope, resolv);
+    auto val = (llvm::Value *) ie->expr->accept(this, nullptr);
+    std::vector<llvm::Value *> idx = {makeInt(0), makeInt(0)};
+    auto ordptr = llvm::GetElementPtrInst::CreateInBounds(val->getType()->getPointerElementType(), val, idx, "", getBB());
+    auto ord = Builder->CreateLoad(getInt(32), ordptr);
+    auto index = Resolver::findVariant(decl, ie->type->name);
+    return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 }

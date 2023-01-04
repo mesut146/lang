@@ -43,28 +43,26 @@ func infix(){
 
 func enumTest(){
   let a: E = E::A;
+  let b: E = E::B{a: 5, b: 6};
+  let c: E = E::C{100};
+
+  assert a.index == 0 && b.index==1 && c.index == 2;
+  assert a is E::A && b is E::B && c is E::C;
+
   if let E::A = (a){
     print("a is E::A\n");
-    //return;
-  }else{
-    print("a is not E::A\n");
   }
-  let b: E = E::B{a: 5, b: 6};
   if let E::B(p1,p2) = (b){
     assert (p1==5)&&(p2==6);
     print("b is E::B a=%d b=%d\n",p1,p2);
     p1=10;
     print("b is E::B a=%d b=%d\n",p1,p2);
     assert (p1==10)&&(p2==6);
-  }else{
-    print("b is not E::B \n");
   }
-  let c: E = E::C{100};
   if let E::C(p3) = (c){
     assert p3 == 100;
     print("c is E::C a=%ld\n", p3);
-  }else print("c is not E::C\n");
-
+  }
   print("enumTest done\n");
 }
 
@@ -134,7 +132,7 @@ func classTest(){
   obj.a=10;
   assert obj.a == 10 && obj.b == 6;
   //let objCopy=obj.clone();
-  
+
   print("classTest done\n");
 }
 

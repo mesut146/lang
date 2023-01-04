@@ -370,6 +370,15 @@ public:
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
+class IsExpr : public Expression {
+public:
+    Expression *expr;
+    Type *type;
+
+    std::string print() override;
+    void *accept(Visitor<void *, void *> *v, void *arg) override;
+};
+
 class Postfix : public Expression {
 public:
     std::string op;

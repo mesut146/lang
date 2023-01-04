@@ -149,4 +149,5 @@ public:
     void *visitExprStmt(ExprStmt *as, void *arg) override;
     void *visitBlock(Block *as, void *arg) override;
     void *visitReturnStmt(ReturnStmt *as, void *arg) override;
+    void *visitIsExpr(IsExpr *as, void *arg) override;
 };

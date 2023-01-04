@@ -12,6 +12,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(LET)
         TOKEN_CASE(RETURN)
         TOKEN_CASE(FROM)
+        TOKEN_CASE(IS)
 
         TOKEN_CASE(BOOLEAN)
         TOKEN_CASE(INT)
@@ -76,6 +77,9 @@ std::string printType(TokenType t) {
         TOKEN_CASE(OR)
 
         TOKEN_CASE(IDENT)
+
+        default:
+            break;
     }
     return "error type(" + std::to_string(t) + ")";
 }

@@ -410,6 +410,9 @@ void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
     auto decl = scp->targetDecl;
     if (decl->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
+        if (fa->name == "index") {
+            return makeSimple("int");
+        }
     } else {
         auto td = dynamic_cast<TypeDecl *>(decl);
         for (auto v : td->fields) {
@@ -705,4 +708,18 @@ void *Resolver::visitIfStmt(IfStmt *is, void *arg) {
 void *Resolver::visitReturnStmt(ReturnStmt *as, void *arg) {
     if (as->expr) as->expr->accept(this, nullptr);
     return nullptr;
+}
+
+void *Resolver::visitIsExpr(IsExpr *ie, void *arg) {
+    auto rt = resolveScoped(ie->expr);
+    auto decl1 = rt->targetDecl;
+    if (!decl1->isEnum) {
+        throw std::runtime_error("is expr must have enum operand");
+    }
+    auto rt2 = resolveScoped(ie->type->scope);
+    auto decl2 = rt2->targetDecl;
+    if (decl1 != decl2) {
+        throw std::runtime_error("is expr has icompatible operands");
+    }
+    return makeSimple("bool");
 }

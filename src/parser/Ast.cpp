@@ -343,6 +343,10 @@ std::string AsExpr::print() {
     return expr->print() + " as " + type->print();
 }
 
+std::string IsExpr::print() {
+    return expr->print() + " is " + type->print();
+}
+
 std::string Assign::print() {
     return left->print() + " " + op + " " + right->print();
 }
@@ -540,7 +544,9 @@ void *Infix::accept(Visitor<void *, void *> *v, void *arg) {
 void *AsExpr::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitAsExpr(this, arg);
 }
-
+void *IsExpr::accept(Visitor<void *, void *> *v, void *arg) {
+    return v->visitIsExpr(this, arg);
+}
 void *Assign::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitAssign(this, arg);
 }

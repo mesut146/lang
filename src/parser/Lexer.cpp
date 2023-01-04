@@ -40,6 +40,8 @@ TokenType kw(std::string &s) {
         return CONTINUE;
     if (s == "if")
         return IF_KW;
+    if (s == "is")
+        return IS;
     if (s == "else")
         return ELSE_KW;
     if (s == "for")
@@ -129,9 +131,9 @@ Token *Lexer::readOp() {
     throw std::invalid_argument(std::string("readOp() failed with buffer: ") + s);
 }
 
-char checkEscape(char c){
-    if(c=='n') return '\n';
-    throw std::runtime_error(std::string("invalid escape: \\")+c);
+char checkEscape(char c) {
+    if (c == 'n') return '\n';
+    throw std::runtime_error(std::string("invalid escape: \\") + c);
 }
 
 Token *Lexer::next() {
@@ -195,13 +197,13 @@ Token *Lexer::next() {
         while (pos < buf.size()) {
             c = read();
             if (c == '\\') {
-                auto c2=checkEscape(buf[pos]);
+                auto c2 = checkEscape(buf[pos]);
                 s.append(1, c2);
                 pos++;
             } else if (c == '"') {
                 s.append(1, c);
                 break;
-            }else{
+            } else {
                 s.append(1, c);
             }
         }

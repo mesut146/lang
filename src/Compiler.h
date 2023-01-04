@@ -41,4 +41,6 @@ struct Compiler : public Visitor<void *, void *> {
     void *visitFieldAccess(FieldAccess *n, void *arg) override;
     void *visitRefExpr(RefExpr *n, void *arg) override;
     void *visitDerefExpr(DerefExpr *n, void *arg) override;
+
+    void *visitIsExpr(IsExpr *ie, void *arg) override;
 };

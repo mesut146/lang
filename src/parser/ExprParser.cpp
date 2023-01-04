@@ -491,9 +491,22 @@ Expression *expr9(Parser *p) {
     return lhs;
 }
 
+Expression *parseIsExpr(Parser *p) {
+    Expression *lhs = expr9(p);
+    if (p->is(IS)) {
+        p->consume(IS);
+        auto type = p->parseType();
+        auto res = new IsExpr;
+        res->expr = lhs;
+        res->type = type;
+        return res;
+    }
+    return lhs;
+}
+
 //expr9 ("<" | ">" | "<=" | ">=" expr9)*
 Expression *expr8(Parser *p) {
-    Expression *lhs = expr9(p);
+    Expression *lhs = parseIsExpr(p);
     while (p->is({LT, GT, LTEQ, GTEQ})) {
         auto res = new Infix;
         res->left = lhs;

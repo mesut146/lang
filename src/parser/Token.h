@@ -46,6 +46,7 @@ enum TokenType {
     CONST_KW,
     NEW,
     IF_KW,
+    IS,
     ELSE_KW,
     FOR,
     WHILE,
