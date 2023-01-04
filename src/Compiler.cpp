@@ -557,13 +557,29 @@ void *Compiler::visitUnary(Unary *u, void *arg) {
 
 void *Compiler::visitAssign(Assign *i, void *arg) {
     auto l = (llvm::Value *) i->left->accept(this, nullptr);
-    expect = l->getType()->getPointerElementType();
+    auto val = l;
+    if (isVar(i->left)) {
+        val = load(l);
+    }
+
     auto r = (llvm::Value *) i->right->accept(this, nullptr);
     if (i->op == "=") {
         return Builder->CreateStore(r, l);
     }
     if (i->op == "+=") {
-        auto tmp = Builder->CreateNSWAdd(loadPtr(l), r);
+        auto tmp = Builder->CreateNSWAdd(val, r);
+        return Builder->CreateStore(tmp, l);
+    }
+    if (i->op == "-=") {
+        auto tmp = Builder->CreateNSWSub(val, r);
+        return Builder->CreateStore(tmp, l);
+    }
+    if (i->op == "*=") {
+        auto tmp = Builder->CreateNSWMul(val, r);
+        return Builder->CreateStore(tmp, l);
+    }
+    if (i->op == "/=") {
+        auto tmp = Builder->CreateSDiv(val, r);
         return Builder->CreateStore(tmp, l);
     }
 
