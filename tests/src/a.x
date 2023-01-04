@@ -9,7 +9,7 @@ enum E{
  C(a: long);
 }
 
-/*func sum(a: int, b: int): int{
+func sum(a: int, b: int): int{
   return a + b;
 }
 
@@ -36,7 +36,7 @@ func infix(){
   assert (14^b)==5;
   assert (a<<3)==16;
   assert (b>>1)==5;
-}*/
+}
 
 func enumTest(){
   let a: E = E::A;
@@ -104,10 +104,11 @@ func condTest(){
 }
 
 func main(): int{
-  //varTest();
+  varTest();
   condTest();
-  //infix();
-  //ifTest(4, 6);
+  infix();
+  ifTest(4, 6);
+  enumTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
   
@@ -117,6 +118,6 @@ func main(): int{
   obj.a=10;
   print("A.a=%d, A.b=%d\n", obj.a, obj.b);*/
   //let objCopy=obj.clone();
-  enumTest();
+  
   return 0;
 }

@@ -182,9 +182,8 @@ static void exit_prototype() {
 }*/
 static int size(Type *type) {
     auto s = type->print();
-    if (s == "byte" || s == "bool") return 1;
-    if (s == "int") return 4;
-    if (s == "long") return 8;
+    auto it = sizeMap.find(s);
+    if(it!=sizeMap.end()) return it->second;
     throw std::runtime_error("size(" + s + ")");
 }
 
@@ -210,7 +209,7 @@ void createProtos(Unit *unit) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
         print("proto " + bd->name);
         if (ed) {
-            int sz = size(ed);
+            int sz = size(ed)/8;
             std::cout << "sizeof enum=" << sz << std::endl;
             elems.push_back(getTy());
             auto charType = llvm::IntegerType::get(*ctx, 8);
@@ -275,11 +274,12 @@ void Compiler::compile(const std::string &path) {
     Lexer lexer(path);
     Parser parser(lexer);
     unit = parser.parseUnit();
-
-    InitializeModule();
-    createProtos(unit);
     resolv = new Resolver(unit);
     resolv->resolveAll();
+    
+    InitializeModule();
+    createProtos(unit);
+    
     for (auto m : unit->methods) {
         resolv->curMethod = m;
         curMethod = m;
@@ -372,6 +372,7 @@ void *Compiler::visitReturnStmt(ReturnStmt *t, void *arg) {
         expect = func->getReturnType();
         auto val = (llvm::Value *) t->expr->accept(this, nullptr);
         Builder->CreateRet(val);
+        expect = nullptr;
     } else {
         Builder->CreateRetVoid();
     }
@@ -426,6 +427,16 @@ llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     return ext;
 }
 
+llvm::Value* cast(llvm::Value* val, Type* type){
+    int bits = size(type);
+    int src = val->getType()->getScalarSizeInBits();
+    if(src<bits){
+        auto ext = Builder->CreateZExt(val, getInt(bits));
+        return ext;
+    }
+    return val;
+}
+
 void *Compiler::visitInfix(Infix *i, void *arg) {
     if (i->op == "&&") {
         //res=(l==true?r:false)
@@ -437,6 +448,14 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     }
     auto l = loadPtr(i->left);
     auto r = loadPtr(i->right);
+    print("lhs=");
+    l->getType()->dump();
+    print("rhs=");
+    r->getType()->dump();
+    auto tt = resolv->resolveScoped(i);
+    print("infix type="+tt->type->print());
+    l = cast(l, tt->type);
+    r = cast(r, tt->type);
     if (i->op == "+") {
         return Builder->CreateNSWAdd(l, r);
     }
@@ -492,6 +511,7 @@ void *Compiler::visitAssign(Assign *i, void *arg) {
     auto l = (llvm::Value *) i->left->accept(this, nullptr);
     expect = l->getType()->getPointerElementType();
     auto r = (llvm::Value *) i->right->accept(this, nullptr);
+    expect = nullptr;
     if (i->op == "=") return Builder->CreateStore(r, l);
 
     throw std::runtime_error("assign: " + i->print());
@@ -535,7 +555,8 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
     } else if (n->isInt) {
-        auto bits = expect->getScalarSizeInBits();
+        auto bits = expect?expect->getScalarSizeInBits():32;
+        expect = nullptr;
         std::cout << "expect: " << bits << std::endl;
 
         auto intType = llvm::IntegerType::get(*ctx, bits);
@@ -573,6 +594,7 @@ void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
         if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
         expect = mapType(f->type);
         auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
+        expect = nullptr;
         Locals[f->name] = f->type;
         //depends on rhs type; copy,ptr...
         /*if(llvm::dyn_cast<llvm::AllocaInst>(val)){
@@ -613,15 +635,6 @@ EnumDecl *findEnum(Type *type, Resolver *resolv) {
     return dynamic_cast<EnumDecl *>(rt->targetDecl);
 }
 
-int findVariant(EnumDecl *decl, std::string name) {
-    for (int i = 0; i < decl->variants.size(); i++) {
-        if (decl->variants[i]->name == name) {
-            return i;
-        }
-    }
-    throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
-}
-
 void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
     //ty->print(llvm::outs(), true, true);
     //ty->dump();
@@ -650,7 +663,7 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     if (n->type->scope) {
         auto enumTy = mapType(n->type->scope);
         auto decl = findEnum(n->type->scope, resolv);
-        auto index = findVariant(decl, n->type->name);
+        auto index = Resolver::findVariant(decl, n->type->name);
         auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
 
         setOrdinal(index, ptr, enumTy);
@@ -666,11 +679,13 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
             auto targetTy = mapType(cons->type);
             expect = targetTy;
             auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
+            expect = nullptr;
             //todo bitcast to target type
             //auto val2 = implicit(val, targetTy);
             auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
             Builder->CreateStore(val, cast);
             offset += size(cons->type);
+            expect= nullptr;
         }
         return ptr;
     } else {
@@ -706,7 +721,7 @@ void *Compiler::visitType(Type *n, void *arg) {
     if (!enumTy) throw std::runtime_error("type not found: " + n->scope->print());
     //enum variant without struct
     auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
-    int index = findVariant(findEnum(n->scope, resolv), n->name);
+    int index = Resolver::findVariant(findEnum(n->scope, resolv), n->name);
     setOrdinal(index, ptr, enumTy);
     return ptr;
 }
@@ -761,7 +776,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
     auto ordptr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, idx, "", BB);
     auto ord = Builder->CreateLoad(getTy(), ordptr);
     auto decl = findEnum(b->type->scope, resolv);
-    auto index = findVariant(decl, b->type->name);
+    auto index = Resolver::findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 
     auto then = llvm::BasicBlock::Create(*ctx, "", func);

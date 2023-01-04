@@ -11,7 +11,32 @@ class Symbol;
 class RType;
 class Resolver;
 
-typedef std::variant<Fragment *, FieldDecl *, EnumParam *, Param *> VarHolder;
+static std::map<std::string, int> sizeMap{
+                {"bool", 1},
+                {"i8", 8},
+                {"i16", 16},
+                {"i32", 32},
+                {"i64", 64},
+                {"u16", 16},
+                {"u8", 8},
+                {"u16", 16},
+                {"u32", 32},
+                {"u64", 64},
+                {"byte", 8},
+                {"char", 16},
+                {"short", 16},
+                {"int", 32},
+                {"long", 64},
+                {"float", 32},
+                {"double", 64}};
+
+class EnumPrm{
+    public:
+    EnumParam *decl;
+    std::string name;
+};
+
+typedef std::variant<Fragment *, FieldDecl *, EnumPrm *, Param *> VarHolder;
 
 class Symbol {
 public:
@@ -52,10 +77,10 @@ public:
     //~Scope();
     void add(VarHolder *f);
     void clear();
-    VarHolder *find(std::string &name);
+    VarHolder *find(const std::string &name);
 };
 
-class Resolver : public BaseVisitor<void *, void *> {
+class Resolver : public Visitor<void *, void *> {
 public:
     Unit *unit;
     std::map<Fragment *, RType *> varMap;
@@ -74,6 +99,8 @@ public:
 
     explicit Resolver(Unit *unit);
     virtual ~Resolver();
+    
+    static int findVariant(EnumDecl *decl, const std::string& name);
 
     static Resolver *getResolver(const std::string &path);
     void other(std::string name, std::vector<Symbol> &res) const;
@@ -95,6 +122,7 @@ public:
     void *visitFragment(Fragment *f, void *arg) override;
 
     void *visitBaseDecl(BaseDecl *bd, void *arg) override;
+    void *visitFieldDecl(FieldDecl *fd, void *arg) override;
 
     void *visitMethod(Method *m, void *arg) override;
     void *visitParam(Param *p, void *arg) override;
@@ -116,5 +144,9 @@ public:
     void *visitDerefExpr(DerefExpr *as, void *arg) override;
     void *visitAssertStmt(AssertStmt *as, void *arg) override;
     void *visitIfLetStmt(IfLetStmt *as, void *arg) override;
+    void *visitIfStmt(IfStmt *as, void *arg) override;
     void *visitParExpr(ParExpr *as, void *arg) override;
+    void *visitExprStmt(ExprStmt *as, void *arg) override;
+    void *visitBlock(Block *as, void *arg) override;
+    void *visitReturnStmt(ReturnStmt *as, void *arg) override;
 };

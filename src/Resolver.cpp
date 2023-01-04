@@ -5,6 +5,19 @@
 #include "parser/Parser.h"
 #include "parser/Util.h"
 
+int Resolver::findVariant(EnumDecl *decl, const std::string& name) {
+    for (int i = 0; i < decl->variants.size(); i++) {
+        if (decl->variants[i]->name == name) {
+            return i;
+        }
+    }
+    throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
+}
+                
+bool isSigned(const std::string& s){
+  return s=="u8" || s=="u16" || 
+  s=="u32" || s=="u64";
+}                
 void Scope::add(VarHolder *f) { list.push_back(f); }
 
 void Scope::clear() { list.clear(); }
@@ -13,15 +26,15 @@ std::string nameOf(VarHolder* vh){
     auto f = std::get_if<Fragment *>(vh);
         if (f) return (*f)->name;
         auto p = std::get_if<Param *>(vh);
-        if (p) return (*f)->name;
+        if (p) return (*p)->name;
         auto fd = std::get_if<FieldDecl *>(vh);
-        if (fd) return (*f)->name;
-        auto ep = std::get_if<EnumParam *>(vh);
-        if (ep) return (*f)->name;
+        if (fd) return (*fd)->name;
+        auto ep = std::get_if<EnumPrm*>(vh);
+        if (ep) return (*ep)->name;
    return "#none#";
 }
 
-VarHolder *Scope::find(std::string &name) {
+VarHolder *Scope::find(const std::string &name) {
     for (auto vh : list) {
         auto f = std::get_if<Fragment *>(vh);
         if (f && (*f)->name == name) return vh;
@@ -29,7 +42,7 @@ VarHolder *Scope::find(std::string &name) {
         if (p && (*p)->name == name) return vh;
         auto fd = std::get_if<FieldDecl *>(vh);
         if (fd && (*fd)->name == name) return vh;
-        auto ep = std::get_if<EnumParam *>(vh);
+        auto ep = std::get_if<EnumPrm *>(vh);
         if (ep && (*ep)->name == name) return vh;
     }
     return nullptr;
@@ -83,7 +96,7 @@ RType *makeSimple(const std::string name) {
 void Resolver::dump() {
     for(auto scope:scopes){
         for(auto vh:scope->list){
-            std::cout << "var :"<<nameOf(vh)<<std::endl;
+            std::cout << "scope var :"<<nameOf(vh)<<std::endl;
         }
     }
     for (auto f : varMap) {
@@ -166,6 +179,12 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
     return typeMap[bd->name];
 }
 
+void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg){
+    auto res = fd->type->accept (this, nullptr);
+    //if(fd->expr) fd->expr->accept (this, nullptr);
+    return res;
+}
+
 void *Resolver::visitMethod(Method *m, void *arg) {
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
@@ -202,7 +221,21 @@ void *Resolver::visitAssign(Assign *as, void *arg) {
     return t1;
 }
 
+RType* bin(std::string& s1, std::string& s2){
+    if (s1 == s2) {
+            return makeSimple(s1);
+        }
+        if(s1=="double"||s2=="double") return makeSimple("double");
+        if(s1=="float"||s2=="float") return makeSimple("float");
+        if(s1=="long"||s2=="long") return makeSimple("long");
+        if(s1=="int"||s2=="int") return makeSimple("int");
+        if(s1=="byte"||s2=="byte") return makeSimple("byte");
+        throw std::runtime_error("bin");
+}
+
 void *Resolver::visitInfix(Infix *infix, void *arg) {
+    auto it = exprMap.find(infix);
+    if(it!=exprMap.end()) return it->second;
     std::cout << "visitInfix = " << infix->print() << std::endl;
     auto *rt1 = (RType *) infix->left->accept(this, infix);
     auto *rt2 = (RType *) infix->right->accept(this, infix);
@@ -222,17 +255,9 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
         }
         auto s1 = rt1->type->print();
         auto s2 = rt2->type->print();
-        if (s1 == s2) {
-            return makeSimple(s1);
-        }
-        std::string arr[] = {"double", "float", "long", "int",
-                             "short", "char", "byte", "bool"};
-        for (auto &t : arr) {
-            if (s1 == t || s2 == t) {
-                return makeSimple(t);
-            }
-        }
-
+        auto res = bin(s1, s2);
+        exprMap[infix]=res;
+        return res;
     } else {
     }
     throw std::runtime_error("visitInfix: " + infix->print());
@@ -335,9 +360,9 @@ void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
             if (field) {
                 return s.resolve(*field);
             }
-            auto ep = std::get_if<EnumParam *>(s.v);
+            auto ep = std::get_if<EnumPrm *>(s.v);
             if (ep) {
-                //return s.resolve(*ep);
+                return s.resolve((*ep)->decl->type);
             }
         } else if (s.m) {
             return s.resolve(s.m);
@@ -414,23 +439,6 @@ bool subType(Type *type, Type *sub) {
     if (type->isPrim()) {
         if (!sub->isPrim()) return false;
         if (type->name == "bool") return false;
-        std::map<std::string, int> sizeMap{
-                {"i8", 8},
-                {"i16", 16},
-                {"i32", 32},
-                {"i64", 64},
-                {"u16", 16},
-                {"u8", 8},
-                {"u16", 16},
-                {"u32", 32},
-                {"u64", 64},
-                {"byte", 8},
-                {"char", 16},
-                {"short", 16},
-                {"int", 32},
-                {"long", 64},
-                {"float", 32},
-                {"double", 64}};
         // auto cast to larger size
         if (sizeMap[type->name] <= sizeMap[sub->name]) {
             return true;
@@ -650,12 +658,52 @@ void *Resolver::visitAssertStmt(AssertStmt *as, void *arg){
 }
 
 void *Resolver::visitIfLetStmt(IfLetStmt *as, void *arg) {
+    newScope();
+    auto rt = (RType *) as->type->scope->accept(this, nullptr);
+    auto decl= dynamic_cast<EnumDecl *>(rt->targetDecl);
+    int index = findVariant (decl, as->type->name);
+    auto variant = decl->variants[index];
+    int i=0;
+    for(auto &name:as->args){
+        auto ep = variant->params[i];
+        auto tmp=new EnumPrm;
+        tmp->decl=ep;
+        tmp->name=name;
+        curScope()->add(new VarHolder(tmp));
+        i++;
+    }
     as->thenStmt->accept(this, nullptr);
+    dropScope();
     if(as->elseStmt){
         as->elseStmt->accept (this, nullptr);
     }
     return nullptr;
 }
+
 void *Resolver::visitParExpr(ParExpr *as, void *arg){
     return as->expr->accept(this, nullptr);
+}
+
+void *Resolver::visitExprStmt(ExprStmt *as, void *arg){
+    as->expr->accept (this, nullptr);
+    return nullptr;
+}
+
+void *Resolver::visitBlock(Block *as, void *arg) {
+    for(auto st:as->list){
+        st->accept (this, nullptr);
+    }
+    return nullptr;
+}
+
+void *Resolver::visitIfStmt(IfStmt *is, void *arg){
+    is->expr->accept (this, nullptr);
+    is->thenStmt->accept (this, nullptr);
+    if(is->elseStmt) is->elseStmt->accept (this, nullptr);
+    return nullptr;
+}
+
+void *Resolver::visitReturnStmt(ReturnStmt *as, void *arg){
+    if(as->expr) as->expr->accept (this, nullptr);
+    return nullptr;
 }

@@ -250,6 +250,8 @@ Fragment *frag(Parser *p) {
     if (p->is(EQ)) {
         p->consume(EQ);
         res->rhs = p->parseExpr();
+    }else{
+        throw std::runtime_error("variable " + res->name+" must have initializer");
     }
     return res;
 }
