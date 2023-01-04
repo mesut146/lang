@@ -5,6 +5,18 @@
 #include <cstdarg>
 #include <iostream>
 
+template<class R>
+class Result {
+public:
+    R result;
+    std::exception *err = nullptr;
+
+    R unwrap() {
+        if (err) throw *err;
+        return result;
+    }
+};
+
 class Parser {
 public:
     Lexer lexer;
@@ -54,6 +66,14 @@ public:
         return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
     }
 
+    Result<Token *> consume2(TokenType tt) {
+        Token *t = pop();
+        if (t->is(tt)) return {t, nullptr};
+        if (!isMarked) {
+        }
+        return {nullptr, new std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt))};
+    }
+
     Token *consume(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return t;
@@ -75,7 +95,7 @@ public:
     }
 
     std::string *name() {
-        if(is(FROM)){
+        if (is(FROM)) {
             return consume(FROM)->value;
         }
         return consume(IDENT)->value;

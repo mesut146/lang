@@ -20,7 +20,9 @@ func varTest(){
   assert a == 6;
   let ptr: int* = &a;
   assert *ptr == 6;
-  print("*ptr=%d\n", *ptr);
+  //print("*ptr=%d\n", *ptr);
+
+  print("varTest done\n");
 }
 
 func infix(){
@@ -36,6 +38,7 @@ func infix(){
   assert (14^b)==5;
   assert (a<<3)==16;
   assert (b>>1)==5;
+  print("infix done\n");
 }
 
 func enumTest(){
@@ -58,31 +61,50 @@ func enumTest(){
   }
   let c: E = E::C{100};
   if let E::C(p3) = (c){
-    assert p3==100;
+    assert p3 == 100;
     print("c is E::C a=%ld\n", p3);
   }else print("c is not E::C\n");
+
+  print("enumTest done\n");
 }
 
-func ifTest(x: int, y: int){
-  if(x<5){
-    print("%d < 5\n", x);
-  }
-  print("after if\n");
-  if(y<6){
-    print("%d < 6\n", y);
+func ifTest(){
+  let b = true;
+  let inIf = false;
+  let inElse = false;
+  if(b){
+    inIf = true;
   }else{
-    print("in else(!(%d<6))\n", y);
+    inElse = true;
   }
-  print("after 2nd if\n");
+  assert inIf;
+  assert inElse == false;
+  
+  print("ifTest done\n");
+}
+
+func elseTest(){
+  let b = false;
+  let inIf = false;
+  let inElse = false;
+  if(b){
+    inIf = true;
+  }else{
+    inElse = true;
+  }
+  assert inElse;
+  assert inIf == false;
+  
+  print("elseTest done\n");
 }
 
 func getTrue(cnt: int*): bool {
-  print("getTrue\n");
+  //print("getTrue\n");
   *cnt = *cnt + 1;
   return true;
 }
 func getFalse(cnt: int*): bool {
-  print("getFalse\n");
+  //print("getFalse\n");
   *cnt = *cnt + 1;
   return false;
 }
@@ -100,24 +122,33 @@ func condTest(){
   assert c1==3 && c2==1;
 
   assert getFalse(&c2) || getTrue(&c1);
-  assert c1==4&&c2==2;
+  assert c1==4 && c2==2;
+
+  print("condTest done\n");
+}
+
+func classTest(){
+  //let obj: A = A{a: 5, b: 6};
+  let obj: A = A{b: 6, a: 5};
+  assert obj.a == 5 && obj.b == 6;
+  obj.a=10;
+  assert obj.a == 10 && obj.b == 6;
+  //let objCopy=obj.clone();
+  
+  print("classTest done\n");
 }
 
 func main(): int{
   varTest();
   condTest();
   infix();
-  ifTest(4, 6);
+  ifTest();
+  elseTest();
   enumTest();
+  classTest();
+
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
-  
   //assert *(&sum(5, 6)) == 11;
-  /*let obj: A = A{a: 5, b: 6};
-  print("A.a=%d, A.b=%d\n", obj.a, obj.b);
-  obj.a=10;
-  print("A.a=%d, A.b=%d\n", obj.a, obj.b);*/
-  //let objCopy=obj.clone();
-  
   return 0;
 }

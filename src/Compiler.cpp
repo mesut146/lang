@@ -120,6 +120,26 @@ llvm::Type *mapType(Type *t) {
     throw std::runtime_error("mapType: " + s);
 }
 
+static int size(Type *type) {
+    auto s = type->print();
+    auto it = sizeMap.find(s);
+    if (it != sizeMap.end()) return it->second;
+    throw std::runtime_error("size(" + s + ")");
+}
+
+static int size(EnumDecl *e) {
+    int res = 0;
+    for (auto ee : e->variants) {
+        if (ee->params.empty()) continue;
+        int cur = 0;
+        for (auto ep : ee->params) {
+            cur += size(ep->type);
+        }
+        res = cur > res ? cur : res;
+    }
+    return res;
+}
+
 llvm::Value *branch(llvm::Value *val) {
     auto ty = llvm::cast<llvm::IntegerType>(val->getType());
     if (ty) {
@@ -180,25 +200,7 @@ static void exit_prototype() {
     func->getBasicBlockList().push_back(next);
     BB = next;
 }*/
-static int size(Type *type) {
-    auto s = type->print();
-    auto it = sizeMap.find(s);
-    if(it!=sizeMap.end()) return it->second;
-    throw std::runtime_error("size(" + s + ")");
-}
 
-static int size(EnumDecl *e) {
-    int res = 0;
-    for (auto ee : e->variants) {
-        if (ee->params.empty()) continue;
-        int cur = 0;
-        for (auto ep : ee->params) {
-            cur += size(ep->type);
-        }
-        res = cur > res ? cur : res;
-    }
-    return res;
-}
 void print(const std::string &msg) {
     std::cout << msg << std::endl;
 }
@@ -209,7 +211,7 @@ void createProtos(Unit *unit) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
         print("proto " + bd->name);
         if (ed) {
-            int sz = size(ed)/8;
+            int sz = size(ed) / 8;
             std::cout << "sizeof enum=" << sz << std::endl;
             elems.push_back(getTy());
             auto charType = llvm::IntegerType::get(*ctx, 8);
@@ -276,10 +278,10 @@ void Compiler::compile(const std::string &path) {
     unit = parser.parseUnit();
     resolv = new Resolver(unit);
     resolv->resolveAll();
-    
+
     InitializeModule();
     createProtos(unit);
-    
+
     for (auto m : unit->methods) {
         resolv->curMethod = m;
         curMethod = m;
@@ -389,9 +391,13 @@ llvm::Value *load(llvm::Value *val) {
     return Builder->CreateLoad(ty, val);
 }
 
+bool isVar(Expression *e) {
+    return dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e);
+}
+
 llvm::Value *Compiler::loadPtr(Expression *e) {
     auto val = (llvm::Value *) e->accept(this, nullptr);
-    if (dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e)) {
+    if (isVar(e)) {
         return load(val);
     }
     return val;
@@ -427,14 +433,25 @@ llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     return ext;
 }
 
-llvm::Value* cast(llvm::Value* val, Type* type){
+llvm::Value *cast(llvm::Value *val, Type *type) {
     int bits = size(type);
     int src = val->getType()->getScalarSizeInBits();
-    if(src<bits){
+    if (src < bits) {
         auto ext = Builder->CreateZExt(val, getInt(bits));
         return ext;
     }
     return val;
+}
+
+llvm::Value *Compiler::cast(Expression *expr, Type *type) {
+    auto lit = dynamic_cast<Literal *>(expr);
+    if (lit && lit->isInt) {
+        auto bits = size(type);
+        auto intType = llvm::IntegerType::get(*ctx, bits);
+        return llvm::ConstantInt::get(intType, atoi(lit->val.c_str()));
+    }
+    return loadPtr(expr);
+    //return (llvm::Value *) expr->accept(this, nullptr);
 }
 
 void *Compiler::visitInfix(Infix *i, void *arg) {
@@ -446,16 +463,14 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
         //res=(l==true?true:r)
         return andOr(i->left, i->right, false);
     }
-    auto l = loadPtr(i->left);
-    auto r = loadPtr(i->right);
+    auto tt = resolv->resolveScoped(i);
+    print("infix type=" + tt->type->print());
+    auto l = cast(i->left, tt->type);
+    auto r = cast(i->right, tt->type);
     print("lhs=");
     l->getType()->dump();
     print("rhs=");
     r->getType()->dump();
-    auto tt = resolv->resolveScoped(i);
-    print("infix type="+tt->type->print());
-    l = cast(l, tt->type);
-    r = cast(r, tt->type);
     if (i->op == "+") {
         return Builder->CreateNSWAdd(l, r);
     }
@@ -534,7 +549,7 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
         f = printf_proto;
     } else {
         auto rt = (RType *) mc->accept(resolv, nullptr);
-        print ("c call: "+mc->name + " f: "+rt->targetMethod->name);
+        print("c call: " + mc->name + " f: " + rt->targetMethod->name);
         print(resolv->exprMap[mc]->targetMethod->name);
         f = funcMap[rt->targetMethod];
     }
@@ -555,10 +570,7 @@ void *Compiler::visitLiteral(Literal *n, void *arg) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
     } else if (n->isInt) {
-        auto bits = expect?expect->getScalarSizeInBits():32;
-        expect = nullptr;
-        std::cout << "expect: " << bits << std::endl;
-
+        auto bits = 32;
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     } else if (n->isBool) {
@@ -592,10 +604,14 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
 void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
         if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
-        expect = mapType(f->type);
+        if (f->type) {
+            expect = mapType(f->type);
+        }
         auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
         expect = nullptr;
-        Locals[f->name] = f->type;
+        auto type = f->type ? f->type : resolv->resolveScoped(f->rhs)->type;
+        Locals[f->name] = type;
+
         //depends on rhs type; copy,ptr...
         /*if(llvm::dyn_cast<llvm::AllocaInst>(val)){
                 NamedValues[f->name] = val;
@@ -606,7 +622,7 @@ void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
             continue;
         }
 
-        auto ty = mapType(f->type);
+        auto ty = mapType(type);
         auto ptr = Builder->CreateAlloca(ty);
         Builder->CreateStore(val, ptr);
         NamedValues[f->name] = ptr;
@@ -658,6 +674,17 @@ void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
     throw std::runtime_error("cant do implicit cast from ");
 }*/
 
+int fieldIndex(TypeDecl *decl, const std::string &name) {
+    int i = 0;
+    for (auto fd : decl->fields) {
+        if (fd->name == name) {
+            return i;
+        }
+        i++;
+    }
+    throw std::runtime_error("unknown field: " + name + " of type " + decl->name);
+}
+
 void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     //enum or class
     if (n->type->scope) {
@@ -677,25 +704,46 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
 
             auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx, "", BB);
             auto targetTy = mapType(cons->type);
-            expect = targetTy;
-            auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
-            expect = nullptr;
+            auto val = cast(n->entries[i].value, cons->type);
+            //auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
+
             //todo bitcast to target type
             //auto val2 = implicit(val, targetTy);
             auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
             Builder->CreateStore(val, cast);
             offset += size(cons->type);
-            expect= nullptr;
         }
         return ptr;
     } else {
+        auto rt = (RType *) n->type->accept(resolv, nullptr);
+        auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
         auto ty = mapType(n->type);
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        bool hasNamed = false;
+        bool hasNonNamed = false;
+        for (auto &e : n->entries) {
+            if (e.hasKey()) {
+                hasNamed = true;
+            } else {
+                hasNonNamed = true;
+            }
+        }
+        if (hasNamed && hasNonNamed) {
+            throw std::runtime_error("obj creation can't have mixed values");
+        }
         int i = 0;
         for (auto &e : n->entries) {
-            std::vector<llvm::Value *> idx = {makeInt(0), makeInt(i)};
-            auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx, "", BB);
-            auto val = (llvm::Value *) e.value->accept(this, nullptr);
+            int index;
+            if (e.hasKey()) {
+                index = fieldIndex(decl, e.key);
+            } else {
+                index = i;
+            }
+            std::vector<llvm::Value *> idx = {makeInt(0), makeInt(index)};
+            auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx, "", getBB());
+            auto field = decl->fields[index];
+            auto val = cast(e.value, field->type);
+            //auto val = (llvm::Value *) e.value->accept(this, nullptr);
             Builder->CreateStore(val, eptr);
             i++;
         }
@@ -703,15 +751,10 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     }
 }
 
-int findIndex(Type *type, std::string name, Resolver *resolv) {
+int findIndex(Type *type, std::string &name, Resolver *resolv) {
     auto sctt = (RType *) type->accept(resolv, nullptr);
     auto td = dynamic_cast<TypeDecl *>(sctt->targetDecl);
-    for (int i = 0; i < td->fields.size(); i++) {
-        if (td->fields[i]->name == name) {
-            return i;
-        }
-    }
-    throw std::runtime_error("unknown field: " + name + " of type " + type->print());
+    return fieldIndex(td, name);
 }
 
 void *Compiler::visitType(Type *n, void *arg) {
@@ -742,6 +785,21 @@ void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
     return eptr;
 }
 
+bool isReturnLast(Statement *stmt) {
+    auto ret = dynamic_cast<ReturnStmt *>(stmt);
+    if (ret) {
+        return true;
+    }
+    auto block = dynamic_cast<Block *>(stmt);
+    if (block) {
+        ret = dynamic_cast<ReturnStmt *>(block->list.back());
+        if (ret) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     auto cond = branch(loadPtr(b->expr));
 
@@ -756,12 +814,17 @@ void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     }
     Builder->SetInsertPoint(then);
     b->thenStmt->accept(this, nullptr);
-    Builder->CreateBr(next);
+    if (!isReturnLast(b->thenStmt)) {
+        Builder->CreateBr(next);
+    }
+
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         b->elseStmt->accept(this, nullptr);
-        Builder->CreateBr(next);
+        if (!isReturnLast(b->elseStmt)) {
+            Builder->CreateBr(next);
+        }
     }
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);

@@ -3,8 +3,8 @@
 #include "BaseVisitor.h"
 #include "parser/Ast.h"
 #include <map>
-#include <unordered_map>
 #include <memory>
+#include <unordered_map>
 #include <variant>
 
 class Symbol;
@@ -12,26 +12,26 @@ class RType;
 class Resolver;
 
 static std::map<std::string, int> sizeMap{
-                {"bool", 1},
-                {"i8", 8},
-                {"i16", 16},
-                {"i32", 32},
-                {"i64", 64},
-                {"u16", 16},
-                {"u8", 8},
-                {"u16", 16},
-                {"u32", 32},
-                {"u64", 64},
-                {"byte", 8},
-                {"char", 16},
-                {"short", 16},
-                {"int", 32},
-                {"long", 64},
-                {"float", 32},
-                {"double", 64}};
+        {"bool", 1},
+        {"i8", 8},
+        {"i16", 16},
+        {"i32", 32},
+        {"i64", 64},
+        {"u16", 16},
+        {"u8", 8},
+        {"u16", 16},
+        {"u32", 32},
+        {"u64", 64},
+        {"byte", 8},
+        {"char", 16},
+        {"short", 16},
+        {"int", 32},
+        {"long", 64},
+        {"float", 32},
+        {"double", 64}};
 
-class EnumPrm{
-    public:
+class EnumPrm {
+public:
     EnumParam *decl;
     std::string name;
 };
@@ -99,8 +99,8 @@ public:
 
     explicit Resolver(Unit *unit);
     virtual ~Resolver();
-    
-    static int findVariant(EnumDecl *decl, const std::string& name);
+
+    static int findVariant(EnumDecl *decl, const std::string &name);
 
     static Resolver *getResolver(const std::string &path);
     void other(std::string name, std::vector<Symbol> &res) const;

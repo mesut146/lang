@@ -6,7 +6,7 @@
 #include <llvm/IR/Value.h>
 #include <string>
 
-struct Compiler : public BaseVisitor<void *, void *> {
+struct Compiler : public Visitor<void *, void *> {
     std::string srcDir;
     std::string outDir;
     Unit *unit;
@@ -19,6 +19,7 @@ struct Compiler : public BaseVisitor<void *, void *> {
     void compile(const std::string &path);
 
     llvm::Value *loadPtr(Expression *e);
+    llvm::Value *cast(Expression *expr, Type *type);
 
     void *visitBlock(Block *b, void *arg) override;
     void *visitReturnStmt(ReturnStmt *t, void *arg) override;

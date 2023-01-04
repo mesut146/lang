@@ -572,9 +572,9 @@ void *WhileStmt::accept(Visitor<void *, void *> *v, void *arg) {
     return v->visitWhileStmt(this, arg);
 }
 
-void *PointerType::accept(Visitor<void *, void *> *v, void *arg) {
-    throw std::runtime_error("todo");
-}
-void *OptionType::accept(Visitor<void *, void *> *v, void *arg) {
-    throw std::runtime_error("todo");
-}
+// void *PointerType::accept(Visitor<void *, void *> *v, void *arg) {
+//     return v->
+// }
+// void *OptionType::accept(Visitor<void *, void *> *v, void *arg) {
+//     throw std::runtime_error("todo");
+// }

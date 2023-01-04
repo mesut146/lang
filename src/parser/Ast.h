@@ -229,12 +229,13 @@ public:
     std::string print() override;
     void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
+
 class PointerType : public Type {
 public:
     Type *type;
 
     std::string print() override;
-    void *accept(Visitor<void *, void *> *v, void *arg) override;
+    //void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 class OptionType : public Type {
 public:
@@ -243,7 +244,7 @@ public:
     bool isOptional() override { return true; }
 
     std::string print() override;
-    void *accept(Visitor<void *, void *> *v, void *arg) override;
+    //void *accept(Visitor<void *, void *> *v, void *arg) override;
 };
 
 /*class SimpleType : public Type {

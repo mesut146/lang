@@ -4,7 +4,8 @@ function c(){
 
 
 function r(){
- gcc a.x.o && ./a.out
+ #gcc a.x.o && ./a.out
+ clang-13 a.x.o && ./a.out
 }
 
 $1
