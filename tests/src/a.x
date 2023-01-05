@@ -3,6 +3,11 @@ class A{
  b: int;
 }
 
+class B{
+ a: A;
+ c: int;
+}
+
 enum E{
  A,
  B(a: int, b: int),
@@ -62,9 +67,9 @@ func enumTest(){
   }
   if let E::B(p1,p2) = (b){
     assert (p1==5)&&(p2==6);
-    print("b is E::B a=%d b=%d\n",p1,p2);
+    //print("b is E::B a=%d b=%d\n",p1,p2);
     p1=10;
-    print("b is E::B a=%d b=%d\n",p1,p2);
+    //print("b is E::B a=%d b=%d\n",p1,p2);
     assert (p1==10)&&(p2==6);
   }
   if let E::C(p3) = (c){
@@ -134,12 +139,14 @@ func condTest(){
 }
 
 func classTest(){
-  //let obj: A = A{a: 5, b: 6};
+//  let obj: A = A{a: 5, b: 6};
   let obj: A = A{b: 6, a: 5};
   assert obj.a == 5 && obj.b == 6;
   obj.a=10;
   assert obj.a == 10 && obj.b == 6;
   //let objCopy=obj.clone();
+
+  //let b= B{a: A{a: 1, b: 2}, c: 3};
 
   print("classTest done\n");
 }

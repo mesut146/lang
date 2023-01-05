@@ -45,6 +45,7 @@ std::map<std::string, llvm::Type *> classMap;
 llvm::BasicBlock *BB;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
+llvm::Function *mallocf;
 int strCnt = 0;
 
 static void InitializeModule() {
@@ -176,6 +177,19 @@ static void exit_prototype() {
     exit_proto = f;
 }
 
+static void malloc_proto(){
+    auto ret=getInt(8)->getPointerTo();
+    auto ft = llvm::FunctionType::get(ret, getInt(64), false);
+    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", mod.get());
+    f->setCallingConv(llvm::CallingConv::C);
+    llvm::AttributeList attr;
+    llvm::AttrBuilder builder;
+    builder.addAlignmentAttr(16);
+    attr=attr.addAttributes(*ctx, 0, builder);
+    f->setAttributes(attr);
+    mallocf=f;
+}
+
 /*void init_assert(){
     auto vt = llvm::Type::getVoidTy(*TheContext);
     auto ft = llvm::FunctionType::get(vt, llvm::IntegerType::get(*TheContext, 32), false);
@@ -245,6 +259,7 @@ void createProtos(Unit *unit) {
     }
     make_printf_prototype();
     exit_prototype();
+    malloc_proto();
 }
 
 void initParams(Method *m) {
@@ -765,7 +780,7 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
             //auto val2 = implicit(val, targetTy);
             auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
             Builder->CreateStore(val, cast);
-            offset += size(cons->type);
+            offset += size(cons->type)/8;
         }
         return ptr;
     } else {
@@ -931,7 +946,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy->getPointerTo());
             NamedValues[argName] = ptrReal;
 
-            offset += size(prm->type);
+            offset += size(prm->type)/8;
         }
     }
     b->thenStmt->accept(this, nullptr);
