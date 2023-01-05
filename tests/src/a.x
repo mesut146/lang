@@ -39,19 +39,21 @@ func infix(){
   assert 6/a==3;
   assert 15 % (a*a) == 3;
   assert (14 & b) == 10;
-  assert (14 | b) ==15 ;
+  assert (14 | b) == 15 ;
   assert (14^b)==5;
   assert (a<<3)==16;
   assert (b>>1)==5;
-  print("infix done\n");
-
+  //unary
   assert -a == -2;
+  //++infix();
   assert ++a == 3;
   assert a == 3;
   assert --a == 2;
   assert a == 2;
   a += 1;
   assert a == 3;
+
+  print("infix done\n");
 }
 
 func enumTest(){
@@ -146,7 +148,9 @@ func classTest(){
   assert obj.a == 10 && obj.b == 6;
   //let objCopy=obj.clone();
 
-  //let b= B{a: A{a: 1, b: 2}, c: 3};
+  let b = B{a: obj, c: 3};
+  assert b.c == 3;
+  assert b.a.a == 10 && b.a.b == 6;
 
   print("classTest done\n");
 }

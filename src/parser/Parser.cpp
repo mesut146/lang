@@ -111,10 +111,10 @@ EnumVariant *parseEnumEntry(Parser *p) {
     res->name = *p->name();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
-        res->params.push_back(parseEnumParam(p));
+        res->fields.push_back(parseEnumParam(p));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->params.push_back(parseEnumParam(p));
+            res->fields.push_back(parseEnumParam(p));
         }
         p->consume(RPAREN);
     }

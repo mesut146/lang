@@ -6,7 +6,10 @@
 #define todo(name) \
     { throw std::runtime_error(std::string("todo: ") + name); }
 
-template<class R, class A>
+
+typedef void* R;
+typedef void* A;
+
 class Visitor {
 public:
     virtual R visitUnit(Unit *unit, A arg) todo("Unit");

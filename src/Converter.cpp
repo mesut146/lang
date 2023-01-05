@@ -54,9 +54,9 @@ int size(Type *type) {
 int size(EnumDecl *e) {
     int res = 0;
     for (auto ee : e->variants) {
-        if (ee->params.empty()) continue;
+        if (ee->fields.empty()) continue;
         int cur = 0;
-        for (auto ep : ee->params) {
+        for (auto ep : ee->fields) {
             cur += size(ep->type);
         }
         res = cur > res ? cur : res;

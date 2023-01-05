@@ -1,57 +1,32 @@
 #include <iostream>
 #include <list>
+#include <unordered_set>
 
 #include "Resolver.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
 
-int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
-    for (int i = 0; i < decl->variants.size(); i++) {
-        if (decl->variants[i]->name == name) {
-            return i;
-        }
-    }
-    throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
+void error(const std::string &msg) {
+    throw std::runtime_error(msg);
+}
+bool isCondition(Expression *e, Resolver *r) {
+    auto rt = r->resolve(e);
+    return rt->type->print() == "bool";
 }
 
-bool isSigned(const std::string &s) {
+bool isUnSigned(const std::string &s) {
     return s == "u8" || s == "u16" ||
            s == "u32" || s == "u64";
 }
-void Scope::add(VarHolder *f) { list.push_back(f); }
 
-void Scope::clear() { list.clear(); }
-
-std::string nameOf(VarHolder *vh) {
-    auto f = std::get_if<Fragment *>(vh);
-    if (f) return (*f)->name;
-    auto p = std::get_if<Param *>(vh);
-    if (p) return (*p)->name;
-    auto fd = std::get_if<FieldDecl *>(vh);
-    if (fd) return (*fd)->name;
-    auto ep = std::get_if<EnumPrm *>(vh);
-    if (ep) return (*ep)->name;
-    return "#none#";
+bool isComp(const std::string &op) {
+    return op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=";
 }
 
-VarHolder *Scope::find(const std::string &name) {
-    for (auto vh : list) {
-        auto f = std::get_if<Fragment *>(vh);
-        if (f && (*f)->name == name) return vh;
-        auto p = std::get_if<Param *>(vh);
-        if (p && (*p)->name == name) return vh;
-        auto fd = std::get_if<FieldDecl *>(vh);
-        if (fd && (*fd)->name == name) return vh;
-        auto ep = std::get_if<EnumPrm *>(vh);
-        if (ep && (*ep)->name == name) return vh;
-    }
-    return nullptr;
+template<class T>
+bool iof(Expression *e) {
+    return dynamic_cast<T>(e) != nullptr;
 }
-
-std::map<std::string, Resolver *> Resolver::resolverMap;
-
-Resolver::Resolver(Unit *unit) : unit(unit) {}
-Resolver::~Resolver() = default;
 
 Type *clone(Type *type) {
     auto ptr = dynamic_cast<PointerType *>(type);
@@ -93,6 +68,90 @@ RType *makeSimple(const std::string name) {
     return res;
 }
 
+std::string normalize(const std::string &s) {
+    if (s == "double") return "f64";
+    if (s == "float") return "f32";
+    if (s == "byte") return "i8";
+    if (s == "short") return "i16";
+    if (s == "char") return "u16";
+    if (s == "int") return "i32";
+    if (s == "long") return "i64";
+    return s;
+}
+
+RType *binCast(const std::string &s1, const std::string &s2) {
+    auto t1 = normalize(s1);
+    auto t2 = normalize(s2);
+    if (t1 == t2) {
+        return makeSimple(s1);
+    }
+    if (t1 == "f64" || t2 == "f64") return makeSimple("f64");
+    if (t1 == "f32" || t2 == "f32") return makeSimple("f32");
+    if (t1 == "i64" || t2 == "i64") return makeSimple("i64");
+    if (t1 == "i32" || t2 == "i32") return makeSimple("i32");
+    if (t1 == "i16" || t2 == "i16") return makeSimple("i16");
+    throw std::runtime_error("binCast");
+}
+
+bool subType(Type *type, Type *real) {
+    if (type->print() == real->print()) return true;
+    if (type->isVoid()) return false;
+    if (type->isArray()) return false;
+    if (type->isPrim()) {
+        if (!real->isPrim()) return false;
+        if (type->name == "bool") return false;
+        // auto cast to larger size
+        if (sizeMap[type->name] <= sizeMap[real->name]) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    // upcast
+    throw std::runtime_error("subtype " + type->print() + " sub: " + real->print());
+}
+
+int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
+    for (int i = 0; i < decl->variants.size(); i++) {
+        if (decl->variants[i]->name == name) {
+            return i;
+        }
+    }
+    throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
+}
+
+
+void Scope::add(VarHolder *f) { list.push_back(f); }
+
+void Scope::clear() { list.clear(); }
+
+std::string nameOf(VarHolder *vh) {
+    auto f = std::get_if<Fragment *>(vh);
+    if (f) return (*f)->name;
+    auto p = std::get_if<Param *>(vh);
+    if (p) return (*p)->name;
+    auto fd = std::get_if<FieldDecl *>(vh);
+    if (fd) return (*fd)->name;
+    auto ep = std::get_if<EnumPrm *>(vh);
+    if (ep) return (*ep)->name;
+    throw std::runtime_error("nameOf");
+}
+
+VarHolder *Scope::find(const std::string &name) {
+    for (auto vh : list) {
+        if (nameOf(vh) == name) {
+            return vh;
+        }
+    }
+    return nullptr;
+}
+
+std::map<std::string, Resolver *> Resolver::resolverMap;
+
+Resolver::Resolver(Unit *unit) : unit(unit) {}
+Resolver::~Resolver() = default;
+
+
 void Resolver::dump() {
     for (auto scope : scopes) {
         for (auto vh : scope->list) {
@@ -121,7 +180,7 @@ void Resolver::newScope() {
 }
 
 void Resolver::dropScope() {
-    curScope()->clear();
+    //curScope()->clear();
     scopes.pop_back();
 }
 
@@ -139,6 +198,7 @@ void Resolver::resolveAll() {
     }
     for (auto *bd : unit->types) {
         newScope();
+        declScopes[bd] = curScope();
         visitBaseDecl(bd, nullptr);
         for (auto m : bd->methods) {
             visitMethod(m, nullptr);
@@ -156,17 +216,22 @@ void Resolver::init() {
         typeMap[bd->name] = res;
     }
     newScope();//globals
+    globalScope = curScope();
 }
 
-RType *Resolver::resolveScoped(Expression *expr) {
-    return (RType *) expr->accept(this, nullptr);
+RType *Resolver::resolve(Expression *expr) {
+    auto it = exprMap.find(expr);
+    if (it != exprMap.end()) return it->second;
+    auto res = (RType *) expr->accept(this, nullptr);
+    exprMap[expr] = res;
+    return res;
 }
 
 void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
     if (bd->isEnum) {
         auto en = dynamic_cast<EnumDecl *>(bd);
         for (auto ev : en->variants) {
-            for (auto ep : ev->params) {
+            for (auto ep : ev->fields) {
                 ep->type->accept(this, nullptr);
             }
         }
@@ -192,12 +257,17 @@ void *Resolver::visitMethod(Method *m, void *arg) {
     auto *res = clone((RType *) m->type->accept(this, m));
     res->targetMethod = m;
     newScope();
+    methodScopes[m] = curScope();
     for (auto *prm : m->params) {
         curScope()->add(new VarHolder(prm));
         prm->accept(this, nullptr);
     }
     if (m->body) {
         m->body->accept(this, nullptr);
+        //todo check unreachable
+        if (!isReturnLast(m->body) && !m->type->isVoid()) {
+            error("non void function must return a value");
+        }
     }
     dropScope();
     methodMap[m] = res;
@@ -213,30 +283,18 @@ void *Resolver::visitParam(Param *p, void *arg) {
 
 void *Resolver::visitAssign(Assign *as, void *arg) {
     auto *t1 = (RType *) as->left->accept(this, as);
-    auto *t2 = (RType *) as->right->accept(this, as);
+    auto *t2 = resolve(as->right);
+    if (!subType(t2->type, t1->type)) {
+        error("cannot assign " + as->right->print() + " to " + as->left->print());
+    }
     // return t1 because t2 is going to be autocast to t1 ultimately
     return t1;
-}
-
-RType *bin(std::string &s1, std::string &s2) {
-    if (s1 == s2) {
-        return makeSimple(s1);
-    }
-    if (s1 == "double" || s2 == "double") return makeSimple("double");
-    if (s1 == "float" || s2 == "float") return makeSimple("float");
-    if (s1 == "long" || s2 == "long") return makeSimple("long");
-    if (s1 == "int" || s2 == "int") return makeSimple("int");
-    if (s1 == "byte" || s2 == "byte") return makeSimple("byte");
-    throw std::runtime_error("bin");
 }
 
 void *Resolver::visitInfix(Infix *infix, void *arg) {
     auto it = exprMap.find(infix);
     if (it != exprMap.end()) return it->second;
-    std::cout << "visitInfix = " << infix->print() << std::endl;
-    if (infix->print() == "x < 5") {
-        int x = 1 + 2;
-    }
+    //std::cout << "visitInfix = " << infix->print() << std::endl;
     auto *rt1 = (RType *) infix->left->accept(this, infix);
     auto *rt2 = (RType *) infix->right->accept(this, infix);
     if (!rt1->type) throw std::runtime_error("lhs null");
@@ -244,30 +302,52 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
     if (rt1->type->isVoid() || rt2->type->isVoid()) {
         throw std::runtime_error("operation on void type");
     }
-    if (infix->op == "+" && (rt1->type->isString() || rt2->type->isString())) {
-        // string concat
-        return rt1;
+    if (rt1->type->isString() || rt2->type->isString()) {
+        error("string op not supported yet");
+    }
+    if (!rt1->type->isPrim() || !rt2->type->isPrim()) {
+        error("infix on non prim type: " + infix->print());
     }
 
-    if (rt1->type->isPrim()) {
-        if (!rt2->type->isPrim()) {
-            throw std::runtime_error("infix on prim and non prim types");
+    RType *res = nullptr;
+    if (isComp(infix->op)) {
+        res = makeSimple("bool");
+    } else if (infix->op == "&&" || infix->op == "||") {
+        if (rt1->type->print() != "bool") {
+            error("infix lhs is not boolean: " + infix->left->print());
         }
+        if (rt2->type->print() != "bool") {
+            error("infix rhs is not boolean: " + infix->right->print());
+        }
+        res = makeSimple("bool");
+    } else {
         auto s1 = rt1->type->print();
         auto s2 = rt2->type->print();
-        auto res = bin(s1, s2);
-        exprMap[infix] = res;
-        return res;
-    } else {
+        res = binCast(s1, s2);
     }
-    throw std::runtime_error("visitInfix: " + infix->print());
+    exprMap[infix] = res;
+    return res;
 }
 
 void *Resolver::visitUnary(Unary *u, void *arg) {
     auto it = exprMap.find(u);
     if (it != exprMap.end()) return it->second;
     //todo check unsigned
-    auto res = resolveScoped(u->expr);
+    auto res = resolve(u->expr);
+    if (u->op == "!") {
+        if (res->type->print() != "bool") {
+            error("unary on non boolean: " + u->print());
+        }
+    } else {
+        if (!res->type->isIntegral()) {
+            error("unary on non prim: " + u->print());
+        }
+        if (u->op == "--" || u->op == "++") {
+            if (!iof<Name *>(u->expr) && !iof<FieldAccess *>(u->expr)) {
+                error("prefix on non variable: " + u->print());
+            }
+        }
+    }
     exprMap[u] = res;
     return res;
 }
@@ -277,40 +357,37 @@ void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 RType *Resolver::resolveType(Type *type) {
     auto it = typeMap.find(type->print());
     if (it != typeMap.end()) return it->second;
-    //std::cout << "resolveType: " << type->print() << "\n";
+    auto str = type->print();
     RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
         res = new RType;
         res->type = type;
-    } else {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        if (ptr) {
-            res = clone(resolveType(ptr->type));
-            auto inner = res->type;
-            auto pt = new PointerType;
-            pt->type = inner;
-            res->type = pt;
-        } else {
-            if (type->scope == nullptr) {
-                //todo is import
-            } else {
-                auto st = (RType *) type->scope->accept(this, nullptr);
-                auto bd = st->targetDecl;
-                if (bd->isEnum) {
-                    auto ed = dynamic_cast<EnumDecl *>(bd);
-                    bool found = false;
-                    for (auto ev : ed->variants) {
-                        if (ev->name == type->name) {
-                            found = true;
-                            res = (RType *) visitBaseDecl(ed, nullptr);
-                        }
-                    }
-                }
-            }
-        }
+        typeMap[str] = res;
+        return res;
     }
-    if (!res) throw std::runtime_error("todo resolveType: " + type->print());
-    typeMap[type->print()] = res;
+    auto ptr = dynamic_cast<PointerType *>(type);
+    if (ptr) {
+        res = clone(resolveType(ptr->type));
+        auto inner = res->type;
+        auto pt = new PointerType;
+        pt->type = inner;
+        res->type = pt;
+        typeMap[str] = res;
+        return res;
+    }
+    if (type->scope == nullptr) {
+        //todo is import
+        error("resolve type import");
+    }
+    auto st = (RType *) type->scope->accept(this, nullptr);
+    auto bd = st->targetDecl;
+    if (bd->isEnum) {
+        auto ed = dynamic_cast<EnumDecl *>(bd);
+        findVariant(ed, type->name);
+        res = (RType *) visitBaseDecl(ed, nullptr);
+    }
+    if (!res) throw std::runtime_error("todo resolveType: " + str);
+    typeMap[str] = res;
     return res;
 }
 
@@ -320,14 +397,11 @@ void *Resolver::visitFragment(Fragment *f, void *arg) {
     RType *res = nullptr;
     if (f->type) {
         res = (RType *) f->type->accept(this, nullptr);
-    } else {
-        int aa = 1 + 2;
     }
     if (f->rhs) {
-        auto r = (RType *) f->rhs->accept(this, nullptr);
+        auto r = resolve(f->rhs);
         if (!res) res = r;
     }
-
     if (!res) {
         throw std::runtime_error("fragment neither has type nor rhs");
     }
@@ -362,73 +436,76 @@ std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
     return res;
 }
 void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
+    auto it = exprMap.find(sn);
+    if (it != exprMap.end()) return it->second;
+
     auto arr = find(sn->name, true);
     if (arr.empty()) {
         dump();
         throw std::runtime_error("unknown identifier: " + sn->name);
     }
-    if (arr.size() == 1) {
-        auto s = arr[0];
-        if (s.v) {
-            auto frag = std::get_if<Fragment *>(s.v);
-            if (frag) {
-                return s.resolve(*frag);
-            }
-            auto prm = std::get_if<Param *>(s.v);
-            if (prm) {
-                return s.resolve(*prm);
-            }
-            auto field = std::get_if<FieldDecl *>(s.v);
-            if (field) {
-                return s.resolve(*field);
-            }
-            auto ep = std::get_if<EnumPrm *>(s.v);
-            if (ep) {
-                return s.resolve((*ep)->decl->type);
-            }
-        } else if (s.m) {
-            return s.resolve(s.m);
-        } else if (s.decl) {
-            return s.resolve(s.decl);
-        } else if (s.imp) {
-            auto res = new RType;
-            res->arr.push_back(s);
-            return res;
-        } else {
-            throw std::runtime_error("unexpected state");
-        }
-    } else {
-        auto res = new RType;
-        res->arr = arr;
-        return res;
-        //throw std::string("more than 1 result for ") + sn->name;
+    if (arr.size() > 1) {
+        throw std::string("more than 1 result for ") + sn->name;
+        //auto res = new RType;
+        //res->arr = arr;
+        //return res;
     }
-    throw std::runtime_error("unknown identifier: " + sn->name);
+    RType *res = nullptr;
+    auto s = arr[0];
+    if (s.v) {
+        auto frag = std::get_if<Fragment *>(s.v);
+        if (frag) {
+            res = s.resolve(*frag);
+        }
+        auto prm = std::get_if<Param *>(s.v);
+        if (prm) {
+            res = s.resolve(*prm);
+        }
+        auto field = std::get_if<FieldDecl *>(s.v);
+        if (field) {
+            res = s.resolve(*field);
+        }
+        auto ep = std::get_if<EnumPrm *>(s.v);
+        if (ep) {
+            res = s.resolve((*ep)->decl->type);
+        }
+    } else if (s.m) {
+        res = s.resolve(s.m);
+    } else if (s.decl) {
+        res = s.resolve(s.decl);
+    } else if (s.imp) {
+        res = new RType;
+        res->arr.push_back(s);
+    } else {
+        throw std::runtime_error("unexpected state");
+    }
+    exprMap[sn] = res;
+    return res;
 }
 
 void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
-    auto scp = (RType *) fa->scope->accept(this, nullptr);
-    std::vector<Symbol> arr;
+    RType *res = nullptr;
+    auto scp = resolve(fa->scope);
+    auto decl = scp->targetDecl;
     if (scp->isImport) {
         auto *r = getResolver(scp->unit->path);
         auto tmp = r->find(fa->name, false);
         auto res = new RType;
         res->arr = tmp;
-        return res;
-    }
-    auto decl = scp->targetDecl;
-    if (decl->isEnum) {
+    } else if (decl->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         if (fa->name == "index") {
-            return makeSimple("int");
+            res = makeSimple("int");
         }
     } else {
         auto td = dynamic_cast<TypeDecl *>(decl);
-        for (auto v : td->fields) {
-            if (v->name == fa->name) {
-                return v->accept(this, nullptr);
-            }
-        }
+        int i = fieldIndex(td, fa->name);
+        auto fd = td->fields[i];
+        res = (RType *) fd->accept(this, nullptr);
+    }
+    if (res) {
+        exprMap[fa] = res;
+        return res;
     }
     throw std::runtime_error("invalid field " + fa->name + " in " +
                              scp->type->print());
@@ -457,29 +534,11 @@ void *Resolver::visitLiteral(Literal *lit, void *arg) {
     return res;
 }
 
-bool subType(Type *type, Type *sub) {
-    if (type->print() == sub->print()) return true;
-    if (type->isVoid()) return false;
-    if (type->isArray()) return false;
-    if (type->isPrim()) {
-        if (!sub->isPrim()) return false;
-        if (type->name == "bool") return false;
-        // auto cast to larger size
-        if (sizeMap[type->name] <= sizeMap[sub->name]) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-    // upcast
-    throw std::runtime_error("subtype " + type->print() + " sub: " + sub->print());
-}
-
 bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
     for (int i = 0; i < mc->args.size(); i++) {
-        auto *t1 = (RType *) mc->args[i]->accept(r, mc);
+        auto *t1 = r->resolve(mc->args[i]);
         auto *t2 = (RType *) m->params[i]->accept(r, nullptr);
         if (t1->type == nullptr) continue;// to be inferred
         if (!subType(t1->type, t2->type)) return false;
@@ -580,15 +639,12 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
 void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     auto it = exprMap.find(mc);
     if (it != exprMap.end()) return it->second;
-    //std::cout << "visitMethodCall " << mc->name << "\n";
     if (mc->scope) {
         return scopedMethod(mc, this);
     }
     if (mc->name == "print") {
-        return nullptr;
+        return makeSimple("void");
     }
-    Type *target = nullptr;
-    std::vector<Type *> list;  // candidates
     std::vector<Method *> cand;// candidates
     for (auto m : unit->methods) {
         if (m->name == mc->name) {
@@ -615,7 +671,6 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     if (real.size() == 1) {
         auto res = (RType *) real[0]->accept(this, arg);
         exprMap[mc] = res;
-        std::cout << "resolved call " << mc->name << "to: " << res->targetMethod->name << std::endl;
         return res;
     }
     if (real.empty()) {
@@ -623,14 +678,85 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
         throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
     }
     throw std::runtime_error("method:  " + mc->name + " has " +
-                             std::to_string(list.size()) + " candidates");
+                             std::to_string(cand.size()) + " candidates");
 }
 
 void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
+    bool hasNamed = false;
+    bool hasNonNamed = false;
     for (auto &e : o->entries) {
-        e.value->accept(this, nullptr);
+        if (e.hasKey()) {
+            hasNamed = true;
+        } else {
+            hasNonNamed = true;
+        }
     }
-    return resolveType(o->type);
+    if (hasNamed && hasNonNamed) {
+        throw std::runtime_error("obj creation can't have mixed values");
+    }
+    auto res = resolveType(o->type);
+    if (res->targetDecl->isEnum) {
+        auto ed = dynamic_cast<EnumDecl *>(res->targetDecl);
+        int idx = findVariant(ed, o->type->name);
+        auto variant = ed->variants[idx];
+        if (variant->fields.size() != o->entries.size()) {
+            error("incorrect number of arguments passed to enum creation");
+        }
+        std::unordered_set<std::string> names;
+        for (int i = 0; i < o->entries.size(); i++) {
+            auto &e = o->entries[i];
+            int prm_idx;
+            if (hasNamed) {
+                names.insert(e.key);
+                prm_idx = fieldIndex(variant, e.key);
+            } else {
+                prm_idx = i;
+            }
+            auto prm = variant->fields[i];
+            auto vt = resolve(prm->type);
+            auto val = resolve(e.value);
+            if (!subType(val->type, prm->type)) {
+                error("variant field type is imcompatiple with " + e.value->print());
+            }
+        }
+        if (hasNamed) {
+            for (auto p : variant->fields) {
+                if (names.find(p->name) == names.end()) {
+                    error("field not covered: " + p->name);
+                }
+            }
+        }
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(res->targetDecl);
+        if (td->fields.size() != o->entries.size()) {
+            error("incorrect number of arguments passed to class creation");
+        }
+        std::unordered_set<std::string> names;
+        for (int i = 0; i < o->entries.size(); i++) {
+            auto &e = o->entries[i];
+            int prm_idx;
+            if (hasNamed) {
+                names.insert(e.key);
+                prm_idx = fieldIndex(td, e.key);
+            } else {
+                prm_idx = i;
+            }
+            auto prm = td->fields[i];
+            auto vt = resolve(prm->type);
+            auto val = resolve(e.value);
+            if (!subType(val->type, prm->type)) {
+                error("variant field type is imcompatiple with " + e.value->print());
+            }
+        }
+        if (hasNamed) {
+            for (auto p : td->fields) {
+                if (names.find(p->name) == names.end()) {
+                    error("field not covered: " + p->name);
+                }
+            }
+        }
+    }
+    return res;
 }
 
 void *Resolver::visitArrayCreation(ArrayCreation *ac, void *arg) {
@@ -640,95 +766,132 @@ void *Resolver::visitArrayCreation(ArrayCreation *ac, void *arg) {
     return ac->type->accept(this, nullptr);
 }
 
-void *Resolver::visitAsExpr(AsExpr *as, void *arg) {
-    //auto left = (RType *) as->expr->accept(this, nullptr);
-    auto right = (RType *) as->type->accept(this, nullptr);
+void *Resolver::visitAsExpr(AsExpr *e, void *arg) {
+    auto left = (RType *) e->expr->accept(this, nullptr);
+    auto right = (RType *) e->type->accept(this, nullptr);
+    //prim->prim
+    if (!left->type->isPrim() || left->type->isVoid()) {
+        error("as expr must be primitive: " + e->expr->print());
+    }
+    if (!right->type->isPrim() || right->type->isVoid()) {
+        error("as type must be primitive: " + e->type->print());
+    }
     return right;
 }
 
-void *Resolver::visitRefExpr(RefExpr *as, void *arg) {
-    auto inner = clone((RType *) as->expr->accept(this, arg));
-    auto type = new PointerType{};
+void *Resolver::visitRefExpr(RefExpr *e, void *arg) {
+    if (!iof<Name *>(e->expr)) {
+        error("ref expr is not supported: " + e->expr->print());
+    }
+    auto inner = clone((RType *) e->expr->accept(this, arg));
+    auto type = new PointerType;
     type->type = inner->type;
     inner->type = type;
     return inner;
 }
 
-void *Resolver::visitDerefExpr(DerefExpr *as, void *arg) {
-    auto res = clone((RType *) as->expr->accept(this, arg));
+void *Resolver::visitDerefExpr(DerefExpr *e, void *arg) {
+    auto res = clone((RType *) e->expr->accept(this, arg));
     auto inner = res->type;
     auto ptr = dynamic_cast<PointerType *>(inner);
-    if (!ptr) throw std::runtime_error("deref is not pointer: ");
+    if (!ptr) error("deref expr is not pointer: " + e->expr->print());
     res->type = ptr->type;
     return res;
 }
 
-void *Resolver::visitAssertStmt(AssertStmt *as, void *arg) {
-    as->expr->accept(this, nullptr);
+void *Resolver::visitAssertStmt(AssertStmt *st, void *arg) {
+    if (!isCondition(st->expr, this)) {
+        error("assert expr is not boolean expr: " + st->expr->print());
+    }
     return nullptr;
 }
 
-void *Resolver::visitIfLetStmt(IfLetStmt *as, void *arg) {
+void *Resolver::visitIfLetStmt(IfLetStmt *st, void *arg) {
     newScope();
-    auto rt = (RType *) as->type->scope->accept(this, nullptr);
+    auto rt = (RType *) st->type->scope->accept(this, nullptr);
+    if (!rt->targetDecl->isEnum) {
+        error("type of if let is not enum: " + st->type->scope->print());
+    }
     auto decl = dynamic_cast<EnumDecl *>(rt->targetDecl);
-    int index = findVariant(decl, as->type->name);
+    int index = findVariant(decl, st->type->name);
     auto variant = decl->variants[index];
     int i = 0;
-    for (auto &name : as->args) {
-        auto ep = variant->params[i];
+    for (auto &name : st->args) {
+        auto ep = variant->fields[i];
         auto tmp = new EnumPrm;
         tmp->decl = ep;
         tmp->name = name;
         curScope()->add(new VarHolder(tmp));
         i++;
     }
-    as->thenStmt->accept(this, nullptr);
+    auto rhs = resolve(st->rhs);
+    if (!rhs->targetDecl->isEnum) {
+        error("if let rhs is not enum: " + st->rhs->print());
+    }
+    st->thenStmt->accept(this, nullptr);
     dropScope();
-    if (as->elseStmt) {
-        as->elseStmt->accept(this, nullptr);
+    if (st->elseStmt) {
+        st->elseStmt->accept(this, nullptr);
     }
     return nullptr;
 }
 
-void *Resolver::visitParExpr(ParExpr *as, void *arg) {
-    return as->expr->accept(this, nullptr);
+void *Resolver::visitParExpr(ParExpr *e, void *arg) {
+    return e->expr->accept(this, nullptr);
 }
 
-void *Resolver::visitExprStmt(ExprStmt *as, void *arg) {
-    as->expr->accept(this, nullptr);
+void *Resolver::visitExprStmt(ExprStmt *st, void *arg) {
+    if (!iof<MethodCall *>(st->expr) && !iof<Assign *>(st->expr) && !iof<Unary *>(st->expr) && !iof<Postfix *>(st->expr)) {
+        error("invalid expr statement: " + st->print());
+    }
+    st->expr->accept(this, nullptr);
     return nullptr;
 }
 
-void *Resolver::visitBlock(Block *as, void *arg) {
-    for (auto st : as->list) {
+void *Resolver::visitBlock(Block *st, void *arg) {
+    for (auto st : st->list) {
         st->accept(this, nullptr);
     }
     return nullptr;
 }
 
-void *Resolver::visitIfStmt(IfStmt *is, void *arg) {
-    is->expr->accept(this, nullptr);
-    is->thenStmt->accept(this, nullptr);
-    if (is->elseStmt) is->elseStmt->accept(this, nullptr);
+void *Resolver::visitIfStmt(IfStmt *st, void *arg) {
+    if (!isCondition(st->expr, this)) {
+        error("if condition is not a boolean");
+    }
+    st->thenStmt->accept(this, nullptr);
+    if (st->elseStmt) st->elseStmt->accept(this, nullptr);
     return nullptr;
 }
 
-void *Resolver::visitReturnStmt(ReturnStmt *as, void *arg) {
-    if (as->expr) as->expr->accept(this, nullptr);
+void *Resolver::visitReturnStmt(ReturnStmt *st, void *arg) {
+    if (st->expr) {
+        if (curMethod->type->isVoid()) {
+            error("void method returns expr");
+        }
+        auto type = (RType *) st->expr->accept(this, nullptr);
+        if (!subType(type->type, curMethod->type)) {
+            error("method expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
+        }
+    } else {
+        if (!curMethod->type->isVoid()) {
+            error("non-void method returns void");
+        }
+    }
     return nullptr;
 }
 
 void *Resolver::visitIsExpr(IsExpr *ie, void *arg) {
-    auto rt = resolveScoped(ie->expr);
+    auto rt = resolve(ie->expr);
     auto decl1 = rt->targetDecl;
     if (!decl1->isEnum) {
-        throw std::runtime_error("is expr must have enum operand");
+        error("lhs of is expr is not enum");
     }
-    auto rt2 = resolveScoped(ie->type->scope);
+    auto rt2 = resolve(ie->type->scope);
     auto decl2 = rt2->targetDecl;
     if (decl1 != decl2) {
-        throw std::runtime_error("is expr has icompatible operands");
+        error("rhs of is expr is not enum");
     }
+    findVariant(dynamic_cast<EnumDecl *>(decl1), ie->type->name);
     return makeSimple("bool");
 }

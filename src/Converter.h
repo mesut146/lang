@@ -1,10 +1,10 @@
 #pragma once
 
-#include "BaseVisitor.h"
+#include "Visitor.h"
 #include <fstream>
 #include <string>
 
-class Converter : public BaseVisitor<void *, void *> {
+class Converter : public Visitor {
 public:
     std::string srcDir;
     std::string outDir;

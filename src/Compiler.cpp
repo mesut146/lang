@@ -21,8 +21,6 @@
 
 namespace fs = std::filesystem;
 
-//using namespace llvm;
-
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -42,7 +40,6 @@ static std::map<std::string, Type *> Locals;
 static std::map<std::string, llvm::Value *> NamedValues;
 std::map<Method *, llvm::Function *> funcMap;
 std::map<std::string, llvm::Type *> classMap;
-llvm::BasicBlock *BB;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
 llvm::Function *mallocf;
@@ -131,9 +128,9 @@ static int size(Type *type) {
 static int size(EnumDecl *e) {
     int res = 0;
     for (auto ee : e->variants) {
-        if (ee->params.empty()) continue;
+        if (ee->fields.empty()) continue;
         int cur = 0;
-        for (auto ep : ee->params) {
+        for (auto ep : ee->fields) {
             cur += size(ep->type);
         }
         res = cur > res ? cur : res;
@@ -152,13 +149,12 @@ llvm::Value *branch(llvm::Value *val) {
     return val;
 }
 
-static void make_printf_prototype() {
-    auto pty = llvm::PointerType::get(llvm::IntegerType::get(*ctx, 8), 0);
+static void make_printf() {
     std::vector<llvm::Type *> args;
-    args.push_back(pty);
-    auto ret = llvm::IntegerType::get(*ctx, 32);
+    auto charPtr = llvm::PointerType::get(getInt(8), 0);
+    args.push_back(charPtr);
     auto ft =
-            llvm::FunctionType::get(ret, args, true);
+            llvm::FunctionType::get(getInt(32), args, true);
     auto *f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", mod.get());
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
@@ -166,10 +162,9 @@ static void make_printf_prototype() {
     printf_proto = f;
 }
 
-static void exit_prototype() {
-    //auto *Pty = llvm::PointerType::get(llvm::IntegerType::get(mod->getContext(), 8), 0);
+static void make_exit() {
     auto vt = llvm::Type::getVoidTy(*ctx);
-    auto ft = llvm::FunctionType::get(vt, llvm::IntegerType::get(*ctx, 32), false);
+    auto ft = llvm::FunctionType::get(vt, getInt(32), false);
     auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", mod.get());
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
@@ -177,17 +172,17 @@ static void exit_prototype() {
     exit_proto = f;
 }
 
-static void malloc_proto(){
-    auto ret=getInt(8)->getPointerTo();
+static void make_malloc() {
+    auto ret = getInt(8)->getPointerTo();
     auto ft = llvm::FunctionType::get(ret, getInt(64), false);
     auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", mod.get());
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     llvm::AttrBuilder builder;
     builder.addAlignmentAttr(16);
-    attr=attr.addAttributes(*ctx, 0, builder);
+    attr = attr.addAttributes(*ctx, 0, builder);
     f->setAttributes(attr);
-    mallocf=f;
+    mallocf = f;
 }
 
 /*void init_assert(){
@@ -257,9 +252,9 @@ void createProtos(Unit *unit) {
         }
         funcMap[m] = f;
     }
-    make_printf_prototype();
-    exit_prototype();
-    malloc_proto();
+    make_printf();
+    make_exit();
+    make_malloc();
 }
 
 void initParams(Method *m) {
@@ -274,6 +269,21 @@ void initParams(Method *m) {
         Locals[prm->name] = prm->type;
         i++;
     }
+}
+
+bool isReturnLast(Statement *stmt) {
+    auto ret = dynamic_cast<ReturnStmt *>(stmt);
+    if (ret) {
+        return true;
+    }
+    auto block = dynamic_cast<Block *>(stmt);
+    if (block) {
+        ret = dynamic_cast<ReturnStmt *>(block->list.back());
+        if (ret) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void Compiler::compile(const std::string &path) {
@@ -297,27 +307,25 @@ void Compiler::compile(const std::string &path) {
     InitializeModule();
     createProtos(unit);
 
+    resolv->scopes.push_back(resolv->globalScope);
     for (auto m : unit->methods) {
         resolv->curMethod = m;
         curMethod = m;
+        resolv->scopes.push_back(resolv->methodScopes[m]);
         func = funcMap[m];
-        BB = llvm::BasicBlock::Create(*ctx, "entry", func);
-        Builder->SetInsertPoint(BB);
+        auto bb = llvm::BasicBlock::Create(*ctx, "", func);
+        Builder->SetInsertPoint(bb);
         NamedValues.clear();
         Locals.clear();
         initParams(m);
-        //        for (auto &Arg : func->args()){
-        //            NamedValues[std::string(Arg.getName())] = &Arg;
-        //        }
         m->body->accept(this, nullptr);
-        if (m->type->print() == "void") {
-            //todo insert ret in ast in other pass
+        if (!isReturnLast(m->body) && m->type->print() == "void") {
             Builder->CreateRetVoid();
         }
         llvm::verifyFunction(*func);
         std::cout << "verified: " << m->name << std::endl;
+        resolv->dropScope();
     }
-    //TheModule->print(,nullptr);
     mod->dump();
     llvm::verifyModule(*mod, &llvm::outs());
 
@@ -374,22 +382,13 @@ void *Compiler::visitBlock(Block *b, void *arg) {
     for (auto &s : b->list) {
         s->accept(this, nullptr);
     }
-    /*if(!dynamic_cast<ReturnStmt*>(b->list.back())){
-        if(curMethod->type->print() == "void"){
-            Builder->CreateRetVoid ();
-        }else{
-            throw std:: runtime_error("non void function doesn't have return as last statement");
-        }
-    }*/
     return nullptr;
 }
 
 void *Compiler::visitReturnStmt(ReturnStmt *t, void *arg) {
     if (t->expr) {
-        expect = func->getReturnType();
         auto val = (llvm::Value *) t->expr->accept(this, nullptr);
         Builder->CreateRet(val);
-        expect = nullptr;
     } else {
         Builder->CreateRetVoid();
     }
@@ -401,7 +400,6 @@ void *Compiler::visitExprStmt(ExprStmt *b, void *arg) {
 }
 
 llvm::Value *load(llvm::Value *val) {
-    //auto ty = getElem(val->getType ());
     auto ty = val->getType()->getPointerElementType();
     return Builder->CreateLoad(ty, val);
 }
@@ -433,14 +431,11 @@ llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
         Builder->CreateCondBr(branch(l), next, then);
     }
     Builder->SetInsertPoint(then);
-    BB = then;
-    //Builder->CreateLoad();
     auto r = loadPtr(right);
     auto rbit = Builder->CreateTrunc(r, getInt(1));
     Builder->CreateBr(next);
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    BB = next;
     auto phi = Builder->CreatePHI(getInt(1), 2);
     phi->addIncoming(isand ? Builder->getFalse() : Builder->getTrue(), bb);
     phi->addIncoming(rbit, then);
@@ -448,12 +443,11 @@ llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     return ext;
 }
 
-llvm::Value *cast(llvm::Value *val, Type *type) {
+llvm::Value *extend(llvm::Value *val, Type *type) {
     int bits = size(type);
     int src = val->getType()->getScalarSizeInBits();
     if (src < bits) {
-        auto ext = Builder->CreateZExt(val, getInt(bits));
-        return ext;
+        return Builder->CreateZExt(val, getInt(bits));
     }
     return val;
 }
@@ -465,8 +459,11 @@ llvm::Value *Compiler::cast(Expression *expr, Type *type) {
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(lit->val.c_str()));
     }
-    return loadPtr(expr);
-    //return (llvm::Value *) expr->accept(this, nullptr);
+    auto val = loadPtr(expr);
+    if (type->isPrim()) {
+        return extend(val, type);
+    }
+    return val;
 }
 
 void *Compiler::visitInfix(Infix *i, void *arg) {
@@ -478,14 +475,35 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
         //res=(l==true?true:r)
         return andOr(i->left, i->right, false);
     }
-    auto tt = resolv->resolveScoped(i);
-    print("infix type=" + tt->type->print());
-    auto l = cast(i->left, tt->type);
-    auto r = cast(i->right, tt->type);
-    print("lhs=");
-    l->getType()->dump();
-    print("rhs=");
-    r->getType()->dump();
+    auto tt = resolv->resolve(i);
+    //print("infix: " + i->print() + " type: " + tt->type->print());
+    auto t1 = resolv->resolve(i->left)->type->print();
+    auto t2 = resolv->resolve(i->right)->type->print();
+    auto t3 = binCast(t1, t2)->type;
+    auto l = cast(i->left, t3);
+    auto r = cast(i->right, t3);
+    // l->getType()->dump();
+    // r->getType()->dump();
+    if (isComp(i->op)) {
+        if (i->op == "==") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, l, r);
+        }
+        if (i->op == "!=") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_NE, l, r);
+        }
+        if (i->op == "<") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_SLT, l, r);
+        }
+        if (i->op == ">") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_SGT, l, r);
+        }
+        if (i->op == "<=") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_SLE, l, r);
+        }
+        if (i->op == ">=") {
+            return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
+        }
+    }
     if (i->op == "+") {
         return Builder->CreateNSWAdd(l, r);
     }
@@ -515,24 +533,6 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
     }
     if (i->op == ">>") {
         return Builder->CreateAShr(l, r);
-    }
-    if (i->op == "==") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, l, r);
-    }
-    if (i->op == "!=") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_NE, l, r);
-    }
-    if (i->op == "<") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_SLT, l, r);
-    }
-    if (i->op == ">") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_SGT, l, r);
-    }
-    if (i->op == "<=") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_SLE, l, r);
-    }
-    if (i->op == ">=") {
-        return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
     }
     throw std::runtime_error("infix: " + i->print());
 }
@@ -576,7 +576,6 @@ void *Compiler::visitAssign(Assign *i, void *arg) {
     if (isVar(i->left)) {
         val = load(l);
     }
-
     auto r = (llvm::Value *) i->right->accept(this, nullptr);
     if (i->op == "=") {
         return Builder->CreateStore(r, l);
@@ -597,7 +596,6 @@ void *Compiler::visitAssign(Assign *i, void *arg) {
         auto tmp = Builder->CreateSDiv(val, r);
         return Builder->CreateStore(tmp, l);
     }
-
     throw std::runtime_error("assign: " + i->print());
 }
 
@@ -617,9 +615,7 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     if (mc->name == "print") {
         f = printf_proto;
     } else {
-        auto rt = (RType *) mc->accept(resolv, nullptr);
-        print("c call: " + mc->name + " f: " + rt->targetMethod->name);
-        print(resolv->exprMap[mc]->targetMethod->name);
+        auto rt = resolv->resolve(mc);
         f = funcMap[rt->targetMethod];
     }
     std::vector<llvm::Value *> args;
@@ -666,31 +662,21 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
     Builder->CreateUnreachable();
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    BB = next;
     return nullptr;
 }
 
 void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
         if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
-        if (f->type) {
-            expect = mapType(f->type);
-        }
         auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
-        expect = nullptr;
-        auto type = f->type ? f->type : resolv->resolveScoped(f->rhs)->type;
+        auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
         Locals[f->name] = type;
 
         //depends on rhs type; copy,ptr...
-        /*if(llvm::dyn_cast<llvm::AllocaInst>(val)){
-                NamedValues[f->name] = val;
-                continue;
-            }*/
         if (dynamic_cast<ObjExpr *>(f->rhs) || dynamic_cast<Type *>(f->rhs)) {
             NamedValues[f->name] = val;
             continue;
         }
-
         auto ty = mapType(type);
         auto ptr = Builder->CreateAlloca(ty);
         Builder->CreateStore(val, ptr);
@@ -721,27 +707,10 @@ EnumDecl *findEnum(Type *type, Resolver *resolv) {
 }
 
 void setOrdinal(int index, llvm::Value *ptr, llvm::Type *ty) {
-    //ty->print(llvm::outs(), true, true);
-    //ty->dump();
-    //ptr->dump();
     std::vector<llvm::Value *> ordidx = {makeInt(0), makeInt(0)};
-    auto ordPtr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, ordidx, "", BB);
+    auto ordPtr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, ordidx, "", getBB());
     Builder->CreateStore(makeInt(index), ordPtr);
 }
-
-/*llvm::Value *implicit(llvm::Value *val, llvm::Type *target) {
-    auto src = val->getType();
-    if (src->isIntegerTy()) {
-        if (!target->isIntegerTy()) {
-            throw std::runtime_error("src is integer but target is not");
-        }
-        if (llvm::isa<llvm::Constant>(val)) {
-            std::cout << "isa" << std::endl;
-        }
-        return Builder->CreateBitCast(val, target->getPointerTo());
-    }
-    throw std::runtime_error("cant do implicit cast from ");
-}*/
 
 int fieldIndex(TypeDecl *decl, const std::string &name) {
     int i = 0;
@@ -754,9 +723,21 @@ int fieldIndex(TypeDecl *decl, const std::string &name) {
     throw std::runtime_error("unknown field: " + name + " of type " + decl->name);
 }
 
+int fieldIndex(EnumVariant *variant, const std::string &name) {
+    int i = 0;
+    for (auto fd : variant->fields) {
+        if (fd->name == name) {
+            return i;
+        }
+        i++;
+    }
+    throw std::runtime_error("unknown field: " + name + " of variant " + variant->name);
+}
+
 void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
     //enum or class
     if (n->type->scope) {
+        //enum
         auto enumTy = mapType(n->type->scope);
         auto decl = findEnum(n->type->scope, resolv);
         auto index = Resolver::findVariant(decl, n->type->name);
@@ -764,14 +745,14 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
 
         setOrdinal(index, ptr, enumTy);
         std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
-        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(enumTy, ptr, dataIdx, "", BB);
+        auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(enumTy, ptr, dataIdx, "", getBB());
         auto variant = decl->variants[index];
         int offset = 0;
-        for (int i = 0; i < variant->params.size(); i++) {
-            auto cons = variant->params[i];
+        for (int i = 0; i < variant->fields.size(); i++) {
+            auto cons = variant->fields[i];
             std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
 
-            auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx, "", BB);
+            auto entPtr = llvm::GetElementPtrInst::CreateInBounds(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx, "", getBB());
             auto targetTy = mapType(cons->type);
             auto val = cast(n->entries[i].value, cons->type);
             //auto val = (llvm::Value *) n->entries[i].value->accept(this, nullptr);
@@ -780,26 +761,15 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
             //auto val2 = implicit(val, targetTy);
             auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
             Builder->CreateStore(val, cast);
-            offset += size(cons->type)/8;
+            offset += size(cons->type) / 8;
         }
         return ptr;
     } else {
+        //class
         auto rt = (RType *) n->type->accept(resolv, nullptr);
         auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
         auto ty = mapType(n->type);
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
-        bool hasNamed = false;
-        bool hasNonNamed = false;
-        for (auto &e : n->entries) {
-            if (e.hasKey()) {
-                hasNamed = true;
-            } else {
-                hasNonNamed = true;
-            }
-        }
-        if (hasNamed && hasNonNamed) {
-            throw std::runtime_error("obj creation can't have mixed values");
-        }
         int i = 0;
         for (auto &e : n->entries) {
             int index;
@@ -833,13 +803,7 @@ void *Compiler::visitType(Type *n, void *arg) {
 }
 
 void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
-    auto sn = dynamic_cast<SimpleName *>(n->scope);
-    if (!sn) throw std::runtime_error("FA: " + n->print());
-    //local,param
-    auto it = Locals.find(sn->name);
-    if (it == Locals.end()) throw std::runtime_error(sn->name + " not found");
-    auto sct = it->second;
-    auto rt = (RType *) sct->accept(resolv, nullptr);
+    auto rt = resolv->resolve(n->scope);
     auto decl = rt->targetDecl;
 
     int index;
@@ -855,28 +819,12 @@ void *Compiler::visitFieldAccess(FieldAccess *n, void *arg) {
     auto scopeVar = (llvm::Value *) n->scope->accept(this, nullptr);
     auto ty = scopeVar->getType()->getPointerElementType();
     std::vector<llvm::Value *> idx = {makeInt(0), makeInt(index)};
-    auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, scopeVar, idx, "", BB);
+    auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, scopeVar, idx, "", getBB());
     return eptr;
-}
-
-bool isReturnLast(Statement *stmt) {
-    auto ret = dynamic_cast<ReturnStmt *>(stmt);
-    if (ret) {
-        return true;
-    }
-    auto block = dynamic_cast<Block *>(stmt);
-    if (block) {
-        ret = dynamic_cast<ReturnStmt *>(block->list.back());
-        if (ret) {
-            return true;
-        }
-    }
-    return false;
 }
 
 void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     auto cond = branch(loadPtr(b->expr));
-
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(*ctx, "");
@@ -891,7 +839,6 @@ void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     if (!isReturnLast(b->thenStmt)) {
         Builder->CreateBr(next);
     }
-
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
@@ -902,7 +849,6 @@ void *Compiler::visitIfStmt(IfStmt *b, void *arg) {
     }
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    BB = next;
     return nullptr;
 }
 
@@ -910,7 +856,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
     auto rhs = (llvm::Value *) b->rhs->accept(this, nullptr);
     std::vector<llvm::Value *> idx = {makeInt(0), makeInt(0)};
     auto ty = rhs->getType()->getPointerElementType();
-    auto ordptr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, idx, "", BB);
+    auto ordptr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, idx, "", getBB());
     auto ord = Builder->CreateLoad(getTy(), ordptr);
     auto decl = findEnum(b->type->scope, resolv);
     auto index = Resolver::findVariant(decl, b->type->name);
@@ -926,12 +872,11 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
         Builder->CreateCondBr(branch(cmp), then, next);
     }
     Builder->SetInsertPoint(then);
-    BB = then;
 
     auto variant = decl->variants[index];
-    if (!variant->params.empty()) {
+    if (!variant->fields.empty()) {
         //declare vars
-        auto &params = variant->params;
+        auto &params = variant->fields;
         std::vector<llvm::Value *> dataIdx = {makeInt(0), makeInt(1)};
         auto dataPtr = llvm::GetElementPtrInst::CreateInBounds(ty, rhs, dataIdx, "", getBB());
         int offset = 0;
@@ -946,7 +891,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy->getPointerTo());
             NamedValues[argName] = ptrReal;
 
-            offset += size(prm->type)/8;
+            offset += size(prm->type) / 8;
         }
     }
     b->thenStmt->accept(this, nullptr);
@@ -963,7 +908,6 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b, void *arg) {
     }
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    BB = next;
     return nullptr;
 }
 

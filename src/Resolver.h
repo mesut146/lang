@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BaseVisitor.h"
+#include "Visitor.h"
 #include "parser/Ast.h"
 #include <map>
 #include <memory>
@@ -11,24 +11,11 @@ class Symbol;
 class RType;
 class Resolver;
 
-static std::map<std::string, int> sizeMap{
-        {"bool", 1},
-        {"i8", 8},
-        {"i16", 16},
-        {"i32", 32},
-        {"i64", 64},
-        {"u16", 16},
-        {"u8", 8},
-        {"u16", 16},
-        {"u32", 32},
-        {"u64", 64},
-        {"byte", 8},
-        {"char", 16},
-        {"short", 16},
-        {"int", 32},
-        {"long", 64},
-        {"float", 32},
-        {"double", 64}};
+bool isReturnLast(Statement *stmt);
+bool isComp(const std::string &op);
+RType *binCast(const std::string &s1, const std::string &s2);
+int fieldIndex(TypeDecl *decl, const std::string &name);
+int fieldIndex(EnumVariant *variant, const std::string &name);
 
 class EnumPrm {
 public:
@@ -80,17 +67,19 @@ public:
     VarHolder *find(const std::string &name);
 };
 
-class Resolver : public Visitor<void *, void *> {
+class Resolver : public Visitor {
 public:
     Unit *unit;
+    std::unordered_map<Expression *, RType *> exprMap;
+    std::unordered_map<std::string, RType *> cache;
     std::map<Fragment *, RType *> varMap;
     std::map<std::string, RType *> typeMap;
     std::map<Param *, RType *> paramMap;
-    //std::map<EnumParam *, RType *> paramMap;
-    std::unordered_map<Method *, RType *> methodMap;//return types
-    //std::map<FieldDecl*, RType*> fieldMap;
-    std::unordered_map<Expression *, RType *> exprMap;
+    std::unordered_map<Method *, RType *> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
+    std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
+    std::map<Method *, std::shared_ptr<Scope>> methodScopes;
+    std::shared_ptr<Scope> globalScope;
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
     bool fromOther = false;
@@ -123,12 +112,11 @@ public:
 
     void *visitBaseDecl(BaseDecl *bd, void *arg) override;
     void *visitFieldDecl(FieldDecl *fd, void *arg) override;
-
     void *visitMethod(Method *m, void *arg) override;
     void *visitParam(Param *p, void *arg) override;
     //void *visitEnumParam(EnumParam *p, void *arg) override;
 
-    RType *resolveScoped(Expression *expr);
+    RType *resolve(Expression *expr);
 
     void *visitLiteral(Literal *lit, void *arg) override;
     void *visitInfix(Infix *infix, void *arg) override;

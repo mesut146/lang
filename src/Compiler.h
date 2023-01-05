@@ -1,19 +1,18 @@
 #pragma once
 
-#include "BaseVisitor.h"
+#include "Visitor.h"
 #include "Resolver.h"
 #include <fstream>
 #include <llvm/IR/Value.h>
 #include <string>
 
-struct Compiler : public Visitor<void *, void *> {
+struct Compiler : public Visitor {
     std::string srcDir;
     std::string outDir;
     Unit *unit;
     llvm::Function *func;
     Method *curMethod;
     Resolver *resolv;
-    llvm::Type *expect;
 
     void compileAll();
     void compile(const std::string &path);
