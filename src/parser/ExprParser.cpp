@@ -46,49 +46,73 @@ Literal *parseLit(Parser *p) {
 //     return false;
 // }
 
-bool isTypeArg(Parser *p, TokenType next) {
+bool isTypeArg(Parser *p) {
     int pos = p->pos;
     if (!p->tokens[pos]->is(LT)) {
         return false;
     }
     pos++;
-    if (!p->tokens[pos]->is(IDENT)) {
-        return false;
-    }
-    pos++;
-    while (p->tokens[pos]->is(COMMA)) {
-        pos++;
-        if (!p->tokens[pos]->is(IDENT)) {
-            return false;
+    int open = 1;
+    while (pos < p->tokens.size()) {
+        if (p->tokens[pos]->is(LT)) {
+            pos++;
+            open++;
+        } else if (p->tokens[pos]->is(GT)) {
+            pos++;
+            open--;
+            if (open == 0) {
+                return p->tokens[pos]->is(LPAREN);
+            }
+        } else {
+            pos++;
         }
-        pos++;
     }
-    if (!p->tokens[pos]->is(GT)) {
-        return false;
-    }
-    pos++;
-    if (!p->tokens[pos]->is(next)) {
-        return false;
-    }
-    return true;
+    return false;
 }
 
-Type *Parser::refType() {
-    Type *res = new Type;
-    res->name = *consume(IDENT)->value;
-    while (is({DOT, LT})) {
-        if (is(LT)) {
-            res->typeArgs = generics();
-        } else {
-            consume(DOT);
-            auto tmp = new Type;
-            tmp->name = *consume(IDENT)->value;
-            tmp->scope = res;
-            res = tmp;
-        }
-    }
-    return res;
-}
+// bool isTypeArg(Parser *p) {
+//     int pos = p->pos;
+//     if (!p->tokens[pos]->is(LT)) {
+//         return false;
+//     }
+//     pos++;
+//     if (!p->tokens[pos]->is(IDENT)) {
+//         return false;
+//     }
+//     pos++;
+//     while (p->tokens[pos]->is(COMMA)) {
+//         pos++;
+//         if (!p->tokens[pos]->is(IDENT)) {
+//             return false;
+//         }
+//         pos++;
+//     }
+//     if (!p->tokens[pos]->is(GT)) {
+//         return false;
+//     }
+//     pos++;
+//     if (!p->tokens[pos]->is(LPAREN)) {
+//         return false;
+//     }
+//     return true;
+// }
+
+// Type *Parser::refType() {
+//     Type *res = new Type;
+//     res->name = *consume(IDENT)->value;
+//     while (is({DOT, LT})) {
+//         if (is(LT)) {
+//             res->typeArgs = generics();
+//         } else {
+//             consume(DOT);
+//             auto tmp = new Type;
+//             tmp->name = *consume(IDENT)->value;
+//             tmp->scope = res;
+//             res = tmp;
+//         }
+//     }
+//     return res;
+// }
 
 Type *Parser::parseType() {
     auto res = new Type;
@@ -137,9 +161,11 @@ std::vector<Type *> Parser::generics() {
     std::vector<Type *> list;
     consume(LT);
     list.push_back(parseType());
+    list.back()->isTypeArg = true;
     while (is(COMMA)) {
         consume(COMMA);
         list.push_back(parseType());
+        list.back()->isTypeArg = true;
     }
     consume(GT);
     return list;
@@ -271,9 +297,9 @@ Expression *PRIM(Parser *p) {
             res->name=t->name;*/
             return t;
         }
-    } else if (p->is({IDENT, FROM})) {
+    } else if (p->is(IDENT)) {
         auto id = p->pop()->value;
-        if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
+        if (p->is(LPAREN) || isTypeArg(p)) {
             auto res = new MethodCall;
             res->name = *id;
             if (p->is(LT)) {
@@ -333,7 +359,7 @@ Expression *PRIM2(Parser *p) {
         if (p->is(DOT)) {
             p->consume(DOT);
             auto name = p->name();
-            if (p->is(LPAREN) || isTypeArg(p, LPAREN)) {
+            if (p->is(LPAREN) || isTypeArg(p)) {
                 auto res = new MethodCall;
                 res->isOptional = isOptional;
                 res->scope = lhs;

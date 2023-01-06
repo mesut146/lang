@@ -155,9 +155,31 @@ func classTest(){
   print("classTest done\n");
 }
 
+class List<T>{
+  size: int;
+  ptr: T*;
+}
+
+func newList<T>(){
+  //let res = List<T>{size: 0, ptr: malloc<T>(10)};
+
+}
+
+func sumGeneric<T>(a: T, b: T): T{
+  return a + b;
+}
+
+func genericTest(){
+  assert sumGeneric<int>(5, 6) == 11;
+  assert sumGeneric<long>(5, 6) == 11;
+  print("genericTest done\n");
+}
+
 func mallocTest(){
    //malloc(10 as long);
-   malloc<int>(10 as long);
+   //let p = null;
+   //malloc<int>(10 as long);
+   //newList<int>();
    print("mallocTest done\n");
 }
 
@@ -169,7 +191,8 @@ func main(): int{
   elseTest();
   enumTest();
   classTest();
-  mallocTest();
+  genericTest();
+  //mallocTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
   //assert *(&sum(5, 6)) == 11;

@@ -234,6 +234,7 @@ public:
     std::string name;
     std::vector<Type *> typeArgs;
     std::vector<Expression *> dims;
+    bool isTypeArg = false;
 
     virtual bool isOptional() { return false; }
 

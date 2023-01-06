@@ -216,6 +216,9 @@ void print(const std::string &msg) {
 
 void createProtos(Unit *unit) {
     for (auto bd : unit->types) {
+        if (!bd->typeArgs.empty()) {
+            continue;
+        }
         std::vector<llvm::Type *> elems;
         auto ed = dynamic_cast<EnumDecl *>(bd);
         print("proto " + bd->name);
@@ -238,6 +241,9 @@ void createProtos(Unit *unit) {
         ty->dump();
     }
     for (auto m : unit->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
         std::vector<llvm::Type *> argTypes;
         for (auto &prm : m->params) {
             argTypes.push_back(mapType(prm->type));
@@ -277,7 +283,7 @@ bool isReturnLast(Statement *stmt) {
         return true;
     }
     auto block = dynamic_cast<Block *>(stmt);
-    if (block) {
+    if (block && !block->list.empty()) {
         ret = dynamic_cast<ReturnStmt *>(block->list.back());
         if (ret) {
             return true;
@@ -309,6 +315,9 @@ void Compiler::compile(const std::string &path) {
 
     resolv->scopes.push_back(resolv->globalScope);
     for (auto m : unit->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
         resolv->curMethod = m;
         curMethod = m;
         resolv->scopes.push_back(resolv->methodScopes[m]);
@@ -615,12 +624,12 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     std::vector<llvm::Value *> args;
     if (mc->name == "print") {
         f = printf_proto;
-    }else if(mc->name == "malloc"){
+    } else if (mc->name == "malloc") {
         f = mallocf;
         auto a = mc->args[0];
         auto av = loadPtr(a);
-        if(!mc->typeArgs.empty()){
-            int sz = size(mc->typeArgs[0]);
+        if (!mc->typeArgs.empty()) {
+            int sz = size(mc->typeArgs[0]) / 8;
             av = Builder->CreateNSWMul(av, makeInt(sz));
         }
         args.push_back(av);
@@ -629,7 +638,7 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
         auto rt = resolv->resolve(mc);
         f = funcMap[rt->targetMethod];
     }
-    
+
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
         auto av = loadPtr(a);
@@ -930,7 +939,7 @@ void *Compiler::visitIsExpr(IsExpr *ie, void *arg) {
 }
 
 void *Compiler::visitAsExpr(AsExpr *e, void *arg) {
-    auto val = (llvm:: Value*)e->expr->accept(this, nullptr);
+    auto val = (llvm::Value *) e->expr->accept(this, nullptr);
     auto ty = resolv->resolve(e->type);
-    return extend (val, ty->type);
+    return extend(val, ty->type);
 }

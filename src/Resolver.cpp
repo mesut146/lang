@@ -14,7 +14,7 @@ bool isCondition(Expression *e, Resolver *r) {
     return rt->type->print() == "bool";
 }
 
-bool isUnSigned(const std::string &s) {
+bool isUnsigned(const std::string &s) {
     return s == "u8" || s == "u16" ||
            s == "u32" || s == "u64";
 }
@@ -228,6 +228,7 @@ RType *Resolver::resolve(Expression *expr) {
 }
 
 void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
+    curDecl = bd;
     if (bd->isEnum) {
         auto en = dynamic_cast<EnumDecl *>(bd);
         for (auto ev : en->variants) {
@@ -241,6 +242,7 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
             fd->accept(this, nullptr);
         }
     }
+    curDecl = nullptr;
     return typeMap[bd->name];
 }
 
@@ -352,6 +354,15 @@ void *Resolver::visitUnary(Unary *u, void *arg) {
     return res;
 }
 
+void checkTypeArgs(std::vector<Type *> &arr1, std::vector<Type *> &arr2) {
+    if (arr1.size() != arr2.size()) {
+        error("type arguments size not matched");
+    }
+    for (int i = 0; i < arr1.size(); i++) {
+        //todo
+    }
+}
+
 void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 
 RType *Resolver::resolveType(Type *type) {
@@ -360,6 +371,9 @@ RType *Resolver::resolveType(Type *type) {
     auto str = type->print();
     RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
+        if (isUnsigned(str)) {
+            error("unsigned typs not yet supported");
+        }
         res = new RType;
         res->type = type;
         typeMap[str] = res;
@@ -376,8 +390,22 @@ RType *Resolver::resolveType(Type *type) {
         return res;
     }
     if (type->scope == nullptr) {
-        //todo is import
-        error("resolve type import");
+        if (curDecl) {
+            for (auto ta : curDecl->typeArgs) {
+                if (subType(type, ta)) {
+                    res = makeSimple(ta->name);
+                    res->type->isTypeArg = true;
+                    return res;
+                }
+            }
+        }
+        for (auto bd : unit->types) {
+            if (bd->name == type->name) {
+                checkTypeArgs(type->typeArgs, bd->typeArgs);
+                return (RType *) visitBaseDecl(bd, nullptr);
+            }
+        }
+        throw std::runtime_error("couldn't find type: " + str);
     }
     auto st = (RType *) type->scope->accept(this, nullptr);
     auto bd = st->targetDecl;
@@ -636,6 +664,19 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
     throw std::runtime_error("scopedMethod");
 }
 
+Type *resolveOrInfer(Type *type, Method *m) {
+}
+
+Method *generateMethod(MethodCall *mc, Method *m) {
+    auto res = new Method;
+    res->name = m->name + "_";
+    for (auto p : mc->typeArgs) {
+        res->name += p->print() + "_";
+    }
+    //res->type = resolveOrInfer(m->type, );
+    return res;
+}
+
 void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     auto it = exprMap.find(mc);
     if (it != exprMap.end()) return it->second;
@@ -644,12 +685,11 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     }
     if (mc->name == "print") {
         return makeSimple("void");
-    }
-    else if(mc->name == "malloc"){
+    } else if (mc->name == "malloc") {
         auto res = makeSimple("byte");
         auto ptr = new PointerType;
-        ptr->type=res->type;
-        res->type=ptr;
+        ptr->type = res->type;
+        res->type = ptr;
         return res;
     }
     std::vector<Method *> cand;// candidates
@@ -676,7 +716,14 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
         }
     }
     if (real.size() == 1) {
-        auto res = (RType *) real[0]->accept(this, arg);
+        auto trg = real[0];
+        RType *res;
+        if (!trg->typeArgs.empty()) {
+            auto newMethod = generateMethod(mc, trg);
+            res = (RType *) newMethod->accept(this, nullptr);
+        } else {
+            res = (RType *) real[0]->accept(this, arg);
+        }
         exprMap[mc] = res;
         return res;
     }
