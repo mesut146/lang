@@ -612,20 +612,28 @@ void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
 
 void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     llvm::Function *f;
+    std::vector<llvm::Value *> args;
     if (mc->name == "print") {
         f = printf_proto;
+    }else if(mc->name == "malloc"){
+        f = mallocf;
+        auto a = mc->args[0];
+        auto av = loadPtr(a);
+        if(!mc->typeArgs.empty()){
+            int sz = size(mc->typeArgs[0]);
+            av = Builder->CreateNSWMul(av, makeInt(sz));
+        }
+        args.push_back(av);
+        return Builder->CreateCall(f, args);
     } else {
         auto rt = resolv->resolve(mc);
         f = funcMap[rt->targetMethod];
     }
-    std::vector<llvm::Value *> args;
+    
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
         auto av = loadPtr(a);
         args.push_back(av);
-        if (!args.back()) {
-            throw std::runtime_error("arg null: " + a->print());
-        }
     }
     return Builder->CreateCall(f, args);
 }
@@ -919,4 +927,10 @@ void *Compiler::visitIsExpr(IsExpr *ie, void *arg) {
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
     auto index = Resolver::findVariant(decl, ie->type->name);
     return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
+}
+
+void *Compiler::visitAsExpr(AsExpr *e, void *arg) {
+    auto val = (llvm:: Value*)e->expr->accept(this, nullptr);
+    auto ty = resolv->resolve(e->type);
+    return extend (val, ty->type);
 }

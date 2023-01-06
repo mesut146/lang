@@ -645,6 +645,13 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     if (mc->name == "print") {
         return makeSimple("void");
     }
+    else if(mc->name == "malloc"){
+        auto res = makeSimple("byte");
+        auto ptr = new PointerType;
+        ptr->type=res->type;
+        res->type=ptr;
+        return res;
+    }
     std::vector<Method *> cand;// candidates
     for (auto m : unit->methods) {
         if (m->name == mc->name) {

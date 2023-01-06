@@ -155,6 +155,12 @@ func classTest(){
   print("classTest done\n");
 }
 
+func mallocTest(){
+   //malloc(10 as long);
+   malloc<int>(10 as long);
+   print("mallocTest done\n");
+}
+
 func main(): int{
   varTest();
   condTest();
@@ -163,7 +169,7 @@ func main(): int{
   elseTest();
   enumTest();
   classTest();
-
+  mallocTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
   //assert *(&sum(5, 6)) == 11;
