@@ -5,6 +5,7 @@
 #include "Resolver.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
+#include "Transformer.h"
 
 void error(const std::string &msg) {
     throw std::runtime_error(msg);
@@ -253,6 +254,7 @@ void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg) {
 }
 
 void *Resolver::visitMethod(Method *m, void *arg) {
+    if(!m->typeArgs.empty()) return nullptr;
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     curMethod = m;
@@ -372,7 +374,7 @@ RType *Resolver::resolveType(Type *type) {
     RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
         if (isUnsigned(str)) {
-            error("unsigned typs not yet supported");
+            error("unsigned types not yet supported");
         }
         res = new RType;
         res->type = type;
@@ -565,6 +567,7 @@ void *Resolver::visitLiteral(Literal *lit, void *arg) {
 bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
+    if(!mc->typeArgs.empty()) return !m->typeArgs.empty();
     for (int i = 0; i < mc->args.size(); i++) {
         auto *t1 = r->resolve(mc->args[i]);
         auto *t2 = (RType *) m->params[i]->accept(r, nullptr);
@@ -665,7 +668,26 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
 }
 
 Type *resolveOrInfer(Type *type, Method *m) {
+    return nullptr;
 }
+
+class Generator: public Transformer{
+    public:
+    MethodCall* mc;
+    Method* m;
+    
+    void* visitType(Type *type, A arg) override{
+        auto str = type->print();
+        int i=0;
+        for(auto ta:m->typeArgs){
+            if(ta->print()==str){
+                return mc->typeArgs[i];
+            }
+            i++;
+        }
+        return type;
+    }
+};
 
 Method *generateMethod(MethodCall *mc, Method *m) {
     auto res = new Method;
@@ -673,7 +695,19 @@ Method *generateMethod(MethodCall *mc, Method *m) {
     for (auto p : mc->typeArgs) {
         res->name += p->print() + "_";
     }
-    //res->type = resolveOrInfer(m->type, );
+    auto gen = new Generator;
+    gen->mc=mc;
+    gen->m=m;
+    auto body=(Block*)m->body->accept (gen, nullptr);
+    res->body=body;
+    for(auto prm:m->params){
+        auto np = new Param;
+        np->name=prm->name;
+        np->type=(Type*)prm->type->accept(gen, nullptr);
+        res->params.push_back(np);
+    }
+    res->type=(Type*)m->type->accept(gen, nullptr);
+    std::cout << res->print()<<std::endl;
     return res;
 }
 

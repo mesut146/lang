@@ -272,6 +272,15 @@ public:
     //void *accept(Visitor *v, void *arg) override;
 };
 
+class ArrayType : public Type {
+public:
+    Type *type;
+    std::vector<Expression *> dims;
+    
+    std::string print() override;
+    //void *accept(Visitor *v, void *arg) override;
+};
+
 /*class SimpleType : public Type {
 public:
     std::string type;
