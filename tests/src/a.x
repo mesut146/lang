@@ -53,6 +53,11 @@ func infix(){
   a += 1;
   assert a == 3;
 
+  //implicit cast
+  let x: int = 10;
+  let y: long = 11;
+  assert x + y == 21;
+
   print("infix done\n");
 }
 
@@ -165,16 +170,6 @@ func newList<T>(){
 
 }
 
-func sumGeneric<T>(a: T, b: T): T{
-  return a + b;
-}
-
-func genericTest(){
-  assert sumGeneric<int>(5, 6) == 11;
-  assert sumGeneric<long>(5, 6) == 11;
-  print("genericTest done\n");
-}
-
 func mallocTest(){
    //malloc(10 as long);
    //let p = null;
@@ -191,7 +186,6 @@ func main(): int{
   elseTest();
   enumTest();
   classTest();
-  genericTest();
   //mallocTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));

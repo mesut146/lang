@@ -26,13 +26,6 @@ std::string getName(const std::string &path) {
     return path.substr(i + 1);
 }
 
-void Compiler::compileAll() {
-    for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
-        if (e.is_directory()) continue;
-        compile(e.path().string());
-    }
-}
-
 static std::unique_ptr<llvm::LLVMContext> ctx;
 static std::unique_ptr<llvm::Module> mod;
 static std::unique_ptr<llvm::IRBuilder<>> Builder;
@@ -45,10 +38,10 @@ llvm::Function *exit_proto;
 llvm::Function *mallocf;
 int strCnt = 0;
 
-static void InitializeModule() {
+static void InitializeModule(std::string &name) {
     // Open a new context and module.
     ctx = std::make_unique<llvm::LLVMContext>();
-    mod = std::make_unique<llvm::Module>("test", *ctx);
+    mod = std::make_unique<llvm::Module>(name, *ctx);
 
     // Create a new builder for the module.
     Builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
@@ -214,7 +207,26 @@ void print(const std::string &msg) {
     std::cout << msg << std::endl;
 }
 
-void createProtos(Unit *unit) {
+void make_proto(Method *m) {
+    if (!m->typeArgs.empty()) {
+        return;
+    }
+    std::vector<llvm::Type *> argTypes;
+    for (auto &prm : m->params) {
+        argTypes.push_back(mapType(prm->type));
+    }
+    auto retType = mapType(m->type);
+    auto FT =
+            llvm::FunctionType::get(retType, argTypes, false);
+    auto *f = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, m->name, mod.get());
+    unsigned Idx = 0;
+    for (auto &Arg : f->args()) {
+        Arg.setName(m->params[Idx++]->name);
+    }
+    funcMap[m] = f;
+}
+
+void Compiler::createProtos() {
     for (auto bd : unit->types) {
         if (!bd->typeArgs.empty()) {
             continue;
@@ -241,22 +253,11 @@ void createProtos(Unit *unit) {
         ty->dump();
     }
     for (auto m : unit->methods) {
-        if (!m->typeArgs.empty()) {
-            continue;
-        }
-        std::vector<llvm::Type *> argTypes;
-        for (auto &prm : m->params) {
-            argTypes.push_back(mapType(prm->type));
-        }
-        auto retType = mapType(m->type);
-        auto FT =
-                llvm::FunctionType::get(retType, argTypes, false);
-        auto *f = llvm::Function::Create(FT, llvm::Function::ExternalLinkage, m->name, mod.get());
-        unsigned Idx = 0;
-        for (auto &Arg : f->args()) {
-            Arg.setName(m->params[Idx++]->name);
-        }
-        funcMap[m] = f;
+        make_proto(m);
+    }
+    //generic methods from resolver
+    for (auto gm : resolv->genericMethods) {
+        make_proto(gm);
     }
     make_printf();
     make_exit();
@@ -264,15 +265,19 @@ void createProtos(Unit *unit) {
 }
 
 void initParams(Method *m) {
+    //alloc first
+    for (auto prm : m->params) {
+        auto ty = mapType(prm->type);
+        auto ptr = Builder->CreateAlloca(ty);
+        NamedValues[prm->name] = ptr;
+        Locals[prm->name] = prm->type;
+    }
     int i = 0;
     for (auto &arg : funcMap[m]->args()) {
         auto prm = m->params[i];
-        auto ty = mapType(prm->type);
-        auto ptr = Builder->CreateAlloca(ty);
+        auto ptr = NamedValues[prm->name];
         auto val = &arg;
         Builder->CreateStore(val, ptr);
-        NamedValues[prm->name] = ptr;
-        Locals[prm->name] = prm->type;
         i++;
     }
 }
@@ -292,9 +297,38 @@ bool isReturnLast(Statement *stmt) {
     return false;
 }
 
+void Compiler::genCode(Method *m) {
+    if (!m->typeArgs.empty()) {
+        return;
+    }
+    resolv->curMethod = m;
+    curMethod = m;
+    resolv->scopes.push_back(resolv->methodScopes[m]);
+    func = funcMap[m];
+    auto bb = llvm::BasicBlock::Create(*ctx, "", func);
+    Builder->SetInsertPoint(bb);
+    NamedValues.clear();
+    Locals.clear();
+    initParams(m);
+    m->body->accept(this, nullptr);
+    if (!isReturnLast(m->body) && m->type->print() == "void") {
+        Builder->CreateRetVoid();
+    }
+    llvm::verifyFunction(*func);
+    std::cout << "verified: " << m->name << std::endl;
+    resolv->dropScope();
+}
+
+void Compiler::compileAll() {
+    for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
+        if (e.is_directory()) continue;
+        compile(e.path().string());
+    }
+}
+
 void Compiler::compile(const std::string &path) {
     auto name = getName(path);
-    if (path.rfind(".x") == std::string::npos) {
+    if (path.compare(path.size() - 2, 2, ".x") != 0) {
         //copy res
         std::ifstream src;
         src.open(path, src.binary);
@@ -310,30 +344,17 @@ void Compiler::compile(const std::string &path) {
     resolv = new Resolver(unit);
     resolv->resolveAll();
 
-    InitializeModule();
-    createProtos(unit);
+    NamedValues.clear();
+    Locals.clear();
+    InitializeModule(name);
+    createProtos();
 
     resolv->scopes.push_back(resolv->globalScope);
     for (auto m : unit->methods) {
-        if (!m->typeArgs.empty()) {
-            continue;
-        }
-        resolv->curMethod = m;
-        curMethod = m;
-        resolv->scopes.push_back(resolv->methodScopes[m]);
-        func = funcMap[m];
-        auto bb = llvm::BasicBlock::Create(*ctx, "", func);
-        Builder->SetInsertPoint(bb);
-        NamedValues.clear();
-        Locals.clear();
-        initParams(m);
-        m->body->accept(this, nullptr);
-        if (!isReturnLast(m->body) && m->type->print() == "void") {
-            Builder->CreateRetVoid();
-        }
-        llvm::verifyFunction(*func);
-        std::cout << "verified: " << m->name << std::endl;
-        resolv->dropScope();
+        genCode(m);
+    }
+    for (auto m : resolv->genericMethods) {
+        genCode(m);
     }
     mod->dump();
     llvm::verifyModule(*mod, &llvm::outs());
@@ -381,6 +402,7 @@ void Compiler::compile(const std::string &path) {
     pass.run(*mod);
     dest.flush();
     std::cout << "writing " << Filename << std::endl;
+    system(("clang-13 " + Filename + " && ./a.out").c_str());
 }
 
 llvm::BasicBlock *getBB() {
@@ -484,8 +506,8 @@ void *Compiler::visitInfix(Infix *i, void *arg) {
         //res=(l==true?true:r)
         return andOr(i->left, i->right, false);
     }
-    auto tt = resolv->resolve(i);
-    //print("infix: " + i->print() + " type: " + tt->type->print());
+    //print("infix: " + i->print());
+    //auto tt = resolv->resolve(i);
     auto t1 = resolv->resolve(i->left)->type->print();
     auto t2 = resolv->resolve(i->right)->type->print();
     auto t3 = binCast(t1, t2)->type;
@@ -622,6 +644,7 @@ void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
 void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     llvm::Function *f;
     std::vector<llvm::Value *> args;
+    Method *target = nullptr;
     if (mc->name == "print") {
         f = printf_proto;
     } else if (mc->name == "malloc") {
@@ -636,13 +659,20 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
         return Builder->CreateCall(f, args);
     } else {
         auto rt = resolv->resolve(mc);
-        f = funcMap[rt->targetMethod];
+        target = rt->targetMethod;
+        f = funcMap[target];
     }
 
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
-        auto av = loadPtr(a);
-        args.push_back(av);
+        //auto av = loadPtr(a);
+        if (target) {
+            auto av = cast(a, target->params[i]->type);
+            args.push_back(av);
+        } else {
+            auto av = loadPtr(a);
+            args.push_back(av);
+        }
     }
     return Builder->CreateCall(f, args);
 }
@@ -684,9 +714,9 @@ void *Compiler::visitAssertStmt(AssertStmt *n, void *arg) {
 
 void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
-        if (!f->rhs) throw std::runtime_error("var '" + f->name + "' has no initializer");
-        auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
+        //auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
         auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
+        auto val = f->type ? cast(f->rhs, type) : (llvm::Value *) f->rhs->accept(this, nullptr);
         Locals[f->name] = type;
 
         //depends on rhs type; copy,ptr...

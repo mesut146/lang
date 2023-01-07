@@ -7,85 +7,53 @@
     { throw std::runtime_error(std::string("todo: ") + name); }
 
 
-typedef void* R;
-typedef void* A;
-
 class Visitor {
 public:
-    virtual R visitUnit(Unit *unit, A arg) todo("Unit");
+    virtual void *visitUnit(Unit *node, void *arg) todo("Unit");
+    virtual void *visitImportStmt(ImportStmt *node, void *arg) todo("Import");
+    virtual void *visitBaseDecl(BaseDecl *node, void *arg) todo("BaseDecl");
+    virtual void *visitTypeDecl(TypeDecl *node, void *arg) todo("TypeDecl");
+    virtual void *visitEnumDecl(EnumDecl *node, void *arg) todo("Enum");
+    virtual void *visitFieldDecl(FieldDecl *node, void *arg) todo("FieldDecl");
+    virtual void *visitMethod(Method *node, void *arg) todo("Param");
+    virtual void *visitParam(Param *node, void *arg) todo("Param");
 
-    virtual R visitImportStmt(ImportStmt *, A arg) todo("Import");
-
-    virtual R visitBaseDecl(BaseDecl *, A arg) todo("BaseDecl");
-
-    virtual R visitTypeDecl(TypeDecl *, A arg) todo("TypeDecl");
-
-    virtual R visitEnumDecl(EnumDecl *, A arg) todo("Enum");
-
-    virtual R visitFieldDecl(FieldDecl *, A arg) todo("FieldDecl");
-
-    virtual R visitMethod(Method *, A arg) todo("Param");
-
-    virtual R visitParam(Param *, A arg) todo("Param");
-
-    virtual R visitLiteral(Literal *lit, A arg) todo("Literal");
-
-    virtual R visitSimpleName(SimpleName *sn, A arg) todo("SimpleName");
-
-    virtual R visitQName(QName *qn, A arg) todo("QName");
-
-    virtual R visitType(Type *type, A arg) todo("Type");
-
-    virtual R visitVarDecl(VarDecl *, A arg) todo("VarDecl");
-
-    virtual R visitVarDeclExpr(VarDeclExpr *, A arg) todo("VarDecl");
-
-    virtual R visitFragment(Fragment *, A arg) todo("Fragment");
-
-    virtual R visitRefExpr(RefExpr *e, A arg) todo("Ref");
-
-    virtual R visitDerefExpr(DerefExpr *e, A arg) todo("deref");
-
-    virtual R visitUnary(Unary *, A arg) todo("Unary");
-
-    virtual R visitAssign(Assign *, A arg) todo("Assign");
-
-    virtual R visitInfix(Infix *, A arg) todo("Infix");
-
-    virtual R visitAsExpr(AsExpr *, A arg) todo("AsExpr");
-    virtual R visitIsExpr(IsExpr *, A arg) todo("IsExpr");
-
-    virtual R visitPostfix(Postfix *, A arg) todo("Postfix");
-
-    virtual R visitTernary(Ternary *, A arg) todo("Ternary");
-
-    virtual R visitMethodCall(MethodCall *, A arg) todo("MethodCall");
-
-    virtual R visitFieldAccess(FieldAccess *, A arg) todo("FieldAccess");
-
-    virtual R visitArrayAccess(ArrayAccess *, A arg) todo("ArrayAccess");
-
-    virtual R visitArrayExpr(ArrayExpr *, A arg) todo("ArrayExpr");
-
-    virtual R visitArrayCreation(ArrayCreation *, A arg) todo("ArrayCreation");
-
-    virtual R visitParExpr(ParExpr *, A arg) todo("ParExpr");
-
-    virtual R visitObjExpr(ObjExpr *, A arg) todo("ObjExpr");
-
-    virtual R visitAnonyObjExpr(MapExpr *, A arg) todo("MapExpr");
+    virtual void *visitLiteral(Literal *node, void *arg) todo("Literal");
+    virtual void *visitSimpleName(SimpleName *node, void *arg) todo("SimpleName");
+    virtual void *visitQName(QName *node, void *arg) todo("QName");
+    virtual void *visitType(Type *node, void *arg) todo("Type");
+    virtual void *visitVarDecl(VarDecl *node, void *arg) todo("VarDecl");
+    virtual void *visitVarDeclExpr(VarDeclExpr *node, void *arg) todo("VarDeclExpr");
+    virtual void *visitFragment(Fragment *node, void *arg) todo("Fragment");
+    virtual void *visitRefExpr(RefExpr *e, void *arg) todo("Ref");
+    virtual void *visitDerefExpr(DerefExpr *e, void *arg) todo("deref");
+    virtual void *visitUnary(Unary *node, void *arg) todo("Unary");
+    virtual void *visitAssign(Assign *, void *arg) todo("Assign");
+    virtual void *visitInfix(Infix *node, void *arg) todo("Infix");
+    virtual void *visitAsExpr(AsExpr *node, void *arg) todo("AsExpr");
+    virtual void *visitIsExpr(IsExpr *node, void *arg) todo("IsExpr");
+    virtual void *visitPostfix(Postfix *node, void *arg) todo("Postfix");
+    virtual void *visitTernary(Ternary *node, void *arg) todo("Ternary");
+    virtual void *visitMethodCall(MethodCall *node, void *arg) todo("MethodCall");
+    virtual void *visitFieldAccess(FieldAccess *node, void *arg) todo("FieldAccess");
+    virtual void *visitArrayAccess(ArrayAccess *node, void *arg) todo("ArrayAccess");
+    virtual void *visitArrayExpr(ArrayExpr *node, void *arg) todo("ArrayExpr");
+    virtual void *visitArrayCreation(ArrayCreation *node, void *arg) todo("ArrayCreation");
+    virtual void *visitParExpr(ParExpr *node, void *arg) todo("ParExpr");
+    virtual void *visitObjExpr(ObjExpr *node, void *arg) todo("ObjExpr");
+    virtual void *visitAnonyObjExpr(MapExpr *node, void *arg) todo("MapExpr");
 
     //statements
-    virtual R visitBlock(Block *, A arg) todo("Block");
-    virtual R visitExprStmt(ExprStmt *, A arg) todo("ExprStmt");
-    virtual R visitAssertStmt(AssertStmt *a, A arg) todo("assert");
-    virtual R visitReturnStmt(ReturnStmt *, A arg) todo("Return");
-    virtual R visitContinueStmt(ContinueStmt *, A arg) todo("Continue");
-    virtual R visitBreakStmt(BreakStmt *, A arg) todo("BreakStmt");
-    virtual R visitIfStmt(IfStmt *, A arg) todo("IfStmt");
-    virtual R visitIfLetStmt(IfLetStmt *, A arg) todo("if let");
-    virtual R visitWhileStmt(WhileStmt *, A arg) todo("WhileStmt");
-    virtual R visitDoWhile(DoWhile *, A arg) todo("DoWhile");
-    virtual R visitForStmt(ForStmt *, A arg) todo("ForStmt");
-    virtual R visitForEach(ForEach *, A arg) todo("for each");
+    virtual void *visitBlock(Block *node, void *arg) todo("Block");
+    virtual void *visitExprStmt(ExprStmt *node, void *arg) todo("ExprStmt");
+    virtual void *visitAssertStmt(AssertStmt *node, void *arg) todo("assert");
+    virtual void *visitReturnStmt(ReturnStmt *node, void *arg) todo("Return");
+    virtual void *visitContinueStmt(ContinueStmt *node, void *arg) todo("Continue");
+    virtual void *visitBreakStmt(BreakStmt *node, void *arg) todo("BreakStmt");
+    virtual void *visitIfStmt(IfStmt *node, void *arg) todo("IfStmt");
+    virtual void *visitIfLetStmt(IfLetStmt *node, void *arg) todo("if let");
+    virtual void *visitWhileStmt(WhileStmt *node, void *arg) todo("WhileStmt");
+    virtual void *visitDoWhile(DoWhile *node, void *arg) todo("DoWhile");
+    virtual void *visitForStmt(ForStmt *node, void *arg) todo("ForStmt");
+    virtual void *visitForEach(ForEach *node, void *arg) todo("for each");
 };

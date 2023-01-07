@@ -1,11 +1,10 @@
+#include "Resolver.h"
+#include "Transformer.h"
+#include "parser/Parser.h"
+#include "parser/Util.h"
 #include <iostream>
 #include <list>
 #include <unordered_set>
-
-#include "Resolver.h"
-#include "parser/Parser.h"
-#include "parser/Util.h"
-#include "Transformer.h"
 
 void error(const std::string &msg) {
     throw std::runtime_error(msg);
@@ -57,18 +56,6 @@ RType *clone(RType *rt) {
     return res;
 }
 
-Type *simpleType(const std::string name) {
-    auto res = new Type;
-    res->name = name;
-    return res;
-}
-
-RType *makeSimple(const std::string name) {
-    auto *res = new RType;
-    res->type = simpleType(name);
-    return res;
-}
-
 std::string normalize(const std::string &s) {
     if (s == "double") return "f64";
     if (s == "float") return "f32";
@@ -79,7 +66,17 @@ std::string normalize(const std::string &s) {
     if (s == "long") return "i64";
     return s;
 }
+Type *simpleType(const std::string name) {
+    auto res = new Type;
+    res->name = normalize(name);
+    return res;
+}
 
+RType *makeSimple(const std::string name) {
+    auto *res = new RType;
+    res->type = simpleType(name);
+    return res;
+}
 RType *binCast(const std::string &s1, const std::string &s2) {
     auto t1 = normalize(s1);
     auto t2 = normalize(s2);
@@ -147,9 +144,20 @@ VarHolder *Scope::find(const std::string &name) {
     return nullptr;
 }
 
+
+std::string Resolver::getId(Expression *e) {
+    auto res = e->accept(idgen, nullptr);
+    if (res) {
+        return *(std::string *) res;
+    }
+    throw std::runtime_error("id: " + e->print());
+}
+
 std::map<std::string, Resolver *> Resolver::resolverMap;
 
-Resolver::Resolver(Unit *unit) : unit(unit) {}
+Resolver::Resolver(Unit *unit) : unit(unit) {
+    idgen = new IdGen(this);
+}
 Resolver::~Resolver() = default;
 
 
@@ -206,7 +214,10 @@ void Resolver::resolveAll() {
         }
         dropScope();
     }
-    //dump();
+    for (auto gm : genericMethods) {
+        gm->accept(this, nullptr);
+    }
+    //dropScope();//global
 }
 
 void Resolver::init() {
@@ -221,10 +232,15 @@ void Resolver::init() {
 }
 
 RType *Resolver::resolve(Expression *expr) {
-    auto it = exprMap.find(expr);
-    if (it != exprMap.end()) return it->second;
+    auto idtmp = expr->accept(idgen, nullptr);
+    if (!idtmp) {
+        return (RType *) expr->accept(this, nullptr);
+    }
+    auto id = *(std::string *) idtmp;
+    auto it = cache.find(id);
+    if (it != cache.end()) return it->second;
     auto res = (RType *) expr->accept(this, nullptr);
-    exprMap[expr] = res;
+    cache[id] = res;
     return res;
 }
 
@@ -254,7 +270,7 @@ void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg) {
 }
 
 void *Resolver::visitMethod(Method *m, void *arg) {
-    if(!m->typeArgs.empty()) return nullptr;
+    if (!m->typeArgs.empty()) return nullptr;
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     curMethod = m;
@@ -296,8 +312,9 @@ void *Resolver::visitAssign(Assign *as, void *arg) {
 }
 
 void *Resolver::visitInfix(Infix *infix, void *arg) {
-    auto it = exprMap.find(infix);
-    if (it != exprMap.end()) return it->second;
+    auto id = getId(infix);
+    auto it = cache.find(id);
+    if (it != cache.end()) return it->second;
     //std::cout << "visitInfix = " << infix->print() << std::endl;
     auto *rt1 = (RType *) infix->left->accept(this, infix);
     auto *rt2 = (RType *) infix->right->accept(this, infix);
@@ -329,13 +346,11 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
         auto s2 = rt2->type->print();
         res = binCast(s1, s2);
     }
-    exprMap[infix] = res;
+    cache[id] = res;
     return res;
 }
 
 void *Resolver::visitUnary(Unary *u, void *arg) {
-    auto it = exprMap.find(u);
-    if (it != exprMap.end()) return it->second;
     //todo check unsigned
     auto res = resolve(u->expr);
     if (u->op == "!") {
@@ -352,7 +367,6 @@ void *Resolver::visitUnary(Unary *u, void *arg) {
             }
         }
     }
-    exprMap[u] = res;
     return res;
 }
 
@@ -449,7 +463,8 @@ void *Resolver::visitVarDeclExpr(VarDeclExpr *vd, void *arg) {
 }
 
 void *Resolver::visitVarDecl(VarDecl *vd, void *arg) {
-    return visitVarDeclExpr(vd->decl, arg);
+    visitVarDeclExpr(vd->decl, arg);
+    return nullptr;
 }
 
 std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
@@ -466,8 +481,9 @@ std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
     return res;
 }
 void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
-    auto it = exprMap.find(sn);
-    if (it != exprMap.end()) return it->second;
+    auto id = getId(sn);
+    auto it = cache.find(id);
+    if (it != cache.end()) return it->second;
 
     auto arr = find(sn->name, true);
     if (arr.empty()) {
@@ -476,9 +492,6 @@ void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
     }
     if (arr.size() > 1) {
         throw std::string("more than 1 result for ") + sn->name;
-        //auto res = new RType;
-        //res->arr = arr;
-        //return res;
     }
     RType *res = nullptr;
     auto s = arr[0];
@@ -509,7 +522,7 @@ void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
     } else {
         throw std::runtime_error("unexpected state");
     }
-    exprMap[sn] = res;
+    cache[id] = res;
     return res;
 }
 
@@ -534,7 +547,6 @@ void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
         res = (RType *) fd->accept(this, nullptr);
     }
     if (res) {
-        exprMap[fa] = res;
         return res;
     }
     throw std::runtime_error("invalid field " + fa->name + " in " +
@@ -564,18 +576,6 @@ void *Resolver::visitLiteral(Literal *lit, void *arg) {
     return res;
 }
 
-bool isSame(Resolver *r, MethodCall *mc, Method *m) {
-    if (mc->name != m->name) return false;
-    if (mc->args.size() != m->params.size()) return false;
-    if(!mc->typeArgs.empty()) return !m->typeArgs.empty();
-    for (int i = 0; i < mc->args.size(); i++) {
-        auto *t1 = r->resolve(mc->args[i]);
-        auto *t2 = (RType *) m->params[i]->accept(r, nullptr);
-        if (t1->type == nullptr) continue;// to be inferred
-        if (!subType(t1->type, t2->type)) return false;
-    }
-    return true;
-}
 
 std::string toPath(Name *nm) {
     if (nm->isSimple()) {
@@ -627,224 +627,6 @@ void Resolver::other(std::string name, std::vector<Symbol> &res) const {
             throw std::runtime_error("import2");
         }
     }
-}
-
-std::vector<std::string> split(Name *path) {
-    std::list<std::string> res;
-    while (true) {
-        if (path->isSimple()) {
-            res.push_front(path->print());
-            break;
-        } else {
-            auto *q = dynamic_cast<QName *>(path);
-            res.push_front(q->name);
-            path = q->scope;
-        }
-    }
-    return {res.begin(), res.end()};
-}
-
-std::pair<std::string, Name *> split2(Name *name) {
-    auto arr = split(name);
-    auto *cur = (Name *) new SimpleName(arr[1]);
-    for (int i = 2; i < arr.size(); i++) {
-        cur = new QName(cur, arr[i]);
-    }
-    return std::make_pair(arr[0], cur);
-}
-
-
-RType *scopedMethod(MethodCall *mc, Resolver *r) {
-    //    auto *scp = (RType *) mc->scope->accept(r, mc);
-    //    if (!scp->arr.empty()) {
-    //        for (auto s : scp->arr) {
-    //            if (s.imp) {
-    //                auto *re = r->getResolver(s.imp->normal->path->print());
-    //                auto arr = re->find(mc->name, false);
-    //            }
-    //        }
-    //    }
-    throw std::runtime_error("scopedMethod");
-}
-
-Type *resolveOrInfer(Type *type, Method *m) {
-    return nullptr;
-}
-
-class Generator: public Transformer{
-    public:
-    MethodCall* mc;
-    Method* m;
-    
-    void* visitType(Type *type, A arg) override{
-        auto str = type->print();
-        int i=0;
-        for(auto ta:m->typeArgs){
-            if(ta->print()==str){
-                return mc->typeArgs[i];
-            }
-            i++;
-        }
-        return type;
-    }
-};
-
-Method *generateMethod(MethodCall *mc, Method *m) {
-    auto res = new Method;
-    res->name = m->name + "_";
-    for (auto p : mc->typeArgs) {
-        res->name += p->print() + "_";
-    }
-    auto gen = new Generator;
-    gen->mc=mc;
-    gen->m=m;
-    auto body=(Block*)m->body->accept (gen, nullptr);
-    res->body=body;
-    for(auto prm:m->params){
-        auto np = new Param;
-        np->name=prm->name;
-        np->type=(Type*)prm->type->accept(gen, nullptr);
-        res->params.push_back(np);
-    }
-    res->type=(Type*)m->type->accept(gen, nullptr);
-    std::cout << res->print()<<std::endl;
-    return res;
-}
-
-void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
-    auto it = exprMap.find(mc);
-    if (it != exprMap.end()) return it->second;
-    if (mc->scope) {
-        return scopedMethod(mc, this);
-    }
-    if (mc->name == "print") {
-        return makeSimple("void");
-    } else if (mc->name == "malloc") {
-        auto res = makeSimple("byte");
-        auto ptr = new PointerType;
-        ptr->type = res->type;
-        res->type = ptr;
-        return res;
-    }
-    std::vector<Method *> cand;// candidates
-    for (auto m : unit->methods) {
-        if (m->name == mc->name) {
-            cand.push_back(m);
-        }
-    }
-    if (curDecl) {
-        for (auto m : curDecl->methods) {
-            if (m->name == mc->name) {
-                cand.push_back(m);
-            }
-        }
-    }
-    if (cand.empty()) {
-        throw std::runtime_error("method:  " + mc->name + " not found");
-    }
-    //filter
-    std::vector<Method *> real;
-    for (auto c : cand) {
-        if (isSame(this, mc, c)) {
-            real.push_back(c);
-        }
-    }
-    if (real.size() == 1) {
-        auto trg = real[0];
-        RType *res;
-        if (!trg->typeArgs.empty()) {
-            auto newMethod = generateMethod(mc, trg);
-            res = (RType *) newMethod->accept(this, nullptr);
-        } else {
-            res = (RType *) real[0]->accept(this, arg);
-        }
-        exprMap[mc] = res;
-        return res;
-    }
-    if (real.empty()) {
-        //print cand
-        throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
-    }
-    throw std::runtime_error("method:  " + mc->name + " has " +
-                             std::to_string(cand.size()) + " candidates");
-}
-
-void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
-    bool hasNamed = false;
-    bool hasNonNamed = false;
-    for (auto &e : o->entries) {
-        if (e.hasKey()) {
-            hasNamed = true;
-        } else {
-            hasNonNamed = true;
-        }
-    }
-    if (hasNamed && hasNonNamed) {
-        throw std::runtime_error("obj creation can't have mixed values");
-    }
-    auto res = resolveType(o->type);
-    if (res->targetDecl->isEnum) {
-        auto ed = dynamic_cast<EnumDecl *>(res->targetDecl);
-        int idx = findVariant(ed, o->type->name);
-        auto variant = ed->variants[idx];
-        if (variant->fields.size() != o->entries.size()) {
-            error("incorrect number of arguments passed to enum creation");
-        }
-        std::unordered_set<std::string> names;
-        for (int i = 0; i < o->entries.size(); i++) {
-            auto &e = o->entries[i];
-            int prm_idx;
-            if (hasNamed) {
-                names.insert(e.key);
-                prm_idx = fieldIndex(variant, e.key);
-            } else {
-                prm_idx = i;
-            }
-            auto prm = variant->fields[i];
-            auto vt = resolve(prm->type);
-            auto val = resolve(e.value);
-            if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print());
-            }
-        }
-        if (hasNamed) {
-            for (auto p : variant->fields) {
-                if (names.find(p->name) == names.end()) {
-                    error("field not covered: " + p->name);
-                }
-            }
-        }
-    } else {
-        auto td = dynamic_cast<TypeDecl *>(res->targetDecl);
-        if (td->fields.size() != o->entries.size()) {
-            error("incorrect number of arguments passed to class creation");
-        }
-        std::unordered_set<std::string> names;
-        for (int i = 0; i < o->entries.size(); i++) {
-            auto &e = o->entries[i];
-            int prm_idx;
-            if (hasNamed) {
-                names.insert(e.key);
-                prm_idx = fieldIndex(td, e.key);
-            } else {
-                prm_idx = i;
-            }
-            auto prm = td->fields[i];
-            auto vt = resolve(prm->type);
-            auto val = resolve(e.value);
-            if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print());
-            }
-        }
-        if (hasNamed) {
-            for (auto p : td->fields) {
-                if (names.find(p->name) == names.end()) {
-                    error("field not covered: " + p->name);
-                }
-            }
-        }
-    }
-    return res;
 }
 
 void *Resolver::visitArrayCreation(ArrayCreation *ac, void *arg) {
@@ -982,4 +764,223 @@ void *Resolver::visitIsExpr(IsExpr *ie, void *arg) {
     }
     findVariant(dynamic_cast<EnumDecl *>(decl1), ie->type->name);
     return makeSimple("bool");
+}
+
+void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
+    bool hasNamed = false;
+    bool hasNonNamed = false;
+    for (auto &e : o->entries) {
+        if (e.hasKey()) {
+            hasNamed = true;
+        } else {
+            hasNonNamed = true;
+        }
+    }
+    if (hasNamed && hasNonNamed) {
+        throw std::runtime_error("obj creation can't have mixed values");
+    }
+    auto res = resolveType(o->type);
+    if (res->targetDecl->isEnum) {
+        auto ed = dynamic_cast<EnumDecl *>(res->targetDecl);
+        int idx = findVariant(ed, o->type->name);
+        auto variant = ed->variants[idx];
+        if (variant->fields.size() != o->entries.size()) {
+            error("incorrect number of arguments passed to enum creation");
+        }
+        std::unordered_set<std::string> names;
+        for (int i = 0; i < o->entries.size(); i++) {
+            auto &e = o->entries[i];
+            int prm_idx;
+            if (hasNamed) {
+                names.insert(e.key);
+                prm_idx = fieldIndex(variant, e.key);
+            } else {
+                prm_idx = i;
+            }
+            auto prm = variant->fields[i];
+            auto vt = resolve(prm->type);
+            auto val = resolve(e.value);
+            if (!subType(val->type, prm->type)) {
+                error("variant field type is imcompatiple with " + e.value->print());
+            }
+        }
+        if (hasNamed) {
+            for (auto p : variant->fields) {
+                if (names.find(p->name) == names.end()) {
+                    error("field not covered: " + p->name);
+                }
+            }
+        }
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(res->targetDecl);
+        if (td->fields.size() != o->entries.size()) {
+            error("incorrect number of arguments passed to class creation");
+        }
+        std::unordered_set<std::string> names;
+        for (int i = 0; i < o->entries.size(); i++) {
+            auto &e = o->entries[i];
+            int prm_idx;
+            if (hasNamed) {
+                names.insert(e.key);
+                prm_idx = fieldIndex(td, e.key);
+            } else {
+                prm_idx = i;
+            }
+            auto prm = td->fields[i];
+            auto vt = resolve(prm->type);
+            auto val = resolve(e.value);
+            if (!subType(val->type, prm->type)) {
+                error("variant field type is imcompatiple with " + e.value->print());
+            }
+        }
+        if (hasNamed) {
+            for (auto p : td->fields) {
+                if (names.find(p->name) == names.end()) {
+                    error("field not covered: " + p->name);
+                }
+            }
+        }
+    }
+    return res;
+}
+
+bool isSame(Resolver *r, MethodCall *mc, Method *m) {
+    if (mc->name != m->name) return false;
+    if (mc->args.size() != m->params.size()) return false;
+    if (!mc->typeArgs.empty()) return !m->typeArgs.empty();
+    for (int i = 0; i < mc->args.size(); i++) {
+        auto *t1 = r->resolve(mc->args[i]);
+        auto *t2 = (RType *) m->params[i]->accept(r, nullptr);
+        if (t1->type == nullptr) continue;// to be inferred
+        if (!subType(t1->type, t2->type)) return false;
+    }
+    return true;
+}
+RType *scopedMethod(MethodCall *mc, Resolver *r) {
+    //    auto *scp = (RType *) mc->scope->accept(r, mc);
+    //    if (!scp->arr.empty()) {
+    //        for (auto s : scp->arr) {
+    //            if (s.imp) {
+    //                auto *re = r->getResolver(s.imp->normal->path->print());
+    //                auto arr = re->find(mc->name, false);
+    //            }
+    //        }
+    //    }
+    throw std::runtime_error("scopedMethod");
+}
+
+class Generator : public Transformer {
+public:
+    MethodCall *mc;
+    Method *m;
+
+    void *visitType(Type *type, void *arg) override {
+        auto str = type->print();
+        int i = 0;
+        for (auto ta : m->typeArgs) {
+            if (ta->print() == str) {
+                return mc->typeArgs[i];
+            }
+            i++;
+        }
+        return type;
+    }
+
+    // void *visitSimpleName(SimpleName *sn, void *arg) override {
+    //     auto res = new SimpleName(sn->name);
+    //     return res;
+    // }
+    // void *visitInfix(Infix *sn, void *arg) override {
+    //     auto res = new Infix;
+    //     res->left = (Expression *) sn->left->accept(this, nullptr);
+    //     res->op = sn->op;
+    //     res->right = (Expression *) sn->right->accept(this, nullptr);
+    //     return res;
+    // }
+};
+
+Method *generateMethod(MethodCall *mc, Method *m) {
+    auto res = new Method;
+    res->name = m->name + "_";
+    for (auto p : mc->typeArgs) {
+        res->name += p->print() + "_";
+    }
+    auto gen = new Generator;
+    gen->mc = mc;
+    gen->m = m;
+    auto body = (Block *) m->body->accept(gen, nullptr);
+    res->body = body;
+    for (auto prm : m->params) {
+        auto np = new Param;
+        np->name = prm->name;
+        np->type = (Type *) prm->type->accept(gen, nullptr);
+        res->params.push_back(np);
+    }
+    res->type = (Type *) m->type->accept(gen, nullptr);
+    std::cout << res->print() << std::endl;
+    return res;
+}
+
+void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
+    auto id = getId(mc);
+    auto it = cache.find(id);
+    if (it != cache.end()) return it->second;
+    if (mc->scope) {
+        return scopedMethod(mc, this);
+    }
+    if (mc->name == "print") {
+        return makeSimple("void");
+    } else if (mc->name == "malloc") {
+        auto res = makeSimple("byte");
+        auto ptr = new PointerType;
+        ptr->type = res->type;
+        res->type = ptr;
+        return res;
+    }
+    std::vector<Method *> cand;// candidates
+    for (auto m : unit->methods) {
+        if (m->name == mc->name) {
+            cand.push_back(m);
+        }
+    }
+    if (curDecl) {
+        for (auto m : curDecl->methods) {
+            if (m->name == mc->name) {
+                cand.push_back(m);
+            }
+        }
+    }
+    if (cand.empty()) {
+        throw std::runtime_error("method:  " + mc->name + " not found");
+    }
+    //filter
+    std::vector<Method *> real;
+    for (auto c : cand) {
+        if (isSame(this, mc, c)) {
+            real.push_back(c);
+        }
+    }
+    if (real.empty()) {
+        //print cand
+        throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
+    }
+    if (real.size() > 1) {
+        throw std::runtime_error("method:  " + mc->name + " has " +
+                                 std::to_string(cand.size()) + " candidates");
+    }
+    auto trg = real[0];
+    RType *res;
+    if (!trg->typeArgs.empty()) {
+        auto newMethod = generateMethod(mc, trg);
+        res = clone(resolveType(newMethod->type));
+        res->targetMethod = newMethod;
+        //res = (RType *) newMethod->accept(this, nullptr);
+        genericMethods.push_back(newMethod);
+    } else {
+        res = clone(resolveType(trg->type));
+        res->targetMethod = trg;
+        //res = (RType *) trg->accept(this, arg);
+    }
+    cache[id] = res;
+    return res;
 }

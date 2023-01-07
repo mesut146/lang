@@ -1,10 +1,11 @@
 #pragma once
 
-#include "Visitor.h"
 #include "Resolver.h"
+#include "Visitor.h"
 #include <fstream>
 #include <llvm/IR/Value.h>
 #include <string>
+
 
 struct Compiler : public Visitor {
     std::string srcDir;
@@ -16,6 +17,8 @@ struct Compiler : public Visitor {
 
     void compileAll();
     void compile(const std::string &path);
+    void createProtos();
+    void genCode(Method *m);
 
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *cast(Expression *expr, Type *type);

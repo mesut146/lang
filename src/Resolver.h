@@ -1,5 +1,6 @@
 #pragma once
 
+#include "IdGen.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
 #include <map>
@@ -82,7 +83,9 @@ public:
     std::shared_ptr<Scope> globalScope;
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
+    std::vector<Method *> genericMethods;
     bool fromOther = false;
+    IdGen *idgen;
     static std::map<std::string, Resolver *> resolverMap;
     static std::string root;
 
@@ -94,6 +97,7 @@ public:
     static Resolver *getResolver(const std::string &path);
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
+    std::string getId(Expression *e);
 
     void dump();
 
