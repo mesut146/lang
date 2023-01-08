@@ -47,4 +47,5 @@ struct Compiler : public Visitor {
 
     void *visitIsExpr(IsExpr *ie, void *arg) override;
     void *visitAsExpr(AsExpr *e, void *arg) override;
+    void *visitArrayAccess(ArrayAccess *node, void *arg) override;
 };

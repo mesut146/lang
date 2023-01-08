@@ -42,6 +42,7 @@ public:
     virtual void *visitParExpr(ParExpr *node, void *arg) todo("ParExpr");
     virtual void *visitObjExpr(ObjExpr *node, void *arg) todo("ObjExpr");
     virtual void *visitAnonyObjExpr(MapExpr *node, void *arg) todo("MapExpr");
+    virtual void *visitUnsafe(UnsafeBlock *node, void *arg) todo("Unsafe");
 
     //statements
     virtual void *visitBlock(Block *node, void *arg) todo("Block");

@@ -844,6 +844,16 @@ void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
     return res;
 }
 
+void *Resolver::visitArrayAccess(ArrayAccess *node, void *arg){
+    auto arr = resolve(node->array);
+    auto ptr = dynamic_cast<PointerType*>(arr->type);
+    if(!ptr) error("array expr is not a pointer: "+node->print());
+    auto idx = resolve(node->index);
+    //todo unsigned 
+    if(!idx->type->isIntegral()) error("array index is not an integer");
+    return resolveType(ptr->type);
+}
+
 bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     if (mc->name != m->name) return false;
     if (mc->args.size() != m->params.size()) return false;
@@ -875,6 +885,9 @@ public:
     Method *m;
 
     void *visitType(Type *type, void *arg) override {
+        for(auto &ta:type->typeArgs){
+            ta = (Type*)ta->accept(this, nullptr);
+        }
         auto str = type->print();
         int i = 0;
         for (auto ta : m->typeArgs) {
@@ -931,10 +944,14 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     if (mc->name == "print") {
         return makeSimple("void");
     } else if (mc->name == "malloc") {
-        auto res = makeSimple("byte");
+        auto res = new RType;
         auto ptr = new PointerType;
-        ptr->type = res->type;
         res->type = ptr;
+        if(mc->typeArgs.empty()){
+            ptr->type = simpleType("i8");
+        }else{
+            ptr->type = resolveType(mc->typeArgs[0])->type;
+        }
         return res;
     }
     std::vector<Method *> cand;// candidates

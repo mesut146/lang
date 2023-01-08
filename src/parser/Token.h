@@ -102,6 +102,7 @@ enum TokenType {
     LBRACE,
     RBRACE,
     ARROW,
+    UNSAFE,
 };
 
 std::string printType(TokenType t);

@@ -162,11 +162,12 @@ func classTest(){
 
 class List<T>{
   size: int;
+  cap: int;
   ptr: T*;
 }
 
 func newList<T>(){
-  //let res = List<T>{size: 0, ptr: malloc<T>(10)};
+  //let res = List<T>{size: 0, cap: 10, ptr: malloc<T>(10)};
 
 }
 
@@ -174,7 +175,13 @@ func mallocTest(){
    //malloc(10 as long);
    //let p = null;
    //malloc<int>(10 as long);
-   //newList<int>();
+   newList<int>();
+   let res = List<int>{size: 0, cap: 10, ptr: malloc<int>(10)};
+   let arr = malloc<int>(10);
+   arr[0]=3;
+   arr[1]=5;
+   print("arr: %d, %d\n", arr[0], arr[1]);
+
    print("mallocTest done\n");
 }
 
@@ -186,7 +193,7 @@ func main(): int{
   elseTest();
   enumTest();
   classTest();
-  //mallocTest();
+  mallocTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
   //assert *(&sum(5, 6)) == 11;

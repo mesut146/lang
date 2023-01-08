@@ -244,6 +244,10 @@ std::string Param::print() {
     return s;
 }
 
+std::string UnsafeBlock::print() {
+    return "unsafe " + body->print();
+}
+
 std::string ParExpr::print() {
     return std::string("(" + expr->print() + ")");
 }
@@ -453,6 +457,10 @@ void *ContinueStmt::accept(Visitor *v, void *arg) {
 }
 void *DoWhile::accept(Visitor *v, void *arg) {
     return v->visitDoWhile(this, arg);
+}
+
+void *UnsafeBlock::accept(Visitor *v, void *arg) {
+    return v->visitUnsafe(this, arg);
 }
 
 void *RefExpr::accept(Visitor *v, void *arg) {

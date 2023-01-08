@@ -275,7 +275,13 @@ Expression *PRIM(Parser *p) {
         return makeAlloc(p);
     } else if (isObj(p)) {
         return makeObj(p, false);
-    } else if (p->is({IDENT}, {COLON2})) {
+    } else if(p->is(UNSAFE)){
+        auto res = new UnsafeBlock;
+        p->pop();
+        res->body = p->parseBlock();
+        return res;
+    }
+    else if (p->is({IDENT}, {COLON2})) {
         auto t = p->parseType();
         if (p->is(LPAREN)) {
             auto res = new MethodCall;

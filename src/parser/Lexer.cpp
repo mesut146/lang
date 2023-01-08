@@ -70,6 +70,7 @@ TokenType kw(std::string &s) {
         return SWITCH;
     if (s == "case")
         return CASE;
+    if(s == "unsafe") return UNSAFE;
     return EOF_;
 }
 

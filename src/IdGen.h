@@ -24,4 +24,5 @@ public:
     void *visitDerefExpr(DerefExpr *node, void *arg) override;
     void *visitParExpr(ParExpr *node, void *arg) override;
     void *visitUnary(Unary *node, void *arg) override;
+    void *visitArrayAccess(ArrayAccess *node, void *arg) override;
 };

@@ -168,6 +168,14 @@ public:
     void *accept(Visitor *v, void *arg) override;
 };
 
+class UnsafeBlock : public Expression {
+public:
+    Block* body;
+
+    std::string print() override;
+    void *accept(Visitor *v, void *arg) override;
+};
+
 class UnwrapExpr : public Expression {
 public:
     Expression *expr;

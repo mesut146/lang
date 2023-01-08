@@ -436,7 +436,7 @@ llvm::Value *load(llvm::Value *val) {
 }
 
 bool isVar(Expression *e) {
-    return dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e);
+    return dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e) || dynamic_cast<ArrayAccess *>(e);
 }
 
 llvm::Value *Compiler::loadPtr(Expression *e) {
@@ -650,13 +650,17 @@ void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
     } else if (mc->name == "malloc") {
         f = mallocf;
         auto a = mc->args[0];
-        auto av = loadPtr(a);
+        auto lt = new Type;
+        lt->name = "i64";
+        auto av = cast(a, lt);
         if (!mc->typeArgs.empty()) {
             int sz = size(mc->typeArgs[0]) / 8;
             av = Builder->CreateNSWMul(av, makeInt(sz));
         }
         args.push_back(av);
-        return Builder->CreateCall(f, args);
+        auto call=Builder->CreateCall(f, args);
+        auto rt = resolv->resolve(mc);
+        return Builder->CreateBitCast(call, mapType(rt->type));
     } else {
         auto rt = resolv->resolve(mc);
         target = rt->targetMethod;
@@ -716,10 +720,11 @@ void *Compiler::visitVarDecl(VarDecl *n, void *arg) {
     for (auto f : n->decl->list) {
         //auto val = (llvm::Value *) f->rhs->accept(this, nullptr);
         auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
-        auto val = f->type ? cast(f->rhs, type) : (llvm::Value *) f->rhs->accept(this, nullptr);
+        //auto val = f->type ? cast(f->rhs, type) : (llvm::Value *) f->rhs->accept(this, nullptr);
+        auto val = cast(f->rhs, type);
         Locals[f->name] = type;
 
-        //depends on rhs type; copy,ptr...
+        //no unnecessary alloc
         if (dynamic_cast<ObjExpr *>(f->rhs) || dynamic_cast<Type *>(f->rhs)) {
             NamedValues[f->name] = val;
             continue;
@@ -972,4 +977,12 @@ void *Compiler::visitAsExpr(AsExpr *e, void *arg) {
     auto val = (llvm::Value *) e->expr->accept(this, nullptr);
     auto ty = resolv->resolve(e->type);
     return extend(val, ty->type);
+}
+
+void *Compiler::visitArrayAccess(ArrayAccess *node, void *arg){
+    auto src = loadPtr(node->array);
+    auto idxVal = loadPtr(node->index);
+    std::vector<llvm::Value *> idx = {idxVal};
+    auto ptr = llvm::GetElementPtrInst::CreateInBounds(src->getType()->getPointerElementType(), src, idx, "", getBB());
+    return ptr;
 }
