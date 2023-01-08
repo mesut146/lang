@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AstCopier.h"
 #include "IdGen.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
@@ -71,7 +72,6 @@ public:
 class Resolver : public Visitor {
 public:
     Unit *unit;
-    std::unordered_map<Expression *, RType *> exprMap;
     std::unordered_map<std::string, RType *> cache;
     std::map<Fragment *, RType *> varMap;
     std::map<std::string, RType *> typeMap;
@@ -84,6 +84,7 @@ public:
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> genericMethods;
+    std::vector<BaseDecl *> genericTypes;
     bool fromOther = false;
     IdGen *idgen;
     static std::map<std::string, Resolver *> resolverMap;

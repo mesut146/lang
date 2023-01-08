@@ -4,7 +4,6 @@
 
 class Transformer : public Visitor {
 public:
-    Unit *unit;
 
     void *visitLiteral(Literal *lit, void *arg) override;
     void *visitSimpleName(SimpleName *sn, void *arg) override;

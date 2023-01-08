@@ -22,6 +22,10 @@ struct Compiler : public Visitor {
 
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *cast(Expression *expr, Type *type);
+    llvm::Type *mapType(Type *t);
+    void make_proto(Method *m);
+    void makeDecl(BaseDecl *bd);
+    void initParams(Method *m);
 
     void *visitBlock(Block *b, void *arg) override;
     void *visitReturnStmt(ReturnStmt *t, void *arg) override;

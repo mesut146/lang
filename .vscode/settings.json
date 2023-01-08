@@ -58,6 +58,9 @@
         "iomanip": "cpp",
         "mutex": "cpp",
         "shared_mutex": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "unordered_set": "cpp",
+        "*.def": "cpp",
+        "*.inc": "cpp"
     }
 }

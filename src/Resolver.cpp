@@ -31,8 +31,7 @@ bool iof(Expression *e) {
 Type *clone(Type *type) {
     auto ptr = dynamic_cast<PointerType *>(type);
     if (ptr) {
-        auto res = new PointerType;
-        res->type = clone(ptr->type);
+        auto res = new PointerType(clone(ptr->type));
         return res;
     } else {
         auto res = new Type;
@@ -54,6 +53,12 @@ RType *clone(RType *rt) {
     res->targetMethod = rt->targetMethod;
     res->targetVar = rt->targetVar;
     return res;
+}
+
+template<class T>
+T copy(T arg) {
+    AstCopier copier;
+    return (T) arg->accept(&copier, nullptr);
 }
 
 std::string normalize(const std::string &s) {
@@ -108,6 +113,34 @@ bool subType(Type *type, Type *real) {
     // upcast
     throw std::runtime_error("subtype " + type->print() + " sub: " + real->print());
 }
+
+//replace any type in decl with src by same index
+class Generator : public AstCopier {
+public:
+    std::vector<Type *> &src;
+    std::vector<Type *> &decl;
+
+    Generator(std::vector<Type *> &src, std::vector<Type *> &decl) : src(src), decl(decl) {}
+
+    void *visitType(Type *type, void *arg) override {
+        type = (Type *) AstCopier::visitType(type, arg);
+        auto ptr = dynamic_cast<PointerType *>(type);
+        if (ptr) {
+            ptr->type = (Type *) ptr->type->accept(this, nullptr);
+            return ptr;
+        }
+        for (auto &ta : type->typeArgs) {
+            ta = (Type *) ta->accept(this, nullptr);
+        }
+        auto str = type->print();
+        for (int i = 0; i < decl.size(); i++) {
+            if (decl[i]->print() == str) {
+                return src[i];
+            }
+        }
+        return type;
+    }
+};
 
 int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
     for (int i = 0; i < decl->variants.size(); i++) {
@@ -203,16 +236,28 @@ void Resolver::resolveAll() {
         st->accept(this, nullptr);
     }
     for (auto *m : unit->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
         visitMethod(m, nullptr);
     }
     for (auto *bd : unit->types) {
+        if (!bd->typeArgs.empty()) {
+            continue;
+        }
         newScope();
         declScopes[bd] = curScope();
         visitBaseDecl(bd, nullptr);
         for (auto m : bd->methods) {
+            if (!m->typeArgs.empty()) {
+                continue;
+            }
             visitMethod(m, nullptr);
         }
         dropScope();
+    }
+    for (auto gt : genericTypes) {
+        visitBaseDecl(gt, nullptr);
     }
     for (auto gm : genericMethods) {
         gm->accept(this, nullptr);
@@ -245,6 +290,7 @@ RType *Resolver::resolve(Expression *expr) {
 }
 
 void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
+    bd->isResolved = true;
     curDecl = bd;
     if (bd->isEnum) {
         auto en = dynamic_cast<EnumDecl *>(bd);
@@ -270,7 +316,7 @@ void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg) {
 }
 
 void *Resolver::visitMethod(Method *m, void *arg) {
-    if (!m->typeArgs.empty()) return nullptr;
+    if (!m->typeArgs.empty()) error("generic method");
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     curMethod = m;
@@ -379,6 +425,32 @@ void checkTypeArgs(std::vector<Type *> &arr1, std::vector<Type *> &arr2) {
     }
 }
 
+BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
+    if (decl->isEnum) {
+        throw std::runtime_error("enum template");
+    } else {
+        auto res = new TypeDecl;
+        res->isEnum = false;
+        res->name = decl->name;
+        for (auto ta : type->typeArgs) {
+            res->name += "_" + ta->print();
+        }
+        auto td = dynamic_cast<TypeDecl *>(decl);
+        auto gen = new Generator(type->typeArgs, decl->typeArgs);
+        // for (auto ta : type->typeArgs) {
+        //     res->typeArgs.push_back((Type *) ta->accept(gen, nullptr));
+        // }
+        for (auto fd : td->fields) {
+            auto field = new FieldDecl;
+            field->name = fd->name;
+            field->type = (Type *) fd->type->accept(gen, nullptr);
+            res->fields.push_back(field);
+        }
+        std::cout << res->print() << std::endl;
+        return res;
+    }
+}
+
 void *Resolver::visitType(Type *type, void *arg) { return resolveType(type); }
 
 RType *Resolver::resolveType(Type *type) {
@@ -399,25 +471,30 @@ RType *Resolver::resolveType(Type *type) {
     if (ptr) {
         res = clone(resolveType(ptr->type));
         auto inner = res->type;
-        auto pt = new PointerType;
-        pt->type = inner;
+        auto pt = new PointerType(inner);
         res->type = pt;
         typeMap[str] = res;
         return res;
     }
     if (type->scope == nullptr) {
-        if (curDecl) {
-            for (auto ta : curDecl->typeArgs) {
-                if (subType(type, ta)) {
-                    res = makeSimple(ta->name);
-                    res->type->isTypeArg = true;
-                    return res;
-                }
-            }
-        }
         for (auto bd : unit->types) {
-            if (bd->name == type->name) {
-                checkTypeArgs(type->typeArgs, bd->typeArgs);
+            if (bd->name != type->name) {
+                continue;
+            }
+            checkTypeArgs(type->typeArgs, bd->typeArgs);
+            if (!bd->typeArgs.empty()) {
+                auto decl = generateDecl(type, bd);
+
+                res = new RType;
+                res->type = simpleType(type->name);
+                for (auto ta : type->typeArgs) {
+                    res->type->typeArgs.push_back(copy(ta));
+                }
+                res->targetDecl = decl;
+                genericTypes.push_back(decl);
+                typeMap[str] = res;
+                return res;
+            } else {
                 return (RType *) visitBaseDecl(bd, nullptr);
             }
         }
@@ -557,18 +634,18 @@ void *Resolver::visitLiteral(Literal *lit, void *arg) {
     auto *res = new RType;
     auto type = new Type;
     res->type = type;
-    if (lit->isStr) {
+    if (lit->type == Literal::STR) {
         type->scope = simpleType("core");
         type->name = "string";
     } else {
         std::string s;
-        if (lit->isBool) {
+        if (lit->type == Literal::BOOL) {
             s = "bool";
-        } else if (lit->isFloat) {
+        } else if (lit->type == Literal::FLOAT) {
             s = "float";
-        } else if (lit->isInt) {
+        } else if (lit->type == Literal::INT) {
             s = "int";
-        } else if (lit->isChar) {
+        } else if (lit->type == Literal::CHAR) {
             s = "char";
         }
         type->name = s;
@@ -654,9 +731,8 @@ void *Resolver::visitRefExpr(RefExpr *e, void *arg) {
         error("ref expr is not supported: " + e->expr->print());
     }
     auto inner = clone((RType *) e->expr->accept(this, arg));
-    auto type = new PointerType;
-    type->type = inner->type;
-    inner->type = type;
+    auto ptr = new PointerType(inner->type);
+    inner->type = ptr;
     return inner;
 }
 
@@ -780,6 +856,10 @@ void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
         throw std::runtime_error("obj creation can't have mixed values");
     }
     auto res = resolveType(o->type);
+    if (o->isPointer) {
+        res = clone(res);
+        res->type = new PointerType(res->type);
+    }
     if (res->targetDecl->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(res->targetDecl);
         int idx = findVariant(ed, o->type->name);
@@ -844,13 +924,13 @@ void *Resolver::visitObjExpr(ObjExpr *o, void *arg) {
     return res;
 }
 
-void *Resolver::visitArrayAccess(ArrayAccess *node, void *arg){
+void *Resolver::visitArrayAccess(ArrayAccess *node, void *arg) {
     auto arr = resolve(node->array);
-    auto ptr = dynamic_cast<PointerType*>(arr->type);
-    if(!ptr) error("array expr is not a pointer: "+node->print());
+    auto ptr = dynamic_cast<PointerType *>(arr->type);
+    if (!ptr) error("array expr is not a pointer: " + node->print());
     auto idx = resolve(node->index);
-    //todo unsigned 
-    if(!idx->type->isIntegral()) error("array index is not an integer");
+    //todo unsigned
+    if (!idx->type->isIntegral()) error("array index is not an integer");
     return resolveType(ptr->type);
 }
 
@@ -879,48 +959,13 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
     throw std::runtime_error("scopedMethod");
 }
 
-class Generator : public Transformer {
-public:
-    MethodCall *mc;
-    Method *m;
-
-    void *visitType(Type *type, void *arg) override {
-        for(auto &ta:type->typeArgs){
-            ta = (Type*)ta->accept(this, nullptr);
-        }
-        auto str = type->print();
-        int i = 0;
-        for (auto ta : m->typeArgs) {
-            if (ta->print() == str) {
-                return mc->typeArgs[i];
-            }
-            i++;
-        }
-        return type;
-    }
-
-    // void *visitSimpleName(SimpleName *sn, void *arg) override {
-    //     auto res = new SimpleName(sn->name);
-    //     return res;
-    // }
-    // void *visitInfix(Infix *sn, void *arg) override {
-    //     auto res = new Infix;
-    //     res->left = (Expression *) sn->left->accept(this, nullptr);
-    //     res->op = sn->op;
-    //     res->right = (Expression *) sn->right->accept(this, nullptr);
-    //     return res;
-    // }
-};
-
 Method *generateMethod(MethodCall *mc, Method *m) {
     auto res = new Method;
     res->name = m->name + "_";
     for (auto p : mc->typeArgs) {
         res->name += p->print() + "_";
     }
-    auto gen = new Generator;
-    gen->mc = mc;
-    gen->m = m;
+    auto gen = new Generator(mc->typeArgs, m->typeArgs);
     auto body = (Block *) m->body->accept(gen, nullptr);
     res->body = body;
     for (auto prm : m->params) {
@@ -945,13 +990,13 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
         return makeSimple("void");
     } else if (mc->name == "malloc") {
         auto res = new RType;
-        auto ptr = new PointerType;
-        res->type = ptr;
-        if(mc->typeArgs.empty()){
-            ptr->type = simpleType("i8");
-        }else{
-            ptr->type = resolveType(mc->typeArgs[0])->type;
+        Type *in;
+        if (mc->typeArgs.empty()) {
+            in = simpleType("i8");
+        } else {
+            in = resolveType(mc->typeArgs[0])->type;
         }
+        res->type = new PointerType(in);
         return res;
     }
     std::vector<Method *> cand;// candidates

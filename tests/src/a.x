@@ -166,17 +166,20 @@ class List<T>{
   ptr: T*;
 }
 
-func newList<T>(){
-  //let res = List<T>{size: 0, cap: 10, ptr: malloc<T>(10)};
-
+func newList<T>(): List<T>*{
+  let res = new List<T>{size: 0, cap: 10, ptr: malloc<T>(10)};
+  return res;
 }
 
 func mallocTest(){
    //malloc(10 as long);
    //let p = null;
    //malloc<int>(10 as long);
-   newList<int>();
-   let res = List<int>{size: 0, cap: 10, ptr: malloc<int>(10)};
+   let list = newList<int>();
+   list.ptr[0] = 1;
+   list.ptr[1] = 2;
+   print("cap: %d arr:%d %d\n", list.cap, list.ptr[0], list.ptr[1]);
+
    let arr = malloc<int>(10);
    arr[0]=3;
    arr[1]=5;

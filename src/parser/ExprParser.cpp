@@ -24,13 +24,21 @@ bool Parser::isPrim(Token &t) {
 
 Literal *parseLit(Parser *p) {
     auto *res = new Literal;
-    Token t = *p->pop();
+    auto &t = *p->pop();
     res->val = *t.value;
-    res->isFloat = t.is(FLOAT_LIT);
-    res->isBool = t.is({TRUE, FALSE});
-    res->isInt = t.is(INTEGER_LIT);
-    res->isStr = t.is(STRING_LIT);
-    res->isChar = t.is(CHAR_LIT);
+    if (t.is(INTEGER_LIT)) {
+        res->type = Literal::INT;
+    } else if (t.is(FLOAT_LIT)) {
+        res->type = Literal::FLOAT;
+    } else if (t.is({TRUE, FALSE})) {
+        res->type = Literal::BOOL;
+    } else if (t.is(STRING_LIT)) {
+        res->type = Literal::STR;
+    } else if (t.is(CHAR_LIT)) {
+        res->type = Literal::CHAR;
+    } else {
+        throw std::runtime_error("invalid literal: " + *t.value);
+    }
     return res;
 }
 
@@ -144,14 +152,10 @@ Type *Parser::parseType() {
     while (is(STAR) || is(QUES)) {
         if (is(STAR)) {
             consume(STAR);
-            auto tmp = new PointerType;
-            tmp->type = res;
-            res = tmp;
+            res = new PointerType(res);
         } else if (is(QUES)) {
             consume(QUES);
-            auto tmp = new OptionType;
-            tmp->type = res;
-            res = tmp;
+            res = new OptionType(res);
         }
     }
     return res;
@@ -275,13 +279,12 @@ Expression *PRIM(Parser *p) {
         return makeAlloc(p);
     } else if (isObj(p)) {
         return makeObj(p, false);
-    } else if(p->is(UNSAFE)){
+    } else if (p->is(UNSAFE)) {
         auto res = new UnsafeBlock;
         p->pop();
         res->body = p->parseBlock();
         return res;
-    }
-    else if (p->is({IDENT}, {COLON2})) {
+    } else if (p->is({IDENT}, {COLON2})) {
         auto t = p->parseType();
         if (p->is(LPAREN)) {
             auto res = new MethodCall;

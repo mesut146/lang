@@ -1,5 +1,4 @@
 #include "Compiler.h"
-#include "Converter.h"
 #include "Resolver.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
@@ -67,12 +66,6 @@ public:
     }
 };
 
-void convert() {
-    Converter c;
-    c.srcDir = "../tests/src";
-    c.outDir = "../out";
-    c.convertAll();
-}
 void compile() {
     Compiler c;
     c.srcDir = "../tests/src";
@@ -99,9 +92,7 @@ int main(int argc, char **args) {
             return 0;
         }
         auto arg = std::string(args[1]);
-        if (arg == "cnv") {
-            convert();
-        } else if (arg == "parse") {
+        if (arg == "parse") {
             parseTest();
         } else if (arg == "resolve") {
             resolveTest();

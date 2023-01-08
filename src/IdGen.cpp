@@ -40,6 +40,6 @@ void *IdGen::visitParExpr(ParExpr *node, void *arg) {
 void *IdGen::visitUnary(Unary *node, void *arg) {
     return nullptr;
 }
-void *IdGen::visitArrayAccess(ArrayAccess *node, void *arg){
+void *IdGen::visitArrayAccess(ArrayAccess *node, void *arg) {
     return nullptr;
 }

@@ -82,6 +82,7 @@ public:
     std::string name;
     std::vector<Type *> typeArgs;
     bool isEnum = false;
+    bool isResolved = false;
     std::vector<Method *> methods;
 
     virtual std::string print() = 0;
@@ -170,7 +171,7 @@ public:
 
 class UnsafeBlock : public Expression {
 public:
-    Block* body;
+    Block *body;
 
     std::string print() override;
     void *accept(Visitor *v, void *arg) override;
@@ -266,6 +267,7 @@ public:
 class PointerType : public Type {
 public:
     Type *type;
+    explicit PointerType(Type *type) : type(type){};
 
     std::string print() override;
     //void *accept(Visitor *v, void *arg) override;
@@ -273,7 +275,8 @@ public:
 class OptionType : public Type {
 public:
     Type *type;
-
+    
+    explicit OptionType(Type *type) : type(type) {}
     bool isOptional() override { return true; }
 
     std::string print() override;
@@ -284,7 +287,7 @@ class ArrayType : public Type {
 public:
     Type *type;
     std::vector<Expression *> dims;
-    
+
     std::string print() override;
     //void *accept(Visitor *v, void *arg) override;
 };
@@ -323,12 +326,15 @@ public:
 
 class Literal : public Expression {
 public:
+    enum LiteralType {
+        BOOL,
+        INT,
+        FLOAT,
+        STR,
+        CHAR,
+    };
     std::string val;
-    bool isBool;
-    bool isInt;
-    bool isFloat;
-    bool isStr;
-    bool isChar;
+    LiteralType type;
 
     std::string print() override;
     void *accept(Visitor *v, void *arg) override;
