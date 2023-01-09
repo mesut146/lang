@@ -24,7 +24,7 @@ ImportStmt *Parser::parseImport() {
     log("parseImport");
     auto res = new ImportStmt;
     consume(IMPORT);
-/*     auto path = qname();
+    /*     auto path = qname();
     if (is(LBRACE)) {
         auto sym = new SymbolImport;
         sym->path = path;
@@ -82,7 +82,6 @@ TypeDecl *Parser::parseTypeDecl() {
     if (is(LT)) {
         res->typeArgs = generics();
     }
-    log("type decl = " + res->name);
     consume(LBRACE);
     //members
     while (first() != nullptr && !is(RBRACE)) {
@@ -122,11 +121,10 @@ EnumVariant *parseEnumEntry(Parser *p) {
 }
 
 EnumDecl *Parser::parseEnumDecl() {
-    auto *res = new EnumDecl;
+    auto res = new EnumDecl;
     res->isEnum = true;
     consume(ENUM);
     res->name = *name();
-    log("enum decl = " + res->name);
     if (is(LT)) {
         res->typeArgs = generics();
     }
@@ -186,7 +184,6 @@ Param *Parser::parseParam(Method *m) {
     auto res = new Param;
     res->method = m;
     res->name = *name();
-    log("param = " + res->name);
     consume(COLON);
     res->type = parseType();
     if (is(EQ)) {
@@ -201,18 +198,23 @@ Param *Parser::parseParam(Method *m) {
 
 //(type | void) name generics? "(" params* ")" (block | ";")
 Method *Parser::parseMethod() {
-    auto *res = new Method;
+    auto res = new Method;
     if (is(STATIC)) {
         consume(STATIC);
         res->isStatic = true;
     }
     consume(FUNC);
-    res->name = *name();
+    if (is(NEW)) {
+        res->name = "new";
+        pop();
+    } else {
+        res->name = *name();
+    }
+
     if (is(LT)) {
         res->typeArgs = generics();
     }
 
-    log("parseMethod = " + res->name);
     consume(LPAREN);
     if (!is(RPAREN)) {
         res->params.push_back(parseParam(res));
@@ -250,8 +252,8 @@ Fragment *frag(Parser *p) {
     if (p->is(EQ)) {
         p->consume(EQ);
         res->rhs = p->parseExpr();
-    }else{
-        throw std::runtime_error("variable " + res->name+" must have initializer");
+    } else {
+        throw std::runtime_error("variable " + res->name + " must have initializer");
     }
     return res;
 }

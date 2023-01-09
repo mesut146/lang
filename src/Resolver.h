@@ -19,6 +19,19 @@ RType *binCast(const std::string &s1, const std::string &s2);
 int fieldIndex(TypeDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
+
+static std::string mangle(Type *type) {
+    return type->name;
+}
+
+static std::string mangle(Method *m) {
+    std::string s = m->name;
+    for (auto prm : m->params) {
+        s += "_" + mangle(prm->type);
+    }
+    return s;
+}
+
 class EnumPrm {
 public:
     EnumParam *decl;
@@ -53,6 +66,7 @@ public:
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
     Fragment *targetVar = nullptr;
+    VarHolder *vh = nullptr;
     bool isImport = false;
     std::vector<Symbol> arr;
 
@@ -84,8 +98,10 @@ public:
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> genericMethods;
+    std::vector<Method *> genericMethodsTodo;
     std::vector<BaseDecl *> genericTypes;
     bool fromOther = false;
+    bool inLoop = false;
     IdGen *idgen;
     static std::map<std::string, Resolver *> resolverMap;
     static std::string root;

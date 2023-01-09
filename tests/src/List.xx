@@ -1,6 +1,11 @@
 class List<T>{
-  arr: T[];
+  arr: T*;
   count: int;
+  cap: int;
+
+  static func new(): List<T>*{
+    return new List<T>{arr: malloc<T>(10), count: 0, cap: 10};
+  } 
 
   func expand(max: int){
     if(arr.length < max){
@@ -12,18 +17,15 @@ class List<T>{
 
   func add(e: T){
     expand(count + 1);
-    arr[count++] = e;
+    arr[count] = e;
+    ++count;
   }
 
   func add(list: List<T>){
-    for(let e : list){
-        add(e);
-    }
-  }
-
-  func add(arr: T[]){
-    for(let e : arr){
-        add(e);
+    let i = 0;
+    while(i < list.count){
+        add(list.get(i));
+        ++i;
     }
   }
 
@@ -42,8 +44,10 @@ class List<T>{
   }
 
   func indexOf(e: T): int{
-    for(let i=0;i < count;i++){
+    let i = 0;
+    while(i < count){
       if(arr[i] == e) return i;
+      ++i;
     }
     return -1;
   }

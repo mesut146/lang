@@ -14,13 +14,14 @@ struct Compiler : public Visitor {
     llvm::Function *func;
     Method *curMethod;
     Resolver *resolv;
-    std::vector<llvm::BasicBlock*> loops;
+    std::vector<llvm::BasicBlock *> loops;
 
     void compileAll();
     void compile(const std::string &path);
     void createProtos();
     void genCode(Method *m);
 
+    llvm::Value *gen(Expression* e);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *cast(Expression *expr, Type *type);
     llvm::Type *mapType(Type *t);

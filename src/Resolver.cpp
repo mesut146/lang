@@ -259,9 +259,14 @@ void Resolver::resolveAll() {
     for (auto gt : genericTypes) {
         visitBaseDecl(gt, nullptr);
     }
-    for (auto gm : genericMethods) {
+    while (!genericMethodsTodo.empty()) {
+        auto gm = genericMethodsTodo.back();
+        genericMethodsTodo.pop_back();
         gm->accept(this, nullptr);
+        genericMethods.push_back(gm);
     }
+
+
     //dropScope();//global
 }
 
@@ -303,6 +308,7 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
         auto td = dynamic_cast<TypeDecl *>(bd);
         for (auto fd : td->fields) {
             fd->accept(this, nullptr);
+            curScope()->add(new VarHolder(fd));
         }
     }
     curDecl = nullptr;
@@ -310,7 +316,9 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
 }
 
 void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg) {
-    auto res = fd->type->accept(this, nullptr);
+    auto res = clone((RType *) fd->type->accept(this, nullptr));
+    res->vh = new VarHolder(fd);
+    res->targetDecl = curDecl;
     //if(fd->expr) fd->expr->accept (this, nullptr);
     return res;
 }
@@ -550,11 +558,13 @@ std::vector<Symbol> Resolver::find(std::string &name, bool checkOthers) {
     for (int i = scopes.size() - 1; i >= 0; i--) {
         auto vh = scopes[i]->find(name);
         if (vh) {
+            if (curMethod && curMethod->isStatic && std::get_if<FieldDecl *>(vh)) {
+                continue;
+            }
             res.push_back(Symbol(vh, this));
         }
     }
     //imports(name, res, this);
-    //if (checkOthers) other(name, res);
     return res;
 }
 void *Resolver::visitSimpleName(SimpleName *sn, void *arg) {
@@ -614,9 +624,11 @@ void *Resolver::visitFieldAccess(FieldAccess *fa, void *arg) {
         res->arr = tmp;
     } else if (decl->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
-        if (fa->name == "index") {
-            res = makeSimple("int");
+        if (fa->name != "index") {
+            throw std::runtime_error("invalid field " + fa->name + " in " +
+                                     scp->type->print());
         }
+        res = makeSimple("int");
     } else {
         auto td = dynamic_cast<TypeDecl *>(decl);
         int i = fieldIndex(td, fa->name);
@@ -980,9 +992,13 @@ Method *generateMethod(MethodCall *mc, Method *m) {
 }
 
 void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
+
     auto id = getId(mc);
     auto it = cache.find(id);
     if (it != cache.end()) return it->second;
+    for (auto arg : mc->args) {
+        resolve(arg);
+    }
     if (mc->scope) {
         return scopedMethod(mc, this);
     }
@@ -1037,7 +1053,7 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
         res = clone(resolveType(newMethod->type));
         res->targetMethod = newMethod;
         //res = (RType *) newMethod->accept(this, nullptr);
-        genericMethods.push_back(newMethod);
+        genericMethodsTodo.push_back(newMethod);
     } else {
         res = clone(resolveType(trg->type));
         res->targetMethod = trg;
@@ -1047,13 +1063,18 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     return res;
 }
 
-void *Resolver::visitWhileStmt(WhileStmt *node, void *arg){
-    if(!isCondition(node->expr, this)) error ("while statement expr is not a condition");
-    //resolve(node->expr);
-    node->body->accept (this, nullptr);
+void *Resolver::visitWhileStmt(WhileStmt *node, void *arg) {
+    if (!isCondition(node->expr, this)) error("while statement expr is not a condition");
+    inLoop = true;
+    node->body->accept(this, nullptr);
+    inLoop = false;
     return nullptr;
 }
-void *Resolver::visitContinueStmt(ContinueStmt *node, void *arg){
-    if(node->label) error("continue label");
+
+void *Resolver::visitContinueStmt(ContinueStmt *node, void *arg) {
+    if (!inLoop) {
+        error("continue in outside of loop");
+    }
+    if (node->label) error("continue label");
     return nullptr;
 }
