@@ -14,6 +14,7 @@ struct Compiler : public Visitor {
     llvm::Function *func;
     Method *curMethod;
     Resolver *resolv;
+    std::vector<llvm::BasicBlock*> loops;
 
     void compileAll();
     void compile(const std::string &path);
@@ -52,4 +53,6 @@ struct Compiler : public Visitor {
     void *visitIsExpr(IsExpr *ie, void *arg) override;
     void *visitAsExpr(AsExpr *e, void *arg) override;
     void *visitArrayAccess(ArrayAccess *node, void *arg) override;
+    void *visitWhileStmt(WhileStmt *node, void *arg) override;
+    void *visitContinueStmt(ContinueStmt *node, void *arg) override;
 };

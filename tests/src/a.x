@@ -171,14 +171,37 @@ func newList<T>(): List<T>*{
   return res;
 }
 
+func add<T>(list: List<T>*, val: T){
+ list.ptr[list.size] = val;
+ ++list.size;
+}
+
+func get<T>(list: List<T>*, idx: int): T{
+ return list.ptr[idx];
+}
+
+func printList<T>(list: List<T>*){
+  print("size=%d cap=%d\n", list.size, list.cap);
+  let i = 0;
+  print("[");
+  while(i < list.size){
+    print("%d ", get<int>(list, i));
+  }
+  print("]");
+}
+
+func listTest(){
+  let list = newList<int>();
+  add<int>(list, 5);
+  //add<int>(list, 7);
+  printList<int>(list);
+  print ("listTest done\n");
+}
+
 func mallocTest(){
    //malloc(10 as long);
    //let p = null;
    //malloc<int>(10 as long);
-   let list = newList<int>();
-   list.ptr[0] = 1;
-   list.ptr[1] = 2;
-   print("cap: %d arr:%d %d\n", list.cap, list.ptr[0], list.ptr[1]);
 
    let arr = malloc<int>(10);
    arr[0]=3;
@@ -186,6 +209,19 @@ func mallocTest(){
    print("arr: %d, %d\n", arr[0], arr[1]);
 
    print("mallocTest done\n");
+}
+
+func whileTest(){
+  let i = 0;
+  while(i < 10){
+    if(i%2==0) {
+      ++i;
+      continue; 
+    }
+    print("i=%d, ", i);
+    ++i;
+  }
+  print("\nwhileTest done\n");
 }
 
 func main(): int{
@@ -197,6 +233,8 @@ func main(): int{
   enumTest();
   classTest();
   mallocTest();
+  listTest();
+  whileTest();
   //assert sum(2,3) == 5;
   //print("sum=%d\n", sum(2, 3));
   //assert *(&sum(5, 6)) == 11;

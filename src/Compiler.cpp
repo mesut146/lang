@@ -75,6 +75,11 @@ llvm::ConstantInt *makeInt(int val) {
     return llvm::ConstantInt::get(intType, val);
 }
 
+llvm::ConstantInt *makeInt(int val, int bits) {
+    auto intType = llvm::IntegerType::get(*ctx, bits);
+    return llvm::ConstantInt::get(intType, val);
+}
+
 llvm::Type *getTy() {
     return llvm::Type::getInt32Ty(*ctx);
 }
@@ -116,6 +121,9 @@ llvm::Type *Compiler::mapType(Type *type) {
 }
 
 static int getSize(Type *type) {
+    if(dynamic_cast<PointerType*>(type)){
+        return 8;
+    }
     auto s = type->print();
     auto it = sizeMap.find(s);
     if (it != sizeMap.end()) return it->second;
@@ -134,6 +142,14 @@ static int size(EnumDecl *e) {
     }
     return res;
 }
+static int size(TypeDecl *td) {
+    int res = 0;
+    for (auto fd : td->fields) {
+        res += getSize(fd->type);
+    }
+    return res;
+}
+
 
 llvm::Value *branch(llvm::Value *val) {
     auto ty = llvm::cast<llvm::IntegerType>(val->getType());
@@ -261,15 +277,18 @@ void Compiler::initParams(Method *m) {
     }
 }
 
+bool isRet(Statement* stmt){
+    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt);
+}
+
 bool isReturnLast(Statement *stmt) {
-    auto ret = dynamic_cast<ReturnStmt *>(stmt);
-    if (ret) {
+    if (isRet(stmt)) {
         return true;
     }
     auto block = dynamic_cast<Block *>(stmt);
     if (block && !block->list.empty()) {
-        ret = dynamic_cast<ReturnStmt *>(block->list.back());
-        if (ret) {
+        auto last = block->list.back();
+        if (isRet(last)) {
             return true;
         }
     }
@@ -589,12 +608,14 @@ void *Compiler::visitUnary(Unary *u, void *arg) {
 void *Compiler::visitAssign(Assign *i, void *arg) {
     auto l = (llvm::Value *) i->left->accept(this, nullptr);
     auto val = l;
-    if (isVar(i->left)) {
-        val = load(l);
-    }
-    auto r = (llvm::Value *) i->right->accept(this, nullptr);
+    //auto r = (llvm::Value *) i->right->accept(this, nullptr);
+    auto lt = resolv->resolve(i->left);
+    auto r = cast(i->right, lt->type);
     if (i->op == "=") {
         return Builder->CreateStore(r, l);
+    }
+    if (isVar(i->left)) {
+        val = load(l);
     }
     if (i->op == "+=") {
         auto tmp = Builder->CreateNSWAdd(val, r);
@@ -624,6 +645,13 @@ void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
         throw std::runtime_error("unknown ref: " + n->name);
     }
     return it->second;
+}
+
+llvm::Value* callMalloc(llvm::Value* sz){
+    std::vector<llvm::Value *> args;
+    args.push_back(sz);
+    auto call = Builder->CreateCall(mallocf, args);
+    return call;
 }
 
 void *Compiler::visitMethodCall(MethodCall *mc, void *arg) {
@@ -804,8 +832,16 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
         //class
         auto rt = (RType *) n->type->accept(resolv, nullptr);
         auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
-        auto ty = mapType(n->type);
-        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        auto ty0 = mapType(n->type);
+        auto ty = mapType(resolv->resolve(n)->type);
+        llvm::Value* ptr;
+        if(n->isPointer){
+            ptr = callMalloc(makeInt(size(decl)/8, 64));
+            ptr = Builder->CreateBitCast(ptr, ty);
+            //ptr = Builder->CreateLoad(mapType(rt->type), ptr);
+        }else{
+            ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        }
         int i = 0;
         for (auto &e : n->entries) {
             int index;
@@ -815,7 +851,7 @@ void *Compiler::visitObjExpr(ObjExpr *n, void *arg) {
                 index = i;
             }
             std::vector<llvm::Value *> idx = {makeInt(0), makeInt(index)};
-            auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty, ptr, idx, "", getBB());
+            auto eptr = llvm::GetElementPtrInst::CreateInBounds(ty0, ptr, idx, "", getBB());
             auto field = decl->fields[index];
             auto val = cast(e.value, field->type);
             //auto val = (llvm::Value *) e.value->accept(this, nullptr);
@@ -975,4 +1011,28 @@ void *Compiler::visitArrayAccess(ArrayAccess *node, void *arg) {
     std::vector<llvm::Value *> idx = {idxVal};
     auto ptr = llvm::GetElementPtrInst::CreateInBounds(src->getType()->getPointerElementType(), src, idx, "", getBB());
     return ptr;
+}
+
+void *Compiler::visitWhileStmt(WhileStmt *node, void *arg){
+    auto then = llvm::BasicBlock::Create(*ctx, "");
+    auto condbb = llvm::BasicBlock::Create(*ctx, "", func);
+    auto next = llvm::BasicBlock::Create(*ctx, "");
+    loops.push_back(condbb);
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(condbb);
+    auto c = loadPtr(node->expr);
+    Builder->CreateCondBr(branch(c), then, next);
+    Builder->SetInsertPoint(then);
+    func->getBasicBlockList().push_back(then);
+    node->body->accept(this, nullptr);
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(next);
+    func->getBasicBlockList().push_back(next);
+    loops.pop_back();
+    return nullptr;
+}
+
+void *Compiler::visitContinueStmt(ContinueStmt *node, void *arg){
+    Builder->CreateBr(loops.back());
+    return nullptr;
 }

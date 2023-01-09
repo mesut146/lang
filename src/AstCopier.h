@@ -8,6 +8,10 @@ public:
     void *visitSimpleName(SimpleName *node, void *arg) override;
     void *visitType(Type *node, void *arg) override;
     void *visitInfix(Infix *node, void *arg) override;
+    void *visitAssign(Assign *node, void *arg) override;
+    void *visitArrayAccess(ArrayAccess *node, void *arg) override;
+    void *visitFieldAccess(FieldAccess *node, void *arg) override;
+    void *visitUnary(Unary *node, void *arg) override;
 
     void *visitBlock(Block *node, void *arg) override;
     void *visitReturnStmt(ReturnStmt *node, void *arg) override;
@@ -16,4 +20,6 @@ public:
     void *visitFragment(Fragment *node, void *arg) override;
     void *visitObjExpr(ObjExpr *node, void *arg) override;
     void *visitMethodCall(MethodCall *node, void *arg) override;
+    void *visitExprStmt(ExprStmt *node, void *arg) override;
+    void *visitWhileStmt(WhileStmt *node, void *arg) override;
 };

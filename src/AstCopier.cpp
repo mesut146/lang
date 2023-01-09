@@ -111,3 +111,41 @@ void *AstCopier::visitMethodCall(MethodCall *node, void *arg) {
     }
     return res;
 }
+void *AstCopier::visitExprStmt(ExprStmt *node, void *arg){
+    auto tmp =visit(node->expr, this);
+    return new ExprStmt(tmp);
+}
+void *AstCopier::visitAssign(Assign *node, void *arg){
+    auto res = new Assign;
+    res->left = visit(node->left, this);
+    res->right = visit(node->right, this);
+    res->op = node->op;
+    return res;
+}
+
+void *AstCopier::visitArrayAccess(ArrayAccess *node, void *arg){
+    auto res = new ArrayAccess;
+    res->array=visit(node->array, this);
+    res->index=visit(node->index, this);
+    return res;
+}
+void *AstCopier::visitFieldAccess(FieldAccess *node, void *arg){
+    auto res = new FieldAccess;
+    res->scope=visit(node->scope, this);
+    res->name=node->name;
+    return res;
+}
+
+void *AstCopier::visitUnary(Unary *node, void *arg){
+    auto res = new Unary;
+    res->op = node->op;
+    res->expr = visit(node->expr, this);
+    return res;
+}
+
+void *AstCopier::visitWhileStmt(WhileStmt *node, void *arg){
+    auto res = new WhileStmt;
+    res->expr=visit(node->expr, this);
+    res->body=visit(node->body, this);
+    return res;
+}

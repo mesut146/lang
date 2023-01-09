@@ -145,4 +145,6 @@ public:
     void *visitReturnStmt(ReturnStmt *as, void *arg) override;
     void *visitIsExpr(IsExpr *as, void *arg) override;
     void *visitArrayAccess(ArrayAccess *node, void *arg) override;
+    void *visitWhileStmt(WhileStmt *node, void *arg) override;
+    void *visitContinueStmt(ContinueStmt *node, void *arg) override;
 };

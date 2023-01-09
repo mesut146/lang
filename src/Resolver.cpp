@@ -1046,3 +1046,14 @@ void *Resolver::visitMethodCall(MethodCall *mc, void *arg) {
     cache[id] = res;
     return res;
 }
+
+void *Resolver::visitWhileStmt(WhileStmt *node, void *arg){
+    if(!isCondition(node->expr, this)) error ("while statement expr is not a condition");
+    //resolve(node->expr);
+    node->body->accept (this, nullptr);
+    return nullptr;
+}
+void *Resolver::visitContinueStmt(ContinueStmt *node, void *arg){
+    if(node->label) error("continue label");
+    return nullptr;
+}
