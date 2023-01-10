@@ -2,7 +2,6 @@
 #include "Transformer.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
-#include <iostream>
 #include <list>
 #include <unordered_set>
 
@@ -316,9 +315,13 @@ void *Resolver::visitBaseDecl(BaseDecl *bd, void *arg) {
 }
 
 void *Resolver::visitFieldDecl(FieldDecl *fd, void *arg) {
+    auto id = fd->parent->name+"#"+fd->name;
+    auto it = cache.find(id);
+    //if(it!=cache.end()) return it->second;
     auto res = clone((RType *) fd->type->accept(this, nullptr));
     res->vh = new VarHolder(fd);
-    res->targetDecl = curDecl;
+    res->targetDecl = fd->parent;
+    cache [id]=res;
     //if(fd->expr) fd->expr->accept (this, nullptr);
     return res;
 }
@@ -366,10 +369,10 @@ void *Resolver::visitAssign(Assign *as, void *arg) {
 }
 
 void *Resolver::visitInfix(Infix *infix, void *arg) {
-    auto id = getId(infix);
-    auto it = cache.find(id);
-    if (it != cache.end()) return it->second;
-    //std::cout << "visitInfix = " << infix->print() << std::endl;
+    //auto id = getId(infix);
+    //auto it = cache.find(id);
+    //if (it != cache.end()) return it->second;
+    std::cout << "visitInfix = " << infix->print() << std::endl;
     auto *rt1 = (RType *) infix->left->accept(this, infix);
     auto *rt2 = (RType *) infix->right->accept(this, infix);
     if (!rt1->type) throw std::runtime_error("lhs null");
@@ -380,10 +383,15 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
     if (rt1->type->isString() || rt2->type->isString()) {
         error("string op not supported yet");
     }
+    print(rt1->type->print());
+    print(rt2->type->print());
     if (!rt1->type->isPrim() || !rt2->type->isPrim()) {
+        for(auto& [k,v]:cache){
+            print (k+"="+v->type->print ());
+        }
         error("infix on non prim type: " + infix->print());
     }
-
+    
     RType *res = nullptr;
     if (isComp(infix->op)) {
         res = makeSimple("bool");
@@ -400,7 +408,7 @@ void *Resolver::visitInfix(Infix *infix, void *arg) {
         auto s2 = rt2->type->print();
         res = binCast(s1, s2);
     }
-    cache[id] = res;
+    //cache[id] = res;
     return res;
 }
 

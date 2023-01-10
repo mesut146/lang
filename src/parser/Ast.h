@@ -32,6 +32,7 @@ class FieldDecl {
 public:
     std::string name;
     Type *type;
+    TypeDecl* parent;
 
     std::string print() const;
 

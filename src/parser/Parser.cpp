@@ -87,8 +87,10 @@ TypeDecl *Parser::parseTypeDecl() {
     while (first() != nullptr && !is(RBRACE)) {
         if (is(IDENT)) {
             res->fields.push_back(parseField(this));
+            res->fields.back()->parent=res;
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
+            res->methods.back()->parent=res;
         } else {
             throw std::runtime_error("invalid class member: " + first()->print());
         }

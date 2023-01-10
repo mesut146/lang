@@ -3,8 +3,9 @@
 
 
 void *IdGen::visitInfix(Infix *node, void *arg) {
-    auto id = resolver->curMethod->name + "#" + node->print();
-    return new std::string(id);
+    //auto id = resolver->curMethod->name + "#" + node->print();
+    //return new std::string(id);
+    return nullptr;
 }
 
 void *IdGen::visitMethodCall(MethodCall *node, void *arg) {

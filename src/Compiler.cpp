@@ -199,17 +199,15 @@ static void make_malloc() {
     mallocf = f;
 }
 
-void print(const std::string &msg) {
-    std::cout << msg << std::endl;
-}
+
 
 void Compiler::make_proto(Method *m) {
     if (!m->typeArgs.empty()) {
         return;
     }
     std::vector<llvm::Type *> argTypes;
-    if (!m->isStatic) {
-        argTypes.push_back(classMap[m->parent->name]);
+    if (isMember(m)) {
+        argTypes.push_back(classMap[m->parent->name]->getPointerTo());
     }
     for (auto &prm : m->params) {
         argTypes.push_back(mapType(prm->type));
@@ -218,9 +216,16 @@ void Compiler::make_proto(Method *m) {
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, m->name, mod.get());
     unsigned i = 0;
+    int pi=0;
     for (auto &a : f->args()) {
-        a.setName(m->params[i++]->name);
+        if(i==0&&isMember(m)){
+            a.setName("this");
+        }else{
+            a.setName(m->params[pi++]->name);
+        }
+        i++;
     }
+    f->dump();
     funcMap[mangle(m)] = f;
 }
 
@@ -281,11 +286,12 @@ void Compiler::initParams(Method *m) {
     }
     //store
     int i = 0;
+    int pi = 0;
     for (auto &arg : funcMap[mangle(m)]->args()) {
-        auto prm = m->params[i];
         if (i == 0 && !m->isStatic) {
-            Builder->CreateStore(&arg, thisPtr);
+            //Builder->CreateStore(&arg, thisPtr);
         } else {
+            auto prm = m->params[pi++];
             auto ptr = NamedValues[prm->name];
             auto val = &arg;
             Builder->CreateStore(val, ptr);
@@ -673,9 +679,12 @@ void *Compiler::visitSimpleName(SimpleName *n, void *arg) {
                 auto fd = *std::get_if<FieldDecl *>(rt->vh);
                 auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
                 auto idx = fieldIndex(decl, n->name);
-                auto ty = thisPtr->getType()->getPointerElementType();
-                auto load = Builder->CreateLoad(ty, thisPtr);
+                //auto ty = thisPtr->getType()->getPointerElementType();
+                auto ty = thisPtr->getType();
+               // auto load = Builder->CreateLoad(ty, thisPtr);
+                auto load = thisPtr;
                 auto gep = Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, idx);
+                //auto gep = Builder->CreateStructGEP(load->getType(), load, idx);
                 return gep;
             }
         }

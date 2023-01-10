@@ -8,6 +8,7 @@
 #include <memory>
 #include <unordered_map>
 #include <variant>
+#include <iostream>
 
 class Symbol;
 class RType;
@@ -19,6 +20,9 @@ RType *binCast(const std::string &s1, const std::string &s2);
 int fieldIndex(TypeDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
+static bool isMember(Method* m){
+    return m->parent && !m->isStatic;
+}
 
 static std::string mangle(Type *type) {
     return type->name;
@@ -30,6 +34,10 @@ static std::string mangle(Method *m) {
         s += "_" + mangle(prm->type);
     }
     return s;
+}
+
+static void print(const std::string &msg) {
+    std::cout << msg << std::endl;
 }
 
 class EnumPrm {
