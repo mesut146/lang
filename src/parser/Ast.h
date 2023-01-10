@@ -1,12 +1,20 @@
 #pragma once
 
-#include "Ast_all.h"
-//#include "Visitor.h"
 #include <map>
 #include <string>
 #include <vector>
 
 class Visitor;
+class Type;
+class BaseDecl;
+class TypeDecl;
+class ImportStmt;
+class Method;
+class Expression;
+class Statement;
+class Name;
+class VarDecl;
+class Block;
 
 static std::map<std::string, int> sizeMap{
         {"i8", 8},
@@ -28,17 +36,6 @@ static std::map<std::string, int> sizeMap{
         {"float", 32},
         {"double", 64}};
 
-class FieldDecl {
-public:
-    std::string name;
-    Type *type;
-    TypeDecl *parent;
-    FieldDecl(std::string name, Type *type, TypeDecl *parent) : name(name), type(type), parent(parent) {}
-
-    std::string print() const;
-
-    virtual void *accept(Visitor *v);
-};
 
 class Unit {
 public:
@@ -90,7 +87,17 @@ public:
     virtual std::string print() = 0;
     virtual void *accept(Visitor *v);
 };
+class FieldDecl {
+public:
+    std::string name;
+    Type *type;
+    TypeDecl *parent;
+    FieldDecl(std::string name, Type *type, TypeDecl *parent) : name(name), type(type), parent(parent) {}
 
+    std::string print() const;
+
+    virtual void *accept(Visitor *v);
+};
 class TypeDecl : public BaseDecl {
 public:
     bool isInterface;
@@ -125,6 +132,18 @@ public:
     void *accept(Visitor *v) override;
 };
 
+
+class Param {
+public:
+    std::string name;
+    Type *type = nullptr;
+    Expression *defVal = nullptr;
+    Method *method = nullptr;
+
+    std::string print();
+    void *accept(Visitor *v);
+};
+
 class Method {
 public:
     bool isStatic = false;
@@ -134,17 +153,6 @@ public:
     std::vector<Param *> params;
     Block *body = nullptr;
     BaseDecl *parent = nullptr;
-
-    std::string print();
-    void *accept(Visitor *v);
-};
-
-class Param {
-public:
-    std::string name;
-    Type *type = nullptr;
-    Expression *defVal = nullptr;
-    Method *method = nullptr;
 
     std::string print();
     void *accept(Visitor *v);
@@ -365,19 +373,19 @@ public:
     void *accept(Visitor *v);
 };
 
-class VarDecl : public Statement {
-public:
-    VarDeclExpr *decl;
-
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
 class VarDeclExpr : public Statement {
 public:
     bool isConst = false;
     bool isStatic = false;
     std::vector<Fragment *> list;
+
+    std::string print() override;
+    void *accept(Visitor *v) override;
+};
+
+class VarDecl : public Statement {
+public:
+    VarDeclExpr *decl;
 
     std::string print() override;
     void *accept(Visitor *v) override;
