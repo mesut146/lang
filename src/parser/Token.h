@@ -109,7 +109,7 @@ std::string printType(TokenType t);
 
 class Token {
 public:
-    std::string *value;
+    std::string value;
     TokenType type;
     int start;
     int end;
@@ -117,7 +117,7 @@ public:
 
     Token(TokenType t) : type(t) {}
 
-    Token(TokenType t, std::string s) : type(t), value(new std::string(std::move(s))) {}
+    Token(TokenType t, const std::string& s) : type(t), value(std::move(s)) {}
 
     bool is(TokenType t) const {
         return t == type;
@@ -131,6 +131,6 @@ public:
     }
 
     std::string print() const {
-        return printType(type) + ": " + *value;
+        return printType(type) + ": " + value;
     }
 };

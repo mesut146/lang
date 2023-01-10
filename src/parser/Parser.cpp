@@ -1,15 +1,15 @@
 #include "Parser.h"
 #include "Util.h"
 
-std::string *Parser::strLit() {
+std::string Parser::strLit() {
     auto t = consume(STRING_LIT);
-    return new std::string(t->value->begin() + 1, t->value->end() - 1);
+    return std::string(t->value.begin() + 1, t->value.end() - 1);
 }
 
 //name ("as" name)?;
 ImportAlias aliased(Parser *p) {
     ImportAlias res;
-    res.name = *p->name();
+    res.name = p->name();
     if (p->is(AS)) {
         p->consume(AS);
         res.as = p->name();
@@ -21,7 +21,6 @@ ImportAlias aliased(Parser *p) {
 //"import" importName ("," importName)* "from" STRING_LIT
 //"import" "*" ("as" name)? "from" STRING_LIT
 ImportStmt *Parser::parseImport() {
-    log("parseImport");
     auto res = new ImportStmt;
     consume(IMPORT);
     /*     auto path = qname();
@@ -66,7 +65,7 @@ ImportStmt *Parser::parseImport() {
 }*/
 
 FieldDecl *parseField(Parser *p, TypeDecl *decl) {
-    auto name = *p->name();
+    auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
     p->consume(SEMI);
@@ -77,7 +76,7 @@ FieldDecl *parseField(Parser *p, TypeDecl *decl) {
 TypeDecl *Parser::parseTypeDecl() {
     auto res = new TypeDecl;
     res->isInterface = pop()->is(INTERFACE);
-    res->name = *name();
+    res->name = name();
     if (is(LT)) {
         res->typeArgs = generics();
     }
@@ -100,7 +99,7 @@ TypeDecl *Parser::parseTypeDecl() {
 
 EnumParam *parseEnumParam(Parser *p) {
     auto res = new EnumParam;
-    res->name = *p->name();
+    res->name = p->name();
     p->consume(COLON);
     res->type = p->parseType();
     return res;
@@ -108,7 +107,7 @@ EnumParam *parseEnumParam(Parser *p) {
 
 EnumVariant *parseEnumEntry(Parser *p) {
     auto res = new EnumVariant;
-    res->name = *p->name();
+    res->name = p->name();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
         res->fields.push_back(parseEnumParam(p));
@@ -125,7 +124,7 @@ EnumDecl *Parser::parseEnumDecl() {
     auto res = new EnumDecl;
     res->isEnum = true;
     consume(ENUM);
-    res->name = *name();
+    res->name = name();
     if (is(LT)) {
         res->typeArgs = generics();
     }
@@ -184,7 +183,7 @@ Unit *Parser::parseUnit() {
 Param *Parser::parseParam(Method *m) {
     auto res = new Param;
     res->method = m;
-    res->name = *name();
+    res->name = name();
     consume(COLON);
     res->type = parseType();
     if (is(EQ)) {
@@ -209,7 +208,7 @@ Method *Parser::parseMethod() {
         res->name = "new";
         pop();
     } else {
-        res->name = *name();
+        res->name = name();
     }
 
     if (is(LT)) {
@@ -245,7 +244,7 @@ Method *Parser::parseMethod() {
 //name (":" type)? ("=" expr)?;
 Fragment *frag(Parser *p) {
     auto res = new Fragment;
-    res->name = *p->name();
+    res->name = p->name();
     if (p->is(COLON)) {
         p->consume(COLON);
         res->type = p->parseType();

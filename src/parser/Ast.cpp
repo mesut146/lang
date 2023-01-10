@@ -422,13 +422,13 @@ std::string ReturnStmt::print() {
 }
 
 std::string ContinueStmt::print() {
-    if (label == nullptr) return "continue";
-    return "continue " + *label;
+    if (!label.has_value()) return "continue";
+    return "continue " + label.value();
 }
 
 std::string BreakStmt::print() {
-    if (label == nullptr) return "break";
-    return "break " + *label;
+    if (!label.has_value()) return "break";
+    return "break " + label.value();
 }
 
 std::string DoWhile::print() {

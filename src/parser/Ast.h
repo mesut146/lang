@@ -51,7 +51,7 @@ public:
 class ImportAlias {
 public:
     std::string name;
-    std::string *as = nullptr;
+    std::optional<std::string> as;
 
     std::string print();
 };
@@ -100,7 +100,7 @@ public:
 };
 class TypeDecl : public BaseDecl {
 public:
-    bool isInterface;
+    bool isInterface = false;
     std::vector<FieldDecl *> fields;
 
     std::string print() override;
@@ -561,7 +561,7 @@ public:
 
 class ContinueStmt : public Statement {
 public:
-    std::string *label = nullptr;
+    std::optional<std::string> label;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -569,7 +569,7 @@ public:
 
 class BreakStmt : public Statement {
 public:
-    std::string *label = nullptr;
+   std::optional<std::string> label;
 
     std::string print() override;
     void *accept(Visitor *v) override;

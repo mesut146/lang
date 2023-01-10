@@ -20,10 +20,10 @@ IfLetStmt *parseIfLet(Parser *p) {
     res->type = p->parseType();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
-        res->args.push_back(*p->name());
+        res->args.push_back(p->name());
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->args.push_back(*p->name());
+            res->args.push_back(p->name());
         }
         p->consume(RPAREN);
     }
@@ -71,7 +71,7 @@ Statement *parseFor(Parser *p) {
         var = new VarDeclExpr;
         if (p->is({LET, CONST_KW})) p->pop();
         auto f = new Fragment;
-        f->name = *p->name();
+        f->name = p->name();
         var->list.push_back(f);
         normalFor = false;
     } else {
@@ -128,7 +128,6 @@ DoWhile *parseDoWhile(Parser *p) {
 
 
 Statement *Parser::parseStmt() {
-    log("parseStmt " + *first()->value);
     if(is(ASSERT_KW)){
       consume(ASSERT_KW);
       auto a = new AssertStmt;

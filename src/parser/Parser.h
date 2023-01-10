@@ -94,14 +94,14 @@ public:
         isMarked = false;
     }
 
-    std::string *name() {
+    std::string name() {
         if (is(FROM)) {
             return consume(FROM)->value;
         }
         return consume(IDENT)->value;
     }
 
-    std::string *strLit();
+    std::string strLit();
 
     Unit *parseUnit();
 

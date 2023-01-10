@@ -25,7 +25,7 @@ bool Parser::isPrim(Token &t) {
 Literal *parseLit(Parser *p) {
     auto *res = new Literal;
     auto &t = *p->pop();
-    res->val = *t.value;
+    res->val = t.value;
     if (t.is(INTEGER_LIT)) {
         res->type = Literal::INT;
     } else if (t.is(FLOAT_LIT)) {
@@ -37,7 +37,7 @@ Literal *parseLit(Parser *p) {
     } else if (t.is(CHAR_LIT)) {
         res->type = Literal::CHAR;
     } else {
-        throw std::runtime_error("invalid literal: " + *t.value);
+        throw std::runtime_error("invalid literal: " + t.value);
     }
     return res;
 }
@@ -125,16 +125,16 @@ bool isTypeArg(Parser *p) {
 Type *Parser::parseType() {
     auto res = new Type;
     if (isPrim(*first())) {
-        res->name = *pop()->value;
+        res->name = pop()->value;
     } else {
-        res->name = *consume(IDENT)->value;
+        res->name = consume(IDENT)->value;
         while (is({COLON2, LT})) {
             if (is(LT)) {
                 res->typeArgs = generics();
             } else {
                 consume(COLON2);
                 auto tmp = new Type;
-                tmp->name = *consume(IDENT)->value;
+                tmp->name = consume(IDENT)->value;
                 tmp->scope = res;
                 res = tmp;
             }
@@ -181,7 +181,7 @@ std::vector<Type *> Parser::generics() {
 Entry parseEntry(Parser *p) {
     Entry e{};
     if (p->is({IDENT}, {COLON})) {
-        e.key = *p->consume(IDENT)->value;
+        e.key = p->consume(IDENT)->value;
         p->consume(COLON);
         e.value = p->parseExpr();
     } else {
@@ -195,7 +195,7 @@ MapEntry parseMapEntry(Parser *p) {
     //lit,ident
     MapEntry e{};
     if (p->is(IDENT)) {
-        e.key = new SimpleName(*p->consume(IDENT)->value);
+        e.key = new SimpleName(p->consume(IDENT)->value);
     } else if (isLit(p->first())) {
         e.key = parseLit(p);
     }
@@ -313,7 +313,7 @@ Expression *PRIM(Parser *p) {
         auto id = p->pop()->value;
         if (p->is(LPAREN) || isTypeArg(p)) {
             auto res = new MethodCall;
-            res->name = *id;
+            res->name = id;
             if (p->is(LT)) {
                 res->typeArgs = p->generics();
             }
@@ -324,7 +324,7 @@ Expression *PRIM(Parser *p) {
             p->consume(RPAREN);
             return res;
         } else {
-            auto *res = new SimpleName(*id);
+            auto *res = new SimpleName(id);
             return res;
         }
     } else if (p->is(LBRACE)) {
@@ -355,7 +355,7 @@ Expression *PRIM(Parser *p) {
         }
         return res;
     } else {
-        throw std::runtime_error("invalid primary " + *p->first()->value + " line: " + std::to_string(p->first()->line));
+        throw std::runtime_error("invalid primary " + p->first()->value + " line: " + std::to_string(p->first()->line));
     }
 }
 
@@ -375,7 +375,7 @@ Expression *PRIM2(Parser *p) {
                 auto res = new MethodCall;
                 res->isOptional = isOptional;
                 res->scope = lhs;
-                res->name = *name;
+                res->name = name;
                 if (p->is(LT)) {
                     res->typeArgs = p->generics();
                 }
@@ -389,7 +389,7 @@ Expression *PRIM2(Parser *p) {
                 auto res = new FieldAccess;
                 res->isOptional = isOptional;
                 res->scope = lhs;
-                res->name = *name;
+                res->name = name;
                 lhs = res;
             }
         } else {
@@ -461,7 +461,7 @@ Expression *expr13(Parser *p) {
     Expression *lhs = asExpr(p);
     while (p->is({PLUSPLUS, MINUSMINUS})) {
         auto res = new Postfix;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->expr = lhs;
         lhs = res;
     }
@@ -472,7 +472,7 @@ Expression *expr13(Parser *p) {
 Expression *expr12(Parser *p) {
     if (p->is({PLUS, MINUS, PLUSPLUS, MINUSMINUS, BANG, TILDE})) {
         auto res = new Unary;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->expr = expr12(p);
         return res;
     } else {
@@ -486,7 +486,7 @@ Expression *expr11(Parser *p) {
     while (p->is({STAR, DIV, PERCENT})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr12(p);
         lhs = res;
     }
@@ -499,7 +499,7 @@ Expression *expr10(Parser *p) {
     while (p->is({PLUS, MINUS})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr11(p);
         lhs = res;
     }
@@ -510,7 +510,7 @@ Expression *expr10(Parser *p) {
 Expression *expr9(Parser *p) {
     Expression *lhs = expr10(p);
     while (p->is({LTLT, GT})) {
-        std::string ops = *p->pop()->value;
+        std::string ops = p->pop()->value;
         //todo >>, in while
         if (ops == ">") {
             ops = ">>";
@@ -548,7 +548,7 @@ Expression *expr8(Parser *p) {
     while (p->is({LT, GT, LTEQ, GTEQ})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr9(p);
         lhs = res;
     }
@@ -561,7 +561,7 @@ Expression *expr7(Parser *p) {
     while (p->is({EQEQ, NOTEQ})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr8(p);
         lhs = res;
     }
@@ -574,7 +574,7 @@ Expression *expr6(Parser *p) {
     while (p->is(AND)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr7(p);
         lhs = res;
     }
@@ -587,7 +587,7 @@ Expression *expr5(Parser *p) {
     while (p->is(POW)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr6(p);
         lhs = res;
     }
@@ -600,7 +600,7 @@ Expression *expr4(Parser *p) {
     while (p->is(OR)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr5(p);
         lhs = res;
     }
@@ -613,7 +613,7 @@ Expression *expr3(Parser *p) {
     while (p->is(ANDAND)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr4(p);
         lhs = res;
     }
@@ -626,7 +626,7 @@ Expression *expr2(Parser *p) {
     while (p->is(OROR)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = *p->pop()->value;
+        res->op = p->pop()->value;
         res->right = expr3(p);
         lhs = res;
     }
@@ -654,12 +654,11 @@ bool isAssign(std::string &s) {
 
 //expr1 (assignOp expr)?
 Expression *Parser::parseExpr() {
-    log("parseExpr " + *first()->value);
     Expression *res = expr1(this);
-    if (isAssign(*first()->value)) {
+    if (isAssign(first()->value)) {
         auto assign = new Assign;
         assign->left = res;
-        assign->op = *pop()->value;
+        assign->op = pop()->value;
         assign->right = parseExpr();
         res = assign;
     }

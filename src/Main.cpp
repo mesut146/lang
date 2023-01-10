@@ -12,7 +12,7 @@ void lex(std::string &path) {
         Token &t = *lexer.next();
         if (t.is(EOF_))
             break;
-        printf("type=%d off=%d val='%s'\n", t.type, t.start, t.value->c_str());
+        printf("type=%d off=%d val='%s'\n", t.type, t.start, t.value.c_str());
     }
 }
 
