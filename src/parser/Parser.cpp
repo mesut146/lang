@@ -65,13 +65,12 @@ ImportStmt *Parser::parseImport() {
     return res;
 }*/
 
-FieldDecl *parseField(Parser *p) {
-    auto res = new FieldDecl;
-    res->name = *p->name();
+FieldDecl *parseField(Parser *p, TypeDecl *decl) {
+    auto name = *p->name();
     p->consume(COLON);
-    res->type = p->parseType();
+    auto type = p->parseType();
     p->consume(SEMI);
-    return res;
+    return new FieldDecl(name, type, decl);
 }
 
 // ("class" | "interface") name typeArgs? (":")? "{" member* "}"
@@ -86,11 +85,11 @@ TypeDecl *Parser::parseTypeDecl() {
     //members
     while (first() != nullptr && !is(RBRACE)) {
         if (is(IDENT)) {
-            res->fields.push_back(parseField(this));
-            res->fields.back()->parent=res;
+            res->fields.push_back(parseField(this, res));
+            res->fields.back()->parent = res;
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
-            res->methods.back()->parent=res;
+            res->methods.back()->parent = res;
         } else {
             throw std::runtime_error("invalid class member: " + first()->print());
         }

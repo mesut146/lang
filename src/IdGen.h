@@ -13,16 +13,16 @@ public:
     IdGen(Resolver *resolver) : resolver(resolver) {}
 
 
-    void *visitInfix(Infix *node, void *arg) override;
-    void *visitMethodCall(MethodCall *node, void *arg) override;
-    void *visitSimpleName(SimpleName *node, void *arg) override;
-    void *visitLiteral(Literal *node, void *arg) override;
-    void *visitRefExpr(RefExpr *node, void *arg) override;
-    void *visitType(Type *node, void *arg) override;
-    void *visitObjExpr(ObjExpr *node, void *arg) override;
-    void *visitFieldAccess(FieldAccess *node, void *arg) override;
-    void *visitDerefExpr(DerefExpr *node, void *arg) override;
-    void *visitParExpr(ParExpr *node, void *arg) override;
-    void *visitUnary(Unary *node, void *arg) override;
-    void *visitArrayAccess(ArrayAccess *node, void *arg) override;
+    void *visitInfix(Infix *node) override;
+    void *visitMethodCall(MethodCall *node) override;
+    void *visitSimpleName(SimpleName *node) override;
+    void *visitLiteral(Literal *node) override;
+    void *visitRefExpr(RefExpr *node) override;
+    void *visitType(Type *node) override;
+    void *visitObjExpr(ObjExpr *node) override;
+    void *visitFieldAccess(FieldAccess *node) override;
+    void *visitDerefExpr(DerefExpr *node) override;
+    void *visitParExpr(ParExpr *node) override;
+    void *visitUnary(Unary *node) override;
+    void *visitArrayAccess(ArrayAccess *node) override;
 };

@@ -191,11 +191,11 @@ func printList<T>(list: List<T>*){
 
 func listTest(){
   let list = newList<int>();
-  add<int>(list, 1);
-  add<int>(list, 3);
-  add<int>(list, 5);
-  add<int>(list, 7);
-  add<int>(list, 9);
+  let i = 1;
+  while(i <= 9){
+    add<int>(list, i);
+    i = i + 2;
+  }
   printList<int>(list);
   print ("listTest done\n");
 }

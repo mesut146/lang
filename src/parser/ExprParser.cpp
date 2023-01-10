@@ -141,13 +141,16 @@ Type *Parser::parseType() {
         }
     }
     while (is(LBRACKET)) {
+        auto arr = new ArrayType;
+        arr->type = res;
         consume(LBRACKET);
         if (!is(RBRACKET)) {
-            res->dims.push_back(parseExpr());
+            arr->dims.push_back(parseExpr());
         } else {
-            res->dims.push_back(nullptr);
+            arr->dims.push_back(nullptr);
         }
         consume(RBRACKET);
+        res = arr;
     }
     while (is(STAR) || is(QUES)) {
         if (is(STAR)) {

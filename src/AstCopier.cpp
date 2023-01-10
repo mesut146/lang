@@ -2,21 +2,21 @@
 
 template<class T>
 T visit(T node, AstCopier *t) {
-    return (T) node->accept(t, nullptr);
+    return (T) node->accept(t);
 }
 
-void *AstCopier::visitLiteral(Literal *node, void *arg) {
+void *AstCopier::visitLiteral(Literal *node) {
     auto res = new Literal;
     res->val = node->val;
     res->type = node->type;
     return res;
 }
 
-void *AstCopier::visitSimpleName(SimpleName *node, void *arg) {
+void *AstCopier::visitSimpleName(SimpleName *node) {
     return new SimpleName(node->name);
 }
 
-void *AstCopier::visitType(Type *node, void *arg) {
+void *AstCopier::visitType(Type *node) {
     auto ptr = dynamic_cast<PointerType *>(node);
     if (ptr) {
         auto inner = visit(ptr->type, this);
@@ -32,7 +32,7 @@ void *AstCopier::visitType(Type *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitInfix(Infix *node, void *arg) {
+void *AstCopier::visitInfix(Infix *node) {
     auto res = new Infix;
     res->left = visit(node->left, this);
     res->right = visit(node->right, this);
@@ -40,7 +40,7 @@ void *AstCopier::visitInfix(Infix *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitBlock(Block *node, void *arg) {
+void *AstCopier::visitBlock(Block *node) {
     auto res = new Block;
     for (auto st : node->list) {
         res->list.push_back(visit(st, this));
@@ -48,7 +48,7 @@ void *AstCopier::visitBlock(Block *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitReturnStmt(ReturnStmt *node, void *arg) {
+void *AstCopier::visitReturnStmt(ReturnStmt *node) {
     auto res = new ReturnStmt;
     if (node->expr) {
         res->expr = visit(node->expr, this);
@@ -56,13 +56,13 @@ void *AstCopier::visitReturnStmt(ReturnStmt *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitVarDecl(VarDecl *node, void *arg) {
+void *AstCopier::visitVarDecl(VarDecl *node) {
     auto res = new VarDecl;
     res->decl = visit(node->decl, this);
     return res;
 }
 
-void *AstCopier::visitVarDeclExpr(VarDeclExpr *node, void *arg) {
+void *AstCopier::visitVarDeclExpr(VarDeclExpr *node) {
     auto res = new VarDeclExpr;
     res->isConst = node->isConst;
     res->isStatic = node->isStatic;
@@ -72,7 +72,7 @@ void *AstCopier::visitVarDeclExpr(VarDeclExpr *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitFragment(Fragment *node, void *arg) {
+void *AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment;
     res->name = node->name;
     if (node->type) {
@@ -83,7 +83,7 @@ void *AstCopier::visitFragment(Fragment *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitObjExpr(ObjExpr *node, void *arg) {
+void *AstCopier::visitObjExpr(ObjExpr *node) {
     auto res = new ObjExpr;
     res->isPointer = node->isPointer;
     res->type = visit(node->type, this);
@@ -96,7 +96,7 @@ void *AstCopier::visitObjExpr(ObjExpr *node, void *arg) {
     return res;
 }
 
-void *AstCopier::visitMethodCall(MethodCall *node, void *arg) {
+void *AstCopier::visitMethodCall(MethodCall *node) {
     auto res = new MethodCall;
     res->isOptional = node->isOptional;
     if (node->scope) {
@@ -111,11 +111,11 @@ void *AstCopier::visitMethodCall(MethodCall *node, void *arg) {
     }
     return res;
 }
-void *AstCopier::visitExprStmt(ExprStmt *node, void *arg){
+void *AstCopier::visitExprStmt(ExprStmt *node){
     auto tmp =visit(node->expr, this);
     return new ExprStmt(tmp);
 }
-void *AstCopier::visitAssign(Assign *node, void *arg){
+void *AstCopier::visitAssign(Assign *node){
     auto res = new Assign;
     res->left = visit(node->left, this);
     res->right = visit(node->right, this);
@@ -123,27 +123,27 @@ void *AstCopier::visitAssign(Assign *node, void *arg){
     return res;
 }
 
-void *AstCopier::visitArrayAccess(ArrayAccess *node, void *arg){
+void *AstCopier::visitArrayAccess(ArrayAccess *node){
     auto res = new ArrayAccess;
     res->array=visit(node->array, this);
     res->index=visit(node->index, this);
     return res;
 }
-void *AstCopier::visitFieldAccess(FieldAccess *node, void *arg){
+void *AstCopier::visitFieldAccess(FieldAccess *node){
     auto res = new FieldAccess;
     res->scope=visit(node->scope, this);
     res->name=node->name;
     return res;
 }
 
-void *AstCopier::visitUnary(Unary *node, void *arg){
+void *AstCopier::visitUnary(Unary *node){
     auto res = new Unary;
     res->op = node->op;
     res->expr = visit(node->expr, this);
     return res;
 }
 
-void *AstCopier::visitWhileStmt(WhileStmt *node, void *arg){
+void *AstCopier::visitWhileStmt(WhileStmt *node){
     auto res = new WhileStmt;
     res->expr=visit(node->expr, this);
     res->body=visit(node->body, this);

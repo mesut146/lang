@@ -4,11 +4,11 @@
 #include "IdGen.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
+#include <iostream>
 #include <map>
 #include <memory>
 #include <unordered_map>
 #include <variant>
-#include <iostream>
 
 class Symbol;
 class RType;
@@ -20,7 +20,7 @@ RType *binCast(const std::string &s1, const std::string &s2);
 int fieldIndex(TypeDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
-static bool isMember(Method* m){
+static bool isMember(Method *m) {
     return m->parent && !m->isStatic;
 }
 
@@ -29,7 +29,11 @@ static std::string mangle(Type *type) {
 }
 
 static std::string mangle(Method *m) {
-    std::string s = m->name;
+    std::string s;
+    if (m->parent) {
+        s += m->parent->name + "::";
+    }
+    s += m->name;
     for (auto prm : m->params) {
         s += "_" + mangle(prm->type);
     }
@@ -63,7 +67,7 @@ public:
 
     template<class T>
     RType *resolve(T e) {
-        return (RType *) e->accept(resolver, nullptr);
+        return (RType *) e->accept(resolver);
     }
 };
 
@@ -134,41 +138,41 @@ public:
     void resolveAll();
 
     RType *resolveType(Type *type);
-    void *visitType(Type *type, void *arg) override;
-    void *visitVarDeclExpr(VarDeclExpr *vd, void *arg) override;
-    void *visitVarDecl(VarDecl *vd, void *arg) override;
-    void *visitFragment(Fragment *f, void *arg) override;
+    void *visitType(Type *type) override;
+    void *visitVarDeclExpr(VarDeclExpr *vd) override;
+    void *visitVarDecl(VarDecl *vd) override;
+    void *visitFragment(Fragment *f) override;
 
-    void *visitBaseDecl(BaseDecl *bd, void *arg) override;
-    void *visitFieldDecl(FieldDecl *fd, void *arg) override;
-    void *visitMethod(Method *m, void *arg) override;
-    void *visitParam(Param *p, void *arg) override;
-    //void *visitEnumParam(EnumParam *p, void *arg) override;
+    void *visitBaseDecl(BaseDecl *bd) override;
+    void *visitFieldDecl(FieldDecl *fd) override;
+    void *visitMethod(Method *m) override;
+    void *visitParam(Param *p) override;
+    //void *visitEnumParam(EnumParam *p) override;
 
     RType *resolve(Expression *expr);
 
-    void *visitLiteral(Literal *lit, void *arg) override;
-    void *visitInfix(Infix *infix, void *arg) override;
-    void *visitUnary(Unary *u, void *arg) override;
-    void *visitAssign(Assign *as, void *arg) override;
-    void *visitSimpleName(SimpleName *sn, void *arg) override;
-    //void *visitQName(QName *sn, void *arg) override;
-    void *visitMethodCall(MethodCall *mc, void *arg) override;
-    void *visitObjExpr(ObjExpr *o, void *arg) override;
-    void *visitFieldAccess(FieldAccess *fa, void *arg) override;
-    void *visitArrayCreation(ArrayCreation *ac, void *arg) override;
-    void *visitAsExpr(AsExpr *as, void *arg) override;
-    void *visitRefExpr(RefExpr *as, void *arg) override;
-    void *visitDerefExpr(DerefExpr *as, void *arg) override;
-    void *visitAssertStmt(AssertStmt *as, void *arg) override;
-    void *visitIfLetStmt(IfLetStmt *as, void *arg) override;
-    void *visitIfStmt(IfStmt *as, void *arg) override;
-    void *visitParExpr(ParExpr *as, void *arg) override;
-    void *visitExprStmt(ExprStmt *as, void *arg) override;
-    void *visitBlock(Block *as, void *arg) override;
-    void *visitReturnStmt(ReturnStmt *as, void *arg) override;
-    void *visitIsExpr(IsExpr *as, void *arg) override;
-    void *visitArrayAccess(ArrayAccess *node, void *arg) override;
-    void *visitWhileStmt(WhileStmt *node, void *arg) override;
-    void *visitContinueStmt(ContinueStmt *node, void *arg) override;
+    void *visitLiteral(Literal *lit) override;
+    void *visitInfix(Infix *infix) override;
+    void *visitUnary(Unary *u) override;
+    void *visitAssign(Assign *as) override;
+    void *visitSimpleName(SimpleName *sn) override;
+    //void *visitQName(QName *sn) override;
+    void *visitMethodCall(MethodCall *mc) override;
+    void *visitObjExpr(ObjExpr *o) override;
+    void *visitFieldAccess(FieldAccess *fa) override;
+    void *visitArrayCreation(ArrayCreation *ac) override;
+    void *visitAsExpr(AsExpr *as) override;
+    void *visitRefExpr(RefExpr *as) override;
+    void *visitDerefExpr(DerefExpr *as) override;
+    void *visitAssertStmt(AssertStmt *as) override;
+    void *visitIfLetStmt(IfLetStmt *as) override;
+    void *visitIfStmt(IfStmt *as) override;
+    void *visitParExpr(ParExpr *as) override;
+    void *visitExprStmt(ExprStmt *as) override;
+    void *visitBlock(Block *as) override;
+    void *visitReturnStmt(ReturnStmt *as) override;
+    void *visitIsExpr(IsExpr *as) override;
+    void *visitArrayAccess(ArrayAccess *node) override;
+    void *visitWhileStmt(WhileStmt *node) override;
+    void *visitContinueStmt(ContinueStmt *node) override;
 };
