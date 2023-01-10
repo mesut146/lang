@@ -47,7 +47,6 @@ llvm::Value *thisPtr = nullptr;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
 llvm::Function *mallocf;
-int strCnt = 0;
 
 static void InitializeModule(std::string &name) {
     ctx.release();
@@ -59,7 +58,6 @@ static void InitializeModule(std::string &name) {
 
     // Create a new builder for the module.
     Builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
-    //strCnt = 0;
     funcMap.clear();
     classMap.clear();
 }
@@ -392,8 +390,8 @@ void Compiler::compile(const std::string &path) {
     std::cout << "compiling " << path << std::endl;
     Lexer lexer(path);
     Parser parser(lexer);
-    unit = parser.parseUnit();
-    resolv = new Resolver(unit);
+    unit.reset(parser.parseUnit());
+    resolv.reset(new Resolver(unit.get(), srcDir));
     resolv->resolveAll();
 
     NamedValues.clear();
@@ -840,7 +838,7 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
     if (n->type->scope) {
         //enum
         auto enumTy = mapType(n->type->scope);
-        auto decl = findEnum(n->type->scope, resolv);
+        auto decl = findEnum(n->type->scope, resolv.get());
         auto index = Resolver::findVariant(decl, n->type->name);
         llvm::Value *ptr;
         if (n->isPointer) {
@@ -868,7 +866,7 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
         return ptr;
     } else {
         //class
-        auto rt = (RType *) n->type->accept(resolv);
+        auto rt = (RType *) n->type->accept(resolv.get());
         auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
         auto ty = mapType(resolv->resolve(n)->type);
         llvm::Value *ptr;
@@ -903,7 +901,7 @@ void *Compiler::visitType(Type *n) {
     //enum variant without struct
     auto enumTy = mapType(n->scope);
     auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
-    int index = Resolver::findVariant(findEnum(n->scope, resolv), n->name);
+    int index = Resolver::findVariant(findEnum(n->scope, resolv.get()), n->name);
     setOrdinal(index, ptr);
     return ptr;
 }
@@ -965,7 +963,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto ty = rhs->getType()->getPointerElementType();
     auto ordptr = Builder->CreateStructGEP(ty, rhs, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
-    auto decl = findEnum(b->type->scope, resolv);
+    auto decl = findEnum(b->type->scope, resolv.get());
     auto index = Resolver::findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 
@@ -1017,7 +1015,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
 }
 
 void *Compiler::visitIsExpr(IsExpr *ie) {
-    auto decl = findEnum(ie->type->scope, resolv);
+    auto decl = findEnum(ie->type->scope, resolv.get());
     auto val = gen(ie->expr);
     auto ordptr = Builder->CreateStructGEP(val->getType()->getPointerElementType(), val, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);

@@ -191,7 +191,7 @@ std::string Resolver::getId(Expression *e) {
 
 std::map<std::string, Resolver *> Resolver::resolverMap;
 
-Resolver::Resolver(Unit *unit) : unit(unit) {
+Resolver::Resolver(Unit *unit, const std::string &root) : unit(unit), root(root) {
     idgen = new IdGen(this);
 }
 Resolver::~Resolver() = default;
@@ -625,7 +625,7 @@ void *Resolver::visitFieldAccess(FieldAccess *fa) {
     auto scp = resolve(fa->scope);
     auto decl = scp->targetDecl;
     if (scp->isImport) {
-        auto *r = getResolver(scp->unit->path);
+        auto *r = getResolver(scp->unit->path, root);
         auto tmp = r->find(fa->name, false);
         auto res = new RType;
         res->arr = tmp;
@@ -678,14 +678,14 @@ std::string toPath(Name *nm) {
     }
 }
 
-Resolver *Resolver::getResolver(const std::string &path) {
+Resolver *Resolver::getResolver(const std::string &path, const std::string &root) {
     auto it = resolverMap.find(path);
-    if (it != resolverMap.end()) return (*it).second;
+    if (it != resolverMap.end()) return it->second;
     Lexer lexer(path);
     Parser parser(lexer);
     Unit *u = parser.parseUnit();
     u->path = path;
-    auto r = new Resolver(u);
+    auto r = new Resolver(u, root);
     //r->resolveAll();
     resolverMap[path] = r;
     return r;
@@ -710,7 +710,7 @@ void imports(std::string &name, std::vector<Symbol> &res, Resolver *r) {
 void Resolver::other(std::string name, std::vector<Symbol> &res) const {
     for (auto *is : unit->imports) {
         if (is->normal) {
-            auto *r = getResolver(root + "/" + toPath(is->normal->path));
+            auto r = getResolver(root + "/" + toPath(is->normal->path), root);
             r->fromOther = true;
             auto arr = r->find(name, false);
             r->fromOther = false;

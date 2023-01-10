@@ -116,14 +116,14 @@ public:
     bool inLoop = false;
     IdGen *idgen;
     static std::map<std::string, Resolver *> resolverMap;
-    static std::string root;
+    std::string root;
 
-    explicit Resolver(Unit *unit);
+    explicit Resolver(Unit *unit, const std::string &root);
     virtual ~Resolver();
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    static Resolver *getResolver(const std::string &path);
+    static Resolver *getResolver(const std::string &path, const std::string &root);
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);

@@ -10,10 +10,10 @@
 struct Compiler : public Visitor {
     std::string srcDir;
     std::string outDir;
-    Unit *unit;
-    llvm::Function *func;
-    Method *curMethod;
-    Resolver *resolv;
+    std::shared_ptr<Unit> unit;
+    llvm::Function *func = nullptr;
+    Method *curMethod = nullptr;
+    std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
 
     void compileAll();
@@ -21,7 +21,7 @@ struct Compiler : public Visitor {
     void createProtos();
     void genCode(Method *m);
 
-    llvm::Value *gen(Expression* e);
+    llvm::Value *gen(Expression *e);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *cast(Expression *expr, Type *type);
     llvm::Type *mapType(Type *t);

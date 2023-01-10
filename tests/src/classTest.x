@@ -14,7 +14,7 @@ class Point{
   func getX(): int{
     return x;
   }
- func getY(): int{
+  func getY(): int{
     return y;
   }
 }

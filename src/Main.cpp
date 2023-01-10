@@ -26,8 +26,6 @@ void parse(const std::string &path, bool print = false) {
     }
 }
 
-std::string Resolver::root;
-
 void resolveTest() {
     debug = false;
     //std::string path="../tests/resolve1";
@@ -36,8 +34,8 @@ void resolveTest() {
     std::string path = "../tests/importTest";
     //std::string path="../tests/a";
     //std::string path="../tests/core/List";
-    Resolver::root = "../tests";
-    Resolver *r = Resolver::getResolver(path);
+    auto root = "../tests";
+    Resolver *r = Resolver::getResolver(path, root);
     r->resolveAll();
 }
 
