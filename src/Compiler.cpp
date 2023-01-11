@@ -153,6 +153,11 @@ llvm::Value *branch(llvm::Value *val) {
     return val;
 }
 
+bool isObj(Expression* e){
+    auto obj = dynamic_cast<ObjExpr *>(e);
+    return obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs);
+}
+
 static void make_printf() {
     std::vector<llvm::Type *> args;
     auto charPtr = getInt(8)->getPointerTo();
@@ -304,6 +309,38 @@ bool isReturnLast(Statement *stmt) {
     return false;
 }
 
+void makeLocals(Statement* st, Resolver* resolv){
+    auto block = dynamic_cast<Block*>(st);
+    if(block){
+        for(auto s:block->list){
+            makeLocals(s);
+        }
+        return;
+    }
+    auto vd = dynamic_cast<VarDecl*>(st);
+    if(vd){
+        for(auto f:vd->decl->list){
+            auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
+            auto ty = mapType(type);
+            auto ptr = Builder->CreateAlloca(ty);
+            NamedValues[f->name] = ptr;
+        }
+        return;
+    }
+    auto ws = dynamic_cast<WhileStmt*>(st);
+    if(ws){
+         makeLocals(ws->body);
+         return;
+     }
+     auto is = dynamic_cast<IfStmt*>(st);
+     if(is){
+         makeLocals (is->thenStmt);
+         if(is->elseStmt){
+             makeLocals (is->elseStmt);
+         }
+         return;
+     }
+}
 void Compiler::genCode(Method *m) {
     if (!m->typeArgs.empty()) {
         return;
@@ -316,6 +353,7 @@ void Compiler::genCode(Method *m) {
     Builder->SetInsertPoint(bb);
     NamedValues.clear();
     initParams(m);
+    makeLocals(m->body, resolv);
     m->body->accept(this);
     if (!isReturnLast(m->body) && m->type->print() == "void") {
         Builder->CreateRetVoid();
@@ -777,10 +815,11 @@ void *Compiler::visitVarDecl(VarDecl *n) {
             NamedValues[f->name] = val;
             continue;
         }
+       // auto ptr = NamedValues[f->name];
         auto ty = mapType(type);
         auto ptr = Builder->CreateAlloca(ty);
-        Builder->CreateStore(val, ptr);
         NamedValues[f->name] = ptr;
+        Builder->CreateStore(val, ptr);
     }
     return nullptr;
 }

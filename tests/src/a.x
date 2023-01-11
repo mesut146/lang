@@ -200,6 +200,27 @@ func listTest(){
   print ("listTest done\n");
 }
 
+func prims(){
+  let i = 3;
+  let pr = true;
+  let j = 3;
+  while(i < 1000){
+    pr = true;
+    j = 3;
+    while (pr && j*j<i){
+      if(i%j==0){
+        pr=false;
+        continue;
+      }
+      j = j+2;
+    }
+    if(pr)
+      print("%d, ", i);
+    i = i + 2;
+  }
+  print ("prims done\n");
+}
+
 
 func mallocTest(){
    let arr = malloc<int>(10);
@@ -234,5 +255,6 @@ func main(): int{
   mallocTest();
   whileTest();
   listTest();
+  prims();
   return 0;
 }
