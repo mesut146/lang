@@ -291,7 +291,7 @@ Expression *PRIM(Parser *p) {
         auto t = p->parseType();
         if (p->is(LPAREN)) {
             auto res = new MethodCall;
-            res->scope = t->scope;
+            res->scope.reset(t->scope);
             res->name = t->name;
             if (p->is(LT)) {
                 res->typeArgs = p->generics();
@@ -304,9 +304,6 @@ Expression *PRIM(Parser *p) {
             return res;
         } else {
             //static field access, or enum variant
-            /*auto res = new FieldAccess;
-            res->scope=t->scope;
-            res->name=t->name;*/
             return t;
         }
     } else if (p->is(IDENT)) {
@@ -374,7 +371,7 @@ Expression *PRIM2(Parser *p) {
             if (p->is(LPAREN) || isTypeArg(p)) {
                 auto res = new MethodCall;
                 res->isOptional = isOptional;
-                res->scope = lhs;
+                res->scope.reset(lhs);
                 res->name = name;
                 if (p->is(LT)) {
                     res->typeArgs = p->generics();

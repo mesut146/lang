@@ -15,6 +15,7 @@ struct Compiler : public Visitor {
     Method *curMethod = nullptr;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
+    std::vector<llvm::BasicBlock *> loopNext;
 
     void compileAll();
     void compile(const std::string &path);
@@ -28,6 +29,7 @@ struct Compiler : public Visitor {
     void make_proto(Method *m);
     void makeDecl(BaseDecl *bd);
     void initParams(Method *m);
+    void makeLocals(Statement *st);
 
     void *visitBlock(Block *b) override;
     void *visitReturnStmt(ReturnStmt *t) override;
@@ -56,4 +58,5 @@ struct Compiler : public Visitor {
     void *visitArrayAccess(ArrayAccess *node) override;
     void *visitWhileStmt(WhileStmt *node) override;
     void *visitContinueStmt(ContinueStmt *node) override;
+    void *visitBreakStmt(BreakStmt *node) override;
 };

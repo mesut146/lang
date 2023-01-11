@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -8,7 +9,6 @@ class Visitor;
 class Type;
 class BaseDecl;
 class TypeDecl;
-class ImportStmt;
 class Method;
 class Expression;
 class Statement;
@@ -37,6 +37,13 @@ static std::map<std::string, int> sizeMap{
         {"double", 64}};
 
 
+class ImportStmt {
+public:
+    Name *path;
+
+    std::string print();
+};
+
 class Unit {
 public:
     std::vector<ImportStmt *> imports;
@@ -48,33 +55,6 @@ public:
     std::string print();
 };
 
-class ImportAlias {
-public:
-    std::string name;
-    std::optional<std::string> as;
-
-    std::string print();
-};
-
-class NormalImport {
-public:
-    Name *path;
-    std::string *as = nullptr;
-};
-
-class SymbolImport {
-public:
-    Name *path;
-    std::vector<ImportAlias> entries;
-};
-
-class ImportStmt {
-public:
-    NormalImport *normal = nullptr;
-    SymbolImport *sym = nullptr;
-
-    std::string print();
-};
 
 class BaseDecl {
 public:
@@ -132,13 +112,11 @@ public:
     void *accept(Visitor *v) override;
 };
 
-
 class Param {
 public:
     std::string name;
-    Type *type = nullptr;
-    Expression *defVal = nullptr;
-    Method *method = nullptr;
+    std::unique_ptr<Type> type;
+    Method *method;
 
     std::string print();
     void *accept(Visitor *v);
@@ -147,11 +125,11 @@ public:
 class Method {
 public:
     bool isStatic = false;
-    Type *type = nullptr;
+    std::unique_ptr<Type> type;
     std::string name;
     std::vector<Type *> typeArgs;
     std::vector<Param *> params;
-    Block *body = nullptr;
+    std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;
 
     std::string print();
@@ -207,7 +185,6 @@ public:
 class SimpleName : public Name {
 public:
     std::string name;
-    void *parent = nullptr;
 
     explicit SimpleName(std::string name) : name(name){};
 
@@ -364,10 +341,9 @@ public:
 class Fragment {
 public:
     std::string name;
-    Type *type = nullptr;
-    Expression *rhs = nullptr;
+    std::unique_ptr<Type> type;
+    std::unique_ptr<Expression> rhs;
     bool isOptional = false;
-    VarDecl *vd = nullptr;
 
     std::string print();
     void *accept(Visitor *v);
@@ -412,9 +388,13 @@ public:
 
 class Infix : public Expression {
 public:
+    enum ops {
+
+    };
     Expression *left;
     Expression *right;
     std::string op;
+    ops op2;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -459,7 +439,7 @@ public:
 
 class MethodCall : public Expression {
 public:
-    Expression *scope = nullptr;
+    std::unique_ptr<Expression> scope;
     std::string name;
     std::vector<Expression *> args;
     bool isOptional = false;
@@ -553,7 +533,7 @@ public:
 
 class ReturnStmt : public Statement {
 public:
-    Expression *expr = nullptr;
+    std::optional<Expression *> expr;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -569,7 +549,7 @@ public:
 
 class BreakStmt : public Statement {
 public:
-   std::optional<std::string> label;
+    std::optional<std::string> label;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -581,7 +561,7 @@ public:
     std::vector<std::string> args;
     Expression *rhs;
     Statement *thenStmt;
-    Statement *elseStmt = nullptr;
+    std::optional<Statement *> elseStmt;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -591,7 +571,7 @@ class IfStmt : public Statement {
 public:
     Expression *expr;
     Statement *thenStmt;
-    Statement *elseStmt = nullptr;
+    std::optional<Statement *> elseStmt;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -639,6 +619,8 @@ public:
 class AssertStmt : public Statement {
 public:
     Expression *expr;
+
+    explicit AssertStmt(Expression *expr) : expr(expr) {}
 
     std::string print() override;
     void *accept(Visitor *v) override;

@@ -154,11 +154,6 @@ int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
     throw std::runtime_error("unknown variant: " + name + " of type " + decl->name);
 }
 
-
-void Scope::add(VarHolder *f) { list.push_back(f); }
-
-void Scope::clear() { list.clear(); }
-
 std::string nameOf(VarHolder *vh) {
     auto f = std::get_if<Fragment *>(vh);
     if (f) return (*f)->name;
@@ -170,6 +165,18 @@ std::string nameOf(VarHolder *vh) {
     if (ep) return (*ep)->name;
     throw std::runtime_error("nameOf");
 }
+
+void Scope::add(VarHolder *f) {
+    for (auto prev : list) {
+        if (nameOf(prev) == nameOf(f)) {
+            std::runtime_error("variable " + nameOf(f) + " already declared in the same scope");
+        }
+    }
+    list.push_back(f);
+}
+
+void Scope::clear() { list.clear(); }
+
 
 VarHolder *Scope::find(const std::string &name) {
     for (auto vh : list) {
@@ -346,7 +353,7 @@ void *Resolver::visitMethod(Method *m) {
     if (m->body) {
         m->body->accept(this);
         //todo check unreachable
-        if (!isReturnLast(m->body) && !m->type->isVoid()) {
+        if (!isReturnLast(m->body.get()) && !m->type->isVoid()) {
             error("non void function must return a value");
         }
     }
@@ -357,7 +364,7 @@ void *Resolver::visitMethod(Method *m) {
 }
 
 void *Resolver::visitParam(Param *p) {
-    auto res = clone(resolveType(p->type));
+    auto res = clone(resolveType(p->type.get()));
     paramMap[p] = res;
     return res;
 }
@@ -369,13 +376,8 @@ void *Resolver::visitFragment(Fragment *f) {
     if (f->type) {
         res = (RType *) f->type->accept(this);
     }
-    if (f->rhs) {
-        auto r = resolve(f->rhs);
-        if (!res) res = r;
-    }
-    if (!res) {
-        throw std::runtime_error("fragment neither has type nor rhs");
-    }
+    auto rhs = resolve(f->rhs.get());
+    if (!res) res = rhs;
     res->targetVar = f;
     varMap[f] = res;
     curScope()->add(new VarHolder(f));
@@ -693,31 +695,23 @@ Resolver *Resolver::getResolver(const std::string &path, const std::string &root
 
 void imports(std::string &name, std::vector<Symbol> &res, Resolver *r) {
     for (auto *is : r->unit->imports) {
-        if (is->normal) {
-            if (is->normal->path->isSimple()) {
-                auto s = dynamic_cast<SimpleName *>(is->normal->path);
-                if (s->name == name) res.push_back(Symbol(is, r));
-            } else {
-                auto *q = dynamic_cast<QName *>(is->normal->path);
-                if (q->name == name) res.push_back(Symbol(is, r));
-            }
+        if (is->path->isSimple()) {
+            auto s = dynamic_cast<SimpleName *>(is->path);
+            if (s->name == name) res.push_back(Symbol(is, r));
         } else {
-            throw std::runtime_error("import2");
+            auto *q = dynamic_cast<QName *>(is->path);
+            if (q->name == name) res.push_back(Symbol(is, r));
         }
     }
 }
 
 void Resolver::other(std::string name, std::vector<Symbol> &res) const {
     for (auto *is : unit->imports) {
-        if (is->normal) {
-            auto r = getResolver(root + "/" + toPath(is->normal->path), root);
-            r->fromOther = true;
-            auto arr = r->find(name, false);
-            r->fromOther = false;
-            res.insert(res.end(), arr.begin(), arr.end());
-        } else {
-            throw std::runtime_error("import2");
-        }
+        auto r = getResolver(root + "/" + toPath(is->path), root);
+        r->fromOther = true;
+        auto arr = r->find(name, false);
+        r->fromOther = false;
+        res.insert(res.end(), arr.begin(), arr.end());
     }
 }
 
@@ -791,8 +785,8 @@ void *Resolver::visitIfLetStmt(IfLetStmt *st) {
     }
     st->thenStmt->accept(this);
     dropScope();
-    if (st->elseStmt) {
-        st->elseStmt->accept(this);
+    if (st->elseStmt.has_value()) {
+        st->elseStmt.value()->accept(this);
     }
     return nullptr;
 }
@@ -821,17 +815,17 @@ void *Resolver::visitIfStmt(IfStmt *st) {
         error("if condition is not a boolean");
     }
     st->thenStmt->accept(this);
-    if (st->elseStmt) st->elseStmt->accept(this);
+    if (st->elseStmt.has_value()) st->elseStmt.value()->accept(this);
     return nullptr;
 }
 
 void *Resolver::visitReturnStmt(ReturnStmt *st) {
-    if (st->expr) {
+    if (st->expr.has_value()) {
         if (curMethod->type->isVoid()) {
             error("void method returns expr");
         }
-        auto type = (RType *) st->expr->accept(this);
-        if (!subType(type->type, curMethod->type)) {
+        auto type = (RType *) st->expr.value()->accept(this);
+        if (!subType(type->type, curMethod->type.get())) {
             error("method expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
         }
     } else {
@@ -982,14 +976,14 @@ Method *generateMethod(MethodCall *mc, Method *m) {
     }
     auto gen = new Generator(mc->typeArgs, m->typeArgs);
     auto body = (Block *) m->body->accept(gen);
-    res->body = body;
+    res->body.reset(body);
     for (auto prm : m->params) {
         auto np = new Param;
         np->name = prm->name;
-        np->type = (Type *) prm->type->accept(gen);
+        np->type.reset((Type *) prm->type.get()->accept(gen));
         res->params.push_back(np);
     }
-    res->type = (Type *) m->type->accept(gen);
+    res->type.reset((Type *) m->type->accept(gen));
     std::cout << res->print() << std::endl;
     return res;
 }
@@ -1052,12 +1046,12 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
     RType *res;
     if (!trg->typeArgs.empty()) {
         auto newMethod = generateMethod(mc, trg);
-        res = clone(resolveType(newMethod->type));
+        res = clone(resolveType(newMethod->type.get()));
         res->targetMethod = newMethod;
         //res = (RType *) newMethod->accept(this);
         genericMethodsTodo.push_back(newMethod);
     } else {
-        res = clone(resolveType(trg->type));
+        res = clone(resolveType(trg->type.get()));
         res->targetMethod = trg;
         //res = (RType *) trg->accept(this, arg);
     }
@@ -1078,5 +1072,13 @@ void *Resolver::visitContinueStmt(ContinueStmt *node) {
         error("continue in outside of loop");
     }
     if (node->label) error("continue label");
+    return nullptr;
+}
+
+void *Resolver::visitBreakStmt(BreakStmt *node) {
+    if (!inLoop) {
+        error("break in outside of loop");
+    }
+    if (node->label) error("break label");
     return nullptr;
 }

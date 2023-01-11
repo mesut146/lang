@@ -35,7 +35,7 @@ static std::string mangle(Method *m) {
     }
     s += m->name;
     for (auto prm : m->params) {
-        s += "_" + mangle(prm->type);
+        s += "_" + mangle(prm->type.get());
     }
     return s;
 }
@@ -175,4 +175,5 @@ public:
     void *visitArrayAccess(ArrayAccess *node) override;
     void *visitWhileStmt(WhileStmt *node) override;
     void *visitContinueStmt(ContinueStmt *node) override;
+    void *visitBreakStmt(BreakStmt *node) override;
 };

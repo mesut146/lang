@@ -6,63 +6,11 @@ std::string Parser::strLit() {
     return std::string(t->value.begin() + 1, t->value.end() - 1);
 }
 
-//name ("as" name)?;
-ImportAlias aliased(Parser *p) {
-    ImportAlias res;
-    res.name = p->name();
-    if (p->is(AS)) {
-        p->consume(AS);
-        res.as = p->name();
-    }
-    return res;
-}
-
-
-//"import" importName ("," importName)* "from" STRING_LIT
-//"import" "*" ("as" name)? "from" STRING_LIT
 ImportStmt *Parser::parseImport() {
     auto res = new ImportStmt;
     consume(IMPORT);
-    /*     auto path = qname();
-    if (is(LBRACE)) {
-        auto sym = new SymbolImport;
-        sym->path = path;
-        consume(LBRACE);
-        sym->entries.push_back(aliased(this));
-        while (is(COMMA)) {
-            consume(COMMA);
-            sym->entries.push_back(aliased(this));
-        }
-        consume(RBRACE);
-        res->sym = sym;
-    } else {
-        auto normal = new NormalImport;
-        normal->path = path;
-        if (is(AS)) {
-            consume(AS);
-            normal->as = name();
-        }
-        res->normal = normal;
-    } */
     return res;
 }
-
-//type name "?"? ("=" expr)?;
-/*FieldDecl *Parser::parseFieldDecl() {
-    auto res = new FieldDecl;
-    res->type = parseType();
-    res->name = *name();
-    if (is(QUES)) {
-        consume(QUES);
-        res->isOptional = true;
-    }
-    if (is(EQ)) {
-        consume(EQ);
-        res->expr = parseExpr();
-    }
-    consume(SEMI);
-    return res;
-}*/
 
 FieldDecl *parseField(Parser *p, TypeDecl *decl) {
     auto name = p->name();
@@ -185,14 +133,7 @@ Param *Parser::parseParam(Method *m) {
     res->method = m;
     res->name = name();
     consume(COLON);
-    res->type = parseType();
-    if (is(EQ)) {
-        if (res->type->isOptional()) {
-            throw std::runtime_error("param: " + res->name + " has both optional type and default value");
-        }
-        consume(EQ);
-        res->defVal = parseExpr();
-    }
+    res->type.reset(parseType());
     return res;
 }
 
@@ -226,17 +167,17 @@ Method *Parser::parseMethod() {
     consume(RPAREN);
     if (is(COLON)) {
         consume(COLON);
-        res->type = parseType();
+        res->type.reset(parseType());
     } else {
         //default is void
-        res->type = new Type;
+        res->type.reset(new Type);
         res->type->name = "void";
     }
     if (is(SEMI)) {
         //interface
         consume(SEMI);
     } else {
-        res->body = parseBlock();
+        res->body.reset(parseBlock());
     }
     return res;
 }
@@ -247,14 +188,13 @@ Fragment *frag(Parser *p) {
     res->name = p->name();
     if (p->is(COLON)) {
         p->consume(COLON);
-        res->type = p->parseType();
+        res->type.reset(p->parseType());
     }
-    if (p->is(EQ)) {
-        p->consume(EQ);
-        res->rhs = p->parseExpr();
-    } else {
+    if (!p->is(EQ)) {
         throw std::runtime_error("variable " + res->name + " must have initializer");
     }
+    p->consume(EQ);
+    res->rhs.reset(p->parseExpr());
     return res;
 }
 

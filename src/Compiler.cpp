@@ -47,6 +47,8 @@ llvm::Value *thisPtr = nullptr;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
 llvm::Function *mallocf;
+int allocIdx = 0;
+std::vector<llvm::Value *> allocArr;
 
 static void InitializeModule(std::string &name) {
     ctx.release();
@@ -153,9 +155,9 @@ llvm::Value *branch(llvm::Value *val) {
     return val;
 }
 
-bool isObj(Expression* e){
+bool isObj(Expression *e) {
     auto obj = dynamic_cast<ObjExpr *>(e);
-    return obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs);
+    return obj && !obj->isPointer || dynamic_cast<Type *>(e);
 }
 
 static void make_printf() {
@@ -201,10 +203,10 @@ void Compiler::make_proto(Method *m) {
     if (isMember(m)) {
         argTypes.push_back(classMap[m->parent->name]->getPointerTo());
     }
-    for (auto &prm : m->params) {
-        argTypes.push_back(mapType(prm->type));
+    for (auto prm : m->params) {
+        argTypes.push_back(mapType(prm->type.get()));
     }
-    auto retType = mapType(m->type);
+    auto retType = mapType(m->type.get());
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangle(m), mod.get());
     unsigned i = 0;
@@ -277,7 +279,7 @@ void Compiler::initParams(Method *m) {
         thisPtr = nullptr;
     }
     for (auto prm : m->params) {
-        auto ty = mapType(prm->type);
+        auto ty = mapType(prm->type.get());
         auto ptr = Builder->CreateAlloca(ty);
         NamedValues[prm->name] = ptr;
     }
@@ -292,7 +294,7 @@ void Compiler::initParams(Method *m) {
 }
 
 bool isRet(Statement *stmt) {
-    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt);
+    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt) || dynamic_cast<BreakStmt *>(stmt);
 }
 
 bool isReturnLast(Statement *stmt) {
@@ -309,38 +311,140 @@ bool isReturnLast(Statement *stmt) {
     return false;
 }
 
-void makeLocals(Statement* st, Resolver* resolv){
-    auto block = dynamic_cast<Block*>(st);
-    if(block){
-        for(auto s:block->list){
-            makeLocals(s);
-        }
-        return;
-    }
-    auto vd = dynamic_cast<VarDecl*>(st);
-    if(vd){
-        for(auto f:vd->decl->list){
-            auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
-            auto ty = mapType(type);
+class AllocCollector : public Visitor {
+public:
+    Compiler *compiler;
+
+    void *visitVarDecl(VarDecl *node) override {
+        for (auto f : node->decl->list) {
+            auto type = f->type ? f->type.get() : compiler->resolv->resolve(f->rhs.get())->type;
+            auto ty = compiler->mapType(type);
             auto ptr = Builder->CreateAlloca(ty);
-            NamedValues[f->name] = ptr;
+            allocArr.push_back(ptr);
         }
-        return;
+        return nullptr;
     }
-    auto ws = dynamic_cast<WhileStmt*>(st);
-    if(ws){
-         makeLocals(ws->body);
-         return;
-     }
-     auto is = dynamic_cast<IfStmt*>(st);
-     if(is){
-         makeLocals (is->thenStmt);
-         if(is->elseStmt){
-             makeLocals (is->elseStmt);
-         }
-         return;
-     }
+    void *visitType(Type *node) override {
+        auto enumTy = compiler->mapType(node->scope);
+        auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
+        allocArr.push_back(ptr);
+        return nullptr;
+    }
+    void *visitObjExpr(ObjExpr *node) override {
+        if (node->isPointer) {
+            return nullptr;
+        }
+        auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
+        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        allocArr.push_back(ptr);
+        return nullptr;
+    }
+    void *visitBlock(Block *node) override {
+        for (auto s : node->list) {
+            s->accept(this);
+        }
+        return nullptr;
+    }
+    void *visitWhileStmt(WhileStmt *node) override {
+        node->body->accept(this);
+        return nullptr;
+    }
+    void *visitIfStmt(IfStmt *node) override {
+        node->thenStmt->accept(this);
+        if (node->elseStmt) {
+            node->elseStmt.value()->accept(this);
+        }
+        return nullptr;
+    }
+    void *visitReturnStmt(ReturnStmt *node) override {
+        if (node->expr) {
+            node->expr.value()->accept(this);
+        }
+        return nullptr;
+    }
+    void *visitExprStmt(ExprStmt *node) override {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitAssign(Assign *node) override {
+        node->right->accept(this);
+        return nullptr;
+    }
+    void *visitSimpleName(SimpleName *node) override {
+        return nullptr;
+    }
+    void *visitInfix(Infix *node) {
+        node->left->accept(this);
+        node->right->accept(this);
+        return nullptr;
+    }
+    void *visitAssertStmt(AssertStmt *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitLiteral(Literal *node) {
+        return nullptr;
+    }
+    void *visitRefExpr(RefExpr *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitDerefExpr(DerefExpr *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitUnary(Unary *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitMethodCall(MethodCall *node) {
+        if (node->scope) node->scope->accept(this);
+        for (auto a : node->args) {
+            a->accept(this);
+        }
+        return nullptr;
+    }
+    void *visitFieldAccess(FieldAccess *node) {
+        node->scope->accept(this);
+        return nullptr;
+    }
+    void *visitArrayAccess(ArrayAccess *node) {
+        node->array->accept(this);
+        node->index->accept(this);
+        return nullptr;
+    }
+    void *visitParExpr(ParExpr *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitAsExpr(AsExpr *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitIsExpr(IsExpr *node) {
+        node->expr->accept(this);
+        return nullptr;
+    }
+    void *visitIfLetStmt(IfLetStmt *node) {
+        node->rhs->accept(this);
+        node->thenStmt->accept(this);
+        if (node->elseStmt) node->elseStmt.value()->accept(this);
+        return nullptr;
+    }
+    void *visitContinueStmt(ContinueStmt *node) {
+        return nullptr;
+    }
+    void *visitBreakStmt(BreakStmt *node) {
+        return nullptr;
+    }
+};
+
+void Compiler::makeLocals(Statement *st) {
+    auto col = new AllocCollector;
+    col->compiler = this;
+    st->accept(col);
 }
+
 void Compiler::genCode(Method *m) {
     if (!m->typeArgs.empty()) {
         return;
@@ -353,9 +457,9 @@ void Compiler::genCode(Method *m) {
     Builder->SetInsertPoint(bb);
     NamedValues.clear();
     initParams(m);
-    makeLocals(m->body, resolv);
+    makeLocals(m->body.get());
     m->body->accept(this);
-    if (!isReturnLast(m->body) && m->type->print() == "void") {
+    if (!isReturnLast(m->body.get()) && m->type->print() == "void") {
         Builder->CreateRetVoid();
     }
     llvm::verifyFunction(*func);
@@ -481,10 +585,10 @@ void *Compiler::visitBlock(Block *b) {
 }
 
 void *Compiler::visitReturnStmt(ReturnStmt *t) {
-    if (t->expr) {
+    if (t->expr.has_value()) {
         //auto val = (llvm::Value *) t->expr->accept(this);
-        auto type = resolv->resolve(curMethod->type)->type;
-        Builder->CreateRet(cast(t->expr, type));
+        auto type = resolv->resolve(curMethod->type.get())->type;
+        Builder->CreateRet(cast(t->expr.value(), type));
     } else {
         Builder->CreateRetVoid();
     }
@@ -754,7 +858,7 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         auto a = mc->args[i];
         //auto av = loadPtr(a);
         if (target) {
-            auto av = cast(a, target->params[i]->type);
+            auto av = cast(a, target->params[i]->type.get());
             args.push_back(av);
         } else {
             auto av = loadPtr(a);
@@ -799,25 +903,19 @@ void *Compiler::visitAssertStmt(AssertStmt *n) {
 
 void *Compiler::visitVarDecl(VarDecl *n) {
     for (auto f : n->decl->list) {
-        //auto val = (llvm::Value *) f->rhs->accept(this);
-        auto type = f->type ? f->type : resolv->resolve(f->rhs)->type;
-        //auto val = f->type ? cast(f->rhs, type) : (llvm::Value *) f->rhs->accept(this);
-        auto val = cast(f->rhs, type);
+        auto type = f->type ? f->type.get() : resolv->resolve(f->rhs.get())->type;
+        auto val = cast(f->rhs.get(), type);
 
         //no unnecessary alloc
-        auto obj = dynamic_cast<ObjExpr *>(f->rhs);
-        // if (llvm::isa<llvm::AllocaInst>(val)) {
-        //     throw std::runtime_error("var alloc");
-        //     NamedValues[f->name] = val;
-        //     continue;
-        // }
-        if (obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs)) {
+        auto obj = dynamic_cast<ObjExpr *>(f->rhs.get());
+        if (obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs.get())) {
             NamedValues[f->name] = val;
             continue;
         }
-       // auto ptr = NamedValues[f->name];
+        // auto ptr = NamedValues[f->name];
         auto ty = mapType(type);
-        auto ptr = Builder->CreateAlloca(ty);
+        //auto ptr = Builder->CreateAlloca(ty);
+        auto ptr = allocArr[allocIdx++];
         NamedValues[f->name] = ptr;
         Builder->CreateStore(val, ptr);
     }
@@ -874,18 +972,18 @@ int fieldIndex(EnumVariant *variant, const std::string &name) {
 
 void *Compiler::visitObjExpr(ObjExpr *n) {
     //enum or class
-    if (n->type->scope) {
+    auto tt = resolv->resolve(n);
+    auto ty = mapType(tt->type);
+    if (tt->targetDecl->isEnum) {
         //enum
-        auto enumTy = mapType(n->type->scope);
-        auto decl = findEnum(n->type->scope, resolv.get());
+        auto decl = dynamic_cast<EnumDecl *>(tt->targetDecl);
         auto index = Resolver::findVariant(decl, n->type->name);
         llvm::Value *ptr;
         if (n->isPointer) {
             ptr = callMalloc(makeInt(size(decl) / 8, 64));
-            ptr = Builder->CreateBitCast(ptr, enumTy);
-            //ptr = Builder->CreateLoad(mapType(rt->type), ptr);
+            ptr = Builder->CreateBitCast(ptr, ty);
         } else {
-            ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
+            ptr = allocArr[allocIdx++];
         }
 
         setOrdinal(index, ptr);
@@ -905,16 +1003,13 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
         return ptr;
     } else {
         //class
-        auto rt = (RType *) n->type->accept(resolv.get());
-        auto decl = dynamic_cast<TypeDecl *>(rt->targetDecl);
-        auto ty = mapType(resolv->resolve(n)->type);
+        auto decl = dynamic_cast<TypeDecl *>(tt->targetDecl);
         llvm::Value *ptr;
         if (n->isPointer) {
             ptr = callMalloc(makeInt(size(decl) / 8, 64));
             ptr = Builder->CreateBitCast(ptr, ty);
-            //ptr = Builder->CreateLoad(mapType(rt->type), ptr);
         } else {
-            ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+            ptr = allocArr[allocIdx++];
         }
         int i = 0;
         for (auto &e : n->entries) {
@@ -927,7 +1022,6 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
             auto field = decl->fields[index];
             auto val = cast(e.value, field->type);
-            //auto val = (llvm::Value *) e.value->accept(this);
             Builder->CreateStore(val, eptr);
             i++;
         }
@@ -939,7 +1033,7 @@ void *Compiler::visitType(Type *n) {
     if (!n->scope) throw std::runtime_error("type has no scope");
     //enum variant without struct
     auto enumTy = mapType(n->scope);
-    auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
+    auto ptr = allocArr[allocIdx++];
     int index = Resolver::findVariant(findEnum(n->scope, resolv.get()), n->name);
     setOrdinal(index, ptr);
     return ptr;
@@ -972,7 +1066,7 @@ void *Compiler::visitIfStmt(IfStmt *b) {
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    if (b->elseStmt) {
+    if (b->elseStmt.has_value()) {
         elsebb = llvm::BasicBlock::Create(*ctx, "");
         Builder->CreateCondBr(cond, then, elsebb);
     } else {
@@ -983,11 +1077,11 @@ void *Compiler::visitIfStmt(IfStmt *b) {
     if (!isReturnLast(b->thenStmt)) {
         Builder->CreateBr(next);
     }
-    if (b->elseStmt) {
+    if (b->elseStmt.has_value()) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
-        b->elseStmt->accept(this);
-        if (!isReturnLast(b->elseStmt)) {
+        b->elseStmt.value()->accept(this);
+        if (!isReturnLast(b->elseStmt.value())) {
             Builder->CreateBr(next);
         }
     }
@@ -1009,7 +1103,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    if (b->elseStmt) {
+    if (b->elseStmt.has_value()) {
         elsebb = llvm::BasicBlock::Create(*ctx, "");
         Builder->CreateCondBr(branch(cmp), then, elsebb);
     } else {
@@ -1042,10 +1136,10 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
         NamedValues.erase(p);
     }
     Builder->CreateBr(next);
-    if (b->elseStmt) {
+    if (b->elseStmt.has_value()) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
-        b->elseStmt->accept(this);
+        b->elseStmt.value()->accept(this);
         Builder->CreateBr(next);
     }
     Builder->SetInsertPoint(next);
@@ -1078,22 +1172,28 @@ void *Compiler::visitWhileStmt(WhileStmt *node) {
     auto then = llvm::BasicBlock::Create(*ctx, "");
     auto condbb = llvm::BasicBlock::Create(*ctx, "", func);
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    loops.push_back(condbb);
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
     auto c = loadPtr(node->expr);
     Builder->CreateCondBr(branch(c), then, next);
     Builder->SetInsertPoint(then);
     func->getBasicBlockList().push_back(then);
+    loops.push_back(condbb);
+    loopNext.push_back(next);
     node->body->accept(this);
+    loops.pop_back();
+    loopNext.pop_back();
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    loops.pop_back();
     return nullptr;
 }
 
 void *Compiler::visitContinueStmt(ContinueStmt *node) {
     Builder->CreateBr(loops.back());
+    return nullptr;
+}
+void *Compiler::visitBreakStmt(BreakStmt *node) {
+    Builder->CreateBr(loopNext.back());
     return nullptr;
 }

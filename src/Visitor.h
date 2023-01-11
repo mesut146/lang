@@ -25,10 +25,10 @@ public:
     virtual void *visitVarDecl(VarDecl *node) todo("VarDecl");
     virtual void *visitVarDeclExpr(VarDeclExpr *node) todo("VarDeclExpr");
     virtual void *visitFragment(Fragment *node) todo("Fragment");
-    virtual void *visitRefExpr(RefExpr *e) todo("Ref");
-    virtual void *visitDerefExpr(DerefExpr *e) todo("deref");
+    virtual void *visitRefExpr(RefExpr *node) todo("Ref");
+    virtual void *visitDerefExpr(DerefExpr *node) todo("deref");
     virtual void *visitUnary(Unary *node) todo("Unary");
-    virtual void *visitAssign(Assign *) todo("Assign");
+    virtual void *visitAssign(Assign *node) todo("Assign");
     virtual void *visitInfix(Infix *node) todo("Infix");
     virtual void *visitAsExpr(AsExpr *node) todo("AsExpr");
     virtual void *visitIsExpr(IsExpr *node) todo("IsExpr");

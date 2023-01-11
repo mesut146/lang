@@ -36,28 +36,11 @@ std::string Unit::print() {
     return s;
 }
 
-std::string ImportAlias::print() {
-    if (as) {
-        return name + " as " + *as;
-    } else {
-        return name;
-    }
-}
-
 std::string ImportStmt::print() {
     std::string s;
     s.append("import ");
-    if (normal) {
-        s.append(normal->path->print());
-        if (normal->as) {
-            s.append("as ").append(*normal->as);
-        }
-    } else {
-        s.append(sym->path->print());
-        s.append(".{");
-        s.append(join(sym->entries, ", "));
-        s.append("}");
-    }
+    s.append(path->print());
+    s.append(";");
     return s;
 }
 
@@ -133,10 +116,10 @@ std::string Method::print() {
         s.append(": ");
         s.append(type->print());
     }
-    if (body == nullptr) {
-        s.append(";");
-    } else {
+    if (body) {
         s.append(body->print());
+    } else {
+        s.append(";");
     }
     return s;
 }
@@ -174,12 +157,10 @@ std::string VarDeclExpr::print() {
 std::string Fragment::print() {
     std::string s;
     s.append(name);
-    if (type != nullptr) {
-        s.append(" : ").append(type->print());
+    if (type) {
+        s.append(": ").append(type->print());
     }
-    if (rhs != nullptr) {
-        s.append(" = ").append(rhs->print());
-    }
+    s.append(" = ").append(rhs->print());
     return s;
 }
 
@@ -238,11 +219,6 @@ std::string Param::print() {
     s.append(name);
     s.append(": ");
     s.append(type->print());
-
-    if (defVal != nullptr) {
-        s.append(" = ");
-        s.append(defVal->print());
-    }
     return s;
 }
 
@@ -297,8 +273,8 @@ std::string IfLetStmt::print() {
     s.append(" = ");
     s.append(rhs->print());
     s.append(thenStmt->print());
-    if (elseStmt != nullptr) {
-        s.append("else ").append(elseStmt->print());
+    if (elseStmt.has_value()) {
+        s.append("else ").append(elseStmt.value()->print());
     }
     return s;
 }
@@ -306,8 +282,8 @@ std::string IfLetStmt::print() {
 std::string IfStmt::print() {
     std::string s;
     s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
-    if (elseStmt != nullptr) {
-        s.append("else ").append(elseStmt->print());
+    if (elseStmt.has_value()) {
+        s.append("else ").append(elseStmt.value()->print());
     }
     return s;
 }
@@ -417,8 +393,8 @@ std::string WhileStmt::print() {
 }
 
 std::string ReturnStmt::print() {
-    if (expr == nullptr) return "return";
-    return "return " + expr->print() + ";";
+    if (!expr.has_value()) return "return";
+    return "return " + expr.value()->print() + ";";
 }
 
 std::string ContinueStmt::print() {

@@ -50,8 +50,8 @@ void *AstCopier::visitBlock(Block *node) {
 
 void *AstCopier::visitReturnStmt(ReturnStmt *node) {
     auto res = new ReturnStmt;
-    if (node->expr) {
-        res->expr = visit(node->expr, this);
+    if (node->expr.has_value()) {
+        res->expr = visit(node->expr.value(), this);
     }
     return res;
 }
@@ -76,9 +76,9 @@ void *AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment;
     res->name = node->name;
     if (node->type) {
-        res->type = visit(node->type, this);
+        res->type.reset(visit(node->type.get(), this));
     }
-    res->rhs = visit(node->rhs, this);
+    res->rhs.reset(visit(node->rhs.get(), this));
     res->isOptional = node->isOptional;
     return res;
 }
@@ -100,7 +100,7 @@ void *AstCopier::visitMethodCall(MethodCall *node) {
     auto res = new MethodCall;
     res->isOptional = node->isOptional;
     if (node->scope) {
-        res->scope = visit(node->scope, this);
+        res->scope.reset(visit(node->scope.get(), this));
     }
     res->name = node->name;
     for (auto ta : node->typeArgs) {
@@ -111,11 +111,11 @@ void *AstCopier::visitMethodCall(MethodCall *node) {
     }
     return res;
 }
-void *AstCopier::visitExprStmt(ExprStmt *node){
-    auto tmp =visit(node->expr, this);
+void *AstCopier::visitExprStmt(ExprStmt *node) {
+    auto tmp = visit(node->expr, this);
     return new ExprStmt(tmp);
 }
-void *AstCopier::visitAssign(Assign *node){
+void *AstCopier::visitAssign(Assign *node) {
     auto res = new Assign;
     res->left = visit(node->left, this);
     res->right = visit(node->right, this);
@@ -123,29 +123,29 @@ void *AstCopier::visitAssign(Assign *node){
     return res;
 }
 
-void *AstCopier::visitArrayAccess(ArrayAccess *node){
+void *AstCopier::visitArrayAccess(ArrayAccess *node) {
     auto res = new ArrayAccess;
-    res->array=visit(node->array, this);
-    res->index=visit(node->index, this);
+    res->array = visit(node->array, this);
+    res->index = visit(node->index, this);
     return res;
 }
-void *AstCopier::visitFieldAccess(FieldAccess *node){
+void *AstCopier::visitFieldAccess(FieldAccess *node) {
     auto res = new FieldAccess;
-    res->scope=visit(node->scope, this);
-    res->name=node->name;
+    res->scope = visit(node->scope, this);
+    res->name = node->name;
     return res;
 }
 
-void *AstCopier::visitUnary(Unary *node){
+void *AstCopier::visitUnary(Unary *node) {
     auto res = new Unary;
     res->op = node->op;
     res->expr = visit(node->expr, this);
     return res;
 }
 
-void *AstCopier::visitWhileStmt(WhileStmt *node){
+void *AstCopier::visitWhileStmt(WhileStmt *node) {
     auto res = new WhileStmt;
-    res->expr=visit(node->expr, this);
-    res->body=visit(node->body, this);
+    res->expr = visit(node->expr, this);
+    res->body = visit(node->body, this);
     return res;
 }

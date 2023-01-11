@@ -202,17 +202,15 @@ func listTest(){
 
 func prims(){
   let i = 3;
-  let pr = true;
-  let j = 3;
   while(i < 1000){
-    pr = true;
-    j = 3;
-    while (pr && j*j<i){
-      if(i%j==0){
-        pr=false;
-        continue;
+    let pr = true;
+    let j = 3;
+    while (j * j < i){
+      if(i % j==0){
+        pr = false;
+        break;
       }
-      j = j+2;
+      j = j + 2;
     }
     if(pr)
       print("%d, ", i);
