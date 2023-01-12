@@ -7,7 +7,7 @@ class Point{
   }
   
   func set(val: int, i: int){
-    if(i==0) x = val;
+    if(i == 0) x = val;
     else y = val;
   }
 

@@ -998,6 +998,7 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
         r->usedMethods.push_back(target);
         return res;
     } else {
+        
     }
     throw std::runtime_error("scopedMethod");
 }

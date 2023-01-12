@@ -249,6 +249,7 @@ func importTest(){
 
   let c2 = Point::new(10, 20);
   assert classTest2() == 123;
+  //assert c2.getX() == 10;
   print ("importTest done\n");
 }
 
