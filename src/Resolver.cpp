@@ -7,6 +7,7 @@
 void error(const std::string &msg) {
     throw std::runtime_error(msg);
 }
+
 bool isCondition(Expression *e, Resolver *r) {
     auto rt = r->resolve(e);
     return rt->type->print() == "bool";
@@ -74,17 +75,19 @@ std::string normalize(const std::string &s) {
     if (s == "long") return "i64";
     return s;
 }
-Type *simpleType(const std::string name) {
+
+Type *simpleType(const std::string& name) {
     auto res = new Type;
     res->name = normalize(name);
     return res;
 }
 
-RType *makeSimple(const std::string name) {
-    auto *res = new RType;
+RType *makeSimple(const std::string& name) {
+    auto res = new RType;
     res->type = simpleType(name);
     return res;
 }
+
 RType *binCast(const std::string &s1, const std::string &s2) {
     auto t1 = normalize(s1);
     auto t2 = normalize(s2);
@@ -162,8 +165,7 @@ std::string nameOf(VarHolder *vh) {
     auto fd = std::get_if<FieldDecl *>(vh);
     if (fd) return (*fd)->name;
     auto ep = std::get_if<EnumPrm *>(vh);
-    if (ep) return (*ep)->name;
-    throw std::runtime_error("nameOf");
+    return (*ep)->name;
 }
 
 void Scope::add(VarHolder *f) {
@@ -186,7 +188,6 @@ VarHolder *Scope::find(const std::string &name) {
     }
     return nullptr;
 }
-
 
 std::string Resolver::getId(Expression *e) {
     auto res = e->accept(idgen);
@@ -282,10 +283,14 @@ void Resolver::resolveAll() {
 
 void Resolver::init() {
     for (auto bd : unit->types) {
-        auto *res = makeSimple(bd->name);
+        auto res = makeSimple(bd->name);
         res->unit = unit;
         res->targetDecl = bd;
         typeMap[bd->name] = res;
+    }
+    for(auto m:unit->methods){
+        auto res = resolve(m->type);
+        methodMap[m] = res;
     }
     newScope();//globals
     globalScope = curScope();
@@ -346,7 +351,7 @@ void *Resolver::visitMethod(Method *m) {
     res->targetMethod = m;
     newScope();
     methodScopes[m] = curScope();
-    for (auto *prm : m->params) {
+    for (auto prm : m->params) {
         curScope()->add(new VarHolder(prm));
         prm->accept(this);
     }
@@ -671,13 +676,8 @@ void *Resolver::visitLiteral(Literal *lit) {
 }
 
 
-std::string toPath(Name *nm) {
-    if (nm->isSimple()) {
-        return dynamic_cast<SimpleName *>(nm)->name;
-    } else {
-        auto q = dynamic_cast<QName *>(nm);
-        return toPath(q->scope) + "/" + q->name;
-    }
+std::string toPath(std::vector<std::string> &list) {
+    return join(list, "/");
 }
 
 Resolver *Resolver::getResolver(const std::string &path, const std::string &root) {
@@ -694,20 +694,14 @@ Resolver *Resolver::getResolver(const std::string &path, const std::string &root
 }
 
 void imports(std::string &name, std::vector<Symbol> &res, Resolver *r) {
-    for (auto *is : r->unit->imports) {
-        if (is->path->isSimple()) {
-            auto s = dynamic_cast<SimpleName *>(is->path);
-            if (s->name == name) res.push_back(Symbol(is, r));
-        } else {
-            auto *q = dynamic_cast<QName *>(is->path);
-            if (q->name == name) res.push_back(Symbol(is, r));
-        }
+    for (auto is : r->unit->imports) {
+        
     }
 }
 
 void Resolver::other(std::string name, std::vector<Symbol> &res) const {
     for (auto *is : unit->imports) {
-        auto r = getResolver(root + "/" + toPath(is->path), root);
+        auto r = getResolver(root + "/" + toPath(is->list), root);
         r->fromOther = true;
         auto arr = r->find(name, false);
         r->fromOther = false;
@@ -1023,6 +1017,9 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
                 cand.push_back(m);
             }
         }
+    }
+    for(auto is:unit->imports){
+        
     }
     if (cand.empty()) {
         throw std::runtime_error("method:  " + mc->name + " not found");

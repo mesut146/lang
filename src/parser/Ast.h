@@ -39,7 +39,7 @@ static std::map<std::string, int> sizeMap{
 
 class ImportStmt {
 public:
-    Name *path;
+    std::vector<std::string> list;
 
     std::string print();
 };
