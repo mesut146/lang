@@ -20,7 +20,7 @@ void parse(const std::string &path, bool print = false) {
     info("parsing " + path);
     Lexer lexer(path);
     Parser parser(lexer);
-    Unit *u = parser.parseUnit();
+    auto u = parser.parseUnit();
     if (print) {
         std::cout << u->print() << "\n";
     }
@@ -35,7 +35,7 @@ void resolveTest() {
     //std::string path="../tests/a";
     //std::string path="../tests/core/List";
     auto root = "../tests";
-    Resolver *r = Resolver::getResolver(path, root);
+    auto r = Resolver::getResolver(path, root);
     r->resolveAll();
 }
 

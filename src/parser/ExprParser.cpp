@@ -134,7 +134,11 @@ Type *Parser::parseType() {
             } else {
                 consume(COLON2);
                 auto tmp = new Type;
-                tmp->name = consume(IDENT)->value;
+                if (is(NEW)) {
+                    tmp->name = consume(NEW)->value;
+                } else {
+                    tmp->name = consume(IDENT)->value;
+                }
                 tmp->scope = res;
                 res = tmp;
             }
@@ -205,12 +209,11 @@ MapEntry parseMapEntry(Parser *p) {
 }
 
 bool isObj(Parser *p) {
+    if (!p->is(IDENT)) {
+        return false;
+    }
     p->backup();
     try {
-        if (!p->is(IDENT)) {
-            p->restore();
-            return false;
-        }
         p->parseType();
         if (p->is(LBRACE)) {
             p->restore();
@@ -252,7 +255,7 @@ Expression *makeAlloc(Parser *p) {
     return makeObj(p, true, type);
 }
 
-Expression *parseCall(Parser *p, std::string name) {
+Expression *parseCall(Parser *p, const std::string &name) {
     auto res = new MethodCall;
     res->name = name;
     if (p->is(LT)) {
@@ -280,13 +283,14 @@ Expression *PRIM(Parser *p) {
         return parseLit(p);
     } else if (p->is(NEW)) {
         return makeAlloc(p);
-    } else if (isObj(p)) {
-        return makeObj(p, false);
     } else if (p->is(UNSAFE)) {
         auto res = new UnsafeBlock;
         p->pop();
         res->body = p->parseBlock();
         return res;
+    }
+    if (isObj(p)) {
+        return makeObj(p, false);
     } else if (p->is({IDENT}, {COLON2})) {
         auto t = p->parseType();
         if (p->is(LPAREN)) {
@@ -321,8 +325,7 @@ Expression *PRIM(Parser *p) {
             p->consume(RPAREN);
             return res;
         } else {
-            auto *res = new SimpleName(id);
-            return res;
+            return new SimpleName(id);
         }
     } else if (p->is(LBRACE)) {
         auto res = new MapExpr;
@@ -659,7 +662,6 @@ Expression *Parser::parseExpr() {
         assign->right = parseExpr();
         res = assign;
     }
-    log("expr=" + res->print());
     return res;
 }
 

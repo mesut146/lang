@@ -9,6 +9,11 @@ std::string Parser::strLit() {
 ImportStmt *Parser::parseImport() {
     auto res = new ImportStmt;
     consume(IMPORT);
+    res->list.push_back(name());
+    while (is(DIV)) {
+        pop();
+        res->list.push_back(name());
+    }
     return res;
 }
 
@@ -102,8 +107,8 @@ bool Parser::isMethod() {
     return is(FUNC);
 }
 
-Unit *Parser::parseUnit() {
-    auto res = new Unit;
+std::shared_ptr<Unit> Parser::parseUnit() {
+    auto res = std::make_shared<Unit>();
 
     while (first() != nullptr && is(IMPORT)) {
         res->imports.push_back(parseImport());

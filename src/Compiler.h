@@ -18,7 +18,7 @@ struct Compiler : public Visitor {
     std::vector<llvm::BasicBlock *> loopNext;
 
     void compileAll();
-    void compile(const std::string &path);
+    std::optional<std::string> compile(const std::string &path);
     void createProtos();
     void genCode(Method *m);
 

@@ -103,7 +103,7 @@ public:
 
     std::string strLit();
 
-    Unit *parseUnit();
+    std::shared_ptr<Unit> parseUnit();
 
     ImportStmt *parseImport();
 

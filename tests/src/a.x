@@ -1,3 +1,5 @@
+import classTest
+
 class A{
  a: int;
  b: int;
@@ -144,10 +146,9 @@ func condTest(){
 }
 
 func classTest(){
-//  let obj: A = A{a: 5, b: 6};
   let obj: A = A{b: 6, a: 5};
   assert obj.a == 5 && obj.b == 6;
-  obj.a=10;
+  obj.a  =10;
   assert obj.a == 10 && obj.b == 6;
   //let objCopy=obj.clone();
 
@@ -202,7 +203,7 @@ func listTest(){
 
 func prims(){
   let i = 3;
-  while(i < 1000){
+  while(i < 100){
     let pr = true;
     let j = 3;
     while (j * j < i){
@@ -242,6 +243,15 @@ func whileTest(){
   print("\nwhileTest done\n");
 }
 
+func importTest(){
+  let c = Point{x: 100, y: 200};
+  assert c.x == 100 && c.y == 200;
+
+  let c2 = Point::new(10, 20);
+  assert classTest2() == 123;
+  print ("importTest done\n");
+}
+
 func main(): int{
   varTest();
   condTest();
@@ -254,5 +264,6 @@ func main(): int{
   whileTest();
   listTest();
   prims();
+  importTest();
   return 0;
 }

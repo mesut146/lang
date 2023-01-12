@@ -73,7 +73,7 @@ public:
 
 class RType {
 public:
-    Unit *unit = nullptr;
+    std::shared_ptr<Unit> unit;
     Type *type = nullptr;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
@@ -97,14 +97,13 @@ public:
 
 class Resolver : public Visitor {
 public:
-    Unit *unit;
+    std::shared_ptr<Unit> unit;
     std::unordered_map<std::string, RType *> cache;
     std::map<Fragment *, RType *> varMap;
     std::map<std::string, RType *> typeMap;
     std::map<Param *, RType *> paramMap;
     std::unordered_map<Method *, RType *> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
-    std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
     std::map<Method *, std::shared_ptr<Scope>> methodScopes;
     std::shared_ptr<Scope> globalScope;
     BaseDecl *curDecl = nullptr;
@@ -115,15 +114,18 @@ public:
     bool fromOther = false;
     bool inLoop = false;
     IdGen *idgen;
-    static std::map<std::string, Resolver *> resolverMap;
+    bool isResolved = false;
+    std::vector<BaseDecl*> usedTypes;
+    std::vector<Method*> usedMethods;
+    static std::map<std::string, std::shared_ptr<Resolver>> resolverMap;
     std::string root;
 
-    explicit Resolver(Unit *unit, const std::string &root);
+    explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
     virtual ~Resolver();
+    static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    static Resolver *getResolver(const std::string &path, const std::string &root);
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);

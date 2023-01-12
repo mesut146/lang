@@ -228,13 +228,10 @@ void Compiler::makeDecl(BaseDecl *bd) {
         return;
     }
     std::vector<llvm::Type *> elems;
-    auto ed = dynamic_cast<EnumDecl *>(bd);
-    if (ed) {
-        int sz = size(ed) / 8;
-        elems.push_back(getTy());
-        auto charType = llvm::IntegerType::get(*ctx, 8);
-        auto stringType = llvm::ArrayType::get(charType, sz);
-        elems.push_back(stringType);
+    if (bd->isEnum) {
+        auto ed = dynamic_cast<EnumDecl *>(bd);
+        elems.push_back(getInt(32));                                   //ordinal
+        elems.push_back(llvm::ArrayType::get(getInt(8), size(ed) / 8));//data
     } else {
         auto td = dynamic_cast<TypeDecl *>(bd);
         for (auto field : td->fields) {
@@ -252,6 +249,9 @@ void Compiler::createProtos() {
     for (auto gt : resolv->genericTypes) {
         makeDecl(gt);
     }
+    for (auto bd : resolv->usedTypes) {
+        makeDecl(bd);
+    }
     for (auto m : unit->methods) {
         make_proto(m);
     }
@@ -263,6 +263,9 @@ void Compiler::createProtos() {
     //generic methods from resolver
     for (auto gm : resolv->genericMethods) {
         make_proto(gm);
+    }
+    for (auto m : resolv->usedMethods) {
+        make_proto(m);
     }
 
     make_printf();
@@ -470,9 +473,20 @@ void Compiler::genCode(Method *m) {
 }
 
 void Compiler::compileAll() {
+    std::string cmd = "clang-13 ";
     for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
         if (e.is_directory()) continue;
-        compile(e.path().string());
+        auto obj = compile(e.path().string());
+        if (obj) {
+            cmd.append(obj.value());
+            cmd.append(" ");
+        }
+    }
+    for (auto m : unit->methods) {
+        if (m->name == "main") {
+            system((cmd + " && ./a.out").c_str());
+            break;
+        }
     }
 }
 
@@ -518,7 +532,7 @@ void emit(std::string &Filename) {
     std::cout << "writing " << Filename << std::endl;
 }
 
-void Compiler::compile(const std::string &path) {
+std::optional<std::string> Compiler::compile(const std::string &path) {
     auto name = getName(path);
     if (path.compare(path.size() - 2, 2, ".x") != 0) {
         //copy res
@@ -527,13 +541,11 @@ void Compiler::compile(const std::string &path) {
         std::ofstream trg;
         trg.open(outDir + "/" + name, trg.binary);
         trg << src.rdbuf();
-        return;
+        return {};
     }
     std::cout << "compiling " << path << std::endl;
-    Lexer lexer(path);
-    Parser parser(lexer);
-    unit.reset(parser.parseUnit());
-    resolv.reset(new Resolver(unit.get(), srcDir));
+    resolv = Resolver::getResolver(path, srcDir);
+    unit = resolv->unit;
     resolv->resolveAll();
 
     NamedValues.clear();
@@ -559,14 +571,10 @@ void Compiler::compile(const std::string &path) {
     mod->print(fd, nullptr);
     llvm::verifyModule(*mod, &llvm::outs());
 
+    //todo fullpath
     auto outFile = noext + ".o";
     emit(outFile);
-    for (auto m : unit->methods) {
-        if (m->name == "main") {
-            system(("clang-13 " + outFile + " && ./a.out").c_str());
-            break;
-        }
-    }
+    return outFile;
 }
 
 llvm::Value *Compiler::gen(Expression *expr) {

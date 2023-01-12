@@ -55,7 +55,6 @@ public:
     std::string print();
 };
 
-
 class BaseDecl {
 public:
     std::string name;
@@ -369,6 +368,14 @@ public:
 
 class Unary : public Expression {
 public:
+    enum ops {
+        PLUS,
+        MINUS,
+        PLUSPLUS,
+        MINUSMINUS,
+        BANG,
+        TILDE,
+    };
     std::string op;
     Expression *expr;
 
@@ -388,13 +395,10 @@ public:
 
 class Infix : public Expression {
 public:
-    enum ops {
-
-    };
     Expression *left;
     Expression *right;
     std::string op;
-    ops op2;
+    bool isAssign = false;
 
     std::string print() override;
     void *accept(Visitor *v) override;

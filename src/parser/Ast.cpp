@@ -39,7 +39,7 @@ std::string Unit::print() {
 std::string ImportStmt::print() {
     std::string s;
     s.append("import ");
-    s.append(join(list, "::"));
+    s.append(join(list, "/"));
     s.append(";");
     return s;
 }

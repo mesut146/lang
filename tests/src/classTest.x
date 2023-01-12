@@ -18,3 +18,7 @@ class Point{
     return y;
   }
 }
+
+func classTest2(): int{
+  return 123;
+}
