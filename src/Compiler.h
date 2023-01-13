@@ -23,7 +23,9 @@ struct Compiler : public Visitor {
     void genCode(Method *m);
 
     llvm::Value *gen(Expression *e);
+    llvm::Value *gen(std::unique_ptr<Expression> &e);
     llvm::Value *loadPtr(Expression *e);
+    llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, Type *type);
     llvm::Type *mapType(Type *t);
     void make_proto(Method *m);

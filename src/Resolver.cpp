@@ -2,6 +2,7 @@
 #include "parser/Parser.h"
 #include "parser/Util.h"
 #include <list>
+#include <memory>
 #include <unordered_set>
 
 void error(const std::string &msg) {
@@ -153,14 +154,16 @@ public:
         auto str = type->print();
         for (int i = 0; i < decl.size(); i++) {
             if (decl[i]->print() == str) {
-                return src[i];
+                return AstCopier::visitType(src[i]);
             }
         }
         return type;
     }
 };
 Method *generateMethod(std::vector<Type *> &typeArgs, Method *m) {
-    auto res = new Method;
+    auto gen = new Generator(typeArgs, m->typeArgs);
+    auto res = (Method *) gen->visitMethod(m);
+    res->typeArgs.clear();
     if (m->parent) {
         res->name = m->name;
     } else {
@@ -169,17 +172,6 @@ Method *generateMethod(std::vector<Type *> &typeArgs, Method *m) {
             res->name += p->print() + "_";
         }
     }
-
-    auto gen = new Generator(typeArgs, m->typeArgs);
-    auto body = (Block *) m->body->accept(gen);
-    res->body.reset(body);
-    for (auto prm : m->params) {
-        auto np = new Param;
-        np->name = prm->name;
-        np->type.reset((Type *) prm->type.get()->accept(gen));
-        res->params.push_back(np);
-    }
-    res->type.reset((Type *) m->type->accept(gen));
     return res;
 }
 int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
@@ -279,7 +271,7 @@ void Resolver::resolveAll() {
     if (isResolved) return;
     isResolved = true;
     init();
-    for (auto st : unit->stmts) {
+    for (auto &st : unit->stmts) {
         st->accept(this);
     }
     for (auto m : unit->methods) {
@@ -298,12 +290,21 @@ void Resolver::resolveAll() {
             if (!m->typeArgs.empty()) {
                 continue;
             }
+            curDecl = bd;
             visitMethod(m);
+            curDecl = nullptr;
         }
         dropScope();
     }
     for (auto gt : genericTypes) {
+        newScope();
         visitBaseDecl(gt);
+        curDecl = gt;
+        for (auto m : gt->methods) {
+            visitMethod(m);
+        }
+        curDecl = nullptr;
+        dropScope();
     }
     while (!genericMethodsTodo.empty()) {
         auto gm = genericMethodsTodo.back();
@@ -396,7 +397,9 @@ void *Resolver::visitFieldDecl(FieldDecl *fd) {
 }
 
 void *Resolver::visitMethod(Method *m) {
-    if (!m->typeArgs.empty()) error("generic method");
+    if (!m->typeArgs.empty()) {
+        error("generic method");
+    }
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     curMethod = m;
@@ -475,7 +478,9 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
             res->fields.push_back(field);
         }
         for (auto m : td->methods) {
-            auto method = generateMethod(decl->typeArgs, m);
+            auto method = (Method *) gen->visitMethod(m);
+            method->parent = res;
+            method->typeArgs.clear();
             res->methods.push_back(method);
         }
         return res;
@@ -520,7 +525,9 @@ void *Resolver::visitType(Type *type) {
             checkTypeArgs(type->typeArgs, bd->typeArgs);
             if (!bd->typeArgs.empty()) {
                 auto decl = generateDecl(type, bd);
-
+                // for (auto m : decl->methods) {
+                //     genericMethodsTodo.push_back(m);
+                // }
                 res = new RType;
                 res->type = simpleType(type->name);
                 for (auto ta : type->typeArgs) {
@@ -801,7 +808,7 @@ void *Resolver::visitDerefExpr(DerefExpr *e) {
 }
 
 void *Resolver::visitAssertStmt(AssertStmt *st) {
-    if (!isCondition(st->expr, this)) {
+    if (!isCondition(st->expr.get(), this)) {
         error("assert expr is not boolean expr: " + st->expr->print());
     }
     return nullptr;
@@ -825,14 +832,14 @@ void *Resolver::visitIfLetStmt(IfLetStmt *st) {
         curScope()->add(new VarHolder(tmp));
         i++;
     }
-    auto rhs = resolve(st->rhs);
+    auto rhs = resolve(st->rhs.get());
     if (!rhs->targetDecl->isEnum) {
         error("if let rhs is not enum: " + st->rhs->print());
     }
     st->thenStmt->accept(this);
     dropScope();
-    if (st->elseStmt.has_value()) {
-        st->elseStmt.value()->accept(this);
+    if (st->elseStmt) {
+        st->elseStmt->accept(this);
     }
     return nullptr;
 }
@@ -850,27 +857,27 @@ void *Resolver::visitExprStmt(ExprStmt *st) {
 }
 
 void *Resolver::visitBlock(Block *st) {
-    for (auto st : st->list) {
+    for (auto& st : st->list) {
         st->accept(this);
     }
     return nullptr;
 }
 
 void *Resolver::visitIfStmt(IfStmt *st) {
-    if (!isCondition(st->expr, this)) {
+    if (!isCondition(st->expr.get(), this)) {
         error("if condition is not a boolean");
     }
     st->thenStmt->accept(this);
-    if (st->elseStmt.has_value()) st->elseStmt.value()->accept(this);
+    if (st->elseStmt) st->elseStmt->accept(this);
     return nullptr;
 }
 
 void *Resolver::visitReturnStmt(ReturnStmt *st) {
-    if (st->expr.has_value()) {
+    if (st->expr) {
         if (curMethod->type->isVoid()) {
             error("void method returns expr");
         }
-        auto type = (RType *) st->expr.value()->accept(this);
+        auto type = (RType *) st->expr->accept(this);
         if (!subType(type->type, curMethod->type.get())) {
             error("method expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
         }
@@ -910,7 +917,7 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
     if (hasNamed && hasNonNamed) {
         throw std::runtime_error("obj creation can't have mixed values");
     }
-    auto res = resolveType(o->type);
+    auto res = resolveType(o->type.get());
     if (o->isPointer) {
         res = clone(res);
         res->type = new PointerType(res->type);
@@ -1135,7 +1142,7 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
 }
 
 void *Resolver::visitWhileStmt(WhileStmt *node) {
-    if (!isCondition(node->expr, this)) error("while statement expr is not a condition");
+    if (!isCondition(node->expr.get(), this)) error("while statement expr is not a condition");
     inLoop = true;
     node->body->accept(this);
     inLoop = false;

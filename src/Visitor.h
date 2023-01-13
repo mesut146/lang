@@ -41,7 +41,6 @@ public:
     virtual void *visitArrayCreation(ArrayCreation *node) todo("ArrayCreation");
     virtual void *visitParExpr(ParExpr *node) todo("ParExpr");
     virtual void *visitObjExpr(ObjExpr *node) todo("ObjExpr");
-    virtual void *visitAnonyObjExpr(MapExpr *node) todo("MapExpr");
     virtual void *visitUnsafe(UnsafeBlock *node) todo("Unsafe");
 
     //statements
@@ -56,5 +55,4 @@ public:
     virtual void *visitWhileStmt(WhileStmt *node) todo("WhileStmt");
     virtual void *visitDoWhile(DoWhile *node) todo("DoWhile");
     virtual void *visitForStmt(ForStmt *node) todo("ForStmt");
-    virtual void *visitForEach(ForEach *node) todo("for each");
 };

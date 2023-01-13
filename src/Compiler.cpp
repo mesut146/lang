@@ -249,6 +249,9 @@ void Compiler::createProtos() {
     }
     for (auto gt : resolv->genericTypes) {
         makeDecl(gt);
+        for (auto m : gt->methods) {
+            make_proto(m);
+        }
     }
     for (auto bd : resolv->usedTypes) {
         makeDecl(bd);
@@ -307,8 +310,8 @@ bool isReturnLast(Statement *stmt) {
     }
     auto block = dynamic_cast<Block *>(stmt);
     if (block && !block->list.empty()) {
-        auto last = block->list.back();
-        if (isRet(last)) {
+        auto &last = block->list.back();
+        if (isRet(last.get())) {
             return true;
         }
     }
@@ -344,7 +347,7 @@ public:
         return nullptr;
     }
     void *visitBlock(Block *node) override {
-        for (auto s : node->list) {
+        for (auto &s : node->list) {
             s->accept(this);
         }
         return nullptr;
@@ -356,13 +359,13 @@ public:
     void *visitIfStmt(IfStmt *node) override {
         node->thenStmt->accept(this);
         if (node->elseStmt) {
-            node->elseStmt.value()->accept(this);
+            node->elseStmt->accept(this);
         }
         return nullptr;
     }
     void *visitReturnStmt(ReturnStmt *node) override {
         if (node->expr) {
-            node->expr.value()->accept(this);
+            node->expr->accept(this);
         }
         return nullptr;
     }
@@ -432,7 +435,7 @@ public:
     void *visitIfLetStmt(IfLetStmt *node) {
         node->rhs->accept(this);
         node->thenStmt->accept(this);
-        if (node->elseStmt) node->elseStmt.value()->accept(this);
+        if (node->elseStmt) node->elseStmt->accept(this);
         return nullptr;
     }
     void *visitContinueStmt(ContinueStmt *node) {
@@ -559,6 +562,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
             genCode(m);
         }
     }
+    for (auto gt : resolv->genericTypes) {
+        for (auto m : gt->methods) {
+            genCode(m);
+        }
+    }
     std::error_code EC;
     auto noext = trimExtenstion(name);
     llvm::raw_fd_ostream fd(noext + ".ll", EC);
@@ -574,6 +582,9 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
 llvm::Value *Compiler::gen(Expression *expr) {
     return (llvm::Value *) expr->accept(this);
 }
+llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
+    return (llvm::Value *) expr->accept(this);
+}
 
 llvm::BasicBlock *getBB() {
     return Builder->GetInsertBlock();
@@ -587,10 +598,10 @@ void *Compiler::visitBlock(Block *b) {
 }
 
 void *Compiler::visitReturnStmt(ReturnStmt *t) {
-    if (t->expr.has_value()) {
+    if (t->expr) {
         //auto val = (llvm::Value *) t->expr->accept(this);
         auto type = resolv->resolve(curMethod->type.get())->type;
-        Builder->CreateRet(cast(t->expr.value(), type));
+        Builder->CreateRet(cast(t->expr.get(), type));
     } else {
         Builder->CreateRetVoid();
     }
@@ -613,6 +624,13 @@ bool isVar(Expression *e) {
 llvm::Value *Compiler::loadPtr(Expression *e) {
     auto val = gen(e);
     if (isVar(e)) {
+        return load(val);
+    }
+    return val;
+}
+llvm::Value *Compiler::loadPtr(std::unique_ptr<Expression> &e) {
+    auto val = gen(e.get());
+    if (isVar(e.get())) {
         return load(val);
     }
     return val;
@@ -841,7 +859,7 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         auto size = cast(mc->args[0], lt);
         if (!mc->typeArgs.empty()) {
             int bytes = getSize(mc->typeArgs[0]) / 8;
-            auto amount = Builder->CreateNSWMul(size, makeInt(bytes));
+            auto amount = Builder->CreateNSWMul(size, makeInt(bytes, 64));
             args.push_back(amount);
         } else {
             args.push_back(size);
@@ -855,10 +873,15 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         target = rt->targetMethod;
         f = funcMap[mangle(target)];
     }
-    if (mc->scope && !target->isStatic) {
-        //add this object
-        auto obj = gen(mc->scope.get());
-        args.push_back(load(obj));
+    if (target && !target->isStatic && target->parent) {
+        if (mc->scope) {
+            //add this object
+            auto obj = gen(mc->scope.get());
+            args.push_back(load(obj));
+        } else {
+            //member sibling
+            args.push_back(thisPtr);
+        }
     }
 
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
@@ -890,7 +913,7 @@ void *Compiler::visitLiteral(Literal *n) {
 
 void *Compiler::visitAssertStmt(AssertStmt *n) {
     auto str = n->expr->print();
-    auto cond = loadPtr(n->expr);
+    auto cond = loadPtr(n->expr.get());
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     auto next = llvm::BasicBlock::Create(*ctx, "");
     Builder->CreateCondBr(branch(cond), next, then);
@@ -1072,7 +1095,7 @@ void *Compiler::visitIfStmt(IfStmt *b) {
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    if (b->elseStmt.has_value()) {
+    if (b->elseStmt) {
         elsebb = llvm::BasicBlock::Create(*ctx, "");
         Builder->CreateCondBr(cond, then, elsebb);
     } else {
@@ -1080,14 +1103,14 @@ void *Compiler::visitIfStmt(IfStmt *b) {
     }
     Builder->SetInsertPoint(then);
     b->thenStmt->accept(this);
-    if (!isReturnLast(b->thenStmt)) {
+    if (!isReturnLast(b->thenStmt.get())) {
         Builder->CreateBr(next);
     }
-    if (b->elseStmt.has_value()) {
+    if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
-        b->elseStmt.value()->accept(this);
-        if (!isReturnLast(b->elseStmt.value())) {
+        b->elseStmt->accept(this);
+        if (!isReturnLast(b->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     }
@@ -1109,7 +1132,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(*ctx, "");
-    if (b->elseStmt.has_value()) {
+    if (b->elseStmt) {
         elsebb = llvm::BasicBlock::Create(*ctx, "");
         Builder->CreateCondBr(branch(cmp), then, elsebb);
     } else {
@@ -1142,10 +1165,10 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
         NamedValues.erase(p);
     }
     Builder->CreateBr(next);
-    if (b->elseStmt.has_value()) {
+    if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
-        b->elseStmt.value()->accept(this);
+        b->elseStmt->accept(this);
         Builder->CreateBr(next);
     }
     Builder->SetInsertPoint(next);
@@ -1180,7 +1203,7 @@ void *Compiler::visitWhileStmt(WhileStmt *node) {
     auto next = llvm::BasicBlock::Create(*ctx, "");
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
-    auto c = loadPtr(node->expr);
+    auto c = loadPtr(node->expr.get());
     Builder->CreateCondBr(branch(c), then, next);
     Builder->SetInsertPoint(then);
     func->getBasicBlockList().push_back(then);

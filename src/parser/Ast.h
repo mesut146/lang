@@ -49,7 +49,7 @@ public:
     std::vector<ImportStmt *> imports;
     std::vector<BaseDecl *> types;
     std::vector<Method *> methods;
-    std::vector<Statement *> stmts;
+    std::vector<std::unique_ptr<Statement>> stmts;
     std::string path;
 
     std::string print();
@@ -124,13 +124,13 @@ public:
 class Method {
 public:
     bool isStatic = false;
-    std::unique_ptr<Type> type;
     std::string name;
+    std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
     std::vector<Param *> params;
     std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;
-    Unit* unit;
+    Unit *unit;
 
     std::string print();
     void *accept(Visitor *v);
@@ -151,7 +151,7 @@ public:
 
 class Block : public Statement {
 public:
-    std::vector<Statement *> list;
+    std::vector<std::unique_ptr<Statement>> list;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -512,7 +512,7 @@ public:
 
 class ObjExpr : public Expression {
 public:
-    Type *type;
+    std::unique_ptr<Type> type;
     std::vector<Entry> entries;
     bool isPointer = false;
 
@@ -520,25 +520,9 @@ public:
     void *accept(Visitor *v) override;
 };
 
-class MapEntry {
-public:
-    Expression *key;
-    Expression *value;
-
-    std::string print();
-};
-
-class MapExpr : public Expression {
-public:
-    std::vector<MapEntry> entries;
-
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
 class ReturnStmt : public Statement {
 public:
-    std::optional<Expression *> expr;
+    std::unique_ptr<Expression> expr;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -562,11 +546,11 @@ public:
 
 class IfLetStmt : public Statement {
 public:
-    Type *type;
+    std::unique_ptr<Type> type;
     std::vector<std::string> args;
-    Expression *rhs;
-    Statement *thenStmt;
-    std::optional<Statement *> elseStmt;
+    std::unique_ptr<Expression> rhs;
+    std::unique_ptr<Statement> thenStmt;
+    std::unique_ptr<Statement> elseStmt;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -574,9 +558,9 @@ public:
 
 class IfStmt : public Statement {
 public:
-    Expression *expr;
-    Statement *thenStmt;
-    std::optional<Statement *> elseStmt;
+    std::unique_ptr<Expression> expr;
+    std::unique_ptr<Statement> thenStmt;
+    std::unique_ptr<Statement> elseStmt;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -584,8 +568,8 @@ public:
 
 class WhileStmt : public Statement {
 public:
-    Expression *expr;
-    Statement *body;
+    std::unique_ptr<Expression> expr;
+    std::unique_ptr<Statement> body;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -593,8 +577,8 @@ public:
 
 class DoWhile : public Statement {
 public:
-    Expression *expr;
-    Block *body;
+    std::unique_ptr<Expression> expr;
+    std::unique_ptr<Block> body;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -603,19 +587,9 @@ public:
 class ForStmt : public Statement {
 public:
     VarDeclExpr *decl = nullptr;
-    Expression *cond = nullptr;
-    std::vector<Expression *> updaters;
-    Statement *body;
-
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
-class ForEach : public Statement {
-public:
-    VarDeclExpr *decl;
-    Expression *expr;
-    Statement *body;
+    std::unique_ptr<Expression> cond;
+    std::vector<std::unique_ptr<Expression>> updaters;
+    std::unique_ptr<Statement> body;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -623,9 +597,9 @@ public:
 
 class AssertStmt : public Statement {
 public:
-    Expression *expr;
+    std::unique_ptr<Expression> expr;
 
-    explicit AssertStmt(Expression *expr) : expr(expr) {}
+    explicit AssertStmt(Expression *expr) : expr(std::unique_ptr<Expression>(expr)) {}
 
     std::string print() override;
     void *accept(Visitor *v) override;

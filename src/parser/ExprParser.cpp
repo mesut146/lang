@@ -195,19 +195,6 @@ Entry parseEntry(Parser *p) {
     return e;
 }
 
-MapEntry parseMapEntry(Parser *p) {
-    //lit,ident
-    MapEntry e{};
-    if (p->is(IDENT)) {
-        e.key = new SimpleName(p->consume(IDENT)->value);
-    } else if (isLit(p->first())) {
-        e.key = parseLit(p);
-    }
-    p->consume(COLON);
-    e.value = p->parseExpr();
-    return e;
-}
-
 bool isObj(Parser *p) {
     if (!p->is(IDENT)) {
         return false;
@@ -219,7 +206,7 @@ bool isObj(Parser *p) {
             p->restore();
             return true;
         }
-    } catch (...) {}
+    } catch (std::exception &e) {}
     p->restore();
     return false;
 }
@@ -227,7 +214,7 @@ bool isObj(Parser *p) {
 Expression *makeObj(Parser *p, bool isPointer, Type *type) {
     auto res = new ObjExpr;
     res->isPointer = isPointer;
-    res->type = type;
+    res->type.reset(type);
     p->consume(LBRACE);
     res->entries.push_back(parseEntry(p));
     while (p->is(COMMA)) {
@@ -327,16 +314,6 @@ Expression *PRIM(Parser *p) {
         } else {
             return new SimpleName(id);
         }
-    } else if (p->is(LBRACE)) {
-        auto res = new MapExpr;
-        p->consume(LBRACE);
-        res->entries.push_back(parseMapEntry(p));
-        while (p->is(COMMA)) {
-            p->consume(COMMA);
-            res->entries.push_back(parseMapEntry(p));
-        }
-        p->consume(RBRACE);
-        return res;
     } else if (p->is(LBRACKET)) {
         auto res = new ArrayExpr;
         p->consume(LBRACKET);

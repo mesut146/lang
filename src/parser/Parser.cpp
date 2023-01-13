@@ -122,12 +122,12 @@ std::shared_ptr<Unit> Parser::parseUnit() {
         } else if (is(ENUM)) {
             res->types.push_back(parseEnumDecl());
         } else if (isVarDecl()) {
-            res->stmts.push_back(parseVarDecl());
+            res->stmts.push_back(std::unique_ptr<Statement>(parseVarDecl()));
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
         } else {
             auto stmt = parseStmt();
-            res->stmts.push_back(stmt);
+            res->stmts.push_back(std::unique_ptr<Statement>(stmt));
         }
     }
     return res;

@@ -31,7 +31,7 @@ std::string Unit::print() {
     }
     if (!stmts.empty()) {
         s.append("\n\n");
-        s.append(join(stmts, "\n"));
+        s.append(joinPtr(stmts, "\n"));
     }
     return s;
 }
@@ -242,18 +242,6 @@ std::string ObjExpr::print() {
     return s;
 }
 
-std::string MapExpr::print() {
-    std::string s;
-    s.append("{");
-    s.append(join(entries, ", "));
-    s.append("}");
-    return s;
-}
-
-std::string MapEntry::print() {
-    return key->print() + ": " + value->print();
-}
-
 std::string Entry::print() {
     if (hasKey()) {
         return key + ": " + value->print();
@@ -273,8 +261,8 @@ std::string IfLetStmt::print() {
     s.append(" = ");
     s.append(rhs->print());
     s.append(thenStmt->print());
-    if (elseStmt.has_value()) {
-        s.append("else ").append(elseStmt.value()->print());
+    if (elseStmt) {
+        s.append("else ").append(elseStmt->print());
     }
     return s;
 }
@@ -282,8 +270,8 @@ std::string IfLetStmt::print() {
 std::string IfStmt::print() {
     std::string s;
     s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
-    if (elseStmt.has_value()) {
-        s.append("else ").append(elseStmt.value()->print());
+    if (elseStmt) {
+        s.append("else ").append(elseStmt->print());
     }
     return s;
 }
@@ -295,26 +283,15 @@ std::string ForStmt::print() {
         s.append(decl->print());
     }
     s.append(";");
-    if (cond != nullptr) {
+    if (cond) {
         s.append(cond->print());
     }
     s.append(";");
     if (!updaters.empty()) {
-        s.append(join(updaters, ", "));
+        s.append(joinPtr(updaters, ", "));
     }
     s.append(")");
-    printBody(s, body);
-    return s;
-}
-
-std::string ForEach::print() {
-    std::string s;
-    s.append("for(");
-    s.append(decl->print());
-    s.append(" : ");
-    s.append(expr->print());
-    s.append(")\n");
-    s.append(body->print());
+    printBody(s, body.get());
     return s;
 }
 std::string Infix::print() {
@@ -388,13 +365,13 @@ std::string Ternary::print() {
 std::string WhileStmt::print() {
     std::string s;
     s.append("while(").append(expr->print()).append(")");
-    printBody(s, body);
+    printBody(s, body.get());
     return s;
 }
 
 std::string ReturnStmt::print() {
-    if (!expr.has_value()) return "return";
-    return "return " + expr.value()->print() + ";";
+    if (!expr) return "return";
+    return "return " + expr->print() + ";";
 }
 
 std::string ContinueStmt::print() {
@@ -495,9 +472,6 @@ void *Block::accept(Visitor *v) {
 void *Type::accept(Visitor *v) {
     return v->visitType(this);
 }
-void *MapExpr::accept(Visitor *v) {
-    return v->visitAnonyObjExpr(this);
-}
 void *ObjExpr::accept(Visitor *v) {
     return v->visitObjExpr(this);
 }
@@ -519,9 +493,6 @@ void *IfLetStmt::accept(Visitor *v) {
 }
 void *IfStmt::accept(Visitor *v) {
     return v->visitIfStmt(this);
-}
-void *ForEach::accept(Visitor *v) {
-    return v->visitForEach(this);
 }
 
 void *Infix::accept(Visitor *v) {

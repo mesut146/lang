@@ -5,6 +5,11 @@ T visit(T node, AstCopier *t) {
     return (T) node->accept(t);
 }
 
+template<class T>
+T *visit(std::unique_ptr<T> &node, AstCopier *t) {
+    return (T *) node->accept(t);
+}
+
 void *AstCopier::visitLiteral(Literal *node) {
     auto res = new Literal;
     res->val = node->val;
@@ -42,16 +47,16 @@ void *AstCopier::visitInfix(Infix *node) {
 
 void *AstCopier::visitBlock(Block *node) {
     auto res = new Block;
-    for (auto st : node->list) {
-        res->list.push_back(visit(st, this));
+    for (auto &st : node->list) {
+        res->list.push_back(std::unique_ptr<Statement>(visit(st, this)));
     }
     return res;
 }
 
 void *AstCopier::visitReturnStmt(ReturnStmt *node) {
     auto res = new ReturnStmt;
-    if (node->expr.has_value()) {
-        res->expr = visit(node->expr.value(), this);
+    if (node->expr) {
+        res->expr.reset(visit(node->expr, this));
     }
     return res;
 }
@@ -76,9 +81,9 @@ void *AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment;
     res->name = node->name;
     if (node->type) {
-        res->type.reset(visit(node->type.get(), this));
+        res->type.reset(visit(node->type, this));
     }
-    res->rhs.reset(visit(node->rhs.get(), this));
+    res->rhs.reset(visit(node->rhs, this));
     res->isOptional = node->isOptional;
     return res;
 }
@@ -86,7 +91,7 @@ void *AstCopier::visitFragment(Fragment *node) {
 void *AstCopier::visitObjExpr(ObjExpr *node) {
     auto res = new ObjExpr;
     res->isPointer = node->isPointer;
-    res->type = visit(node->type, this);
+    res->type.reset(visit(node->type, this));
     for (auto &e : node->entries) {
         auto ent = Entry();
         ent.key = e.key;
@@ -145,16 +150,36 @@ void *AstCopier::visitUnary(Unary *node) {
 
 void *AstCopier::visitWhileStmt(WhileStmt *node) {
     auto res = new WhileStmt;
-    res->expr = visit(node->expr, this);
-    res->body = visit(node->body, this);
+    res->expr.reset(visit(node->expr.get(), this));
+    res->body.reset(visit(node->body.get(), this));
     return res;
 }
 void *AstCopier::visitIfStmt(IfStmt *node) {
     auto res = new IfStmt;
-    res->expr = visit(node->expr, this);
-    res->thenStmt = visit(node->thenStmt, this);
+    res->expr.reset(visit(node->expr.get(), this));
+    res->thenStmt.reset(visit(node->thenStmt.get(), this));
     if (node->elseStmt) {
-        res->elseStmt = visit(node->elseStmt.value(), this);
+        res->elseStmt.reset(visit(node->elseStmt.get(), this));
     }
+    return res;
+}
+
+void *AstCopier::visitMethod(Method *node) {
+    auto res = new Method;
+    res->isStatic = node->isStatic;
+    res->name = node->name;
+    res->type.reset(visit(node->type.get(), this));
+    for (auto ta : node->typeArgs) {
+        res->typeArgs.push_back(visit(ta, this));
+    }
+    for (auto prm : node->params) {
+        auto param = new Param;
+        param->name = prm->name;
+        param->type.reset(visit(prm->type.get(), this));
+        param->method = res;
+        res->params.push_back(param);
+    }
+    res->body.reset(visit(node->body.get(), this));
+
     return res;
 }

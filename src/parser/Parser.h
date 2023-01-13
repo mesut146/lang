@@ -24,7 +24,7 @@ public:
     int pos = 0;
     int mark = 0;
     bool isMarked = false;
-    Unit* unit;
+    Unit *unit;
 
     explicit Parser(Lexer &lexer) : lexer(lexer) {
         fill();
@@ -70,21 +70,19 @@ public:
     Result<Token *> consume2(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return {t, nullptr};
-        if (!isMarked) {
-        }
         return {nullptr, new std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt))};
     }
 
     Token *consume(TokenType tt) {
         Token *t = pop();
         if (t->is(tt)) return t;
-        if (!isMarked) {
-        }
         throw std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt));
     }
 
     void backup() {
-        if (isMarked) throw std::runtime_error("already marked");
+        if (isMarked) {
+            throw std::runtime_error("already marked");
+        }
         isMarked = true;
         mark = pos;
     }

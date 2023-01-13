@@ -6,7 +6,7 @@ Block *Parser::parseBlock() {
     auto res = new Block;
     consume(LBRACE);
     while (!is(RBRACE)) {
-        res->list.push_back(parseStmt());
+        res->list.push_back(std::unique_ptr<Statement>(parseStmt()));
     }
     consume(RBRACE);
     return res;
@@ -17,7 +17,7 @@ IfLetStmt *parseIfLet(Parser *p) {
     auto res = new IfLetStmt;
     p->consume(IF_KW);
     p->consume(LET);
-    res->type = p->parseType();
+    res->type.reset(p->parseType());
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
         res->args.push_back(p->name());
@@ -30,13 +30,13 @@ IfLetStmt *parseIfLet(Parser *p) {
     p->consume(EQ);
     //need lparen to distinguish from objExpr
     p->consume(LPAREN);
-    res->rhs = p->parseExpr();
+    res->rhs.reset(p->parseExpr());
     p->consume(RPAREN);
 
-    res->thenStmt = p->parseBlock();
+    res->thenStmt.reset(p->parseBlock());
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
-        res->elseStmt = p->parseStmt();
+        res->elseStmt.reset(p->parseStmt());
     }
     return res;
 }
@@ -45,87 +45,59 @@ IfStmt *parseIf(Parser *p) {
     auto res = new IfStmt;
     p->consume(IF_KW);
     p->consume(LPAREN);
-    res->expr = p->parseExpr();
+    res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
-    res->thenStmt = p->parseStmt();
+    res->thenStmt.reset(p->parseStmt());
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
-        res->elseStmt = p->parseStmt();
+        res->elseStmt.reset(p->parseStmt());
     }
     return res;
 }
 
-bool isForEach(Parser *p) {
-    int pos = p->pos;
-    if (p->is({LET, CONST_KW})) pos++;
-    if (!p->tokens[pos++]->is(IDENT)) return false;
-    return p->tokens[pos]->is(COLON);
-}
-
 Statement *parseFor(Parser *p) {
+    auto res = new ForStmt;
     p->consume(FOR);
     p->consume(LPAREN);
-    VarDeclExpr *var;
-    bool normalFor;
-    if (isForEach(p)) {
-        var = new VarDeclExpr;
-        if (p->is({LET, CONST_KW})) p->pop();
-        auto f = new Fragment;
-        f->name = p->name();
-        var->list.push_back(f);
-        normalFor = false;
-    } else {
-        var = p->parseVarDeclExpr();
-        normalFor = true;
+    auto var = p->parseVarDeclExpr();
+    p->consume(SEMI);
+    res->decl = var;
+    if (!p->first()->is(SEMI)) {
+        res->cond.reset(p->parseExpr());
     }
-
-    if (normalFor) {
-        p->consume(SEMI);
-        auto res = new ForStmt;
-        res->decl = var;
-        if (!p->first()->is(SEMI)) {
-            res->cond = p->parseExpr();
+    p->consume(SEMI);
+    if (!p->first()->is(RPAREN)) {
+        auto list = p->exprList();
+        for (auto e : list) {
+            res->updaters.push_back(std::unique_ptr<Expression>(e));
         }
-        p->consume(SEMI);
-        if (!p->first()->is(RPAREN)) {
-            res->updaters = p->exprList();
-        }
-        p->consume(RPAREN);
-        res->body = p->parseStmt();
-        return res;
-    } else {
-        auto res = new ForEach;
-        res->decl = var;
-        p->consume(COLON);
-        res->expr = p->parseExpr();
-        p->consume(RPAREN);
-        res->body = p->parseStmt();
-        return res;
     }
+    p->consume(RPAREN);
+    res->body.reset(p->parseStmt());
+    return res;
 }
 
 WhileStmt *parseWhile(Parser *p) {
     auto res = new WhileStmt;
     p->consume(WHILE);
     p->consume(LPAREN);
-    res->expr = p->parseExpr();
+    res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
-    res->body = p->parseBlock();
+    res->body.reset(p->parseBlock());
     return res;
 }
 
 DoWhile *parseDoWhile(Parser *p) {
     auto res = new DoWhile;
     p->consume(DO);
-    res->body = p->parseBlock();
+    res->body.reset(p->parseBlock());
     p->consume(WHILE);
     p->consume(LPAREN);
-    res->expr = p->parseExpr();
+    res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
     p->consume(SEMI);
     return res;
 }
-
 
 Statement *Parser::parseStmt() {
     if (is(ASSERT_KW)) {
@@ -152,7 +124,7 @@ Statement *Parser::parseStmt() {
         auto ret = new ReturnStmt;
         consume(RETURN);
         if (!is(SEMI)) {
-            ret->expr = parseExpr();
+            ret->expr.reset(parseExpr());
         }
         consume(SEMI);
         return ret;
