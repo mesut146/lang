@@ -3,16 +3,16 @@ class List<T>{
   count: int;
   cap: int;
 
-  static func new(): List<T>*{
+  /*static func new<T>(): List<T>*{
     return new List<T>{arr: malloc<T>(10), count: 0, cap: 10};
-  } 
+  } */
 
   func expand(max: int){
-    if(arr.length < max){
+    /*if(arr.length < max){
       let tmp = new T[max];
       Array.copy(arr, 0, tmp, 0, count);
       arr = tmp;
-    }
+    }*/
   }
 
   func add(e: T){
@@ -21,13 +21,13 @@ class List<T>{
     ++count;
   }
 
-  func add(list: List<T>){
+  /*func add(list: List<T>){
     let i = 0;
     while(i < list.count){
         add(list.get(i));
         ++i;
     }
-  }
+  }*/
 
   func get(pos: int): T{
     if(pos >= count) panic("index out of bounds");
@@ -68,4 +68,11 @@ class List<T>{
     return res;
   }
   */
+}
+
+func listTest(){
+  //let list = List::new();
+  let list = new List<int>{arr: malloc<int>(10), count: 0, cap: 10};
+  list.add(1);
+  print("listTest done\n");
 }

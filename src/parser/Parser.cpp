@@ -109,6 +109,7 @@ bool Parser::isMethod() {
 
 std::shared_ptr<Unit> Parser::parseUnit() {
     auto res = std::make_shared<Unit>();
+    unit = res.get();
 
     while (first() != nullptr && is(IMPORT)) {
         res->imports.push_back(parseImport());
@@ -145,6 +146,7 @@ Param *Parser::parseParam(Method *m) {
 //(type | void) name generics? "(" params* ")" (block | ";")
 Method *Parser::parseMethod() {
     auto res = new Method;
+    res->unit = unit;
     if (is(STATIC)) {
         consume(STATIC);
         res->isStatic = true;

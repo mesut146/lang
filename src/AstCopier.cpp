@@ -149,3 +149,12 @@ void *AstCopier::visitWhileStmt(WhileStmt *node) {
     res->body = visit(node->body, this);
     return res;
 }
+void *AstCopier::visitIfStmt(IfStmt *node) {
+    auto res = new IfStmt;
+    res->expr = visit(node->expr, this);
+    res->thenStmt = visit(node->thenStmt, this);
+    if (node->elseStmt) {
+        res->elseStmt = visit(node->elseStmt.value(), this);
+    }
+    return res;
+}

@@ -159,7 +159,29 @@ public:
         return type;
     }
 };
+Method *generateMethod(std::vector<Type *> &typeArgs, Method *m) {
+    auto res = new Method;
+    if (m->parent) {
+        res->name = m->name;
+    } else {
+        res->name = m->name + "_";
+        for (auto p : typeArgs) {
+            res->name += p->print() + "_";
+        }
+    }
 
+    auto gen = new Generator(typeArgs, m->typeArgs);
+    auto body = (Block *) m->body->accept(gen);
+    res->body.reset(body);
+    for (auto prm : m->params) {
+        auto np = new Param;
+        np->name = prm->name;
+        np->type.reset((Type *) prm->type.get()->accept(gen));
+        res->params.push_back(np);
+    }
+    res->type.reset((Type *) m->type->accept(gen));
+    return res;
+}
 int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
     for (int i = 0; i < decl->variants.size(); i++) {
         if (decl->variants[i]->name == name) {
@@ -452,7 +474,10 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
             auto field = new FieldDecl(fd->name, type, res);
             res->fields.push_back(field);
         }
-        std::cout << res->print() << std::endl;
+        for (auto m : td->methods) {
+            auto method = generateMethod(decl->typeArgs, m);
+            res->methods.push_back(method);
+        }
         return res;
     }
 }
@@ -969,9 +994,8 @@ bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     if (mc->args.size() != m->params.size()) return false;
     if (!mc->typeArgs.empty()) return !m->typeArgs.empty();
     for (int i = 0; i < mc->args.size(); i++) {
-        auto *t1 = r->resolve(mc->args[i]);
-        auto *t2 = (RType *) m->params[i]->accept(r);
-        if (t1->type == nullptr) continue;// to be inferred
+        auto t1 = r->resolve(mc->args[i]);
+        auto t2 = (RType *) m->params[i]->accept(r);
         if (!subType(t1->type, t2->type)) return false;
     }
     return true;
@@ -998,29 +1022,34 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
         r->usedMethods.push_back(target);
         return res;
     } else {
-        
+        //member method
+        std::vector<Method *> list;
+        for (auto m : scope->targetDecl->methods) {
+            if (m->isStatic) continue;
+            if (m->name == mc->name) {
+                list.push_back(m);
+            }
+        }
+        if (list.empty()) {
+            error("no such method: " + mc->name);
+        }
+        if (list.size() > 1) error("more than 1 candidate");
+        auto target = list[0];
+        auto res = r->resolveType(target->type.get());
+        res->targetMethod = target;
+        r->usedMethods.push_back(target);
+        return res;
     }
     throw std::runtime_error("scopedMethod");
 }
 
-Method *generateMethod(MethodCall *mc, Method *m) {
-    auto res = new Method;
-    res->name = m->name + "_";
-    for (auto p : mc->typeArgs) {
-        res->name += p->print() + "_";
+
+void findMethod(Unit *unit, MethodCall *mc, std::vector<Method *> &list) {
+    for (auto m : unit->methods) {
+        if (m->name == mc->name) {
+            list.push_back(m);
+        }
     }
-    auto gen = new Generator(mc->typeArgs, m->typeArgs);
-    auto body = (Block *) m->body->accept(gen);
-    res->body.reset(body);
-    for (auto prm : m->params) {
-        auto np = new Param;
-        np->name = prm->name;
-        np->type.reset((Type *) prm->type.get()->accept(gen));
-        res->params.push_back(np);
-    }
-    res->type.reset((Type *) m->type->accept(gen));
-    std::cout << res->print() << std::endl;
-    return res;
 }
 
 void *Resolver::visitMethodCall(MethodCall *mc) {
@@ -1053,6 +1082,7 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         }
     }
     if (curDecl) {
+        //static sibling method
         for (auto m : curDecl->methods) {
             if (m->name == mc->name) {
                 cand.push_back(m);
@@ -1063,16 +1093,14 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
         resolver->resolveAll();
         try {
-            auto res = resolver->resolve(mc);
-            cache[id] = res;
-            usedMethods.push_back(res->targetMethod);
-            return res;
+            findMethod(resolver->unit.get(), mc, cand);
         } catch (std::exception &e) {
         }
     }
     if (cand.empty()) {
         throw std::runtime_error("method:  " + mc->name + " not found");
     }
+
     //filter
     std::vector<Method *> real;
     for (auto c : cand) {
@@ -1091,15 +1119,16 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
     auto trg = real[0];
     RType *res;
     if (!trg->typeArgs.empty()) {
-        auto newMethod = generateMethod(mc, trg);
+        auto newMethod = generateMethod(mc->typeArgs, trg);
         res = clone(resolveType(newMethod->type.get()));
         res->targetMethod = newMethod;
-        //res = (RType *) newMethod->accept(this);
         genericMethodsTodo.push_back(newMethod);
     } else {
         res = clone(resolveType(trg->type.get()));
         res->targetMethod = trg;
-        //res = (RType *) trg->accept(this, arg);
+        if (trg->unit != unit.get()) {
+            usedMethods.push_back(trg);
+        }
     }
     cache[id] = res;
     return res;

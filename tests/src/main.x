@@ -1,0 +1,145 @@
+import classTest
+import infix
+import enumTest
+import flow
+import generic
+import List
+
+func varTest(){
+  let a: int = 5;
+  assert a == 5;
+  a = 6;
+  assert a == 6;
+  let ptr: int* = &a;
+  assert *ptr == 6;
+  print("varTest done\n");
+}
+
+
+func getTrue(cnt: int*): bool {
+  *cnt = *cnt + 1;
+  return true;
+}
+func getFalse(cnt: int*): bool {
+  *cnt = *cnt + 1;
+  return false;
+}
+
+func condTest(){
+  let c1: int = 0;
+  let c2: int = 0;
+  assert (getFalse(&c2)&&getTrue(&c1))==false;
+  assert c1 == 0 && c2 == 1;
+ 
+  assert getTrue(&c1) && getTrue(&c1);
+  assert c1 == 2 && c2 == 1;
+  
+  assert getTrue(&c1) || getFalse(&c2);
+  assert c1==3 && c2==1;
+
+  assert getFalse(&c2) || getTrue(&c1);
+  assert c1==4 && c2==2;
+
+  print("condTest done\n");
+}
+
+
+class List<T>{
+  size: int;
+  cap: int;
+  ptr: T*;
+}
+
+func newList<T>(): List<T>*{
+  let res = new List<T>{size: 0, cap: 10, ptr: malloc<T>(10)};
+  return res;
+}
+
+func add<T>(list: List<T>*, val: T){
+ list.ptr[list.size] = val;
+ ++list.size;
+}
+
+func get<T>(list: List<T>*, idx: int): T{
+ return list.ptr[idx];
+}
+
+func printList<T>(list: List<T>*){
+  print("size=%d cap=%d\n", list.size, list.cap);
+  let i = 0;
+  print("[");
+  while(i < list.size){
+    print("%d ", get<int>(list, i));
+    ++i;
+  }
+  print("]\n");
+}
+
+func listTest2(){
+  let list = newList<int>();
+  let i = 1;
+  while(i <= 9){
+    add<int>(list, i);
+    i = i + 2;
+  }
+  printList<int>(list);
+  print ("listTest done\n");
+}
+
+func prims(){
+  let i = 3;
+  while(i < 100){
+    let pr = true;
+    let j = 3;
+    while (j * j < i){
+      if(i % j==0){
+        pr = false;
+        break;
+      }
+      j = j + 2;
+    }
+    if(pr)
+      print("%d, ", i);
+    i = i + 2;
+  }
+  print ("prims done\n");
+}
+
+
+func mallocTest(){
+   let arr = malloc<int>(10);
+   arr[0] = 3;
+   arr[1] = 5;
+   print("arr: %d, %d\n", arr[0], arr[1]);
+
+   print("mallocTest done\n");
+}
+
+
+func importTest(){
+  let c = Point{x: 100, y: 200};
+  assert c.x == 100 && c.y == 200;
+
+  let c2 = Point::new(10, 20);
+  assert classTest2() == 123;
+  assert c2.getX() == 10 && c2.getY() == 20;
+  print ("importTest done\n");
+}
+
+func main(): int{
+  varTest();
+  condTest();
+  infixTest();
+  ifTest();
+  elseTest();
+  enumTest();
+  classTest();
+  mallocTest();
+  whileTest();
+  listTest();
+  prims();
+  importTest();
+  genericTest();
+  listTest();
+  return 0;
+}

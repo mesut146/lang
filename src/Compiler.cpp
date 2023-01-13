@@ -193,10 +193,12 @@ static void make_malloc() {
     f->setAttributes(attr);
     mallocf = f;
 }
-
+bool isTemplate(Method *m) {
+    return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
+}
 
 void Compiler::make_proto(Method *m) {
-    if (!m->typeArgs.empty()) {
+    if (isTemplate(m)) {
         return;
     }
     std::vector<llvm::Type *> argTypes;
@@ -219,7 +221,6 @@ void Compiler::make_proto(Method *m) {
         }
         i++;
     }
-    f->dump();
     funcMap[mangle(m)] = f;
 }
 
@@ -449,7 +450,7 @@ void Compiler::makeLocals(Statement *st) {
 }
 
 void Compiler::genCode(Method *m) {
-    if (!m->typeArgs.empty()) {
+    if (isTemplate(m)) {
         return;
     }
     resolv->curMethod = m;
@@ -466,7 +467,6 @@ void Compiler::genCode(Method *m) {
         Builder->CreateRetVoid();
     }
     llvm::verifyFunction(*func);
-    std::cout << "verified: " << m->name << std::endl;
     resolv->dropScope();
     func = nullptr;
     curMethod = nullptr;
@@ -482,12 +482,7 @@ void Compiler::compileAll() {
             cmd.append(" ");
         }
     }
-    for (auto m : unit->methods) {
-        if (m->name == "main") {
-            system((cmd + " && ./a.out").c_str());
-            break;
-        }
-    }
+    system((cmd + " && ./a.out").c_str());
 }
 
 void emit(std::string &Filename) {
@@ -564,7 +559,6 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
             genCode(m);
         }
     }
-    //mod->dump();
     std::error_code EC;
     auto noext = trimExtenstion(name);
     llvm::raw_fd_ostream fd(noext + ".ll", EC);
@@ -861,10 +855,14 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         target = rt->targetMethod;
         f = funcMap[mangle(target)];
     }
+    if (mc->scope && !target->isStatic) {
+        //add this object
+        auto obj = gen(mc->scope.get());
+        args.push_back(load(obj));
+    }
 
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
-        //auto av = loadPtr(a);
         if (target) {
             auto av = cast(a, target->params[i]->type.get());
             args.push_back(av);

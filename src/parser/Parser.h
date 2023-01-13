@@ -24,6 +24,7 @@ public:
     int pos = 0;
     int mark = 0;
     bool isMarked = false;
+    Unit* unit;
 
     explicit Parser(Lexer &lexer) : lexer(lexer) {
         fill();

@@ -130,6 +130,7 @@ public:
     std::vector<Param *> params;
     std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;
+    Unit* unit;
 
     std::string print();
     void *accept(Visitor *v);

@@ -14,8 +14,8 @@ public:
 
     explicit Lexer(const std::string &path) {
         std::fstream stream;
-        if(!stream) throw std::system_error(errno, std::system_category(), "failed to open "+path);
         stream.open(path, std::fstream::in);
+        if (!stream.is_open()) throw std::system_error(errno, std::system_category(), "failed to open " + path);
         std::stringstream ss;
         ss << stream.rdbuf();
         buf = ss.str();

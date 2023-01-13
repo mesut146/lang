@@ -22,4 +22,5 @@ public:
     void *visitMethodCall(MethodCall *node) override;
     void *visitExprStmt(ExprStmt *node) override;
     void *visitWhileStmt(WhileStmt *node) override;
+    void *visitIfStmt(IfStmt *node) override;
 };
