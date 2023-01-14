@@ -80,7 +80,7 @@ std::string EnumParam::print() {
 
 std::string TypeDecl::print() {
     std::string s;
-    s.append(isInterface ? "interface " : "class ");
+    s.append("class ");
     s.append(name);
     if (!typeArgs.empty()) {
         s.append("<").append(join(typeArgs, ", ")).append(">");
@@ -96,6 +96,24 @@ std::string TypeDecl::print() {
         s.append(join(methods, "\n\n", "  "));
     }
     s.append("\n}");
+    return s;
+}
+
+std::string Trait::print() {
+    std:: string s;
+    s.append("trait ").append(name).append("{\n");
+    s.append(join(methods, "\n"));
+    s.append("}\n");
+    return s;
+}
+
+std::string Impl::print() {
+    std:: string s;
+    s.append("impl ").append(trait_name).append(" for ");
+    s.append(type->print());
+    s.append("{\n");
+    s.append(join(methods, "\n"));
+    s.append("}\n");
     return s;
 }
 
@@ -533,6 +551,14 @@ void *Ternary::accept(Visitor *v) {
 
 void *WhileStmt::accept(Visitor *v) {
     return v->visitWhileStmt(this);
+}
+
+void *Trait::accept(Visitor *v) {
+    return v->visitTrait(this);
+}
+
+void *Impl::accept(Visitor *v) {
+    return v->visitImpl(this);
 }
 
 // void *PointerType::accept(Visitor *v) {

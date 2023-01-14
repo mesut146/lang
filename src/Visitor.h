@@ -14,6 +14,8 @@ public:
     virtual void *visitBaseDecl(BaseDecl *node) todo("BaseDecl");
     virtual void *visitTypeDecl(TypeDecl *node) todo("TypeDecl");
     virtual void *visitEnumDecl(EnumDecl *node) todo("Enum");
+    virtual void *visitTrait(Trait *node) todo("Trait");
+    virtual void *visitImpl(Impl *node) todo("Impl");
     virtual void *visitFieldDecl(FieldDecl *node) todo("FieldDecl");
     virtual void *visitMethod(Method *node) todo("Param");
     virtual void *visitParam(Param *node) todo("Param");

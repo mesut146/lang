@@ -5,7 +5,8 @@ TokenType kw(std::string &s) {
     if (s == "assert") return ASSERT_KW;
     if (s == "class") return CLASS;
     if (s == "enum") return ENUM;
-    if (s == "interface") return INTERFACE;
+    if (s == "trait") return TRAIT;
+    if (s == "impl") return IMPL;
     if (s == "static") return STATIC;
     if (s == "bool") return BOOLEAN;
     if (s == "true") return TRUE;

@@ -63,6 +63,8 @@ public:
     bool isResolved = false;
     std::vector<Method *> methods;
 
+    virtual bool isTrait(){ return false; }
+    virtual bool isImpl(){ return false; }
     virtual std::string print() = 0;
     virtual void *accept(Visitor *v);
 };
@@ -79,9 +81,25 @@ public:
 };
 class TypeDecl : public BaseDecl {
 public:
-    bool isInterface = false;
     std::vector<FieldDecl *> fields;
 
+    std::string print() override;
+    void *accept(Visitor *v) override;
+};
+
+class Trait : public BaseDecl {
+public:
+    virtual bool isTrait(){ return true; }
+    std::string print() override;
+    void *accept(Visitor *v) override;
+};
+
+class Impl: public BaseDecl{
+public:
+    std::string trait_name;
+    Type* type;
+    
+    virtual bool isImpl(){ return true; }
     std::string print() override;
     void *accept(Visitor *v) override;
 };
@@ -127,6 +145,7 @@ public:
     std::string name;
     std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
+    std::optional<std::string> self;
     std::vector<Param *> params;
     std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;

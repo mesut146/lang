@@ -28,7 +28,7 @@ FieldDecl *parseField(Parser *p, TypeDecl *decl) {
 // ("class" | "interface") name typeArgs? (":")? "{" member* "}"
 TypeDecl *Parser::parseTypeDecl() {
     auto res = new TypeDecl;
-    res->isInterface = pop()->is(INTERFACE);
+    consume(CLASS);
     res->name = name();
     if (is(LT)) {
         res->typeArgs = generics();
@@ -97,6 +97,35 @@ EnumDecl *Parser::parseEnumDecl() {
     return res;
 }
 
+std::unique_ptr<Trait> parseTrait(Parser* p){
+    auto res = std::make_unique<Trait>();
+    p->consume(TRAIT);
+    res->name = p->name();
+    p->consume(LBRACE);
+    while(!p->is(RBRACE)){
+        res->methods.push_back(p->parseMethod());
+        res->methods.back()->parent = res.get();
+    }
+    p->consume(RBRACE);
+    return res;
+}
+
+std::unique_ptr<Impl> parseImpl(Parser* p){
+    auto res = std::make_unique<Impl>();
+    p->consume(IMPL);
+    res->trait_name = p->name();
+    p->consume(FOR);
+    res->type = p->parseType();
+    p->consume(LBRACE);
+    while(!p->is(RBRACE)){
+        res->methods.push_back(p->parseMethod());
+        res->methods.back()->parent = res.
+get();
+    }
+    p->consume(RBRACE);
+    return res;
+}
+
 bool Parser::isVarDecl() {
     if (is({STATIC}, {LET, CONST_KW})) return true;
     return is({LET, CONST_KW});
@@ -117,10 +146,12 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
     while (first() != nullptr) {
         //top level decl
-        if (is({CLASS, INTERFACE})) {
+        if (is({CLASS})) {
             res->types.push_back(parseTypeDecl());
         } else if (is(ENUM)) {
             res->types.push_back(parseEnumDecl());
+        }else if(is(TRAIT)){
+            res->types.push_back(parseTrait(this).get());
         } else if (isVarDecl()) {
             res->stmts.push_back(std::unique_ptr<Statement>(parseVarDecl()));
         } else if (isMethod()) {

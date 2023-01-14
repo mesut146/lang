@@ -8,11 +8,14 @@ std::string printType(TokenType t) {
     switch (t) {
         TOKEN_CASE(ASSERT_KW)
         TOKEN_CASE(CLASS)
+        TOKEN_CASE(TRAIT)
+        TOKEN_CASE(IMPL)
         TOKEN_CASE(NEW)
         TOKEN_CASE(LET)
         TOKEN_CASE(RETURN)
         TOKEN_CASE(FROM)
         TOKEN_CASE(IS)
+        
 
         TOKEN_CASE(BOOLEAN)
         TOKEN_CASE(INT)

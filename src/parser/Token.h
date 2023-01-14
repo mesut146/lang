@@ -9,7 +9,8 @@ enum TokenType {
     IDENT,
     CLASS,
     ENUM,
-    INTERFACE,
+    TRAIT,
+    IMPL,
     STATIC,
     I8, //byte
     I16,//short
