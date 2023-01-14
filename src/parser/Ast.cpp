@@ -21,13 +21,13 @@ std::string Unit::print() {
     s.append(join(imports, "\n"));
     if (!types.empty()) {
         if (!imports.empty()) s.append("\n\n");
-        s.append(join(types, "\n\n"));
+        s.append(joinPtr(types, "\n\n"));
     }
 
     s.append("\n");
     if (!methods.empty()) {
         if (!types.empty()) s.append("\n");
-        s.append(join(methods, "\n\n"));
+        s.append(joinPtr(methods, "\n\n"));
     }
     if (!stmts.empty()) {
         s.append("\n\n");
@@ -58,7 +58,7 @@ std::string EnumDecl::print() {
     if (!methods.empty()) {
         s.append("\n");
     }
-    s.append(join(methods, "\n\n", "  "));
+    s.append(joinPtr(methods, "\n\n", "  "));
     s.append("\n}");
     return s;
 }
@@ -93,7 +93,7 @@ std::string TypeDecl::print() {
     }
     if (!methods.empty()) {
         if (!fields.empty()) s.append("\n");
-        s.append(join(methods, "\n\n", "  "));
+        s.append(joinPtr(methods, "\n\n", "  "));
     }
     s.append("\n}");
     return s;
@@ -102,7 +102,7 @@ std::string TypeDecl::print() {
 std::string Trait::print() {
     std:: string s;
     s.append("trait ").append(name).append("{\n");
-    s.append(join(methods, "\n"));
+    s.append(joinPtr(methods, "\n"));
     s.append("}\n");
     return s;
 }
@@ -112,7 +112,7 @@ std::string Impl::print() {
     s.append("impl ").append(trait_name).append(" for ");
     s.append(type->print());
     s.append("{\n");
-    s.append(join(methods, "\n"));
+    s.append(joinPtr(methods, "\n"));
     s.append("}\n");
     return s;
 }

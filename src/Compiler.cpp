@@ -132,7 +132,7 @@ static int size(EnumDecl *e) {
 }
 static int size(TypeDecl *td) {
     int res = 0;
-    for (auto fd : td->fields) {
+    for (auto &fd : td->fields) {
         res += getSize(fd->type);
     }
     return res;
@@ -196,6 +196,9 @@ static void make_malloc() {
 bool isTemplate(Method *m) {
     return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
 }
+void Compiler::make_proto(std::unique_ptr<Method> &m) {
+    make_proto(m.get());
+}
 
 void Compiler::make_proto(Method *m) {
     if (isTemplate(m)) {
@@ -235,7 +238,7 @@ void Compiler::makeDecl(BaseDecl *bd) {
         elems.push_back(llvm::ArrayType::get(getInt(8), size(ed) / 8));//data
     } else {
         auto td = dynamic_cast<TypeDecl *>(bd);
-        for (auto field : td->fields) {
+        for (auto &field : td->fields) {
             elems.push_back(mapType(field->type));
         }
     }
@@ -244,23 +247,23 @@ void Compiler::makeDecl(BaseDecl *bd) {
 }
 
 void Compiler::createProtos() {
-    for (auto bd : unit->types) {
-        makeDecl(bd);
+    for (auto &bd : unit->types) {
+        makeDecl(bd.get());
     }
     for (auto gt : resolv->genericTypes) {
         makeDecl(gt);
-        for (auto m : gt->methods) {
+        for (auto &m : gt->methods) {
             make_proto(m);
         }
     }
     for (auto bd : resolv->usedTypes) {
         makeDecl(bd);
     }
-    for (auto m : unit->methods) {
+    for (auto &m : unit->methods) {
         make_proto(m);
     }
-    for (auto bd : unit->types) {
-        for (auto m : bd->methods) {
+    for (auto &bd : unit->types) {
+        for (auto &m : bd->methods) {
             make_proto(m);
         }
     }
@@ -451,7 +454,9 @@ void Compiler::makeLocals(Statement *st) {
     col->compiler = this;
     st->accept(col);
 }
-
+void Compiler::genCode(std::unique_ptr<Method> &m) {
+    genCode(m.get());
+}
 void Compiler::genCode(Method *m) {
     if (isTemplate(m)) {
         return;
@@ -551,26 +556,29 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     createProtos();
 
     resolv->scopes.push_back(resolv->globalScope);
-    for (auto m : unit->methods) {
+    for (auto &m : unit->methods) {
         genCode(m);
     }
     for (auto m : resolv->genericMethods) {
         genCode(m);
     }
-    for (auto bd : unit->types) {
-        for (auto m : bd->methods) {
+    for (auto &bd : unit->types) {
+        for (auto &m : bd->methods) {
             genCode(m);
         }
     }
     for (auto gt : resolv->genericTypes) {
-        for (auto m : gt->methods) {
+        print(gt->print());
+        for (auto &m : gt->methods) {
             genCode(m);
         }
     }
     std::error_code EC;
     auto noext = trimExtenstion(name);
-    llvm::raw_fd_ostream fd(noext + ".ll", EC);
+    auto llvm_file = noext + ".ll";
+    llvm::raw_fd_ostream fd(llvm_file, EC);
     mod->print(fd, nullptr);
+    print("writing " + llvm_file);
     llvm::verifyModule(*mod, &llvm::outs());
 
     //todo fullpath
@@ -979,7 +987,7 @@ void setOrdinal(int index, llvm::Value *ptr) {
 
 int fieldIndex(TypeDecl *decl, const std::string &name) {
     int i = 0;
-    for (auto fd : decl->fields) {
+    for (auto &fd : decl->fields) {
         if (fd->name == name) {
             return i;
         }
@@ -1049,7 +1057,7 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
                 index = i;
             }
             auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
-            auto field = decl->fields[index];
+            auto &field = decl->fields[index];
             auto val = cast(e.value, field->type);
             Builder->CreateStore(val, eptr);
             i++;

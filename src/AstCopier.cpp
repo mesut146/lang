@@ -165,7 +165,7 @@ void *AstCopier::visitIfStmt(IfStmt *node) {
 }
 
 void *AstCopier::visitMethod(Method *node) {
-    auto res = new Method;
+    auto res = new Method(node->unit);
     res->isStatic = node->isStatic;
     res->name = node->name;
     res->type.reset(visit(node->type.get(), this));

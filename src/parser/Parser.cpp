@@ -17,17 +17,17 @@ ImportStmt *Parser::parseImport() {
     return res;
 }
 
-FieldDecl *parseField(Parser *p, TypeDecl *decl) {
+std::unique_ptr<FieldDecl> parseField(Parser *p, TypeDecl *decl) {
     auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
     p->consume(SEMI);
-    return new FieldDecl(name, type, decl);
+    return std::make_unique<FieldDecl>(name, type, decl);
 }
 
 // ("class" | "interface") name typeArgs? (":")? "{" member* "}"
-TypeDecl *Parser::parseTypeDecl() {
-    auto res = new TypeDecl;
+std::unique_ptr<TypeDecl> Parser::parseTypeDecl() {
+    auto res = std::make_unique<TypeDecl>();
     consume(CLASS);
     res->name = name();
     if (is(LT)) {
@@ -37,11 +37,10 @@ TypeDecl *Parser::parseTypeDecl() {
     //members
     while (first() != nullptr && !is(RBRACE)) {
         if (is(IDENT)) {
-            res->fields.push_back(parseField(this, res));
-            res->fields.back()->parent = res;
+            res->fields.push_back(parseField(this, res.get()));
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
-            res->methods.back()->parent = res;
+            res->methods.back()->parent = res.get();
         } else {
             throw std::runtime_error("invalid class member: " + first()->print());
         }
@@ -72,9 +71,8 @@ EnumVariant *parseEnumEntry(Parser *p) {
     }
     return res;
 }
-
-EnumDecl *Parser::parseEnumDecl() {
-    auto res = new EnumDecl;
+std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
+    auto res = std::make_unique<EnumDecl>();
     res->isEnum = true;
     consume(ENUM);
     res->name = name();
@@ -97,12 +95,12 @@ EnumDecl *Parser::parseEnumDecl() {
     return res;
 }
 
-std::unique_ptr<Trait> parseTrait(Parser* p){
+std::unique_ptr<Trait> parseTrait(Parser *p) {
     auto res = std::make_unique<Trait>();
     p->consume(TRAIT);
     res->name = p->name();
     p->consume(LBRACE);
-    while(!p->is(RBRACE)){
+    while (!p->is(RBRACE)) {
         res->methods.push_back(p->parseMethod());
         res->methods.back()->parent = res.get();
     }
@@ -110,17 +108,16 @@ std::unique_ptr<Trait> parseTrait(Parser* p){
     return res;
 }
 
-std::unique_ptr<Impl> parseImpl(Parser* p){
+std::unique_ptr<Impl> parseImpl(Parser *p) {
     auto res = std::make_unique<Impl>();
     p->consume(IMPL);
     res->trait_name = p->name();
     p->consume(FOR);
-    res->type = p->parseType();
+    res->type.reset (p->parseType());
     p->consume(LBRACE);
-    while(!p->is(RBRACE)){
+    while (!p->is(RBRACE)) {
         res->methods.push_back(p->parseMethod());
-        res->methods.back()->parent = res.
-get();
+        res->methods.back()->parent = res.get();
     }
     p->consume(RBRACE);
     return res;
@@ -150,8 +147,8 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->types.push_back(parseTypeDecl());
         } else if (is(ENUM)) {
             res->types.push_back(parseEnumDecl());
-        }else if(is(TRAIT)){
-            res->types.push_back(parseTrait(this).get());
+        } else if (is(TRAIT)) {
+            res->types.push_back(parseTrait(this));
         } else if (isVarDecl()) {
             res->stmts.push_back(std::unique_ptr<Statement>(parseVarDecl()));
         } else if (isMethod()) {
@@ -175,9 +172,8 @@ Param *Parser::parseParam(Method *m) {
 }
 
 //(type | void) name generics? "(" params* ")" (block | ";")
-Method *Parser::parseMethod() {
-    auto res = new Method;
-    res->unit = unit;
+std::unique_ptr<Method> Parser::parseMethod() {
+    auto res = std::make_unique<Method>(unit);
     if (is(STATIC)) {
         consume(STATIC);
         res->isStatic = true;
@@ -196,10 +192,10 @@ Method *Parser::parseMethod() {
 
     consume(LPAREN);
     if (!is(RPAREN)) {
-        res->params.push_back(parseParam(res));
+        res->params.push_back(parseParam(res.get()));
         while (is(COMMA)) {
             consume(COMMA);
-            res->params.push_back(parseParam(res));
+            res->params.push_back(parseParam(res.get()));
         }
     }
     consume(RPAREN);

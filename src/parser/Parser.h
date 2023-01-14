@@ -106,11 +106,11 @@ public:
 
     ImportStmt *parseImport();
 
-    TypeDecl *parseTypeDecl();
+    std::unique_ptr<TypeDecl> parseTypeDecl();
 
-    EnumDecl *parseEnumDecl();
+    std::unique_ptr<EnumDecl> parseEnumDecl();
 
-    Method *parseMethod();
+    std::unique_ptr<Method> parseMethod();
     bool isMethod();
 
     Param *parseParam(Method *m);

@@ -20,6 +20,7 @@ struct Compiler : public Visitor {
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
     void createProtos();
+    void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
 
     llvm::Value *gen(Expression *e);
@@ -28,6 +29,7 @@ struct Compiler : public Visitor {
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, Type *type);
     llvm::Type *mapType(Type *t);
+    void make_proto(std::unique_ptr<Method> &m);
     void make_proto(Method *m);
     void makeDecl(BaseDecl *bd);
     void initParams(Method *m);

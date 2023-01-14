@@ -43,49 +43,6 @@ func condTest(){
   print("condTest done\n");
 }
 
-
-class List<T>{
-  size: int;
-  cap: int;
-  ptr: T*;
-}
-
-func newList<T>(): List<T>*{
-  let res = new List<T>{size: 0, cap: 10, ptr: malloc<T>(10)};
-  return res;
-}
-
-func add<T>(list: List<T>*, val: T){
- list.ptr[list.size] = val;
- ++list.size;
-}
-
-func get<T>(list: List<T>*, idx: int): T{
- return list.ptr[idx];
-}
-
-func printList<T>(list: List<T>*){
-  print("size=%d cap=%d\n", list.size, list.cap);
-  let i = 0;
-  print("[");
-  while(i < list.size){
-    print("%d ", get<int>(list, i));
-    ++i;
-  }
-  print("]\n");
-}
-
-func listTest2(){
-  let list = newList<int>();
-  let i = 1;
-  while(i <= 9){
-    add<int>(list, i);
-    i = i + 2;
-  }
-  printList<int>(list);
-  print ("listTest done\n");
-}
-
 func prims(){
   let i = 3;
   while(i < 100){

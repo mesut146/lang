@@ -274,24 +274,24 @@ void Resolver::resolveAll() {
     for (auto &st : unit->stmts) {
         st->accept(this);
     }
-    for (auto m : unit->methods) {
+    for (auto &m : unit->methods) {
         if (!m->typeArgs.empty()) {
             continue;
         }
-        visitMethod(m);
+        visitMethod(m.get());
     }
-    for (auto bd : unit->types) {
+    for (auto &bd : unit->types) {
         if (!bd->typeArgs.empty()) {
             continue;
         }
         newScope();
-        visitBaseDecl(bd);
-        for (auto m : bd->methods) {
+        visitBaseDecl(bd.get());
+        for (auto &m : bd->methods) {
             if (!m->typeArgs.empty()) {
                 continue;
             }
-            curDecl = bd;
-            visitMethod(m);
+            curDecl = bd.get();
+            visitMethod(m.get());
             curDecl = nullptr;
         }
         dropScope();
@@ -300,8 +300,8 @@ void Resolver::resolveAll() {
         newScope();
         visitBaseDecl(gt);
         curDecl = gt;
-        for (auto m : gt->methods) {
-            visitMethod(m);
+        for (auto &m : gt->methods) {
+            visitMethod(m.get());
         }
         curDecl = nullptr;
         dropScope();
@@ -316,13 +316,13 @@ void Resolver::resolveAll() {
 }
 
 void Resolver::init() {
-    for (auto bd : unit->types) {
+    for (auto &bd : unit->types) {
         if (!bd->typeArgs.empty()) {
             continue;
         }
         auto res = makeSimple(bd->name);
         res->unit = unit;
-        res->targetDecl = bd;
+        res->targetDecl = bd.get();
         typeMap[bd->name] = res;
     }
     // for (auto m : unit->methods) {
@@ -375,9 +375,9 @@ void *Resolver::visitBaseDecl(BaseDecl *bd) {
         }
     } else {
         auto td = dynamic_cast<TypeDecl *>(bd);
-        for (auto fd : td->fields) {
+        for (auto &fd : td->fields) {
             fd->accept(this);
-            curScope()->add(new VarHolder(fd));
+            curScope()->add(new VarHolder(fd.get()));
         }
     }
     curDecl = nullptr;
@@ -472,16 +472,16 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         // for (auto ta : type->typeArgs) {
         //     res->typeArgs.push_back((Type *) ta->accept(gen));
         // }
-        for (auto fd : td->fields) {
+        for (auto &fd : td->fields) {
             auto type = (Type *) fd->type->accept(gen);
             auto field = new FieldDecl(fd->name, type, res);
-            res->fields.push_back(field);
+            res->fields.push_back(std::unique_ptr<FieldDecl>(field));
         }
-        for (auto m : td->methods) {
-            auto method = (Method *) gen->visitMethod(m);
+        for (auto &m : td->methods) {
+            auto method = (Method *) gen->visitMethod(m.get());
             method->parent = res;
             method->typeArgs.clear();
-            res->methods.push_back(method);
+            res->methods.push_back(std::unique_ptr<Method>(method));
         }
         return res;
     }
@@ -518,16 +518,14 @@ void *Resolver::visitType(Type *type) {
         return res;
     }
     if (type->scope == nullptr) {
-        for (auto bd : unit->types) {
+        for (auto &bd : unit->types) {
             if (bd->name != type->name) {
                 continue;
             }
             checkTypeArgs(type->typeArgs, bd->typeArgs);
             if (!bd->typeArgs.empty()) {
-                auto decl = generateDecl(type, bd);
-                // for (auto m : decl->methods) {
-                //     genericMethodsTodo.push_back(m);
-                // }
+                auto decl = generateDecl(type, bd.get());
+                
                 res = new RType;
                 res->type = simpleType(type->name);
                 for (auto ta : type->typeArgs) {
@@ -538,7 +536,7 @@ void *Resolver::visitType(Type *type) {
                 typeMap[str] = res;
                 return res;
             } else {
-                return (RType *) visitBaseDecl(bd);
+                return (RType *) visitBaseDecl(bd.get());
             }
         }
         for (auto is : unit->imports) {
@@ -718,7 +716,7 @@ void *Resolver::visitFieldAccess(FieldAccess *fa) {
     } else {
         auto td = dynamic_cast<TypeDecl *>(decl);
         int i = fieldIndex(td, fa->name);
-        auto fd = td->fields[i];
+        auto &fd = td->fields[i];
         res = (RType *) fd->accept(this);
     }
     if (res) {
@@ -857,7 +855,7 @@ void *Resolver::visitExprStmt(ExprStmt *st) {
 }
 
 void *Resolver::visitBlock(Block *st) {
-    for (auto& st : st->list) {
+    for (auto &st : st->list) {
         st->accept(this);
     }
     return nullptr;
@@ -968,7 +966,7 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
             } else {
                 prm_idx = i;
             }
-            auto prm = td->fields[i];
+            auto &prm = td->fields[i];
             auto vt = resolve(prm->type);
             auto val = resolve(e.value);
             if (!subType(val->type, prm->type)) {
@@ -976,7 +974,7 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
             }
         }
         if (hasNamed) {
-            for (auto p : td->fields) {
+            for (auto &p : td->fields) {
                 if (names.find(p->name) == names.end()) {
                     error("field not covered: " + p->name);
                 }
@@ -1013,10 +1011,10 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
     if (dynamic_cast<Type *>(mc->scope.get())) {
         //static method
         std::vector<Method *> list;
-        for (auto m : scope->targetDecl->methods) {
+        for (auto &m : scope->targetDecl->methods) {
             if (!m->isStatic) continue;
             if (m->name == mc->name) {
-                list.push_back(m);
+                list.push_back(m.get());
             }
         }
         if (list.empty()) {
@@ -1026,15 +1024,15 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
         auto target = list[0];
         auto res = r->resolveType(target->type.get());
         res->targetMethod = target;
-        r->usedMethods.push_back(target);
+        //r->usedMethods.push_back(target);
         return res;
     } else {
         //member method
         std::vector<Method *> list;
-        for (auto m : scope->targetDecl->methods) {
+        for (auto &m : scope->targetDecl->methods) {
             if (m->isStatic) continue;
             if (m->name == mc->name) {
-                list.push_back(m);
+                list.push_back(m.get());
             }
         }
         if (list.empty()) {
@@ -1044,7 +1042,7 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
         auto target = list[0];
         auto res = r->resolveType(target->type.get());
         res->targetMethod = target;
-        r->usedMethods.push_back(target);
+        //r->usedMethods.push_back(target);
         return res;
     }
     throw std::runtime_error("scopedMethod");
@@ -1052,9 +1050,9 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
 
 
 void findMethod(Unit *unit, MethodCall *mc, std::vector<Method *> &list) {
-    for (auto m : unit->methods) {
+    for (auto &m : unit->methods) {
         if (m->name == mc->name) {
-            list.push_back(m);
+            list.push_back(m.get());
         }
     }
 }
@@ -1083,16 +1081,16 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         return res;
     }
     std::vector<Method *> cand;// candidates
-    for (auto m : unit->methods) {
+    for (auto &m : unit->methods) {
         if (m->name == mc->name) {
-            cand.push_back(m);
+            cand.push_back(m.get());
         }
     }
     if (curDecl) {
         //static sibling method
-        for (auto m : curDecl->methods) {
+        for (auto &m : curDecl->methods) {
             if (m->name == mc->name) {
-                cand.push_back(m);
+                cand.push_back(m.get());
             }
         }
     }

@@ -47,8 +47,8 @@ public:
 class Unit {
 public:
     std::vector<ImportStmt *> imports;
-    std::vector<BaseDecl *> types;
-    std::vector<Method *> methods;
+    std::vector<std::unique_ptr<BaseDecl>> types;
+    std::vector<std::unique_ptr<Method>> methods;
     std::vector<std::unique_ptr<Statement>> stmts;
     std::string path;
 
@@ -61,10 +61,10 @@ public:
     std::vector<Type *> typeArgs;
     bool isEnum = false;
     bool isResolved = false;
-    std::vector<Method *> methods;
+    std::vector<std::unique_ptr<Method>> methods;
 
-    virtual bool isTrait(){ return false; }
-    virtual bool isImpl(){ return false; }
+    virtual bool isTrait() { return false; }
+    virtual bool isImpl() { return false; }
     virtual std::string print() = 0;
     virtual void *accept(Visitor *v);
 };
@@ -81,7 +81,7 @@ public:
 };
 class TypeDecl : public BaseDecl {
 public:
-    std::vector<FieldDecl *> fields;
+    std::vector<std::unique_ptr<FieldDecl>> fields;
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -89,17 +89,17 @@ public:
 
 class Trait : public BaseDecl {
 public:
-    virtual bool isTrait(){ return true; }
+    virtual bool isTrait() { return true; }
     std::string print() override;
     void *accept(Visitor *v) override;
 };
 
-class Impl: public BaseDecl{
+class Impl : public BaseDecl {
 public:
     std::string trait_name;
-    Type* type;
-    
-    virtual bool isImpl(){ return true; }
+    std::unique_ptr<Type> type;
+
+    virtual bool isImpl() { return true; }
     std::string print() override;
     void *accept(Visitor *v) override;
 };
@@ -150,6 +150,8 @@ public:
     std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;
     Unit *unit;
+
+    explicit Method(Unit *unit) : unit(unit) {}
 
     std::string print();
     void *accept(Visitor *v);
