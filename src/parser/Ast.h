@@ -96,7 +96,7 @@ public:
 
 class Impl : public BaseDecl {
 public:
-    std::string trait_name;
+    std::optional<std::string> trait_name;
     std::unique_ptr<Type> type;
 
     virtual bool isImpl() { return true; }

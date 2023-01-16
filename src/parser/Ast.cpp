@@ -109,7 +109,10 @@ std::string Trait::print() {
 
 std::string Impl::print() {
     std:: string s;
-    s.append("impl ").append(trait_name).append(" for ");
+    s.append("impl ");
+    if(trait_name){
+        s.append(trait_name.value()).append(" for ");
+    }
     s.append(type->print());
     s.append("{\n");
     s.append(joinPtr(methods, "\n"));

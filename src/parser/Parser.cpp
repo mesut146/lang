@@ -111,9 +111,14 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
 std::unique_ptr<Impl> parseImpl(Parser *p) {
     auto res = std::make_unique<Impl>();
     p->consume(IMPL);
-    res->trait_name = p->name();
-    p->consume(FOR);
-    res->type.reset (p->parseType());
+    auto type = p->parseType();
+    if(p->is(FOR)){
+        res->trait_name = type->name;
+        p->consume(FOR);
+        res->type.reset(p->parseType());
+    }else{
+        res->type.reset(type);
+    }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         res->methods.push_back(p->parseMethod());
