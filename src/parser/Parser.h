@@ -94,8 +94,8 @@ public:
     }
 
     std::string name() {
-        if (is(FROM)) {
-            return consume(FROM)->value;
+        if (is({IDENT, FROM, NEW})) {
+            return pop()->value;
         }
         return consume(IDENT)->value;
     }

@@ -69,7 +69,7 @@ bool isTypeArg(Parser *p) {
             pos++;
             open--;
             if (open == 0) {
-                return p->tokens[pos]->is(LPAREN);
+                return true;
             }
         } else {
             pos++;
@@ -127,19 +127,15 @@ Type *Parser::parseType() {
     if (isPrim(*first())) {
         res->name = pop()->value;
     } else {
-        res->name = consume(IDENT)->value;
+        res->name = name();
         while (is({COLON2, LT})) {
             if (is(LT)) {
                 res->typeArgs = generics();
             } else {
                 consume(COLON2);
                 auto tmp = new Type;
-                if (is(NEW)) {
-                    tmp->name = consume(NEW)->value;
-                } else {
-                    tmp->name = consume(IDENT)->value;
-                }
                 tmp->scope = res;
+                tmp->name = name();
                 res = tmp;
             }
         }
@@ -242,7 +238,7 @@ Expression *makeAlloc(Parser *p) {
     return makeObj(p, true, type);
 }
 
-Expression *parseCall(Parser *p, const std::string &name) {
+MethodCall *parseCall(Parser *p, const std::string &name) {
     auto res = new MethodCall;
     res->name = name;
     if (p->is(LT)) {
@@ -278,39 +274,50 @@ Expression *PRIM(Parser *p) {
     }
     if (isObj(p)) {
         return makeObj(p, false);
-    } else if (p->is({IDENT}, {COLON2})) {
-        auto t = p->parseType();
-        if (p->is(LPAREN)) {
-            auto res = new MethodCall;
-            res->scope.reset(t->scope);
-            res->name = t->name;
-            if (p->is(LT)) {
-                res->typeArgs = p->generics();
-            }
-            p->consume(LPAREN);
-            if (!p->is(RPAREN)) {
-                res->args = p->exprList();
-            }
-            p->consume(RPAREN);
-            return res;
-        } else {
-            //static field access, or enum variant
-            return t;
-        }
     } else if (p->is(IDENT)) {
         auto id = p->pop()->value;
-        if (p->is(LPAREN) || isTypeArg(p)) {
-            auto res = new MethodCall;
-            res->name = id;
-            if (p->is(LT)) {
-                res->typeArgs = p->generics();
+        if (p->is(LPAREN)) {
+            return parseCall(p, id);
+        } else if (isTypeArg(p)) {
+            auto typeArgs = p->generics();
+            //todo move isObj here
+            if (p->is(LPAREN)) {//id<...>(args)
+                auto res = parseCall(p, id);
+                res->typeArgs = typeArgs;
+                return res;
+            } else {
+                p->consume(COLON2);//id<...>::
+                auto scope = new Type;
+                scope->name = id;
+                scope->typeArgs = typeArgs;
+                auto name = p->name();
+                if (p->is(LPAREN)) {
+                    auto res = parseCall(p, name);
+                    res->scope.reset(scope);
+                    return res;
+                } else {
+                    //id<...>::name
+                    auto res = new Type;
+                    res->scope = scope;
+                    res->name = name;
+                    return res;
+                }
             }
-            p->consume(LPAREN);
-            if (!p->is(RPAREN)) {
-                res->args = p->exprList();
+        } else if (p->is(COLON2)) {
+            p->consume(COLON2);
+            auto t = p->parseType();
+            if (p->is(LPAREN)) {//id::name<...>(args)
+                auto res = parseCall(p, t->name);
+                if (!t->typeArgs.empty()) {
+                    res->typeArgs = t->typeArgs;
+                }
+                res->scope.reset(new Type(id));
+                return res;
+            } else {
+                //id::t
+                //static field access, or enum variant
+                return new Type(new Type(id), t->name);
             }
-            p->consume(RPAREN);
-            return res;
         } else {
             return new SimpleName(id);
         }

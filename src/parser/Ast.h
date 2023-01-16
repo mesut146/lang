@@ -252,6 +252,10 @@ public:
     std::vector<Type *> typeArgs;
     bool isTypeArg = false;
 
+    Type() {}
+    explicit Type(std::string name) : name(name) {}
+    explicit Type(Type *scope, std::string name) : scope(scope), name(name) {}
+
     virtual bool isOptional() { return false; }
     virtual bool isArray() { return false; }
     virtual bool isPointer() { return false; }

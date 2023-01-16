@@ -3,7 +3,7 @@ class List<T>{
   count: int;
   cap: int;
 
-  static func new<T>(): List<T>*{
+  static func new(): List<T>*{
     return new List<T>{arr: malloc<T>(10), count: 0, cap: 10};
   }
 
@@ -60,7 +60,7 @@ class List<T>{
 }
 
 func listTest(){
-  //let list1 = List::new<int>();
+  let list1 = List<int>::new();
   let list = new List<int>{arr: malloc<int>(2), count: 0, cap: 2};
   list.add(1);
   list.add(2);

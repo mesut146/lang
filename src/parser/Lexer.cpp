@@ -71,7 +71,7 @@ TokenType kw(std::string &s) {
         return SWITCH;
     if (s == "case")
         return CASE;
-    if(s == "unsafe") return UNSAFE;
+    if (s == "unsafe") return UNSAFE;
     return EOF_;
 }
 
@@ -150,14 +150,14 @@ Token *Lexer::next() {
         if (c == '\n') {
             line++;
         } else if (c == '\r') {
+            line++;
             if (pos < buf.length() && buf[pos] == '\n') {
-                line++;
                 pos++;
             }
         }
         return next();
     }
-    int off = pos;
+    int start = pos;
     Token *token;
     if (isalpha(c) || c == '_') {
         token = readIdent();
@@ -168,11 +168,31 @@ Token *Lexer::next() {
         if (c2 == '/') {
             token = lineComment();
         } else if (c2 == '*') {
-            auto it = buf.find("*/", pos + 2);
-            if (it != std::string::npos) {
-                token = new Token(COMMENT, str(pos, it + 2));
-                pos = it + 2;
-            } else {
+            pos += 2;
+            while (pos < buf.length()) {
+                if (buf[pos] == '*') {
+                    pos++;
+                    if (pos < buf.length() && buf[pos] == '/') {
+                        pos++;
+                        token = new Token(COMMENT, str(start, pos));
+                        break;
+                    }
+                } else {
+                    if (buf[pos] == '\r') {
+                        pos++;
+                        line++;
+                        if (buf[pos] == '\n') {
+                            pos++;
+                        }
+                    } else if (buf[pos] == '\n') {
+                        pos++;
+                        line++;
+                    } else {
+                        pos++;
+                    }
+                }
+            }
+            if (token == nullptr) {
                 throw std::runtime_error("unclosed block comment at line " + std::to_string(line));
             }
         } else {
@@ -215,7 +235,7 @@ Token *Lexer::next() {
     } else {
         throw std::runtime_error("unexpected char: " + std::string(&c));
     }
-    token->start = off;
+    token->start = start;
     token->end = pos;
     token->line = line;
     return token;
