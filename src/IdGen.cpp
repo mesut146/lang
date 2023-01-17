@@ -44,3 +44,7 @@ void *IdGen::visitUnary(Unary *node) {
 void *IdGen::visitArrayAccess(ArrayAccess *node) {
     return nullptr;
 }
+
+void *IdGen::visitArrayExpr(ArrayExpr *node) {
+    return nullptr;
+}

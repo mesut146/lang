@@ -126,6 +126,20 @@ Type *Parser::parseType() {
     auto res = new Type;
     if (isPrim(*first())) {
         res->name = pop()->value;
+    } else if (is(LBRACKET)) {
+        consume(LBRACKET);
+        auto type = parseType();
+        if (is(SEMI)) {
+            consume(SEMI);
+            if (!is(INTEGER_LIT)) {
+                throw std::runtime_error("invalid array size: " + this->first()->value);
+            }
+            auto size = std::stoi(pop()->value);
+            res = new ArrayType(type, size);
+        } else {
+            res = new SliceType(type);
+        }
+        consume(RBRACKET);
     } else {
         res->name = name();
         while (is({COLON2, LT})) {
@@ -140,18 +154,7 @@ Type *Parser::parseType() {
             }
         }
     }
-    while (is(LBRACKET)) {
-        auto arr = new ArrayType;
-        arr->type = res;
-        consume(LBRACKET);
-        if (!is(RBRACKET)) {
-            arr->dims.push_back(parseExpr());
-        } else {
-            arr->dims.push_back(nullptr);
-        }
-        consume(RBRACKET);
-        res = arr;
-    }
+
     while (is(STAR) || is(QUES)) {
         if (is(STAR)) {
             consume(STAR);
@@ -229,12 +232,6 @@ Expression *makeObj(Parser *p, bool isPointer) {
 Expression *makeAlloc(Parser *p) {
     p->consume(NEW);
     auto type = p->parseType();
-    if (type->isArray()) {
-        auto res = new ArrayCreation;
-        res->type = type;
-
-        return res;
-    }
     return makeObj(p, true, type);
 }
 
@@ -322,21 +319,18 @@ Expression *PRIM(Parser *p) {
             return new SimpleName(id);
         }
     } else if (p->is(LBRACKET)) {
-        auto res = new ArrayExpr;
         p->consume(LBRACKET);
-        if (!p->is(RBRACKET)) {
-            res->list = p->exprList();
+        auto res = new ArrayExpr;
+        res->list = p->exprList();
+        if (p->is(SEMI)) {
+            p->consume(SEMI);
+            auto size = p->consume(INTEGER_LIT)->value;
+            res->size = std::stoi(size);
+            if (res->list.size() != 1) {
+                throw std::runtime_error("sized array expects 1 element but got " + std::to_string(res->list.size()) + " line: " + std::to_string(p->first()->line));
+            }
         }
         p->consume(RBRACKET);
-        return res;
-    } else if (p->is(FUNC)) {
-        auto res = new ArrayCreation;
-        res->type = p->parseType();
-        while (p->is(LBRACKET)) {
-            p->pop();
-            res->dims.push_back(p->parseExpr());
-            p->consume(RBRACKET);
-        }
         return res;
     } else {
         throw std::runtime_error("invalid primary " + p->first()->value + " line: " + std::to_string(p->first()->line));
@@ -388,9 +382,7 @@ Expression *PRIM2(Parser *p) {
     }
     if (p->is(BANG)) {
         p->consume(BANG);
-        auto res = new UnwrapExpr;
-        res->expr = lhs;
-        return res;
+        return new UnwrapExpr(lhs);
     }
     return lhs;
 }
@@ -399,7 +391,7 @@ Expression *parseLhs(Parser *p);
 RefExpr *parseRef(Parser *p) {
     p->consume(AND);
     auto expr = parseLhs(p);
-    if (dynamic_cast<Name *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
+    if (dynamic_cast<SimpleName *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
         return new RefExpr(expr);
     }
     throw std::runtime_error("cannot take reference of " + expr->print());
@@ -408,7 +400,7 @@ RefExpr *parseRef(Parser *p) {
 DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
     auto expr = parseLhs(p);
-    if (dynamic_cast<Name *>(expr) ||
+    if (dynamic_cast<SimpleName *>(expr) ||
         dynamic_cast<FieldAccess *>(expr) ||
         dynamic_cast<MethodCall *>(expr) ||
         dynamic_cast<ParExpr *>(expr) ||

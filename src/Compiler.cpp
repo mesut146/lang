@@ -636,7 +636,7 @@ llvm::Value *load(llvm::Value *val) {
 }
 
 bool isVar(Expression *e) {
-    return dynamic_cast<Name *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e) || dynamic_cast<ArrayAccess *>(e);
+    return dynamic_cast<SimpleName *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e) || dynamic_cast<ArrayAccess *>(e);
 }
 
 llvm::Value *Compiler::loadPtr(Expression *e) {
@@ -860,8 +860,33 @@ void *Compiler::visitSimpleName(SimpleName *n) {
 llvm::Value *callMalloc(llvm::Value *sz) {
     std::vector<llvm::Value *> args;
     args.push_back(sz);
-    auto call = Builder->CreateCall(mallocf, args);
-    return call;
+    return Builder->CreateCall(mallocf, args);
+}
+
+void *callPanic(MethodCall *mc, Compiler *c) {
+    std::string message;
+    if (mc->args.empty()) {
+        message = "panic";
+    } else {
+        auto val = dynamic_cast<Literal *>(mc->args[0])->val;
+        message = "panic: " + val.substr(1, val.size() - 2);
+    }
+    message.append("\n");
+    auto str = Builder->CreateGlobalStringPtr(message);
+    std::vector<llvm::Value *> args;
+    args.push_back(str);
+    if (!mc->args.empty()) {
+        for (int i = 1; i < mc->args.size(); ++i) {
+            auto a = mc->args[i];
+            auto av = c->loadPtr(a);
+            args.push_back(av);
+        }
+    }
+    auto call = Builder->CreateCall(printf_proto, args);
+    std::vector<llvm::Value *> exit_args = {makeInt(1)};
+    Builder->CreateCall(exit_proto, exit_args);
+    Builder->CreateUnreachable();
+    return Builder->getVoidTy();
 }
 
 void *Compiler::visitMethodCall(MethodCall *mc) {
@@ -876,40 +901,14 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         lt->name = "i64";
         auto size = cast(mc->args[0], lt);
         if (!mc->typeArgs.empty()) {
-            int bytes = getSize(mc->typeArgs[0]) / 8;
-            auto amount = Builder->CreateNSWMul(size, makeInt(bytes, 64));
-            args.push_back(amount);
-        } else {
-            args.push_back(size);
+            int typeSize = getSize(mc->typeArgs[0]) / 8;
+            size = Builder->CreateNSWMul(size, makeInt(typeSize, 64));
         }
-
-        auto call = Builder->CreateCall(f, args);
+        auto call = callMalloc(size);
         auto rt = resolv->resolve(mc);
         return Builder->CreateBitCast(call, mapType(rt->type));
     } else if (mc->name == "panic") {
-        std::string message;
-        if (mc->args.empty()) {
-            message = "panic";
-        } else {
-            auto val = dynamic_cast<Literal *>(mc->args[0])->val;
-            message = "panic: " + val.substr(1, val.size() - 2);
-        }
-        message.append("\n");
-        auto str = Builder->CreateGlobalStringPtr(message);
-        std::vector<llvm::Value *> args;
-        args.push_back(str);
-        if (!mc->args.empty()) {
-            for (int i = 1; i < mc->args.size(); ++i) {
-                auto a = mc->args[i];
-                auto av = loadPtr(a);
-                args.push_back(av);
-            }
-        }
-        auto call = Builder->CreateCall(printf_proto, args);
-        std::vector<llvm::Value *> exit_args = {makeInt(1)};
-        Builder->CreateCall(exit_proto, exit_args);
-        Builder->CreateUnreachable();
-        return Builder->getVoidTy();
+        return callPanic(mc, this);
     } else {
         auto rt = resolv->resolve(mc);
         target = rt->targetMethod;
@@ -928,13 +927,13 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
 
     for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
+        llvm::Value *av;
         if (target) {
-            auto av = cast(a, target->params[i]->type.get());
-            args.push_back(av);
+            av = cast(a, target->params[i]->type.get());
         } else {
-            auto av = loadPtr(a);
-            args.push_back(av);
+            av = loadPtr(a);
         }
+        args.push_back(av);
     }
     return Builder->CreateCall(f, args);
 }

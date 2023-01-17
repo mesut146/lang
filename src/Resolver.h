@@ -163,7 +163,6 @@ public:
     void *visitMethodCall(MethodCall *mc) override;
     void *visitObjExpr(ObjExpr *o) override;
     void *visitFieldAccess(FieldAccess *fa) override;
-    void *visitArrayCreation(ArrayCreation *ac) override;
     void *visitAsExpr(AsExpr *as) override;
     void *visitRefExpr(RefExpr *as) override;
     void *visitDerefExpr(DerefExpr *as) override;
@@ -179,4 +178,5 @@ public:
     void *visitWhileStmt(WhileStmt *node) override;
     void *visitContinueStmt(ContinueStmt *node) override;
     void *visitBreakStmt(BreakStmt *node) override;
+    void *visitArrayExpr(ArrayExpr *node) override;
 };

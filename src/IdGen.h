@@ -25,4 +25,5 @@ public:
     void *visitParExpr(ParExpr *node) override;
     void *visitUnary(Unary *node) override;
     void *visitArrayAccess(ArrayAccess *node) override;
+    void *visitArrayExpr(ArrayExpr *node) override;
 };

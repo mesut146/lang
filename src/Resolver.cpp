@@ -31,14 +31,13 @@ bool iof(Expression *e) {
 Type *clone(Type *type) {
     if (type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(type);
-        auto res = new PointerType(clone(ptr->type));
-        return res;
+        return new PointerType(clone(ptr->type));
     } else if (type->isArray()) {
         auto arr = dynamic_cast<ArrayType *>(type);
-        auto res = new ArrayType;
-        res->type = clone(arr->type);
-        res->dims.insert(res->dims.end(), arr->dims.begin(), arr->dims.end());
-        return res;
+        return new ArrayType(clone(arr->type), arr->size);
+    } else if (type->isSlice()) {
+        auto slice = dynamic_cast<SliceType *>(type);
+        return new SliceType(clone(slice->type));
     } else {
         auto res = new Type;
         if (type->scope) {
@@ -517,6 +516,20 @@ void *Resolver::visitType(Type *type) {
         typeMap[str] = res;
         return res;
     }
+    if (type->isSlice()) {
+        auto slice = dynamic_cast<SliceType *>(type);
+        auto inner = clone(resolveType(slice->type));
+        res = new RType(new SliceType(inner->type));
+        typeMap[str] = res;
+        return res;
+    }
+    if (type->isArray()) {
+        auto arr = dynamic_cast<ArrayType *>(type);
+        auto inner = clone(resolveType(arr->type));
+        res = new RType(new ArrayType(inner->type, arr->size));
+        typeMap[str] = res;
+        return res;
+    }
     if (type->scope == nullptr) {
         for (auto &bd : unit->types) {
             if (bd->name != type->name) {
@@ -619,11 +632,11 @@ void *Resolver::visitUnary(Unary *u) {
             error("unary on non boolean: " + u->print());
         }
     } else {
-        if (!res->type->isIntegral()) {
-            error("unary on non prim: " + u->print());
+        if (res->type->print() == "bool" || !res->type->isPrim()) {
+            error("unary on non interal: " + u->print());
         }
         if (u->op == "--" || u->op == "++") {
-            if (!iof<Name *>(u->expr) && !iof<FieldAccess *>(u->expr)) {
+            if (!iof<SimpleName *>(u->expr) && !iof<FieldAccess *>(u->expr)) {
                 error("prefix on non variable: " + u->print());
             }
         }
@@ -766,13 +779,6 @@ void Resolver::other(std::string name, std::vector<Symbol> &res) const {
     }
 }
 
-void *Resolver::visitArrayCreation(ArrayCreation *ac) {
-    for (auto &e : ac->dims) {
-        e->accept(this);
-    }
-    return ac->type->accept(this);
-}
-
 void *Resolver::visitAsExpr(AsExpr *e) {
     auto left = (RType *) e->expr->accept(this);
     auto right = (RType *) e->type->accept(this);
@@ -787,7 +793,7 @@ void *Resolver::visitAsExpr(AsExpr *e) {
 }
 
 void *Resolver::visitRefExpr(RefExpr *e) {
-    if (!iof<Name *>(e->expr)) {
+    if (!iof<SimpleName *>(e->expr)) {
         error("ref expr is not supported: " + e->expr->print());
     }
     auto inner = clone((RType *) e->expr->accept(this));
@@ -989,7 +995,7 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
     if (!arr->type->isPointer()) error("array expr is not a pointer: " + node->print());
     auto idx = resolve(node->index);
     //todo unsigned
-    if (!idx->type->isIntegral()) error("array index is not an integer");
+    if (idx->type->print() == "bool" || !idx->type->isPrim()) error("array index is not an integer");
     auto ptr = dynamic_cast<PointerType *>(arr->type);
     return resolveType(ptr->type);
 }
@@ -1159,4 +1165,19 @@ void *Resolver::visitBreakStmt(BreakStmt *node) {
     }
     if (node->label) error("break label");
     return nullptr;
+}
+void *Resolver::visitArrayExpr(ArrayExpr *node) {
+    if (node->isSized()) {
+        auto elemType = resolve(node->list[0]);
+        return new RType(new ArrayType(elemType->type, node->size));
+    } else {
+        RType *res = resolve(node->list[0]);
+        for (int i = 1; i < node->list.size(); i++) {
+            auto t = resolve(node->list[i]);
+            if (!subType(res->type, t->type)) {
+                error("array element type mismatch");
+            }
+        }
+        return res;
+    }
 }

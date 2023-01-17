@@ -12,7 +12,6 @@ class TypeDecl;
 class Method;
 class Expression;
 class Statement;
-class Name;
 class VarDecl;
 class Block;
 
@@ -190,36 +189,18 @@ class UnwrapExpr : public Expression {
 public:
     Expression *expr;
 
+    UnwrapExpr(Expression *expr) : expr(expr){};
+
     std::string print() override;
     void *accept(Visitor *v) override;
 };
 
-class Name : public Expression {
-public:
-    std::vector<Type *> typeArgs;
 
-    virtual bool isSimple() { return false; };
-    std::string print() override = 0;
-    void *accept(Visitor *v) override = 0;
-};
-
-class SimpleName : public Name {
+class SimpleName : public Expression {
 public:
     std::string name;
 
-    explicit SimpleName(std::string name) : name(name){};
-
-    bool isSimple() override { return true; };
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
-class QName : public Name {
-public:
-    Name *scope;
-    std::string name;
-
-    QName(Name *scope, std::string name) : scope(scope), name(name){};
+    explicit SimpleName(const std::string &name) : name(move(name)){};
 
     std::string print() override;
     void *accept(Visitor *v) override;
@@ -253,20 +234,16 @@ public:
     bool isTypeArg = false;
 
     Type() {}
-    explicit Type(std::string name) : name(name) {}
-    explicit Type(Type *scope, std::string name) : scope(scope), name(name) {}
+    explicit Type(const std::string &name) : name(move(name)) {}
+    explicit Type(Type *scope, const std::string &name) : scope(scope), name(move(name)) {}
 
     virtual bool isOptional() { return false; }
     virtual bool isArray() { return false; }
+    virtual bool isSlice() { return false; }
     virtual bool isPointer() { return false; }
 
     bool isPrim() {
-        return isIntegral() || print() == "bool";
-    }
-    bool isIntegral() {
-        auto str = print();
-        auto it = sizeMap.find(str);
-        return it != sizeMap.end();
+        return sizeMap.find(print()) != sizeMap.end();
     }
     bool isVoid() { return print() == "void"; };
     bool isString() { return print() == "core/string"; }
@@ -295,47 +272,26 @@ public:
     //void *accept(Visitor *v) override;
 };
 
+//[type; size]
 class ArrayType : public Type {
 public:
     Type *type;
-    std::vector<Expression *> dims;
+    int size;
+    ArrayType(Type *type, int size) : type(type), size(size) {}
 
     bool isArray() override { return true; }
     std::string print() override;
     //void *accept(Visitor *v) override;
 };
-
-/*class SimpleType : public Type {
+//[type]
+class SliceType : public Type {
 public:
-    std::string type;
-    bool isTypeVar_;
-    
-    bool isTypeVar() { return isTypeVar_; }
-    
-    bool isPrim() {
-        return type == "int" || type == "long" || type == "char" || type == "byte" ||
-               type == "short" || type == "float" || type == "double" || type == "bool";
-    }
-    bool isVoid() {
-        return type == "void";
-    }
+    Type *type;
+    SliceType(Type *type) : type(type) {}
 
+    bool isSlice() override { return true; }
     std::string print() override;
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
-};*/
-
-/*class RefType : public Type {
-public:
-    Name *name;
-    std::vector<Type *> typeArgs;
-    
-    bool isString(){
-      return name->print() == "core.string";
-    }
-    
-    std::string print();
-    void* accept(Visitor<void*, void*>* v, void* arg) override;
-};*/
+};
 
 class Literal : public Expression {
 public:
@@ -502,16 +458,9 @@ public:
 class ArrayExpr : public Expression {
 public:
     std::vector<Expression *> list;
+    int size = -1;
 
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
-class ArrayCreation : public Expression {
-public:
-    Type *type;
-    std::vector<Expression *> dims;
-    bool isPointer = false;
+    bool isSized() { return size != -1; }
 
     std::string print() override;
     void *accept(Visitor *v) override;

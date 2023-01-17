@@ -56,23 +56,33 @@ class List<T>{
   }
 
   func indexOf(e: T): int{
-    let i = 0;
+    return indexOf(e, 0);
+  }
+
+  func indexOf(e: T, off: int): int{
+    let i = off;
     while(i < count){
       if(arr[i] == e) return i;
       ++i;
     }
     return -1;
   }
+
+  func contains(e: T): bool{
+    return indexOf(e) != -1;
+  }
 }
 
 func listTest(){
   let list = List<int>::new(2);
-  list.add(1);
-  list.add(2);
-  list.add(3);//trigger expand
-  assert list.get(0) == 1;
-  assert list.get(1) == 2;
-  assert list.get(2) == 3;
+  list.add(10);
+  list.add(20);
+  list.add(30);//trigger expand
+  assert list.get(0) == 10;
+  assert list.get(1) == 20;
+  assert list.get(2) == 30;
   //list.get(3); //will panic
+  assert list.indexOf(20) == 1;
+  assert list.contains(30) && !list.contains(40);
   print("listTest done\n");
 }

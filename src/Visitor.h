@@ -22,7 +22,6 @@ public:
 
     virtual void *visitLiteral(Literal *node) todo("Literal");
     virtual void *visitSimpleName(SimpleName *node) todo("SimpleName");
-    virtual void *visitQName(QName *node) todo("QName");
     virtual void *visitType(Type *node) todo("Type");
     virtual void *visitVarDecl(VarDecl *node) todo("VarDecl");
     virtual void *visitVarDeclExpr(VarDeclExpr *node) todo("VarDeclExpr");
@@ -40,7 +39,6 @@ public:
     virtual void *visitFieldAccess(FieldAccess *node) todo("FieldAccess");
     virtual void *visitArrayAccess(ArrayAccess *node) todo("ArrayAccess");
     virtual void *visitArrayExpr(ArrayExpr *node) todo("ArrayExpr");
-    virtual void *visitArrayCreation(ArrayCreation *node) todo("ArrayCreation");
     virtual void *visitParExpr(ParExpr *node) todo("ParExpr");
     virtual void *visitObjExpr(ObjExpr *node) todo("ObjExpr");
     virtual void *visitUnsafe(UnsafeBlock *node) todo("Unsafe");

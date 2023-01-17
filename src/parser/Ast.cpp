@@ -100,7 +100,7 @@ std::string TypeDecl::print() {
 }
 
 std::string Trait::print() {
-    std:: string s;
+    std::string s;
     s.append("trait ").append(name).append("{\n");
     s.append(joinPtr(methods, "\n"));
     s.append("}\n");
@@ -108,9 +108,9 @@ std::string Trait::print() {
 }
 
 std::string Impl::print() {
-    std:: string s;
+    std::string s;
     s.append("impl ");
-    if(trait_name){
+    if (trait_name) {
         s.append(trait_name.value()).append(" for ");
     }
     s.append(type->print());
@@ -147,10 +147,6 @@ std::string Method::print() {
 
 std::string SimpleName::print() {
     return name;
-}
-
-std::string QName::print() {
-    return scope->print() + "." + name;
 }
 
 std::string Literal::print() {
@@ -218,7 +214,10 @@ std::string OptionType::print() {
     return type->print() + "?";
 }
 std::string ArrayType::print() {
-    return type->print() + printDims(dims);
+    return "[" + type->print() + "; " + std::to_string(size) + "]";
+}
+std::string SliceType::print() {
+    return "[" + type->print() + "]";
 }
 
 std::string Type::print() {
@@ -369,14 +368,11 @@ std::string ArrayAccess::print() {
 }
 
 std::string ArrayExpr::print() {
-    return "[" + join(list, ", ") + "]";
-}
-
-std::string ArrayCreation::print() {
-    std::string s;
-    if (isPointer) s.append("new ");
-    s.append(type->print() + printDims(dims));
-    return s;
+    if (isSized()) {
+        return "[" + list[0]->print() + "; " + std::to_string(size) + "]";
+    } else {
+        return "[" + join(list, ", ") + "]";
+    }
 }
 
 std::string Ternary::print() {
@@ -467,9 +463,6 @@ void *VarDecl::accept(Visitor *v) {
 void *Literal::accept(Visitor *v) {
     return v->visitLiteral(this);
 }
-void *QName::accept(Visitor *v) {
-    return v->visitQName(this);
-}
 void *SimpleName::accept(Visitor *v) {
     return v->visitSimpleName(this);
 }
@@ -527,9 +520,6 @@ void *IsExpr::accept(Visitor *v) {
 }
 void *Assign::accept(Visitor *v) {
     return v->visitAssign(this);
-}
-void *ArrayCreation::accept(Visitor *v) {
-    return v->visitArrayCreation(this);
 }
 void *ArrayAccess::accept(Visitor *v) {
     return v->visitArrayAccess(this);
