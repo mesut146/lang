@@ -4,7 +4,11 @@ class List<T>{
   cap: int;
 
   static func new(): List<T>*{
-    return new List<T>{arr: malloc<T>(10), count: 0, cap: 10};
+    return List<T>::new(10);
+  }
+
+  static func new(cap: int): List<T>*{
+    return new List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
   }
 
   func expand(){
@@ -27,16 +31,18 @@ class List<T>{
     ++count;
   }
 
-  /*func add(list: List<T>){
+  func add(list: List<T>*){
     let i = 0;
     while(i < list.count){
         add(list.get(i));
         ++i;
     }
-  }*/
+  }
 
   func get(pos: int): T{
-    //if(pos >= count) panic("index out of bounds");
+    if(pos >= count) {
+      panic("index %d out of bounds %d",pos, count);
+    }
     return arr[pos];
   }
 
@@ -60,13 +66,13 @@ class List<T>{
 }
 
 func listTest(){
-  let list1 = List<int>::new();
-  let list = new List<int>{arr: malloc<int>(2), count: 0, cap: 2};
+  let list = List<int>::new(2);
   list.add(1);
   list.add(2);
   list.add(3);//trigger expand
   assert list.get(0) == 1;
   assert list.get(1) == 2;
   assert list.get(2) == 3;
+  //list.get(3); //will panic
   print("listTest done\n");
 }

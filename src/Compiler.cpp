@@ -74,10 +74,6 @@ llvm::ConstantInt *makeInt(int val, int bits) {
     return llvm::ConstantInt::get(intType, val);
 }
 
-llvm::Type *getTy() {
-    return llvm::Type::getInt32Ty(*ctx);
-}
-
 llvm::Type *getInt(int bit) {
     return llvm::IntegerType::get(*ctx, bit);
 }
@@ -89,8 +85,8 @@ Type *make(int bit) {
 }
 
 llvm::Type *Compiler::mapType(Type *type) {
-    auto ptr = dynamic_cast<PointerType *>(type);
-    if (ptr) {
+    if (type->isPointer()) {
+        auto ptr = dynamic_cast<PointerType *>(type);
         return mapType(ptr->type)->getPointerTo();
     }
     if (type->isVoid()) {
@@ -304,6 +300,11 @@ void Compiler::initParams(Method *m) {
 }
 
 bool isRet(Statement *stmt) {
+    auto expr = dynamic_cast<ExprStmt *>(stmt);
+    if (expr) {
+        auto mc = dynamic_cast<MethodCall *>(expr->expr);
+        return mc && mc->name == "panic";
+    }
     return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt) || dynamic_cast<BreakStmt *>(stmt);
 }
 
@@ -335,8 +336,16 @@ public:
         return nullptr;
     }
     void *visitType(Type *node) override {
-        auto enumTy = compiler->mapType(node->scope);
-        auto ptr = Builder->CreateAlloca(enumTy, (unsigned) 0);
+        //todo
+        if (true) {
+            return nullptr;
+        }
+        if (node->isPointer()) {
+            return nullptr;
+        }
+        auto r = compiler->resolv->resolve(node);
+        auto ty = compiler->mapType(node->scope);
+        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
         return nullptr;
     }
@@ -454,9 +463,11 @@ void Compiler::makeLocals(Statement *st) {
     col->compiler = this;
     st->accept(col);
 }
+
 void Compiler::genCode(std::unique_ptr<Method> &m) {
     genCode(m.get());
 }
+
 void Compiler::genCode(Method *m) {
     if (isTemplate(m)) {
         return;
@@ -568,7 +579,6 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         }
     }
     for (auto gt : resolv->genericTypes) {
-        print(gt->print());
         for (auto &m : gt->methods) {
             genCode(m);
         }
@@ -876,6 +886,30 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         auto call = Builder->CreateCall(f, args);
         auto rt = resolv->resolve(mc);
         return Builder->CreateBitCast(call, mapType(rt->type));
+    } else if (mc->name == "panic") {
+        std::string message;
+        if (mc->args.empty()) {
+            message = "panic";
+        } else {
+            auto val = dynamic_cast<Literal *>(mc->args[0])->val;
+            message = "panic: " + val.substr(1, val.size() - 2);
+        }
+        message.append("\n");
+        auto str = Builder->CreateGlobalStringPtr(message);
+        std::vector<llvm::Value *> args;
+        args.push_back(str);
+        if (!mc->args.empty()) {
+            for (int i = 1; i < mc->args.size(); ++i) {
+                auto a = mc->args[i];
+                auto av = loadPtr(a);
+                args.push_back(av);
+            }
+        }
+        auto call = Builder->CreateCall(printf_proto, args);
+        std::vector<llvm::Value *> exit_args = {makeInt(1)};
+        Builder->CreateCall(exit_proto, exit_args);
+        Builder->CreateUnreachable();
+        return Builder->getVoidTy();
     } else {
         auto rt = resolv->resolve(mc);
         target = rt->targetMethod;

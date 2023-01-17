@@ -115,8 +115,8 @@ public:
     bool inLoop = false;
     IdGen *idgen;
     bool isResolved = false;
-    std::vector<BaseDecl*> usedTypes;
-    std::vector<Method*> usedMethods;
+    std::vector<BaseDecl *> usedTypes;
+    std::vector<Method *> usedMethods;
     static std::map<std::string, std::shared_ptr<Resolver>> resolverMap;
     std::string root;
 
@@ -129,6 +129,7 @@ public:
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
+    RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
 
     void dump();
 

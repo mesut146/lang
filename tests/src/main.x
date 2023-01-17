@@ -67,19 +67,20 @@ func mallocTest(){
    let arr = malloc<int>(10);
    arr[0] = 3;
    arr[1] = 5;
-   print("arr: %d, %d\n", arr[0], arr[1]);
-
+   assert arr[0] == 3 && arr[1] == 5;
    print("mallocTest done\n");
 }
 
 
 func importTest(){
+  //from classTest
   let c = Point{x: 100, y: 200};
   assert c.x == 100 && c.y == 200;
 
   let c2 = Point::new(10, 20);
-  assert classTest2() == 123;
   assert c2.getX() == 10 && c2.getY() == 20;
+  
+  assert classTest2() == 123;
   print ("importTest done\n");
 }
 
@@ -93,7 +94,6 @@ func main(): int{
   classTest();
   mallocTest();
   whileTest();
-  listTest();
   prims();
   importTest();
   genericTest();

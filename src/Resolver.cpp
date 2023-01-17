@@ -197,7 +197,7 @@ std::string nameOf(VarHolder *vh) {
 void Scope::add(VarHolder *f) {
     for (auto prev : list) {
         if (nameOf(prev) == nameOf(f)) {
-            std::runtime_error("variable " + nameOf(f) + " already declared in the same scope");
+            throw std::runtime_error("variable " + nameOf(f) + " already declared in the same scope");
         }
     }
     list.push_back(f);
@@ -438,7 +438,7 @@ void *Resolver::visitFragment(Fragment *f) {
         res = (RType *) f->type->accept(this);
     }
     auto rhs = resolve(f->rhs.get());
-    if (!res) res = rhs;
+    if (!res) res = clone(rhs);
     res->targetVar = f;
     varMap[f] = res;
     curScope()->add(new VarHolder(f));
@@ -525,7 +525,7 @@ void *Resolver::visitType(Type *type) {
             checkTypeArgs(type->typeArgs, bd->typeArgs);
             if (!bd->typeArgs.empty()) {
                 auto decl = generateDecl(type, bd.get());
-                
+
                 res = new RType;
                 res->type = simpleType(type->name);
                 for (auto ta : type->typeArgs) {
@@ -1006,48 +1006,39 @@ bool isSame(Resolver *r, MethodCall *mc, Method *m) {
     return true;
 }
 
+std::vector<Method *> filter(Resolver *r, std::vector<Method *> &list, MethodCall *mc) {
+    std::vector<Method *> res;
+    for (auto m : list) {
+        if (isSame(r, mc, m)) {
+            res.push_back(m);
+        }
+    }
+    return res;
+}
+
 RType *scopedMethod(MethodCall *mc, Resolver *r) {
     auto scope = r->resolve(mc->scope.get());
+    RType *res;
+    std::vector<Method *> list;
     if (dynamic_cast<Type *>(mc->scope.get())) {
         //static method
-        std::vector<Method *> list;
         for (auto &m : scope->targetDecl->methods) {
             if (!m->isStatic) continue;
             if (m->name == mc->name) {
                 list.push_back(m.get());
             }
         }
-        if (list.empty()) {
-            error("no such method: " + mc->name);
-        }
-        if (list.size() > 1) error("more than 1 candidate");
-        auto target = list[0];
-        auto res = r->resolveType(target->type.get());
-        res->targetMethod = target;
-        //r->usedMethods.push_back(target);
-        return res;
     } else {
-        //member method
-        std::vector<Method *> list;
+        //member method of obj
         for (auto &m : scope->targetDecl->methods) {
             if (m->isStatic) continue;
             if (m->name == mc->name) {
                 list.push_back(m.get());
             }
         }
-        if (list.empty()) {
-            error("no such method: " + mc->name);
-        }
-        if (list.size() > 1) error("more than 1 candidate");
-        auto target = list[0];
-        auto res = r->resolveType(target->type.get());
-        res->targetMethod = target;
-        //r->usedMethods.push_back(target);
-        return res;
     }
-    throw std::runtime_error("scopedMethod");
+    return r->handleCallResult(list, mc);
 }
-
 
 void findMethod(Unit *unit, MethodCall *mc, std::vector<Method *> &list) {
     for (auto &m : unit->methods) {
@@ -1055,6 +1046,33 @@ void findMethod(Unit *unit, MethodCall *mc, std::vector<Method *> &list) {
             list.push_back(m.get());
         }
     }
+}
+
+RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
+    if (list.empty()) {
+        error("no such method: " + mc->name);
+    }
+    auto real = filter(this, list, mc);
+    if (real.empty()) {
+        //print cand
+        throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
+    }
+    if (real.size() > 1) {
+        throw std::runtime_error("method:  " + mc->name + " has " +
+                                 std::to_string(list.size()) + " candidates");
+    }
+    auto target = real[0];
+    if (!target->typeArgs.empty()) {
+        auto newMethod = generateMethod(mc->typeArgs, target);
+        genericMethodsTodo.push_back(newMethod);
+        target = newMethod;
+    }
+    auto res = clone(resolveType(target->type.get()));
+    res->targetMethod = target;
+    if (target->unit != unit.get()) {
+        usedMethods.push_back(target);
+    }
+    return res;
 }
 
 void *Resolver::visitMethodCall(MethodCall *mc) {
@@ -1065,7 +1083,9 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         resolve(arg);
     }
     if (mc->scope) {
-        return scopedMethod(mc, this);
+        auto res = scopedMethod(mc, this);
+        cache[id] = res;
+        return res;
     }
     if (mc->name == "print") {
         return makeSimple("void");
@@ -1079,6 +1099,19 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         auto res = new RType;
         res->type = new PointerType(in);
         return res;
+    } else if (mc->name == "panic") {
+        if (mc->args.empty()) {
+            auto res = new RType;
+            res->type = new Type("void");
+            return res;
+        }
+        auto lit = dynamic_cast<Literal *>(mc->args[0]);
+        if (lit && lit->type == Literal::STR) {
+            auto res = new RType;
+            res->type = new Type("void");
+            return res;
+        }
+        throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
     std::vector<Method *> cand;// candidates
     for (auto &m : unit->methods) {
@@ -1087,9 +1120,9 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         }
     }
     if (curDecl) {
-        //static sibling method
+        //static sibling or normal sibling
         for (auto &m : curDecl->methods) {
-            if (m->name == mc->name) {
+            if ((!curMethod->isStatic || m->isStatic) && m->name == mc->name) {
                 cand.push_back(m.get());
             }
         }
@@ -1097,44 +1130,9 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
     for (auto is : unit->imports) {
         auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
         resolver->resolveAll();
-        try {
-            findMethod(resolver->unit.get(), mc, cand);
-        } catch (std::exception &e) {
-        }
+        findMethod(resolver->unit.get(), mc, cand);
     }
-    if (cand.empty()) {
-        throw std::runtime_error("method:  " + mc->name + " not found");
-    }
-
-    //filter
-    std::vector<Method *> real;
-    for (auto c : cand) {
-        if (isSame(this, mc, c)) {
-            real.push_back(c);
-        }
-    }
-    if (real.empty()) {
-        //print cand
-        throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
-    }
-    if (real.size() > 1) {
-        throw std::runtime_error("method:  " + mc->name + " has " +
-                                 std::to_string(cand.size()) + " candidates");
-    }
-    auto trg = real[0];
-    RType *res;
-    if (!trg->typeArgs.empty()) {
-        auto newMethod = generateMethod(mc->typeArgs, trg);
-        res = clone(resolveType(newMethod->type.get()));
-        res->targetMethod = newMethod;
-        genericMethodsTodo.push_back(newMethod);
-    } else {
-        res = clone(resolveType(trg->type.get()));
-        res->targetMethod = trg;
-        if (trg->unit != unit.get()) {
-            usedMethods.push_back(trg);
-        }
-    }
+    auto res = handleCallResult(cand, mc);
     cache[id] = res;
     return res;
 }
