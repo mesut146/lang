@@ -23,6 +23,8 @@ struct Compiler : public Visitor {
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
 
+    int getSize(Type *type);
+    int getSize(BaseDecl *decl);
     llvm::Value *gen(Expression *e);
     llvm::Value *gen(std::unique_ptr<Expression> &e);
     llvm::Value *loadPtr(Expression *e);

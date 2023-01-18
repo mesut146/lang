@@ -109,34 +109,46 @@ llvm::Type *Compiler::mapType(Type *type) {
     throw std::runtime_error("mapType: " + s);
 }
 
-static int getSize(Type *type) {
+int Compiler::getSize(BaseDecl *decl) {
+    if (decl->isEnum) {
+        auto ed = dynamic_cast<EnumDecl *>(decl);
+        int res = 0;
+        for (auto ev : ed->variants) {
+            if (ev->fields.empty()) continue;
+            int cur = 0;
+            for (auto f : ev->fields) {
+                cur += getSize(f->type);
+            }
+            res = cur > res ? cur : res;
+        }
+        return res;
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(decl);
+        int res = 0;
+        for (auto &fd : td->fields) {
+            res += getSize(fd->type);
+        }
+        return res;
+    }
+}
+
+int Compiler::getSize(Type *type) {
     if (dynamic_cast<PointerType *>(type)) {
         return 64;
     }
-    auto s = type->print();
-    auto it = sizeMap.find(s);
-    if (it != sizeMap.end()) return it->second;
-    throw std::runtime_error("size(" + s + ")");
-}
+    if (type->isPrim()) {
+        return sizeMap[type->name];
+    }
+    if (type->isArray()) {
+        auto arr = dynamic_cast<ArrayType *>(type);
+        return getSize(arr->type) * arr->size;
+    }
 
-static int size(EnumDecl *e) {
-    int res = 0;
-    for (auto ev : e->variants) {
-        if (ev->fields.empty()) continue;
-        int cur = 0;
-        for (auto f : ev->fields) {
-            cur += getSize(f->type);
-        }
-        res = cur > res ? cur : res;
+    auto decl = resolv->resolveType(type)->targetDecl;
+    if (decl) {
+        return getSize(decl);
     }
-    return res;
-}
-static int size(TypeDecl *td) {
-    int res = 0;
-    for (auto &fd : td->fields) {
-        res += getSize(fd->type);
-    }
-    return res;
+    throw std::runtime_error("size(" + type->print() + ")");
 }
 
 llvm::Value *makeStr(std::string &str) {
@@ -201,10 +213,6 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
 }
 
-bool isStruct(Type* t){
-    return !t->isPrim() && !t->isVoid() && !t->isPointer();
-}
-
 void Compiler::make_proto(Method *m) {
     if (isTemplate(m)) {
         return;
@@ -215,11 +223,11 @@ void Compiler::make_proto(Method *m) {
     }
     for (auto prm : m->params) {
         auto t = prm->type.get();
-        if(!isStruct(t)){
-          argTypes.push_back(mapType(prm->type.get()));
-        }else{
+        if (isStruct(t)) {
             //structs are always pass by ptr
             argTypes.push_back(mapType(prm->type.get())->getPointerTo());
+        } else {
+            argTypes.push_back(mapType(prm->type.get()));
         }
     }
     auto retType = mapType(m->type.get());
@@ -245,8 +253,8 @@ void Compiler::makeDecl(BaseDecl *bd) {
     std::vector<llvm::Type *> elems;
     if (bd->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
-        elems.push_back(getInt(32));                                   //ordinal
-        elems.push_back(llvm::ArrayType::get(getInt(8), size(ed) / 8));//data
+        elems.push_back(getInt(32));                                      //ordinal
+        elems.push_back(llvm::ArrayType::get(getInt(8), getSize(ed) / 8));//data
     } else {
         auto td = dynamic_cast<TypeDecl *>(bd);
         for (auto &field : td->fields) {
@@ -291,8 +299,9 @@ void Compiler::createProtos() {
     make_malloc();
 }
 
-bool isMut(Param* prm, Statement* st){
-    auto bl=dynamic_cast<Block*>(st);
+bool isMut(Param *prm, Statement *st) {
+    auto bl = dynamic_cast<Block *>(st);
+    return false;
 }
 
 void Compiler::initParams(Method *m) {
@@ -304,7 +313,8 @@ void Compiler::initParams(Method *m) {
         thisPtr = nullptr;
     }
     for (auto prm : m->params) {
-        if(isStruct(prm->type.get() && !isMut(prm, m.body)) continue;
+        //non mut structs dont need alloc
+        if (isStruct(prm->type.get()) && resolv->mut_params.count(prm) == 0) continue;
         auto ty = mapType(prm->type.get());
         auto ptr = Builder->CreateAlloca(ty);
         NamedValues[prm->name] = ptr;
@@ -313,19 +323,19 @@ void Compiler::initParams(Method *m) {
     int argIdx = isMember(m) ? 1 : 0;
     for (auto i = 0; i < m->params.size(); i++) {
         auto prm = m->params[i];
-        auto ptr = NamedValues[prm->name];
         auto val = ff->getArg(argIdx++);
-        Builder->CreateStore(val, ptr);
+        if (isStruct(prm->type.get())) {
+            if (resolv->mut_params.count(prm) == 0) {
+                NamedValues[prm->name] = val;
+            } else {
+                //memcpy
+                Builder->CreateMemCpy(NamedValues[prm->name], llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(prm->type.get()) / 8);
+            }
+        } else {
+            auto ptr = NamedValues[prm->name];
+            Builder->CreateStore(val, ptr);
+        }
     }
-}
-
-bool isRet(Statement *stmt) {
-    auto expr = dynamic_cast<ExprStmt *>(stmt);
-    if (expr) {
-        auto mc = dynamic_cast<MethodCall *>(expr->expr);
-        return mc && mc->name == "panic";
-    }
-    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt) || dynamic_cast<BreakStmt *>(stmt);
 }
 
 bool isReturnLast(Statement *stmt) {
@@ -562,6 +572,7 @@ void Compiler::compileAll() {
 }
 
 void emit(std::string &Filename) {
+    //todo init once
     auto TargetTriple = llvm::sys::getDefaultTargetTriple();
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -600,6 +611,7 @@ void emit(std::string &Filename) {
     }
     pass.run(*mod);
     dest.flush();
+    dest.close();
     std::cout << "writing " << Filename << std::endl;
 }
 
@@ -631,14 +643,18 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         genCode(m);
     }
     for (auto &bd : unit->types) {
+        resolv->scopes.push_back(resolv->declScopes[bd.get()]);
         for (auto &m : bd->methods) {
             genCode(m);
         }
+        resolv->dropScope();
     }
     for (auto gt : resolv->genericTypes) {
+        resolv->scopes.push_back(resolv->declScopes[gt]);
         for (auto &m : gt->methods) {
             genCode(m);
         }
+        resolv->dropScope();
     }
     std::error_code EC;
     auto noext = trimExtenstion(name);
@@ -674,7 +690,6 @@ void *Compiler::visitBlock(Block *b) {
 
 void *Compiler::visitReturnStmt(ReturnStmt *t) {
     if (t->expr) {
-        //auto val = (llvm::Value *) t->expr->accept(this);
         auto type = resolv->resolve(curMethod->type.get())->type;
         Builder->CreateRet(cast(t->expr.get(), type));
     } else {
@@ -689,6 +704,9 @@ void *Compiler::visitExprStmt(ExprStmt *b) {
 
 llvm::Value *load(llvm::Value *val) {
     auto ty = val->getType()->getPointerElementType();
+    if (ty->isStructTy() || ty->isArrayTy()) {
+        return val;
+    }
     return Builder->CreateLoad(ty, val);
 }
 
@@ -703,12 +721,9 @@ llvm::Value *Compiler::loadPtr(Expression *e) {
     }
     return val;
 }
+
 llvm::Value *Compiler::loadPtr(std::unique_ptr<Expression> &e) {
-    auto val = gen(e.get());
-    if (isVar(e.get())) {
-        return load(val);
-    }
-    return val;
+    return loadPtr(e.get());
 }
 
 void *Compiler::visitParExpr(ParExpr *i) {
@@ -737,9 +752,9 @@ llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     return Builder->CreateZExt(phi, getInt(1));
 }
 
-llvm::Value *extend(llvm::Value *val, Type *type) {
+llvm::Value *extend(llvm::Value *val, Type *type, Compiler *c) {
     int src = val->getType()->getPrimitiveSizeInBits();
-    int bits = getSize(type);
+    int bits = c->getSize(type);
     if (src < bits) {
         return Builder->CreateZExt(val, getInt(bits));
     }
@@ -755,7 +770,7 @@ llvm::Value *Compiler::cast(Expression *expr, Type *type) {
     }
     auto val = loadPtr(expr);
     if (type->isPrim()) {
-        return extend(val, type);
+        return extend(val, type, this);
     }
     return val;
 }
@@ -1055,13 +1070,13 @@ void *Compiler::visitRefExpr(RefExpr *n) {
     //auto pt = llvm::PointerType::get(inner->getType(), 0);
     auto pt = inner->getType();
     //todo not needed for name,already ptr
-    //return Builder->CreateLoad(pt, inner);
     return inner;
 }
 
 void *Compiler::visitDerefExpr(DerefExpr *n) {
     auto val = gen(n->expr);
     auto ty = val->getType()->getPointerElementType();
+    //todo struct memcpy
     return Builder->CreateLoad(ty, val);
 }
 
@@ -1107,7 +1122,7 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
         auto index = Resolver::findVariant(decl, n->type->name);
         llvm::Value *ptr;
         if (n->isPointer) {
-            ptr = callMalloc(makeInt(size(decl) / 8, 64));
+            ptr = callMalloc(makeInt(getSize(decl) / 8, 64));
             ptr = Builder->CreateBitCast(ptr, ty);
         } else {
             ptr = allocArr[allocIdx++];
@@ -1124,7 +1139,12 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             auto targetTy = mapType(cons->type);
             auto val = cast(n->entries[i].value, cons->type);
             auto cast = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
-            Builder->CreateStore(val, cast);
+
+            if (isStruct(cons->type)) {
+                Builder->CreateMemCpy(cast, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(cons->type) / 8);
+            } else {
+                Builder->CreateStore(val, cast);
+            }
             offset += getSize(cons->type) / 8;
         }
         return ptr;
@@ -1133,7 +1153,7 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
         auto decl = dynamic_cast<TypeDecl *>(tt->targetDecl);
         llvm::Value *ptr;
         if (n->isPointer) {
-            ptr = callMalloc(makeInt(size(decl) / 8, 64));
+            ptr = callMalloc(makeInt(getSize(decl) / 8, 64));
             ptr = Builder->CreateBitCast(ptr, ty);
         } else {
             ptr = allocArr[allocIdx++];
@@ -1149,7 +1169,11 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
             auto &field = decl->fields[index];
             auto val = cast(e.value, field->type);
-            Builder->CreateStore(val, eptr);
+            if (isStruct(field->type)) {
+                Builder->CreateMemCpy(eptr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(field->type) / 8);
+            } else {
+                Builder->CreateStore(val, eptr);
+            }
             i++;
         }
         return ptr;
@@ -1286,7 +1310,7 @@ void *Compiler::visitIsExpr(IsExpr *ie) {
 void *Compiler::visitAsExpr(AsExpr *e) {
     auto val = gen(e->expr);
     auto ty = resolv->resolve(e->type);
-    return extend(val, ty->type);
+    return extend(val, ty->type, this);
 }
 
 void *Compiler::visitArrayAccess(ArrayAccess *node) {

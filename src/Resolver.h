@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 
 class Symbol;
@@ -42,6 +43,19 @@ static std::string mangle(Method *m) {
 
 static void print(const std::string &msg) {
     std::cout << msg << std::endl;
+}
+
+static bool isStruct(Type *t) {
+    return !t->isPrim() && !t->isPointer();
+}
+
+static bool isRet(Statement *stmt) {
+    auto expr = dynamic_cast<ExprStmt *>(stmt);
+    if (expr) {
+        auto mc = dynamic_cast<MethodCall *>(expr->expr);
+        return mc && mc->name == "panic";
+    }
+    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt) || dynamic_cast<BreakStmt *>(stmt);
 }
 
 class EnumPrm {
@@ -101,11 +115,13 @@ public:
     std::unordered_map<std::string, RType *> cache;
     std::map<Fragment *, RType *> varMap;
     std::map<std::string, RType *> typeMap;
-    std::map<Param *, RType *> paramMap;
+    std::map<std::string, RType *> paramMap;
     std::unordered_map<Method *, RType *> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
-    std::map<Method *, std::shared_ptr<Scope>> methodScopes;
     std::shared_ptr<Scope> globalScope;
+    std::map<Method *, std::shared_ptr<Scope>> methodScopes;
+    std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
+    std::unordered_set<Param *> mut_params;
     BaseDecl *curDecl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> genericMethods;
@@ -126,6 +142,7 @@ public:
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
+    void initDecl(BaseDecl *bd);
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);

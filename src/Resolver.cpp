@@ -240,18 +240,6 @@ void Resolver::dump() {
         std::cout << "var: " << f.first->name << " = "
                   << f.second->type->print() << std::endl;
     }
-    /*for(auto &p : fieldMap){
-      std::cout << "field: " << p.first->name << " = " <<
-    p.second->type->print() << "\n";
-    }*/
-    for (auto &p : methodMap) {
-        std::cout << "method: " << p.first->name << " = "
-                  << p.second->type->print() << std::endl;
-        for (auto *prm : p.first->params) {
-            std::cout << "param: " << prm->name << " = "
-                      << paramMap[prm]->type->print() << std::endl;
-        }
-    }
 }
 void Resolver::newScope() {
     scopes.push_back(std::make_shared<Scope>());
@@ -284,6 +272,7 @@ void Resolver::resolveAll() {
             continue;
         }
         newScope();
+        declScopes[bd.get()] = curScope();
         visitBaseDecl(bd.get());
         for (auto &m : bd->methods) {
             if (!m->typeArgs.empty()) {
@@ -297,6 +286,7 @@ void Resolver::resolveAll() {
     }
     for (auto gt : genericTypes) {
         newScope();
+        declScopes[gt] = curScope();
         visitBaseDecl(gt);
         curDecl = gt;
         for (auto &m : gt->methods) {
@@ -324,27 +314,6 @@ void Resolver::init() {
         res->targetDecl = bd.get();
         typeMap[bd->name] = res;
     }
-    // for (auto m : unit->methods) {
-    //     if (!m->typeArgs.empty()) {
-    //         continue;
-    //     }
-    //     auto res = clone(resolve(m->type.get()));
-    //     res->targetMethod = m;
-    //     methodMap[m] = res;
-    // }
-    // for (auto bd : unit->types) {
-    //     if (!bd->typeArgs.empty()) {
-    //         continue;
-    //     }
-    //     for (auto m : bd->methods) {
-    //         if (!m->typeArgs.empty()) {
-    //             continue;
-    //         }
-    //         auto res = clone(resolve(m->type.get()));
-    //         res->targetMethod = m;
-    //         methodMap[m] = res;
-    //     }
-    // }
     newScope();//globals
     globalScope = curScope();
 }
@@ -360,6 +329,27 @@ RType *Resolver::resolve(Expression *expr) {
     auto res = (RType *) expr->accept(this);
     cache[id] = res;
     return res;
+}
+
+void Resolver::initDecl(BaseDecl *bd) {
+    bd->isResolved = true;
+    curDecl = bd;
+    if (bd->isEnum) {
+        auto en = dynamic_cast<EnumDecl *>(bd);
+        for (auto ev : en->variants) {
+            for (auto ep : ev->fields) {
+                ep->type->accept(this);
+            }
+        }
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(bd);
+        for (auto &fd : td->fields) {
+            fd->accept(this);
+            curScope()->add(new VarHolder(fd.get()));
+        }
+    }
+    curDecl = nullptr;
+    //return typeMap[bd->name];
 }
 
 void *Resolver::visitBaseDecl(BaseDecl *bd) {
@@ -423,9 +413,19 @@ void *Resolver::visitMethod(Method *m) {
     return res;
 }
 
+std::string paramId(Param *p) {
+    if (p->method->parent) {
+        return p->method->parent->name + "#" + p->method->name + "#" + p->name;
+    } else {
+        return p->method->name + "#" + p->name;
+    }
+}
+
 void *Resolver::visitParam(Param *p) {
+    auto id = paramId(p);
+    if (paramMap.find(id) != paramMap.end()) return paramMap[id];
     auto res = clone(resolveType(p->type.get()));
-    paramMap[p] = res;
+    paramMap[id] = res;
     return res;
 }
 
@@ -577,13 +577,50 @@ void *Resolver::visitType(Type *type) {
     return res;
 }
 
+Param *isMut(Expression *e, Resolver *r) {
+    auto sn = dynamic_cast<SimpleName *>(e);
+    if (sn) {
+        auto rt = r->resolve(sn);
+        if (std::get_if<Param *>(rt->vh) && isStruct(rt->type)) {
+            return *std::get_if<Param *>(rt->vh);
+        }
+        return nullptr;
+    }
+    auto aa = dynamic_cast<ArrayAccess *>(e);
+    if (aa) {
+        return isMut(aa->array, r);
+    }
+    auto de = dynamic_cast<DerefExpr *>(e);
+    if (de) {
+        return isMut(de->expr, r);
+    }
+
+    auto fa = dynamic_cast<FieldAccess *>(e);
+    if (fa) {
+        //find root var
+        auto scope = fa->scope;
+        while (true) {
+            auto fa2 = dynamic_cast<FieldAccess *>(scope);
+            if (fa2) {
+                scope = fa2->scope;
+            } else {
+                return isMut(scope, r);
+            }
+        }
+    }
+    throw std::runtime_error("todo isMut: " + e->print());
+}
+
 void *Resolver::visitAssign(Assign *as) {
     auto t1 = resolve(as->left);
     auto t2 = resolve(as->right);
     if (!subType(t2->type, t1->type)) {
         error("cannot assign " + as->right->print() + " to " + as->left->print());
     }
-    // return t1 because t2 is going to be autocast to t1 ultimately
+    auto prm = isMut(as->left, this);
+    if (prm) {
+        mut_params.insert(prm);
+    }
     return t1;
 }
 
@@ -671,7 +708,6 @@ void *Resolver::visitSimpleName(SimpleName *sn) {
 
     auto arr = find(sn->name, true);
     if (arr.empty()) {
-        dump();
         throw std::runtime_error("unknown identifier: " + sn->name);
     }
     if (arr.size() > 1) {
@@ -696,7 +732,7 @@ void *Resolver::visitSimpleName(SimpleName *sn) {
         if (ep) {
             res = s.resolve((*ep)->decl->type);
         }
-        res=clone(res);
+        res = clone(res);
         res->vh = s.v;
     } else if (s.m) {
         res = s.resolve(s.m);
@@ -854,27 +890,32 @@ void *Resolver::visitParExpr(ParExpr *e) {
     return e->expr->accept(this);
 }
 
-void *Resolver::visitExprStmt(ExprStmt *st) {
-    if (!iof<MethodCall *>(st->expr) && !iof<Assign *>(st->expr) && !iof<Unary *>(st->expr) && !iof<Postfix *>(st->expr)) {
-        error("invalid expr statement: " + st->print());
+void *Resolver::visitExprStmt(ExprStmt *node) {
+    if (!iof<MethodCall *>(node->expr) && !iof<Assign *>(node->expr) && !iof<Unary *>(node->expr) && !iof<Postfix *>(node->expr)) {
+        error("invalid expr statement: " + node->print());
     }
-    st->expr->accept(this);
+    node->expr->accept(this);
     return nullptr;
 }
 
-void *Resolver::visitBlock(Block *st) {
-    for (auto &st : st->list) {
+void *Resolver::visitBlock(Block *node) {
+    int i = 0;
+    for (auto &st : node->list) {
+        if (i > 0 && isRet(node->list[i - 1].get())) {
+            error("unreachable code: " + st->print());
+        }
         st->accept(this);
+        i++;
     }
     return nullptr;
 }
 
-void *Resolver::visitIfStmt(IfStmt *st) {
-    if (!isCondition(st->expr.get(), this)) {
+void *Resolver::visitIfStmt(IfStmt *node) {
+    if (!isCondition(node->expr.get(), this)) {
         error("if condition is not a boolean");
     }
-    st->thenStmt->accept(this);
-    if (st->elseStmt) st->elseStmt->accept(this);
+    node->thenStmt->accept(this);
+    if (node->elseStmt) node->elseStmt->accept(this);
     return nullptr;
 }
 
@@ -997,15 +1038,14 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
     auto idx = resolve(node->index);
     //todo unsigned
     if (idx->type->print() == "bool" || !idx->type->isPrim()) error("array index is not an integer");
-    if(arr->type->isPointer()){
-      auto ptr = dynamic_cast<PointerType *>(arr->type);
-      return resolveType(ptr->type);
-    }
-    else if(arr->type->isArray()){
+    if (arr->type->isPointer()) {
+        auto ptr = dynamic_cast<PointerType *>(arr->type);
+        return resolveType(ptr->type);
+    } else if (arr->type->isArray()) {
         auto at = dynamic_cast<ArrayType *>(arr->type);
         return resolveType(at->type);
-    }else{
-      throw std::runtime_error("array expr is not a pointer: " + node->print());
+    } else {
+        throw std::runtime_error("array expr is not a pointer: " + node->print());
     }
 }
 

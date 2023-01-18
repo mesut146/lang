@@ -14,8 +14,13 @@ void *IdGen::visitMethodCall(MethodCall *node) {
 }
 
 void *IdGen::visitSimpleName(SimpleName *node) {
-    auto id = resolver->curMethod->name + "#" + node->print();
-    return new std::string(id);
+    if (resolver->curDecl) {
+        auto id = resolver->curDecl->name + "#"+ resolver->curMethod->name + "#" + node->print();
+        return new std::string(id);
+    } else {
+        auto id = resolver->curMethod->name + "#" + node->print();
+        return new std::string(id);
+    }
 }
 void *IdGen::visitLiteral(Literal *node) {
     return nullptr;

@@ -5,6 +5,7 @@ import flow
 import generic
 import List
 import array
+import pass
 
 func varTest(){
   let a: int = 5;
