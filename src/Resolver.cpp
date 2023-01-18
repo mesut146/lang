@@ -696,6 +696,8 @@ void *Resolver::visitSimpleName(SimpleName *sn) {
         if (ep) {
             res = s.resolve((*ep)->decl->type);
         }
+        res=clone(res);
+        res->vh = s.v;
     } else if (s.m) {
         res = s.resolve(s.m);
     } else if (s.decl) {
@@ -992,12 +994,19 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
 
 void *Resolver::visitArrayAccess(ArrayAccess *node) {
     auto arr = resolve(node->array);
-    if (!arr->type->isPointer()) error("array expr is not a pointer: " + node->print());
     auto idx = resolve(node->index);
     //todo unsigned
     if (idx->type->print() == "bool" || !idx->type->isPrim()) error("array index is not an integer");
-    auto ptr = dynamic_cast<PointerType *>(arr->type);
-    return resolveType(ptr->type);
+    if(arr->type->isPointer()){
+      auto ptr = dynamic_cast<PointerType *>(arr->type);
+      return resolveType(ptr->type);
+    }
+    else if(arr->type->isArray()){
+        auto at = dynamic_cast<ArrayType *>(arr->type);
+        return resolveType(at->type);
+    }else{
+      throw std::runtime_error("array expr is not a pointer: " + node->print());
+    }
 }
 
 bool isSame(Resolver *r, MethodCall *mc, Method *m) {
@@ -1171,13 +1180,13 @@ void *Resolver::visitArrayExpr(ArrayExpr *node) {
         auto elemType = resolve(node->list[0]);
         return new RType(new ArrayType(elemType->type, node->size));
     } else {
-        RType *res = resolve(node->list[0]);
+        auto inner = resolve(node->list[0]);
         for (int i = 1; i < node->list.size(); i++) {
             auto t = resolve(node->list[i]);
-            if (!subType(res->type, t->type)) {
+            if (!subType(inner->type, t->type)) {
                 error("array element type mismatch");
             }
         }
-        return res;
+        return new RType(new ArrayType(inner->type, node->list.size()));
     }
 }

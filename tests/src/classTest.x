@@ -17,3 +17,21 @@ class Point{
 func classTest2(): int{
   return 123;
 }
+
+class A{
+ a: long;
+ b: [int; 100];
+}
+
+func by_val(p: A){
+  p.a = 11;
+  assert p.a == 11;
+}
+
+func passTest(){
+  let arr = [0; 100];
+  let p = A{a: 10, b: arr};
+  by_val(p);
+  assert p.a == 10;
+  print("passTest done\n");
+}

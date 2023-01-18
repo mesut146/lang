@@ -400,14 +400,16 @@ RefExpr *parseRef(Parser *p) {
 DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
     auto expr = parseLhs(p);
+    return new DerefExpr(expr);
+    /*
     if (dynamic_cast<SimpleName *>(expr) ||
         dynamic_cast<FieldAccess *>(expr) ||
         dynamic_cast<MethodCall *>(expr) ||
         dynamic_cast<ParExpr *>(expr) ||
         dynamic_cast<DerefExpr *>(expr)) {
-        return new DerefExpr(expr);
+        
     }
-    throw std::runtime_error("cannot dereference " + expr->print());
+    throw std::runtime_error("cannot dereference " + expr->print());*/
 }
 
 Expression *parseLhs(Parser *p) {

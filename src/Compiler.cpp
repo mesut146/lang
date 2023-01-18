@@ -89,6 +89,11 @@ llvm::Type *Compiler::mapType(Type *type) {
         auto ptr = dynamic_cast<PointerType *>(type);
         return mapType(ptr->type)->getPointerTo();
     }
+    if (type->isArray()) {
+        auto res = resolv->resolve(type);
+        auto arr = dynamic_cast<ArrayType *>(res->type);
+        return llvm::ArrayType::get(mapType(arr->type), arr->size);
+    }
     if (type->isVoid()) {
         return llvm::Type::getVoidTy(*ctx);
     }
@@ -196,6 +201,10 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
 }
 
+bool isStruct(Type* t){
+    return !t->isPrim() && !t->isVoid() && !t->isPointer();
+}
+
 void Compiler::make_proto(Method *m) {
     if (isTemplate(m)) {
         return;
@@ -205,7 +214,13 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(classMap[m->parent->name]->getPointerTo());
     }
     for (auto prm : m->params) {
-        argTypes.push_back(mapType(prm->type.get()));
+        auto t = prm->type.get();
+        if(!isStruct(t)){
+          argTypes.push_back(mapType(prm->type.get()));
+        }else{
+            //structs are always pass by ptr
+            argTypes.push_back(mapType(prm->type.get())->getPointerTo());
+        }
     }
     auto retType = mapType(m->type.get());
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
@@ -276,6 +291,10 @@ void Compiler::createProtos() {
     make_malloc();
 }
 
+bool isMut(Param* prm, Statement* st){
+    auto bl=dynamic_cast<Block*>(st);
+}
+
 void Compiler::initParams(Method *m) {
     //alloc
     auto ff = funcMap[mangle(m)];
@@ -285,6 +304,7 @@ void Compiler::initParams(Method *m) {
         thisPtr = nullptr;
     }
     for (auto prm : m->params) {
+        if(isStruct(prm->type.get() && !isMut(prm, m.body)) continue;
         auto ty = mapType(prm->type.get());
         auto ptr = Builder->CreateAlloca(ty);
         NamedValues[prm->name] = ptr;
@@ -319,6 +339,43 @@ bool isReturnLast(Statement *stmt) {
             return true;
         }
     }
+    return false;
+}
+
+bool isReturnLocal(Statement *st, Compiler *c) {
+    auto rs = dynamic_cast<ReturnStmt *>(st);
+    //is alloca
+    if (rs) {
+        auto os = dynamic_cast<ObjExpr *>(rs->expr.get());
+        if (os) return !os->isPointer;
+        auto mc = dynamic_cast<MethodCall *>(rs->expr.get());
+        if (mc) {
+            auto rt = c->resolv->resolve(mc);
+            auto target = rt->targetMethod;
+            return isReturnLocal(target->body.get(), c);
+        }
+        auto nm = dynamic_cast<SimpleName *>(rs->expr.get());
+        if (nm) {
+            auto rt = c->resolv->resolve(nm);
+            if (rt->vh && std::get_if<Fragment *>(rt->vh)) {
+                return true;
+            }
+        }
+    }
+    auto is = dynamic_cast<IfStmt *>(st);
+    if (is) {
+    }
+    auto bl = dynamic_cast<Block *>(st);
+    if (bl) {
+        for (auto &s : bl->list) {
+            if (isReturnLocal(s.get(), c)) return true;
+        }
+    }
+    return false;
+}
+
+bool isReturnLocal(Method *m, Compiler *c) {
+
     return false;
 }
 
@@ -978,7 +1035,7 @@ void *Compiler::visitVarDecl(VarDecl *n) {
 
         //no unnecessary alloc
         auto obj = dynamic_cast<ObjExpr *>(f->rhs.get());
-        if (obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs.get())) {
+        if (obj && !obj->isPointer || dynamic_cast<Type *>(f->rhs.get()) || dynamic_cast<ArrayExpr *>(f->rhs.get())) {
             NamedValues[f->name] = val;
             continue;
         }
@@ -1233,9 +1290,17 @@ void *Compiler::visitAsExpr(AsExpr *e) {
 }
 
 void *Compiler::visitArrayAccess(ArrayAccess *node) {
-    auto src = loadPtr(node->array);
-    std::vector<llvm::Value *> idx = {loadPtr(node->index)};
-    return Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
+    auto type = resolv->resolve(node->array)->type;
+    if (dynamic_cast<ArrayType *>(type)) {
+        auto src = gen(node->array);
+        std::vector<llvm::Value *> idx = {makeInt(0), loadPtr(node->index)};
+        //getArrayElementType
+        return Builder->CreateGEP(mapType(type), src, idx);
+    } else {
+        auto src = loadPtr(node->array);
+        std::vector<llvm::Value *> idx = {loadPtr(node->index)};
+        return Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
+    }
 }
 
 void *Compiler::visitWhileStmt(WhileStmt *node) {
@@ -1263,7 +1328,28 @@ void *Compiler::visitContinueStmt(ContinueStmt *node) {
     Builder->CreateBr(loops.back());
     return nullptr;
 }
+
 void *Compiler::visitBreakStmt(BreakStmt *node) {
     Builder->CreateBr(loopNext.back());
     return nullptr;
+}
+
+void *Compiler::visitArrayExpr(ArrayExpr *node) {
+    auto type = resolv->resolve(node->list[0])->type;
+    if (node->isSized()) {
+        //auto expr = cast(node->list[0], type);
+        auto ptr = allocArr[allocIdx++];
+        //create cons and memcpy
+        return ptr;
+    } else {
+        auto ptr = allocArr[allocIdx++];
+        int i = 0;
+        for (auto e : node->list) {
+            std::vector<llvm::Value *> idx = {makeInt(0), makeInt(i++)};
+            //getArrayElementType
+            auto p = Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+            Builder->CreateStore(cast(e, type), p);
+        }
+        return ptr;
+    }
 }

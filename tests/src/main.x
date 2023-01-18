@@ -4,6 +4,7 @@ import enumTest
 import flow
 import generic
 import List
+import array
 
 func varTest(){
   let a: int = 5;
@@ -14,7 +15,6 @@ func varTest(){
   assert *ptr == 6;
   print("varTest done\n");
 }
-
 
 func getTrue(cnt: int*): bool {
   *cnt = *cnt + 1;
@@ -98,5 +98,7 @@ func main(): int{
   importTest();
   genericTest();
   listTest();
+  arrayTest();
+  passTest();
   return 0;
 }

@@ -63,4 +63,5 @@ struct Compiler : public Visitor {
     void *visitWhileStmt(WhileStmt *node) override;
     void *visitContinueStmt(ContinueStmt *node) override;
     void *visitBreakStmt(BreakStmt *node) override;
+    void *visitArrayExpr(ArrayExpr *node) override;
 };
