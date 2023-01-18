@@ -6,6 +6,7 @@ import generic
 import List
 import array
 import pass
+import ret
 
 func varTest(){
   let a: int = 5;
@@ -101,5 +102,6 @@ func main(): int{
   listTest();
   arrayTest();
   passTest();
+  retTest();
   return 0;
 }

@@ -369,7 +369,7 @@ std::string ArrayAccess::print() {
 
 std::string ArrayExpr::print() {
     if (isSized()) {
-        return "[" + list[0]->print() + "; " + std::to_string(size) + "]";
+        return "[" + list[0]->print() + "; " + std::to_string(size.value()) + "]";
     } else {
         return "[" + join(list, ", ") + "]";
     }

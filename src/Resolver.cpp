@@ -1218,7 +1218,7 @@ void *Resolver::visitBreakStmt(BreakStmt *node) {
 void *Resolver::visitArrayExpr(ArrayExpr *node) {
     if (node->isSized()) {
         auto elemType = resolve(node->list[0]);
-        return new RType(new ArrayType(elemType->type, node->size));
+        return new RType(new ArrayType(elemType->type, node->size.value()));
     } else {
         auto inner = resolve(node->list[0]);
         for (int i = 1; i < node->list.size(); i++) {

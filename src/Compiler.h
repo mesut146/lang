@@ -16,6 +16,7 @@ struct Compiler : public Visitor {
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;
+    llvm::Value *retPtr = nullptr;
 
     void compileAll();
     std::optional<std::string> compile(const std::string &path);

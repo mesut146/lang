@@ -218,6 +218,9 @@ void Compiler::make_proto(Method *m) {
         return;
     }
     std::vector<llvm::Type *> argTypes;
+    if (!m->type->isVoid() && isStruct(m->type.get())) {
+        argTypes.push_back(classMap[m->type->name]->getPointerTo());
+    }
     if (isMember(m)) {
         argTypes.push_back(classMap[m->parent->name]->getPointerTo());
     }
@@ -231,6 +234,9 @@ void Compiler::make_proto(Method *m) {
         }
     }
     auto retType = mapType(m->type.get());
+    if (isStruct(m->type.get())) {
+        retType = Builder->getVoidTy();
+    }
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangle(m), mod.get());
     unsigned i = 0;
@@ -421,6 +427,13 @@ public:
             return nullptr;
         }
         auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
+        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
+        allocArr.push_back(ptr);
+        return nullptr;
+    }
+    void *visitArrayExpr(ArrayExpr *node) {
+        auto r = compiler->resolv->resolve(node);
+        auto ty = compiler->mapType(r->type);
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
         return nullptr;
@@ -690,8 +703,13 @@ void *Compiler::visitBlock(Block *b) {
 
 void *Compiler::visitReturnStmt(ReturnStmt *t) {
     if (t->expr) {
-        auto type = resolv->resolve(curMethod->type.get())->type;
-        Builder->CreateRet(cast(t->expr.get(), type));
+        if (isStruct(curMethod->type.get())) {
+            //rvo
+            Builder->CreateRetVoid();
+        } else {
+            auto type = resolv->resolve(curMethod->type.get())->type;
+            Builder->CreateRet(cast(t->expr.get(), type));
+        }
     } else {
         Builder->CreateRetVoid();
     }

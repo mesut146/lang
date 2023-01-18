@@ -458,9 +458,9 @@ public:
 class ArrayExpr : public Expression {
 public:
     std::vector<Expression *> list;
-    int size = -1;
+    std::optional<int> size = std::nullopt;
 
-    bool isSized() { return size != -1; }
+    bool isSized() { return size.has_value(); }
 
     std::string print() override;
     void *accept(Visitor *v) override;
