@@ -449,6 +449,7 @@ class ArrayAccess : public Expression {
 public:
     Expression *array;
     Expression *index;
+    std::unique_ptr<Expression> index2;
     bool isOptional = false;
 
     std::string print() override;

@@ -11,3 +11,8 @@ func arrayTest(){
   assert (*arr3[0])[0] == 8;
   print("arrayTest done\n");
 }
+
+func sliceTest(){
+  let arr = [2, 3, 5, 7, 11, 13];
+  let slice = arr[0..2];
+}

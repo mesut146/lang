@@ -1,10 +1,12 @@
 #pragma once
 
+#include <fstream>
+#include <string>
+
 #include "Resolver.h"
 #include "Visitor.h"
-#include <fstream>
 #include <llvm/IR/Value.h>
-#include <string>
+#include <llvm/Target/TargetMachine.h>
 
 
 struct Compiler : public Visitor {
@@ -17,7 +19,11 @@ struct Compiler : public Visitor {
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;
     llvm::Value *retPtr = nullptr;
+    std::string TargetTriple;
+    llvm::TargetMachine *TargetMachine;
 
+    void init();
+    void emit(std::string &Filename);
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
     void createProtos();

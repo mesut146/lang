@@ -96,6 +96,7 @@ enum TokenType {
     GTGT,
     COMMA,
     DOT,
+    DOTDOT,
     LPAREN,
     RPAREN,
     LBRACKET,

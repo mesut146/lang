@@ -34,6 +34,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(VOID)
 
         TOKEN_CASE(DOT)
+        TOKEN_CASE(DOTDOT)
         TOKEN_CASE(SEMI)
         TOKEN_CASE(LBRACKET)
         TOKEN_CASE(RBRACKET)

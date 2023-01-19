@@ -361,10 +361,18 @@ std::string MethodCall::print() {
 }
 
 std::string ArrayAccess::print() {
+    std::string s = array->print();
     if (isOptional) {
-        return array->print() + "?[" + index->print() + "]";
+        s.append("?");
     }
-    return array->print() + "[" + index->print() + "]";
+    s.append("[");
+    s.append(index->print());
+    if (index2) {
+        s.append("..");
+        s.append(index2->print());
+    }
+    s.append("]");
+    return s;
 }
 
 std::string ArrayExpr::print() {

@@ -3,12 +3,12 @@ class List<T>{
   count: int;
   cap: int;
 
-  static func new(): List<T>*{
+  static func new(): List<T>{
     return List<T>::new(10);
   }
 
-  static func new(cap: int): List<T>*{
-    return new List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
+  static func new(cap: int): List<T>{
+    return List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
   }
 
   func expand(){

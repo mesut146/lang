@@ -96,5 +96,6 @@ public:
 
         ops["=>"] = ARROW;
         ops["::"] = COLON2;
+        ops[".."] = DOTDOT;
     }
 };

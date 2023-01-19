@@ -376,6 +376,10 @@ Expression *PRIM2(Parser *p) {
             res->array = lhs;
             p->consume(LBRACKET);
             res->index = p->parseExpr();
+            if (p->is(DOTDOT)) {
+                p->consume(DOTDOT);
+                res->index2.reset(p->parseExpr());
+            }
             p->consume(RBRACKET);
             lhs = res;
         }

@@ -258,9 +258,6 @@ void Resolver::resolveAll() {
     if (isResolved) return;
     isResolved = true;
     init();
-    for (auto &st : unit->stmts) {
-        st->accept(this);
-    }
     for (auto &m : unit->methods) {
         if (!m->typeArgs.empty()) {
             continue;
@@ -271,29 +268,15 @@ void Resolver::resolveAll() {
         if (!bd->typeArgs.empty()) {
             continue;
         }
-        newScope();
-        declScopes[bd.get()] = curScope();
         visitBaseDecl(bd.get());
-        for (auto &m : bd->methods) {
-            if (!m->typeArgs.empty()) {
-                continue;
-            }
-            curDecl = bd.get();
-            visitMethod(m.get());
-            curDecl = nullptr;
-        }
-        dropScope();
     }
     for (auto gt : genericTypes) {
-        newScope();
-        declScopes[gt] = curScope();
         visitBaseDecl(gt);
-        curDecl = gt;
-        for (auto &m : gt->methods) {
-            visitMethod(m.get());
-        }
-        curDecl = nullptr;
-        dropScope();
+    }
+
+    for (auto &st : unit->stmts) {
+        //todo globs visited first
+        st->accept(this);
     }
     while (!genericMethodsTodo.empty()) {
         auto gm = genericMethodsTodo.back();
@@ -353,6 +336,11 @@ void Resolver::initDecl(BaseDecl *bd) {
 }
 
 void *Resolver::visitBaseDecl(BaseDecl *bd) {
+    if (bd->isResolved) {
+        error("already resolved");
+    }
+    newScope();
+    declScopes[bd] = curScope();
     bd->isResolved = true;
     curDecl = bd;
     if (bd->isEnum) {
@@ -369,7 +357,14 @@ void *Resolver::visitBaseDecl(BaseDecl *bd) {
             curScope()->add(new VarHolder(fd.get()));
         }
     }
+    for (auto &m : bd->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
+        m->accept(this);
+    }
     curDecl = nullptr;
+    dropScope();
     return typeMap[bd->name];
 }
 
@@ -549,7 +544,7 @@ void *Resolver::visitType(Type *type) {
                 typeMap[str] = res;
                 return res;
             } else {
-                return (RType *) visitBaseDecl(bd.get());
+                return typeMap[bd->name];
             }
         }
         for (auto is : unit->imports) {
@@ -568,9 +563,10 @@ void *Resolver::visitType(Type *type) {
     auto st = (RType *) type->scope->accept(this);
     auto bd = st->targetDecl;
     if (bd->isEnum) {
+        //enum variant creation
         auto ed = dynamic_cast<EnumDecl *>(bd);
         findVariant(ed, type->name);
-        res = (RType *) visitBaseDecl(ed);
+        res = typeMap[ed->name];
     }
     if (!res) throw std::runtime_error("todo resolveType: " + str);
     typeMap[str] = res;
@@ -1038,6 +1034,12 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
     auto idx = resolve(node->index);
     //todo unsigned
     if (idx->type->print() == "bool" || !idx->type->isPrim()) error("array index is not an integer");
+    if (node->index2) {
+        auto idx2 = resolve(node->index2.get());
+        if (idx2->type->print() == "bool" || !idx2->type->isPrim()) error("range end is not an integer");
+        auto at = dynamic_cast<ArrayType *>(arr->type);
+        return new RType(new SliceType(at->type));
+    }
     if (arr->type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(arr->type);
         return resolveType(ptr->type);
@@ -1215,6 +1217,7 @@ void *Resolver::visitBreakStmt(BreakStmt *node) {
     if (node->label) error("break label");
     return nullptr;
 }
+
 void *Resolver::visitArrayExpr(ArrayExpr *node) {
     if (node->isSized()) {
         auto elemType = resolve(node->list[0]);
