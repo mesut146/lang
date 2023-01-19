@@ -218,8 +218,9 @@ void Compiler::make_proto(Method *m) {
         return;
     }
     std::vector<llvm::Type *> argTypes;
-    if (!m->type->isVoid() && isStruct(m->type.get())) {
-        argTypes.push_back(classMap[m->type->name]->getPointerTo());
+    bool rvo = !m->type->isVoid() && isStruct(m->type.get());
+    if (rvo) {
+        argTypes.push_back(mapType(m->type.get())->getPointerTo());
     }
     if (isMember(m)) {
         argTypes.push_back(classMap[m->parent->name]->getPointerTo());
@@ -242,7 +243,8 @@ void Compiler::make_proto(Method *m) {
     unsigned i = 0;
     int pi = 0;
     for (auto &a : f->args()) {
-        if (i == 0 && isMember(m)) {
+        if(i==0&&rvo){i++;continue;}
+        if ((i == 1||!rvo) && isMember(m)) {
             a.setName("this");
         } else {
             a.setName(m->params[pi++]->name);
@@ -1332,13 +1334,24 @@ void *Compiler::visitAsExpr(AsExpr *e) {
 }
 
 void *Compiler::visitArrayAccess(ArrayAccess *node) {
-    auto type = resolv->resolve(node->array)->type;
-    if (dynamic_cast<ArrayType *>(type)) {
+    auto arr = resolv->resolve(node->array);
+    auto type = arr->type;
+    std::vector<llvm::Value *> idx;
+    if (type->isArray()) {
         auto src = gen(node->array);
-        std::vector<llvm::Value *> idx = {makeInt(0), loadPtr(node->index)};
-        //getArrayElementType
-        return Builder->CreateGEP(mapType(type), src, idx);
+        auto ty = mapType(type);
+        ty->dump(); 
+        src->getType()->dump();
+        if(std::get_if<Param*>(arr->vh)){
+            idx = { makeInt(0), loadPtr(node->index)};
+            ty = src->getType()->getPointerElementType();
+        }else{
+            idx = { loadPtr(node->index)};
+            ty = src->getType()->getPointerElementType();
+        }
+        return Builder->CreateGEP(ty, src, idx);
     } else {
+        idx = {makeInt(0), loadPtr(node->index)};
         auto src = loadPtr(node->array);
         std::vector<llvm::Value *> idx = {loadPtr(node->index)};
         return Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
