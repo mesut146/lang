@@ -3,6 +3,7 @@
 #include "parser/Parser.h"
 #include "parser/Util.h"
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 
 void lex(std::string &path) {
@@ -67,6 +68,7 @@ public:
 void compile() {
     Compiler c;
     c.srcDir = "../tests/src";
+    //c.srcDir = "../tests/a";
     c.outDir = "../out";
     c.compileAll();
 }
@@ -94,6 +96,17 @@ int main(int argc, char **args) {
             parseTest();
         } else if (arg == "resolve") {
             resolveTest();
+        }
+        if (arg == "c") {
+            auto file = std::string(args[2]);
+            Compiler c;
+            if (std::filesystem::is_directory(file)) {
+                c.srcDir = file;
+                c.compileAll();
+            } else {
+                c.init();
+                c.compile(file);
+            }
         } else {
             std::cerr << "invalid cmd: " << arg;
         }
