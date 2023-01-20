@@ -1042,13 +1042,21 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
     }
     if (arr->type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(arr->type);
-        return resolveType(ptr->type);
-    } else if (arr->type->isArray()) {
+        auto res = resolveType(ptr->type);
+        if(res->type->isArray() || res->type->isSlice()){
+            arr=res;
+        }
+        else{
+            return res;
+        }
+    } if (arr->type->isArray()) {
         auto at = dynamic_cast<ArrayType *>(arr->type);
         return resolveType(at->type);
-    } else {
-        throw std::runtime_error("array expr is not a pointer: " + node->print());
+    } if(arr->type->isSlice()){
+        auto at = dynamic_cast<SliceType *>(arr->type);
+        return resolveType(at->type);
     }
+        throw std::runtime_error("array expr is not a pointer: " + node->print());
 }
 
 bool isSame(Resolver *r, MethodCall *mc, Method *m) {
