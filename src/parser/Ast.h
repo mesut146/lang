@@ -103,7 +103,7 @@ public:
     void *accept(Visitor *v) override;
 };
 
-class EnumParam {
+class EnumField {
 public:
     std::string name;
     Type *type;
@@ -114,7 +114,7 @@ public:
 class EnumVariant {
 public:
     std::string name;
-    std::vector<EnumParam *> fields;
+    std::vector<EnumField *> fields;
 
     bool isStruct() const { return !fields.empty(); }
     std::string print();

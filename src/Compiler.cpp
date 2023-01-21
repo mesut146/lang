@@ -85,8 +85,11 @@ Type *make(int bit) {
 
 llvm::Type *Compiler::mapType(Type *type) {
     if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        return mapType(ptr->type)->getPointerTo();
+        auto elem = dynamic_cast<PointerType *>(type)->type;
+        if (isStruct(elem)) {
+            //forward
+        }
+        return mapType(elem)->getPointerTo();
     }
     if (type->isArray()) {
         auto res = resolv->resolve(type);
@@ -179,9 +182,6 @@ bool isObj(Expression *e) {
 
 llvm::Value *load(llvm::Value *val) {
     auto ty = val->getType()->getPointerElementType();
-    /*if (ty->isStructTy() || ty->isArrayTy()) {
-        return val;
-    }*/
     return Builder->CreateLoad(ty, val);
 }
 
@@ -284,7 +284,6 @@ void make_slice_type() {
     std::vector<llvm::Type *> elems;
     elems.push_back(getInt(8)->getPointerTo());
     elems.push_back(getInt(32));//len
-    //elems.push_back(getInt(32));
     sliceType = llvm::StructType::create(*ctx, elems, "__slice");
 }
 
@@ -295,8 +294,10 @@ void Compiler::makeDecl(BaseDecl *bd) {
     std::vector<llvm::Type *> elems;
     if (bd->isEnum) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
-        elems.push_back(getInt(32));                                      //ordinal
-        elems.push_back(llvm::ArrayType::get(getInt(8), getSize(ed) / 8));//data
+        //ordinal, i32
+        elems.push_back(getInt(32));
+        //data, i8*
+        elems.push_back(llvm::ArrayType::get(getInt(8), getSize(ed) / 8));
     } else {
         auto td = dynamic_cast<TypeDecl *>(bd);
         for (auto &field : td->fields) {
@@ -307,18 +308,45 @@ void Compiler::makeDecl(BaseDecl *bd) {
     classMap[bd->name] = ty;
 }
 
+void sort(std::vector<BaseDecl *> &list) {
+    std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
+        if (a->isEnum) {
+            auto ed = dynamic_cast<EnumDecl *>(a);
+            for(auto varian){
+
+            }
+        } else {
+            auto td = dynamic_cast<TypeDecl *>(a);
+            for (auto &field : td->fields) {
+                if (field->type->name == b->name) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    });
+}
+
 void Compiler::createProtos() {
+    std::vector<BaseDecl *> list;
     for (auto &bd : unit->types) {
-        makeDecl(bd.get());
+        list.push_back(bd.get());
     }
     for (auto gt : resolv->genericTypes) {
-        makeDecl(gt);
+        list.push_back(gt);
+    }
+    for (auto bd : resolv->usedTypes) {
+        list.push_back(bd);
+    }
+    sort(list);
+    for (auto bd : list) {
+        makeDecl(bd);
+    }
+    //methods
+    for (auto gt : resolv->genericTypes) {
         for (auto &m : gt->methods) {
             make_proto(m);
         }
-    }
-    for (auto bd : resolv->usedTypes) {
-        makeDecl(bd);
     }
     for (auto &m : unit->methods) {
         make_proto(m);
@@ -339,11 +367,6 @@ void Compiler::createProtos() {
     make_printf();
     make_exit();
     make_malloc();
-}
-
-bool isMut(Param *prm, Statement *st) {
-    auto bl = dynamic_cast<Block *>(st);
-    return false;
 }
 
 void Compiler::initParams(Method *m) {
@@ -389,38 +412,6 @@ bool isReturnLast(Statement *stmt) {
         auto &last = block->list.back();
         if (isRet(last.get())) {
             return true;
-        }
-    }
-    return false;
-}
-
-bool isReturnLocal(Statement *st, Compiler *c) {
-    auto rs = dynamic_cast<ReturnStmt *>(st);
-    //is alloca
-    if (rs) {
-        auto os = dynamic_cast<ObjExpr *>(rs->expr.get());
-        if (os) return !os->isPointer;
-        auto mc = dynamic_cast<MethodCall *>(rs->expr.get());
-        if (mc) {
-            auto rt = c->resolv->resolve(mc);
-            auto target = rt->targetMethod;
-            return isReturnLocal(target->body.get(), c);
-        }
-        auto nm = dynamic_cast<SimpleName *>(rs->expr.get());
-        if (nm) {
-            auto rt = c->resolv->resolve(nm);
-            if (rt->vh && std::get_if<Fragment *>(rt->vh)) {
-                return true;
-            }
-        }
-    }
-    auto is = dynamic_cast<IfStmt *>(st);
-    if (is) {
-    }
-    auto bl = dynamic_cast<Block *>(st);
-    if (bl) {
-        for (auto &s : bl->list) {
-            if (isReturnLocal(s.get(), c)) return true;
         }
     }
     return false;
@@ -493,10 +484,10 @@ public:
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
         for (auto e : node->list) {
-            auto mc=dynamic_cast<MethodCall*>(e);
-            if(mc){
-              //throw std:: runtime_error("mc to array");
-            }else{
+            auto mc = dynamic_cast<MethodCall *>(e);
+            if (mc) {
+                //throw std:: runtime_error("mc to array");
+            } else {
                 //e->accept(this);
             }
         }
@@ -1230,72 +1221,82 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
     return ptr;
 }
 
-void Compiler::object(ObjExpr *n, llvm::Value* ptr, RType* tt) {
+int Compiler::getOffset(EnumVariant *variant, int index) {
+    int offset = 0;
+    for (int i = 0; i < index; i++) {
+        offset += getSize(variant->fields[i]->type) / 8;
+    }
+    return offset;
+}
+
+void Compiler::setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr) {
+    auto targetTy = mapType(type);
+    if (do_cast) {
+        entPtr = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
+    }
+    if (doesAlloc(expr)) {
+        child(expr, entPtr);
+    } else if (isStruct(type)) {
+        auto val = gen(expr);
+        Builder->CreateMemCpy(entPtr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(type) / 8);
+    } else {
+        auto val = cast(expr, type);
+        Builder->CreateStore(val, entPtr);
+    }
+}
+
+void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
     auto ty = mapType(tt->type);
     if (tt->targetDecl->isEnum) {
         //enum
         auto decl = dynamic_cast<EnumDecl *>(tt->targetDecl);
-        auto index = Resolver::findVariant(decl, n->type->name);
+        auto variant_index = Resolver::findVariant(decl, n->type->name);
 
-        setOrdinal(index, ptr);
+        setOrdinal(variant_index, ptr);
         auto dataPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, 1);
-        auto variant = decl->variants[index];
-        int offset = 0;
-        for (int i = 0; i < variant->fields.size(); i++) {
-            auto cons = variant->fields[i];
-            std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
-            auto entPtr = Builder->CreateGEP(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx);
-            auto targetTy = mapType(cons->type);
-            auto e = n->entries[i].value;
-            if(doesAlloc (e)){
-                child(e, entPtr);
-            }
-            else if (isStruct(cons->type)) {
-                auto val = gen(e);
-                Builder->CreateMemCpy(entPtr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(cons->type) / 8);
+        auto variant = decl->variants[variant_index];
+        for (int i = 0; i < n->entries.size(); i++) {
+            auto &e = n->entries[i];
+            int index;
+            if (e.hasKey()) {
+                index = fieldIndex(variant, e.key);
             } else {
-                auto casted = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
-                auto val = cast(e, cons->type);
-                Builder->CreateStore(val, casted);
+                index = i;
             }
-            offset += getSize(cons->type) / 8;
+            auto field = variant->fields[index];
+            std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(getOffset(variant, index))};
+            auto entPtr = Builder->CreateGEP(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx);
+            setField(e.value, field->type, true, entPtr);
         }
     } else {
         //class
         auto decl = dynamic_cast<TypeDecl *>(tt->targetDecl);
-        int i = 0;
-        for (auto &e : n->entries) {
+        for (int i = 0; i < n->entries.size(); i++) {
+            auto &e = n->entries[i];
             int index;
             if (e.hasKey()) {
                 index = fieldIndex(decl, e.key);
             } else {
                 index = i;
             }
-            auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
             auto &field = decl->fields[index];
-            if(doesAlloc (e.value)){
-                child(e.value, eptr);
-            }else if (isStruct(field->type)) {
-                auto val = gen(e.value);
-                Builder->CreateMemCpy(eptr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(field->type) / 8);
-            } else {
-                auto val = cast(e.value, field->type);
-                Builder->CreateStore(val, eptr);
-            }
-            i++;
+            auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
+            setField(e.value, field->type, false, eptr);
         }
     }
 }
 
-void visitType2(Type *n, llvm::Value* ptr, Resolver* resolv) {
-    int index = Resolver::findVariant(findEnum(n->scope, resolv), n->name);
+void simpleVariant(Type *n, llvm::Value *ptr, Resolver *resolv) {
+    auto decl = findEnum(n->scope, resolv);
+    int index = Resolver::findVariant(decl, n->name);
     setOrdinal(index, ptr);
 }
+
 void *Compiler::visitType(Type *n) {
     if (!n->scope) throw std::runtime_error("type has no scope");
     //enum variant without struct
     auto ptr = allocArr[allocIdx++];
-    visitType2(n, ptr, resolv.get());
+    simpleVariant(n, ptr, resolv.get());
     return ptr;
 }
 
@@ -1511,22 +1512,22 @@ void *Compiler::visitArrayExpr(ArrayExpr *node) {
     return ptr;
 }
 
-void Compiler::child(Expression* e, llvm::Value* ptr){
-    auto a=dynamic_cast<ArrayExpr*>(e);
-    if(a){
+void Compiler::child(Expression *e, llvm::Value *ptr) {
+    auto a = dynamic_cast<ArrayExpr *>(e);
+    if (a) {
         array(a, ptr);
     }
-    auto obj=dynamic_cast<ObjExpr*>(e);
-    if(obj&&!obj->isPointer){
+    auto obj = dynamic_cast<ObjExpr *>(e);
+    if (obj && !obj->isPointer) {
         object(obj, ptr, resolv->resolve(obj));
     }
-    auto t=dynamic_cast<Type*>(e);
-    if(t){
-        visitType2(t, ptr, resolv.get());
+    auto t = dynamic_cast<Type *>(e);
+    if (t) {
+        simpleVariant(t, ptr, resolv.get());
     }
 }
 
-void* Compiler::array(ArrayExpr *node, llvm::Value* ptr) {
+void *Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     auto type = resolv->resolve(node->list[0])->type;
     if (node->isSized()) {
         //auto expr = cast(node->list[0], type);
@@ -1538,12 +1539,11 @@ void* Compiler::array(ArrayExpr *node, llvm::Value* ptr) {
             //getArrayElementType
             auto rt = resolv->resolve(e);
             auto elem_target = Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
-            if(doesAlloc(e)){
+            if (doesAlloc(e)) {
                 child(e, elem_target);
-            }
-            else if (isStruct(type)) {
-                  auto val = gen(e);
-                  Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt->type) / 8);
+            } else if (isStruct(type)) {
+                auto val = gen(e);
+                Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt->type) / 8);
             } else {
                 Builder->CreateStore(cast(e, type), elem_target);
             }

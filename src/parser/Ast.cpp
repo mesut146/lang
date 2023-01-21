@@ -74,7 +74,7 @@ std::string EnumVariant::print() {
     return s;
 }
 
-std::string EnumParam::print() {
+std::string EnumField::print() {
     return name + ": " + type->print();
 }
 

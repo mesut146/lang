@@ -49,8 +49,8 @@ std::unique_ptr<TypeDecl> Parser::parseTypeDecl() {
     return res;
 }
 
-EnumParam *parseEnumParam(Parser *p) {
-    auto res = new EnumParam;
+EnumField *parseEnumParam(Parser *p) {
+    auto res = new EnumField;
     res->name = p->name();
     p->consume(COLON);
     res->type = p->parseType();

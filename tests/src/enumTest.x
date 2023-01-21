@@ -10,8 +10,9 @@ class B{
 
 enum E{
  A,
- B(a: int, b: long),
- C(a: long);
+ B(a: int, b: int),
+ C(a: long),
+ A2(a: A);
 }
 
 func classTest(){
@@ -30,19 +31,21 @@ func classTest(){
 
 func enumTest(){
   let a: E = E::A;
-  let b: E = E::B{b: 6, a: 6};
+  let b: E = E::B{b: 6, a: 5};//random order
   let c: E = E::C{100};
+  let d: E = E::A2{A{a: 100, b: 200}};
 
   assert a.index == 0 && b.index==1 && c.index == 2;
-  assert a is E::A && b is E::B && c is E::C;
+  assert a is E::A && b is E::B && c is E::C && d is E::A2;
 
   let isA = false;
   let isB = false;
   let isC = false;
+  let isD = false;
   if let E::A = (a){
     isA = true;
   }
-  if let E::B(p1,p2) = (b){
+  if let E::B(p1, p2) = (b){
     isB = true;
     assert p1 == 5 && p2 == 6;
     p1 = 10;
@@ -52,9 +55,14 @@ func enumTest(){
     isC = true;
     assert p3 == 100;
   }
-  assert isB;
+  if let E::A2(p4) = (d){
+    isD = true;
+    assert p4.a == 100 && p4.b == 200;
+  }
   assert isA;
+  assert isB;
   assert isC;
+  assert isD;
   print("enumTest done\n");
 }
 

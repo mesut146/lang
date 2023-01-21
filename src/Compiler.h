@@ -32,6 +32,8 @@ struct Compiler : public Visitor {
 
     int getSize(Type *type);
     int getSize(BaseDecl *decl);
+    int getOffset(EnumVariant *variant, int index);
+    void setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr);
     llvm::Value *gen(Expression *e);
     llvm::Value *gen(std::unique_ptr<Expression> &e);
     llvm::Value *loadPtr(Expression *e);
@@ -73,7 +75,7 @@ struct Compiler : public Visitor {
     void *visitContinueStmt(ContinueStmt *node) override;
     void *visitBreakStmt(BreakStmt *node) override;
     void *visitArrayExpr(ArrayExpr *node) override;
-    void* array(ArrayExpr *node, llvm::Value* ptr);
-    void child(Expression* e, llvm::Value* ptr);
-    void object(ObjExpr* e, llvm::Value* ptr, RType* tt);
+    void *array(ArrayExpr *node, llvm::Value *ptr);
+    void child(Expression *e, llvm::Value *ptr);
+    void object(ObjExpr *e, llvm::Value *ptr, RType *tt);
 };

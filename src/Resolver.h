@@ -60,7 +60,7 @@ static bool isRet(Statement *stmt) {
 
 class EnumPrm {
 public:
-    EnumParam *decl;
+    EnumField *decl;
     std::string name;
 };
 

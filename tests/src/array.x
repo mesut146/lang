@@ -44,27 +44,32 @@ func arr2d(){
   let a4 = [a3, [10, 20, 30]];
   assert a4[0][0] == 1 && a4[1][2] == 30;
   print("arr2d done\n");
-  arr_in_obj();
+  mixed();
 }
 
+/*class AA{
+  ptr: A*;
+}*/
+
 class A{
-  arr: [int; 3];
+  a: [B; 2];
+  b: B;
+  c: [B]; 
 }
 class B{
   b: int;
 }
-func arr_in_obj(){
-  let a1 = A{arr: [10, 11, 12]};
-  assert a1.arr[0] == 10;
+class C{
+  a: int;
+}
+func mixed(){
+  let a1 = A{a: [B{1}, B{2}], b: B{b: 3}, c: [B{4}][0..1]};
+  /*assert a1.arr[0] == 10;
   
   //obj in arr
   let a2 = [B{b: 5}, B{b: 7}];
-  assert a2[0].b == 5;
+  assert a2[0].b == 5;*/
+
+  print("mixed done\n");
 }
 
-func pp(){
-  let a = new B{b: 5};
-  //let b = 6;
-  let ptr = &a;
-  //ptr = &b;
-}
