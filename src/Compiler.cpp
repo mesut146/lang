@@ -482,9 +482,9 @@ public:
         auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
-        for (auto &e : node->entries) {
+        /*for (auto &e : node->entries) {
             e.value->accept(this);
-        }
+        }*/
         return ptr;
     }
     void *visitArrayExpr(ArrayExpr *node) {
@@ -493,7 +493,12 @@ public:
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
         for (auto e : node->list) {
-            e->accept(this);
+            auto mc=dynamic_cast<MethodCall*>(e);
+            if(mc){
+              //throw std:: runtime_error("mc to array");
+            }else{
+                //e->accept(this);
+            }
         }
         return ptr;
     }
@@ -607,6 +612,8 @@ public:
 };
 
 void Compiler::makeLocals(Statement *st) {
+    allocIdx = 0;
+    allocArr.clear();
     auto col = new AllocCollector;
     col->compiler = this;
     st->accept(col);
@@ -1209,18 +1216,22 @@ int fieldIndex(EnumVariant *variant, const std::string &name) {
     }
     throw std::runtime_error("unknown field: " + name + " of variant " + variant->name);
 }
-
 void *Compiler::visitObjExpr(ObjExpr *n) {
-    //enum or class
     auto tt = resolv->resolve(n);
-    auto ty = mapType(tt->type);
     llvm::Value *ptr;
     if (n->isPointer) {
+        auto ty = mapType(tt->type);
         ptr = callMalloc(makeInt(getSize(tt->targetDecl) / 8, 64));
         ptr = Builder->CreateBitCast(ptr, ty);
     } else {
         ptr = allocArr[allocIdx++];
     }
+    object(n, ptr, tt);
+    return ptr;
+}
+
+void Compiler::object(ObjExpr *n, llvm::Value* ptr, RType* tt) {
+    auto ty = mapType(tt->type);
     if (tt->targetDecl->isEnum) {
         //enum
         auto decl = dynamic_cast<EnumDecl *>(tt->targetDecl);
@@ -1235,17 +1246,20 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(offset)};
             auto entPtr = Builder->CreateGEP(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx);
             auto targetTy = mapType(cons->type);
-            auto casted = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
-            if (isStruct(cons->type)) {
-                auto val = gen(n->entries[i].value);
-                Builder->CreateMemCpy(casted, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(cons->type) / 8);
+            auto e = n->entries[i].value;
+            if(doesAlloc (e)){
+                child(e, entPtr);
+            }
+            else if (isStruct(cons->type)) {
+                auto val = gen(e);
+                Builder->CreateMemCpy(entPtr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(cons->type) / 8);
             } else {
-                auto val = cast(n->entries[i].value, cons->type);
+                auto casted = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
+                auto val = cast(e, cons->type);
                 Builder->CreateStore(val, casted);
             }
             offset += getSize(cons->type) / 8;
         }
-        return ptr;
     } else {
         //class
         auto decl = dynamic_cast<TypeDecl *>(tt->targetDecl);
@@ -1259,8 +1273,9 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             }
             auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
             auto &field = decl->fields[index];
-
-            if (isStruct(field->type)) {
+            if(doesAlloc (e.value)){
+                child(e.value, eptr);
+            }else if (isStruct(field->type)) {
                 auto val = gen(e.value);
                 Builder->CreateMemCpy(eptr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(field->type) / 8);
             } else {
@@ -1269,17 +1284,18 @@ void *Compiler::visitObjExpr(ObjExpr *n) {
             }
             i++;
         }
-        return ptr;
     }
 }
 
+void visitType2(Type *n, llvm::Value* ptr, Resolver* resolv) {
+    int index = Resolver::findVariant(findEnum(n->scope, resolv), n->name);
+    setOrdinal(index, ptr);
+}
 void *Compiler::visitType(Type *n) {
     if (!n->scope) throw std::runtime_error("type has no scope");
     //enum variant without struct
-    auto enumTy = mapType(n->scope);
     auto ptr = allocArr[allocIdx++];
-    int index = Resolver::findVariant(findEnum(n->scope, resolv.get()), n->name);
-    setOrdinal(index, ptr);
+    visitType2(n, ptr, resolv.get());
     return ptr;
 }
 
@@ -1490,8 +1506,28 @@ void *Compiler::visitBreakStmt(BreakStmt *node) {
 }
 
 void *Compiler::visitArrayExpr(ArrayExpr *node) {
-    auto type = resolv->resolve(node->list[0])->type;
     auto ptr = allocArr[allocIdx++];
+    array(node, ptr);
+    return ptr;
+}
+
+void Compiler::child(Expression* e, llvm::Value* ptr){
+    auto a=dynamic_cast<ArrayExpr*>(e);
+    if(a){
+        array(a, ptr);
+    }
+    auto obj=dynamic_cast<ObjExpr*>(e);
+    if(obj&&!obj->isPointer){
+        object(obj, ptr, resolv->resolve(obj));
+    }
+    auto t=dynamic_cast<Type*>(e);
+    if(t){
+        visitType2(t, ptr, resolv.get());
+    }
+}
+
+void* Compiler::array(ArrayExpr *node, llvm::Value* ptr) {
+    auto type = resolv->resolve(node->list[0])->type;
     if (node->isSized()) {
         //auto expr = cast(node->list[0], type);
         //create cons and memcpy
@@ -1502,9 +1538,12 @@ void *Compiler::visitArrayExpr(ArrayExpr *node) {
             //getArrayElementType
             auto rt = resolv->resolve(e);
             auto elem_target = Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
-            if (isStruct(rt->type)) {
-                auto val = gen(e);
-                Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt->type) / 8);
+            if(doesAlloc(e)){
+                child(e, elem_target);
+            }
+            else if (isStruct(type)) {
+                  auto val = gen(e);
+                  Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt->type) / 8);
             } else {
                 Builder->CreateStore(cast(e, type), elem_target);
             }

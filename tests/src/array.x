@@ -33,16 +33,38 @@ func sliceTest(){
 }
 
 func arr2d(){
-  let arr = [[0; 5]; 10];
-  arr[0][0] = 3;
-  assert arr[0][0] == 3;
-  let a1 = [1, 2, 3];
-  let arr2 = [a1];
-  assert arr2[0][0] == 1;
+  let a1 = [[0; 5]; 10];
+  a1[0][0] = 3;
+  assert a1[0][0] == 3;
+  
+  let a2 = [[10, 20], [30, 40]];
+  assert a2[0][1]==20 && a2[1][0]==30;
+  
+  let a3 = [1, 2, 3];
+  let a4 = [a3, [10, 20, 30]];
+  assert a4[0][0] == 1 && a4[1][2] == 30;
   print("arr2d done\n");
+  arr_in_obj();
 }
 
-func arrr3(){
-  let arr2 = [[1, 2, 3]];
+class A{
+  arr: [int; 3];
+}
+class B{
+  b: int;
+}
+func arr_in_obj(){
+  let a1 = A{arr: [10, 11, 12]};
+  assert a1.arr[0] == 10;
+  
+  //obj in arr
+  let a2 = [B{b: 5}, B{b: 7}];
+  assert a2[0].b == 5;
+}
 
+func pp(){
+  let a = new B{b: 5};
+  //let b = 6;
+  let ptr = &a;
+  //ptr = &b;
 }

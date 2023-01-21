@@ -10,16 +10,16 @@ class B{
 
 enum E{
  A,
- B(a: int, b: int),
+ B(a: int, b: long),
  C(a: long);
 }
 
 func classTest(){
-  let obj: A = A{b: 6, a: 5};
+  //random order
+  let obj = A{b: 6, a: 5};
   assert obj.a == 5 && obj.b == 6;
-  obj.a  =10;
+  obj.a = 10;
   assert obj.a == 10 && obj.b == 6;
-  //let objCopy=obj.clone();
 
   let b = B{a: obj, c: 3};
   assert b.c == 3;
@@ -30,7 +30,7 @@ func classTest(){
 
 func enumTest(){
   let a: E = E::A;
-  let b: E = E::B{a: 5, b: 6};
+  let b: E = E::B{b: 6, a: 6};
   let c: E = E::C{100};
 
   assert a.index == 0 && b.index==1 && c.index == 2;

@@ -73,4 +73,7 @@ struct Compiler : public Visitor {
     void *visitContinueStmt(ContinueStmt *node) override;
     void *visitBreakStmt(BreakStmt *node) override;
     void *visitArrayExpr(ArrayExpr *node) override;
+    void* array(ArrayExpr *node, llvm::Value* ptr);
+    void child(Expression* e, llvm::Value* ptr);
+    void object(ObjExpr* e, llvm::Value* ptr, RType* tt);
 };
