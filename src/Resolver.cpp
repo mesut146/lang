@@ -270,6 +270,14 @@ void Resolver::resolveAll() {
         }
         visitBaseDecl(bd.get());
     }
+    for(auto& i:unit->items){
+        curImpl = i.get();
+        i->isResolved=true;
+        for(auto &m:i->methods){
+            visitMethod(m.get());
+        }
+        curImpl = nullptr;
+    }
     for (auto gt : genericTypes) {
         visitBaseDecl(gt);
     }
@@ -335,9 +343,46 @@ void Resolver::initDecl(BaseDecl *bd) {
     //return typeMap[bd->name];
 }
 
+bool Resolver::isCyclic(Type* type, BaseDecl* target){
+    if(type->isPointer()) return false;
+    if(type->isArray()){
+        auto at = dynamic_cast<ArrayType*>(type);
+        return isCyclic(at->type, target);
+    }
+    if(type->isSlice()) return false;
+    if(!isStruct(type)) return false;
+    if(type->print () == target->name) return true;
+    auto bd = resolveType (type)->targetDecl;
+    if (bd->isEnum) {
+        auto en = dynamic_cast<EnumDecl *>(bd);
+        for (auto ev : en->variants) {
+            for (auto f : ev->fields) {
+                if(isCyclic(f->type, target)) return true;
+            }
+        }
+    } else {
+        auto td = dynamic_cast<TypeDecl *>(bd);
+        for (auto &fd : td->fields) {
+            if(isCyclic(fd->type, target)) return true;
+        }
+    }
+    return false;
+}
+
 void *Resolver::visitBaseDecl(BaseDecl *bd) {
     if (bd->isResolved) {
         error("already resolved");
+    }
+    if(bd->isImpl()){
+        curImpl = dynamic_cast<Impl*>(bd);
+        for (auto &m : bd->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
+        m->accept(this);
+    }
+    curImpl=nullptr;
+        return resolve(curImpl->type.get());
     }
     newScope();
     declScopes[bd] = curScope();
@@ -350,7 +395,8 @@ void *Resolver::visitBaseDecl(BaseDecl *bd) {
                 ep->type->accept(this);
             }
         }
-    } else {
+    }
+     else {
         auto td = dynamic_cast<TypeDecl *>(bd);
         for (auto &fd : td->fields) {
             fd->accept(this);
@@ -391,6 +437,15 @@ void *Resolver::visitMethod(Method *m) {
     res->targetMethod = m;
     newScope();
     methodScopes[m] = curScope();
+    if(m->self){
+        curScope()->add(new VarHolder(m->self.get()));
+        if(curImpl){
+            m->self->type.reset(clone(curImpl->type.get()));
+        }else{
+            m->self->type.reset(new Type(curDecl->name));
+        }
+        m->self->accept(this);
+    }
     for (auto prm : m->params) {
         curScope()->add(new VarHolder(prm));
         prm->accept(this);
@@ -435,6 +490,7 @@ void *Resolver::visitFragment(Fragment *f) {
     if (!res) res = clone(rhs);
     res->targetVar = f;
     varMap[f] = res;
+    //todo visit once
     curScope()->add(new VarHolder(f));
     return res;
 }
@@ -497,8 +553,7 @@ void *Resolver::visitType(Type *type) {
         if (isUnsigned(str)) {
             error("unsigned types not yet supported");
         }
-        res = new RType;
-        res->type = type;
+        res = new RType(type);
         typeMap[str] = res;
         return res;
     }
@@ -797,7 +852,6 @@ std::string toPath(std::vector<std::string> &list) {
     return join(list, "/");
 }
 
-
 void imports(std::string &name, std::vector<Symbol> &res, Resolver *r) {
     for (auto is : r->unit->imports) {
     }
@@ -827,6 +881,7 @@ void *Resolver::visitAsExpr(AsExpr *e) {
 }
 
 void *Resolver::visitRefExpr(RefExpr *e) {
+    //todo field access
     if (!iof<SimpleName *>(e->expr)) {
         error("ref expr is not supported: " + e->expr->print());
     }

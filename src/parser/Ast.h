@@ -9,6 +9,7 @@ class Visitor;
 class Type;
 class BaseDecl;
 class TypeDecl;
+class Impl;
 class Method;
 class Expression;
 class Statement;
@@ -49,6 +50,7 @@ public:
     std::vector<std::unique_ptr<BaseDecl>> types;
     std::vector<std::unique_ptr<Method>> methods;
     std::vector<std::unique_ptr<Statement>> stmts;
+    std::vector<std::unique_ptr<Impl>> items;
     std::string path;
 
     std::string print();
@@ -144,7 +146,7 @@ public:
     std::string name;
     std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
-    std::optional<std::string> self;
+    std::unique_ptr<Param> self;
     std::vector<Param *> params;
     std::unique_ptr<Block> body;
     BaseDecl *parent = nullptr;

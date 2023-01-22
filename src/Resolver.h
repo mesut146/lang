@@ -32,7 +32,12 @@ static std::string mangle(Type *type) {
 static std::string mangle(Method *m) {
     std::string s;
     if (m->parent) {
-        s += m->parent->name + "::";
+        if(m->parent->isImpl()){
+            auto i = dynamic_cast<Impl*>(m->parent); 
+            s += i->type->print() + "::";
+        }else{
+            s += m->parent->name + "::";
+        }
     }
     s += m->name;
     for (auto prm : m->params) {
@@ -123,6 +128,7 @@ public:
     std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
     std::unordered_set<Param *> mut_params;
     BaseDecl *curDecl = nullptr;
+    Impl* curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> genericMethods;
     std::vector<Method *> genericMethodsTodo;
@@ -147,6 +153,7 @@ public:
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
     RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
+    bool isCyclic(Type* type, BaseDecl* target);
 
     void dump();
 

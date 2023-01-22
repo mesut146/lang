@@ -118,6 +118,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
         res->type.reset(p->parseType());
     }else{
         res->type.reset(type);
+        res->name = type->name;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
@@ -154,7 +155,10 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->types.push_back(parseEnumDecl());
         } else if (is(TRAIT)) {
             res->types.push_back(parseTrait(this));
-        } else if (isVarDecl()) {
+        }else if(is(IMPL)){
+            res->items.push_back(parseImpl(this));
+        }
+         else if (isVarDecl()) {
             res->stmts.push_back(std::unique_ptr<Statement>(parseVarDecl()));
         } else if (isMethod()) {
             res->methods.push_back(parseMethod());
@@ -190,14 +194,19 @@ std::unique_ptr<Method> Parser::parseMethod() {
     } else {
         res->name = name();
     }
-
     if (is(LT)) {
         res->typeArgs = generics();
     }
-
     consume(LPAREN);
     if (!is(RPAREN)) {
-        res->params.push_back(parseParam(res.get()));
+        if(is({IDENT}, {COMMA, RPAREN})){
+            auto self = new Param;
+            self->name = name();
+            self->method = res.get();
+            res->self.reset(self);
+        }else{
+            res->params.push_back(parseParam(res.get()));
+        }
         while (is(COMMA)) {
             consume(COMMA);
             res->params.push_back(parseParam(res.get()));

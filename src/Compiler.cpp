@@ -235,6 +235,7 @@ static void make_malloc() {
     mallocf = f;
 }
 bool isTemplate(Method *m) {
+    //if(m->parent&&m->parent->isImpl()) return false;
     return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
 }
 void Compiler::make_proto(std::unique_ptr<Method> &m) {
@@ -251,7 +252,12 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(mapType(m->type.get())->getPointerTo());
     }*/
     if (isMember(m)) {
-        argTypes.push_back(classMap[m->parent->name]->getPointerTo());
+        auto p = new Type(m->parent->name);
+        if(isStruct(p)){
+            argTypes.push_back(mapType(p)->getPointerTo());
+        }else{
+            argTypes.push_back(mapType(p));
+        }
     }
     for (auto prm : m->params) {
         auto t = prm->type.get();
@@ -308,17 +314,23 @@ void Compiler::makeDecl(BaseDecl *bd) {
     classMap[bd->name] = ty;
 }
 
+bool isSame(Type* type, BaseDecl* decl){
+    return type->print() == decl->name;
+}
+
 void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
         if (a->isEnum) {
             auto ed = dynamic_cast<EnumDecl *>(a);
-            for(auto varian){
-
+            for(auto variant: ed->variants){
+                for(auto f:variant->fields){
+                    if(isSame(f->type, b)) return false;
+                }
             }
         } else {
             auto td = dynamic_cast<TypeDecl *>(a);
             for (auto &field : td->fields) {
-                if (field->type->name == b->name) {
+                if (isSame(field->type, b)) {
                     return false;
                 }
             }
@@ -352,6 +364,11 @@ void Compiler::createProtos() {
         make_proto(m);
     }
     for (auto &bd : unit->types) {
+        for (auto &m : bd->methods) {
+            make_proto(m);
+        }
+    }
+    for (auto &bd : unit->items) {
         for (auto &m : bd->methods) {
             make_proto(m);
         }
@@ -744,6 +761,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
             genCode(m);
         }
         resolv->dropScope();
+    }
+    for(auto &imp:unit->items){
+        for(auto &m:imp->methods){
+            genCode(m);
+        }
     }
     std::error_code EC;
     auto noext = trimExtenstion(name);

@@ -1,13 +1,13 @@
 let str: List<u16>::new();
 
-let ptr: &str = "hello";
+let ptr: str = "hello";
 
 let s: String = String::new("hello");
 
 //string slice
 struct str{
   ptr: i8*;
-  size: u32;
+  len: u32;
 }
 
 struct String{
