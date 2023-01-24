@@ -9,21 +9,21 @@ std::string Parser::strLit() {
 ImportStmt *Parser::parseImport() {
     auto res = new ImportStmt;
     consume(IMPORT);
-    res->list.push_back(name());
+    res->list.push_back(pop()->value);
     while (is(DIV)) {
         pop();
-        res->list.push_back(name());
+        res->list.push_back(pop()->value);
     }
     return res;
 }
 
-void setArgs(Type* type){
-  for(auto ta:type->typeArgs){
-  	ta->isTypeParam = true;
-  }
+void setArgs(Type *type) {
+    for (auto ta : type->typeArgs) {
+        ta->isTypeParam = true;
+    }
 }
 
-std::unique_ptr<FieldDecl> parseField(Parser *p, TypeDecl *decl) {
+std::unique_ptr<FieldDecl> parseField(Parser *p, StructDecl *decl) {
     auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
@@ -32,8 +32,8 @@ std::unique_ptr<FieldDecl> parseField(Parser *p, TypeDecl *decl) {
 }
 
 // ("class") name typeArgs? "{" member* "}"
-std::unique_ptr<TypeDecl> Parser::parseTypeDecl() {
-    auto res = std::make_unique<TypeDecl>();
+std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
+    auto res = std::make_unique<StructDecl>();
     consume(CLASS);
     res->type = parseType();
     consume(LBRACE);
@@ -41,9 +41,6 @@ std::unique_ptr<TypeDecl> Parser::parseTypeDecl() {
     while (first() != nullptr && !is(RBRACE)) {
         if (is(IDENT)) {
             res->fields.push_back(parseField(this, res.get()));
-        } else if (isMethod()) {
-            res->methods.push_back(parseMethod());
-            res->methods.back()->parent = res.get();
         } else {
             throw std::runtime_error("invalid class member: " + first()->print());
         }
@@ -76,7 +73,6 @@ EnumVariant *parseEnumEntry(Parser *p) {
 }
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
-    res->isEnum = true;
     consume(ENUM);
     res->type = parseType();
     consume(LBRACE);
@@ -88,9 +84,6 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
         }
     }
     consume(SEMI);
-    while (isMethod()) {
-        res->methods.push_back(parseMethod());
-    }
     consume(RBRACE);
     return res;
 }
@@ -112,12 +105,12 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     auto res = std::make_unique<Impl>();
     p->consume(IMPL);
     auto type = p->parseType();
-    if(p->is(FOR)){
+    if (p->is(FOR)) {
         res->trait_name = type->name;
         p->consume(FOR);
-        res->type=(p->parseType());
-    }else{
-        res->type=type;
+        res->type = (p->parseType());
+    } else {
+        res->type = type;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
@@ -148,21 +141,17 @@ std::shared_ptr<Unit> Parser::parseUnit() {
     while (first() != nullptr) {
         //top level decl
         if (is({CLASS})) {
-            res->types.push_back(parseTypeDecl());
+            res->items.push_back(parseTypeDecl());
         } else if (is(ENUM)) {
-            res->types.push_back(parseEnumDecl());
+            res->items.push_back(parseEnumDecl());
         } else if (is(TRAIT)) {
-            res->types.push_back(parseTrait(this));
-        }else if(is(IMPL)){
+            res->items.push_back(parseTrait(this));
+        } else if (is(IMPL)) {
             res->items.push_back(parseImpl(this));
-        }
-         else if (isVarDecl()) {
-            res->stmts.push_back(std::unique_ptr<Statement>(parseVarDecl()));
         } else if (isMethod()) {
-            res->methods.push_back(parseMethod());
+            res->items.push_back(parseMethod());
         } else {
-            auto stmt = parseStmt();
-            res->stmts.push_back(std::unique_ptr<Statement>(stmt));
+            throw std::runtime_error("invalid top level decl: " + first()->print());
         }
     }
     return res;
@@ -189,12 +178,13 @@ std::unique_ptr<Method> Parser::parseMethod() {
     }
     if (is(LT)) {
         res->typeArgs = generics();
+        res->isGeneric = true;
     }
     consume(LPAREN);
     if (!is(RPAREN)) {
-        if(is({IDENT}, {COLON})){
+        if (is({IDENT}, {COLON})) {
             res->params.push_back(parseParam(res.get()));
-        }else{
+        } else {
             auto self = new Param;
             self->name = name();
             self->method = res.get();

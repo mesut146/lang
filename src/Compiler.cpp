@@ -116,7 +116,7 @@ llvm::Type *Compiler::mapType(Type *type) {
 }
 
 int Compiler::getSize(BaseDecl *decl) {
-    if (decl->isEnum) {
+    if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         int res = 0;
         for (auto ev : ed->variants) {
@@ -129,7 +129,7 @@ int Compiler::getSize(BaseDecl *decl) {
         }
         return res;
     } else {
-        auto td = dynamic_cast<TypeDecl *>(decl);
+        auto td = dynamic_cast<StructDecl *>(decl);
         int res = 0;
         for (auto &fd : td->fields) {
             res += getSize(fd->type);
@@ -248,10 +248,10 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(mapType(m->type.get())->getPointerTo());
     }*/
     if (isMember(m)) {
-        auto p = m->parent->type;
-        if(isStruct(p)){
+        auto p = m->self->type.get();
+        if (isStruct(p)) {
             argTypes.push_back(mapType(p)->getPointerTo());
-        }else{
+        } else {
             argTypes.push_back(mapType(p));
         }
     }
@@ -270,13 +270,12 @@ void Compiler::make_proto(Method *m) {
     }*/
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangle(m), mod.get());
-    unsigned i = 0;
-    int pi = 0;
+    int i = 0;
     if (isMember(m)) {
         f->getArg(0)->setName("this");
         i++;
     }
-    for (; i < f->arg_size(); i++) {
+    for (int pi = 0; i < f->arg_size(); i++) {
         f->getArg(i)->setName(m->params[pi++]->name);
     }
     funcMap[mangle(m)] = f;
@@ -294,14 +293,14 @@ void Compiler::makeDecl(BaseDecl *bd) {
         return;
     }
     std::vector<llvm::Type *> elems;
-    if (bd->isEnum) {
+    if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
         //ordinal, i32
         elems.push_back(getInt(32));
         //data, i8*
         elems.push_back(llvm::ArrayType::get(getInt(8), getSize(ed) / 8));
     } else {
-        auto td = dynamic_cast<TypeDecl *>(bd);
+        auto td = dynamic_cast<StructDecl *>(bd);
         for (auto &field : td->fields) {
             elems.push_back(mapType(field->type));
         }
@@ -310,21 +309,21 @@ void Compiler::makeDecl(BaseDecl *bd) {
     classMap[bd->getName()] = ty;
 }
 
-bool isSame(Type* type, BaseDecl* decl){
+bool isSame(Type *type, BaseDecl *decl) {
     return type->print() == decl->type->print();
 }
 
 void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
-        if (a->isEnum) {
+        if (a->isEnum()) {
             auto ed = dynamic_cast<EnumDecl *>(a);
-            for(auto variant: ed->variants){
-                for(auto f:variant->fields){
-                    if(isSame(f->type, b)) return false;
+            for (auto variant : ed->variants) {
+                for (auto f : variant->fields) {
+                    if (isSame(f->type, b)) return false;
                 }
             }
         } else {
-            auto td = dynamic_cast<TypeDecl *>(a);
+            auto td = dynamic_cast<StructDecl *>(a);
             for (auto &field : td->fields) {
                 if (isSame(field->type, b)) {
                     return false;
@@ -335,10 +334,26 @@ void sort(std::vector<BaseDecl *> &list) {
     });
 }
 
+std::vector<Method *> getMethods(Unit *unit) {
+    std::vector<Method *> list;
+    for (auto &item : unit->items) {
+        if (item->isMethod()) {
+            auto m = dynamic_cast<Method *>(item.get());
+            list.push_back(m);
+        } else if (item->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(item.get());
+            for (auto &m : impl->methods) {
+                list.push_back(m.get());
+            }
+        }
+    }
+    return list;
+}
+
 void Compiler::createProtos() {
     std::vector<BaseDecl *> list;
-    for (auto &bd : unit->types) {
-        list.push_back(bd.get());
+    for (auto bd : getTypes(unit.get())) {
+        list.push_back(bd);
     }
     for (auto gt : resolv->genericTypes) {
         list.push_back(gt);
@@ -351,23 +366,8 @@ void Compiler::createProtos() {
         makeDecl(bd);
     }
     //methods
-    for (auto gt : resolv->genericTypes) {
-        for (auto &m : gt->methods) {
-            make_proto(m);
-        }
-    }
-    for (auto &m : unit->methods) {
+    for (auto m : getMethods(unit.get())) {
         make_proto(m);
-    }
-    for (auto &bd : unit->types) {
-        for (auto &m : bd->methods) {
-            make_proto(m);
-        }
-    }
-    for (auto &bd : unit->items) {
-        for (auto &m : bd->methods) {
-            make_proto(m);
-        }
     }
     //generic methods from resolver
     for (auto gm : resolv->genericMethods) {
@@ -385,10 +385,10 @@ void Compiler::createProtos() {
 void Compiler::initParams(Method *m) {
     //alloc
     auto ff = funcMap[mangle(m)];
-    if(m->self){
-        llvm::Value* ptr=ff->getArg(0);
-        if(isStruct(m->self->type.get())){
-        }else{
+    if (m->self) {
+        llvm::Value *ptr = ff->getArg(0);
+        if (isStruct(m->self->type.get())) {
+        } else {
             auto ty = mapType(m->self->type.get());
             ptr = Builder->CreateAlloca(ty);
         }
@@ -403,12 +403,12 @@ void Compiler::initParams(Method *m) {
     }
     //store
     int argIdx = 0;
-    if(m->self){
-        if(!isStruct (m->self->type.get())){
-          auto ptr = NamedValues[m->self->name];
-          auto val = ff->getArg(argIdx);
-          Builder->CreateStore(val, ptr);
-          print("store: "+mangle(m));
+    if (m->self) {
+        if (!isStruct(m->self->type.get())) {
+            auto ptr = NamedValues[m->self->name];
+            auto val = ff->getArg(argIdx);
+            Builder->CreateStore(val, ptr);
+            print("store: " + mangle(m));
         }
         argIdx++;
     }
@@ -750,31 +750,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     make_slice_type();
     createProtos();
 
-    resolv->scopes.push_back(resolv->globalScope);
-    for (auto &m : unit->methods) {
+    for (auto &m : getMethods(unit.get())) {
         genCode(m);
     }
     for (auto m : resolv->genericMethods) {
         genCode(m);
-    }
-    for (auto &bd : unit->types) {
-        resolv->scopes.push_back(resolv->declScopes[bd.get()]);
-        for (auto &m : bd->methods) {
-            genCode(m);
-        }
-        resolv->dropScope();
-    }
-    for (auto gt : resolv->genericTypes) {
-        resolv->scopes.push_back(resolv->declScopes[gt]);
-        for (auto &m : gt->methods) {
-            genCode(m);
-        }
-        resolv->dropScope();
-    }
-    for(auto &imp:unit->items){
-        for(auto &m:imp->methods){
-            genCode(m);
-        }
     }
     std::error_code EC;
     auto noext = trimExtenstion(name);
@@ -1022,7 +1002,7 @@ void *Compiler::visitSimpleName(SimpleName *n) {
     if (it != NamedValues.end()) {
         return it->second;
     }
-    throw std::runtime_error("compiler bug; sym not found: " + n->name+" in "+curMethod->name);
+    throw std::runtime_error("compiler bug; sym not found: " + n->name + " in " + curMethod->name);
 }
 
 llvm::Value *callMalloc(llvm::Value *sz) {
@@ -1082,24 +1062,18 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         target = rt->targetMethod;
         f = funcMap[mangle(target)];
     }
-    if (target && isMember(target)) {
-        if (mc->scope) {
-            //add this object
-            auto obj = gen(mc->scope.get());
-            auto res = resolv->resolve(mc->scope.get());
-            if (res->type->isPointer()) {
-                //auto deref
-                obj = Builder->CreateLoad(obj->getType()->getPointerElementType(), obj);
-            }
-            args.push_back(obj);
-            //args.push_back(load(obj));
-        } else {
-            //member sibling
-           // args.push_back(thisPtr);
+    if (target && isMember(target) && mc->scope) {
+        //add this object
+        auto obj = gen(mc->scope.get());
+        auto res = resolv->resolve(mc->scope.get());
+        if (res->type->isPointer() || (res->type->isPrim() && isVar(mc->scope.get()))) {
+            //auto deref
+            obj = Builder->CreateLoad(obj->getType()->getPointerElementType(), obj);
         }
+        args.push_back(obj);
     }
 
-    for (unsigned i = 0, e = mc->args.size(); i != e; ++i) {
+    for (int i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
         llvm::Value *av;
         if (target) {
@@ -1201,7 +1175,7 @@ void setOrdinal(int index, llvm::Value *ptr) {
     Builder->CreateStore(makeInt(index), ordPtr);
 }
 
-int fieldIndex(TypeDecl *decl, const std::string &name) {
+int fieldIndex(StructDecl *decl, const std::string &name) {
     int i = 0;
     for (auto &fd : decl->fields) {
         if (fd->name == name) {
@@ -1262,7 +1236,7 @@ void Compiler::setField(Expression *expr, Type *type, bool do_cast, llvm::Value 
 
 void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
     auto ty = mapType(tt->type);
-    if (tt->targetDecl->isEnum) {
+    if (tt->targetDecl->isEnum()) {
         //enum
         auto decl = dynamic_cast<EnumDecl *>(tt->targetDecl);
         auto variant_index = Resolver::findVariant(decl, n->type->name);
@@ -1285,7 +1259,7 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
         }
     } else {
         //class
-        auto decl = dynamic_cast<TypeDecl *>(tt->targetDecl);
+        auto decl = dynamic_cast<StructDecl *>(tt->targetDecl);
         for (int i = 0; i < n->entries.size(); i++) {
             auto &e = n->entries[i];
             int index;
@@ -1319,10 +1293,10 @@ void *Compiler::visitFieldAccess(FieldAccess *n) {
     auto rt = resolv->resolve(n->scope);
     auto decl = rt->targetDecl;
     int index;
-    if (decl->isEnum) {
+    if (decl->isEnum()) {
         index = 0;
     } else {
-        auto td = dynamic_cast<TypeDecl *>(decl);
+        auto td = dynamic_cast<StructDecl *>(decl);
         index = fieldIndex(td, n->name);
     }
     auto scopeVar = gen(n->scope);

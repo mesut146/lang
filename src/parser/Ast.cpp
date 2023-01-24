@@ -2,6 +2,10 @@
 #include "Visitor.h"
 #include "parser/Util.h"
 
+std::string& BaseDecl::getName() {
+    return type->name;
+}
+
 std::string RefExpr::print() {
     return "&" + expr->print();
 }
@@ -19,20 +23,9 @@ std::string FieldDecl::print() const {
 std::string Unit::print() {
     std::string s;
     s.append(join(imports, "\n"));
-    if (!types.empty()) {
-        if (!imports.empty()) s.append("\n\n");
-        s.append(joinPtr(types, "\n\n"));
-    }
-
+    if (!imports.empty()) s.append("\n\n");
+    s.append(joinPtr(items, "\n\n"));
     s.append("\n");
-    if (!methods.empty()) {
-        if (!types.empty()) s.append("\n");
-        s.append(joinPtr(methods, "\n\n"));
-    }
-    if (!stmts.empty()) {
-        s.append("\n\n");
-        s.append(joinPtr(stmts, "\n"));
-    }
     return s;
 }
 
@@ -44,21 +37,13 @@ std::string ImportStmt::print() {
     return s;
 }
 
-std::string& BaseDecl::getName(){ return type->name; }
-
 std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
     s.append(type->print());
     s.append("{\n");
     s.append(join(variants, ",\n", "  "));
-    s.append(";\n");
-    //body
-    if (!methods.empty()) {
-        s.append("\n");
-    }
-    s.append(joinPtr(methods, "\n\n", "  "));
-    s.append("\n}");
+    s.append(";\n}");
     return s;
 }
 
@@ -77,18 +62,14 @@ std::string EnumField::print() {
     return name + ": " + type->print();
 }
 
-std::string TypeDecl::print() {
+std::string StructDecl::print() {
     std::string s;
-    s.append("class ");
+    s.append("struct ");
     s.append(type->print());
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
         s.append("  ").append(fields[i]->print());
         if (i < fields.size() - 1) s.append("\n");
-    }
-    if (!methods.empty()) {
-        if (!fields.empty()) s.append("\n");
-        s.append(joinPtr(methods, "\n\n", "  "));
     }
     s.append("\n}");
     return s;
@@ -125,9 +106,9 @@ std::string Method::print() {
         s.append(">");
     }
     s.append("(");
-    if(self){
-    	s.append(self->name);
-        if(!params.empty()) s.append(", ");
+    if (self) {
+        s.append(self->name);
+        if (!params.empty()) s.append(", ");
     }
     s.append(join(params, ", "));
     s.append(")");
@@ -448,9 +429,6 @@ void *RefExpr::accept(Visitor *v) {
 void *DerefExpr::accept(Visitor *v) {
     return v->visitDerefExpr(this);
 }
-void *BaseDecl::accept(Visitor *v) {
-    return v->visitBaseDecl(this);
-}
 
 void *UnwrapExpr::accept(Visitor *v) {
     //return v->visitUnwrapExpr(this);
@@ -475,8 +453,8 @@ void *SimpleName::accept(Visitor *v) {
 void *Method::accept(Visitor *v) {
     return v->visitMethod(this);
 }
-void *TypeDecl::accept(Visitor *v) {
-    return v->visitTypeDecl(this);
+void *StructDecl::accept(Visitor *v) {
+    return v->visitStructDecl(this);
 }
 void *EnumDecl::accept(Visitor *v) {
     return v->visitEnumDecl(this);

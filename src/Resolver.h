@@ -18,19 +18,29 @@ class Resolver;
 bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType *binCast(const std::string &s1, const std::string &s2);
-int fieldIndex(TypeDecl *decl, const std::string &name);
+int fieldIndex(StructDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
+static std::vector<BaseDecl *> getTypes(Unit *unit) {
+    std::vector<BaseDecl *> list;
+    for (auto &item : unit->items) {
+        if (item->isClass() || item->isEnum()) {
+            list.push_back(dynamic_cast<BaseDecl *>(item.get()));
+        }
+    }
+    return list;
+}
+
 static bool isMember(Method *m) {
-    if(m->self) return true;
+    if (m->self) return true;
     return false;
 }
 
 static std::string mangle(Type *type) {
     std::string s = type->name;
-    for(auto ta:type->typeArgs){
-    	s.append("_");
-    	s.append(mangle(ta));
+    for (auto ta : type->typeArgs) {
+        s.append("_");
+        s.append(mangle(ta));
     }
     return s;
 }
@@ -38,11 +48,12 @@ static std::string mangle(Type *type) {
 static std::string mangle(Method *m) {
     std::string s;
     if (m->parent) {
-        if(m->parent->isImpl()){
-            auto i = dynamic_cast<Impl*>(m->parent); 
-            s += i->type->print() + "::";
-        }else{
-            s += m->parent->getName() + "::";
+        if (m->parent->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(m->parent);
+            s += impl->type->print() + "::";
+        } else {
+            auto t = dynamic_cast<Trait *>(m->parent);
+            s += t->type->print() + "::";
         }
     }
     s += m->name;
@@ -52,9 +63,12 @@ static std::string mangle(Method *m) {
     return s;
 }
 
-bool isTemplate(Method *m) {
-    //if(m->parent&&m->parent->isImpl()) return false;
-    return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
+static bool isTemplate(Method *m) {
+    if (m->parent && m->parent->isImpl()) {
+        auto impl = dynamic_cast<Impl *>(m->parent);
+        return !impl->type->typeArgs.empty();
+    }
+    return !m->typeArgs.empty();
 }
 
 static void print(const std::string &msg) {
@@ -134,12 +148,11 @@ public:
     std::map<std::string, RType *> paramMap;
     std::unordered_map<Method *, RType *> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
-    std::shared_ptr<Scope> globalScope;
     std::map<Method *, std::shared_ptr<Scope>> methodScopes;
     std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
     std::unordered_set<Param *> mut_params;
     BaseDecl *curDecl = nullptr;
-    Impl* curImpl = nullptr;
+    Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> genericMethods;
     std::vector<Method *> genericMethodsTodo;
@@ -159,13 +172,12 @@ public:
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    void initDecl(BaseDecl *bd);
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
     RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
-    void getMethods(Type* type, std::string& name, std::vector<Method *>& list);
-    bool isCyclic(Type* type, BaseDecl* target);
+    void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
+    bool isCyclic(Type *type, BaseDecl *target);
 
     void dump();
 
@@ -176,17 +188,17 @@ public:
     void init();
     void resolveAll();
 
+    void *visitStructDecl(StructDecl *bd) override;
+    void *visitEnumDecl(EnumDecl *bd) override;
+    void *visitImpl(Impl *bd);
     RType *resolveType(Type *type);
     void *visitType(Type *type) override;
     void *visitVarDeclExpr(VarDeclExpr *vd) override;
     void *visitVarDecl(VarDecl *vd) override;
     void *visitFragment(Fragment *f) override;
-
-    void *visitBaseDecl(BaseDecl *bd) override;
     void *visitFieldDecl(FieldDecl *fd) override;
     void *visitMethod(Method *m) override;
     void *visitParam(Param *p) override;
-    //void *visitEnumParam(EnumParam *p) override;
 
     RType *resolve(Expression *expr);
 
@@ -195,7 +207,6 @@ public:
     void *visitUnary(Unary *u) override;
     void *visitAssign(Assign *as) override;
     void *visitSimpleName(SimpleName *sn) override;
-    //void *visitQName(QName *sn) override;
     void *visitMethodCall(MethodCall *mc) override;
     void *visitObjExpr(ObjExpr *o) override;
     void *visitFieldAccess(FieldAccess *fa) override;

@@ -11,8 +11,7 @@ class Visitor {
 public:
     virtual void *visitUnit(Unit *node) todo("Unit");
     virtual void *visitImportStmt(ImportStmt *node) todo("Import");
-    virtual void *visitBaseDecl(BaseDecl *node) todo("BaseDecl");
-    virtual void *visitTypeDecl(TypeDecl *node) todo("TypeDecl");
+    virtual void *visitStructDecl(StructDecl *node) todo("TypeDecl");
     virtual void *visitEnumDecl(EnumDecl *node) todo("Enum");
     virtual void *visitTrait(Trait *node) todo("Trait");
     virtual void *visitImpl(Impl *node) todo("Impl");

@@ -3,12 +3,12 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 class Visitor;
 class Type;
-class BaseDecl;
-class TypeDecl;
+class StructDecl;
 class Impl;
 class Method;
 class Expression;
@@ -44,64 +44,71 @@ public:
     std::string print();
 };
 
+struct Item {
+    virtual bool isClass() { return false; }
+    virtual bool isEnum() { return false; }
+    virtual bool isTrait() { return false; }
+    virtual bool isImpl() { return false; }
+    virtual bool isMethod() { return false; }
+
+    virtual std::string print() = 0;
+    virtual void *accept(Visitor *v) = 0;
+};
+
 class Unit {
 public:
     std::vector<ImportStmt *> imports;
-    std::vector<std::unique_ptr<BaseDecl>> types;
-    std::vector<std::unique_ptr<Method>> methods;
-    std::vector<std::unique_ptr<Statement>> stmts;
-    std::vector<std::unique_ptr<Impl>> items;
+    std::vector<std::unique_ptr<Item>> items;
     std::string path;
 
     std::string print();
 };
 
-class BaseDecl {
-public:
-    Type* type;
-    bool isEnum = false;
+struct BaseDecl : public Item {
+    Type *type;
     bool isResolved = false;
-    std::vector<std::unique_ptr<Method>> methods;
 
-    std::string& getName();
-    virtual bool isTrait() { return false; }
-    virtual bool isImpl() { return false; }
-    virtual std::string print() = 0;
-    virtual void *accept(Visitor *v);
+    std::string &getName();
 };
+
 class FieldDecl {
 public:
     std::string name;
     Type *type;
-    TypeDecl *parent;
-    FieldDecl(std::string name, Type *type, TypeDecl *parent) : name(name), type(type), parent(parent) {}
+    StructDecl *parent;
+    FieldDecl(std::string name, Type *type, StructDecl *parent) : name(name), type(type), parent(parent) {}
 
     std::string print() const;
-
-    virtual void *accept(Visitor *v);
+    void *accept(Visitor *v);
 };
-class TypeDecl : public BaseDecl {
+
+class StructDecl : public BaseDecl {
 public:
     std::vector<std::unique_ptr<FieldDecl>> fields;
 
+    bool isClass() { return true; }
     std::string print() override;
     void *accept(Visitor *v) override;
 };
 
-class Trait : public BaseDecl {
+class Trait : public Item {
 public:
-    virtual bool isTrait() { return true; }
-    std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
-class Impl {
-public:
-    std::optional<std::string> trait_name;
-    Type* type;
+    Type *type;
     std::vector<std::unique_ptr<Method>> methods;
 
-    virtual bool isImpl() { return true; }
+    bool isTrait() { return true; }
+    std::string print();
+    void *accept(Visitor *v);
+};
+
+class Impl : public Item {
+public:
+    std::optional<std::string> trait_name;
+    Type *type;
+    std::vector<std::unique_ptr<Method>> methods;
+    bool isResolved = false;
+
+    bool isImpl() { return true; }
     std::string print();
     void *accept(Visitor *v);
 };
@@ -126,7 +133,7 @@ public:
 class EnumDecl : public BaseDecl {
 public:
     std::vector<EnumVariant *> variants;
-
+    bool isEnum() { return true; }
     std::string print() override;
     void *accept(Visitor *v) override;
 };
@@ -141,7 +148,7 @@ public:
     void *accept(Visitor *v);
 };
 
-class Method {
+class Method : public Item {
 public:
     std::string name;
     std::unique_ptr<Type> type;
@@ -149,11 +156,13 @@ public:
     std::unique_ptr<Param> self;
     std::vector<Param *> params;
     std::unique_ptr<Block> body;
-    BaseDecl *parent = nullptr;
+    Item *parent = nullptr;
     Unit *unit;
+    bool isGeneric = false;
 
     explicit Method(Unit *unit) : unit(unit) {}
 
+    bool isMethod() { return true; }
     std::string print();
     void *accept(Visitor *v);
 };

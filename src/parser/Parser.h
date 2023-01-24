@@ -106,7 +106,7 @@ public:
 
     ImportStmt *parseImport();
 
-    std::unique_ptr<TypeDecl> parseTypeDecl();
+    std::unique_ptr<StructDecl> parseTypeDecl();
 
     std::unique_ptr<EnumDecl> parseEnumDecl();
 

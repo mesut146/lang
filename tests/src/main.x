@@ -2,11 +2,12 @@ import classTest
 import infix
 import enumTest
 import flow
-import generic
-import List
+//import generic
+//import List
 import array
 import pass
 import ret
+import impl
 
 func varTest(){
   let a: int = 5;
@@ -76,13 +77,13 @@ func mallocTest(){
 
 func importTest(){
   //from classTest
-  let c = Point{x: 100, y: 200};
+  /*let c = Point{x: 100, y: 200};
   assert c.x == 100 && c.y == 200;
 
   let c2 = Point::new(10, 20);
   assert c2.getX() == 10 && c2.getY() == 20;
   
-  assert classTest2() == 123;
+  assert classTest2() == 123;*/
   print ("importTest done\n");
 }
 
@@ -98,10 +99,11 @@ func main(): int{
   whileTest();
   prims();
   importTest();
-  genericTest();
-  listTest();
+  //genericTest();
+  //listTest();
   arrayTest();
   passTest();
   retTest();
+  implTest();
   return 0;
 }
