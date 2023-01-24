@@ -161,8 +161,8 @@ public:
 Method *generateMethod(std::vector<Type *> &typeArgs, Method *m) {
     auto gen = new Generator(typeArgs, m->typeArgs);
     auto res = (Method *) gen->visitMethod(m);
-    res->typeArgs.clear();
-    res->name = m->name;
+    //res->typeArgs.clear();
+    //res->name = m->name;
     if (!m->parent) {
         /*res->name +="_";
         for (auto p : typeArgs) {
@@ -409,19 +409,7 @@ void *Resolver::visitMethod(Method *m) {
 }
 
 std::string paramId(Param *p) {
-    if (p->method->parent) {
-        if (isType(p->method->parent)) {
-            auto bd = dynamic_cast<BaseDecl *>(p->method->parent);
-            return bd->getName() + "#" + p->method->name + "#" + p->name;
-        }
-        if (p->method->parent->isImpl()) {
-            auto impl = dynamic_cast<Impl *>(p->method->parent);
-            return impl->type->print() + "#" + p->method->name + "#" + p->name;
-        }
-        throw std::runtime_error("paramId");
-    } else {
-        return p->method->name + "#" + p->name;
-    }
+    return mangle(p->method) + "#" + p->name;
 }
 
 void *Resolver::visitParam(Param *p) {
@@ -635,10 +623,6 @@ void *Resolver::visitAssign(Assign *as) {
 }
 
 void *Resolver::visitInfix(Infix *infix) {
-    //auto id = getId(infix);
-    //auto it = cache.find(id);
-    //if (it != cache.end()) return it->second;
-    //std::cout << "visitInfix = " << infix->print() << std::endl;
     auto rt1 = (RType *) infix->left->accept(this);
     auto rt2 = (RType *) infix->right->accept(this);
     if (rt1->type->isVoid() || rt2->type->isVoid()) {
@@ -667,7 +651,6 @@ void *Resolver::visitInfix(Infix *infix) {
         auto s2 = rt2->type->print();
         res = binCast(s1, s2);
     }
-    //cache[id] = res;
     return res;
 }
 
@@ -1113,11 +1096,18 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
     return r->handleCallResult(list, mc);
 }
 
-void findMethod(Unit *unit, std::string &name, std::vector<Method *> &list) {
+void Resolver::findMethod(Unit *unit, MethodCall *mc, std::vector<Method *> &list) {
+    if (!mc->typeArgs.empty()) {
+        for (auto g : genericMethodsTodo) {
+            if (g->name == mc->name) {
+                list.push_back(g);
+            }
+        }
+    }
     for (auto &item : unit->items) {
         if (item->isMethod()) {
             auto m = dynamic_cast<Method *>(item.get());
-            if (m->name == name) {
+            if (m->name == mc->name) {
                 list.push_back(m);
             }
         }
@@ -1128,18 +1118,27 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
     if (list.empty()) {
         error("no such method: " + mc->name);
     }
-    auto real = filter(this, list, mc);
+    //prefer generic methods
+    std::vector<Method *> real;
+    real = filter(this, list, mc);
+
+
     if (real.empty()) {
         //print cand
         throw std::runtime_error("method: " + mc->name + " not found from candidates: ");
     }
     if (real.size() > 1) {
+        std::string s;
+        for (auto m : real) {
+            s += mangle(m) + "\n";
+        }
         throw std::runtime_error("method:  " + mc->name + " has " +
-                                 std::to_string(list.size()) + " candidates");
+                                 std::to_string(real.size()) + " candidates;\n" + s);
     }
     auto target = real[0];
-    if (!target->typeArgs.empty()) {
+    if (target->isGeneric) {
         auto newMethod = generateMethod(mc->typeArgs, target);
+        print("generic: " + newMethod->print());
         genericMethodsTodo.push_back(newMethod);
         target = newMethod;
     }
@@ -1188,7 +1187,7 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
     std::vector<Method *> cand;// candidates
-    findMethod(unit.get(), mc->name, cand);
+    findMethod(unit.get(), mc, cand);
     if (curImpl) {
         //static sibling
         for (auto &m : curImpl->methods) {
@@ -1200,7 +1199,7 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
     for (auto is : unit->imports) {
         auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
         resolver->resolveAll();
-        findMethod(resolver->unit.get(), mc->name, cand);
+        findMethod(resolver->unit.get(), mc, cand);
     }
     auto res = handleCallResult(cand, mc);
     cache[id] = res;

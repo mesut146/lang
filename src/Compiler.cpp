@@ -239,7 +239,7 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
 }
 
 void Compiler::make_proto(Method *m) {
-    if (isTemplate(m)) {
+    if (m->isGeneric) {
         return;
     }
     std::vector<llvm::Type *> argTypes;
@@ -641,7 +641,7 @@ void Compiler::genCode(std::unique_ptr<Method> &m) {
 }
 
 void Compiler::genCode(Method *m) {
-    if (isTemplate(m)) {
+    if (m->isGeneric) {
         return;
     }
     resolv->curMethod = m;

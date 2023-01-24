@@ -57,6 +57,15 @@ static std::string mangle(Method *m) {
         }
     }
     s += m->name;
+    if (!m->typeArgs.empty()) {
+        s += "<";
+        for (auto ta : m->typeArgs) {
+            s += mangle(ta);
+            s += ",";
+        }
+        s += ">";
+    }
+
     for (auto prm : m->params) {
         s += "_" + mangle(prm->type.get());
     }
@@ -177,6 +186,7 @@ public:
     std::string getId(Expression *e);
     RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
+    void findMethod(Unit *unit, MethodCall* mc, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
 
     void dump();
