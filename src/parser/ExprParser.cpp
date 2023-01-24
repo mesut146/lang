@@ -171,11 +171,9 @@ std::vector<Type *> Parser::generics() {
     std::vector<Type *> list;
     consume(LT);
     list.push_back(parseType());
-    list.back()->isTypeArg = true;
     while (is(COMMA)) {
         consume(COMMA);
         list.push_back(parseType());
-        list.back()->isTypeArg = true;
     }
     consume(GT);
     return list;

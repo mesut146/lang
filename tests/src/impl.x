@@ -5,3 +5,8 @@ impl int{
   }
 
 }
+
+func implTest(){
+  let x = 5;
+  let m = x.min(6);
+}

@@ -22,11 +22,17 @@ int fieldIndex(TypeDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
 static bool isMember(Method *m) {
-    return m->parent && !m->isStatic;
+    if(m->self) return true;
+    return false;
 }
 
 static std::string mangle(Type *type) {
-    return type->name;
+    std::string s = type->name;
+    for(auto ta:type->typeArgs){
+    	s.append("_");
+    	s.append(mangle(ta));
+    }
+    return s;
 }
 
 static std::string mangle(Method *m) {
@@ -36,7 +42,7 @@ static std::string mangle(Method *m) {
             auto i = dynamic_cast<Impl*>(m->parent); 
             s += i->type->print() + "::";
         }else{
-            s += m->parent->name + "::";
+            s += m->parent->getName() + "::";
         }
     }
     s += m->name;
@@ -44,6 +50,11 @@ static std::string mangle(Method *m) {
         s += "_" + mangle(prm->type.get());
     }
     return s;
+}
+
+bool isTemplate(Method *m) {
+    //if(m->parent&&m->parent->isImpl()) return false;
+    return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
 }
 
 static void print(const std::string &msg) {
@@ -153,6 +164,7 @@ public:
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
     RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
+    void getMethods(Type* type, std::string& name, std::vector<Method *>& list);
     bool isCyclic(Type* type, BaseDecl* target);
 
     void dump();

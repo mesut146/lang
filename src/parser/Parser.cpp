@@ -17,6 +17,12 @@ ImportStmt *Parser::parseImport() {
     return res;
 }
 
+void setArgs(Type* type){
+  for(auto ta:type->typeArgs){
+  	ta->isTypeParam = true;
+  }
+}
+
 std::unique_ptr<FieldDecl> parseField(Parser *p, TypeDecl *decl) {
     auto name = p->name();
     p->consume(COLON);
@@ -25,14 +31,11 @@ std::unique_ptr<FieldDecl> parseField(Parser *p, TypeDecl *decl) {
     return std::make_unique<FieldDecl>(name, type, decl);
 }
 
-// ("class" | "interface") name typeArgs? (":")? "{" member* "}"
+// ("class") name typeArgs? "{" member* "}"
 std::unique_ptr<TypeDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<TypeDecl>();
     consume(CLASS);
-    res->name = name();
-    if (is(LT)) {
-        res->typeArgs = generics();
-    }
+    res->type = parseType();
     consume(LBRACE);
     //members
     while (first() != nullptr && !is(RBRACE)) {
@@ -75,10 +78,7 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     res->isEnum = true;
     consume(ENUM);
-    res->name = name();
-    if (is(LT)) {
-        res->typeArgs = generics();
-    }
+    res->type = parseType();
     consume(LBRACE);
     if (!is(RBRACE)) {
         res->variants.push_back(parseEnumEntry(this));
@@ -98,7 +98,7 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
 std::unique_ptr<Trait> parseTrait(Parser *p) {
     auto res = std::make_unique<Trait>();
     p->consume(TRAIT);
-    res->name = p->name();
+    res->type = p->parseType();
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         res->methods.push_back(p->parseMethod());
@@ -115,10 +115,9 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     if(p->is(FOR)){
         res->trait_name = type->name;
         p->consume(FOR);
-        res->type.reset(p->parseType());
+        res->type=(p->parseType());
     }else{
-        res->type.reset(type);
-        res->name = type->name;
+        res->type=type;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
@@ -135,7 +134,6 @@ bool Parser::isVarDecl() {
 }
 
 bool Parser::isMethod() {
-    if (is({STATIC}, {FUNC})) return true;
     return is(FUNC);
 }
 
@@ -180,13 +178,8 @@ Param *Parser::parseParam(Method *m) {
     return res;
 }
 
-//(type | void) name generics? "(" params* ")" (block | ";")
 std::unique_ptr<Method> Parser::parseMethod() {
     auto res = std::make_unique<Method>(unit);
-    if (is(STATIC)) {
-        consume(STATIC);
-        res->isStatic = true;
-    }
     consume(FUNC);
     if (is(NEW)) {
         res->name = "new";
@@ -199,13 +192,13 @@ std::unique_ptr<Method> Parser::parseMethod() {
     }
     consume(LPAREN);
     if (!is(RPAREN)) {
-        if(is({IDENT}, {COMMA, RPAREN})){
+        if(is({IDENT}, {COLON})){
+            res->params.push_back(parseParam(res.get()));
+        }else{
             auto self = new Param;
             self->name = name();
             self->method = res.get();
             res->self.reset(self);
-        }else{
-            res->params.push_back(parseParam(res.get()));
         }
         while (is(COMMA)) {
             consume(COMMA);
@@ -246,7 +239,7 @@ Fragment *frag(Parser *p) {
     return res;
 }
 
-//("let" | "var") varDeclFrag ("," varDeclFrag)*;
+//"let" varDeclFrag ("," varDeclFrag)*;
 VarDecl *Parser::parseVarDecl() {
     auto res = new VarDecl;
     res->decl = parseVarDeclExpr();

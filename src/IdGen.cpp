@@ -15,7 +15,7 @@ void *IdGen::visitMethodCall(MethodCall *node) {
 
 void *IdGen::visitSimpleName(SimpleName *node) {
     if (resolver->curDecl) {
-        auto id = resolver->curDecl->name + "#"+ resolver->curMethod->name + "#" + node->print();
+        auto id = resolver->curDecl->getName() + "#"+ resolver->curMethod->name + "#" + node->print();
         return new std::string(id);
     } else {
         auto id = resolver->curMethod->name + "#" + node->print();

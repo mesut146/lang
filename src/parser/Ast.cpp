@@ -44,13 +44,12 @@ std::string ImportStmt::print() {
     return s;
 }
 
+std::string& BaseDecl::getName(){ return type->name; }
+
 std::string EnumDecl::print() {
     std::string s;
     s.append("enum ");
-    s.append(name);
-    if (!typeArgs.empty()) {
-        s.append("<").append(join(typeArgs, ", ")).append(">");
-    }
+    s.append(type->print());
     s.append("{\n");
     s.append(join(variants, ",\n", "  "));
     s.append(";\n");
@@ -81,11 +80,7 @@ std::string EnumField::print() {
 std::string TypeDecl::print() {
     std::string s;
     s.append("class ");
-    s.append(name);
-    if (!typeArgs.empty()) {
-        s.append("<").append(join(typeArgs, ", ")).append(">");
-    }
-
+    s.append(type->print());
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
         s.append("  ").append(fields[i]->print());
@@ -101,7 +96,7 @@ std::string TypeDecl::print() {
 
 std::string Trait::print() {
     std::string s;
-    s.append("trait ").append(name).append("{\n");
+    s.append("trait ").append(type->print()).append("{\n");
     s.append(joinPtr(methods, "\n"));
     s.append("}\n");
     return s;
@@ -122,7 +117,6 @@ std::string Impl::print() {
 
 std::string Method::print() {
     std::string s;
-    if (isStatic) s.append("static ");
     s.append("func ");
     s.append(name);
     if (!typeArgs.empty()) {
@@ -131,6 +125,10 @@ std::string Method::print() {
         s.append(">");
     }
     s.append("(");
+    if(self){
+    	s.append(self->name);
+        if(!params.empty()) s.append(", ");
+    }
     s.append(join(params, ", "));
     s.append(")");
     if (type) {

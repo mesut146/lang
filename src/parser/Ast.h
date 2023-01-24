@@ -58,12 +58,12 @@ public:
 
 class BaseDecl {
 public:
-    std::string name;
-    std::vector<Type *> typeArgs;
+    Type* type;
     bool isEnum = false;
     bool isResolved = false;
     std::vector<std::unique_ptr<Method>> methods;
 
+    std::string& getName();
     virtual bool isTrait() { return false; }
     virtual bool isImpl() { return false; }
     virtual std::string print() = 0;
@@ -95,14 +95,15 @@ public:
     void *accept(Visitor *v) override;
 };
 
-class Impl : public BaseDecl {
+class Impl {
 public:
     std::optional<std::string> trait_name;
-    std::unique_ptr<Type> type;
+    Type* type;
+    std::vector<std::unique_ptr<Method>> methods;
 
     virtual bool isImpl() { return true; }
-    std::string print() override;
-    void *accept(Visitor *v) override;
+    std::string print();
+    void *accept(Visitor *v);
 };
 
 class EnumField {
@@ -142,7 +143,6 @@ public:
 
 class Method {
 public:
-    bool isStatic = false;
     std::string name;
     std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
@@ -233,7 +233,8 @@ public:
     Type *scope = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
-    bool isTypeArg = false;
+    //bool isTypeArg = false;
+    bool isTypeParam = false;
 
     Type() {}
     explicit Type(const std::string &name) : name(move(name)) {}
@@ -248,7 +249,7 @@ public:
         return sizeMap.find(print()) != sizeMap.end();
     }
     bool isVoid() { return print() == "void"; };
-    bool isString() { return print() == "core/string"; }
+    bool isString() { return print() == "std::string"; }
 
     std::string print() override;
     void *accept(Visitor *v) override;

@@ -43,7 +43,6 @@ std::unique_ptr<llvm::IRBuilder<>> Builder;
 std::map<std::string, llvm::Value *> NamedValues;
 std::map<std::string, llvm::Function *> funcMap;
 std::map<std::string, llvm::Type *> classMap;
-llvm::Value *thisPtr = nullptr;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
 llvm::Function *mallocf;
@@ -108,7 +107,7 @@ llvm::Type *Compiler::mapType(Type *type) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
-    auto s = resolv->resolveType(type)->targetDecl->name;
+    auto s = resolv->resolveType(type)->targetDecl->getName();
     auto it = classMap.find(s);
     if (it != classMap.end()) {
         return it->second;
@@ -234,10 +233,7 @@ static void make_malloc() {
     f->setAttributes(attr);
     mallocf = f;
 }
-bool isTemplate(Method *m) {
-    //if(m->parent&&m->parent->isImpl()) return false;
-    return !m->typeArgs.empty() || (m->parent && !m->parent->isResolved);
-}
+
 void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
 }
@@ -252,7 +248,7 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(mapType(m->type.get())->getPointerTo());
     }*/
     if (isMember(m)) {
-        auto p = new Type(m->parent->name);
+        auto p = m->parent->type;
         if(isStruct(p)){
             argTypes.push_back(mapType(p)->getPointerTo());
         }else{
@@ -310,12 +306,12 @@ void Compiler::makeDecl(BaseDecl *bd) {
             elems.push_back(mapType(field->type));
         }
     }
-    auto ty = llvm::StructType::create(*ctx, elems, bd->name);
-    classMap[bd->name] = ty;
+    auto ty = llvm::StructType::create(*ctx, elems, bd->getName());
+    classMap[bd->getName()] = ty;
 }
 
 bool isSame(Type* type, BaseDecl* decl){
-    return type->print() == decl->name;
+    return type->print() == decl->type->print();
 }
 
 void sort(std::vector<BaseDecl *> &list) {
@@ -389,10 +385,14 @@ void Compiler::createProtos() {
 void Compiler::initParams(Method *m) {
     //alloc
     auto ff = funcMap[mangle(m)];
-    if (isMember(m)) {
-        thisPtr = ff->getArg(0);
-    } else {
-        thisPtr = nullptr;
+    if(m->self){
+        llvm::Value* ptr=ff->getArg(0);
+        if(isStruct(m->self->type.get())){
+        }else{
+            auto ty = mapType(m->self->type.get());
+            ptr = Builder->CreateAlloca(ty);
+        }
+        NamedValues[m->self->name] = ptr;
     }
     for (auto prm : m->params) {
         //non mut structs dont need alloc
@@ -402,7 +402,16 @@ void Compiler::initParams(Method *m) {
         NamedValues[prm->name] = ptr;
     }
     //store
-    int argIdx = isMember(m) ? 1 : 0;
+    int argIdx = 0;
+    if(m->self){
+        if(!isStruct (m->self->type.get())){
+          auto ptr = NamedValues[m->self->name];
+          auto val = ff->getArg(argIdx);
+          Builder->CreateStore(val, ptr);
+          print("store: "+mangle(m));
+        }
+        argIdx++;
+    }
     for (auto i = 0; i < m->params.size(); i++) {
         auto prm = m->params[i];
         auto val = ff->getArg(argIdx++);
@@ -1013,23 +1022,7 @@ void *Compiler::visitSimpleName(SimpleName *n) {
     if (it != NamedValues.end()) {
         return it->second;
     }
-    if (!isMember(curMethod)) {
-        throw std::runtime_error("unknown ref: " + n->name);
-    }
-    auto rt = resolv->resolve(n);
-    if (!rt->vh) {
-        throw std::runtime_error("unknown ref: " + n->name);
-    }
-    auto fd = *std::get_if<FieldDecl *>(rt->vh);
-    auto decl = fd->parent;
-    auto idx = fieldIndex(decl, n->name);
-    //auto ty = thisPtr->getType()->getPointerElementType();
-    auto ty = thisPtr->getType();
-    // auto load = Builder->CreateLoad(ty, thisPtr);
-    auto load = thisPtr;
-    auto gep = Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, idx);
-    //auto gep = Builder->CreateStructGEP(load->getType(), load, idx);
-    return gep;
+    throw std::runtime_error("compiler bug; sym not found: " + n->name+" in "+curMethod->name);
 }
 
 llvm::Value *callMalloc(llvm::Value *sz) {
@@ -1102,7 +1095,7 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
             //args.push_back(load(obj));
         } else {
             //member sibling
-            args.push_back(thisPtr);
+           // args.push_back(thisPtr);
         }
     }
 
@@ -1216,7 +1209,7 @@ int fieldIndex(TypeDecl *decl, const std::string &name) {
         }
         i++;
     }
-    throw std::runtime_error("unknown field: " + name + " of type " + decl->name);
+    throw std::runtime_error("unknown field: " + name + " of type " + decl->type->print());
 }
 
 int fieldIndex(EnumVariant *variant, const std::string &name) {
