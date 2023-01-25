@@ -12,20 +12,17 @@ enum TokenType {
     TRAIT,
     IMPL,
     STATIC,
-    I8, //byte
-    I16,//short
-    I32,//int
-    I64,//long
-    F32,//float
-    F64,//double
+    I8,
+    I16,
+    I32,
+    I64,
+    F32,
+    F64,
+    U8,
+    U16,
+    U32,
+    U64,
     VOID,
-    CHAR,
-    BYTE,
-    INT,
-    LONG,
-    FLOAT,
-    DOUBLE,
-    SHORT,
     BOOLEAN,
     TRUE,
     FALSE,
@@ -119,7 +116,7 @@ public:
 
     Token(TokenType t) : type(t) {}
 
-    Token(TokenType t, const std::string& s) : type(t), value(std::move(s)) {}
+    Token(TokenType t, const std::string &s) : type(t), value(std::move(s)) {}
 
     bool is(TokenType t) const {
         return t == type;

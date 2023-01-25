@@ -1,17 +1,17 @@
 class A{
- a: int;
- b: int;
+ a: i32;
+ b: i32;
 }
 
 class B{
  a: A;
- c: int;
+ c: i32;
 }
 
 enum E{
  A,
- B(a: int, b: int),
- C(a: long),
+ B(a: i32, b: i32),
+ C(a: i64),
  A2(a: A);
 }
 

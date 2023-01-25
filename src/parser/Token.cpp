@@ -15,16 +15,13 @@ std::string printType(TokenType t) {
         TOKEN_CASE(RETURN)
         TOKEN_CASE(FROM)
         TOKEN_CASE(IS)
-        
+
 
         TOKEN_CASE(BOOLEAN)
-        TOKEN_CASE(INT)
-        TOKEN_CASE(LONG)
-        TOKEN_CASE(BYTE)
-        TOKEN_CASE(CHAR)
-        TOKEN_CASE(SHORT)
-        TOKEN_CASE(FLOAT)
-        TOKEN_CASE(DOUBLE)
+        TOKEN_CASE(U8)
+        TOKEN_CASE(U16)
+        TOKEN_CASE(U32)
+        TOKEN_CASE(U64)
         TOKEN_CASE(I8)
         TOKEN_CASE(I16)
         TOKEN_CASE(I32)

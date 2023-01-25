@@ -19,7 +19,7 @@ bool isLit(Token *t) {
 }
 
 bool Parser::isPrim(Token &t) {
-    return t.is({BOOLEAN, INT, LONG, FLOAT, DOUBLE, CHAR, BYTE, VOID, I8, I16, I32, I64, F32, F64, SHORT});
+    return t.is({BOOLEAN, VOID, I8, I16, I32, I64, F32, F64, U8, U16, U32, U64});
 }
 
 Literal *parseLit(Parser *p) {

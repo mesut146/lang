@@ -57,10 +57,10 @@ class A{
   c: [B]; 
 }
 class B{
-  b: int;
+  b: i32;
 }
 class C{
-  a: int;
+  a: i32;
 }
 func mixed(){
   let a1 = A{a: [B{1}, B{2}], b: B{b: 3}, c: [B{4}][0..1]};

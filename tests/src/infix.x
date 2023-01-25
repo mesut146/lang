@@ -1,6 +1,6 @@
 func infixTest(){
-  let a: int = 2;
-  let b: int = 11;
+  let a: i32 = 2;
+  let b: i32 = 11;
   assert a+3==5;
   assert a*5==10;
   assert 10-a==8;
@@ -22,8 +22,8 @@ func infixTest(){
   assert a == 3;
 
   //implicit cast
-  let x: int = 10;
-  let y: long = 11;
+  let x: i32 = 10;
+  let y: i64 = 11;
   assert x + y == 21;
 
   print("infixTest done\n");

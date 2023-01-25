@@ -27,14 +27,7 @@ static std::map<std::string, int> sizeMap{
         {"u64", 64},
         {"f32", 32},
         {"f64", 64},
-        {"bool", 1},
-        {"byte", 8},
-        {"char", 16},
-        {"short", 16},
-        {"int", 32},
-        {"long", 64},
-        {"float", 32},
-        {"double", 64}};
+        {"bool", 1}};
 
 
 class ImportStmt {

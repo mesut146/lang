@@ -1,9 +1,9 @@
 class A{
-    a: int;
-    b: [int; 100];
+    a: i32;
+    b: [i32; 100];
 }
 
-func make_arr(): [int; 100]{
+func make_arr(): [i32; 100]{
     return [0; 100];
 }
 

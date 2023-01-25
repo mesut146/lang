@@ -1417,7 +1417,7 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
     auto type = arr->type;
     if (node->index2) {
         auto sp = allocArr[allocIdx++];
-        auto val_start = cast(node->index, new Type("int"));
+        auto val_start = cast(node->index, new Type("i32"));
         //set array ptr
         auto pp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
         auto src = gen(node->array);
@@ -1427,7 +1427,7 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
         Builder->CreateStore(src, pp);
         //set len
         auto lenp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 1);
-        auto val_end = cast(node->index2.get(), new Type("int"));
+        auto val_end = cast(node->index2.get(), new Type("i32"));
         auto len = Builder->CreateSub(val_end, val_start);
         Builder->CreateStore(len, lenp);
         return sp;
@@ -1440,7 +1440,7 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
             type = pt->type;
         }
     }
-    std::vector<llvm::Value *> idx = {cast(node->index, new Type("int"))};
+    std::vector<llvm::Value *> idx = {cast(node->index, new Type("i32"))};
     if (type->isArray()) {
         auto ty = mapType(type);
         idx.insert(idx.begin(), makeInt(0, 32));
@@ -1465,9 +1465,9 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
 }
 
 void *Compiler::visitWhileStmt(WhileStmt *node) {
-    auto then = llvm::BasicBlock::Create(*ctx, "");
+    auto then = llvm::BasicBlock::Create(*ctx);
     auto condbb = llvm::BasicBlock::Create(*ctx, "", func);
-    auto next = llvm::BasicBlock::Create(*ctx, "");
+    auto next = llvm::BasicBlock::Create(*ctx);
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
     auto c = loadPtr(node->expr.get());

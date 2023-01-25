@@ -17,16 +17,6 @@ TokenType kw(std::string &s) {
     if (s == "i32") return I32;
     if (s == "f32") return F32;
     if (s == "f64") return F64;
-    if (s == "long")
-        return LONG;
-    if (s == "int")
-        return INT;
-    if (s == "float")
-        return FLOAT;
-    if (s == "double")
-        return DOUBLE;
-    if (s == "short")
-        return SHORT;
     if (s == "null")
         return NULL_LIT;
     if (s == "import")

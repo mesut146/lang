@@ -10,27 +10,27 @@ import ret
 import impl
 
 func varTest(){
-  let a: int = 5;
+  let a: i32 = 5;
   assert a == 5;
   a = 6;
   assert a == 6;
-  let ptr: int* = &a;
+  let ptr: i32* = &a;
   assert *ptr == 6;
   print("varTest done\n");
 }
 
-func getTrue(cnt: int*): bool {
+func getTrue(cnt: i32*): bool {
   *cnt = *cnt + 1;
   return true;
 }
-func getFalse(cnt: int*): bool {
+func getFalse(cnt: i32*): bool {
   *cnt = *cnt + 1;
   return false;
 }
 
 func condTest(){
-  let c1: int = 0;
-  let c2: int = 0;
+  let c1: i32 = 0;
+  let c2: i32 = 0;
   assert (getFalse(&c2)&&getTrue(&c1))==false;
   assert c1 == 0 && c2 == 1;
  
@@ -62,12 +62,12 @@ func prims(){
       print("%d, ", i);
     i = i + 2;
   }
-  print ("prims done\n");
+  print("prims done\n");
 }
 
 
 func mallocTest(){
-   let arr = malloc<int>(10);
+   let arr = malloc<i32>(10);
    arr[0] = 3;
    arr[1] = 5;
    assert arr[0] == 3 && arr[1] == 5;
@@ -87,7 +87,7 @@ func importTest(){
   print ("importTest done\n");
 }
 
-func main(): int{
+func main(): i32{
   varTest();
   condTest();
   infixTest();

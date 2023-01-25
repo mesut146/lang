@@ -1,9 +1,9 @@
-impl int{
-  func min(x, y: int): int{
+impl i32{
+  func min(x, y: i32): i32{
     if(x <= y) return x;
     return y;
   }
-  func max(x, y: int): int{
+  func max(x, y: i32): i32{
     if(x >= y) return x;
     return y;
   }
