@@ -21,6 +21,10 @@ RType *binCast(const std::string &s1, const std::string &s2);
 int fieldIndex(StructDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
 
+static void error(const std::string &msg) {
+    throw std::runtime_error(msg);
+}
+
 static std::vector<BaseDecl *> getTypes(Unit *unit) {
     std::vector<BaseDecl *> list;
     for (auto &item : unit->items) {
@@ -38,9 +42,15 @@ static bool isMember(Method *m) {
 
 static std::string mangle(Type *type) {
     std::string s = type->name;
-    for (auto ta : type->typeArgs) {
-        s.append("_");
-        s.append(mangle(ta));
+    if (!type->typeArgs.empty()) {
+        s.append("<");
+        int i = 0;
+        for (auto ta : type->typeArgs) {
+            if (i > 0) s.append(",");
+            s.append(mangle(ta));
+            i++;
+        }
+        s.append(">");
     }
     return s;
 }
@@ -150,6 +160,15 @@ public:
     VarHolder *find(const std::string &name);
 };
 
+//replace any type in decl with src by same index
+class Generator : public AstCopier {
+public:
+    std::unordered_map<std::string, Type *> &map;
+
+    Generator(std::unordered_map<std::string, Type *> &map) : map(map) {}
+    void *visitType(Type *type) override;
+};
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
@@ -165,8 +184,7 @@ public:
     BaseDecl *curDecl = nullptr;
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
-    std::vector<Method *> genericMethods;
-    std::vector<Method *> genericMethodsTodo;
+    std::vector<Method *> generatedMethods;
     std::vector<BaseDecl *> genericTypes;
     bool fromOther = false;
     bool inLoop = false;

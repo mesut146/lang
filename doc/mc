@@ -1,0 +1,9 @@
+a(i32)
+a(i64)
+a<T>(T)  error
+
+
+func one<T>(a: i32, b: T);
+func one<T>(a: T, b: i32);
+
+one(5 as i64, ...)  -> error

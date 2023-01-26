@@ -60,6 +60,7 @@ public:
 struct BaseDecl : public Item {
     Type *type;
     bool isResolved = false;
+    bool isGeneric = false;
 
     std::string &getName();
 };

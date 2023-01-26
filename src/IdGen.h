@@ -26,4 +26,5 @@ public:
     void *visitUnary(Unary *node) override;
     void *visitArrayAccess(ArrayAccess *node) override;
     void *visitArrayExpr(ArrayExpr *node) override;
+    void *visitAsExpr(AsExpr *node) override;
 };

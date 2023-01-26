@@ -46,3 +46,6 @@ void *IdGen::visitArrayAccess(ArrayAccess *node) {
 void *IdGen::visitArrayExpr(ArrayExpr *node) {
     return nullptr;
 }
+void *IdGen::visitAsExpr(AsExpr *node) {
+    return nullptr;
+}

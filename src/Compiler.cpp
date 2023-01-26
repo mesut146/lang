@@ -270,6 +270,7 @@ void Compiler::make_proto(Method *m) {
     }*/
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangle(m), mod.get());
+    //f->addTypeMetadata(0, llvm::MDNode::get(*ctx, llvm::MDString::get(*ctx, m->name)));
     int i = 0;
     if (isMember(m)) {
         f->getArg(0)->setName("this");
@@ -289,7 +290,7 @@ void make_slice_type() {
 }
 
 void Compiler::makeDecl(BaseDecl *bd) {
-    if (!bd->isResolved) {
+    if (bd->isGeneric) {
         return;
     }
     std::vector<llvm::Type *> elems;
@@ -342,6 +343,7 @@ std::vector<Method *> getMethods(Unit *unit) {
             list.push_back(m);
         } else if (item->isImpl()) {
             auto impl = dynamic_cast<Impl *>(item.get());
+            if (!impl->type->typeArgs.empty()) { continue; }
             for (auto &m : impl->methods) {
                 list.push_back(m.get());
             }
@@ -370,7 +372,7 @@ void Compiler::createProtos() {
         make_proto(m);
     }
     //generic methods from resolver
-    for (auto gm : resolv->genericMethods) {
+    for (auto gm : resolv->generatedMethods) {
         make_proto(gm);
     }
     for (auto m : resolv->usedMethods) {
@@ -753,7 +755,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     for (auto &m : getMethods(unit.get())) {
         genCode(m);
     }
-    for (auto m : resolv->genericMethods) {
+    for (auto m : resolv->generatedMethods) {
         genCode(m);
     }
     std::error_code EC;

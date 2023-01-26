@@ -36,6 +36,9 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     consume(CLASS);
     res->type = parseType();
+    if (!res->type->typeArgs.empty()) {
+        res->isGeneric = true;
+    }
     consume(LBRACE);
     //members
     while (first() != nullptr && !is(RBRACE)) {
@@ -75,6 +78,9 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     consume(ENUM);
     res->type = parseType();
+    if (!res->type->typeArgs.empty()) {
+        res->isGeneric = true;
+    }
     consume(LBRACE);
     if (!is(RBRACE)) {
         res->variants.push_back(parseEnumEntry(this));
