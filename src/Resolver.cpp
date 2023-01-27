@@ -314,6 +314,7 @@ void *Resolver::visitStructDecl(StructDecl *node) {
 }
 
 void *Resolver::visitImpl(Impl *node) {
+	if(!node->type->typeArgs.empty()) return nullptr;
     curImpl = node;
     for (auto &m : node->methods) {
         if (!m->typeArgs.empty()) {
@@ -495,7 +496,7 @@ void *Resolver::visitType(Type *type) {
                 continue;
             }
             checkTypeArgs(type->typeArgs, bd->type->typeArgs);
-            if (!bd->type->typeArgs.empty()) {
+            if (bd->isGeneric) {
                 auto decl = generateDecl(type, bd);
                 if (decl->type->typeArgs[0]->name == "T") {
                     auto vv = 5;
@@ -879,7 +880,7 @@ void *Resolver::visitReturnStmt(ReturnStmt *st) {
         }
         auto type = (RType *) st->expr->accept(this);
         if (!subType(type->type, curMethod->type.get())) {
-            error("method expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
+            error("method "+mangle(curMethod)+" expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
         }
     } else {
         if (!curMethod->type->isVoid()) {
@@ -943,7 +944,7 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
             auto vt = resolve(prm->type);
             auto val = resolve(e.value);
             if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print());
+                error("variant field type is imcompatiple with " + e.value->print()+"expected "+prm->type->print());
             }
         }
         if (hasNamed) {
@@ -972,7 +973,7 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
             auto vt = resolve(prm->type);
             auto val = resolve(e.value);
             if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print());
+                error("variant field type is imcompatiple with " + e.value->print()+" expected "+prm->type->print());
             }
         }
         if (hasNamed) {
@@ -1029,6 +1030,9 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
 
 
 void infer(Type *arg, Type *prm, std::unordered_map<std::string, Type *> &typeMap) {
+	if(arg->typeArgs.size()!=prm->typeArgs.size()){
+      error("type arg size mismatch, "+arg->print()+" = "+prm->print());
+    }
     if (prm->typeArgs.empty()) {
         auto it = typeMap.find(prm->name);
         if (it != typeMap.end()) {
@@ -1041,7 +1045,12 @@ void infer(Type *arg, Type *prm, std::unordered_map<std::string, Type *> &typeMa
             }
         }
     } else {
-        error("complex infer");
+        if(arg->name!=prm->name) error("cant infer");
+        for(int i=0;i<arg->typeArgs.size();i++){
+        	auto ta = arg->typeArgs[i];
+            auto tp = prm->typeArgs[i];
+            infer(ta, tp, typeMap);
+        }
     }
 }
 
@@ -1144,17 +1153,14 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         } else {
             in = resolveType(mc->typeArgs[0])->type;
         }
-        auto res = new RType(new PointerType(in));
-        return res;
+        return new RType(new PointerType(in));
     } else if (mc->name == "panic") {
         if (mc->args.empty()) {
-            auto res = new RType(new Type("void"));
-            return res;
+            return new RType(new Type("void"));
         }
         auto lit = dynamic_cast<Literal *>(mc->args[0]);
         if (lit && lit->type == Literal::STR) {
-            auto res = new RType(new Type("void"));
-            return res;
+            return new RType(new Type("void"));
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }

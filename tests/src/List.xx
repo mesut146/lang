@@ -1,7 +1,7 @@
 class List<T>{
   arr: T*;
-  count: int;
-  cap: int;
+  count: i32;
+  cap: i32;
 }
 
 impl List<T>{
@@ -9,7 +9,7 @@ impl List<T>{
     return List<T>::new(10);
   }
 
-  func new(cap: int): List<T>{
+  func new(cap: i32): List<T>{
     return List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
   }
 

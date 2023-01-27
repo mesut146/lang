@@ -41,6 +41,10 @@ static bool isMember(Method *m) {
 }
 
 static std::string mangle(Type *type) {
+	if(type->isPointer()){
+		auto ptr = dynamic_cast<PointerType*>(type);
+		return mangle(ptr->type)+"*";
+    }
     std::string s = type->name;
     if (!type->typeArgs.empty()) {
         s.append("<");

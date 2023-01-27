@@ -1,7 +1,9 @@
 enum Optional<T>{
   None,
   Some(val: T);
+}
 
+impl Optional<T>{
   func unwrap(): T{
     if let Some(val) = (this){
       return val;

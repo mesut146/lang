@@ -107,7 +107,8 @@ llvm::Type *Compiler::mapType(Type *type) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
-    auto s = resolv->resolveType(type)->targetDecl->getName();
+    auto rt = resolv->resolveType(type);
+    auto s = mangle(rt->targetDecl->type);
     auto it = classMap.find(s);
     if (it != classMap.end()) {
         return it->second;
@@ -306,8 +307,10 @@ void Compiler::makeDecl(BaseDecl *bd) {
             elems.push_back(mapType(field->type));
         }
     }
-    auto ty = llvm::StructType::create(*ctx, elems, bd->getName());
-    classMap[bd->getName()] = ty;
+    auto mangled = mangle(bd->type);
+    auto ty = llvm::StructType::create(*ctx, elems, mangled);
+    ty->dump();
+    classMap[mangled] = ty;
 }
 
 bool isSame(Type *type, BaseDecl *decl) {
@@ -848,6 +851,9 @@ llvm::Value *extend(llvm::Value *val, Type *type, Compiler *c) {
     int bits = c->getSize(type);
     if (src < bits) {
         return Builder->CreateZExt(val, getInt(bits));
+    }
+    if(src > bits){
+    	return Builder->CreateTrunc(val, getInt(bits));
     }
     return val;
 }

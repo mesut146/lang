@@ -40,6 +40,7 @@ public:
                 auto impl = dynamic_cast<Impl *>(i.get());
                 if (impl->type->name != type->name) continue;
                 if (!impl->type->typeArgs.empty()) {
+                	//todo move this
                     r->resolve(type);
                 }
                 for (auto &m : impl->methods) {

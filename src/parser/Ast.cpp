@@ -331,7 +331,11 @@ std::string MethodCall::print() {
         if (isOptional) {
             s.append("?");
         }
-        s.append(".");
+        if(dynamic_cast<Type*>(scope.get())){
+        	s.append("::");
+        }else{
+            s.append(".");
+        }
     }
     s.append(name);
     if (!typeArgs.empty()) s.append("<" + join(typeArgs, ", ") + ">");
