@@ -108,9 +108,12 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
 }
 
 std::unique_ptr<Impl> parseImpl(Parser *p) {
-    auto res = std::make_unique<Impl>();
     p->consume(IMPL);
     auto type = p->parseType();
+    auto res = std::make_unique<Impl>(type);
+    if (!type->typeArgs.empty()) {
+        res->isGeneric = true;
+    }
     if (p->is(FOR)) {
         res->trait_name = type->name;
         p->consume(FOR);
@@ -139,6 +142,7 @@ bool Parser::isMethod() {
 std::shared_ptr<Unit> Parser::parseUnit() {
     auto res = std::make_shared<Unit>();
     unit = res.get();
+    unit->path = lexer.path;
 
     while (first() != nullptr && is(IMPORT)) {
         res->imports.push_back(parseImport());

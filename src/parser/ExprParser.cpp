@@ -23,21 +23,29 @@ bool Parser::isPrim(Token &t) {
 }
 
 Literal *parseLit(Parser *p) {
-    auto *res = new Literal;
     auto &t = *p->pop();
-    res->val = t.value;
+    Literal::LiteralType type;
     if (t.is(INTEGER_LIT)) {
-        res->type = Literal::INT;
+        type = Literal::INT;
     } else if (t.is(FLOAT_LIT)) {
-        res->type = Literal::FLOAT;
+        type = Literal::FLOAT;
     } else if (t.is({TRUE, FALSE})) {
-        res->type = Literal::BOOL;
+        type = Literal::BOOL;
     } else if (t.is(STRING_LIT)) {
-        res->type = Literal::STR;
+        type = Literal::STR;
     } else if (t.is(CHAR_LIT)) {
-        res->type = Literal::CHAR;
+        type = Literal::CHAR;
     } else {
         throw std::runtime_error("invalid literal: " + t.value);
+    }
+    auto res = new Literal(type, t.value);
+    std::vector<std::string> suffixes = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
+    for (auto &s : suffixes) {
+        if (t.value.rfind(s) != std::string::npos) {
+            res->val = t.value.substr(0, t.value.size() - s.size());
+            res->suffix.reset(new Type(s));
+            break;
+        }
     }
     return res;
 }

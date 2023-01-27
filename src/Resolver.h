@@ -20,6 +20,8 @@ bool isComp(const std::string &op);
 RType *binCast(const std::string &s1, const std::string &s2);
 int fieldIndex(StructDecl *decl, const std::string &name);
 int fieldIndex(EnumVariant *variant, const std::string &name);
+Type *clone(Type *type);
+RType *clone(RType *rt);
 
 static void error(const std::string &msg) {
     throw std::runtime_error(msg);
@@ -41,9 +43,9 @@ static bool isMember(Method *m) {
 }
 
 static std::string mangle(Type *type) {
-	if(type->isPointer()){
-		auto ptr = dynamic_cast<PointerType*>(type);
-		return mangle(ptr->type)+"*";
+    if (type->isPointer()) {
+        auto ptr = dynamic_cast<PointerType *>(type);
+        return mangle(ptr->type) + "*";
     }
     std::string s = type->name;
     if (!type->typeArgs.empty()) {

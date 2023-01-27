@@ -269,18 +269,19 @@ void Compiler::make_proto(Method *m) {
     /*if (isStruct(m->type.get())) {
         retType = Builder->getVoidTy();
     }*/
+    auto mangled = mangle(m);
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
-    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangle(m), mod.get());
+    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, mod.get());
     //f->addTypeMetadata(0, llvm::MDNode::get(*ctx, llvm::MDString::get(*ctx, m->name)));
     int i = 0;
     if (isMember(m)) {
-        f->getArg(0)->setName("this");
+        f->getArg(0)->setName("self");
         i++;
     }
     for (int pi = 0; i < f->arg_size(); i++) {
         f->getArg(i)->setName(m->params[pi++]->name);
     }
-    funcMap[mangle(m)] = f;
+    funcMap[mangled] = f;
 }
 
 void make_slice_type() {
@@ -309,7 +310,6 @@ void Compiler::makeDecl(BaseDecl *bd) {
     }
     auto mangled = mangle(bd->type);
     auto ty = llvm::StructType::create(*ctx, elems, mangled);
-    ty->dump();
     classMap[mangled] = ty;
 }
 
@@ -319,22 +319,22 @@ bool isSame(Type *type, BaseDecl *decl) {
 
 void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
-        if (a->isEnum()) {
-            auto ed = dynamic_cast<EnumDecl *>(a);
+        if (b->isEnum()) {
+            auto ed = dynamic_cast<EnumDecl *>(b);
             for (auto variant : ed->variants) {
                 for (auto f : variant->fields) {
-                    if (isSame(f->type, b)) return false;
+                    if (isSame(f->type, a)) return true;
                 }
             }
         } else {
-            auto td = dynamic_cast<StructDecl *>(a);
+            auto td = dynamic_cast<StructDecl *>(b);
             for (auto &field : td->fields) {
-                if (isSame(field->type, b)) {
-                    return false;
+                if (isSame(field->type, a)) {
+                    return true;
                 }
             }
         }
-        return true;
+        return false;
     });
 }
 
@@ -358,6 +358,7 @@ std::vector<Method *> getMethods(Unit *unit) {
 void Compiler::createProtos() {
     std::vector<BaseDecl *> list;
     for (auto bd : getTypes(unit.get())) {
+        if (bd->isGeneric) continue;
         list.push_back(bd);
     }
     for (auto gt : resolv->genericTypes) {
@@ -852,8 +853,8 @@ llvm::Value *extend(llvm::Value *val, Type *type, Compiler *c) {
     if (src < bits) {
         return Builder->CreateZExt(val, getInt(bits));
     }
-    if(src > bits){
-    	return Builder->CreateTrunc(val, getInt(bits));
+    if (src > bits) {
+        return Builder->CreateTrunc(val, getInt(bits));
     }
     return val;
 }
@@ -862,6 +863,9 @@ llvm::Value *Compiler::cast(Expression *expr, Type *type) {
     auto lit = dynamic_cast<Literal *>(expr);
     if (lit && lit->type == Literal::INT) {
         auto bits = getSize(type);
+        if (lit->suffix) {
+            bits = getSize(lit->suffix.get());
+        }
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(lit->val.c_str()));
     }
@@ -1104,6 +1108,9 @@ void *Compiler::visitLiteral(Literal *n) {
         return makeStr(trimmed);
     } else if (n->type == Literal::INT) {
         auto bits = 32;
+        if (n->suffix) {
+            bits = getSize(n->suffix.get());
+        }
         auto intType = llvm::IntegerType::get(*ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     } else if (n->type == Literal::BOOL) {

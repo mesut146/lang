@@ -2,7 +2,7 @@
 #include "Visitor.h"
 #include "parser/Util.h"
 
-std::string& BaseDecl::getName() {
+std::string &BaseDecl::getName() {
     return type->name;
 }
 
@@ -108,6 +108,10 @@ std::string Method::print() {
     s.append("(");
     if (self) {
         s.append(self->name);
+        if(self->type){
+            s.append(": ");
+            s.append(self->type->print());
+        }
         if (!params.empty()) s.append(", ");
     }
     s.append(join(params, ", "));
@@ -131,6 +135,9 @@ std::string SimpleName::print() {
 std::string Literal::print() {
     std::string s;
     s.append(val);
+    if (suffix) {
+        s.append(suffix->print());
+    }
     return s;
 }
 
@@ -202,7 +209,7 @@ std::string SliceType::print() {
 std::string Type::print() {
     std::string s;
     if (scope) {
-        s.append(scope->print()).append(".");
+        s.append(scope->print()).append("::");
     }
     s.append(name);
     if (!typeArgs.empty()) {
@@ -331,9 +338,9 @@ std::string MethodCall::print() {
         if (isOptional) {
             s.append("?");
         }
-        if(dynamic_cast<Type*>(scope.get())){
-        	s.append("::");
-        }else{
+        if (dynamic_cast<Type *>(scope.get())) {
+            s.append("::");
+        } else {
             s.append(".");
         }
     }

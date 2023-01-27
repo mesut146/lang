@@ -11,9 +11,10 @@ T *visit(std::unique_ptr<T> &node, AstCopier *t) {
 }
 
 void *AstCopier::visitLiteral(Literal *node) {
-    auto res = new Literal;
-    res->val = node->val;
-    res->type = node->type;
+    auto res = new Literal(node->type, node->val);
+    if (node->suffix) {
+        res->suffix.reset(visit(node->suffix, this));
+    }
     return res;
 }
 
@@ -171,11 +172,11 @@ void *AstCopier::visitMethod(Method *node) {
     for (auto ta : node->typeArgs) {
         res->typeArgs.push_back(visit(ta, this));
     }
-    if(node->self){
+    if (node->self) {
         auto self = new Param;
         self->name = node->self->name;
-        if(node->self->type)
-        self->type.reset(visit(node->self->type.get(), this));
+        if (node->self->type)
+            self->type.reset(visit(node->self->type.get(), this));
         self->method = res;
         res->self.reset(self);
     }

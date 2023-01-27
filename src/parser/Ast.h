@@ -100,7 +100,9 @@ public:
     std::optional<std::string> trait_name;
     Type *type;
     std::vector<std::unique_ptr<Method>> methods;
-    bool isResolved = false;
+    bool isGeneric = false;
+
+    explicit Impl(Type *type) : type(type) {}
 
     bool isImpl() { return true; }
     std::string print();
@@ -310,6 +312,9 @@ public:
     };
     std::string val;
     LiteralType type;
+    std::unique_ptr<Type> suffix;
+
+    Literal(LiteralType type, const std::string &val) : type(type), val(move(val)) {}
 
     std::string print() override;
     void *accept(Visitor *v) override;

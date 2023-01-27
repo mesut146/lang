@@ -19,7 +19,7 @@ public:
 
 class Parser {
 public:
-    Lexer lexer;
+    Lexer &lexer;
     std::vector<Token *> tokens;
     int pos = 0;
     int mark = 0;

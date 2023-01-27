@@ -3,11 +3,20 @@ import infix
 import enumTest
 import flow
 import generic
-//import List
+import List
 import array
 import pass
 import ret
 import impl
+
+func literalTest(){
+  let a8 = 5i8;
+  let a16 = 5i16;
+  let a32 = 5i32;
+  let a64 = 5i64;
+  assert a8 == 5 && a16 == 5 && a32 == 5 && a64 == 5;
+  print("literalTest done\n");
+}
 
 func varTest(){
   let a: i32 = 5;
@@ -88,6 +97,7 @@ func importTest(){
 }
 
 func main(): i32{
+  literalTest();
   varTest();
   condTest();
   infixTest();
@@ -100,7 +110,7 @@ func main(): i32{
   prims();
   importTest();
   genericTest();
-  //listTest();
+  listTest();
   arrayTest();
   passTest();
   retTest();

@@ -41,7 +41,7 @@ impl List<T>{
     }
   }
 
-  func get(self, pos: int): T{
+  func get(self, pos: i32): T{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
     }
@@ -53,15 +53,15 @@ impl List<T>{
     self.count = 0;
   }
 
-  func size(self): int{
+  func size(self): i32{
     return self.count;
   }
 
-  func indexOf(self, e: T): int{
+  func indexOf(self, e: T): i32{
     return self.indexOf(e, 0);
   }
 
-  func indexOf(self, e: T, off: int): int{
+  func indexOf(self, e: T, off: i32): i32{
     let i = off;
     while(i < self.count){
       if(self.arr[i] == e) return i;
@@ -76,7 +76,7 @@ impl List<T>{
 }
 
 func listTest(){
-  let list = List<int>::new(2);
+  let list = List<i32>::new(2);
   list.add(10);
   list.add(20);
   list.add(30);//trigger expand

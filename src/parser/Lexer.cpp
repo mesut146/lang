@@ -1,5 +1,6 @@
 #include "Lexer.h"
 #include <map>
+#include <vector>
 
 TokenType kw(std::string &s) {
     if (s == "assert") return ASSERT_KW;
@@ -74,6 +75,13 @@ Token *Lexer::readNumber() {
         dot |= (c == '.');
         pos++;
         c = peek();
+    }
+    std::vector<std::string> suffixMap = {"i8", "i16", "i32", "i64", "f32", "f64"};
+    for (auto &s : suffixMap) {
+        if (str(pos, pos + s.length()) == s) {
+            pos += s.length();
+            break;
+        }
     }
     return new Token(dot ? FLOAT_LIT : INTEGER_LIT, str(start, pos));
 }

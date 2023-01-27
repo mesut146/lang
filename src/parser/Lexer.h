@@ -8,11 +8,12 @@
 
 class Lexer {
 public:
+    const std::string &path;
     std::string buf;
     int pos = 0;
     int line = 1;
 
-    explicit Lexer(const std::string &path) {
+    explicit Lexer(const std::string &path) : path(path) {
         std::fstream stream;
         stream.open(path, std::fstream::in);
         if (!stream.is_open()) throw std::system_error(errno, std::system_category(), "failed to open " + path);
