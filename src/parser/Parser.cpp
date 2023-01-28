@@ -23,12 +23,12 @@ void setArgs(Type *type) {
     }
 }
 
-std::unique_ptr<FieldDecl> parseField(Parser *p, StructDecl *decl) {
+std::unique_ptr<FieldDecl> parseField(Parser *p) {
     auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
     p->consume(SEMI);
-    return std::make_unique<FieldDecl>(name, type, decl);
+    return std::make_unique<FieldDecl>(name, type);
 }
 
 // ("class") name typeArgs? "{" member* "}"
@@ -43,7 +43,7 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     //members
     while (first() != nullptr && !is(RBRACE)) {
         if (is(IDENT)) {
-            res->fields.push_back(parseField(this, res.get()));
+            res->fields.push_back(parseField(this));
         } else {
             throw std::runtime_error("invalid class member: " + first()->print());
         }
@@ -52,12 +52,11 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     return res;
 }
 
-EnumField *parseEnumParam(Parser *p) {
-    auto res = new EnumField;
-    res->name = p->name();
+std::unique_ptr<FieldDecl> parseEnumParam(Parser *p) {
+    auto name = p->name();
     p->consume(COLON);
-    res->type = p->parseType();
-    return res;
+    auto type = p->parseType();
+    return std::make_unique<FieldDecl>(name, type);
 }
 
 EnumVariant *parseEnumEntry(Parser *p) {
@@ -123,8 +122,12 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
-        res->methods.push_back(p->parseMethod());
-        res->methods.back()->parent = res.get();
+        auto m = p->parseMethod();
+        m->parent = res.get();
+        if (m->self) {
+            m->self->type.reset(res->type);
+        }
+        res->methods.push_back(move(m));
     }
     p->consume(RBRACE);
     return res;

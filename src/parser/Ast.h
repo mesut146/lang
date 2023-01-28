@@ -69,8 +69,8 @@ class FieldDecl {
 public:
     std::string name;
     Type *type;
-    StructDecl *parent;
-    FieldDecl(std::string name, Type *type, StructDecl *parent) : name(name), type(type), parent(parent) {}
+
+    FieldDecl(std::string name, Type *type) : name(name), type(type) {}
 
     std::string print() const;
     void *accept(Visitor *v);
@@ -109,18 +109,10 @@ public:
     void *accept(Visitor *v);
 };
 
-class EnumField {
-public:
-    std::string name;
-    Type *type;
-
-    std::string print();
-};
-
 class EnumVariant {
 public:
     std::string name;
-    std::vector<EnumField *> fields;
+    std::vector<std::unique_ptr<FieldDecl>> fields;
 
     bool isStruct() const { return !fields.empty(); }
     std::string print();

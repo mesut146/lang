@@ -284,7 +284,7 @@ bool Resolver::isCyclic(Type *type, BaseDecl *target) {
     if (bd->isEnum()) {
         auto en = dynamic_cast<EnumDecl *>(bd);
         for (auto ev : en->variants) {
-            for (auto f : ev->fields) {
+            for (auto &f : ev->fields) {
                 if (isCyclic(f->type, target)) return true;
             }
         }
@@ -305,7 +305,7 @@ void *Resolver::visitEnumDecl(EnumDecl *node) {
     }
     node->isResolved = true;
     for (auto ev : node->variants) {
-        for (auto ep : ev->fields) {
+        for (auto &ep : ev->fields) {
             ep->type->accept(this);
         }
     }
@@ -360,9 +360,6 @@ void *Resolver::visitMethod(Method *m) {
     methodScopes[m] = curScope();
     if (m->self) {
         curScope()->add(new VarHolder(m->self.get()));
-        if (curImpl) {
-            m->self->type.reset(clone(curImpl->type));
-        }
         m->self->accept(this);
     }
     for (auto prm : m->params) {
@@ -372,7 +369,7 @@ void *Resolver::visitMethod(Method *m) {
     if (m->body) {
         m->body->accept(this);
         //todo check unreachable
-        if (!isReturnLast(m->body.get()) && !m->type->isVoid()) {
+        if (!m->type->isVoid() && !isReturnLast(m->body.get())) {
             error("non void function must return a value");
         }
     }
@@ -382,12 +379,8 @@ void *Resolver::visitMethod(Method *m) {
     return res;
 }
 
-std::string paramId(Param *p) {
-    return mangle(p->method) + "#" + p->name;
-}
-
 void *Resolver::visitParam(Param *p) {
-    auto id = paramId(p);
+    auto id = mangle(p->method) + "#" + p->name;
     if (paramMap.find(id) != paramMap.end()) return paramMap[id];
     auto res = clone(resolveType(p->type.get()));
     paramMap[id] = res;
@@ -428,22 +421,36 @@ void *Resolver::visitVarDecl(VarDecl *vd) {
 }
 
 BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
+    std::map<std::string, Type *> map;
+    for (int i = 0; i < decl->type->typeArgs.size(); i++) {
+        auto ta = decl->type->typeArgs[i];
+        map[ta->name] = type->typeArgs[i];
+    }
+    auto gen = new Generator(map);
     if (decl->isEnum()) {
-        throw std::runtime_error("enum template");
+        auto res = new EnumDecl;
+        res->type = clone(type);
+        auto ed = dynamic_cast<EnumDecl *>(decl);
+        for (auto ev : ed->variants) {
+            auto ev2 = new EnumVariant;
+            ev2->name = ev->name;
+            for (auto &field : ev->fields) {
+                auto ftype = (Type *) field->type->accept(gen);
+                auto field2 = new FieldDecl(field->name, ftype);
+                ev2->fields.push_back(std::unique_ptr<FieldDecl>(field2));
+            }
+            res->variants.push_back(ev2);
+        }
+        return res;
     } else {
         auto res = new StructDecl;
         res->type = clone(type);
         auto td = dynamic_cast<StructDecl *>(decl);
-        std::map<std::string, Type *> map;
-        for (int i = 0; i < decl->type->typeArgs.size(); i++) {
-            auto ta = decl->type->typeArgs[i];
-            map[ta->name] = type->typeArgs[i];
-        }
-        auto gen = new Generator(map);
-        for (auto &fd : td->fields) {
-            auto type = (Type *) fd->type->accept(gen);
-            auto field = new FieldDecl(fd->name, type, res);
-            res->fields.push_back(std::unique_ptr<FieldDecl>(field));
+
+        for (auto &field : td->fields) {
+            auto ftype = (Type *) field->type->accept(gen);
+            auto field2 = new FieldDecl(field->name, ftype);
+            res->fields.push_back(std::unique_ptr<FieldDecl>(field2));
         }
         return res;
     }
@@ -490,12 +497,12 @@ void *Resolver::visitType(Type *type) {
                 continue;
             }
             if (bd->isGeneric) {
-            	if(type->typeArgs.empty()){
-            	    res = new RType(clone(bd->type));
+                if (type->typeArgs.empty()) {
+                    res = new RType(clone(bd->type));
                     res->targetDecl = bd;
                     return res;
-            	}
-            	if (type->typeArgs.size() != bd->type->typeArgs.size()) {
+                }
+                if (type->typeArgs.size() != bd->type->typeArgs.size()) {
                     error("type arguments size not matched");
                 }
                 auto decl = generateDecl(type, bd);
@@ -531,9 +538,11 @@ void *Resolver::visitType(Type *type) {
         //enum variant creation
         auto ed = dynamic_cast<EnumDecl *>(bd);
         findVariant(ed, type->name);
-        res = typeMap[ed->getName()];
+        res = typeMap[ed->type->print()];
     }
-    if (!res) throw std::runtime_error("todo resolveType: " + str);
+    if (!res) {
+        throw std::runtime_error("todo resolveType: " + str);
+    }
     typeMap[str] = res;
     return res;
 }
@@ -719,7 +728,7 @@ void *Resolver::visitFieldAccess(FieldAccess *fa) {
         res = makeSimple("i32");
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
-        int i = fieldIndex(td, fa->name);
+        int i = fieldIndex(td->fields, fa->name, td->type);
         auto &fd = td->fields[i];
         res = (RType *) fd->accept(this);
     }
@@ -823,9 +832,8 @@ void *Resolver::visitIfLetStmt(IfLetStmt *st) {
     auto variant = decl->variants[index];
     int i = 0;
     for (auto &name : st->args) {
-        auto ep = variant->fields[i];
         auto tmp = new EnumPrm;
-        tmp->decl = ep;
+        tmp->decl = variant->fields[i].get();
         tmp->name = name;
         curScope()->add(new VarHolder(tmp));
         i++;
@@ -907,34 +915,34 @@ void *Resolver::visitIsExpr(IsExpr *ie) {
     return makeSimple("bool");
 }
 
-Type* Resolver::inferStruct(ObjExpr* node, StructDecl* decl, bool hasNamed){
+Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type) {
     std::map<std::string, Type *> typeMap;
-    for (auto ta:decl->type->typeArgs) {
-                    typeMap[ta->name] = nullptr;
-                }
+    for (auto ta : typeArgs) {
+        typeMap[ta->name] = nullptr;
+    }
     for (int i = 0; i < node->entries.size(); i++) {
-        auto& e = node->entries[i];
+        auto &e = node->entries[i];
         int prm_idx;
-                    if (hasNamed) {
-                prm_idx = fieldIndex(decl, e.key);
-            } else {
-                prm_idx = i;
-            }
-                auto arg_type = resolve(e.value);
-                auto target_type = decl->fields[i]->type;
-                
-                MethodResolver::infer(arg_type->type, target_type, typeMap);
-            }
-            for (auto &i : typeMap) {
-                if (i.second == nullptr) {
-                    error("can't infer type parameter: " + i.first);
-                }
-            }
-            auto type = new Type(decl->type->name);
-            for(auto &e:typeMap){
-                type->typeArgs.push_back(e.second);
-            }
-            return type;
+        if (hasNamed) {
+            prm_idx = fieldIndex(fields, e.key, type);
+        } else {
+            prm_idx = i;
+        }
+        auto arg_type = resolve(e.value);
+        auto target_type = fields[i]->type;
+
+        MethodResolver::infer(arg_type->type, target_type, typeMap);
+    }
+    for (auto &i : typeMap) {
+        if (i.second == nullptr) {
+            error("can't infer type parameter: " + i.first);
+        }
+    }
+    auto res = new Type(type->name);
+    for (auto &e : typeMap) {
+        res->typeArgs.push_back(e.second);
+    }
+    return res;
 }
 
 void *Resolver::visitObjExpr(ObjExpr *o) {
@@ -955,72 +963,55 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
         res = clone(res);
         res->type = new PointerType(res->type);
     }
+    std::unordered_set<std::string> names;
+    std::vector<std::unique_ptr<FieldDecl>> *fields;
+    Type *type;
     if (res->targetDecl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(res->targetDecl);
         int idx = findVariant(ed, o->type->name);
         auto variant = ed->variants[idx];
+        fields = &variant->fields;
+        type = new Type(ed->type, variant->name);
         if (variant->fields.size() != o->entries.size()) {
             error("incorrect number of arguments passed to enum creation");
         }
-        std::unordered_set<std::string> names;
-        for (int i = 0; i < o->entries.size(); i++) {
-            auto &e = o->entries[i];
-            int prm_idx;
-            if (hasNamed) {
-                names.insert(e.key);
-                prm_idx = fieldIndex(variant, e.key);
-            } else {
-                prm_idx = i;
-            }
-            auto prm = variant->fields[i];
-            auto vt = resolve(prm->type);
-            auto val = resolve(e.value);
-            if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print() + "expected " + prm->type->print());
-            }
-        }
-        if (hasNamed) {
-            for (auto p : variant->fields) {
-                if (names.find(p->name) == names.end()) {
-                    error("field not covered: " + p->name);
-                }
-            }
-        }
     } else {
         auto td = dynamic_cast<StructDecl *>(res->targetDecl);
+        fields = &td->fields;
+        type = td->type;
         if (td->fields.size() != o->entries.size()) {
             error("incorrect number of arguments passed to class creation");
         }
-        if(td->isGeneric){
-        	//infer
-           auto decl = generateDecl(inferStruct(o, td, hasNamed), td);
-           td = dynamic_cast<StructDecl *>(decl);
-           genericTypes.push_back(decl);
-           res = resolve(decl->type);
-           
+        if (td->isGeneric) {
+            //infer
+            auto inferred = inferStruct(o, hasNamed, td->type->typeArgs, td->fields, td->type);
+            auto decl = generateDecl(inferred, td);
+            td = dynamic_cast<StructDecl *>(decl);
+            genericTypes.push_back(decl);
+            res = resolve(decl->type);
+            fields = &td->fields;
         }
-        std::unordered_set<std::string> names;
-        for (int i = 0; i < o->entries.size(); i++) {
-            auto &e = o->entries[i];
-            int prm_idx;
-            if (hasNamed) {
-                names.insert(e.key);
-                prm_idx = fieldIndex(td, e.key);
-            } else {
-                prm_idx = i;
-            }
-            auto &prm = td->fields[i];
-            auto vt = resolve(prm->type);
-            auto val = resolve(e.value);
-            if (!subType(val->type, prm->type)) {
-                error("variant field type is imcompatiple with " + e.value->print() + " expected " + prm->type->print());
-            }
-        }
+    }
+    for (int i = 0; i < o->entries.size(); i++) {
+        auto &e = o->entries[i];
+        int prm_idx;
         if (hasNamed) {
-            for (auto &p : td->fields) {
-                if (names.find(p->name) == names.end()) {
-                    error("field not covered: " + p->name);
-                }
+            names.insert(e.key);
+            prm_idx = fieldIndex(*fields, e.key, type);
+        } else {
+            prm_idx = i;
+        }
+        auto &prm = (*fields)[i];
+        auto vt = resolve(prm->type);
+        auto val = resolve(e.value);
+        if (!subType(val->type, prm->type)) {
+            error("variant field type is imcompatiple with " + e.value->print() + " expected " + prm->type->print());
+        }
+    }
+    if (hasNamed) {
+        for (auto &p : *fields) {
+            if (names.find(p->name) == names.end()) {
+                error("field not covered: " + p->name);
             }
         }
     }
@@ -1036,6 +1027,9 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
         auto idx2 = resolve(node->index2.get());
         if (idx2->type->print() == "bool" || !idx2->type->isPrim()) error("range end is not an integer");
         auto at = dynamic_cast<ArrayType *>(arr->type);
+        if (arr->type->isSlice()) {
+            error("slice from slice is not supported");
+        }
         return new RType(new SliceType(at->type));
     }
     if (arr->type->isPointer()) {

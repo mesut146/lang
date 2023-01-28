@@ -52,14 +52,10 @@ std::string EnumVariant::print() {
     s.append(name);
     if (isStruct()) {
         s.append("(");
-        s.append(join(fields, ", "));
+        s.append(joinPtr(fields, ", "));
         s.append(")");
     }
     return s;
-}
-
-std::string EnumField::print() {
-    return name + ": " + type->print();
 }
 
 std::string StructDecl::print() {
@@ -68,7 +64,7 @@ std::string StructDecl::print() {
     s.append(type->print());
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
-        s.append("  ").append(fields[i]->print());
+        s.append("  ").append(fields[i]->print()).append(";");
         if (i < fields.size() - 1) s.append("\n");
     }
     s.append("\n}");

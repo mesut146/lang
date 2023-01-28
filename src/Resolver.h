@@ -18,8 +18,17 @@ class Resolver;
 bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType *binCast(const std::string &s1, const std::string &s2);
-int fieldIndex(StructDecl *decl, const std::string &name);
-int fieldIndex(EnumVariant *variant, const std::string &name);
+
+static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std::string &name, Type *type) {
+    int i = 0;
+    for (auto &fd : fields) {
+        if (fd->name == name) {
+            return i;
+        }
+        i++;
+    }
+    throw std::runtime_error("unknown field: " + name + " of type " + type->print());
+}
 Type *clone(Type *type);
 RType *clone(RType *rt);
 
@@ -57,6 +66,40 @@ static std::string mangle(Type *type) {
             i++;
         }
         s.append(">");
+    }
+    return s;
+}
+
+static std::string printMethod(Method *m) {
+    std::string s;
+    if (m->parent) {
+        if (m->parent->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(m->parent);
+            s += impl->type->print() + "::";
+        } else {
+            auto t = dynamic_cast<Trait *>(m->parent);
+            s += t->type->print() + "::";
+        }
+    }
+    s += m->name;
+    if (!m->typeArgs.empty()) {
+        s += "<";
+        for (int i = 0; i < m->typeArgs.size(); i++) {
+            s += m->typeArgs[i]->print();
+            if (i < m->typeArgs.size() - 1) {
+                s += ",";
+            }
+        }
+        s += ">";
+    }
+    int i = 0;
+    if (m->self) {
+        s += m->self->type->print();
+        i++;
+    }
+    for (auto prm : m->params) {
+        if (i > 0) s += ",";
+        s += prm->type.get()->print();
     }
     return s;
 }
@@ -117,7 +160,7 @@ static bool isRet(Statement *stmt) {
 
 class EnumPrm {
 public:
-    EnumField *decl;
+    FieldDecl *decl;
     std::string name;
 };
 
@@ -214,7 +257,7 @@ public:
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
     void findMethod(MethodCall *mc, std::vector<Method *> &list, std::vector<Method *> &generics);
     bool isCyclic(Type *type, BaseDecl *target);
-    Type* inferStruct(ObjExpr* node, StructDecl* decl, bool hasNamed);
+    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type*>& typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
 
     void dump();
 

@@ -46,7 +46,7 @@ std::map<std::string, llvm::Type *> classMap;
 llvm::Function *printf_proto;
 llvm::Function *exit_proto;
 llvm::Function *mallocf;
-int allocIdx = 0;
+
 std::vector<llvm::Value *> allocArr;
 llvm::StructType *sliceType;
 
@@ -57,8 +57,6 @@ static void InitializeModule(std::string &name) {
     // Open a new context and module.
     ctx = std::make_unique<llvm::LLVMContext>();
     mod = std::make_unique<llvm::Module>(name, *ctx);
-
-    // Create a new builder for the module.
     Builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
     funcMap.clear();
     classMap.clear();
@@ -76,12 +74,6 @@ llvm::Type *getInt(int bit) {
     return llvm::IntegerType::get(*ctx, bit);
 }
 
-Type *make(int bit) {
-    auto res = new Type;
-    res->name = "i" + std::to_string(bit);
-    return res;
-}
-
 llvm::Type *Compiler::mapType(Type *type) {
     if (type->isPointer()) {
         auto elem = dynamic_cast<PointerType *>(type)->type;
@@ -96,8 +88,6 @@ llvm::Type *Compiler::mapType(Type *type) {
         return llvm::ArrayType::get(mapType(arr->type), arr->size);
     }
     if (type->isSlice()) {
-        /*auto res = resolv->resolve(type);
-        auto arr = dynamic_cast<ArrayType *>(res->type);*/
         return sliceType;
     }
     if (type->isVoid()) {
@@ -123,7 +113,7 @@ int Compiler::getSize(BaseDecl *decl) {
         for (auto ev : ed->variants) {
             if (ev->fields.empty()) continue;
             int cur = 0;
-            for (auto f : ev->fields) {
+            for (auto &f : ev->fields) {
                 cur += getSize(f->type);
             }
             res = cur > res ? cur : res;
@@ -322,7 +312,7 @@ void sort(std::vector<BaseDecl *> &list) {
         if (b->isEnum()) {
             auto ed = dynamic_cast<EnumDecl *>(b);
             for (auto variant : ed->variants) {
-                for (auto f : variant->fields) {
+                for (auto &f : variant->fields) {
                     if (isSame(f->type, a)) return true;
                 }
             }
@@ -693,6 +683,7 @@ void Compiler::init() {
     llvm::InitializeAllAsmPrinters();
 
     std::string Error;
+    //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
     auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
     std::cout << "triple: " << TargetTriple << std::endl;
     std::cout << "target: " << Target->getName() << std::endl;
@@ -886,7 +877,7 @@ void *Compiler::visitInfix(Infix *i) {
     //print("infix: " + i->print());
     auto t1 = resolv->resolve(i->left)->type->print();
     auto t2 = resolv->resolve(i->right)->type->print();
-    auto t3 = t1 == "bool" ? make(1) : binCast(t1, t2)->type;
+    auto t3 = t1 == "bool" ? new Type("i1") : binCast(t1, t2)->type;
     auto l = cast(i->left, t3);
     auto r = cast(i->right, t3);
     if (isComp(i->op)) {
@@ -1074,30 +1065,42 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         target = rt->targetMethod;
         f = funcMap[mangle(target)];
     }
-    if (target && isMember(target) && mc->scope) {
+    int paramIdx = 0;
+    if (target && target->self && !dynamic_cast<Type *>(mc->scope.get())) {
         //add this object
         auto obj = gen(mc->scope.get());
-        auto res = resolv->resolve(mc->scope.get());
-        if (res->type->isPointer() || (res->type->isPrim() && isVar(mc->scope.get()))) {
+        auto scope_type = resolv->resolve(mc->scope.get())->type;
+        if (scope_type->isPointer() || (scope_type->isPrim() && isVar(mc->scope.get()))) {
             //auto deref
             obj = Builder->CreateLoad(obj->getType()->getPointerElementType(), obj);
         }
         args.push_back(obj);
+        paramIdx++;
     }
-
-    for (int i = 0, e = mc->args.size(); i != e; ++i) {
-        auto a = mc->args[i];
-        llvm::Value *av;
-        if (target) {
-            if (isStruct(target->params[i]->type.get())) {
+    std::vector<Param *> params;
+    if (target) {
+        if (target->self) {
+            params.push_back(target->self.get());
+        }
+        for (auto p : target->params) {
+            params.push_back(p);
+        }
+        for (int i = 0, e = mc->args.size(); i != e; ++i) {
+            auto a = mc->args[i];
+            llvm::Value *av;
+            if (isStruct(params[paramIdx]->type.get())) {
                 av = gen(a);
             } else {
-                av = cast(a, target->params[i]->type.get());
+                av = cast(a, params[paramIdx]->type.get());
             }
-        } else {
-            av = loadPtr(a);
+            args.push_back(av);
+            paramIdx++;
         }
-        args.push_back(av);
+    } else {
+        for (auto a : mc->args) {
+            auto av = loadPtr(a);
+            args.push_back(av);
+        }
     }
     return Builder->CreateCall(f, args);
 }
@@ -1167,7 +1170,6 @@ void *Compiler::visitVarDecl(VarDecl *n) {
 void *Compiler::visitRefExpr(RefExpr *n) {
     auto inner = gen(n->expr);
     //todo rvalue
-    //auto pt = llvm::PointerType::get(inner->getType(), 0);
     auto pt = inner->getType();
     //todo not needed for name,already ptr
     return inner;
@@ -1190,27 +1192,6 @@ void setOrdinal(int index, llvm::Value *ptr) {
     Builder->CreateStore(makeInt(index), ordPtr);
 }
 
-int fieldIndex(StructDecl *decl, const std::string &name) {
-    int i = 0;
-    for (auto &fd : decl->fields) {
-        if (fd->name == name) {
-            return i;
-        }
-        i++;
-    }
-    throw std::runtime_error("unknown field: " + name + " of type " + decl->type->print());
-}
-
-int fieldIndex(EnumVariant *variant, const std::string &name) {
-    int i = 0;
-    for (auto fd : variant->fields) {
-        if (fd->name == name) {
-            return i;
-        }
-        i++;
-    }
-    throw std::runtime_error("unknown field: " + name + " of variant " + variant->name);
-}
 void *Compiler::visitObjExpr(ObjExpr *n) {
     auto tt = resolv->resolve(n);
     llvm::Value *ptr;
@@ -1263,11 +1244,11 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
             auto &e = n->entries[i];
             int index;
             if (e.hasKey()) {
-                index = fieldIndex(variant, e.key);
+                index = fieldIndex(variant->fields, e.key, new Type(decl->type, variant->name));
             } else {
                 index = i;
             }
-            auto field = variant->fields[index];
+            auto &field = variant->fields[index];
             std::vector<llvm::Value *> entIdx = {makeInt(0), makeInt(getOffset(variant, index))};
             auto entPtr = Builder->CreateGEP(dataPtr->getType()->getPointerElementType(), dataPtr, entIdx);
             setField(e.value, field->type, true, entPtr);
@@ -1279,7 +1260,7 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
             auto &e = n->entries[i];
             int index;
             if (e.hasKey()) {
-                index = fieldIndex(decl, e.key);
+                index = fieldIndex(decl->fields, e.key, decl->type);
             } else {
                 index = i;
             }
@@ -1297,7 +1278,9 @@ void simpleVariant(Type *n, llvm::Value *ptr, Resolver *resolv) {
 }
 
 void *Compiler::visitType(Type *n) {
-    if (!n->scope) throw std::runtime_error("type has no scope");
+    if (!n->scope) {
+        throw std::runtime_error("type has no scope");
+    }
     //enum variant without struct
     auto ptr = allocArr[allocIdx++];
     simpleVariant(n, ptr, resolv.get());
@@ -1312,7 +1295,7 @@ void *Compiler::visitFieldAccess(FieldAccess *n) {
         index = 0;
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
-        index = fieldIndex(td, n->name);
+        index = fieldIndex(td->fields, n->name, td->type);
     }
     auto scopeVar = gen(n->scope);
     auto ty = scopeVar->getType()->getPointerElementType();
@@ -1384,7 +1367,7 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
-            auto prm = params[i];
+            auto &prm = params[i];
             auto argName = b->args[i];
             std::vector<llvm::Value *> idx = {makeInt(0), makeInt(offset)};
             auto ptr = Builder->CreateGEP(dataPtr->getType()->getPointerElementType(), dataPtr, idx);
@@ -1400,12 +1383,16 @@ void *Compiler::visitIfLetStmt(IfLetStmt *b) {
     for (auto &p : b->args) {
         NamedValues.erase(p);
     }
-    Builder->CreateBr(next);
+    if (!isReturnLast(b->thenStmt.get())) {
+        Builder->CreateBr(next);
+    }
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         b->elseStmt->accept(this);
-        Builder->CreateBr(next);
+        if (!isReturnLast(b->elseStmt.get())) {
+            Builder->CreateBr(next);
+        }
     }
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);

@@ -8,6 +8,7 @@ import array
 import pass
 import ret
 import impl
+import optional
 
 func literalTest(){
   let a8 = 5i8;
@@ -115,5 +116,6 @@ func main(): i32{
   passTest();
   retTest();
   implTest();
+  optionalTest();
   return 0;
 }

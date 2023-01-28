@@ -165,6 +165,20 @@ void *AstCopier::visitIfStmt(IfStmt *node) {
     return res;
 }
 
+void *AstCopier::visitIfLetStmt(IfLetStmt *node) {
+    auto res = new IfLetStmt;
+    res->type.reset(visit(node->type.get(), this));
+    for (auto a : node->args) {
+        res->args.push_back(a);
+    }
+    res->rhs.reset(visit(node->rhs.get(), this));
+    res->thenStmt.reset(visit(node->thenStmt.get(), this));
+    if (node->elseStmt) {
+        res->elseStmt.reset(visit(node->elseStmt.get(), this));
+    }
+    return res;
+}
+
 void *AstCopier::visitMethod(Method *node) {
     auto res = new Method(node->unit);
     res->name = node->name;

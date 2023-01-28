@@ -21,6 +21,7 @@ struct Compiler : public Visitor {
     llvm::Value *retPtr = nullptr;
     std::string TargetTriple;
     llvm::TargetMachine *TargetMachine;
+    int allocIdx = 0;
 
     void init();
     void emit(std::string &Filename);

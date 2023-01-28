@@ -58,24 +58,10 @@ public:
 
     static bool isCompatible(Type *arg, Type *target, std::vector<Type *> &typeParams);
 
-    bool checkArgs(MethodCall *mc, Method *m) {
-        if (mc->args.size() != m->params.size()) return false;
-        for (int i = 0; i < mc->args.size(); i++) {
-            auto t1 = r->resolve(mc->args[i])->type;
-            auto t2 = m->params[i]->type.get();
-            if (m->isGeneric) {
-                if (!isCompatible(t1, t2, m->typeArgs)) {
-                    return false;
-                }
-            } else {
-                if (!isCompatible(t1, t2)) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
+    bool checkArgs(MethodCall *mc, Method *m);
+
+    bool checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m);
 
     bool isSame(MethodCall *mc, Method *m);
-    static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap) ;
+    static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap);
 };
