@@ -719,13 +719,19 @@ void *Resolver::visitFieldAccess(FieldAccess *fa) {
         auto tmp = r->find(fa->name, false);
         auto res = new RType;
         res->arr = tmp;
+    } else if (scp->type->isSlice()) {
+        if (fa->name != "len") {
+            throw std::runtime_error("invalid field " + fa->name + " in " +
+                                     scp->type->print());
+        }
+        return makeSimple("i32");
     } else if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         if (fa->name != "index") {
             throw std::runtime_error("invalid field " + fa->name + " in " +
                                      scp->type->print());
         }
-        res = makeSimple("i32");
+        return  makeSimple("i32");
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         int i = fieldIndex(td->fields, fa->name, td->type);

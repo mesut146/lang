@@ -6,8 +6,11 @@ let s: String = String::new("hello");
 
 //string slice
 struct str{
-  ptr: i8*;
-  len: u32;
+  buf: [i8];
+}
+
+impl str{
+
 }
 
 struct String{

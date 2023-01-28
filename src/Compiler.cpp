@@ -24,6 +24,8 @@
 
 namespace fs = std::filesystem;
 
+const int SLICE_LEN_INDEX = 1;
+
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -139,6 +141,10 @@ int Compiler::getSize(Type *type) {
     if (type->isArray()) {
         auto arr = dynamic_cast<ArrayType *>(type);
         return getSize(arr->type) * arr->size;
+    }
+    if(type->isSlice()){
+        //data ptr, len
+        return 64 + 32;
     }
 
     auto decl = resolv->resolveType(type)->targetDecl;
@@ -1289,6 +1295,10 @@ void *Compiler::visitType(Type *n) {
 
 void *Compiler::visitFieldAccess(FieldAccess *n) {
     auto rt = resolv->resolve(n->scope);
+    if (rt->type->isSlice()) {
+        auto scopeVar = gen(n->scope);
+        return Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, SLICE_LEN_INDEX);
+    }
     auto decl = rt->targetDecl;
     int index;
     if (decl->isEnum()) {
@@ -1418,7 +1428,7 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
     auto arr = resolv->resolve(node->array);
     auto type = arr->type;
     if (node->index2) {
-        auto sp = allocArr[allocIdx++];
+        auto sp = allocArr.at(allocIdx++);
         auto val_start = cast(node->index, new Type("i32"));
         //set array ptr
         auto pp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
@@ -1428,7 +1438,7 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
         src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
         Builder->CreateStore(src, pp);
         //set len
-        auto lenp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 1);
+        auto lenp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
         auto val_end = cast(node->index2.get(), new Type("i32"));
         auto len = Builder->CreateSub(val_end, val_start);
         Builder->CreateStore(len, lenp);
