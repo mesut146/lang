@@ -9,7 +9,7 @@ public:
     MethodResolver(Resolver *r) : r(r) {}
 
     //get cached or generate method
-    Method *generateMethod(std::unordered_map<std::string, Type *> &map, Method *m, MethodCall *mc);
+    Method *generateMethod(std::map<std::string, Type *> &map, Method *m, MethodCall *mc);
 
     std::vector<Method *> filter(std::vector<Method *> &list, MethodCall *mc) {
         std::vector<Method *> res;
@@ -77,4 +77,5 @@ public:
     }
 
     bool isSame(MethodCall *mc, Method *m);
+    static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap) ;
 };

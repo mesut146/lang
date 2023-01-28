@@ -14,6 +14,9 @@ impl i32{
   func generic_sum<T>(x, y: T): T{
     return x + y;
   }
+  func generic_other<T>(x: T): T{
+    return x;
+  }
 }
 
 class A<T>{
@@ -35,6 +38,8 @@ func implTest(){
   assert 5.max(6) == 6;
   assert (-5).abs() == 5;
   assert 5.generic_sum(6i64) == 11;
+  assert i32::generic_other(5) == 5;
+  assert i32::min(5, 6) == 5;
 
   assert A<i32>{a: 5}.get() == 5;
   assert A<i64>{a: 5}.get() == 5;

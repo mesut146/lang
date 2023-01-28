@@ -16,7 +16,7 @@ class B<T, U>{
 }
 
 //complex infer
-func infer<U>(x: i32, a: A<U>): U{
+func infer<T>(x: i32, a: A<T>): T{
   return x + a.val;
 }
 
@@ -33,6 +33,10 @@ func genericTest(){
   assert two<i32, i32>(7, 8) == 15;
   assert two<i64, i32>(7, 8) == 15;
 
+  assert infer(1, A<i32>{val: 2}) == 3;
+  assert infer(3, A<i64>{val: 4}) == 7;
+  assert infer2(B<A<i32>, i64>{a: A<i32>{5}, b: 6}) == 11;
+
   inferTest();
   print("genericTest done\n");
 }
@@ -42,7 +46,11 @@ func inferTest(){
   assert one(5i64, 6i64) == 11;
   assert two(9, 10) == 19;
 
-  assert infer(1, A<i32>{val: 2}) == 3;
-  assert infer(3, A<i64>{val: 4}) == 7;
-  assert infer2(B<A<i32>, i64>{a: A<i32>{5}, b: 6}) == 11;
+  assert infer(1, A{2}) == 3;
+  assert infer(3, A{4i64}) == 7;
+  assert infer2(B{a: A{5}, b: 6}) == 11;
+
+  assert A{5}.val == 5;
+  assert A{A{5}}.val.val == 5;
+  assert B{5, A{6}}.b.val == 6;
 }

@@ -37,12 +37,9 @@ void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list, std::vect
     }
 }
 
-void infer(Type *arg, Type *prm, std::unordered_map<std::string, Type *> &typeMap) {
-    if (arg->typeArgs.size() != prm->typeArgs.size()) {
-        error("type arg size mismatch, " + arg->print() + " = " + prm->print());
-    }
+void MethodResolver::infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap) {
+    auto it = typeMap.find(prm->name);
     if (prm->typeArgs.empty()) {
-        auto it = typeMap.find(prm->name);
         if (it != typeMap.end()) {
             if (it->second == nullptr) {
                 it->second = arg;
@@ -54,6 +51,9 @@ void infer(Type *arg, Type *prm, std::unordered_map<std::string, Type *> &typeMa
             }
         }
     } else {
+        if (arg->typeArgs.size() != prm->typeArgs.size()) {
+            error("type arg size mismatch, " + arg->print() + " = " + prm->print());
+        }
         if (arg->name != prm->name) error("cant infer");
         for (int i = 0; i < arg->typeArgs.size(); i++) {
             auto ta = arg->typeArgs[i];
@@ -95,7 +95,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, std::vector<Metho
     }
     auto target = real[0];
     if (target->isGeneric) {
-        std::unordered_map<std::string, Type *> typeMap;
+        std::map<std::string, Type *> typeMap;
         if (mc->typeArgs.empty()) {
             //infer
             for (auto ta : target->typeArgs) {
@@ -110,10 +110,9 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, std::vector<Metho
             for (int i = 0; i < mc->args.size(); i++) {
                 auto arg_type = resolve(mc->args[i]);
                 auto target_type = target->params[i]->type.get();
-                infer(arg_type->type, target_type, typeMap);
+                MethodResolver::infer(arg_type->type, target_type, typeMap);
             }
             for (auto &i : typeMap) {
-                //print("inferred:" + i.first + " = " + i.second->print());
                 if (i.second == nullptr) {
                     error("can't infer type parameter: " + i.first);
                 }
@@ -139,7 +138,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, std::vector<Metho
     return res;
 }
 
-Method *MethodResolver::generateMethod(std::unordered_map<std::string, Type *> &map, Method *m, MethodCall *mc) {
+Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Method *m, MethodCall *mc) {
     for (auto gm : r->generatedMethods) {
         if (isSame(mc, gm)) {
             return gm;

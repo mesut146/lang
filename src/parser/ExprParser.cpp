@@ -255,7 +255,7 @@ MethodCall *parseCall(Parser *p, const std::string &name) {
     return res;
 }
 
-//"(" expr ")" | arrow | literal | objCreation | arrayCreation | name | mc
+//"(" expr ")" | literal | objCreation | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
     //log("parsePrimary " + *p->first()->value);
     if (p->is(LPAREN)) {
@@ -277,7 +277,23 @@ Expression *PRIM(Parser *p) {
     }
     if (isObj(p)) {
         return makeObj(p, false);
-    } else if (p->is(IDENT)) {
+    } else if(p->isPrim(*p->first())){
+        auto type = new Type(p->pop()->value);
+        p->consume(COLON2);
+        auto name = p->name();
+        if(p->is(LPAREN) || p->is(LT)){
+            std::vector<Type*> typeArgs;
+            if(p->is(LT)){
+                typeArgs= p->generics();
+            }
+            auto mc = parseCall(p, name);
+            mc->scope.reset(type);
+            mc->typeArgs=typeArgs;
+            return mc;
+        }
+        return new Type(type, name);
+    }
+    else if (p->is(IDENT)) {
         auto id = p->pop()->value;
         if (p->is(LPAREN)) {
             return parseCall(p, id);

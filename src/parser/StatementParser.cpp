@@ -147,7 +147,7 @@ Statement *Parser::parseStmt() {
     } else if (isVarDecl()) {
         return parseVarDecl();
     } else {
-        auto *e = parseExpr();
+        auto e = parseExpr();
         if (is(SEMI)) {
             consume(SEMI);
             return new ExprStmt(e);

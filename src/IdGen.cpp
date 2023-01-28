@@ -25,7 +25,8 @@ void *IdGen::visitType(Type *node) {
     return nullptr;
 }
 void *IdGen::visitObjExpr(ObjExpr *node) {
-    return nullptr;
+    auto id = mangle(resolver->curMethod) + "#" + node->print();
+    return new std::string(id);
 }
 void *IdGen::visitFieldAccess(FieldAccess *node) {
     return nullptr;

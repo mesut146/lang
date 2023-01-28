@@ -434,7 +434,7 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         auto res = new StructDecl;
         res->type = clone(type);
         auto td = dynamic_cast<StructDecl *>(decl);
-        std::unordered_map<std::string, Type *> map;
+        std::map<std::string, Type *> map;
         for (int i = 0; i < decl->type->typeArgs.size(); i++) {
             auto ta = decl->type->typeArgs[i];
             map[ta->name] = type->typeArgs[i];
@@ -466,8 +466,7 @@ void *Resolver::visitType(Type *type) {
         auto ptr = dynamic_cast<PointerType *>(type);
         res = clone(resolveType(ptr->type));
         auto inner = res->type;
-        auto pt = new PointerType(inner);
-        res->type = pt;
+        res->type = new PointerType(inner);
         typeMap[str] = res;
         return res;
     }
@@ -490,10 +489,15 @@ void *Resolver::visitType(Type *type) {
             if (bd->getName() != type->name) {
                 continue;
             }
-            if (type->typeArgs.size() != bd->type->typeArgs.size()) {
-                error("type arguments size not matched");
-            }
             if (bd->isGeneric) {
+            	if(type->typeArgs.empty()){
+            	    res = new RType(clone(bd->type));
+                    res->targetDecl = bd;
+                    return res;
+            	}
+            	if (type->typeArgs.size() != bd->type->typeArgs.size()) {
+                    error("type arguments size not matched");
+                }
                 auto decl = generateDecl(type, bd);
                 res = new RType(simpleType(type->name));
                 for (auto ta : type->typeArgs) {
@@ -903,6 +907,36 @@ void *Resolver::visitIsExpr(IsExpr *ie) {
     return makeSimple("bool");
 }
 
+Type* Resolver::inferStruct(ObjExpr* node, StructDecl* decl, bool hasNamed){
+    std::map<std::string, Type *> typeMap;
+    for (auto ta:decl->type->typeArgs) {
+                    typeMap[ta->name] = nullptr;
+                }
+    for (int i = 0; i < node->entries.size(); i++) {
+        auto& e = node->entries[i];
+        int prm_idx;
+                    if (hasNamed) {
+                prm_idx = fieldIndex(decl, e.key);
+            } else {
+                prm_idx = i;
+            }
+                auto arg_type = resolve(e.value);
+                auto target_type = decl->fields[i]->type;
+                
+                MethodResolver::infer(arg_type->type, target_type, typeMap);
+            }
+            for (auto &i : typeMap) {
+                if (i.second == nullptr) {
+                    error("can't infer type parameter: " + i.first);
+                }
+            }
+            auto type = new Type(decl->type->name);
+            for(auto &e:typeMap){
+                type->typeArgs.push_back(e.second);
+            }
+            return type;
+}
+
 void *Resolver::visitObjExpr(ObjExpr *o) {
     bool hasNamed = false;
     bool hasNonNamed = false;
@@ -956,6 +990,14 @@ void *Resolver::visitObjExpr(ObjExpr *o) {
         auto td = dynamic_cast<StructDecl *>(res->targetDecl);
         if (td->fields.size() != o->entries.size()) {
             error("incorrect number of arguments passed to class creation");
+        }
+        if(td->isGeneric){
+        	//infer
+           auto decl = generateDecl(inferStruct(o, td, hasNamed), td);
+           td = dynamic_cast<StructDecl *>(decl);
+           genericTypes.push_back(decl);
+           res = resolve(decl->type);
+           
         }
         std::unordered_set<std::string> names;
         for (int i = 0; i < o->entries.size(); i++) {

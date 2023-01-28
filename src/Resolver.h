@@ -169,9 +169,9 @@ public:
 //replace any type in decl with src by same index
 class Generator : public AstCopier {
 public:
-    std::unordered_map<std::string, Type *> &map;
+    std::map<std::string, Type *> &map;
 
-    Generator(std::unordered_map<std::string, Type *> &map) : map(map) {}
+    Generator(std::map<std::string, Type *> &map) : map(map) {}
     void *visitType(Type *type) override;
 };
 
@@ -214,6 +214,7 @@ public:
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
     void findMethod(MethodCall *mc, std::vector<Method *> &list, std::vector<Method *> &generics);
     bool isCyclic(Type *type, BaseDecl *target);
+    Type* inferStruct(ObjExpr* node, StructDecl* decl, bool hasNamed);
 
     void dump();
 
