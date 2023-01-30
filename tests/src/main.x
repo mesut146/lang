@@ -121,6 +121,5 @@ func main(): i32{
 
   strTest();
 
-  str::len("asd");
   return 0;
 }

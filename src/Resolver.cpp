@@ -177,7 +177,7 @@ std::string Resolver::getId(Expression *e) {
     throw std::runtime_error("id: " + e->print());
 }
 
-std::map<std::string, std::shared_ptr<Resolver>> Resolver::resolverMap;
+std::unordered_map<std::string, std::shared_ptr<Resolver>> Resolver::resolverMap;
 
 Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root) {
     idgen = new IdGen(this);
@@ -495,55 +495,64 @@ void *Resolver::visitType(Type *type) {
         typeMap[str] = res;
         return res;
     }
+    if (type->scope) {
+        auto scope = resolve(type->scope);
+        auto bd = scope->targetDecl;
+        if (bd->isEnum()) {
+            //enum variant creation
+            auto ed = dynamic_cast<EnumDecl *>(bd);
+            findVariant(ed, type->name);
+            res = typeMap[ed->type->print()];
+            typeMap[str] = res;
+            return res;
+        }
+    }
     if (type->scope == nullptr) {
+        BaseDecl *target = nullptr;
         for (auto &bd : getTypes(unit.get())) {
-            if (bd->getName() != type->name) {
-                continue;
-            }
-            if (bd->isGeneric) {
-                if (type->typeArgs.empty()) {
-                    res = new RType(clone(bd->type));
-                    res->targetDecl = bd;
-                    return res;
-                }
-                if (type->typeArgs.size() != bd->type->typeArgs.size()) {
-                    error("type arguments size not matched");
-                }
-                auto decl = generateDecl(type, bd);
-                res = new RType(simpleType(type->name));
-                for (auto ta : type->typeArgs) {
-                    res->type->typeArgs.push_back(copy(ta));
-                }
-                res->targetDecl = decl;
-                genericTypes.push_back(decl);
-                typeMap[str] = res;//todo
-                typeMap[decl->type->print()] = res;
-                return res;
-            } else {
-                return typeMap[bd->getName()];
+            if (bd->getName() == type->name) {
+                res = typeMap[bd->getName()];
+                break;
             }
         }
-        for (auto is : unit->imports) {
-            auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
-            resolver->resolveAll();
-            auto ii = resolver->typeMap.find(str);
-            if (ii != resolver->typeMap.end()) {
-                res = ii->second;
-                typeMap[str] = res;
-                usedTypes.push_back(res->targetDecl);
-                return res;
+        if (!res) {
+            for (auto is : unit->imports) {
+                auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
+                resolver->resolveAll();
+                auto ii = resolver->typeMap.find(str);
+                if (ii != resolver->typeMap.end()) {
+                    res = ii->second;
+                    typeMap[str] = res;
+                    usedTypes.push_back(res->targetDecl);
+                    break;
+                }
             }
         }
-        throw std::runtime_error("couldn't find type: " + str);
+        if (!res) {
+            throw std::runtime_error("couldn't find type: " + str);
+        }
+        if (bd->isGeneric) {
+            if (type->typeArgs.empty()) {
+                res = new RType(clone(bd->type));
+                res->targetDecl = bd;
+                return res;
+            }
+            if (type->typeArgs.size() != bd->type->typeArgs.size()) {
+                error("type arguments size not matched");
+            }
+            auto decl = generateDecl(type, bd);
+            res = new RType(simpleType(type->name));
+            for (auto ta : type->typeArgs) {
+                res->type->typeArgs.push_back(copy(ta));
+            }
+            res->targetDecl = decl;
+            genericTypes.push_back(decl);
+            typeMap[str] = res;//todo
+            typeMap[decl->type->print()] = res;
+            return res;
+        }
     }
-    auto st = (RType *) type->scope->accept(this);
-    auto bd = st->targetDecl;
-    if (bd->isEnum()) {
-        //enum variant creation
-        auto ed = dynamic_cast<EnumDecl *>(bd);
-        findVariant(ed, type->name);
-        res = typeMap[ed->type->print()];
-    }
+
     if (!res) {
         throw std::runtime_error("todo resolveType: " + str);
     }

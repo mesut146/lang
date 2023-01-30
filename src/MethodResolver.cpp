@@ -1,4 +1,5 @@
 #include "MethodResolver.h"
+#include "parser/Util.h"
 
 void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list) {
     for (auto &item : unit->items) {
@@ -17,6 +18,33 @@ void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list) {
                 list.push_back(m.get());
             }
         }
+    }
+}
+
+void MethodResolver::getMethods(Type *type, std::string &name, std::vector<Method *> &list) {
+    if (type->isPointer()) {
+        auto ptr = dynamic_cast<PointerType *>(type);
+        type = ptr->type;
+    }
+    for (auto &i : r->unit->items) {
+        if (i->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(i.get());
+            if (impl->type->name != type->name) continue;
+            if (!impl->type->typeArgs.empty()) {
+                //todo move this
+                r->resolve(type);
+            }
+            for (auto &m : impl->methods) {
+                if (m->name == name) list.push_back(m.get());
+            }
+        }
+    }
+    //todo other imports
+    for (auto is : r->unit->imports) {
+        auto resolver = Resolver::getResolver(r->root + "/" + join(is->list, "/") + ".x", r->root);
+        resolver->resolveAll();
+        MethodResolver mr(resolver.get());
+        mr.getMethods(type, name, list);
     }
 }
 

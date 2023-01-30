@@ -243,7 +243,7 @@ public:
     bool isResolved = false;
     std::vector<BaseDecl *> usedTypes;
     std::vector<Method *> usedMethods;
-    static std::map<std::string, std::shared_ptr<Resolver>> resolverMap;
+    static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
     std::string root;
 
     explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
