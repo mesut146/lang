@@ -92,6 +92,7 @@ static std::string printMethod(Method *m) {
         }
         s += ">";
     }
+    s+="(";
     int i = 0;
     if (m->self) {
         s += m->self->type->print();
@@ -101,6 +102,7 @@ static std::string printMethod(Method *m) {
         if (i > 0) s += ",";
         s += prm->type.get()->print();
     }
+    s+=")";
     return s;
 }
 
@@ -253,9 +255,9 @@ public:
     void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
-    RType *handleCallResult(std::vector<Method *> &list, std::vector<Method *> &generics, MethodCall *mc);
+    RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
-    void findMethod(MethodCall *mc, std::vector<Method *> &list, std::vector<Method *> &generics);
+    void findMethod(MethodCall *mc, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type*>& typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
 
@@ -271,6 +273,7 @@ public:
     void *visitStructDecl(StructDecl *bd) override;
     void *visitEnumDecl(EnumDecl *bd) override;
     void *visitImpl(Impl *bd);
+    void *visitTrait(Trait *node);
     RType *resolveType(Type *type);
     void *visitType(Type *type) override;
     void *visitVarDeclExpr(VarDeclExpr *vd) override;

@@ -341,6 +341,10 @@ void *Resolver::visitImpl(Impl *node) {
     return resolve(node->type);
 }
 
+void *Resolver::visitTrait(Trait *node){
+    return nullptr;
+}
+
 void *Resolver::visitFieldDecl(FieldDecl *node) {
     auto res = clone((RType *) node->type->accept(this));
     res->vh = new VarHolder(node);
@@ -759,7 +763,7 @@ void *Resolver::visitLiteral(Literal *lit) {
     } else if (lit->type == Literal::INT) {
         name = "i32";
     } else if (lit->type == Literal::CHAR) {
-        name = "u16";
+        name = "i32";
     } else {
         throw std::runtime_error("unknown literal: " + lit->print());
     }
@@ -1063,8 +1067,7 @@ RType *scopedMethod(MethodCall *mc, Resolver *r) {
     std::vector<Method *> list;
     MethodResolver mr(r);
     mr.getMethods(scope->type, mc->name, list);
-    std::vector<Method *> generics;
-    auto res = r->handleCallResult(list, generics, mc);
+    auto res = r->handleCallResult(list, mc);
     return res;
 }
 
@@ -1101,14 +1104,13 @@ void *Resolver::visitMethodCall(MethodCall *mc) {
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
     std::vector<Method *> list;
-    std::vector<Method *> templates;
-    findMethod(mc, list, templates);
+    findMethod(mc, list);
     for (auto is : unit->imports) {
         auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
         resolver->resolveAll();
-        resolver->findMethod(mc, list, templates);
+        resolver->findMethod(mc, list);
     }
-    auto res = handleCallResult(list, templates, mc);
+    auto res = handleCallResult(list, mc);
     cache[id] = res;
     return res;
 }

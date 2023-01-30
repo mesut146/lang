@@ -14,7 +14,7 @@ public:
     std::vector<Method *> filter(std::vector<Method *> &list, MethodCall *mc) {
         std::vector<Method *> res;
         for (auto m : list) {
-            if (isSame(mc, m)) {
+            if (!isSame(mc, m)) {
                 res.push_back(m);
             }
         }
@@ -22,6 +22,10 @@ public:
     }
 
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list) {
+        if(type->isPointer ()){
+            auto ptr = dynamic_cast<PointerType*>(type);
+            type=ptr->type;
+        }
         for (auto &i : r->unit->items) {
             if (i->isImpl()) {
                 auto impl = dynamic_cast<Impl *>(i.get());
@@ -58,10 +62,10 @@ public:
 
     static bool isCompatible(Type *arg, Type *target, std::vector<Type *> &typeParams);
 
-    bool checkArgs(MethodCall *mc, Method *m);
+    std::optional<std::string> checkArgs(MethodCall *mc, Method *m);
 
-    bool checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m);
+    std::optional<std::string> checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m);
 
-    bool isSame(MethodCall *mc, Method *m);
+    std::optional<std::string> isSame(MethodCall *mc, Method *m);
     static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap);
 };

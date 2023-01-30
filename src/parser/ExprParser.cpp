@@ -659,7 +659,7 @@ bool isAssign(std::string &s) {
 //expr1 (assignOp expr)?
 Expression *Parser::parseExpr() {
     Expression *res = expr1(this);
-    if (isAssign(first()->value)) {
+    if (first() && isAssign(first()->value)) {
         auto assign = new Assign;
         assign->left = res;
         assign->op = pop()->value;

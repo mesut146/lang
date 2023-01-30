@@ -1,37 +1,20 @@
 #include "MethodResolver.h"
 
-void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list, std::vector<Method *> &generics) {
-    // for (auto m : generatedMethods) {
-    //     if (m->name == mc->name) {
-    //         if (m->isGeneric) {
-    //             generics.push_back(m);
-    //         } else {
-    //             list.push_back(m);
-    //         }
-    //     }
-    // }
+void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list) {
     for (auto &item : unit->items) {
         if (item->isMethod()) {
             auto m = dynamic_cast<Method *>(item.get());
             if (m->name != mc->name) {
                 continue;
             }
-            if (m->isGeneric) {
-                generics.push_back(m);
-            } else {
-                list.push_back(m);
-            }
+            list.push_back(m);
         }
     }
     if (curImpl) {
-        //static sibling
+        //sibling
         for (auto &m : curImpl->methods) {
             if (!m->self && m->name == mc->name) {
-                if (m->isGeneric) {
-                    generics.push_back(m.get());
-                } else {
                     list.push_back(m.get());
-                }
             }
         }
     }
@@ -63,26 +46,27 @@ void MethodResolver::infer(Type *arg, Type *prm, std::map<std::string, Type *> &
     }
 }
 
-RType *Resolver::handleCallResult(std::vector<Method *> &list, std::vector<Method *> &generics, MethodCall *mc) {
-    //prefer generic methods
+RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
+    if (list.empty()) {
+        error("no such method: " + mc->print());
+    }
     std::vector<Method *> real;
     MethodResolver mr(this);
-    real = mr.filter(list, mc);
-    if (real.empty()) {
-        real = mr.filter(generics, mc);
+    std::map<Method*, std::string> errors;
+    for(auto m:list){
+        auto msg = mr.isSame(mc, m);
+        if(!msg) {
+            real.push_back(m);
+        }else{
+            errors[m] = msg.value();
+        }
     }
     if (real.empty()) {
-        if (list.empty() && generics.empty()) {
-            error("no such method: " + mc->print());
+        std::string s="method: " + mc->print() + " not found from candidates:\n ";
+        for (auto& [m, err] : errors) {
+            s += printMethod(m) +" "+ err + "\n";
         }
-        std::string s;
-        for (auto m : list) {
-            s += printMethod(m) + "\n";
-        }
-        for (auto m : generics) {
-            s += printMethod(m) + "\n";
-        }
-        error("method: " + mc->print() + " not found from candidates:\n " + s);
+        error(s);
     }
 
     if (real.size() > 1) {
@@ -140,7 +124,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, std::vector<Metho
 
 Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Method *m, MethodCall *mc) {
     for (auto gm : r->generatedMethods) {
-        if (isSame(mc, gm)) {
+        if (!isSame(mc, gm).has_value()) {
             return gm;
         }
     }
@@ -186,17 +170,19 @@ bool MethodResolver::isCompatible(Type *arg, Type *target, std::vector<Type *> &
     return false;
 }
 
-bool MethodResolver::isSame(MethodCall *mc, Method *m) {
-    if (mc->name != m->name) return false;
+std::optional<std::string> MethodResolver::isSame(MethodCall *mc, Method *m) {
+    if (mc->name != m->name) return "";
     if (!m->typeArgs.empty()) {
         if (!mc->typeArgs.empty()) {
             //size mismatch
-            if (mc->typeArgs.size() != m->typeArgs.size()) return false;
+            if (mc->typeArgs.size() != m->typeArgs.size()) return "type arg size mismatched";
         }
         if (!m->isGeneric) {
             //check if args are compatible with generic type params
             for (int i = 0; i < mc->typeArgs.size(); i++) {
-                if (mc->typeArgs[i]->print() != m->typeArgs[i]->print()) return false;
+                if (mc->typeArgs[i]->print() != m->typeArgs[i]->print()){
+                  return "type arg " + mc->typeArgs[i]->print() + " not matched with "+m->typeArgs[i]->print();
+                }
             }
         }
     }
@@ -206,7 +192,7 @@ bool MethodResolver::isSame(MethodCall *mc, Method *m) {
             auto scope = r->resolve(mc->scope.get());
             //check they belong same impl
             for (int i = 0; i < scope->type->typeArgs.size(); i++) {
-                if (scope->type->typeArgs[i]->print() != impl->type->typeArgs[i]->print()) return false;
+                if (scope->type->typeArgs[i]->print() != impl->type->typeArgs[i]->print()) return "not same impl";
             }
         }
     }
@@ -215,28 +201,34 @@ bool MethodResolver::isSame(MethodCall *mc, Method *m) {
 }
 
 
-bool MethodResolver::checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m) {
-    if (args.size() != params.size()) return false;
+std::optional<std::string> MethodResolver::checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m) {
+    if (args.size() != params.size()) return "arg size mismatched";
     auto typeParams = m->isGeneric ? m->typeArgs : std::vector<Type *>();
     for (int i = 0; i < args.size(); i++) {
         auto t1 = r->resolve(args[i])->type;
         auto t2 = params[i]->type.get();
+        if(m->self && i==0){
+            if(t1->isPointer()){
+                auto ptr = dynamic_cast<PointerType*>(t1);
+                t1 = ptr->type;
+            }
+        }
         if (!isCompatible(t1, t2, typeParams)) {
-            return false;
+            return "arg type "+t1->print()+ " is not compatible with param "+t2->print();
         }
     }
-    return true;
+    return {};
 }
 
-bool MethodResolver::checkArgs(MethodCall *mc, Method *m) {
+std::optional<std::string> MethodResolver::checkArgs(MethodCall *mc, Method *m) {
     if (m->self) {
-        if (!mc->scope) return false;
+        if (!mc->scope) return "member method called without scope";
         std::vector<Param *> params;
         params.push_back(m->self.get());
         params.insert(params.end(), m->params.begin(), m->params.end());
         //call member directly on type
         if (dynamic_cast<Type *>(mc->scope.get())) {
-            if (mc->args.size() != m->params.size() + 1) return false;
+            if (mc->args.size() != m->params.size() + 1) return "arg size mismatched";
             //args -> args
             //params -> self + params
             return checkArgs(mc->args, params, m);

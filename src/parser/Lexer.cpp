@@ -156,7 +156,7 @@ Token *Lexer::next() {
         return next();
     }
     int start = pos;
-    Token *token;
+    Token *token = nullptr;
     if (isalpha(c) || c == '_') {
         token = readIdent();
     } else if (isdigit(c)) {
@@ -198,21 +198,20 @@ Token *Lexer::next() {
             pos++;
         }
     } else if (c == '\'') {
-        auto a = pos;
         pos++;
         while (pos < buf.size()) {
             c = read();
             if (c == '\\') {
                 pos++;
-            } else if (c == '"') {
+            } else if (c == '\'') {
+                token = new Token(CHAR_LIT, str(start, pos));
                 break;
             }
         }
-        token = new Token(CHAR_LIT, str(a, pos));
+        if(!token) throw std::runtime_error("unterminated char literal");
     } else if (c == '"') {
         std::string s;
         s.append(1, c);
-        auto a = pos;
         pos++;
         while (pos < buf.size()) {
             c = read();

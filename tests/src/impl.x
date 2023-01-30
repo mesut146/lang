@@ -1,4 +1,7 @@
 impl i32{
+  func MIN(): i32{ return -2147483648; }
+  func MAX(): i32{ return 2147483647; }
+
   func min(x, y: i32): i32{
     if(x <= y) return x;
     return y;

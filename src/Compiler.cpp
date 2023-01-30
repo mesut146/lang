@@ -1115,7 +1115,12 @@ void *Compiler::visitLiteral(Literal *n) {
     if (n->type == Literal::STR) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         return makeStr(trimmed);
-    } else if (n->type == Literal::INT) {
+    }else if (n->type == Literal::CHAR) {
+        auto trimmed = n->val.substr(1, n->val.size() - 2);
+        auto chr = trimmed[0];
+        return llvm::ConstantInt::get(getInt(32), chr);
+    }
+     else if (n->type == Literal::INT) {
         auto bits = 32;
         if (n->suffix) {
             bits = getSize(n->suffix.get());
