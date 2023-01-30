@@ -9,6 +9,7 @@ import pass
 import ret
 import impl
 import optional
+import str
 
 func literalTest(){
   let a8 = 5i8;
@@ -117,5 +118,9 @@ func main(): i32{
   retTest();
   implTest();
   optionalTest();
+
+  strTest();
+
+  str::len("asd");
   return 0;
 }

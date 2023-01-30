@@ -4,15 +4,6 @@ let ptr: str = "hello";
 
 let s: String = String::new("hello");
 
-//string slice
-struct str{
-  buf: [i8];
-}
-
-impl str{
-
-}
-
 struct String{
   vec: List<u8>;
 
@@ -22,24 +13,5 @@ struct String{
   }
 }
 
-struct slice<T>{
-  ptr: T*;
-  start: u32;
-  end: u32;
-
-  func len(): u32{
-    return end - start;
-  }
-}
-
-type str = slice<u8>;
-type<T> [T] = slice<T>;
-
 let s: [int] = List<int>::new()[0..10];
 s.len()
-
-size_of(str) => 8 + 4 = 12 bytes 
-
-
-let array: [T; 10] = [expr; 10];
-let array: [T, <inferred>] = [expr, ...];

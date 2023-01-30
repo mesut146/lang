@@ -22,9 +22,9 @@ public:
     }
 
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list) {
-        if(type->isPointer ()){
-            auto ptr = dynamic_cast<PointerType*>(type);
-            type=ptr->type;
+        if (type->isPointer()) {
+            auto ptr = dynamic_cast<PointerType *>(type);
+            type = ptr->type;
         }
         for (auto &i : r->unit->items) {
             if (i->isImpl()) {
@@ -39,6 +39,7 @@ public:
                 }
             }
         }
+        //todo other imports
     }
 
     static bool isGeneric(Type *type, std::vector<Type *> &typeParams) {
@@ -64,7 +65,7 @@ public:
 
     std::optional<std::string> checkArgs(MethodCall *mc, Method *m);
 
-    std::optional<std::string> checkArgs(std::vector<Expression *> &args, std::vector<Param *> &params, Method *m);
+    std::optional<std::string> checkArgs(std::vector<Expression *> &args, std::vector<Param*> &params, Method *m);
 
     std::optional<std::string> isSame(MethodCall *mc, Method *m);
     static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap);

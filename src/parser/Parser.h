@@ -113,7 +113,7 @@ public:
     std::unique_ptr<Method> parseMethod();
     bool isMethod();
 
-    Param *parseParam(Method *m);
+    std::unique_ptr<Param> parseParam(Method *m);
 
     VarDecl *parseVarDecl();
     bool isVarDecl();

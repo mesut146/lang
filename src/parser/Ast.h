@@ -142,7 +142,7 @@ public:
     std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
     std::unique_ptr<Param> self;
-    std::vector<Param *> params;
+    std::vector<std::unique_ptr<Param>> params;
     std::unique_ptr<Block> body;
     Item *parent = nullptr;
     Unit *unit;
@@ -246,7 +246,7 @@ public:
         return sizeMap.find(print()) != sizeMap.end();
     }
     bool isVoid() { return print() == "void"; };
-    bool isString() { return print() == "std::string"; }
+    bool isString() { return print() == "str"; }
 
     std::string print() override;
     void *accept(Visitor *v) override;

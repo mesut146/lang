@@ -98,7 +98,7 @@ static std::string printMethod(Method *m) {
         s += m->self->type->print();
         i++;
     }
-    for (auto prm : m->params) {
+    for (auto& prm : m->params) {
         if (i > 0) s += ",";
         s += prm->type.get()->print();
     }
@@ -129,7 +129,7 @@ static std::string mangle(Method *m) {
         s += ">";
     }
     //todo self
-    for (auto prm : m->params) {
+    for (auto &prm : m->params) {
         s += "_" + mangle(prm->type.get());
     }
     return s;

@@ -51,6 +51,7 @@ llvm::Function *mallocf;
 
 std::vector<llvm::Value *> allocArr;
 llvm::StructType *sliceType;
+llvm::StructType *stringType;
 
 static void InitializeModule(std::string &name) {
     ctx.release();
@@ -91,6 +92,9 @@ llvm::Type *Compiler::mapType(Type *type) {
     }
     if (type->isSlice()) {
         return sliceType;
+    }
+    if (type->isString()) {
+        return stringType;
     }
     if (type->isVoid()) {
         return llvm::Type::getVoidTy(*ctx);
@@ -142,7 +146,7 @@ int Compiler::getSize(Type *type) {
         auto arr = dynamic_cast<ArrayType *>(type);
         return getSize(arr->type) * arr->size;
     }
-    if(type->isSlice()){
+    if (type->isSlice()) {
         //data ptr, len
         return 64 + 32;
     }
@@ -252,7 +256,7 @@ void Compiler::make_proto(Method *m) {
             argTypes.push_back(mapType(p));
         }
     }
-    for (auto prm : m->params) {
+    for (auto &prm : m->params) {
         auto t = prm->type.get();
         if (isStruct(t)) {
             //structs are always pass by ptr
@@ -287,8 +291,17 @@ void make_slice_type() {
     sliceType = llvm::StructType::create(*ctx, elems, "__slice");
 }
 
+void make_string_type() {
+    std::vector<llvm::Type *> elems;
+    elems.push_back(sliceType);
+    stringType = llvm::StructType::create(*ctx, elems, "str");
+}
+
 void Compiler::makeDecl(BaseDecl *bd) {
     if (bd->isGeneric) {
+        return;
+    }
+    if (bd->type->print() == "str") {
         return;
     }
     std::vector<llvm::Type *> elems;
@@ -396,9 +409,9 @@ void Compiler::initParams(Method *m) {
         }
         NamedValues[m->self->name] = ptr;
     }
-    for (auto prm : m->params) {
+    for (auto &prm : m->params) {
         //non mut structs dont need alloc
-        if (isStruct(prm->type.get()) && resolv->mut_params.count(prm) == 0) continue;
+        if (isStruct(prm->type.get()) && resolv->mut_params.count(prm.get()) == 0) continue;
         auto ty = mapType(prm->type.get());
         auto ptr = Builder->CreateAlloca(ty);
         NamedValues[prm->name] = ptr;
@@ -415,7 +428,7 @@ void Compiler::initParams(Method *m) {
         argIdx++;
     }
     for (auto i = 0; i < m->params.size(); i++) {
-        auto prm = m->params[i];
+        auto prm = m->params[i].get();
         auto val = ff->getArg(argIdx++);
         if (isStruct(prm->type.get())) {
             if (resolv->mut_params.count(prm) == 0) {
@@ -445,6 +458,12 @@ bool isReturnLast(Statement *stmt) {
     return false;
 }
 
+bool isStrLit(Expression *e) {
+    auto l = dynamic_cast<Literal *>(e);
+    if (!l) return false;
+    return l->type == Literal::STR;
+}
+
 bool doesAlloc(Expression *e) {
     auto obj = dynamic_cast<ObjExpr *>(e);
     if (obj) {
@@ -453,6 +472,10 @@ bool doesAlloc(Expression *e) {
     auto aa = dynamic_cast<ArrayAccess *>(e);
     if (aa) {
         return aa->index2.get() != nullptr;
+    }
+    auto lit = dynamic_cast<Literal *>(e);
+    if (lit) {
+        return lit->type == Literal::STR;
     }
     return dynamic_cast<Type *>(e) || dynamic_cast<ArrayExpr *>(e);
 }
@@ -535,6 +558,14 @@ public:
         }
         return nullptr;
     }
+    void *visitLiteral(Literal *node) {
+        if (node->type == Literal::STR) {
+            auto ptr = Builder->CreateAlloca(stringType, (unsigned) 0);
+            allocArr.push_back(ptr);
+            return ptr;
+        }
+        return nullptr;
+    }
     void *visitBlock(Block *node) override {
         for (auto &s : node->list) {
             s->accept(this);
@@ -578,9 +609,7 @@ public:
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitLiteral(Literal *node) {
-        return nullptr;
-    }
+
     void *visitRefExpr(RefExpr *node) {
         node->expr->accept(this);
         return nullptr;
@@ -596,6 +625,9 @@ public:
     void *visitMethodCall(MethodCall *node) {
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
+            if (!node->scope && node->name == "print" && isStrLit(a)) {
+                continue;
+            }
             a->accept(this);
         }
         return nullptr;
@@ -751,6 +783,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     NamedValues.clear();
     InitializeModule(name);
     make_slice_type();
+    make_string_type();
     createProtos();
 
     for (auto &m : getMethods(unit.get())) {
@@ -1046,12 +1079,28 @@ void *callPanic(MethodCall *mc, Compiler *c) {
     return Builder->getVoidTy();
 }
 
+void callPrint(MethodCall *mc, Compiler *c) {
+    std::vector<llvm::Value *> args;
+    for (auto a : mc->args) {
+        if (isStrLit(a)) {
+            auto l = dynamic_cast<Literal *>(a);
+            auto str = Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
+            args.push_back(str);
+        } else {
+            auto av = c->loadPtr(a);
+            args.push_back(av);
+        }
+    }
+    auto call = Builder->CreateCall(printf_proto, args);
+}
+
 void *Compiler::visitMethodCall(MethodCall *mc) {
     llvm::Function *f;
     std::vector<llvm::Value *> args;
     Method *target = nullptr;
     if (mc->name == "print") {
-        f = printf_proto;
+        callPrint(mc, this);
+        return nullptr;
     } else if (mc->name == "malloc") {
         f = mallocf;
         auto lt = new Type;
@@ -1088,8 +1137,8 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         if (target->self) {
             params.push_back(target->self.get());
         }
-        for (auto p : target->params) {
-            params.push_back(p);
+        for (auto &p : target->params) {
+            params.push_back(p.get());
         }
         for (int i = 0, e = mc->args.size(); i != e; ++i) {
             auto a = mc->args[i];
@@ -1114,13 +1163,22 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
 void *Compiler::visitLiteral(Literal *n) {
     if (n->type == Literal::STR) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
-        return makeStr(trimmed);
-    }else if (n->type == Literal::CHAR) {
+        auto src = Builder->CreateGlobalStringPtr(trimmed);
+        auto str_slice_ptr = allocArr.at(allocIdx++);
+        auto slice_ptr = Builder->CreateBitCast(str_slice_ptr, sliceType->getPointerTo());
+        //store s in slice_ptr
+        auto data_target = Builder->CreateStructGEP(slice_ptr->getType()->getPointerElementType(), slice_ptr, 0);
+        Builder->CreateStore(src, data_target);
+        //store len in slice_ptr
+        auto len_target = Builder->CreateStructGEP(slice_ptr->getType()->getPointerElementType(), slice_ptr, 1);
+        auto len = makeInt(trimmed.size(), 32);
+        Builder->CreateStore(len, len_target);
+        return str_slice_ptr;
+    } else if (n->type == Literal::CHAR) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         auto chr = trimmed[0];
         return llvm::ConstantInt::get(getInt(32), chr);
-    }
-     else if (n->type == Literal::INT) {
+    } else if (n->type == Literal::INT) {
         auto bits = 32;
         if (n->suffix) {
             bits = getSize(n->suffix.get());
@@ -1303,6 +1361,9 @@ void *Compiler::visitFieldAccess(FieldAccess *n) {
     if (rt->type->isSlice()) {
         auto scopeVar = gen(n->scope);
         return Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, SLICE_LEN_INDEX);
+    }
+    if (rt->type->isString()) {
+        rt = resolv->resolve(rt->type);
     }
     auto decl = rt->targetDecl;
     int index;

@@ -50,22 +50,9 @@ Literal *parseLit(Parser *p) {
     return res;
 }
 
-// bool isTypeArg(Parser *p, TokenType next) {
-//     p->backup();
-//     try {
-//         p->generics();
-//         p->consume(next);
-//         p->restore();
-//         return true;
-//     } catch (...) {}
-//     p->restore();
-//     return false;
-// }
-
-bool isTypeArg(Parser *p) {
-    int pos = p->pos;
+int isTypeArg(Parser *p, int pos) {
     if (!p->tokens[pos]->is(LT)) {
-        return false;
+        return -1;
     }
     pos++;
     int open = 1;
@@ -77,58 +64,15 @@ bool isTypeArg(Parser *p) {
             pos++;
             open--;
             if (open == 0) {
-                return true;
+                return pos;
             }
         } else {
             pos++;
         }
     }
-    return false;
+    return -1;
 }
 
-// bool isTypeArg(Parser *p) {
-//     int pos = p->pos;
-//     if (!p->tokens[pos]->is(LT)) {
-//         return false;
-//     }
-//     pos++;
-//     if (!p->tokens[pos]->is(IDENT)) {
-//         return false;
-//     }
-//     pos++;
-//     while (p->tokens[pos]->is(COMMA)) {
-//         pos++;
-//         if (!p->tokens[pos]->is(IDENT)) {
-//             return false;
-//         }
-//         pos++;
-//     }
-//     if (!p->tokens[pos]->is(GT)) {
-//         return false;
-//     }
-//     pos++;
-//     if (!p->tokens[pos]->is(LPAREN)) {
-//         return false;
-//     }
-//     return true;
-// }
-
-// Type *Parser::refType() {
-//     Type *res = new Type;
-//     res->name = *consume(IDENT)->value;
-//     while (is({DOT, LT})) {
-//         if (is(LT)) {
-//             res->typeArgs = generics();
-//         } else {
-//             consume(DOT);
-//             auto tmp = new Type;
-//             tmp->name = *consume(IDENT)->value;
-//             tmp->scope = res;
-//             res = tmp;
-//         }
-//     }
-//     return res;
-// }
 
 Type *Parser::parseType() {
     auto res = new Type;
@@ -204,15 +148,22 @@ bool isObj(Parser *p) {
     if (!p->is(IDENT)) {
         return false;
     }
-    p->backup();
-    try {
-        p->parseType();
-        if (p->is(LBRACE)) {
-            p->restore();
-            return true;
+    int pos = p->pos + 1;
+    int ta = isTypeArg(p, pos);
+    if (ta != -1) {
+        pos = ta;
+    }
+    if (p->tokens[pos]->is(COLON2)) {
+        pos++;
+        if (!p->tokens[pos]->is(IDENT)) {
+            return false;
         }
-    } catch (std::exception &e) {}
-    p->restore();
+        pos++;
+    }
+
+    if (p->tokens[pos]->is(LBRACE)) {
+        return true;
+    }
     return false;
 }
 
@@ -277,27 +228,26 @@ Expression *PRIM(Parser *p) {
     }
     if (isObj(p)) {
         return makeObj(p, false);
-    } else if(p->isPrim(*p->first())){
+    } else if (p->isPrim(*p->first())) {
         auto type = new Type(p->pop()->value);
         p->consume(COLON2);
         auto name = p->name();
-        if(p->is(LPAREN) || p->is(LT)){
-            std::vector<Type*> typeArgs;
-            if(p->is(LT)){
-                typeArgs= p->generics();
+        if (p->is(LPAREN) || p->is(LT)) {
+            std::vector<Type *> typeArgs;
+            if (p->is(LT)) {
+                typeArgs = p->generics();
             }
             auto mc = parseCall(p, name);
             mc->scope.reset(type);
-            mc->typeArgs=typeArgs;
+            mc->typeArgs = typeArgs;
             return mc;
         }
         return new Type(type, name);
-    }
-    else if (p->is(IDENT)) {
+    } else if (p->is(IDENT)) {
         auto id = p->pop()->value;
         if (p->is(LPAREN)) {
             return parseCall(p, id);
-        } else if (isTypeArg(p)) {
+        } else if (isTypeArg(p, p->pos) != -1) {
             auto typeArgs = p->generics();
             //todo move isObj here
             if (p->is(LPAREN)) {//id<...>(args)
@@ -371,7 +321,7 @@ Expression *PRIM2(Parser *p) {
         if (p->is(DOT)) {
             p->consume(DOT);
             auto name = p->name();
-            if (p->is(LPAREN) || isTypeArg(p)) {
+            if (p->is(LPAREN) || isTypeArg(p, p->pos) != -1) {
                 auto res = new MethodCall;
                 res->isOptional = isOptional;
                 res->scope.reset(lhs);

@@ -189,17 +189,18 @@ void *AstCopier::visitMethod(Method *node) {
     if (node->self) {
         auto self = new Param;
         self->name = node->self->name;
-        if (node->self->type)
+        if (node->self->type) {
             self->type.reset(visit(node->self->type.get(), this));
+        }
         self->method = res;
         res->self.reset(self);
     }
-    for (auto prm : node->params) {
+    for (auto &prm : node->params) {
         auto param = new Param;
         param->name = prm->name;
         param->type.reset(visit(prm->type.get(), this));
         param->method = res;
-        res->params.push_back(param);
+        res->params.push_back(std::unique_ptr<Param>(param));
     }
     res->body.reset(visit(node->body.get(), this));
 

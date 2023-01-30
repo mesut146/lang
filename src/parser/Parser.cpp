@@ -127,7 +127,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
         if (m->self) {
             m->self->type.reset(res->type);
         }
-        res->methods.push_back(move(m));
+        res->methods.push_back(std::move(m));
     }
     p->consume(RBRACE);
     return res;
@@ -171,13 +171,13 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 }
 
 //name ":" type ("=" expr)?
-Param *Parser::parseParam(Method *m) {
+std::unique_ptr<Param> Parser::parseParam(Method *m) {
     auto res = new Param;
     res->method = m;
     res->name = name();
     consume(COLON);
     res->type.reset(parseType());
-    return res;
+    return std::unique_ptr<Param>(res);
 }
 
 std::unique_ptr<Method> Parser::parseMethod() {

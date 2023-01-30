@@ -110,7 +110,7 @@ std::string Method::print() {
         }
         if (!params.empty()) s.append(", ");
     }
-    s.append(join(params, ", "));
+    s.append(joinPtr(params, ", "));
     s.append(")");
     if (type) {
         s.append(": ");

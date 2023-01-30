@@ -341,7 +341,7 @@ void *Resolver::visitImpl(Impl *node) {
     return resolve(node->type);
 }
 
-void *Resolver::visitTrait(Trait *node){
+void *Resolver::visitTrait(Trait *node) {
     return nullptr;
 }
 
@@ -366,8 +366,8 @@ void *Resolver::visitMethod(Method *m) {
         curScope()->add(new VarHolder(m->self.get()));
         m->self->accept(this);
     }
-    for (auto prm : m->params) {
-        curScope()->add(new VarHolder(prm));
+    for (auto &prm : m->params) {
+        curScope()->add(new VarHolder(prm.get()));
         prm->accept(this);
     }
     if (m->body) {
@@ -717,6 +717,9 @@ void *Resolver::visitSimpleName(SimpleName *sn) {
 void *Resolver::visitFieldAccess(FieldAccess *fa) {
     RType *res = nullptr;
     auto scp = resolve(fa->scope);
+    if (scp->type->isString()) {
+        scp = resolve(scp->type);
+    }
     auto decl = scp->targetDecl;
     if (scp->isImport) {
         auto r = getResolver(scp->unit->path, root);
@@ -735,7 +738,7 @@ void *Resolver::visitFieldAccess(FieldAccess *fa) {
             throw std::runtime_error("invalid field " + fa->name + " in " +
                                      scp->type->print());
         }
-        return  makeSimple("i32");
+        return makeSimple("i32");
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         int i = fieldIndex(td->fields, fa->name, td->type);
@@ -755,7 +758,7 @@ void *Resolver::visitLiteral(Literal *lit) {
     }
     std::string name;
     if (lit->type == Literal::STR) {
-        name = "string";
+        name = "str";
     } else if (lit->type == Literal::BOOL) {
         name = "bool";
     } else if (lit->type == Literal::FLOAT) {
