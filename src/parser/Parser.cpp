@@ -34,6 +34,7 @@ std::unique_ptr<FieldDecl> parseField(Parser *p) {
 // ("class") name typeArgs? "{" member* "}"
 std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
+    res->unit = unit;
     consume(CLASS);
     res->type = parseType();
     if (!res->type->typeArgs.empty()) {
@@ -75,6 +76,7 @@ EnumVariant *parseEnumEntry(Parser *p) {
 }
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
+    res->unit = unit;
     consume(ENUM);
     res->type = parseType();
     if (!res->type->typeArgs.empty()) {
@@ -95,6 +97,7 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
 
 std::unique_ptr<Trait> parseTrait(Parser *p) {
     auto res = std::make_unique<Trait>();
+    res->unit = p->unit;
     p->consume(TRAIT);
     res->type = p->parseType();
     p->consume(LBRACE);
@@ -110,6 +113,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     p->consume(IMPL);
     auto type = p->parseType();
     auto res = std::make_unique<Impl>(type);
+    res->unit = p->unit;
     if (!type->typeArgs.empty()) {
         res->isGeneric = true;
     }

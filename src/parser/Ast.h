@@ -36,8 +36,10 @@ public:
 
     std::string print();
 };
-
+class Unit;
 struct Item {
+    Unit *unit;
+
     virtual bool isClass() { return false; }
     virtual bool isEnum() { return false; }
     virtual bool isTrait() { return false; }

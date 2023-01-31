@@ -48,6 +48,15 @@ impl str{
     func contains(self, s: str): bool{
       return self.indexOf(s, 0) != -1;
     }
+
+    func substr(self, start: i32): str{
+      return self.substr(start, self.len());
+    }
+
+    func substr(self, start: i32, end: i32): str{
+      return str{self.buf[start..end]};
+    }
+
 }
 
 
@@ -67,5 +76,6 @@ func lit(){
   assert s2.get(1) == 'e';
   //s2.buf[0] = 'H' as i8; //error
   assert s2.indexOf("ll", 0) == 2;
-  print("%s\n", s2);
+  let buf = s2.buf[1..5];
+  //print("%s\n", str{buf: buf});
 }

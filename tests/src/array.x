@@ -21,7 +21,7 @@ func arrayTest(){
 
 func sliceTest(){
   let arr = [2, 3, 5, 7, 11, 13];
-  let slice = arr[2..5];
+  let slice = arr[2..5];//[5, 7, 11]
   assert slice.len == 3;
   assert slice[0] == 5 && slice[3]==13;
   //mutate original
@@ -30,6 +30,10 @@ func sliceTest(){
   //auto deref
   let ptr = &slice;
   assert ptr[0] == 55;
+  //slice of slice
+  let slice2 = slice[0..1];//[7, 11]
+  print("slice2[0]=%d\n",slice2[0]);
+  assert slice2[0] == 7 && slice2[1] == 11;
   print("sliceTest done\n");
 }
 

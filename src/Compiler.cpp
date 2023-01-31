@@ -1087,8 +1087,17 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto str = Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
             args.push_back(str);
         } else {
-            auto av = c->loadPtr(a);
-            args.push_back(av);
+            auto arg_type = c->resolv->resolve(a)->type;
+            if (arg_type->isString()) {
+                auto src = c->gen(a);
+                //get ptr to inner char array
+                auto slice = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
+                auto str = Builder->CreateLoad(getInt(8)->getPointerTo(), slice);
+                args.push_back(str);
+            } else {
+                auto av = c->loadPtr(a);
+                args.push_back(av);
+            }
         }
     }
     auto call = Builder->CreateCall(printf_proto, args);
@@ -1497,12 +1506,20 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
         auto sp = allocArr.at(allocIdx++);
         auto val_start = cast(node->index, new Type("i32"));
         //set array ptr
-        auto pp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
         auto src = gen(node->array);
-        std::vector<llvm::Value *> off = {makeInt(0, 32), val_start};
-        src = Builder->CreateGEP(src->getType()->getPointerElementType(), src, off, "off");
+        if (arr->type->isSlice()) {
+            //deref inner pointer
+            auto orig_type = src->getType();
+            auto ptr_src = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
+            src = Builder->CreateLoad(ptr_src->getType()->getPointerElementType(), ptr_src);
+            src = Builder->CreateBitCast(src, orig_type);
+        }
+        //shift by start
+        std::vector<llvm::Value *> shift_idx = {makeInt(0, 32), val_start};
+        src = Builder->CreateGEP(src->getType()->getPointerElementType(), src, shift_idx, "shifted");
         src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
-        Builder->CreateStore(src, pp);
+        auto ptr_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
+        Builder->CreateStore(src, ptr_target);
         //set len
         auto lenp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
         auto val_end = cast(node->index2.get(), new Type("i32"));
@@ -1520,23 +1537,24 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
     }
     std::vector<llvm::Value *> idx = {cast(node->index, new Type("i32"))};
     if (type->isArray()) {
+        //regular array access
         auto ty = mapType(type);
         idx.insert(idx.begin(), makeInt(0, 32));
         ty = src->getType()->getPointerElementType();
         return Builder->CreateGEP(ty, src, idx);
     } else if (type->isSlice()) {
+        //slice access
         auto elem = dynamic_cast<SliceType *>(type)->type;
         auto elemty = mapType(elem);
-        auto sp = src;
-        //read ptr
-        auto arr = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0, "arr1");
+        //read array ptr
+        auto arr = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0, "arr1");
         arr = Builder->CreateBitCast(arr, arr->getType()->getPointerTo());
         arr = Builder->CreateLoad(arr->getType()->getPointerElementType(), arr);
         arr = Builder->CreateBitCast(arr, elemty->getPointerTo());
-        //idx.insert(idx.begin(), makeInt(0, 64));
         auto tt = arr->getType()->getPointerElementType();
         return Builder->CreateGEP(tt, arr, idx);
     } else {
+        //pointer access
         src = load(src);
         return Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
     }

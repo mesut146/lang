@@ -249,7 +249,7 @@ void Resolver::init() {
         }
         auto bd = dynamic_cast<BaseDecl *>(item.get());
         if (!bd->type->typeArgs.empty()) {
-            continue;
+            //continue;
         }
         auto res = makeSimple(bd->getName());
         res->unit = unit;
@@ -433,6 +433,7 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
     auto gen = new Generator(map);
     if (decl->isEnum()) {
         auto res = new EnumDecl;
+        res->unit = decl->unit;
         res->type = clone(type);
         auto ed = dynamic_cast<EnumDecl *>(decl);
         for (auto ev : ed->variants) {
@@ -448,6 +449,7 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         return res;
     } else {
         auto res = new StructDecl;
+        res->unit = decl->unit;
         res->type = clone(type);
         auto td = dynamic_cast<StructDecl *>(decl);
 
@@ -458,6 +460,9 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         }
         return res;
     }
+}
+
+void handleType() {
 }
 
 void *Resolver::visitType(Type *type) {
@@ -498,63 +503,77 @@ void *Resolver::visitType(Type *type) {
     if (type->scope) {
         auto scope = resolve(type->scope);
         auto bd = scope->targetDecl;
-        if (bd->isEnum()) {
-            //enum variant creation
-            auto ed = dynamic_cast<EnumDecl *>(bd);
-            findVariant(ed, type->name);
-            res = typeMap[ed->type->print()];
-            typeMap[str] = res;
-            return res;
+        if (!bd->isEnum()) {
+            throw std::runtime_error("couldn't find type: " + str);
+        }
+        //enum variant creation
+        auto ed = dynamic_cast<EnumDecl *>(bd);
+        findVariant(ed, type->name);
+        res = typeMap[ed->type->print()];
+        typeMap[str] = res;
+        return res;
+    }
+    BaseDecl *target = nullptr;
+    if (type->typeArgs.empty()) {
+        //imports
+
+    } else {
+        //we looking for generic type
+        auto it = typeMap.find(type->name);
+        if (it != typeMap.end()) {
+            target = it->second->targetDecl;
+        } else {
+            //generic from imports
         }
     }
-    if (type->scope == nullptr) {
-        BaseDecl *target = nullptr;
-        for (auto &bd : getTypes(unit.get())) {
-            if (bd->getName() == type->name) {
-                res = typeMap[bd->getName()];
-                break;
-            }
-        }
-        if (!res) {
-            for (auto is : unit->imports) {
-                auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
-                resolver->resolveAll();
-                auto ii = resolver->typeMap.find(str);
-                if (ii != resolver->typeMap.end()) {
-                    res = ii->second;
+    if (!target) {
+        for (auto is : unit->imports) {
+            auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
+            resolver->resolveAll();
+            //try full type
+            if (type->typeArgs.empty()) {
+                //non generic type
+                auto it = resolver->typeMap.find(str);
+                if (it != resolver->typeMap.end()) {
+                    res = it->second;
                     typeMap[str] = res;
                     usedTypes.push_back(res->targetDecl);
+                    return res;
+                }
+            } else {
+                //generic type
+                //try root type
+                auto it = resolver->typeMap.find(type->name);
+                if (it != resolver->typeMap.end()) {
+                    target = it->second->targetDecl;
                     break;
                 }
             }
         }
-        if (!res) {
-            throw std::runtime_error("couldn't find type: " + str);
-        }
-        if (bd->isGeneric) {
-            if (type->typeArgs.empty()) {
-                res = new RType(clone(bd->type));
-                res->targetDecl = bd;
-                return res;
-            }
-            if (type->typeArgs.size() != bd->type->typeArgs.size()) {
-                error("type arguments size not matched");
-            }
-            auto decl = generateDecl(type, bd);
-            res = new RType(simpleType(type->name));
-            for (auto ta : type->typeArgs) {
-                res->type->typeArgs.push_back(copy(ta));
-            }
-            res->targetDecl = decl;
-            genericTypes.push_back(decl);
-            typeMap[str] = res;//todo
-            typeMap[decl->type->print()] = res;
-            return res;
-        }
     }
-
-    if (!res) {
-        throw std::runtime_error("todo resolveType: " + str);
+    if (!target) {
+        throw std::runtime_error("couldn't find type: " + str);
+    }
+    //generic
+    if (type->typeArgs.empty()) {
+        //inferred later
+        res = new RType(clone(target->type));
+        res->targetDecl = target;
+        typeMap[str] = res;
+        return res;
+    }
+    if (type->typeArgs.size() != target->type->typeArgs.size()) {
+        error("type arguments size not matched");
+    }
+    auto decl = generateDecl(type, target);
+    res = new RType(simpleType(type->name));
+    for (auto ta : type->typeArgs) {
+        res->type->typeArgs.push_back(copy(ta));
+    }
+    res->targetDecl = decl;
+    genericTypes.push_back(decl);
+    if (decl->unit != unit.get()) {
+        usedTypes.push_back(decl);
     }
     typeMap[str] = res;
     return res;
@@ -1048,11 +1067,13 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
     if (node->index2) {
         auto idx2 = resolve(node->index2.get());
         if (idx2->type->print() == "bool" || !idx2->type->isPrim()) error("range end is not an integer");
-        auto at = dynamic_cast<ArrayType *>(arr->type);
         if (arr->type->isSlice()) {
-            error("slice from slice is not supported");
+            auto st = dynamic_cast<SliceType *>(arr->type);
+            return new RType(st);
+        } else {
+            auto at = dynamic_cast<ArrayType *>(arr->type);
+            return new RType(new SliceType(at->type));
         }
-        return new RType(new SliceType(at->type));
     }
     if (arr->type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(arr->type);
