@@ -243,6 +243,7 @@ void Compiler::make_proto(Method *m) {
     if (m->isGeneric) {
         return;
     }
+    resolv->curMethod = m;
     std::vector<llvm::Type *> argTypes;
     /*bool rvo = !m->type->isVoid() && isStruct(m->type.get());
     if (rvo) {
@@ -282,6 +283,7 @@ void Compiler::make_proto(Method *m) {
         f->getArg(i)->setName(m->params[pi++]->name);
     }
     funcMap[mangled] = f;
+    resolv->curMethod = nullptr;
 }
 
 void make_slice_type() {
@@ -524,9 +526,6 @@ public:
         auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
         auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
         allocArr.push_back(ptr);
-        /*for (auto &e : node->entries) {
-            e.value->accept(this);
-        }*/
         return ptr;
     }
     void *visitArrayExpr(ArrayExpr *node) {
@@ -795,17 +794,17 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     std::error_code EC;
     auto noext = trimExtenstion(name);
 
-
     llvm::verifyModule(*mod, &llvm::outs());
 
-    //todo fullpath
-    auto outFile = noext + ".o";
-    emit(outFile);
-
+    //emit llvm
     auto llvm_file = noext + ".ll";
     llvm::raw_fd_ostream fd(llvm_file, EC);
     mod->print(fd, nullptr);
     print("writing " + llvm_file);
+
+    //todo fullpath
+    auto outFile = noext + ".o";
+    emit(outFile);
     return outFile;
 }
 
@@ -830,13 +829,12 @@ void *Compiler::visitBlock(Block *b) {
 void *Compiler::visitReturnStmt(ReturnStmt *t) {
     if (t->expr) {
         if (isStruct(curMethod->type.get())) {
-            //rvo
-            if (dynamic_cast<ArrayExpr *>(t->expr.get()) || dynamic_cast<ObjExpr *>(t->expr.get())) {
+            //todo rvo
+            if (doesAlloc(t->expr.get())) {
                 Builder->CreateRet(load(gen(t->expr.get())));
             } else {
                 Builder->CreateRet(loadPtr(t->expr.get()));
             }
-            //Builder->CreateRetVoid();
         } else {
             auto type = resolv->resolve(curMethod->type.get())->type;
             Builder->CreateRet(cast(t->expr.get(), type));
@@ -1091,9 +1089,14 @@ void callPrint(MethodCall *mc, Compiler *c) {
             if (arg_type->isString()) {
                 auto src = c->gen(a);
                 //get ptr to inner char array
-                auto slice = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
-                auto str = Builder->CreateLoad(getInt(8)->getPointerTo(), slice);
-                args.push_back(str);
+                if (src->getType()->isPointerTy()) {
+                    auto slice = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
+                    auto str = Builder->CreateLoad(getInt(8)->getPointerTo(), slice);
+                    args.push_back(str);
+                } else {
+                    args.push_back(src);
+                }
+
             } else {
                 auto av = c->loadPtr(a);
                 args.push_back(av);
@@ -1293,8 +1296,8 @@ int Compiler::getOffset(EnumVariant *variant, int index) {
 }
 
 void Compiler::setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr) {
-    auto targetTy = mapType(type);
     if (do_cast) {
+        auto targetTy = mapType(type);
         entPtr = Builder->CreateBitCast(entPtr, targetTy->getPointerTo());
     }
     if (doesAlloc(expr)) {
@@ -1343,8 +1346,8 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
                 index = i;
             }
             auto &field = decl->fields[index];
-            auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index);
-            setField(e.value, field->type, false, eptr);
+            auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, index, "field_" + field->name);
+            setField(e.value, field->type, true, eptr);
         }
     }
 }
@@ -1499,40 +1502,48 @@ void *Compiler::visitAsExpr(AsExpr *e) {
     return extend(val, ty->type, this);
 }
 
+
+void *Compiler::slice(ArrayAccess *node, llvm::Value *sp, Type *arrty) {
+    auto val_start = cast(node->index, new Type("i32"));
+    //set array ptr
+    llvm::Value *src;
+    if (doesAlloc(node->array)) {
+        child(node->array, sp);
+        src = sp;
+    } else {
+        src = gen(node->array);
+    }
+    Type *elemty;
+    if (arrty->isSlice()) {
+        //deref inner pointer
+        src = Builder->CreateBitCast(src, src->getType()->getPointerTo());
+        src = load(src);
+        elemty = dynamic_cast<SliceType *>(arrty)->type;
+    } else {
+        elemty = dynamic_cast<ArrayType *>(arrty)->type;
+    }
+    src = Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
+    //shift by start
+    std::vector<llvm::Value *> shift_idx = {val_start};
+    src = Builder->CreateGEP(src->getType()->getPointerElementType(), src, shift_idx, "shifted");
+    //i8*
+    src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
+    auto ptr_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
+    Builder->CreateStore(src, ptr_target);
+    //set len
+    auto len_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
+    auto val_end = cast(node->index2.get(), new Type("i32"));
+    auto len = Builder->CreateSub(val_end, val_start);
+    Builder->CreateStore(len, len_target);
+    return sp;
+}
+
 void *Compiler::visitArrayAccess(ArrayAccess *node) {
     auto arr = resolv->resolve(node->array);
     auto type = arr->type;
     if (node->index2) {
         auto sp = allocArr.at(allocIdx++);
-        auto val_start = cast(node->index, new Type("i32"));
-        //set array ptr
-        auto src = gen(node->array);
-        Type* elemty;
-        if (arr->type->isSlice()) {
-            //deref inner pointer
-            src = Builder->CreateBitCast(src, src->getType()->getPointerTo());
-            src = load(src);
-            elemty = dynamic_cast<SliceType*>(arr->type)->type;
-            src=Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
-        }else{
-            elemty = dynamic_cast<ArrayType*>(arr->type)->type;
-            src=Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
-        }
-        //shift by start
-        
-        //std::vector<llvm::Value *> shift_idx = {makeInt(0, 32), val_start};
-        std::vector<llvm::Value *> shift_idx = {val_start};
-        src = Builder->CreateGEP(src->getType()->getPointerElementType(), src, shift_idx, "shifted");
-        //i8*
-        src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
-        auto ptr_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
-        Builder->CreateStore(src, ptr_target);
-        //set len
-        auto len_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
-        auto val_end = cast(node->index2.get(), new Type("i32"));
-        auto len = Builder->CreateSub(val_end, val_start);
-        Builder->CreateStore(len, len_target);
-        return sp;
+        return slice(node, sp, type);
     }
     auto src = gen(node->array);
     if (type->isPointer()) {
@@ -1605,17 +1616,27 @@ void *Compiler::visitArrayExpr(ArrayExpr *node) {
 }
 
 void Compiler::child(Expression *e, llvm::Value *ptr) {
+    ptr = Builder->CreateBitCast(ptr, mapType(resolv->resolve(e)->type)->getPointerTo());
     auto a = dynamic_cast<ArrayExpr *>(e);
     if (a) {
         array(a, ptr);
+        return;
+    }
+    auto aa = dynamic_cast<ArrayAccess *>(e);
+    if (aa) {
+        auto arrty = resolv->resolve(aa->array)->type;
+        slice(aa, ptr, arrty);
+        return;
     }
     auto obj = dynamic_cast<ObjExpr *>(e);
     if (obj && !obj->isPointer) {
         object(obj, ptr, resolv->resolve(obj));
+        return;
     }
     auto t = dynamic_cast<Type *>(e);
     if (t) {
         simpleVariant(t, ptr, resolv.get());
+        return;
     }
 }
 

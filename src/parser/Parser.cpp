@@ -1,5 +1,6 @@
 #include "Parser.h"
 #include "Util.h"
+#include "TypeUtils.h"
 
 std::string Parser::strLit() {
     auto t = consume(STRING_LIT);
@@ -15,12 +16,6 @@ ImportStmt *Parser::parseImport() {
         res->list.push_back(pop()->value);
     }
     return res;
-}
-
-void setArgs(Type *type) {
-    for (auto ta : type->typeArgs) {
-        ta->isTypeParam = true;
-    }
 }
 
 std::unique_ptr<FieldDecl> parseField(Parser *p) {
@@ -129,7 +124,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
         auto m = p->parseMethod();
         m->parent = res.get();
         if (m->self) {
-            m->self->type.reset(res->type);
+            m->self->type.reset(clone(res->type));
         }
         res->methods.push_back(std::move(m));
     }

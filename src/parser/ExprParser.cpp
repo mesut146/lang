@@ -67,12 +67,15 @@ int isTypeArg(Parser *p, int pos) {
                 return pos;
             }
         } else {
+            auto valid_tokens = {IDENT, STAR, QUES, LBRACKET, RBRACKET, COMMA, COLON2};
+            if (!p->tokens[pos]->is(valid_tokens) && !p->isPrim(*p->tokens[pos])) {
+                return -1;
+            }
             pos++;
         }
     }
     return -1;
 }
-
 
 Type *Parser::parseType() {
     auto res = new Type;
@@ -462,21 +465,21 @@ Expression *expr10(Parser *p) {
 
 //expr10 ("<<" | ">" ">" | ">" ">" ">" expr10)*
 Expression *expr9(Parser *p) {
-    Expression *lhs = expr10(p);
+    auto lhs = expr10(p);
     while (p->is({LTLT, GT})) {
-        std::string ops = p->pop()->value;
+        auto &op = p->pop()->value;
         //todo >>, in while
-        if (ops == ">") {
-            ops = ">>";
+        if (op == ">" && p->is(GT)) {
+            op = ">>";
             p->consume(GT);
             if (p->is(GT)) {
-                ops = ">>>";
+                op = ">>>";
                 p->consume(GT);
             }
         }
         auto res = new Infix;
         res->left = lhs;
-        res->op = ops;
+        res->op = op;
         res->right = expr10(p);
         lhs = res;
     }
@@ -484,7 +487,7 @@ Expression *expr9(Parser *p) {
 }
 
 Expression *parseIsExpr(Parser *p) {
-    Expression *lhs = expr9(p);
+    auto lhs = expr9(p);
     if (p->is(IS)) {
         p->consume(IS);
         auto type = p->parseType();

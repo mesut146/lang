@@ -4,8 +4,8 @@ class Point{
 }
 
 impl Point{
-  func new(a: i32, b: i32): Point*{
-    return new Point{x: a, y: b};
+  func new(a: i32, b: i32): Point{
+    return Point{x: a, y: b};
   }
 
   func getX(self): i32{

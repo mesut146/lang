@@ -3,6 +3,16 @@ class str{
 }
 
 impl str{
+    func dump(self){
+      let i = 0;
+      print("str{len: %d, \"", self.len());
+      while (i < self.len()){
+        print("%c", self.buf[i]);
+        ++i;
+      }
+      print("\"}\n");
+    }
+    
     func len(self): i32{
       return self.buf.len;
     }
@@ -54,8 +64,8 @@ impl str{
     }
 
     func substr(self, start: i32, end: i32): str{
-      if(start >= self.len()) panic("start index out of bounds %d of %d", start, self.len());
-      if(end >= self.len()) panic("end index out of bounds %d of %d", start, self.len());
+      if(start > self.len()) panic("start index out of bounds %d of %d", start, self.len());
+      if(end > self.len()) panic("end index out of bounds %d of %d", end, self.len());
       assert start < end;
       return str{self.buf[start..end]};
     }
@@ -69,18 +79,24 @@ func strTest(){
     let s = str::new(helloSlice);
 
     lit();
+    //fix();
 
     print("strTest done\n");
 }
 
+func fix(){
+  let s1 = "hello world";
+  let s2 = str{s1.buf[6..11]};
+  s2.dump();
+}
+
 func lit(){
-  let s2 = "hello";
-  assert s2.len() == 5;
-  assert s2.get(1) == 'e';
-  //s2.buf[0] = 'H' as i8; //error mutate glob
-  assert s2.indexOf("ll", 0) == 2;
-  let buf = s2.buf[2..3];
-  print("%s\n", str{buf: buf});
-  //let s3 = s2.substr(3);
-  //print("%s\n", s3);
+  let s1 = "hello world";
+  s1.dump();
+  assert s1.len() == 11;
+  assert s1.get(1) == 'e';
+  //s1.buf[0] = 'H' as i8; //error mutate glob
+  assert s1.indexOf("ll", 0) == 2;
+  let s2 = s1.substr(6, 11);
+  s2.dump();
 }

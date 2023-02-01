@@ -232,8 +232,6 @@ public:
     Type *scope = nullptr;
     std::string name;
     std::vector<Type *> typeArgs;
-    //bool isTypeArg = false;
-    bool isTypeParam = false;
 
     Type() {}
     explicit Type(const std::string &name) : name(move(name)) {}

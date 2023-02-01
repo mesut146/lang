@@ -133,6 +133,10 @@ Token *Lexer::readOp() {
 
 char checkEscape(char c) {
     if (c == 'n') return '\n';
+    if (c == 'r') return '\r';
+    if (c == 't') return '\t';
+    if (c == '"') return '"';
+    if (c == '\'') return '\'';
     throw std::runtime_error(std::string("invalid escape: \\") + c);
 }
 

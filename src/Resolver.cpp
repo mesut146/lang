@@ -1,5 +1,6 @@
 #include "Resolver.h"
 #include "MethodResolver.h"
+#include "TypeUtils.h"
 #include "parser/Parser.h"
 #include "parser/Util.h"
 #include <list>
@@ -28,26 +29,6 @@ bool isType(Item *item) {
 template<class T>
 bool iof(Expression *e) {
     return dynamic_cast<T>(e) != nullptr;
-}
-
-Type *clone(Type *type) {
-    if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        return new PointerType(clone(ptr->type));
-    } else if (type->isArray()) {
-        auto arr = dynamic_cast<ArrayType *>(type);
-        return new ArrayType(clone(arr->type), arr->size);
-    } else if (type->isSlice()) {
-        auto slice = dynamic_cast<SliceType *>(type);
-        return new SliceType(clone(slice->type));
-    } else {
-        auto res = new Type(type->name);
-        if (type->scope) {
-            res->scope = clone(type->scope);
-        }
-        res->typeArgs.insert(res->typeArgs.end(), type->typeArgs.begin(), type->typeArgs.end());
-        return res;
-    }
 }
 
 RType *clone(RType *rt) {
@@ -513,6 +494,12 @@ void *Resolver::visitType(Type *type) {
         typeMap[str] = res;
         return res;
     }
+    if (str == "Self") {
+        if (curMethod->parent) {
+            auto imp = dynamic_cast<Impl *>(curMethod->parent);
+            return resolve(imp->type);
+        }
+    }
     BaseDecl *target = nullptr;
     if (type->typeArgs.empty()) {
         //imports
@@ -929,9 +916,10 @@ void *Resolver::visitReturnStmt(ReturnStmt *st) {
         if (curMethod->type->isVoid()) {
             error("void method returns expr");
         }
-        auto type = (RType *) st->expr->accept(this);
-        if (!subType(type->type, curMethod->type.get())) {
-            error("method " + mangle(curMethod) + " expects '" + curMethod->type->print() + " but returned '" + type->type->print() + "'");
+        auto type = resolve(st->expr.get())->type;
+        auto mtype = resolve(curMethod->type.get())->type;
+        if (!subType(type, mtype)) {
+            error("method " + mangle(curMethod) + " expects '" + curMethod->type->print() + " but returned '" + type->print() + "'");
         }
     } else {
         if (!curMethod->type->isVoid()) {

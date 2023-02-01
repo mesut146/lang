@@ -29,7 +29,6 @@ static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std
     }
     throw std::runtime_error("unknown field: " + name + " of type " + type->print());
 }
-Type *clone(Type *type);
 RType *clone(RType *rt);
 
 static void error(const std::string &msg) {

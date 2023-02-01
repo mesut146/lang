@@ -32,7 +32,6 @@ func sliceTest(){
   assert ptr[0] == 55;
   //slice of slice
   let slice2 = slice[1..3];//[7, 11]
-  print("slice2[0]=%d slice2[1]=%d\n", slice2[0], slice2[1]);
   assert slice2[0] == 7 && slice2[1] == 11;
   print("sliceTest done\n");
 }
@@ -52,10 +51,6 @@ func arr2d(){
   mixed();
 }
 
-/*class AA{
-  ptr: A*;
-}*/
-
 class A{
   a: [B; 2];
   b: B;
@@ -63,9 +58,6 @@ class A{
 }
 class B{
   b: i32;
-}
-class C{
-  a: i32;
 }
 func mixed(){
   let a1 = A{a: [B{1}, B{2}], b: B{b: 3}, c: [B{4}][0..1]};

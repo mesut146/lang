@@ -1,5 +1,6 @@
 #include "MethodResolver.h"
 #include "parser/Util.h"
+#include "TypeUtils.h"
 
 void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list) {
     for (auto &item : unit->items) {
