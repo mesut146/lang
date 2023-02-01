@@ -25,14 +25,14 @@ func sliceTest(){
   assert slice.len == 3;
   assert slice[0] == 5 && slice[3]==13;
   //mutate original
-  slice[0] = 55;
+  slice[0] = 55; //[55, 7 ,11]
   assert slice[0] == 55 && arr[2] == 55;
   //auto deref
   let ptr = &slice;
   assert ptr[0] == 55;
   //slice of slice
-  let slice2 = slice[0..1];//[7, 11]
-  print("slice2[0]=%d\n",slice2[0]);
+  let slice2 = slice[1..3];//[7, 11]
+  print("slice2[0]=%d slice2[1]=%d\n", slice2[0], slice2[1]);
   assert slice2[0] == 7 && slice2[1] == 11;
   print("sliceTest done\n");
 }

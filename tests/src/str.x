@@ -54,6 +54,9 @@ impl str{
     }
 
     func substr(self, start: i32, end: i32): str{
+      if(start >= self.len()) panic("start index out of bounds %d of %d", start, self.len());
+      if(end >= self.len()) panic("end index out of bounds %d of %d", start, self.len());
+      assert start < end;
       return str{self.buf[start..end]};
     }
 
@@ -74,8 +77,10 @@ func lit(){
   let s2 = "hello";
   assert s2.len() == 5;
   assert s2.get(1) == 'e';
-  //s2.buf[0] = 'H' as i8; //error
+  //s2.buf[0] = 'H' as i8; //error mutate glob
   assert s2.indexOf("ll", 0) == 2;
-  let buf = s2.buf[1..5];
-  //print("%s\n", str{buf: buf});
+  let buf = s2.buf[2..3];
+  print("%s\n", str{buf: buf});
+  //let s3 = s2.substr(3);
+  //print("%s\n", s3);
 }

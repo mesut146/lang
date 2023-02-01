@@ -1507,24 +1507,31 @@ void *Compiler::visitArrayAccess(ArrayAccess *node) {
         auto val_start = cast(node->index, new Type("i32"));
         //set array ptr
         auto src = gen(node->array);
+        Type* elemty;
         if (arr->type->isSlice()) {
             //deref inner pointer
-            auto orig_type = src->getType();
-            auto ptr_src = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
-            src = Builder->CreateLoad(ptr_src->getType()->getPointerElementType(), ptr_src);
-            src = Builder->CreateBitCast(src, orig_type);
+            src = Builder->CreateBitCast(src, src->getType()->getPointerTo());
+            src = load(src);
+            elemty = dynamic_cast<SliceType*>(arr->type)->type;
+            src=Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
+        }else{
+            elemty = dynamic_cast<ArrayType*>(arr->type)->type;
+            src=Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
         }
         //shift by start
-        std::vector<llvm::Value *> shift_idx = {makeInt(0, 32), val_start};
+        
+        //std::vector<llvm::Value *> shift_idx = {makeInt(0, 32), val_start};
+        std::vector<llvm::Value *> shift_idx = {val_start};
         src = Builder->CreateGEP(src->getType()->getPointerElementType(), src, shift_idx, "shifted");
+        //i8*
         src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
         auto ptr_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, 0);
         Builder->CreateStore(src, ptr_target);
         //set len
-        auto lenp = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
+        auto len_target = Builder->CreateStructGEP(sp->getType()->getPointerElementType(), sp, SLICE_LEN_INDEX);
         auto val_end = cast(node->index2.get(), new Type("i32"));
         auto len = Builder->CreateSub(val_end, val_start);
-        Builder->CreateStore(len, lenp);
+        Builder->CreateStore(len, len_target);
         return sp;
     }
     auto src = gen(node->array);
