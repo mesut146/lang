@@ -5,11 +5,17 @@
 
 #include "Resolver.h"
 #include "Visitor.h"
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
 
 
+bool doesAlloc(Expression *e);
+bool isStrLit(Expression *e);
+
 struct Compiler : public Visitor {
+public:
     std::string srcDir;
     std::string outDir;
     std::shared_ptr<Unit> unit;
@@ -20,8 +26,19 @@ struct Compiler : public Visitor {
     std::vector<llvm::BasicBlock *> loopNext;
     llvm::Value *retPtr = nullptr;
     std::string TargetTriple;
-    llvm::TargetMachine *TargetMachine;
+    llvm::TargetMachine *TargetMachine = nullptr;
+    llvm::IRBuilder<> *Builder = nullptr;
+    llvm::LLVMContext *ctx = nullptr;
+    llvm::Module *mod = nullptr;
+    std::vector<llvm::Value *> allocArr;
     int allocIdx = 0;
+    std::map<std::string, llvm::Value *> NamedValues;
+    std::map<std::string, llvm::Type *> classMap;
+    llvm::Function *printf_proto = nullptr;
+    llvm::Function *exit_proto = nullptr;
+    llvm::Function *mallocf = nullptr;
+    llvm::StructType *sliceType = nullptr;
+    llvm::StructType *stringType = nullptr;
 
     void init();
     void emit(std::string &Filename);
@@ -35,8 +52,20 @@ struct Compiler : public Visitor {
     int getSize(BaseDecl *decl);
     int getOffset(EnumVariant *variant, int index);
     void setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr);
-    llvm::Value *gen(Expression *e);
-    llvm::Value *gen(std::unique_ptr<Expression> &e);
+    llvm::Value *branch(llvm::Value *val);
+    llvm::ConstantInt *makeInt(int val);
+    llvm::ConstantInt *makeInt(int val, int bits);
+    llvm::Type *getInt(int bit);
+    void setOrdinal(int index, llvm::Value *ptr);
+    void simpleVariant(Type *n, llvm::Value *ptr);
+
+    llvm::Function *make_printf();
+    llvm::Function *make_exit();
+    llvm::Function *make_malloc();
+    llvm::StructType *make_slice_type();
+    llvm::StructType *make_string_type();
+
+    llvm::Value *load(llvm::Value *val);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, Type *type);
@@ -47,6 +76,8 @@ struct Compiler : public Visitor {
     void initParams(Method *m);
     void makeLocals(Statement *st);
 
+    llvm::Value *gen(Expression *e);
+    llvm::Value *gen(std::unique_ptr<Expression> &e);
     void *visitBlock(Block *b) override;
     void *visitReturnStmt(ReturnStmt *t) override;
     void *visitExprStmt(ExprStmt *b) override;
@@ -80,4 +111,9 @@ struct Compiler : public Visitor {
     void *array(ArrayExpr *node, llvm::Value *ptr);
     void object(ObjExpr *e, llvm::Value *ptr, RType *tt);
     void *slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
+};
+
+
+struct CompilerHelper {
+    Compiler *c;
 };

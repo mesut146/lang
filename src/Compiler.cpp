@@ -39,132 +39,25 @@ std::string trimExtenstion(const std::string &name) {
     return name.substr(0, i);
 }
 
-std::unique_ptr<llvm::LLVMContext> ctx;
-std::unique_ptr<llvm::Module> mod;
-std::unique_ptr<llvm::IRBuilder<>> Builder;
-std::map<std::string, llvm::Value *> NamedValues;
 std::map<std::string, llvm::Function *> funcMap;
-std::map<std::string, llvm::Type *> classMap;
-llvm::Function *printf_proto;
-llvm::Function *exit_proto;
-llvm::Function *mallocf;
 
-std::vector<llvm::Value *> allocArr;
-llvm::StructType *sliceType;
-llvm::StructType *stringType;
 
-static void InitializeModule(std::string &name) {
-    ctx.release();
-    mod.release();
-    Builder.release();
+void InitializeModule(std::string &name, Compiler *c) {
+    //delete c->ctx;
+    delete c->mod;
+    delete c->Builder;
     // Open a new context and module.
-    ctx = std::make_unique<llvm::LLVMContext>();
-    mod = std::make_unique<llvm::Module>(name, *ctx);
-    Builder = std::make_unique<llvm::IRBuilder<>>(*ctx);
+    if (!c->ctx) {
+        c->ctx = new llvm::LLVMContext();
+    }
+    c->mod = new llvm::Module(name, *c->ctx);
+    c->Builder = new llvm::IRBuilder<>(*c->ctx);
     funcMap.clear();
-    classMap.clear();
-}
-llvm::ConstantInt *makeInt(int val, int bits) {
-    auto intType = llvm::IntegerType::get(*ctx, bits);
-    return llvm::ConstantInt::get(intType, val);
+    c->classMap.clear();
+    c->NamedValues.clear();
 }
 
-llvm::ConstantInt *makeInt(int val) {
-    return makeInt(val, 32);
-}
-
-llvm::Type *getInt(int bit) {
-    return llvm::IntegerType::get(*ctx, bit);
-}
-
-llvm::Type *Compiler::mapType(Type *type) {
-    if (type->isPointer()) {
-        auto elem = dynamic_cast<PointerType *>(type)->type;
-        if (isStruct(elem)) {
-            //forward
-        }
-        return mapType(elem)->getPointerTo();
-    }
-    if (type->isArray()) {
-        auto res = resolv->resolve(type);
-        auto arr = dynamic_cast<ArrayType *>(res->type);
-        return llvm::ArrayType::get(mapType(arr->type), arr->size);
-    }
-    if (type->isSlice()) {
-        return sliceType;
-    }
-    if (type->isString()) {
-        return stringType;
-    }
-    if (type->isVoid()) {
-        return llvm::Type::getVoidTy(*ctx);
-    }
-    if (type->isPrim()) {
-        auto bits = sizeMap[type->name];
-        return getInt(bits);
-    }
-    auto rt = resolv->resolveType(type);
-    auto s = mangle(rt->targetDecl->type);
-    auto it = classMap.find(s);
-    if (it != classMap.end()) {
-        return it->second;
-    }
-    throw std::runtime_error("mapType: " + s);
-}
-
-int Compiler::getSize(BaseDecl *decl) {
-    if (decl->isEnum()) {
-        auto ed = dynamic_cast<EnumDecl *>(decl);
-        int res = 0;
-        for (auto ev : ed->variants) {
-            if (ev->fields.empty()) continue;
-            int cur = 0;
-            for (auto &f : ev->fields) {
-                cur += getSize(f->type);
-            }
-            res = cur > res ? cur : res;
-        }
-        return res;
-    } else {
-        auto td = dynamic_cast<StructDecl *>(decl);
-        int res = 0;
-        for (auto &fd : td->fields) {
-            res += getSize(fd->type);
-        }
-        return res;
-    }
-}
-
-int Compiler::getSize(Type *type) {
-    if (dynamic_cast<PointerType *>(type)) {
-        return 64;
-    }
-    if (type->isPrim()) {
-        return sizeMap[type->name];
-    }
-    if (type->isArray()) {
-        auto arr = dynamic_cast<ArrayType *>(type);
-        return getSize(arr->type) * arr->size;
-    }
-    if (type->isSlice()) {
-        //data ptr, len
-        return 64 + 32;
-    }
-
-    auto decl = resolv->resolveType(type)->targetDecl;
-    if (decl) {
-        return getSize(decl);
-    }
-    throw std::runtime_error("size(" + type->print() + ")");
-}
-
-llvm::Value *makeStr(std::string &str) {
-    auto charType = getInt(8);
-    auto glob = Builder->CreateGlobalString(str);
-    return Builder->CreateBitCast(glob, charType->getPointerTo());
-}
-
-llvm::Value *branch(llvm::Value *val) {
+llvm::Value *Compiler::branch(llvm::Value *val) {
     auto ty = llvm::cast<llvm::IntegerType>(val->getType());
     if (ty) {
         auto w = ty->getBitWidth();
@@ -180,7 +73,7 @@ bool isObj(Expression *e) {
     return obj && !obj->isPointer || dynamic_cast<Type *>(e);
 }
 
-llvm::Value *load(llvm::Value *val) {
+llvm::Value *Compiler::load(llvm::Value *val) {
     auto ty = val->getType()->getPointerElementType();
     return Builder->CreateLoad(ty, val);
 }
@@ -201,39 +94,6 @@ llvm::Value *Compiler::loadPtr(std::unique_ptr<Expression> &e) {
     return loadPtr(e.get());
 }
 
-static void make_printf() {
-    std::vector<llvm::Type *> args;
-    auto charPtr = getInt(8)->getPointerTo();
-    args.push_back(charPtr);
-    auto ft = llvm::FunctionType::get(getInt(32), args, true);
-    auto f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", mod.get());
-    f->setCallingConv(llvm::CallingConv::C);
-    llvm::AttributeList attr;
-    f->setAttributes(attr);
-    printf_proto = f;
-}
-
-static void make_exit() {
-    auto ft = llvm::FunctionType::get(Builder->getVoidTy(), getInt(32), false);
-    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", mod.get());
-    f->setCallingConv(llvm::CallingConv::C);
-    llvm::AttributeList attr;
-    f->setAttributes(attr);
-    exit_proto = f;
-}
-
-static void make_malloc() {
-    auto ret = getInt(8)->getPointerTo();//i8*
-    auto ft = llvm::FunctionType::get(ret, getInt(64), false);
-    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", mod.get());
-    f->setCallingConv(llvm::CallingConv::C);
-    llvm::AttributeList attr;
-    llvm::AttrBuilder builder;
-    builder.addAlignmentAttr(16);
-    attr = attr.addAttributes(*ctx, 0, builder);
-    f->setAttributes(attr);
-    mallocf = f;
-}
 
 void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
@@ -272,7 +132,7 @@ void Compiler::make_proto(Method *m) {
     }*/
     auto mangled = mangle(m);
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
-    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, mod.get());
+    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, mod);
     //f->addTypeMetadata(0, llvm::MDNode::get(*ctx, llvm::MDString::get(*ctx, m->name)));
     int i = 0;
     if (isMember(m)) {
@@ -284,19 +144,6 @@ void Compiler::make_proto(Method *m) {
     }
     funcMap[mangled] = f;
     resolv->curMethod = nullptr;
-}
-
-void make_slice_type() {
-    std::vector<llvm::Type *> elems;
-    elems.push_back(getInt(8)->getPointerTo());
-    elems.push_back(getInt(32));//len
-    sliceType = llvm::StructType::create(*ctx, elems, "__slice");
-}
-
-void make_string_type() {
-    std::vector<llvm::Type *> elems;
-    elems.push_back(sliceType);
-    stringType = llvm::StructType::create(*ctx, elems, "str");
 }
 
 void Compiler::makeDecl(BaseDecl *bd) {
@@ -394,9 +241,15 @@ void Compiler::createProtos() {
         make_proto(m);
     }
 
-    make_printf();
-    make_exit();
-    make_malloc();
+    printf_proto = make_printf();
+    exit_proto = make_exit();
+    mallocf = make_malloc();
+    if (!sliceType) {
+        sliceType = make_slice_type();
+    }
+    if (!stringType) {
+        stringType = make_string_type();
+    }
 }
 
 void Compiler::initParams(Method *m) {
@@ -418,30 +271,32 @@ void Compiler::initParams(Method *m) {
         auto ptr = Builder->CreateAlloca(ty);
         NamedValues[prm->name] = ptr;
     }
-    //store
+}
+
+void storeParams(Method *m, Compiler *c) {
+    auto ff = funcMap[mangle(m)];
     int argIdx = 0;
     if (m->self) {
         if (!isStruct(m->self->type.get())) {
-            auto ptr = NamedValues[m->self->name];
+            auto ptr = c->NamedValues[m->self->name];
             auto val = ff->getArg(argIdx);
-            Builder->CreateStore(val, ptr);
-            print("store: " + mangle(m));
+            c->Builder->CreateStore(val, ptr);
         }
         argIdx++;
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto prm = m->params[i].get();
         auto val = ff->getArg(argIdx++);
+        auto ptr = c->NamedValues[prm->name];
         if (isStruct(prm->type.get())) {
-            if (resolv->mut_params.count(prm) == 0) {
-                NamedValues[prm->name] = val;
+            if (c->resolv->mut_params.count(prm) == 0) {
+                c->NamedValues[prm->name] = val;
             } else {
                 //memcpy
-                Builder->CreateMemCpy(NamedValues[prm->name], llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(prm->type.get()) / 8);
+                c->Builder->CreateMemCpy(ptr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), c->getSize(prm->type.get()) / 8);
             }
         } else {
-            auto ptr = NamedValues[prm->name];
-            Builder->CreateStore(val, ptr);
+            c->Builder->CreateStore(val, ptr);
         }
     }
 }
@@ -458,215 +313,6 @@ bool isReturnLast(Statement *stmt) {
         }
     }
     return false;
-}
-
-bool isStrLit(Expression *e) {
-    auto l = dynamic_cast<Literal *>(e);
-    if (!l) return false;
-    return l->type == Literal::STR;
-}
-
-bool doesAlloc(Expression *e) {
-    auto obj = dynamic_cast<ObjExpr *>(e);
-    if (obj) {
-        return !obj->isPointer;
-    }
-    auto aa = dynamic_cast<ArrayAccess *>(e);
-    if (aa) {
-        return aa->index2.get() != nullptr;
-    }
-    auto lit = dynamic_cast<Literal *>(e);
-    if (lit) {
-        return lit->type == Literal::STR;
-    }
-    return dynamic_cast<Type *>(e) || dynamic_cast<ArrayExpr *>(e);
-}
-
-class AllocCollector : public Visitor {
-public:
-    Compiler *compiler;
-
-    void *visitVarDecl(VarDecl *node) override {
-        for (auto f : node->decl->list) {
-            auto type = f->type ? f->type.get() : compiler->resolv->resolve(f->rhs.get())->type;
-            llvm::Value *ptr;
-            if (doesAlloc(f->rhs.get())) {
-                //auto alloc
-                ptr = (llvm::Value *) f->rhs->accept(this);
-            } else {
-                //manual alloc, prims, struct copy
-                auto ty = compiler->mapType(type);
-                ptr = Builder->CreateAlloca(ty);
-                allocArr.push_back(ptr);
-            }
-            ptr->setName(f->name);
-            NamedValues[f->name] = ptr;
-        }
-        return nullptr;
-    }
-    void *visitType(Type *node) override {
-        if (!node->scope) {
-            return nullptr;
-        }
-        //todo
-        if (node->isPointer()) {
-            return nullptr;
-        }
-        auto r = compiler->resolv->resolve(node);
-        auto ty = compiler->mapType(node->scope);
-        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
-        allocArr.push_back(ptr);
-        return ptr;
-    }
-    void *visitObjExpr(ObjExpr *node) override {
-        if (node->isPointer) {
-            //todo this too
-            return nullptr;
-        }
-        auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
-        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
-        allocArr.push_back(ptr);
-        return ptr;
-    }
-    void *visitArrayExpr(ArrayExpr *node) {
-        auto r = compiler->resolv->resolve(node);
-        auto ty = compiler->mapType(r->type);
-        auto ptr = Builder->CreateAlloca(ty, (unsigned) 0);
-        allocArr.push_back(ptr);
-        for (auto e : node->list) {
-            auto mc = dynamic_cast<MethodCall *>(e);
-            if (mc) {
-                //throw std:: runtime_error("mc to array");
-            } else {
-                //e->accept(this);
-            }
-        }
-        return ptr;
-    }
-    void *visitArrayAccess(ArrayAccess *node) {
-        if (node->index2) {
-            auto ptr = Builder->CreateAlloca(sliceType, (unsigned) 0);
-            allocArr.push_back(ptr);
-            node->array->accept(this);
-            node->index2->accept(this);
-            node->index->accept(this);
-            return ptr;
-        } else {
-            node->array->accept(this);
-            node->index->accept(this);
-        }
-        return nullptr;
-    }
-    void *visitLiteral(Literal *node) {
-        if (node->type == Literal::STR) {
-            auto ptr = Builder->CreateAlloca(stringType, (unsigned) 0);
-            allocArr.push_back(ptr);
-            return ptr;
-        }
-        return nullptr;
-    }
-    void *visitBlock(Block *node) override {
-        for (auto &s : node->list) {
-            s->accept(this);
-        }
-        return nullptr;
-    }
-    void *visitWhileStmt(WhileStmt *node) override {
-        node->body->accept(this);
-        return nullptr;
-    }
-    void *visitIfStmt(IfStmt *node) override {
-        node->thenStmt->accept(this);
-        if (node->elseStmt) {
-            node->elseStmt->accept(this);
-        }
-        return nullptr;
-    }
-    void *visitReturnStmt(ReturnStmt *node) override {
-        if (node->expr) {
-            node->expr->accept(this);
-        }
-        return nullptr;
-    }
-    void *visitExprStmt(ExprStmt *node) override {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitAssign(Assign *node) override {
-        node->right->accept(this);
-        return nullptr;
-    }
-    void *visitSimpleName(SimpleName *node) override {
-        return nullptr;
-    }
-    void *visitInfix(Infix *node) {
-        node->left->accept(this);
-        node->right->accept(this);
-        return nullptr;
-    }
-    void *visitAssertStmt(AssertStmt *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-
-    void *visitRefExpr(RefExpr *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitDerefExpr(DerefExpr *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitUnary(Unary *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitMethodCall(MethodCall *node) {
-        if (node->scope) node->scope->accept(this);
-        for (auto a : node->args) {
-            if (!node->scope && node->name == "print" && isStrLit(a)) {
-                continue;
-            }
-            a->accept(this);
-        }
-        return nullptr;
-    }
-    void *visitFieldAccess(FieldAccess *node) {
-        node->scope->accept(this);
-        return nullptr;
-    }
-    void *visitParExpr(ParExpr *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitAsExpr(AsExpr *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitIsExpr(IsExpr *node) {
-        node->expr->accept(this);
-        return nullptr;
-    }
-    void *visitIfLetStmt(IfLetStmt *node) {
-        node->rhs->accept(this);
-        node->thenStmt->accept(this);
-        if (node->elseStmt) node->elseStmt->accept(this);
-        return nullptr;
-    }
-    void *visitContinueStmt(ContinueStmt *node) {
-        return nullptr;
-    }
-    void *visitBreakStmt(BreakStmt *node) {
-        return nullptr;
-    }
-};
-
-void Compiler::makeLocals(Statement *st) {
-    allocIdx = 0;
-    allocArr.clear();
-    auto col = new AllocCollector;
-    col->compiler = this;
-    st->accept(col);
 }
 
 void Compiler::genCode(std::unique_ptr<Method> &m) {
@@ -686,6 +332,7 @@ void Compiler::genCode(Method *m) {
     NamedValues.clear();
     initParams(m);
     makeLocals(m->body.get());
+    storeParams(curMethod, this);
     m->body->accept(this);
     if (!isReturnLast(m->body.get()) && m->type->print() == "void") {
         Builder->CreateRetVoid();
@@ -779,10 +426,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     unit = resolv->unit;
     resolv->resolveAll();
 
-    NamedValues.clear();
-    InitializeModule(name);
-    make_slice_type();
-    make_string_type();
+    InitializeModule(name, this);
     createProtos();
 
     for (auto &m : getMethods(unit.get())) {
@@ -815,9 +459,9 @@ llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
     return (llvm::Value *) expr->accept(this);
 }
 
-llvm::BasicBlock *getBB() {
-    return Builder->GetInsertBlock();
-}
+// llvm::BasicBlock *getBB() {
+//     return Builder->GetInsertBlock();
+// }
 
 void *Compiler::visitBlock(Block *b) {
     for (auto &s : b->list) {
@@ -855,7 +499,7 @@ void *Compiler::visitParExpr(ParExpr *i) {
 
 llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     auto l = loadPtr(left);
-    auto bb = getBB();
+    auto bb = Builder->GetInsertBlock();
     auto then = llvm::BasicBlock::Create(*ctx, "", func);
     auto next = llvm::BasicBlock::Create(*ctx, "");
     if (isand) {
@@ -879,10 +523,10 @@ llvm::Value *extend(llvm::Value *val, Type *type, Compiler *c) {
     int src = val->getType()->getPrimitiveSizeInBits();
     int bits = c->getSize(type);
     if (src < bits) {
-        return Builder->CreateZExt(val, getInt(bits));
+        return c->Builder->CreateZExt(val, c->getInt(bits));
     }
     if (src > bits) {
-        return Builder->CreateTrunc(val, getInt(bits));
+        return c->Builder->CreateTrunc(val, c->getInt(bits));
     }
     return val;
 }
@@ -911,7 +555,6 @@ void *Compiler::visitInfix(Infix *i) {
     if (i->op == "||") {
         return andOr(i->left, i->right, false);
     }
-    //print("infix: " + i->print());
     auto t1 = resolv->resolve(i->left)->type->print();
     auto t2 = resolv->resolve(i->right)->type->print();
     auto t3 = t1 == "bool" ? new Type("i1") : binCast(t1, t2)->type;
@@ -1045,10 +688,10 @@ void *Compiler::visitSimpleName(SimpleName *n) {
     throw std::runtime_error("compiler bug; sym not found: " + n->name + " in " + curMethod->name);
 }
 
-llvm::Value *callMalloc(llvm::Value *sz) {
+llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
     std::vector<llvm::Value *> args;
     args.push_back(sz);
-    return Builder->CreateCall(mallocf, args);
+    return c->Builder->CreateCall(c->mallocf, args);
 }
 
 void *callPanic(MethodCall *mc, Compiler *c) {
@@ -1060,7 +703,7 @@ void *callPanic(MethodCall *mc, Compiler *c) {
         message = "panic: " + val.substr(1, val.size() - 2);
     }
     message.append("\n");
-    auto str = Builder->CreateGlobalStringPtr(message);
+    auto str = c->Builder->CreateGlobalStringPtr(message);
     std::vector<llvm::Value *> args;
     args.push_back(str);
     if (!mc->args.empty()) {
@@ -1070,11 +713,11 @@ void *callPanic(MethodCall *mc, Compiler *c) {
             args.push_back(av);
         }
     }
-    auto call = Builder->CreateCall(printf_proto, args);
-    std::vector<llvm::Value *> exit_args = {makeInt(1)};
-    Builder->CreateCall(exit_proto, exit_args);
-    Builder->CreateUnreachable();
-    return Builder->getVoidTy();
+    auto call = c->Builder->CreateCall(c->printf_proto, args);
+    std::vector<llvm::Value *> exit_args = {c->makeInt(1)};
+    c->Builder->CreateCall(c->exit_proto, exit_args);
+    c->Builder->CreateUnreachable();
+    return c->Builder->getVoidTy();
 }
 
 void callPrint(MethodCall *mc, Compiler *c) {
@@ -1082,7 +725,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
     for (auto a : mc->args) {
         if (isStrLit(a)) {
             auto l = dynamic_cast<Literal *>(a);
-            auto str = Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
+            auto str = c->Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
             args.push_back(str);
         } else {
             auto arg_type = c->resolv->resolve(a)->type;
@@ -1090,8 +733,8 @@ void callPrint(MethodCall *mc, Compiler *c) {
                 auto src = c->gen(a);
                 //get ptr to inner char array
                 if (src->getType()->isPointerTy()) {
-                    auto slice = Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
-                    auto str = Builder->CreateLoad(getInt(8)->getPointerTo(), slice);
+                    auto slice = c->Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
+                    auto str = c->Builder->CreateLoad(c->getInt(8)->getPointerTo(), slice);
                     args.push_back(str);
                 } else {
                     args.push_back(src);
@@ -1103,7 +746,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
             }
         }
     }
-    auto call = Builder->CreateCall(printf_proto, args);
+    auto call = c->Builder->CreateCall(c->printf_proto, args);
 }
 
 void *Compiler::visitMethodCall(MethodCall *mc) {
@@ -1122,7 +765,7 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
             int typeSize = getSize(mc->typeArgs[0]) / 8;
             size = Builder->CreateNSWMul(size, makeInt(typeSize, 64));
         }
-        auto call = callMalloc(size);
+        auto call = callMalloc(size, this);
         auto rt = resolv->resolve(mc);
         return Builder->CreateBitCast(call, mapType(rt->type));
     } else if (mc->name == "panic") {
@@ -1212,7 +855,7 @@ void *Compiler::visitAssertStmt(AssertStmt *n) {
     Builder->SetInsertPoint(then);
     //print error and exit
     auto msg = std::string("assertion ") + str + " failed\n";
-    std::vector<llvm::Value *> pr_args = {makeStr(msg)};
+    std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
     Builder->CreateCall(printf_proto, pr_args, "");
     std::vector<llvm::Value *> args = {makeInt(1)};
     Builder->CreateCall(exit_proto, args);
@@ -1268,17 +911,12 @@ EnumDecl *findEnum(Type *type, Resolver *resolv) {
     return dynamic_cast<EnumDecl *>(rt->targetDecl);
 }
 
-void setOrdinal(int index, llvm::Value *ptr) {
-    auto ordPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, 0);
-    Builder->CreateStore(makeInt(index), ordPtr);
-}
-
 void *Compiler::visitObjExpr(ObjExpr *n) {
     auto tt = resolv->resolve(n);
     llvm::Value *ptr;
     if (n->isPointer) {
         auto ty = mapType(tt->type);
-        ptr = callMalloc(makeInt(getSize(tt->targetDecl) / 8, 64));
+        ptr = callMalloc(makeInt(getSize(tt->targetDecl) / 8, 64), this);
         ptr = Builder->CreateBitCast(ptr, ty);
     } else {
         ptr = allocArr[allocIdx++];
@@ -1302,7 +940,7 @@ void Compiler::setField(Expression *expr, Type *type, bool do_cast, llvm::Value 
     }
     if (doesAlloc(expr)) {
         child(expr, entPtr);
-    } else if (isStruct(type)) {
+    } else if (isStruct(type) && !dynamic_cast<MethodCall *>(expr)) {
         auto val = gen(expr);
         Builder->CreateMemCpy(entPtr, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(type) / 8);
     } else {
@@ -1352,11 +990,6 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
     }
 }
 
-void simpleVariant(Type *n, llvm::Value *ptr, Resolver *resolv) {
-    auto decl = findEnum(n->scope, resolv);
-    int index = Resolver::findVariant(decl, n->name);
-    setOrdinal(index, ptr);
-}
 
 void *Compiler::visitType(Type *n) {
     if (!n->scope) {
@@ -1364,7 +997,7 @@ void *Compiler::visitType(Type *n) {
     }
     //enum variant without struct
     auto ptr = allocArr[allocIdx++];
-    simpleVariant(n, ptr, resolv.get());
+    simpleVariant(n, ptr);
     return ptr;
 }
 
@@ -1519,8 +1152,10 @@ void *Compiler::slice(ArrayAccess *node, llvm::Value *sp, Type *arrty) {
         src = Builder->CreateBitCast(src, src->getType()->getPointerTo());
         src = load(src);
         elemty = dynamic_cast<SliceType *>(arrty)->type;
-    } else {
+    } else if (arrty->isArray()) {
         elemty = dynamic_cast<ArrayType *>(arrty)->type;
+    } else {
+        elemty = dynamic_cast<PointerType *>(arrty)->type;
     }
     src = Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
     //shift by start
@@ -1635,7 +1270,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
     }
     auto t = dynamic_cast<Type *>(e);
     if (t) {
-        simpleVariant(t, ptr, resolv.get());
+        simpleVariant(t, ptr);
         return;
     }
 }

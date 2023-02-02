@@ -23,11 +23,20 @@ void *AstCopier::visitSimpleName(SimpleName *node) {
 }
 
 void *AstCopier::visitType(Type *node) {
-    auto ptr = dynamic_cast<PointerType *>(node);
-    if (ptr) {
+    if (node->isPointer()) {
+        auto ptr = dynamic_cast<PointerType *>(node);
         auto inner = visit(ptr->type, this);
-        auto res = new PointerType(inner);
-        return res;
+        return new PointerType(inner);
+    }
+    if (node->isArray()) {
+        auto arr = dynamic_cast<ArrayType *>(node);
+        auto inner = visit(arr->type, this);
+        return new ArrayType(inner, arr->size);
+    }
+    if (node->isSlice()) {
+        auto slice = dynamic_cast<SliceType *>(node);
+        auto inner = visit(slice->type, this);
+        return new SliceType(inner);
     }
     auto res = new Type;
     if (node->scope) res->scope = visit(node->scope, this);
@@ -133,6 +142,9 @@ void *AstCopier::visitArrayAccess(ArrayAccess *node) {
     auto res = new ArrayAccess;
     res->array = visit(node->array, this);
     res->index = visit(node->index, this);
+    if (node->index2) {
+        res->index2.reset(visit(node->index2.get(), this));
+    }
     return res;
 }
 void *AstCopier::visitFieldAccess(FieldAccess *node) {

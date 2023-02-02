@@ -57,6 +57,10 @@ impl List<T>{
     return self.count;
   }
 
+  func len(self): i32{
+    return self.count;
+  }  
+
   func indexOf(self, e: T): i32{
     return self.indexOf(e, 0);
   }
@@ -72,6 +76,10 @@ impl List<T>{
 
   func contains(self, e: T): bool{
     return self.indexOf(e) != -1;
+  }
+
+  func slice(self, start: i32, end: i32): [T]{
+    return self.arr[start..end];
   }
 }
 

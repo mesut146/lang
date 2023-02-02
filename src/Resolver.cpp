@@ -197,9 +197,20 @@ void Resolver::resolveAll() {
     for (auto &i : unit->items) {
         i->accept(this);
     }
-    for (auto gt : genericTypes) {
-        gt->accept(this);
+    int i = 0, j = 0;
+    while (true) {
+        for (; i < genericTypes.size(); i++) {
+            auto gt = genericTypes[i];
+            gt->accept(this);
+        }
+        int old = genericTypes.size();
+        for (; i < usedTypes.size(); i++) {
+            auto gt = usedTypes[i];
+            gt->accept(this);
+        }
+        if (old == genericTypes.size()) break;
     }
+
     for (int i = 0; i < generatedMethods.size(); i++) {
         auto gm = generatedMethods[i];
         if (gm->parent) {
@@ -235,7 +246,7 @@ void Resolver::init() {
         auto res = makeSimple(bd->getName());
         res->unit = unit;
         res->targetDecl = bd;
-        typeMap[bd->getName()] = res;
+        addType(bd->getName(), res);
     }
 }
 
@@ -291,14 +302,34 @@ void *Resolver::visitEnumDecl(EnumDecl *node) {
         }
     }
     curDecl = nullptr;
-    return typeMap[node->getName()];
+    return getType(node->getName());
 }
+
+RType *Resolver::getType(const std::string &name) {
+    auto it = typeMap.find(name);
+    if (it != typeMap.end()) {
+        if (!it->second) {
+            error("internal");
+        }
+        return it->second;
+    }
+    return nullptr;
+}
+
+void Resolver::addType(const std::string &name, RType *rt) {
+    if (!rt) {
+        error("internal");
+    }
+    typeMap[name] = rt;
+}
+
 void *Resolver::visitStructDecl(StructDecl *node) {
     if (node->isGeneric) {
         return nullptr;
     }
     if (node->isResolved) {
-        error("already resolved");
+        //error("already resolved");
+        return getType(node->getName());
     }
     node->isResolved = true;
     curDecl = node;
@@ -306,7 +337,7 @@ void *Resolver::visitStructDecl(StructDecl *node) {
         fd->accept(this);
     }
     curDecl = nullptr;
-    return typeMap[node->getName()];
+    return getType(node->getName());
 }
 
 void *Resolver::visitImpl(Impl *node) {
@@ -447,9 +478,14 @@ void handleType() {
 }
 
 void *Resolver::visitType(Type *type) {
-    auto it = typeMap.find(type->print());
-    if (it != typeMap.end()) return it->second;
     auto str = type->print();
+    auto it = typeMap.find(type->print());
+    if (it != typeMap.end()) {
+        if (!it->second) {
+            error("interal");
+        }
+        return it->second;
+    }
     RType *res = nullptr;
     if (type->isPrim() || type->isVoid()) {
         if (isUnsigned(str)) {
@@ -490,8 +526,8 @@ void *Resolver::visitType(Type *type) {
         //enum variant creation
         auto ed = dynamic_cast<EnumDecl *>(bd);
         findVariant(ed, type->name);
-        res = typeMap[ed->type->print()];
-        typeMap[str] = res;
+        res = getType(ed->type->print());
+        addType(str, res);
         return res;
     }
     if (str == "Self") {
@@ -501,10 +537,7 @@ void *Resolver::visitType(Type *type) {
         }
     }
     BaseDecl *target = nullptr;
-    if (type->typeArgs.empty()) {
-        //imports
-
-    } else {
+    if (!type->typeArgs.empty()) {
         //we looking for generic type
         auto it = typeMap.find(type->name);
         if (it != typeMap.end()) {
@@ -523,7 +556,7 @@ void *Resolver::visitType(Type *type) {
                 auto it = resolver->typeMap.find(str);
                 if (it != resolver->typeMap.end()) {
                     res = it->second;
-                    typeMap[str] = res;
+                    addType(str, res);
                     usedTypes.push_back(res->targetDecl);
                     return res;
                 }
@@ -546,7 +579,7 @@ void *Resolver::visitType(Type *type) {
         //inferred later
         res = new RType(clone(target->type));
         res->targetDecl = target;
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (type->typeArgs.size() != target->type->typeArgs.size()) {
@@ -559,10 +592,7 @@ void *Resolver::visitType(Type *type) {
     }
     res->targetDecl = decl;
     genericTypes.push_back(decl);
-    if (decl->unit != unit.get()) {
-        usedTypes.push_back(decl);
-    }
-    typeMap[str] = res;
+    addType(str, res);
     return res;
 }
 
@@ -919,7 +949,7 @@ void *Resolver::visitReturnStmt(ReturnStmt *st) {
         auto type = resolve(st->expr.get())->type;
         auto mtype = resolve(curMethod->type.get())->type;
         if (!subType(type, mtype)) {
-            error("method " + mangle(curMethod) + " expects '" + curMethod->type->print() + " but returned '" + type->print() + "'");
+            error("method " + printMethod(curMethod) + " expects '" + mtype->print() + " but returned '" + type->print() + "'");
         }
     } else {
         if (!curMethod->type->isVoid()) {
@@ -945,9 +975,9 @@ void *Resolver::visitIsExpr(IsExpr *ie) {
 }
 
 Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type) {
-    std::map<std::string, Type *> typeMap;
+    std::map<std::string, Type *> typeMap0;
     for (auto ta : typeArgs) {
-        typeMap[ta->name] = nullptr;
+        typeMap0[ta->name] = nullptr;
     }
     for (int i = 0; i < node->entries.size(); i++) {
         auto &e = node->entries[i];
@@ -960,15 +990,15 @@ Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &t
         auto arg_type = resolve(e.value);
         auto target_type = fields[i]->type;
 
-        MethodResolver::infer(arg_type->type, target_type, typeMap);
+        MethodResolver::infer(arg_type->type, target_type, typeMap0);
     }
-    for (auto &i : typeMap) {
+    for (auto &i : typeMap0) {
         if (i.second == nullptr) {
             error("can't infer type parameter: " + i.first);
         }
     }
     auto res = new Type(type->name);
-    for (auto &e : typeMap) {
+    for (auto &e : typeMap0) {
         res->typeArgs.push_back(e.second);
     }
     return res;
@@ -1058,9 +1088,14 @@ void *Resolver::visitArrayAccess(ArrayAccess *node) {
         if (arr->type->isSlice()) {
             auto st = dynamic_cast<SliceType *>(arr->type);
             return new RType(st);
-        } else {
+        } else if (arr->type->isArray()) {
             auto at = dynamic_cast<ArrayType *>(arr->type);
             return new RType(new SliceType(at->type));
+        } else if (arr->type->isPointer()) {
+            auto pt = dynamic_cast<PointerType *>(arr->type);
+            return new RType(new SliceType(pt->type));
+        } else {
+            error("can't make slice out of " + arr->type->print());
         }
     }
     if (arr->type->isPointer()) {

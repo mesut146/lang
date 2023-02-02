@@ -29,4 +29,5 @@ func prin<T>(obj: T){
 func traitTest(){
   prin(A{5});
   prin(B{6});
+  print("traitTest done");
 }

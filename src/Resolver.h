@@ -27,7 +27,7 @@ static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std
         }
         i++;
     }
-    throw std::runtime_error("unknown field: " + name + " of type " + type->print());
+    throw std::runtime_error("unknown field: " + type->print() + "." + name);
 }
 RType *clone(RType *rt);
 
@@ -91,17 +91,17 @@ static std::string printMethod(Method *m) {
         }
         s += ">";
     }
-    s+="(";
+    s += "(";
     int i = 0;
     if (m->self) {
         s += m->self->type->print();
         i++;
     }
-    for (auto& prm : m->params) {
+    for (auto &prm : m->params) {
         if (i > 0) s += ",";
         s += prm->type.get()->print();
     }
-    s+=")";
+    s += ")";
     return s;
 }
 
@@ -258,7 +258,7 @@ public:
     void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
     void findMethod(MethodCall *mc, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
-    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type*>& typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
+    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
 
     void dump();
 
@@ -268,6 +268,9 @@ public:
 
     void init();
     void resolveAll();
+
+    RType *getType(const std::string &name);
+    void addType(const std::string &name, RType* rt);
 
     void *visitStructDecl(StructDecl *bd) override;
     void *visitEnumDecl(EnumDecl *bd) override;

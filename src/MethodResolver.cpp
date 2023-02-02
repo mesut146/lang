@@ -1,6 +1,6 @@
 #include "MethodResolver.h"
-#include "parser/Util.h"
 #include "TypeUtils.h"
+#include "parser/Util.h"
 
 void Resolver::findMethod(MethodCall *mc, std::vector<Method *> &list) {
     for (auto &item : unit->items) {
@@ -142,12 +142,11 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
         }
         auto newMethod = mr.generateMethod(typeMap, target, mc);
         target = newMethod;
+    } else if (target->unit != unit.get()) {
+        usedMethods.push_back(target);
     }
     auto res = clone(resolveType(target->type.get()));
     res->targetMethod = target;
-    if (target->unit != unit.get()) {
-        usedMethods.push_back(target);
-    }
     return res;
 }
 

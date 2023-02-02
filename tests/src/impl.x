@@ -1,3 +1,6 @@
+import List
+import String
+
 impl i32{
   func MIN(): i32{ return -2147483648; }
   func MAX(): i32{ return 2147483647; }
@@ -19,6 +22,17 @@ impl i32{
   }
   func generic_other<T>(x: T): T{
     return x;
+  }
+
+  func str(self): String{
+    let x = self;
+    let s = String::new();
+    while(x > 0){
+      let c = x % 10;
+      s.append((c + '0') as i8);
+      x = x / 10;
+    }
+    return s;
   }
 }
 
