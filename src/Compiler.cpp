@@ -758,8 +758,7 @@ void *Compiler::visitMethodCall(MethodCall *mc) {
         return nullptr;
     } else if (mc->name == "malloc") {
         f = mallocf;
-        auto lt = new Type;
-        lt->name = "i64";
+        auto lt = new Type("i64");
         auto size = cast(mc->args[0], lt);
         if (!mc->typeArgs.empty()) {
             int typeSize = getSize(mc->typeArgs[0]) / 8;
@@ -996,7 +995,7 @@ void *Compiler::visitType(Type *n) {
         throw std::runtime_error("type has no scope");
     }
     //enum variant without struct
-    auto ptr = allocArr[allocIdx++];
+    auto ptr = allocArr.at(allocIdx++);
     simpleVariant(n, ptr);
     return ptr;
 }
@@ -1006,6 +1005,7 @@ void *Compiler::visitFieldAccess(FieldAccess *n) {
     if (rt->type->isSlice()) {
         auto scopeVar = gen(n->scope);
         return Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, SLICE_LEN_INDEX);
+        //todo load since cant mutate
     }
     if (rt->type->isString()) {
         rt = resolv->resolve(rt->type);

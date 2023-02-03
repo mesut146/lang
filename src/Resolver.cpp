@@ -203,9 +203,10 @@ void Resolver::resolveAll() {
             auto gt = genericTypes[i];
             gt->accept(this);
         }
+        //todo dont visit used type methods they already visited
         int old = genericTypes.size();
-        for (; i < usedTypes.size(); i++) {
-            auto gt = usedTypes[i];
+        for (; j < usedTypes.size(); j++) {
+            auto gt = usedTypes[j];
             gt->accept(this);
         }
         if (old == genericTypes.size()) break;
@@ -354,11 +355,12 @@ void *Resolver::visitImpl(Impl *node) {
 }
 
 void *Resolver::visitTrait(Trait *node) {
+    //todo
     return nullptr;
 }
 
 void *Resolver::visitFieldDecl(FieldDecl *node) {
-    auto res = clone((RType *) node->type->accept(this));
+    auto res = clone(resolve(node->type));
     res->vh = new VarHolder(node);
     return res;
 }
@@ -398,7 +400,7 @@ void *Resolver::visitMethod(Method *m) {
 void *Resolver::visitParam(Param *p) {
     auto id = mangle(p->method) + "#" + p->name;
     if (paramMap.find(id) != paramMap.end()) return paramMap[id];
-    auto res = clone(resolveType(p->type.get()));
+    auto res = clone(resolve(p->type.get()));
     paramMap[id] = res;
     return res;
 }
@@ -472,9 +474,6 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         }
         return res;
     }
-}
-
-void handleType() {
 }
 
 void *Resolver::visitType(Type *type) {

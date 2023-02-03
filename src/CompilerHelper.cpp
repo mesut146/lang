@@ -156,7 +156,7 @@ int Compiler::getSize(BaseDecl *decl) {
 }
 
 int Compiler::getSize(Type *type) {
-    if (dynamic_cast<PointerType *>(type)) {
+    if (type->isPointer()) {
         return 64;
     }
     if (type->isPrim()) {
