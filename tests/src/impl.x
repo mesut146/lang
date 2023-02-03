@@ -24,7 +24,7 @@ impl i32{
     return x;
   }
 
-  func str(self): String{
+  /*func str(self): String{
     let x = self;
     let s = String::new();
     while(x > 0){
@@ -33,7 +33,7 @@ impl i32{
       x = x / 10;
     }
     return s;
-  }
+  }*/
 }
 
 class A<T>{

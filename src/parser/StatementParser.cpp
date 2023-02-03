@@ -2,19 +2,19 @@
 #include "Util.h"
 
 
-Block *Parser::parseBlock() {
-    auto res = new Block;
+std::unique_ptr<Block> Parser::parseBlock() {
+    auto res = std::make_unique<Block>();
     consume(LBRACE);
     while (!is(RBRACE)) {
-        res->list.push_back(std::unique_ptr<Statement>(parseStmt()));
+        res->list.push_back(parseStmt());
     }
     consume(RBRACE);
     return res;
 }
 
 //destructure enum
-IfLetStmt *parseIfLet(Parser *p) {
-    auto res = new IfLetStmt;
+std::unique_ptr<IfLetStmt> parseIfLet(Parser *p) {
+    auto res = std::make_unique<IfLetStmt>();
     p->consume(IF_KW);
     p->consume(LET);
     res->type.reset(p->parseType());
@@ -33,30 +33,30 @@ IfLetStmt *parseIfLet(Parser *p) {
     res->rhs.reset(p->parseExpr());
     p->consume(RPAREN);
 
-    res->thenStmt.reset(p->parseBlock());
+    res->thenStmt = p->parseBlock();
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
-        res->elseStmt.reset(p->parseStmt());
+        res->elseStmt = p->parseStmt();
     }
     return res;
 }
 
-IfStmt *parseIf(Parser *p) {
-    auto res = new IfStmt;
+std::unique_ptr<IfStmt> parseIf(Parser *p) {
+    auto res = std::make_unique<IfStmt>();
     p->consume(IF_KW);
     p->consume(LPAREN);
     res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
-    res->thenStmt.reset(p->parseStmt());
+    res->thenStmt = p->parseStmt();
     if (p->is(ELSE_KW)) {
         p->consume(ELSE_KW);
-        res->elseStmt.reset(p->parseStmt());
+        res->elseStmt = p->parseStmt();
     }
     return res;
 }
 
-Statement *parseFor(Parser *p) {
-    auto res = new ForStmt;
+std::unique_ptr<Statement> parseFor(Parser *p) {
+    auto res = std::make_unique<ForStmt>();
     p->consume(FOR);
     p->consume(LPAREN);
     auto var = p->parseVarDeclExpr();
@@ -73,24 +73,24 @@ Statement *parseFor(Parser *p) {
         }
     }
     p->consume(RPAREN);
-    res->body.reset(p->parseStmt());
+    res->body = p->parseStmt();
     return res;
 }
 
-WhileStmt *parseWhile(Parser *p) {
-    auto res = new WhileStmt;
+std::unique_ptr<WhileStmt> parseWhile(Parser *p) {
+    auto res = std::make_unique<WhileStmt>();
     p->consume(WHILE);
     p->consume(LPAREN);
     res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
-    res->body.reset(p->parseBlock());
+    res->body = p->parseBlock();
     return res;
 }
 
-DoWhile *parseDoWhile(Parser *p) {
-    auto res = new DoWhile;
+std::unique_ptr<DoWhile> parseDoWhile(Parser *p) {
+    auto res = std::make_unique<DoWhile>();
     p->consume(DO);
-    res->body.reset(p->parseBlock());
+    res->body = p->parseBlock();
     p->consume(WHILE);
     p->consume(LPAREN);
     res->expr.reset(p->parseExpr());
@@ -99,13 +99,12 @@ DoWhile *parseDoWhile(Parser *p) {
     return res;
 }
 
-Statement *Parser::parseStmt() {
+std::unique_ptr<Statement> Parser::parseStmt() {
     if (is(ASSERT_KW)) {
         consume(ASSERT_KW);
         auto expr = parseExpr();
-        auto res = new AssertStmt(expr);
         consume(SEMI);
-        return res;
+        return std::make_unique<AssertStmt>(expr);
     }
     if (is(IF_KW)) {
         if (is({IF_KW}, {LET})) {
@@ -121,7 +120,7 @@ Statement *Parser::parseStmt() {
     } else if (is(LBRACE)) {
         return parseBlock();
     } else if (is(RETURN)) {
-        auto ret = new ReturnStmt;
+        auto ret = std::make_unique<ReturnStmt>();
         consume(RETURN);
         if (!is(SEMI)) {
             ret->expr.reset(parseExpr());
@@ -129,7 +128,7 @@ Statement *Parser::parseStmt() {
         consume(SEMI);
         return ret;
     } else if (is(CONTINUE)) {
-        auto ret = new ContinueStmt;
+        auto ret = std::make_unique<ContinueStmt>();
         consume(CONTINUE);
         if (!is(SEMI)) {
             ret->label = name();
@@ -137,7 +136,7 @@ Statement *Parser::parseStmt() {
         consume(SEMI);
         return ret;
     } else if (is(BREAK)) {
-        auto ret = new BreakStmt;
+        auto ret = std::make_unique<BreakStmt>();
         consume(BREAK);
         if (!is(SEMI)) {
             ret->label = name();
@@ -150,7 +149,7 @@ Statement *Parser::parseStmt() {
         auto e = parseExpr();
         if (is(SEMI)) {
             consume(SEMI);
-            return new ExprStmt(e);
+            return std::unique_ptr<Statement>(new ExprStmt(e));
         }
         throw std::runtime_error("invalid stmt " + e->print() + " line:" + std::to_string(first()->line));
     }

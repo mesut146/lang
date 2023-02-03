@@ -62,11 +62,10 @@ TokenType kw(std::string &s) {
         return SWITCH;
     if (s == "case")
         return CASE;
-    if (s == "unsafe") return UNSAFE;
     return EOF_;
 }
 
-Token *Lexer::readNumber() {
+Token Lexer::readNumber() {
     bool dot = false;
     int start = pos;
     pos++;
@@ -83,10 +82,10 @@ Token *Lexer::readNumber() {
             break;
         }
     }
-    return new Token(dot ? FLOAT_LIT : INTEGER_LIT, str(start, pos));
+    return Token(dot ? FLOAT_LIT : INTEGER_LIT, str(start, pos));
 }
 
-Token *Lexer::readIdent() {
+Token Lexer::readIdent() {
     TokenType type;
     int a = pos;
     pos++;
@@ -100,10 +99,10 @@ Token *Lexer::readIdent() {
     if (type == EOF_) {
         type = IDENT;
     }
-    return new Token(type, s);
+    return Token(type, s);
 }
 
-Token *Lexer::lineComment() {
+Token Lexer::lineComment() {
     int start = pos;
     pos += 2;
     char c = peek();
@@ -111,10 +110,10 @@ Token *Lexer::lineComment() {
         pos++;
         c = peek();
     }
-    return new Token(COMMENT, str(start, pos));
+    return Token(COMMENT, str(start, pos));
 }
 
-Token *Lexer::readOp() {
+Token Lexer::readOp() {
     std::string s = str(pos, pos + 3);
 
     int off = pos;
@@ -123,7 +122,7 @@ Token *Lexer::readOp() {
         auto it = ops.find(s);
         if (it != ops.end()) {
             pos += i;
-            return new Token(it->second, it->first);
+            return Token(it->second, it->first);
         }
         s.pop_back();
     }
@@ -140,13 +139,13 @@ char checkEscape(char c) {
     throw std::runtime_error(std::string("invalid escape: \\") + c);
 }
 
-Token *Lexer::next() {
+Token Lexer::next() {
     if (pos == buf.length()) {
-        return new Token(EOF_);
+        return Token(EOF_);
     }
     char c = peek();
     if (c == '\0')
-        return new Token(EOF_);
+        return Token(EOF_);
     if (c == ' ' || c == '\r' || c == '\n' || c == '\t') {
         pos++;
         if (c == '\n') {
@@ -160,7 +159,7 @@ Token *Lexer::next() {
         return next();
     }
     int start = pos;
-    Token *token = nullptr;
+    std::optional<Token> token;
     if (isalpha(c) || c == '_') {
         token = readIdent();
     } else if (isdigit(c)) {
@@ -176,7 +175,7 @@ Token *Lexer::next() {
                     pos++;
                     if (pos < buf.length() && buf[pos] == '/') {
                         pos++;
-                        token = new Token(COMMENT, str(start, pos));
+                        token = Token(COMMENT, str(start, pos));
                         break;
                     }
                 } else {
@@ -194,11 +193,11 @@ Token *Lexer::next() {
                     }
                 }
             }
-            if (token == nullptr) {
+            if (!token.has_value()) {
                 throw std::runtime_error("unclosed block comment at line " + std::to_string(line));
             }
         } else {
-            token = new Token(DIV, str(pos, pos + 1));
+            token = Token(DIV, str(pos, pos + 1));
             pos++;
         }
     } else if (c == '\'') {
@@ -208,11 +207,11 @@ Token *Lexer::next() {
             if (c == '\\') {
                 pos++;
             } else if (c == '\'') {
-                token = new Token(CHAR_LIT, str(start, pos));
+                token = Token(CHAR_LIT, str(start, pos));
                 break;
             }
         }
-        if(!token) throw std::runtime_error("unterminated char literal");
+        if (!token) throw std::runtime_error("unterminated char literal");
     } else if (c == '"') {
         std::string s;
         s.append(1, c);
@@ -230,7 +229,7 @@ Token *Lexer::next() {
                 s.append(1, c);
             }
         }
-        token = new Token(STRING_LIT, s);
+        token = Token(STRING_LIT, s);
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {
@@ -239,5 +238,5 @@ Token *Lexer::next() {
     token->start = start;
     token->end = pos;
     token->line = line;
-    return token;
+    return token.value();
 }

@@ -36,11 +36,11 @@ public:
         return buf.substr(a, b - a);
     }
 
-    Token *next();
-    Token *readNumber();
-    Token *readIdent();
-    Token *lineComment();
-    Token *readOp();
+    Token next();
+    Token readNumber();
+    Token readIdent();
+    Token lineComment();
+    Token readOp();
 
     std::map<std::string, TokenType> ops;
 

@@ -104,7 +104,7 @@ std::string Method::print() {
     s.append("(");
     if (self) {
         s.append(self->name);
-        if(self->type){
+        if (self->type) {
             s.append(": ");
             s.append(self->type->print());
         }
@@ -222,10 +222,6 @@ std::string Param::print() {
     s.append(": ");
     s.append(type->print());
     return s;
-}
-
-std::string UnsafeBlock::print() {
-    return "unsafe " + body->print();
 }
 
 std::string ParExpr::print() {
@@ -405,149 +401,145 @@ std::string AssertStmt::print() {
 
 //accept------------------------------------
 
-void *AssertStmt::accept(Visitor *v) {
+std::any AssertStmt::accept(Visitor *v) {
     return v->visitAssertStmt(this);
 }
-void *BreakStmt::accept(Visitor *v) {
+std::any BreakStmt::accept(Visitor *v) {
     return v->visitBreakStmt(this);
 }
-void *ArrayExpr::accept(Visitor *v) {
+std::any ArrayExpr::accept(Visitor *v) {
     return v->visitArrayExpr(this);
 }
-void *ReturnStmt::accept(Visitor *v) {
+std::any ReturnStmt::accept(Visitor *v) {
     return v->visitReturnStmt(this);
 }
 
-void *ContinueStmt::accept(Visitor *v) {
+std::any ContinueStmt::accept(Visitor *v) {
     return v->visitContinueStmt(this);
 }
-void *DoWhile::accept(Visitor *v) {
+std::any DoWhile::accept(Visitor *v) {
     return v->visitDoWhile(this);
 }
 
-void *UnsafeBlock::accept(Visitor *v) {
-    return v->visitUnsafe(this);
-}
-
-void *RefExpr::accept(Visitor *v) {
+std::any RefExpr::accept(Visitor *v) {
     return v->visitRefExpr(this);
 }
 
-void *DerefExpr::accept(Visitor *v) {
+std::any DerefExpr::accept(Visitor *v) {
     return v->visitDerefExpr(this);
 }
 
-void *UnwrapExpr::accept(Visitor *v) {
+std::any UnwrapExpr::accept(Visitor *v) {
     //return v->visitUnwrapExpr(this);
     throw std::runtime_error("UnwrapExpr::accept");
 }
 
-void *FieldDecl::accept(Visitor *v) {
+std::any FieldDecl::accept(Visitor *v) {
     return v->visitFieldDecl(this);
 }
-void *VarDeclExpr::accept(Visitor *v) {
+std::any VarDeclExpr::accept(Visitor *v) {
     return v->visitVarDeclExpr(this);
 }
-void *VarDecl::accept(Visitor *v) {
+std::any VarDecl::accept(Visitor *v) {
     return v->visitVarDecl(this);
 }
-void *Literal::accept(Visitor *v) {
+std::any Literal::accept(Visitor *v) {
     return v->visitLiteral(this);
 }
-void *SimpleName::accept(Visitor *v) {
+std::any SimpleName::accept(Visitor *v) {
     return v->visitSimpleName(this);
 }
-void *Method::accept(Visitor *v) {
+std::any Method::accept(Visitor *v) {
     return v->visitMethod(this);
 }
-void *StructDecl::accept(Visitor *v) {
+std::any StructDecl::accept(Visitor *v) {
     return v->visitStructDecl(this);
 }
-void *EnumDecl::accept(Visitor *v) {
+std::any EnumDecl::accept(Visitor *v) {
     return v->visitEnumDecl(this);
 }
-void *ExprStmt::accept(Visitor *v) {
+std::any ExprStmt::accept(Visitor *v) {
     return v->visitExprStmt(this);
 }
 
-void *Block::accept(Visitor *v) {
+std::any Block::accept(Visitor *v) {
     return v->visitBlock(this);
 }
 
-void *Type::accept(Visitor *v) {
+std::any Type::accept(Visitor *v) {
     return v->visitType(this);
 }
-void *ObjExpr::accept(Visitor *v) {
+std::any ObjExpr::accept(Visitor *v) {
     return v->visitObjExpr(this);
 }
-void *Param::accept(Visitor *v) {
+std::any Param::accept(Visitor *v) {
     return v->visitParam(this);
 }
 
-void *ParExpr::accept(Visitor *v) {
+std::any ParExpr::accept(Visitor *v) {
     return v->visitParExpr(this);
 }
-void *Fragment::accept(Visitor *v) {
+std::any Fragment::accept(Visitor *v) {
     return v->visitFragment(this);
 }
-void *ForStmt::accept(Visitor *v) {
+std::any ForStmt::accept(Visitor *v) {
     return v->visitForStmt(this);
 }
-void *IfLetStmt::accept(Visitor *v) {
+std::any IfLetStmt::accept(Visitor *v) {
     return v->visitIfLetStmt(this);
 }
-void *IfStmt::accept(Visitor *v) {
+std::any IfStmt::accept(Visitor *v) {
     return v->visitIfStmt(this);
 }
 
-void *Infix::accept(Visitor *v) {
+std::any Infix::accept(Visitor *v) {
     return v->visitInfix(this);
 }
-void *AsExpr::accept(Visitor *v) {
+std::any AsExpr::accept(Visitor *v) {
     return v->visitAsExpr(this);
 }
-void *IsExpr::accept(Visitor *v) {
+std::any IsExpr::accept(Visitor *v) {
     return v->visitIsExpr(this);
 }
-void *Assign::accept(Visitor *v) {
+std::any Assign::accept(Visitor *v) {
     return v->visitAssign(this);
 }
-void *ArrayAccess::accept(Visitor *v) {
+std::any ArrayAccess::accept(Visitor *v) {
     return v->visitArrayAccess(this);
 }
-void *MethodCall::accept(Visitor *v) {
+std::any MethodCall::accept(Visitor *v) {
     return v->visitMethodCall(this);
 }
-void *Unary::accept(Visitor *v) {
+std::any Unary::accept(Visitor *v) {
     return v->visitUnary(this);
 }
 
-void *Postfix::accept(Visitor *v) {
+std::any Postfix::accept(Visitor *v) {
     return v->visitPostfix(this);
 }
 
-void *FieldAccess::accept(Visitor *v) {
+std::any FieldAccess::accept(Visitor *v) {
     return v->visitFieldAccess(this);
 }
-void *Ternary::accept(Visitor *v) {
+std::any Ternary::accept(Visitor *v) {
     return v->visitTernary(this);
 }
 
-void *WhileStmt::accept(Visitor *v) {
+std::any WhileStmt::accept(Visitor *v) {
     return v->visitWhileStmt(this);
 }
 
-void *Trait::accept(Visitor *v) {
+std::any Trait::accept(Visitor *v) {
     return v->visitTrait(this);
 }
 
-void *Impl::accept(Visitor *v) {
+std::any Impl::accept(Visitor *v) {
     return v->visitImpl(this);
 }
 
-// void *PointerType::accept(Visitor *v) {
+// std::any PointerType::accept(Visitor *v) {
 //     return v->
 // }
-// void *OptionType::accept(Visitor *v) {
+// std::any OptionType::accept(Visitor *v) {
 //     throw std::runtime_error("todo");
 // }

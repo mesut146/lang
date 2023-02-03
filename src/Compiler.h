@@ -34,6 +34,7 @@ public:
     int allocIdx = 0;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Type *> classMap;
+    std::map<std::string, llvm::Function *> funcMap;
     llvm::Function *printf_proto = nullptr;
     llvm::Function *exit_proto = nullptr;
     llvm::Function *mallocf = nullptr;
@@ -78,39 +79,39 @@ public:
 
     llvm::Value *gen(Expression *e);
     llvm::Value *gen(std::unique_ptr<Expression> &e);
-    void *visitBlock(Block *b) override;
-    void *visitReturnStmt(ReturnStmt *t) override;
-    void *visitExprStmt(ExprStmt *b) override;
-    void *visitIfStmt(IfStmt *b) override;
-    void *visitIfLetStmt(IfLetStmt *b) override;
 
-    void *visitParExpr(ParExpr *i) override;
+    std::any visitParExpr(ParExpr *node) override;
     llvm::Value *andOr(Expression *l, Expression *r, bool isand);
-    void *visitInfix(Infix *i) override;
-    void *visitUnary(Unary *u) override;
-    void *visitAssign(Assign *i) override;
-    void *visitSimpleName(SimpleName *n) override;
-    void *visitMethodCall(MethodCall *n) override;
-    void *visitLiteral(Literal *n) override;
-    void *visitAssertStmt(AssertStmt *n) override;
-    void *visitVarDecl(VarDecl *n) override;
-    void *visitObjExpr(ObjExpr *n) override;
-    void *visitType(Type *n) override;
-    void *visitFieldAccess(FieldAccess *n) override;
-    void *visitRefExpr(RefExpr *n) override;
-    void *visitDerefExpr(DerefExpr *n) override;
+    std::any visitInfix(Infix *node) override;
+    std::any visitUnary(Unary *node) override;
+    std::any visitAssign(Assign *node) override;
+    std::any visitSimpleName(SimpleName *node) override;
+    std::any visitMethodCall(MethodCall *node) override;
+    std::any visitLiteral(Literal *node) override;
+    std::any visitObjExpr(ObjExpr *node) override;
+    std::any visitType(Type *node) override;
+    std::any visitFieldAccess(FieldAccess *node) override;
+    std::any visitRefExpr(RefExpr *node) override;
+    std::any visitDerefExpr(DerefExpr *n) override;
+    std::any visitIsExpr(IsExpr *node) override;
+    std::any visitAsExpr(AsExpr *node) override;
+    std::any visitArrayAccess(ArrayAccess *node) override;
+    std::any visitArrayExpr(ArrayExpr *node) override;
+    void child(Expression *node, llvm::Value *ptr);
+    std::any array(ArrayExpr *node, llvm::Value *ptr);
+    void object(ObjExpr *node, llvm::Value *ptr, RType *tt);
+    std::any slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
 
-    void *visitIsExpr(IsExpr *ie) override;
-    void *visitAsExpr(AsExpr *e) override;
-    void *visitArrayAccess(ArrayAccess *node) override;
-    void *visitWhileStmt(WhileStmt *node) override;
-    void *visitContinueStmt(ContinueStmt *node) override;
-    void *visitBreakStmt(BreakStmt *node) override;
-    void *visitArrayExpr(ArrayExpr *node) override;
-    void child(Expression *e, llvm::Value *ptr);
-    void *array(ArrayExpr *node, llvm::Value *ptr);
-    void object(ObjExpr *e, llvm::Value *ptr, RType *tt);
-    void *slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
+    std::any visitBlock(Block *node) override;
+    std::any visitVarDecl(VarDecl *node) override;
+    std::any visitReturnStmt(ReturnStmt *node) override;
+    std::any visitExprStmt(ExprStmt *node) override;
+    std::any visitIfStmt(IfStmt *node) override;
+    std::any visitIfLetStmt(IfLetStmt *node) override;
+    std::any visitAssertStmt(AssertStmt *node) override;
+    std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitContinueStmt(ContinueStmt *node) override;
+    std::any visitBreakStmt(BreakStmt *node) override;
 };
 
 

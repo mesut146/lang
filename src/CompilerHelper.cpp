@@ -123,7 +123,7 @@ llvm::Type *Compiler::mapType(Type *type) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
-    auto rt = resolv->resolveType(type);
+    auto rt = resolv->resolve(type);
     auto s = mangle(rt->targetDecl->type);
     auto it = classMap.find(s);
     if (it != classMap.end()) {
@@ -171,7 +171,7 @@ int Compiler::getSize(Type *type) {
         return 64 + 32;
     }
 
-    auto decl = resolv->resolveType(type)->targetDecl;
+    auto decl = resolv->resolve(type)->targetDecl;
     if (decl) {
         return getSize(decl);
     }
@@ -190,13 +190,14 @@ public:
         return ptr;
     }
 
-    void *visitVarDecl(VarDecl *node) override {
+    std::any visitVarDecl(VarDecl *node) override {
         for (auto f : node->decl->list) {
             auto type = f->type ? f->type.get() : compiler->resolv->resolve(f->rhs.get())->type;
             llvm::Value *ptr;
             if (doesAlloc(f->rhs.get())) {
                 //auto alloc
-                ptr = (llvm::Value *) f->rhs->accept(this);
+                auto rhs = f->rhs->accept(this);
+                ptr = std::any_cast<llvm::Value *>(rhs);
             } else {
                 //manual alloc, prims, struct copy
                 auto ty = compiler->mapType(type);
@@ -208,7 +209,7 @@ public:
         }
         return nullptr;
     }
-    void *visitType(Type *node) override {
+    std::any visitType(Type *node) override {
         if (!node->scope) {
             return nullptr;
         }
@@ -222,7 +223,7 @@ public:
         compiler->allocArr.push_back(ptr);
         return ptr;
     }
-    void *visitObjExpr(ObjExpr *node) override {
+    std::any visitObjExpr(ObjExpr *node) override {
         if (node->isPointer) {
             //todo this too
             return nullptr;
@@ -230,7 +231,7 @@ public:
         auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
         return alloca(ty);
     }
-    void *visitArrayExpr(ArrayExpr *node) {
+    std::any visitArrayExpr(ArrayExpr *node) {
         auto r = compiler->resolv->resolve(node);
         auto ty = compiler->mapType(r->type);
         auto ptr = alloca(ty);
@@ -244,7 +245,7 @@ public:
         }
         return ptr;
     }
-    void *visitArrayAccess(ArrayAccess *node) {
+    std::any visitArrayAccess(ArrayAccess *node) {
         if (node->index2) {
             auto ptr = alloca(compiler->sliceType);
             node->array->accept(this);
@@ -257,69 +258,69 @@ public:
         }
         return nullptr;
     }
-    void *visitLiteral(Literal *node) {
+    std::any visitLiteral(Literal *node) {
         if (node->type == Literal::STR) {
             return alloca(compiler->stringType);
         }
         return nullptr;
     }
-    void *visitBlock(Block *node) override {
+    std::any visitBlock(Block *node) override {
         for (auto &s : node->list) {
             s->accept(this);
         }
         return nullptr;
     }
-    void *visitWhileStmt(WhileStmt *node) override {
+    std::any visitWhileStmt(WhileStmt *node) override {
         node->body->accept(this);
         return nullptr;
     }
-    void *visitIfStmt(IfStmt *node) override {
+    std::any visitIfStmt(IfStmt *node) override {
         node->thenStmt->accept(this);
         if (node->elseStmt) {
             node->elseStmt->accept(this);
         }
         return nullptr;
     }
-    void *visitReturnStmt(ReturnStmt *node) override {
+    std::any visitReturnStmt(ReturnStmt *node) override {
         if (node->expr) {
             node->expr->accept(this);
         }
         return nullptr;
     }
-    void *visitExprStmt(ExprStmt *node) override {
+    std::any visitExprStmt(ExprStmt *node) override {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitAssign(Assign *node) override {
+    std::any visitAssign(Assign *node) override {
         node->right->accept(this);
         return nullptr;
     }
-    void *visitSimpleName(SimpleName *node) override {
+    std::any visitSimpleName(SimpleName *node) override {
         return nullptr;
     }
-    void *visitInfix(Infix *node) {
+    std::any visitInfix(Infix *node) {
         node->left->accept(this);
         node->right->accept(this);
         return nullptr;
     }
-    void *visitAssertStmt(AssertStmt *node) {
+    std::any visitAssertStmt(AssertStmt *node) {
         node->expr->accept(this);
         return nullptr;
     }
 
-    void *visitRefExpr(RefExpr *node) {
+    std::any visitRefExpr(RefExpr *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitDerefExpr(DerefExpr *node) {
+    std::any visitDerefExpr(DerefExpr *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitUnary(Unary *node) {
+    std::any visitUnary(Unary *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitMethodCall(MethodCall *node) {
+    std::any visitMethodCall(MethodCall *node) {
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
             if (!node->scope && node->name == "print" && isStrLit(a)) {
@@ -329,32 +330,32 @@ public:
         }
         return nullptr;
     }
-    void *visitFieldAccess(FieldAccess *node) {
+    std::any visitFieldAccess(FieldAccess *node) {
         node->scope->accept(this);
         return nullptr;
     }
-    void *visitParExpr(ParExpr *node) {
+    std::any visitParExpr(ParExpr *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitAsExpr(AsExpr *node) {
+    std::any visitAsExpr(AsExpr *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitIsExpr(IsExpr *node) {
+    std::any visitIsExpr(IsExpr *node) {
         node->expr->accept(this);
         return nullptr;
     }
-    void *visitIfLetStmt(IfLetStmt *node) {
+    std::any visitIfLetStmt(IfLetStmt *node) {
         node->rhs->accept(this);
         node->thenStmt->accept(this);
         if (node->elseStmt) node->elseStmt->accept(this);
         return nullptr;
     }
-    void *visitContinueStmt(ContinueStmt *node) {
+    std::any visitContinueStmt(ContinueStmt *node) {
         return nullptr;
     }
-    void *visitBreakStmt(BreakStmt *node) {
+    std::any visitBreakStmt(BreakStmt *node) {
         return nullptr;
     }
 };

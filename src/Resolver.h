@@ -134,14 +134,6 @@ static std::string mangle(Method *m) {
     return s;
 }
 
-static bool isTemplate(Method *m) {
-    if (m->parent && m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        return !impl->type->typeArgs.empty();
-    }
-    return !m->typeArgs.empty();
-}
-
 static void print(const std::string &msg) {
     std::cout << msg << std::endl;
 }
@@ -167,22 +159,30 @@ public:
 
 typedef std::variant<Fragment *, FieldDecl *, EnumPrm *, Param *> VarHolder;
 
+static RType *cast(std::any &&arg) {
+    if (arg.type() == typeid(RType *)) {
+        return std::any_cast<RType *>(arg);
+    }
+    if (arg.type() == typeid(void *)) {
+        return (RType *) std::any_cast<void *>(arg);
+    }
+    throw std::runtime_error("unknown type");
+}
+
 class Symbol {
 public:
     Method *m = nullptr;
     VarHolder *v = nullptr;
     BaseDecl *decl = nullptr;
-    ImportStmt *imp = nullptr;
     Resolver *resolver;
 
     Symbol(Method *m, Resolver *r) : m(m), resolver(r) {}
     Symbol(VarHolder *f, Resolver *r) : v(f), resolver(r) {}
     Symbol(BaseDecl *bd, Resolver *r) : decl(bd), resolver(r) {}
-    Symbol(ImportStmt *imp, Resolver *r) : imp(imp), resolver(r) {}
 
     template<class T>
     RType *resolve(T e) {
-        return (RType *) e->accept(resolver);
+        return cast(e->accept(resolver));
     }
 };
 
@@ -192,10 +192,7 @@ public:
     Type *type = nullptr;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
-    Fragment *targetVar = nullptr;
     VarHolder *vh = nullptr;
-    bool isImport = false;
-    std::vector<Symbol> arr;
 
     RType() = default;
     explicit RType(Type *t) : type(t) {}
@@ -216,7 +213,7 @@ public:
     std::map<std::string, Type *> &map;
 
     Generator(std::map<std::string, Type *> &map) : map(map) {}
-    void *visitType(Type *type) override;
+    std::any visitType(Type *type) override;
 };
 
 class Resolver : public Visitor {
@@ -246,21 +243,17 @@ public:
     std::string root;
 
     explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
-    virtual ~Resolver();
+
     static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    void other(std::string name, std::vector<Symbol> &res) const;
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
     RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
-    void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
     void findMethod(MethodCall *mc, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
-
-    void dump();
 
     void newScope();
     void dropScope();
@@ -270,45 +263,45 @@ public:
     void resolveAll();
 
     RType *getType(const std::string &name);
-    void addType(const std::string &name, RType* rt);
+    void addType(const std::string &name, RType *rt);
 
-    void *visitStructDecl(StructDecl *bd) override;
-    void *visitEnumDecl(EnumDecl *bd) override;
-    void *visitImpl(Impl *bd);
-    void *visitTrait(Trait *node);
-    RType *resolveType(Type *type);
-    void *visitType(Type *type) override;
-    void *visitVarDeclExpr(VarDeclExpr *vd) override;
-    void *visitVarDecl(VarDecl *vd) override;
-    void *visitFragment(Fragment *f) override;
-    void *visitFieldDecl(FieldDecl *fd) override;
-    void *visitMethod(Method *m) override;
-    void *visitParam(Param *p) override;
+    std::any visitStructDecl(StructDecl *bd) override;
+    std::any visitEnumDecl(EnumDecl *bd) override;
+    std::any visitImpl(Impl *bd);
+    std::any visitTrait(Trait *node);
+    std::any visitFieldDecl(FieldDecl *fd) override;
+    std::any visitMethod(Method *m) override;
+    std::any visitParam(Param *p) override;
+    std::any visitType(Type *type) override;
+    std::any visitVarDeclExpr(VarDeclExpr *vd) override;
+    std::any visitVarDecl(VarDecl *vd) override;
+    std::any visitFragment(Fragment *f) override;
 
     RType *resolve(Expression *expr);
 
-    void *visitLiteral(Literal *lit) override;
-    void *visitInfix(Infix *infix) override;
-    void *visitUnary(Unary *u) override;
-    void *visitAssign(Assign *as) override;
-    void *visitSimpleName(SimpleName *sn) override;
-    void *visitMethodCall(MethodCall *mc) override;
-    void *visitObjExpr(ObjExpr *o) override;
-    void *visitFieldAccess(FieldAccess *fa) override;
-    void *visitAsExpr(AsExpr *as) override;
-    void *visitRefExpr(RefExpr *as) override;
-    void *visitDerefExpr(DerefExpr *as) override;
-    void *visitAssertStmt(AssertStmt *as) override;
-    void *visitIfLetStmt(IfLetStmt *as) override;
-    void *visitIfStmt(IfStmt *as) override;
-    void *visitParExpr(ParExpr *as) override;
-    void *visitExprStmt(ExprStmt *as) override;
-    void *visitBlock(Block *as) override;
-    void *visitReturnStmt(ReturnStmt *as) override;
-    void *visitIsExpr(IsExpr *as) override;
-    void *visitArrayAccess(ArrayAccess *node) override;
-    void *visitWhileStmt(WhileStmt *node) override;
-    void *visitContinueStmt(ContinueStmt *node) override;
-    void *visitBreakStmt(BreakStmt *node) override;
-    void *visitArrayExpr(ArrayExpr *node) override;
+    std::any visitLiteral(Literal *lit) override;
+    std::any visitInfix(Infix *infix) override;
+    std::any visitUnary(Unary *u) override;
+    std::any visitAssign(Assign *as) override;
+    std::any visitSimpleName(SimpleName *sn) override;
+    std::any visitMethodCall(MethodCall *mc) override;
+    std::any visitObjExpr(ObjExpr *o) override;
+    std::any visitFieldAccess(FieldAccess *fa) override;
+    std::any visitAsExpr(AsExpr *as) override;
+    std::any visitRefExpr(RefExpr *as) override;
+    std::any visitDerefExpr(DerefExpr *as) override;
+    std::any visitParExpr(ParExpr *as) override;
+    std::any visitArrayExpr(ArrayExpr *node) override;
+    std::any visitIsExpr(IsExpr *as) override;
+    std::any visitArrayAccess(ArrayAccess *node) override;
+
+    std::any visitAssertStmt(AssertStmt *as) override;
+    std::any visitIfLetStmt(IfLetStmt *as) override;
+    std::any visitIfStmt(IfStmt *as) override;
+    std::any visitExprStmt(ExprStmt *as) override;
+    std::any visitBlock(Block *as) override;
+    std::any visitReturnStmt(ReturnStmt *as) override;
+    std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitContinueStmt(ContinueStmt *node) override;
+    std::any visitBreakStmt(BreakStmt *node) override;
 };

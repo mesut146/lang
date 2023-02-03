@@ -20,7 +20,7 @@ public:
 class Parser {
 public:
     Lexer &lexer;
-    std::vector<Token *> tokens;
+    std::vector<Token> tokens;
     int pos = 0;
     int mark = 0;
     bool isMarked = false;
@@ -32,24 +32,24 @@ public:
 
     void fill() {
         while (true) {
-            Token *t = lexer.next();
-            if (t->is(EOF_))
+            auto t = lexer.next();
+            if (t.is(EOF_))
                 return;
-            if (t->is(COMMENT))
+            if (t.is(COMMENT))
                 continue;
             tokens.push_back(t);
         }
     }
 
-    Token *pop() {
-        Token *t = tokens[pos];
+    Token &pop() {
+        auto& t = tokens[pos];
         pos++;
         return t;
     }
 
-    Token *first() {
+    Token* first() {
         if (tokens.empty() || pos >= tokens.size()) return nullptr;
-        return tokens[pos];
+        return &tokens[pos];
     }
 
     bool is(TokenType t) {
@@ -64,19 +64,19 @@ public:
 
     bool is(std::initializer_list<TokenType> t1, std::initializer_list<TokenType> t2) {
         if (first() == nullptr || pos + 1 >= tokens.size()) return false;
-        return tokens[pos]->is(t1) && tokens[pos + 1]->is(t2);
+        return tokens[pos].is(t1) && tokens[pos + 1].is(t2);
     }
 
-    Result<Token *> consume2(TokenType tt) {
-        Token *t = pop();
-        if (t->is(tt)) return {t, nullptr};
-        return {nullptr, new std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt))};
+    Result<Token*> consume2(TokenType tt) {
+        auto &t = pop();
+        if (t.is(tt)) return {&t, nullptr};
+        return {nullptr, new std::runtime_error("unexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt))};
     }
 
-    Token *consume(TokenType tt) {
-        Token *t = pop();
-        if (t->is(tt)) return t;
-        throw std::runtime_error("unexpected token " + t->print() + " on line " + std::to_string(t->line) + " was expecting " + printType(tt));
+    Token& consume(TokenType tt) {
+        auto &t = pop();
+        if (t.is(tt)) return t;
+        throw std::runtime_error("unexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt));
     }
 
     void backup() {
@@ -95,9 +95,9 @@ public:
 
     std::string name() {
         if (is({IDENT, FROM, NEW})) {
-            return pop()->value;
+            return pop().value;
         }
-        return consume(IDENT)->value;
+        return consume(IDENT).value;
     }
 
     std::string strLit();
@@ -115,7 +115,7 @@ public:
 
     std::unique_ptr<Param> parseParam(Method *m);
 
-    VarDecl *parseVarDecl();
+    std::unique_ptr<VarDecl> parseVarDecl();
     bool isVarDecl();
 
     VarDeclExpr *parseVarDeclExpr();
@@ -125,13 +125,12 @@ public:
     std::vector<Expression *> exprList();
 
     Type *parseType();
-    Type *refType();
 
     std::vector<Type *> generics();
 
     static bool isPrim(Token &t);
 
-    Statement *parseStmt();
+    std::unique_ptr<Statement> parseStmt();
 
-    Block *parseBlock();
+    std::unique_ptr<Block> parseBlock();
 };

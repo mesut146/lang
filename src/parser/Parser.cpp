@@ -1,19 +1,19 @@
 #include "Parser.h"
-#include "Util.h"
 #include "TypeUtils.h"
+#include "Util.h"
 
 std::string Parser::strLit() {
     auto t = consume(STRING_LIT);
-    return std::string(t->value.begin() + 1, t->value.end() - 1);
+    return std::string(t.value.begin() + 1, t.value.end() - 1);
 }
 
 ImportStmt *Parser::parseImport() {
     auto res = new ImportStmt;
     consume(IMPORT);
-    res->list.push_back(pop()->value);
+    res->list.push_back(pop().value);
     while (is(DIV)) {
         pop();
-        res->list.push_back(pop()->value);
+        res->list.push_back(pop().value);
     }
     return res;
 }
@@ -213,14 +213,13 @@ std::unique_ptr<Method> Parser::parseMethod() {
         res->type.reset(parseType());
     } else {
         //default is void
-        res->type.reset(new Type);
-        res->type->name = "void";
+        res->type.reset(new Type("void"));
     }
     if (is(SEMI)) {
         //interface
         consume(SEMI);
     } else {
-        res->body.reset(parseBlock());
+        res->body = parseBlock();
     }
     return res;
 }
@@ -242,8 +241,8 @@ Fragment *frag(Parser *p) {
 }
 
 //"let" varDeclFrag ("," varDeclFrag)*;
-VarDecl *Parser::parseVarDecl() {
-    auto res = new VarDecl;
+std::unique_ptr<VarDecl> Parser::parseVarDecl() {
+    auto res = std::make_unique<VarDecl>();
     res->decl = parseVarDeclExpr();
     consume(SEMI);
     return res;

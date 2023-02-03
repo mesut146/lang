@@ -13,18 +13,19 @@ public:
     IdGen(Resolver *resolver) : resolver(resolver) {}
 
 
-    void *visitInfix(Infix *node) override;
-    void *visitMethodCall(MethodCall *node) override;
-    void *visitSimpleName(SimpleName *node) override;
-    void *visitLiteral(Literal *node) override;
-    void *visitRefExpr(RefExpr *node) override;
-    void *visitType(Type *node) override;
-    void *visitObjExpr(ObjExpr *node) override;
-    void *visitFieldAccess(FieldAccess *node) override;
-    void *visitDerefExpr(DerefExpr *node) override;
-    void *visitParExpr(ParExpr *node) override;
-    void *visitUnary(Unary *node) override;
-    void *visitArrayAccess(ArrayAccess *node) override;
-    void *visitArrayExpr(ArrayExpr *node) override;
-    void *visitAsExpr(AsExpr *node) override;
+    std::any visitInfix(Infix *node) override;
+    std::any visitMethodCall(MethodCall *node) override;
+    std::any visitSimpleName(SimpleName *node) override;
+    std::any visitLiteral(Literal *node) override;
+    std::any visitRefExpr(RefExpr *node) override;
+    std::any visitType(Type *node) override;
+    std::any visitObjExpr(ObjExpr *node) override;
+    std::any visitFieldAccess(FieldAccess *node) override;
+    std::any visitDerefExpr(DerefExpr *node) override;
+    std::any visitParExpr(ParExpr *node) override;
+    std::any visitUnary(Unary *node) override;
+    std::any visitArrayAccess(ArrayAccess *node) override;
+    std::any visitArrayExpr(ArrayExpr *node) override;
+    std::any visitAsExpr(AsExpr *node) override;
+    std::any visitIsExpr(IsExpr *node) override;
 };

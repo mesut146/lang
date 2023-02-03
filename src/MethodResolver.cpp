@@ -145,7 +145,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
     } else if (target->unit != unit.get()) {
         usedMethods.push_back(target);
     }
-    auto res = clone(resolveType(target->type.get()));
+    auto res = clone(resolve(target->type.get()));
     res->targetMethod = target;
     return res;
 }
@@ -157,7 +157,7 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Metho
         }
     }
     auto gen = new Generator(map);
-    auto res = (Method *) gen->visitMethod(m);
+    auto res = std::any_cast<Method *>(gen->visitMethod(m));
     if (m->parent && m->parent->isImpl()) {
         auto impl = dynamic_cast<Impl *>(m->parent);
         auto scope = r->resolve(mc->scope.get());

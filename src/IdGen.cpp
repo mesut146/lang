@@ -2,51 +2,54 @@
 #include "Resolver.h"
 
 
-void *IdGen::visitInfix(Infix *node) {
-    return nullptr;
+std::any IdGen::visitInfix(Infix *node) {
+    return {};
 }
 
-void *IdGen::visitMethodCall(MethodCall *node) {
+std::any IdGen::visitMethodCall(MethodCall *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
     return new std::string(id);
 }
 
-void *IdGen::visitSimpleName(SimpleName *node) {
+std::any IdGen::visitSimpleName(SimpleName *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
     return new std::string(id);
 }
-void *IdGen::visitLiteral(Literal *node) {
-    return nullptr;
+std::any IdGen::visitLiteral(Literal *node) {
+    return {};
 }
-void *IdGen::visitRefExpr(RefExpr *node) {
-    return nullptr;
+std::any IdGen::visitRefExpr(RefExpr *node) {
+    return {};
 }
-void *IdGen::visitType(Type *node) {
-    return nullptr;
+std::any IdGen::visitType(Type *node) {
+    return {};
 }
-void *IdGen::visitObjExpr(ObjExpr *node) {
+std::any IdGen::visitObjExpr(ObjExpr *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
     return new std::string(id);
 }
-void *IdGen::visitFieldAccess(FieldAccess *node) {
-    return nullptr;
+std::any IdGen::visitFieldAccess(FieldAccess *node) {
+    return {};
 }
-void *IdGen::visitDerefExpr(DerefExpr *node) {
-    return nullptr;
+std::any IdGen::visitDerefExpr(DerefExpr *node) {
+    return {};
 }
-void *IdGen::visitParExpr(ParExpr *node) {
-    return nullptr;
+std::any IdGen::visitParExpr(ParExpr *node) {
+    return {};
 }
-void *IdGen::visitUnary(Unary *node) {
-    return nullptr;
+std::any IdGen::visitUnary(Unary *node) {
+    return {};
 }
-void *IdGen::visitArrayAccess(ArrayAccess *node) {
-    return nullptr;
+std::any IdGen::visitArrayAccess(ArrayAccess *node) {
+    return {};
 }
 
-void *IdGen::visitArrayExpr(ArrayExpr *node) {
-    return nullptr;
+std::any IdGen::visitArrayExpr(ArrayExpr *node) {
+    return {};
 }
-void *IdGen::visitAsExpr(AsExpr *node) {
-    return nullptr;
+std::any IdGen::visitAsExpr(AsExpr *node) {
+    return {};
+}
+std::any IdGen::visitIsExpr(IsExpr *node) {
+    return {};
 }

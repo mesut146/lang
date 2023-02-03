@@ -4,25 +4,25 @@
 
 class AstCopier : public Visitor {
 public:
-    void *visitLiteral(Literal *node) override;
-    void *visitSimpleName(SimpleName *node) override;
-    void *visitType(Type *node) override;
-    void *visitInfix(Infix *node) override;
-    void *visitAssign(Assign *node) override;
-    void *visitArrayAccess(ArrayAccess *node) override;
-    void *visitFieldAccess(FieldAccess *node) override;
-    void *visitUnary(Unary *node) override;
+    std::any visitLiteral(Literal *node) override;
+    std::any visitSimpleName(SimpleName *node) override;
+    std::any visitType(Type *node) override;
+    std::any visitInfix(Infix *node) override;
+    std::any visitAssign(Assign *node) override;
+    std::any visitArrayAccess(ArrayAccess *node) override;
+    std::any visitFieldAccess(FieldAccess *node) override;
+    std::any visitUnary(Unary *node) override;
+    std::any visitFragment(Fragment *node) override;
+    std::any visitObjExpr(ObjExpr *node) override;
+    std::any visitMethodCall(MethodCall *node) override;
 
-    void *visitBlock(Block *node) override;
-    void *visitReturnStmt(ReturnStmt *node) override;
-    void *visitVarDecl(VarDecl *node) override;
-    void *visitVarDeclExpr(VarDeclExpr *node) override;
-    void *visitFragment(Fragment *node) override;
-    void *visitObjExpr(ObjExpr *node) override;
-    void *visitMethodCall(MethodCall *node) override;
-    void *visitExprStmt(ExprStmt *node) override;
-    void *visitWhileStmt(WhileStmt *node) override;
-    void *visitIfStmt(IfStmt *node) override;
-    void *visitIfLetStmt(IfLetStmt *node) override;
-    void *visitMethod(Method *node) override;
+    std::any visitVarDecl(VarDecl *node) override;
+    std::any visitVarDeclExpr(VarDeclExpr *node) override;
+    std::any visitBlock(Block *node) override;
+    std::any visitReturnStmt(ReturnStmt *node) override;
+    std::any visitExprStmt(ExprStmt *node) override;
+    std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitIfStmt(IfStmt *node) override;
+    std::any visitIfLetStmt(IfLetStmt *node) override;
+    std::any visitMethod(Method *node) override;
 };

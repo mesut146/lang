@@ -5,6 +5,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <any>
 
 class Visitor;
 class Type;
@@ -47,7 +48,7 @@ struct Item {
     virtual bool isMethod() { return false; }
 
     virtual std::string print() = 0;
-    virtual void *accept(Visitor *v) = 0;
+    virtual std::any accept(Visitor *v) = 0;
 };
 
 class Unit {
@@ -75,7 +76,7 @@ public:
     FieldDecl(std::string name, Type *type) : name(name), type(type) {}
 
     std::string print() const;
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class StructDecl : public BaseDecl {
@@ -84,7 +85,7 @@ public:
 
     bool isClass() { return true; }
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Trait : public Item {
@@ -94,7 +95,7 @@ public:
 
     bool isTrait() { return true; }
     std::string print();
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class Impl : public Item {
@@ -108,7 +109,7 @@ public:
 
     bool isImpl() { return true; }
     std::string print();
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class EnumVariant {
@@ -125,7 +126,7 @@ public:
     std::vector<EnumVariant *> variants;
     bool isEnum() { return true; }
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Param {
@@ -135,7 +136,7 @@ public:
     Method *method;
 
     std::string print();
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class Method : public Item {
@@ -154,20 +155,20 @@ public:
 
     bool isMethod() { return true; }
     std::string print();
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class Expression {
 public:
     virtual std::string print() = 0;
 
-    virtual void *accept(Visitor *v) = 0;
+    virtual std::any accept(Visitor *v) = 0;
 };
 class Statement {
 public:
     virtual std::string print() = 0;
 
-    virtual void *accept(Visitor *v) = 0;
+    virtual std::any accept(Visitor *v) = 0;
 };
 
 class Block : public Statement {
@@ -175,15 +176,7 @@ public:
     std::vector<std::unique_ptr<Statement>> list;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
-};
-
-class UnsafeBlock : public Expression {
-public:
-    Block *body;
-
-    std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class UnwrapExpr : public Expression {
@@ -193,7 +186,7 @@ public:
     UnwrapExpr(Expression *expr) : expr(expr){};
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 
@@ -204,7 +197,7 @@ public:
     explicit SimpleName(const std::string &name) : name(move(name)){};
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class RefExpr : public Expression {
@@ -214,7 +207,7 @@ public:
     RefExpr(Expression *expr) : expr(expr){};
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class DerefExpr : public Expression {
@@ -224,7 +217,7 @@ public:
     DerefExpr(Expression *expr) : expr(expr){};
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Type : public Expression {
@@ -249,7 +242,7 @@ public:
     bool isString() { return print() == "str"; }
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class PointerType : public Type {
@@ -259,7 +252,7 @@ public:
 
     bool isPointer() override { return true; }
     std::string print() override;
-    //void *accept(Visitor *v) override;
+    //std::any accept(Visitor *v) override;
 };
 class OptionType : public Type {
 public:
@@ -269,7 +262,7 @@ public:
     bool isOptional() override { return true; }
 
     std::string print() override;
-    //void *accept(Visitor *v) override;
+    //std::any accept(Visitor *v) override;
 };
 
 //[type; size]
@@ -281,7 +274,7 @@ public:
 
     bool isArray() override { return true; }
     std::string print() override;
-    //void *accept(Visitor *v) override;
+    //std::any accept(Visitor *v) override;
 };
 //[type]
 class SliceType : public Type {
@@ -309,7 +302,7 @@ public:
     Literal(LiteralType type, const std::string &val) : type(type), val(move(val)) {}
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ExprStmt : public Statement {
@@ -317,7 +310,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 
     explicit ExprStmt(Expression *e) : expr(e) {}
 };
@@ -330,7 +323,7 @@ public:
     bool isOptional = false;
 
     std::string print();
-    void *accept(Visitor *v);
+    std::any accept(Visitor *v);
 };
 
 class VarDeclExpr : public Statement {
@@ -340,7 +333,7 @@ public:
     std::vector<Fragment *> list;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class VarDecl : public Statement {
@@ -348,7 +341,7 @@ public:
     VarDeclExpr *decl;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Unary : public Expression {
@@ -365,7 +358,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Assign : public Expression {
@@ -375,7 +368,7 @@ public:
     std::string op;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Infix : public Expression {
@@ -386,7 +379,7 @@ public:
     bool isAssign = false;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class AsExpr : public Expression {
@@ -395,7 +388,7 @@ public:
     Type *type;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class IsExpr : public Expression {
@@ -404,7 +397,7 @@ public:
     Type *type;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Postfix : public Expression {
@@ -413,7 +406,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Ternary : public Expression {
@@ -423,7 +416,7 @@ public:
     Expression *elseExpr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class MethodCall : public Expression {
@@ -435,7 +428,7 @@ public:
     std::vector<Type *> typeArgs;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class FieldAccess : public Expression {
@@ -445,7 +438,7 @@ public:
     bool isOptional = false;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ArrayAccess : public Expression {
@@ -456,7 +449,7 @@ public:
     bool isOptional = false;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ArrayExpr : public Expression {
@@ -467,7 +460,7 @@ public:
     bool isSized() { return size.has_value(); }
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ParExpr : public Expression {
@@ -475,7 +468,7 @@ public:
     Expression *expr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class Entry {
@@ -495,7 +488,7 @@ public:
     bool isPointer = false;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ReturnStmt : public Statement {
@@ -503,7 +496,7 @@ public:
     std::unique_ptr<Expression> expr;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ContinueStmt : public Statement {
@@ -511,7 +504,7 @@ public:
     std::optional<std::string> label;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class BreakStmt : public Statement {
@@ -519,7 +512,7 @@ public:
     std::optional<std::string> label;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class IfLetStmt : public Statement {
@@ -531,7 +524,7 @@ public:
     std::unique_ptr<Statement> elseStmt;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class IfStmt : public Statement {
@@ -541,7 +534,7 @@ public:
     std::unique_ptr<Statement> elseStmt;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class WhileStmt : public Statement {
@@ -550,7 +543,7 @@ public:
     std::unique_ptr<Statement> body;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class DoWhile : public Statement {
@@ -559,7 +552,7 @@ public:
     std::unique_ptr<Block> body;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class ForStmt : public Statement {
@@ -570,7 +563,7 @@ public:
     std::unique_ptr<Statement> body;
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };
 
 class AssertStmt : public Statement {
@@ -580,5 +573,5 @@ public:
     explicit AssertStmt(Expression *expr) : expr(std::unique_ptr<Expression>(expr)) {}
 
     std::string print() override;
-    void *accept(Visitor *v) override;
+    std::any accept(Visitor *v) override;
 };

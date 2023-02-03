@@ -23,7 +23,7 @@ bool Parser::isPrim(Token &t) {
 }
 
 Literal *parseLit(Parser *p) {
-    auto &t = *p->pop();
+    auto &t = p->pop();
     Literal::LiteralType type;
     if (t.is(INTEGER_LIT)) {
         type = Literal::INT;
@@ -51,16 +51,16 @@ Literal *parseLit(Parser *p) {
 }
 
 int isTypeArg(Parser *p, int pos) {
-    if (!p->tokens[pos]->is(LT)) {
+    if (!p->tokens[pos].is(LT)) {
         return -1;
     }
     pos++;
     int open = 1;
     while (pos < p->tokens.size()) {
-        if (p->tokens[pos]->is(LT)) {
+        if (p->tokens[pos].is(LT)) {
             pos++;
             open++;
-        } else if (p->tokens[pos]->is(GT)) {
+        } else if (p->tokens[pos].is(GT)) {
             pos++;
             open--;
             if (open == 0) {
@@ -68,7 +68,7 @@ int isTypeArg(Parser *p, int pos) {
             }
         } else {
             auto valid_tokens = {IDENT, STAR, QUES, LBRACKET, RBRACKET, COMMA, COLON2};
-            if (!p->tokens[pos]->is(valid_tokens) && !p->isPrim(*p->tokens[pos])) {
+            if (!p->tokens[pos].is(valid_tokens) && !p->isPrim(p->tokens[pos])) {
                 return -1;
             }
             pos++;
@@ -80,7 +80,7 @@ int isTypeArg(Parser *p, int pos) {
 Type *Parser::parseType() {
     auto res = new Type;
     if (isPrim(*first())) {
-        res->name = pop()->value;
+        res->name = pop().value;
     } else if (is(LBRACKET)) {
         consume(LBRACKET);
         auto type = parseType();
@@ -89,7 +89,7 @@ Type *Parser::parseType() {
             if (!is(INTEGER_LIT)) {
                 throw std::runtime_error("invalid array size: " + this->first()->value);
             }
-            auto size = std::stoi(pop()->value);
+            auto size = std::stoi(pop().value);
             res = new ArrayType(type, size);
         } else {
             res = new SliceType(type);
@@ -137,7 +137,7 @@ std::vector<Type *> Parser::generics() {
 Entry parseEntry(Parser *p) {
     Entry e{};
     if (p->is({IDENT}, {COLON})) {
-        e.key = p->consume(IDENT)->value;
+        e.key = p->consume(IDENT).value;
         p->consume(COLON);
         e.value = p->parseExpr();
     } else {
@@ -156,15 +156,15 @@ bool isObj(Parser *p) {
     if (ta != -1) {
         pos = ta;
     }
-    if (p->tokens[pos]->is(COLON2)) {
+    if (p->tokens[pos].is(COLON2)) {
         pos++;
-        if (!p->tokens[pos]->is(IDENT)) {
+        if (!p->tokens[pos].is(IDENT)) {
             return false;
         }
         pos++;
     }
 
-    if (p->tokens[pos]->is(LBRACE)) {
+    if (p->tokens[pos].is(LBRACE)) {
         return true;
     }
     return false;
@@ -211,7 +211,7 @@ MethodCall *parseCall(Parser *p, const std::string &name) {
 
 //"(" expr ")" | literal | objCreation | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
-    //log("parsePrimary " + *p->first()->value);
+    //log("parsePrimary " + *p->first().value);
     if (p->is(LPAREN)) {
         //ParExpr
         auto res = new ParExpr;
@@ -223,16 +223,11 @@ Expression *PRIM(Parser *p) {
         return parseLit(p);
     } else if (p->is(NEW)) {
         return makeAlloc(p);
-    } else if (p->is(UNSAFE)) {
-        auto res = new UnsafeBlock;
-        p->pop();
-        res->body = p->parseBlock();
-        return res;
     }
     if (isObj(p)) {
         return makeObj(p, false);
     } else if (p->isPrim(*p->first())) {
-        auto type = new Type(p->pop()->value);
+        auto type = new Type(p->pop().value);
         p->consume(COLON2);
         auto name = p->name();
         if (p->is(LPAREN) || p->is(LT)) {
@@ -247,7 +242,7 @@ Expression *PRIM(Parser *p) {
         }
         return new Type(type, name);
     } else if (p->is(IDENT)) {
-        auto id = p->pop()->value;
+        auto id = p->pop().value;
         if (p->is(LPAREN)) {
             return parseCall(p, id);
         } else if (isTypeArg(p, p->pos) != -1) {
@@ -299,7 +294,7 @@ Expression *PRIM(Parser *p) {
         res->list = p->exprList();
         if (p->is(SEMI)) {
             p->consume(SEMI);
-            auto size = p->consume(INTEGER_LIT)->value;
+            auto size = p->consume(INTEGER_LIT).value;
             res->size = std::stoi(size);
             if (res->list.size() != 1) {
                 throw std::runtime_error("sized array expects 1 element but got " + std::to_string(res->list.size()) + " line: " + std::to_string(p->first()->line));
@@ -418,7 +413,7 @@ Expression *expr13(Parser *p) {
     Expression *lhs = asExpr(p);
     while (p->is({PLUSPLUS, MINUSMINUS})) {
         auto res = new Postfix;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->expr = lhs;
         lhs = res;
     }
@@ -429,7 +424,7 @@ Expression *expr13(Parser *p) {
 Expression *expr12(Parser *p) {
     if (p->is({PLUS, MINUS, PLUSPLUS, MINUSMINUS, BANG, TILDE})) {
         auto res = new Unary;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->expr = expr12(p);
         return res;
     } else {
@@ -443,7 +438,7 @@ Expression *expr11(Parser *p) {
     while (p->is({STAR, DIV, PERCENT})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr12(p);
         lhs = res;
     }
@@ -456,7 +451,7 @@ Expression *expr10(Parser *p) {
     while (p->is({PLUS, MINUS})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr11(p);
         lhs = res;
     }
@@ -467,7 +462,7 @@ Expression *expr10(Parser *p) {
 Expression *expr9(Parser *p) {
     auto lhs = expr10(p);
     while (p->is({LTLT, GT})) {
-        auto &op = p->pop()->value;
+        auto &op = p->pop().value;
         //todo >>, in while
         if (op == ">" && p->is(GT)) {
             op = ">>";
@@ -505,7 +500,7 @@ Expression *expr8(Parser *p) {
     while (p->is({LT, GT, LTEQ, GTEQ})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr9(p);
         lhs = res;
     }
@@ -518,7 +513,7 @@ Expression *expr7(Parser *p) {
     while (p->is({EQEQ, NOTEQ})) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr8(p);
         lhs = res;
     }
@@ -531,7 +526,7 @@ Expression *expr6(Parser *p) {
     while (p->is(AND)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr7(p);
         lhs = res;
     }
@@ -544,7 +539,7 @@ Expression *expr5(Parser *p) {
     while (p->is(POW)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr6(p);
         lhs = res;
     }
@@ -557,7 +552,7 @@ Expression *expr4(Parser *p) {
     while (p->is(OR)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr5(p);
         lhs = res;
     }
@@ -570,7 +565,7 @@ Expression *expr3(Parser *p) {
     while (p->is(ANDAND)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr4(p);
         lhs = res;
     }
@@ -583,7 +578,7 @@ Expression *expr2(Parser *p) {
     while (p->is(OROR)) {
         auto res = new Infix;
         res->left = lhs;
-        res->op = p->pop()->value;
+        res->op = p->pop().value;
         res->right = expr3(p);
         lhs = res;
     }
@@ -615,7 +610,7 @@ Expression *Parser::parseExpr() {
     if (first() && isAssign(first()->value)) {
         auto assign = new Assign;
         assign->left = res;
-        assign->op = pop()->value;
+        assign->op = pop().value;
         assign->right = parseExpr();
         res = assign;
     }
