@@ -6,7 +6,7 @@ impl Box<T>{
     func new(val: T): Box<T>{
         let ptr = malloc<T>(1);
         *ptr = val;
-        return Box{val: ptr};
+        return Box<T>{val: ptr};
     }
 
     func get(self): T*{
@@ -19,5 +19,9 @@ impl Box<T>{
 }
 
 func boxText(){
-  let b = Box<i32>::new(5);
+  let b = Box::new(5);
+  //assert *b.get() == 5;
+  assert b.unwrap() == 5;
+
+  print("boxText done");
 }

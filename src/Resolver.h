@@ -17,7 +17,7 @@ class Resolver;
 
 bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
-RType *binCast(const std::string &s1, const std::string &s2);
+RType binCast(const std::string &s1, const std::string &s2);
 
 static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std::string &name, Type *type) {
     int i = 0;
@@ -29,7 +29,7 @@ static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std
     }
     throw std::runtime_error("unknown field: " + type->print() + "." + name);
 }
-RType *clone(RType *rt);
+RType clone(const RType &rt);
 
 static void error(const std::string &msg) {
     throw std::runtime_error(msg);
@@ -50,24 +50,24 @@ static bool isMember(Method *m) {
     return false;
 }
 
-static std::string mangle(Type *type) {
-    if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        return mangle(ptr->type) + "*";
-    }
-    std::string s = type->name;
-    if (!type->typeArgs.empty()) {
-        s.append("<");
-        int i = 0;
-        for (auto ta : type->typeArgs) {
-            if (i > 0) s.append(",");
-            s.append(mangle(ta));
-            i++;
-        }
-        s.append(">");
-    }
-    return s;
-}
+// static std::string mangle(Type *type) {
+//     if (type->isPointer()) {
+//         auto ptr = dynamic_cast<PointerType *>(type);
+//         return mangle(ptr->type) + "*";
+//     }
+//     std::string s = type->name;
+//     if (!type->typeArgs.empty()) {
+//         s.append("<");
+//         int i = 0;
+//         for (auto ta : type->typeArgs) {
+//             if (i > 0) s.append(",");
+//             s.append(mangle(ta));
+//             i++;
+//         }
+//         s.append(">");
+//     }
+//     return s;
+// }
 
 static std::string printMethod(Method *m) {
     std::string s;
@@ -120,7 +120,7 @@ static std::string mangle(Method *m) {
     if (!m->typeArgs.empty()) {
         s += "<";
         for (int i = 0; i < m->typeArgs.size(); i++) {
-            s += mangle(m->typeArgs[i]);
+            s += m->typeArgs[i]->print();
             if (i < m->typeArgs.size() - 1) {
                 s += ",";
             }
@@ -129,7 +129,7 @@ static std::string mangle(Method *m) {
     }
     //todo self
     for (auto &prm : m->params) {
-        s += "_" + mangle(prm->type.get());
+        s += "_" + prm->type.get()->print();
     }
     return s;
 }
@@ -159,32 +159,6 @@ public:
 
 typedef std::variant<Fragment *, FieldDecl *, EnumPrm *, Param *> VarHolder;
 
-static RType *cast(std::any &&arg) {
-    if (arg.type() == typeid(RType *)) {
-        return std::any_cast<RType *>(arg);
-    }
-    if (arg.type() == typeid(void *)) {
-        return (RType *) std::any_cast<void *>(arg);
-    }
-    throw std::runtime_error("unknown type");
-}
-
-class Symbol {
-public:
-    Method *m = nullptr;
-    VarHolder *v = nullptr;
-    BaseDecl *decl = nullptr;
-    Resolver *resolver;
-
-    Symbol(Method *m, Resolver *r) : m(m), resolver(r) {}
-    Symbol(VarHolder *f, Resolver *r) : v(f), resolver(r) {}
-    Symbol(BaseDecl *bd, Resolver *r) : decl(bd), resolver(r) {}
-
-    template<class T>
-    RType *resolve(T e) {
-        return cast(e->accept(resolver));
-    }
-};
 
 class RType {
 public:
@@ -192,19 +166,40 @@ public:
     Type *type = nullptr;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
-    VarHolder *vh = nullptr;
+    std::optional<VarHolder> vh;
 
     RType() = default;
     explicit RType(Type *t) : type(t) {}
 };
+static RType cast(std::any &&arg) {
+    if (arg.type() == typeid(RType)) {
+        return std::any_cast<RType>(arg);
+    }
+    throw std::runtime_error("unknown type");
+}
+class Symbol {
+public:
+    Method *m = nullptr;
+    std::optional<VarHolder> v;
+    BaseDecl *decl = nullptr;
+    Resolver *resolver;
 
+    Symbol(Method *m, Resolver *r) : m(m), resolver(r) {}
+    Symbol(const VarHolder &f, Resolver *r) : v(f), resolver(r) {}
+    Symbol(BaseDecl *bd, Resolver *r) : decl(bd), resolver(r) {}
+
+    template<class T>
+    RType resolve(T e) {
+        return cast(e->accept(resolver));
+    }
+};
 class Scope {
 public:
-    std::vector<VarHolder *> list;
+    std::vector<VarHolder> list;
     //~Scope();
-    void add(VarHolder *f);
+    void add(const VarHolder &f);
     void clear();
-    VarHolder *find(const std::string &name);
+    std::optional<VarHolder> find(const std::string &name);
 };
 
 //replace any type in decl with src by same index
@@ -219,11 +214,11 @@ public:
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
-    std::unordered_map<std::string, RType *> cache;
-    std::map<Fragment *, RType *> varMap;
-    std::map<std::string, RType *> typeMap;
-    std::map<std::string, RType *> paramMap;
-    std::unordered_map<Method *, RType *> methodMap;
+    std::unordered_map<std::string, RType> cache;
+    std::map<Fragment *, RType> varMap;
+    std::map<std::string, RType> typeMap;
+    std::map<std::string, RType> paramMap;
+    std::unordered_map<Method *, RType> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
     std::map<Method *, std::shared_ptr<Scope>> methodScopes;
     std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
@@ -250,7 +245,7 @@ public:
 
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
-    RType *handleCallResult(std::vector<Method *> &list, MethodCall *mc);
+    RType handleCallResult(std::vector<Method *> &list, MethodCall *mc);
     void findMethod(MethodCall *mc, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
@@ -262,8 +257,8 @@ public:
     void init();
     void resolveAll();
 
-    RType *getType(const std::string &name);
-    void addType(const std::string &name, RType *rt);
+    RType getTypeCached(const std::string &name);
+    void addType(const std::string &name, const RType &rt);
 
     std::any visitStructDecl(StructDecl *bd) override;
     std::any visitEnumDecl(EnumDecl *bd) override;
@@ -277,7 +272,8 @@ public:
     std::any visitVarDecl(VarDecl *vd) override;
     std::any visitFragment(Fragment *f) override;
 
-    RType *resolve(Expression *expr);
+    RType resolve(Expression *expr);
+    Type *getType(Expression *expr);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;
@@ -302,6 +298,7 @@ public:
     std::any visitBlock(Block *as) override;
     std::any visitReturnStmt(ReturnStmt *as) override;
     std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitForStmt(ForStmt *node) override;
     std::any visitContinueStmt(ContinueStmt *node) override;
     std::any visitBreakStmt(BreakStmt *node) override;
 };

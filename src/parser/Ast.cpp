@@ -196,7 +196,8 @@ std::string OptionType::print() {
     return type->print() + "?";
 }
 std::string ArrayType::print() {
-    return "[" + type->print() + "; " + std::to_string(size) + "]";
+    auto sz = std::to_string(size);
+    return "[" + type->print() + "; " + sz + "]";
 }
 std::string SliceType::print() {
     return "[" + type->print() + "]";

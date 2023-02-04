@@ -7,7 +7,7 @@ std::unique_ptr<T> expr(std::unique_ptr<T> &node, AstCopier *t) {
 template<typename T>
 T expr(T node, AstCopier *t) {
     auto res = node->accept(t);
-    return (T)std::any_cast<Expression*>(res);
+    return (T) std::any_cast<Expression *>(res);
 }
 template<typename T>
 T stmt(T node, AstCopier *t) {
@@ -30,30 +30,30 @@ T visit(T node, AstCopier *t) {
 std::any AstCopier::visitLiteral(Literal *node) {
     auto res = new Literal(node->type, node->val);
     if (node->suffix) {
-        res->suffix=expr(node->suffix, this);
+        res->suffix = expr(node->suffix, this);
     }
-    return (Expression *)res;
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitSimpleName(SimpleName *node) {
-    return (Expression *)new SimpleName(node->name);
+    return (Expression *) new SimpleName(node->name);
 }
 
 std::any AstCopier::visitType(Type *node) {
     if (node->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(node);
         auto inner = expr(ptr->type, this);
-        return (Expression *)new PointerType(inner);
+        return (Expression *) new PointerType(inner);
     }
     if (node->isArray()) {
         auto arr = dynamic_cast<ArrayType *>(node);
         auto inner = expr(arr->type, this);
-        return (Expression *)new ArrayType(inner, arr->size);
+        return (Expression *) new ArrayType(inner, arr->size);
     }
     if (node->isSlice()) {
         auto slice = dynamic_cast<SliceType *>(node);
         auto inner = expr(slice->type, this);
-        return (Expression *)new SliceType(inner);
+        return (Expression *) new SliceType(inner);
     }
     auto res = new Type;
     if (node->scope) res->scope = expr(node->scope, this);
@@ -61,7 +61,7 @@ std::any AstCopier::visitType(Type *node) {
     for (auto ta : node->typeArgs) {
         res->typeArgs.push_back(expr(ta, this));
     }
-    return (Expression *)res;
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitInfix(Infix *node) {
@@ -69,7 +69,7 @@ std::any AstCopier::visitInfix(Infix *node) {
     res->left = expr(node->left, this);
     res->right = expr(node->right, this);
     res->op = node->op;
-    return (Expression *)res;
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitBlock(Block *node) {
@@ -83,7 +83,7 @@ std::any AstCopier::visitBlock(Block *node) {
 std::any AstCopier::visitReturnStmt(ReturnStmt *node) {
     auto res = new ReturnStmt;
     if (node->expr) {
-        res->expr=expr(node->expr, this);
+        res->expr = expr(node->expr, this);
     }
     return (Statement *) res;
 }
@@ -108,9 +108,9 @@ std::any AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment;
     res->name = node->name;
     if (node->type) {
-        res->type=expr(node->type, this);
+        res->type = expr(node->type, this);
     }
-    res->rhs=expr(node->rhs, this);
+    res->rhs = expr(node->rhs, this);
     res->isOptional = node->isOptional;
     return res;
 }
@@ -118,14 +118,14 @@ std::any AstCopier::visitFragment(Fragment *node) {
 std::any AstCopier::visitObjExpr(ObjExpr *node) {
     auto res = new ObjExpr;
     res->isPointer = node->isPointer;
-    res->type=(expr(node->type, this));
+    res->type = (expr(node->type, this));
     for (auto &e : node->entries) {
         auto ent = Entry();
         ent.key = e.key;
         ent.value = expr(e.value, this);
         res->entries.push_back(ent);
     }
-    return (Expression *)res;
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitMethodCall(MethodCall *node) {
@@ -141,7 +141,7 @@ std::any AstCopier::visitMethodCall(MethodCall *node) {
     for (auto arg : node->args) {
         res->args.push_back(expr(arg, this));
     }
-    return (Expression *)res;
+    return (Expression *) res;
 }
 std::any AstCopier::visitExprStmt(ExprStmt *node) {
     auto tmp = expr(node->expr, this);
@@ -152,7 +152,13 @@ std::any AstCopier::visitAssign(Assign *node) {
     res->left = expr(node->left, this);
     res->right = expr(node->right, this);
     res->op = node->op;
-    return (Expression *)res;
+    return (Expression *) res;
+}
+
+//deref
+std::any AstCopier::visitDerefExpr(DerefExpr *node) {
+    auto res = new DerefExpr(expr(node->expr, this));
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitArrayAccess(ArrayAccess *node) {
@@ -162,13 +168,13 @@ std::any AstCopier::visitArrayAccess(ArrayAccess *node) {
     if (node->index2) {
         res->index2.reset(expr(node->index2.get(), this));
     }
-    return (Expression *)res;
+    return (Expression *) res;
 }
 std::any AstCopier::visitFieldAccess(FieldAccess *node) {
     auto res = new FieldAccess;
     res->scope = expr(node->scope, this);
     res->name = node->name;
-    return (Expression *)res;
+    return (Expression *) res;
 }
 
 std::any AstCopier::visitUnary(Unary *node) {

@@ -13,7 +13,7 @@ static Type *clone(Type *type) {
     } else {
         auto res = new Type(type->name);
         if (type->scope) {
-            res->scope = clone(type->scope);
+            res->scope.reset(clone(type->scope.get()));
         }
         res->typeArgs.insert(res->typeArgs.end(), type->typeArgs.begin(), type->typeArgs.end());
         return res;

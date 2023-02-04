@@ -15,6 +15,7 @@ public:
     std::any visitFragment(Fragment *node) override;
     std::any visitObjExpr(ObjExpr *node) override;
     std::any visitMethodCall(MethodCall *node) override;
+    std::any visitDerefExpr(DerefExpr *node) override;
 
     std::any visitVarDecl(VarDecl *node) override;
     std::any visitVarDeclExpr(VarDeclExpr *node) override;

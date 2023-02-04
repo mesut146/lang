@@ -102,10 +102,7 @@ Type *Parser::parseType() {
                 res->typeArgs = generics();
             } else {
                 consume(COLON2);
-                auto tmp = new Type;
-                tmp->scope = res;
-                tmp->name = name();
-                res = tmp;
+                res = new Type(res, name());
             }
         }
     }
@@ -264,10 +261,7 @@ Expression *PRIM(Parser *p) {
                     return res;
                 } else {
                     //id<...>::name
-                    auto res = new Type;
-                    res->scope = scope;
-                    res->name = name;
-                    return res;
+                    return new Type(scope, name);
                 }
             }
         } else if (p->is(COLON2)) {
@@ -366,7 +360,7 @@ RefExpr *parseRef(Parser *p) {
     p->consume(AND);
     auto expr = parseLhs(p);
     if (dynamic_cast<SimpleName *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
-        return new RefExpr(expr);
+        return new RefExpr(std::unique_ptr<Expression>(expr));
     }
     throw std::runtime_error("cannot take reference of " + expr->print());
 }
@@ -374,7 +368,7 @@ RefExpr *parseRef(Parser *p) {
 DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
     auto expr = parseLhs(p);
-    return new DerefExpr(expr);
+    return new DerefExpr(std::unique_ptr<Expression>(expr));
     /*
     if (dynamic_cast<SimpleName *>(expr) ||
         dynamic_cast<FieldAccess *>(expr) ||

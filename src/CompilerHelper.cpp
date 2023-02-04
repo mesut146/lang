@@ -27,7 +27,7 @@ bool isStrLit(Expression *e) {
 //llvm
 
 llvm::ConstantInt *Compiler::makeInt(int val, int bits) {
-    auto intType = llvm::IntegerType::get(*ctx, bits);
+    auto intType = llvm::IntegerType::get(ctx, bits);
     return llvm::ConstantInt::get(intType, val);
 }
 
@@ -36,11 +36,11 @@ llvm::ConstantInt *Compiler::makeInt(int val) {
 }
 
 llvm::Type *Compiler::getInt(int bit) {
-    return llvm::IntegerType::get(*ctx, bit);
+    return llvm::IntegerType::get(ctx, bit);
 }
 
 void Compiler::simpleVariant(Type *n, llvm::Value *ptr) {
-    auto bd = resolv->resolve(n->scope)->targetDecl;
+    auto bd = resolv->resolve(n->scope.get()).targetDecl;
     auto decl = dynamic_cast<EnumDecl *>(bd);
     int index = Resolver::findVariant(decl, n->name);
     setOrdinal(index, ptr);
@@ -55,7 +55,7 @@ llvm::Function *Compiler::make_printf() {
     auto charPtr = getInt(8)->getPointerTo();
     args.push_back(charPtr);
     auto ft = llvm::FunctionType::get(getInt(32), args, true);
-    auto f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", mod);
+    auto f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", *mod);
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     f->setAttributes(attr);
@@ -64,7 +64,7 @@ llvm::Function *Compiler::make_printf() {
 
 llvm::Function *Compiler::make_exit() {
     auto ft = llvm::FunctionType::get(Builder->getVoidTy(), getInt(32), false);
-    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", mod);
+    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", *mod);
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     f->setAttributes(attr);
@@ -74,12 +74,12 @@ llvm::Function *Compiler::make_exit() {
 llvm::Function *Compiler::make_malloc() {
     auto ret = getInt(8)->getPointerTo();//i8*
     auto ft = llvm::FunctionType::get(ret, getInt(64), false);
-    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", mod);
+    auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", *mod);
     f->setCallingConv(llvm::CallingConv::C);
     llvm::AttributeList attr;
     llvm::AttrBuilder builder;
     builder.addAlignmentAttr(16);
-    attr = attr.addAttributes(*ctx, 0, builder);
+    attr = attr.addAttributes(ctx, 0, builder);
     f->setAttributes(attr);
     return f;
 }
@@ -88,13 +88,13 @@ llvm::StructType *Compiler::make_slice_type() {
     std::vector<llvm::Type *> elems;
     elems.push_back(getInt(8)->getPointerTo());
     elems.push_back(getInt(32));//len
-    return llvm::StructType::create(*ctx, elems, "__slice");
+    return llvm::StructType::create(ctx, elems, "__slice");
 }
 
 llvm::StructType *Compiler::make_string_type() {
     std::vector<llvm::Type *> elems;
     elems.push_back(sliceType);
-    return llvm::StructType::create(*ctx, elems, "str");
+    return llvm::StructType::create(ctx, elems, "str");
 }
 
 llvm::Type *Compiler::mapType(Type *type) {
@@ -106,8 +106,8 @@ llvm::Type *Compiler::mapType(Type *type) {
         return mapType(elem)->getPointerTo();
     }
     if (type->isArray()) {
-        auto res = resolv->resolve(type);
-        auto arr = dynamic_cast<ArrayType *>(res->type);
+        auto res = resolv->getType(type);
+        auto arr = dynamic_cast<ArrayType *>(res);
         return llvm::ArrayType::get(mapType(arr->type), arr->size);
     }
     if (type->isSlice()) {
@@ -117,14 +117,15 @@ llvm::Type *Compiler::mapType(Type *type) {
         return stringType;
     }
     if (type->isVoid()) {
-        return llvm::Type::getVoidTy(*ctx);
+        return llvm::Type::getVoidTy(ctx);
     }
     if (type->isPrim()) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
     auto rt = resolv->resolve(type);
-    auto s = mangle(rt->targetDecl->type);
+    //auto s = mangle(rt.targetDecl->type);
+    auto s = rt.targetDecl->type->print();
     auto it = classMap.find(s);
     if (it != classMap.end()) {
         return it->second;
@@ -171,7 +172,7 @@ int Compiler::getSize(Type *type) {
         return 64 + 32;
     }
 
-    auto decl = resolv->resolve(type)->targetDecl;
+    auto decl = resolv->resolve(type).targetDecl;
     if (decl) {
         return getSize(decl);
     }
@@ -184,15 +185,18 @@ public:
 
     AllocCollector(Compiler *c) : compiler(c) {}
 
-    llvm::Value* alloca(llvm::Type *ty) {
+    llvm::Value *alloca(llvm::Type *ty) {
         auto ptr = compiler->Builder->CreateAlloca(ty);
         compiler->allocArr.push_back(ptr);
         return ptr;
     }
-
     std::any visitVarDecl(VarDecl *node) override {
-        for (auto f : node->decl->list) {
-            auto type = f->type ? f->type.get() : compiler->resolv->resolve(f->rhs.get())->type;
+        node->decl->accept(this);
+        return {};
+    }
+    std::any visitVarDeclExpr(VarDeclExpr *node) override {
+        for (auto f : node->list) {
+            auto type = f->type ? f->type.get() : compiler->resolv->getType(f->rhs.get());
             llvm::Value *ptr;
             if (doesAlloc(f->rhs.get())) {
                 //auto alloc
@@ -207,31 +211,31 @@ public:
             ptr->setName(f->name);
             compiler->NamedValues[f->name] = ptr;
         }
-        return nullptr;
+        return {};
     }
     std::any visitType(Type *node) override {
         if (!node->scope) {
-            return nullptr;
+            return {};
         }
         //todo
         if (node->isPointer()) {
-            return nullptr;
+            return {};
         }
-        auto ty = compiler->mapType(node->scope);
+        auto ty = compiler->mapType(node->scope.get());
         auto ptr = alloca(ty);
         return ptr;
     }
     std::any visitObjExpr(ObjExpr *node) override {
         if (node->isPointer) {
             //todo this too
-            return nullptr;
+            return {};
         }
-        auto ty = compiler->mapType(compiler->resolv->resolve(node)->type);
+        auto ty = compiler->mapType(compiler->resolv->getType(node));
         return alloca(ty);
     }
     std::any visitArrayExpr(ArrayExpr *node) {
-        auto r = compiler->resolv->resolve(node);
-        auto ty = compiler->mapType(r->type);
+        auto r = compiler->resolv->getType(node);
+        auto ty = compiler->mapType(r);
         auto ptr = alloca(ty);
         for (auto e : node->list) {
             auto mc = dynamic_cast<MethodCall *>(e);
@@ -254,69 +258,76 @@ public:
             node->array->accept(this);
             node->index->accept(this);
         }
-        return nullptr;
+        return {};
     }
     std::any visitLiteral(Literal *node) {
         if (node->type == Literal::STR) {
             return alloca(compiler->stringType);
         }
-        return nullptr;
+        return {};
     }
     std::any visitBlock(Block *node) override {
         for (auto &s : node->list) {
             s->accept(this);
         }
-        return nullptr;
+        return {};
     }
     std::any visitWhileStmt(WhileStmt *node) override {
         node->body->accept(this);
-        return nullptr;
+        return {};
+    }
+    std::any visitForStmt(ForStmt *node) override {
+        if (node->decl) {
+            node->decl->accept(this);
+        }
+        node->body->accept(this);
+        return {};
     }
     std::any visitIfStmt(IfStmt *node) override {
         node->thenStmt->accept(this);
         if (node->elseStmt) {
             node->elseStmt->accept(this);
         }
-        return nullptr;
+        return {};
     }
     std::any visitReturnStmt(ReturnStmt *node) override {
         if (node->expr) {
             node->expr->accept(this);
         }
-        return nullptr;
+        return {};
     }
     std::any visitExprStmt(ExprStmt *node) override {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitAssign(Assign *node) override {
         node->right->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitSimpleName(SimpleName *node) override {
-        return nullptr;
+        return {};
     }
     std::any visitInfix(Infix *node) {
         node->left->accept(this);
         node->right->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitAssertStmt(AssertStmt *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
 
     std::any visitRefExpr(RefExpr *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitDerefExpr(DerefExpr *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitUnary(Unary *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitMethodCall(MethodCall *node) {
         if (node->scope) node->scope->accept(this);
@@ -326,35 +337,35 @@ public:
             }
             a->accept(this);
         }
-        return nullptr;
+        return {};
     }
     std::any visitFieldAccess(FieldAccess *node) {
         node->scope->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitParExpr(ParExpr *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitAsExpr(AsExpr *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitIsExpr(IsExpr *node) {
         node->expr->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitIfLetStmt(IfLetStmt *node) {
         node->rhs->accept(this);
         node->thenStmt->accept(this);
         if (node->elseStmt) node->elseStmt->accept(this);
-        return nullptr;
+        return {};
     }
     std::any visitContinueStmt(ContinueStmt *node) {
-        return nullptr;
+        return {};
     }
     std::any visitBreakStmt(BreakStmt *node) {
-        return nullptr;
+        return {};
     }
 };
 

@@ -202,9 +202,9 @@ public:
 
 class RefExpr : public Expression {
 public:
-    Expression *expr;
+    std::unique_ptr<Expression> expr;
 
-    RefExpr(Expression *expr) : expr(expr){};
+    RefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
 
     std::string print() override;
     std::any accept(Visitor *v) override;
@@ -212,9 +212,9 @@ public:
 
 class DerefExpr : public Expression {
 public:
-    Expression *expr;
+    std::unique_ptr<Expression> expr;
 
-    DerefExpr(Expression *expr) : expr(expr){};
+    DerefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
 
     std::string print() override;
     std::any accept(Visitor *v) override;
@@ -222,7 +222,7 @@ public:
 
 class Type : public Expression {
 public:
-    Type *scope = nullptr;
+    std::unique_ptr<Type> scope;
     std::string name;
     std::vector<Type *> typeArgs;
 
@@ -234,6 +234,8 @@ public:
     virtual bool isArray() { return false; }
     virtual bool isSlice() { return false; }
     virtual bool isPointer() { return false; }
+
+    //Type* unwrap();
 
     bool isPrim() {
         return sizeMap.find(print()) != sizeMap.end();
@@ -557,7 +559,7 @@ public:
 
 class ForStmt : public Statement {
 public:
-    VarDeclExpr *decl = nullptr;
+    std::unique_ptr<VarDeclExpr> decl;
     std::unique_ptr<Expression> cond;
     std::vector<std::unique_ptr<Expression>> updaters;
     std::unique_ptr<Statement> body;

@@ -27,9 +27,9 @@ public:
     llvm::Value *retPtr = nullptr;
     std::string TargetTriple;
     llvm::TargetMachine *TargetMachine = nullptr;
-    llvm::IRBuilder<> *Builder = nullptr;
-    llvm::LLVMContext *ctx = nullptr;
-    llvm::Module *mod = nullptr;
+    std::unique_ptr<llvm::IRBuilder<>> Builder;
+    llvm::LLVMContext ctx;
+    std::unique_ptr<llvm::Module> mod;
     std::vector<llvm::Value *> allocArr;
     int allocIdx = 0;
     std::map<std::string, llvm::Value *> NamedValues;
@@ -48,6 +48,7 @@ public:
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
+    void cleanup();
 
     int getSize(Type *type);
     int getSize(BaseDecl *decl);
@@ -99,17 +100,19 @@ public:
     std::any visitArrayExpr(ArrayExpr *node) override;
     void child(Expression *node, llvm::Value *ptr);
     std::any array(ArrayExpr *node, llvm::Value *ptr);
-    void object(ObjExpr *node, llvm::Value *ptr, RType *tt);
+    void object(ObjExpr *node, llvm::Value *ptr, const RType &tt);
     std::any slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
 
     std::any visitBlock(Block *node) override;
     std::any visitVarDecl(VarDecl *node) override;
+    std::any visitVarDeclExpr(VarDeclExpr *node) override;
     std::any visitReturnStmt(ReturnStmt *node) override;
     std::any visitExprStmt(ExprStmt *node) override;
     std::any visitIfStmt(IfStmt *node) override;
     std::any visitIfLetStmt(IfLetStmt *node) override;
     std::any visitAssertStmt(AssertStmt *node) override;
     std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitForStmt(ForStmt *node) override;
     std::any visitContinueStmt(ContinueStmt *node) override;
     std::any visitBreakStmt(BreakStmt *node) override;
 };

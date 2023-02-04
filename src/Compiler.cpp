@@ -39,19 +39,34 @@ std::string trimExtenstion(const std::string &name) {
     return name.substr(0, i);
 }
 
-void InitializeModule(std::string &name, Compiler *c) {
-    //delete c->ctx;
-    delete c->mod;
-    delete c->Builder;
-    // Open a new context and module.
-    if (!c->ctx) {
-        c->ctx = new llvm::LLVMContext();
+void initModule(std::string &name, Compiler *c) {
+    c->mod = std::make_unique<llvm::Module>(name, c->ctx);
+    c->Builder = std::make_unique<llvm::IRBuilder<>>(c->ctx);
+}
+
+void Compiler::init() {
+    TargetTriple = llvm::sys::getDefaultTargetTriple();
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string Error;
+    //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
+    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
+    std::cout << "triple: " << TargetTriple << std::endl;
+    std::cout << "target: " << Target->getName() << std::endl;
+
+    if (!Target) {
+        throw std::runtime_error(Error);
     }
-    c->mod = new llvm::Module(name, *c->ctx);
-    c->Builder = new llvm::IRBuilder<>(*c->ctx);
-    c->funcMap.clear();
-    c->classMap.clear();
-    c->NamedValues.clear();
+    auto CPU = "generic";
+    auto Features = "";
+
+    llvm::TargetOptions opt;
+    auto RM = llvm::Optional<llvm::Reloc::Model>();
+    TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
 llvm::Value *Compiler::branch(llvm::Value *val) {
@@ -76,7 +91,10 @@ llvm::Value *Compiler::load(llvm::Value *val) {
 }
 
 bool isVar(Expression *e) {
-    return dynamic_cast<SimpleName *>(e) || dynamic_cast<DerefExpr *>(e) || dynamic_cast<FieldAccess *>(e) || dynamic_cast<ArrayAccess *>(e);
+    if (dynamic_cast<DerefExpr *>(e)) {
+        return true;
+    }
+    return dynamic_cast<SimpleName *>(e) || dynamic_cast<FieldAccess *>(e) || dynamic_cast<ArrayAccess *>(e);
 }
 
 llvm::Value *Compiler::loadPtr(Expression *e) {
@@ -127,8 +145,8 @@ void Compiler::make_proto(Method *m) {
     }*/
     auto mangled = mangle(m);
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
-    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, mod);
-    //f->addTypeMetadata(0, llvm::MDNode::get(*ctx, llvm::MDString::get(*ctx, m->name)));
+    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, *mod);
+    //f->addTypeMetadata(0, llvm::MDNode::get(ctx, llvm::MDString::get(ctx, m->name)));
     int i = 0;
     if (isMember(m)) {
         f->getArg(0)->setName("self");
@@ -161,8 +179,9 @@ void Compiler::makeDecl(BaseDecl *bd) {
             elems.push_back(mapType(field->type));
         }
     }
-    auto mangled = mangle(bd->type);
-    auto ty = llvm::StructType::create(*ctx, elems, mangled);
+    //auto mangled = mangle(bd->type);
+    auto mangled = bd->type->print();
+    auto ty = llvm::StructType::create(ctx, elems, mangled);
     classMap[mangled] = ty;
 }
 
@@ -322,7 +341,7 @@ void Compiler::genCode(Method *m) {
     curMethod = m;
     resolv->scopes.push_back(resolv->methodScopes[m]);
     func = funcMap[mangle(m)];
-    auto bb = llvm::BasicBlock::Create(*ctx, "", func);
+    auto bb = llvm::BasicBlock::Create(ctx, "", func);
     Builder->SetInsertPoint(bb);
     NamedValues.clear();
     initParams(m);
@@ -351,31 +370,10 @@ void Compiler::compileAll() {
         }
     }
     system((cmd + " && ./a.out").c_str());
-}
-
-void Compiler::init() {
-    TargetTriple = llvm::sys::getDefaultTargetTriple();
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllAsmParsers();
-    llvm::InitializeAllAsmPrinters();
-
-    std::string Error;
-    //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
-    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
-    std::cout << "triple: " << TargetTriple << std::endl;
-    std::cout << "target: " << Target->getName() << std::endl;
-
-    if (!Target) {
-        throw std::runtime_error(Error);
+    for (auto &[k, v] : Resolver::resolverMap) {
+        v.reset();
+        //v->unit.reset();
     }
-    auto CPU = "generic";
-    auto Features = "";
-
-    llvm::TargetOptions opt;
-    auto RM = llvm::Optional<llvm::Reloc::Model>();
-    TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
 void Compiler::emit(std::string &Filename) {
@@ -421,7 +419,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     unit = resolv->unit;
     resolv->resolveAll();
 
-    InitializeModule(name, this);
+    initModule(name, this);
     createProtos();
 
     for (auto &m : getMethods(unit.get())) {
@@ -444,13 +442,29 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     //todo fullpath
     auto outFile = noext + ".o";
     emit(outFile);
+    cleanup();
     return outFile;
+}
+
+void Compiler::cleanup() {
+    // for (auto &[k, v] : funcMap) {
+    //     v->eraseFromParent();
+    // }
+    funcMap.clear();
+    classMap.clear();
+    // for (auto &[k, v] : NamedValues) {
+    //     v->deleteValue();
+    // }
+    NamedValues.clear();
+    mod.reset();
+    Builder.reset();
+    //allocArr;
 }
 
 llvm::Value *Compiler::gen(Expression *expr) {
     auto val = expr->accept(this);
-    auto res= std::any_cast<llvm::Value *>(val);
-    if(!res) error("val null "+expr->print()+" "+val.type().name());
+    auto res = std::any_cast<llvm::Value *>(val);
+    if (!res) error("val null " + expr->print() + " " + val.type().name());
     return res;
 }
 llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
@@ -474,7 +488,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *t) {
                 Builder->CreateRet(loadPtr(t->expr.get()));
             }
         } else {
-            auto type = resolv->resolve(curMethod->type.get())->type;
+            auto type = resolv->resolve(curMethod->type.get()).type;
             Builder->CreateRet(cast(t->expr.get(), type));
         }
     } else {
@@ -494,8 +508,8 @@ std::any Compiler::visitParExpr(ParExpr *i) {
 llvm::Value *Compiler::andOr(Expression *left, Expression *right, bool isand) {
     auto l = loadPtr(left);
     auto bb = Builder->GetInsertBlock();
-    auto then = llvm::BasicBlock::Create(*ctx, "", func);
-    auto next = llvm::BasicBlock::Create(*ctx, "");
+    auto then = llvm::BasicBlock::Create(ctx, "", func);
+    auto next = llvm::BasicBlock::Create(ctx, "");
     if (isand) {
         Builder->CreateCondBr(branch(l), then, next);
     } else {
@@ -532,7 +546,7 @@ llvm::Value *Compiler::cast(Expression *expr, Type *type) {
         if (lit->suffix) {
             bits = getSize(lit->suffix.get());
         }
-        auto intType = llvm::IntegerType::get(*ctx, bits);
+        auto intType = llvm::IntegerType::get(ctx, bits);
         return llvm::ConstantInt::get(intType, atoi(lit->val.c_str()));
     }
     auto val = loadPtr(expr);
@@ -549,9 +563,9 @@ std::any Compiler::visitInfix(Infix *i) {
     if (i->op == "||") {
         return andOr(i->left, i->right, false);
     }
-    auto t1 = resolv->resolve(i->left)->type->print();
-    auto t2 = resolv->resolve(i->right)->type->print();
-    auto t3 = t1 == "bool" ? new Type("i1") : binCast(t1, t2)->type;
+    auto t1 = resolv->resolve(i->left).type->print();
+    auto t2 = resolv->resolve(i->right).type->print();
+    auto t3 = t1 == "bool" ? new Type("i1") : binCast(t1, t2).type;
     auto l = cast(i->left, t3);
     auto r = cast(i->right, t3);
     if (isComp(i->op)) {
@@ -616,26 +630,26 @@ std::any Compiler::visitUnary(Unary *u) {
 
     if (u->op == "+") return val;
     if (u->op == "-") {
-        return (llvm::Value *)Builder->CreateNSWSub(makeInt(0), val);
+        return (llvm::Value *) Builder->CreateNSWSub(makeInt(0), val);
     }
     if (u->op == "++") {
         auto tmp = Builder->CreateNSWAdd(val, makeInt(1));
         Builder->CreateStore(tmp, v);
-        return (llvm::Value *)tmp;
+        return (llvm::Value *) tmp;
     }
     if (u->op == "--") {
         auto tmp = Builder->CreateNSWSub(val, makeInt(1));
         Builder->CreateStore(tmp, v);
-        return (llvm::Value *)tmp;
+        return (llvm::Value *) tmp;
     }
     if (u->op == "!") {
         auto trunc = Builder->CreateTrunc(val, getInt(1));
         auto xorr = Builder->CreateXor(trunc, Builder->getTrue());
         auto zext = Builder->CreateZExt(xorr, getInt(8));
-        return (llvm::Value *)zext;
+        return (llvm::Value *) zext;
     }
     if (u->op == "~") {
-        return (llvm::Value *)Builder->CreateXor(val, makeInt(-1));
+        return (llvm::Value *) Builder->CreateXor(val, makeInt(-1));
     }
     throw std::runtime_error("Unary: " + u->print());
 }
@@ -643,13 +657,13 @@ std::any Compiler::visitUnary(Unary *u) {
 std::any Compiler::visitAssign(Assign *i) {
     auto l = gen(i->left);
     auto val = l;
-    auto lt = resolv->resolve(i->left);
-    auto r = cast(i->right, lt->type);
+    auto lt = resolv->resolve(i->left).type;
+    auto r = cast(i->right, lt);
     if (i->op == "=") {
-        if (isStruct(lt->type)) {
-            return (llvm::Value *)Builder->CreateMemCpy(l, llvm::MaybeAlign(0), r, llvm::MaybeAlign(0), getSize(lt->type) / 8);
+        if (isStruct(lt)) {
+            return (llvm::Value *) Builder->CreateMemCpy(l, llvm::MaybeAlign(0), r, llvm::MaybeAlign(0), getSize(lt) / 8);
         } else {
-            return (llvm::Value *)Builder->CreateStore(r, l);
+            return (llvm::Value *) Builder->CreateStore(r, l);
         }
     }
     if (isVar(i->left)) {
@@ -657,19 +671,19 @@ std::any Compiler::visitAssign(Assign *i) {
     }
     if (i->op == "+=") {
         auto tmp = Builder->CreateNSWAdd(val, r);
-        return (llvm::Value *)Builder->CreateStore(tmp, l);
+        return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
     if (i->op == "-=") {
         auto tmp = Builder->CreateNSWSub(val, r);
-        return (llvm::Value *)Builder->CreateStore(tmp, l);
+        return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
     if (i->op == "*=") {
         auto tmp = Builder->CreateNSWMul(val, r);
-        return (llvm::Value *)Builder->CreateStore(tmp, l);
+        return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
     if (i->op == "/=") {
         auto tmp = Builder->CreateSDiv(val, r);
-        return (llvm::Value *)Builder->CreateStore(tmp, l);
+        return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
     throw std::runtime_error("assign: " + i->print());
 }
@@ -685,7 +699,7 @@ std::any Compiler::visitSimpleName(SimpleName *n) {
 llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
     std::vector<llvm::Value *> args;
     args.push_back(sz);
-    return (llvm::Value *)c->Builder->CreateCall(c->mallocf, args);
+    return (llvm::Value *) c->Builder->CreateCall(c->mallocf, args);
 }
 
 std::any callPanic(MethodCall *mc, Compiler *c) {
@@ -711,7 +725,7 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
     std::vector<llvm::Value *> exit_args = {c->makeInt(1)};
     c->Builder->CreateCall(c->exit_proto, exit_args);
     c->Builder->CreateUnreachable();
-    return (llvm::Value *)c->Builder->getVoidTy();
+    return (llvm::Value *) c->Builder->getVoidTy();
 }
 
 void callPrint(MethodCall *mc, Compiler *c) {
@@ -722,7 +736,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto str = c->Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
             args.push_back(str);
         } else {
-            auto arg_type = c->resolv->resolve(a)->type;
+            auto arg_type = c->resolv->resolve(a).type;
             if (arg_type->isString()) {
                 auto src = c->gen(a);
                 //get ptr to inner char array
@@ -760,19 +774,19 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         }
         auto call = callMalloc(size, this);
         auto rt = resolv->resolve(mc);
-        return Builder->CreateBitCast(call, mapType(rt->type));
+        return Builder->CreateBitCast(call, mapType(rt.type));
     } else if (mc->name == "panic") {
         return callPanic(mc, this);
     } else {
         auto rt = resolv->resolve(mc);
-        target = rt->targetMethod;
+        target = rt.targetMethod;
         f = funcMap[mangle(target)];
     }
     int paramIdx = 0;
     if (target && target->self && !dynamic_cast<Type *>(mc->scope.get())) {
         //add this object
         auto obj = gen(mc->scope.get());
-        auto scope_type = resolv->resolve(mc->scope.get())->type;
+        auto scope_type = resolv->resolve(mc->scope.get()).type;
         if (scope_type->isPointer() || (scope_type->isPrim() && isVar(mc->scope.get()))) {
             //auto deref
             obj = Builder->CreateLoad(obj->getType()->getPointerElementType(), obj);
@@ -805,7 +819,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             args.push_back(av);
         }
     }
-    return (llvm::Value *)Builder->CreateCall(f, args);
+    return (llvm::Value *) Builder->CreateCall(f, args);
 }
 
 std::any Compiler::visitLiteral(Literal *n) {
@@ -821,20 +835,20 @@ std::any Compiler::visitLiteral(Literal *n) {
         auto len_target = Builder->CreateStructGEP(slice_ptr->getType()->getPointerElementType(), slice_ptr, 1);
         auto len = makeInt(trimmed.size(), 32);
         Builder->CreateStore(len, len_target);
-        return (llvm::Value *)str_slice_ptr;
+        return (llvm::Value *) str_slice_ptr;
     } else if (n->type == Literal::CHAR) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         auto chr = trimmed[0];
-        return (llvm::Value *)llvm::ConstantInt::get(getInt(32), chr);
+        return (llvm::Value *) llvm::ConstantInt::get(getInt(32), chr);
     } else if (n->type == Literal::INT) {
         auto bits = 32;
         if (n->suffix) {
             bits = getSize(n->suffix.get());
         }
-        auto intType = llvm::IntegerType::get(*ctx, bits);
-        return (llvm::Value *)llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
+        auto intType = llvm::IntegerType::get(ctx, bits);
+        return (llvm::Value *) llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     } else if (n->type == Literal::BOOL) {
-        return (llvm::Value *)(n->val == "true" ? Builder->getTrue() : Builder->getFalse());
+        return (llvm::Value *) (n->val == "true" ? Builder->getTrue() : Builder->getFalse());
     }
     throw std::runtime_error("literal: " + n->print());
 }
@@ -842,8 +856,8 @@ std::any Compiler::visitLiteral(Literal *n) {
 std::any Compiler::visitAssertStmt(AssertStmt *n) {
     auto str = n->expr->print();
     auto cond = loadPtr(n->expr.get());
-    auto then = llvm::BasicBlock::Create(*ctx, "", func);
-    auto next = llvm::BasicBlock::Create(*ctx, "");
+    auto then = llvm::BasicBlock::Create(ctx, "", func);
+    auto next = llvm::BasicBlock::Create(ctx, "");
     Builder->CreateCondBr(branch(cond), next, then);
     Builder->SetInsertPoint(then);
     //print error and exit
@@ -857,10 +871,13 @@ std::any Compiler::visitAssertStmt(AssertStmt *n) {
     func->getBasicBlockList().push_back(next);
     return nullptr;
 }
-
-std::any Compiler::visitVarDecl(VarDecl *n) {
-    for (auto f : n->decl->list) {
-        auto type = f->type ? f->type.get() : resolv->resolve(f->rhs.get())->type;
+std::any Compiler::visitVarDecl(VarDecl *node) {
+    node->decl->accept(this);
+    return {};
+}
+std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
+    for (auto f : n->list) {
+        auto type = f->type ? f->type.get() : resolv->getType(f->rhs.get());
         auto ptr = NamedValues[f->name];
         //no unnecessary alloc
         if (doesAlloc(f->rhs.get())) {
@@ -894,20 +911,20 @@ std::any Compiler::visitDerefExpr(DerefExpr *n) {
     auto val = gen(n->expr);
     auto ty = val->getType()->getPointerElementType();
     //todo struct memcpy
-    return (llvm::Value *)Builder->CreateLoad(ty, val);
+    return (llvm::Value *) Builder->CreateLoad(ty, val);
 }
 
 EnumDecl *findEnum(Type *type, Resolver *resolv) {
     auto rt = resolv->resolve(type);
-    return dynamic_cast<EnumDecl *>(rt->targetDecl);
+    return dynamic_cast<EnumDecl *>(rt.targetDecl);
 }
 
 std::any Compiler::visitObjExpr(ObjExpr *n) {
     auto tt = resolv->resolve(n);
     llvm::Value *ptr;
     if (n->isPointer) {
-        auto ty = mapType(tt->type);
-        ptr = callMalloc(makeInt(getSize(tt->targetDecl) / 8, 64), this);
+        auto ty = mapType(tt.type);
+        ptr = callMalloc(makeInt(getSize(tt.targetDecl) / 8, 64), this);
         ptr = Builder->CreateBitCast(ptr, ty);
     } else {
         ptr = allocArr[allocIdx++];
@@ -940,11 +957,11 @@ void Compiler::setField(Expression *expr, Type *type, bool do_cast, llvm::Value 
     }
 }
 
-void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
-    auto ty = mapType(tt->type);
-    if (tt->targetDecl->isEnum()) {
+void Compiler::object(ObjExpr *n, llvm::Value *ptr, const RType &tt) {
+    auto ty = mapType(tt.type);
+    if (tt.targetDecl->isEnum()) {
         //enum
-        auto decl = dynamic_cast<EnumDecl *>(tt->targetDecl);
+        auto decl = dynamic_cast<EnumDecl *>(tt.targetDecl);
         auto variant_index = Resolver::findVariant(decl, n->type->name);
 
         setOrdinal(variant_index, ptr);
@@ -965,7 +982,7 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, RType *tt) {
         }
     } else {
         //class
-        auto decl = dynamic_cast<StructDecl *>(tt->targetDecl);
+        auto decl = dynamic_cast<StructDecl *>(tt.targetDecl);
         for (int i = 0; i < n->entries.size(); i++) {
             auto &e = n->entries[i];
             int index;
@@ -994,15 +1011,15 @@ std::any Compiler::visitType(Type *n) {
 
 std::any Compiler::visitFieldAccess(FieldAccess *n) {
     auto rt = resolv->resolve(n->scope);
-    if (rt->type->isSlice()) {
+    if (rt.type->isSlice()) {
         auto scopeVar = gen(n->scope);
         return Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, SLICE_LEN_INDEX);
         //todo load since cant mutate
     }
-    if (rt->type->isString()) {
-        rt = resolv->resolve(rt->type);
+    if (rt.type->isString()) {
+        rt = resolv->resolve(rt.type);
     }
-    auto decl = rt->targetDecl;
+    auto decl = rt.targetDecl;
     int index;
     if (decl->isEnum()) {
         index = 0;
@@ -1012,22 +1029,22 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
     }
     auto scopeVar = gen(n->scope);
     auto ty = scopeVar->getType()->getPointerElementType();
-    if (dynamic_cast<PointerType *>(rt->type)) {
+    if (dynamic_cast<PointerType *>(rt.type)) {
         //auto deref
         auto load = Builder->CreateLoad(ty, scopeVar);
-        return (llvm::Value *)Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, index);
+        return (llvm::Value *) Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, index);
     } else {
-        return (llvm::Value *)Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
+        return (llvm::Value *) Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
     }
 }
 
 std::any Compiler::visitIfStmt(IfStmt *b) {
     auto cond = branch(loadPtr(b->expr));
-    auto then = llvm::BasicBlock::Create(*ctx, "", func);
-    llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(*ctx, "");
+    auto then = llvm::BasicBlock::Create(ctx, "body", func);
+    llvm::BasicBlock *elsebb = nullptr;
+    auto next = llvm::BasicBlock::Create(ctx, "next");
     if (b->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(*ctx, "");
+        elsebb = llvm::BasicBlock::Create(ctx, "else");
         Builder->CreateCondBr(cond, then, elsebb);
     } else {
         Builder->CreateCondBr(cond, then, next);
@@ -1056,15 +1073,15 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto ty = rhs->getType()->getPointerElementType();
     auto ordptr = Builder->CreateStructGEP(ty, rhs, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
-    auto decl = findEnum(b->type->scope, resolv.get());
+    auto decl = findEnum(b->type->scope.get(), resolv.get());
     auto index = Resolver::findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 
-    auto then = llvm::BasicBlock::Create(*ctx, "", func);
+    auto then = llvm::BasicBlock::Create(ctx, "", func);
     llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(*ctx, "");
+    auto next = llvm::BasicBlock::Create(ctx, "");
     if (b->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(*ctx, "");
+        elsebb = llvm::BasicBlock::Create(ctx, "");
         Builder->CreateCondBr(branch(cmp), then, elsebb);
     } else {
         Builder->CreateCondBr(branch(cmp), then, next);
@@ -1112,18 +1129,18 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
 }
 
 std::any Compiler::visitIsExpr(IsExpr *ie) {
-    auto decl = findEnum(ie->type->scope, resolv.get());
+    auto decl = findEnum(ie->type->scope.get(), resolv.get());
     auto val = gen(ie->expr);
     auto ordptr = Builder->CreateStructGEP(val->getType()->getPointerElementType(), val, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
     auto index = Resolver::findVariant(decl, ie->type->name);
-    return (llvm::Value *)Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
+    return (llvm::Value *) Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 }
 
 std::any Compiler::visitAsExpr(AsExpr *e) {
     auto val = gen(e->expr);
-    auto ty = resolv->resolve(e->type);
-    return extend(val, ty->type, this);
+    auto ty = resolv->getType(e->type);
+    return extend(val, ty, this);
 }
 
 
@@ -1165,8 +1182,7 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, Type *arrty) {
 }
 
 std::any Compiler::visitArrayAccess(ArrayAccess *node) {
-    auto arr = resolv->resolve(node->array);
-    auto type = arr->type;
+    auto type = resolv->getType(node->array);
     if (node->index2) {
         auto sp = allocArr.at(allocIdx++);
         slice(node, sp, type);
@@ -1186,7 +1202,7 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         auto ty = mapType(type);
         idx.insert(idx.begin(), makeInt(0, 32));
         ty = src->getType()->getPointerElementType();
-        return (llvm::Value *)Builder->CreateGEP(ty, src, idx);
+        return (llvm::Value *) Builder->CreateGEP(ty, src, idx);
     } else if (type->isSlice()) {
         //slice access
         auto elem = dynamic_cast<SliceType *>(type)->type;
@@ -1197,18 +1213,18 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         arr = Builder->CreateLoad(arr->getType()->getPointerElementType(), arr);
         arr = Builder->CreateBitCast(arr, elemty->getPointerTo());
         auto tt = arr->getType()->getPointerElementType();
-        return (llvm::Value *)Builder->CreateGEP(tt, arr, idx);
+        return (llvm::Value *) Builder->CreateGEP(tt, arr, idx);
     } else {
         //pointer access
         src = load(src);
-        return (llvm::Value *)Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
+        return (llvm::Value *) Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
     }
 }
 
 std::any Compiler::visitWhileStmt(WhileStmt *node) {
-    auto then = llvm::BasicBlock::Create(*ctx);
-    auto condbb = llvm::BasicBlock::Create(*ctx, "", func);
-    auto next = llvm::BasicBlock::Create(*ctx);
+    auto then = llvm::BasicBlock::Create(ctx, "body");
+    auto condbb = llvm::BasicBlock::Create(ctx, "cont_test", func);
+    auto next = llvm::BasicBlock::Create(ctx, "next");
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
     auto c = loadPtr(node->expr.get());
@@ -1224,6 +1240,41 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
     return nullptr;
+}
+
+std::any Compiler::visitForStmt(ForStmt *node) {
+    if (node->decl) {
+        node->decl->accept(this);
+    }
+    auto then = llvm::BasicBlock::Create(ctx, "body");
+    auto condbb = llvm::BasicBlock::Create(ctx, "cont_test", func);
+    auto updatebb = llvm::BasicBlock::Create(ctx, "update", func);
+    auto next = llvm::BasicBlock::Create(ctx, "next");
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(condbb);
+    if (node->cond) {
+        auto c = loadPtr(node->cond.get());
+        Builder->CreateCondBr(branch(c), then, next);
+    } else {
+        Builder->CreateBr(then);
+    }
+
+    Builder->SetInsertPoint(then);
+    func->getBasicBlockList().push_back(then);
+    loops.push_back(updatebb);
+    loopNext.push_back(next);
+    node->body->accept(this);
+    Builder->CreateBr(updatebb);
+    Builder->SetInsertPoint(updatebb);
+    for (auto &u : node->updaters) {
+        u->accept(this);
+    }
+    loops.pop_back();
+    loopNext.pop_back();
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(next);
+    func->getBasicBlockList().push_back(next);
+    return {};
 }
 
 std::any Compiler::visitContinueStmt(ContinueStmt *node) {
@@ -1243,7 +1294,7 @@ std::any Compiler::visitArrayExpr(ArrayExpr *node) {
 }
 
 void Compiler::child(Expression *e, llvm::Value *ptr) {
-    ptr = Builder->CreateBitCast(ptr, mapType(resolv->resolve(e)->type)->getPointerTo());
+    ptr = Builder->CreateBitCast(ptr, mapType(resolv->getType(e))->getPointerTo());
     auto a = dynamic_cast<ArrayExpr *>(e);
     if (a) {
         array(a, ptr);
@@ -1251,7 +1302,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
     }
     auto aa = dynamic_cast<ArrayAccess *>(e);
     if (aa) {
-        auto arrty = resolv->resolve(aa->array)->type;
+        auto arrty = resolv->getType(aa->array);
         slice(aa, ptr, arrty);
         return;
     }
@@ -1268,7 +1319,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
 }
 
 std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
-    auto type = resolv->resolve(node->list[0])->type;
+    auto type = resolv->getType(node->list[0]);
     if (node->isSized()) {
         //auto expr = cast(node->list[0], type);
         //create cons and memcpy
@@ -1283,7 +1334,7 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
                 child(e, elem_target);
             } else if (isStruct(type)) {
                 auto val = gen(e);
-                Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt->type) / 8);
+                Builder->CreateMemCpy(elem_target, llvm::MaybeAlign(0), val, llvm::MaybeAlign(0), getSize(rt.type) / 8);
             } else {
                 Builder->CreateStore(cast(e, type), elem_target);
             }

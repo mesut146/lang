@@ -61,7 +61,7 @@ std::unique_ptr<Statement> parseFor(Parser *p) {
     p->consume(LPAREN);
     auto var = p->parseVarDeclExpr();
     p->consume(SEMI);
-    res->decl = var;
+    res->decl.reset(var);
     if (!p->first()->is(SEMI)) {
         res->cond.reset(p->parseExpr());
     }

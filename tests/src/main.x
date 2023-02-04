@@ -103,12 +103,10 @@ func main(): i32{
   varTest();
   condTest();
   infixTest();
-  ifTest();
-  elseTest();
+  flowTest();
   enumTest();
   classTest();
   mallocTest();
-  whileTest();
   prims();
   importTest();
   genericTest();

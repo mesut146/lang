@@ -75,7 +75,7 @@ void MethodResolver::infer(Type *arg, Type *prm, std::map<std::string, Type *> &
     }
 }
 
-RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
+RType Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
     if (list.empty()) {
         error("no such method: " + mc->print());
     }
@@ -116,14 +116,14 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
             }
             if (mc->scope) {
                 auto scope = resolve(mc->scope.get());
-                for (int i = 0; i < scope->type->typeArgs.size(); i++) {
-                    typeMap[target->typeArgs[i]->name] = scope->type->typeArgs[i];
+                for (int i = 0; i < scope.type->typeArgs.size(); i++) {
+                    typeMap[target->typeArgs[i]->name] = scope.type->typeArgs[i];
                 }
             }
             for (int i = 0; i < mc->args.size(); i++) {
                 auto arg_type = resolve(mc->args[i]);
                 auto target_type = target->params[i]->type.get();
-                MethodResolver::infer(arg_type->type, target_type, typeMap);
+                MethodResolver::infer(arg_type.type, target_type, typeMap);
             }
             for (auto &i : typeMap) {
                 if (i.second == nullptr) {
@@ -137,7 +137,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
             //place specified type args
             for (int i = 0; i < mc->typeArgs.size(); i++) {
                 auto argt = resolve(mc->typeArgs[i]);
-                typeMap[target->typeArgs[i]->name] = argt->type;
+                typeMap[target->typeArgs[i]->name] = argt.type;
             }
         }
         auto newMethod = mr.generateMethod(typeMap, target, mc);
@@ -146,7 +146,7 @@ RType *Resolver::handleCallResult(std::vector<Method *> &list, MethodCall *mc) {
         usedMethods.push_back(target);
     }
     auto res = clone(resolve(target->type.get()));
-    res->targetMethod = target;
+    res.targetMethod = target;
     return res;
 }
 
@@ -161,7 +161,7 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Metho
     if (m->parent && m->parent->isImpl()) {
         auto impl = dynamic_cast<Impl *>(m->parent);
         auto scope = r->resolve(mc->scope.get());
-        auto newImpl = new Impl(clone(scope->type));
+        auto newImpl = new Impl(clone(scope.type));
         res->parent = newImpl;
     }
     r->generatedMethods.push_back(res);
@@ -219,8 +219,8 @@ std::optional<std::string> MethodResolver::isSame(MethodCall *mc, Method *m) {
         if (!impl->isGeneric && !impl->type->typeArgs.empty()) {
             auto scope = r->resolve(mc->scope.get());
             //check they belong same impl
-            for (int i = 0; i < scope->type->typeArgs.size(); i++) {
-                if (scope->type->typeArgs[i]->print() != impl->type->typeArgs[i]->print()) return "not same impl";
+            for (int i = 0; i < scope.type->typeArgs.size(); i++) {
+                if (scope.type->typeArgs[i]->print() != impl->type->typeArgs[i]->print()) return "not same impl";
             }
         }
     }
@@ -233,7 +233,7 @@ std::optional<std::string> MethodResolver::checkArgs(std::vector<Expression *> &
     if (args.size() != params.size()) return "arg size mismatched";
     auto typeParams = m->isGeneric ? m->typeArgs : std::vector<Type *>();
     for (int i = 0; i < args.size(); i++) {
-        auto t1 = r->resolve(args[i])->type;
+        auto t1 = r->resolve(args[i]).type;
         auto t2 = params[i]->type.get();
         if (m->self && i == 0) {
             if (t1->isPointer()) {

@@ -40,3 +40,20 @@ func whileTest(){
   }
   print("\nwhileTest done\n");
 }
+
+func forTest(){
+  for(let i = 0, j = 1; i < 10; ++i, ++j){
+    if(i % 2 == 0) {
+      continue; 
+    }
+    print("i=%d, ", i);
+  }
+  print("\nforTest done\n");
+}
+
+func flowTest(){
+  ifTest();
+  elseTest();
+  whileTest();
+  forTest();
+}
