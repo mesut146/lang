@@ -449,7 +449,9 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
 
 llvm::Value *Compiler::gen(Expression *expr) {
     auto val = expr->accept(this);
-    return std::any_cast<llvm::Value *>(expr->accept(this));
+    auto res= std::any_cast<llvm::Value *>(val);
+    if(!res) error("val null "+expr->print()+" "+val.type().name());
+    return res;
 }
 llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
     return gen(expr.get());
@@ -614,26 +616,26 @@ std::any Compiler::visitUnary(Unary *u) {
 
     if (u->op == "+") return val;
     if (u->op == "-") {
-        return Builder->CreateNSWSub(makeInt(0), val);
+        return (llvm::Value *)Builder->CreateNSWSub(makeInt(0), val);
     }
     if (u->op == "++") {
         auto tmp = Builder->CreateNSWAdd(val, makeInt(1));
         Builder->CreateStore(tmp, v);
-        return tmp;
+        return (llvm::Value *)tmp;
     }
     if (u->op == "--") {
         auto tmp = Builder->CreateNSWSub(val, makeInt(1));
         Builder->CreateStore(tmp, v);
-        return tmp;
+        return (llvm::Value *)tmp;
     }
     if (u->op == "!") {
         auto trunc = Builder->CreateTrunc(val, getInt(1));
         auto xorr = Builder->CreateXor(trunc, Builder->getTrue());
         auto zext = Builder->CreateZExt(xorr, getInt(8));
-        return zext;
+        return (llvm::Value *)zext;
     }
     if (u->op == "~") {
-        return Builder->CreateXor(val, makeInt(-1));
+        return (llvm::Value *)Builder->CreateXor(val, makeInt(-1));
     }
     throw std::runtime_error("Unary: " + u->print());
 }
@@ -645,9 +647,9 @@ std::any Compiler::visitAssign(Assign *i) {
     auto r = cast(i->right, lt->type);
     if (i->op == "=") {
         if (isStruct(lt->type)) {
-            return Builder->CreateMemCpy(l, llvm::MaybeAlign(0), r, llvm::MaybeAlign(0), getSize(lt->type) / 8);
+            return (llvm::Value *)Builder->CreateMemCpy(l, llvm::MaybeAlign(0), r, llvm::MaybeAlign(0), getSize(lt->type) / 8);
         } else {
-            return Builder->CreateStore(r, l);
+            return (llvm::Value *)Builder->CreateStore(r, l);
         }
     }
     if (isVar(i->left)) {
@@ -655,19 +657,19 @@ std::any Compiler::visitAssign(Assign *i) {
     }
     if (i->op == "+=") {
         auto tmp = Builder->CreateNSWAdd(val, r);
-        return Builder->CreateStore(tmp, l);
+        return (llvm::Value *)Builder->CreateStore(tmp, l);
     }
     if (i->op == "-=") {
         auto tmp = Builder->CreateNSWSub(val, r);
-        return Builder->CreateStore(tmp, l);
+        return (llvm::Value *)Builder->CreateStore(tmp, l);
     }
     if (i->op == "*=") {
         auto tmp = Builder->CreateNSWMul(val, r);
-        return Builder->CreateStore(tmp, l);
+        return (llvm::Value *)Builder->CreateStore(tmp, l);
     }
     if (i->op == "/=") {
         auto tmp = Builder->CreateSDiv(val, r);
-        return Builder->CreateStore(tmp, l);
+        return (llvm::Value *)Builder->CreateStore(tmp, l);
     }
     throw std::runtime_error("assign: " + i->print());
 }
@@ -683,7 +685,7 @@ std::any Compiler::visitSimpleName(SimpleName *n) {
 llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
     std::vector<llvm::Value *> args;
     args.push_back(sz);
-    return c->Builder->CreateCall(c->mallocf, args);
+    return (llvm::Value *)c->Builder->CreateCall(c->mallocf, args);
 }
 
 std::any callPanic(MethodCall *mc, Compiler *c) {
@@ -709,7 +711,7 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
     std::vector<llvm::Value *> exit_args = {c->makeInt(1)};
     c->Builder->CreateCall(c->exit_proto, exit_args);
     c->Builder->CreateUnreachable();
-    return c->Builder->getVoidTy();
+    return (llvm::Value *)c->Builder->getVoidTy();
 }
 
 void callPrint(MethodCall *mc, Compiler *c) {
@@ -803,7 +805,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             args.push_back(av);
         }
     }
-    return Builder->CreateCall(f, args);
+    return (llvm::Value *)Builder->CreateCall(f, args);
 }
 
 std::any Compiler::visitLiteral(Literal *n) {
@@ -819,20 +821,20 @@ std::any Compiler::visitLiteral(Literal *n) {
         auto len_target = Builder->CreateStructGEP(slice_ptr->getType()->getPointerElementType(), slice_ptr, 1);
         auto len = makeInt(trimmed.size(), 32);
         Builder->CreateStore(len, len_target);
-        return str_slice_ptr;
+        return (llvm::Value *)str_slice_ptr;
     } else if (n->type == Literal::CHAR) {
         auto trimmed = n->val.substr(1, n->val.size() - 2);
         auto chr = trimmed[0];
-        return llvm::ConstantInt::get(getInt(32), chr);
+        return (llvm::Value *)llvm::ConstantInt::get(getInt(32), chr);
     } else if (n->type == Literal::INT) {
         auto bits = 32;
         if (n->suffix) {
             bits = getSize(n->suffix.get());
         }
         auto intType = llvm::IntegerType::get(*ctx, bits);
-        return llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
+        return (llvm::Value *)llvm::ConstantInt::get(intType, atoi(n->val.c_str()));
     } else if (n->type == Literal::BOOL) {
-        return n->val == "true" ? Builder->getTrue() : Builder->getFalse();
+        return (llvm::Value *)(n->val == "true" ? Builder->getTrue() : Builder->getFalse());
     }
     throw std::runtime_error("literal: " + n->print());
 }
@@ -885,8 +887,6 @@ std::any Compiler::visitVarDecl(VarDecl *n) {
 std::any Compiler::visitRefExpr(RefExpr *n) {
     auto inner = gen(n->expr);
     //todo rvalue
-    auto pt = inner->getType();
-    //todo not needed for name,already ptr
     return inner;
 }
 
@@ -894,7 +894,7 @@ std::any Compiler::visitDerefExpr(DerefExpr *n) {
     auto val = gen(n->expr);
     auto ty = val->getType()->getPointerElementType();
     //todo struct memcpy
-    return Builder->CreateLoad(ty, val);
+    return (llvm::Value *)Builder->CreateLoad(ty, val);
 }
 
 EnumDecl *findEnum(Type *type, Resolver *resolv) {
@@ -1015,10 +1015,9 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
     if (dynamic_cast<PointerType *>(rt->type)) {
         //auto deref
         auto load = Builder->CreateLoad(ty, scopeVar);
-        return Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, index);
-
+        return (llvm::Value *)Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, index);
     } else {
-        return Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
+        return (llvm::Value *)Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
     }
 }
 
@@ -1118,7 +1117,7 @@ std::any Compiler::visitIsExpr(IsExpr *ie) {
     auto ordptr = Builder->CreateStructGEP(val->getType()->getPointerElementType(), val, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
     auto index = Resolver::findVariant(decl, ie->type->name);
-    return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
+    return (llvm::Value *)Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 }
 
 std::any Compiler::visitAsExpr(AsExpr *e) {
@@ -1170,7 +1169,8 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     auto type = arr->type;
     if (node->index2) {
         auto sp = allocArr.at(allocIdx++);
-        return slice(node, sp, type);
+        slice(node, sp, type);
+        return sp;
     }
     auto src = gen(node->array);
     if (type->isPointer()) {
@@ -1186,7 +1186,7 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         auto ty = mapType(type);
         idx.insert(idx.begin(), makeInt(0, 32));
         ty = src->getType()->getPointerElementType();
-        return Builder->CreateGEP(ty, src, idx);
+        return (llvm::Value *)Builder->CreateGEP(ty, src, idx);
     } else if (type->isSlice()) {
         //slice access
         auto elem = dynamic_cast<SliceType *>(type)->type;
@@ -1197,11 +1197,11 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         arr = Builder->CreateLoad(arr->getType()->getPointerElementType(), arr);
         arr = Builder->CreateBitCast(arr, elemty->getPointerTo());
         auto tt = arr->getType()->getPointerElementType();
-        return Builder->CreateGEP(tt, arr, idx);
+        return (llvm::Value *)Builder->CreateGEP(tt, arr, idx);
     } else {
         //pointer access
         src = load(src);
-        return Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
+        return (llvm::Value *)Builder->CreateGEP(src->getType()->getPointerElementType(), src, idx);
     }
 }
 

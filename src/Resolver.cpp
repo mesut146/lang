@@ -42,7 +42,7 @@ RType *clone(RType *rt) {
 
 Type *copy(Type *arg) {
     AstCopier copier;
-    return std::any_cast<Type *>(arg->accept(&copier));
+    return (Type*)std::any_cast<Expression *>(arg->accept(&copier));
 }
 
 RType *makeSimple(const std::string &name) {
@@ -90,18 +90,18 @@ std::any Generator::visitType(Type *type) {
     type = (Type *) std::any_cast<Expression *>(AstCopier::visitType(type));
     if (type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(type);
-        ptr->type = std::any_cast<Type *>(ptr->type->accept(this));
-        return (Type *) ptr;
+        ptr->type = (Type*)std::any_cast<Expression *>(ptr->type->accept(this));
+        return (Expression *) ptr;
     }
     for (auto &ta : type->typeArgs) {
-        ta = std::any_cast<Type *>(ta->accept(this));
+        ta = (Type*)std::any_cast<Expression *>(ta->accept(this));
     }
     auto str = type->print();
     auto it = map.find(str);
     if (it != map.end()) {
-        return (Type *) std::any_cast<Expression *>(AstCopier::visitType(it->second));
+        return std::any_cast<Expression *>(AstCopier::visitType(it->second));
     }
-    return type;
+    return (Expression*)type;
 }
 
 int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
@@ -148,7 +148,7 @@ VarHolder *Scope::find(const std::string &name) {
 std::string Resolver::getId(Expression *e) {
     auto res = e->accept(idgen);
     if (res.has_value()) {
-        return *std::any_cast<std::string *>(res);
+        return std::any_cast<std::string>(res);
     }
     throw std::runtime_error("id: " + e->print());
 }
@@ -235,7 +235,7 @@ RType *Resolver::resolve(Expression *expr) {
     if (!idtmp.has_value()) {
         return std::any_cast<RType *>(expr->accept(this));
     }
-    auto &id = *std::any_cast<std::string *>(idtmp);
+    auto id = std::any_cast<std::string>(idtmp);
     auto it = cache.find(id);
     if (it != cache.end()) return it->second;
     auto res = std::any_cast<RType *>(expr->accept(this));
@@ -432,7 +432,7 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
             auto ev2 = new EnumVariant;
             ev2->name = ev->name;
             for (auto &field : ev->fields) {
-                auto ftype = std::any_cast<Type *>(field->type->accept(gen));
+                auto ftype = (Type*)std::any_cast<Expression *>(field->type->accept(gen));
                 auto field2 = new FieldDecl(field->name, ftype);
                 ev2->fields.push_back(std::unique_ptr<FieldDecl>(field2));
             }
@@ -446,7 +446,7 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         auto td = dynamic_cast<StructDecl *>(decl);
 
         for (auto &field : td->fields) {
-            auto ftype = std::any_cast<Type *>(field->type->accept(gen));
+            auto ftype = (Type*)std::any_cast<Expression *>(field->type->accept(gen));
             auto field2 = new FieldDecl(field->name, ftype);
             res->fields.push_back(std::unique_ptr<FieldDecl>(field2));
         }

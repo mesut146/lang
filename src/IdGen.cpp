@@ -8,12 +8,12 @@ std::any IdGen::visitInfix(Infix *node) {
 
 std::any IdGen::visitMethodCall(MethodCall *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
-    return new std::string(id);
+    return id;
 }
 
 std::any IdGen::visitSimpleName(SimpleName *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
-    return new std::string(id);
+    return id;
 }
 std::any IdGen::visitLiteral(Literal *node) {
     return {};
@@ -26,7 +26,7 @@ std::any IdGen::visitType(Type *node) {
 }
 std::any IdGen::visitObjExpr(ObjExpr *node) {
     auto id = mangle(resolver->curMethod) + "#" + node->print();
-    return new std::string(id);
+    return id;
 }
 std::any IdGen::visitFieldAccess(FieldAccess *node) {
     return {};

@@ -184,7 +184,7 @@ public:
 
     AllocCollector(Compiler *c) : compiler(c) {}
 
-    auto alloca(llvm::Type *ty) {
+    llvm::Value* alloca(llvm::Type *ty) {
         auto ptr = compiler->Builder->CreateAlloca(ty);
         compiler->allocArr.push_back(ptr);
         return ptr;
@@ -217,10 +217,8 @@ public:
         if (node->isPointer()) {
             return nullptr;
         }
-        auto r = compiler->resolv->resolve(node);
         auto ty = compiler->mapType(node->scope);
-        auto ptr = compiler->Builder->CreateAlloca(ty, (unsigned) 0);
-        compiler->allocArr.push_back(ptr);
+        auto ptr = alloca(ty);
         return ptr;
     }
     std::any visitObjExpr(ObjExpr *node) override {
