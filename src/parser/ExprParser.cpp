@@ -172,10 +172,12 @@ Expression *makeObj(Parser *p, bool isPointer, Type *type) {
     res->isPointer = isPointer;
     res->type.reset(type);
     p->consume(LBRACE);
-    res->entries.push_back(parseEntry(p));
-    while (p->is(COMMA)) {
-        p->consume(COMMA);
+    if(!p->is(RBRACE)){
         res->entries.push_back(parseEntry(p));
+        while (p->is(COMMA)) {
+            p->consume(COMMA);
+            res->entries.push_back(parseEntry(p));
+        }
     }
     //todo check entry keys for mix
     p->consume(RBRACE);
@@ -347,10 +349,6 @@ Expression *PRIM2(Parser *p) {
             p->consume(RBRACKET);
             lhs = res;
         }
-    }
-    if (p->is(BANG)) {
-        p->consume(BANG);
-        return new UnwrapExpr(lhs);
     }
     return lhs;
 }

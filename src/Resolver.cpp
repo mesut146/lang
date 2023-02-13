@@ -334,6 +334,16 @@ std::any Resolver::visitTrait(Trait *node) {
     return nullptr;
 }
 
+std::any Resolver::visitExtern(Extern *node){
+    for (auto &m : node->methods) {
+        if (!m->typeArgs.empty()) {
+            continue;
+        }
+        m->accept(this);
+    }
+    return nullptr;
+}
+
 std::any Resolver::visitFieldDecl(FieldDecl *node) {
     auto res = clone(resolve(node->type));
     res.vh = VarHolder(node);
@@ -373,7 +383,7 @@ std::any Resolver::visitMethod(Method *m) {
 }
 
 std::any Resolver::visitParam(Param *p) {
-    auto id = mangle(p->method) + "#" + p->name;
+    auto id = printMethod(p->method) + "#" + p->name;
     if (paramMap.find(id) != paramMap.end()) return paramMap[id];
     auto res = clone(resolve(p->type.get()));
     paramMap[id] = res;
@@ -785,7 +795,7 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
 
 std::any Resolver::visitRefExpr(RefExpr *node) {
     //todo field access
-    if (!iof<SimpleName *>(node->expr.get())) {
+    if (!iof<SimpleName *>(node->expr.get()) && !iof<ArrayAccess *>(node->expr.get())) {
         error("ref expr is not supported: " + node->expr->print());
     }
     auto inner = clone(resolve(node->expr.get()));
@@ -1052,23 +1062,15 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     throw std::runtime_error("array expr is not a pointer: " + node->print());
 }
 
-RType scopedMethod(MethodCall *mc, Resolver *r) {
-    auto scope = r->resolve(mc->scope.get());
-    std::vector<Method *> list;
-    MethodResolver mr(r);
-    mr.getMethods(scope.type, mc->name, list);
-    return r->handleCallResult(list, mc);
-}
-
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     auto id = getId(mc);
     auto it = cache.find(id);
     if (it != cache.end()) return it->second;
-    for (auto arg : mc->args) {
-        resolve(arg);
-    }
+    auto sig = Signature::make(mc, this);
     if (mc->scope) {
-        auto res = scopedMethod(mc, this);
+        MethodResolver mr(this);
+        auto list=mr.collect(sig);
+        auto res = handleCallResult(list, &sig);
         cache[id] = res;
         return res;
     }
@@ -1079,7 +1081,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         if (mc->typeArgs.empty()) {
             in = new Type("i8");
         } else {
-            in = resolve(mc->typeArgs[0]).type;
+            in = getType(mc->typeArgs[0]);
         }
         return RType(new PointerType(in));
     } else if (mc->name == "panic") {
@@ -1092,14 +1094,10 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
-    std::vector<Method *> list;
-    findMethod(mc, list);
-    for (auto is : unit->imports) {
-        auto resolver = getResolver(root + "/" + join(is->list, "/") + ".x", root);
-        resolver->resolveAll();
-        resolver->findMethod(mc, list);
-    }
-    auto res = handleCallResult(list, mc);
+    
+    MethodResolver mr(this);
+    auto list=mr.collect(sig);
+    auto res = handleCallResult(list, &sig);
     cache[id] = res;
     return res;
 }

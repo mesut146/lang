@@ -49,6 +49,12 @@ impl A<T>{
   }
 }
 
+impl [i32]{
+   func test(self){}
+}
+
+impl [i32; 3]{}
+
 func implTest(){
   let x = 5;
   assert x.min(6) == 5;
@@ -64,5 +70,6 @@ func implTest(){
   assert A<i32>::add(5, 6) == 11;
   assert A<i64>::add(5, 6) == 11;
 
+  [1, 2, 3][0..3].test();
   print("implTest done\n");
 }

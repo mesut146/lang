@@ -7,12 +7,12 @@ std::any IdGen::visitInfix(Infix *node) {
 }
 
 std::any IdGen::visitMethodCall(MethodCall *node) {
-    auto id = mangle(resolver->curMethod) + "#" + node->print();
+    auto id = printMethod(resolver->curMethod) + "#" + node->print();
     return id;
 }
 
 std::any IdGen::visitSimpleName(SimpleName *node) {
-    auto id = mangle(resolver->curMethod) + "#" + node->print();
+    auto id = printMethod(resolver->curMethod) + "#" + node->print();
     return id;
 }
 std::any IdGen::visitLiteral(Literal *node) {
@@ -25,7 +25,7 @@ std::any IdGen::visitType(Type *node) {
     return {};
 }
 std::any IdGen::visitObjExpr(ObjExpr *node) {
-    auto id = mangle(resolver->curMethod) + "#" + node->print();
+    auto id = printMethod(resolver->curMethod) + "#" + node->print();
     return id;
 }
 std::any IdGen::visitFieldAccess(FieldAccess *node) {

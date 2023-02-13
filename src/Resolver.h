@@ -14,6 +14,7 @@
 class Symbol;
 class RType;
 class Resolver;
+class Signature;
 
 bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
@@ -75,7 +76,7 @@ static std::string printMethod(Method *m) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
             s += impl->type->print() + "::";
-        } else {
+        } else if(m->parent->isTrait()){
             auto t = dynamic_cast<Trait *>(m->parent);
             s += t->type->print() + "::";
         }
@@ -111,7 +112,7 @@ static std::string mangle(Method *m) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
             s += impl->type->print() + "::";
-        } else {
+        } else if(m->parent->isTrait()){
             auto t = dynamic_cast<Trait *>(m->parent);
             s += t->type->print() + "::";
         }
@@ -128,6 +129,7 @@ static std::string mangle(Method *m) {
         s += ">";
     }
     //todo self
+    if(m->parent &&m->parent->isExtern()) return s;
     for (auto &prm : m->params) {
         s += "_" + prm->type.get()->print();
     }
@@ -233,7 +235,7 @@ public:
     IdGen *idgen;
     bool isResolved = false;
     std::vector<BaseDecl *> usedTypes;
-    std::vector<Method *> usedMethods;
+    std::unordered_set<Method *> usedMethods;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
     std::string root;
 
@@ -245,8 +247,8 @@ public:
 
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
-    RType handleCallResult(std::vector<Method *> &list, MethodCall *mc);
-    void findMethod(MethodCall *mc, std::vector<Method *> &list);
+    RType handleCallResult(std::vector<Method *> &list, Signature *sig);
+    void findMethod(std::string& name, std::vector<Method *> &list);
     bool isCyclic(Type *type, BaseDecl *target);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
 
@@ -264,6 +266,7 @@ public:
     std::any visitEnumDecl(EnumDecl *bd) override;
     std::any visitImpl(Impl *bd);
     std::any visitTrait(Trait *node);
+    std::any visitExtern(Extern *node);
     std::any visitFieldDecl(FieldDecl *fd) override;
     std::any visitMethod(Method *m) override;
     std::any visitParam(Param *p) override;

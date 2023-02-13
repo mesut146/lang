@@ -33,6 +33,7 @@ enum TokenType {
     STRING_LIT,
     COMMENT,
     IMPORT,
+    EXTERN,
     AS,
     ASSERT_KW,
     FROM,

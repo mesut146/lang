@@ -132,6 +132,19 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     return res;
 }
 
+std::unique_ptr<Extern> parseExtern(Parser *p) {
+  auto res = std::make_unique<Extern>();
+  p->consume(EXTERN);
+  p->consume(LBRACE);
+  while (!p->is(RBRACE)) {
+        auto m = p->parseMethod();
+        m->parent = res.get();
+        res->methods.push_back(std::move(m));
+    }
+  p->consume(RBRACE);
+  return res;
+}
+
 bool Parser::isVarDecl() {
     if (is({STATIC}, {LET, CONST_KW})) return true;
     return is({LET, CONST_KW});
@@ -160,7 +173,10 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->items.push_back(parseTrait(this));
         } else if (is(IMPL)) {
             res->items.push_back(parseImpl(this));
-        } else if (isMethod()) {
+        } else if (is(EXTERN)) {
+            res->items.push_back(parseExtern(this));
+        } 
+        else if (isMethod()) {
             res->items.push_back(parseMethod());
         } else {
             throw std::runtime_error("invalid top level decl: " + first()->print());

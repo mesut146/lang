@@ -10,6 +10,7 @@ import ret
 import impl
 import optional
 import str
+import libc
 
 func literalTest(){
   let a8 = 5i8;
@@ -118,6 +119,6 @@ func main(): i32{
   optionalTest();
 
   strTest();
-
+  libc_test();
   return 0;
 }

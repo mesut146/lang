@@ -92,8 +92,7 @@ llvm::StructType *Compiler::make_slice_type() {
 }
 
 llvm::StructType *Compiler::make_string_type() {
-    std::vector<llvm::Type *> elems;
-    elems.push_back(sliceType);
+    std::vector<llvm::Type *> elems={sliceType};
     return llvm::StructType::create(ctx, elems, "str");
 }
 
@@ -205,8 +204,11 @@ public:
             } else {
                 //manual alloc, prims, struct copy
                 auto ty = compiler->mapType(type);
-                ptr = compiler->Builder->CreateAlloca(ty);
-                compiler->allocArr.push_back(ptr);
+                ptr = alloca(ty);
+                if(dynamic_cast<MethodCall*>(f->rhs.get())){
+                    //todo not just this
+                    f->rhs->accept(this);
+                }
             }
             ptr->setName(f->name);
             compiler->NamedValues[f->name] = ptr;
@@ -372,6 +374,8 @@ public:
 void Compiler::makeLocals(Statement *st) {
     allocIdx = 0;
     allocArr.clear();
-    AllocCollector col(this);
-    st->accept(&col);
+    if(st){
+      AllocCollector col(this);
+      st->accept(&col);
+    }
 }

@@ -10,7 +10,7 @@ impl String{
         return String{arr: List<i8>::new()};
     }
 
-    func len(self): i32{
+    func len(self): i64{
         return self.arr.len();
     }
 

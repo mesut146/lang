@@ -12,9 +12,6 @@ std::string RefExpr::print() {
 std::string DerefExpr::print() {
     return "*" + expr->print();
 }
-std::string UnwrapExpr::print() {
-    return expr->print() + "!";
-}
 
 std::string FieldDecl::print() const {
     return name + ": " + type->print();
@@ -90,6 +87,9 @@ std::string Impl::print() {
     s.append(joinPtr(methods, "\n"));
     s.append("}\n");
     return s;
+}
+std::string Extern::print() {
+    return "extern {" +joinPtr(methods, "\n")+"\n}";
 }
 
 std::string Method::print() {
@@ -430,11 +430,6 @@ std::any DerefExpr::accept(Visitor *v) {
     return v->visitDerefExpr(this);
 }
 
-std::any UnwrapExpr::accept(Visitor *v) {
-    //return v->visitUnwrapExpr(this);
-    throw std::runtime_error("UnwrapExpr::accept");
-}
-
 std::any FieldDecl::accept(Visitor *v) {
     return v->visitFieldDecl(this);
 }
@@ -536,6 +531,9 @@ std::any Trait::accept(Visitor *v) {
 
 std::any Impl::accept(Visitor *v) {
     return v->visitImpl(this);
+}
+std::any Extern::accept(Visitor *v) {
+    return v->visitExtern(this);
 }
 
 // std::any PointerType::accept(Visitor *v) {

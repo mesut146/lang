@@ -145,7 +145,11 @@ void Compiler::make_proto(Method *m) {
     }*/
     auto mangled = mangle(m);
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
-    auto f = llvm::Function::Create(fr, llvm::Function::ExternalLinkage, mangled, *mod);
+    auto linkage=llvm::Function::ExternalLinkage;
+    if(!m->typeArgs.empty()){
+        linkage=llvm::Function::LinkOnceODRLinkage;
+    }
+    auto f = llvm::Function::Create(fr, linkage, mangled, *mod);
     //f->addTypeMetadata(0, llvm::MDNode::get(ctx, llvm::MDString::get(ctx, m->name)));
     int i = 0;
     if (isMember(m)) {
@@ -220,6 +224,11 @@ std::vector<Method *> getMethods(Unit *unit) {
             auto impl = dynamic_cast<Impl *>(item.get());
             if (!impl->type->typeArgs.empty()) { continue; }
             for (auto &m : impl->methods) {
+                list.push_back(m.get());
+            }
+        }else if (item->isExtern()) {
+            auto ex = dynamic_cast<Extern *>(item.get());
+            for (auto &m : ex->methods) {
                 list.push_back(m.get());
             }
         }
@@ -334,22 +343,24 @@ void Compiler::genCode(std::unique_ptr<Method> &m) {
 }
 
 void Compiler::genCode(Method *m) {
-    if (m->isGeneric) {
+    if (m->isGeneric || !m->body) {
         return;
     }
     resolv->curMethod = m;
     curMethod = m;
     resolv->scopes.push_back(resolv->methodScopes[m]);
     func = funcMap[mangle(m)];
-    auto bb = llvm::BasicBlock::Create(ctx, "", func);
-    Builder->SetInsertPoint(bb);
     NamedValues.clear();
+    if(m->body){
+        auto bb = llvm::BasicBlock::Create(ctx, "", func);
+    Builder->SetInsertPoint(bb);
     initParams(m);
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     m->body->accept(this);
     if (!isReturnLast(m->body.get()) && m->type->print() == "void") {
         Builder->CreateRetVoid();
+    }
     }
     llvm::verifyFunction(*func);
     resolv->dropScope();
@@ -369,6 +380,7 @@ void Compiler::compileAll() {
             cmd.append(" ");
         }
     }
+    system("rm a.out");
     system((cmd + " && ./a.out").c_str());
     for (auto &[k, v] : Resolver::resolverMap) {
         v.reset();
@@ -627,31 +639,32 @@ std::any Compiler::visitUnary(Unary *u) {
     if (isVar(u->expr)) {
         val = load(v);
     }
-
-    if (u->op == "+") return val;
-    if (u->op == "-") {
-        return (llvm::Value *) Builder->CreateNSWSub(makeInt(0), val);
+    llvm::Value *res;
+    if (u->op == "+"){
+        res = val;
+    }else if (u->op == "-") {
+        res= (llvm::Value *) Builder->CreateNSWSub(makeInt(0), val);
     }
-    if (u->op == "++") {
-        auto tmp = Builder->CreateNSWAdd(val, makeInt(1));
-        Builder->CreateStore(tmp, v);
-        return (llvm::Value *) tmp;
+    else if (u->op == "++") {
+        auto bits=val->getType()->getPrimitiveSizeInBits();
+        res = Builder->CreateNSWAdd(val, makeInt(1, bits));
+        Builder->CreateStore(res, v);
     }
-    if (u->op == "--") {
-        auto tmp = Builder->CreateNSWSub(val, makeInt(1));
-        Builder->CreateStore(tmp, v);
-        return (llvm::Value *) tmp;
+    else if (u->op == "--") {
+        res = Builder->CreateNSWSub(val, makeInt(1));
+        Builder->CreateStore(res, v);
     }
-    if (u->op == "!") {
-        auto trunc = Builder->CreateTrunc(val, getInt(1));
-        auto xorr = Builder->CreateXor(trunc, Builder->getTrue());
-        auto zext = Builder->CreateZExt(xorr, getInt(8));
-        return (llvm::Value *) zext;
+    else if (u->op == "!") {
+        res = Builder->CreateTrunc(val, getInt(1));
+        res = Builder->CreateXor(res, Builder->getTrue());
+        res = Builder->CreateZExt(res, getInt(8));
     }
-    if (u->op == "~") {
-        return (llvm::Value *) Builder->CreateXor(val, makeInt(-1));
+    else if (u->op == "~") {
+        res = (llvm::Value *) Builder->CreateXor(val, makeInt(-1));
+    }else{
+        throw std::runtime_error("Unary: " + u->print());
     }
-    throw std::runtime_error("Unary: " + u->print());
+    return res;
 }
 
 std::any Compiler::visitAssign(Assign *i) {
@@ -697,8 +710,7 @@ std::any Compiler::visitSimpleName(SimpleName *n) {
 }
 
 llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
-    std::vector<llvm::Value *> args;
-    args.push_back(sz);
+    std::vector<llvm::Value *> args={sz};
     return (llvm::Value *) c->Builder->CreateCall(c->mallocf, args);
 }
 
@@ -736,7 +748,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto str = c->Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
             args.push_back(str);
         } else {
-            auto arg_type = c->resolv->resolve(a).type;
+            auto arg_type = c->resolv->getType(a);
             if (arg_type->isString()) {
                 auto src = c->gen(a);
                 //get ptr to inner char array
@@ -747,14 +759,13 @@ void callPrint(MethodCall *mc, Compiler *c) {
                 } else {
                     args.push_back(src);
                 }
-
             } else {
                 auto av = c->loadPtr(a);
                 args.push_back(av);
             }
         }
     }
-    auto call = c->Builder->CreateCall(c->printf_proto, args);
+    c->Builder->CreateCall(c->printf_proto, args);
 }
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
@@ -927,7 +938,7 @@ std::any Compiler::visitObjExpr(ObjExpr *n) {
         ptr = callMalloc(makeInt(getSize(tt.targetDecl) / 8, 64), this);
         ptr = Builder->CreateBitCast(ptr, ty);
     } else {
-        ptr = allocArr[allocIdx++];
+        ptr = allocArr.at(allocIdx++);
     }
     object(n, ptr, tt);
     return ptr;
@@ -1029,13 +1040,11 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
     }
     auto scopeVar = gen(n->scope);
     auto ty = scopeVar->getType()->getPointerElementType();
-    if (dynamic_cast<PointerType *>(rt.type)) {
+    if (rt.type->isPointer()) {
         //auto deref
-        auto load = Builder->CreateLoad(ty, scopeVar);
-        return (llvm::Value *) Builder->CreateStructGEP(load->getType()->getPointerElementType(), load, index);
-    } else {
-        return (llvm::Value *) Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
+        scopeVar = Builder->CreateLoad(ty, scopeVar);
     }
+    return (llvm::Value *) Builder->CreateStructGEP(scopeVar->getType()->getPointerElementType(), scopeVar, index);
 }
 
 std::any Compiler::visitIfStmt(IfStmt *b) {
@@ -1288,7 +1297,7 @@ std::any Compiler::visitBreakStmt(BreakStmt *node) {
 }
 
 std::any Compiler::visitArrayExpr(ArrayExpr *node) {
-    auto ptr = allocArr[allocIdx++];
+    auto ptr = allocArr.at(allocIdx++);
     array(node, ptr);
     return ptr;
 }

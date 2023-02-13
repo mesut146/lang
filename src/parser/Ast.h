@@ -46,6 +46,7 @@ struct Item {
     virtual bool isTrait() { return false; }
     virtual bool isImpl() { return false; }
     virtual bool isMethod() { return false; }
+    virtual bool isExtern() { return false; }
 
     virtual std::string print() = 0;
     virtual std::any accept(Visitor *v) = 0;
@@ -124,7 +125,17 @@ public:
 class EnumDecl : public BaseDecl {
 public:
     std::vector<EnumVariant *> variants;
+    
     bool isEnum() { return true; }
+    std::string print() override;
+    std::any accept(Visitor *v) override;
+};
+
+class Extern: public Item{
+public:
+    std::vector<std::unique_ptr<Method>> methods;
+    
+    bool isExtern() { return true; }
     std::string print() override;
     std::any accept(Visitor *v) override;
 };
@@ -153,7 +164,7 @@ public:
 
     explicit Method(Unit *unit) : unit(unit) {}
 
-    bool isMethod() { return true; }
+    bool isMethod() override{ return true; }
     std::string print();
     std::any accept(Visitor *v);
 };
@@ -174,16 +185,6 @@ public:
 class Block : public Statement {
 public:
     std::vector<std::unique_ptr<Statement>> list;
-
-    std::string print() override;
-    std::any accept(Visitor *v) override;
-};
-
-class UnwrapExpr : public Expression {
-public:
-    Expression *expr;
-
-    UnwrapExpr(Expression *expr) : expr(expr){};
 
     std::string print() override;
     std::any accept(Visitor *v) override;

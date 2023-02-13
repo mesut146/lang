@@ -1,7 +1,7 @@
 class List<T>{
   arr: T*;
-  count: i32;
-  cap: i32;
+  count: i64;
+  cap: i64;
 }
 
 impl List<T>{
@@ -9,7 +9,7 @@ impl List<T>{
     return List<T>::new(10);
   }
 
-  func new(cap: i32): List<T>{
+  func new(cap: i64): List<T>{
     return List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
   }
 
@@ -41,6 +41,14 @@ impl List<T>{
     }
   }
 
+  func add(self, sl: [T]){
+    let i = 0;
+    while(i < sl.len){
+        self.add(sl[i]);
+        ++i;
+    }
+  } 
+
   func get(self, pos: i32): T{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
@@ -53,11 +61,11 @@ impl List<T>{
     self.count = 0;
   }
 
-  func size(self): i32{
+  func size(self): i64{
     return self.count;
   }
 
-  func len(self): i32{
+  func len(self): i64{
     return self.count;
   }  
 
@@ -78,7 +86,7 @@ impl List<T>{
     return self.indexOf(e) != -1;
   }
 
-  func slice(self, start: i32, end: i32): [T]{
+  func slice(self, start: i64, end: i64): [T]{
     return self.arr[start..end];
   }
 }

@@ -13,6 +13,10 @@ impl str{
       print("\"}\n");
     }
     
+    func ptr(self): i8*{
+       return &self.buf[0];
+    }
+
     func len(self): i32{
       return self.buf.len;
     }
