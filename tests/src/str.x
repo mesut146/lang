@@ -52,7 +52,7 @@ impl str{
             found = false;
             break;
           }
-        }
+         }
         if(found) return i;
         ++i;
       }
@@ -72,6 +72,20 @@ impl str{
       if(end > self.len()) panic("end index out of bounds %d of %d", end, self.len());
       assert start < end;
       return str{self.buf[start..end]};
+    }
+    
+    func eq(self, s: str): bool{
+      return self.cmp(s) == 0;
+    }
+
+    func cmp(self, s: str): i32{
+      if(self.len() < s.len()) return -1;
+      if(self.len() > s.len()) return 1;
+      for(let i=0;i < self.len();++i){
+        if(self.get(i) < s.get(i)) return -1;
+        if(self.get(i) > s.get(i)) return 1;
+      }
+      return 0;
     }
 
 }

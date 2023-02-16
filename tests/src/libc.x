@@ -10,6 +10,7 @@ class FILE{}
 //const stdout = 0
 
 func SEEK_END(): i32 { return 2; }
+func SEEK_SET(): i32 { return 1; }
 
 extern{
   func free(ptr: i8*);
@@ -29,13 +30,13 @@ func read_bytes(path: str): List<i8>{
   let f = fopen(path.ptr(), "r".ptr());
   fseek(f, 0, SEEK_END());
   let size = ftell(f) as i32;
-  fseek(f, 0, 1);
+  fseek(f, 0, SEEK_SET());
   let res = List<i8>::new(size);
   let buf = [0 as i8; 1024];
   while(true){
       let rcnt = fread(&buf[0], 1, 1024, f);
       if(rcnt <= 0){ break; }
-      //res.add(buf[0..1024]);
+      res.add(buf[0..1024]);
   }
   return res;
 }

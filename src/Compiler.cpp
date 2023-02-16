@@ -163,12 +163,12 @@ void Compiler::make_proto(Method *m) {
     resolv->curMethod = nullptr;
 }
 
-void Compiler::makeDecl(BaseDecl *bd) {
+llvm::StructType* Compiler::makeDecl(BaseDecl *bd) {
     if (bd->isGeneric) {
-        return;
+        return nullptr;
     }
     if (bd->type->print() == "str") {
-        return;
+        return stringType;
     }
     std::vector<llvm::Type *> elems;
     if (bd->isEnum()) {
@@ -187,6 +187,7 @@ void Compiler::makeDecl(BaseDecl *bd) {
     auto mangled = bd->type->print();
     auto ty = llvm::StructType::create(ctx, elems, mangled);
     classMap[mangled] = ty;
+    return ty;
 }
 
 bool isSame(Type *type, BaseDecl *decl) {
@@ -1082,7 +1083,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto ty = rhs->getType()->getPointerElementType();
     auto ordptr = Builder->CreateStructGEP(ty, rhs, 0);
     auto ord = Builder->CreateLoad(getInt(32), ordptr);
-    auto decl = findEnum(b->type->scope.get(), resolv.get());
+    auto decl = findEnum(b->type.get(), resolv.get());
     auto index = Resolver::findVariant(decl, b->type->name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index));
 
@@ -1173,6 +1174,7 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, Type *arrty) {
         elemty = dynamic_cast<ArrayType *>(arrty)->type;
     } else {
         elemty = dynamic_cast<PointerType *>(arrty)->type;
+        src = load(src);
     }
     src = Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
     //shift by start

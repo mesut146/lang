@@ -129,7 +129,9 @@ llvm::Type *Compiler::mapType(Type *type) {
     if (it != classMap.end()) {
         return it->second;
     }
-    throw std::runtime_error("mapType: " + s);
+    return makeDecl(rt.targetDecl);
+    
+    //throw std::runtime_error("mapType: " + s);
 }
 
 int Compiler::getSize(BaseDecl *decl) {
@@ -167,7 +169,7 @@ int Compiler::getSize(Type *type) {
         return getSize(arr->type) * arr->size;
     }
     if (type->isSlice()) {
-        //data ptr, len
+        //ptr + len
         return 64 + 32;
     }
 

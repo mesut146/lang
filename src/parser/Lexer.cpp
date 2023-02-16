@@ -116,8 +116,6 @@ Token Lexer::lineComment() {
 
 Token Lexer::readOp() {
     std::string s = str(pos, pos + 3);
-
-    int off = pos;
     //can be length of 1 to 3
     for (int i = (int) s.length(); i > 0; i--) {
         auto it = ops.find(s);
@@ -198,8 +196,7 @@ Token Lexer::next() {
                 throw std::runtime_error("unclosed block comment at line " + std::to_string(line));
             }
         } else {
-            token = Token(DIV, str(pos, pos + 1));
-            pos++;
+            token = readOp();
         }
     } else if (c == '\'') {
         pos++;

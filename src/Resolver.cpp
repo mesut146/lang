@@ -508,7 +508,21 @@ std::any Resolver::visitType(Type *type) {
         auto res = getTypeCached(ed->type->print());
         addType(str, res);
         return res;
+    }else if(curImpl){
+        auto r = resolve(curImpl->type);
+        if(r.targetDecl && r.targetDecl->isEnum()){
+            auto ed = (EnumDecl*)r.targetDecl;
+          for(auto v:ed->variants){
+              if(v->name==type->name){
+                  //enum variant without scope(same impl)
+                  auto res = getTypeCached(ed->type->print());
+                  addType(str, res);
+                  return res;
+              }
+          }
+        }
     }
+    
     if (str == "Self") {
         if (curMethod->parent) {
             auto imp = dynamic_cast<Impl *>(curMethod->parent);
@@ -823,9 +837,9 @@ std::any Resolver::visitAssertStmt(AssertStmt *node) {
 
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     newScope();
-    auto rt = resolve(node->type->scope.get());
+    auto rt = resolve(node->type.get());
     if (!rt.targetDecl->isEnum()) {
-        error("type of if let is not enum: " + node->type->scope->print());
+        error("type of if let is not enum: " + node->type->print());
     }
     auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
     int index = findVariant(decl, node->type->name);

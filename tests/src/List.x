@@ -47,7 +47,11 @@ impl List<T>{
         self.add(sl[i]);
         ++i;
     }
-  } 
+  }
+
+  func set(self, pos: i64, val: T){
+      self.arr[pos] = val;
+  }
 
   func get(self, pos: i32): T{
     if(pos >= self.count) {
@@ -102,5 +106,7 @@ func listTest(){
   //list.get(3); //will panic
   assert list.indexOf(20) == 1;
   assert list.contains(30) && !list.contains(40);
+  let s = list.slice(1, 3);
+  assert s.len == 2 && s[0] == 20;
   print("listTest done\n");
 }

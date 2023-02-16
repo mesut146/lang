@@ -2,6 +2,34 @@
 #include "TypeUtils.h"
 #include "parser/Util.h"
 
+std::string printSig(Signature& sig){
+    std::string s;
+    std::optional<RType> sc;
+    if(sig.mc&&sig.mc->scope){
+      s+=sig.scope->print();
+      s+="::";
+    }
+    else if(sig.m){
+        auto p=sig.m->parent;
+        if(p){
+            auto imp=(Impl*)p;
+            s+=imp->type->print();
+            s+="::";
+        }
+    }
+    if(sig.mc)
+      s+=sig.mc->name;
+    else s+=sig.m->name;
+    s+="(";
+    int i=0;
+    for(auto &a:sig.args){
+        if(i++>0) s+=",";
+        s+=a->print();
+    }
+    s+=")";
+    return s;
+}
+
     Signature Signature::make(MethodCall* mc, Resolver* r){
         Signature res;
         res.mc=mc;
@@ -29,11 +57,11 @@
     }
     
 
-std::vector<Method *> MethodResolver::collect(Signature &sig){
-  std::vector<Method *> list;
+std::vector<Signature> MethodResolver::collect(Signature &sig){
+  std::vector<Signature> list;
   auto mc = sig.mc;
   if(mc->scope){
-      getMethods(sig.scope, mc->name, list);
+      getMethods(sig.scope, mc->name, list, true);
   }else{
       r->findMethod(mc->name, list);
     for (auto is : r->unit->imports) {
@@ -59,17 +87,17 @@ bool isGeneric(Type *type, std::vector<Type *> &typeParams) {
         return false;
     }
 
-void Resolver::findMethod(std::string &name, std::vector<Method *> &list) {
+void Resolver::findMethod(std::string &name, std::vector<Signature> &list) {
     for (auto &item : unit->items) {
         if (item->isMethod()) {
             auto m = dynamic_cast<Method *>(item.get());
             if (m->name == name) {
-                list.push_back(m);
+                list.push_back(Signature::make(m, this));
             }
         }else if(item->isExtern()){
             auto ex = dynamic_cast<Extern *>(item.get());
             for(auto &m:ex->methods){
-                if (m->name == name) { list.push_back(m.get()); }
+                if (m->name == name) { list.push_back(Signature::make(m.get(), this)); }
              }
         }
     }
@@ -77,19 +105,21 @@ void Resolver::findMethod(std::string &name, std::vector<Method *> &list) {
         //sibling
         for (auto &m : curImpl->methods) {
             if (!m->self && m->name == name) {
-                list.push_back(m.get());
+                list.push_back(Signature::make(m.get(), this));
             }
         }
     }
 }
 
-void MethodResolver::getMethods(Type *type, std::string &name, std::vector<Method *> &list) {
+void MethodResolver::getMethods(Type *type, std::string &name, std::vector<Signature> &list, bool imports) {
     if (type->isPointer()) {
         auto ptr = dynamic_cast<PointerType *>(type);
         type = ptr->type;
     }
     for (auto &item : r->unit->items) {
-        if (item->isImpl()) {
+        if (!item->isImpl()) {
+            continue;
+            }
             auto impl = dynamic_cast<Impl *>(item.get());
             if (impl->type->name != type->name) continue;
             if (!impl->type->typeArgs.empty()) {
@@ -98,16 +128,37 @@ void MethodResolver::getMethods(Type *type, std::string &name, std::vector<Metho
             }
             for (auto &m : impl->methods) {
                 //todo generate if generic
-                if (m->name == name) list.push_back(m.get());
+                if (m->name != name){
+                    continue;
+                }
+                    if(type->typeArgs.empty()){
+                        
+                        list.push_back(Signature::make(m.get(), r));
+                    }else{
+                        std::map<std::string, Type *> typeMap;
+                        for(int i=0;i<m->typeArgs.size();i++){
+                            auto ta = m->typeArgs[i];
+                            typeMap[ta->name]=type->typeArgs[i];
+                        }
+                        Generator gen(typeMap);
+                        auto sig=Signature::make(m.get(), r);
+                        for(auto &a:sig.args){
+                            a=(Type*)std::any_cast<Expression*>(a->accept(&gen));
+                        }
+                        list.push_back(sig);
+                        
+                    }
+                    
             }
-        }
     }
-    //todo other imports
+    if(imports){
     for (auto is : r->unit->imports) {
         auto resolver = Resolver::getResolver(r->root + "/" + join(is->list, "/") + ".x", r->root);
+        
         resolver->resolveAll();
         MethodResolver mr(resolver.get());
-        mr.getMethods(type, name, list);
+        mr.getMethods(type, name, list, false);
+    }
     }
 }
 
@@ -137,39 +188,21 @@ void MethodResolver::infer(Type *arg, Type *prm, std::map<std::string, Type *> &
     }
 }
 
-std::string printSig(Signature sig, Resolver* r){
-    std::string s;
-    std::optional<RType> sc;
-    if(sig.mc->scope){
-      s+=sig.scope->print();
-      s+="::";
-    }
-    s+=sig.mc->name;
-    s+="(";
-    int i=0;
-    for(auto &a:sig.args){
-        if(i++>0) s+=",";
-        s+=a->print();
-    }
-    s+=")";
-    return s;
-}
 
-RType Resolver::handleCallResult(std::vector<Method *> &list, Signature *sig) {
+RType Resolver::handleCallResult(std::vector<Signature > &list, Signature *sig) {
     auto mc = sig->mc;
     if (list.empty()) {
-        error("no such method: " + printSig(*sig, this));
+        error("no such method: " + printSig(*sig));
     }
-    std::vector<Method *> real;
+    std::vector<Signature> real;
     MethodResolver mr(this);
     std::map<Method *, std::string> errors;
-    for (auto m : list) {
-        auto sig2=Signature::make(m, this);
+    for (auto &sig2 : list) {
         auto msg = mr.isSame(*sig, sig2);
         if (!msg) {
-            real.push_back(m);
+            real.push_back(sig2);
         } else {
-            errors[m] = msg.value();
+            errors[sig2.m] = msg.value();
         }
     }
     if (real.empty()) {
@@ -183,13 +216,13 @@ RType Resolver::handleCallResult(std::vector<Method *> &list, Signature *sig) {
     if (real.size() > 1) {
         std::string s;
         for (auto m : real) {
-            s += printMethod(m) + "\n";
+            s += printSig(m) + "\n";
         }
-        error("method:  " + mc->print()+"\n"+printSig(*sig, this) + " has " +
+        error("method:  " + mc->print()+"\n"+printSig(*sig) + " has " +
               std::to_string(real.size()) + " candidates;\n" + s);
     }
-    auto target = real[0];
-    auto sig2=Signature::make(target, this);
+    auto &sig2=real[0];
+    auto target = sig2.m;
     if (target->isGeneric) {
         std::map<std::string, Type *> typeMap;
         if (mc->typeArgs.empty()) {

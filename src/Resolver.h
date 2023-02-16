@@ -247,8 +247,8 @@ public:
 
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
-    RType handleCallResult(std::vector<Method *> &list, Signature *sig);
-    void findMethod(std::string& name, std::vector<Method *> &list);
+    RType handleCallResult(std::vector<Signature> &list, Signature *sig);
+    void findMethod(std::string& name, std::vector<Signature> &list);
     bool isCyclic(Type *type, BaseDecl *target);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
 

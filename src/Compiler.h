@@ -74,7 +74,7 @@ public:
     llvm::Type *mapType(Type *t);
     void make_proto(std::unique_ptr<Method> &m);
     void make_proto(Method *m);
-    void makeDecl(BaseDecl *bd);
+    llvm::StructType* makeDecl(BaseDecl *bd);
     void initParams(Method *m);
     void makeLocals(Statement *st);
 

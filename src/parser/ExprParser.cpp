@@ -210,7 +210,6 @@ MethodCall *parseCall(Parser *p, const std::string &name) {
 
 //"(" expr ")" | literal | objCreation | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
-    //log("parsePrimary " + *p->first().value);
     if (p->is(LPAREN)) {
         //ParExpr
         auto res = new ParExpr;
@@ -593,7 +592,7 @@ Expression *expr1(Parser *p) {
 }
 
 bool isAssign(std::string &s) {
-    return s == "=" || s == "+=" | s == "-=" | s == "*=" | s == "/=" | s == "%=" | s == "&=" | s == "^=" | s == "|=" | s == "<<=" | s == ">>=" | s == ">>>=";
+    return s == "=" || s == "+=" || s == "-=" || s == "*=" || s == "/=" || s == "%=" || s == "&=" || s == "^=" || s == "|=" || s == "<<=" || s == ">>=" || s == ">>>=";
 }
 
 //expr1 (assignOp expr)?

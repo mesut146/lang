@@ -22,7 +22,7 @@ public:
     //get cached or generate method
     Method *generateMethod(std::map<std::string, Type *> &map, Method *m, Signature &sig);
 
-    void getMethods(Type *type, std::string &name, std::vector<Method *> &list);
+    void getMethods(Type *type, std::string &name, std::vector<Signature> &list, bool imports);
 
     static bool isCompatible(Type *arg, Type *target) {
         std::vector<Type *> typeParams;
@@ -36,6 +36,6 @@ public:
 
     std::optional<std::string> isSame(Signature &sig, Signature &sig2);
     
-    std::vector<Method *> collect(Signature& sig);
+    std::vector<Signature> collect(Signature& sig);
 };
 

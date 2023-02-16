@@ -151,6 +151,6 @@ std::unique_ptr<Statement> Parser::parseStmt() {
             consume(SEMI);
             return std::unique_ptr<Statement>(new ExprStmt(e));
         }
-        throw std::runtime_error("invalid stmt " + e->print() + " line:" + std::to_string(first()->line));
+        throw std::runtime_error("missing semicolon " + e->print() + " line:" + std::to_string(first()->line));
     }
 }

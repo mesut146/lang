@@ -6,6 +6,16 @@ class String{
 }
 
 impl String{
+    func dump(self){
+      let i = 0;
+      print("String{len: %d, \"", self.len());
+      while (i < self.len()){
+        print("%c", self.arr.get(i));
+        ++i;
+      }
+      print("\"}\n");
+    }
+
     func new(): String{
         return String{arr: List<i8>::new()};
     }

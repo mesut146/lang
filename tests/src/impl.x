@@ -1,5 +1,6 @@
 import List
 import String
+import str//todo str is imported incorrectly from String
 
 impl i32{
   func MIN(): i32{ return -2147483648; }
@@ -24,16 +25,33 @@ impl i32{
     return x;
   }
 
-  /*func str(self): String{
+  func str_size(self): i32{
+    if(self==0) return 1;
     let x = self;
-    let s = String::new();
+    let res = 0;
+    while(x > 0){
+      x /= 10;
+      res+=1;
+    }
+    return res;
+  }
+
+  func str(self): String{
+    let x = self;
+    let len = self.str_size() + 1;
+    let list = List<i8>::new(len);
+    list.count = len - 1;
+    let i = len - 1;
+    list.set(i, 0i8);
+    i -= 1;
     while(x > 0){
       let c = x % 10;
-      s.append((c + '0') as i8);
+      list.set(i, (c + '0') as i8);
+      i -= 1;
       x = x / 10;
     }
-    return s;
-  }*/
+    return String{list};
+  }
 }
 
 class A<T>{
@@ -63,6 +81,11 @@ func implTest(){
   assert 5.generic_sum(6i64) == 11;
   assert i32::generic_other(5) == 5;
   assert i32::min(5, 6) == 5;
+  let s = 345.str();
+  s.dump();
+  let s2=s.str();
+  s2.dump();
+  assert s2.eq("345");
 
   assert A<i32>{a: 5}.get() == 5;
   assert A<i64>{a: 5}.get() == 5;
