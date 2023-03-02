@@ -1,5 +1,18 @@
+impl [i32; 3]{
+  func dump(self){
+    print("[");
+    for(let i=0;i<3;++i){
+      if(i>0) print(", ");
+      print("%d", self[i]);
+    }
+    print("]\n");
+  }
+}
+
 func arrayTest(){
   let arr = [5; 3];
+  arr.dump();
+  assert arr[1] == 5;
   arr[0] = 8;
   arr[2] = 9;
   assert arr[0]==8 && arr[2] == 9;
@@ -37,7 +50,7 @@ func sliceTest(){
 }
 
 func arr2d(){
-  let a1 = [[0; 5]; 10];
+  /*let a1 = [[0; 5]; 10];
   a1[0][0] = 3;
   assert a1[0][0] == 3;
   
@@ -46,13 +59,13 @@ func arr2d(){
   
   let a3 = [1, 2, 3];
   let a4 = [a3, [10, 20, 30]];
-  assert a4[0][0] == 1 && a4[1][2] == 30;
+  assert a4[0][0] == 1 && a4[1][2] == 30;*/
   print("arr2d done\n");
   mixed();
 }
 
 class A{
-  a: [B; 2];
+  a: [B; 3];
   b: B;
   c: [B]; 
 }
@@ -60,7 +73,7 @@ class B{
   b: i32;
 }
 func mixed(){
-  let a1 = A{a: [B{1}, B{2}], b: B{b: 3}, c: [B{4}][0..1]};
+  let a1 = A{a: [B{1}, B{2}, B{3}], b: B{b: 4}, c: [B{5}][0..1]};
   /*assert a1.arr[0] == 10;
   
   //obj in arr

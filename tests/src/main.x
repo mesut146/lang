@@ -8,9 +8,10 @@ import array
 import pass
 import ret
 import impl
-import optional
+import Option
 import str
 import libc
+import alloc
 
 func literalTest(){
   let a8 = 5i8;
@@ -107,6 +108,7 @@ func main(): i32{
   flowTest();
   enumTest();
   classTest();
+  baseTest();
   mallocTest();
   prims();
   importTest();
@@ -120,5 +122,6 @@ func main(): i32{
 
   strTest();
   libc_test();
+  allocTest();
   return 0;
 }

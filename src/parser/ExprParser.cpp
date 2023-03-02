@@ -138,7 +138,11 @@ Entry parseEntry(Parser *p) {
         p->consume(COLON);
         e.value = p->parseExpr();
     } else {
-        //single expr
+        //single expr or base
+        if(p->is(DOT)){
+            p->pop();
+            e.isBase = true;
+        }
         e.value = p->parseExpr();
     }
     return e;

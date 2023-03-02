@@ -20,6 +20,12 @@ impl String{
         return String{arr: List<i8>::new()};
     }
 
+    func new(s: str): String{
+        let res = String::new();
+        res.append(s);
+        return res;
+    }
+
     func len(self): i64{
         return self.arr.len();
     }

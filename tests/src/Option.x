@@ -1,3 +1,5 @@
+import str
+
 enum Option<T>{
   None,
   Some(val: T);
@@ -25,6 +27,14 @@ impl Option<T>{
       return true;
     }
     return false;
+  }
+
+  func dump(self){
+    if(self.is_some()){
+      print("Option::Some{%d}", self.unwrap());
+    }else{
+      print("Option::None");
+    }
   }
 }
 

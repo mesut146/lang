@@ -2,7 +2,54 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
-bool doesAlloc(Expression *e) {
+bool isSame(Type *type, BaseDecl *decl) {
+    return type->print() == decl->type->print();
+}
+
+void sort(std::vector<BaseDecl *> &list) {
+    std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
+        if (b->isEnum()) {
+            auto ed = dynamic_cast<EnumDecl *>(b);
+            for (auto variant : ed->variants) {
+                for (auto &f : variant->fields) {
+                    if (isSame(f->type, a)) return true;
+                }
+            }
+        } else {
+            auto td = dynamic_cast<StructDecl *>(b);
+            for (auto &field : td->fields) {
+                if (isSame(field->type, a)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    });
+}
+
+std::vector<Method *> getMethods(Unit *unit) {
+    std::vector<Method *> list;
+    for (auto &item : unit->items) {
+        if (item->isMethod()) {
+            auto m = dynamic_cast<Method *>(item.get());
+            list.push_back(m);
+        } else if (item->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(item.get());
+            if (!impl->type->typeArgs.empty()) { continue; }
+            for (auto &m : impl->methods) {
+                list.push_back(m.get());
+            }
+        } else if (item->isExtern()) {
+            auto ex = dynamic_cast<Extern *>(item.get());
+            for (auto &m : ex->methods) {
+                list.push_back(m.get());
+            }
+        }
+    }
+    return list;
+}
+
+bool Compiler::doesAlloc(Expression *e) {
     auto obj = dynamic_cast<ObjExpr *>(e);
     if (obj) {
         return !obj->isPointer;
@@ -14,6 +61,11 @@ bool doesAlloc(Expression *e) {
     auto lit = dynamic_cast<Literal *>(e);
     if (lit) {
         return lit->type == Literal::STR;
+    }
+    auto mc = dynamic_cast<MethodCall *>(e);
+    if (mc) {
+        auto m = resolv->resolve(mc).targetMethod;
+        return m && isRvo(m);
     }
     return dynamic_cast<Type *>(e) || dynamic_cast<ArrayExpr *>(e);
 }
@@ -92,7 +144,7 @@ llvm::StructType *Compiler::make_slice_type() {
 }
 
 llvm::StructType *Compiler::make_string_type() {
-    std::vector<llvm::Type *> elems={sliceType};
+    std::vector<llvm::Type *> elems = {sliceType};
     return llvm::StructType::create(ctx, elems, "str");
 }
 
@@ -130,7 +182,6 @@ llvm::Type *Compiler::mapType(Type *type) {
         return it->second;
     }
     return makeDecl(rt.targetDecl);
-    
     //throw std::runtime_error("mapType: " + s);
 }
 
@@ -172,7 +223,6 @@ int Compiler::getSize(Type *type) {
         //ptr + len
         return 64 + 32;
     }
-
     auto decl = resolv->resolve(type).targetDecl;
     if (decl) {
         return getSize(decl);
@@ -199,7 +249,7 @@ public:
         for (auto f : node->list) {
             auto type = f->type ? f->type.get() : compiler->resolv->getType(f->rhs.get());
             llvm::Value *ptr;
-            if (doesAlloc(f->rhs.get())) {
+            if (compiler->doesAlloc(f->rhs.get())) {
                 //auto alloc
                 auto rhs = f->rhs->accept(this);
                 ptr = std::any_cast<llvm::Value *>(rhs);
@@ -207,7 +257,7 @@ public:
                 //manual alloc, prims, struct copy
                 auto ty = compiler->mapType(type);
                 ptr = alloca(ty);
-                if(dynamic_cast<MethodCall*>(f->rhs.get())){
+                if (dynamic_cast<MethodCall *>(f->rhs.get()) || dynamic_cast<FieldAccess *>(f->rhs.get())) {
                     //todo not just this
                     f->rhs->accept(this);
                 }
@@ -216,6 +266,21 @@ public:
             compiler->NamedValues[f->name] = ptr;
         }
         return {};
+    }
+    std::any visitMethodCall(MethodCall *node) {
+        auto m = compiler->resolv->resolve(node).targetMethod;
+        llvm::Value *ptr = nullptr;
+        if (m && isRvo(m)) {
+            ptr = alloca(compiler->mapType(m->type.get()));
+        }
+        if (node->scope) node->scope->accept(this);
+        for (auto a : node->args) {
+            if (!node->scope && node->name == "print" && isStrLit(a)) {
+                continue;
+            }
+            a->accept(this);
+        }
+        return ptr;
     }
     std::any visitType(Type *node) override {
         if (!node->scope) {
@@ -270,6 +335,10 @@ public:
         }
         return {};
     }
+    std::any visitFieldAccess(FieldAccess *node) {
+        node->scope->accept(this);
+        return {};
+    }
     std::any visitBlock(Block *node) override {
         for (auto &s : node->list) {
             s->accept(this);
@@ -296,6 +365,7 @@ public:
     }
     std::any visitReturnStmt(ReturnStmt *node) override {
         if (node->expr) {
+            if (compiler->doesAlloc(node->expr.get())) return {};
             node->expr->accept(this);
         }
         return {};
@@ -333,20 +403,6 @@ public:
         node->expr->accept(this);
         return {};
     }
-    std::any visitMethodCall(MethodCall *node) {
-        if (node->scope) node->scope->accept(this);
-        for (auto a : node->args) {
-            if (!node->scope && node->name == "print" && isStrLit(a)) {
-                continue;
-            }
-            a->accept(this);
-        }
-        return {};
-    }
-    std::any visitFieldAccess(FieldAccess *node) {
-        node->scope->accept(this);
-        return {};
-    }
     std::any visitParExpr(ParExpr *node) {
         node->expr->accept(this);
         return {};
@@ -376,8 +432,8 @@ public:
 void Compiler::makeLocals(Statement *st) {
     allocIdx = 0;
     allocArr.clear();
-    if(st){
-      AllocCollector col(this);
-      st->accept(&col);
+    if (st) {
+        AllocCollector col(this);
+        st->accept(&col);
     }
 }

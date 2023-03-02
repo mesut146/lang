@@ -1,3 +1,6 @@
+import it
+import Option
+
 class List<T>{
   arr: T*;
   count: i64;
@@ -93,6 +96,39 @@ impl List<T>{
   func slice(self, start: i64, end: i64): [T]{
     return self.arr[start..end];
   }
+  
+  func iter(self): ListIter<T>{
+    return ListIter<T>{list: self, pos: 0};
+  }
+}
+
+class ListIter<T>{
+  list: List<T>;
+  pos: i32;
+}
+
+impl Iterator<T> for ListIter<T>{
+  func has(self): bool{
+    return self.pos < self.list.len();
+  }
+
+  func next(self): Option<T>{
+    if(self.has()){
+      let p = self.pos;
+      self.pos+=1;
+      return Option<T>::Some{self.list.get(p)};
+    }
+    return Option<T>::None;
+  }
+}
+
+func iterTest(list: List<i32>){
+  let it = list.iter();
+  assert it.has();
+  let n1=it.next();
+  assert n1.unwrap() == 10;
+  let n2=it.next();
+  assert n2.unwrap() == 20;
 }
 
 func listTest(){
@@ -108,5 +144,6 @@ func listTest(){
   assert list.contains(30) && !list.contains(40);
   let s = list.slice(1, 3);
   assert s.len == 2 && s[0] == 20;
+  iterTest(list);
   print("listTest done\n");
 }

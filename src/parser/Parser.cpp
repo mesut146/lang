@@ -35,6 +35,10 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     if (!res->type->typeArgs.empty()) {
         res->isGeneric = true;
     }
+    if(is(COLON)){
+        pop();
+        res->base.reset(parseType());
+    }
     consume(LBRACE);
     //members
     while (first() != nullptr && !is(RBRACE)) {
@@ -151,7 +155,7 @@ bool Parser::isVarDecl() {
 }
 
 bool Parser::isMethod() {
-    return is(FUNC);
+    return is(FUNC) || is({VIRTUAL}, {FUNC});
 }
 
 std::shared_ptr<Unit> Parser::parseUnit() {
@@ -197,6 +201,10 @@ std::unique_ptr<Param> Parser::parseParam(Method *m) {
 
 std::unique_ptr<Method> Parser::parseMethod() {
     auto res = std::make_unique<Method>(unit);
+    if(is(VIRTUAL)){
+        res->isVirtual = true;
+        pop();
+    }
     consume(FUNC);
     if (is(NEW)) {
         res->name = "new";

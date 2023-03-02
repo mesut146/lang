@@ -55,6 +55,7 @@ enum TokenType {
     THROW,
     TRY,
     CATCH,
+    VIRTUAL,
     EQ,
     PLUS,
     MINUS,

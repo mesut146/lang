@@ -117,4 +117,5 @@ func lit(){
   assert s1.indexOf("ll", 0) == 2;
   let s2 = s1.substr(6, 11);
   s2.dump();
+  assert s2.eq("world");
 }

@@ -16,6 +16,41 @@ impl Point{
   }
 }
 
+class Base{
+  x: i32;
+}
+
+class Derived: Base{
+  y: i32;
+}
+
+/*class Derived2: Derived{
+  z: i32;
+}*/
+
+impl Base{
+  virtual func foo(self){
+    print("Base::foo x=%d\n", self.x);
+  }
+}
+impl Derived{
+  func foo(self){
+    print("Derived::foo y=%d\n", self.y);
+  }
+}
+
+func dyn(b: Base*){
+  b.foo();
+}
+
+func baseTest(){
+  let d = Derived{.Base{x: 10}, y: 5};
+  let b = d as Base*;
+  assert b.x == 10;
+  b.foo();
+  d.foo();
+}
+
 func classTest2(): i32{
   return 123;
 }

@@ -218,6 +218,7 @@ std::any AstCopier::visitMethod(Method *node) {
     auto res = new Method(node->unit);
     res->name = node->name;
     res->type.reset(expr(node->type.get(), this));
+    res->isVirtual = node->isVirtual;
     for (auto ta : node->typeArgs) {
         res->typeArgs.push_back(expr(ta, this));
     }

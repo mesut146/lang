@@ -1,1 +1,1 @@
-make && ./lang
+make &&./lang

@@ -334,7 +334,7 @@ std::any Resolver::visitTrait(Trait *node) {
     return nullptr;
 }
 
-std::any Resolver::visitExtern(Extern *node){
+std::any Resolver::visitExtern(Extern *node) {
     for (auto &m : node->methods) {
         if (!m->typeArgs.empty()) {
             continue;
@@ -357,6 +357,10 @@ std::any Resolver::visitMethod(Method *m) {
     auto it = methodMap.find(m);
     if (it != methodMap.end()) return it->second;
     curMethod = m;
+    if(m->isVirtual && !m->self){
+        error("virtual method must have self parameter");
+    }
+    //todo check if both virtual and override
     auto res = clone(resolve(m->type.get()));
     res.targetMethod = m;
     newScope();
@@ -508,21 +512,21 @@ std::any Resolver::visitType(Type *type) {
         auto res = getTypeCached(ed->type->print());
         addType(str, res);
         return res;
-    }else if(curImpl){
+    } else if (curImpl) {
         auto r = resolve(curImpl->type);
-        if(r.targetDecl && r.targetDecl->isEnum()){
-            auto ed = (EnumDecl*)r.targetDecl;
-          for(auto v:ed->variants){
-              if(v->name==type->name){
-                  //enum variant without scope(same impl)
-                  auto res = getTypeCached(ed->type->print());
-                  addType(str, res);
-                  return res;
-              }
-          }
+        if (r.targetDecl && r.targetDecl->isEnum()) {
+            auto ed = (EnumDecl *) r.targetDecl;
+            for (auto v : ed->variants) {
+                if (v->name == type->name) {
+                    //enum variant without scope(same impl)
+                    auto res = getTypeCached(ed->type->print());
+                    addType(str, res);
+                    return res;
+                }
+            }
         }
     }
-    
+
     if (str == "Self") {
         if (curMethod->parent) {
             auto imp = dynamic_cast<Impl *>(curMethod->parent);
@@ -798,13 +802,14 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
     auto left = resolve(node->expr);
     auto right = resolve(node->type);
     //prim->prim
-    if (!left.type->isPrim() || left.type->isVoid()) {
-        error("as expr must be primitive: " + node->expr->print());
+    if (left.type->isPrim() && right.type->isPrim()){
+        return right;
     }
-    if (!right.type->isPrim() || right.type->isVoid()) {
-        error("as type must be primitive: " + node->type->print());
+    //derived->base
+    if(left.targetDecl && left.targetDecl->base && (left.targetDecl->base->print()+"*")==right.type->print()){
+        return right;
     }
-    return right;
+    throw std::runtime_error("invalid as expr " + node->print());
 }
 
 std::any Resolver::visitRefExpr(RefExpr *node) {
@@ -941,7 +946,7 @@ Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &t
         auto &e = node->entries[i];
         int prm_idx;
         if (hasNamed) {
-            prm_idx = fieldIndex(fields, e.key, type);
+            prm_idx = fieldIndex(fields, e.key.value(), type);
         } else {
             prm_idx = i;
         }
@@ -965,8 +970,13 @@ Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &t
 std::any Resolver::visitObjExpr(ObjExpr *node) {
     bool hasNamed = false;
     bool hasNonNamed = false;
+    Expression *base = nullptr;
     for (auto &e : node->entries) {
-        if (e.hasKey()) {
+        if (e.isBase) {
+            if (base) error("base already set");
+            base = e.value;
+        }
+        else if (e.key) {
             hasNamed = true;
         } else {
             hasNonNamed = true;
@@ -984,6 +994,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
     std::vector<std::unique_ptr<FieldDecl>> *fields;
     Type *type;
     if (res.targetDecl->isEnum()) {
+        if (base) error("enum base not supported");
         auto ed = dynamic_cast<EnumDecl *>(res.targetDecl);
         int idx = findVariant(ed, node->type->name);
         auto variant = ed->variants[idx];
@@ -996,8 +1007,22 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         auto td = dynamic_cast<StructDecl *>(res.targetDecl);
         fields = &td->fields;
         type = td->type;
-        if (td->fields.size() != node->entries.size()) {
-            error("incorrect number of arguments passed to class creation");
+        if (!base && td->base) {
+            error("base class is not initialized for " + node->print());
+        }
+        if (base && !td->base) {
+            error("wasn't expecting base");
+        }
+        if(base){
+            auto base_ty = getType(base);
+            if (base_ty->print() != td->base->print()) {
+                error("invalid base class type: " + base_ty->print() + " expecting: " + td->base->print());
+            }
+        }
+        int fcnt=td->fields.size();
+        if(base) fcnt++;
+        if (fcnt != node->entries.size()) {
+            error("incorrect number of arguments passed to class creation "+node->print());
         }
         if (td->isGeneric) {
             //infer
@@ -1009,16 +1034,18 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             fields = &td->fields;
         }
     }
+    int field_idx = 0;
     for (int i = 0; i < node->entries.size(); i++) {
         auto &e = node->entries[i];
+        if (e.isBase) continue;
         int prm_idx;
         if (hasNamed) {
-            names.insert(e.key);
-            prm_idx = fieldIndex(*fields, e.key, type);
+            names.insert(e.key.value());
+            prm_idx = fieldIndex(*fields, e.key.value(), type);
         } else {
-            prm_idx = i;
+            prm_idx = field_idx++;
         }
-        auto &prm = fields->at(i);
+        auto &prm = fields->at(prm_idx);
         auto vt = resolve(prm->type);
         auto val = resolve(e.value);
         if (!subType(val.type, prm->type)) {
@@ -1083,7 +1110,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     auto sig = Signature::make(mc, this);
     if (mc->scope) {
         MethodResolver mr(this);
-        auto list=mr.collect(sig);
+        auto list = mr.collect(sig);
         auto res = handleCallResult(list, &sig);
         cache[id] = res;
         return res;
@@ -1108,9 +1135,9 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
-    
+
     MethodResolver mr(this);
-    auto list=mr.collect(sig);
+    auto list = mr.collect(sig);
     auto res = handleCallResult(list, &sig);
     cache[id] = res;
     return res;

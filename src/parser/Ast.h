@@ -65,6 +65,7 @@ struct BaseDecl : public Item {
     Type *type;
     bool isResolved = false;
     bool isGeneric = false;
+    std::unique_ptr<Type> base;
 
     std::string &getName();
 };
@@ -161,6 +162,7 @@ public:
     Item *parent = nullptr;
     Unit *unit;
     bool isGeneric = false;
+    bool isVirtual = false;
 
     explicit Method(Unit *unit) : unit(unit) {}
 
@@ -476,10 +478,11 @@ public:
 
 class Entry {
 public:
-    std::string key;
+    std::optional<std::string> key;
     Expression *value;
+    bool isBase = false;
 
-    bool hasKey() { return !key.empty(); }
+    //bool hasKey() { return !key.empty(); }
 
     std::string print();
 };

@@ -242,9 +242,10 @@ std::string ObjExpr::print() {
 }
 
 std::string Entry::print() {
-    if (hasKey()) {
-        return key + ": " + value->print();
+    if (key) {
+        return key.value() + ": " + value->print();
     }
+    if(isBase) return "." + value->print();
     return value->print();
 }
 

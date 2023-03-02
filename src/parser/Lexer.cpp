@@ -9,6 +9,7 @@ TokenType kw(std::string &s) {
     if (s == "trait") return TRAIT;
     if (s == "impl") return IMPL;
     if (s == "extern") return EXTERN;
+    if (s == "virtual") return VIRTUAL;
     if (s == "static") return STATIC;
     if (s == "bool") return BOOLEAN;
     if (s == "true") return TRUE;

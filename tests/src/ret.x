@@ -9,8 +9,15 @@ func make_arr(): [i32; 100]{
 
 func make_A(): A{
     let arr = [0; 100];
-    let obj = A{a: 10, b: arr};
-    return obj;
+    return A{a: 10, b: arr};
+}
+
+func ret_mc(): A{
+  return make_A();
+}
+
+func ret_mc2(): A{
+  return A{5, make_arr()};
 }
 
 func retTest(){

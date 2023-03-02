@@ -15,7 +15,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(RETURN)
         TOKEN_CASE(FROM)
         TOKEN_CASE(IS)
-
+        TOKEN_CASE(VIRTUAL)
 
         TOKEN_CASE(BOOLEAN)
         TOKEN_CASE(U8)
