@@ -104,16 +104,14 @@ public:
 
     std::shared_ptr<Unit> parseUnit();
 
-    ImportStmt *parseImport();
-
     std::unique_ptr<StructDecl> parseTypeDecl();
 
     std::unique_ptr<EnumDecl> parseEnumDecl();
 
-    std::unique_ptr<Method> parseMethod();
+    Method parseMethod();
     bool isMethod();
 
-    std::unique_ptr<Param> parseParam(Method *m);
+    Param parseParam();
 
     std::unique_ptr<VarDecl> parseVarDecl();
     bool isVarDecl();

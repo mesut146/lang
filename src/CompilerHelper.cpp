@@ -10,8 +10,8 @@ void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
         if (b->isEnum()) {
             auto ed = dynamic_cast<EnumDecl *>(b);
-            for (auto variant : ed->variants) {
-                for (auto &f : variant->fields) {
+            for (auto &variant : ed->variants) {
+                for (auto &f : variant.fields) {
                     if (isSame(f->type, a)) return true;
                 }
             }
@@ -37,12 +37,12 @@ std::vector<Method *> getMethods(Unit *unit) {
             auto impl = dynamic_cast<Impl *>(item.get());
             if (!impl->type->typeArgs.empty()) { continue; }
             for (auto &m : impl->methods) {
-                list.push_back(m.get());
+                list.push_back(&m);
             }
         } else if (item->isExtern()) {
             auto ex = dynamic_cast<Extern *>(item.get());
             for (auto &m : ex->methods) {
-                list.push_back(m.get());
+                list.push_back(&m);
             }
         }
     }
@@ -182,17 +182,16 @@ llvm::Type *Compiler::mapType(Type *type) {
         return it->second;
     }
     return makeDecl(rt.targetDecl);
-    //throw std::runtime_error("mapType: " + s);
 }
 
 int Compiler::getSize(BaseDecl *decl) {
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         int res = 0;
-        for (auto ev : ed->variants) {
-            if (ev->fields.empty()) continue;
+        for (auto &ev : ed->variants) {
+            if (ev.fields.empty()) continue;
             int cur = 0;
-            for (auto &f : ev->fields) {
+            for (auto &f : ev.fields) {
                 cur += getSize(f->type);
             }
             res = cur > res ? cur : res;

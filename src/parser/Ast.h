@@ -54,7 +54,7 @@ struct Item {
 
 class Unit {
 public:
-    std::vector<ImportStmt *> imports;
+    std::vector<ImportStmt> imports;
     std::vector<std::unique_ptr<Item>> items;
     std::string path;
 
@@ -93,7 +93,7 @@ public:
 class Trait : public Item {
 public:
     Type *type;
-    std::vector<std::unique_ptr<Method>> methods;
+    std::vector<Method> methods;
 
     bool isTrait() { return true; }
     std::string print();
@@ -102,9 +102,9 @@ public:
 
 class Impl : public Item {
 public:
-    std::optional<std::string> trait_name;
+    std::unique_ptr<Type> trait_name;
     Type *type;
-    std::vector<std::unique_ptr<Method>> methods;
+    std::vector<Method> methods;
     bool isGeneric = false;
 
     explicit Impl(Type *type) : type(type) {}
@@ -125,7 +125,7 @@ public:
 
 class EnumDecl : public BaseDecl {
 public:
-    std::vector<EnumVariant *> variants;
+    std::vector<EnumVariant> variants;
     
     bool isEnum() { return true; }
     std::string print() override;
@@ -134,7 +134,7 @@ public:
 
 class Extern: public Item{
 public:
-    std::vector<std::unique_ptr<Method>> methods;
+    std::vector<Method> methods;
     
     bool isExtern() { return true; }
     std::string print() override;
@@ -145,7 +145,6 @@ class Param {
 public:
     std::string name;
     std::unique_ptr<Type> type;
-    Method *method;
 
     std::string print();
     std::any accept(Visitor *v);
@@ -156,8 +155,8 @@ public:
     std::string name;
     std::unique_ptr<Type> type;
     std::vector<Type *> typeArgs;
-    std::unique_ptr<Param> self;
-    std::vector<std::unique_ptr<Param>> params;
+    std::optional<Param> self;
+    std::vector<Param> params;
     std::unique_ptr<Block> body;
     Item *parent = nullptr;
     Unit *unit;

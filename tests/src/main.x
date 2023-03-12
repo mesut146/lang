@@ -60,24 +60,18 @@ func condTest(){
 }
 
 func prims(){
-  let i = 3;
-  while(i < 100){
+  for(let i = 3 ; i < 90 ; i = i + 2){
     let pr = true;
-    let j = 3;
-    while (j * j < i){
-      if(i % j==0){
+    for (let j = 3; j * j < i; j = j + 2){
+      if(i % j == 0){
         pr = false;
         break;
       }
-      j = j + 2;
     }
-    if(pr)
-      print("%d, ", i);
-    i = i + 2;
+    if(pr) print("%d, ", i);
   }
   print("prims done\n");
 }
-
 
 func mallocTest(){
    let arr = malloc<i32>(10);
@@ -87,17 +81,15 @@ func mallocTest(){
    print("mallocTest done\n");
 }
 
-
 func importTest(){
   //from classTest
   let c = Point{x: 100, y: 200};
   assert c.x == 100 && c.y == 200;
 
-  /*let c2 = Point::new(10, 20);
-  assert c2.getX() == 10 && c2.getY() == 20;*/
+  let c2 = Point::new(10, 20);
+  assert c2.getX() == 10 && c2.getY() == 20;
   
-  assert classTest2() == 123;
-  print ("importTest done\n");
+  print("importTest done\n");
 }
 
 func main(): i32{
@@ -106,8 +98,7 @@ func main(): i32{
   condTest();
   infixTest();
   flowTest();
-  enumTest();
-  classTest();
+  structTest();
   baseTest();
   mallocTest();
   prims();

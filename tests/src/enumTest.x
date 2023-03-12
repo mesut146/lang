@@ -15,7 +15,7 @@ enum E{
  A2(a: A);
 }
 
-func classTest(){
+func structTest(){
   //random order
   let obj = A{b: 6, a: 5};
   assert obj.a == 5 && obj.b == 6;
@@ -26,7 +26,8 @@ func classTest(){
   assert b.c == 3;
   assert b.a.a == 10 && b.a.b == 6;
 
-  print("classTest done\n");
+  print("structTest done\n");
+  enumTest();
 }
 
 func enumTest(){

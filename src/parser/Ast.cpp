@@ -71,7 +71,7 @@ std::string StructDecl::print() {
 std::string Trait::print() {
     std::string s;
     s.append("trait ").append(type->print()).append("{\n");
-    s.append(joinPtr(methods, "\n"));
+    s.append(join(methods, "\n"));
     s.append("}\n");
     return s;
 }
@@ -80,16 +80,16 @@ std::string Impl::print() {
     std::string s;
     s.append("impl ");
     if (trait_name) {
-        s.append(trait_name.value()).append(" for ");
+        s.append(trait_name->print()).append(" for ");
     }
     s.append(type->print());
     s.append("{\n");
-    s.append(joinPtr(methods, "\n"));
+    s.append(join(methods, "\n"));
     s.append("}\n");
     return s;
 }
 std::string Extern::print() {
-    return "extern {" +joinPtr(methods, "\n")+"\n}";
+    return "extern {" +join(methods, "\n")+"\n}";
 }
 
 std::string Method::print() {
@@ -110,7 +110,7 @@ std::string Method::print() {
         }
         if (!params.empty()) s.append(", ");
     }
-    s.append(joinPtr(params, ", "));
+    s.append(join(params, ", "));
     s.append(")");
     if (type) {
         s.append(": ");

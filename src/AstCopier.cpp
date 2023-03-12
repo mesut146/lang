@@ -223,20 +223,18 @@ std::any AstCopier::visitMethod(Method *node) {
         res->typeArgs.push_back(expr(ta, this));
     }
     if (node->self) {
-        auto self = new Param;
-        self->name = node->self->name;
+        Param self;
+        self.name = node->self->name;
         if (node->self->type) {
-            self->type.reset(expr(node->self->type.get(), this));
+            self.type.reset(expr(node->self->type.get(), this));
         }
-        self->method = res;
-        res->self.reset(self);
+        res->self = std::move(self);
     }
     for (auto &prm : node->params) {
-        auto param = new Param;
-        param->name = prm->name;
-        param->type.reset(expr(prm->type.get(), this));
-        param->method = res;
-        res->params.push_back(std::unique_ptr<Param>(param));
+        Param param;
+        param.name = prm.name;
+        param.type.reset(expr(prm.type.get(), this));
+        res->params.push_back(std::move(param));
     }
     auto body = stmt(node->body.get(), this);
     res->body.reset(body);

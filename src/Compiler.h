@@ -13,8 +13,8 @@
 
 bool isStrLit(Expression *e);
 
-static bool isRvo(Method* m){
-   return !m->type->isVoid() && isStruct(m->type.get());   
+static bool isRvo(Method *m) {
+    return !m->type->isVoid() && isStruct(m->type.get());
 }
 std::vector<Method *> getMethods(Unit *unit);
 void sort(std::vector<BaseDecl *> &list);
@@ -45,9 +45,9 @@ public:
     llvm::Function *mallocf = nullptr;
     llvm::StructType *sliceType = nullptr;
     llvm::StructType *stringType = nullptr;
-    std::vector<Method*> virtuals;
-    std::map<std::string, llvm::Constant*> vtables;
-    std::map<Method*, int> virtualIndex;
+    std::vector<Method *> virtuals;
+    std::map<std::string, llvm::Constant *> vtables;
+    std::map<Method *, int> virtualIndex;
 
     void init();
     void emit(std::string &Filename);
@@ -70,35 +70,35 @@ public:
     void setOrdinal(int index, llvm::Value *ptr);
     void simpleVariant(Type *n, llvm::Value *ptr);
     bool doesAlloc(Expression *e);
-    
-    std::vector<llvm::Value *> makeIdx(int i1, int i2){
+
+    std::vector<llvm::Value *> makeIdx(int i1, int i2) {
         return {makeInt(i1), makeInt(i2)};
     }
-    std::vector<llvm::Value *> makeIdx(int i1){
+    std::vector<llvm::Value *> makeIdx(int i1) {
         return {makeInt(i1)};
     }
-    llvm::Value* gep(llvm::Value* ptr, int i1, int i2){
+    llvm::Value *gep(llvm::Value *ptr, int i1, int i2) {
         auto idx = makeIdx(i1, i2);
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
-    llvm::Value* gep(llvm::Value* ptr, int i1){
+    llvm::Value *gep(llvm::Value *ptr, int i1) {
         auto idx = makeIdx(i1);
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
-    llvm::Value* gep(llvm::Value* ptr, int i1, Expression* i2){
+    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2) {
         std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, new Type("i32"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
-    llvm::Value* gep(llvm::Value* ptr, Expression* i2){
+    llvm::Value *gep(llvm::Value *ptr, Expression *i2) {
         std::vector<llvm::Value *> idx = {cast(i2, new Type("i32"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
-    llvm::Value* gep2(llvm::Value* ptr, int idx){
+    llvm::Value *gep2(llvm::Value *ptr, int idx) {
         return Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
-    llvm::Value* getAlloc(Expression* e){
-        if(allocIdx < allocArr.size())  return allocArr.at(allocIdx++);
-        throw std::runtime_error("alloc error for "+e->print());
+    llvm::Value *getAlloc(Expression *e) {
+        if (allocIdx < allocArr.size()) return allocArr.at(allocIdx++);
+        throw std::runtime_error("alloc error for " + e->print());
     }
 
     llvm::Function *make_printf();
@@ -114,7 +114,7 @@ public:
     llvm::Type *mapType(Type *t);
     void make_proto(std::unique_ptr<Method> &m);
     void make_proto(Method *m);
-    llvm::StructType* makeDecl(BaseDecl *bd);
+    llvm::StructType *makeDecl(BaseDecl *bd);
     void initParams(Method *m);
     void makeLocals(Statement *st);
 
@@ -140,9 +140,10 @@ public:
     std::any visitArrayExpr(ArrayExpr *node) override;
     void child(Expression *node, llvm::Value *ptr);
     std::any array(ArrayExpr *node, llvm::Value *ptr);
-    void object(ObjExpr *node, llvm::Value *ptr, const RType &tt);
-    llvm::Value*  call(MethodCall *node, llvm::Value *ptr);
+    void object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived);
+    llvm::Value *call(MethodCall *node, llvm::Value *ptr);
     std::any slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
+    void strLit(llvm::Value *ptr, Literal *lit);
 
     std::any visitBlock(Block *node) override;
     std::any visitVarDecl(VarDecl *node) override;

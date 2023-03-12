@@ -7,13 +7,13 @@ std::string Parser::strLit() {
     return std::string(t.value.begin() + 1, t.value.end() - 1);
 }
 
-ImportStmt *Parser::parseImport() {
-    auto res = new ImportStmt;
-    consume(IMPORT);
-    res->list.push_back(pop().value);
-    while (is(DIV)) {
-        pop();
-        res->list.push_back(pop().value);
+ImportStmt parseImport(Parser* p) {
+    ImportStmt res;
+    p->consume(IMPORT);
+    res.list.push_back(p->pop().value);
+    while (p->is(DIV)) {
+        p->pop();
+        res.list.push_back(p->pop().value);
     }
     return res;
 }
@@ -26,7 +26,7 @@ std::unique_ptr<FieldDecl> parseField(Parser *p) {
     return std::make_unique<FieldDecl>(name, type);
 }
 
-// ("class") name typeArgs? "{" member* "}"
+// "class" name typeArgs? (":" type)? "{" member* "}"
 std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     res->unit = unit;
@@ -38,6 +38,10 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     if(is(COLON)){
         pop();
         res->base.reset(parseType());
+    }
+    if(is(SEMI)){
+        consume(SEMI);
+        return res;
     }
     consume(LBRACE);
     //members
@@ -59,15 +63,15 @@ std::unique_ptr<FieldDecl> parseEnumParam(Parser *p) {
     return std::make_unique<FieldDecl>(name, type);
 }
 
-EnumVariant *parseEnumEntry(Parser *p) {
-    auto res = new EnumVariant;
-    res->name = p->name();
+EnumVariant parseEnumEntry(Parser *p) {
+    EnumVariant res;
+    res.name = p->name();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
-        res->fields.push_back(parseEnumParam(p));
+        res.fields.push_back(parseEnumParam(p));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->fields.push_back(parseEnumParam(p));
+            res.fields.push_back(parseEnumParam(p));
         }
         p->consume(RPAREN);
     }
@@ -101,8 +105,8 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
     res->type = p->parseType();
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
-        res->methods.push_back(p->parseMethod());
-        res->methods.back()->parent = res.get();
+        res->methods.push_back(std::move(p->parseMethod()));
+        res->methods.back().parent = res.get();
     }
     p->consume(RBRACE);
     return res;
@@ -117,18 +121,18 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
         res->isGeneric = true;
     }
     if (p->is(FOR)) {
-        res->trait_name = type->name;
+        res->trait_name.reset(type);
         p->consume(FOR);
-        res->type = (p->parseType());
+        res->type = p->parseType();
     } else {
         res->type = type;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
-        m->parent = res.get();
-        if (m->self) {
-            m->self->type.reset(clone(res->type));
+        m.parent = res.get();
+        if (m.self) {
+            m.self->type.reset(clone(res->type));
         }
         res->methods.push_back(std::move(m));
     }
@@ -142,7 +146,7 @@ std::unique_ptr<Extern> parseExtern(Parser *p) {
   p->consume(LBRACE);
   while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
-        m->parent = res.get();
+        m.parent = res.get();
         res->methods.push_back(std::move(m));
     }
   p->consume(RBRACE);
@@ -164,7 +168,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
     unit->path = lexer.path;
 
     while (first() != nullptr && is(IMPORT)) {
-        res->imports.push_back(parseImport());
+        res->imports.push_back(parseImport(this));
     }
 
     while (first() != nullptr) {
@@ -181,7 +185,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->items.push_back(parseExtern(this));
         } 
         else if (isMethod()) {
-            res->items.push_back(parseMethod());
+            res->items.push_back(std::make_unique<Method>(parseMethod()));
         } else {
             throw std::runtime_error("invalid top level decl: " + first()->print());
         }
@@ -190,60 +194,58 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 }
 
 //name ":" type ("=" expr)?
-std::unique_ptr<Param> Parser::parseParam(Method *m) {
-    auto res = new Param;
-    res->method = m;
-    res->name = name();
+Param Parser::parseParam() {
+    Param res ;
+    res.name = name();
     consume(COLON);
-    res->type.reset(parseType());
-    return std::unique_ptr<Param>(res);
+    res.type.reset(parseType());
+    return res;
 }
 
-std::unique_ptr<Method> Parser::parseMethod() {
-    auto res = std::make_unique<Method>(unit);
+Method Parser::parseMethod() {
+    Method res(unit);
     if(is(VIRTUAL)){
-        res->isVirtual = true;
+        res.isVirtual = true;
         pop();
     }
     consume(FUNC);
     if (is(NEW)) {
-        res->name = "new";
+        res.name = "new";
         pop();
     } else {
-        res->name = name();
+        res.name = name();
     }
     if (is(LT)) {
-        res->typeArgs = generics();
-        res->isGeneric = true;
+        res.typeArgs = generics();
+        res.isGeneric = true;
     }
     consume(LPAREN);
     if (!is(RPAREN)) {
         if (is({IDENT}, {COLON})) {
-            res->params.push_back(parseParam(res.get()));
+            res.params.push_back(parseParam());
         } else {
-            auto self = new Param;
-            self->name = name();
-            self->method = res.get();
-            res->self.reset(self);
+            Param self;
+            self.name = name();
+            res.self = std::move(self);
         }
         while (is(COMMA)) {
             consume(COMMA);
-            res->params.push_back(parseParam(res.get()));
+            res.params.push_back(parseParam());
         }
     }
     consume(RPAREN);
     if (is(COLON)) {
         consume(COLON);
-        res->type.reset(parseType());
+        res.type.reset(parseType());
     } else {
         //default is void
-        res->type.reset(new Type("void"));
+        res.type.reset(new Type("void"));
     }
     if (is(SEMI)) {
         //interface
         consume(SEMI);
     } else {
-        res->body = parseBlock();
+        res.body = parseBlock();
     }
     return res;
 }

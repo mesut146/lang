@@ -14,6 +14,7 @@ public:
 
 
     std::any visitInfix(Infix *node) override;
+    std::any visitAssign(Assign *node) override;
     std::any visitMethodCall(MethodCall *node) override;
     std::any visitSimpleName(SimpleName *node) override;
     std::any visitLiteral(Literal *node) override;

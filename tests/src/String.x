@@ -35,10 +35,8 @@ impl String{
     }
 
     func append(self, s: str){
-        let i = 0;
-        while(i < s.len()){
+        for(let i = 0;i < s.len();++i){
             self.arr.add(s.get(i));
-            i += 1;
         }
     }
 

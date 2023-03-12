@@ -76,7 +76,7 @@ static std::string printMethod(Method *m) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
             s += impl->type->print() + "::";
-        } else if(m->parent->isTrait()){
+        } else if (m->parent->isTrait()) {
             auto t = dynamic_cast<Trait *>(m->parent);
             s += t->type->print() + "::";
         }
@@ -100,7 +100,7 @@ static std::string printMethod(Method *m) {
     }
     for (auto &prm : m->params) {
         if (i > 0) s += ",";
-        s += prm->type.get()->print();
+        s += prm.type.get()->print();
     }
     s += ")";
     return s;
@@ -112,7 +112,7 @@ static std::string mangle(Method *m) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
             s += impl->type->print() + "::";
-        } else if(m->parent->isTrait()){
+        } else if (m->parent->isTrait()) {
             auto t = dynamic_cast<Trait *>(m->parent);
             s += t->type->print() + "::";
         }
@@ -129,9 +129,9 @@ static std::string mangle(Method *m) {
         s += ">";
     }
     //todo self
-    if(m->parent &&m->parent->isExtern()) return s;
+    if (m->parent && m->parent->isExtern()) return s;
     for (auto &prm : m->params) {
-        s += "_" + prm->type.get()->print();
+        s += "_" + prm.type.get()->print();
     }
     return s;
 }
@@ -164,7 +164,7 @@ typedef std::variant<Fragment *, FieldDecl *, EnumPrm *, Param *> VarHolder;
 
 class RType {
 public:
-    std::shared_ptr<Unit> unit;
+    Unit* unit;
     Type *type = nullptr;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
@@ -198,7 +198,7 @@ public:
 class Scope {
 public:
     std::vector<VarHolder> list;
-    //~Scope();
+
     void add(const VarHolder &f);
     void clear();
     std::optional<VarHolder> find(const std::string &name);
@@ -223,7 +223,6 @@ public:
     std::unordered_map<Method *, RType> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
     std::map<Method *, std::shared_ptr<Scope>> methodScopes;
-    std::map<BaseDecl *, std::shared_ptr<Scope>> declScopes;
     std::unordered_set<Param *> mut_params;
     BaseDecl *curDecl = nullptr;
     Impl *curImpl = nullptr;
@@ -232,25 +231,30 @@ public:
     std::vector<BaseDecl *> genericTypes;
     bool fromOther = false;
     bool inLoop = false;
-    IdGen *idgen;
+    IdGen idgen;
     bool isResolved = false;
     std::vector<BaseDecl *> usedTypes;
     std::unordered_set<Method *> usedMethods;
+    std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
     std::string root;
 
     explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
 
     static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
+    static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
     std::vector<Symbol> find(std::string &name, bool checkOthers);
     std::string getId(Expression *e);
-    RType handleCallResult(std::vector<Signature> &list, Signature *sig);
-    void findMethod(std::string& name, std::vector<Signature> &list);
+
+    Method *isOverride(Method *method);
+    static bool do_override(Method *m1, Method *m2);
     bool isCyclic(Type *type, BaseDecl *target);
+    bool is_base_of(Type *base, BaseDecl *d);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
+    std::vector<Method*> get_trait_methods(const std::string& name);
 
     void newScope();
     void dropScope();

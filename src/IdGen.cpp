@@ -5,6 +5,9 @@
 std::any IdGen::visitInfix(Infix *node) {
     return {};
 }
+std::any IdGen::visitAssign(Assign *node){
+    return {};
+}
 
 std::any IdGen::visitMethodCall(MethodCall *node) {
     auto id = printMethod(resolver->curMethod) + "#" + node->print();
