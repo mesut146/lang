@@ -2,9 +2,11 @@
 
 #include <fstream>
 #include <string>
+#include <utility>
 
 #include "Resolver.h"
 #include "Visitor.h"
+#include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Value.h>
@@ -19,11 +21,24 @@ static bool isRvo(Method *m) {
 std::vector<Method *> getMethods(Unit *unit);
 void sort(std::vector<BaseDecl *> &list);
 
+constexpr int ENUM_INDEX_SIZE = 32;
+constexpr int ENUM_TAG_INDEX = 0;
+constexpr int ENUM_DATA_INDEX = 1;
+
+struct DebugInfo {
+    llvm::DICompileUnit *cu;
+    llvm::DIType *type;
+    llvm::DIFile *file;
+    llvm::DIScope *sp = nullptr;
+    std::unordered_map<std::string, llvm::DIType *> types;
+};
+
 struct Compiler : public Visitor {
 public:
     std::string srcDir;
     std::string outDir;
     std::shared_ptr<Unit> unit;
+    bool debug = true;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
     std::shared_ptr<Resolver> resolv;
@@ -33,10 +48,11 @@ public:
     std::string TargetTriple;
     llvm::TargetMachine *TargetMachine = nullptr;
     std::unique_ptr<llvm::IRBuilder<>> Builder;
-    llvm::LLVMContext ctx;
+    std::unique_ptr<llvm::DIBuilder> DBuilder;
+    DebugInfo di;
+    std::unique_ptr<llvm::LLVMContext> ctxp;
     std::unique_ptr<llvm::Module> mod;
-    std::vector<llvm::Value *> allocArr;
-    int allocIdx = 0;
+    std::map<std::string, std::vector<llvm::Value *>> allocMap;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Type *> classMap;
     std::map<std::string, llvm::Function *> funcMap;
@@ -58,6 +74,7 @@ public:
     void genCode(Method *m);
     void cleanup();
     void make_vtables();
+    llvm::LLVMContext& ctx(){ return *ctxp; };
 
     int getSize(Type *type);
     int getSize(BaseDecl *decl);
@@ -69,6 +86,8 @@ public:
     llvm::Type *getInt(int bit);
     void setOrdinal(int index, llvm::Value *ptr);
     void simpleVariant(Type *n, llvm::Value *ptr);
+    bool is_simple_enum(BaseDecl *bd);
+    bool is_simple_enum(Expression *e);
     bool doesAlloc(Expression *e);
 
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
@@ -97,7 +116,12 @@ public:
         return Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *getAlloc(Expression *e) {
-        if (allocIdx < allocArr.size()) return allocArr.at(allocIdx++);
+        auto &arr = allocMap[e->print()];
+        if (!arr.empty()) {
+            auto res = arr[0];
+            arr.erase(arr.begin());
+            return res;
+        }
         throw std::runtime_error("alloc error for " + e->print());
     }
 
@@ -112,6 +136,9 @@ public:
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, Type *type);
     llvm::Type *mapType(Type *t);
+    llvm::DIType *map_di(Type *t);
+    void loc(Node *e);
+    void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
     void make_proto(Method *m);
     llvm::StructType *makeDecl(BaseDecl *bd);
@@ -122,7 +149,7 @@ public:
     llvm::Value *gen(std::unique_ptr<Expression> &e);
 
     std::any visitParExpr(ParExpr *node) override;
-    llvm::Value *andOr(Expression *l, Expression *r, bool isand);
+    std::pair<llvm::Value *, llvm::BasicBlock *> andOr(Infix *node);
     std::any visitInfix(Infix *node) override;
     std::any visitUnary(Unary *node) override;
     std::any visitAssign(Assign *node) override;

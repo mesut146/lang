@@ -7,11 +7,10 @@ class Resolver;
 
 class IdGen : public Visitor {
 public:
-    Unit *unit;
     Resolver *resolver;
 
     IdGen(Resolver *resolver) : resolver(resolver) {}
-
+    std::any get(Expression *node);
 
     std::any visitInfix(Infix *node) override;
     std::any visitAssign(Assign *node) override;

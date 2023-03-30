@@ -21,13 +21,19 @@ impl List<T>{
       return;
     }
     let tmp = malloc<T>(self.cap * 2);
-    let i = 0;
-    while(i < self.count){
+    for(let i = 0;i < self.count;++i){
       tmp[i] = self.arr[i];
-      ++i;
     }
     self.arr = tmp;
     self.cap = self.cap * 2;
+  }
+  
+  func remove(self, pos: i64){
+    //copy right of pos to 1 left
+    for(let i = pos;i < self.count - 1;++i){
+      self.arr[i] = self.arr[i + 1];
+    }
+    self.count =- 1;
   }
 
   func add(self, e: T){
@@ -56,11 +62,17 @@ impl List<T>{
       self.arr[pos] = val;
   }
 
-  func get(self, pos: i32): T{
+  func get(self, pos: i64): T{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
     }
     return self.arr[pos];
+  }
+  func get_ptr(self, pos: i64): T*{
+    if(pos >= self.count) {
+      panic("index %d out of bounds %d", pos, self.count);
+    }
+    return &self.arr[pos];
   }
 
   func clear(self){
@@ -145,5 +157,6 @@ func listTest(){
   let s = list.slice(1, 3);
   assert s.len == 2 && s[0] == 20;
   iterTest(list);
+  list.remove(1);
   print("listTest done\n");
 }

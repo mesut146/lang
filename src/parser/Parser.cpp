@@ -18,17 +18,21 @@ ImportStmt parseImport(Parser* p) {
     return res;
 }
 
-std::unique_ptr<FieldDecl> parseField(Parser *p) {
+FieldDecl parseField(Parser *p) {
+    int line = p->first()->line;
     auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
     p->consume(SEMI);
-    return std::make_unique<FieldDecl>(name, type);
+    auto res = FieldDecl{name, type};
+    res.line = line;
+    return res;
 }
 
 // "class" name typeArgs? (":" type)? "{" member* "}"
 std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
+    res->line = first()->line;
     res->unit = unit;
     consume(CLASS);
     res->type = parseType();
@@ -56,11 +60,11 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     return res;
 }
 
-std::unique_ptr<FieldDecl> parseEnumParam(Parser *p) {
+FieldDecl parseEnumParam(Parser *p) {
     auto name = p->name();
     p->consume(COLON);
     auto type = p->parseType();
-    return std::make_unique<FieldDecl>(name, type);
+    return FieldDecl{name, type};
 }
 
 EnumVariant parseEnumEntry(Parser *p) {
@@ -93,7 +97,6 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
             res->variants.push_back(parseEnumEntry(this));
         }
     }
-    consume(SEMI);
     consume(RBRACE);
     return res;
 }
@@ -195,8 +198,10 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
 //name ":" type ("=" expr)?
 Param Parser::parseParam() {
-    Param res ;
-    res.name = name();
+    Param res;
+    auto nm = pop();
+    res.name = nm.value;
+    res.line = nm.line;
     consume(COLON);
     res.type.reset(parseType());
     return res;
@@ -209,12 +214,9 @@ Method Parser::parseMethod() {
         pop();
     }
     consume(FUNC);
-    if (is(NEW)) {
-        res.name = "new";
-        pop();
-    } else {
-        res.name = name();
-    }
+    auto nm = pop();
+    res.line = nm.line;
+    res.name = nm.value;
     if (is(LT)) {
         res.typeArgs = generics();
         res.isGeneric = true;
@@ -225,7 +227,9 @@ Method Parser::parseMethod() {
             res.params.push_back(parseParam());
         } else {
             Param self;
-            self.name = name();
+            auto nm = pop();
+            self.name = nm.value;
+            self.line = nm.line;
             res.self = std::move(self);
         }
         while (is(COMMA)) {
@@ -251,18 +255,19 @@ Method Parser::parseMethod() {
 }
 
 //name (":" type)? ("=" expr)?;
-Fragment *frag(Parser *p) {
-    auto res = new Fragment;
-    res->name = p->name();
+Fragment frag(Parser *p) {
+    Fragment res;
+    res.line = p->first()->line;
+    res.name = p->name();
     if (p->is(COLON)) {
         p->consume(COLON);
-        res->type.reset(p->parseType());
+        res.type.reset(p->parseType());
     }
     if (!p->is(EQ)) {
-        throw std::runtime_error("variable " + res->name + " must have initializer");
+        throw std::runtime_error("variable " + res.name + " must have initializer");
     }
     p->consume(EQ);
-    res->rhs.reset(p->parseExpr());
+    res.rhs.reset(p->parseExpr());
     return res;
 }
 

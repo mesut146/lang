@@ -26,17 +26,26 @@ T visit(T node, AstCopier *t) {
     return st;
 }
 
+Expression *loc(Expression *res, Expression *src) {
+    res->line = src->line;
+    return res;
+}
+
+Statement *loc(Statement *res, Statement *src) {
+    res->line = src->line;
+    return res;
+}
 
 std::any AstCopier::visitLiteral(Literal *node) {
     auto res = new Literal(node->type, node->val);
     if (node->suffix) {
         res->suffix = expr(node->suffix, this);
     }
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitSimpleName(SimpleName *node) {
-    return (Expression *) new SimpleName(node->name);
+    return loc(new SimpleName(node->name), node);
 }
 
 std::any AstCopier::visitType(Type *node) {
@@ -61,7 +70,7 @@ std::any AstCopier::visitType(Type *node) {
     for (auto ta : node->typeArgs) {
         res->typeArgs.push_back(expr(ta, this));
     }
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitInfix(Infix *node) {
@@ -69,7 +78,7 @@ std::any AstCopier::visitInfix(Infix *node) {
     res->left = expr(node->left, this);
     res->right = expr(node->right, this);
     res->op = node->op;
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitBlock(Block *node) {
@@ -77,7 +86,7 @@ std::any AstCopier::visitBlock(Block *node) {
     for (auto &st : node->list) {
         res->list.push_back(stmt(st, this));
     }
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitReturnStmt(ReturnStmt *node) {
@@ -85,33 +94,36 @@ std::any AstCopier::visitReturnStmt(ReturnStmt *node) {
     if (node->expr) {
         res->expr = expr(node->expr, this);
     }
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitVarDecl(VarDecl *node) {
     auto res = new VarDecl;
     res->decl = stmt(node->decl, this);
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitVarDeclExpr(VarDeclExpr *node) {
     auto res = new VarDeclExpr;
     res->isConst = node->isConst;
     res->isStatic = node->isStatic;
-    for (auto f : node->list) {
-        res->list.push_back(visit(f, this));
+    for (auto &f : node->list) {
+        auto fr = std::any_cast<Fragment *>(visitFragment(&f));
+        res->list.push_back(std::move(*fr));
+        delete fr;
     }
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitFragment(Fragment *node) {
-    auto res = new Fragment;
+    auto res = new Fragment();
     res->name = node->name;
     if (node->type) {
         res->type = expr(node->type, this);
     }
     res->rhs = expr(node->rhs, this);
     res->isOptional = node->isOptional;
+    res->line = node->line;
     return res;
 }
 
@@ -125,7 +137,7 @@ std::any AstCopier::visitObjExpr(ObjExpr *node) {
         ent.value = expr(e.value, this);
         res->entries.push_back(ent);
     }
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitMethodCall(MethodCall *node) {
@@ -141,24 +153,29 @@ std::any AstCopier::visitMethodCall(MethodCall *node) {
     for (auto arg : node->args) {
         res->args.push_back(expr(arg, this));
     }
-    return (Expression *) res;
+    return loc(res, node);
 }
 std::any AstCopier::visitExprStmt(ExprStmt *node) {
     auto tmp = expr(node->expr, this);
-    return (Statement *) new ExprStmt(tmp);
+    return loc(new ExprStmt(tmp), node);
 }
 std::any AstCopier::visitAssign(Assign *node) {
     auto res = new Assign;
     res->left = expr(node->left, this);
     res->right = expr(node->right, this);
     res->op = node->op;
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 //deref
 std::any AstCopier::visitDerefExpr(DerefExpr *node) {
     auto res = new DerefExpr(expr(node->expr, this));
-    return (Expression *) res;
+    return loc(res, node);
+}
+
+std::any AstCopier::visitRefExpr(RefExpr *node) {
+    auto res = new RefExpr(expr(node->expr, this));
+    return loc(res, node);
 }
 
 std::any AstCopier::visitArrayAccess(ArrayAccess *node) {
@@ -168,28 +185,39 @@ std::any AstCopier::visitArrayAccess(ArrayAccess *node) {
     if (node->index2) {
         res->index2.reset(expr(node->index2.get(), this));
     }
-    return (Expression *) res;
+    return loc(res, node);
 }
 std::any AstCopier::visitFieldAccess(FieldAccess *node) {
     auto res = new FieldAccess;
     res->scope = expr(node->scope, this);
     res->name = node->name;
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitUnary(Unary *node) {
     auto res = new Unary;
     res->op = node->op;
     res->expr = expr(node->expr, this);
-    return (Expression *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitWhileStmt(WhileStmt *node) {
     auto res = new WhileStmt;
     res->expr.reset(expr(node->expr.get(), this));
     res->body.reset(stmt(node->body.get(), this));
-    return (Statement *) res;
+    return loc(res, node);
 }
+std::any AstCopier::visitForStmt(ForStmt *node) {
+    auto res = new ForStmt;
+    res->decl.reset(stmt(node->decl.get(), this));
+    res->cond.reset(expr(node->cond.get(), this));
+    for (auto &u : node->updaters) {
+        res->updaters.push_back(expr(u, this));
+    }
+    res->body.reset(stmt(node->body.get(), this));
+    return loc(res, node);
+}
+
 std::any AstCopier::visitIfStmt(IfStmt *node) {
     auto res = new IfStmt;
     res->expr.reset(expr(node->expr.get(), this));
@@ -197,13 +225,13 @@ std::any AstCopier::visitIfStmt(IfStmt *node) {
     if (node->elseStmt) {
         res->elseStmt.reset(stmt(node->elseStmt.get(), this));
     }
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
     auto res = new IfLetStmt;
     res->type.reset(expr(node->type.get(), this));
-    for (auto a : node->args) {
+    for (auto &a : node->args) {
         res->args.push_back(a);
     }
     res->rhs.reset(expr(node->rhs.get(), this));
@@ -211,7 +239,7 @@ std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
     if (node->elseStmt) {
         res->elseStmt.reset(stmt(node->elseStmt.get(), this));
     }
-    return (Statement *) res;
+    return loc(res, node);
 }
 
 std::any AstCopier::visitMethod(Method *node) {
@@ -224,6 +252,7 @@ std::any AstCopier::visitMethod(Method *node) {
     }
     if (node->self) {
         Param self;
+        self.line = node->self->line;
         self.name = node->self->name;
         if (node->self->type) {
             self.type.reset(expr(node->self->type.get(), this));
@@ -232,12 +261,13 @@ std::any AstCopier::visitMethod(Method *node) {
     }
     for (auto &prm : node->params) {
         Param param;
+        param.line = prm.line;
         param.name = prm.name;
         param.type.reset(expr(prm.type.get(), this));
         res->params.push_back(std::move(param));
     }
     auto body = stmt(node->body.get(), this);
     res->body.reset(body);
-
+    res->line = node->line;
     return res;
 }

@@ -12,7 +12,7 @@ enum E{
  A,
  B(a: i32, b: i32),
  C(a: i64),
- A2(a: A);
+ A2(a: A)
 }
 
 func structTest(){
@@ -35,8 +35,9 @@ func enumTest(){
   let b: E = E::B{b: 6, a: 5};//random order
   let c: E = E::C{100};
   let d: E = E::A2{A{a: 100, b: 200}};
-
-  assert a.index == 0 && b.index==1 && c.index == 2;
+  assert a.index == 0;
+  assert b.index == 1;
+  assert c.index == 2;
   assert a is E::A && b is E::B && c is E::C && d is E::A2;
 
   let isA = false;

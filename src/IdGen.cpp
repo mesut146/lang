@@ -1,11 +1,18 @@
 #include "IdGen.h"
 #include "Resolver.h"
 
-
-std::any IdGen::visitInfix(Infix *node) {
+std::any IdGen::get(Expression *node) {
+    if (resolver->curMethod) {
+        return printMethod(resolver->curMethod) + "#" + node->print();
+    }
     return {};
 }
-std::any IdGen::visitAssign(Assign *node){
+
+
+std::any IdGen::visitInfix(Infix *node) {
+    return get(node);
+}
+std::any IdGen::visitAssign(Assign *node) {
     return {};
 }
 
@@ -25,14 +32,14 @@ std::any IdGen::visitRefExpr(RefExpr *node) {
     return {};
 }
 std::any IdGen::visitType(Type *node) {
-    return {};
+    return get(node);
 }
 std::any IdGen::visitObjExpr(ObjExpr *node) {
     auto id = printMethod(resolver->curMethod) + "#" + node->print();
     return id;
 }
 std::any IdGen::visitFieldAccess(FieldAccess *node) {
-    return {};
+    return get(node);
 }
 std::any IdGen::visitDerefExpr(DerefExpr *node) {
     return {};

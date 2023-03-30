@@ -16,6 +16,7 @@ public:
     std::any visitObjExpr(ObjExpr *node) override;
     std::any visitMethodCall(MethodCall *node) override;
     std::any visitDerefExpr(DerefExpr *node) override;
+    std::any visitRefExpr(RefExpr *node) override;
 
     std::any visitVarDecl(VarDecl *node) override;
     std::any visitVarDeclExpr(VarDeclExpr *node) override;
@@ -23,6 +24,7 @@ public:
     std::any visitReturnStmt(ReturnStmt *node) override;
     std::any visitExprStmt(ExprStmt *node) override;
     std::any visitWhileStmt(WhileStmt *node) override;
+    std::any visitForStmt(ForStmt *node) override;
     std::any visitIfStmt(IfStmt *node) override;
     std::any visitIfLetStmt(IfLetStmt *node) override;
     std::any visitMethod(Method *node) override;

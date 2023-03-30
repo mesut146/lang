@@ -2,7 +2,7 @@ import str
 
 enum Option<T>{
   None,
-  Some(val: T);
+  Some(val: T)
 }
 
 /*match self{

@@ -40,31 +40,6 @@ void resolveTest() {
     r->resolveAll();
 }
 
-class Node {
-public:
-    int val;
-    Node *next = nullptr;
-
-    static Node make() {
-        auto node = Node{.val = 5};
-        auto next = new Node{.val = 6};
-        auto next2 = new Node{.val = 7};
-        node.next = next;
-        next->next = next2;
-        return node;
-    }
-
-    void print() {
-        std::cout << val;
-        if (next != nullptr) {
-            std::cout << ", ";
-            next->print();
-        } else {
-            std::cout << std::endl;
-        }
-    }
-};
-
 void compile() {
     Compiler c;
     c.srcDir = "../tests/src";

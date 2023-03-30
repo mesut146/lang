@@ -7,18 +7,22 @@ class B{
 
 trait Print{
   func prin(self);
-  func aa(self);
+  //func aa(self);
 }
 
 impl Print for A{
+  func helper(self){
+    print("a=%d\n", self.a);
+  }
   func prin(self){
     print("a=%d\n", self.a);
+    self.helper();
   }
 }
 
 impl Print for B{
   func prin(self){
-    print("a=%d\n", self.b);
+    print("a=%lld\n", self.b);
   }
 }
 
@@ -30,5 +34,5 @@ func traitTest(){
   prin(A{5});
   prin(B{6});
   //prin(5);
-  print("traitTest done");
+  print("traitTest done\n");
 }

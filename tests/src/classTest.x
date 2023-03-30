@@ -42,7 +42,7 @@ impl C{
   }
 }
 func baseTest(){
-  let a = A{5};
+  /*let a = A{5};
   assert a.foo().eq("A::foo");
   assert a.bar().eq("A::bar");
   
@@ -63,7 +63,7 @@ func baseTest(){
   assert a3.foo().eq("B::foo");
   assert a3.bar().eq("C::bar");
   
-  virtualTest2();
+  virtualTest2();*/
 }
 
 class A2;

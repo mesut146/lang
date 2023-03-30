@@ -11,7 +11,6 @@
 #include <unordered_set>
 #include <variant>
 
-class Symbol;
 class RType;
 class Resolver;
 class Signature;
@@ -20,10 +19,10 @@ bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType binCast(const std::string &s1, const std::string &s2);
 
-static int fieldIndex(std::vector<std::unique_ptr<FieldDecl>> &fields, const std::string &name, Type *type) {
+static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, Type *type) {
     int i = 0;
     for (auto &fd : fields) {
-        if (fd->name == name) {
+        if (fd.name == name) {
             return i;
         }
         i++;
@@ -51,26 +50,47 @@ static bool isMember(Method *m) {
     return false;
 }
 
-// static std::string mangle(Type *type) {
-//     if (type->isPointer()) {
-//         auto ptr = dynamic_cast<PointerType *>(type);
-//         return mangle(ptr->type) + "*";
-//     }
-//     std::string s = type->name;
-//     if (!type->typeArgs.empty()) {
-//         s.append("<");
-//         int i = 0;
-//         for (auto ta : type->typeArgs) {
-//             if (i > 0) s.append(",");
-//             s.append(mangle(ta));
-//             i++;
-//         }
-//         s.append(">");
-//     }
-//     return s;
-// }
-
 static std::string printMethod(Method *m) {
+    std::string s;
+    std::string parent;
+    if (m->parent) {
+        if (m->parent->isImpl()) {
+            auto impl = dynamic_cast<Impl *>(m->parent);
+            parent = impl->type->print();
+        } else if (m->parent->isTrait()) {
+            auto t = dynamic_cast<Trait *>(m->parent);
+            parent = t->type->print();
+        }
+    }
+    if (!parent.empty()) {
+        s += parent + "::";
+    }
+    s += m->name;
+    if (!m->typeArgs.empty()) {
+        s += "<";
+        for (int i = 0; i < m->typeArgs.size(); i++) {
+            s += m->typeArgs[i]->print();
+            if (i < m->typeArgs.size() - 1) {
+                s += ",";
+            }
+        }
+        s += ">";
+    }
+    s += "(";
+    int i = 0;
+    if (m->self) {
+        s += parent;
+        i++;
+    }
+    for (auto &prm : m->params) {
+        if (i > 0) s += ",";
+        s += prm.type.get()->print();
+    }
+    s += ")";
+    return s;
+}
+
+static std::string mangle(Method *m) {
     std::string s;
     if (m->parent) {
         if (m->parent->isImpl()) {
@@ -92,22 +112,18 @@ static std::string printMethod(Method *m) {
         }
         s += ">";
     }
-    s += "(";
-    int i = 0;
-    if (m->self) {
-        s += m->self->type->print();
-        i++;
-    }
+    //todo self
+    if (m->parent && m->parent->isExtern()) return s;
+    if (m->self) s += "_" + m->self->type->print();
     for (auto &prm : m->params) {
-        if (i > 0) s += ",";
-        s += prm.type.get()->print();
+        s += "_" + prm.type.get()->print();
     }
-    s += ")";
     return s;
 }
 
-static std::string mangle(Method *m) {
+static std::string mangle_cpp(Method *m) {
     std::string s;
+    if (m->name != "main") s += "_ZN";
     if (m->parent) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
@@ -159,49 +175,35 @@ public:
     std::string name;
 };
 
-typedef std::variant<Fragment *, FieldDecl *, EnumPrm *, Param *> VarHolder;
+struct VarHolder {
+    std::string name;
+    Type *type;
+    bool prm = false;
 
+    VarHolder(std::string &name, Type *type, bool prm) : name(name), type(type), prm(prm) {}
+    VarHolder(std::string &name, Type *type) : name(name), type(type) {}
+};
 
 class RType {
 public:
-    Unit* unit;
+    Unit *unit = nullptr;
     Type *type = nullptr;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
+    Trait *trait = nullptr;
     std::optional<VarHolder> vh;
 
     RType() = default;
-    explicit RType(Type *t) : type(t) {}
+    RType(Type *t) : type(t) {}
 };
-static RType cast(std::any &&arg) {
-    if (arg.type() == typeid(RType)) {
-        return std::any_cast<RType>(arg);
-    }
-    throw std::runtime_error("unknown type");
-}
-class Symbol {
-public:
-    Method *m = nullptr;
-    std::optional<VarHolder> v;
-    BaseDecl *decl = nullptr;
-    Resolver *resolver;
 
-    Symbol(Method *m, Resolver *r) : m(m), resolver(r) {}
-    Symbol(const VarHolder &f, Resolver *r) : v(f), resolver(r) {}
-    Symbol(BaseDecl *bd, Resolver *r) : decl(bd), resolver(r) {}
-
-    template<class T>
-    RType resolve(T e) {
-        return cast(e->accept(resolver));
-    }
-};
 class Scope {
 public:
     std::vector<VarHolder> list;
 
     void add(const VarHolder &f);
     void clear();
-    std::optional<VarHolder> find(const std::string &name);
+    VarHolder *find(const std::string &name);
 };
 
 //replace any type in decl with src by same index
@@ -213,23 +215,22 @@ public:
     std::any visitType(Type *type) override;
 };
 
+static std::string prm_id(Method &m, std::string &p) {
+    return mangle(&m) + "." + p;
+}
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
     std::unordered_map<std::string, RType> cache;
-    std::map<Fragment *, RType> varMap;
     std::map<std::string, RType> typeMap;
-    std::map<std::string, RType> paramMap;
     std::unordered_map<Method *, RType> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
-    std::map<Method *, std::shared_ptr<Scope>> methodScopes;
-    std::unordered_set<Param *> mut_params;
-    BaseDecl *curDecl = nullptr;
+    std::unordered_set<std::string> mut_params;//todo
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
     std::vector<BaseDecl *> genericTypes;
-    bool fromOther = false;
     bool inLoop = false;
     IdGen idgen;
     bool isResolved = false;
@@ -246,15 +247,12 @@ public:
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    std::vector<Symbol> find(std::string &name, bool checkOthers);
-    std::string getId(Expression *e);
-
     Method *isOverride(Method *method);
     static bool do_override(Method *m1, Method *m2);
     bool isCyclic(Type *type, BaseDecl *target);
     bool is_base_of(Type *base, BaseDecl *d);
-    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<std::unique_ptr<FieldDecl>> &fields, Type *type);
-    std::vector<Method*> get_trait_methods(const std::string& name);
+    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<FieldDecl> &fields, Type *type);
+    std::vector<Method> &get_trait_methods(Type *type);
 
     void newScope();
     void dropScope();
@@ -262,9 +260,6 @@ public:
 
     void init();
     void resolveAll();
-
-    RType getTypeCached(const std::string &name);
-    void addType(const std::string &name, const RType &rt);
 
     std::any visitStructDecl(StructDecl *bd) override;
     std::any visitEnumDecl(EnumDecl *bd) override;
@@ -281,6 +276,9 @@ public:
 
     RType resolve(Expression *expr);
     Type *getType(Expression *expr);
+    RType getTypeCached(const std::string &name);
+    void addType(const std::string &name, const RType &rt);
+    std::string getId(Expression *e);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

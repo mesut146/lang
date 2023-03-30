@@ -72,7 +72,7 @@ Token Lexer::readNumber() {
     int start = pos;
     pos++;
     char c = peek();
-    while (isdigit(c) || (c == '.' & isdigit(buf[pos + 1]))) {
+    while (isdigit(c) || (c == '.' && isdigit(buf[pos + 1]))) {
         dot |= (c == '.');
         pos++;
         c = peek();

@@ -4,7 +4,6 @@
 
 std::string printSig(Signature &sig) {
     std::string s;
-    //std::optional<RType> sc;
     if (sig.mc && sig.mc->scope) {
         s += sig.scope->type->print();
         s += "::";
@@ -39,7 +38,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
             auto ptr = dynamic_cast<PointerType *>(scp.type);
             res.scope = r->resolve(ptr->type);
         } else
-            res.scope = scp;
+            res.scope = std::move(scp);
         if (!dynamic_cast<Type *>(mc->scope.get())) {
             res.args.push_back(res.scope->type);
         }
@@ -156,7 +155,7 @@ void MethodResolver::getMethods(RType &rt, std::string &name, std::vector<Signat
                 for (auto &a : sig.args) {
                     a = (Type *) std::any_cast<Expression *>(a->accept(&gen));
                 }
-                list.push_back(sig);
+                list.push_back(std::move(sig));
             }
         }
     }
@@ -201,14 +200,14 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     auto mc = sig.mc;
     auto list = collect(sig);
     if (list.empty()) {
-        error("no such method: " + printSig(sig));
+        error("no such method: " + sig.mc->print() + " => " + printSig(sig));
     }
     std::vector<Signature> real;
     std::map<Method *, std::string> errors;
     for (auto &sig2 : list) {
         auto msg = isSame(sig, sig2);
         if (!msg) {
-            real.push_back(sig2);
+            real.push_back(std::move(sig2));
         } else {
             errors[sig2.m] = msg.value();
         }
@@ -222,8 +221,8 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     }
     //remove base method if derived exist
     if (mc->scope && real.size() == 2) {
-        auto m1 = real[0];
-        auto m2 = real[1];
+        auto &m1 = real[0];
+        auto &m2 = real[1];
         if (m1.m->self->type->print() == sig.scope->type->print()) {
             //m1 is derived
             real.erase(real.begin() + 1);
@@ -234,7 +233,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     }
     if (real.size() > 1) {
         std::string s;
-        for (auto m : real) {
+        for (auto &m : real) {
             s += printSig(m) + "\n";
         }
         error("method:  " + mc->print() + "\n" + printSig(sig) + " has " +
@@ -287,7 +286,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
 
 Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Method *m, Signature &sig) {
     auto mc = sig.mc;
-    for (auto gm : r->generatedMethods) {
+    for (auto &gm : r->generatedMethods) {
         auto sig2 = Signature::make(gm, r);
         if (!isSame(sig, sig2).has_value()) {
             return gm;
@@ -384,7 +383,6 @@ std::optional<std::string> MethodResolver::checkArgs(Signature &sig, Signature &
             //if base method, skip self
             auto imp = (Impl *) sig2.m->parent;
             if (imp->type->name != sig.scope->type->name) {
-                //print("base method " + printSig(sig) + " , " + printSig(sig2));
                 continue;
             }
         }

@@ -6,7 +6,9 @@ std::unique_ptr<Block> Parser::parseBlock() {
     auto res = std::make_unique<Block>();
     consume(LBRACE);
     while (!is(RBRACE)) {
+        auto line = first()->line;
         res->list.push_back(parseStmt());
+        res->list.back()->line = line;
     }
     consume(RBRACE);
     return res;
@@ -98,8 +100,13 @@ std::unique_ptr<DoWhile> parseDoWhile(Parser *p) {
     p->consume(SEMI);
     return res;
 }
-
 std::unique_ptr<Statement> Parser::parseStmt() {
+    int line = first()->line;
+    auto res = parseStmt2();
+    res->line=line;
+    return res;
+}
+std::unique_ptr<Statement> Parser::parseStmt2() {
     if (is(ASSERT_KW)) {
         consume(ASSERT_KW);
         auto expr = parseExpr();

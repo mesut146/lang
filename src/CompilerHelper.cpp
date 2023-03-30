@@ -6,19 +6,35 @@ bool isSame(Type *type, BaseDecl *decl) {
     return type->print() == decl->type->print();
 }
 
+bool Compiler::is_simple_enum(BaseDecl *bd) {
+    return getSize(bd) == ENUM_INDEX_SIZE;
+}
+
+bool Compiler::is_simple_enum(Expression *e) {
+    auto rt = resolv->resolve(e);
+    if (rt.targetDecl && rt.targetDecl->isEnum()) {
+        auto ed = (EnumDecl *) rt.targetDecl;
+        for (auto &ev : ed->variants) {
+            if (ev.isStruct()) return false;
+        }
+        return true;
+    }
+    return false;
+}
+
 void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
         if (b->isEnum()) {
             auto ed = dynamic_cast<EnumDecl *>(b);
             for (auto &variant : ed->variants) {
                 for (auto &f : variant.fields) {
-                    if (isSame(f->type, a)) return true;
+                    if (isSame(f.type, a)) return true;
                 }
             }
         } else {
             auto td = dynamic_cast<StructDecl *>(b);
             for (auto &field : td->fields) {
-                if (isSame(field->type, a)) {
+                if (isSame(field.type, a)) {
                     return true;
                 }
             }
@@ -79,7 +95,7 @@ bool isStrLit(Expression *e) {
 //llvm
 
 llvm::ConstantInt *Compiler::makeInt(int val, int bits) {
-    auto intType = llvm::IntegerType::get(ctx, bits);
+    auto intType = llvm::IntegerType::get(ctx(), bits);
     return llvm::ConstantInt::get(intType, val);
 }
 
@@ -88,7 +104,7 @@ llvm::ConstantInt *Compiler::makeInt(int val) {
 }
 
 llvm::Type *Compiler::getInt(int bit) {
-    return llvm::IntegerType::get(ctx, bit);
+    return llvm::IntegerType::get(ctx(), bit);
 }
 
 void Compiler::simpleVariant(Type *n, llvm::Value *ptr) {
@@ -98,14 +114,13 @@ void Compiler::simpleVariant(Type *n, llvm::Value *ptr) {
     setOrdinal(index, ptr);
 }
 void Compiler::setOrdinal(int index, llvm::Value *ptr) {
-    auto ordPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, 0);
-    Builder->CreateStore(makeInt(index), ordPtr);
+    auto ordPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, ENUM_TAG_INDEX);
+    Builder->CreateStore(makeInt(index, ENUM_INDEX_SIZE), ordPtr);
 }
 
 llvm::Function *Compiler::make_printf() {
     std::vector<llvm::Type *> args;
-    auto charPtr = getInt(8)->getPointerTo();
-    args.push_back(charPtr);
+    args.push_back(getInt(8)->getPointerTo());
     auto ft = llvm::FunctionType::get(getInt(32), args, true);
     auto f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "printf", *mod);
     f->setCallingConv(llvm::CallingConv::C);
@@ -131,7 +146,7 @@ llvm::Function *Compiler::make_malloc() {
     llvm::AttributeList attr;
     llvm::AttrBuilder builder;
     builder.addAlignmentAttr(16);
-    attr = attr.addAttributes(ctx, 0, builder);
+    attr = attr.addAttributes(ctx(), 0, builder);
     f->setAttributes(attr);
     return f;
 }
@@ -140,12 +155,12 @@ llvm::StructType *Compiler::make_slice_type() {
     std::vector<llvm::Type *> elems;
     elems.push_back(getInt(8)->getPointerTo());
     elems.push_back(getInt(32));//len
-    return llvm::StructType::create(ctx, elems, "__slice");
+    return llvm::StructType::create(ctx(), elems, "__slice");
 }
 
 llvm::StructType *Compiler::make_string_type() {
     std::vector<llvm::Type *> elems = {sliceType};
-    return llvm::StructType::create(ctx, elems, "str");
+    return llvm::StructType::create(ctx(), elems, "str");
 }
 
 llvm::Type *Compiler::mapType(Type *type) {
@@ -168,20 +183,68 @@ llvm::Type *Compiler::mapType(Type *type) {
         return stringType;
     }
     if (type->isVoid()) {
-        return llvm::Type::getVoidTy(ctx);
+        return llvm::Type::getVoidTy(ctx());
     }
     if (type->isPrim()) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
     auto rt = resolv->resolve(type);
-    //auto s = mangle(rt.targetDecl->type);
     auto s = rt.targetDecl->type->print();
     auto it = classMap.find(s);
     if (it != classMap.end()) {
         return it->second;
     }
     return makeDecl(rt.targetDecl);
+}
+
+llvm::DIType *Compiler::map_di(Type *t) {
+    auto s = t->print();
+    auto it = di.types.find(s);
+    if (it != di.types.end()) return it->second;
+    if (t->isPointer()) {
+        auto pt = (PointerType *) t;
+        return DBuilder->createPointerType(map_di(pt->type), 64);
+    }
+    if (s == "bool") return DBuilder->createBasicType(s, 1, llvm::dwarf::DW_ATE_boolean);
+    if (s == "i8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_signed);
+    if (s == "i16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_signed);
+    if (s == "i32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_signed);
+    if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_signed);
+    if (s == "f32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_float);
+    if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_float);
+    if (s == "void") return nullptr;
+    auto rt = resolv->resolve(t);
+    if (rt.targetDecl) {
+        auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
+        auto sz = getSize(t);
+        std::vector<llvm::Metadata *> elems;
+        if (rt.targetDecl->isEnum()) {
+            auto ed = (EnumDecl *) rt.targetDecl;
+            auto tag = DBuilder->createBasicType("tag", ENUM_INDEX_SIZE, llvm::dwarf::DW_ATE_signed);
+            auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_INDEX_SIZE, 8, 0, llvm::DINode::FlagZero, tag);
+            elems.push_back(tagm);
+            auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
+            auto sz = getSize(ed) - ENUM_INDEX_SIZE;
+            llvm::DINodeArray sub;
+            auto at = DBuilder->createArrayType(sz, 8, chr, sub);
+            auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_INDEX_SIZE, llvm::DINode::FlagZero, at);
+            elems.push_back(arrm);
+        } else {
+            auto sd = (StructDecl *) rt.targetDecl;
+            int off = 0;
+            for (auto &fd : sd->fields) {
+                auto sz = getSize(fd.type);
+                auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 8, off, llvm::DINode::FlagZero, map_di(fd.type));
+                elems.push_back(mt);
+                off += sz;
+            }
+        }
+        auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, sz, 8, llvm::DINode::FlagZero, nullptr, et);
+    }
+    //error("di type: "+t->print());
+    return DBuilder->createUnspecifiedType(s);
 }
 
 int Compiler::getSize(BaseDecl *decl) {
@@ -192,16 +255,16 @@ int Compiler::getSize(BaseDecl *decl) {
             if (ev.fields.empty()) continue;
             int cur = 0;
             for (auto &f : ev.fields) {
-                cur += getSize(f->type);
+                cur += getSize(f.type);
             }
             res = cur > res ? cur : res;
         }
-        return res;
+        return res + ENUM_INDEX_SIZE;
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         int res = 0;
         for (auto &fd : td->fields) {
-            res += getSize(fd->type);
+            res += getSize(fd.type);
         }
         return res;
     }
@@ -235,42 +298,57 @@ public:
 
     AllocCollector(Compiler *c) : compiler(c) {}
 
-    llvm::Value *alloca(llvm::Type *ty) {
-        auto ptr = compiler->Builder->CreateAlloca(ty);
-        compiler->allocArr.push_back(ptr);
+    template<class T>
+    llvm::Value *alloc(llvm::Type *type, T *e) {
+        auto ptr = compiler->Builder->CreateAlloca(type);
+        auto &arr = compiler->allocMap[e->print()];
+        arr.push_back(ptr);
         return ptr;
+    }
+    template<class T>
+    llvm::Value *alloc(Type *type, T *e) {
+        return alloc(compiler->mapType(type), e);
     }
     std::any visitVarDecl(VarDecl *node) override {
         node->decl->accept(this);
         return {};
     }
     std::any visitVarDeclExpr(VarDeclExpr *node) override {
-        for (auto f : node->list) {
-            auto type = f->type ? f->type.get() : compiler->resolv->getType(f->rhs.get());
+        for (auto &f : node->list) {
+            auto type = f.type ? f.type.get() : compiler->resolv->getType(f.rhs.get());
             llvm::Value *ptr;
-            if (compiler->doesAlloc(f->rhs.get())) {
+            if (compiler->doesAlloc(f.rhs.get())) {
                 //auto alloc
-                auto rhs = f->rhs->accept(this);
+                auto rhs = f.rhs->accept(this);
                 ptr = std::any_cast<llvm::Value *>(rhs);
             } else {
                 //manual alloc, prims, struct copy
-                auto ty = compiler->mapType(type);
-                ptr = alloca(ty);
-                if (dynamic_cast<MethodCall *>(f->rhs.get()) || dynamic_cast<FieldAccess *>(f->rhs.get())) {
+                ptr = alloc(type, node);
+                if (dynamic_cast<MethodCall *>(f.rhs.get()) || dynamic_cast<FieldAccess *>(f.rhs.get())) {
                     //todo not just this
-                    f->rhs->accept(this);
+                    f.rhs->accept(this);
                 }
             }
-            ptr->setName(f->name);
-            compiler->NamedValues[f->name] = ptr;
+            ptr->setName(f.name);
+            compiler->NamedValues[f.name] = ptr;
         }
         return {};
+    }
+    void call(MethodCall *node) {
+        //todo rvo
+        if (node->scope) node->scope->accept(this);
+        for (auto a : node->args) {
+            if (!node->scope && node->name == "print" && isStrLit(a)) {
+                continue;
+            }
+            a->accept(this);
+        }
     }
     std::any visitMethodCall(MethodCall *node) {
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;
         if (m && isRvo(m)) {
-            ptr = alloca(compiler->mapType(m->type.get()));
+            ptr = alloc(m->type.get(), node);
         }
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
@@ -289,8 +367,7 @@ public:
         if (node->isPointer()) {
             return {};
         }
-        auto ty = compiler->mapType(node->scope.get());
-        auto ptr = alloca(ty);
+        auto ptr = alloc(node->scope.get(), node);
         return ptr;
     }
     std::any visitObjExpr(ObjExpr *node) override {
@@ -298,13 +375,12 @@ public:
             //todo this too
             return {};
         }
-        auto ty = compiler->mapType(compiler->resolv->getType(node));
-        return alloca(ty);
+        auto ty = compiler->resolv->getType(node);
+        return alloc(ty, node);
     }
     std::any visitArrayExpr(ArrayExpr *node) {
-        auto r = compiler->resolv->getType(node);
-        auto ty = compiler->mapType(r);
-        auto ptr = alloca(ty);
+        auto ty = compiler->resolv->getType(node);
+        auto ptr = alloc(ty, node);
         for (auto e : node->list) {
             auto mc = dynamic_cast<MethodCall *>(e);
             if (mc) {
@@ -317,7 +393,7 @@ public:
     }
     std::any visitArrayAccess(ArrayAccess *node) {
         if (node->index2) {
-            auto ptr = alloca(compiler->sliceType);
+            auto ptr = alloc(compiler->sliceType, node);
             node->array->accept(this);
             node->index2->accept(this);
             node->index->accept(this);
@@ -330,7 +406,7 @@ public:
     }
     std::any visitLiteral(Literal *node) {
         if (node->type == Literal::STR) {
-            return alloca(compiler->stringType);
+            return alloc(compiler->stringType, node);
         }
         return {};
     }
@@ -356,6 +432,7 @@ public:
         return {};
     }
     std::any visitIfStmt(IfStmt *node) override {
+        node->expr->accept(this);
         node->thenStmt->accept(this);
         if (node->elseStmt) {
             node->elseStmt->accept(this);
@@ -364,7 +441,11 @@ public:
     }
     std::any visitReturnStmt(ReturnStmt *node) override {
         if (node->expr) {
-            if (compiler->doesAlloc(node->expr.get())) return {};
+            auto mc = dynamic_cast<MethodCall *>(node->expr.get());
+            if (mc) {
+                call(mc);
+            } else if (compiler->doesAlloc(node->expr.get()))
+                return {};
             node->expr->accept(this);
         }
         return {};
@@ -429,8 +510,7 @@ public:
 };
 
 void Compiler::makeLocals(Statement *st) {
-    allocIdx = 0;
-    allocArr.clear();
+    allocMap.clear();
     if (st) {
         AllocCollector col(this);
         st->accept(&col);

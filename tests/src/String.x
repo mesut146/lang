@@ -25,9 +25,17 @@ impl String{
         res.append(s);
         return res;
     }
+    
+    func new(arr: List<i8>*): String{
+        return String{*arr};
+    }
 
     func len(self): i64{
         return self.arr.len();
+    }
+    
+    func get(self, i: i32): i8{
+         return self.arr.get(i);
     }
 
     func str(self): str{
@@ -35,6 +43,12 @@ impl String{
     }
 
     func append(self, s: str){
+        for(let i = 0;i < s.len();++i){
+            self.arr.add(s.get(i));
+        }
+    }
+    
+    func append(self, s: String){
         for(let i = 0;i < s.len();++i){
             self.arr.add(s.get(i));
         }

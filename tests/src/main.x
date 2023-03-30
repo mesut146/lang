@@ -12,6 +12,8 @@ import Option
 import str
 import libc
 import alloc
+import traits
+import parser/lexer
 
 func literalTest(){
   let a8 = 5i8;
@@ -55,6 +57,11 @@ func condTest(){
 
   assert getFalse(&c2) || getTrue(&c1);
   assert c1==4 && c2==2;
+  
+  assert (getFalse(&c2) || getTrue(&c1)) && getTrue(&c1);
+  assert (getTrue(&c1) && getFalse(&c2)) || getTrue(&c1);
+  assert getFalse(&c2) || (getTrue(&c1) && getTrue(&c1));
+  assert getTrue(&c1) && (getFalse(&c2) || getTrue(&c1));
 
   print("condTest done\n");
 }
@@ -114,5 +121,7 @@ func main(): i32{
   strTest();
   libc_test();
   allocTest();
+  traitTest();
+  lexer_test();
   return 0;
 }

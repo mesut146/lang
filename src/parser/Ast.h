@@ -30,6 +30,13 @@ static std::map<std::string, int> sizeMap{
         {"f64", 64},
         {"bool", 1}};
 
+class Node{
+public:
+  int pos = 0;
+  int line = 0;
+  
+  virtual ~Node() = default;
+};
 
 class ImportStmt {
 public:
@@ -38,7 +45,7 @@ public:
     std::string print();
 };
 class Unit;
-struct Item {
+struct Item: public Node{
     Unit *unit;
 
     virtual bool isClass() { return false; }
@@ -70,7 +77,7 @@ struct BaseDecl : public Item {
     std::string &getName();
 };
 
-class FieldDecl {
+class FieldDecl: public Node{
 public:
     std::string name;
     Type *type;
@@ -83,7 +90,7 @@ public:
 
 class StructDecl : public BaseDecl {
 public:
-    std::vector<std::unique_ptr<FieldDecl>> fields;
+    std::vector<FieldDecl> fields;
 
     bool isClass() { return true; }
     std::string print() override;
@@ -117,7 +124,7 @@ public:
 class EnumVariant {
 public:
     std::string name;
-    std::vector<std::unique_ptr<FieldDecl>> fields;
+    std::vector<FieldDecl> fields;
 
     bool isStruct() const { return !fields.empty(); }
     std::string print();
@@ -141,7 +148,7 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class Param {
+class Param: public Node{
 public:
     std::string name;
     std::unique_ptr<Type> type;
@@ -170,13 +177,13 @@ public:
     std::any accept(Visitor *v);
 };
 
-class Expression {
+class Expression: public Node{
 public:
     virtual std::string print() = 0;
 
     virtual std::any accept(Visitor *v) = 0;
 };
-class Statement {
+class Statement: public Node{
 public:
     virtual std::string print() = 0;
 
@@ -319,7 +326,10 @@ public:
     explicit ExprStmt(Expression *e) : expr(e) {}
 };
 
-class Fragment {
+template<class T>
+using Ptr = std::unique_ptr<T>;
+
+class Fragment: public Node{
 public:
     std::string name;
     std::unique_ptr<Type> type;
@@ -334,7 +344,7 @@ class VarDeclExpr : public Statement {
 public:
     bool isConst = false;
     bool isStatic = false;
-    std::vector<Fragment *> list;
+    std::vector<Fragment> list;
 
     std::string print() override;
     std::any accept(Visitor *v) override;

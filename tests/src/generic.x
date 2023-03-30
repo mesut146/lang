@@ -17,7 +17,7 @@ class B<T, U>{
 
 enum Op<T>{
   None,
-  Some(val: T);
+  Some(val: T)
 }
 
 //complex infer

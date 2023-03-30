@@ -76,7 +76,7 @@ public:
     Token& consume(TokenType tt) {
         auto &t = pop();
         if (t.is(tt)) return t;
-        throw std::runtime_error("unexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt));
+        throw std::runtime_error(lexer.path + "\nunexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt));
     }
 
     void backup() {
@@ -129,6 +129,7 @@ public:
     static bool isPrim(Token &t);
 
     std::unique_ptr<Statement> parseStmt();
+    std::unique_ptr<Statement> parseStmt2();
 
     std::unique_ptr<Block> parseBlock();
 };

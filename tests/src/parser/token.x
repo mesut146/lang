@@ -1,4 +1,6 @@
 import String
+import str
+import List
 
 enum TokenType {
     EOF_,
@@ -98,11 +100,20 @@ enum TokenType {
     RBRACKET,
     LBRACE,
     RBRACE,
-    ARROW,
+    ARROW
 }
-
-func printType(t: TokenType): String{
-  return "error type".str();
+impl TokenType{
+  func print(t): str{
+    if(t is TokenType::IMPORT) return "import";
+    if(t is TokenType::IDENT) return "ident";
+    if(t is TokenType::DIV) return "DIV";
+    if(t is TokenType::EQ) return "EQ";
+    if(t is TokenType::PLUS) return "PLUS";
+    if(t is TokenType::MINUS) return "MINUS";
+    if(t is TokenType::I64) return "I64";
+    print("index = %d\n", t.index);
+    return "<error type>";
+  }
 }
 
 class Token {
@@ -120,19 +131,27 @@ impl Token{
     func new(t: TokenType, s: String): Token{
         return Token{s, t, 0, 0, 0};
     }
+    
+    func new(t: TokenType, s: str): Token{
+        return Token{String::new(s), t, 0, 0, 0};
+    }
 
    func is(self, t: TokenType): bool {
         return self.type.index == t.index;
     }
 
-    func is(self, t1: TokenType): bool {
+    /*func is(self, t1: TokenType): bool {
         for (auto tt : t) {
             if (tt == type) return true;
         }
         return false;
-    }
+    }*/
 
     func print(self): String {
-        return printType(type) + ": " + value;
+        let s = String::new();
+        s.append(self.type.print());
+        s.append(": ");
+        s.append(self.value);
+        return s;
     }
 }
