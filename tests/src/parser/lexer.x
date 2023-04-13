@@ -7,7 +7,7 @@ import Option
 import map
 
 class Lexer{
-  path: str;
+  path: String;
   buf: String;
   pos: i32;
   line: i32;
@@ -31,15 +31,25 @@ impl i8{
 impl Lexer{
   func new(path: str): Lexer{
     let s = String{read_bytes(path)};
-    return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
+    return Lexer{path: path.str(), buf: s, pos: 0, line: 1, ops: make_ops()};
   }
+  
   func peek(self): i8{
     return self.buf.get(self.pos);
   }
+  
+  func peek(self, off: i32): i8{
+    return self.buf.get(self.pos + off);
+  }
+  
   func read(self): i8{
     let res = self.buf.get(self.pos);
     self.pos+=1;
     return res;
+  }
+  
+  func has(self): bool{
+    return self.pos < self.buf.len();
   }
   
   func str(self, a: i32, b: i32): str{
@@ -61,8 +71,10 @@ impl Lexer{
     if (c == 'n') return '\n';
     if (c == 'r') return '\r';
     if (c == 't') return '\t';
+    if (c == '\\') return '\\';
     if (c == '"') return '"';
     if (c == '\'') return '\'';
+    if (c == '0') return '\0';
     panic("invalid escape: %c", c);
   }
   
@@ -70,43 +82,153 @@ impl Lexer{
     let ops = Map<str, TokenType>::new();
     ops.add("{", TokenType::LBRACE);
     ops.add("}", TokenType::RBRACE);
+    ops.add("(", TokenType::LPAREN);
+    ops.add(")", TokenType::RPAREN);
+    ops.add("[", TokenType::LBRACKET);
+    ops.add("]", TokenType::RBRACKET);
     ops.add("/", TokenType::DIV);
+    ops.add(":", TokenType::COLON);
+    ops.add(";", TokenType::SEMI);
+    ops.add(",", TokenType::COMMA);
+    ops.add(".", TokenType::DOT);
+    ops.add("<", TokenType::LT);
+    ops.add(">", TokenType::GT);
+    ops.add("=", TokenType::EQ);
+    ops.add("+", TokenType::PLUS);
+    ops.add("-", TokenType::MINUS);
+    ops.add("*", TokenType::STAR);
+    ops.add("/", TokenType::DIV);
+    ops.add("%", TokenType::PERCENT);
+    ops.add("^", TokenType::POW);
+    ops.add("~", TokenType::TILDE);
+    ops.add("&", TokenType::AND);
+    ops.add("|", TokenType::OR);
+    ops.add("&&", TokenType::ANDAND);
+    ops.add("||", TokenType::OROR);
+    ops.add("==", TokenType::EQEQ);
+    ops.add("<=", TokenType::LTEQ);
+    ops.add(">=", TokenType::GTEQ);
+    ops.add("!", TokenType::BANG);
+    ops.add("#", TokenType::HASH);
     return ops;
   }
   
+  func kw(s: str): TokenType{
+    if(s.eq("assert")) return TokenType::ASSERT_KW;
+    if(s.eq("class")) return TokenType::CLASS;
+    if(s.eq("enum")) return TokenType::ENUM;
+    if(s.eq("trait")) return TokenType::TRAIT;
+    if(s.eq("impl")) return TokenType::IMPL;
+    if(s.eq("extern")) return TokenType::EXTERN;
+    if(s.eq("virtual")) return TokenType::VIRTUAL;
+    if(s.eq("static")) return TokenType::STATIC;
+    if(s.eq("bool")) return TokenType::BOOLEAN;
+    if(s.eq("import")) return TokenType::IMPORT;
+    if(s.eq("true")) return TokenType::TRUE;
+    if(s.eq("false")) return TokenType::FALSE;
+    if(s.eq("i8")) return TokenType::I8;
+    if(s.eq("i16")) return TokenType::I16;
+    if(s.eq("i32")) return TokenType::I32;
+    if(s.eq("i64")) return TokenType::I64;
+    if(s.eq("f32")) return TokenType::F32;
+    if(s.eq("f64")) return TokenType::F64;
+    if(s.eq("null")) return TokenType::NULL_LIT;
+    if(s.eq("as")) return TokenType::AS;
+    if(s.eq("is")) return TokenType::IS;
+    if(s.eq("from")) return TokenType::FROM;
+    if(s.eq("return")) return TokenType::RETURN;
+    if(s.eq("continue")) return TokenType::CONTINUE;
+    if(s.eq("if")) return TokenType::IF;
+    if(s.eq("else")) return TokenType::ELSE;
+    if(s.eq("for")) return TokenType::FOR;
+    if(s.eq("while")) return TokenType::WHILE;
+    if(s.eq("do")) return TokenType::DO;
+    if(s.eq("break")) return TokenType::BREAK;
+    if(s.eq("func")) return TokenType::FUNC;
+    if(s.eq("let")) return TokenType::LET;
+    if(s.eq("new")) return TokenType::NEW;
+    if(s.eq("match")) return TokenType::MATCH;
+    if(s.eq("const")) return TokenType::CONST;
+    return TokenType::EOF_;
+  }
+  
   func read_op(self): Token{
-    //let s = self.str(self.pos, self.pos + 3);
     //can be length of 1 to 3
     for (let i = 3; i > 0; i-=1) {
+        if(self.pos + i > self.buf.len()){
+          continue;
+        }
         let s = self.str(self.pos, self.pos + i); 
         let it = self.ops.get(s);
         if (it.is_some()) {
             self.pos += i;
-            print("found op %d\n", it.unwrap().index);
-            s.dump();
-            return Token::new(it.unwrap(), s);
+            let tok = it.unwrap(); 
+            return Token::new(tok, s);
         }
     }
     //never
     panic("readOp() failed with buffer: %c", self.peek());
 }
-  
-  func next(self): Token{
-    if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
-    let c = self.peek();
-    if(c == 0) return Token::new(TokenType::EOF_);
-    if(c ==' ' || c == '\r' || c == '\n' || c == '\t'){
+
+  func skip_ws(self){
+   let c = self.peek();
+   while(c ==' ' || c == '\r' || c == '\n' || c == '\t'){
       self.pos += 1;
       if(c == '\n'){
         self.line+=1;
       }else if(c == '\r'){
         self.line+=1;
-        if (self.pos < self.buf.len() && self.peek() == '\n') {
+        if (self.has() && self.peek() == '\n') {
           self.pos+=1;
         }
       }
-      return self.next();
+      if(!self.has()) break;
+      c = self.peek();
     }
+  }
+  
+  func next(self): Token{
+    let start = self.pos;
+    let res = self.next0();
+    res.line = self.line;
+    res.start = start;
+    res.end = self.pos;
+    return res;
+  }
+  
+  func block_comment(self): Token{
+    let start = self.pos;
+    self.pos += 2;
+    while (self.has()) {
+                if (self.peek() == '*') {
+                    self.pos+=1;
+                    if (self.has() && self.peek() == '/') {
+                        self.pos+=1;
+                        return Token::new(TokenType::COMMENT, self.str(start, self.pos));                        
+                    }
+                } else {
+                    if (self.peek() == '\r') {
+                        self.pos+=1;
+                        self.line+=1;
+                        if (self.peek() == '\n') {
+                            self.pos+=1;
+                        }
+                    } else if (self.peek() == '\n') {
+                        self.pos+=1;
+                        self.line+=1;
+                    } else {
+                        self.pos+=1;
+                    }
+                }
+            }            
+    panic("unclosed block comment at line %d" , self.line);
+  }
+  
+  func next0(self): Token{
+    if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
+    if(self.peek() == 0) return Token::new(TokenType::EOF_);
+    self.skip_ws();
+    let c = self.peek();
     let start = self.pos;
     if(c.is_letter() || c == '_'){
       return self.read_ident();
@@ -115,53 +237,19 @@ impl Lexer{
       return self.read_number();
     }
     if (c == '/') {
-        print("saw / pos=%d\n", self.pos);
-        let c2 = self.buf.get(self.pos + 1);
+        let c2 = self.peek(1);
         if (c2 == '/') {
             return self.line_comment();
         } else if (c2 == '*') {
-            self.pos += 2;
-            while (self.pos < self.buf.len()) {
-                if (self.buf.get(self.pos) == '*') {
-                    self.pos+=1;
-                    if (self.pos < self.buf.len() && self.buf.get(self.pos) == '/') {
-                        self.pos+=1;
-                        return Token::new(TokenType::COMMENT, self.str(start, self.pos));                        
-                    }
-                } else {
-                    if (self.buf.get(self.pos) == '\r') {
-                        self.pos+=1;
-                        self.line+=1;
-                        if (self.buf.get(self.pos) == '\n') {
-                            self.pos+=1;
-                        }
-                    } else if (self.buf.get(self.pos) == '\n') {
-                        self.pos+=1;
-                        self.line+=1;
-                    } else {
-                        self.pos+=1;
-                    }
-                }
-            }            
-            panic("unclosed block comment at line %d" , self.line);
+            return self.block_comment();
         } else {
-        print("before op / pos=%d\n", self.pos);
             return self.read_op();
         }
     }
-    if (c == '\'') {
-        self.pos+=1;
-        while (self.pos < self.buf.len()) {
-            c = self.read();
-            if (c == '\\') {
-                self.pos+=1;
-            } else if (c == '\'') {
-                return Token::new(TokenType::CHAR_LIT, self.str(start, self.pos));
-            }
-        }
-        panic("unterminated char literal");
-    }
-    if (c == '"') {
+    if (c == '\'' || c == '"') {
+        let cc = c;
+        let type = TokenType::STRING_LIT;
+        if(c == '\'') type = TokenType::CHAR_LIT;
         let s = String::new();
         s.append(c);
         self.pos+=1;
@@ -171,9 +259,9 @@ impl Lexer{
                 let esc = checkEscape(self.peek()) as i8;
                 s.append(esc);
                 self.pos+=1;
-            } else if (c == '"') {
+            } else if (c == cc) {
                 s.append(c);
-                return Token::new(TokenType::STRING_LIT, s);
+                return Token::new(type, s);
             } else {
                 s.append(c);
             }
@@ -185,7 +273,7 @@ impl Lexer{
     if(self.ops.get(os.str()).is_some()){
       return self.read_op();
     }
-    panic("unexpected char: %c(%d)" , c, c);
+    panic("unexpected char: %c(%d) at %d" , c, c, start);
   }
   
   func read_ident(self): Token {
@@ -201,9 +289,7 @@ impl Lexer{
     if (type is TokenType::EOF_) {
         type = TokenType::IDENT;
     }
-    let res = Token::new(type, s);
-    //let res = Token{String::new(s), type, 0, 0, 0};
-    return res;
+    return Token::new(type, s);
   }
   
   func read_number(self):Token {
@@ -211,7 +297,7 @@ impl Lexer{
     let start = self.pos;
     self.pos+=1;
     let c = self.peek();
-    while (c.is_digit() || (c == '.' && self.buf.get(self.pos + 1).is_digit())) {
+    while (c.is_digit() || (c == '.' && self.peek(1).is_digit())) {
         if(c == '.') dot = true;
         self.pos+=1;
         c = self.peek();
@@ -229,19 +315,15 @@ impl Lexer{
     return Token::new(type, self.str(start, self.pos));
 }
   
-  func kw(s: str): TokenType{
-    if(s.eq("assert")) return TokenType::ASSERT_KW;
-    if(s.eq("import")) return TokenType::IMPORT;
-    return TokenType::EOF_;
-  }
 }
 
 
 func lexer_test(){
   let lexer = Lexer::new("../tests/src/parser/lexer.x");
-  for(let i = 0;i < 0; ++i){
+  for(let i = 0;; ++i){
     let t = lexer.next();
-    let ts = t.print().str();
-    print("tok = '%s'\n", ts);
+    print("%s\n", t.print().cstr());
+    if(t.type is TokenType::EOF_) break;
   }
+  print("lexer_test done\n");
 }

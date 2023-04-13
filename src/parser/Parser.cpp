@@ -84,6 +84,17 @@ EnumVariant parseEnumEntry(Parser *p) {
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     res->unit = unit;
+    if(is(HASH)){
+        pop();
+        consume(IDENT);
+        consume(LPAREN);
+        res->derives.push_back(parseType());
+        while(is(COMMA)){
+            consume(COMMA);
+            res->derives.push_back(parseType());
+        }
+        consume(RPAREN);
+    }
     consume(ENUM);
     res->type = parseType();
     if (!res->type->typeArgs.empty()) {
@@ -134,9 +145,6 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
         m.parent = res.get();
-        if (m.self) {
-            m.self->type.reset(clone(res->type));
-        }
         res->methods.push_back(std::move(m));
     }
     p->consume(RBRACE);
@@ -169,6 +177,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
     auto res = std::make_shared<Unit>();
     unit = res.get();
     unit->path = lexer.path;
+    unit->lastLine = tokens.back().line;
 
     while (first() != nullptr && is(IMPORT)) {
         res->imports.push_back(parseImport(this));
@@ -176,10 +185,24 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
     while (first() != nullptr) {
         //top level decl
+        std::vector<Type*> derives;
+        if(is(HASH)){
+        pop();
+        consume(IDENT);
+        consume(LPAREN);
+        derives.push_back(parseType());
+        while(is(COMMA)){
+            consume(COMMA);
+            derives.push_back(parseType());
+        }
+        consume(RPAREN);
+        }
         if (is({CLASS})) {
             res->items.push_back(parseTypeDecl());
         } else if (is(ENUM)) {
-            res->items.push_back(parseEnumDecl());
+            auto ed = parseEnumDecl();
+            ed->derives = derives;
+            res->items.push_back(std::move(ed));
         } else if (is(TRAIT)) {
             res->items.push_back(parseTrait(this));
         } else if (is(IMPL)) {

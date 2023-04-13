@@ -1,7 +1,9 @@
 import String
 import str
 import List
+import impl
 
+#derive(Debug)
 enum TokenType {
     EOF_,
     IDENT,
@@ -40,19 +42,15 @@ enum TokenType {
     CONTINUE,
     FUNC,
     LET,
-    CONST_KW,
+    CONST,
     NEW,
-    IF_KW,
+    IF,
     IS,
-    ELSE_KW,
+    ELSE,
     FOR,
     WHILE,
     DO,
-    SWITCH,
-    CASE,
-    THROW,
-    TRY,
-    CATCH,
+    MATCH,
     VIRTUAL,
     EQ,
     PLUS,
@@ -100,20 +98,8 @@ enum TokenType {
     RBRACKET,
     LBRACE,
     RBRACE,
-    ARROW
-}
-impl TokenType{
-  func print(t): str{
-    if(t is TokenType::IMPORT) return "import";
-    if(t is TokenType::IDENT) return "ident";
-    if(t is TokenType::DIV) return "DIV";
-    if(t is TokenType::EQ) return "EQ";
-    if(t is TokenType::PLUS) return "PLUS";
-    if(t is TokenType::MINUS) return "MINUS";
-    if(t is TokenType::I64) return "I64";
-    print("index = %d\n", t.index);
-    return "<error type>";
-  }
+    ARROW,
+    HASH
 }
 
 class Token {
@@ -123,6 +109,7 @@ class Token {
     end: i32;
     line: i32;
 }
+
 impl Token{
     func new(t: TokenType): Token{
       return Token::new(t, String::new());
@@ -137,7 +124,7 @@ impl Token{
     }
 
    func is(self, t: TokenType): bool {
-        return self.type.index == t.index;
+        return self.type is t;
     }
 
     /*func is(self, t1: TokenType): bool {
@@ -148,10 +135,13 @@ impl Token{
     }*/
 
     func print(self): String {
-        let s = String::new();
-        s.append(self.type.print());
-        s.append(": ");
+        let s = String::new("Token{type: ");
+        s.append(self.type.debug());
+        s.append(", line: ");
+        s.append(self.line.str());
+        s.append(", value: ");
         s.append(self.value);
+        s.append("}");
         return s;
     }
 }

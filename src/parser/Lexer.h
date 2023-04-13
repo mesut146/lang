@@ -41,6 +41,7 @@ public:
     Token readIdent();
     Token lineComment();
     Token readOp();
+    Token quoted(char c1);
 
     std::map<std::string, TokenType> ops;
 
@@ -98,5 +99,6 @@ public:
         ops["=>"] = ARROW;
         ops["::"] = COLON2;
         ops[".."] = DOTDOT;
+        ops["#"] = HASH;
     }
 };

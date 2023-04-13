@@ -11,6 +11,10 @@
 #include <unordered_set>
 #include <variant>
 
+struct Config {
+    static const bool optimize_enum = true;
+};
+
 class RType;
 class Resolver;
 class Signature;
@@ -90,18 +94,21 @@ static std::string printMethod(Method *m) {
     return s;
 }
 
-static std::string mangle(Method *m) {
-    std::string s;
-    if (m->parent) {
-        if (m->parent->isImpl()) {
-            auto impl = dynamic_cast<Impl *>(m->parent);
-            s += impl->type->print() + "::";
-        } else if (m->parent->isTrait()) {
-            auto t = dynamic_cast<Trait *>(m->parent);
-            s += t->type->print() + "::";
-        }
+static std::string methodParent(Method *m) {
+    if (!m->parent) return m->name;
+    if (m->parent->isImpl()) {
+        auto impl = dynamic_cast<Impl *>(m->parent);
+        return impl->type->print() + "::" + m->name;
+    } else if (m->parent->isTrait()) {
+        auto t = dynamic_cast<Trait *>(m->parent);
+        return t->type->print() + "::" + m->name;
     }
-    s += m->name;
+    return m->name;
+}
+
+static std::string mangle(Method *m) {
+    std::string s = methodParent(m);
+
     if (!m->typeArgs.empty()) {
         s += "<";
         for (int i = 0; i < m->typeArgs.size(); i++) {
@@ -219,6 +226,12 @@ static std::string prm_id(Method &m, std::string &p) {
     return mangle(&m) + "." + p;
 }
 
+enum class MutKind {
+    WHOLE,
+    FIELD,
+    DEREF
+};
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
@@ -226,7 +239,7 @@ public:
     std::map<std::string, RType> typeMap;
     std::unordered_map<Method *, RType> methodMap;
     std::vector<std::shared_ptr<Scope>> scopes;
-    std::unordered_set<std::string> mut_params;//todo
+    std::unordered_map<std::string, MutKind> mut_params;//todo
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
@@ -234,6 +247,7 @@ public:
     bool inLoop = false;
     IdGen idgen;
     bool isResolved = false;
+    bool is_init = false;
     std::vector<BaseDecl *> usedTypes;
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
@@ -246,6 +260,12 @@ public:
     static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
+    static bool is_simple_enum(EnumDecl *ed) {
+        for (auto &ev : ed->variants) {
+            if (ev.isStruct()) return false;
+        }
+        return true;
+    }
 
     Method *isOverride(Method *method);
     static bool do_override(Method *m1, Method *m2);

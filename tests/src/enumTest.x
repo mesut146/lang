@@ -30,11 +30,19 @@ func structTest(){
   enumTest();
 }
 
+func ee1(e: E){
+ print("e=%p p=%p id=%d\n", e, &e, e.index);
+}
+func ee(e: E*){
+ print("e=%p p=%p id=%d\n", e, &e, e.index);
+}
+
 func enumTest(){
   let a: E = E::A;
   let b: E = E::B{b: 6, a: 5};//random order
   let c: E = E::C{100};
   let d: E = E::A2{A{a: 100, b: 200}};
+  ee(&a);ee(&b);ee(&c);
   assert a.index == 0;
   assert b.index == 1;
   assert c.index == 2;

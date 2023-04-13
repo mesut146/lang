@@ -504,10 +504,9 @@ Expression *parseIsExpr(Parser *p) {
     auto lhs = expr9(p);
     if (p->is(IS)) {
         p->consume(IS);
-        auto type = p->parseType();
         auto res = loc(new IsExpr, lhs->line);
         res->expr = lhs;
-        res->type = type;
+        res->rhs = expr9(p);
         return res;
     }
     return lhs;

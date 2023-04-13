@@ -15,9 +15,6 @@
 
 bool isStrLit(Expression *e);
 
-static bool isRvo(Method *m) {
-    return !m->type->isVoid() && isStruct(m->type.get());
-}
 std::vector<Method *> getMethods(Unit *unit);
 void sort(std::vector<BaseDecl *> &list);
 
@@ -74,10 +71,13 @@ public:
     void genCode(Method *m);
     void cleanup();
     void make_vtables();
-    llvm::LLVMContext& ctx(){ return *ctxp; };
+    llvm::LLVMContext &ctx() { return *ctxp; };
 
     int getSize(Type *type);
+    int getSize2(Type *type);
+    void copy(llvm::Value *trg, llvm::Value *src, Type *type);
     int getSize(BaseDecl *decl);
+    int getSize2(BaseDecl *decl);
     int getOffset(EnumVariant *variant, int index);
     void setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr);
     llvm::Value *branch(llvm::Value *val);
@@ -86,9 +86,13 @@ public:
     llvm::Type *getInt(int bit);
     void setOrdinal(int index, llvm::Value *ptr);
     void simpleVariant(Type *n, llvm::Value *ptr);
-    bool is_simple_enum(BaseDecl *bd);
-    bool is_simple_enum(Expression *e);
+    bool is_simple_enum(Type *type);
+    llvm::Value *getTag(Expression *expr);
     bool doesAlloc(Expression *e);
+
+    bool isRvo(Method *m) {
+        return !m->type->isVoid() && isStruct(m->type.get()) && !is_simple_enum(m->type.get());
+    }
 
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
         return {makeInt(i1), makeInt(i2)};
@@ -141,8 +145,8 @@ public:
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
     void make_proto(Method *m);
-    llvm::StructType *makeDecl(BaseDecl *bd);
-    void initParams(Method *m);
+    llvm::Type *makeDecl(BaseDecl *bd);
+    void allocParams(Method *m);
     void makeLocals(Statement *st);
 
     llvm::Value *gen(Expression *e);

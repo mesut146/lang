@@ -7,13 +7,11 @@ std::string printSig(Signature &sig) {
     if (sig.mc && sig.mc->scope) {
         s += sig.scope->type->print();
         s += "::";
-    } else if (sig.m) {
+    } else if (sig.m && sig.m->parent) {
         auto p = sig.m->parent;
-        if (p) {
-            auto imp = (Impl *) p;
-            s += imp->type->print();
-            s += "::";
-        }
+        auto imp = (Impl *) p;
+        s += imp->type->print();
+        s += "::";
     }
     if (sig.mc)
         s += sig.mc->name;
@@ -35,12 +33,12 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     if (mc->scope) {
         auto scp = r->resolve(mc->scope.get());
         if (scp.type->isPointer()) {
-            auto ptr = dynamic_cast<PointerType *>(scp.type);
-            res.scope = r->resolve(ptr->type);
-        } else
+            res.scope = r->resolve(PointerType::unwrap(scp.type));
+        } else {
             res.scope = std::move(scp);
+        }
         if (!dynamic_cast<Type *>(mc->scope.get())) {
-            res.args.push_back(res.scope->type);
+            res.args.push_back(makeSelf(res.scope->type));
         }
     }
     for (auto a : mc->args) {
@@ -48,6 +46,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     }
     return res;
 }
+
 Signature Signature::make(Method *m, Resolver *r) {
     Signature res;
     res.m = m;
@@ -70,7 +69,7 @@ std::vector<Signature> MethodResolver::collect(Signature &sig) {
         findMethod(mc->name, list);
         for (auto &is : r->unit->imports) {
             auto resolver = Resolver::getResolver(is, r->root);
-            resolver->resolveAll();
+            resolver->init();
             MethodResolver mr(resolver.get());
             mr.findMethod(mc->name, list);
         }
@@ -133,10 +132,6 @@ void MethodResolver::getMethods(RType &rt, std::string &name, std::vector<Signat
         }
         auto impl = dynamic_cast<Impl *>(item.get());
         if (impl->type->name != type->name) continue;
-        if (!impl->type->typeArgs.empty()) {
-            //todo move this
-            r->resolve(type);
-        }
         for (auto &m : impl->methods) {
             //todo generate if generic
             if (m.name != name) {
@@ -162,7 +157,7 @@ void MethodResolver::getMethods(RType &rt, std::string &name, std::vector<Signat
     if (imports) {
         for (auto &is : r->unit->imports) {
             auto resolver = Resolver::getResolver(is, r->root);
-            resolver->resolveAll();
+            resolver->init();
             MethodResolver mr(resolver.get());
             mr.getMethods(rt, name, list, false);
         }
@@ -376,10 +371,7 @@ std::optional<std::string> MethodResolver::checkArgs(Signature &sig, Signature &
         auto t1 = sig.args[i];
         auto t2 = sig2.args[i];
         if (sig2.m->self && i == 0) {
-            if (t1->isPointer()) {
-                auto ptr = dynamic_cast<PointerType *>(t1);
-                t1 = ptr->type;
-            }
+            //t1 = PointerType::unwrap(t1);
             //if base method, skip self
             auto imp = (Impl *) sig2.m->parent;
             if (imp->type->name != sig.scope->type->name) {

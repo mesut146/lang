@@ -41,6 +41,13 @@ impl String{
     func str(self): str{
         return str{self.arr.slice(0, self.len())};
     }
+    
+    func cstr(self): i8*{
+      if(self.get((self.len()-1) as i32)!=0){
+        self.append(0i8);
+      }
+      return self.arr.arr;
+    }
 
     func append(self, s: str){
         for(let i = 0;i < s.len();++i){

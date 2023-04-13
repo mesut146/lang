@@ -4,6 +4,7 @@ import enumTest
 import flow
 import generic
 import List
+import map
 import array
 import pass
 import ret
@@ -85,7 +86,21 @@ func mallocTest(){
    arr[0] = 3;
    arr[1] = 5;
    assert arr[0] == 3 && arr[1] == 5;
+   mallocTest2();
    print("mallocTest done\n");
+}
+
+class Big{
+  a: i64;
+  b: i64;
+}
+
+func mallocTest2(){
+   let arr = malloc<Big>(2);
+   arr[0] = Big{5, 25};
+   arr[1] = Big{6, 36};
+   assert arr[0].a == 5 && arr[0].b == 25;
+   assert arr[1].a == 6 && arr[1].b == 36;
 }
 
 func importTest(){
@@ -123,5 +138,6 @@ func main(): i32{
   allocTest();
   traitTest();
   lexer_test();
+  map_test();
   return 0;
 }

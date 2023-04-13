@@ -19,3 +19,8 @@ static Type *clone(Type *type) {
         return res;
     }
 }
+
+static Type *makeSelf(Type *scope) {
+    if (scope->isPrim()) return scope;
+    return new PointerType(scope);
+}

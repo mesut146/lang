@@ -303,7 +303,7 @@ std::string AsExpr::print() {
 }
 
 std::string IsExpr::print() {
-    return expr->print() + " is " + type->print();
+    return expr->print() + " is " + rhs->print();
 }
 
 std::string Assign::print() {

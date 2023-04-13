@@ -28,6 +28,10 @@ impl Option<T>{
     }
     return false;
   }
+  
+  func set(self, val: T){
+    //todo
+  }
 
   func dump(self){
     if(self.is_some()){

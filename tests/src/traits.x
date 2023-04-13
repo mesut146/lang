@@ -12,17 +12,14 @@ trait Print{
 
 impl Print for A{
   func helper(self){
-    print("a=%d\n", self.a);
   }
   func prin(self){
-    print("a=%d\n", self.a);
     self.helper();
   }
 }
 
 impl Print for B{
   func prin(self){
-    print("a=%lld\n", self.b);
   }
 }
 

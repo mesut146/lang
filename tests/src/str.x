@@ -1,3 +1,6 @@
+import String
+import List
+
 class str{
   buf: [i8];
 }
@@ -86,6 +89,10 @@ impl str{
         if(self.get(i) > s.get(i)) return 1;
       }
       return 0;
+    }
+    
+    func str(self): String{
+      return String::new(self);
     }
 
 }

@@ -103,6 +103,7 @@ enum TokenType {
     LBRACE,
     RBRACE,
     ARROW,
+    HASH,
 };
 
 std::string printType(TokenType t);

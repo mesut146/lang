@@ -64,6 +64,7 @@ public:
     std::vector<ImportStmt> imports;
     std::vector<std::unique_ptr<Item>> items;
     std::string path;
+    int lastLine = 0;
 
     std::string print();
 };
@@ -73,6 +74,7 @@ struct BaseDecl : public Item {
     bool isResolved = false;
     bool isGeneric = false;
     std::unique_ptr<Type> base;
+    std::vector<Type*> derives;
 
     std::string &getName();
 };
@@ -262,6 +264,10 @@ public:
     explicit PointerType(Type *type) : type(type){};
 
     bool isPointer() override { return true; }
+    static Type* unwrap(Type* type){
+        auto ptr = dynamic_cast<PointerType *>(type);
+        return ptr ? ptr->type : type;
+    }
     std::string print() override;
     //std::any accept(Visitor *v) override;
 };
@@ -408,7 +414,7 @@ public:
 class IsExpr : public Expression {
 public:
     Expression *expr;
-    Type *type;
+    Expression *rhs;
 
     std::string print() override;
     std::any accept(Visitor *v) override;

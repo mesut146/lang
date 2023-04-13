@@ -78,6 +78,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(OR)
 
         TOKEN_CASE(IDENT)
+        TOKEN_CASE(HASH)
 
         default:
             break;
