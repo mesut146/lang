@@ -8,6 +8,7 @@ struct Signature {
     Method *m = nullptr;
     std::vector<Type *> args;
     std::optional<RType> scope;
+    Type *ret;
 
     static Signature make(MethodCall *mc, Resolver *r);
     static Signature make(Method *m, Resolver *r);
@@ -22,7 +23,7 @@ public:
     //get cached or generate method
     Method *generateMethod(std::map<std::string, Type *> &map, Method *m, Signature &sig);
     void findMethod(std::string &name, std::vector<Signature> &list);
-    void getMethods(RType &rtype, std::string &name, std::vector<Signature> &list, bool imports);
+    void getMethods(Signature& sig, std::vector<Signature> &list, bool imports);
 
     static bool isCompatible(Type *arg, Type *target) {
         std::vector<Type *> typeParams;

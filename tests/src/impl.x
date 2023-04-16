@@ -25,33 +25,6 @@ impl i32{
     return x;
   }
 
-  func str_size(self): i32{
-    if(self==0) return 1;
-    let x = self;
-    let res = 0;
-    while(x > 0){
-      x /= 10;
-      res+=1;
-    }
-    return res;
-  }
-
-  func str(self): String{
-    let x = self;
-    let len = self.str_size() + 1;
-    let list = List<i8>::new(len);
-    list.count = len - 1;
-    let i = len - 1;
-    list.set(i, 0i8);
-    i -= 1;
-    while(x > 0){
-      let c = x % 10;
-      list.set(i, (c + '0') as i8);
-      i -= 1;
-      x = x / 10;
-    }
-    return String{list};
-  }
 }
 
 class A<T>{

@@ -252,7 +252,7 @@ Expression *PRIM(Parser *p) {
             return loc(mc, line);
         }
         return new Type(type, name);
-    } else if (p->is(IDENT)) {
+    } else if (p->is({IDENT, IS, AS})) {
         auto id = p->pop().value;
         if (p->is(LPAREN)) {
             auto res = parseCall(p, id);

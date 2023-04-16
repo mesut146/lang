@@ -236,9 +236,8 @@ class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
     std::unordered_map<std::string, RType> cache;
-    std::map<std::string, RType> typeMap;
-    std::unordered_map<Method *, RType> methodMap;
-    std::vector<std::shared_ptr<Scope>> scopes;
+    std::unordered_map<std::string, RType> typeMap;
+    std::vector<Scope> scopes;
     std::unordered_map<std::string, MutKind> mut_params;//todo
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
@@ -276,7 +275,7 @@ public:
 
     void newScope();
     void dropScope();
-    std::shared_ptr<Scope> curScope();
+    Scope &curScope();
 
     void init();
     void resolveAll();

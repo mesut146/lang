@@ -150,7 +150,7 @@ Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(u
 }
 
 void Resolver::newScope() {
-    scopes.push_back(std::make_shared<Scope>());
+    scopes.push_back(Scope{});
 }
 
 void Resolver::dropScope() {
@@ -158,7 +158,7 @@ void Resolver::dropScope() {
     scopes.pop_back();
 }
 
-std::shared_ptr<Scope> Resolver::curScope() {
+Scope &Resolver::curScope() {
     return scopes.back();
 }
 
@@ -207,6 +207,46 @@ void initSelf(Unit *unit) {
     }
 }
 
+MethodCall *newStr(Unit *unit, const std::string &name) {
+    auto mc = new MethodCall;
+    mc->line = unit->lastLine;
+    mc->scope.reset(new Type("String"));
+    mc->name = "new";
+    if(!name.empty()){
+        auto lit = new Literal(Literal::STR, "\"" + name + "\"");
+        lit->line = unit->lastLine;
+        mc->args.push_back(lit);
+     }
+     return mc;
+}
+
+Ptr<ExprStmt> newAppend(Unit *unit, std::string& scope, const std::string &str) {
+    auto mc = new MethodCall;
+    mc->line = unit->lastLine;
+    mc->scope.reset(new SimpleName(scope));
+    mc->name = "append";
+        auto lit = new Literal(Literal::STR, "\"" + str + "\"");
+        lit->line = unit->lastLine;
+        mc->args.push_back(lit);
+     return std::make_unique<ExprStmt>(mc);
+}
+
+Ptr<ExprStmt> newAppend(Unit *unit, std::string& scope, Expression* e) {
+    auto mc = new MethodCall;
+    mc->line = unit->lastLine;
+    mc->scope.reset(new SimpleName(scope));
+    mc->name = "append";
+        mc->args.push_back(e);
+     return std::make_unique<ExprStmt>(mc);
+}
+
+Ptr<ReturnStmt> makeRet(Unit* unit, Expression* e){
+    auto ret = std::make_unique<ReturnStmt>();
+    ret->line = ++unit->lastLine;
+    ret->expr.reset(e);
+    return ret;
+}
+
 std::unique_ptr<Item> derive(BaseDecl *bd, Unit *unit) {
     Method m(unit);
     m.name = "debug";
@@ -244,9 +284,36 @@ std::unique_ptr<Item> derive(BaseDecl *bd, Unit *unit) {
                 bl->list.push_back(std::move(ret));
             }
         }
-        //print(m.print());
     } else {
-        error("derive class");
+        auto sd = (StructDecl *) bd;
+        auto vd = std::make_unique<VarDecl>();
+        auto vde = new VarDeclExpr;
+        vd->decl = vde;
+        std::string fn = "s";
+        Fragment f;
+        f.name = fn;
+        f.rhs.reset(newStr(unit, sd->type->name + "{"));
+        vde->list.push_back(std::move(f));
+        bl->list.push_back(std::move(vd));
+        int i=0;
+        for (auto &fd : sd->fields) {
+            bl->list.push_back(newAppend(unit, fn, (i>0?", ":"")+fd.name + ": "));
+            auto ts = fd.type->print();
+            if(ts=="String"){
+                //self.path
+                auto fa = new FieldAccess;
+                fa->scope=new SimpleName("self");
+                fa->name=fd.name;
+                bl->list.push_back(newAppend(unit, fn, fa));
+            }else if(ts=="i32"){
+                //s.append(self.x.str())
+                //bl->list.push_back(newAppend(unit, fn, fa));
+            }
+            i++;
+        }
+        bl->list.push_back(newAppend(unit, fn, "}"));
+        bl->list.push_back(makeRet(unit, new SimpleName(fn)));
+        print(m.print());
     }
     auto imp = std::make_unique<Impl>(bd->type);
     m.parent = imp.get();
@@ -489,8 +556,6 @@ std::any Resolver::visitMethod(Method *m) {
     if (m->isGeneric) {
         return nullptr;
     }
-    auto it = methodMap.find(m);
-    if (it != methodMap.end()) return it->second;
     curMethod = m;
     if (m->isVirtual && !m->self) {
         error("virtual method must have self parameter");
@@ -505,11 +570,11 @@ std::any Resolver::visitMethod(Method *m) {
     res.targetMethod = m;
     newScope();
     if (m->self) {
-        curScope()->add(VarHolder(m->self->name, ((Impl *) m->parent)->type, true));
+        curScope().add(VarHolder(m->self->name, ((Impl *) m->parent)->type, true));
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        curScope()->add(VarHolder(prm.name, prm.type.get(), true));
+        curScope().add(VarHolder(prm.name, prm.type.get(), true));
         prm.accept(this);
     }
     if (m->body) {
@@ -520,7 +585,6 @@ std::any Resolver::visitMethod(Method *m) {
         }
     }
     dropScope();
-    methodMap[m] = res;
     curMethod = nullptr;
     return res;
 }
@@ -548,7 +612,7 @@ std::any Resolver::visitFragment(Fragment *f) {
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
     for (auto &f : vd->list) {
         auto rt = std::any_cast<RType>(f.accept(this));
-        curScope()->add(VarHolder(f.name, rt.type));
+        curScope().add(VarHolder(f.name, rt.type));
     }
     return nullptr;
 }
@@ -827,7 +891,7 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
     VarHolder *vh;
     bool found = false;
     for (int i = scopes.size() - 1; i >= 0; i--) {
-        auto v = scopes[i]->find(node->name);
+        auto v = scopes[i].find(node->name);
         if (v) {
             vh = v;
             found = true;
@@ -960,7 +1024,7 @@ std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     auto &variant = decl->variants[index];
     int i = 0;
     for (auto &name : node->args) {
-        curScope()->add(VarHolder(name, variant.fields[i].type));
+        curScope().add(VarHolder(name, variant.fields[i].type));
         i++;
     }
     auto rhs = resolve(node->rhs.get());

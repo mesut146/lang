@@ -322,7 +322,7 @@ func lexer_test(){
   let lexer = Lexer::new("../tests/src/parser/lexer.x");
   for(let i = 0;; ++i){
     let t = lexer.next();
-    print("%s\n", t.print().cstr());
+    //print("%s\n", t.print().cstr());
     if(t.type is TokenType::EOF_) break;
   }
   print("lexer_test done\n");

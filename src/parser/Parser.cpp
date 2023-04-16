@@ -187,8 +187,8 @@ std::shared_ptr<Unit> Parser::parseUnit() {
         //top level decl
         std::vector<Type*> derives;
         if(is(HASH)){
-        pop();
-        consume(IDENT);
+            pop();
+            consume(IDENT);
         consume(LPAREN);
         derives.push_back(parseType());
         while(is(COMMA)){
@@ -198,7 +198,9 @@ std::shared_ptr<Unit> Parser::parseUnit() {
         consume(RPAREN);
         }
         if (is({CLASS})) {
-            res->items.push_back(parseTypeDecl());
+            auto td = parseTypeDecl();
+            td->derives = derives;
+            res->items.push_back(std::move(td));
         } else if (is(ENUM)) {
             auto ed = parseEnumDecl();
             ed->derives = derives;

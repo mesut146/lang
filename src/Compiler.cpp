@@ -1081,27 +1081,38 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
 }
 
+bool isAlloc(Expression *e, llvm::Value *val) {
+    if (dynamic_cast<FieldAccess *>(e)) return true;
+    if (!dynamic_cast<SimpleName *>(e)) return false;
+    if (dynamic_cast<RefExpr *>(e)) return true;
+    if (llvm::isa<llvm::AllocaInst>(val)) {
+        return true;
+    }
+    return false;
+}
+
 llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     auto f = funcMap[mangle(target)];
     std::vector<llvm::Value *> args;
     int paramIdx = 0;
-    if (isRvo(target)) {
+    if (ptr) {
         args.push_back(ptr);
     }
     llvm::Value *obj = nullptr;
     RType scp;
     if (target->self && !dynamic_cast<Type *>(mc->scope.get())) {
         //add this object
-        obj = gen(mc->scope.get());
-        scp = resolv->resolve(mc->scope.get());
+        auto e = mc->scope.get();
+        obj = gen(e);
+        scp = resolv->resolve(e);
         auto scope_type = scp.type;
-        if (scope_type->isPointer() ||
-            (scope_type->isPrim() && isVar(mc->scope.get()) && !scp.vh->prm) ||
+        if (scope_type->isPointer() && isAlloc(e, obj) ||
+            (scope_type->isPrim() && isVar(e) && !scp.vh->prm) ||
             is_simple_enum(scope_type) && isPtr(obj)) {
             //auto deref
-            obj = Builder->CreateLoad(obj->getType()->getPointerElementType(), obj);
+            obj = load(obj);
         }
         //base method
         if (PointerType::unwrap(target->self->type.get())->print() != PointerType::unwrap(scope_type)->print()) {
@@ -1120,8 +1131,12 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     for (int i = 0, e = mc->args.size(); i != e; ++i) {
         auto a = mc->args[i];
         auto pt = params[paramIdx]->type.get();
+        auto at = resolv->getType(a);
         llvm::Value *av;
-        if (isStruct(pt)) {
+        if (at->isPointer()) {
+            av = gen(a);
+            if (isAlloc(a, av)) av = load(av);
+        } else if (isStruct(at)) {
             av = gen(a);
             if (is_simple_enum(pt) && isPtr(av)) {
                 av = load(av);
@@ -1168,7 +1183,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     } else {
         res = (llvm::Value *) Builder->CreateCall(f, args);
     }
-    if (isRvo(target)) {
+    if (ptr) {
         return args[0];
     }
     return res;

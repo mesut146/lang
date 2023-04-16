@@ -47,6 +47,12 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     return res;
 }
 
+Type *handleSelf(Type *type, Method *m) {
+    if (type->print() != "Self") return type;
+    auto imp = (Impl *) m->parent;
+    return imp->type;
+}
+
 Signature Signature::make(Method *m, Resolver *r) {
     Signature res;
     res.m = m;
@@ -54,8 +60,9 @@ Signature Signature::make(Method *m, Resolver *r) {
         res.args.push_back(m->self->type.get());
     }
     for (auto &prm : m->params) {
-        res.args.push_back(prm.type.get());
+        res.args.push_back(handleSelf(prm.type.get(), m));
     }
+    res.ret = handleSelf(m->type.get(), m);
     return res;
 }
 
@@ -64,7 +71,7 @@ std::vector<Signature> MethodResolver::collect(Signature &sig) {
     std::vector<Signature> list;
     auto mc = sig.mc;
     if (mc->scope) {
-        getMethods(sig.scope.value(), mc->name, list, true);
+        getMethods(sig, list, true);
     } else {
         findMethod(mc->name, list);
         for (auto &is : r->unit->imports) {
@@ -115,23 +122,27 @@ void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list)
     }
 }
 
-void MethodResolver::getMethods(RType &rt, std::string &name, std::vector<Signature> &list, bool imports) {
+void MethodResolver::getMethods(Signature& sig, std::vector<Signature> &list, bool imports) {
+    auto &name = sig.mc->name;
+    auto& rt = sig.scope.value();
     auto type = rt.type;
-    if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        type = ptr->type;
-    }
+    type = PointerType::unwrap(type);
     if (rt.targetDecl && rt.targetDecl->base) {
         auto rr = Resolver::getResolver(rt.unit->path, r->root);
         auto base = rr->resolve(rt.targetDecl->base.get());
-        getMethods(base, name, list, false);
+        //getMethods(base, name, list, false);
     }
     for (auto &item : r->unit->items) {
         if (!item->isImpl()) {
             continue;
         }
         auto impl = dynamic_cast<Impl *>(item.get());
-        if (impl->type->name != type->name) continue;
+        if(rt.trait){
+            if (impl->trait_name->name != type->name) continue;
+            if (impl->type->name!=sig.args[0]->name) continue;
+        }else{
+            if (impl->type->name != type->name) continue;
+        }
         for (auto &m : impl->methods) {
             //todo generate if generic
             if (m.name != name) {
@@ -159,7 +170,7 @@ void MethodResolver::getMethods(RType &rt, std::string &name, std::vector<Signat
             auto resolver = Resolver::getResolver(is, r->root);
             resolver->init();
             MethodResolver mr(resolver.get());
-            mr.getMethods(rt, name, list, false);
+            mr.getMethods(sig, list, false);
         }
     }
 }
@@ -236,45 +247,49 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     }
     auto &sig2 = real[0];
     auto target = sig2.m;
-    if (target->isGeneric) {
-        std::map<std::string, Type *> typeMap;
-        if (mc->typeArgs.empty()) {
-            //infer
-            for (auto ta : target->typeArgs) {
-                typeMap[ta->name] = nullptr;
-            }
-            if (mc->scope) {
-                auto scope = sig.scope->type;
-                for (int i = 0; i < scope->typeArgs.size(); i++) {
-                    typeMap[target->typeArgs[i]->name] = scope->typeArgs[i];
-                }
-            }
-            for (int i = 0; i < sig.args.size(); i++) {
-                auto arg_type = sig.args[i];
-                auto target_type = sig2.args[i];
-                MethodResolver::infer(arg_type, target_type, typeMap);
-            }
-            for (auto &i : typeMap) {
-                if (i.second == nullptr) {
-                    error("can't infer type parameter: " + i.first);
-                }
-            }
-        } else {
-            if (mc->typeArgs.size() < target->typeArgs.size()) {
-                error("not enough type args: " + mc->print());
-            }
-            //place specified type args
-            for (int i = 0; i < mc->typeArgs.size(); i++) {
-                auto argt = r->resolve(mc->typeArgs[i]);
-                typeMap[target->typeArgs[i]->name] = argt.type;
+    RType res;
+    if (!target->isGeneric) {
+        if (target->unit->path != r->unit->path) {
+            r->usedMethods.insert(target);
+        }
+        res = clone(r->resolve(sig2.ret));
+        res.targetMethod = target;
+        return res;
+    }
+    std::map<std::string, Type *> typeMap;
+    if (mc->typeArgs.empty()) {
+        //infer
+        for (auto ta : target->typeArgs) {
+            typeMap[ta->name] = nullptr;
+        }
+        if (mc->scope) {
+            auto scope = sig.scope->type;
+            for (int i = 0; i < scope->typeArgs.size(); i++) {
+                typeMap[target->typeArgs[i]->name] = scope->typeArgs[i];
             }
         }
-        auto newMethod = generateMethod(typeMap, target, sig);
-        target = newMethod;
-    } else if (target->unit != r->unit.get()) {
-        r->usedMethods.insert(target);
+        for (int i = 0; i < sig.args.size(); i++) {
+            auto arg_type = sig.args[i];
+            auto target_type = sig2.args[i];
+            MethodResolver::infer(arg_type, target_type, typeMap);
+        }
+        for (auto &i : typeMap) {
+            if (i.second == nullptr) {
+                error("can't infer type parameter: " + i.first);
+            }
+        }
+    } else {
+        if (mc->typeArgs.size() < target->typeArgs.size()) {
+            error("not enough type args: " + mc->print());
+        }
+        //place specified type args
+        for (int i = 0; i < mc->typeArgs.size(); i++) {
+            auto argt = r->resolve(mc->typeArgs[i]);
+            typeMap[target->typeArgs[i]->name] = argt.type;
+        }
     }
-    auto res = clone(r->resolve(target->type.get()));
+    target = generateMethod(typeMap, target, sig);
+    res = clone(r->resolve(target->type.get()));
     res.targetMethod = target;
     return res;
 }

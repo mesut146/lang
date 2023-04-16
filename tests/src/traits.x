@@ -7,7 +7,6 @@ class B{
 
 trait Print{
   func prin(self);
-  //func aa(self);
 }
 
 impl Print for A{
@@ -23,13 +22,16 @@ impl Print for B{
   }
 }
 
-func prin<T>(obj: T){
+func common<T>(obj: T){
   obj.prin();
 }
 
 func traitTest(){
-  prin(A{5});
-  prin(B{6});
-  //prin(5);
+  let a = A{5};
+  let b = B{6};
+  common(a);
+  common(b);
+  Print::prin(a);
+  Print::prin(b);
   print("traitTest done\n");
 }

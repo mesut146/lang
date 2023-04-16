@@ -15,6 +15,7 @@ import libc
 import alloc
 import traits
 import parser/lexer
+import parser/parser
 
 func literalTest(){
   let a8 = 5i8;
@@ -137,7 +138,8 @@ func main(): i32{
   libc_test();
   allocTest();
   traitTest();
-  lexer_test();
   map_test();
+  lexer_test();
+  Parser::test();
   return 0;
 }

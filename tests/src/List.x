@@ -129,6 +129,22 @@ impl List<T>{
   func last(self, off: i64): T*{
     return self.get_ptr(self.count - 1 - off);
   }
+  
+  func clone(self): List<T>{
+    let res = List<T>::new(self.cap);
+    res.add(&self);
+    return res;
+  }
+}
+
+impl Debug for List<T>{
+  func debug(self, f: Fmt*){
+    f.print("[");
+    for(let i=0;i<self.count;++i){
+      Debug::debug(self.get(i), f);
+    }
+    f.print("]");
+  }
 }
 
 class ListIter<T>{
