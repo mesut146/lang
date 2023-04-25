@@ -42,12 +42,12 @@ public:
     }
 
     Token &pop() {
-        auto& t = tokens[pos];
+        auto &t = tokens[pos];
         pos++;
         return t;
     }
 
-    Token* first() {
+    Token *first() {
         if (tokens.empty() || pos >= tokens.size()) return nullptr;
         return &tokens[pos];
     }
@@ -67,13 +67,13 @@ public:
         return tokens[pos].is(t1) && tokens[pos + 1].is(t2);
     }
 
-    Result<Token*> consume2(TokenType tt) {
+    Result<Token *> consume2(TokenType tt) {
         auto &t = pop();
         if (t.is(tt)) return {&t, nullptr};
         return {nullptr, new std::runtime_error("unexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt))};
     }
 
-    Token& consume(TokenType tt) {
+    Token &consume(TokenType tt) {
         auto &t = pop();
         if (t.is(tt)) return t;
         throw std::runtime_error(lexer.path + "\nunexpected token " + t.print() + " on line " + std::to_string(t.line) + " was expecting " + printType(tt));

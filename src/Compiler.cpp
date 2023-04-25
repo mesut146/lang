@@ -68,6 +68,10 @@ void Compiler::init() {
 
 void Compiler::compileAll() {
     init();
+    //prelude
+    for (auto &pre : Resolver::prelude) {
+        Resolver::getResolver(srcDir + "/" + pre + ".x", srcDir);
+    }
     std::string cmd = "clang-13 ";
     for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
         if (e.is_directory()) continue;
@@ -161,14 +165,14 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     for (auto m : resolv->generatedMethods) {
         genCode(m);
     }
-    std::error_code EC;
-    auto noext = trimExtenstion(name);
 
     llvm::verifyModule(*mod, &llvm::outs());
 
     //emit llvm
+    auto noext = trimExtenstion(name);
     auto llvm_file = noext + ".ll";
-    llvm::raw_fd_ostream fd(llvm_file, EC);
+    std::error_code ec;
+    llvm::raw_fd_ostream fd(llvm_file, ec);
     mod->print(fd, nullptr);
     print("writing " + llvm_file);
 
@@ -1137,9 +1141,14 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
             av = gen(a);
             if (isAlloc(a, av)) av = load(av);
         } else if (isStruct(at)) {
-            av = gen(a);
-            if (is_simple_enum(pt) && isPtr(av)) {
-                av = load(av);
+            auto de = dynamic_cast<DerefExpr *>(a);//rakkas
+            if (de && isStruct(pt)) {
+                av = gen(de->expr);
+            } else {
+                av = gen(a);
+                if (is_simple_enum(pt) && isPtr(av)) {
+                    av = load(av);
+                }
             }
         } else {
             av = cast(a, pt);
@@ -1461,14 +1470,19 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
 }
 
 std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
-    auto rhs = gen(b->rhs);
-    std::vector<llvm::Value *> idx = {makeInt(0), makeInt(0)};
-    auto ty = rhs->getType()->getPointerElementType();
-    auto ordptr = Builder->CreateStructGEP(ty, rhs, 0);
-    auto ord = Builder->CreateLoad(getInt(ENUM_INDEX_SIZE), ordptr);
     auto decl = findEnum(b->type.get(), resolv.get());
+    auto rhs = gen(b->rhs);
+    llvm::Value *tag;
+    if (Resolver::is_simple_enum(decl)) {
+        tag = rhs;
+        if (tag->getType()->isPointerTy()) tag = load(tag);
+    } else {
+        auto tagptr = gep2(rhs, 0);
+        tag = Builder->CreateLoad(getInt(ENUM_INDEX_SIZE), tagptr);
+    }
+
     auto index = Resolver::findVariant(decl, b->type->name);
-    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, ord, makeInt(index, ENUM_INDEX_SIZE));
+    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_INDEX_SIZE));
 
     auto then = llvm::BasicBlock::Create(ctx(), "", func);
     llvm::BasicBlock *elsebb;
@@ -1485,7 +1499,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     if (!variant.fields.empty()) {
         //declare vars
         auto &params = variant.fields;
-        auto dataPtr = Builder->CreateStructGEP(ty, rhs, 1);
+        auto dataPtr = gep2(rhs, 1);
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
@@ -1609,7 +1623,7 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     auto src = gen(node->array);
     if (type->isPointer()) {
         auto pt = dynamic_cast<PointerType *>(type);
-        if (pt->type->isArray() || pt->type->isSlice()) {
+        if (isAlloc(node->array, src) && (pt->type->isArray() || pt->type->isSlice())) {
             src = load(src);
             type = pt->type;
         }
@@ -1629,7 +1643,8 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         return gep(arr, node->index);
     } else {
         //pointer access
-        src = load(src);
+        if (isAlloc(node->array, src))
+            src = load(src);
         return gep(src, node->index);
     }
 }
@@ -1743,36 +1758,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
 
 std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     auto type = resolv->getType(node->list[0]);
-    if (node->isSized()) {
-        auto bb = Builder->GetInsertBlock();
-        auto cur = gep(ptr, 0, 0);
-        auto end = gep(ptr, 0, node->size.value());
-        //create cons and memcpy
-        auto condbb = llvm::BasicBlock::Create(ctx(), "cond");
-        auto setbb = llvm::BasicBlock::Create(ctx(), "set");
-        auto nextbb = llvm::BasicBlock::Create(ctx(), "next");
-        Builder->CreateBr(condbb);
-        func->getBasicBlockList().push_back(condbb);
-        Builder->SetInsertPoint(condbb);
-        auto phi = Builder->CreatePHI(mapType(type)->getPointerTo(), 2);
-        auto step = gep(phi, 1);
-        phi->addIncoming(cur, bb);
-        phi->addIncoming(step, setbb);
-        auto ne = Builder->CreateCmp(llvm::CmpInst::ICMP_NE, phi, end);
-        Builder->CreateCondBr(branch(ne), setbb, nextbb);
-        Builder->SetInsertPoint(setbb);
-        func->getBasicBlockList().push_back(setbb);
-        if (doesAlloc(node->list[0])) {
-            child(node->list[0], phi);
-        } else {
-            auto val = cast(node->list[0], type);
-            Builder->CreateStore(val, phi);
-        }
-        Builder->CreateBr(condbb);
-        //node->size.value()
-        func->getBasicBlockList().push_back(nextbb);
-        Builder->SetInsertPoint(nextbb);
-    } else {
+    if (!node->isSized()) {
         int i = 0;
         for (auto e : node->list) {
             auto elem_target = gep(ptr, 0, i++);
@@ -1786,6 +1772,34 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
                 Builder->CreateStore(cast(e, type), elem_target);
             }
         }
+        return ptr;
     }
+    auto bb = Builder->GetInsertBlock();
+    auto cur = gep(ptr, 0, 0);
+    auto end = gep(ptr, 0, node->size.value());
+    //create cons and memcpy
+    auto condbb = llvm::BasicBlock::Create(ctx(), "cond");
+    auto setbb = llvm::BasicBlock::Create(ctx(), "set");
+    auto nextbb = llvm::BasicBlock::Create(ctx(), "next");
+    Builder->CreateBr(condbb);
+    func->getBasicBlockList().push_back(condbb);
+    Builder->SetInsertPoint(condbb);
+    auto phi = Builder->CreatePHI(mapType(type)->getPointerTo(), 2);
+    phi->addIncoming(cur, bb);
+    auto ne = Builder->CreateCmp(llvm::CmpInst::ICMP_NE, phi, end);
+    Builder->CreateCondBr(branch(ne), setbb, nextbb);
+    Builder->SetInsertPoint(setbb);
+    func->getBasicBlockList().push_back(setbb);
+    if (doesAlloc(node->list[0])) {
+        child(node->list[0], phi);
+    } else {
+        auto val = cast(node->list[0], type);
+        Builder->CreateStore(val, phi);
+    }
+    auto step = gep(phi, 1);
+    phi->addIncoming(step, setbb);
+    Builder->CreateBr(condbb);
+    func->getBasicBlockList().push_back(nextbb);
+    Builder->SetInsertPoint(nextbb);
     return ptr;
 }

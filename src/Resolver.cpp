@@ -87,6 +87,7 @@ std::shared_ptr<Resolver> Resolver::getResolver(ImportStmt &is, const std::strin
     return Resolver::getResolver(root + "/" + join(is.list, "/") + ".x", root);
 }
 
+
 //replace any type in decl with src by same index
 std::any Generator::visitType(Type *type) {
     type = (Type *) std::any_cast<Expression *>(AstCopier::visitType(type));
@@ -145,6 +146,7 @@ std::string Resolver::getId(Expression *e) {
 }
 
 std::unordered_map<std::string, std::shared_ptr<Resolver>> Resolver::resolverMap;
+std::vector<std::string> Resolver::prelude = {"Box", "List", "str", "String", "Option"};
 
 Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root), idgen(IdGen{this}) {
 }
@@ -207,124 +209,146 @@ void initSelf(Unit *unit) {
     }
 }
 
-MethodCall *newStr(Unit *unit, const std::string &name) {
+MethodCall *newStr(std::shared_ptr<Unit> &unit, const std::string &name) {
     auto mc = new MethodCall;
     mc->line = unit->lastLine;
     mc->scope.reset(new Type("String"));
     mc->name = "new";
-    if(!name.empty()){
+    if (!name.empty()) {
         auto lit = new Literal(Literal::STR, "\"" + name + "\"");
         lit->line = unit->lastLine;
         mc->args.push_back(lit);
-     }
-     return mc;
+    }
+    return mc;
 }
-
-Ptr<ExprStmt> newAppend(Unit *unit, std::string& scope, const std::string &str) {
+Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, Expression *e) {
     auto mc = new MethodCall;
     mc->line = unit->lastLine;
     mc->scope.reset(new SimpleName(scope));
-    mc->name = "append";
-        auto lit = new Literal(Literal::STR, "\"" + str + "\"");
-        lit->line = unit->lastLine;
-        mc->args.push_back(lit);
-     return std::make_unique<ExprStmt>(mc);
+    mc->name = "print";
+    mc->args.push_back(e);
+    return std::make_unique<ExprStmt>(mc);
 }
-
-Ptr<ExprStmt> newAppend(Unit *unit, std::string& scope, Expression* e) {
+//scope.print(str);
+Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, const std::string &str) {
     auto mc = new MethodCall;
     mc->line = unit->lastLine;
     mc->scope.reset(new SimpleName(scope));
-    mc->name = "append";
-        mc->args.push_back(e);
-     return std::make_unique<ExprStmt>(mc);
+    mc->name = "print";
+    auto lit = new Literal(Literal::STR, "\"" + str + "\"");
+    lit->line = unit->lastLine;
+    mc->args.push_back(lit);
+    return std::make_unique<ExprStmt>(mc);
 }
-
-Ptr<ReturnStmt> makeRet(Unit* unit, Expression* e){
+Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
     auto ret = std::make_unique<ReturnStmt>();
     ret->line = ++unit->lastLine;
     ret->expr.reset(e);
     return ret;
 }
 
-std::unique_ptr<Item> derive(BaseDecl *bd, Unit *unit) {
-    Method m(unit);
+//Debug::debug(e, f)
+Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, const std::string &fmt) {
+    auto mc = new MethodCall;
+    mc->line = ++unit->lastLine;
+    mc->scope.reset(new Type("Debug"));
+    mc->name = "debug";
+    mc->args.push_back(e);
+    mc->args.push_back(new SimpleName(fmt));
+    return std::make_unique<ExprStmt>(mc);
+}
+
+FieldAccess *makeFa(std::string &name) {
+    auto fa = new FieldAccess;
+    fa->scope = new SimpleName("self");
+    fa->name = name;
+    return fa;
+}
+
+std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
+    Method m(unit.get());
     m.name = "debug";
     Param s;
     s.name = "self";
     s.type.reset(clone(makeSelf(bd->type)));
     m.self = std::move(s);
-    m.type.reset(new Type("String"));
+    m.type.reset(new Type("void"));
+    Param fp;
+    fp.name = "f";
+    fp.type.reset(new PointerType(new Type("Fmt")));
+    m.params.push_back(std::move(fp));
     auto bl = new Block;
     m.body.reset(bl);
     if (bd->isEnum()) {
         auto ed = (EnumDecl *) bd;
-        auto lhs = new SimpleName("self");
         for (int i = 0; i < ed->variants.size(); i++) {
             auto &ev = ed->variants[i];
-            auto ret = std::make_unique<ReturnStmt>();
-            ret->line = ++unit->lastLine;
-            auto mc = new MethodCall;
-            mc->line = unit->lastLine;
-            mc->scope.reset(new Type("String"));
-            mc->name = "new";
-            auto lit = new Literal(Literal::STR, "\"" + ev.name + "\"");
-            lit->line = unit->lastLine;
-            mc->args.push_back(lit);
-            ret->expr.reset(mc);
-            if (i < ed->variants.size() - 1) {
-                auto ifs = std::make_unique<IfStmt>();
-                auto is = new IsExpr;
-                is->expr = lhs;
-                is->rhs = new Type(bd->type, ev.name);
-                ifs->expr.reset(is);
-                ifs->thenStmt = std::move(ret);
-                bl->list.push_back(std::move(ifs));
-            } else {
-                bl->list.push_back(std::move(ret));
+            auto ifs = std::make_unique<IfLetStmt>();
+            ifs->type.reset(new Type(clone(bd->type), ev.name));
+            for (auto &fd : ev.fields) {
+                ifs->args.push_back(fd.name);
             }
+            ifs->rhs.reset(new SimpleName("self"));
+            auto then = new Block;
+            ifs->thenStmt.reset(then);
+            then->list.push_back(newPrint(unit, "f", bd->type->print() + "::" + ev.name));
+            if (!ev.fields.empty()) {
+                then->list.push_back(newPrint(unit, "f", "{"));
+                int i = 0;
+                for (auto &fd : ev.fields) {
+                    if (i++ > 0) then->list.push_back(newPrint(unit, "f", ", "));
+                    then->list.push_back(newPrint(unit, "f", fd.name + ": "));
+                    then->list.push_back(makeDebug(unit, new SimpleName(fd.name), "f"));
+                }
+                then->list.push_back(newPrint(unit, "f", "}"));
+            }
+            bl->list.push_back(std::move(ifs));
         }
     } else {
         auto sd = (StructDecl *) bd;
-        auto vd = std::make_unique<VarDecl>();
-        auto vde = new VarDeclExpr;
-        vd->decl = vde;
-        std::string fn = "s";
-        Fragment f;
-        f.name = fn;
-        f.rhs.reset(newStr(unit, sd->type->name + "{"));
-        vde->list.push_back(std::move(f));
-        bl->list.push_back(std::move(vd));
-        int i=0;
+        bl->list.push_back(newPrint(unit, "f", sd->type->name + "{"));
+        int i = 0;
         for (auto &fd : sd->fields) {
-            bl->list.push_back(newAppend(unit, fn, (i>0?", ":"")+fd.name + ": "));
+            bl->list.push_back(newPrint(unit, "f", (i > 0 ? ", " : "") + fd.name + ": "));
             auto ts = fd.type->print();
-            if(ts=="String"){
-                //self.path
-                auto fa = new FieldAccess;
-                fa->scope=new SimpleName("self");
-                fa->name=fd.name;
-                bl->list.push_back(newAppend(unit, fn, fa));
-            }else if(ts=="i32"){
-                //s.append(self.x.str())
-                //bl->list.push_back(newAppend(unit, fn, fa));
-            }
+            bl->list.push_back(makeDebug(unit, makeFa(fd.name), "f"));
             i++;
         }
-        bl->list.push_back(newAppend(unit, fn, "}"));
-        bl->list.push_back(makeRet(unit, new SimpleName(fn)));
-        print(m.print());
+        bl->list.push_back(newPrint(unit, "f", "}"));
     }
     auto imp = std::make_unique<Impl>(bd->type);
+    imp->trait_name.reset(new Type("Debug"));
+    imp->isGeneric = bd->isGeneric;
     m.parent = imp.get();
     imp->methods.push_back(std::move(m));
+    auto tr = resolve(new Type("Debug")).trait;
+    for (auto &m : tr->methods) {
+        if (m.body) {
+            AstCopier copier;
+            auto m2 = std::any_cast<Method *>(m.accept(&copier));
+            imp->methods.push_back(std::move(*m2));
+        }
+    }
     return imp;
+}
+
+void init_impl(Impl *impl) {
+    if (impl->type->typeArgs.empty()) {
+        return;
+    }
+    //copy impl type params into all methods
+    for (auto &m : impl->methods) {
+        m.isGeneric = true;
+        for (auto &ta : impl->type->typeArgs) {
+            m.typeArgs.push_back(ta);
+        }
+    }
 }
 
 void Resolver::init() {
     if (is_init) return;
     is_init = true;
-    std::vector<std::unique_ptr<Item>> newItems;
+    std::vector<std::unique_ptr<Impl>> newItems;
     for (auto &item : unit->items) {
         if (item->isClass() || item->isEnum()) {
             auto bd = dynamic_cast<BaseDecl *>(item.get());
@@ -333,7 +357,8 @@ void Resolver::init() {
             res.targetDecl = bd;
             addType(bd->getName(), res);
             if (!bd->derives.empty()) {
-                newItems.push_back(derive(bd, unit.get()));
+                newItems.push_back(derive(bd));
+                init_impl(newItems.back().get());
             }
         } else if (item->isTrait()) {
             auto tr = (Trait *) item.get();
@@ -343,16 +368,7 @@ void Resolver::init() {
             addType(tr->type->name, res);
         } else if (item->isImpl()) {
             auto impl = dynamic_cast<Impl *>(item.get());
-            if (impl->type->typeArgs.empty()) {
-                continue;
-            }
-            //copy impl type params into all methods
-            for (auto &m : impl->methods) {
-                m.isGeneric = true;
-                for (auto &ta : impl->type->typeArgs) {
-                    m.typeArgs.push_back(ta);
-                }
-            }
+            init_impl(impl);
         }
     }//for
     for (auto &ni : newItems) {
@@ -570,7 +586,9 @@ std::any Resolver::visitMethod(Method *m) {
     res.targetMethod = m;
     newScope();
     if (m->self) {
-        curScope().add(VarHolder(m->self->name, ((Impl *) m->parent)->type, true));
+        if (!m->self->type) error("self type is not set " + printMethod(curMethod));
+        //curScope().add(VarHolder(m->self->name, ((Impl *) m->parent)->type, true));
+        curScope().add(VarHolder(m->self->name, m->self->type.get(), true));
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
@@ -658,6 +676,14 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
     }
 }
 
+BaseDecl *Resolver::getDecl(Type *type) {
+    auto it = typeMap.find(type->print());
+    if (it != typeMap.end()) {
+        return it->second.targetDecl;
+    }
+    return nullptr;
+}
+
 std::any Resolver::visitType(Type *type) {
     auto str = type->print();
     auto it = typeMap.find(str);
@@ -712,9 +738,10 @@ std::any Resolver::visitType(Type *type) {
         return res;
     }
     if (curMethod && curMethod->self) {
-        auto r = resolve(curMethod->self->type.get());
-        if (r.targetDecl && r.targetDecl->isEnum()) {
-            auto ed = (EnumDecl *) r.targetDecl;
+        auto decl = getDecl(curMethod->self->type.get());
+        //auto r = resolve(curMethod->self->type.get());
+        if (decl && decl->isEnum()) {
+            auto ed = (EnumDecl *) decl;
             for (auto &v : ed->variants) {
                 if (v.name == type->name) {
                     //enum variant without scope(same impl)
@@ -737,7 +764,7 @@ std::any Resolver::visitType(Type *type) {
         }
     }
     if (!target) {
-        for (auto &is : unit->imports) {
+        for (auto &is : get_imports()) {
             auto resolver = getResolver(is, root);
             resolver->init();
             //try full type
@@ -747,7 +774,9 @@ std::any Resolver::visitType(Type *type) {
                 if (it != resolver->typeMap.end()) {
                     auto res = it->second;
                     addType(str, res);
-                    usedTypes.push_back(res.targetDecl);
+                    if (res.targetDecl) {
+                        usedTypes.push_back(res.targetDecl);
+                    }//todo trait
                     return res;
                 }
             } else {
@@ -784,6 +813,25 @@ std::any Resolver::visitType(Type *type) {
     genericTypes.push_back(decl);
     addType(str, res);
     return res;
+}
+
+std::vector<ImportStmt> Resolver::get_imports() {
+    std::vector<ImportStmt> imports;
+    for (auto &is : unit->imports) {
+        //ignore prelude imports
+        auto it = std::find(prelude.begin(), prelude.end(), join(is.list, "/"));
+        if (it == prelude.end()) {
+            imports.push_back(is);
+        }
+    }
+    for (auto &pre : prelude) {
+        //skip self unit being prelude
+        if(unit->path == root + "/" + pre + ".x") continue;
+        ImportStmt is;
+        is.list.push_back(pre);
+        imports.push_back(std::move(is));
+    }
+    return imports;
 }
 
 SimpleName *find_base(Expression *e) {
@@ -1144,13 +1192,17 @@ Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &t
     return res;
 }
 
+void error(Expression *e, const std::string &str) {
+    error(e->print() + "=>" + str);
+}
+
 std::any Resolver::visitObjExpr(ObjExpr *node) {
     bool hasNamed = false;
     bool hasNonNamed = false;
     Expression *base = nullptr;
     for (auto &e : node->entries) {
         if (e.isBase) {
-            if (base) error("base already set");
+            if (base) error(node, "base already set");
             base = e.value;
         } else if (e.key) {
             hasNamed = true;
@@ -1170,35 +1222,35 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
     std::vector<FieldDecl> *fields;
     Type *type;
     if (res.targetDecl->isEnum()) {
-        if (base) error("enum base not supported");
+        if (base) error(node, "enum base not supported");
         auto ed = dynamic_cast<EnumDecl *>(res.targetDecl);
         int idx = findVariant(ed, node->type->name);
         auto &variant = ed->variants[idx];
         fields = &variant.fields;
         type = new Type(ed->type, variant.name);
         if (variant.fields.size() != node->entries.size()) {
-            error("incorrect number of arguments passed to enum creation");
+            error(node, "incorrect number of arguments passed to enum creation");
         }
     } else {
         auto td = dynamic_cast<StructDecl *>(res.targetDecl);
         fields = &td->fields;
         type = td->type;
         if (!base && td->base) {
-            error("base class is not initialized for " + node->print());
+            error(node, "base class is not initialized");
         }
         if (base && !td->base) {
-            error("wasn't expecting base");
+            error(node, "wasn't expecting base");
         }
         if (base) {
             auto base_ty = getType(base);
             if (base_ty->print() != td->base->print()) {
-                error("invalid base class type: " + base_ty->print() + " expecting: " + td->base->print());
+                error(node, "invalid base class type: " + base_ty->print() + " expecting: " + td->base->print());
             }
         }
         int fcnt = td->fields.size();
         if (base) fcnt++;
         if (fcnt != node->entries.size()) {
-            error("incorrect number of arguments passed to class creation " + node->print());
+            error(node, "incorrect number of arguments passed to class creation");
         }
         if (td->isGeneric) {
             //infer
@@ -1222,10 +1274,11 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             prm_idx = field_idx++;
         }
         auto &prm = fields->at(prm_idx);
-        auto vt = resolve(prm.type);
-        auto val = resolve(e.value);
-        if (!subType(val.type, prm.type)) {
-            error("variant field type is imcompatiple with " + e.value->print() + " expected " + prm.type->print());
+        auto pt = getType(prm.type);
+        auto val = getType(e.value);
+        if (!MethodResolver::isCompatible(val, pt)) {
+            auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt->print().c_str(), val->print().c_str());
+            error(f);
         }
     }
     if (hasNamed) {
@@ -1287,6 +1340,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (mc->scope) {
         MethodResolver mr(this);
         auto res = mr.handleCallResult(sig);
+        //print(format("%s => %s => %s\n",mc->print().c_str(), sig.print().c_str(), printMethod(res.targetMethod).c_str()));
         cache[id] = res;
         return res;
     }

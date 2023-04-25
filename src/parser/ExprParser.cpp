@@ -41,8 +41,8 @@ Literal *parseLit(Parser *p) {
     auto res = new Literal(type, t.value);
     std::vector<std::string> suffixes = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
     for (auto &s : suffixes) {
-        auto pos=t.value.rfind(s);
-        bool  support_suffix = type == Literal::INT || type == Literal::FLOAT || type == Literal::CHAR;
+        auto pos = t.value.rfind(s);
+        bool support_suffix = type == Literal::INT || type == Literal::FLOAT || type == Literal::CHAR;
         if (pos != std::string::npos && support_suffix) {
             res->val = t.value.substr(0, t.value.size() - s.size());
             res->suffix.reset(new Type(s));
@@ -141,7 +141,7 @@ Entry parseEntry(Parser *p) {
         e.value = p->parseExpr();
     } else {
         //single expr or base
-        if(p->is(DOT)){
+        if (p->is(DOT)) {
             p->pop();
             e.isBase = true;
         }
@@ -178,7 +178,7 @@ Expression *makeObj(Parser *p, bool isPointer, Type *type) {
     res->isPointer = isPointer;
     res->type.reset(type);
     p->consume(LBRACE);
-    if(!p->is(RBRACE)){
+    if (!p->is(RBRACE)) {
         res->entries.push_back(parseEntry(p));
         while (p->is(COMMA)) {
             p->consume(COMMA);
@@ -215,9 +215,9 @@ MethodCall *parseCall(Parser *p, const std::string &name) {
 }
 
 template<class T>
-T loc(T t, int line){
-   t->line = line;
-   return t;   
+T loc(T t, int line) {
+    t->line = line;
+    return t;
 }
 
 //"(" expr ")" | literal | objCreation | arrayCreation | name | mc
@@ -534,7 +534,7 @@ Expression *expr7(Parser *p) {
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr8(p);
-        res->line=line;
+        res->line = line;
         lhs = res;
     }
     return lhs;
@@ -546,7 +546,7 @@ Expression *expr6(Parser *p) {
     auto lhs = expr7(p);
     while (p->is(AND)) {
         auto res = new Infix;
-        res->line=line;
+        res->line = line;
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr7(p);

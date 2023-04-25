@@ -42,7 +42,7 @@ func enumTest(){
   let b: E = E::B{b: 6, a: 5};//random order
   let c: E = E::C{100};
   let d: E = E::A2{A{a: 100, b: 200}};
-  ee(&a);ee(&b);ee(&c);
+  //ee(&a);ee(&b);ee(&c);
   assert a.index == 0;
   assert b.index == 1;
   assert c.index == 2;

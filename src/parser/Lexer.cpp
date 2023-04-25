@@ -141,25 +141,25 @@ char checkEscape(char c) {
     throw std::runtime_error(std::string("invalid escape: \\") + c);
 }
 
-Token Lexer::quoted(char c1){
+Token Lexer::quoted(char c1) {
     char c = peek();
-   std::string s;
-        s.append(1, c);
-        pos++;
-        while (pos < buf.size()) {
-            c = read();
-            if (c == '\\') {
-                auto c2 = checkEscape(buf[pos]);
-                s.append(1, c2);
-                pos++;
-            } else if (c == c1) {
-                s.append(1, c);
-                return Token(c1=='"'?STRING_LIT:CHAR_LIT, s);   
-            } else {
-                s.append(1, c);
-            }
+    std::string s;
+    s.append(1, c);
+    pos++;
+    while (pos < buf.size()) {
+        c = read();
+        if (c == '\\') {
+            auto c2 = checkEscape(buf[pos]);
+            s.append(1, c2);
+            pos++;
+        } else if (c == c1) {
+            s.append(1, c);
+            return Token(c1 == '"' ? STRING_LIT : CHAR_LIT, s);
+        } else {
+            s.append(1, c);
         }
-        throw std::runtime_error("unterminated char literal " + s);
+    }
+    throw std::runtime_error("unterminated char literal " + s);
 }
 
 Token Lexer::next() {

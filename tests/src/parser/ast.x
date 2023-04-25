@@ -1,5 +1,3 @@
-import String
-import List
 
 #derive(Debug)
 class Unit{
@@ -15,26 +13,70 @@ impl Unit{
   }
 }
 
+#derive(Debug)
 class ImportStmt{
   list: List<String>;
 }
 
+#derive(Debug)
 enum Item{
-  Method(m: Method)
+  Method(m: Method),
+  Struct(s: StructDecl)
 }
 
 class BaseDecl{
+  line: i32;
+  unit: Unit*;
   type: Type;
-  isResolved: bool;
-  isGeneric: bool;
-  base: Type;
+  is_resolved: bool;
+  is_generic: bool;
+  base: Option<Type>;
   derives: List<Type>;
 }
 
-class Method{
-
+#derive(Debug)
+class StructDecl: BaseDecl{
+  fields: List<FieldDecl>;
 }
 
-enum Type{
+#derive(Debug)
+class FieldDecl{
+  name: String;
+  type: Type;
+}
 
+#derive(Debug)
+class Method{
+  line: i32;
+  unit: Unit*;
+}
+
+//#derive(Debug)
+enum Type{
+  Simple(scope: Option<Box<Type>>, name: String, args: List<Type>),
+  Prim(s: String),
+  Pointer(type: Box<Type>),
+  Array(type: Box<Type>, size: i32),
+  Slice(type: Box<Type>)
+}
+
+impl Debug for Type{
+  func debug(self, f: Fmt*){
+    if let Type::Simple(scp, name, args)=(self){
+      if(scp.is_some()){}
+      f.print(name);
+      if(!args.empty()){
+        f.print("<");
+        for(let i=0;i<args.len();++i){
+          if(i>0) f.print(", ");
+          args.get_ptr(i).debug(f);
+        }
+        f.print(">");
+      }
+    }
+    if let Type::Pointer(ty)=(self){
+      //ty.get().debug(f);
+      f.print("*");
+    }
+  }
 }

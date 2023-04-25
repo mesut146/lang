@@ -136,7 +136,7 @@ impl Token{
 
     func print(self): String {
         let s = String::new("Token{type: ");
-        s.append(self.type.debug());
+        s.append(Fmt::str(self.type));
         s.append(", line: ");
         s.append(self.line.str());
         s.append(", value: ");

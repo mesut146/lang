@@ -103,7 +103,7 @@ std::unique_ptr<DoWhile> parseDoWhile(Parser *p) {
 std::unique_ptr<Statement> Parser::parseStmt() {
     int line = first()->line;
     auto res = parseStmt2();
-    res->line=line;
+    res->line = line;
     return res;
 }
 std::unique_ptr<Statement> Parser::parseStmt2() {

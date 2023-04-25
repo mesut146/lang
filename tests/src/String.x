@@ -40,7 +40,7 @@ impl String{
         return self.arr.len();
     }
     
-    func get(self, i: i32): i8{
+    func get(self, i: i64): i8{
          return self.arr.get(i);
     }
 
@@ -100,13 +100,25 @@ impl Fmt{
   
  func str<T>(t: T): String{
    let f = Fmt::new();
-   Debug::debug(t, f);
+   Debug::debug(t, &f);
    return f.buf;
  }
 }
 
 trait Debug{
   func debug(self, f: Fmt*);
+  
+  /*func str(self): String{
+   let f = Fmt::new();
+   Debug::debug(self, &f);
+   return f.buf;
+ }*/
+}
+
+impl Debug for String{
+  func debug(self, f: Fmt*){
+    f.print(*self);
+  }
 }
 
 impl Debug for i32{
@@ -135,5 +147,22 @@ impl Debug for i32{
       res+=1;
     }
     return res;
+  }
+}
+
+impl i32{
+  func parse(s: String*): i32{
+    let x = 0;
+    let neg = false;
+    let pos = 0;
+    if(s.get(0) == '-'){
+      ++pos;
+      neg=true;
+    }
+    while(pos < s.len()){
+      x = 10 * x + (s.get(pos) - '0');
+      ++pos;
+    }
+    return x;  
   }
 }

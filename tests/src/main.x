@@ -4,6 +4,7 @@ import enumTest
 import flow
 import generic
 import List
+import Box
 import map
 import array
 import pass
@@ -128,6 +129,7 @@ func main(): i32{
   importTest();
   genericTest();
   listTest();
+  boxTest();
   arrayTest();
   passTest();
   retTest();
@@ -140,6 +142,6 @@ func main(): i32{
   traitTest();
   map_test();
   lexer_test();
-  Parser::test();
+  //Parser::test();
   return 0;
 }

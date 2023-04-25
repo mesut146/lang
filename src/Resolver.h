@@ -251,6 +251,7 @@ public:
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
+    static std::vector<std::string> prelude;
     std::string root;
 
     explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
@@ -272,6 +273,8 @@ public:
     bool is_base_of(Type *base, BaseDecl *d);
     Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<FieldDecl> &fields, Type *type);
     std::vector<Method> &get_trait_methods(Type *type);
+    std::unique_ptr<Impl> derive(BaseDecl *bd);
+    std::vector<ImportStmt> get_imports();
 
     void newScope();
     void dropScope();
@@ -298,6 +301,7 @@ public:
     RType getTypeCached(const std::string &name);
     void addType(const std::string &name, const RType &rt);
     std::string getId(Expression *e);
+    BaseDecl *getDecl(Type *type);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

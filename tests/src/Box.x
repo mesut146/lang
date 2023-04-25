@@ -1,3 +1,5 @@
+import String
+
 class Box<T>{
     val: T*;
 }
@@ -18,10 +20,18 @@ impl Box<T>{
     }
 }
 
-func boxText(){
+impl Debug for Box<T>{
+  func debug(self, f: Fmt*){
+    f.print("Box{");
+    Debug::debug(self.val, f);
+    f.print("}");
+  }
+}
+
+func boxTest(){
   let b = Box::new(5);
   //assert *b.get() == 5;
   assert b.unwrap() == 5;
 
-  print("boxText done");
+  print("boxText done\n");
 }

@@ -1,9 +1,10 @@
 impl [i32; 3]{
   func dump(self){
+    print("{%d %d %d}\n", self[0], self[1], self[2]);
     print("[");
     for(let i=0;i<3;++i){
       if(i>0) print(", ");
-      print("%d", self[i]);
+      print("%d.%d", self[i], self[1]);
     }
     print("]\n");
   }
@@ -11,6 +12,7 @@ impl [i32; 3]{
 
 func arrayTest(){
   let arr = [5; 3];
+  print("{%d %d %d}\n", arr[0], arr[1], arr[2]);
   arr.dump();
   assert arr[1] == 5;
   arr[0] = 8;

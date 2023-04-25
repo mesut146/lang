@@ -92,7 +92,7 @@ impl str{
     }
     
     func str(self): String{
-      return String::new(self);
+      return String::new(*self);
     }
 
 }

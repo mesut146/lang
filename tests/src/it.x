@@ -5,3 +5,4 @@ trait Iterator<T>{
   func has(self): bool;
 }
 
+

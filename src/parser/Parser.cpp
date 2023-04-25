@@ -7,7 +7,7 @@ std::string Parser::strLit() {
     return std::string(t.value.begin() + 1, t.value.end() - 1);
 }
 
-ImportStmt parseImport(Parser* p) {
+ImportStmt parseImport(Parser *p) {
     ImportStmt res;
     p->consume(IMPORT);
     res.list.push_back(p->pop().value);
@@ -39,11 +39,11 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     if (!res->type->typeArgs.empty()) {
         res->isGeneric = true;
     }
-    if(is(COLON)){
+    if (is(COLON)) {
         pop();
         res->base.reset(parseType());
     }
-    if(is(SEMI)){
+    if (is(SEMI)) {
         consume(SEMI);
         return res;
     }
@@ -84,12 +84,12 @@ EnumVariant parseEnumEntry(Parser *p) {
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     res->unit = unit;
-    if(is(HASH)){
+    if (is(HASH)) {
         pop();
         consume(IDENT);
         consume(LPAREN);
         res->derives.push_back(parseType());
-        while(is(COMMA)){
+        while (is(COMMA)) {
             consume(COMMA);
             res->derives.push_back(parseType());
         }
@@ -131,15 +131,15 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     auto type = p->parseType();
     auto res = std::make_unique<Impl>(type);
     res->unit = p->unit;
-    if (!type->typeArgs.empty()) {
-        res->isGeneric = true;
-    }
     if (p->is(FOR)) {
         res->trait_name.reset(type);
         p->consume(FOR);
         res->type = p->parseType();
     } else {
         res->type = type;
+    }
+    if (!res->type->typeArgs.empty()) {
+        res->isGeneric = true;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
@@ -152,16 +152,16 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
 }
 
 std::unique_ptr<Extern> parseExtern(Parser *p) {
-  auto res = std::make_unique<Extern>();
-  p->consume(EXTERN);
-  p->consume(LBRACE);
-  while (!p->is(RBRACE)) {
+    auto res = std::make_unique<Extern>();
+    p->consume(EXTERN);
+    p->consume(LBRACE);
+    while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
         m.parent = res.get();
         res->methods.push_back(std::move(m));
     }
-  p->consume(RBRACE);
-  return res;
+    p->consume(RBRACE);
+    return res;
 }
 
 bool Parser::isVarDecl() {
@@ -185,17 +185,17 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
     while (first() != nullptr) {
         //top level decl
-        std::vector<Type*> derives;
-        if(is(HASH)){
+        std::vector<Type *> derives;
+        if (is(HASH)) {
             pop();
             consume(IDENT);
-        consume(LPAREN);
-        derives.push_back(parseType());
-        while(is(COMMA)){
-            consume(COMMA);
+            consume(LPAREN);
             derives.push_back(parseType());
-        }
-        consume(RPAREN);
+            while (is(COMMA)) {
+                consume(COMMA);
+                derives.push_back(parseType());
+            }
+            consume(RPAREN);
         }
         if (is({CLASS})) {
             auto td = parseTypeDecl();
@@ -211,8 +211,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->items.push_back(parseImpl(this));
         } else if (is(EXTERN)) {
             res->items.push_back(parseExtern(this));
-        } 
-        else if (isMethod()) {
+        } else if (isMethod()) {
             res->items.push_back(std::make_unique<Method>(parseMethod()));
         } else {
             throw std::runtime_error("invalid top level decl: " + first()->print());
@@ -234,7 +233,7 @@ Param Parser::parseParam() {
 
 Method Parser::parseMethod() {
     Method res(unit);
-    if(is(VIRTUAL)){
+    if (is(VIRTUAL)) {
         res.isVirtual = true;
         pop();
     }

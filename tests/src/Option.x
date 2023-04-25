@@ -1,5 +1,7 @@
 import str
+import String
 
+#derive(Debug)
 enum Option<T>{
   None,
   Some(val: T)
@@ -11,6 +13,10 @@ enum Option<T>{
 }*/
 
 impl Option<T>{
+  func new(val: T): Option<T>{
+    return Option<T>::Some{val};  
+  }
+
   func unwrap(self): T{
     if let Some(val) = (self){
       return val;

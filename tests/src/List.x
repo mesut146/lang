@@ -88,7 +88,11 @@ impl List<T>{
 
   func len(self): i64{
     return self.count;
-  }  
+  }
+  
+  func empty(self): bool{
+    return self.count == 0;
+  }
 
   func indexOf(self, e: T): i32{
     return self.indexOf(e, 0);
@@ -132,7 +136,7 @@ impl List<T>{
   
   func clone(self): List<T>{
     let res = List<T>::new(self.cap);
-    res.add(&self);
+    res.add(self);
     return res;
   }
 }
@@ -141,6 +145,7 @@ impl Debug for List<T>{
   func debug(self, f: Fmt*){
     f.print("[");
     for(let i=0;i<self.count;++i){
+      if(i>0) f.print(", ");
       Debug::debug(self.get(i), f);
     }
     f.print("]");
@@ -148,7 +153,7 @@ impl Debug for List<T>{
 }
 
 class ListIter<T>{
-  list: List<T>;
+  list: List<T>*;
   pos: i32;
 }
 

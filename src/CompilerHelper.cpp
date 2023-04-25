@@ -285,7 +285,7 @@ int Compiler::getSize(BaseDecl *decl) {
 int Compiler::getSize2(BaseDecl *decl) {
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
-        int res = 0;
+        /*int res = 0;
         for (auto &ev : ed->variants) {
             if (ev.fields.empty()) continue;
             int cur = 0;
@@ -294,7 +294,10 @@ int Compiler::getSize2(BaseDecl *decl) {
             }
             res = cur > res ? cur : res;
         }
-        return res + ENUM_INDEX_SIZE;
+        return res + ENUM_INDEX_SIZE;*/
+        auto st = (llvm::StructType *) mapType(ed->type);
+        auto sl = mod->getDataLayout().getStructLayout(st);
+        return sl->getSizeInBits();
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         auto st = (llvm::StructType *) mapType(td->type);
@@ -427,13 +430,45 @@ public:
         if (Config::optimize_enum && compiler->is_simple_enum(node)) return {};
         return alloc(node->scope.get(), node);
     }
+
+    void child(Expression *e) {
+        auto mc = dynamic_cast<MethodCall *>(e);
+        if (mc) {
+            call(mc);
+            return;
+        }
+        auto obj = dynamic_cast<ObjExpr *>(e);
+        if (obj) {
+            for (auto &e : obj->entries) {
+                if (!e.isBase) child(e.value);
+            }
+            return;
+        }
+        auto ty = dynamic_cast<Type *>(e);
+        if (ty) {
+            return;
+        }
+        auto ae = dynamic_cast<ArrayExpr *>(e);
+        if (ae) {
+            return;
+        }
+    }
+    void object(ObjExpr *node) {
+        for (auto &e : node->entries) {
+            if (!e.isBase) child(e.value);
+        }
+    }
     std::any visitObjExpr(ObjExpr *node) override {
         if (node->isPointer) {
             //todo this too
             return {};
         }
         auto ty = compiler->resolv->getType(node);
-        return alloc(ty, node);
+        auto ptr = alloc(ty, node);
+        for (auto &e : node->entries) {
+            if (!e.isBase) child(e.value);
+        }
+        return ptr;
     }
     std::any visitArrayExpr(ArrayExpr *node) {
         auto ty = compiler->resolv->getType(node);

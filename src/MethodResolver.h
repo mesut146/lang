@@ -12,6 +12,7 @@ struct Signature {
 
     static Signature make(MethodCall *mc, Resolver *r);
     static Signature make(Method *m, Resolver *r);
+    std::string print();
 };
 
 class MethodResolver {
@@ -23,7 +24,7 @@ public:
     //get cached or generate method
     Method *generateMethod(std::map<std::string, Type *> &map, Method *m, Signature &sig);
     void findMethod(std::string &name, std::vector<Signature> &list);
-    void getMethods(Signature& sig, std::vector<Signature> &list, bool imports);
+    void getMethods(Signature &sig, std::vector<Signature> &list, bool imports);
 
     static bool isCompatible(Type *arg, Type *target) {
         std::vector<Type *> typeParams;

@@ -1,11 +1,11 @@
 #pragma once
 
+#include <any>
 #include <map>
 #include <memory>
 #include <string>
 #include <variant>
 #include <vector>
-#include <any>
 
 class Visitor;
 class Type;
@@ -30,12 +30,12 @@ static std::map<std::string, int> sizeMap{
         {"f64", 64},
         {"bool", 1}};
 
-class Node{
+class Node {
 public:
-  int pos = 0;
-  int line = 0;
-  
-  virtual ~Node() = default;
+    int pos = 0;
+    int line = 0;
+
+    virtual ~Node() = default;
 };
 
 class ImportStmt {
@@ -45,7 +45,7 @@ public:
     std::string print();
 };
 class Unit;
-struct Item: public Node{
+struct Item : public Node {
     Unit *unit;
 
     virtual bool isClass() { return false; }
@@ -74,12 +74,12 @@ struct BaseDecl : public Item {
     bool isResolved = false;
     bool isGeneric = false;
     std::unique_ptr<Type> base;
-    std::vector<Type*> derives;
+    std::vector<Type *> derives;
 
     std::string &getName();
 };
 
-class FieldDecl: public Node{
+class FieldDecl : public Node {
 public:
     std::string name;
     Type *type;
@@ -135,22 +135,22 @@ public:
 class EnumDecl : public BaseDecl {
 public:
     std::vector<EnumVariant> variants;
-    
+
     bool isEnum() { return true; }
     std::string print() override;
     std::any accept(Visitor *v) override;
 };
 
-class Extern: public Item{
+class Extern : public Item {
 public:
     std::vector<Method> methods;
-    
+
     bool isExtern() { return true; }
     std::string print() override;
     std::any accept(Visitor *v) override;
 };
 
-class Param: public Node{
+class Param : public Node {
 public:
     std::string name;
     std::unique_ptr<Type> type;
@@ -174,18 +174,18 @@ public:
 
     explicit Method(Unit *unit) : unit(unit) {}
 
-    bool isMethod() override{ return true; }
+    bool isMethod() override { return true; }
     std::string print();
     std::any accept(Visitor *v);
 };
 
-class Expression: public Node{
+class Expression : public Node {
 public:
     virtual std::string print() = 0;
 
     virtual std::any accept(Visitor *v) = 0;
 };
-class Statement: public Node{
+class Statement : public Node {
 public:
     virtual std::string print() = 0;
 
@@ -264,7 +264,7 @@ public:
     explicit PointerType(Type *type) : type(type){};
 
     bool isPointer() override { return true; }
-    static Type* unwrap(Type* type){
+    static Type *unwrap(Type *type) {
         auto ptr = dynamic_cast<PointerType *>(type);
         return ptr ? ptr->type : type;
     }
@@ -335,7 +335,7 @@ public:
 template<class T>
 using Ptr = std::unique_ptr<T>;
 
-class Fragment: public Node{
+class Fragment : public Node {
 public:
     std::string name;
     std::unique_ptr<Type> type;

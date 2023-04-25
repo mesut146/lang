@@ -89,7 +89,7 @@ std::string Impl::print() {
     return s;
 }
 std::string Extern::print() {
-    return "extern {" +join(methods, "\n")+"\n}";
+    return "extern {" + join(methods, "\n") + "\n}";
 }
 
 std::string Method::print() {
@@ -245,7 +245,7 @@ std::string Entry::print() {
     if (key) {
         return key.value() + ": " + value->print();
     }
-    if(isBase) return "." + value->print();
+    if (isBase) return "." + value->print();
     return value->print();
 }
 
