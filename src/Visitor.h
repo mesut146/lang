@@ -15,6 +15,7 @@ public:
     virtual std::any visitTrait(Trait *node) todo("Trait");
     virtual std::any visitImpl(Impl *node) todo("Impl");
     virtual std::any visitExtern(Extern *node) todo("Extern");
+    virtual std::any visitNs(Ns *node) todo("Ns");
     virtual std::any visitFieldDecl(FieldDecl *node) todo("FieldDecl");
     virtual std::any visitMethod(Method *node) todo("Param");
     virtual std::any visitParam(Param *node) todo("Param");

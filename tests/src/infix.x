@@ -1,4 +1,4 @@
-func infixTest(){
+func main(){
   let a: i32 = 2;
   let b: i32 = 11;
   assert a+3==5;
@@ -27,4 +27,38 @@ func infixTest(){
   assert x + y == 21;
 
   print("infixTest done\n");
+  
+  condTest();
+}
+
+func getTrue(cnt: i32*): bool {
+  *cnt = *cnt + 1;
+  return true;
+}
+func getFalse(cnt: i32*): bool {
+  *cnt = *cnt + 1;
+  return false;
+}
+
+func condTest(){
+  let c1: i32 = 0;
+  let c2: i32 = 0;
+  assert (getFalse(&c2)&&getTrue(&c1))==false;
+  assert c1 == 0 && c2 == 1;
+ 
+  assert getTrue(&c1) && getTrue(&c1);
+  assert c1 == 2 && c2 == 1;
+  
+  assert getTrue(&c1) || getFalse(&c2);
+  assert c1==3 && c2==1;
+
+  assert getFalse(&c2) || getTrue(&c1);
+  assert c1==4 && c2==2;
+  
+  assert (getFalse(&c2) || getTrue(&c1)) && getTrue(&c1);
+  assert (getTrue(&c1) && getFalse(&c2)) || getTrue(&c1);
+  assert getFalse(&c2) || (getTrue(&c1) && getTrue(&c1));
+  assert getTrue(&c1) && (getFalse(&c2) || getTrue(&c1));
+
+  print("condTest done\n");
 }

@@ -26,7 +26,7 @@ func common<T>(obj: T){
   obj.prin();
 }
 
-func traitTest(){
+func main(){
   let a = A{5};
   let b = B{6};
   common(a);

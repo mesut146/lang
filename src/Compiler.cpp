@@ -52,8 +52,8 @@ void Compiler::init() {
     std::string Error;
     //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
     auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
-    std::cout << "triple: " << TargetTriple << std::endl;
-    std::cout << "target: " << Target->getName() << std::endl;
+    //std::cout << "triple: " << TargetTriple << std::endl;
+    //std::cout << "target: " << Target->getName() << std::endl;
 
     if (!Target) {
         throw std::runtime_error(Error);
@@ -64,29 +64,34 @@ void Compiler::init() {
     llvm::TargetOptions opt;
     auto RM = llvm::Optional<llvm::Reloc::Model>();
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+    
+    Resolver::init_prelude();
 }
 
 void Compiler::compileAll() {
     init();
-    //prelude
-    for (auto &pre : Resolver::prelude) {
-        Resolver::getResolver(srcDir + "/" + pre + ".x", srcDir);
-    }
-    std::string cmd = "clang-13 ";
     for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
         if (e.is_directory()) continue;
-        auto obj = compile(e.path().string());
-        if (obj) {
-            cmd.append(obj.value());
-            cmd.append(" ");
-        }
+        compile(e.path().string());
     }
-    system("rm a.out");
-    system((cmd + " && ./a.out").c_str());
+    link_run();
     for (auto &[k, v] : Resolver::resolverMap) {
         v.reset();
         //v->unit.reset();
     }
+}
+
+void Compiler::link_run(){
+    if(fs::exists("a.out")){
+        system("rm a.out");
+    }
+    std::string cmd = "clang-13 ";
+    for(auto &obj : compiled){
+        cmd.append(obj);
+        cmd.append(" ");
+    }
+    system(cmd.c_str());
+    system("./a.out");
 }
 
 void Compiler::emit(std::string &Filename) {
@@ -180,6 +185,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     auto outFile = noext + ".o";
     emit(outFile);
     cleanup();
+    compiled.push_back(outFile);
     return outFile;
 }
 
@@ -460,6 +466,12 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
 }
 
 void Compiler::createProtos() {
+    if (!sliceType) {
+        sliceType = make_slice_type();
+    }
+    if (!stringType) {
+        stringType = make_string_type();
+    }
     std::vector<BaseDecl *> list;
     for (auto bd : getTypes(unit.get())) {
         if (bd->isGeneric) continue;
@@ -490,12 +502,6 @@ void Compiler::createProtos() {
     printf_proto = make_printf();
     exit_proto = make_exit();
     mallocf = make_malloc();
-    if (!sliceType) {
-        sliceType = make_slice_type();
-    }
-    if (!stringType) {
-        stringType = make_string_type();
-    }
     make_vtables();
 }
 
@@ -742,6 +748,8 @@ void Compiler::genCode(Method *m) {
     allocParams(m);
     makeLocals(m->body.get());
     storeParams(curMethod, this);
+    resolv->max_scope = 0;
+    resolv->newScope();
     m->body->accept(this);
     if (!isReturnLast(m->body.get()) && m->type->print() == "void") {
         if (!m->body->list.empty()) {
@@ -952,7 +960,6 @@ std::any Compiler::visitUnary(Unary *u) {
 std::any Compiler::visitAssign(Assign *i) {
     loc(i);
     auto de = dynamic_cast<DerefExpr *>(i->left);
-    if (de) print(i->print());
     llvm::Value *l;
     if (de) {
         l = gen(de->expr.get());
@@ -1252,13 +1259,16 @@ std::any Compiler::visitAssertStmt(AssertStmt *n) {
     func->getBasicBlockList().push_back(next);
     return nullptr;
 }
+
 std::any Compiler::visitVarDecl(VarDecl *node) {
     node->decl->accept(this);
     return {};
 }
+
 void Compiler::copy(llvm::Value *trg, llvm::Value *src, Type *type) {
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), getSize2(type) / 8);
 }
+
 std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
     for (auto &f : n->list) {
         auto rhs = f.rhs.get();
@@ -1452,6 +1462,7 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
         Builder->CreateCondBr(cond, then, next);
     }
     Builder->SetInsertPoint(then);
+    resolv->newScope();
     b->thenStmt->accept(this);
     if (!isReturnLast(b->thenStmt.get())) {
         Builder->CreateBr(next);
@@ -1459,6 +1470,7 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
+        resolv->newScope();
         b->elseStmt->accept(this);
         if (!isReturnLast(b->elseStmt.get())) {
             Builder->CreateBr(next);
@@ -1493,6 +1505,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     } else {
         Builder->CreateCondBr(branch(cmp), then, next);
     }
+    resolv->newScope();
     Builder->SetInsertPoint(then);
 
     auto &variant = decl->variants[index];
@@ -1524,6 +1537,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     if (b->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
+        resolv->newScope();
         b->elseStmt->accept(this);
         if (!isReturnLast(b->elseStmt.get())) {
             Builder->CreateBr(next);
@@ -1643,8 +1657,9 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         return gep(arr, node->index);
     } else {
         //pointer access
-        if (isAlloc(node->array, src))
+        if (isAlloc(node->array, src)){
             src = load(src);
+        }
         return gep(src, node->index);
     }
 }
@@ -1661,6 +1676,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     func->getBasicBlockList().push_back(then);
     loops.push_back(condbb);
     loopNext.push_back(next);
+    resolv->newScope();
     node->body->accept(this);
     loops.pop_back();
     loopNext.pop_back();
@@ -1671,6 +1687,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 }
 
 std::any Compiler::visitForStmt(ForStmt *node) {
+    resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);
     }
@@ -1690,12 +1707,16 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     func->getBasicBlockList().push_back(then);
     loops.push_back(updatebb);
     loopNext.push_back(next);
+    int backup = resolv->max_scope;
     node->body->accept(this);
+    int backup2 = resolv->max_scope;
+    resolv->max_scope = backup;
     Builder->CreateBr(updatebb);
     Builder->SetInsertPoint(updatebb);
     for (auto &u : node->updaters) {
         u->accept(this);
     }
+    resolv->max_scope = backup2;
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);

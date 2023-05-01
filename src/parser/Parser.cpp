@@ -214,7 +214,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
         } else if (isMethod()) {
             res->items.push_back(std::make_unique<Method>(parseMethod()));
         } else {
-            throw std::runtime_error("invalid top level decl: " + first()->print());
+            throw std::runtime_error("invalid top level decl: " + first()->print() + " line: " + std::to_string(first()->line));
         }
     }
     return res;

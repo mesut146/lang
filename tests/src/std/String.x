@@ -1,6 +1,5 @@
-import List
-import str
-import impl
+//import std/List
+//import std/str
 
 class String{
     arr: List<i8>;
@@ -125,6 +124,7 @@ impl Debug for i32{
   func debug(self, f: Fmt*){
     f.print(self.str());
   }
+  
   func str(self): String{
     let x = self;
     let len = self.str_size();
@@ -138,6 +138,7 @@ impl Debug for i32{
     }
     return String{list};
   }
+  
   func str_size(self): i32{
     if(self==0) return 1;
     let x = self;

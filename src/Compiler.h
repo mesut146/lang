@@ -34,6 +34,7 @@ struct Compiler : public Visitor {
 public:
     std::string srcDir;
     std::string outDir;
+    std::vector<std::string> compiled; 
     std::shared_ptr<Unit> unit;
     bool debug = true;
     llvm::Function *func = nullptr;
@@ -66,6 +67,7 @@ public:
     void emit(std::string &Filename);
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
+    void link_run();
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);

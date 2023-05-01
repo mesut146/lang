@@ -17,6 +17,9 @@ class Statement;
 class VarDecl;
 class Block;
 
+template<class T>
+using Ptr = std::unique_ptr<T>;
+
 static std::map<std::string, int> sizeMap{
         {"i8", 8},
         {"i16", 16},
@@ -54,6 +57,7 @@ struct Item : public Node {
     virtual bool isImpl() { return false; }
     virtual bool isMethod() { return false; }
     virtual bool isExtern() { return false; }
+    virtual bool isNs() { return false; }
 
     virtual std::string print() = 0;
     virtual std::any accept(Visitor *v) = 0;
@@ -150,6 +154,15 @@ public:
     std::any accept(Visitor *v) override;
 };
 
+class Ns: public Item{
+public:
+    std::vector<Ptr<Item>> items;
+    
+    bool isNs(){ return true; }
+    std::string print() override;
+    std::any accept(Visitor *v) override;
+};
+
 class Param : public Node {
 public:
     std::string name;
@@ -181,6 +194,8 @@ public:
 
 class Expression : public Node {
 public:
+    //static int last_id = 0;
+    int id = -1;
     virtual std::string print() = 0;
 
     virtual std::any accept(Visitor *v) = 0;
@@ -331,9 +346,6 @@ public:
 
     explicit ExprStmt(Expression *e) : expr(e) {}
 };
-
-template<class T>
-using Ptr = std::unique_ptr<T>;
 
 class Fragment : public Node {
 public:

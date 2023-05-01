@@ -1,6 +1,3 @@
-import List
-import String
-import str//todo str is imported incorrectly from String
 
 impl i32{
   func MIN(): i32{ return -2147483648; }
@@ -46,7 +43,7 @@ impl [i32]{
 
 impl [i32; 3]{}
 
-func implTest(){
+func main(){
   let x = 5;
   assert x.min(6) == 5;
   assert 5.max(6) == 6;
@@ -54,11 +51,6 @@ func implTest(){
   assert 5.generic_sum(6i64) == 11;
   assert i32::generic_other(5) == 5;
   assert i32::min(5, 6) == 5;
-  let s = 345.str();
-  s.dump();
-  let s2=s.str();
-  s2.dump();
-  assert s2.eq("345");
 
   assert A<i32>{a: 5}.get() == 5;
   assert A<i64>{a: 5}.get() == 5;

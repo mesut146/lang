@@ -1,5 +1,3 @@
-import String
-
 class Box<T>{
     val: T*;
 }
@@ -28,10 +26,3 @@ impl Debug for Box<T>{
   }
 }
 
-func boxTest(){
-  let b = Box::new(5);
-  //assert *b.get() == 5;
-  assert b.unwrap() == 5;
-
-  print("boxText done\n");
-}

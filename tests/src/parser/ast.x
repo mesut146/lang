@@ -75,7 +75,7 @@ impl Debug for Type{
       }
     }
     if let Type::Pointer(ty)=(self){
-      //ty.get().debug(f);
+      ty.get().debug(f);
       f.print("*");
     }
   }

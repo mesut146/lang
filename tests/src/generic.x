@@ -29,7 +29,7 @@ func infer2<T, U>(b: B<A<T>, U>): i64{
   return b.a.val + b.b;
 }
 
-func genericTest(){
+func main(){
   //specified
   assert one<i32>(1, 2) == 3;
   assert one<i64>(5, 6) == 11;

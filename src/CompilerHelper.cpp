@@ -513,10 +513,12 @@ public:
         return {};
     }
     std::any visitWhileStmt(WhileStmt *node) override {
+        compiler->resolv->max_scope++;
         node->body->accept(this);
         return {};
     }
     std::any visitForStmt(ForStmt *node) override {
+        compiler->resolv->max_scope++;
         if (node->decl) {
             node->decl->accept(this);
         }
@@ -525,8 +527,10 @@ public:
     }
     std::any visitIfStmt(IfStmt *node) override {
         node->expr->accept(this);
+        compiler->resolv->max_scope++;
         node->thenStmt->accept(this);
         if (node->elseStmt) {
+            compiler->resolv->max_scope++;
             node->elseStmt->accept(this);
         }
         return {};
@@ -589,8 +593,12 @@ public:
     }
     std::any visitIfLetStmt(IfLetStmt *node) {
         node->rhs->accept(this);
+        compiler->resolv->max_scope++;
         node->thenStmt->accept(this);
-        if (node->elseStmt) node->elseStmt->accept(this);
+        if (node->elseStmt){
+            compiler->resolv->max_scope++;
+            node->elseStmt->accept(this);
+        }
         return {};
     }
     std::any visitContinueStmt(ContinueStmt *node) {
@@ -604,6 +612,7 @@ public:
 void Compiler::makeLocals(Statement *st) {
     allocMap.clear();
     if (st) {
+        resolv->max_scope = 1;
         AllocCollector col(this);
         st->accept(&col);
     }

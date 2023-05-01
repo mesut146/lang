@@ -238,7 +238,10 @@ public:
     std::unordered_map<std::string, RType> cache;
     std::unordered_map<std::string, RType> typeMap;
     std::vector<Scope> scopes;
-    std::unordered_map<std::string, MutKind> mut_params;//todo
+    std::unordered_map<std::string, std::vector<Scope>> scopeMap;
+    std::vector<Scope>* m_scopes;
+    int max_scope;
+    std::unordered_map<std::string, MutKind> mut_params;
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
@@ -258,6 +261,8 @@ public:
 
     static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
     static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
+    
+    static void init_prelude();
 
     static int findVariant(EnumDecl *decl, const std::string &name);
     static bool is_simple_enum(EnumDecl *ed) {
@@ -279,6 +284,7 @@ public:
     void newScope();
     void dropScope();
     Scope &curScope();
+    void addScope(std::string& name, Type* type, bool prm = false);
 
     void init();
     void resolveAll();

@@ -127,7 +127,6 @@ void Scope::add(const VarHolder &f) {
 
 void Scope::clear() { list.clear(); }
 
-
 VarHolder *Scope::find(const std::string &name) {
     for (auto &vh : list) {
         if (vh.name == name) {
@@ -151,17 +150,57 @@ std::vector<std::string> Resolver::prelude = {"Box", "List", "str", "String", "O
 Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root), idgen(IdGen{this}) {
 }
 
+void Resolver::init_prelude(){
+    for(auto &pre : prelude){
+        getResolver("../tests/src/std/" + pre + ".x", "../tests/src");
+    }
+}
+
+std::vector<ImportStmt> Resolver::get_imports() {
+    std::vector<ImportStmt> imports;
+    for (auto &is : unit->imports) {
+        //ignore prelude imports
+        auto it = std::find(prelude.begin(), prelude.end(), join(is.list, "/"));
+        if (it == prelude.end()) {
+            imports.push_back(is);
+        }
+    }
+    for (auto &pre : prelude) {
+        //skip self unit being prelude
+        if(unit->path == root + "/std/" + pre + ".x") continue;
+        ImportStmt is;
+        is.list.push_back("std");
+        is.list.push_back(pre);
+        imports.push_back(std::move(is));
+    }
+    return imports;
+}
+
 void Resolver::newScope() {
+    //auto id = printMethod(curMethod);
+    //scopeMap[id].push_back(Scope{});
+    //scopes.push_back(&scopeMap[id].back());
     scopes.push_back(Scope{});
+    max_scope++;
 }
 
 void Resolver::dropScope() {
-    //curScope()->clear();
+    //todo clear;
     scopes.pop_back();
 }
 
-Scope &Resolver::curScope() {
-    return scopes.back();
+void Resolver::addScope(std::string& name, Type* type, bool prm){
+    scopes.back().add(VarHolder(name, type, prm));
+}
+
+void dump(Resolver* r){
+    for(auto &[k, v]: r->cache){
+        print(k + " = " + v.type->print());
+    }
+}
+
+void dump(Method* node){
+  print(node->print());  
 }
 
 void Resolver::resolveAll() {
@@ -584,15 +623,15 @@ std::any Resolver::visitMethod(Method *m) {
     }
     auto res = clone(resolve(m->type.get()));
     res.targetMethod = m;
+    max_scope = 0;
     newScope();
     if (m->self) {
         if (!m->self->type) error("self type is not set " + printMethod(curMethod));
-        //curScope().add(VarHolder(m->self->name, ((Impl *) m->parent)->type, true));
-        curScope().add(VarHolder(m->self->name, m->self->type.get(), true));
+        addScope(m->self->name, m->self->type.get(), true);
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        curScope().add(VarHolder(prm.name, prm.type.get(), true));
+        addScope(prm.name, prm.type.get(), true);
         prm.accept(this);
     }
     if (m->body) {
@@ -630,7 +669,7 @@ std::any Resolver::visitFragment(Fragment *f) {
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
     for (auto &f : vd->list) {
         auto rt = std::any_cast<RType>(f.accept(this));
-        curScope().add(VarHolder(f.name, rt.type));
+        addScope(f.name, rt.type);
     }
     return nullptr;
 }
@@ -815,25 +854,6 @@ std::any Resolver::visitType(Type *type) {
     return res;
 }
 
-std::vector<ImportStmt> Resolver::get_imports() {
-    std::vector<ImportStmt> imports;
-    for (auto &is : unit->imports) {
-        //ignore prelude imports
-        auto it = std::find(prelude.begin(), prelude.end(), join(is.list, "/"));
-        if (it == prelude.end()) {
-            imports.push_back(is);
-        }
-    }
-    for (auto &pre : prelude) {
-        //skip self unit being prelude
-        if(unit->path == root + "/" + pre + ".x") continue;
-        ImportStmt is;
-        is.list.push_back(pre);
-        imports.push_back(std::move(is));
-    }
-    return imports;
-}
-
 SimpleName *find_base(Expression *e) {
     auto sn = dynamic_cast<SimpleName *>(e);
     if (sn) return sn;
@@ -936,22 +956,15 @@ std::any Resolver::visitUnary(Unary *node) {
 }
 
 std::any Resolver::visitSimpleName(SimpleName *node) {
-    VarHolder *vh;
-    bool found = false;
     for (int i = scopes.size() - 1; i >= 0; i--) {
-        auto v = scopes[i].find(node->name);
-        if (v) {
-            vh = v;
-            found = true;
-            break;
+        auto vh = scopes[i].find(node->name);
+        if (vh) {
+            auto res = clone(resolve(vh->type));
+            res.vh = *vh;
+            return res;
         }
     }
-    if (!found) {
-        throw std::runtime_error("unknown identifier: " + node->name);
-    }
-    auto res = clone(resolve(vh->type));
-    res.vh = *vh;
-    return res;
+    throw std::runtime_error("unknown identifier: " + node->name);    
 }
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
@@ -1062,27 +1075,29 @@ std::any Resolver::visitAssertStmt(AssertStmt *node) {
 }
 
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
-    newScope();
     auto rt = resolve(node->type.get());
     if (!rt.targetDecl->isEnum()) {
         error("type of if let is not enum: " + node->type->print());
-    }
-    auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
-    int index = findVariant(decl, node->type->name);
-    auto &variant = decl->variants[index];
-    int i = 0;
-    for (auto &name : node->args) {
-        curScope().add(VarHolder(name, variant.fields[i].type));
-        i++;
     }
     auto rhs = resolve(node->rhs.get());
     if (!rhs.targetDecl->isEnum()) {
         error("if let rhs is not enum: " + node->rhs->print());
     }
+    auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
+    int index = findVariant(decl, node->type->name);
+    auto &variant = decl->variants[index];
+    int i = 0;
+    newScope();
+    for (auto &name : node->args) {
+        addScope(name, variant.fields[i].type);
+        i++;
+    }
     node->thenStmt->accept(this);
     dropScope();
     if (node->elseStmt) {
+        newScope();
         node->elseStmt->accept(this);
+        dropScope();
     }
     return nullptr;
 }
@@ -1383,6 +1398,7 @@ std::any Resolver::visitWhileStmt(WhileStmt *node) {
 }
 
 std::any Resolver::visitForStmt(ForStmt *node) {
+    newScope();
     if (node->decl) {
         node->decl->accept(this);
     }
@@ -1395,7 +1411,6 @@ std::any Resolver::visitForStmt(ForStmt *node) {
         resolve(u.get());
     }
     inLoop = true;
-    newScope();
     node->body->accept(this);
     inLoop = false;
     dropScope();

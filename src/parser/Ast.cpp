@@ -89,9 +89,11 @@ std::string Impl::print() {
     return s;
 }
 std::string Extern::print() {
-    return "extern {" + join(methods, "\n") + "\n}";
+    return "extern {\n" + join(methods, "\n") + "\n}";
 }
-
+std::string Ns::print() {
+    return "namespace n{\n" + join(items, "\n") + "\n}";
+}
 std::string Method::print() {
     std::string s;
     s.append("func ");
@@ -454,6 +456,9 @@ std::any StructDecl::accept(Visitor *v) {
 }
 std::any EnumDecl::accept(Visitor *v) {
     return v->visitEnumDecl(this);
+}
+std::any Ns::accept(Visitor *v) {
+    return v->visitNs(this);
 }
 std::any ExprStmt::accept(Visitor *v) {
     return v->visitExprStmt(this);

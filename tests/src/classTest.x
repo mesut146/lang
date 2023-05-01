@@ -1,22 +1,3 @@
-import str
-
-class Point{
-  x: i32;
-  y: i32;
-}
-
-impl Point{
-  func new(a: i32, b: i32): Point{
-    return Point{x: a, y: b};
-  }
-  func getX(self): i32{
-    return self.x;
-  }
-  func getY(self): i32{
-    return self.y;
-  }
-}
-
 class A{
   x: i32;
 }
@@ -41,7 +22,7 @@ impl C{
     return "C::bar";
   }
 }
-func baseTest(){
+func main(){
   /*let a = A{5};
   assert a.foo().eq("A::foo");
   assert a.bar().eq("A::bar");

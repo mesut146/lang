@@ -51,9 +51,24 @@ func forTest(){
   print("\nforTest done\n");
 }
 
-func flowTest(){
+func prims(){
+  for(let i = 3 ; i < 90 ; i = i + 2){
+    let pr = true;
+    for (let j = 3; j * j < i; j = j + 2){
+      if(i % j == 0){
+        pr = false;
+        break;
+      }
+    }
+    if(pr) print("%d, ", i);
+  }
+  print("prims done\n");
+}
+
+func main(){
   ifTest();
   elseTest();
   whileTest();
   forTest();
+  prims();
 }

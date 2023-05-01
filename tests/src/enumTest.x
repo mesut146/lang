@@ -15,6 +15,11 @@ enum E{
  A2(a: A)
 }
 
+func main(){
+  structTest();
+  enumTest();
+}
+
 func structTest(){
   //random order
   let obj = A{b: 6, a: 5};

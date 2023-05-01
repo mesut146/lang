@@ -40,14 +40,6 @@ void resolveTest() {
     r->resolveAll();
 }
 
-void compile() {
-    Compiler c;
-    c.srcDir = "../tests/src";
-    //c.srcDir = "../tests/a";
-    c.outDir = "../out";
-    c.compileAll();
-}
-
 void parseTest() {
     debug = true;
     parse("../tests/exprs");
@@ -60,10 +52,66 @@ void parseTest() {
     parse("../tests/src/a.x", true);
 }
 
+void compile(const std::string& path){
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.init();
+    if(std::filesystem::is_directory(path)){
+        for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
+            if (e.is_directory()) continue;
+            c.compile(e.path().string());
+        }
+        c.link_run();
+    }else{
+        c.compile(path);
+        c.link_run();
+    }
+}
+
+void compile(std::initializer_list<std::string> list){
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.init();
+    for(auto &file : list){
+        c.compile(file);
+    }
+    c.link_run();
+}
+
+void compileTest() {    
+    compile("../tests/src/lit.x");
+    compile("../tests/src/var.x");
+    compile("../tests/src/infix.x");
+    compile("../tests/src/flow.x");
+    compile("../tests/src/pass.x");
+    compile("../tests/src/ret.x");
+    compile("../tests/src/alloc.x");
+    compile("../tests/src/array.x");
+    compile("../tests/src/importTest");
+    compile("../tests/src/traits.x");
+    compile("../tests/src/generic.x");
+    compile("../tests/src/enumTest.x");
+    compile("../tests/src/malloc.x");
+    compile("../tests/src/impl.x");
+    
+    auto s1 = "../tests/src/std/String.x";
+    auto s2 = "../tests/src/std/str.x";
+    
+    compile({"../tests/src/libc.x", s1, s2});
+    compile({"../tests/src/strTest.x", s1, s2});
+    compile({"../tests/src/classTest.x", s1, s2});
+    compile({"../tests/src/boxTest.x", s1, s2});
+    compile({"../tests/src/listTest.x", s1, s2});
+    compile({"../tests/src/opt.x", s1, s2});
+    compile({"../tests/src/mapTest.x", s1, s2});
+}
+
 int main(int argc, char **args) {
     try {
         if (argc == 1) {
-            compile();
+            compileTest();
             return 0;
         }
         auto arg = std::string(args[1]);

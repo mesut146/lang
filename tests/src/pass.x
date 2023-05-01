@@ -23,7 +23,7 @@ func by_val_arr_mut(arr: [i32; 2]){
   assert arr[0] == 52;
 }
 
-func passTest(){  
+func main(){  
   let p = A{a: 10, b: [0; 100]};
   by_val_mut(p);
   assert p.a == 10;

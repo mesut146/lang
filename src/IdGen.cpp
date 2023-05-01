@@ -3,7 +3,7 @@
 
 std::any IdGen::get(Expression *node) {
     if (resolver->curMethod) {
-        return printMethod(resolver->curMethod) + "#" + node->print();
+        return printMethod(resolver->curMethod) + "#" + std::to_string(resolver->max_scope) +"#"+ node->print();
     }
     return {};
 }
@@ -17,13 +17,11 @@ std::any IdGen::visitAssign(Assign *node) {
 }
 
 std::any IdGen::visitMethodCall(MethodCall *node) {
-    auto id = printMethod(resolver->curMethod) + "#" + node->print();
-    return id;
+    return get(node);
 }
 
 std::any IdGen::visitSimpleName(SimpleName *node) {
-    auto id = printMethod(resolver->curMethod) + "#" + node->print();
-    return id;
+    return get(node);
 }
 std::any IdGen::visitLiteral(Literal *node) {
     return {};
@@ -32,11 +30,11 @@ std::any IdGen::visitRefExpr(RefExpr *node) {
     return {};
 }
 std::any IdGen::visitType(Type *node) {
-    return get(node);
+    return {};
+    //return get(node);
 }
 std::any IdGen::visitObjExpr(ObjExpr *node) {
-    auto id = printMethod(resolver->curMethod) + "#" + node->print();
-    return id;
+    return get(node);
 }
 std::any IdGen::visitFieldAccess(FieldAccess *node) {
     return get(node);

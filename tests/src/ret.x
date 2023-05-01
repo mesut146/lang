@@ -20,7 +20,7 @@ func ret_mc2(): A{
   return A{5, make_arr()};
 }
 
-func retTest(){
+func main(){
     let arr = [0; 100];
     //let obj = A{a: 10, b: arr};
     print("retTest done\n");

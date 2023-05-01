@@ -1,6 +1,3 @@
-import str
-import List
-import String
 
 class c_void{}
 class FILE{}
@@ -77,7 +74,7 @@ func write_test(){
   //write_bytes(buf.arr, path);
 }
 
-func libc_test(){
+func main(){
   read_test();
   write_test();
   

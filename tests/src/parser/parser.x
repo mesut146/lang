@@ -166,6 +166,7 @@ impl Parser{
         Fmt::str(res).dump();
         self.consume(TokenType::STAR);
         res = Type::Pointer{Box::new(res)};
+        Fmt::str(res).dump();
       }
       
       return res;

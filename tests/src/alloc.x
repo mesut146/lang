@@ -10,7 +10,7 @@ func getA(): A{
   return A{B{5}};
 }
 
-func allocTest(){
+func main(){
   let a = getA().a;
   assert a.a == 5;
   //let c = getA().c;

@@ -10,7 +10,7 @@ impl [i32; 3]{
   }
 }
 
-func arrayTest(){
+func main(){
   let arr = [5; 3];
   print("{%d %d %d}\n", arr[0], arr[1], arr[2]);
   arr.dump();
