@@ -126,6 +126,8 @@ public:
 
     std::vector<Type *> generics();
 
+    std::vector<Type *> type_params();
+
     static bool isPrim(Token &t);
 
     std::unique_ptr<Statement> parseStmt();

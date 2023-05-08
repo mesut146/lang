@@ -11,7 +11,7 @@ class Map<K, V>{
   arr: List<Pair<K, V>>;
 }
 
-impl Map<K, V>{
+impl<K, V> Map<K, V>{
   func new(): Map<K, V>{
     return Map<K, V>{List<Pair<K, V>>::new(100)};
   }
@@ -30,7 +30,7 @@ impl Map<K, V>{
   func get(self, k: K): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get(i);
-      if(e.a.eq(k)){
+      if(Eq::eq(e.a, k)){
         return Option<V>::Some{e.b};
       }
     }

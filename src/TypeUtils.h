@@ -24,3 +24,5 @@ static Type *makeSelf(Type *scope) {
     if (scope->isPrim()) return scope;
     return new PointerType(scope);
 }
+
+bool isGeneric(Type *type, std::vector<Type *> &typeParams);

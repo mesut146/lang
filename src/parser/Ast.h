@@ -115,10 +115,10 @@ public:
 
 class Impl : public Item {
 public:
+    std::vector<Type *> type_params;
     std::unique_ptr<Type> trait_name;
     Type *type;
     std::vector<Method> methods;
-    bool isGeneric = false;
 
     explicit Impl(Type *type) : type(type) {}
 
@@ -154,11 +154,11 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class Ns: public Item{
+class Ns : public Item {
 public:
     std::vector<Ptr<Item>> items;
-    
-    bool isNs(){ return true; }
+
+    bool isNs() { return true; }
     std::string print() override;
     std::any accept(Visitor *v) override;
 };

@@ -35,10 +35,10 @@ func whileTest(){
       ++i;
       continue; 
     }
-    print("i=%d, ", i);
     ++i;
   }
-  print("\nwhileTest done\n");
+  assert i == 10;
+  print("whileTest done\n");
 }
 
 func forTest(){
@@ -46,12 +46,13 @@ func forTest(){
     if(i % 2 == 0) {
       continue; 
     }
-    print("i=%d, ", i);
+    assert i %2 == 1;
   }
-  print("\nforTest done\n");
+  print("forTest done\n");
 }
 
 func prims(){
+  let cnt = 0;
   for(let i = 3 ; i < 90 ; i = i + 2){
     let pr = true;
     for (let j = 3; j * j < i; j = j + 2){
@@ -60,8 +61,11 @@ func prims(){
         break;
       }
     }
-    if(pr) print("%d, ", i);
+    if(pr){
+      ++cnt;
+    }
   }
+  assert cnt == 26;
   print("prims done\n");
 }
 

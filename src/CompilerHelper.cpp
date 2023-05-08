@@ -363,6 +363,7 @@ public:
         auto ptr = compiler->Builder->CreateAlloca(type);
         auto &arr = compiler->allocMap[e->print()];
         arr.push_back(ptr);
+        //print("alloc "+e->print());
         return ptr;
     }
     template<class T>
@@ -452,6 +453,10 @@ public:
         if (ae) {
             return;
         }
+        auto aa = dynamic_cast<ArrayAccess *>(e);
+        if(aa && aa->index2){
+            aa->array->accept(this);
+        }
     }
     void object(ObjExpr *node) {
         for (auto &e : node->entries) {
@@ -473,13 +478,8 @@ public:
     std::any visitArrayExpr(ArrayExpr *node) {
         auto ty = compiler->resolv->getType(node);
         auto ptr = alloc(ty, node);
-        for (auto e : node->list) {
-            auto mc = dynamic_cast<MethodCall *>(e);
-            if (mc) {
-                //throw std:: runtime_error("mc to array");
-            } else {
-                //e->accept(this);
-            }
+        if(node->isSized() && compiler->doesAlloc(node->list[0])){
+            node->list[0]->accept(this);
         }
         return ptr;
     }
@@ -595,7 +595,7 @@ public:
         node->rhs->accept(this);
         compiler->resolv->max_scope++;
         node->thenStmt->accept(this);
-        if (node->elseStmt){
+        if (node->elseStmt) {
             compiler->resolv->max_scope++;
             node->elseStmt->accept(this);
         }

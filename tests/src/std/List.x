@@ -7,7 +7,7 @@ class List<T>{
   cap: i64;
 }
 
-impl List<T>{
+impl<T> List<T>{
   func new(): List<T>{
     return List<T>::new(10);
   }
@@ -63,11 +63,9 @@ impl List<T>{
   }
 
   func get(self, pos: i64): T{
-    if(pos >= self.count) {
-      panic("index %d out of bounds %d", pos, self.count);
-    }
-    return self.arr[pos];
+    return *self.get_ptr(pos);
   }
+  
   func get_ptr(self, pos: i64): T*{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
@@ -132,14 +130,9 @@ impl List<T>{
     return self.get_ptr(self.count - 1 - off);
   }
   
-  func clone(self): List<T>{
-    let res = List<T>::new(self.cap);
-    res.add(self);
-    return res;
-  }
 }
 
-impl Debug for List<T>{
+impl<T> Debug for List<T>{
   func debug(self, f: Fmt*){
     f.print("[");
     for(let i=0;i<self.count;++i){
@@ -155,7 +148,7 @@ class ListIter<T>{
   pos: i32;
 }
 
-impl Iterator<T> for ListIter<T>{
+impl<T> Iterator<T> for ListIter<T>{
   func has(self): bool{
     return self.pos < self.list.len();
   }
@@ -170,3 +163,10 @@ impl Iterator<T> for ListIter<T>{
   }
 }
 
+impl<T> Clone for List<T>{
+  func clone(self): List<T>{
+    let res = List<T>::new(self.cap);
+    res.add(self);
+    return res;
+  }
+}

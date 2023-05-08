@@ -9,7 +9,7 @@ enum Option<T>{
   None => panic("unwrap on None");
 }*/
 
-impl Option<T>{
+impl<T> Option<T>{
   func new(val: T): Option<T>{
     return Option<T>::Some{val};  
   }

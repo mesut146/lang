@@ -21,6 +21,7 @@ void sort(std::vector<BaseDecl *> &list);
 constexpr int ENUM_INDEX_SIZE = 32;
 constexpr int ENUM_TAG_INDEX = 0;
 constexpr int ENUM_DATA_INDEX = 1;
+constexpr int SLICE_LEN_BITS = 32;
 
 struct DebugInfo {
     llvm::DICompileUnit *cu;
@@ -34,7 +35,7 @@ struct Compiler : public Visitor {
 public:
     std::string srcDir;
     std::string outDir;
-    std::vector<std::string> compiled; 
+    std::vector<std::string> compiled;
     std::shared_ptr<Unit> unit;
     bool debug = true;
     llvm::Function *func = nullptr;
@@ -97,10 +98,10 @@ public:
     }
 
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
-        return {makeInt(i1), makeInt(i2)};
+        return {makeInt(i1, 64), makeInt(i2, 64)};
     }
     std::vector<llvm::Value *> makeIdx(int i1) {
-        return {makeInt(i1)};
+        return {makeInt(i1, 64)};
     }
     llvm::Value *gep(llvm::Value *ptr, int i1, int i2) {
         auto idx = makeIdx(i1, i2);
@@ -110,12 +111,16 @@ public:
         auto idx = makeIdx(i1);
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
+    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1) {
+        std::vector<llvm::Value *> idx = {i1};
+        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+    }
     llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2) {
-        std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, new Type("i32"))};
+        std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, new Type("i64"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *gep(llvm::Value *ptr, Expression *i2) {
-        std::vector<llvm::Value *> idx = {cast(i2, new Type("i32"))};
+        std::vector<llvm::Value *> idx = {cast(i2, new Type("i64"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *gep2(llvm::Value *ptr, int idx) {
@@ -123,12 +128,12 @@ public:
     }
     llvm::Value *getAlloc(Expression *e) {
         auto &arr = allocMap[e->print()];
-        if (!arr.empty()) {
-            auto res = arr[0];
-            arr.erase(arr.begin());
-            return res;
+        if (arr.empty()) {
+            throw std::runtime_error("alloc error for " + e->print());
         }
-        throw std::runtime_error("alloc error for " + e->print());
+        auto res = arr[0];
+        arr.erase(arr.begin());
+        return res;
     }
 
     llvm::Function *make_printf();
@@ -190,9 +195,4 @@ public:
     std::any visitForStmt(ForStmt *node) override;
     std::any visitContinueStmt(ContinueStmt *node) override;
     std::any visitBreakStmt(BreakStmt *node) override;
-};
-
-
-struct CompilerHelper {
-    Compiler *c;
 };

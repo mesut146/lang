@@ -2,7 +2,7 @@ class Box<T>{
     val: T*;
 }
 
-impl Box<T>{
+impl<T> Box<T>{
     func new(val: T): Box<T>{
         let ptr = malloc<T>(1);
         *ptr = val;
@@ -18,11 +18,19 @@ impl Box<T>{
     }
 }
 
-impl Debug for Box<T>{
+impl<T> Debug for Box<T>{
   func debug(self, f: Fmt*){
     f.print("Box{");
     Debug::debug(self.val, f);
     f.print("}");
   }
 }
+
+impl<T> Clone for Box<T>{
+  func clone(self): Box<T>{
+    return Box<T>::new(Clone::clone(*self.val));
+  }
+}
+
+
 

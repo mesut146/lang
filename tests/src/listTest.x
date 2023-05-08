@@ -45,9 +45,6 @@ class Align{
   c: i64;
 }
 
-func al(a: Align*){
-  print("algn %d %d %lld\n", a.a, a.b, a.c);
-}
 
 func listAlign(){
   let arr = malloc<Align>(10);
@@ -55,10 +52,6 @@ func listAlign(){
   let e2 = Align{4i8, 5i16, 6};
   let e3 = Align{10i8, 20i16, 30};
   arr[0] = e1;
-  let xx = arr[0];
-  al(&xx);
-  al(&arr[0]);
-  //assert false;
 }
 
 func main(){

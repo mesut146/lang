@@ -146,9 +146,6 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
             continue;
         }
         auto impl = dynamic_cast<Impl *>(item.get());
-        if (!sig.mc->args.empty() && sig.mc->args[0]->print() == "self.items") {
-            int uu = 7;
-        }
         if (rt.trait) {
             if (!impl->trait_name || impl->trait_name->name != type->name) continue;
             auto uw = PointerType::unwrap(sig.args[0]);
@@ -213,7 +210,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         for (auto &[m, err] : errors) {
             s += printMethod(m) + " " + err + "\n";
         }
-        error(r, s);
+        r->err(mc, s);
     }
     //remove base method if derived exist
     if (mc->scope && real.size() == 2) {
@@ -242,7 +239,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         if (target->unit->path != r->unit->path) {
             r->usedMethods.insert(target);
         }
-        res = clone(r->resolve(sig2.ret));
+        res = r->resolve(sig2.ret).clone();
         res.targetMethod = target;
         return res;
     }
@@ -280,7 +277,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         }
     }
     target = generateMethod(typeMap, target, sig);
-    res = clone(r->resolve(target->type.get()));
+    res = r->resolve(target->type.get()).clone();
     res.targetMethod = target;
     return res;
 }
@@ -391,7 +388,7 @@ std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig
     }
     if (m->parent && m->parent->isImpl() && mc->scope) {
         auto impl = dynamic_cast<Impl *>(m->parent);
-        if (!impl->isGeneric && !impl->type->typeArgs.empty()) {
+        if (impl->type_params.empty() && !impl->type->typeArgs.empty()) {
             auto scope = sig.scope->type;
             //check they belong same impl
             for (int i = 0; i < scope->typeArgs.size(); i++) {

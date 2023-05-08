@@ -1,4 +1,5 @@
 import std/map
+import std/ops
 
 enum En{
   A,

@@ -28,7 +28,7 @@ class A<T>{
   a: T;
 }
 
-impl A<T>{
+impl<T> A<T>{
   func get(self): T{
     return self.a;
   }

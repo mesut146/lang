@@ -32,8 +32,7 @@ impl String{
     
     func new(arr: List<i8>*): String{
         return String{*arr};
-    }
-    
+    }    
 
     func len(self): i64{
         return self.arr.len();
@@ -70,48 +69,15 @@ impl String{
         self.arr.add(chr);
     }
     
-    func clone(self): Self{
-      return String{self.arr.clone()};
-    }
-    
     func set(self, pos: i32, c: i8){
       self.arr.set(pos, c);
     }
 }
 
-class Fmt{
-  buf: String;
-}
-
-impl Fmt{
-  func new(): Fmt{
-    return Fmt{String::new()};
+impl Clone for String{
+  func clone(self): String{
+    return String{self.arr.clone()};
   }
-  func print(self, c: i8){
-    self.buf.append(c);
-  }
-  func print(self, s: str){
-    self.buf.append(s); 
-  }
-  func print(self, s: String){
-    self.buf.append(s); 
-  }
-  
- func str<T>(t: T): String{
-   let f = Fmt::new();
-   Debug::debug(t, &f);
-   return f.buf;
- }
-}
-
-trait Debug{
-  func debug(self, f: Fmt*);
-  
-  /*func str(self): String{
-   let f = Fmt::new();
-   Debug::debug(self, &f);
-   return f.buf;
- }*/
 }
 
 impl Debug for String{
@@ -167,3 +133,4 @@ impl i32{
     return x;  
   }
 }
+

@@ -128,8 +128,13 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
 
 std::unique_ptr<Impl> parseImpl(Parser *p) {
     p->consume(IMPL);
+    std::vector<Type *> type_params;
+    if (p->is(LT)) {
+        type_params = p->type_params();
+    }
     auto type = p->parseType();
     auto res = std::make_unique<Impl>(type);
+    res->type_params = type_params;
     res->unit = p->unit;
     if (p->is(FOR)) {
         res->trait_name.reset(type);
@@ -137,9 +142,6 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
         res->type = p->parseType();
     } else {
         res->type = type;
-    }
-    if (!res->type->typeArgs.empty()) {
-        res->isGeneric = true;
     }
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
@@ -242,7 +244,7 @@ Method Parser::parseMethod() {
     res.line = nm.line;
     res.name = nm.value;
     if (is(LT)) {
-        res.typeArgs = generics();
+        res.typeArgs = type_params();
         res.isGeneric = true;
     }
     consume(LPAREN);
@@ -323,4 +325,26 @@ VarDeclExpr *Parser::parseVarDeclExpr() {
         res->list.push_back(frag(this));
     }
     return res;
+}
+
+Type *parse_tp(Parser *p) {
+    auto res = new Type(p->name());
+    if (p->is(COLON)) {
+        throw std::runtime_error("trait bound");
+        //p->consume(COLON);
+        //p->parseType();
+    }
+    return res;
+}
+
+std::vector<Type *> Parser::type_params() {
+    std::vector<Type *> list;
+    consume(LT);
+    list.push_back(parse_tp(this));
+    while (is(COMMA)) {
+        consume(COMMA);
+        list.push_back(parse_tp(this));
+    }
+    consume(GT);
+    return list;
 }

@@ -3,7 +3,7 @@
 
 std::any IdGen::get(Expression *node) {
     if (resolver->curMethod) {
-        return printMethod(resolver->curMethod) + "#" + std::to_string(resolver->max_scope) +"#"+ node->print();
+        return printMethod(resolver->curMethod) + "#" + std::to_string(resolver->max_scope) + "#" + node->print();
     }
     return {};
 }

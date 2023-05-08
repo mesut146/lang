@@ -95,17 +95,20 @@ void compileTest() {
     compile("../tests/src/enumTest.x");
     compile("../tests/src/malloc.x");
     compile("../tests/src/impl.x");
+    compile("../tests/src/load.x");
+    compile("../tests/src/as.x");
     
     auto s1 = "../tests/src/std/String.x";
     auto s2 = "../tests/src/std/str.x";
+    auto op = "../tests/src/std/ops.x";
     
-    compile({"../tests/src/libc.x", s1, s2});
-    compile({"../tests/src/strTest.x", s1, s2});
-    compile({"../tests/src/classTest.x", s1, s2});
-    compile({"../tests/src/boxTest.x", s1, s2});
-    compile({"../tests/src/listTest.x", s1, s2});
-    compile({"../tests/src/opt.x", s1, s2});
-    compile({"../tests/src/mapTest.x", s1, s2});
+    compile({"../tests/src/classTest.x", s1, s2, op});
+    compile({"../tests/src/boxTest.x", s1, s2, op});
+    compile({"../tests/src/listTest.x", s1, s2, op});
+    compile({"../tests/src/strTest.x", s1, s2, op});
+    compile({"../tests/src/opt.x", s1, s2, op});
+    compile({"../tests/src/mapTest.x", s1, s2, op});
+    compile({"../tests/src/libc.x", s1, s2, op});
 }
 
 int main(int argc, char **args) {

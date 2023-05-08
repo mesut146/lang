@@ -390,15 +390,6 @@ DerefExpr *parseDeref(Parser *p) {
     p->consume(STAR);
     auto expr = parseLhs(p);
     return loc(new DerefExpr(std::unique_ptr<Expression>(expr)), line);
-    /*
-    if (dynamic_cast<SimpleName *>(expr) ||
-        dynamic_cast<FieldAccess *>(expr) ||
-        dynamic_cast<MethodCall *>(expr) ||
-        dynamic_cast<ParExpr *>(expr) ||
-        dynamic_cast<DerefExpr *>(expr)) {
-        
-    }
-    throw std::runtime_error("cannot dereference " + expr->print());*/
 }
 
 Expression *parseLhs(Parser *p) {

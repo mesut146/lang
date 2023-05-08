@@ -1,37 +1,50 @@
-impl [i32; 3]{
+impl [i32]{
   func dump(self){
-    print("{%d %d %d}\n", self[0], self[1], self[2]);
     print("[");
-    for(let i=0;i<3;++i){
-      if(i>0) print(", ");
-      print("%d.%d", self[i], self[1]);
+    for(let i = 0;i < self.len;++i){
+      if(i > 0) print(", ");
+      print("%d=%d", i, self[i]);
     }
     print("]\n");
-  }
+  }  
+}
+
+func sized(){
+  let arr = [5; 3];
+  assert arr[0] == 5 && arr[1] == 5 && arr[2] == 5;
+  arr[0] = 8;
+  arr[2] = 9;
+  assert arr[0]==8 && arr[1] == 5 && arr[2] == 9;
+}
+
+func elems(){
+  let arr = [3, 7, 11];
+  //assert Fmt::str(arr[0..3]).str().eq("[3, 7, 11]");
+  assert arr[0] == 3 && arr[1] == 7 && arr[2] == 11;
+}
+
+func deref(){
+  //auto deref
+  let arr = [10, 20, 30];
+  let ptr = &arr;
+  assert ptr[0] == 10 && ptr[1] == 20;
+}
+
+func ptr(){
+  let arr = [5, 6, 7];
+  let arr2 = [50, 60, 70];
+  let arr3 = [&arr, &arr2];
+  assert (*arr3[0])[0] == 5;
 }
 
 func main(){
-  let arr = [5; 3];
-  print("{%d %d %d}\n", arr[0], arr[1], arr[2]);
-  arr.dump();
-  assert arr[1] == 5;
-  arr[0] = 8;
-  arr[2] = 9;
-  assert arr[0]==8 && arr[2] == 9;
-  
-  let arr2 = [3, 7, 55];
-  assert arr2[0] == 3 && arr2[1] == 7;
-  
-  //auto deref
-  let ptr = &arr2;
-  assert ptr[0] == 3 && ptr[1] == 7;
-  
-  let arr3 = [&arr, &arr2];
-  assert (*arr3[0])[0] == 8;
-  print("arrayTest done\n");
-  
+  sized();
+  elems();
+  deref();
+  ptr();  
   sliceTest();
   arr2d();
+  print("arrayTest done\n");
 }
 
 func sliceTest(){
@@ -48,39 +61,53 @@ func sliceTest(){
   //slice of slice
   let slice2 = slice[1..3];//[7, 11]
   assert slice2[0] == 7 && slice2[1] == 11;
+  //multi alloc
+  assert [1, 2, 3][1..2][1] == 3;
   print("sliceTest done\n");
 }
 
-func arr2d(){
-  /*let a1 = [[0; 5]; 10];
+func arr2d_cons(){
+  //inner allocated first then memcpy
+  let a1 = [[52; 5]; 10];
+  assert a1[0][0] == 52 && a1[9][4] == 52;
   a1[0][0] = 3;
   assert a1[0][0] == 3;
-  
+}
+
+func arr2d_elems(){
   let a2 = [[10, 20], [30, 40]];
   assert a2[0][1]==20 && a2[1][0]==30;
-  
+}
+
+func arr2d_copy(){
   let a3 = [1, 2, 3];
   let a4 = [a3, [10, 20, 30]];
-  assert a4[0][0] == 1 && a4[1][2] == 30;*/
+  assert a4[0][0] == 1 && a4[1][2] == 30;
+}
+
+func arr2d(){
+  arr2d_cons();
+  arr2d_elems();
+  arr2d_copy();
   print("arr2d done\n");
   mixed();
 }
 
 class A{
   a: [B; 3];
-  b: B;
-  c: [B]; 
+  b: [B]; 
 }
 class B{
   b: i32;
 }
 func mixed(){
-  let a1 = A{a: [B{1}, B{2}, B{3}], b: B{b: 4}, c: [B{5}][0..1]};
-  /*assert a1.arr[0] == 10;
+  let a1 = A{a: [B{10}, B{20}, B{30}], b: [B{5}][0..1]};
+  assert a1.a[0].b == 10;
+  assert a1.b[0].b == 5;
   
   //obj in arr
   let a2 = [B{b: 5}, B{b: 7}];
-  assert a2[0].b == 5;*/
+  assert a2[0].b == 5;
 
   print("mixed done\n");
 }
