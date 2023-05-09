@@ -26,3 +26,9 @@ static Type *makeSelf(Type *scope) {
 }
 
 bool isGeneric(Type *type, std::vector<Type *> &typeParams);
+
+static bool isUnsigned(Type* type) {
+    auto s = type->print();
+    return s == "u8" || s == "u16" ||
+           s == "u32" || s == "u64";
+}

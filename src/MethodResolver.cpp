@@ -297,7 +297,7 @@ void MethodResolver::infer(Type *arg, Type *prm, std::map<std::string, Type *> &
                 it->second = arg;
             } else {
                 std::vector<Type *> tmp;
-                if (!MethodResolver::isCompatible(it->second, arg, tmp)) {
+                if (MethodResolver::isCompatible(it->second, arg, tmp)) {
                     error("type infer failed: " + it->second->print() + " vs " + arg->print());
                 }
             }
@@ -338,34 +338,60 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type *> &map, Metho
     return res;
 }
 
-bool MethodResolver::isCompatible(Type *arg, Type *target, std::vector<Type *> &typeParams) {
-    if (isGeneric(target, typeParams)) return true;
-    if (arg->print() == target->print()) return true;
+uint64_t max_for(Type* type){
+  auto s = type->print();
+  int bits = sizeMap[s];
+  if(isUnsigned(type)){
+      return (1ULL << bits) - 1;
+  }
+  return (1ULL << (bits-1)) -1;
+}
+
+std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, Type *target, std::vector<Type *> &typeParams) {
+    auto arg = arg0.type;
+    if (isGeneric(target, typeParams)) return {};
+    if (arg->print() == target->print()) return {};
     if (arg->isPointer()) {
-        if (!target->isPointer()) return false;
+        if (!target->isPointer()) return "target is not pointer";
         auto p1 = dynamic_cast<PointerType *>(arg);
         auto p2 = dynamic_cast<PointerType *>(target);
         return isCompatible(p1->type, p2->type, typeParams);
     }
     if (arg->isSlice()) {
-        if (!target->isSlice()) return false;
+        if (!target->isSlice()) return "target is not slice";
         auto p1 = dynamic_cast<SliceType *>(arg);
         auto p2 = dynamic_cast<SliceType *>(target);
         return isCompatible(p1->type, p2->type, typeParams);
     }
     if (arg->isArray()) {
-        if (!target->isArray()) return false;
+        if (!target->isArray()) return "target is not array";
         auto p1 = dynamic_cast<ArrayType *>(arg);
         auto p2 = dynamic_cast<ArrayType *>(target);
         return isCompatible(p1->type, p2->type, typeParams);
     }
     if (arg->isPrim()) {
-        if (!target->isPrim()) return false;
-        if (arg->print() == "bool" || target->print() == "bool") return false;
+        if (!target->isPrim()) return "target is not prim";
+        if (arg->print() == "bool" || target->print() == "bool") return "target is not bool";
+        if(arg0.value){
+            //autocast literal
+            auto &v = arg0.value.value();
+            if(v[0] == '-'){
+                if(isUnsigned(target)) return v + " is signed but "+target->print() +" is unsigned";
+                //check range
+            }
+            else{
+                if(max_for(target) >= stoll(v)){
+                    return {};
+                }else{
+                    return v + " can't fit into " + target->print();
+                }
+            }
+        }
         // auto cast to larger size
-        return sizeMap[arg->name] <= sizeMap[target->name];
+        if(sizeMap[arg->name] <= sizeMap[target->name]) return {};
+        else return "arg can't fit into target";
     }
-    return false;
+    return "";
 }
 
 std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig2) {
@@ -418,7 +444,7 @@ std::optional<std::string> MethodResolver::checkArgs(Signature &sig, Signature &
                 //continue;
             }
         }
-        if (!isCompatible(t1, t2, typeParams)) {
+        if (isCompatible(t1, t2, typeParams)) {
             return "arg type " + t1->print() + " is not compatible with param " + t2->print();
         }
     }

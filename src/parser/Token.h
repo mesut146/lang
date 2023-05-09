@@ -8,6 +8,7 @@ enum TokenType {
     EOF_,
     IDENT,
     CLASS,
+    STRUCT,
     ENUM,
     TRAIT,
     IMPL,

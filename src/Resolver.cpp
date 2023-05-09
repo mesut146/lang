@@ -13,11 +13,6 @@ bool isCondition(Expression *e, Resolver *r) {
     return r->getType(e)->print() == "bool";
 }
 
-bool isUnsigned(const std::string &s) {
-    return s == "u8" || s == "u16" ||
-           s == "u32" || s == "u64";
-}
-
 bool isComp(const std::string &op) {
     return op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=";
 }
@@ -42,6 +37,8 @@ RType RType::clone() {
     res.targetDecl = targetDecl;
     res.targetMethod = targetMethod;
     res.vh = vh;
+    if(value)
+      res.value = value.value();
     return res;
 }
 
@@ -187,9 +184,6 @@ std::vector<ImportStmt> Resolver::get_imports() {
 }
 
 void Resolver::newScope() {
-    //auto id = printMethod(curMethod);
-    //scopeMap[id].push_back(Scope{});
-    //scopes.push_back(&scopeMap[id].back());
     scopes.push_back(Scope{});
     max_scope++;
 }
@@ -669,19 +663,17 @@ std::any Resolver::visitParam(Param *p) {
 }
 
 std::any Resolver::visitFragment(Fragment *f) {
-    RType res;
     auto rhs = resolve(f->rhs.get());
-    if (f->type) {
-        res = resolve(f->type.get());
-    } else {
-        res = rhs.clone();
-    }
-    if (f->type && !MethodResolver::isCompatible(rhs.type, res.type)) {
-        std::string msg = "variable type mismatch '" + f->name + "'\n";
-        msg += "expected: " + res.type->print() + " got " + rhs.type->print();
-        error(msg);
-    }
-    return res;
+    if(!f->type) return  rhs.clone();
+        auto res = resolve(f->type.get());
+        auto err = MethodResolver::isCompatible(rhs, res.type);
+        if (err) {
+            std::string msg = "variable type mismatch '" + f->name + "'\n";
+            msg += "expected: " + res.type->print() + " got " + rhs.type->print();
+            msg+="\n"+ err.value();
+            error(msg);
+        }
+        return res;
 }
 
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
@@ -748,9 +740,6 @@ std::any Resolver::visitType(Type *type) {
         return it->second;
     }
     if (type->isPrim() || type->isVoid()) {
-        if (isUnsigned(str)) {
-            error("unsigned types not yet supported");
-        }
         auto res = RType(type);
         typeMap[str] = res;
         return res;
@@ -970,6 +959,10 @@ std::any Resolver::visitUnary(Unary *node) {
             }
         }
     }
+    if(node->op == "-" && res.value){
+        res = res.clone();
+        res.value = "-" + res.value.value();
+    }
     return res;
 }
 
@@ -993,8 +986,7 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto sct = PointerType::unwrap(scp.type);
     if (sct->isSlice()) {
         if (node->name != "len") {
-            throw std::runtime_error("invalid field " + node->name + " in " +
-                                     sct->print());
+            err(node, "invalid field " + node->name + " of " + sct->print());
         }
         return makeSimple("i32");
     }
@@ -1002,8 +994,7 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         if (node->name != "index") {
-            throw std::runtime_error("invalid field " + node->name + " in " +
-                                     scp.type->print());
+            err(node, "invalid field " + node->name + " of " + sct->print());
         }
         if (is_simple_enum(ed) && Config::optimize_enum) {
             error("can't index simple enum: " + node->print());
@@ -1029,8 +1020,14 @@ std::any Resolver::visitLiteral(Literal *node) {
         name = "bool";
     } else if (type == Literal::FLOAT) {
         name = "f32";
+        auto res = RType(new Type(name));
+        res.value = node->val;
+        return res;
     } else if (type == Literal::INT) {
         name = "i32";
+        auto res = RType(new Type(name));
+        res.value = node->val;
+        return res;
     } else if (type == Literal::CHAR) {
         name = "i32";
     } else {
@@ -1039,6 +1036,7 @@ std::any Resolver::visitLiteral(Literal *node) {
     //todo check max value
     return RType(new Type(name));
 }
+
 bool Resolver::is_base_of(Type *base, BaseDecl *d) {
     while (d->base) {
         if (d->base->print() == base->print()) return true;
@@ -1310,9 +1308,9 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         }
         auto &prm = fields->at(prm_idx);
         auto pt = getType(prm.type);
-        auto val = getType(e.value);
-        if (!MethodResolver::isCompatible(val, pt)) {
-            auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt->print().c_str(), val->print().c_str());
+        auto val = resolve(e.value);
+        if (MethodResolver::isCompatible(val, pt)) {
+            auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt->print().c_str(), val.type->print().c_str());
             error(f);
         }
     }

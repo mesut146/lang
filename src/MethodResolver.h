@@ -26,12 +26,12 @@ public:
     void findMethod(std::string &name, std::vector<Signature> &list);
     void getMethods(Signature &sig, std::vector<Signature> &list, bool imports);
 
-    static bool isCompatible(Type *arg, Type *target) {
+    static std::optional<std::string> isCompatible(const RType& arg, Type *target) {
         std::vector<Type *> typeParams;
         return isCompatible(arg, target, typeParams);
     }
 
-    static bool isCompatible(Type *arg, Type *target, std::vector<Type *> &typeParams);
+    static std::optional<std::string> isCompatible(const RType &arg, Type *target, std::vector<Type *> &typeParams);
     static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap);
 
     std::optional<std::string> checkArgs(Signature &sig, Signature &sig2);

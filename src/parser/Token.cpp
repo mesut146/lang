@@ -8,6 +8,7 @@ std::string printType(TokenType t) {
     switch (t) {
         TOKEN_CASE(ASSERT_KW)
         TOKEN_CASE(CLASS)
+        TOKEN_CASE(STRUCT)
         TOKEN_CASE(TRAIT)
         TOKEN_CASE(IMPL)
         TOKEN_CASE(NEW)

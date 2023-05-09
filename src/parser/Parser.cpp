@@ -34,7 +34,12 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     res->line = first()->line;
     res->unit = unit;
-    consume(CLASS);
+    if(is(CLASS)){
+        consume(CLASS);
+    }
+    else{
+        consume(STRUCT);
+    }
     res->type = parseType();
     if (!res->type->typeArgs.empty()) {
         res->isGeneric = true;
@@ -199,7 +204,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             }
             consume(RPAREN);
         }
-        if (is({CLASS})) {
+        if (is({CLASS}) || is({STRUCT})) {
             auto td = parseTypeDecl();
             td->derives = derives;
             res->items.push_back(std::move(td));

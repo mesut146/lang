@@ -3,6 +3,7 @@
 #include "Token.h"
 #include <fstream>
 #include <map>
+#include <vector>
 #include <sstream>
 #include <system_error>
 
@@ -12,6 +13,7 @@ public:
     std::string buf;
     int pos = 0;
     int line = 1;
+    static std::vector<std::string> suffixes;
 
     explicit Lexer(const std::string &path) : path(path) {
         std::fstream stream;

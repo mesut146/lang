@@ -2,6 +2,7 @@
 #pragma ide diagnostic ignored "misc-no-recursion"
 #include "Parser.h"
 #include "Util.h"
+#include "Lexer.h"
 
 
 std::vector<Expression *> Parser::exprList() {
@@ -39,8 +40,7 @@ Literal *parseLit(Parser *p) {
         throw std::runtime_error("invalid literal: " + t.value);
     }
     auto res = new Literal(type, t.value);
-    std::vector<std::string> suffixes = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
-    for (auto &s : suffixes) {
+    for (auto &s : Lexer::suffixes) {
         auto pos = t.value.rfind(s);
         bool support_suffix = type == Literal::INT || type == Literal::FLOAT || type == Literal::CHAR;
         if (pos != std::string::npos && support_suffix) {

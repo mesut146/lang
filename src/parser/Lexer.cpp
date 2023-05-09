@@ -5,6 +5,7 @@
 TokenType kw(std::string &s) {
     if (s == "assert") return ASSERT_KW;
     if (s == "class") return CLASS;
+    if (s == "struct") return STRUCT;
     if (s == "enum") return ENUM;
     if (s == "trait") return TRAIT;
     if (s == "impl") return IMPL;
@@ -67,6 +68,8 @@ TokenType kw(std::string &s) {
     return EOF_;
 }
 
+std::vector<std::string> Lexer::suffixes = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
+
 Token Lexer::readNumber() {
     bool dot = false;
     int start = pos;
@@ -77,8 +80,7 @@ Token Lexer::readNumber() {
         pos++;
         c = peek();
     }
-    std::vector<std::string> suffixMap = {"i8", "i16", "i32", "i64", "f32", "f64"};
-    for (auto &s : suffixMap) {
+    for (auto &s : Lexer::suffixes) {
         if (str(pos, pos + s.length()) == s) {
             pos += s.length();
             break;

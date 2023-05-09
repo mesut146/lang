@@ -199,6 +199,7 @@ public:
     Method *targetMethod = nullptr;
     Trait *trait = nullptr;
     std::optional<VarHolder> vh;
+    std::optional<std::string> value;
 
     RType() = default;
     RType(Type *t) : type(t) {}
