@@ -24,7 +24,7 @@ bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType binCast(const std::string &s1, const std::string &s2);
 
-static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, Type *type) {
+static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {
         if (fd.name == name) {
@@ -32,7 +32,7 @@ static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, T
         }
         i++;
     }
-    throw std::runtime_error("unknown field: " + type->print() + "." + name);
+    throw std::runtime_error("unknown field: " + type.print() + "." + name);
 }
 
 static void error(const std::string &msg) {
@@ -60,10 +60,10 @@ static std::string printMethod(Method *m) {
     if (m->parent) {
         if (m->parent->isImpl()) {
             auto impl = dynamic_cast<Impl *>(m->parent);
-            parent = impl->type->print();
+            parent = impl->type.print();
         } else if (m->parent->isTrait()) {
             auto t = dynamic_cast<Trait *>(m->parent);
-            parent = t->type->print();
+            parent = t->type.print();
         }
     }
     if (!parent.empty()) {
@@ -73,7 +73,7 @@ static std::string printMethod(Method *m) {
     if (!m->typeArgs.empty()) {
         s += "<";
         for (int i = 0; i < m->typeArgs.size(); i++) {
-            s += m->typeArgs[i]->print();
+            s += m->typeArgs[i].print();
             if (i < m->typeArgs.size() - 1) {
                 s += ",";
             }
@@ -88,7 +88,7 @@ static std::string printMethod(Method *m) {
     }
     for (auto &prm : m->params) {
         if (i > 0) s += ",";
-        s += prm.type.get()->print();
+        s += prm.type->print();
     }
     s += ")";
     return s;
@@ -98,63 +98,30 @@ static std::string methodParent(Method *m) {
     if (!m->parent) return m->name;
     if (m->parent->isImpl()) {
         auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type->print() + "::" + m->name;
+        return impl->type.print() + "::" + m->name;
     } else if (m->parent->isTrait()) {
         auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type->print() + "::" + m->name;
+        return t->type.print() + "::" + m->name;
     }
     return m->name;
 }
 
 static std::string mangle(Method *m) {
     std::string s = methodParent(m);
-
     if (!m->typeArgs.empty()) {
         s += "<";
         for (int i = 0; i < m->typeArgs.size(); i++) {
-            s += m->typeArgs[i]->print();
+            s += m->typeArgs[i].print();
             if (i < m->typeArgs.size() - 1) {
                 s += ",";
             }
         }
         s += ">";
     }
-    //todo self
     if (m->parent && m->parent->isExtern()) return s;
     if (m->self) s += "_" + m->self->type->print();
     for (auto &prm : m->params) {
-        s += "_" + prm.type.get()->print();
-    }
-    return s;
-}
-
-static std::string mangle_cpp(Method *m) {
-    std::string s;
-    if (m->name != "main") s += "_ZN";
-    if (m->parent) {
-        if (m->parent->isImpl()) {
-            auto impl = dynamic_cast<Impl *>(m->parent);
-            s += impl->type->print() + "::";
-        } else if (m->parent->isTrait()) {
-            auto t = dynamic_cast<Trait *>(m->parent);
-            s += t->type->print() + "::";
-        }
-    }
-    s += m->name;
-    if (!m->typeArgs.empty()) {
-        s += "<";
-        for (int i = 0; i < m->typeArgs.size(); i++) {
-            s += m->typeArgs[i]->print();
-            if (i < m->typeArgs.size() - 1) {
-                s += ",";
-            }
-        }
-        s += ">";
-    }
-    //todo self
-    if (m->parent && m->parent->isExtern()) return s;
-    for (auto &prm : m->params) {
-        s += "_" + prm.type.get()->print();
+        s += "_" + prm.type->print();
     }
     return s;
 }
@@ -163,8 +130,8 @@ static void print(const std::string &msg) {
     std::cout << msg << std::endl;
 }
 
-static bool isStruct(Type *t) {
-    return !t->isPrim() && !t->isPointer();
+static bool isStruct(const Type &t) {
+    return !t.isPrim() && !t.isPointer();
 }
 
 static bool isRet(Statement *stmt) {
@@ -184,17 +151,17 @@ public:
 
 struct VarHolder {
     std::string name;
-    Type *type;
+    Type type;
     bool prm = false;
 
-    VarHolder(std::string &name, Type *type, bool prm) : name(name), type(type), prm(prm) {}
-    VarHolder(std::string &name, Type *type) : name(name), type(type) {}
+    VarHolder(std::string &name, const Type &type, bool prm) : name(name), type(type), prm(prm) {}
+    VarHolder(std::string &name, const Type &type) : name(name), type(type) {}
 };
 
 class RType {
 public:
     Unit *unit = nullptr;
-    Type *type = nullptr;
+    Type type;
     BaseDecl *targetDecl = nullptr;
     Method *targetMethod = nullptr;
     Trait *trait = nullptr;
@@ -202,7 +169,7 @@ public:
     std::optional<std::string> value;
 
     RType() = default;
-    RType(Type *t) : type(t) {}
+    RType(const Type &t) : type(t) {}
 
     RType clone();
 };
@@ -219,9 +186,9 @@ public:
 //replace any type in decl with src by same index
 class Generator : public AstCopier {
 public:
-    std::map<std::string, Type *> &map;
+    const std::map<std::string, Type> &map;
 
-    Generator(std::map<std::string, Type *> &map) : map(map) {}
+    Generator(const std::map<std::string, Type> &map) : map(map) {}
     std::any visitType(Type *type) override;
 };
 
@@ -277,17 +244,17 @@ public:
 
     Method *isOverride(Method *method);
     static bool do_override(Method *m1, Method *m2);
-    bool isCyclic(Type *type, BaseDecl *target);
-    bool is_base_of(Type *base, BaseDecl *d);
-    Type *inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<FieldDecl> &fields, Type *type);
-    std::vector<Method> &get_trait_methods(Type *type);
+    bool isCyclic(const Type &type, BaseDecl *target);
+    bool is_base_of(const Type &base, BaseDecl *d);
+    Type inferStruct(ObjExpr *node, bool hasNamed, const std::vector<Type> &typeArgs, std::vector<FieldDecl> &fields, const Type &type);
+    std::vector<Method> &get_trait_methods(const Type &type);
     std::unique_ptr<Impl> derive(BaseDecl *bd);
     std::vector<ImportStmt> get_imports();
 
     void newScope();
     void dropScope();
     Scope &curScope();
-    void addScope(std::string &name, Type *type, bool prm = false);
+    void addScope(std::string &name, const Type &type, bool prm = false);
 
     void init();
     void resolveAll();
@@ -306,11 +273,14 @@ public:
     std::any visitFragment(Fragment *f) override;
 
     RType resolve(Expression *expr);
-    Type *getType(Expression *expr);
+    RType resolve(Ptr<Expression> &expr) { return resolve(expr.get()); }
+    RType resolve(const Type &type) { return resolve(const_cast<Type *>(&type)); }
+    Type getType(Expression *expr);
+    Type getType(const Type &type) { return resolve(type).type; }
     RType getTypeCached(const std::string &name);
     void addType(const std::string &name, const RType &rt);
     std::string getId(Expression *e);
-    BaseDecl *getDecl(Type *type);
+    BaseDecl *getDecl(const Type &type);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

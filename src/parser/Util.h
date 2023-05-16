@@ -9,7 +9,7 @@ static bool debug = false;
 
 
 template<class T>
-std::string join(std::vector<std::unique_ptr<T>> &arr, const char *sep, const char *indent = "") {
+std::string join(const std::vector<std::unique_ptr<T>> &arr, const char *sep, const char *indent = "") {
     std::string s;
     for (int i = 0; i < arr.size(); i++) {
         s.append(indent);
@@ -21,7 +21,7 @@ std::string join(std::vector<std::unique_ptr<T>> &arr, const char *sep, const ch
 }
 
 template<class T>
-std::string join(std::vector<T> &arr, const char *sep, const char *indent = "") {
+std::string join(const std::vector<T> &arr, const char *sep, const char *indent = "") {
     std::string s;
     for (int i = 0; i < arr.size(); i++) {
         s.append(indent);
@@ -33,7 +33,7 @@ std::string join(std::vector<T> &arr, const char *sep, const char *indent = "") 
 }
 
 template<class T>
-std::string join(std::vector<T *> &arr, const char *sep, const char *indent = "") {
+std::string join(const std::vector<T *> &arr, const char *sep, const char *indent = "") {
     std::string s;
     for (int i = 0; i < arr.size(); i++) {
         s.append(indent);
@@ -45,7 +45,7 @@ std::string join(std::vector<T *> &arr, const char *sep, const char *indent = ""
 }
 
 template<class T>
-std::string joinPtr(std::vector<T> &arr, const char *sep, const char *indent = "") {
+std::string joinPtr(const std::vector<T> &arr, const char *sep, const char *indent = "") {
     std::string s;
     for (int i = 0; i < arr.size(); i++) {
         s.append(indent);
@@ -57,7 +57,7 @@ std::string joinPtr(std::vector<T> &arr, const char *sep, const char *indent = "
 }
 
 
-std::string join(std::vector<std::string> &arr, const char *sep, const char *indent = "");
+std::string join(const std::vector<std::string> &arr, const char *sep, const char *indent = "");
 
 void printBody(std::string &buf, Statement *stmt);
 

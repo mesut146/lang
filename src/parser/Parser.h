@@ -122,11 +122,11 @@ public:
 
     std::vector<Expression *> exprList();
 
-    Type *parseType();
+    Type parseType();
 
-    std::vector<Type *> generics();
+    std::vector<Type> generics();
 
-    std::vector<Type *> type_params();
+    std::vector<Type> type_params();
 
     static bool isPrim(Token &t);
 

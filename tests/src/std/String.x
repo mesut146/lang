@@ -2,7 +2,7 @@
 //import std/str
 
 class String{
-    arr: List<i8>;
+    arr: List<u8>;
 }
 
 impl String{
@@ -17,11 +17,11 @@ impl String{
     }
 
     func new(): String{
-        return String{arr: List<i8>::new()};
+        return String{arr: List<u8>::new()};
     }
     
     func new(cap: i64): String{
-      return String{List<i8>::new(cap)};
+      return String{List<u8>::new(cap)};
     }
 
     func new(s: str): String{
@@ -30,7 +30,7 @@ impl String{
         return res;
     }
     
-    func new(arr: List<i8>*): String{
+    func new(arr: List<u8>*): String{
         return String{*arr};
     }    
 
@@ -46,9 +46,9 @@ impl String{
         return str{self.arr.slice(0, self.len())};
     }
     
-    func cstr(self): i8*{
+    func cstr(self): u8*{
       if(self.get((self.len()-1) as i32)!=0){
-        self.append(0i8);
+        self.append(0u8);
       }
       return self.arr.arr;
     }
@@ -69,7 +69,7 @@ impl String{
         self.arr.add(chr);
     }
     
-    func set(self, pos: i32, c: i8){
+    func set(self, pos: i32, c: u8){
       self.arr.set(pos, c);
     }
 }
@@ -94,12 +94,12 @@ impl Debug for i32{
   func str(self): String{
     let x = self;
     let len = self.str_size();
-    let list = List<i8>::new(len +1);
+    let list = List<u8>::new(len +1);
     list.count = len;
-    list.set(len, 0i8);//null terminate
+    list.set(len, 0u8);//null terminate
     for(let i=len-1;i >= 0;--i){
       let c = x % 10;
-      list.set(i, (c + '0') as i8);
+      list.set(i, (c + ('0' as i32)) as u8);
       x = x / 10;
     }
     return String{list};
@@ -122,12 +122,12 @@ impl i32{
     let x = 0;
     let neg = false;
     let pos = 0;
-    if(s.get(0) == '-'){
+    if(s.get(0) as u32 == '-'){
       ++pos;
       neg=true;
     }
     while(pos < s.len()){
-      x = 10 * x + (s.get(pos) - '0');
+      x = 10 * x + (s.get(pos) as i32 - ('0' as i32));
       ++pos;
     }
     return x;  

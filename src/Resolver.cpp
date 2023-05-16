@@ -10,7 +10,7 @@
 
 
 bool isCondition(Expression *e, Resolver *r) {
-    return r->getType(e)->print() == "bool";
+    return r->getType(e).print() == "bool";
 }
 
 bool isComp(const std::string &op) {
@@ -26,9 +26,10 @@ bool iof(Expression *e) {
     return dynamic_cast<T>(e) != nullptr;
 }
 
-Type *copy(Type *arg) {
+Type copy(const Type &arg) {
     AstCopier copier;
-    return (Type *) std::any_cast<Expression *>(arg->accept(&copier));
+    auto tmp = arg;
+    return *(Type *) std::any_cast<Expression *>(tmp.accept(&copier));
 }
 
 RType RType::clone() {
@@ -37,13 +38,14 @@ RType RType::clone() {
     res.targetDecl = targetDecl;
     res.targetMethod = targetMethod;
     res.vh = vh;
-    if(value)
-      res.value = value.value();
+    if (value) {
+        res.value = value.value();
+    }
     return res;
 }
 
 RType makeSimple(const std::string &name) {
-    return RType(new Type(name));
+    return RType(Type(name));
 }
 
 RType binCast(const std::string &t1, const std::string &t2) {
@@ -51,9 +53,11 @@ RType binCast(const std::string &t1, const std::string &t2) {
     if (t1 == "f64" || t2 == "f64") return makeSimple("f64");
     if (t1 == "f32" || t2 == "f32") return makeSimple("f32");
     if (t1 == "i64" || t2 == "i64") return makeSimple("i64");
+    if (t1 == "u64" || t2 == "u64") return makeSimple("u64");
+    if (t1 == "u32" || t2 == "u32") return makeSimple("u32");
     if (t1 == "i32" || t2 == "i32") return makeSimple("i32");
     if (t1 == "i16" || t2 == "i16") return makeSimple("i16");
-    throw std::runtime_error("binCast");
+    throw std::runtime_error("binCast " + t1 + ", " + t2);
 }
 
 bool subType(Type *type, Type *real) {
@@ -85,11 +89,10 @@ std::shared_ptr<Resolver> Resolver::getResolver(ImportStmt &is, const std::strin
 }
 
 void Resolver::err(Expression *e, const std::string &msg) {
-    if(curMethod){
+    if (curMethod) {
         std::string s = format("%s:%d\nin %s\n%s %s", unit->path.c_str(), e->line, printMethod(curMethod).c_str(), e->print().c_str(), msg.c_str());
         error(s);
-    }
-    else{
+    } else {
         std::string s = format("%s:%d\n%s %s", unit->path.c_str(), e->line, e->print().c_str(), msg.c_str());
         error(s);
     }
@@ -99,17 +102,17 @@ void Resolver::err(Expression *e, const std::string &msg) {
 std::any Generator::visitType(Type *type) {
     type = (Type *) std::any_cast<Expression *>(AstCopier::visitType(type));
     if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        ptr->type = (Type *) std::any_cast<Expression *>(ptr->type->accept(this));
-        return (Expression *) ptr;
+        type->scope.reset((Type *) std::any_cast<Expression *>(type->scope->accept(this)));
+        return (Expression *) type;
     }
     for (auto &ta : type->typeArgs) {
-        ta = (Type *) std::any_cast<Expression *>(ta->accept(this));
+        ta = *(Type *) std::any_cast<Expression *>(ta.accept(this));
     }
     auto str = type->print();
     auto it = map.find(str);
     if (it != map.end()) {
-        return std::any_cast<Expression *>(AstCopier::visitType(it->second));
+        auto tmp = it->second;
+        return std::any_cast<Expression *>(AstCopier::visitType(&tmp));
     }
     return (Expression *) type;
 }
@@ -120,7 +123,7 @@ int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
             return i;
         }
     }
-    throw std::runtime_error("unknown variant: " + name + " of type " + decl->type->print());
+    throw std::runtime_error("unknown variant: " + name + " of type " + decl->type.print());
 }
 
 void Scope::add(const VarHolder &f) {
@@ -193,13 +196,13 @@ void Resolver::dropScope() {
     scopes.pop_back();
 }
 
-void Resolver::addScope(std::string &name, Type *type, bool prm) {
+void Resolver::addScope(std::string &name, const Type &type, bool prm) {
     scopes.back().add(VarHolder(name, type, prm));
 }
 
 void dump(Resolver *r) {
     for (auto &[k, v] : r->cache) {
-        print(k + " = " + v.type->print());
+        print(k + " = " + v.type.print());
     }
 }
 
@@ -245,7 +248,7 @@ void initSelf(Unit *unit) {
             auto imp = (Impl *) item.get();
             for (auto &m : imp->methods) {
                 if (m.self) {
-                    m.self->type.reset(clone(makeSelf(imp->type)));
+                    m.self->type = (clone(makeSelf(imp->type)));
                 }
             }
         }
@@ -311,14 +314,10 @@ FieldAccess *makeFa(std::string &name) {
 std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
     Method m(unit.get());
     m.name = "debug";
-    Param s;
-    s.name = "self";
-    s.type.reset(clone(makeSelf(bd->type)));
+    Param s("self", clone(makeSelf(bd->type)));
     m.self = std::move(s);
-    m.type.reset(new Type("void"));
-    Param fp;
-    fp.name = "f";
-    fp.type.reset(new PointerType(new Type("Fmt")));
+    m.type = Type("void");
+    Param fp("f", Type(Type::Pointer, Type("Fmt")));
     m.params.push_back(std::move(fp));
     auto bl = new Block;
     m.body.reset(bl);
@@ -327,14 +326,14 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         for (int i = 0; i < ed->variants.size(); i++) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
-            ifs->type.reset(new Type(clone(bd->type), ev.name));
+            ifs->type = (Type(clone(bd->type), ev.name));
             for (auto &fd : ev.fields) {
                 ifs->args.push_back(fd.name);
             }
             ifs->rhs.reset(new SimpleName("self"));
             auto then = new Block;
             ifs->thenStmt.reset(then);
-            then->list.push_back(newPrint(unit, "f", bd->type->print() + "::" + ev.name));
+            then->list.push_back(newPrint(unit, "f", bd->type.print() + "::" + ev.name));
             if (!ev.fields.empty()) {
                 then->list.push_back(newPrint(unit, "f", "{"));
                 int i = 0;
@@ -349,22 +348,22 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         }
     } else {
         auto sd = (StructDecl *) bd;
-        bl->list.push_back(newPrint(unit, "f", sd->type->name + "{"));
+        bl->list.push_back(newPrint(unit, "f", sd->type.name + "{"));
         int i = 0;
         for (auto &fd : sd->fields) {
             bl->list.push_back(newPrint(unit, "f", (i > 0 ? ", " : "") + fd.name + ": "));
-            auto ts = fd.type->print();
+            auto ts = fd.type.print();
             bl->list.push_back(makeDebug(unit, makeFa(fd.name), "f"));
             i++;
         }
         bl->list.push_back(newPrint(unit, "f", "}"));
     }
     auto imp = std::make_unique<Impl>(bd->type);
-    imp->trait_name.reset(new Type("Debug"));
-    imp->type_params = bd->type->typeArgs;
+    imp->trait_name = Type("Debug");
+    imp->type_params = bd->type.typeArgs;
     m.parent = imp.get();
     imp->methods.push_back(std::move(m));
-    auto tr = resolve(new Type("Debug")).trait;
+    auto tr = resolve(Type("Debug")).trait;
     for (auto &m : tr->methods) {
         if (m.body) {
             AstCopier copier;
@@ -376,9 +375,10 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
 }
 
 void init_impl(Impl *impl, Resolver *r) {
-    if (!impl->type->typeArgs.empty()) {
+    auto &arr = impl->type.typeArgs;
+    if (!arr.empty()) {
         //resolve non generic type args
-        for (auto ta : impl->type->typeArgs) {
+        for (auto &ta : arr) {
             if (!isGeneric(ta, impl->type_params)) {
                 r->resolve(ta);
             }
@@ -386,7 +386,7 @@ void init_impl(Impl *impl, Resolver *r) {
         //copy impl type params into all methods
         for (auto &m : impl->methods) {
             m.isGeneric = true;
-            for (auto &ta : impl->type->typeArgs) {
+            for (auto &ta : arr) {
                 m.typeArgs.push_back(ta);
             }
         }
@@ -410,13 +410,16 @@ void Resolver::init() {
             }
         } else if (item->isTrait()) {
             auto tr = (Trait *) item.get();
-            auto res = makeSimple(tr->type->name);
+            auto res = makeSimple(tr->type.name);
             res.unit = unit.get();
             res.trait = tr;
-            addType(tr->type->name, res);
+            addType(tr->type.name, res);
         } else if (item->isImpl()) {
             auto impl = dynamic_cast<Impl *>(item.get());
             init_impl(impl, this);
+        } else if (item->isType()) {
+            auto ti = (TypeItem *) item.get();
+            addType(ti->name, resolve(&ti->rhs));
         }
     }//for
     for (auto &ni : newItems) {
@@ -439,19 +442,18 @@ RType Resolver::resolve(Expression *expr) {
     return res;
 }
 
-Type *Resolver::getType(Expression *expr) {
+Type Resolver::getType(Expression *expr) {
     return resolve(expr).type;
 }
 
-bool Resolver::isCyclic(Type *type, BaseDecl *target) {
-    if (type->isPointer()) return false;
-    if (type->isArray()) {
-        auto at = dynamic_cast<ArrayType *>(type);
-        return isCyclic(at->type, target);
+bool Resolver::isCyclic(const Type &type, BaseDecl *target) {
+    if (type.isPointer()) return false;
+    if (type.isArray()) {
+        return isCyclic(*type.scope.get(), target);
     }
-    if (type->isSlice()) return false;
+    if (type.isSlice()) return false;
     if (!isStruct(type)) return false;
-    if (type->print() == target->type->print()) return true;
+    if (type.print() == target->type.print()) return true;
     auto bd = resolve(type).targetDecl;
     if (bd->isEnum()) {
         auto en = dynamic_cast<EnumDecl *>(bd);
@@ -480,7 +482,7 @@ std::any Resolver::visitEnumDecl(EnumDecl *node) {
             }
         }
     }
-    return getTypeCached(node->type->print());
+    return getTypeCached(node->type.print());
 }
 
 RType Resolver::getTypeCached(const std::string &name) {
@@ -503,19 +505,19 @@ std::any Resolver::visitStructDecl(StructDecl *node) {
             fd.accept(this);
         }
     }
-    return getTypeCached(node->type->print());
+    return getTypeCached(node->type.print());
 }
 
-std::vector<Method> &Resolver::get_trait_methods(Type *type) {
+std::vector<Method> &Resolver::get_trait_methods(const Type &type) {
     auto rt = resolve(type);
     return rt.trait->methods;
 }
 
-std::string mangle2(Method &m, Type *parent) {
+std::string mangle2(Method &m, const Type &parent) {
     std::string s = m.name;
     for (auto &p : m.params) {
         auto s = p.type->print();
-        if (s == "Self") s = parent->print();
+        if (s == "Self") s = parent.print();
         s += "_" + s;
     }
     return s;
@@ -528,7 +530,7 @@ std::any Resolver::visitImpl(Impl *node) {
     curImpl = node;
     if (node->trait_name) {
         std::map<std::string, Method *> required;
-        auto &methods = get_trait_methods(node->trait_name.get());
+        auto &methods = get_trait_methods(*node->trait_name);
         std::vector<bool> done;
         for (auto &m : methods) {
             if (!m.body) {
@@ -549,7 +551,7 @@ std::any Resolver::visitImpl(Impl *node) {
         if (!required.empty()) {
             std::string msg;
             for (auto [mng, m] : required) {
-                msg += "method " + printMethod(m) + " not implemented for " + node->type->print();
+                msg += "method " + printMethod(m) + " not implemented for " + node->type.print();
             }
             error(msg);
         }
@@ -601,15 +603,15 @@ bool Resolver::do_override(Method *m1, Method *m2) {
 //find base method that we override
 Method *Resolver::isOverride(Method *method) {
     if (!method->self) return nullptr;
-    auto cur = method->self->type.get();
+    auto cur = *method->self->type;
     while (true) {
         auto decl = resolve(cur).targetDecl;
         if (!decl || !decl->base) return nullptr;
-        auto base = decl->base.get();
+        auto base = *decl->base;
         for (auto &item : unit->items) {//todo not just this unit
             if (!item->isImpl()) continue;
             auto imp = (Impl *) item.get();
-            if (imp->type->name != base->name) continue;
+            if (imp->type.name != base.name) continue;
             for (auto &m : imp->methods) {
                 if (do_override(method, &m)) return &m;
             }
@@ -633,23 +635,23 @@ std::any Resolver::visitMethod(Method *m) {
         print(printMethod(m) + " overrides " + printMethod(orr));
         overrideMap[m] = orr;
     }
-    auto res = resolve(m->type.get()).clone();
+    auto res = resolve(m->type).clone();
     res.targetMethod = m;
     max_scope = 0;
     newScope();
     if (m->self) {
         if (!m->self->type) error("self type is not set " + printMethod(curMethod));
-        addScope(m->self->name, m->self->type.get(), true);
+        addScope(m->self->name, *m->self->type, true);
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        addScope(prm.name, prm.type.get(), true);
+        addScope(prm.name, *prm.type, true);
         prm.accept(this);
     }
     if (m->body) {
         m->body->accept(this);
         //todo check unreachable
-        if (!m->type->isVoid() && !isReturnLast(m->body.get())) {
+        if (!m->type.isVoid() && !isReturnLast(m->body.get())) {
             error("non void function must return a value");
         }
     }
@@ -659,21 +661,21 @@ std::any Resolver::visitMethod(Method *m) {
 }
 
 std::any Resolver::visitParam(Param *p) {
-    return resolve(p->type.get()).clone();
+    return resolve(*p->type).clone();
 }
 
 std::any Resolver::visitFragment(Fragment *f) {
     auto rhs = resolve(f->rhs.get());
-    if(!f->type) return  rhs.clone();
-        auto res = resolve(f->type.get());
-        auto err = MethodResolver::isCompatible(rhs, res.type);
-        if (err) {
-            std::string msg = "variable type mismatch '" + f->name + "'\n";
-            msg += "expected: " + res.type->print() + " got " + rhs.type->print();
-            msg+="\n"+ err.value();
-            error(msg);
-        }
-        return res;
+    if (!f->type) return rhs.clone();
+    auto res = resolve(*f->type);
+    auto err = MethodResolver::isCompatible(rhs, res.type);
+    if (err) {
+        std::string msg = "variable type mismatch '" + f->name + "'\n";
+        msg += "expected: " + res.type.print() + " got " + rhs.type.print();
+        msg += "\n" + err.value();
+        error(msg);
+    }
+    return res;
 }
 
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
@@ -689,11 +691,11 @@ std::any Resolver::visitVarDecl(VarDecl *vd) {
     return nullptr;
 }
 
-BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
-    std::map<std::string, Type *> map;
-    for (int i = 0; i < decl->type->typeArgs.size(); i++) {
-        auto ta = decl->type->typeArgs[i];
-        map[ta->name] = type->typeArgs[i];
+BaseDecl *generateDecl(const Type &type, BaseDecl *decl) {
+    std::map<std::string, Type> map;
+    for (int i = 0; i < decl->type.typeArgs.size(); i++) {
+        auto &ta = decl->type.typeArgs[i];
+        map[ta.name] = type.typeArgs[i];
     }
     Generator gen(map);
     if (decl->isEnum()) {
@@ -705,8 +707,8 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
             EnumVariant ev2;
             ev2.name = ev.name;
             for (auto &field : ev.fields) {
-                auto ftype = (Type *) std::any_cast<Expression *>(field.type->accept(&gen));
-                ev2.fields.push_back(FieldDecl{field.name, ftype});
+                auto ftype = (Type *) std::any_cast<Expression *>(field.type.accept(&gen));
+                ev2.fields.push_back(FieldDecl(field.name, *ftype));
             }
             res->variants.push_back(std::move(ev2));
         }
@@ -716,17 +718,16 @@ BaseDecl *generateDecl(Type *type, BaseDecl *decl) {
         res->unit = decl->unit;
         res->type = clone(type);
         auto td = dynamic_cast<StructDecl *>(decl);
-
         for (auto &field : td->fields) {
-            auto ftype = (Type *) std::any_cast<Expression *>(field.type->accept(&gen));
-            res->fields.push_back(FieldDecl{field.name, ftype});
+            auto ftype = (Type *) std::any_cast<Expression *>(field.type.accept(&gen));
+            res->fields.push_back(FieldDecl(field.name, *ftype));
         }
         return res;
     }
 }
 
-BaseDecl *Resolver::getDecl(Type *type) {
-    auto it = typeMap.find(type->print());
+BaseDecl *Resolver::getDecl(const Type &type) {
+    auto it = typeMap.find(type.print());
     if (it != typeMap.end()) {
         return it->second.targetDecl;
     }
@@ -740,35 +741,32 @@ std::any Resolver::visitType(Type *type) {
         return it->second;
     }
     if (type->isPrim() || type->isVoid()) {
-        auto res = RType(type);
+        auto res = RType(*type);
         typeMap[str] = res;
         return res;
     }
     if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        auto rt = resolve(ptr->type);
+        auto rt = resolve(type->scope.get());
         auto res = rt.clone();
-        res.type = new PointerType(rt.type);
+        res.type = Type(Type::Pointer, rt.type);
         typeMap[str] = res;
         return res;
     }
     if (type->isSlice()) {
-        auto slice = dynamic_cast<SliceType *>(type);
-        auto rt = resolve(slice->type);
-        auto res = RType(new SliceType(clone(rt.type)));
+        auto rt = resolve(type->scope.get());
+        auto res = RType(Type(Type::Slice, clone(rt.type)));
         typeMap[str] = res;
         return res;
     }
     if (type->isArray()) {
-        auto arr = dynamic_cast<ArrayType *>(type);
-        auto rt = resolve(arr->type);
-        auto res = RType(new ArrayType(clone(rt.type), arr->size));
+        auto rt = resolve(type->scope.get());
+        auto res = RType(Type(clone(rt.type), type->size));
         typeMap[str] = res;
         return res;
     }
     if (str == "Self" && curMethod->parent) {
         auto imp = dynamic_cast<Impl *>(curMethod->parent);
-        return resolve(imp->type);
+        return resolve(&imp->type);
     }
     if (type->scope) {
         auto scope = resolve(type->scope.get());
@@ -779,19 +777,18 @@ std::any Resolver::visitType(Type *type) {
         //enum variant creation
         auto ed = dynamic_cast<EnumDecl *>(bd);
         findVariant(ed, type->name);
-        auto res = getTypeCached(ed->type->print());
+        auto res = getTypeCached(ed->type.print());
         addType(str, res);
         return res;
     }
     if (curMethod && curMethod->self) {
-        auto decl = getDecl(curMethod->self->type.get());
-        //auto r = resolve(curMethod->self->type.get());
+        auto decl = getDecl(*curMethod->self->type);
         if (decl && decl->isEnum()) {
             auto ed = (EnumDecl *) decl;
             for (auto &v : ed->variants) {
                 if (v.name == type->name) {
                     //enum variant without scope(same impl)
-                    auto res = getTypeCached(ed->type->print());
+                    auto res = getTypeCached(ed->type.print());
                     //addType(str, res);
                     return res;
                 }
@@ -847,13 +844,13 @@ std::any Resolver::visitType(Type *type) {
         addType(str, res);
         return res;
     }
-    if (type->typeArgs.size() != target->type->typeArgs.size()) {
+    if (type->typeArgs.size() != target->type.typeArgs.size()) {
         error("type arguments size not matched");
     }
-    auto decl = generateDecl(type, target);
-    auto res = RType(new Type(type->name));
-    for (auto ta : type->typeArgs) {
-        res.type->typeArgs.push_back(copy(ta));
+    auto decl = generateDecl(*type, target);
+    auto res = RType(Type(type->name));
+    for (auto &ta : type->typeArgs) {
+        res.type.typeArgs.push_back(copy(ta));
     }
     res.targetDecl = decl;
     genericTypes.push_back(decl);
@@ -900,8 +897,8 @@ void does_alloc(Expression *e, Resolver *r) {
 
 std::any Resolver::visitAssign(Assign *node) {
     auto t1 = resolve(node->left);
-    auto t2 = getType(node->right);
-    if (!subType(t2, t1.type)) {
+    auto t2 = resolve(node->right);
+    if (MethodResolver::isCompatible(t2, t1.type)) {
         error("cannot assign " + node->right->print() + " to " + node->left->print());
     }
     does_alloc(node->left, this);
@@ -912,32 +909,40 @@ std::any Resolver::visitInfix(Infix *node) {
     //todo mut
     auto rt1 = resolve(node->left);
     auto rt2 = resolve(node->right);
-    if (rt1.type->isVoid() || rt2.type->isVoid()) {
+    if (rt1.type.isVoid() || rt2.type.isVoid()) {
         error("operation on void type");
     }
-    if (rt1.type->isString() || rt2.type->isString()) {
+    if (rt1.type.isString() || rt2.type.isString()) {
         error("string op not supported yet");
     }
     if (rt1.targetDecl && node->op == "==") {
-        if (rt1.type->print() == rt2.type->print())
+        if (rt1.type.print() == rt2.type.print())
             return makeSimple("bool");
     }
-    if (!rt1.type->isPrim() || !rt2.type->isPrim()) {
+    if (!rt1.type.isPrim() || !rt2.type.isPrim()) {
         error("infix on non prim type: " + node->print());
+    }
+    if (node->op == "==" || node->op == "!=") {
+        auto u1 = isUnsigned(rt1.type);
+        auto u2 = isUnsigned(rt2.type);
+        if (!u1 && !rt1.value && u2 || u1 && !u2 && !rt2.value) err(node, "both comparision operands must be same type");
     }
     if (isComp(node->op)) {
         return makeSimple("bool");
     } else if (node->op == "&&" || node->op == "||") {
-        if (rt1.type->print() != "bool") {
+        if (rt1.type.print() != "bool") {
             error("infix lhs is not boolean: " + node->left->print());
         }
-        if (rt2.type->print() != "bool") {
+        if (rt2.type.print() != "bool") {
             error("infix rhs is not boolean: " + node->right->print());
         }
         return makeSimple("bool");
     } else {
-        auto s1 = rt1.type->print();
-        auto s2 = rt2.type->print();
+        if (node->op == "-" && isUnsigned(rt1.type)) {
+            err(node, "this will overflow");
+        }
+        auto s1 = rt1.type.print();
+        auto s2 = rt2.type.print();
         return binCast(s1, s2);
     }
 }
@@ -946,11 +951,11 @@ std::any Resolver::visitUnary(Unary *node) {
     //todo check unsigned
     auto res = resolve(node->expr);
     if (node->op == "!") {
-        if (res.type->print() != "bool") {
+        if (res.type.print() != "bool") {
             error("unary on non boolean: " + node->print());
         }
     } else {
-        if (res.type->print() == "bool" || !res.type->isPrim()) {
+        if (res.type.print() == "bool" || !res.type.isPrim()) {
             error("unary on non interal: " + node->print());
         }
         if (node->op == "--" || node->op == "++") {
@@ -959,7 +964,7 @@ std::any Resolver::visitUnary(Unary *node) {
             }
         }
     }
-    if(node->op == "-" && res.value){
+    if (node->op == "-" && res.value) {
         res = res.clone();
         res.value = "-" + res.value.value();
     }
@@ -980,13 +985,13 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
-    if (scp.type->isString()) {
+    if (scp.type.isString()) {
         scp = resolve(scp.type);
     }
-    auto sct = PointerType::unwrap(scp.type);
-    if (sct->isSlice()) {
+    auto sct = scp.type.unwrap();
+    if (sct.isSlice()) {
         if (node->name != "len") {
-            err(node, "invalid field " + node->name + " of " + sct->print());
+            err(node, "invalid field " + node->name + " of " + sct.print());
         }
         return makeSimple("i32");
     }
@@ -994,7 +999,7 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         if (node->name != "index") {
-            err(node, "invalid field " + node->name + " of " + sct->print());
+            err(node, "invalid field " + node->name + " of " + sct.print());
         }
         if (is_simple_enum(ed) && Config::optimize_enum) {
             error("can't index simple enum: " + node->print());
@@ -1010,37 +1015,37 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
 
 std::any Resolver::visitLiteral(Literal *node) {
     if (node->suffix) {
-        return RType(node->suffix.get());
+        //check max value
+        if (max_for(*node->suffix) < stoll(node->val)) {
+            err(node, "literal out of range");
+        }
+        return RType(*node->suffix);
     }
-    std::string name;
     auto type = node->type;
     if (type == Literal::STR) {
-        name = "str";
+        return RType(Type("str"));
     } else if (type == Literal::BOOL) {
-        name = "bool";
+        return RType(Type("bool"));
     } else if (type == Literal::FLOAT) {
-        name = "f32";
-        auto res = RType(new Type(name));
+        auto res = RType(Type("f32"));
         res.value = node->val;
         return res;
     } else if (type == Literal::INT) {
-        name = "i32";
-        auto res = RType(new Type(name));
+        auto res = RType(Type("i32"));
         res.value = node->val;
         return res;
     } else if (type == Literal::CHAR) {
-        name = "i32";
-    } else {
-        throw std::runtime_error("unknown literal: " + node->print());
+        auto res = RType(Type("u32"));
+        res.value = std::to_string(node->val[0]);
+        return res;
     }
-    //todo check max value
-    return RType(new Type(name));
+    err(node, "unknown literal");
 }
 
-bool Resolver::is_base_of(Type *base, BaseDecl *d) {
+bool Resolver::is_base_of(const Type &base, BaseDecl *d) {
     while (d->base) {
-        if (d->base->print() == base->print()) return true;
-        d = resolve(d->base.get()).targetDecl;
+        if (d->base->print() == base.print()) return true;
+        d = resolve(*d->base).targetDecl;
     }
     return false;
 }
@@ -1049,15 +1054,15 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
     auto left = resolve(node->expr);
     auto right = resolve(node->type);
     //prim->prim
-    if (left.type->isPrim() && right.type->isPrim()) {
+    if (left.type.isPrim() && right.type.isPrim()) {
         return right;
     }
     //derived->base
     if (left.targetDecl && left.targetDecl->base) {
         auto cur = left.targetDecl;
         while (cur && cur->base) {
-            if (cur->base->print() + "*" == right.type->print()) return right;
-            cur = resolve(cur->base.get()).targetDecl;
+            if (cur->base->print() + "*" == right.type.print()) return right;
+            cur = resolve(*cur->base).targetDecl;
         }
     }
     throw std::runtime_error("invalid as expr " + node->print());
@@ -1070,18 +1075,18 @@ std::any Resolver::visitRefExpr(RefExpr *node) {
         error("ref expr is not supported: " + node->expr->print());
     }
     auto inner = resolve(node->expr.get()).clone();
-    inner.type = new PointerType(inner.type);
+    inner.type = Type(Type::Pointer, inner.type);
     return inner;
 }
 
 std::any Resolver::visitDerefExpr(DerefExpr *node) {
-    auto res = resolve(node->expr.get()).clone();
-    auto inner = res.type;
-    if (!inner->isPointer()) {
+    auto rt = resolve(node->expr.get());
+    auto &inner = rt.type;
+    if (!inner.isPointer()) {
         error("deref expr is not pointer: " + node->expr->print());
     }
-    auto ptr = dynamic_cast<PointerType *>(inner);
-    res.type = ptr->type;
+    auto res = rt.clone();
+    res.type = *inner.scope.get();
     return res;
 }
 
@@ -1093,16 +1098,16 @@ std::any Resolver::visitAssertStmt(AssertStmt *node) {
 }
 
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
-    auto rt = resolve(node->type.get());
+    auto rt = resolve(node->type);
     if (!rt.targetDecl->isEnum()) {
-        error("type of if let is not enum: " + node->type->print());
+        error("type of if let is not enum: " + node->type.print());
     }
     auto rhs = resolve(node->rhs.get());
     if (!rhs.targetDecl->isEnum()) {
         error("if let rhs is not enum: " + node->rhs->print());
     }
     auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
-    int index = findVariant(decl, node->type->name);
+    int index = findVariant(decl, node->type.name);
     auto &variant = decl->variants[index];
     int i = 0;
     newScope();
@@ -1161,16 +1166,17 @@ std::any Resolver::visitIfStmt(IfStmt *node) {
 
 std::any Resolver::visitReturnStmt(ReturnStmt *node) {
     if (node->expr) {
-        if (curMethod->type->isVoid()) {
+        if (curMethod->type.isVoid()) {
             error("void method returns expr");
         }
-        auto type = getType(node->expr.get());
-        auto mtype = getType(curMethod->type.get());
-        if (!subType(type, mtype)) {
-            error("method " + printMethod(curMethod) + " expects '" + mtype->print() + " but returned '" + type->print() + "' => ");
+        auto type = resolve(node->expr.get());
+        auto mtype = getType(curMethod->type);
+        if (MethodResolver::isCompatible(type, mtype)) {
+            //err(node, );
+            error("method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
     } else {
-        if (!curMethod->type->isVoid()) {
+        if (!curMethod->type.isVoid()) {
             error("non-void method returns void");
         }
     }
@@ -1181,12 +1187,12 @@ std::any Resolver::visitIsExpr(IsExpr *node) {
     auto rt = resolve(node->expr);
     auto decl1 = rt.targetDecl;
     if (!decl1 || !decl1->isEnum()) {
-        error("lhs of is expr is not enum: " + rt.type->print());
+        error("lhs of is expr is not enum: " + rt.type.print());
     }
     auto rt2 = resolve(node->rhs);
     auto decl2 = rt2.targetDecl;
     if (decl1 != decl2) {
-        error("rhs is not same type with lhs " + decl2->type->print());
+        error("rhs is not same type with lhs " + decl2->type.print());
     }
     auto rr = dynamic_cast<Type *>(node->rhs);
     if (rr) {
@@ -1195,10 +1201,10 @@ std::any Resolver::visitIsExpr(IsExpr *node) {
     return makeSimple("bool");
 }
 
-Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &typeArgs, std::vector<FieldDecl> &fields, Type *type) {
-    std::map<std::string, Type *> inferMap;
-    for (auto ta : typeArgs) {
-        inferMap[ta->name] = nullptr;
+Type Resolver::inferStruct(ObjExpr *node, bool hasNamed, const std::vector<Type> &typeArgs, std::vector<FieldDecl> &fields, const Type &type) {
+    std::map<std::string, std::optional<Type>> inferMap;
+    for (auto &ta : typeArgs) {
+        inferMap[ta.name] = std::optional<Type>();
     }
     for (int i = 0; i < node->entries.size(); i++) {
         auto &e = node->entries[i];
@@ -1209,18 +1215,17 @@ Type *Resolver::inferStruct(ObjExpr *node, bool hasNamed, std::vector<Type *> &t
             prm_idx = i;
         }
         auto arg_type = resolve(e.value);
-        auto target_type = fields[i].type;
-
+        auto &target_type = fields[i].type;
         MethodResolver::infer(arg_type.type, target_type, inferMap);
     }
     for (auto &i : inferMap) {
-        if (i.second == nullptr) {
+        if (!i.second) {
             error("can't infer type parameter: " + i.first);
         }
     }
-    auto res = new Type(type->name);
+    auto res = Type(type.name);
     for (auto &e : inferMap) {
-        res->typeArgs.push_back(e.second);
+        res.typeArgs.push_back(*e.second);
     }
     return res;
 }
@@ -1246,21 +1251,21 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
     if (hasNamed && hasNonNamed) {
         throw std::runtime_error("obj creation can't have mixed values");
     }
-    auto res = resolve(node->type.get());
+    auto res = resolve(node->type);
     if (node->isPointer) {
         res = res.clone();
-        res.type = new PointerType(res.type);
+        res.type = Type(Type::Pointer, res.type);
     }
     std::unordered_set<std::string> names;
     std::vector<FieldDecl> *fields;
-    Type *type;
+    Type type;
     if (res.targetDecl->isEnum()) {
         if (base) error(node, "enum base not supported");
         auto ed = dynamic_cast<EnumDecl *>(res.targetDecl);
-        int idx = findVariant(ed, node->type->name);
+        int idx = findVariant(ed, node->type.name);
         auto &variant = ed->variants[idx];
         fields = &variant.fields;
-        type = new Type(ed->type, variant.name);
+        type = Type(ed->type, variant.name);
         if (variant.fields.size() != node->entries.size()) {
             error(node, "incorrect number of arguments passed to enum creation");
         }
@@ -1276,8 +1281,8 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         }
         if (base) {
             auto base_ty = getType(base);
-            if (base_ty->print() != td->base->print()) {
-                error(node, "invalid base class type: " + base_ty->print() + " expecting: " + td->base->print());
+            if (base_ty.print() != td->base->print()) {
+                error(node, "invalid base class type: " + base_ty.print() + " expecting: " + td->base->print());
             }
         }
         int fcnt = td->fields.size();
@@ -1287,7 +1292,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         }
         if (td->isGeneric) {
             //infer
-            auto inferred = inferStruct(node, hasNamed, td->type->typeArgs, td->fields, td->type);
+            auto inferred = inferStruct(node, hasNamed, td->type.typeArgs, td->fields, td->type);
             auto decl = generateDecl(inferred, td);
             td = dynamic_cast<StructDecl *>(decl);
             genericTypes.push_back(decl);
@@ -1308,9 +1313,9 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         }
         auto &prm = fields->at(prm_idx);
         auto pt = getType(prm.type);
-        auto val = resolve(e.value);
-        if (MethodResolver::isCompatible(val, pt)) {
-            auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt->print().c_str(), val.type->print().c_str());
+        auto arg = resolve(e.value);
+        if (MethodResolver::isCompatible(arg, pt)) {
+            auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt.print().c_str(), arg.type.print().c_str());
             error(f);
         }
     }
@@ -1328,39 +1333,33 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     auto arr = getType(node->array);
     auto idx = getType(node->index);
     //todo unsigned
-    if (idx->print() == "bool" || !idx->isPrim()) error("array index is not an integer");
+    if (idx.print() == "bool" || !idx.isPrim()) error("array index is not an integer");
     if (node->index2) {
         auto idx2 = getType(node->index2.get());
-        if (idx2->print() == "bool" || !idx2->isPrim()) error("range end is not an integer");
-        if (arr->isSlice()) {
-            auto st = dynamic_cast<SliceType *>(arr);
-            return RType(st);
-        } else if (arr->isArray()) {
-            auto at = dynamic_cast<ArrayType *>(arr);
-            return RType(new SliceType(at->type));
-        } else if (arr->isPointer()) {
-            auto pt = dynamic_cast<PointerType *>(arr);
-            return RType(new SliceType(pt->type));
+        if (idx2.print() == "bool" || !idx2.isPrim()) error("range end is not an integer");
+        if (arr.isSlice()) {
+            return RType(clone(arr));
+        } else if (arr.isArray()) {
+            return RType(Type(Type::Slice, clone(*arr.scope)));
+        } else if (arr.isPointer()) {
+            return RType(Type(Type::Slice, clone(*arr.scope)));
         } else {
-            error("can't make slice out of " + arr->print());
+            error("can't make slice out of " + arr.print());
         }
     }
-    if (arr->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(arr);
-        auto res = resolve(ptr->type);
-        if (res.type->isArray() || res.type->isSlice()) {
+    if (arr.isPointer()) {
+        auto res = resolve(arr.scope.get());
+        if (res.type.isArray() || res.type.isSlice()) {
             arr = res.type;
         } else {
             return res;
         }
     }
-    if (arr->isArray()) {
-        auto at = dynamic_cast<ArrayType *>(arr);
-        return resolve(at->type);
+    if (arr.isArray()) {
+        return resolve(arr.scope.get());
     }
-    if (arr->isSlice()) {
-        auto at = dynamic_cast<SliceType *>(arr);
-        return resolve(at->type);
+    if (arr.isSlice()) {
+        return resolve(arr.scope.get());
     }
     throw std::runtime_error("cant index: " + node->print());
 }
@@ -1380,20 +1379,18 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (mc->name == "print") {
         return makeSimple("void");
     } else if (mc->name == "malloc") {
-        Type *in;
-        if (mc->typeArgs.empty()) {
-            in = new Type("i8");
-        } else {
+        Type in("i8");
+        if (!mc->typeArgs.empty()) {
             in = getType(mc->typeArgs[0]);
         }
-        return RType(new PointerType(in));
+        return RType(Type(Type::Pointer, in));
     } else if (mc->name == "panic") {
         if (mc->args.empty()) {
-            return RType(new Type("void"));
+            return RType(Type("void"));
         }
         auto lit = dynamic_cast<Literal *>(mc->args[0]);
         if (lit && lit->type == Literal::STR) {
-            return RType(new Type("void"));
+            return RType(Type("void"));
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     }
@@ -1454,15 +1451,15 @@ std::any Resolver::visitBreakStmt(BreakStmt *node) {
 std::any Resolver::visitArrayExpr(ArrayExpr *node) {
     if (node->isSized()) {
         auto elemType = getType(node->list[0]);
-        return RType(new ArrayType(elemType, node->size.value()));
+        return RType(Type(elemType, node->size.value()));
     } else {
-        auto elemType = getType(node->list[0]);
+        auto elemType = resolve(node->list[0]);
         for (int i = 1; i < node->list.size(); i++) {
             auto cur = getType(node->list[i]);
-            if (!subType(elemType, cur)) {
-                error("array element type mismatch, expecting: " + elemType->print() + " got: " + cur->print());
+            if (MethodResolver::isCompatible(elemType, cur)) {
+                error("array element type mismatch, expecting: " + elemType.type.print() + " got: " + cur.print());
             }
         }
-        return RType(new ArrayType(elemType, node->list.size()));
+        return RType(Type(elemType.type, node->list.size()));
     }
 }

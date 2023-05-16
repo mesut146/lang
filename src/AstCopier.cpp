@@ -20,10 +20,19 @@ std::unique_ptr<T> stmt(std::unique_ptr<T> &node, AstCopier *t) {
     return std::unique_ptr<T>(stmt(node.get(), t));
 }
 template<typename T>
-T visit(T node, AstCopier *t) {
+T *visit(T *node, AstCopier *t) {
     auto res = node->accept(t);
-    auto st = std::any_cast<T>(res);
-    return st;
+    return std::any_cast<T *>(res);
+}
+template<typename T>
+T visit(T &node, AstCopier *t) {
+    auto res = node.accept(t);
+    return std::any_cast<T>(res);
+}
+
+Type visit(Type& node, AstCopier* t){
+    auto res = node.accept(t);
+    return *(Type*)std::any_cast<Expression*>(res);
 }
 
 Expression *loc(Expression *res, Expression *src) {
@@ -39,7 +48,7 @@ Statement *loc(Statement *res, Statement *src) {
 std::any AstCopier::visitLiteral(Literal *node) {
     auto res = new Literal(node->type, node->val);
     if (node->suffix) {
-        res->suffix = expr(node->suffix, this);
+        res->suffix.emplace(visit(*node->suffix, this));
     }
     return loc(res, node);
 }
@@ -50,25 +59,23 @@ std::any AstCopier::visitSimpleName(SimpleName *node) {
 
 std::any AstCopier::visitType(Type *node) {
     if (node->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(node);
-        auto inner = expr(ptr->type, this);
-        return (Expression *) new PointerType(inner);
+        auto inner = expr(node->scope.get(), this);
+        return (Expression *) new Type(Type::Pointer, *inner);
     }
     if (node->isArray()) {
-        auto arr = dynamic_cast<ArrayType *>(node);
-        auto inner = expr(arr->type, this);
-        return (Expression *) new ArrayType(inner, arr->size);
+        auto inner = expr(node->scope.get(), this);
+        return (Expression *) new Type(*inner, node->size);
     }
     if (node->isSlice()) {
-        auto slice = dynamic_cast<SliceType *>(node);
-        auto inner = expr(slice->type, this);
-        return (Expression *) new SliceType(inner);
+        auto inner = expr(node->scope.get(), this);
+        return (Expression *) new Type(Type::Slice, *inner);
     }
-    auto res = new Type;
-    if (node->scope) res->scope = expr(node->scope, this);
-    res->name = node->name;
-    for (auto ta : node->typeArgs) {
-        res->typeArgs.push_back(expr(ta, this));
+    auto res = new Type(node->name);
+    if (node->scope){
+        res->scope.reset(expr(node->scope.get(), this));
+    }
+    for (auto &ta : node->typeArgs) {
+        res->typeArgs.push_back(visit(ta, this));
     }
     return loc(res, node);
 }
@@ -119,7 +126,7 @@ std::any AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment();
     res->name = node->name;
     if (node->type) {
-        res->type = expr(node->type, this);
+        res->type = visit(*node->type, this);
     }
     res->rhs = expr(node->rhs, this);
     res->isOptional = node->isOptional;
@@ -130,7 +137,7 @@ std::any AstCopier::visitFragment(Fragment *node) {
 std::any AstCopier::visitObjExpr(ObjExpr *node) {
     auto res = new ObjExpr;
     res->isPointer = node->isPointer;
-    res->type = (expr(node->type, this));
+    res->type = visit(node->type, this);
     for (auto &e : node->entries) {
         auto ent = Entry();
         ent.key = e.key;
@@ -147,8 +154,8 @@ std::any AstCopier::visitMethodCall(MethodCall *node) {
         res->scope.reset(expr(node->scope.get(), this));
     }
     res->name = node->name;
-    for (auto ta : node->typeArgs) {
-        res->typeArgs.push_back(expr(ta, this));
+    for (auto &ta : node->typeArgs) {
+        res->typeArgs.push_back(visit(ta, this));
     }
     for (auto arg : node->args) {
         res->args.push_back(expr(arg, this));
@@ -230,7 +237,7 @@ std::any AstCopier::visitIfStmt(IfStmt *node) {
 
 std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
     auto res = new IfLetStmt;
-    res->type.reset(expr(node->type.get(), this));
+    res->type = visit(node->type, this);
     for (auto &a : node->args) {
         res->args.push_back(a);
     }
@@ -245,25 +252,22 @@ std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
 std::any AstCopier::visitMethod(Method *node) {
     auto res = new Method(node->unit);
     res->name = node->name;
-    res->type.reset(expr(node->type.get(), this));
+    res->type = visit(node->type, this);
     res->isVirtual = node->isVirtual;
-    for (auto ta : node->typeArgs) {
-        res->typeArgs.push_back(expr(ta, this));
+    for (auto &ta : node->typeArgs) {
+        res->typeArgs.push_back(visit(ta, this));
     }
     if (node->self) {
-        Param self;
+        Param self(node->self->name);
         self.line = node->self->line;
-        self.name = node->self->name;
         if (node->self->type) {
-            self.type.reset(expr(node->self->type.get(), this));
+            self.type.emplace(visit(*node->self->type, this));
         }
-        res->self = std::move(self);
+        res->self.emplace(self);//std::move(self);
     }
     for (auto &prm : node->params) {
-        Param param;
+        Param param(prm.name, visit(*prm.type, this));
         param.line = prm.line;
-        param.name = prm.name;
-        param.type.reset(expr(prm.type.get(), this));
         res->params.push_back(std::move(param));
     }
     auto body = stmt(node->body.get(), this);

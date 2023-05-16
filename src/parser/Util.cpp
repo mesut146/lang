@@ -14,7 +14,7 @@ void log(const std::string &msg) {
         std::cout << msg << std::endl;
 }
 
-std::string join(std::vector<std::string> &arr, const char *sep, const char *indent) {
+std::string join(const std::vector<std::string> &arr, const char *sep, const char *indent) {
     std::string s;
     for (int i = 0; i < arr.size(); i++) {
         s.append(indent);

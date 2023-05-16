@@ -1,0 +1,10 @@
+enum Result<E, R>{
+  Err(e: E),
+  Ok(val: R)
+}
+
+impl<E, R> Result<E, R>{
+  func is_err(self): bool{
+    return self is Result<E, R>::Err;
+  }
+}

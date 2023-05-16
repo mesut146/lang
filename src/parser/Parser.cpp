@@ -24,7 +24,7 @@ FieldDecl parseField(Parser *p) {
     p->consume(COLON);
     auto type = p->parseType();
     p->consume(SEMI);
-    auto res = FieldDecl{name, type};
+    auto res = FieldDecl(name, type);
     res.line = line;
     return res;
 }
@@ -34,19 +34,18 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     res->line = first()->line;
     res->unit = unit;
-    if(is(CLASS)){
+    if (is(CLASS)) {
         consume(CLASS);
-    }
-    else{
+    } else {
         consume(STRUCT);
     }
     res->type = parseType();
-    if (!res->type->typeArgs.empty()) {
+    if (!res->type.typeArgs.empty()) {
         res->isGeneric = true;
     }
     if (is(COLON)) {
         pop();
-        res->base.reset(parseType());
+        res->base = parseType();
     }
     if (is(SEMI)) {
         consume(SEMI);
@@ -86,6 +85,7 @@ EnumVariant parseEnumEntry(Parser *p) {
     }
     return res;
 }
+
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     res->unit = unit;
@@ -102,7 +102,7 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     }
     consume(ENUM);
     res->type = parseType();
-    if (!res->type->typeArgs.empty()) {
+    if (!res->type.typeArgs.empty()) {
         res->isGeneric = true;
     }
     consume(LBRACE);
@@ -118,10 +118,10 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
 }
 
 std::unique_ptr<Trait> parseTrait(Parser *p) {
-    auto res = std::make_unique<Trait>();
-    res->unit = p->unit;
     p->consume(TRAIT);
-    res->type = p->parseType();
+    auto type = p->parseType();
+    auto res = std::make_unique<Trait>(type);
+    res->unit = p->unit;
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         res->methods.push_back(std::move(p->parseMethod()));
@@ -133,7 +133,7 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
 
 std::unique_ptr<Impl> parseImpl(Parser *p) {
     p->consume(IMPL);
-    std::vector<Type *> type_params;
+    std::vector<Type> type_params;
     if (p->is(LT)) {
         type_params = p->type_params();
     }
@@ -142,7 +142,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     res->type_params = type_params;
     res->unit = p->unit;
     if (p->is(FOR)) {
-        res->trait_name.reset(type);
+        res->trait_name.emplace(type);
         p->consume(FOR);
         res->type = p->parseType();
     } else {
@@ -192,7 +192,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
     while (first() != nullptr) {
         //top level decl
-        std::vector<Type *> derives;
+        std::vector<Type> derives;
         if (is(HASH)) {
             pop();
             consume(IDENT);
@@ -220,6 +220,14 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             res->items.push_back(parseExtern(this));
         } else if (isMethod()) {
             res->items.push_back(std::make_unique<Method>(parseMethod()));
+        } else if (is(TYPE)) {
+            pop();
+            auto name = pop().value;
+            consume(EQ);
+            auto rhs = parseType();
+            consume(SEMI);
+            auto ti = std::make_unique<TypeItem>(name, rhs);
+            res->items.push_back(std::move(ti));
         } else {
             throw std::runtime_error("invalid top level decl: " + first()->print() + " line: " + std::to_string(first()->line));
         }
@@ -229,12 +237,11 @@ std::shared_ptr<Unit> Parser::parseUnit() {
 
 //name ":" type ("=" expr)?
 Param Parser::parseParam() {
-    Param res;
     auto nm = pop();
-    res.name = nm.value;
+    Param res(nm.value);
     res.line = nm.line;
     consume(COLON);
-    res.type.reset(parseType());
+    res.type = (parseType());
     return res;
 }
 
@@ -257,9 +264,8 @@ Method Parser::parseMethod() {
         if (is({IDENT}, {COLON})) {
             res.params.push_back(parseParam());
         } else {
-            Param self;
             auto nm = pop();
-            self.name = nm.value;
+            Param self(nm.value);
             self.line = nm.line;
             res.self = std::move(self);
         }
@@ -271,10 +277,10 @@ Method Parser::parseMethod() {
     consume(RPAREN);
     if (is(COLON)) {
         consume(COLON);
-        res.type.reset(parseType());
+        res.type = (parseType());
     } else {
         //default is void
-        res.type.reset(new Type("void"));
+        res.type = (Type("void"));
     }
     if (is(SEMI)) {
         //interface
@@ -292,7 +298,7 @@ Fragment frag(Parser *p) {
     res.name = p->name();
     if (p->is(COLON)) {
         p->consume(COLON);
-        res.type.reset(p->parseType());
+        res.type.emplace(p->parseType());
     }
     if (!p->is(EQ)) {
         throw std::runtime_error("variable " + res.name + " must have initializer");
@@ -332,8 +338,8 @@ VarDeclExpr *Parser::parseVarDeclExpr() {
     return res;
 }
 
-Type *parse_tp(Parser *p) {
-    auto res = new Type(p->name());
+Type parse_tp(Parser *p) {
+    auto res = Type(p->name());
     if (p->is(COLON)) {
         throw std::runtime_error("trait bound");
         //p->consume(COLON);
@@ -342,8 +348,8 @@ Type *parse_tp(Parser *p) {
     return res;
 }
 
-std::vector<Type *> Parser::type_params() {
-    std::vector<Type *> list;
+std::vector<Type> Parser::type_params() {
+    std::vector<Type> list;
     consume(LT);
     list.push_back(parse_tp(this));
     while (is(COMMA)) {

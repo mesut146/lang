@@ -13,6 +13,7 @@ enum TokenType {
     TRAIT,
     IMPL,
     STATIC,
+    TYPE,
     I8,
     I16,
     I32,

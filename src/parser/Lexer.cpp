@@ -12,6 +12,7 @@ TokenType kw(std::string &s) {
     if (s == "extern") return EXTERN;
     if (s == "virtual") return VIRTUAL;
     if (s == "static") return STATIC;
+    if (s == "type") return TYPE;
     if (s == "bool") return BOOLEAN;
     if (s == "true") return TRUE;
     if (s == "false")
@@ -79,6 +80,9 @@ Token Lexer::readNumber() {
         dot |= (c == '.');
         pos++;
         c = peek();
+    }
+    if (peek() == '_') {
+        pos++;
     }
     for (auto &s : Lexer::suffixes) {
         if (str(pos, pos + s.length()) == s) {

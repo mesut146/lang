@@ -19,7 +19,7 @@ std::unique_ptr<IfLetStmt> parseIfLet(Parser *p) {
     auto res = std::make_unique<IfLetStmt>();
     p->consume(IF_KW);
     p->consume(LET);
-    res->type.reset(p->parseType());
+    res->type = p->parseType();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
         res->args.push_back(p->name());

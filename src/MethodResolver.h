@@ -6,14 +6,16 @@
 struct Signature {
     MethodCall *mc = nullptr;
     Method *m = nullptr;
-    std::vector<Type *> args;
+    std::vector<Type> args;
     std::optional<RType> scope;
-    Type *ret;
+    Type ret;
 
     static Signature make(MethodCall *mc, Resolver *r);
     static Signature make(Method *m, Resolver *r);
     std::string print();
 };
+
+typedef std::vector<std::string> Names;
 
 class MethodResolver {
     Resolver *r;
@@ -22,17 +24,17 @@ public:
     MethodResolver(Resolver *r) : r(r) {}
 
     //get cached or generate method
-    Method *generateMethod(std::map<std::string, Type *> &map, Method *m, Signature &sig);
+    Method *generateMethod(std::map<std::string, Type> &map, Method *m, Signature &sig);
     void findMethod(std::string &name, std::vector<Signature> &list);
     void getMethods(Signature &sig, std::vector<Signature> &list, bool imports);
 
-    static std::optional<std::string> isCompatible(const RType& arg, Type *target) {
-        std::vector<Type *> typeParams;
+    static std::optional<std::string> isCompatible(const RType &arg, const Type &target) {
+        std::vector<Type> typeParams;
         return isCompatible(arg, target, typeParams);
     }
 
-    static std::optional<std::string> isCompatible(const RType &arg, Type *target, std::vector<Type *> &typeParams);
-    static void infer(Type *arg, Type *prm, std::map<std::string, Type *> &typeMap);
+    static std::optional<std::string> isCompatible(const RType &arg, const Type &target, const std::vector<Type> &typeParams);
+    static void infer(const Type &arg, const Type &prm, std::map<std::string, std::optional<Type>> &typeMap);
 
     std::optional<std::string> checkArgs(Signature &sig, Signature &sig2);
 

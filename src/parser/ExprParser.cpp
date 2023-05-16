@@ -1,8 +1,8 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "misc-no-recursion"
+#include "Lexer.h"
 #include "Parser.h"
 #include "Util.h"
-#include "Lexer.h"
 
 
 std::vector<Expression *> Parser::exprList() {
@@ -45,7 +45,7 @@ Literal *parseLit(Parser *p) {
         bool support_suffix = type == Literal::INT || type == Literal::FLOAT || type == Literal::CHAR;
         if (pos != std::string::npos && support_suffix) {
             res->val = t.value.substr(0, t.value.size() - s.size());
-            res->suffix.reset(new Type(s));
+            res->suffix = Type(s);
             break;
         }
     }
@@ -79,10 +79,10 @@ int isTypeArg(Parser *p, int pos) {
     return -1;
 }
 
-Type *Parser::parseType() {
-    auto res = new Type;
+Type Parser::parseType() {
+    Type res;
     if (isPrim(*first())) {
-        res->name = pop().value;
+        res = Type(pop().value);
     } else if (is(LBRACKET)) {
         consume(LBRACKET);
         auto type = parseType();
@@ -92,19 +92,19 @@ Type *Parser::parseType() {
                 throw std::runtime_error("invalid array size: " + this->first()->value);
             }
             auto size = std::stoi(pop().value);
-            res = new ArrayType(type, size);
+            res = Type(type, size);
         } else {
-            res = new SliceType(type);
+            res = Type(Type::Slice, type);
         }
         consume(RBRACKET);
     } else {
-        res->name = name();
+        res = Type(name());
         while (is({COLON2, LT})) {
             if (is(LT)) {
-                res->typeArgs = generics();
+                res.typeArgs = generics();
             } else {
                 consume(COLON2);
-                res = new Type(res, name());
+                res = Type(res, name());
             }
         }
     }
@@ -112,17 +112,17 @@ Type *Parser::parseType() {
     while (is(STAR) || is(QUES)) {
         if (is(STAR)) {
             consume(STAR);
-            res = new PointerType(res);
+            res = Type(Type::Pointer, res);
         } else if (is(QUES)) {
             consume(QUES);
-            res = new OptionType(res);
+            res = Type(Type::Option, res);
         }
     }
     return res;
 }
 
-std::vector<Type *> Parser::generics() {
-    std::vector<Type *> list;
+std::vector<Type> Parser::generics() {
+    std::vector<Type> list;
     consume(LT);
     list.push_back(parseType());
     while (is(COMMA)) {
@@ -173,10 +173,10 @@ bool isObj(Parser *p) {
     return false;
 }
 
-Expression *makeObj(Parser *p, bool isPointer, Type *type) {
+Expression *makeObj(Parser *p, bool isPointer, const Type &type) {
     auto res = new ObjExpr;
     res->isPointer = isPointer;
-    res->type.reset(type);
+    res->type = type;
     p->consume(LBRACE);
     if (!p->is(RBRACE)) {
         res->entries.push_back(parseEntry(p));
@@ -185,7 +185,6 @@ Expression *makeObj(Parser *p, bool isPointer, Type *type) {
             res->entries.push_back(parseEntry(p));
         }
     }
-    //todo check entry keys for mix
     p->consume(RBRACE);
     return res;
 }
@@ -242,7 +241,7 @@ Expression *PRIM(Parser *p) {
         p->consume(COLON2);
         auto name = p->name();
         if (p->is(LPAREN) || p->is(LT)) {
-            std::vector<Type *> typeArgs;
+            std::vector<Type> typeArgs;
             if (p->is(LT)) {
                 typeArgs = p->generics();
             }
@@ -251,7 +250,7 @@ Expression *PRIM(Parser *p) {
             mc->typeArgs = typeArgs;
             return loc(mc, line);
         }
-        return new Type(type, name);
+        return new Type(*type, name);
     } else if (p->is({IDENT, IS, AS})) {
         auto id = p->pop().value;
         if (p->is(LPAREN)) {
@@ -268,8 +267,7 @@ Expression *PRIM(Parser *p) {
                 return res;
             } else {
                 p->consume(COLON2);//id<...>::
-                auto scope = new Type;
-                scope->name = id;
+                auto scope = new Type(id);
                 scope->typeArgs = typeArgs;
                 auto name = p->name();
                 if (p->is(LPAREN)) {
@@ -279,24 +277,24 @@ Expression *PRIM(Parser *p) {
                     return res;
                 } else {
                     //id<...>::name
-                    return new Type(scope, name);
+                    return new Type(*scope, name);
                 }
             }
         } else if (p->is(COLON2)) {
             p->consume(COLON2);
             auto t = p->parseType();
             if (p->is(LPAREN)) {//id::name<...>(args)
-                auto res = parseCall(p, t->name);
+                auto res = parseCall(p, t.name);
                 res->line = line;
-                if (!t->typeArgs.empty()) {
-                    res->typeArgs = t->typeArgs;
+                if (!t.typeArgs.empty()) {
+                    res->typeArgs = t.typeArgs;
                 }
                 res->scope.reset(new Type(id));
                 return res;
             } else {
                 //id::t
                 //static field access, or enum variant
-                return new Type(new Type(id), t->name);
+                return new Type(Type(id), t.name);
             }
         } else {
             return loc(new SimpleName(id), line);
@@ -473,7 +471,6 @@ Expression *expr9(Parser *p) {
     auto lhs = expr10(p);
     while (p->is({LTLT, GT})) {
         auto &op = p->pop().value;
-        //todo >>, in while
         if (op == ">" && p->is(GT)) {
             op = ">>";
             p->consume(GT);

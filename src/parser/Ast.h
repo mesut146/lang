@@ -40,14 +40,90 @@ public:
 
     virtual ~Node() = default;
 };
+class Expression : public Node {
+public:
+    //static int last_id = 0;
+    int id = -1;
+    virtual std::string print() const = 0;
+
+    virtual std::any accept(Visitor *v) = 0;
+};
+class Type : public Expression {
+public:
+    std::unique_ptr<Type> scope;
+    std::string name;
+    std::vector<Type> typeArgs;
+    int size;
+    enum Kind {
+        Prim,
+        Simple,
+        Pointer,
+        Option,
+        Array,
+        Slice,
+        None
+    };
+    Kind kind = None;
+
+    Type() {}
+    Type(const Type &rhs) {
+        (*this) = rhs;
+    }
+    Type &operator=(const Type &rhs) {
+        if (rhs.scope) {
+            set(*rhs.scope.get());
+        }else{
+            scope.reset();
+        }
+        name = rhs.name;
+        kind = rhs.kind;
+        typeArgs = rhs.typeArgs;
+        size = rhs.size;
+        return *this;
+    }
+
+    explicit Type(const std::string &name) : name(name) {}
+    explicit Type(const Type &scope, const std::string &name): name(name) {
+        set(scope);
+    }
+    Type(Kind kind, const Type &inner) : kind(kind) {
+        set(inner);
+    }
+    Type(const Type &inner, int size) : kind(Array), size(size) {
+        set(inner);
+    }
+
+    void set(const Type& type){
+        scope = std::make_unique<Type>(type);
+    }
+    bool isArray() const { return kind == Array; }
+    bool isSlice() const { return kind == Slice; }
+    bool isPointer() const { return kind == Pointer; }
+
+    Type &unwrap() {
+        if (isPointer()) return *scope.get();
+        return *this;
+    }
+
+    bool isPrim() const {
+        return sizeMap.find(print()) != sizeMap.end();
+    }
+    bool isVoid() const { return print() == "void"; };
+    bool isString() const { return print() == "str"; }
+
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
+};
 
 class ImportStmt {
 public:
     std::vector<std::string> list;
 
-    std::string print();
+    std::string print() const;
 };
+
 class Unit;
+
 struct Item : public Node {
     Unit *unit;
 
@@ -58,9 +134,20 @@ struct Item : public Node {
     virtual bool isMethod() { return false; }
     virtual bool isExtern() { return false; }
     virtual bool isNs() { return false; }
+    virtual bool isType() { return false; }
 
-    virtual std::string print() = 0;
+    virtual std::string print() const = 0;
     virtual std::any accept(Visitor *v) = 0;
+};
+
+struct TypeItem : public Item {
+    std::string name;
+    Type rhs;
+
+    explicit TypeItem(const std::string &name, const Type &rhs) : name(name), rhs(rhs) {}
+    std::string print() const;
+    std::any accept(Visitor *v);
+    bool isType() { return true; }
 };
 
 class Unit {
@@ -74,21 +161,22 @@ public:
 };
 
 struct BaseDecl : public Item {
-    Type *type;
+    Type type;
     bool isResolved = false;
     bool isGeneric = false;
-    std::unique_ptr<Type> base;
-    std::vector<Type *> derives;
+    std::optional<Type> base;
+    std::vector<Type> derives;
 
+    //explicit BaseDecl(const Type &type) : type(type) {}
     std::string &getName();
 };
 
 class FieldDecl : public Node {
 public:
     std::string name;
-    Type *type;
+    Type type;
 
-    FieldDecl(std::string name, Type *type) : name(name), type(type) {}
+    FieldDecl(std::string name, const Type &type) : name(name), type(type) {}
 
     std::string print() const;
     std::any accept(Visitor *v);
@@ -99,41 +187,42 @@ public:
     std::vector<FieldDecl> fields;
 
     bool isClass() { return true; }
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
 class Trait : public Item {
 public:
-    Type *type;
+    Type type;
     std::vector<Method> methods;
 
+    explicit Trait(const Type &type) : type(type) {}
     bool isTrait() { return true; }
-    std::string print();
+    std::string print() const;
     std::any accept(Visitor *v);
 };
 
 class Impl : public Item {
 public:
-    std::vector<Type *> type_params;
-    std::unique_ptr<Type> trait_name;
-    Type *type;
+    std::vector<Type> type_params;
+    std::optional<Type> trait_name;
+    Type type;
     std::vector<Method> methods;
 
-    explicit Impl(Type *type) : type(type) {}
+    explicit Impl(const Type &type) : type(type) {}
 
     bool isImpl() { return true; }
-    std::string print();
+    std::string print() const;
     std::any accept(Visitor *v);
 };
 
-class EnumVariant {
+class EnumVariant : public Node {
 public:
     std::string name;
     std::vector<FieldDecl> fields;
 
     bool isStruct() const { return !fields.empty(); }
-    std::string print();
+    std::string print() const;
 };
 
 class EnumDecl : public BaseDecl {
@@ -141,7 +230,7 @@ public:
     std::vector<EnumVariant> variants;
 
     bool isEnum() { return true; }
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -150,7 +239,7 @@ public:
     std::vector<Method> methods;
 
     bool isExtern() { return true; }
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -159,24 +248,26 @@ public:
     std::vector<Ptr<Item>> items;
 
     bool isNs() { return true; }
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
 class Param : public Node {
 public:
     std::string name;
-    std::unique_ptr<Type> type;
+    std::optional<Type> type;
 
-    std::string print();
+    explicit Param(const std::string &name) : name(name) {}
+    explicit Param(const std::string &name, const Type &type) : name(name), type(type){};
+    std::string print() const;
     std::any accept(Visitor *v);
 };
 
 class Method : public Item {
 public:
     std::string name;
-    std::unique_ptr<Type> type;
-    std::vector<Type *> typeArgs;
+    Type type;
+    std::vector<Type> typeArgs;
     std::optional<Param> self;
     std::vector<Param> params;
     std::unique_ptr<Block> body;
@@ -188,21 +279,14 @@ public:
     explicit Method(Unit *unit) : unit(unit) {}
 
     bool isMethod() override { return true; }
-    std::string print();
+    std::string print() const override;
     std::any accept(Visitor *v);
 };
 
-class Expression : public Node {
-public:
-    //static int last_id = 0;
-    int id = -1;
-    virtual std::string print() = 0;
 
-    virtual std::any accept(Visitor *v) = 0;
-};
 class Statement : public Node {
 public:
-    virtual std::string print() = 0;
+    virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
 };
@@ -211,7 +295,7 @@ class Block : public Statement {
 public:
     std::vector<std::unique_ptr<Statement>> list;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -222,7 +306,7 @@ public:
 
     explicit SimpleName(const std::string &name) : name(move(name)){};
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -232,7 +316,7 @@ public:
 
     RefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -242,81 +326,10 @@ public:
 
     DerefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
-class Type : public Expression {
-public:
-    std::unique_ptr<Type> scope;
-    std::string name;
-    std::vector<Type *> typeArgs;
-
-    Type() {}
-    explicit Type(const std::string &name) : name(move(name)) {}
-    explicit Type(Type *scope, const std::string &name) : scope(scope), name(move(name)) {}
-
-    virtual bool isOptional() { return false; }
-    virtual bool isArray() { return false; }
-    virtual bool isSlice() { return false; }
-    virtual bool isPointer() { return false; }
-
-    //Type* unwrap();
-
-    bool isPrim() {
-        return sizeMap.find(print()) != sizeMap.end();
-    }
-    bool isVoid() { return print() == "void"; };
-    bool isString() { return print() == "str"; }
-
-    std::string print() override;
-    std::any accept(Visitor *v) override;
-};
-
-class PointerType : public Type {
-public:
-    Type *type;
-    explicit PointerType(Type *type) : type(type){};
-
-    bool isPointer() override { return true; }
-    static Type *unwrap(Type *type) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        return ptr ? ptr->type : type;
-    }
-    std::string print() override;
-    //std::any accept(Visitor *v) override;
-};
-class OptionType : public Type {
-public:
-    Type *type;
-
-    explicit OptionType(Type *type) : type(type) {}
-    bool isOptional() override { return true; }
-
-    std::string print() override;
-    //std::any accept(Visitor *v) override;
-};
-
-//[type; size]
-class ArrayType : public Type {
-public:
-    Type *type;
-    int size;
-    ArrayType(Type *type, int size) : type(type), size(size) {}
-
-    bool isArray() override { return true; }
-    std::string print() override;
-    //std::any accept(Visitor *v) override;
-};
-//[type]
-class SliceType : public Type {
-public:
-    Type *type;
-    SliceType(Type *type) : type(type) {}
-
-    bool isSlice() override { return true; }
-    std::string print() override;
-};
 
 class Literal : public Expression {
 public:
@@ -329,11 +342,11 @@ public:
     };
     std::string val;
     LiteralType type;
-    std::unique_ptr<Type> suffix;
+    std::optional<Type> suffix;
 
     Literal(LiteralType type, const std::string &val) : type(type), val(move(val)) {}
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -341,7 +354,7 @@ class ExprStmt : public Statement {
 public:
     Expression *expr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 
     explicit ExprStmt(Expression *e) : expr(e) {}
@@ -350,11 +363,11 @@ public:
 class Fragment : public Node {
 public:
     std::string name;
-    std::unique_ptr<Type> type;
+    std::optional<Type> type;
     std::unique_ptr<Expression> rhs;
     bool isOptional = false;
 
-    std::string print();
+    std::string print() const;
     std::any accept(Visitor *v);
 };
 
@@ -364,7 +377,7 @@ public:
     bool isStatic = false;
     std::vector<Fragment> list;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -372,7 +385,7 @@ class VarDecl : public Statement {
 public:
     VarDeclExpr *decl;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -389,7 +402,7 @@ public:
     std::string op;
     Expression *expr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -399,7 +412,7 @@ public:
     Expression *right;
     std::string op;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -410,16 +423,16 @@ public:
     std::string op;
     bool isAssign = false;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
 class AsExpr : public Expression {
 public:
     Expression *expr;
-    Type *type;
+    Type type;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -428,7 +441,7 @@ public:
     Expression *expr;
     Expression *rhs;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -437,7 +450,7 @@ public:
     std::string op;
     Expression *expr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -447,7 +460,7 @@ public:
     Expression *thenExpr;
     Expression *elseExpr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -457,9 +470,9 @@ public:
     std::string name;
     std::vector<Expression *> args;
     bool isOptional = false;
-    std::vector<Type *> typeArgs;
+    std::vector<Type> typeArgs;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -469,7 +482,7 @@ public:
     std::string name;
     bool isOptional = false;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -480,7 +493,7 @@ public:
     std::unique_ptr<Expression> index2;
     bool isOptional = false;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -489,9 +502,9 @@ public:
     std::vector<Expression *> list;
     std::optional<int> size = std::nullopt;
 
-    bool isSized() { return size.has_value(); }
+    bool isSized() const { return size.has_value(); }
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -499,7 +512,7 @@ class ParExpr : public Expression {
 public:
     Expression *expr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -511,16 +524,16 @@ public:
 
     //bool hasKey() { return !key.empty(); }
 
-    std::string print();
+    std::string print() const;
 };
 
 class ObjExpr : public Expression {
 public:
-    std::unique_ptr<Type> type;
+    Type type;
     std::vector<Entry> entries;
     bool isPointer = false;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -528,7 +541,7 @@ class ReturnStmt : public Statement {
 public:
     std::unique_ptr<Expression> expr;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -536,7 +549,7 @@ class ContinueStmt : public Statement {
 public:
     std::optional<std::string> label;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -544,19 +557,19 @@ class BreakStmt : public Statement {
 public:
     std::optional<std::string> label;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
 class IfLetStmt : public Statement {
 public:
-    std::unique_ptr<Type> type;
+    Type type;
     std::vector<std::string> args;
     std::unique_ptr<Expression> rhs;
     std::unique_ptr<Statement> thenStmt;
     std::unique_ptr<Statement> elseStmt;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -566,7 +579,7 @@ public:
     std::unique_ptr<Statement> thenStmt;
     std::unique_ptr<Statement> elseStmt;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -575,7 +588,7 @@ public:
     std::unique_ptr<Expression> expr;
     std::unique_ptr<Statement> body;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -584,7 +597,7 @@ public:
     std::unique_ptr<Expression> expr;
     std::unique_ptr<Block> body;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -595,7 +608,7 @@ public:
     std::vector<std::unique_ptr<Expression>> updaters;
     std::unique_ptr<Statement> body;
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };
 
@@ -605,6 +618,6 @@ public:
 
     explicit AssertStmt(Expression *expr) : expr(std::unique_ptr<Expression>(expr)) {}
 
-    std::string print() override;
+    std::string print() const override;
     std::any accept(Visitor *v) override;
 };

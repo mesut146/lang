@@ -3,18 +3,18 @@
 #include "parser/Util.h"
 
 std::string &BaseDecl::getName() {
-    return type->name;
+    return type.name;
 }
 
-std::string RefExpr::print() {
+std::string RefExpr::print() const {
     return "&" + expr->print();
 }
-std::string DerefExpr::print() {
+std::string DerefExpr::print() const {
     return "*" + expr->print();
 }
 
 std::string FieldDecl::print() const {
-    return name + ": " + type->print();
+    return name + ": " + type.print();
 }
 
 std::string Unit::print() {
@@ -25,8 +25,10 @@ std::string Unit::print() {
     s.append("\n");
     return s;
 }
-
-std::string ImportStmt::print() {
+std::string TypeItem::print() const {
+    return "type " + name + " = " + rhs.print() + ";";
+}
+std::string ImportStmt::print() const {
     std::string s;
     s.append("import ");
     s.append(join(list, "/"));
@@ -34,17 +36,17 @@ std::string ImportStmt::print() {
     return s;
 }
 
-std::string EnumDecl::print() {
+std::string EnumDecl::print() const {
     std::string s;
     s.append("enum ");
-    s.append(type->print());
+    s.append(type.print());
     s.append("{\n");
     s.append(join(variants, ",\n", "  "));
     s.append(";\n}");
     return s;
 }
 
-std::string EnumVariant::print() {
+std::string EnumVariant::print() const {
     std::string s;
     s.append(name);
     if (isStruct()) {
@@ -55,10 +57,10 @@ std::string EnumVariant::print() {
     return s;
 }
 
-std::string StructDecl::print() {
+std::string StructDecl::print() const {
     std::string s;
     s.append("struct ");
-    s.append(type->print());
+    s.append(type.print());
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
         s.append("  ").append(fields[i].print()).append(";");
@@ -68,33 +70,33 @@ std::string StructDecl::print() {
     return s;
 }
 
-std::string Trait::print() {
+std::string Trait::print() const {
     std::string s;
-    s.append("trait ").append(type->print()).append("{\n");
+    s.append("trait ").append(type.print()).append("{\n");
     s.append(join(methods, "\n"));
     s.append("}\n");
     return s;
 }
 
-std::string Impl::print() {
+std::string Impl::print() const {
     std::string s;
     s.append("impl ");
     if (trait_name) {
         s.append(trait_name->print()).append(" for ");
     }
-    s.append(type->print());
+    s.append(type.print());
     s.append("{\n");
     s.append(join(methods, "\n"));
     s.append("}\n");
     return s;
 }
-std::string Extern::print() {
+std::string Extern::print() const {
     return "extern {\n" + join(methods, "\n") + "\n}";
 }
-std::string Ns::print() {
+std::string Ns::print() const {
     return "namespace n{\n" + join(items, "\n") + "\n}";
 }
-std::string Method::print() {
+std::string Method::print() const {
     std::string s;
     s.append("func ");
     s.append(name);
@@ -114,10 +116,10 @@ std::string Method::print() {
     }
     s.append(join(params, ", "));
     s.append(")");
-    if (type) {
-        s.append(": ");
-        s.append(type->print());
-    }
+
+    s.append(": ");
+    s.append(type.print());
+
     if (body) {
         s.append(body->print());
     } else {
@@ -126,11 +128,11 @@ std::string Method::print() {
     return s;
 }
 
-std::string SimpleName::print() {
+std::string SimpleName::print() const {
     return name;
 }
 
-std::string Literal::print() {
+std::string Literal::print() const {
     std::string s;
     s.append(val);
     if (suffix) {
@@ -139,13 +141,11 @@ std::string Literal::print() {
     return s;
 }
 
-
-std::string VarDecl::print() {
+std::string VarDecl::print() const {
     return decl->print() + ";";
 }
 
-
-std::string VarDeclExpr::print() {
+std::string VarDeclExpr::print() const {
     std::string s;
     if (isStatic) s.append("static ");
     s.append(!isConst ? "let" : "const");
@@ -155,7 +155,7 @@ std::string VarDeclExpr::print() {
 }
 
 
-std::string Fragment::print() {
+std::string Fragment::print() const {
     std::string s;
     s.append(name);
     if (type) {
@@ -165,11 +165,11 @@ std::string Fragment::print() {
     return s;
 }
 
-std::string ExprStmt::print() {
+std::string ExprStmt::print() const {
     return expr->print() + ";";
 }
 
-std::string Block::print() {
+std::string Block::print() const {
     std::string s;
     s.append("{\n");
     for (int i = 0; i < list.size(); ++i) {
@@ -181,7 +181,7 @@ std::string Block::print() {
 
 std::string printDims(std::vector<Expression *> &dims) {
     std::string s;
-    for (Expression *e : dims) {
+    for (auto *e : dims) {
         s.append("[");
         if (e != nullptr) {
             s.append(e->print());
@@ -191,21 +191,19 @@ std::string printDims(std::vector<Expression *> &dims) {
     return s;
 }
 
-std::string PointerType::print() {
-    return type->print() + "*";
-}
-std::string OptionType::print() {
-    return type->print() + "?";
-}
-std::string ArrayType::print() {
-    auto sz = std::to_string(size);
-    return "[" + type->print() + "; " + sz + "]";
-}
-std::string SliceType::print() {
-    return "[" + type->print() + "]";
-}
-
-std::string Type::print() {
+std::string Type::print() const {
+    if (kind == Option) {
+        return scope->print() + "?";
+    }
+    if (kind == Slice) {
+        return "[" + scope->print() + "]";
+    }
+    if (kind == Array) {
+        return "[" + scope->print() + "; " + std::to_string(size) + "]";
+    }
+    if (kind == Pointer) {
+        return scope->print() + "*";
+    }
     std::string s;
     if (scope) {
         s.append(scope->print()).append("::");
@@ -219,7 +217,7 @@ std::string Type::print() {
     return s;
 }
 
-std::string Param::print() {
+std::string Param::print() const {
     std::string s;
     s.append(name);
     s.append(": ");
@@ -227,23 +225,23 @@ std::string Param::print() {
     return s;
 }
 
-std::string ParExpr::print() {
+std::string ParExpr::print() const {
     return std::string("(" + expr->print() + ")");
 }
 
-std::string ObjExpr::print() {
+std::string ObjExpr::print() const {
     std::string s;
     if (isPointer) {
         s.append("new ");
     }
-    s.append(type->print());
+    s.append(type.print());
     s.append("{");
     s.append(join(entries, ", "));
     s.append("}");
     return s;
 }
 
-std::string Entry::print() {
+std::string Entry::print() const {
     if (key) {
         return key.value() + ": " + value->print();
     }
@@ -251,10 +249,10 @@ std::string Entry::print() {
     return value->print();
 }
 
-std::string IfLetStmt::print() {
+std::string IfLetStmt::print() const {
     std::string s;
     s.append("if let ");
-    s.append(type->print());
+    s.append(type.print());
     if (!args.empty()) {
         s.append("(");
         s.append(join(args, ", "));
@@ -269,7 +267,7 @@ std::string IfLetStmt::print() {
     return s;
 }
 
-std::string IfStmt::print() {
+std::string IfStmt::print() const {
     std::string s;
     s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
     if (elseStmt) {
@@ -278,7 +276,7 @@ std::string IfStmt::print() {
     return s;
 }
 
-std::string ForStmt::print() {
+std::string ForStmt::print() const {
     std::string s;
     s.append("for(");
     if (decl != nullptr) {
@@ -296,38 +294,38 @@ std::string ForStmt::print() {
     printBody(s, body.get());
     return s;
 }
-std::string Infix::print() {
+std::string Infix::print() const {
     return left->print() + " " + op + " " + right->print();
 }
 
-std::string AsExpr::print() {
-    return expr->print() + " as " + type->print();
+std::string AsExpr::print() const {
+    return expr->print() + " as " + type.print();
 }
 
-std::string IsExpr::print() {
+std::string IsExpr::print() const {
     return expr->print() + " is " + rhs->print();
 }
 
-std::string Assign::print() {
+std::string Assign::print() const {
     return left->print() + " " + op + " " + right->print();
 }
 
-std::string Unary::print() {
+std::string Unary::print() const {
     return op + expr->print();
 }
 
-std::string Postfix::print() {
+std::string Postfix::print() const {
     return expr->print() + op;
 }
 
-std::string FieldAccess::print() {
+std::string FieldAccess::print() const {
     if (isOptional) {
         return scope->print() + "?." + name;
     }
     return scope->print() + "." + name;
 }
 
-std::string MethodCall::print() {
+std::string MethodCall::print() const {
     std::string s;
     if (scope) {
         s.append(scope->print());
@@ -346,7 +344,7 @@ std::string MethodCall::print() {
     return s;
 }
 
-std::string ArrayAccess::print() {
+std::string ArrayAccess::print() const {
     std::string s = array->print();
     if (isOptional) {
         s.append("?");
@@ -361,7 +359,7 @@ std::string ArrayAccess::print() {
     return s;
 }
 
-std::string ArrayExpr::print() {
+std::string ArrayExpr::print() const {
     if (isSized()) {
         return "[" + list[0]->print() + "; " + std::to_string(size.value()) + "]";
     } else {
@@ -369,37 +367,37 @@ std::string ArrayExpr::print() {
     }
 }
 
-std::string Ternary::print() {
+std::string Ternary::print() const {
     return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
 }
 
-std::string WhileStmt::print() {
+std::string WhileStmt::print() const {
     std::string s;
     s.append("while(").append(expr->print()).append(")");
     printBody(s, body.get());
     return s;
 }
 
-std::string ReturnStmt::print() {
+std::string ReturnStmt::print() const {
     if (!expr) return "return";
     return "return " + expr->print() + ";";
 }
 
-std::string ContinueStmt::print() {
+std::string ContinueStmt::print() const {
     if (!label.has_value()) return "continue";
     return "continue " + label.value();
 }
 
-std::string BreakStmt::print() {
+std::string BreakStmt::print() const {
     if (!label.has_value()) return "break";
     return "break " + label.value();
 }
 
-std::string DoWhile::print() {
+std::string DoWhile::print() const {
     return "do" + body->print() + "\nwhile(" + expr->print() + ");";
 }
 
-std::string AssertStmt::print() {
+std::string AssertStmt::print() const {
     return "assert " + expr->print() + ";";
 }
 
@@ -541,10 +539,7 @@ std::any Impl::accept(Visitor *v) {
 std::any Extern::accept(Visitor *v) {
     return v->visitExtern(this);
 }
-
-// std::any PointerType::accept(Visitor *v) {
-//     return v->
-// }
-// std::any OptionType::accept(Visitor *v) {
-//     throw std::runtime_error("todo");
-// }
+std::any TypeItem::accept(Visitor *v) {
+    //return v->visitExtern(this);
+    return {};
+}

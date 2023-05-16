@@ -32,7 +32,6 @@ func structTest(){
   assert b.a.a == 10 && b.a.b == 6;
 
   print("structTest done\n");
-  enumTest();
 }
 
 func ee1(e: E){

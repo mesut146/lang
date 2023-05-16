@@ -76,25 +76,27 @@ public:
     void make_vtables();
     llvm::LLVMContext &ctx() { return *ctxp; };
 
-    int getSize(Type *type);
-    int getSize2(Type *type);
-    void copy(llvm::Value *trg, llvm::Value *src, Type *type);
+    int getSize(const Type *type);
+    int getSize(const Type &type) { return getSize(&type); }
+    int getSize2(const Type *type);
+    int getSize2(const Type &type) { return getSize2(&type); }
+    void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
     int getSize(BaseDecl *decl);
     int getSize2(BaseDecl *decl);
     int getOffset(EnumVariant *variant, int index);
-    void setField(Expression *expr, Type *type, bool do_cast, llvm::Value *entPtr);
+    void setField(Expression *expr, const Type &type, bool do_cast, llvm::Value *entPtr);
     llvm::Value *branch(llvm::Value *val);
     llvm::ConstantInt *makeInt(int val);
     llvm::ConstantInt *makeInt(int val, int bits);
     llvm::Type *getInt(int bit);
     void setOrdinal(int index, llvm::Value *ptr);
-    void simpleVariant(Type *n, llvm::Value *ptr);
-    bool is_simple_enum(Type *type);
+    void simpleVariant(const Type &n, llvm::Value *ptr);
+    bool is_simple_enum(const Type &type);
     llvm::Value *getTag(Expression *expr);
     bool doesAlloc(Expression *e);
 
     bool isRvo(Method *m) {
-        return !m->type->isVoid() && isStruct(m->type.get()) && !is_simple_enum(m->type.get());
+        return !m->type.isVoid() && isStruct(m->type) && !is_simple_enum(m->type);
     }
 
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
@@ -116,11 +118,11 @@ public:
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2) {
-        std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, new Type("i64"))};
+        std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, Type("i64"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *gep(llvm::Value *ptr, Expression *i2) {
-        std::vector<llvm::Value *> idx = {cast(i2, new Type("i64"))};
+        std::vector<llvm::Value *> idx = {cast(i2, Type("i64"))};
         return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
     }
     llvm::Value *gep2(llvm::Value *ptr, int idx) {
@@ -145,9 +147,11 @@ public:
     llvm::Value *load(llvm::Value *val);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
-    llvm::Value *cast(Expression *expr, Type *type);
-    llvm::Type *mapType(Type *t);
-    llvm::DIType *map_di(Type *t);
+    llvm::Value *cast(Expression *expr, const Type &type);
+    llvm::Type *mapType(const Type *t);
+    llvm::Type *mapType(const Type &t) { return mapType(&t); }
+    llvm::DIType *map_di(const Type *t);
+    llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     void loc(Node *e);
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
@@ -180,7 +184,7 @@ public:
     std::any array(ArrayExpr *node, llvm::Value *ptr);
     void object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived);
     llvm::Value *call(MethodCall *node, llvm::Value *ptr);
-    std::any slice(ArrayAccess *node, llvm::Value *ptr, Type *arrty);
+    std::any slice(ArrayAccess *node, llvm::Value *ptr, const Type &arrty);
     void strLit(llvm::Value *ptr, Literal *lit);
 
     std::any visitBlock(Block *node) override;

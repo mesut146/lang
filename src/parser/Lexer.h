@@ -3,9 +3,9 @@
 #include "Token.h"
 #include <fstream>
 #include <map>
-#include <vector>
 #include <sstream>
 #include <system_error>
+#include <vector>
 
 class Lexer {
 public:

@@ -40,12 +40,14 @@ class Fmt{
 
 impl Debug for [i32]{
   func debug(self, f: Fmt*){
-    print("[");
+    f.print("[");
     for(let i = 0;i < self.len;++i){
       if(i > 0) print(", ");
-      print("%d=%d", i, self[i]);
+      Debug::debug(i, f);
+      f.print("=");
+      Debug::debug(self[i], f);
     }
-    print("]\n");
+    f.print("]\n");
   }
 }
 
@@ -68,4 +70,28 @@ impl Fmt{
    Debug::debug(t, &f);
    return f.buf;
  }
+}
+
+trait Hash{
+  func hash(self): i64;
+}
+
+impl Hash for i32{
+  func hash(self): i64{
+    return self as i64;
+  }
+}
+impl Hash for i64{
+  func hash(self): i64{
+    return self as i64;
+  }
+}
+impl Hash for str{
+  func hash(self): i64{
+    let x: i64 = 0;
+    for(let i = 0;i < self.len();++i){
+      x = x * 31 + self.get(i);
+    }
+    return x;
+  }
 }

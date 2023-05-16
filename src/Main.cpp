@@ -52,35 +52,35 @@ void parseTest() {
     parse("../tests/src/a.x", true);
 }
 
-void compile(const std::string& path){
+void compile(const std::string &path) {
     Compiler c;
     c.srcDir = "../tests/src";
     c.outDir = "../out";
     c.init();
-    if(std::filesystem::is_directory(path)){
+    if (std::filesystem::is_directory(path)) {
         for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
             if (e.is_directory()) continue;
             c.compile(e.path().string());
         }
         c.link_run();
-    }else{
+    } else {
         c.compile(path);
         c.link_run();
     }
 }
 
-void compile(std::initializer_list<std::string> list){
+void compile(std::initializer_list<std::string> list) {
     Compiler c;
     c.srcDir = "../tests/src";
     c.outDir = "../out";
     c.init();
-    for(auto &file : list){
+    for (auto &file : list) {
         c.compile(file);
     }
     c.link_run();
 }
 
-void compileTest() {    
+void compileTest() {
     compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
@@ -97,11 +97,12 @@ void compileTest() {
     compile("../tests/src/impl.x");
     compile("../tests/src/load.x");
     compile("../tests/src/as.x");
-    
+    compile("../tests/src/alias.x");
+
     auto s1 = "../tests/src/std/String.x";
     auto s2 = "../tests/src/std/str.x";
     auto op = "../tests/src/std/ops.x";
-    
+
     compile({"../tests/src/classTest.x", s1, s2, op});
     compile({"../tests/src/boxTest.x", s1, s2, op});
     compile({"../tests/src/listTest.x", s1, s2, op});

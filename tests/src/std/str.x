@@ -2,7 +2,7 @@
 //import std/List
 
 class str{
-  buf: [i8];
+  buf: [u8];
 }
 
 impl str{
@@ -16,7 +16,7 @@ impl str{
       print("\"}\n");
     }
     
-    func ptr(self): i8*{
+    func ptr(self): u8*{
        return &self.buf[0];
     }
 
@@ -24,11 +24,11 @@ impl str{
       return self.buf.len;
     }
 
-    func new(buf: [i8]): str{
+    func new(buf: [u8]): str{
         return str{buf: buf};
     }
 
-    func get(self, i: i32): i8{
+    func get(self, i: i32): u8{
       return self.buf[i];
     }
 

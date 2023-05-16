@@ -1,34 +1,46 @@
 #include "parser/Ast.h"
 
-static Type *clone(Type *type) {
-    if (type->isPointer()) {
-        auto ptr = dynamic_cast<PointerType *>(type);
-        return new PointerType(clone(ptr->type));
-    } else if (type->isArray()) {
-        auto arr = dynamic_cast<ArrayType *>(type);
-        return new ArrayType(clone(arr->type), arr->size);
-    } else if (type->isSlice()) {
-        auto slice = dynamic_cast<SliceType *>(type);
-        return new SliceType(clone(slice->type));
+static Type clone(const Type &type) {
+    if (type.isPointer()) {
+        return Type(Type::Pointer, clone(*type.scope.get()));
+    } else if (type.isArray()) {
+        return Type(clone(*type.scope.get()), type.size);
+    } else if (type.isSlice()) {
+        return Type(Type::Slice, clone(*type.scope.get()));
     } else {
-        auto res = new Type(type->name);
-        if (type->scope) {
-            res->scope.reset(clone(type->scope.get()));
+        Type res(type.name);
+        if (type.scope) {
+            res.scope = std::make_unique<Type>(clone(*type.scope.get()));
         }
-        res->typeArgs.insert(res->typeArgs.end(), type->typeArgs.begin(), type->typeArgs.end());
+        res.typeArgs.insert(res.typeArgs.end(), type.typeArgs.begin(), type.typeArgs.end());
         return res;
     }
 }
 
-static Type *makeSelf(Type *scope) {
-    if (scope->isPrim()) return scope;
-    return new PointerType(scope);
+/*static Type clone(Ptr<Type> &type) {
+    return clone(type.get());
+}*/
+
+static Type makeSelf(const Type &scope) {
+    if (scope.isPrim()) return clone(scope);
+    return Type(Type::Pointer, scope);
 }
 
-bool isGeneric(Type *type, std::vector<Type *> &typeParams);
+bool isGeneric(const Type &type, const std::vector<Type> &typeParams);
 
-static bool isUnsigned(Type* type) {
-    auto s = type->print();
+static bool isUnsigned(const Type &type) {
+    auto s = type.print();
     return s == "u8" || s == "u16" ||
            s == "u32" || s == "u64";
+}
+
+static uint64_t max_for(const Type &type) {
+    auto s = type.print();
+    int bits = sizeMap[s];
+    if (isUnsigned(type)) {
+        auto x = 1ULL << (bits - 1);
+        //do this not to overflow
+        return x - 1 + x;
+    }
+    return (1ULL << (bits - 1)) - 1;
 }
