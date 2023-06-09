@@ -86,7 +86,16 @@ expr: "import";
 
 /*
 expr:
-| PRIM ("." IDENT ("(" args? ")")? | "[" expr "]")*
+"(" expr ")" | literal | "[" expr*"]" | "new" obj | obj |
+ prim "::" name (generics? "(" args? ")")? |
+ name |
+ name generics "::" name
+ name generics "(" args ")"
+ name "(" args? ")" |
+ name "::" name "(" args ")")?
+| expr ("." IDENT (generics? "(" args? ")")? |
+ "[" expr (".." expr)? "]")*
+| ("*" | "&") expr
 | expr "as" type
 | expr ("++" | "--") #post
 | ("+" | "-" | "++" | "--" | "!" | "~") expr #unary
@@ -100,7 +109,6 @@ expr:
 | expr "|" expr %left
 | expr "&&" expr %left
 | expr "||" expr %left
-| expr "?" expr ":" expr %rhs
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
 ;*/
 

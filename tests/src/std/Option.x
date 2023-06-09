@@ -13,10 +13,19 @@ impl<T> Option<T>{
   func new(val: T): Option<T>{
     return Option<T>::Some{val};  
   }
+  func new(): Option<T>{
+    return Option<T>::None;  
+  }
 
   func unwrap(self): T{
     if let Some(val) = (self){
       return val;
+    }
+    panic("unwrap on None");
+  }
+  func get(self): T*{
+    if let Some(val) = (self){
+      return &val;
     }
     panic("unwrap on None");
   }

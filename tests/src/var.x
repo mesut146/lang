@@ -7,3 +7,8 @@ func main(){
   assert *ptr == 6;
   print("varTest done\n");
 }
+
+func refTest(){
+  let a = 5;
+  //let b: i32& = a;
+}

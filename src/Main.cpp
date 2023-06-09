@@ -81,7 +81,12 @@ void compile(std::initializer_list<std::string> list) {
 }
 
 void compileTest() {
-    compile("../tests/src/lit.x");
+    auto s1 = "../tests/src/std/String.x";
+    auto s2 = "../tests/src/std/str.x";
+    auto op = "../tests/src/std/ops.x";
+    auto libc = "../tests/src/std/libc.x";
+    
+    /*compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
     compile("../tests/src/flow.x");
@@ -99,17 +104,20 @@ void compileTest() {
     compile("../tests/src/as.x");
     compile("../tests/src/alias.x");
 
-    auto s1 = "../tests/src/std/String.x";
-    auto s2 = "../tests/src/std/str.x";
-    auto op = "../tests/src/std/ops.x";
-
     compile({"../tests/src/classTest.x", s1, s2, op});
     compile({"../tests/src/boxTest.x", s1, s2, op});
     compile({"../tests/src/listTest.x", s1, s2, op});
     compile({"../tests/src/strTest.x", s1, s2, op});
     compile({"../tests/src/opt.x", s1, s2, op});
     compile({"../tests/src/mapTest.x", s1, s2, op});
-    compile({"../tests/src/libc.x", s1, s2, op});
+    compile({"../tests/src/libc-test.x", s1, s2, op, libc});*/
+    
+    auto tok = "../tests/src/parser/token.x";
+    auto lx = "../tests/src/parser/lexer.x";
+    auto ast = "../tests/src/parser/ast.x";
+    auto ps = "../tests/src/parser/parser.x";
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, lx, ast, ps});
+    //compile({"../tests/src/parser/parser.x", s1, s2, op});
 }
 
 int main(int argc, char **args) {

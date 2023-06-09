@@ -31,7 +31,19 @@ impl String{
     }
     
     func new(arr: List<u8>*): String{
-        return String{*arr};
+        let s = String::new(arr.len());
+        for(let i=0;i<arr.len();++i){
+          s.append(arr.get(i));
+        }
+        return s;
+    }
+    
+    func new(arr: List<i8>): String{
+        let s = String::new(arr.len());
+        for(let i=0;i<arr.len();++i){
+          s.append(arr.get(i));
+        }
+        return s;
     }    
 
     func len(self): i64{
@@ -47,7 +59,7 @@ impl String{
     }
     
     func cstr(self): u8*{
-      if(self.get((self.len()-1) as i32)!=0){
+      if(self.len() == 0 || self.get((self.len()-1) as i32)!=0){
         self.append(0u8);
       }
       return self.arr.arr;
@@ -72,6 +84,63 @@ impl String{
     func set(self, pos: i32, c: u8){
       self.arr.set(pos, c);
     }
+    
+    func find(self, s: str): Option<i32>{
+      return self.find(s, 0);
+    }
+    
+    func find(self, s: str, start: i32): Option<i32>{
+      let i = self.str().indexOf(s, start);
+      if(i==-1){ 
+       return Option<i32>::None; 
+      }
+      return Option::new(i);
+    }
+    
+    func replace(self, s1: str, s2: str): String{
+      let res = String::new();
+      let last = 0;
+      //"abcdbce" "bc" "x"
+      //"axdxe"
+      while(true){
+        let i = self.find(s1, last);
+        if(i.is_some()){
+          res.append(self.str().substr(last, i.unwrap()));
+          res.append(s2);
+          last = i.unwrap() + s1.len();
+        }else{
+          res.append(self.str().substr(last));
+          break;
+        }
+      }
+      return res;
+    }
+    
+    func substr(self, start: i32): str{
+      return self.substr(start, self.len() as i32);
+    }
+
+    func substr(self, start: i32, end: i32): str{
+      return self.str().substr(start, end);
+    }
+    
+    func split(self, sep: str): List<String>{
+      let arr = List<String>::new();
+      let last = 0;
+      while(true){
+        let i = self.str().indexOf(sep, last);
+        if(i == -1){
+          arr.add(self.substr(last).str());
+          break;
+        }else{
+          arr.add(self.substr(last, i).str());
+          //print("s = %s\n", arr.last().str().cstr());
+          last = i + sep.len();
+        }
+      }
+      return arr;
+    }
+    
 }
 
 impl Clone for String{

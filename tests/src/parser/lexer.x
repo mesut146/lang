@@ -1,10 +1,6 @@
 import parser/token
-import String
-import str
-import List
-import libc
-import Option
-import map
+import std/map
+import std/libc
 
 class Lexer{
   path: String;
@@ -30,7 +26,7 @@ impl i8{
 
 impl Lexer{
   func new(path: str): Lexer{
-    let s = String{read_bytes(path)};
+    let s = String::new(read_bytes(path));
     return Lexer{path: path.str(), buf: s, pos: 0, line: 1, ops: make_ops()};
   }
   
@@ -44,7 +40,7 @@ impl Lexer{
   
   func read(self): i8{
     let res = self.buf.get(self.pos);
-    self.pos+=1;
+    self.pos += 1;
     return res;
   }
   
@@ -88,12 +84,18 @@ impl Lexer{
     ops.add("]", TokenType::RBRACKET);
     ops.add("/", TokenType::DIV);
     ops.add(":", TokenType::COLON);
+    ops.add("::", TokenType::COLON2);
     ops.add(";", TokenType::SEMI);
     ops.add(",", TokenType::COMMA);
     ops.add(".", TokenType::DOT);
     ops.add("<", TokenType::LT);
     ops.add(">", TokenType::GT);
     ops.add("=", TokenType::EQ);
+    ops.add("+=", TokenType::PLUSEQ);
+    ops.add("-=", TokenType::MINUSEQ);
+    ops.add("*=", TokenType::MULEQ);
+    ops.add("/=", TokenType::DIVEQ);
+    ops.add("^=", TokenType::POWEQ);
     ops.add("+", TokenType::PLUS);
     ops.add("-", TokenType::MINUS);
     ops.add("*", TokenType::STAR);
@@ -106,16 +108,20 @@ impl Lexer{
     ops.add("&&", TokenType::ANDAND);
     ops.add("||", TokenType::OROR);
     ops.add("==", TokenType::EQEQ);
+    ops.add("!=", TokenType::NOTEQ);
     ops.add("<=", TokenType::LTEQ);
     ops.add(">=", TokenType::GTEQ);
     ops.add("!", TokenType::BANG);
     ops.add("#", TokenType::HASH);
+    ops.add("++", TokenType::PLUSPLUS);
+    ops.add("..", TokenType::DOTDOT);
     return ops;
   }
   
   func kw(s: str): TokenType{
     if(s.eq("assert")) return TokenType::ASSERT_KW;
     if(s.eq("class")) return TokenType::CLASS;
+    if(s.eq("struct")) return TokenType::STRUCT;
     if(s.eq("enum")) return TokenType::ENUM;
     if(s.eq("trait")) return TokenType::TRAIT;
     if(s.eq("impl")) return TokenType::IMPL;
@@ -228,6 +234,7 @@ impl Lexer{
     if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
     if(self.peek() == 0) return Token::new(TokenType::EOF_);
     self.skip_ws();
+    if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
     let c = self.peek();
     let start = self.pos;
     if(c.is_letter() || c == '_'){
@@ -247,7 +254,7 @@ impl Lexer{
         }
     }
     if (c == '\'' || c == '"') {
-        let cc = c;
+        let open = c;
         let type = TokenType::STRING_LIT;
         if(c == '\'') type = TokenType::CHAR_LIT;
         let s = String::new();
@@ -256,10 +263,10 @@ impl Lexer{
         while (self.pos < self.buf.len()) {
             c = self.read();
             if (c == '\\') {
-                let esc = checkEscape(self.peek()) as i8;
-                s.append(esc);
+                s.append("\\");
+                s.append(self.peek());
                 self.pos+=1;
-            } else if (c == cc) {
+            } else if (c == open) {
                 s.append(c);
                 return Token::new(type, s);
             } else {
@@ -313,17 +320,6 @@ impl Lexer{
     let type = TokenType::INTEGER_LIT;
     if(dot) type = TokenType::FLOAT_LIT;
     return Token::new(type, self.str(start, self.pos));
-}
-  
-}
-
-
-func lexer_test(){
-  let lexer = Lexer::new("../tests/src/parser/lexer.x");
-  for(let i = 0;; ++i){
-    let t = lexer.next();
-    //print("%s\n", t.print().cstr());
-    if(t.type is TokenType::EOF_) break;
   }
-  print("lexer_test done\n");
+  
 }

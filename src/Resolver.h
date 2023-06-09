@@ -4,6 +4,7 @@
 #include "IdGen.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
+#include "parser/Util.h"
 #include <iostream>
 #include <map>
 #include <memory>
@@ -12,8 +13,9 @@
 #include <variant>
 
 struct Config {
-    static const bool optimize_enum = true;
-    static const bool verbose = false;
+    static bool optimize_enum;
+    static bool verbose;
+    static bool rvo_ptr;
 };
 
 class RType;
@@ -54,22 +56,20 @@ static bool isMember(Method *m) {
     return false;
 }
 
+static std::string methodParent(Method *m) {
+    if (!m->parent) return m->name;
+    if (m->parent->isImpl()) {
+        auto impl = dynamic_cast<Impl *>(m->parent);
+        return impl->type.print() + "::" + m->name;
+    } else if (m->parent->isTrait()) {
+        auto t = dynamic_cast<Trait *>(m->parent);
+        return t->type.print() + "::" + m->name;
+    }
+    return m->name;
+}
+
 static std::string printMethod(Method *m) {
-    std::string s;
-    std::string parent;
-    if (m->parent) {
-        if (m->parent->isImpl()) {
-            auto impl = dynamic_cast<Impl *>(m->parent);
-            parent = impl->type.print();
-        } else if (m->parent->isTrait()) {
-            auto t = dynamic_cast<Trait *>(m->parent);
-            parent = t->type.print();
-        }
-    }
-    if (!parent.empty()) {
-        s += parent + "::";
-    }
-    s += m->name;
+    std::string s = methodParent(m);
     if (!m->typeArgs.empty()) {
         s += "<";
         for (int i = 0; i < m->typeArgs.size(); i++) {
@@ -83,7 +83,7 @@ static std::string printMethod(Method *m) {
     s += "(";
     int i = 0;
     if (m->self) {
-        s += parent;
+        s += m->self->type->print();
         i++;
     }
     for (auto &prm : m->params) {
@@ -92,18 +92,6 @@ static std::string printMethod(Method *m) {
     }
     s += ")";
     return s;
-}
-
-static std::string methodParent(Method *m) {
-    if (!m->parent) return m->name;
-    if (m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type.print() + "::" + m->name;
-    } else if (m->parent->isTrait()) {
-        auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type.print() + "::" + m->name;
-    }
-    return m->name;
 }
 
 static std::string mangle(Method *m) {
@@ -140,7 +128,9 @@ static bool isRet(Statement *stmt) {
         auto mc = dynamic_cast<MethodCall *>(expr->expr);
         return mc && mc->name == "panic";
     }
-    return dynamic_cast<ReturnStmt *>(stmt) || dynamic_cast<ContinueStmt *>(stmt) || dynamic_cast<BreakStmt *>(stmt);
+    return dynamic_cast<ReturnStmt *>(stmt) ||
+                dynamic_cast<ContinueStmt *>(stmt) ||
+                dynamic_cast<BreakStmt *>(stmt);
 }
 
 class EnumPrm {
@@ -205,7 +195,7 @@ enum class MutKind {
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
-    std::unordered_map<std::string, RType> cache;
+    std::unordered_map<std::string, std::map<std::string, RType>> cache;
     std::unordered_map<std::string, RType> typeMap;
     std::vector<Scope> scopes;
     int max_scope;
@@ -231,11 +221,17 @@ public:
     static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
 
     static void init_prelude();
+    
+    std::string getPath(ImportStmt& is){
+      return root +"/"+ join(is.list, "/") + ".x";
+    }
 
     void err(Expression *e, const std::string &msg);
+    void err(const std::string &msg);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
     static bool is_simple_enum(EnumDecl *ed) {
+        if(!Config::optimize_enum) return false;
         for (auto &ev : ed->variants) {
             if (ev.isStruct()) return false;
         }

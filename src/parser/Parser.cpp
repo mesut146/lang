@@ -53,12 +53,8 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     }
     consume(LBRACE);
     //members
-    while (first() != nullptr && !is(RBRACE)) {
-        if (is(IDENT)) {
-            res->fields.push_back(parseField(this));
-        } else {
-            throw std::runtime_error("invalid class member: " + first()->print());
-        }
+    while (!is(RBRACE)){
+        res->fields.push_back(parseField(this));
     }
     consume(RBRACE);
     return res;

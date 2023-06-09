@@ -14,6 +14,12 @@ impl Eq for i64{
   }
 }
 
+impl Eq for str{
+  func eq(self, x: str): bool{
+    return self.eq(x);
+  }
+}
+
 trait Clone{
   func clone(self): Self;
 }
@@ -65,11 +71,21 @@ impl Fmt{
     self.buf.append(s); 
   }
   
- func str<T>(t: T): String{
+ func str<T>(node: T*): String{
    let f = Fmt::new();
-   Debug::debug(t, &f);
+   Debug::debug(node, &f);
    return f.buf;
  }
+}
+
+impl Debug for bool{
+  func debug(self, f: Fmt*){
+    if(self){
+      f.print("true");
+    }else{
+      f.print("false");
+    }
+  }
 }
 
 trait Hash{

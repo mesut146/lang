@@ -7,6 +7,7 @@ bool isSame(const Type &type, BaseDecl *decl) {
 }
 
 bool Compiler::is_simple_enum(const Type &type) {
+    if(!Config::optimize_enum) return false;
     auto rt = resolv->resolve(type);
     return rt.targetDecl && rt.targetDecl->isEnum() && Resolver::is_simple_enum((EnumDecl *) rt.targetDecl);
 }
@@ -69,8 +70,11 @@ bool Compiler::doesAlloc(Expression *e) {
     }
     auto mc = dynamic_cast<MethodCall *>(e);
     if (mc) {
-        auto m = resolv->resolve(mc).targetMethod;
-        return m && isRvo(m);
+        if(true || Config::rvo_ptr){
+          auto m = resolv->resolve(mc).targetMethod;
+          return m && isRvo(m);
+        }
+        return false;
     }
     auto ty = dynamic_cast<Type *>(e);
     if (ty) {
@@ -379,7 +383,8 @@ public:
                 }
             }
             ptr->setName(f.name);
-            compiler->NamedValues[f.name] = ptr;
+            auto id = compiler->getId(f.name);
+            compiler->varAlloc[id] = ptr;
         }
         return {};
     }
@@ -415,14 +420,16 @@ public:
         if (node->isPointer()) {
             return {};
         }
-        if (Config::optimize_enum && compiler->is_simple_enum(*node)) return {};
-        return alloc(*node->scope.get(), node);
+        if (compiler->is_simple_enum(*node)) return {};
+        //return alloc(*node->scope.get(), node);
+        return alloc(*node, node);
     }
 
     void child(Expression *e) {
         auto mc = dynamic_cast<MethodCall *>(e);
         if (mc) {
-            call(mc);
+            if(Config::rvo_ptr) call(mc);
+            else e->accept(this);
             return;
         }
         auto obj = dynamic_cast<ObjExpr *>(e);
@@ -500,6 +507,7 @@ public:
         return {};
     }
     std::any visitWhileStmt(WhileStmt *node) override {
+        node->expr->accept(this);
         compiler->resolv->max_scope++;
         node->body->accept(this);
         return {};
@@ -523,14 +531,25 @@ public:
         return {};
     }
     std::any visitReturnStmt(ReturnStmt *node) override {
-        if (node->expr) {
-            auto mc = dynamic_cast<MethodCall *>(node->expr.get());
-            if (mc) {
-                call(mc);
-            } else if (compiler->doesAlloc(node->expr.get()))
-                return {};
-            node->expr->accept(this);
+        if (!node->expr) {
+            return {};
         }
+        auto e = node->expr.get();
+        auto mc = dynamic_cast<MethodCall *>(e);
+        if (mc) {
+            call(mc);
+            return {};
+        }
+        auto oe = dynamic_cast<ObjExpr *>(e);
+        if (oe) {
+            object(oe);
+            return {};
+        }
+        if (compiler->doesAlloc(e)){
+            return {};
+        }else{
+            e->accept(this);
+        } 
         return {};
     }
     std::any visitExprStmt(ExprStmt *node) override {

@@ -1,5 +1,6 @@
 import std/it
 import std/ops
+import std/libc
 
 class List<T>{
   arr: T*;
@@ -24,6 +25,7 @@ impl<T> List<T>{
     for(let i = 0;i < self.count;++i){
       tmp[i] = self.arr[i];
     }
+    //free(self.arr as u8*);
     self.arr = tmp;
     self.cap = self.cap * 2;
   }

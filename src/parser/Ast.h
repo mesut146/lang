@@ -37,13 +37,13 @@ class Node {
 public:
     int pos = 0;
     int line = 0;
+    int id = -1;
+    static int last_id;
 
     virtual ~Node() = default;
 };
 class Expression : public Node {
 public:
-    //static int last_id = 0;
-    int id = -1;
     virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
@@ -58,6 +58,7 @@ public:
         Prim,
         Simple,
         Pointer,
+        Ref,
         Option,
         Array,
         Slice,
@@ -72,7 +73,7 @@ public:
     Type &operator=(const Type &rhs) {
         if (rhs.scope) {
             set(*rhs.scope.get());
-        }else{
+        } else {
             scope.reset();
         }
         name = rhs.name;
@@ -83,7 +84,7 @@ public:
     }
 
     explicit Type(const std::string &name) : name(name) {}
-    explicit Type(const Type &scope, const std::string &name): name(name) {
+    explicit Type(const Type &scope, const std::string &name) : name(name) {
         set(scope);
     }
     Type(Kind kind, const Type &inner) : kind(kind) {
@@ -93,14 +94,15 @@ public:
         set(inner);
     }
 
-    void set(const Type& type){
+    void set(const Type &type) {
         scope = std::make_unique<Type>(type);
     }
     bool isArray() const { return kind == Array; }
     bool isSlice() const { return kind == Slice; }
     bool isPointer() const { return kind == Pointer; }
+    bool isRef() const { return kind == Ref; }
 
-    Type &unwrap() {
+    Type unwrap() {
         if (isPointer()) return *scope.get();
         return *this;
     }
@@ -299,6 +301,23 @@ public:
     std::any accept(Visitor *v) override;
 };
 
+class MatchArm{
+public:
+    std::optional<Type> type;
+    std::vector<std::string> args;
+    Ptr<Statement> rhs;
+    
+    bool us(){ return !type.has_value(); }
+};
+
+class Match: public Statement{
+public:
+    Ptr<Expression> expr;
+    std::vector<MatchArm> arms;
+    
+    std::string print() const override{ return "match"; };
+    std::any accept(Visitor *v) override{ return {}; };
+};
 
 class SimpleName : public Expression {
 public:

@@ -36,5 +36,8 @@ impl<K, V> Map<K, V>{
     }
     return Option<V>::None;
   }
+  func get(self, k: K*): Option<V>{
+    return self.get(*k);
+  }
 }
 

@@ -9,9 +9,11 @@ std::string Signature::print() {
         s += "::";
     } else if (m && m->parent) {
         auto p = m->parent;
-        auto imp = (Impl *) p;
-        s += imp->type.print();
-        s += "::";
+        if(p->isImpl()){
+          auto imp = (Impl *) p;
+          s += imp->type.print();
+          s += "::";
+        }
     }
     if (mc) {
         s += mc->name;
@@ -65,6 +67,12 @@ Type handleSelf(const Type &type, Method *m) {
 Signature Signature::make(Method *m, Resolver *r) {
     Signature res;
     res.m = m;
+    if(m->parent){
+        if(m->parent->isImpl()){
+            auto imp = (Impl*)m->parent;
+            res.scope=RType(imp->type);
+        }
+    }
     if (m->self) {
         res.args.push_back(*m->self->type);
     }
@@ -118,7 +126,12 @@ void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list)
         } else if (item->isExtern()) {
             auto ex = dynamic_cast<Extern *>(item.get());
             for (auto &m : ex->methods) {
-                if (m.name == name) { list.push_back(Signature::make(&m, r)); }
+                if (m.name == name) {
+                    if(name=="free"){
+                        print("free " + r->unit->path);
+                    }
+                    list.push_back(Signature::make(&m, r));
+                }
             }
         }
     }
@@ -193,7 +206,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     auto mc = sig.mc;
     auto list = collect(sig);
     if (list.empty()) {
-        error(r, "no such method: " + sig.mc->print() + " => " + sig.print());
+        r->err(mc, "no such method: " + sig.mc->print() + " => " + sig.print());
     }
     std::vector<Signature> real;
     std::map<Method *, std::string> errors;
@@ -234,12 +247,11 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     }
     auto &sig2 = real[0];
     auto target = sig2.m;
-    RType res;
     if (!target->isGeneric) {
         if (target->unit->path != r->unit->path) {
             r->usedMethods.insert(target);
         }
-        res = r->resolve(sig2.ret).clone();
+        auto res = r->resolve(sig2.ret).clone();
         res.targetMethod = target;
         return res;
     }
@@ -281,7 +293,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         tmap[k] = *v;
     }
     target = generateMethod(tmap, target, sig);
-    res = r->resolve(target->type).clone();
+    auto res = r->resolve(target->type).clone();
     res.targetMethod = target;
     return res;
 }
@@ -346,6 +358,10 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
         if (!target.isPointer()) return "target is not pointer";
         return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
     }
+    if (arg.isRef()) {
+        if (!target.isRef()) return "target is not ref";
+        return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
+    }
     if (arg.isSlice()) {
         if (!target.isSlice()) return "target is not slice";
         return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
@@ -398,9 +414,18 @@ std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig
         }
     }
     if (m->parent && m->parent->isImpl() && mc->scope) {
+        auto &scope = sig.scope->type;
         auto impl = dynamic_cast<Impl *>(m->parent);
+        if(sig.scope->trait){
+            auto scp = sig.args[0].unwrap();
+            if(scp.name!=impl->type.name){
+                return format("not same impl %s vs %s", scp.print().c_str(), impl->type.print().c_str());
+            }
+        }
+        else if(scope.name != impl->type.name){
+            return format("not same impl %s vs %s", scope.print().c_str(), impl->type.print().c_str());
+        }
         if (impl->type_params.empty() && !impl->type.typeArgs.empty()) {
-            auto &scope = sig.scope->type;
             //check they belong same impl
             for (int i = 0; i < scope.typeArgs.size(); i++) {
                 if (scope.typeArgs[i].print() != impl->type.typeArgs[i].print()) return "not same impl";

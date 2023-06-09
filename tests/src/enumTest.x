@@ -34,19 +34,12 @@ func structTest(){
   print("structTest done\n");
 }
 
-func ee1(e: E){
- print("e=%p p=%p id=%d\n", e, &e, e.index);
-}
-func ee(e: E*){
- print("e=%p p=%p id=%d\n", e, &e, e.index);
-}
-
 func enumTest(){
   let a: E = E::A;
   let b: E = E::B{b: 6, a: 5};//random order
   let c: E = E::C{100};
   let d: E = E::A2{A{a: 100, b: 200}};
-  //ee(&a);ee(&b);ee(&c);
+  
   assert a.index == 0;
   assert b.index == 1;
   assert c.index == 2;
@@ -62,8 +55,15 @@ func enumTest(){
   if let E::B(p1, p2) = (b){
     isB = true;
     assert p1 == 5 && p2 == 6;
+    //mutate
     p1 = 10;
     assert p1 == 10 && p2 == 6;
+  }
+  //check mutate
+  if let E::B(p1, p2) = (b){
+    assert p1 == 10 && p2 == 6;
+  }else{
+    panic("mut");
   }
   if let E::C(p3) = (c){
     isC = true;

@@ -13,6 +13,7 @@ TokenType kw(std::string &s) {
     if (s == "virtual") return VIRTUAL;
     if (s == "static") return STATIC;
     if (s == "type") return TYPE;
+    if (s == "match") return MATCH;
     if (s == "bool") return BOOLEAN;
     if (s == "true") return TRUE;
     if (s == "false")
@@ -71,26 +72,67 @@ TokenType kw(std::string &s) {
 
 std::vector<std::string> Lexer::suffixes = {"i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"};
 
+void eatNum(Lexer &l) {
+    while (l.peek() == '_' && isdigit(l.buf[l.pos + 1]) || isdigit(l.peek())) {
+        if (l.peek() == '_') {
+            l.pos++;
+            if (!isdigit(l.peek())) {
+                throw std::runtime_error("expected digit got: ");
+            }
+        }
+        l.pos++;
+    }
+}
+
+std::string trim(const std::string &str) {
+    std::string s;
+    for (auto c : str) {
+        if (c != '_') s.push_back(c);
+    }
+    return s;
+}
+
+bool is_hex(char c) {
+    return isdigit(c) || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F';
+}
+
 Token Lexer::readNumber() {
     bool dot = false;
     int start = pos;
-    pos++;
-    char c = peek();
-    while (isdigit(c) || (c == '.' && isdigit(buf[pos + 1]))) {
-        dot |= (c == '.');
-        pos++;
-        c = peek();
+    if (peek() == '0' && peek(1) == 'x') {
+        pos += 2;
+        while (is_hex(peek()) || peek() == '_') {
+            pos++;
+        }
+        for (auto &sf : Lexer::suffixes) {
+            if (str(pos, pos + sf.length()) == sf) {
+                pos += sf.length();
+            }
+        }
+        return Token(INTEGER_LIT, trim(str(start, pos)));
     }
+    pos++;
+    eatNum(*this);
+    if (peek() == '.' && isdigit(buf[pos + 1])) {
+        pos += 2;
+        eatNum(*this);
+        dot = true;
+    }
+    auto res = trim(str(start, pos));
+    auto suf = pos;
     if (peek() == '_') {
         pos++;
     }
-    for (auto &s : Lexer::suffixes) {
-        if (str(pos, pos + s.length()) == s) {
-            pos += s.length();
+    for (auto &sf : Lexer::suffixes) {
+        if (str(pos, pos + sf.length()) == sf) {
+            pos += sf.length();
             break;
         }
     }
-    return Token(dot ? FLOAT_LIT : INTEGER_LIT, str(start, pos));
+    if (pos > suf) {
+        res += str(suf, pos);
+    }
+    return Token(dot ? FLOAT_LIT : INTEGER_LIT, res);
 }
 
 Token Lexer::readIdent() {

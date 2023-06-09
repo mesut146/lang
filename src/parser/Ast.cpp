@@ -2,6 +2,8 @@
 #include "Visitor.h"
 #include "parser/Util.h"
 
+int Node::last_id = -1;
+
 std::string &BaseDecl::getName() {
     return type.name;
 }

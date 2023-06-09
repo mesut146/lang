@@ -53,6 +53,7 @@ public:
     std::unique_ptr<llvm::Module> mod;
     std::map<std::string, std::vector<llvm::Value *>> allocMap;
     std::map<std::string, llvm::Value *> NamedValues;
+    std::map<std::string, llvm::Value *> varAlloc;
     std::map<std::string, llvm::Type *> classMap;
     std::map<std::string, llvm::Function *> funcMap;
     llvm::Function *printf_proto = nullptr;
@@ -98,6 +99,11 @@ public:
     bool isRvo(Method *m) {
         return !m->type.isVoid() && isStruct(m->type) && !is_simple_enum(m->type);
     }
+    
+    bool isRvo(Expression* e){
+        auto m = resolv->resolve(e).targetMethod;
+        return m && isRvo(m);
+    }
 
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
         return {makeInt(i1, 64), makeInt(i2, 64)};
@@ -131,11 +137,26 @@ public:
     llvm::Value *getAlloc(Expression *e) {
         auto &arr = allocMap[e->print()];
         if (arr.empty()) {
-            throw std::runtime_error("alloc error for " + e->print());
+            resolv->err(e, "alloc error for " + e->print());
         }
         auto res = arr[0];
         arr.erase(arr.begin());
         return res;
+    }
+    
+    std::string getId(const std::string& name){
+        return name+"#"+std::to_string(resolv->max_scope);
+    }
+    
+    llvm::Value* getVar(const std::string& name){
+        auto id = getId(name);
+        auto it=NamedValues.find(id);
+        if(it==NamedValues.end()) error("get var "+name);
+        return it->second;
+    }
+    void addVar(const std::string& name, llvm::Value* ptr){
+        auto id = getId(name);
+        NamedValues[id]=ptr;
     }
 
     llvm::Function *make_printf();

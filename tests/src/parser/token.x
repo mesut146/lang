@@ -8,10 +8,12 @@ enum TokenType {
     EOF_,
     IDENT,
     CLASS,
+    STRUCT,
     ENUM,
     TRAIT,
     IMPL,
     STATIC,
+    TYPE,
     I8,
     I16,
     I32,
@@ -127,16 +129,16 @@ impl Token{
         return self.type is t;
     }
 
-    /*func is(self, t1: TokenType): bool {
-        for (auto tt : t) {
-            if (tt == type) return true;
+    func is(self, arr: [TokenType]): bool {
+        for (let i=0;i<arr.len;++i) {
+            if (self.type is arr[i]) return true;
         }
         return false;
-    }*/
+    }
 
     func print(self): String {
         let s = String::new("Token{type: ");
-        s.append(Fmt::str(self.type));
+        s.append(Fmt::str(&self.type));
         s.append(", line: ");
         s.append(self.line.str());
         s.append(", value: ");

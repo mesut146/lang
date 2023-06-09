@@ -26,8 +26,8 @@ public:
         init();
     }
 
-    char peek() {
-        return buf[pos];
+    char peek(int la = 0) {
+        return buf[pos + la];
     }
 
     char read() {

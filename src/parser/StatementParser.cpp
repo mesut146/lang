@@ -61,14 +61,16 @@ std::unique_ptr<Statement> parseFor(Parser *p) {
     auto res = std::make_unique<ForStmt>();
     p->consume(FOR);
     p->consume(LPAREN);
-    auto var = p->parseVarDeclExpr();
+    if(!p->is(SEMI)){
+      auto var = p->parseVarDeclExpr();
+      res->decl.reset(var);
+    }
     p->consume(SEMI);
-    res->decl.reset(var);
-    if (!p->first()->is(SEMI)) {
+    if (!p->is(SEMI)) {
         res->cond.reset(p->parseExpr());
     }
     p->consume(SEMI);
-    if (!p->first()->is(RPAREN)) {
+    if (!p->is(RPAREN)) {
         auto list = p->exprList();
         for (auto e : list) {
             res->updaters.push_back(std::unique_ptr<Expression>(e));
@@ -107,6 +109,33 @@ std::unique_ptr<Statement> Parser::parseStmt() {
     return res;
 }
 std::unique_ptr<Statement> Parser::parseStmt2() {
+    if(is(MATCH)){
+        auto ret = std::make_unique<Match>();
+        pop();
+        consume(LPAREN);
+        ret->expr.reset(parseExpr());
+        consume(RPAREN);
+        consume(LBRACE);
+        while(!is(RBRACE)){
+            MatchArm arm;
+            arm.type=parseType();
+            if(is(LPAREN)){
+                consume(LPAREN);
+                arm.args.push_back(pop().value);
+                while(is(COMMA)){
+                    pop();
+                    arm.args.push_back(pop().value);
+                }
+                consume(RPAREN);
+            }
+            consume(ARROW);
+            arm.rhs=parseStmt();
+            ret->arms.push_back(std::move(arm));
+            if(is(COMMA)) pop();
+        }
+        consume(RBRACE);
+        return ret;
+    }
     if (is(ASSERT_KW)) {
         consume(ASSERT_KW);
         auto expr = parseExpr();

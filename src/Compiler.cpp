@@ -77,7 +77,7 @@ void Compiler::compileAll() {
     }
     link_run();
     for (auto &[k, v] : Resolver::resolverMap) {
-        v.reset();
+        //v.reset();
         //v->unit.reset();
     }
 }
@@ -314,14 +314,6 @@ llvm::Value *extend(llvm::Value *val, const Type &type, Compiler *c) {
 }
 
 llvm::Value *Compiler::cast(Expression *expr, const Type &type) {
-    auto lit = dynamic_cast<Literal *>(expr);
-    if (lit && lit->type == Literal::INT) {
-        auto bits = getSize(type);
-        if (lit->suffix) {
-            bits = getSize(*lit->suffix);
-        }
-        return llvm::ConstantInt::get(getInt(bits), atoi(lit->val.c_str()));
-    }
     auto val = loadPtr(expr);
     if (type.isPrim()) {
         return extend(val, type, this);
@@ -342,6 +334,12 @@ void Compiler::setField(Expression *expr, const Type &type, bool do_cast, llvm::
             return;
         }
     }
+    if(isRvo(expr)){
+        auto val = gen(expr);
+        copy(ptr, val, type);
+        return;
+    }
+    //dynamic_cast<MethodCall *>(expr)
     if (is_simple_enum(type)) {
         auto val = gen(expr);
         if (val->getType()->isPointerTy()) {
@@ -350,7 +348,7 @@ void Compiler::setField(Expression *expr, const Type &type, bool do_cast, llvm::
         Builder->CreateStore(val, ptr);
     } else if (doesAlloc(expr)) {
         child(expr, ptr);
-    } else if (isStruct(type) && !dynamic_cast<MethodCall *>(expr)) {//todo mc
+    } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
         copy(ptr, val, type);
     } else {
@@ -374,7 +372,7 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(mapType(m->type)->getPointerTo());
     }
     if (m->self) {
-        auto &st = *m->self->type;
+        auto st = *m->self->type;
         auto real = st.unwrap();
         if (is_simple_enum(real)) {
             st = real;
@@ -723,6 +721,17 @@ void dbg_var(Fragment &f, const Type &type, Compiler *c) {
     c->DBuilder->insertDeclare(val, v, e, lc, c->Builder->GetInsertBlock());
 }
 
+void dbg_var(const std::string& name, int line, int pos, const Type &type, Compiler *c) {
+    if (!c->debug) return;
+    auto sp = c->di.sp;
+    //auto ff = c->DBuilder->createFile(c->di.cu->getFilename(), c->di.cu->getDirectory());
+    auto v = c->DBuilder->createAutoVariable(sp, name, c->di.file, line, c->map_di(type), true);
+    auto val = c->NamedValues[name];
+    auto lc = llvm::DILocation::get(sp->getContext(), line, pos, sp);
+    auto e = c->DBuilder->createExpression();
+    c->DBuilder->insertDeclare(val, v, e, lc, c->Builder->GetInsertBlock());
+}
+
 void dbg_func(Method *m, llvm::Function *func, Compiler *c) {
     if (!c->debug) return;
     llvm::SmallVector<llvm::Metadata *, 8> tys;
@@ -828,6 +837,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *t) {
     }
     //rvo
     auto ptr = func->getArg(0);
+    
     if (doesAlloc(e)) {
         child(e, ptr);
         return Builder->CreateRetVoid();
@@ -1008,7 +1018,12 @@ std::any Compiler::visitAssign(Assign *i) {
     auto val = l;
     auto lt = resolv->getType(i->left);
     if (i->op == "=") {
-        setField(i->right, lt, false, l);
+        if(dynamic_cast<ObjExpr*>(i->right)){
+            auto val=gen(i->right);
+            copy(l, val, lt);
+        }else{
+            setField(i->right, lt, false, l);
+        }
         return l;
     }
     auto r = cast(i->right, lt);
@@ -1035,11 +1050,7 @@ std::any Compiler::visitAssign(Assign *i) {
 }
 
 std::any Compiler::visitSimpleName(SimpleName *n) {
-    auto it = NamedValues.find(n->name);
-    if (it != NamedValues.end()) {
-        return it->second;
-    }
-    throw std::runtime_error("compiler bug; sym not found: " + n->name + " in " + curMethod->name);
+    return NamedValues[n->name];
 }
 
 llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
@@ -1109,7 +1120,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     } else if (mc->name == "malloc" && !mc->scope) {
         auto size = cast(mc->args[0], Type("i64"));
         if (!mc->typeArgs.empty()) {
-            int typeSize = getSize(mc->typeArgs[0]) / 8;
+            int typeSize = getSize2(mc->typeArgs[0]) / 8;
             size = Builder->CreateNSWMul(size, makeInt(typeSize, 64));
         }
         auto call = callMalloc(size, this);
@@ -1258,9 +1269,16 @@ std::any Compiler::visitLiteral(Literal *n) {
         if (n->suffix) {
             bits = getSize(*n->suffix);
         }
-        return (llvm::Value *) llvm::ConstantInt::get(getInt(bits), atoi(n->val.c_str()));
+        int base = 10;
+        if(n->val[0]=='0'&&n->val[1]=='x') base = 16;
+        auto val = std::stoll(n->val, nullptr, base);
+        return (llvm::Value *) llvm::ConstantInt::get(getInt(bits), val);
     } else if (n->type == Literal::BOOL) {
         return (llvm::Value *) (n->val == "true" ? Builder->getTrue() : Builder->getFalse());
+    }else if(n->type == Literal::FLOAT){
+        //auto ty = resolv->getType(n);
+        auto ty = mapType(Type("f64"));
+        return (llvm::Value *) llvm::ConstantFP::get(ty, std::stod(n->val.c_str()));
     }
     throw std::runtime_error("literal: " + n->print());
 }
@@ -1298,6 +1316,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
     for (auto &f : n->list) {
         auto rhs = f.rhs.get();
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
+        NamedValues[f.name] = varAlloc[getId(f.name)];
         dbg_var(f, type, this);
         //no unnecessary alloc
         if (doesAlloc(rhs)) {
@@ -1503,6 +1522,16 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
     return nullptr;
 }
 
+bool isp(Expression* e, llvm::Value* val, Compiler* c){
+    auto rt = c->resolv->getType(e);
+    if(rt.isPointer() && isAlloc(e, val)){
+        return true;
+    }
+    /*if(dynamic_cast<SimpleName>(e)){
+    }*/
+    return false;
+}
+
 std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto decl = findEnum(b->type, resolv.get());
     auto rhs = gen(b->rhs);
@@ -1511,6 +1540,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
         tag = rhs;
         if (tag->getType()->isPointerTy()) tag = load(tag);
     } else {
+        if(isp(b->rhs.get(), rhs, this)){
+            rhs = load(rhs);
+        }
         tag = load(gep2(rhs, 0));
     }
 
@@ -1544,13 +1576,14 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
             auto targetTy = mapType(prm.type)->getPointerTo();
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy);
             NamedValues[argName] = ptrReal;
+            dbg_var(argName, b->rhs->line, 0, prm.type, this);
             offset += getSize(prm.type) / 8;
         }
     }
     b->thenStmt->accept(this);
     //clear params
     for (auto &p : b->args) {
-        NamedValues.erase(p);
+        //NamedValues.erase(p);
     }
     if (!isReturnLast(b->thenStmt.get())) {
         Builder->CreateBr(next);
@@ -1572,7 +1605,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
 llvm::Value *Compiler::getTag(Expression *expr) {
     auto tag = gen(expr);
     auto lt = resolv->getType(expr);
-    if (Config::optimize_enum && is_simple_enum(lt)) {
+    if (is_simple_enum(lt)) {
         if (isPtr(tag)) {
             return load(tag);
         }
@@ -1604,7 +1637,7 @@ std::any Compiler::visitAsExpr(AsExpr *e) {
     }
     //derived to base
     auto val = gen(e->expr);
-    if (resolv->getType(e->expr).isPointer()) {
+    if (resolv->getType(e->expr).isPointer() && is_mut_prm(e->expr, this)) {
         val = load(val);
     }
     return Builder->CreateBitCast(val, mapType(ty));
@@ -1804,7 +1837,7 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
         return ptr;
     }
     auto elem = node->list[0];
-    llvm::Value *elem_ptr;
+    llvm::Value *elem_ptr=nullptr;
     if (doesAlloc(elem)) {
         elem_ptr = gen(elem);
     }
@@ -1824,7 +1857,7 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     Builder->CreateCondBr(branch(ne), setbb, nextbb);
     Builder->SetInsertPoint(setbb);
     func->getBasicBlockList().push_back(setbb);
-    if (doesAlloc(elem)) {
+    if (elem_ptr) {
         copy(phi, elem_ptr, type);
     } else {
         setField(node->list[0], type, true, phi);

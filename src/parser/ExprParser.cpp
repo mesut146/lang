@@ -109,13 +109,16 @@ Type Parser::parseType() {
         }
     }
 
-    while (is(STAR) || is(QUES)) {
+    while (is(STAR) || is(QUES) || is(AND)) {
         if (is(STAR)) {
             consume(STAR);
             res = Type(Type::Pointer, res);
         } else if (is(QUES)) {
             consume(QUES);
             res = Type(Type::Option, res);
+        }else if(AND){
+            consume(AND);
+            res = Type(Type::Ref, res);
         }
     }
     return res;
@@ -251,7 +254,7 @@ Expression *PRIM(Parser *p) {
             return loc(mc, line);
         }
         return new Type(*type, name);
-    } else if (p->is({IDENT, IS, AS})) {
+    } else if (p->is({IDENT, IS, AS, TYPE})) {
         auto id = p->pop().value;
         if (p->is(LPAREN)) {
             auto res = parseCall(p, id);

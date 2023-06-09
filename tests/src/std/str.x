@@ -74,6 +74,10 @@ impl str{
     func substr(self, start: i32, end: i32): str{
       if(start > self.len()) panic("start index out of bounds %d of %d", start, self.len());
       if(end > self.len()) panic("end index out of bounds %d of %d", end, self.len());
+      if(start == end){
+        let arr = [0u8];
+        return str{arr[0..0]};
+      }
       assert start < end;
       return str{self.buf[start..end]};
     }
@@ -94,6 +98,23 @@ impl str{
     
     func str(self): String{
       return String::new(*self);
+    }
+    
+    func split(self, sep: str): List<str>{
+      let arr = List<str>::new();
+      let last = 0;
+      while(true){
+        let i = self.indexOf(sep, last);
+        if(i == -1){
+          arr.add(self.substr(last));
+          break;
+        }else{
+          arr.add(self.substr(last, i));
+          //print("s = %s\n", arr.last().str().cstr());
+          last = i + sep.len();
+        }
+      }
+      return arr;
     }
 
 }

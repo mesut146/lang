@@ -14,6 +14,7 @@ enum TokenType {
     IMPL,
     STATIC,
     TYPE,
+    MATCH,
     I8,
     I16,
     I32,

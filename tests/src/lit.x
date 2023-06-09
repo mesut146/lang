@@ -10,7 +10,11 @@ func main(){
   underflow_u8();
   underflow_u16();
   underflow_u32();
-  test(1);
+  
+  let sc = 1_000_000;
+  //let dec = 1_000.123_456;
+  let hex = 0xA0;
+  assert hex == 160;
   print("literalTest done\n");
 }
 

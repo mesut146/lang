@@ -1,12 +1,7 @@
 import parser/lexer
 import parser/token
 import parser/ast
-import List
-import String
-import str
-import map
-import Option
-import Box
+import std/map
 
 class Parser{
   lexer: Lexer*;
@@ -18,14 +13,7 @@ class Parser{
 }
 
 impl Parser{
-  func test(){
-    let lexer = Lexer::new("../tests/src/parser/parser.x");
-    let parser = Parser::new(&lexer);
-    let unit = parser.parse_unit();
-    print("%s\n", Fmt::str(unit).cstr());
-  }
-
-
+  
   func new(l: Lexer*): Parser{
     let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path)};
     res.fill();
@@ -36,11 +24,12 @@ impl Parser{
     while (true) {
         let t = self.lexer.next();
         if (t.is(TokenType::EOF_))
-            return;
+            break;
         if (t.is(TokenType::COMMENT))
             continue;
         self.tokens.add(t);
       }
+      print("tokens %d\n", self.tokens.len());
     }
     
     func has(self): bool{
@@ -51,12 +40,25 @@ impl Parser{
       return self.has() && self.peek().type is tt;
     }
     
+    func is(self, tt1: TokenType, tt2: TokenType): bool{
+      return self.has() && self.peek().type is tt1 && self.peek(1).type is tt2;
+    }
+    
     func peek(self): Token*{
-      return self.tokens.get_ptr(self.pos);
+      return self.get(self.pos);
+    }
+    
+    func peek(self, la: i32): Token*{
+      return self.get(self.pos + la);
+    }
+    
+    func get(self, pos: i32): Token*{
+      if(pos >= self.tokens.len()) panic("eof");
+      return self.tokens.get_ptr(pos);
     }
     
     func pop(self): Token*{
-      let t = self.tokens.get_ptr(self.pos);
+      let t = self.peek();
       ++self.pos;
       return t;
     }
@@ -64,7 +66,7 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
-      panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(tt).cstr());
+      panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(&tt).cstr());
     }
     
     func parse_unit(self): Unit*{
@@ -84,8 +86,14 @@ impl Parser{
           }
           self.consume(TokenType::RPAREN);
         }
-        if(self.is(TokenType::CLASS)){
+        if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
           self.unit.items.add(Item::Struct{self.parse_struct(derives)});
+        }else if(self.is(TokenType::ENUM)){
+          self.unit.items.add(Item::Enum{self.parse_enum(derives)});
+        }else if(self.is(TokenType::IMPL)){
+            self.unit.items.add(Item::Impl{self.parse_impl()});
+        }else if(self.is(TokenType::FUNC)){
+            self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None)});
         }else{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }
@@ -104,9 +112,93 @@ impl Parser{
       return res;
     }
     
+    func parse_impl(self): Impl{
+        self.consume(TokenType::IMPL);
+        let type_params = List<Type>::new();
+        if (self.is(TokenType::LT)) {
+          type_params = self.type_params();
+        }
+        let t1 = self.parse_type();
+        if(self.is(TokenType::FOR)){
+            self.pop();
+            let target = self.parse_type();
+            let op = Option::new(target);
+            return Impl{type_params, Option::new(t1), target, self.parse_methods(op)};
+        }else{
+          let op = Option::new(t1);
+          return Impl{type_params, Option<Type>::None, t1, self.parse_methods(op)};
+        }
+        panic("");
+    }
+    
+    func parse_methods(self, imp: Option<Type>): List<Method>{
+        let arr = List<Method>::new();
+        self.consume(TokenType::LBRACE);
+        while(!self.is(TokenType::RBRACE)){
+            arr.add(self.parse_method(imp));
+        }
+        self.consume(TokenType::RBRACE);
+        return arr;
+    }
+    
+    func parse_method(self, imp: Option<Type>): Method{
+      if(self.is(TokenType::VIRTUAL)){
+        self.pop();
+      }
+      self.consume(TokenType::FUNC);
+      let line = self.peek().line;
+      let name = self.pop().value;
+      let type_args = List<Type>::new();
+      if(self.is(TokenType::LT)){
+        type_args = self.type_params();
+      }
+      self.consume(TokenType::LPAREN);
+      let params = List<Param>::new();
+      let selfp = Option<Param>::None;
+      if(!self.is(TokenType::RPAREN)){
+        if(self.is(TokenType::IDENT, TokenType::COLON)){
+          params.add(self.parse_param());
+        }else{
+          let self_name = self.name();
+          let self_ty = Type::Pointer{Box::new(imp.unwrap())};
+          selfp = Option::new(Param{self_name, self_ty, true});
+        }
+        while (self.is(TokenType::COMMA)) {
+            self.consume(TokenType::COMMA);
+            params.add(self.parse_param());
+        }
+      }
+      self.consume(TokenType::RPAREN);
+      let type = Option<Type>::None;
+      if(self.is(TokenType::COLON)){
+        self.pop();
+        type = Option::new(self.parse_type());
+      }else{
+        type = Option::new(Type::new("void".str()));
+      }
+      let body = Option<Block>::None;
+      if(self.is(TokenType::SEMI)){
+        self.pop();
+      }else{
+        body = Option::new(self.parse_block());
+      }
+      return Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body};
+    }
+    
+    func parse_param(self): Param{
+      let name = self.pop();
+      self.consume(TokenType::COLON);
+      let type=self.parse_type();
+      return Param{name.value, type, false};
+    }
+    
     func parse_struct(self, derives: List<Type>): StructDecl{
       let line = self.peek().line;
-      self.consume(TokenType::CLASS);
+      if(self.is(TokenType::CLASS)){
+        self.consume(TokenType::CLASS);
+      }else{
+        self.consume(TokenType::STRUCT);
+      }
       let type = self.parse_type();
       let is_generic = false;
       //isgen
@@ -121,21 +213,59 @@ impl Parser{
       }else{
         self.consume(TokenType::LBRACE);
         while(!self.is(TokenType::RBRACE)){
-          fields.add(self.parse_field());
+          fields.add(self.parse_field(true));
         }
         self.consume(TokenType::RBRACE);
       }
       return StructDecl{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, fields: fields};
     }
     
-    func parse_field(self): FieldDecl{
+    func parse_field(self, semi: bool): FieldDecl{
       let line=self.peek().line;
       let name = self.pop().value;
       self.consume(TokenType::COLON);
       let type=self.parse_type();
-      Fmt::str(type).dump();
-      self.consume(TokenType::SEMI);
+      if(semi){
+        self.consume(TokenType::SEMI);
+      }
       return FieldDecl{name, type};
+    }
+    
+    func parse_enum(self, derives: List<Type>): EnumDecl{
+      let line=self.peek().line;
+      self.consume(TokenType::ENUM);
+      let type = self.parse_type();
+      let is_generic = false;
+      //isgen
+      let base = Option<Type>::None;
+      if(self.is(TokenType::COLON)){
+        self.pop();
+        base = Option<Type>::Some{self.parse_type()};
+      }
+      self.consume(TokenType::LBRACE);
+      let variants = List<Variant>::new();
+      variants.add(self.parse_variant());
+      while(self.is(TokenType::COMMA)){
+        self.pop();
+        variants.add(self.parse_variant());
+      }
+      self.consume(TokenType::RBRACE);
+      return EnumDecl{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, variants: variants};
+    }
+    
+    func parse_variant(self): Variant{
+      let name = self.name();
+      let fields = List<FieldDecl>::new();
+      if(self.is(TokenType::LPAREN)){
+        self.pop();
+        fields.add(self.parse_field(false));
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          fields.add(self.parse_field(false));
+        }
+        self.consume(TokenType::RPAREN);
+      }
+      return Variant{name, fields};
     }
     
     func parse_type(self): Type{
@@ -146,14 +276,14 @@ impl Parser{
           self.pop();
           let s = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
-          return Type::Array{Box::new(type), i32::parse(&s.value)};
+          let bx: Box<Type> = Box::new(type);
+          return Type::Array{bx,  i32::parse(&s.value)};
         }else{
           self.consume(TokenType::RBRACKET);
           return Type::Slice{Box::new(type)};
         }
       }
       let res = self.gen_part();
-      //Fmt::str(res).dump();
       while(self.is(TokenType::COLON2)){
         self.pop();
         let part = self.gen_part();
@@ -161,16 +291,13 @@ impl Parser{
           res = Type::Simple{Option::new(Box::new(res)), name, args};
         }
       }
-      
       while (self.is(TokenType::STAR)) {
-        Fmt::str(res).dump();
         self.consume(TokenType::STAR);
         res = Type::Pointer{Box::new(res)};
-        Fmt::str(res).dump();
       }
-      
       return res;
     }
+    
     func gen_part(self): Type{
     //a<b>::c<d>
       let id = self.pop().value;
@@ -191,4 +318,464 @@ impl Parser{
       self.consume(TokenType::GT);
       return res;
     }
+    
+    func type_params(self): List<Type>{
+      let res = List<Type>::new();
+      self.consume(TokenType::LT);
+      res.add(self.parse_tp());
+      while(self.is(TokenType::COMMA)){
+        self.pop();
+        res.add(self.parse_tp());
+      }
+      self.consume(TokenType::GT);
+      return res;
+    }
+    
+    func parse_tp(self): Type{
+        let id = self.pop().value;
+        return Type::new(id);
+    }
+}
+
+//statements
+impl Parser{
+  func parse_block(self): Block{
+      self.consume(TokenType::LBRACE);
+      let arr = List<Stmt>::new();
+      while(!self.is(TokenType::RBRACE)){
+        arr.add(self.parse_stmt());
+        //dump(arr.last());
+      }
+      self.consume(TokenType::RBRACE);
+      return Block{arr};
+    }
+    
+    func var(self): VarExpr{
+        self.pop();
+        let vd = VarExpr::new();
+        vd.list.add(self.parse_frag());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          vd.list.add(self.parse_frag());
+        }
+        return vd;
+    }
+    
+    func parse_stmt(self): Stmt{
+      if(self.is(TokenType::LBRACE)){
+        let res = Stmt::Block{self.parse_block()};
+        return res;
+      }
+      else if(self.is(TokenType::LET)){
+        let vd = self.var();
+        self.consume(TokenType::SEMI);
+        return Stmt::Var{vd};
+      }else if(self.is(TokenType::RETURN)){
+        self.pop();
+        if(self.is(TokenType::SEMI)){
+          self.consume(TokenType::SEMI);
+          return Stmt::Ret{Option<Expr>::None};
+        }else{
+          let e = self.parse_expr();
+          self.consume(TokenType::SEMI);
+          return Stmt::Ret{Option::new(e)};
+        }
+      }else if(self.is(TokenType::WHILE)){
+        self.pop();
+        self.consume(TokenType::LPAREN);
+        let e = self.parse_expr();
+        self.consume(TokenType::RPAREN);
+        let b = self.parse_block();
+        return Stmt::While{e, b};
+      }else if(self.is(TokenType::IF, TokenType::LET)){
+        self.pop();
+        self.consume(TokenType::LET);
+        let ty = self.parse_type();
+        let args = List<String>::new();
+        if(self.is(TokenType::LPAREN)){
+          self.consume(TokenType::LPAREN);
+          args.add(self.name());
+          while(self.is(TokenType::COMMA)){
+            self.pop();
+            args.add(self.name());
+          }
+          self.consume(TokenType::RPAREN);
+        }
+        self.consume(TokenType::EQ);
+        self.consume(TokenType::LPAREN);
+        let rhs = self.parse_expr();
+        self.consume(TokenType::RPAREN);
+        let then = self.parse_stmt();
+        let els = Option<Box<Stmt>>::None;
+        if(self.is(TokenType::ELSE)){
+            self.pop();
+            els = Option::new(Box::new(self.parse_stmt()));
+        }
+        return Stmt::IfLet{ty, args, rhs, Box::new(then), els};
+      }else if(self.is(TokenType::IF)){
+        self.pop();
+        self.consume(TokenType::LPAREN);
+        let e = self.parse_expr();
+        self.consume(TokenType::RPAREN);
+        let b = Box::new(self.parse_stmt());
+        if(self.is(TokenType::ELSE)){
+          self.pop();
+          let els = self.parse_stmt();
+          return Stmt::If{e, b, Option::new(Box::new(els))};
+        }
+        return Stmt::If{e, b, Option<Box<Stmt>>::None};
+      }else if(self.is(TokenType::FOR)){
+        self.pop();
+        self.consume(TokenType::LPAREN);
+        let v = Option<VarExpr>::None;
+        if(!self.is(TokenType::SEMI)){
+          v = Option::new(self.var());
+        }
+        self.consume(TokenType::SEMI);
+        let e = Option<Expr>::None;
+        if(!self.is(TokenType::SEMI)){
+          e = Option::new(self.parse_expr());
+        }
+        self.consume(TokenType::SEMI);
+        let u = self.exprList(TokenType::RPAREN);
+        self.consume(TokenType::RPAREN);
+        let b = self.parse_stmt();
+        return Stmt::For{v, e, u, Box::new(b)};
+      }else if(self.is(TokenType::CONTINUE)){
+        self.pop();
+        self.consume(TokenType::SEMI);
+        return Stmt::Continue;
+      }else if(self.is(TokenType::BREAK)){
+        self.pop();
+        self.consume(TokenType::SEMI);
+        return Stmt::Break;
+      }else{
+        let e = self.parse_expr();
+        self.consume(TokenType::SEMI);
+        return Stmt::Expr{e};
+      }
+      panic("invalid stmt %s", self.peek().print().cstr());
+    }
+    
+    func parse_frag(self): Fragment{
+      let nm = self.pop();
+      let type = Option<Type>::None;
+      if(self.is(TokenType::COLON)){
+        self.pop();
+        type = Option::new(self.parse_type());
+      }
+      self.consume(TokenType::EQ);
+      let rhs = self.parse_expr();
+      return Fragment{nm.value, type, rhs};
+    }
+}
+
+
+//expr
+impl Parser{
+  func isName(tok: Token*): bool{
+    let t = tok.type;
+    return t is TokenType::IDENT || t is TokenType::IS || t is TokenType::AS || t is TokenType::TYPE || t is TokenType::NEW;
+  }
+  
+  func isTypeArg(self, pos: i32): i32{
+    if (!self.get(pos).is(TokenType::LT)) {
+        return -1;
+    }
+    pos+=1;
+    let open = 1;
+    while (pos < self.tokens.len()) {
+      if (self.get(pos).is(TokenType::LT)) {
+        pos+=1;
+        open+=1;
+      } else if (self.get(pos).is(TokenType::GT)) {
+        pos+=1;
+        open-=1;
+        if (open == 0) {
+           return pos;
+        }
+      } else {
+        let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2];
+        let tok = self.get(pos);
+        let any = false;
+        for(let i=0;i<7;++i){
+          if (tok.is(valid_tokens[i])) {
+            any = true;
+            break;
+          }
+        }
+        if(!any && !isPrim(tok)) return -1;
+        pos+=1;
+      }
+    }
+    return -1;
+  }
+  
+  func isLit(t: Token *): bool{
+    return t.is([TokenType::FLOAT_LIT, TokenType::INTEGER_LIT, TokenType::CHAR_LIT, TokenType::STRING_LIT, TokenType::TRUE, TokenType::TokenType::FALSE][0..6]);
+  }
+
+  func isPrim(t: Token*): bool{
+    return t.is([TokenType::BOOLEAN, TokenType::VOID, TokenType::I8, TokenType::I16, TokenType::I32, TokenType::I64, TokenType::F32, TokenType::F64, TokenType::U8, TokenType::U16, TokenType::U32, TokenType::U64][0..12]);
+  }
+  
+  func call(self, scp: Expr, nm: String): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return newCall(scp, nm, args);
+  }
+  func call(self, nm: String): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return newCall(nm, args);
+  }
+  func call(self, nm: String, g: List<Type>): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return newCall(nm, g, args);
+  }
+  
+  func exprList(self, tt: TokenType): List<Expr>{
+    let arr = List<Expr>::new();
+    if(self.is(tt)) return arr;
+    arr.add(self.parse_expr());
+    while(self.is(TokenType::COMMA)){
+      self.pop();
+      arr.add(self.parse_expr());
+    }
+    return arr;
+  }
+  
+  func parseLit(self): Expr{
+    if(self.is(TokenType::INTEGER_LIT)){
+      return Expr::Lit{LitKind::INT, self.pop().value};
+    }
+    else if(self.is(TokenType::STRING_LIT)){
+      return Expr::Lit{LitKind::STR, self.pop().value};
+    }else if(self.is(TokenType::CHAR_LIT)){
+      return Expr::Lit{LitKind::CHAR, self.pop().value};
+    }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
+      return Expr::Lit{LitKind::BOOL, self.pop().value};
+    }
+    panic("lit %s", self.peek().print().cstr());
+  }
+  
+  func name(self): String{
+    if(isName(self.peek())){
+      return self.pop().value;
+    }
+    panic("expected name got %s", self.peek().print().cstr());
+  }
+  
+  func isObj(self): bool{
+    if (!self.is(TokenType::IDENT)) {
+        return false;
+    }
+    let pos = self.pos + 1;
+    let ta = self.isTypeArg(pos);
+    if (ta != -1) {
+        pos = ta;
+    }
+    if (self.get(pos).is(TokenType::COLON2)) {
+        pos+=1;
+        if (!self.get(pos).is(TokenType::IDENT)) {
+            return false;
+        }
+        pos+=1;
+    }
+    if (self.get(pos).is(TokenType::LBRACE)) {
+        return true;
+    }
+    return false;
+  }
+  
+  func entry(self): Entry{
+    if(self.is(TokenType::IDENT) && self.peek(1).is(TokenType::COLON)){
+      let name = self.pop().value;
+      self.consume(TokenType::COLON);
+      let e = self.parse_expr();
+      return Entry{Option::new(name), e, false};
+    }
+    let dot = false; 
+    if(self.is(TokenType::DOT)){
+      self.pop();
+      dot = true;
+    }
+    let e = self.parse_expr();
+    return Entry{Option<String>::None, e, dot};
+  }
+
+  func prim(self): Expr{
+    if(isLit(self.peek())){
+      return self.parseLit();
+    }else if(self.is(TokenType::LPAREN)){
+        self.pop();
+        let e = self.parse_expr();
+        self.consume(TokenType::RPAREN);
+        return Expr::Par{Box::new(e)};
+    }else if(self.is(TokenType::LBRACKET)){
+        self.pop();
+        let arr = self.exprList(TokenType::SEMI);
+        let sz = Option<i32>::None;
+        if(self.is(TokenType::SEMI)){
+            self.pop();
+            let s = self.consume(TokenType::INTEGER_LIT);
+            sz = Option::new(i32::parse(&s.value));
+        }
+        self.consume(TokenType::RBRACKET);
+        return Expr::Array{arr, sz};
+    }else if(false && self.isObj()){
+      let ty = self.parse_type();
+      let args = List<Entry>::new();
+      self.consume(TokenType::LBRACE);
+      if(!self.is(TokenType::RBRACE)){
+        args.add(self.entry());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          args.add(self.entry());
+        }
+      }
+      self.consume(TokenType::RBRACE);
+      return Expr::Obj{ty, args};
+    }
+    else if(isName(self.peek()) || isPrim(self.peek())){
+      let nm = self.pop().value;
+      if(self.is(TokenType::LPAREN)){
+        return self.call(nm);
+      }else if(self.isTypeArg(self.pos) != -1){
+        let g = self.generics();
+        if(self.is(TokenType::LPAREN)){
+          return self.call(nm, g);
+        }
+        self.consume(TokenType::COLON2);
+        let ty = Type::new(nm, g);
+        let nm2 = self.name();
+        if(self.is(TokenType::LPAREN)){
+          return self.call(Expr::Type{ty}, nm2);
+        }
+        return Expr::Type{Type::new(ty, nm2)};
+      }else if(self.is(TokenType::COLON2)){
+        self.pop();
+        let ty = self.parse_type();
+        if(self.is(TokenType::LPAREN)){
+          return self.call(Expr::Type{Type::new(nm)}, *ty.name());
+        }else{
+          return Expr::Type{Type::new(Type::new(nm), *ty.name())};
+        }
+      }else{
+        return Expr::Name{nm};
+      }
+    }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS)){
+      let op = self.pop().value;
+      let e = self.parse_expr();
+      return Expr::Unary{op, Box::new(e)};
+    }
+    panic("invalid expr %s", self.peek().print().cstr());
+  }
+  
+  func prim2(self): Expr{
+    let e = self.prim();
+    if(self.is(TokenType::LBRACE)){
+      let ty = Option<Type>::None; 
+      if let Expr::Name(nm)=(e){
+        ty = Option::new(Type::new(nm));
+      }else if let Expr::Type(t)=(e){
+        ty = Option::new(t);
+      }else panic("was expecting name got %s", Fmt::str(&e).cstr());
+      let args = List<Entry>::new();
+      self.consume(TokenType::LBRACE);
+      if(!self.is(TokenType::RBRACE)){
+        args.add(self.entry());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          args.add(self.entry());
+        }
+      }
+      self.consume(TokenType::RBRACE);
+      e = Expr::Obj{ty.unwrap(), args};
+    }
+    while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
+      if(self.is(TokenType::DOT)){
+        self.pop();
+        let nm = self.name();
+        if(self.is(TokenType::LPAREN)){
+          e = self.call(e, nm);
+        }else{
+          e = Expr::Access{Box::new(e), nm};
+        }
+      }else{
+          self.pop();
+          let idx = self.parse_expr();
+          let idx2 = Option<Box<Expr>>::None;
+          if(self.is(TokenType::DOTDOT)){
+              self.pop();
+              idx2 = Option::new(Box::new(self.parse_expr()));
+          }
+          self.consume(TokenType::RBRACKET);
+          e = Expr::ArrAccess{Box::new(e), Box::new(idx), idx2}; 
+      }
+    }
+    if(self.is(TokenType::AS)){
+        self.pop();
+        let t = self.parse_type();
+        e = Expr::As{Box::new(e), t};
+    }
+    if(self.is(TokenType::IS)){
+        self.pop();
+        let rhs = self.parse_expr();
+        e = Expr::Is{Box::new(e), Box::new(rhs)};
+    }
+    return e; 
+  }
+  
+  
+  func expr_level(self, prec: i32): Expr{
+    if(prec==11) return self.prim2();
+    let e = self.expr_level(prec+1);
+    while(Parser::get_prec(&self.peek().type) == prec){
+      let op = self.pop().value;
+      let r = self.expr_level(prec+1);
+      e = Expr::Infix{op, Box::new(e), Box::new(r)};
+    }
+    return e;
+  }
+  
+  func get_prec(tt: TokenType*): i32{
+    if(tt is TokenType::EQ || tt is TokenType::PLUSEQ || tt is TokenType::MINUSEQ) return 0;
+    if(tt is TokenType::OROR) return 1;
+    if(tt is TokenType::ANDAND) return 2;
+    if(tt is TokenType::OR) return 3;
+    if(tt is TokenType::POW) return 4;
+    if(tt is TokenType::AND) return 5;
+    if(tt is TokenType::EQEQ) return 6;
+    if(tt is TokenType::NOTEQ) return 6;
+    if(tt is TokenType::LT || tt is TokenType::GT || tt is TokenType::LTEQ || tt is TokenType::GTEQ) return 7;
+    if(tt is TokenType::LTLT) return 8;
+    if(tt is TokenType::GTGT) return 8;
+    if(tt is TokenType::PLUS) return 9;
+    if(tt is TokenType::MINUS) return 9;
+    if(tt is TokenType::STAR) return 10;
+    if(tt is TokenType::DIV) return 10;
+    if(tt is TokenType::PERCENT) return 10;
+    //panic("is op %s", Fmt::str(tt).cstr());
+    return -1;
+  }
+  
+  func parse_expr(self): Expr{
+    return self.expr_level(0);
+  }
+}
+
+func dump(e: Expr*){
+  let f = Fmt::new();
+  e.debug(&f);
+  f.buf.dump();
+}
+func dump(e: Stmt*){
+  let f = Fmt::new();
+  e.debug(&f);
+  f.buf.dump();
 }

@@ -1,25 +1,11 @@
 #include "parser/Ast.h"
+#include "AstCopier.h"
 
 static Type clone(const Type &type) {
-    if (type.isPointer()) {
-        return Type(Type::Pointer, clone(*type.scope.get()));
-    } else if (type.isArray()) {
-        return Type(clone(*type.scope.get()), type.size);
-    } else if (type.isSlice()) {
-        return Type(Type::Slice, clone(*type.scope.get()));
-    } else {
-        Type res(type.name);
-        if (type.scope) {
-            res.scope = std::make_unique<Type>(clone(*type.scope.get()));
-        }
-        res.typeArgs.insert(res.typeArgs.end(), type.typeArgs.begin(), type.typeArgs.end());
-        return res;
-    }
+    AstCopier copier;
+    auto tmp = type;
+    return *(Type *) std::any_cast<Expression *>(tmp.accept(&copier));
 }
-
-/*static Type clone(Ptr<Type> &type) {
-    return clone(type.get());
-}*/
 
 static Type makeSelf(const Type &scope) {
     if (scope.isPrim()) return clone(scope);

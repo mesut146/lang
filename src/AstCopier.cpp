@@ -30,9 +30,9 @@ T visit(T &node, AstCopier *t) {
     return std::any_cast<T>(res);
 }
 
-Type visit(Type& node, AstCopier* t){
+Type visit(Type &node, AstCopier *t) {
     auto res = node.accept(t);
-    return *(Type*)std::any_cast<Expression*>(res);
+    return *(Type *) std::any_cast<Expression *>(res);
 }
 
 Expression *loc(Expression *res, Expression *src) {
@@ -62,6 +62,10 @@ std::any AstCopier::visitType(Type *node) {
         auto inner = expr(node->scope.get(), this);
         return (Expression *) new Type(Type::Pointer, *inner);
     }
+    if (node->isRef()) {
+        auto inner = expr(node->scope.get(), this);
+        return (Expression *) new Type(Type::Ref, *inner);
+    }
     if (node->isArray()) {
         auto inner = expr(node->scope.get(), this);
         return (Expression *) new Type(*inner, node->size);
@@ -71,7 +75,7 @@ std::any AstCopier::visitType(Type *node) {
         return (Expression *) new Type(Type::Slice, *inner);
     }
     auto res = new Type(node->name);
-    if (node->scope){
+    if (node->scope) {
         res->scope.reset(expr(node->scope.get(), this));
     }
     for (auto &ta : node->typeArgs) {
@@ -207,6 +211,13 @@ std::any AstCopier::visitUnary(Unary *node) {
     res->expr = expr(node->expr, this);
     return loc(res, node);
 }
+std::any AstCopier::visitAsExpr(AsExpr *node){
+    auto res = new AsExpr;
+    res->expr = expr(node->expr, this);
+    res->type = visit(node->type, this);
+    return loc(res, node);
+}
+
 
 std::any AstCopier::visitWhileStmt(WhileStmt *node) {
     auto res = new WhileStmt;
