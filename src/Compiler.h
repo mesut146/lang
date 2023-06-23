@@ -169,8 +169,11 @@ public:
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, const Type &type);
-    llvm::Type *mapType(const Type *t);
+    llvm::Type *mapType(const Type *t, Resolver* r);
     llvm::Type *mapType(const Type &t) { return mapType(&t); }
+    llvm::Type *mapType(const Type *type) {
+        return mapType(type, resolv.get());
+    }
     llvm::DIType *map_di(const Type *t);
     llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     void loc(Node *e);

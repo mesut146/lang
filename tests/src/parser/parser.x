@@ -449,6 +449,11 @@ impl Parser{
         self.pop();
         self.consume(TokenType::SEMI);
         return Stmt::Break;
+      }else if(self.is(TokenType::ASSERT_KW)){
+        self.pop();
+        let e = self.parse_expr();
+        self.consume(TokenType::SEMI);
+        return Stmt::Assert{e};
       }else{
         let e = self.parse_expr();
         self.consume(TokenType::SEMI);

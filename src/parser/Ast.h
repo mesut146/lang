@@ -31,7 +31,7 @@ static std::map<std::string, int> sizeMap{
         {"u64", 64},
         {"f32", 32},
         {"f64", 64},
-        {"bool", 1}};
+        {"bool", 8}};
 
 class Node {
 public:

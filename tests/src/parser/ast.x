@@ -236,6 +236,10 @@ impl Type{
     }
     panic("cant unwrap");
   }
+  
+  func print(self): String{
+    return Fmt::str(self);
+  }
 }
 
 impl Debug for Type{
@@ -284,7 +288,8 @@ enum Stmt{
  IfLet(ty: Type, args: List<String>, rhs: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
  For(v: Option<VarExpr>, e: Option<Expr>, u: List<Expr>, s: Box<Stmt>),
  Continue,
- Break
+ Break,
+ Assert(e: Expr)
 }
 
 impl Debug for Stmt{
@@ -316,6 +321,9 @@ impl Debug for Stmt{
      f.print("if(");
      e.debug(f);
      f.print(")");
+     if(!(then.get() is Stmt::Block)){
+       f.print(" ");
+     }
      then.get().debug(f);
      if(els.is_some()){
        f.print("\nelse ");
@@ -351,6 +359,10 @@ impl Debug for Stmt{
       f.print("continue;");
     }else if let Stmt::Break=(self){
       f.print("break;");
+    }else if let Stmt::Assert(e)=(self){
+      f.print("assert ");
+      e.debug(f);
+      f.print(";");
     }
     else{
       panic("stmt");
@@ -517,7 +529,7 @@ impl Debug for Expr{
     }else if let Expr::Is(e, rhs)=(self){
       e.get().debug(f);
       f.print(" is ");
-      rhs.debug(f);
+      rhs.get().debug(f);
     }else if let Expr::Array(arr, sz)=(self){
       f.print("[");
       join(f, arr, ", ");

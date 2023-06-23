@@ -66,6 +66,10 @@ impl str{
     func contains(self, s: str): bool{
       return self.indexOf(s, 0) != -1;
     }
+    
+    func cstr(self): u8*{
+      return self.str().cstr();
+    }
 
     func substr(self, start: i32): str{
       return self.substr(start, self.len());

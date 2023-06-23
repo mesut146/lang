@@ -277,6 +277,7 @@ public:
     void addType(const std::string &name, const RType &rt);
     std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
+    std::pair<StructDecl*, int> findField(const std::string& name, BaseDecl* decl);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

@@ -300,7 +300,9 @@ Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, Ex
     mc->scope.reset(new SimpleName(scope));
     mc->name = "print";
     mc->args.push_back(e);
-    return std::make_unique<ExprStmt>(mc);
+    auto res = std::make_unique<ExprStmt>(mc);
+    res->line = unit->lastLine;
+    return res;
 }
 //scope.print(str);
 Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, const std::string &str) {
@@ -311,7 +313,9 @@ Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, co
     auto lit = new Literal(Literal::STR, "\"" + str + "\"");
     lit->line = unit->lastLine;
     mc->args.push_back(lit);
-    return std::make_unique<ExprStmt>(mc);
+    auto res = std::make_unique<ExprStmt>(mc);
+    res->line = unit->lastLine;
+    return res;
 }
 Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
     auto ret = std::make_unique<ReturnStmt>();
@@ -328,7 +332,9 @@ Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, const std::s
     mc->name = "debug";
     mc->args.push_back(e);
     mc->args.push_back(new SimpleName(fmt));
-    return std::make_unique<ExprStmt>(mc);
+    auto res = std::make_unique<ExprStmt>(mc);
+    res->line = unit->lastLine;
+    return res;
 }
 
 FieldAccess *makeFa(std::string &name) {
@@ -339,6 +345,7 @@ FieldAccess *makeFa(std::string &name) {
 }
 
 std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
+    int line = unit->lastLine;
     Method m(unit.get());
     m.name = "debug";
     Param s("self", clone(makeSelf(bd->type)));
@@ -353,6 +360,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         for (int i = 0; i < ed->variants.size(); i++) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
+            ifs->line=line;
             ifs->type = (Type(clone(bd->type), ev.name));
             for (auto &fd : ev.fields) {
                 ifs->args.push_back(fd.name);
@@ -476,6 +484,7 @@ Type Resolver::getType(Expression *expr) {
 }
 
 bool Resolver::isCyclic(const Type &type, BaseDecl *target) {
+    if(true) return false;
     if (type.isPointer()) return false;
     if (type.isArray()) {
         return isCyclic(*type.scope.get(), target);
@@ -1032,6 +1041,27 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
     return {};
 }
 
+std::pair<StructDecl*, int> Resolver::findField(const std::string& name, BaseDecl* decl){
+    auto cur = decl;
+    while(true){
+    if(cur->isClass()){
+        auto sd = (StructDecl*)cur;
+        int idx=0;
+        for(auto &fd:sd->fields){
+            if(fd.name==name){
+                return std::make_pair(sd, idx);
+            }
+            idx++;
+        }
+    }
+    if(cur->base){
+        auto base = resolve(*cur->base).targetDecl;
+        cur = base;
+    }
+    }
+    throw std::runtime_error("unknown field: " + decl->type.print() + "." + name);
+}
+
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
     if (scp.type.isString()) {
@@ -1056,8 +1086,8 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
         return makeSimple("i32");
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
-        int i = fieldIndex(td->fields, node->name, td->type);
-        auto &fd = td->fields[i];
+        auto [sd, idx] = findField(node->name, td);
+        auto &fd = sd->fields[idx];
         return std::any_cast<RType>(fd.accept(this));
     }
 }
@@ -1117,6 +1147,9 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
     }
     if(right.type.isPointer()){
         return right;
+    }
+    if(left.type.isPointer() && right.type.print()=="u64"){
+        return makeSimple("u64");
     }
     throw std::runtime_error("invalid as expr " + node->print());
 }

@@ -1,8 +1,38 @@
 class c_void{}
 class FILE{}
+class DIR{}
+struct dirent {
+    d_ino: ino_t          ;       /* inode number */
+    d_off: off_t          ;       /* offset to the next dirent */
+    d_reclen: u16 ;    /* length of this record */
+    d_type: u8  ;      /* type of file; not supported
+                                   by all file system types */
+    d_name: [u8; 256]; /* filename */
+}
+
+impl dirent{
+  func len(self): i32{
+    for(let i=0;i<256;++i){
+      if(self.d_name[i]==0) return i;
+    }
+    panic("no eof");
+  }
+  func cstr(self): [i8]{
+    return self.d_name[0..self.len()];
+  }
+}
+
+func strlen(arr: [i8]): i32{
+  for(let i = 0;i < arr.len;++i){
+    if(arr[i] == 0) return i;
+  }
+  panic("no eof");
+}
 
 //type char = i8
 //type int i32
+type ino_t = u64;
+type off_t = u64;
 
 //const stdout = 0
 
@@ -22,36 +52,11 @@ extern{
   func ftell(file: FILE*): i64;
   func remove(name: i8*): i32;
   func rename(old_name: i8*, new_name: i8*): i32;
+  func opendir(dir: i8*): DIR*;
+  func readdir(dp: DIR*): dirent*;
+  func closedir(dp: DIR*): i32;
+  func realpath(path: i8*, resolved: i8*): i8*;
 }
 
-func cstr(s: str): i8*{
-    if(s.get(s.len())==0) return s.ptr();
-    let buf = malloc(s.len() + 1);
-    memcpy(buf, s.ptr(), s.len());
-    buf[s.len()] = 0i8;
-    return buf;
-}
 
-func read_bytes(path: str): List<i8>{
-  let f = fopen(cstr(path), cstr("r"));
-  fseek(f, 0, SEEK_END());
-  let size = ftell(f);
-  //print("size = %lld\n", size);
-  fseek(f, 0, SEEK_SET());
-  let res = List<i8>::new(size);
-  let buf = [0i8; 1024];
-  while(true){
-      let rcnt = fread(&buf[0], 1, 1024, f);
-      if(rcnt <= 0){ break; }
-      res.add(buf[0..rcnt]);
-  }
-  fclose(f);
-  return res;
-}
 
-func write_bytes(data: List<i8>, path: str){
-  let f = fopen(cstr(path), cstr("w"));
-  let c = fwrite(data.arr, 1, data.len() as i32, f);
-  print("wrote %d of %lld\n", c, data.len());
-  fclose(f);
-}

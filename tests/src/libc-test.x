@@ -1,4 +1,5 @@
 import std/libc
+import std/io
 
 func read_test(){
   let buf = read_bytes("./Box.ll");
@@ -17,9 +18,15 @@ func write_test(){
   //write_bytes(buf.arr, path);
 }
 
+func list_test(){
+  let dir = ".";
+  list(dir);
+}
+
 func main(){
   read_test();
   write_test();
-  
+  list_test();
+  print("res=%s\n", resolve(".").cstr());
   print("libc_test done\n");
 }

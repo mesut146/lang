@@ -38,10 +38,10 @@ impl<T> List<T>{
     self.count =- 1;
   }
 
-  func add(self1, e: T){
-    self1.expand();
-    self1.arr[self1.count] = e;
-    ++self1.count;
+  func add(self, e: T){
+    self.expand();
+    self.arr[self.count] = e;
+    ++self.count;
   }
 
   func add(self, list: List<T>*){

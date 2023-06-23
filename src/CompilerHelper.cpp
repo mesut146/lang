@@ -161,8 +161,8 @@ llvm::StructType *Compiler::make_string_type() {
     return llvm::StructType::create(ctx(), elems, "str");
 }
 
-llvm::Type *Compiler::mapType(const Type *type) {
-    auto tmp = resolv->getType(*type);
+llvm::Type *Compiler::mapType(const Type *type, Resolver* r) {
+    auto tmp = r->getType(*type);
     type = &tmp;
     if (type->isPointer()) {
         auto &elem = *type->scope.get();
@@ -188,7 +188,7 @@ llvm::Type *Compiler::mapType(const Type *type) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
-    auto rt = resolv->resolve(*type);
+    auto rt = r->resolve(*type);
     auto s = rt.targetDecl->type.print();
     auto it = classMap.find(s);
     if (it != classMap.end()) {
@@ -198,6 +198,8 @@ llvm::Type *Compiler::mapType(const Type *type) {
 }
 
 llvm::DIType *Compiler::map_di(const Type *t) {
+    auto rt = resolv->resolve(*t);
+    t = &rt.type;
     auto s = t->print();
     auto it = di.types.find(s);
     if (it != di.types.end()) return it->second;
@@ -218,7 +220,7 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
         return DBuilder->createStructType(di.cu, s, file, 0, sz, 8, llvm::DINode::FlagZero, nullptr, et);
     }
-    if (s == "bool") return DBuilder->createBasicType(s, 1, llvm::dwarf::DW_ATE_boolean);
+    if (s == "bool") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_boolean);
     if (s == "i8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_signed);
     if (s == "i16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_signed);
     if (s == "i32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_signed);
@@ -226,10 +228,13 @@ llvm::DIType *Compiler::map_di(const Type *t) {
     if (s == "f32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_float);
     if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_float);
     if (s == "void") return nullptr;
-    auto rt = resolv->resolve(*t);
+    if (s == "u8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_unsigned);
     if (rt.targetDecl) {
         auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
-        auto sz = getSize(t);
+        auto st_size = getSize2(t);
         std::vector<llvm::Metadata *> elems;
         if (rt.targetDecl->isEnum()) {
             auto ed = (EnumDecl *) rt.targetDecl;
@@ -240,26 +245,34 @@ llvm::DIType *Compiler::map_di(const Type *t) {
             auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_INDEX_SIZE, 8, 0, llvm::DINode::FlagZero, tag);
             elems.push_back(tagm);
             auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
-            auto sz = getSize(ed) - ENUM_INDEX_SIZE;
+            auto sz = getSize2(ed) - ENUM_INDEX_SIZE;
             llvm::DINodeArray sub;
             auto at = DBuilder->createArrayType(sz, 8, chr, sub);
             auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_INDEX_SIZE, llvm::DINode::FlagZero, at);
             elems.push_back(arrm);
         } else {
             auto sd = (StructDecl *) rt.targetDecl;
-            int off = 0;
+            int idx=0;
+            auto st = (llvm::StructType *) mapType(sd->type);
+            auto sl = mod->getDataLayout().getStructLayout(st);
             for (auto &fd : sd->fields) {
-                auto sz = getSize(fd.type);
-                auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 8, off, llvm::DINode::FlagZero, map_di(fd.type));
+                auto off = sl->getElementOffsetInBits(idx);
+                int sz;
+                if(idx==sd->fields.size()-1){
+                    sz = st_size - off;
+                }else{
+                    sz=sl->getElementOffsetInBits(idx+1) - off;
+                }
+                auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 0, off, llvm::DINode::FlagZero, map_di(fd.type));
                 elems.push_back(mt);
-                off += sz;
+                idx++;
             }
         }
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, sz, 8, llvm::DINode::FlagZero, nullptr, et);
+        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 8, llvm::DINode::FlagZero, nullptr, et);
     }
-    //error("di type: "+t->print());
-    return DBuilder->createUnspecifiedType(s);
+    error("di type: "+t->print());
+    //return DBuilder->createUnspecifiedType(s);
 }
 
 int Compiler::getSize(BaseDecl *decl) {
@@ -286,20 +299,14 @@ int Compiler::getSize(BaseDecl *decl) {
 }
 
 int Compiler::getSize2(BaseDecl *decl) {
-    if (decl->isEnum()) {
-        auto ed = dynamic_cast<EnumDecl *>(decl);
-        auto st = (llvm::StructType *) mapType(ed->type);
-        auto sl = mod->getDataLayout().getStructLayout(st);
-        return sl->getSizeInBits();
-    } else {
-        auto td = dynamic_cast<StructDecl *>(decl);
-        auto st = (llvm::StructType *) mapType(td->type);
-        auto sl = mod->getDataLayout().getStructLayout(st);
-        return sl->getSizeInBits();
-    }
+    auto st = (llvm::StructType *) mapType(decl->type);
+    auto sl = mod->getDataLayout().getStructLayout(st);
+    return sl->getSizeInBits();
 }
 
 int Compiler::getSize(const Type *type) {
+    auto tt = resolv->getType(*type);
+    type = &tt;
     if (type->isPointer()) {
         return 64;
     }
@@ -334,6 +341,7 @@ int Compiler::getSize2(const Type *type) {
     }
     if (type->isSlice()) {
         //ptr + len
+        //todo align
         return 64 + 32;
     }
     auto decl = resolv->resolve(*type).targetDecl;

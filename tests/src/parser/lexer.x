@@ -1,6 +1,7 @@
 import parser/token
 import std/map
 import std/libc
+import std/io
 
 class Lexer{
   path: String;
@@ -21,6 +22,9 @@ impl i8{
   }
   func is_alpha(self): bool{
     return self.is_letter() || self.is_digit();
+  }
+  func is_hex(self): bool{
+    return self.in('a', 'f') || self.in('A', 'F') || self.is_digit();
   }
 }
 
@@ -115,6 +119,7 @@ impl Lexer{
     ops.add("#", TokenType::HASH);
     ops.add("++", TokenType::PLUSPLUS);
     ops.add("..", TokenType::DOTDOT);
+    ops.add("<<", TokenType::LTLT);
     return ops;
   }
   
@@ -206,27 +211,27 @@ impl Lexer{
     let start = self.pos;
     self.pos += 2;
     while (self.has()) {
-                if (self.peek() == '*') {
-                    self.pos+=1;
-                    if (self.has() && self.peek() == '/') {
-                        self.pos+=1;
-                        return Token::new(TokenType::COMMENT, self.str(start, self.pos));                        
-                    }
-                } else {
-                    if (self.peek() == '\r') {
-                        self.pos+=1;
-                        self.line+=1;
-                        if (self.peek() == '\n') {
-                            self.pos+=1;
-                        }
-                    } else if (self.peek() == '\n') {
-                        self.pos+=1;
-                        self.line+=1;
-                    } else {
-                        self.pos+=1;
-                    }
-                }
-            }            
+      if (self.peek() == '*') {
+        self.pos+=1;
+        if (self.has() && self.peek() == '/') {
+          self.pos+=1;
+          return Token::new(TokenType::COMMENT, self.str(start, self.pos));                        
+        }
+      } else {
+        if (self.peek() == '\r') {
+          self.pos+=1;
+          self.line+=1;
+          if (self.peek() == '\n') {
+           self.pos+=1;
+          }
+        } else if (self.peek() == '\n') {
+          self.pos+=1;
+          self.line+=1;
+        } else {
+          self.pos+=1;
+        }
+      }
+    }            
     panic("unclosed block comment at line %d" , self.line);
   }
   
@@ -299,24 +304,54 @@ impl Lexer{
     return Token::new(type, s);
   }
   
+  //[0-9] ('_'? [0-9])* ('.' [0-9]+)? ('_' suffix)?
   func read_number(self):Token {
     let dot = false;
     let start = self.pos;
-    self.pos+=1;
-    let c = self.peek();
-    while (c.is_digit() || (c == '.' && self.peek(1).is_digit())) {
-        if(c == '.') dot = true;
+    if(self.peek()=='0' && self.peek(1)=='x'){
+      self.pos+=2;
+      while(self.peek().is_hex()){
         self.pos+=1;
-        c = self.peek();
+      }
+      let type = TokenType::INTEGER_LIT;
+      return Token::new(type, self.str(start, self.pos));
+    }
+    self.pos+=1;
+    while (true){
+      let c = self.peek();
+      if(c.is_digit()){
+        self.pos+=1;
+      }else if(c == '_' && self.peek(1).is_digit()){
+        self.pos+=2;
+      }else break;
+    }
+    if(self.peek() == '.'){
+      dot = true;
+      self.pos+=1;
+      if(!self.peek(1).is_digit()){
+        panic("expeced digit got %c", self.peek());
+      }
+      self.pos+=1;
+      while (self.peek().is_digit()) {
+        self.pos+=1;
+      }
+    }
+    let mustSuffix = false;
+    if(self.peek()=='_'){
+      self.pos+=1;
+      mustSuffix = true; 
     }
     let suffixes = ["i8", "i16", "i32", "i64", "f32", "f64"];
+    let has = false;
     for (let i =0;i < 6;++i) {
-        let sf = suffixes[i];
-        if (self.str(self.pos, self.pos + sf.len()).eq(sf)) {
-            self.pos += sf.len();
-            break;
-        }
+      let sf = suffixes[i];
+      if (self.str(self.pos, self.pos + sf.len()).eq(sf)) {
+        self.pos += sf.len();
+        has = true;
+        break;
+      }
     }
+    if(mustSuffix && !has) panic("expected literal suffix");
     let type = TokenType::INTEGER_LIT;
     if(dot) type = TokenType::FLOAT_LIT;
     return Token::new(type, self.str(start, self.pos));

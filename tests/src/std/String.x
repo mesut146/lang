@@ -44,6 +44,14 @@ impl String{
           s.append(arr.get(i));
         }
         return s;
+    }
+    
+    func new(arr: [i8]): String{
+        let s = String::new(arr.len);
+        for(let i=0;i<arr.len;++i){
+          s.append(arr[i]);
+        }
+        return s;
     }    
 
     func len(self): i64{
