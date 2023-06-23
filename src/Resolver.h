@@ -230,13 +230,6 @@ public:
     void err(const std::string &msg);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
-    static bool is_simple_enum(EnumDecl *ed) {
-        if(!Config::optimize_enum) return false;
-        for (auto &ev : ed->variants) {
-            if (ev.isStruct()) return false;
-        }
-        return true;
-    }
 
     Method *isOverride(Method *method);
     static bool do_override(Method *m1, Method *m2);

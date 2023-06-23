@@ -1,9 +1,10 @@
-class Unit{
+struct Unit{
   path: String;
   last_line: i32;
   imports: List<ImportStmt>;
   items: List<Item>;
 }
+
 impl Debug for Unit{
   func debug(self, f: Fmt*){
     join(f, self.imports, "\n");
@@ -18,9 +19,10 @@ impl Unit{
   }
 }
 
-class ImportStmt{
+struct ImportStmt{
   list: List<String>;
 }
+
 impl Debug for ImportStmt{
   func debug(self, f: Fmt*){
     f.print("import ");

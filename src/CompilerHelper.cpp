@@ -6,12 +6,6 @@ bool isSame(const Type &type, BaseDecl *decl) {
     return type.print() == decl->type.print();
 }
 
-bool Compiler::is_simple_enum(const Type &type) {
-    if(!Config::optimize_enum) return false;
-    auto rt = resolv->resolve(type);
-    return rt.targetDecl && rt.targetDecl->isEnum() && Resolver::is_simple_enum((EnumDecl *) rt.targetDecl);
-}
-
 void sort(std::vector<BaseDecl *> &list) {
     std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
         if (b->isEnum()) {
@@ -70,15 +64,15 @@ bool Compiler::doesAlloc(Expression *e) {
     }
     auto mc = dynamic_cast<MethodCall *>(e);
     if (mc) {
-        if(true || Config::rvo_ptr){
-          auto m = resolv->resolve(mc).targetMethod;
-          return m && isRvo(m);
+        if (true || Config::rvo_ptr) {
+            auto m = resolv->resolve(mc).targetMethod;
+            return m && isRvo(m);
         }
         return false;
     }
     auto ty = dynamic_cast<Type *>(e);
     if (ty) {
-        return !Config::optimize_enum || !is_simple_enum(*ty);
+        return true;
     }
     return dynamic_cast<ArrayExpr *>(e);
 }
@@ -161,9 +155,9 @@ llvm::StructType *Compiler::make_string_type() {
     return llvm::StructType::create(ctx(), elems, "str");
 }
 
-llvm::Type *Compiler::mapType(const Type *type, Resolver* r) {
-    auto tmp = r->getType(*type);
-    type = &tmp;
+llvm::Type *Compiler::mapType(const Type &type0, Resolver *r) {
+    auto rt = r->resolve(type0);
+    auto type = &rt.type;
     if (type->isPointer()) {
         auto &elem = *type->scope.get();
         if (isStruct(elem)) {
@@ -188,9 +182,8 @@ llvm::Type *Compiler::mapType(const Type *type, Resolver* r) {
         auto bits = sizeMap[type->name];
         return getInt(bits);
     }
-    auto rt = r->resolve(*type);
-    auto s = rt.targetDecl->type.print();
-    auto it = classMap.find(s);
+    auto str = rt.targetDecl->type.print();
+    auto it = classMap.find(str);
     if (it != classMap.end()) {
         return it->second;
     }
@@ -238,9 +231,6 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         std::vector<llvm::Metadata *> elems;
         if (rt.targetDecl->isEnum()) {
             auto ed = (EnumDecl *) rt.targetDecl;
-            if (Config::optimize_enum && Resolver::is_simple_enum(ed)) {
-                return DBuilder->createBasicType(s, ENUM_INDEX_SIZE, llvm::dwarf::DW_ATE_signed);
-            }
             auto tag = DBuilder->createBasicType("tag", ENUM_INDEX_SIZE, llvm::dwarf::DW_ATE_signed);
             auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_INDEX_SIZE, 8, 0, llvm::DINode::FlagZero, tag);
             elems.push_back(tagm);
@@ -252,16 +242,16 @@ llvm::DIType *Compiler::map_di(const Type *t) {
             elems.push_back(arrm);
         } else {
             auto sd = (StructDecl *) rt.targetDecl;
-            int idx=0;
+            int idx = 0;
             auto st = (llvm::StructType *) mapType(sd->type);
             auto sl = mod->getDataLayout().getStructLayout(st);
             for (auto &fd : sd->fields) {
                 auto off = sl->getElementOffsetInBits(idx);
                 int sz;
-                if(idx==sd->fields.size()-1){
+                if (idx == sd->fields.size() - 1) {
                     sz = st_size - off;
-                }else{
-                    sz=sl->getElementOffsetInBits(idx+1) - off;
+                } else {
+                    sz = sl->getElementOffsetInBits(idx + 1) - off;
                 }
                 auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 0, off, llvm::DINode::FlagZero, map_di(fd.type));
                 elems.push_back(mt);
@@ -271,8 +261,7 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
         return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 8, llvm::DINode::FlagZero, nullptr, et);
     }
-    error("di type: "+t->print());
-    //return DBuilder->createUnspecifiedType(s);
+    throw std::runtime_error("di type: " + t->print());
 }
 
 int Compiler::getSize(BaseDecl *decl) {
@@ -428,16 +417,15 @@ public:
         if (node->isPointer()) {
             return {};
         }
-        if (compiler->is_simple_enum(*node)) return {};
-        //return alloc(*node->scope.get(), node);
         return alloc(*node, node);
     }
 
     void child(Expression *e) {
         auto mc = dynamic_cast<MethodCall *>(e);
         if (mc) {
-            if(Config::rvo_ptr) call(mc);
-            else e->accept(this);
+            if (Config::rvo_ptr) call(mc);
+            else
+                e->accept(this);
             return;
         }
         auto obj = dynamic_cast<ObjExpr *>(e);
@@ -553,11 +541,11 @@ public:
             object(oe);
             return {};
         }
-        if (compiler->doesAlloc(e)){
+        if (compiler->doesAlloc(e)) {
             return {};
-        }else{
+        } else {
             e->accept(this);
-        } 
+        }
         return {};
     }
     std::any visitExprStmt(ExprStmt *node) override {

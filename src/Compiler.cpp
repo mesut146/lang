@@ -169,7 +169,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     resolv = Resolver::getResolver(path, srcDir);
     unit = resolv->unit;
     resolv->resolveAll();
-    print("resolved");
+    //print("resolved");
 
     initModule(path, this);
     createProtos();
@@ -285,6 +285,12 @@ bool needDeref(Expression *e, llvm::Value *val) {
     return llvm::isa<llvm::AllocaInst>(val);
 }
 
+
+bool is_double_ptr(const Type &type, Expression *e, llvm::Value *val) {
+    if (!type.isPointer()) return false;
+    return isAlloc(e, val);
+}
+
 //load if alloca
 llvm::Value *Compiler::loadPtr(Expression *e) {
     auto val = gen(e);
@@ -331,23 +337,20 @@ void Compiler::setField(Expression *expr, const Type &type, bool do_cast, llvm::
     if (de) {
         if (isStruct(type)) {
             auto val = gen(de->expr.get());
+            if (is_double_ptr(resolv->getType(de->expr.get()), expr, val)) {
+                val = load(val);
+            }
             copy(ptr, val, type);
             return;
         }
     }
-    if(isRvo(expr)){
+    if (isRvo(expr)) {
         auto val = gen(expr);
         copy(ptr, val, type);
         return;
     }
     //dynamic_cast<MethodCall *>(expr)
-    if (is_simple_enum(type)) {
-        auto val = gen(expr);
-        if (val->getType()->isPointerTy()) {
-            val = load(val);
-        }
-        Builder->CreateStore(val, ptr);
-    } else if (doesAlloc(expr)) {
+    if (doesAlloc(expr)) {
         child(expr, ptr);
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
@@ -373,17 +376,13 @@ void Compiler::make_proto(Method *m) {
         argTypes.push_back(mapType(m->type)->getPointerTo());
     }
     if (m->self) {
-        auto st = *m->self->type;
-        auto real = st.unwrap();
-        if (is_simple_enum(real)) {
-            st = real;
-        }
-        auto ty = mapType(st);
+        auto &self_type = *m->self->type;
+        auto ty = mapType(self_type);
         argTypes.push_back(ty);
     }
     for (auto &prm : m->params) {
         auto ty = mapType(*prm.type);
-        if (isStruct(*prm.type) && !is_simple_enum(*prm.type)) {
+        if (isStruct(*prm.type)) {
             //structs are always pass by ptr
             ty = ty->getPointerTo();
         }
@@ -412,7 +411,7 @@ void Compiler::make_proto(Method *m) {
     f->addFnAttr("no-trapping-math", "true");
     f->addFnAttr("stack-protector-buffer-size", "8");
     f->addFnAttr("target-cpu", "generic");
-    f->addFnAttr("target-features", "+neon,+outline-atomics");
+    //f->addFnAttr("target-features", "+neon,+outline-atomics");
     int i = 0;
     if (rvo) {
         f->getArg(0)->setName("ret");
@@ -459,21 +458,16 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
     std::vector<llvm::Type *> elems;
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
-        if (Resolver::is_simple_enum(ed)) {
-            auto ty = getInt(ENUM_INDEX_SIZE);
-            classMap[mangled] = ty;
-            return ty;
-        }
         //ordinal, i32
         elems.push_back(getInt(ENUM_INDEX_SIZE));
         //data, i8*
         auto sz = getSize(ed);
         elems.push_back(llvm::ArrayType::get(getInt(8), (sz - ENUM_INDEX_SIZE) / 8));
     } else {
-        Resolver* r;
-        if(true || bd->unit==unit.get()){
-            r=resolv.get();
-        }else{
+        Resolver *r;
+        if (true || bd->unit == unit.get()) {
+            r = resolv.get();
+        } else {
             r = Resolver::getResolver(bd->unit->path, resolv->root).get();
         }
         auto td = dynamic_cast<StructDecl *>(bd);
@@ -717,7 +711,7 @@ void Compiler::loc(int line, int pos) {
     Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
 
-void dbg_var(const std::string& name, int line, int pos, const Type &type, Compiler *c) {
+void dbg_var(const std::string &name, int line, int pos, const Type &type, Compiler *c) {
     if (!c->debug) return;
     auto sp = c->di.sp;
     //auto ff = c->DBuilder->createFile(c->di.cu->getFilename(), c->di.cu->getDirectory());
@@ -769,7 +763,7 @@ void Compiler::genCode(Method *m) {
     }
     resolv->curMethod = m;
     curMethod = m;
-    auto id=mangle(m);
+    auto id = mangle(m);
     func = funcMap[id];
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
@@ -831,16 +825,9 @@ std::any Compiler::visitReturnStmt(ReturnStmt *t) {
         auto expr_type = resolv->getType(type);
         return Builder->CreateRet(cast(e, expr_type));
     }
-    if (is_simple_enum(type)) {
-        auto val = gen(e);
-        if (is_mut_prm(e, this)) {
-            val = load(val);
-        }
-        return Builder->CreateRet(val);
-    }
     //rvo
     auto ptr = func->getArg(0);
-    
+
     if (doesAlloc(e)) {
         child(e, ptr);
         return Builder->CreateRetVoid();
@@ -893,14 +880,14 @@ std::pair<llvm::Value *, llvm::BasicBlock *> Compiler::andOr(Infix *node) {
     } else {
         r = loadPtr(node->right);
     }
-    auto rbit = Builder->CreateTrunc(r, getInt(1));
+    auto rbit = Builder->CreateZExt(r, getInt(8));
     Builder->CreateBr(next);
     Builder->SetInsertPoint(next);
     func->getBasicBlockList().push_back(next);
-    auto phi = Builder->CreatePHI(getInt(1), 2);
-    phi->addIncoming(isand ? Builder->getFalse() : Builder->getTrue(), bb);
+    auto phi = Builder->CreatePHI(getInt(8), 2);
+    phi->addIncoming(isand ? makeInt(0, 8) : makeInt(1, 8), bb);
     phi->addIncoming(rbit, then);
-    return {Builder->CreateZExt(phi, getInt(1)), next};
+    return {Builder->CreateZExt(phi, getInt(8)), next};
 }
 
 std::any Compiler::visitInfix(Infix *i) {
@@ -1021,10 +1008,10 @@ std::any Compiler::visitAssign(Assign *i) {
     auto val = l;
     auto lt = resolv->getType(i->left);
     if (i->op == "=") {
-        if(dynamic_cast<ObjExpr*>(i->right)){
-            auto val=gen(i->right);
+        if (dynamic_cast<ObjExpr *>(i->right)) {
+            auto val = gen(i->right);
             copy(l, val, lt);
-        }else{
+        } else {
             setField(i->right, lt, false, l);
         }
         return l;
@@ -1159,8 +1146,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         scp = resolv->resolve(e);
         auto &scope_type = scp.type;
         if (scope_type.isPointer() && isAlloc(e, obj) ||
-            (scope_type.isPrim() && isVar(e) && !scp.vh->prm) ||
-            is_simple_enum(scope_type) && isPtr(obj)) {
+            (scope_type.isPrim() && isVar(e) && !scp.vh->prm)) {
             //auto deref
             obj = load(obj);
         }
@@ -1192,9 +1178,6 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
                 av = gen(de->expr);
             } else {
                 av = gen(a);
-                if (is_simple_enum(pt) && isPtr(av)) {
-                    av = load(av);
-                }
             }
         } else {
             av = cast(a, pt);
@@ -1273,12 +1256,12 @@ std::any Compiler::visitLiteral(Literal *n) {
             bits = getSize(*n->suffix);
         }
         int base = 10;
-        if(n->val[0]=='0'&&n->val[1]=='x') base = 16;
+        if (n->val[0] == '0' && n->val[1] == 'x') base = 16;
         auto val = std::stoll(n->val, nullptr, base);
         return (llvm::Value *) llvm::ConstantInt::get(getInt(bits), val);
     } else if (n->type == Literal::BOOL) {
-        return (llvm::Value *) (n->val == "true" ? Builder->getTrue() : Builder->getFalse());
-    }else if(n->type == Literal::FLOAT){
+        return (llvm::Value *) (n->val == "true" ? makeInt(1, 8) : makeInt(0, 8));
+    } else if (n->type == Literal::FLOAT) {
         //auto ty = resolv->getType(n);
         auto ty = mapType(Type("f64"));
         return (llvm::Value *) llvm::ConstantFP::get(ty, std::stod(n->val.c_str()));
@@ -1330,12 +1313,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
         auto ptr = NamedValues[f.name];
         if (isStruct(type)) {
             auto val = gen(rhs);
-            if (is_simple_enum(type)) {
-                if (val->getType()->isPointerTy()) {
-                    val = load(val);
-                }
-                Builder->CreateStore(val, ptr);
-            } else if (val->getType()->isPointerTy()) {
+            if (val->getType()->isPointerTy()) {
                 copy(ptr, val, type);
             } else {
                 Builder->CreateStore(val, ptr);
@@ -1458,24 +1436,9 @@ std::any Compiler::visitType(Type *n) {
         throw std::runtime_error("type has no scope");
     }
     //enum variant without struct
-    if (Config::optimize_enum) {
-        auto bd = resolv->resolve(n->scope.get()).targetDecl;
-        auto decl = dynamic_cast<EnumDecl *>(bd);
-        if (Resolver::is_simple_enum(decl)) {
-            int index = Resolver::findVariant(decl, n->name);
-            return (llvm::Value *) makeInt(index, ENUM_INDEX_SIZE);
-        }
-    }
     auto ptr = getAlloc(n);
     simpleVariant(*n, ptr);
     return ptr;
-}
-
-bool is_double_ptr(const Type& type, Expression* e, llvm::Value* val){
-    if(!type.isPointer()) return false;
-    return isAlloc(e, val);
-    /*if(is_mut_prm(e, c) || ){
-    }*/
 }
 
 std::any Compiler::visitFieldAccess(FieldAccess *n) {
@@ -1497,7 +1460,7 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         auto [sd, idx] = resolv->findField(n->name, decl);
-        index=idx;
+        index = idx;
         if (sd->base) index++;
         auto target = mapType(sd->type)->getPointerTo();
         scope = Builder->CreateBitCast(scope, target);
@@ -1536,9 +1499,9 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
     return nullptr;
 }
 
-bool isp(Expression* e, llvm::Value* val, Compiler* c){
+bool isp(Expression *e, llvm::Value *val, Compiler *c) {
     auto rt = c->resolv->getType(e);
-    if(rt.isPointer() && isAlloc(e, val)){
+    if (rt.isPointer() && isAlloc(e, val)) {
         return true;
     }
     /*if(dynamic_cast<SimpleName>(e)){
@@ -1549,16 +1512,10 @@ bool isp(Expression* e, llvm::Value* val, Compiler* c){
 std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
     auto decl = findEnum(b->type, resolv.get());
     auto rhs = gen(b->rhs);
-    llvm::Value *tag;
-    if (Resolver::is_simple_enum(decl)) {
-        tag = rhs;
-        if (tag->getType()->isPointerTy()) tag = load(tag);
-    } else {
-        if(isp(b->rhs.get(), rhs, this)){
-            rhs = load(rhs);
-        }
-        tag = load(gep2(rhs, 0));
+    if (isp(b->rhs.get(), rhs, this)) {
+        rhs = load(rhs);
     }
+    auto tag = load(gep2(rhs, 0));
 
     auto index = Resolver::findVariant(decl, b->type.name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_INDEX_SIZE));
@@ -1619,14 +1576,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
 llvm::Value *Compiler::getTag(Expression *expr) {
     auto tag = gen(expr);
     auto lt = resolv->getType(expr);
-    if (is_simple_enum(lt)) {
-        if (isPtr(tag)) {
-            return load(tag);
-        }
-        return tag;
-    } else {
-        return load(gep2(tag, ENUM_TAG_INDEX));
-    }
+    return load(gep2(tag, ENUM_TAG_INDEX));
 }
 
 std::any Compiler::visitIsExpr(IsExpr *ie) {
@@ -1647,9 +1597,9 @@ std::any Compiler::visitAsExpr(AsExpr *e) {
     auto lhs = resolv->getType(e->expr);
     auto ty = resolv->getType(&e->type);
     //ptr to int
-    if(lhs.isPointer() && ty.print()=="u64"){
+    if (lhs.isPointer() && ty.print() == "u64") {
         auto val = gen(e->expr);
-        if(is_mut_prm(e->expr, this)){
+        if (is_mut_prm(e->expr, this)) {
             val = load(val);
         }
         return Builder->CreatePtrToInt(val, mapType(ty));
@@ -1860,7 +1810,7 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
         return ptr;
     }
     auto elem = node->list[0];
-    llvm::Value *elem_ptr=nullptr;
+    llvm::Value *elem_ptr = nullptr;
     if (doesAlloc(elem)) {
         elem_ptr = gen(elem);
     }

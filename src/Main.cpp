@@ -87,7 +87,7 @@ void compileTest() {
     auto libc = "../tests/src/std/libc.x";
     auto io = "../tests/src/std/io.x";
     
-    /*compile("../tests/src/lit.x");
+    compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
     compile("../tests/src/flow.x");
@@ -110,9 +110,9 @@ void compileTest() {
     compile({"../tests/src/listTest.x", s1, s2, op});
     compile({"../tests/src/strTest.x", s1, s2, op});
     compile({"../tests/src/opt.x", s1, s2, op});
-    compile({"../tests/src/mapTest.x", s1, s2, op});*/
-    //compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
-    compile("../tests/src/dbg.x");
+    compile({"../tests/src/mapTest.x", s1, s2, op});
+    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
+    //compile("../tests/src/dbg.x");
     
     auto tok = "../tests/src/parser/token.x";
     auto lx = "../tests/src/parser/lexer.x";

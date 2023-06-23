@@ -92,15 +92,14 @@ public:
     llvm::Type *getInt(int bit);
     void setOrdinal(int index, llvm::Value *ptr);
     void simpleVariant(const Type &n, llvm::Value *ptr);
-    bool is_simple_enum(const Type &type);
     llvm::Value *getTag(Expression *expr);
     bool doesAlloc(Expression *e);
 
     bool isRvo(Method *m) {
-        return !m->type.isVoid() && isStruct(m->type) && !is_simple_enum(m->type);
+        return !m->type.isVoid() && isStruct(m->type);
     }
-    
-    bool isRvo(Expression* e){
+
+    bool isRvo(Expression *e) {
         auto m = resolv->resolve(e).targetMethod;
         return m && isRvo(m);
     }
@@ -143,20 +142,20 @@ public:
         arr.erase(arr.begin());
         return res;
     }
-    
-    std::string getId(const std::string& name){
-        return name+"#"+std::to_string(resolv->max_scope);
+
+    std::string getId(const std::string &name) {
+        return name + "#" + std::to_string(resolv->max_scope);
     }
-    
-    llvm::Value* getVar(const std::string& name){
+
+    llvm::Value *getVar(const std::string &name) {
         auto id = getId(name);
-        auto it=NamedValues.find(id);
-        if(it==NamedValues.end()) error("get var "+name);
+        auto it = NamedValues.find(id);
+        if (it == NamedValues.end()) error("get var " + name);
         return it->second;
     }
-    void addVar(const std::string& name, llvm::Value* ptr){
+    void addVar(const std::string &name, llvm::Value *ptr) {
         auto id = getId(name);
-        NamedValues[id]=ptr;
+        NamedValues[id] = ptr;
     }
 
     llvm::Function *make_printf();
@@ -169,7 +168,10 @@ public:
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, const Type &type);
-    llvm::Type *mapType(const Type *t, Resolver* r);
+    llvm::Type *mapType(const Type &t, Resolver *r);
+    llvm::Type *mapType(const Type *t, Resolver *r) {
+        return mapType(*t, r);
+    }
     llvm::Type *mapType(const Type &t) { return mapType(&t); }
     llvm::Type *mapType(const Type *type) {
         return mapType(type, resolv.get());

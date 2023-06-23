@@ -9,7 +9,6 @@
 #include <unordered_set>
 
 bool Config::verbose = true;
-bool Config::optimize_enum = false;
 bool Config::rvo_ptr = false;
 
 bool isCondition(Expression *e, Resolver *r) {
@@ -167,11 +166,11 @@ void Resolver::init_prelude() {
     }
 }
 
-bool has(std::vector<ImportStmt>& arr, ImportStmt& is){
-    for(auto& i : arr){
+bool has(std::vector<ImportStmt> &arr, ImportStmt &is) {
+    for (auto &i : arr) {
         auto s1 = join(i.list, "/");
         auto s2 = join(is.list, "/");
-        if(s1 == s2) return true;
+        if (s1 == s2) return true;
     }
     return false;
 }
@@ -193,9 +192,9 @@ std::vector<ImportStmt> Resolver::get_imports() {
         is.list.push_back(pre);
         imports.push_back(std::move(is));
     }
-    if(curMethod && !curMethod->typeArgs.empty()){
-        for(auto &is : curMethod->unit->imports){
-            if(has(imports, is)) continue;
+    if (curMethod && !curMethod->typeArgs.empty()) {
+        for (auto &is : curMethod->unit->imports) {
+            if (has(imports, is)) continue;
             //skip self being cycle
             if (unit->path == getPath(is)) continue;
             imports.push_back(is);
@@ -203,7 +202,7 @@ std::vector<ImportStmt> Resolver::get_imports() {
         }
     }
     ///print("\n"+unit->path);
-    for(auto &is:imports){
+    for (auto &is : imports) {
         //print(is.print());
     }
     return imports;
@@ -226,8 +225,8 @@ void Resolver::addScope(std::string &name, const Type &type, bool prm) {
 void dump(Resolver *r) {
     for (auto &[k, v] : r->cache) {
         print(k);
-        for(auto &[k2, v2]: v){
-            print(k2 +"=" + v2.type.print());
+        for (auto &[k2, v2] : v) {
+            print(k2 + "=" + v2.type.print());
         }
         print("");
     }
@@ -360,7 +359,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         for (int i = 0; i < ed->variants.size(); i++) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
-            ifs->line=line;
+            ifs->line = line;
             ifs->type = (Type(clone(bd->type), ev.name));
             for (auto &fd : ev.fields) {
                 ifs->args.push_back(fd.name);
@@ -484,7 +483,7 @@ Type Resolver::getType(Expression *expr) {
 }
 
 bool Resolver::isCyclic(const Type &type, BaseDecl *target) {
-    if(true) return false;
+    if (true) return false;
     if (type.isPointer()) return false;
     if (type.isArray()) {
         return isCyclic(*type.scope.get(), target);
@@ -517,8 +516,8 @@ std::any Resolver::visitEnumDecl(EnumDecl *node) {
         for (auto &ev : node->variants) {
             for (auto &ep : ev.fields) {
                 resolve(ep.type);
-                if(isCyclic(ep.type, node)){
-                  err("cyclic type " + node->type.print());
+                if (isCyclic(ep.type, node)) {
+                    err("cyclic type " + node->type.print());
                 }
             }
         }
@@ -544,8 +543,8 @@ std::any Resolver::visitStructDecl(StructDecl *node) {
         node->isResolved = true;
         for (auto &fd : node->fields) {
             fd.accept(this);
-            if(isCyclic(fd.type, node)){
-              err("cyclic type " + node->type.print());
+            if (isCyclic(fd.type, node)) {
+                err("cyclic type " + node->type.print());
             }
         }
     }
@@ -849,7 +848,7 @@ std::any Resolver::visitType(Type *type) {
 
     BaseDecl *target = nullptr;
     if (!type->typeArgs.empty()) {
-        for(auto &ta:type->typeArgs){
+        for (auto &ta : type->typeArgs) {
             resolve(ta);
         }
         //we looking for generic type
@@ -1041,23 +1040,23 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
     return {};
 }
 
-std::pair<StructDecl*, int> Resolver::findField(const std::string& name, BaseDecl* decl){
+std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDecl *decl) {
     auto cur = decl;
-    while(true){
-    if(cur->isClass()){
-        auto sd = (StructDecl*)cur;
-        int idx=0;
-        for(auto &fd:sd->fields){
-            if(fd.name==name){
-                return std::make_pair(sd, idx);
+    while (true) {
+        if (cur->isClass()) {
+            auto sd = (StructDecl *) cur;
+            int idx = 0;
+            for (auto &fd : sd->fields) {
+                if (fd.name == name) {
+                    return std::make_pair(sd, idx);
+                }
+                idx++;
             }
-            idx++;
         }
-    }
-    if(cur->base){
-        auto base = resolve(*cur->base).targetDecl;
-        cur = base;
-    }
+        if (cur->base) {
+            auto base = resolve(*cur->base).targetDecl;
+            cur = base;
+        }
     }
     throw std::runtime_error("unknown field: " + decl->type.print() + "." + name);
 }
@@ -1073,15 +1072,18 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
             err(node, "invalid field " + node->name + " of " + sct.print());
         }
         return makeSimple("i32");
+    } else if (sct.isArray()) {
+        error("array field access not supported yet");
+        if (node->name != "len") {
+            err(node, "invalid field " + node->name + " of " + sct.print());
+        }
+        return makeSimple("i32");
     }
     auto decl = scp.targetDecl;
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         if (node->name != "index") {
             err(node, "invalid field " + node->name + " of " + sct.print());
-        }
-        if (is_simple_enum(ed) && Config::optimize_enum) {
-            error("can't index simple enum: " + node->print());
         }
         return makeSimple("i32");
     } else {
@@ -1145,10 +1147,10 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
             cur = resolve(*cur->base).targetDecl;
         }
     }
-    if(right.type.isPointer()){
+    if (right.type.isPointer()) {
         return right;
     }
-    if(left.type.isPointer() && right.type.print()=="u64"){
+    if (left.type.isPointer() && right.type.print() == "u64") {
         return makeSimple("u64");
     }
     throw std::runtime_error("invalid as expr " + node->print());

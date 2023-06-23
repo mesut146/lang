@@ -3,12 +3,12 @@ import parser/lexer
 import parser/ast
 import std/map
 
-#derive(debug)
+//#derive(debug)
 struct Resolver{
   unit: Unit;
   is_resolved: bool;
   is_init: bool;
-  //typeMap: Map<String, RType>;
+  typeMap: Map<String, RType>;
 }
 
 struct Config{
@@ -18,6 +18,7 @@ struct Config{
 struct RType{
   type: Type;
 }
+
 impl RType{
   func new(s: str): RType{
     return RType{Type::new(s.str())};
@@ -33,14 +34,14 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
-    //let map = Map<String, RType>::new();
-    return Resolver{unit: *unit, is_resolved: false, is_init: false/*, typeMap: map*/};
+    let map = Map<String, RType>::new();
+    let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map};
+    return res;
   }
   
   func resolve_all(self){
     if(self.is_resolved) return;
     self.is_resolved = true;
-    print("self=%p\n", self);
     self.init();
     /*for(let i=0;i<self.unit.items.len();++i){
       visit(self.unit.items.get_ptr(i));
@@ -53,19 +54,16 @@ impl Resolver{
   func init(self){
     if(self.is_init) return;
     self.is_init = true;
-    Fmt::str(self).dump();
-    print("self=%p\n", self);
     let newItems = List<Impl>::new();
-    print("%d\n", self.unit.items.len());
     for(let i=0;i<self.unit.items.len();++i){
-      print("self=%p\n", self);
       let it=self.unit.items.get_ptr(i);
-      print("self=%p\n", self);
-      Fmt::str(it).dump();
-      /*if let Item::Struct(sd)=(it){
+      //Fmt::str(it).dump();
+      if let Item::Struct(sd)=(it){
         let res = RType::new(sd.type);
         self.typeMap.add(sd.type.print(), res);
-      }*/
+      }else{
+        
+      }
     }
   }
   
