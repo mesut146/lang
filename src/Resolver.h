@@ -129,8 +129,8 @@ static bool isRet(Statement *stmt) {
         return mc && mc->name == "panic";
     }
     return dynamic_cast<ReturnStmt *>(stmt) ||
-                dynamic_cast<ContinueStmt *>(stmt) ||
-                dynamic_cast<BreakStmt *>(stmt);
+           dynamic_cast<ContinueStmt *>(stmt) ||
+           dynamic_cast<BreakStmt *>(stmt);
 }
 
 class EnumPrm {
@@ -221,9 +221,9 @@ public:
     static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
 
     static void init_prelude();
-    
-    std::string getPath(ImportStmt& is){
-      return root +"/"+ join(is.list, "/") + ".x";
+
+    std::string getPath(ImportStmt &is) {
+        return root + "/" + join(is.list, "/") + ".x";
     }
 
     void err(Expression *e, const std::string &msg);
@@ -262,15 +262,21 @@ public:
     std::any visitFragment(Fragment *f) override;
 
     RType resolve(Expression *expr);
-    RType resolve(Ptr<Expression> &expr) { return resolve(expr.get()); }
-    RType resolve(const Type &type) { return resolve(const_cast<Type *>(&type)); }
+    RType resolve(Ptr<Expression> &expr) {
+        return resolve(expr.get());
+    }
+    RType resolve(const Type &type) {
+        return resolve(const_cast<Type *>(&type));
+    }
     Type getType(Expression *expr);
-    Type getType(const Type &type) { return resolve(type).type; }
+    Type getType(const Type &type) {
+        return resolve(type).type;
+    }
     RType getTypeCached(const std::string &name);
     void addType(const std::string &name, const RType &rt);
     std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
-    std::pair<StructDecl*, int> findField(const std::string& name, BaseDecl* decl);
+    std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

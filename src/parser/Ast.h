@@ -369,44 +369,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class ExprStmt : public Statement {
-public:
-    Expression *expr;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-
-    explicit ExprStmt(Expression *e) : expr(e) {}
-};
-
-class Fragment : public Node {
-public:
-    std::string name;
-    std::optional<Type> type;
-    std::unique_ptr<Expression> rhs;
-    bool isOptional = false;
-
-    std::string print() const;
-    std::any accept(Visitor *v);
-};
-
-class VarDeclExpr : public Statement {
-public:
-    bool isConst = false;
-    bool isStatic = false;
-    std::vector<Fragment> list;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
-
-class VarDecl : public Statement {
-public:
-    VarDeclExpr *decl;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
 
 class Unary : public Expression {
 public:
@@ -464,24 +426,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class Postfix : public Expression {
-public:
-    std::string op;
-    Expression *expr;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
-
-class Ternary : public Expression {
-public:
-    Expression *cond;
-    Expression *thenExpr;
-    Expression *elseExpr;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
 
 class MethodCall : public Expression {
 public:
@@ -551,6 +495,46 @@ public:
     Type type;
     std::vector<Entry> entries;
     bool isPointer = false;
+
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
+};
+
+//STATEMENTS----------------------------------------------
+class ExprStmt : public Statement {
+public:
+    Expression *expr;
+
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
+
+    explicit ExprStmt(Expression *e) : expr(e) {}
+};
+
+class Fragment : public Node {
+public:
+    std::string name;
+    std::optional<Type> type;
+    std::unique_ptr<Expression> rhs;
+    bool isOptional = false;
+
+    std::string print() const;
+    std::any accept(Visitor *v);
+};
+
+class VarDeclExpr : public Statement {
+public:
+    bool isConst = false;
+    bool isStatic = false;
+    std::vector<Fragment> list;
+
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
+};
+
+class VarDecl : public Statement {
+public:
+    VarDeclExpr *decl;
 
     std::string print() const override;
     std::any accept(Visitor *v) override;

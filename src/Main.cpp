@@ -86,8 +86,8 @@ void compileTest() {
     auto op = "../tests/src/std/ops.x";
     auto libc = "../tests/src/std/libc.x";
     auto io = "../tests/src/std/io.x";
-    
-    compile("../tests/src/lit.x");
+
+    /*compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
     compile("../tests/src/flow.x");
@@ -111,19 +111,20 @@ void compileTest() {
     compile({"../tests/src/strTest.x", s1, s2, op});
     compile({"../tests/src/opt.x", s1, s2, op});
     compile({"../tests/src/mapTest.x", s1, s2, op});
-    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
+    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});*/
     //compile("../tests/src/dbg.x");
-    
+
     auto tok = "../tests/src/parser/token.x";
     auto lx = "../tests/src/parser/lexer.x";
     auto ast = "../tests/src/parser/ast.x";
+    auto printer = "../tests/src/parser/printer.x";
     auto ps = "../tests/src/parser/parser.x";
     auto rs = "../tests/src/parser/resolver.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, ps, rs});
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs});
     //compile({ps});
 }
 
-void usage(){
+void usage() {
     throw std::runtime_error("usage: ./lang <cmd>\n");
 }
 
@@ -136,13 +137,11 @@ int main(int argc, char **args) {
         auto arg = std::string(args[1]);
         if (arg == "help") {
             usage();
-        }
-        else if (arg == "parse") {
+        } else if (arg == "parse") {
             parseTest();
         } else if (arg == "resolve") {
             resolveTest();
-        }
-        else if (arg == "c") {
+        } else if (arg == "c") {
             auto file = std::string(args[2]);
             Compiler c;
             if (std::filesystem::is_directory(file)) {

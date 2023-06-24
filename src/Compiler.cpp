@@ -806,21 +806,21 @@ llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
     return gen(expr.get());
 }
 
-std::any Compiler::visitBlock(Block *b) {
-    for (auto &s : b->list) {
-        loc(s.get());
-        s->accept(this);
+std::any Compiler::visitBlock(Block *node) {
+    for (auto &stmt : node->list) {
+        loc(stmt.get());
+        stmt->accept(this);
     }
     return nullptr;
 }
 
-std::any Compiler::visitReturnStmt(ReturnStmt *t) {
-    loc(t);
-    if (!t->expr) {
+std::any Compiler::visitReturnStmt(ReturnStmt *node) {
+    loc(node);
+    if (!node->expr) {
         return Builder->CreateRetVoid();
     }
     auto &type = curMethod->type;
-    auto e = t->expr.get();
+    auto e = node->expr.get();
     if (!isStruct(type)) {
         auto expr_type = resolv->getType(type);
         return Builder->CreateRet(cast(e, expr_type));
@@ -843,12 +843,12 @@ std::any Compiler::visitReturnStmt(ReturnStmt *t) {
     return Builder->CreateRetVoid();
 }
 
-std::any Compiler::visitExprStmt(ExprStmt *b) {
-    return b->expr->accept(this);
+std::any Compiler::visitExprStmt(ExprStmt *node) {
+    return node->expr->accept(this);
 }
 
-std::any Compiler::visitParExpr(ParExpr *i) {
-    return i->expr->accept(this);
+std::any Compiler::visitParExpr(ParExpr *node) {
+    return node->expr->accept(this);
 }
 
 bool is_logic(Expression *e) {
@@ -890,112 +890,107 @@ std::pair<llvm::Value *, llvm::BasicBlock *> Compiler::andOr(Infix *node) {
     return {Builder->CreateZExt(phi, getInt(8)), next};
 }
 
-std::any Compiler::visitInfix(Infix *i) {
-    loc(i->left);
-    if (i->op == "&&" || i->op == "||") {
-        return andOr(i).first;
+std::any Compiler::visitInfix(Infix *node) {
+    loc(node->left);
+    auto& op= node->op;
+    if (op == "&&" || op == "||") {
+        return andOr(node).first;
     }
-    auto lt = resolv->resolve(i->left);
+    auto lt = resolv->resolve(node->left);
     auto t1 = lt.type.print();
-    auto t2 = resolv->getType(i->right).print();
+    auto t2 = resolv->getType(node->right).print();
     auto t3 = t1 == "bool" ? Type("i1") : binCast(t1, t2).type;
-    auto l = cast(i->left, t3);
-    auto r = cast(i->right, t3);
-    if (isComp(i->op)) {
-        if (i->op == "==") {
-            /*if(lt.targetDecl){
-                auto idx_ptr = Builder->CreateStructGEP(l->getType()->getPointerElementType(), l, 0);
-                auto idx_ptr2 = Builder->CreateStructGEP(r->getType()->getPointerElementType(), r, 0);
-                l = load(idx_ptr);
-                r = load(idx_ptr2);
-            }*/
+    auto l = cast(node->left, t3);
+    auto r = cast(node->right, t3);
+    if (isComp(op)) {
+        if (op == "==") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, l, r);
         }
-        if (i->op == "!=") {
+        if (op == "!=") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_NE, l, r);
         }
-        if (i->op == "<") {
+        if (op == "<") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_SLT, l, r);
         }
-        if (i->op == ">") {
+        if (op == ">") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_SGT, l, r);
         }
-        if (i->op == "<=") {
+        if (op == "<=") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_SLE, l, r);
         }
-        if (i->op == ">=") {
+        if (op == ">=") {
             return Builder->CreateCmp(llvm::CmpInst::ICMP_SGE, l, r);
         }
     }
-    if (i->op == "+") {
+    if (op == "+") {
         return Builder->CreateNSWAdd(l, r);
     }
-    if (i->op == "-") {
+    if (op == "-") {
         if (isUnsigned(lt.type)) {
             return Builder->CreateSub(l, r);
         } else {
             return Builder->CreateNSWSub(l, r);
         }
     }
-    if (i->op == "*") {
+    if (op == "*") {
         return Builder->CreateNSWMul(l, r);
     }
-    if (i->op == "/") {
+    if (op == "/") {
         return Builder->CreateSDiv(l, r);
     }
-    if (i->op == "%") {
+    if (op == "%") {
         return Builder->CreateSRem(l, r);
     }
-    if (i->op == "^") {
+    if (op == "^") {
         return Builder->CreateXor(l, r);
     }
-    if (i->op == "&") {
+    if (op == "&") {
         return Builder->CreateAnd(l, r);
     }
-    if (i->op == "|") {
+    if (op == "|") {
         return Builder->CreateOr(l, r);
     }
-    if (i->op == "<<") {
+    if (op == "<<") {
         return Builder->CreateShl(l, r);
     }
-    if (i->op == ">>") {
+    if (op == ">>") {
         return Builder->CreateAShr(l, r);
     }
-    throw std::runtime_error("infix: " + i->print());
+    throw std::runtime_error("infix: " + node->print());
 }
 
-std::any Compiler::visitUnary(Unary *u) {
-    loc(u);
-    auto val = loadPtr(u->expr);
+std::any Compiler::visitUnary(Unary *node) {
+    loc(node);
+    auto val = loadPtr(node->expr);
     llvm::Value *res;
-    if (u->op == "+") {
+    if (node->op == "+") {
         res = val;
-    } else if (u->op == "-") {
+    } else if (node->op == "-") {
         res = (llvm::Value *) Builder->CreateNSWSub(makeInt(0), val);
-    } else if (u->op == "++") {
-        auto v = gen(u->expr);
+    } else if (node->op == "++") {
+        auto v = gen(node->expr);
         auto bits = val->getType()->getPrimitiveSizeInBits();
         res = Builder->CreateNSWAdd(val, makeInt(1, bits));
         Builder->CreateStore(res, v);
-    } else if (u->op == "--") {
-        auto v = gen(u->expr);
+    } else if (node->op == "--") {
+        auto v = gen(node->expr);
         res = Builder->CreateNSWSub(val, makeInt(1));
         Builder->CreateStore(res, v);
-    } else if (u->op == "!") {
+    } else if (node->op == "!") {
         res = Builder->CreateTrunc(val, getInt(1));
         res = Builder->CreateXor(res, Builder->getTrue());
         res = Builder->CreateZExt(res, getInt(8));
-    } else if (u->op == "~") {
+    } else if (node->op == "~") {
         res = (llvm::Value *) Builder->CreateXor(val, makeInt(-1));
     } else {
-        throw std::runtime_error("Unary: " + u->print());
+        throw std::runtime_error("Unary: " + node->print());
     }
     return res;
 }
 
-std::any Compiler::visitAssign(Assign *i) {
-    loc(i);
-    auto de = dynamic_cast<DerefExpr *>(i->left);
+std::any Compiler::visitAssign(Assign *node) {
+    loc(node);
+    auto de = dynamic_cast<DerefExpr *>(node->left);
     llvm::Value *l;
     if (de) {
         l = gen(de->expr.get());
@@ -1003,44 +998,44 @@ std::any Compiler::visitAssign(Assign *i) {
             l = load(l);
         }
     } else {
-        l = gen(i->left);
+        l = gen(node->left);
     }
     auto val = l;
-    auto lt = resolv->getType(i->left);
-    if (i->op == "=") {
-        if (dynamic_cast<ObjExpr *>(i->right)) {
-            auto val = gen(i->right);
+    auto lt = resolv->getType(node->left);
+    if (node->op == "=") {
+        if (dynamic_cast<ObjExpr *>(node->right)) {
+            auto val = gen(node->right);
             copy(l, val, lt);
         } else {
-            setField(i->right, lt, false, l);
+            setField(node->right, lt, false, l);
         }
         return l;
     }
-    auto r = cast(i->right, lt);
-    if (isVar(i->left)) {
+    auto r = cast(node->right, lt);
+    if (isVar(node->left)) {
         val = load(l);
     }
-    if (i->op == "+=") {
+    if (node->op == "+=") {
         auto tmp = Builder->CreateNSWAdd(val, r);
         return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
-    if (i->op == "-=") {
+    if (node->op == "-=") {
         auto tmp = Builder->CreateNSWSub(val, r);
         return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
-    if (i->op == "*=") {
+    if (node->op == "*=") {
         auto tmp = Builder->CreateNSWMul(val, r);
         return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
-    if (i->op == "/=") {
+    if (node->op == "/=") {
         auto tmp = Builder->CreateSDiv(val, r);
         return (llvm::Value *) Builder->CreateStore(tmp, l);
     }
-    throw std::runtime_error("assign: " + i->print());
+    throw std::runtime_error("assign: " + node->print());
 }
 
-std::any Compiler::visitSimpleName(SimpleName *n) {
-    return NamedValues[n->name];
+std::any Compiler::visitSimpleName(SimpleName *node) {
+    return NamedValues[node->name];
 }
 
 llvm::Value *callMalloc(llvm::Value *sz, Compiler *c) {
@@ -1081,22 +1076,22 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto l = dynamic_cast<Literal *>(a);
             auto str = c->Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
             args.push_back(str);
-        } else {
-            auto arg_type = c->resolv->getType(a);
-            if (arg_type.isString()) {
-                auto src = c->gen(a);
-                //get ptr to inner char array
-                if (src->getType()->isPointerTy()) {
-                    auto slice = c->Builder->CreateStructGEP(src->getType()->getPointerElementType(), src, 0);
-                    auto str = c->Builder->CreateLoad(c->getInt(8)->getPointerTo(), slice);
-                    args.push_back(str);
-                } else {
-                    args.push_back(src);
-                }
+            continue;
+        }
+        auto arg_type = c->resolv->getType(a);
+        if (arg_type.isString()) {
+            auto src = c->gen(a);
+            //get ptr to inner char array
+            if (src->getType()->isPointerTy()) {
+                auto slice = c->gep2(src, 0);
+                auto str = c->Builder->CreateLoad(c->getInt(8)->getPointerTo(), slice);
+                args.push_back(str);
             } else {
-                auto av = c->loadPtr(a);
-                args.push_back(av);
+                args.push_back(src);
             }
+        } else {
+            auto av = c->loadPtr(a);
+            args.push_back(av);
         }
     }
     c->Builder->CreateCall(c->printf_proto, args);
@@ -1209,7 +1204,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         auto decl = (StructDecl *) scp.targetDecl;
         int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-        auto vt = Builder->CreateStructGEP(obj->getType()->getPointerElementType(), obj, vt_index, "vtptr");
+        auto vt = gep2( obj, vt_index);
         vt = load(vt);
         auto ft = f->getType();
         auto real = llvm::ArrayType::get(ft, 1)->getPointerTo();
@@ -1227,8 +1222,8 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     return res;
 }
 
-void Compiler::strLit(llvm::Value *ptr, Literal *n) {
-    auto trimmed = n->val.substr(1, n->val.size() - 2);
+void Compiler::strLit(llvm::Value *ptr, Literal *node) {
+    auto trimmed = node->val.substr(1, node->val.size() - 2);
     auto src = Builder->CreateGlobalStringPtr(trimmed);
     auto slice_ptr = Builder->CreateBitCast(ptr, sliceType->getPointerTo());
     auto data_target = gep2(slice_ptr, 0);
@@ -1240,39 +1235,39 @@ void Compiler::strLit(llvm::Value *ptr, Literal *n) {
     Builder->CreateStore(len, len_target);
 }
 
-std::any Compiler::visitLiteral(Literal *n) {
-    loc(n);
-    if (n->type == Literal::STR) {
-        auto ptr = getAlloc(n);
-        strLit(ptr, n);
+std::any Compiler::visitLiteral(Literal *node) {
+    loc(node);
+    if (node->type == Literal::STR) {
+        auto ptr = getAlloc(node);
+        strLit(ptr, node);
         return (llvm::Value *) ptr;
-    } else if (n->type == Literal::CHAR) {
-        auto trimmed = n->val.substr(1, n->val.size() - 2);
+    } else if (node->type == Literal::CHAR) {
+        auto trimmed = node->val.substr(1, node->val.size() - 2);
         auto chr = trimmed[0];
         return (llvm::Value *) llvm::ConstantInt::get(getInt(32), chr);
-    } else if (n->type == Literal::INT) {
+    } else if (node->type == Literal::INT) {
         auto bits = 32;
-        if (n->suffix) {
-            bits = getSize(*n->suffix);
+        if (node->suffix) {
+            bits = getSize(*node->suffix);
         }
         int base = 10;
-        if (n->val[0] == '0' && n->val[1] == 'x') base = 16;
-        auto val = std::stoll(n->val, nullptr, base);
+        if (node->val[0] == '0' && node->val[1] == 'x') base = 16;
+        auto val = std::stoll(node->val, nullptr, base);
         return (llvm::Value *) llvm::ConstantInt::get(getInt(bits), val);
-    } else if (n->type == Literal::BOOL) {
-        return (llvm::Value *) (n->val == "true" ? makeInt(1, 8) : makeInt(0, 8));
-    } else if (n->type == Literal::FLOAT) {
+    } else if (node->type == Literal::BOOL) {
+        return (llvm::Value *) (node->val == "true" ? makeInt(1, 8) : makeInt(0, 8));
+    } else if (node->type == Literal::FLOAT) {
         //auto ty = resolv->getType(n);
         auto ty = mapType(Type("f64"));
-        return (llvm::Value *) llvm::ConstantFP::get(ty, std::stod(n->val.c_str()));
+        return (llvm::Value *) llvm::ConstantFP::get(ty, std::stod(node->val.c_str()));
     }
-    throw std::runtime_error("literal: " + n->print());
+    throw std::runtime_error("literal: " + node->print());
 }
 
-std::any Compiler::visitAssertStmt(AssertStmt *n) {
-    loc(n);
-    auto str = n->expr->print();
-    auto cond = loadPtr(n->expr.get());
+std::any Compiler::visitAssertStmt(AssertStmt *node) {
+    loc(node);
+    auto str = node->expr->print();
+    auto cond = loadPtr(node->expr.get());
     auto then = llvm::BasicBlock::Create(ctx(), "", func);
     auto next = llvm::BasicBlock::Create(ctx(), "");
     Builder->CreateCondBr(branch(cond), next, then);
@@ -1298,8 +1293,8 @@ void Compiler::copy(llvm::Value *trg, llvm::Value *src, const Type &type) {
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), getSize2(type) / 8);
 }
 
-std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
-    for (auto &f : n->list) {
+std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
+    for (auto &f : node->list) {
         auto rhs = f.rhs.get();
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
         NamedValues[f.name] = varAlloc[getId(f.name)];
@@ -1326,14 +1321,14 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *n) {
     return nullptr;
 }
 
-std::any Compiler::visitRefExpr(RefExpr *n) {
-    auto inner = gen(n->expr);
+std::any Compiler::visitRefExpr(RefExpr *node) {
+    auto inner = gen(node->expr);
     //todo rvalue
     return inner;
 }
 
-std::any Compiler::visitDerefExpr(DerefExpr *n) {
-    auto val = gen(n->expr);
+std::any Compiler::visitDerefExpr(DerefExpr *node) {
+    auto val = gen(node->expr);
     return load(val);
 }
 
@@ -1342,21 +1337,22 @@ EnumDecl *findEnum(const Type &type, Resolver *resolv) {
     return dynamic_cast<EnumDecl *>(rt.targetDecl);
 }
 
-std::any Compiler::visitObjExpr(ObjExpr *n) {
-    loc(n);
-    auto tt = resolv->resolve(n);
+std::any Compiler::visitObjExpr(ObjExpr *node) {
+    loc(node);
+    auto tt = resolv->resolve(node);
     llvm::Value *ptr;
-    if (n->isPointer) {
+    if (node->isPointer) {
         auto ty = mapType(tt.type);
         ptr = callMalloc(makeInt(getSize(tt.targetDecl) / 8, 64), this);
         ptr = Builder->CreateBitCast(ptr, ty);
     } else {
-        ptr = getAlloc(n);
+        ptr = getAlloc(node);
     }
-    object(n, ptr, tt, nullptr);
+    object(node, ptr, tt, nullptr);
     return ptr;
 }
 
+//todo
 int Compiler::getOffset(EnumVariant *variant, int index) {
     int offset = 0;
     for (int i = 0; i < index; i++) {
@@ -1365,17 +1361,17 @@ int Compiler::getOffset(EnumVariant *variant, int index) {
     return offset;
 }
 
-void Compiler::object(ObjExpr *n, llvm::Value *ptr, const RType &tt, std::string *derived) {
+void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived) {
     auto ty = mapType(tt.type);
     if (tt.targetDecl->isEnum()) {
         //enum
         auto decl = dynamic_cast<EnumDecl *>(tt.targetDecl);
-        auto variant_index = Resolver::findVariant(decl, n->type.name);
+        auto variant_index = Resolver::findVariant(decl, node->type.name);
         setOrdinal(variant_index, ptr);
-        auto dataPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, 1);
+        auto dataPtr = gep2( ptr, 1);
         auto &variant = decl->variants[variant_index];
-        for (int i = 0; i < n->entries.size(); i++) {
-            auto &e = n->entries[i];
+        for (int i = 0; i < node->entries.size(); i++) {
+            auto &e = node->entries[i];
             int index;
             if (e.key) {
                 index = fieldIndex(variant.fields, e.key.value(), Type(decl->type, variant.name));
@@ -1400,15 +1396,15 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, const RType &tt, std::string
                 }
             }
             int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-            auto vt_target = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, vt_index, "vtptr");
+            auto vt_target = gep2(ptr, vt_index);
             auto casted = Builder->CreateBitCast(vt, getInt(8)->getPointerTo()->getPointerTo());
             Builder->CreateStore(casted, vt_target);
         }
         int field_idx = 0;
-        for (int i = 0; i < n->entries.size(); i++) {
-            auto &e = n->entries[i];
+        for (int i = 0; i < node->entries.size(); i++) {
+            auto &e = node->entries[i];
             if (e.isBase) {
-                auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, 0, "base");
+                auto eptr = gep2(ptr, 0);
                 auto val = dynamic_cast<ObjExpr *>(e.value);
                 auto key = decl->type.print();
                 object(val, eptr, resolv->resolve(val), derived ? derived : &key);
@@ -1425,31 +1421,31 @@ void Compiler::object(ObjExpr *n, llvm::Value *ptr, const RType &tt, std::string
                 field = &decl->fields[field_idx++];
             }
             if (decl->base) real_idx++;
-            auto eptr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, real_idx, "field_" + field->name);
+            auto eptr = gep2(ptr, real_idx);
             setField(e.value, field->type, true, eptr);
         }
     }
 }
 
-std::any Compiler::visitType(Type *n) {
-    if (!n->scope) {
+std::any Compiler::visitType(Type *node) {
+    if (!node->scope) {
         throw std::runtime_error("type has no scope");
     }
     //enum variant without struct
-    auto ptr = getAlloc(n);
-    simpleVariant(*n, ptr);
+    auto ptr = getAlloc(node);
+    simpleVariant(*node, ptr);
     return ptr;
 }
 
-std::any Compiler::visitFieldAccess(FieldAccess *n) {
-    auto rt = resolv->resolve(n->scope);
+std::any Compiler::visitFieldAccess(FieldAccess *node) {
+    auto rt = resolv->resolve(node->scope);
     if (rt.type.unwrap().isSlice()) {
-        auto scopeVar = gen(n->scope);
+        auto scopeVar = gen(node->scope);
         return gep2(scopeVar, SLICE_LEN_INDEX);
         //todo load since cant mutate
     }
-    auto scope = gen(n->scope);
-    if (is_double_ptr(rt.type, n->scope, scope)) {
+    auto scope = gen(node->scope);
+    if (is_double_ptr(rt.type, node->scope, scope)) {
         //auto deref
         scope = load(scope);
     }
@@ -1459,7 +1455,7 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
         index = 0;
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
-        auto [sd, idx] = resolv->findField(n->name, decl);
+        auto [sd, idx] = resolv->findField(node->name, decl);
         index = idx;
         if (sd->base) index++;
         auto target = mapType(sd->type)->getPointerTo();
@@ -1468,12 +1464,12 @@ std::any Compiler::visitFieldAccess(FieldAccess *n) {
     return gep2(scope, index);
 }
 
-std::any Compiler::visitIfStmt(IfStmt *b) {
-    auto cond = branch(loadPtr(b->expr));
+std::any Compiler::visitIfStmt(IfStmt *node) {
+    auto cond = branch(loadPtr(node->expr));
     auto then = llvm::BasicBlock::Create(ctx(), "body", func);
     llvm::BasicBlock *elsebb = nullptr;
     auto next = llvm::BasicBlock::Create(ctx(), "next");
-    if (b->elseStmt) {
+    if (node->elseStmt) {
         elsebb = llvm::BasicBlock::Create(ctx(), "else");
         Builder->CreateCondBr(cond, then, elsebb);
     } else {
@@ -1481,16 +1477,16 @@ std::any Compiler::visitIfStmt(IfStmt *b) {
     }
     Builder->SetInsertPoint(then);
     resolv->newScope();
-    b->thenStmt->accept(this);
-    if (!isReturnLast(b->thenStmt.get())) {
+    node->thenStmt->accept(this);
+    if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
-    if (b->elseStmt) {
+    if (node->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         resolv->newScope();
-        b->elseStmt->accept(this);
-        if (!isReturnLast(b->elseStmt.get())) {
+        node->elseStmt->accept(this);
+        if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     }
@@ -1509,21 +1505,21 @@ bool isp(Expression *e, llvm::Value *val, Compiler *c) {
     return false;
 }
 
-std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
-    auto decl = findEnum(b->type, resolv.get());
-    auto rhs = gen(b->rhs);
-    if (isp(b->rhs.get(), rhs, this)) {
+std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
+    auto decl = findEnum(node->type, resolv.get());
+    auto rhs = gen(node->rhs);
+    if (isp(node->rhs.get(), rhs, this)) {
         rhs = load(rhs);
     }
     auto tag = load(gep2(rhs, 0));
 
-    auto index = Resolver::findVariant(decl, b->type.name);
+    auto index = Resolver::findVariant(decl, node->type.name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_INDEX_SIZE));
 
     auto then = llvm::BasicBlock::Create(ctx(), "", func);
     llvm::BasicBlock *elsebb;
     auto next = llvm::BasicBlock::Create(ctx(), "");
-    if (b->elseStmt) {
+    if (node->elseStmt) {
         elsebb = llvm::BasicBlock::Create(ctx(), "");
         Builder->CreateCondBr(branch(cmp), then, elsebb);
     } else {
@@ -1541,30 +1537,30 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *b) {
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
             auto &prm = params[i];
-            auto argName = b->args[i];
+            auto argName = node->args[i];
             auto ptr = gep(dataPtr, 0, offset);
             //bitcast to real type
             auto targetTy = mapType(prm.type)->getPointerTo();
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy);
             NamedValues[argName] = ptrReal;
-            dbg_var(argName, b->rhs->line, 0, prm.type, this);
+            dbg_var(argName, node->rhs->line, 0, prm.type, this);
             offset += getSize(prm.type) / 8;
         }
     }
-    b->thenStmt->accept(this);
+    node->thenStmt->accept(this);
     //clear params
-    for (auto &p : b->args) {
+    for (auto &p : node->args) {
         //NamedValues.erase(p);
     }
-    if (!isReturnLast(b->thenStmt.get())) {
+    if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
-    if (b->elseStmt) {
+    if (node->elseStmt) {
         Builder->SetInsertPoint(elsebb);
         func->getBasicBlockList().push_back(elsebb);
         resolv->newScope();
-        b->elseStmt->accept(this);
-        if (!isReturnLast(b->elseStmt.get())) {
+        node->elseStmt->accept(this);
+        if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     }
@@ -1579,12 +1575,12 @@ llvm::Value *Compiler::getTag(Expression *expr) {
     return load(gep2(tag, ENUM_TAG_INDEX));
 }
 
-std::any Compiler::visitIsExpr(IsExpr *ie) {
-    llvm::Value *tag1 = getTag(ie->expr);
+std::any Compiler::visitIsExpr(IsExpr *node) {
+    llvm::Value *tag1 = getTag(node->expr);
     llvm::Value *tag2;
-    auto rt = dynamic_cast<Type *>(ie->rhs);
+    auto rt = dynamic_cast<Type *>(node->rhs);
     if (!rt) {
-        tag2 = getTag(ie->rhs);
+        tag2 = getTag(node->rhs);
     } else {
         auto decl = (EnumDecl *) resolv->resolve(rt).targetDecl;
         auto index = Resolver::findVariant(decl, rt->name);
@@ -1593,23 +1589,23 @@ std::any Compiler::visitIsExpr(IsExpr *ie) {
     return (llvm::Value *) Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag1, tag2);
 }
 
-std::any Compiler::visitAsExpr(AsExpr *e) {
-    auto lhs = resolv->getType(e->expr);
-    auto ty = resolv->getType(&e->type);
+std::any Compiler::visitAsExpr(AsExpr *node) {
+    auto lhs = resolv->getType(node->expr);
+    auto ty = resolv->getType(&node->type);
     //ptr to int
     if (lhs.isPointer() && ty.print() == "u64") {
-        auto val = gen(e->expr);
-        if (is_mut_prm(e->expr, this)) {
+        auto val = gen(node->expr);
+        if (is_mut_prm(node->expr, this)) {
             val = load(val);
         }
         return Builder->CreatePtrToInt(val, mapType(ty));
     }
     if (ty.isPrim()) {
-        auto val = loadPtr(e->expr);
+        auto val = loadPtr(node->expr);
         return extend(val, ty, this);
     }
-    auto val = gen(e->expr);
-    if (lhs.isPointer() && is_mut_prm(e->expr, this)) {
+    auto val = gen(node->expr);
+    if (lhs.isPointer() && is_mut_prm(node->expr, this)) {
         val = load(val);
     }
     //derived to base

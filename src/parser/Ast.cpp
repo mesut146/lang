@@ -316,10 +316,6 @@ std::string Unary::print() const {
     return op + expr->print();
 }
 
-std::string Postfix::print() const {
-    return expr->print() + op;
-}
-
 std::string FieldAccess::print() const {
     if (isOptional) {
         return scope->print() + "?." + name;
@@ -369,9 +365,6 @@ std::string ArrayExpr::print() const {
     }
 }
 
-std::string Ternary::print() const {
-    return cond->print() + "?" + thenExpr->print() + ":" + elseExpr->print();
-}
 
 std::string WhileStmt::print() const {
     std::string s;
@@ -516,15 +509,8 @@ std::any Unary::accept(Visitor *v) {
     return v->visitUnary(this);
 }
 
-std::any Postfix::accept(Visitor *v) {
-    return v->visitPostfix(this);
-}
-
 std::any FieldAccess::accept(Visitor *v) {
     return v->visitFieldAccess(this);
-}
-std::any Ternary::accept(Visitor *v) {
-    return v->visitTernary(this);
 }
 
 std::any WhileStmt::accept(Visitor *v) {

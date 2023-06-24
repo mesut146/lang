@@ -416,19 +416,6 @@ Expression *asExpr(Parser *p) {
     return lhs;
 }
 
-//expr14 ("++" | "--")* #post
-Expression *expr13(Parser *p) {
-    int line = p->first()->line;
-    auto *lhs = asExpr(p);
-    while (p->is({PLUSPLUS, MINUSMINUS})) {
-        auto res = loc(new Postfix, line);
-        res->op = p->pop().value;
-        res->expr = lhs;
-        lhs = res;
-    }
-    return lhs;
-}
-
 //("+" | "-" | "++" | "--" | "!" | "~") expr #unary
 Expression *expr12(Parser *p) {
     int line = p->first()->line;
@@ -438,7 +425,7 @@ Expression *expr12(Parser *p) {
         res->expr = expr12(p);
         return res;
     } else {
-        return expr13(p);
+        return asExpr(p);
     }
 }
 
@@ -599,20 +586,6 @@ Expression *expr2(Parser *p) {
     return lhs;
 }
 
-//ternary
-Expression *expr1(Parser *p) {
-    auto lhs = expr2(p);
-    if (p->is(QUES)) {
-        auto t = new Ternary;
-        t->cond = lhs;
-        p->consume(QUES);
-        t->thenExpr = p->parseExpr();
-        p->consume(COLON);
-        t->elseExpr = expr1(p);
-        lhs = t;
-    }
-    return lhs;
-}
 
 bool isAssign(std::string &s) {
     return s == "=" || s == "+=" || s == "-=" || s == "*=" || s == "/=" || s == "%=" || s == "&=" || s == "^=" || s == "|=" || s == "<<=" || s == ">>=" || s == ">>>=";
@@ -620,7 +593,7 @@ bool isAssign(std::string &s) {
 
 //expr1 (assignOp expr)?
 Expression *Parser::parseExpr() {
-    auto res = expr1(this);
+    auto res = expr2(this);
     if (first() && isAssign(first()->value)) {
         auto assign = new Assign;
         assign->line = first()->line;

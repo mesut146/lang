@@ -1,6 +1,7 @@
 import parser/parser
 import parser/lexer
 import parser/ast
+import parser/printer
 import std/map
 
 //#derive(debug)
@@ -46,6 +47,14 @@ impl Resolver{
     /*for(let i=0;i<self.unit.items.len();++i){
       visit(self.unit.items.get_ptr(i));
     }*/
+    self.dump();
+  }
+
+  func dump(self){
+    for(let i=0;i<self.typeMap.len();++i){
+      let pair = self.typeMap.get_idx(i).unwrap();
+      print("%s -> %s\n", pair.a.cstr(), Fmt::str(&pair.b.type).cstr());
+    }
   }
   
   func visit(node: Item*){
@@ -61,6 +70,9 @@ impl Resolver{
       if let Item::Struct(sd)=(it){
         let res = RType::new(sd.type);
         self.typeMap.add(sd.type.print(), res);
+      }if let Item::Enum(ed)=(it){
+        let res = RType::new(ed.type);
+        self.typeMap.add(ed.type.print(), res);
       }else{
         
       }

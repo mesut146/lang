@@ -20,7 +20,7 @@ impl<K, V> Map<K, V>{
     return Map<K, V>{List<Pair<K, V>>::new(cap)};
   }
   
-  func len(self): i32{ return self.arr.len(); }
+  func len(self): i64{ return self.arr.len(); }
   
   func add(self, k: K, v: V){
     let p = Pair{k, v};
@@ -38,6 +38,12 @@ impl<K, V> Map<K, V>{
   }
   func get(self, k: K*): Option<V>{
     return self.get(*k);
+  }
+  func get_idx(self, idx: i32): Option<Pair<K, V>*>{
+    if(idx < self.len()){
+      return Option::new(self.arr.get_ptr(idx));
+    }
+    return Option<Pair<K, V>*>::None;
   }
 }
 

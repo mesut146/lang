@@ -1,6 +1,7 @@
 import parser/lexer
 import parser/token
 import parser/ast
+import parser/printer
 import std/map
 
 class Parser{

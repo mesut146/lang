@@ -31,8 +31,6 @@ public:
     virtual std::any visitInfix(Infix *node) todo("Infix");
     virtual std::any visitAsExpr(AsExpr *node) todo("AsExpr");
     virtual std::any visitIsExpr(IsExpr *node) todo("IsExpr");
-    virtual std::any visitPostfix(Postfix *node) todo("Postfix");
-    virtual std::any visitTernary(Ternary *node) todo("Ternary");
     virtual std::any visitMethodCall(MethodCall *node) todo("MethodCall");
     virtual std::any visitFieldAccess(FieldAccess *node) todo("FieldAccess");
     virtual std::any visitArrayAccess(ArrayAccess *node) todo("ArrayAccess");

@@ -1218,7 +1218,7 @@ std::any Resolver::visitParExpr(ParExpr *node) {
 }
 
 std::any Resolver::visitExprStmt(ExprStmt *node) {
-    if (!iof<MethodCall *>(node->expr) && !iof<Assign *>(node->expr) && !iof<Unary *>(node->expr) && !iof<Postfix *>(node->expr)) {
+    if (!iof<MethodCall *>(node->expr) && !iof<Assign *>(node->expr) && !iof<Unary *>(node->expr)) {
         error("invalid expr statement: " + node->print());
     }
     resolve(node->expr);
@@ -1261,6 +1261,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         auto mtype = getType(curMethod->type);
         if (MethodResolver::isCompatible(type, mtype)) {
             //err(node, );
+            getType(curMethod->type);
             error("method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
     } else {

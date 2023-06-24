@@ -2,6 +2,7 @@ import parser/lexer
 import parser/token
 import parser/parser
 import parser/ast
+import parser/printer
 import parser/resolver
 import std/map
 
