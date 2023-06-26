@@ -250,9 +250,9 @@ public:
 
     std::any visitStructDecl(StructDecl *bd) override;
     std::any visitEnumDecl(EnumDecl *bd) override;
-    std::any visitImpl(Impl *bd);
-    std::any visitTrait(Trait *node);
-    std::any visitExtern(Extern *node);
+    std::any visitImpl(Impl *bd) override;
+    std::any visitTrait(Trait *node) override;
+    std::any visitExtern(Extern *node)override;
     std::any visitFieldDecl(FieldDecl *fd) override;
     std::any visitMethod(Method *m) override;
     std::any visitParam(Param *p) override;

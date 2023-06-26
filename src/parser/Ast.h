@@ -188,7 +188,7 @@ class StructDecl : public BaseDecl {
 public:
     std::vector<FieldDecl> fields;
 
-    bool isClass() { return true; }
+    bool isClass() override{ return true; }
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
@@ -231,7 +231,7 @@ class EnumDecl : public BaseDecl {
 public:
     std::vector<EnumVariant> variants;
 
-    bool isEnum() { return true; }
+    bool isEnum() override { return true; }
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
@@ -240,7 +240,7 @@ class Extern : public Item {
 public:
     std::vector<Method> methods;
 
-    bool isExtern() { return true; }
+    bool isExtern() override { return true; }
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
@@ -249,7 +249,7 @@ class Ns : public Item {
 public:
     std::vector<Ptr<Item>> items;
 
-    bool isNs() { return true; }
+    bool isNs() override { return true; }
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
@@ -282,7 +282,7 @@ public:
 
     bool isMethod() override { return true; }
     std::string print() const override;
-    std::any accept(Visitor *v);
+    std::any accept(Visitor *v) override;
 };
 
 

@@ -18,13 +18,13 @@ impl<T> Option<T>{
   }
 
   func unwrap(self): T{
-    if let Some(val) = (self){
+    if let Option<T>::Some(val) = (self){
       return val;
     }
     panic("unwrap on None");
   }
   func get(self): T*{
-    if let Some(val) = (self){
+    if let Option<T>::Some(val) = (self){
       return &val;
     }
     panic("unwrap on None");
@@ -35,7 +35,7 @@ impl<T> Option<T>{
   }
 
   func is_none(self): bool{
-    if let None = (self){
+    if let Option<T>::None = (self){
       return true;
     }
     return false;

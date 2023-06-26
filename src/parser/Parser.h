@@ -52,6 +52,11 @@ public:
         return &tokens[pos];
     }
 
+    Token *peek(int la) {
+        if (tokens.empty() || pos + la >= tokens.size()) return nullptr;
+        return &tokens[pos + la];
+    }
+
     bool is(TokenType t) {
         if (first() == nullptr) return false;
         return first()->is(t);
@@ -94,10 +99,14 @@ public:
     }
 
     std::string name() {
-        if (is({IDENT, FROM, NEW, IS, AS, TYPE})) {
+        if (isName()) {
             return pop().value;
         }
         return consume(IDENT).value;
+    }
+
+    bool isName() {
+        return is({IDENT, FROM, NEW, IS, AS, TYPE, TRAIT});
     }
 
     std::string strLit();

@@ -138,8 +138,8 @@ std::vector<Type> Parser::generics() {
 
 Entry parseEntry(Parser *p) {
     Entry e{};
-    if (p->is({IDENT}, {COLON})) {
-        e.key = p->consume(IDENT).value;
+    if (p->isName() && p->peek(1)->is({COLON})) {
+        e.key = p->name();
         p->consume(COLON);
         e.value = p->parseExpr();
     } else {

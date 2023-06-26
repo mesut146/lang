@@ -395,7 +395,7 @@ public:
             a->accept(this);
         }
     }
-    std::any visitMethodCall(MethodCall *node) {
+    std::any visitMethodCall(MethodCall *node) override{
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;
         if (m && compiler->isRvo(m)) {
@@ -465,7 +465,7 @@ public:
         }
         return ptr;
     }
-    std::any visitArrayExpr(ArrayExpr *node) {
+    std::any visitArrayExpr(ArrayExpr *node) override{
         auto ty = compiler->resolv->getType(node);
         auto ptr = alloc(ty, node);
         if (node->isSized() && compiler->doesAlloc(node->list[0])) {
@@ -473,7 +473,7 @@ public:
         }
         return ptr;
     }
-    std::any visitArrayAccess(ArrayAccess *node) {
+    std::any visitArrayAccess(ArrayAccess *node) override{
         if (node->index2) {
             auto ptr = alloc(compiler->sliceType, node);
             node->array->accept(this);
@@ -486,13 +486,13 @@ public:
         }
         return {};
     }
-    std::any visitLiteral(Literal *node) {
+    std::any visitLiteral(Literal *node) override{
         if (node->type == Literal::STR) {
             return alloc(compiler->stringType, node);
         }
         return {};
     }
-    std::any visitFieldAccess(FieldAccess *node) {
+    std::any visitFieldAccess(FieldAccess *node) override{
         node->scope->accept(this);
         return {};
     }
@@ -559,41 +559,41 @@ public:
     std::any visitSimpleName(SimpleName *node) override {
         return {};
     }
-    std::any visitInfix(Infix *node) {
+    std::any visitInfix(Infix *node) override {
         node->left->accept(this);
         node->right->accept(this);
         return {};
     }
-    std::any visitAssertStmt(AssertStmt *node) {
+    std::any visitAssertStmt(AssertStmt *node)override {
         node->expr->accept(this);
         return {};
     }
 
-    std::any visitRefExpr(RefExpr *node) {
+    std::any visitRefExpr(RefExpr *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitDerefExpr(DerefExpr *node) {
+    std::any visitDerefExpr(DerefExpr *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitUnary(Unary *node) {
+    std::any visitUnary(Unary *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitParExpr(ParExpr *node) {
+    std::any visitParExpr(ParExpr *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitAsExpr(AsExpr *node) {
+    std::any visitAsExpr(AsExpr *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitIsExpr(IsExpr *node) {
+    std::any visitIsExpr(IsExpr *node) override{
         node->expr->accept(this);
         return {};
     }
-    std::any visitIfLetStmt(IfLetStmt *node) {
+    std::any visitIfLetStmt(IfLetStmt *node)override {
         node->rhs->accept(this);
         compiler->resolv->max_scope++;
         node->thenStmt->accept(this);
@@ -603,10 +603,10 @@ public:
         }
         return {};
     }
-    std::any visitContinueStmt(ContinueStmt *node) {
+    std::any visitContinueStmt(ContinueStmt *node) override{
         return {};
     }
-    std::any visitBreakStmt(BreakStmt *node) {
+    std::any visitBreakStmt(BreakStmt *node)override {
         return {};
     }
 };

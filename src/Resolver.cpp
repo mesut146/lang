@@ -472,7 +472,9 @@ RType Resolver::resolve(Expression *expr) {
     auto scp = printMethod(curMethod);
     auto &map = cache[scp];
     auto it = map.find(id);
-    if (it != map.end()) return it->second;
+    if (it != map.end()) {
+        return it->second;
+    }
     auto res = std::any_cast<RType>(expr->accept(this));
     map[id] = res;
     return res;
@@ -785,33 +787,33 @@ std::any Resolver::visitType(Type *type) {
     }
     if (type->isPrim() || type->isVoid()) {
         auto res = RType(*type);
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (type->isPointer()) {
         auto rt = resolve(type->scope.get());
         auto res = rt.clone();
         res.type = Type(Type::Pointer, rt.type);
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (type->isRef()) {
         auto rt = resolve(type->scope.get());
         auto res = rt.clone();
         res.type = Type(Type::Ref, rt.type);
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (type->isSlice()) {
         auto rt = resolve(type->scope.get());
         auto res = RType(Type(Type::Slice, clone(rt.type)));
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (type->isArray()) {
         auto rt = resolve(type->scope.get());
         auto res = RType(Type(clone(rt.type), type->size));
-        typeMap[str] = res;
+        addType(str, res);
         return res;
     }
     if (str == "Self" && curMethod->parent) {
@@ -831,7 +833,7 @@ std::any Resolver::visitType(Type *type) {
         addType(str, res);
         return res;
     }
-    if (curMethod && curMethod->self) {
+    /*if (curMethod && curMethod->self) {
         auto decl = getDecl(*curMethod->self->type);
         if (decl && decl->isEnum()) {
             auto ed = (EnumDecl *) decl;
@@ -844,7 +846,7 @@ std::any Resolver::visitType(Type *type) {
                 }
             }
         }
-    }
+    }*/
 
     BaseDecl *target = nullptr;
     if (!type->typeArgs.empty()) {
@@ -1261,7 +1263,6 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         auto mtype = getType(curMethod->type);
         if (MethodResolver::isCompatible(type, mtype)) {
             //err(node, );
-            getType(curMethod->type);
             error("method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
     } else {

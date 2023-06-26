@@ -1,0 +1,16 @@
+when enum variant name conflicts with another type , indirect type resolution leads to error
+
+struct A;
+enum E{
+ A, B
+}
+
+func get(): A{
+ return A{};
+}
+
+impl E{
+  func test(self){
+    let a = get();//this will resolve to E::A instead of A
+  }
+}

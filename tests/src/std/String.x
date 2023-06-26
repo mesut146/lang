@@ -149,6 +149,9 @@ impl String{
       return arr;
     }
     
+    func eq(self, s: str): bool{
+      return self.str().eq(s);
+    }
 }
 
 impl Clone for String{

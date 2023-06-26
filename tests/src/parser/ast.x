@@ -22,7 +22,9 @@ enum Item{
   Method(m: Method),
   Struct(s: StructDecl),
   Enum(ed: EnumDecl),
-  Impl(i: Impl)
+  Impl(i: Impl),
+  Trait(t: Trait),
+  Type(name: String, rhs: Type)
 }
 
 struct Impl{
@@ -60,6 +62,11 @@ struct Variant{
   fields: List<FieldDecl>;
 }
 
+struct Trait{
+  type: Type;
+  methods: List<Method>;
+}
+
 struct Method{
   line: i32;
   unit: Unit*;
@@ -69,6 +76,7 @@ struct Method{
   params: List<Param>;
   type: Type;
   body: Option<Block>;
+  is_generic: bool;
 }
 
 struct Param{
@@ -100,6 +108,10 @@ impl Type{
       return &nm;
     }
     panic("cant unwrap");
+  }
+
+  func isVoid(self): bool{
+    return self.print().eq("void");
   }
   
   func print(self): String{
@@ -149,7 +161,7 @@ enum LitKind{
 enum Expr{
   Lit(kind: LitKind, val: String),
   Name(val: String),
-  Call(scope: Option<Box<Expr>>, name: String, tp: List<Type>, args: List<Expr>),
+  Call(mc: Call),
   Par(e: Box<Expr>),
   Type(val: Type),
   Unary(op: String, e: Box<Expr>),
@@ -162,6 +174,13 @@ enum Expr{
   ArrAccess(arr: Box<Expr>, idx: Box<Expr>, idx2: Option<Box<Expr>>)
 }
 
+struct Call{
+  scope: Option<Box<Expr>>;
+  name: String;
+  tp: List<Type>;
+  args: List<Expr>;
+}
+
 struct Entry{
   name: Option<String>;
   expr: Expr;
@@ -169,11 +188,11 @@ struct Entry{
 }
 
 func newCall(name: String, args: List<Expr>): Expr{
-  return Expr::Call{Option<Box<Expr>>::None, name, List<Type>::new(), args};
+  return Expr::Call{Call{Option<Box<Expr>>::None, name, List<Type>::new(), args}};
 }
 func newCall(name: String, g: List<Type>, args: List<Expr>): Expr{
-  return Expr::Call{Option<Box<Expr>>::None, name, g, args};
+  return Expr::Call{Call{Option<Box<Expr>>::None, name, g, args}};
 }
 func newCall(scp: Expr, name: String, args: List<Expr>): Expr{
-  return Expr::Call{Option::new(Box::new(scp)), name, List<Type>::new(), args};
+  return Expr::Call{Call{Option::new(Box::new(scp)), name, List<Type>::new(), args}};
 }
