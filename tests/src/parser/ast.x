@@ -1,5 +1,25 @@
 import parser/printer
 
+func prim_size(s: str): Option<u32>{
+  let prims = ["bool", "i8","i16","i32","i64","u8","u16","u32","u64","f32","f64"];
+  let sizes = [8,8,16,32,64, 8,16,32,64,32,64];
+  for(let i = 0;i < prims.len;++i){
+    if(prims[i].eq(s)){
+      return Option::new(sizes[i] as u32);
+    }
+  }
+  return Option<u32>::None;
+}
+
+func prim_size(s: String): Option<u32>{
+  return prim_size(s.str());
+}
+
+struct Node{
+  line: i32;
+  pos: i32;
+}
+
 struct Unit{
   path: String;
   last_line: i32;
@@ -113,6 +133,13 @@ impl Type{
   func isVoid(self): bool{
     return self.print().eq("void");
   }
+  func isPrim(self): bool{
+    return prim_size(self.print()).is_some();
+  }
+  func is_unsigned(self): bool{
+    let str = self.print();
+    return str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
+  }
   
   func print(self): String{
     return Fmt::str(self);
@@ -131,6 +158,12 @@ enum Stmt{
  Continue,
  Break,
  Assert(e: Expr)
+}
+
+impl Stmt{
+  func print(self): String{
+    return Fmt::str(self);
+  }
 }
 
 struct Block{
@@ -159,7 +192,7 @@ enum LitKind{
 }
 
 enum Expr{
-  Lit(kind: LitKind, val: String),
+  Lit(kind: LitKind, val: String, suffix: Option<Type>),
   Name(val: String),
   Call(mc: Call),
   Par(e: Box<Expr>),
@@ -172,6 +205,12 @@ enum Expr{
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(arr: Box<Expr>, idx: Box<Expr>, idx2: Option<Box<Expr>>)
+}
+
+impl Expr{
+  func print(self): String{
+    return Fmt::str(self);
+  }
 }
 
 struct Call{

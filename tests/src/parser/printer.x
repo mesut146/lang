@@ -301,27 +301,18 @@ impl Debug for Fragment{
 //expr---------------------------------
 impl Debug for Expr{
   func debug(self, f: Fmt*){
-    if let Expr::Lit(k, v)=(self){
-      f.print(v.replace("\n", "\\n"));
+    if let Expr::Lit(kind, val, suffix)=(self){
+      f.print(val.replace("\n", "\\n"));
+      if(suffix.is_some()){
+        f.print("_");
+        suffix.get().debug(f);
+      }
     }
     else if let Expr::Name(v)=(self){
       f.print(v);
     }
-    else if let Expr::Call(scp, nm, tp, args)=(self){
-      if(scp.is_some()){
-        let s = scp.unwrap().get();
-        if let Expr::Type(t)=(s){
-          t.debug(f);
-          f.print("::");
-        }else{
-          s.debug(f);
-          f.print(".");
-        }
-      }
-      f.print(nm);
-      f.print("(");
-      join(f, args);
-      f.print(")");
+    else if let Expr::Call(call)=(self){
+      call.debug(f);
     }else if let Expr::Par(e)=(self){
       f.print("(");
       e.get().debug(f);
@@ -377,6 +368,25 @@ impl Debug for Expr{
     else{
      panic("expr %d", self.index);
     }
+  }
+}
+
+impl Debug for Call{
+  func debug(self, f: Fmt*){
+    if(self.scope.is_some()){
+      let s = self.scope.unwrap().get();
+      if let Expr::Type(t)=(s){
+        t.debug(f);
+        f.print("::");
+      }else{
+        s.debug(f);
+        f.print(".");
+      }
+    }
+    f.print(self.name);
+    f.print("(");
+    join(f, self.args);
+    f.print(")");
   }
 }
 

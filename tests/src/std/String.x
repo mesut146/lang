@@ -199,18 +199,26 @@ impl Debug for i32{
 
 impl i32{
   func parse(s: String*): i32{
-    let x = 0;
+    let x = i64::parse(s);
+    return x as i32;
+  }
+}
+impl i64{
+  func parse(s: String*): i64{
+    let x: i64 = 0;
     let neg = false;
     let pos = 0;
     if(s.get(0) as u32 == '-'){
       ++pos;
-      neg=true;
+      neg = true;
     }
     while(pos < s.len()){
-      x = 10 * x + (s.get(pos) as i32 - ('0' as i32));
+      x = 10 * x + (s.get(pos) as i64 - ('0' as i64));
       ++pos;
+    }
+    if(neg){
+      return -x;
     }
     return x;  
   }
 }
-

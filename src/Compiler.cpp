@@ -134,7 +134,8 @@ void initModule(const std::string &path, Compiler *c) {
         c->ctxp = std::make_unique<llvm::LLVMContext>();
     }
     c->mod = std::make_unique<llvm::Module>(name, c->ctx());
-    c->mod->setDataLayout("e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
+    //c->mod->setDataLayout("e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
+    //c->mod->setDataLayout("e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128");
     c->mod->setTargetTriple(c->TargetTriple);
     c->Builder = std::make_unique<llvm::IRBuilder<>>(c->ctx());
     if (c->debug) {
@@ -300,6 +301,9 @@ llvm::Value *Compiler::loadPtr(Expression *e) {
         auto alc = need_alloc(*curMethod, rt.vh->name, rt.type, this);
         if (!alc) return val;
     }
+    if (!val->getType()->isPointerTy()) {
+        return val;
+    }
     //local, fa, aa
     return load(val);
 }
@@ -445,7 +449,21 @@ std::vector<Method *> getVirtual(StructDecl *decl, Unit *unit) {
     return arr;
 }
 
+llvm::Type *map_incomplete(const Type &type, Compiler *c) {
+    if (type.isPrim()) {
+        return c->mapType(type);
+    }
+    //error("todo " + type.print());
+    return c->mapType(Type("i8"));
+}
+
+
+// llvm::Type *Compiler::makeDecl0(BaseDecl *bd) {
+
+// }
+
 llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
+    //print("makeDecl " + bd->type.print());
     if (bd->isGeneric) {
         return nullptr;
     }
@@ -454,15 +472,40 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
     }
     auto mangled = bd->type.print();
     auto it = classMap.find(mangled);
-    if (it != classMap.end()) return (llvm::StructType *) it->second;
+    if (it != classMap.end()) {
+        //fill body
+        //return it->second;
+    } else {
+        auto ty = llvm::StructType::create(ctx(), mangled);
+        classMap[mangled] = ty;
+        return ty;
+    }
     std::vector<llvm::Type *> elems;
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
         //ordinal, i32
         elems.push_back(getInt(ENUM_INDEX_SIZE));
         //data, i8*
-        auto sz = getSize(ed);
-        elems.push_back(llvm::ArrayType::get(getInt(8), (sz - ENUM_INDEX_SIZE) / 8));
+        //print("map " + ed->type.print());
+        int max = 0;
+        for (auto &ev : ed->variants) {
+            std::vector<llvm::Type *> var_elems;
+            for (auto &field : ev.fields) {
+                if (false && field.type.isPointer()) {
+                    var_elems.push_back(map_incomplete(field.type.unwrap(), this));
+                } else {
+                    var_elems.push_back(mapType(&field.type));
+                }
+            }
+            auto var_ty = llvm::StructType::create(ctx(), var_elems, mangled + "." + ev.name);
+            auto var_size = mod->getDataLayout().getStructLayout(var_ty)->getSizeInBits();
+            if (var_size > max) {
+                max = var_size;
+            }
+        }
+        //auto sz = getSize2(ed);
+        auto sz = max / 8;
+        elems.push_back(llvm::ArrayType::get(getInt(8), sz));
     } else {
         Resolver *r;
         if (true || bd->unit == unit.get()) {
@@ -472,17 +515,24 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         }
         auto td = dynamic_cast<StructDecl *>(bd);
         if (td->base) {
-            elems.push_back(mapType(&*td->base, r));
+            elems.push_back(mapType(td->base.value(), r));
         }
         for (auto &field : td->fields) {
-            elems.push_back(mapType(&field.type, r));
+            if (false && field.type.isPointer()) {
+                elems.push_back(map_incomplete(field.type.unwrap(), this));
+            } else {
+                elems.push_back(mapType(&field.type, r));
+            }
         }
+        //vtable ptr
         if (!getVirtual(td, unit.get()).empty()) {
             elems.push_back(getInt(8)->getPointerTo()->getPointerTo());
         }
     }
-    auto ty = llvm::StructType::create(ctx(), elems, mangled);
-    classMap[mangled] = ty;
+    auto ty = (llvm::StructType *) it->second;
+    ty->setBody(elems);
+    //auto ty = llvm::StructType::create(ctx(), elems, mangled);
+    //classMap[mangled] = ty;
     return ty;
 }
 
@@ -498,13 +548,17 @@ void Compiler::createProtos() {
         if (bd->isGeneric) continue;
         list.push_back(bd);
     }
-    for (auto gt : resolv->genericTypes) {
-        list.push_back(gt);
-    }
     for (auto bd : resolv->usedTypes) {
+        if (bd->isGeneric) {
+            //error("gen");
+            continue;
+        }
         list.push_back(bd);
     }
-    sort(list);
+    sort(list, resolv.get());
+    for (auto bd : list) {
+        makeDecl(bd);
+    }
     for (auto bd : list) {
         makeDecl(bd);
     }
@@ -892,7 +946,7 @@ std::pair<llvm::Value *, llvm::BasicBlock *> Compiler::andOr(Infix *node) {
 
 std::any Compiler::visitInfix(Infix *node) {
     loc(node->left);
-    auto& op= node->op;
+    auto &op = node->op;
     if (op == "&&" || op == "||") {
         return andOr(node).first;
     }
@@ -966,7 +1020,8 @@ std::any Compiler::visitUnary(Unary *node) {
     if (node->op == "+") {
         res = val;
     } else if (node->op == "-") {
-        res = (llvm::Value *) Builder->CreateNSWSub(makeInt(0), val);
+        auto bits = val->getType()->getPrimitiveSizeInBits();
+        res = (llvm::Value *) Builder->CreateNSWSub(makeInt(0, bits), val);
     } else if (node->op == "++") {
         auto v = gen(node->expr);
         auto bits = val->getType()->getPrimitiveSizeInBits();
@@ -1113,6 +1168,9 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return Builder->CreateBitCast(call, mapType(rt));
     } else if (mc->name == "panic" && !mc->scope) {
         return callPanic(mc, this);
+    } else if (mc->name == "format" && !mc->scope) {
+        error("format not implemented");
+        //return callFormat(mc, this);
     }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
@@ -1204,7 +1262,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         auto decl = (StructDecl *) scp.targetDecl;
         int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-        auto vt = gep2( obj, vt_index);
+        auto vt = gep2(obj, vt_index);
         vt = load(vt);
         auto ft = f->getType();
         auto real = llvm::ArrayType::get(ft, 1)->getPointerTo();
@@ -1368,7 +1426,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         auto decl = dynamic_cast<EnumDecl *>(tt.targetDecl);
         auto variant_index = Resolver::findVariant(decl, node->type.name);
         setOrdinal(variant_index, ptr);
-        auto dataPtr = gep2( ptr, 1);
+        auto dataPtr = gep2(ptr, 1);
         auto &variant = decl->variants[variant_index];
         for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
@@ -1439,10 +1497,16 @@ std::any Compiler::visitType(Type *node) {
 
 std::any Compiler::visitFieldAccess(FieldAccess *node) {
     auto rt = resolv->resolve(node->scope);
+    //slice len
     if (rt.type.unwrap().isSlice()) {
         auto scopeVar = gen(node->scope);
         return gep2(scopeVar, SLICE_LEN_INDEX);
         //todo load since cant mutate
+    }
+    //array len
+    if (rt.type.unwrap().isArray()) {
+        auto size = rt.type.unwrap().size;
+        return (llvm::Value *) makeInt(size);
     }
     auto scope = gen(node->scope);
     if (is_double_ptr(rt.type, node->scope, scope)) {

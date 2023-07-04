@@ -240,22 +240,18 @@ void Resolver::resolveAll() {
     if (isResolved) return;
     isResolved = true;
     init();
-    for (auto &i : unit->items) {
-        i->accept(this);
+    for (auto &item : unit->items) {
+        item->accept(this);
     }
-    int i = 0, j = 0;
+    int j = 0;
     while (true) {
-        for (; i < genericTypes.size(); i++) {
-            auto gt = genericTypes[i];
-            gt->accept(this);
-        }
         //todo dont visit used type methods they already visited
-        int old = genericTypes.size();
+        int old = usedTypes.size();
         for (; j < usedTypes.size(); j++) {
             auto gt = usedTypes[j];
             gt->accept(this);
         }
-        if (old == genericTypes.size()) break;
+        if (old == usedTypes.size()) break;
     }
 
     for (int i = 0; i < generatedMethods.size(); i++) {
@@ -336,7 +332,13 @@ Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, const std::s
     return res;
 }
 
-FieldAccess *makeFa(std::string &name) {
+FieldAccess *makeFa(const std::string &scope, const std::string &name) {
+    auto fa = new FieldAccess;
+    fa->scope = new SimpleName(scope);
+    fa->name = name;
+    return fa;
+}
+FieldAccess *makeFa(const std::string &name) {
     auto fa = new FieldAccess;
     fa->scope = new SimpleName("self");
     fa->name = name;
@@ -484,27 +486,36 @@ Type Resolver::getType(Expression *expr) {
     return resolve(expr).type;
 }
 
-bool Resolver::isCyclic(const Type &type, BaseDecl *target) {
-    if (true) return false;
+bool Resolver::isCyclic(const Type &type0, BaseDecl *target) {
+    auto type = getType(type0);
     if (type.isPointer()) return false;
     if (type.isArray()) {
         return isCyclic(*type.scope.get(), target);
     }
     if (type.isSlice()) return false;
     if (!isStruct(type)) return false;
-    if (type.print() == target->type.print()) return true;
+    if (type.print() == target->type.print()) {
+        return true;
+    }
     auto bd = resolve(type).targetDecl;
+    if (bd->base && isCyclic(bd->base.value(), target)) {
+        return true;
+    }
     if (bd->isEnum()) {
         auto en = dynamic_cast<EnumDecl *>(bd);
         for (auto &ev : en->variants) {
             for (auto &f : ev.fields) {
-                if (isCyclic(f.type, target)) return true;
+                if (isCyclic(f.type, target)) {
+                    return true;
+                }
             }
         }
     } else {
         auto td = dynamic_cast<StructDecl *>(bd);
         for (auto &fd : td->fields) {
-            if (isCyclic(fd.type, target)) return true;
+            if (isCyclic(fd.type, target)) {
+                return true;
+            }
         }
     }
     return false;
@@ -541,15 +552,15 @@ std::any Resolver::visitStructDecl(StructDecl *node) {
     if (node->isGeneric) {
         return nullptr;
     }
-    if (!node->isResolved) {
-        node->isResolved = true;
-        for (auto &fd : node->fields) {
-            fd.accept(this);
-            if (isCyclic(fd.type, node)) {
-                err("cyclic type " + node->type.print());
-            }
+    //if (!node->isResolved) {
+    node->isResolved = true;
+    for (auto &fd : node->fields) {
+        fd.accept(this);
+        if (isCyclic(fd.type, node)) {
+            err("cyclic type " + node->type.print());
         }
     }
+    //}
     return getTypeCached(node->type.print());
 }
 
@@ -629,7 +640,8 @@ std::any Resolver::visitExtern(Extern *node) {
 
 std::any Resolver::visitFieldDecl(FieldDecl *node) {
     auto res = resolve(node->type).clone();
-    res.vh = VarHolder(node->name, res.type);
+    //todo remove this
+    //res.vh = VarHolder(node->name, res.type);
     return res;
 }
 
@@ -873,7 +885,9 @@ std::any Resolver::visitType(Type *type) {
                     auto res = it->second;
                     addType(str, res);
                     if (res.targetDecl) {
-                        usedTypes.push_back(res.targetDecl);
+                        if (!res.targetDecl->isGeneric) {
+                            addUsed(res.targetDecl);
+                        }
                     }//todo trait
                     return res;
                 }
@@ -909,9 +923,16 @@ std::any Resolver::visitType(Type *type) {
         res.type.typeArgs.push_back(clone(ta));
     }
     res.targetDecl = decl;
-    genericTypes.push_back(decl);
+    addUsed(decl);
     addType(str, res);
     return res;
+}
+
+void Resolver::addUsed(BaseDecl *bd) {
+    for (auto prev : usedTypes) {
+        if (prev->type.print() == bd->type.print()) return;
+    }
+    usedTypes.push_back(bd);
 }
 
 SimpleName *find_base(Expression *e) {
@@ -1058,6 +1079,8 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
         if (cur->base) {
             auto base = resolve(*cur->base).targetDecl;
             cur = base;
+        }else{
+            break;
         }
     }
     throw std::runtime_error("unknown field: " + decl->type.print() + "." + name);
@@ -1075,7 +1098,7 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
         }
         return makeSimple("i32");
     } else if (sct.isArray()) {
-        error("array field access not supported yet");
+        //error("array field access not supported yet");
         if (node->name != "len") {
             err(node, "invalid field " + node->name + " of " + sct.print());
         }
@@ -1199,6 +1222,9 @@ std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
     int index = findVariant(decl, node->type.name);
     auto &variant = decl->variants[index];
+    if (variant.fields.size() != node->args.size()) {
+        error("if let args size mismatch: " + join(node->args, ", "));
+    }
     int i = 0;
     newScope();
     for (auto &name : node->args) {
@@ -1386,7 +1412,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             auto decl = generateDecl(inferred, td);
             //print("obj=\n"+decl->print());
             td = dynamic_cast<StructDecl *>(decl);
-            genericTypes.push_back(decl);
+            addUsed(decl);
             res = resolve(decl->type);
             fields = &td->fields;
         }
@@ -1455,6 +1481,37 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     throw std::runtime_error("cant index: " + node->print());
 }
 
+Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
+    auto res = std::make_unique<VarDecl>();
+    res->decl = new VarDeclExpr;
+    Fragment f;
+    f.name = name;
+    f.rhs.reset(rhs);
+    res->decl->list.push_back(std::move(f));
+    return res;
+}
+
+std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
+    auto res = std::make_unique<Method>(r->unit.get());
+    res->name = "format";
+    res->type = Type("String");
+    res->params.push_back(Param("s", Type("str")));
+    res->body = std::make_unique<Block>();
+    auto body = res->body.get();
+    auto rhs = new MethodCall;
+    rhs->scope.reset(new Type("Fmt"));
+    rhs->name = "new";
+    body->list.push_back(make_var("f", rhs));
+    int i = 0;
+    for (auto a : node->args) {
+        auto arg_type = r->resolve(a);
+        res->params.push_back(Param("p" + std::to_string(i), arg_type.type));
+        i++;
+    }
+    body->list.push_back(makeRet(r->unit, makeFa("f", "buf")));
+    return res;
+}
+
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     //auto id = getId(mc);
     //auto it = cache.find(id);
@@ -1484,6 +1541,28 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             return RType(Type("void"));
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
+    } else if (mc->name == "format") {
+        if (mc->args.empty()) {
+            err("format expects format string");
+        }
+        auto lit = dynamic_cast<Literal *>(mc->args[0]);
+        if (!lit || lit->type != Literal::STR) {
+            err("invalid format argument: " + mc->args[0]->print());
+        }
+        for (auto a : mc->args) {
+            auto arg_type = resolve(a);
+        }
+        if (mc->id == -1) {
+            err(mc->print() + " must have id");
+        }
+        //cache generated method
+        if (format_methods.find(mc->id) == format_methods.end()) {
+            auto gm = generate_format(mc, this);
+            gm->accept(this);
+            format_methods[mc->id] = std::move(gm);
+        }
+        //unit->items.push_back(std::move(gm));
+        return RType(Type("String"));
     }
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);

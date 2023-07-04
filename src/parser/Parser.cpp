@@ -53,7 +53,7 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     }
     consume(LBRACE);
     //members
-    while (!is(RBRACE)){
+    while (!is(RBRACE)) {
         res->fields.push_back(parseField(this));
     }
     consume(RBRACE);
@@ -257,7 +257,7 @@ Method Parser::parseMethod() {
     }
     consume(LPAREN);
     if (!is(RPAREN)) {
-        if (is({IDENT}, {COLON})) {
+        if (isName() && peek(1)->is(COLON)) {
             res.params.push_back(parseParam());
         } else {
             auto nm = pop();

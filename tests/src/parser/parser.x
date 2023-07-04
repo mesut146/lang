@@ -556,17 +556,20 @@ impl Parser{
   }
   
   func parseLit(self): Expr{
+    let kind = LitKind::INT;
     if(self.is(TokenType::INTEGER_LIT)){
-      return Expr::Lit{LitKind::INT, self.pop().value};
+      kind = LitKind::INT;
     }
     else if(self.is(TokenType::STRING_LIT)){
-      return Expr::Lit{LitKind::STR, self.pop().value};
+      kind = LitKind::STR;
     }else if(self.is(TokenType::CHAR_LIT)){
-      return Expr::Lit{LitKind::CHAR, self.pop().value};
+      kind = LitKind::CHAR;
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
-      return Expr::Lit{LitKind::BOOL, self.pop().value};
+      kind = LitKind::BOOL;
+    }else{
+      panic("invalid literal %s", self.peek().print().cstr());
     }
-    panic("lit %s", self.peek().print().cstr());
+    return Expr::Lit{kind, self.pop().value, Option<Type>::None};
   }
   
   func name(self): String{

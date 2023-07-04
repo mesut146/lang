@@ -5,13 +5,17 @@ import parser/printer
 import std/map
 
 
-func isReturnLast(stmt: Stmt*): bool{
-  if (isRet(stmt)) {
-      return true;
-  }
-  if let Stmt::Block(b)=(stmt){
+func isReturnLast(b: Block*): bool{
     let last = b.list.last();
     return isRet(last);
+}
+
+func isReturnLast(stmt: Stmt*): bool{
+  if (isRet(stmt)) {
+    return true;
+  }
+  if let Stmt::Block(b)=(stmt){
+    return isReturnLast(&b);
   }
   return false;
 }
@@ -23,8 +27,14 @@ func isRet(stmt: Stmt*): bool{
     }
     return false;
   }
-  else return false;
   return stmt is Stmt::Ret || stmt is Stmt::Continue || stmt is Stmt::Break;
+}
+
+func printMethod(m: Method*): String{
+  let s = String::new();
+  s.append(m.name);
+  s.append("()");
+  return s;
 }
 
 struct Scope{
@@ -74,6 +84,12 @@ impl RType{
   func new(typ: Type): RType{
     return RType{typ, Option<Trait*>::None, Option<Method*>::None};
   }
+  func clone(self): RType{
+    let res = RType::new(self.type);
+    res.trait = self.trait;
+    res.method = self.method;
+    return res;
+  }
 }
 
 
@@ -103,7 +119,7 @@ impl Resolver{
     if(self.is_resolved) return;
     self.is_resolved = true;
     self.init();
-    for(let i=0;i < self.unit.items.len();++i){
+    for(let i = 0;i < self.unit.items.len();++i){
       self.visit(self.unit.items.get_ptr(i));
     }
     self.dump();
@@ -141,17 +157,24 @@ impl Resolver{
       }else if let Item::Impl(imp)=(it){
         panic("impl init");
       }else if let Item::Type(name, rhs)=(it){
-        let res = self.resolve(&rhs);
+        let res = self.visit(&rhs);
         self.addType(name, res);
       }
     }
   }
+
+  func err(self, msg: String){
+    panic("%s", msg.cstr());
+  }
+  func err(self, msg: str){
+    panic("%s", msg.cstr());
+  }
+  func err(self, msg: String, node: Node*){
+    panic("%s\n:%d %s %s", self.unit.path.cstr(), node.line);
+  }
   
   func resolve(self, node: Expr*): RType{
-    panic("resolve expr");
-  }
-  func resolve(self, node: Type*): RType{
-    panic("resolve type");
+    return self.visit(node);
   }
 
   func visit(self, node: Item*){
@@ -164,15 +187,22 @@ impl Resolver{
   }
 
   func visit(self, node: Type*): RType{
-    panic("type");
+    let str = node.print();
+    if(node.isPrim() || node.isVoid()){
+      let res = RType::new(str.str());
+      self.addType(str, res);
+      return res;
+    }
+    panic("type %s", node.print().cstr());
   }
 
   func visit(self, node: Method*){
+    print("visiting %s\n", printMethod(node).cstr());
     if(node.is_generic){
       return;
     }
     self.curMethod = Option::new(node);
-    let res = self.resolve(&node.type);
+    let res = self.visit(&node.type);
     res.method = Option<Method*>::new(node);
     self.newScope();
     if(node.self.is_some()){
@@ -188,19 +218,83 @@ impl Resolver{
       self.visit(node.body.get());
       //todo check unreachable
       if (!node.type.isVoid() && !isReturnLast(node.body.get())) {
-        self.err("non void function must return a value");
+        let msg = String::new("non void function ");
+        msg.append(printMethod(self.curMethod.unwrap()));
+        msg.append(" must return a value");
+        self.err(msg);
       }
     }
     self.dropScope();
     self.curMethod = Option<Method*>::None;
   }
 
-  func err(self, msg: String){
-    panic(msg.cstr());
-  }
 
   func visit(self, node: Stmt*){
-    panic("visit stmt");
+    if let Stmt::Expr(e) = (node){
+      self.visit(&e);
+      return;
+    }else if let Stmt::Ret(e) = (node){
+      if(e.is_some()){
+        //self.visit(&e);
+      }else{
+        if(!self.curMethod.unwrap().type.isVoid()){
+          self.err("non-void method returns void");
+        }
+      }
+      return;
+    }else if let Stmt::Var(ve)=(node){
+      self.visit(&ve);
+      return;
+    }
+    panic("visit stmt %s", node.print().cstr());
   }
 
+  func visit(self, node: Expr*): RType{
+    if let Expr::Lit(kind, value, suffix)=(node){
+      if(suffix.is_some()){
+        if(i64::parse(&value) > max_for(suffix.get())){
+          self.err("literal out of range");
+        }
+        return self.visit(suffix.get());
+      }
+      if(kind is LitKind::INT){
+
+      }
+    }
+    panic("visit expr %s", node.print().cstr());
+  }
+
+  func visit(self, node: Block*){
+    for(let i = 0;i < node.list.len();++i){
+      self.visit(node.list.get_ptr(i));
+    }
+  }
+
+  func visit(self, node: VarExpr*){
+    for(let i = 0;i < node.list.len();++i){
+      let f = node.list.get_ptr(i);
+      let res = self.visit(f);
+      self.addScope(f.name, res.type, false);
+    }
+  }
+
+  func visit(self, node: Fragment*): RType{
+    let rhs = self.visit(&node.rhs);
+    if(node.type.is_none()){
+      return rhs.clone();
+    }
+    let type = self.visit(node.type.get());
+    return type;
+  }
+
+}
+
+func max_for(type: Type*): i64{
+  let bits = prim_size(type.print()).unwrap() as i64;
+  let tmp = 1 << (bits - 1);
+  if(type.is_unsigned()){
+    //do this not to overflow
+    return tmp - 1 + tmp;
+  }
+  return tmp - 1;
 }

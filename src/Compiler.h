@@ -16,7 +16,7 @@
 bool isStrLit(Expression *e);
 
 std::vector<Method *> getMethods(Unit *unit);
-void sort(std::vector<BaseDecl *> &list);
+void sort(std::vector<BaseDecl *> &list, Resolver* r);
 
 constexpr int ENUM_INDEX_SIZE = 32;
 constexpr int ENUM_TAG_INDEX = 0;

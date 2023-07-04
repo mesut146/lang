@@ -9,10 +9,10 @@ std::string Signature::print() {
         s += "::";
     } else if (m && m->parent) {
         auto p = m->parent;
-        if(p->isImpl()){
-          auto imp = (Impl *) p;
-          s += imp->type.print();
-          s += "::";
+        if (p->isImpl()) {
+            auto imp = (Impl *) p;
+            s += imp->type.print();
+            s += "::";
         }
     }
     if (mc) {
@@ -30,12 +30,17 @@ std::string Signature::print() {
     return s;
 }
 
+
 Signature Signature::make(MethodCall *mc, Resolver *r) {
     Signature res;
     res.mc = mc;
     RType scp;
     if (mc->scope) {
         scp = r->resolve(mc->scope.get());
+        //we need this to handle cases like Option::new(...)
+        if (scp.targetDecl && scp.targetDecl->unit->path != r->unit->path) {
+            r->addUsed(scp.targetDecl);
+        }
         if (scp.type.isPointer()) {
             res.scope = r->resolve(scp.type.unwrap());
         } else {
@@ -67,10 +72,10 @@ Type handleSelf(const Type &type, Method *m) {
 Signature Signature::make(Method *m, Resolver *r) {
     Signature res;
     res.m = m;
-    if(m->parent){
-        if(m->parent->isImpl()){
-            auto imp = (Impl*)m->parent;
-            res.scope=RType(imp->type);
+    if (m->parent) {
+        if (m->parent->isImpl()) {
+            auto imp = (Impl *) m->parent;
+            res.scope = RType(imp->type);
         }
     }
     if (m->self) {
@@ -127,7 +132,7 @@ void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list)
             auto ex = dynamic_cast<Extern *>(item.get());
             for (auto &m : ex->methods) {
                 if (m.name == name) {
-                    if(name=="free"){
+                    if (name == "free") {
                         print("free " + r->unit->path);
                     }
                     list.push_back(Signature::make(&m, r));
@@ -416,13 +421,12 @@ std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig
     if (m->parent && m->parent->isImpl() && mc->scope) {
         auto &scope = sig.scope->type;
         auto impl = dynamic_cast<Impl *>(m->parent);
-        if(sig.scope->trait){
+        if (sig.scope->trait) {
             auto scp = sig.args[0].unwrap();
-            if(scp.name!=impl->type.name){
+            if (scp.name != impl->type.name) {
                 return format("not same impl %s vs %s", scp.print().c_str(), impl->type.print().c_str());
             }
-        }
-        else if(scope.name != impl->type.name){
+        } else if (scope.name != impl->type.name) {
             return format("not same impl %s vs %s", scope.print().c_str(), impl->type.print().c_str());
         }
         if (impl->type_params.empty() && !impl->type.typeArgs.empty()) {

@@ -2,29 +2,23 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
-bool isSame(const Type &type, BaseDecl *decl) {
-    return type.print() == decl->type.print();
-}
-
-void sort(std::vector<BaseDecl *> &list) {
-    std::sort(list.begin(), list.end(), [](BaseDecl *a, BaseDecl *b) {
-        if (b->isEnum()) {
-            auto ed = dynamic_cast<EnumDecl *>(b);
-            for (auto &variant : ed->variants) {
-                for (auto &f : variant.fields) {
-                    if (isSame(f.type, a)) return true;
-                }
-            }
-        } else {
-            auto td = dynamic_cast<StructDecl *>(b);
-            for (auto &field : td->fields) {
-                if (isSame(field.type, a)) {
-                    return true;
-                }
+void sort(std::vector<BaseDecl *> &list, Resolver *r) {
+    // for (auto decl : list) {
+    //     std::cout << decl->type.print() << ", ";
+    // }
+    // std::cout << std::endl;
+    for (int i = 0; i < list.size(); i++) {
+        //find min that belongs to i'th index
+        auto min = list[i];
+        for (int j = i + 1; j < list.size(); j++) {
+            auto &cur = list[j];
+            if (r->isCyclic(min->type, cur)) {
+                //print("swap " + min->type.print() + " and " + cur->type.print());
+                min = cur;
+                std::swap(list[i], list[j]);
             }
         }
-        return false;
-    });
+    }
 }
 
 std::vector<Method *> getMethods(Unit *unit) {
@@ -187,6 +181,14 @@ llvm::Type *Compiler::mapType(const Type &type0, Resolver *r) {
     if (it != classMap.end()) {
         return it->second;
     }
+    //return makeDecl(rt.targetDecl);
+    // for (auto bd : resolv->usedTypes) {
+    //     print(bd->type.print());
+    // }
+    // for (auto bd : resolv->genericTypes) {
+    //     print(bd->type.print());
+    // }
+    //throw std::runtime_error("mapType: " + type->print());
     return makeDecl(rt.targetDecl);
 }
 
@@ -249,7 +251,8 @@ llvm::DIType *Compiler::map_di(const Type *t) {
                 auto off = sl->getElementOffsetInBits(idx);
                 int sz;
                 if (idx == sd->fields.size() - 1) {
-                    sz = st_size - off;
+                    //sz = st_size - off;
+                    sz = getSize2(fd.type);
                 } else {
                     sz = sl->getElementOffsetInBits(idx + 1) - off;
                 }
@@ -259,7 +262,7 @@ llvm::DIType *Compiler::map_di(const Type *t) {
             }
         }
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 8, llvm::DINode::FlagZero, nullptr, et);
+        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
     }
     throw std::runtime_error("di type: " + t->print());
 }
@@ -395,7 +398,7 @@ public:
             a->accept(this);
         }
     }
-    std::any visitMethodCall(MethodCall *node) override{
+    std::any visitMethodCall(MethodCall *node) override {
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;
         if (m && compiler->isRvo(m)) {
@@ -465,7 +468,7 @@ public:
         }
         return ptr;
     }
-    std::any visitArrayExpr(ArrayExpr *node) override{
+    std::any visitArrayExpr(ArrayExpr *node) override {
         auto ty = compiler->resolv->getType(node);
         auto ptr = alloc(ty, node);
         if (node->isSized() && compiler->doesAlloc(node->list[0])) {
@@ -473,7 +476,7 @@ public:
         }
         return ptr;
     }
-    std::any visitArrayAccess(ArrayAccess *node) override{
+    std::any visitArrayAccess(ArrayAccess *node) override {
         if (node->index2) {
             auto ptr = alloc(compiler->sliceType, node);
             node->array->accept(this);
@@ -486,13 +489,13 @@ public:
         }
         return {};
     }
-    std::any visitLiteral(Literal *node) override{
+    std::any visitLiteral(Literal *node) override {
         if (node->type == Literal::STR) {
             return alloc(compiler->stringType, node);
         }
         return {};
     }
-    std::any visitFieldAccess(FieldAccess *node) override{
+    std::any visitFieldAccess(FieldAccess *node) override {
         node->scope->accept(this);
         return {};
     }
@@ -564,36 +567,36 @@ public:
         node->right->accept(this);
         return {};
     }
-    std::any visitAssertStmt(AssertStmt *node)override {
+    std::any visitAssertStmt(AssertStmt *node) override {
         node->expr->accept(this);
         return {};
     }
 
-    std::any visitRefExpr(RefExpr *node) override{
+    std::any visitRefExpr(RefExpr *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitDerefExpr(DerefExpr *node) override{
+    std::any visitDerefExpr(DerefExpr *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitUnary(Unary *node) override{
+    std::any visitUnary(Unary *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitParExpr(ParExpr *node) override{
+    std::any visitParExpr(ParExpr *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitAsExpr(AsExpr *node) override{
+    std::any visitAsExpr(AsExpr *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitIsExpr(IsExpr *node) override{
+    std::any visitIsExpr(IsExpr *node) override {
         node->expr->accept(this);
         return {};
     }
-    std::any visitIfLetStmt(IfLetStmt *node)override {
+    std::any visitIfLetStmt(IfLetStmt *node) override {
         node->rhs->accept(this);
         compiler->resolv->max_scope++;
         node->thenStmt->accept(this);
@@ -603,10 +606,10 @@ public:
         }
         return {};
     }
-    std::any visitContinueStmt(ContinueStmt *node) override{
+    std::any visitContinueStmt(ContinueStmt *node) override {
         return {};
     }
-    std::any visitBreakStmt(BreakStmt *node)override {
+    std::any visitBreakStmt(BreakStmt *node) override {
         return {};
     }
 };

@@ -41,6 +41,13 @@ public:
     static int last_id;
 
     virtual ~Node() = default;
+
+    template<class T>
+    static T *make() {
+        auto res = new T();
+        res->id = last_id++;
+        return res;
+    }
 };
 class Expression : public Node {
 public:
@@ -102,7 +109,7 @@ public:
     bool isPointer() const { return kind == Pointer; }
     bool isRef() const { return kind == Ref; }
 
-    Type unwrap() {
+    Type unwrap() const{
         if (isPointer()) return *scope.get();
         return *this;
     }
@@ -188,7 +195,7 @@ class StructDecl : public BaseDecl {
 public:
     std::vector<FieldDecl> fields;
 
-    bool isClass() override{ return true; }
+    bool isClass() override { return true; }
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
@@ -301,22 +308,22 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class MatchArm{
+class MatchArm {
 public:
     std::optional<Type> type;
     std::vector<std::string> args;
     Ptr<Statement> rhs;
-    
-    bool us(){ return !type.has_value(); }
+
+    bool us() { return !type.has_value(); }
 };
 
-class Match: public Statement{
+class Match : public Statement {
 public:
     Ptr<Expression> expr;
     std::vector<MatchArm> arms;
-    
-    std::string print() const override{ return "match"; };
-    std::any accept(Visitor *v) override{ return {}; };
+
+    std::string print() const override { return "match"; };
+    std::any accept(Visitor *v) override { return {}; };
 };
 
 class SimpleName : public Expression {

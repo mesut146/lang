@@ -203,7 +203,7 @@ public:
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
-    std::vector<BaseDecl *> genericTypes;
+    std::map<int, std::unique_ptr<Method>> format_methods;
     bool inLoop = false;
     IdGen idgen;
     bool isResolved = false;
@@ -252,7 +252,7 @@ public:
     std::any visitEnumDecl(EnumDecl *bd) override;
     std::any visitImpl(Impl *bd) override;
     std::any visitTrait(Trait *node) override;
-    std::any visitExtern(Extern *node)override;
+    std::any visitExtern(Extern *node) override;
     std::any visitFieldDecl(FieldDecl *fd) override;
     std::any visitMethod(Method *m) override;
     std::any visitParam(Param *p) override;
@@ -277,6 +277,7 @@ public:
     std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
     std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl);
+    void addUsed(BaseDecl* bd);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

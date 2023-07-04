@@ -116,7 +116,7 @@ Type Parser::parseType() {
         } else if (is(QUES)) {
             consume(QUES);
             res = Type(Type::Option, res);
-        }else if(AND){
+        } else if (AND) {
             consume(AND);
             res = Type(Type::Ref, res);
         }
@@ -203,7 +203,7 @@ Expression *makeAlloc(Parser *p) {
 }
 
 MethodCall *parseCall(Parser *p, const std::string &name) {
-    auto res = new MethodCall;
+    auto res = Expression::make<MethodCall>();
     res->name = name;
     if (p->is(LT)) {
         res->typeArgs = p->generics();
@@ -336,7 +336,7 @@ Expression *PRIM2(Parser *p) {
             int line = p->first()->line;
             auto name = p->name();
             if (p->is(LPAREN) || isTypeArg(p, p->pos) != -1) {
-                auto res = new MethodCall;
+                auto res = Expression::make<MethodCall>();
                 res->line = line;
                 res->isOptional = isOptional;
                 res->scope.reset(lhs);

@@ -131,6 +131,13 @@ void usage() {
 int main(int argc, char **args) {
     try {
         if (argc == 1) {
+            /*std::vector<int> arr{6, 9, 1, 3};
+            std::sort(arr.begin(), arr.end(), [](int a, int b) {
+                if (b >= a) {
+                    return true;
+                }
+                return false;
+            });*/
             compileTest();
             return 0;
         }
