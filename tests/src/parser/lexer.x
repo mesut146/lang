@@ -130,6 +130,7 @@ impl Lexer{
     if(s.eq("enum")) return TokenType::ENUM;
     if(s.eq("trait")) return TokenType::TRAIT;
     if(s.eq("impl")) return TokenType::IMPL;
+    if(s.eq("type")) return TokenType::TYPE;
     if(s.eq("extern")) return TokenType::EXTERN;
     if(s.eq("virtual")) return TokenType::VIRTUAL;
     if(s.eq("static")) return TokenType::STATIC;
@@ -316,7 +317,7 @@ impl Lexer{
       let type = TokenType::INTEGER_LIT;
       return Token::new(type, self.str(start, self.pos));
     }
-    self.pos+=1;
+    self.pos += 1;
     while (true){
       let c = self.peek();
       if(c.is_digit()){
@@ -325,15 +326,11 @@ impl Lexer{
         self.pos+=2;
       }else break;
     }
-    if(self.peek() == '.'){
+    if(self.peek() == '.' && self.peek(1).is_digit()){
       dot = true;
-      self.pos+=1;
-      if(!self.peek(1).is_digit()){
-        panic("expeced digit got %c", self.peek());
-      }
-      self.pos+=1;
-      while (self.peek().is_digit()) {
-        self.pos+=1;
+      self.pos += 2;
+      while (self.has() && self.peek().is_digit()) {
+        self.pos += 1;
       }
     }
     let mustSuffix = false;

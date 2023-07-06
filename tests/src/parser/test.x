@@ -5,6 +5,7 @@ import parser/ast
 import parser/printer
 import parser/resolver
 import std/map
+import std/io
 
 func lexer_test(){
   let lexer = Lexer::new("../tests/src/parser/parser.x");
@@ -27,12 +28,23 @@ func parser_test(){
 
 func resolver_test(){
   //let s = "../tests/src/parser/token.x";
-  let s = "../tests/src/lit.x";
-  let r = Resolver::new(s);
-  r.resolve_all();
+  let dir = "../tests/src";
+  let list = list(dir);
+  for(let i = 0;i < list.len();++i){
+    let name = list.get_ptr(i);
+    if(!name.str().ends_with(".x")) continue;
+    let file = String::new(dir);
+    file.append("/");
+    file.append(name.str());
+    if(is_dir(file.str())) continue;
+    let r = Resolver::new(file.str());
+    r.resolve_all();
+  }
+  //let s = "../tests/src/lit.x";
 }
 
 func main(){
+  print("##########running##########\n");
   //lexer_test();
   //parser_test();
   resolver_test();

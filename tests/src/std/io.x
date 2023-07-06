@@ -2,6 +2,9 @@ import std/libc
 
 func read_bytes(path: str): List<i8>{
   let f = fopen(path.cstr(), "r".cstr());
+  if(!is_valid(f)){
+    panic("no such file %s", path.cstr());
+  }
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   //print("size = %lld\n", size);
@@ -38,7 +41,7 @@ func dump(arr: [i8; 256], len: i32){
 func list(path: str): List<String>{
   let list = List<String>::new();
   let dp = opendir(path.cstr());
-  if(dp as u64 == 0) panic("cant open dir");
+  if(dp as u64 == 0) panic("no such dir");
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
@@ -65,6 +68,14 @@ func is_file(path: str): bool{
     return true;
   }
   return false;
+}
+
+func is_valid(fp: FILE*): bool{
+  return fp as u64 != 0;
+}
+
+func exist(path: str): bool{
+  return is_file(path) || is_dir(path);
 }
 
 func resolve(path: str): String{

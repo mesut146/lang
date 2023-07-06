@@ -64,6 +64,7 @@ struct Resolver{
   is_init: bool;
   typeMap: Map<String, RType>;
   curMethod: Option<Method*>;
+  curImpl: Option<Impl*>;
   scopes: List<Scope>;
 }
 
@@ -75,6 +76,7 @@ struct RType{
   type: Type;
   trait: Option<Trait*>;
   method: Option<Method*>;
+  value: Option<String>;
 }
 
 impl RType{
@@ -82,12 +84,13 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<Method*>::None};
+    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None};
   }
   func clone(self): RType{
     let res = RType::new(self.type);
     res.trait = self.trait;
     res.method = self.method;
+    res.value = self.value;
     return res;
   }
 }
@@ -100,7 +103,7 @@ impl Resolver{
     let unit = parser.parse_unit();
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
-      curMethod: Option<Method*>::None, scopes: List<Scope>::new()};
+      curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new()};
     return res;
   }
 
@@ -155,7 +158,7 @@ impl Resolver{
         res.trait = Option::new(&tr);
         self.addType(tr.type.print(), res);
       }else if let Item::Impl(imp)=(it){
-        panic("impl init");
+        //pass
       }else if let Item::Type(name, rhs)=(it){
         let res = self.visit(&rhs);
         self.addType(name, res);
@@ -172,28 +175,34 @@ impl Resolver{
   func err(self, msg: String, node: Node*){
     panic("%s\n:%d %s %s", self.unit.path.cstr(), node.line);
   }
-  
-  func resolve(self, node: Expr*): RType{
-    return self.visit(node);
-  }
 
   func visit(self, node: Item*){
     if let Item::Method(m) = (node){
       self.visit(&m);
+    }else if let Item::Type(name, rhs) = (node){
+      //pass
+    }else if let Item::Impl(imp) = (node){
+      if(imp.type_params.empty()){
+        //generic
+        return;
+      }
+      //self.curImpl = imp;
+      //resolve non generic type args
+      //let args = &imp.type;
+      if(imp.trait_name.is_some()){
+        //todo
+        for(let i = 0;i < imp.methods.len();++i){
+          self.visit(imp.methods.get_ptr(i));
+        }
+      }else{
+        for(let i = 0;i < imp.methods.len();++i){
+          self.visit(imp.methods.get_ptr(i));
+        }
+      }
     }else{
       Fmt::str(node).dump();
       panic("item");
     }
-  }
-
-  func visit(self, node: Type*): RType{
-    let str = node.print();
-    if(node.isPrim() || node.isVoid()){
-      let res = RType::new(str.str());
-      self.addType(str, res);
-      return res;
-    }
-    panic("type %s", node.print().cstr());
   }
 
   func visit(self, node: Method*){
@@ -217,7 +226,7 @@ impl Resolver{
     if(node.body.is_some()){
       self.visit(node.body.get());
       //todo check unreachable
-      if (!node.type.isVoid() && !isReturnLast(node.body.get())) {
+      if (!node.type.is_void() && !isReturnLast(node.body.get())) {
         let msg = String::new("non void function ");
         msg.append(printMethod(self.curMethod.unwrap()));
         msg.append(" must return a value");
@@ -229,24 +238,40 @@ impl Resolver{
   }
 
 
-  func visit(self, node: Stmt*){
-    if let Stmt::Expr(e) = (node){
-      self.visit(&e);
-      return;
-    }else if let Stmt::Ret(e) = (node){
-      if(e.is_some()){
-        //self.visit(&e);
-      }else{
-        if(!self.curMethod.unwrap().type.isVoid()){
-          self.err("non-void method returns void");
-        }
-      }
-      return;
-    }else if let Stmt::Var(ve)=(node){
-      self.visit(&ve);
-      return;
+
+
+}
+
+func max_for(type: Type*): i64{
+  let bits: i64 = prim_size(type.print()).unwrap();
+  let tmp = 1 << (bits - 1);
+  if(type.is_unsigned()){
+    //do this not to overflow
+    return tmp - 1 + tmp;
+  }
+  return tmp - 1;
+}
+
+
+//expressions-------------------------------------
+impl Resolver{
+  func is_condition(self, e: Expr*): bool{
+    let tmp = self.visit(e);
+    return tmp.type.print().eq("bool");
+  }
+
+  func visit(self, node: Type*): RType{
+    let str = node.print();
+    let cached = self.typeMap.get_p(&str);
+    if(cached.is_some()){
+      return cached.unwrap();
     }
-    panic("visit stmt %s", node.print().cstr());
+    if(node.is_prim() || node.is_void()){
+      let res = RType::new(str.str());
+      self.addType(str, res);
+      return res;
+    }
+    panic("type %s", node.print().cstr());
   }
 
   func visit(self, node: Expr*): RType{
@@ -258,10 +283,96 @@ impl Resolver{
         return self.visit(suffix.get());
       }
       if(kind is LitKind::INT){
+        let res = RType::new("i32");
+        res.value = Option::new(value);
+        return res;
+      }else if(kind is LitKind::STR){
+        return RType::new("str");
+      }else if(kind is LitKind::BOOL){
+        return RType::new("bool");
+      }else if(kind is LitKind::FLOAT){
+        let res = RType::new("f32");
+        res.value = Option::new(value);
+        return res;
+      }else if(kind is LitKind::CHAR){
+        let res = RType::new("u32");
+        res.value = Option::new(value);
+        return res;
+      }
+    }else if let Expr::Infix(op, lhs, rhs) = (node){
+      let lt = self.visit(lhs.get());
+      let rt = self.visit(rhs.get());
+      if(lt.type.is_void() || rt.type.is_void()){
+        self.err("operation on void type");
+      }
+      if(lt.type.is_str() || rt.type.is_str()){
+        self.err("string op not supported yet");
+      }
+      if(!(lt.type.is_prim() && rt.type.is_prim())){
+        panic("infix on non prim type: %s", node.print().cstr());
+      }
+      if(is_comp(&op)){
+        return RType::new("bool");
+      }
+      else if(op.eq("&&") || op.eq("||")){
+        if (!lt.type.print().eq("bool")) {
+          panic("infix lhs is not boolean: %s", lhs.get().print().cstr());
+        }
+        if (!rt.type.print().eq("bool")) {
+          panic("infix rhs is not boolean: %s", rhs.get().print().cstr());
+        }        
+        return RType::new("bool");
+      }else{
+        return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
+      }
+    }//else if let Expr::()
+    panic("visit expr %s", node.print().cstr());
+  }
 
+}
+
+func infix_result(l: str, r: str): str{
+  if(l.eq(r)){
+    return l;
+  }
+  let arr = ["f64", "f32", "i64", "i32", "i16", "i8", "u64", "u32", "u16"];
+  for(let i = 0;i < arr.len;++i){
+    let op = arr[i];
+    if(l.eq(op) || r.eq(op)){
+      return op;
+    }
+  }
+  panic("infix_result: %s, %s", l, r);
+}
+
+func is_comp(s: String*): bool{
+  return s.eq("==") || s.eq("!=") || s.eq("<") || s.eq(">") || s.eq("<=") || s.eq(">=");
+}
+
+//statements-------------------------------------
+impl Resolver{
+  func visit(self, node: Stmt*){
+    if let Stmt::Expr(e) = (node){
+      self.visit(&e);
+      return;
+    }else if let Stmt::Ret(e) = (node){
+      if(e.is_some()){
+        //self.visit(&e);
+      }else{
+        if(!self.curMethod.unwrap().type.is_void()){
+          self.err("non-void method returns void");
+        }
+      }
+      return;
+    }else if let Stmt::Var(ve) = (node){
+      self.visit(&ve);
+      return;
+    }else if let Stmt::Assert(e) = (node){
+      if(!self.is_condition(&e)){
+        panic("assert expr is not bool: %s", e.print().cstr());
       }
     }
-    panic("visit expr %s", node.print().cstr());
+    panic("visit stmt %s", node.print().cstr());
   }
 
   func visit(self, node: Block*){
@@ -286,15 +397,4 @@ impl Resolver{
     let type = self.visit(node.type.get());
     return type;
   }
-
-}
-
-func max_for(type: Type*): i64{
-  let bits = prim_size(type.print()).unwrap() as i64;
-  let tmp = 1 << (bits - 1);
-  if(type.is_unsigned()){
-    //do this not to overflow
-    return tmp - 1 + tmp;
-  }
-  return tmp - 1;
 }

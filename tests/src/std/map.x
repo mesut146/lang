@@ -36,8 +36,14 @@ impl<K, V> Map<K, V>{
     }
     return Option<V>::None;
   }
-  func get(self, k: K*): Option<V>{
-    return self.get(*k);
+  func get_p(self, k: K*): Option<V>{
+    for(let i = 0;i < self.arr.len();i += 1){
+      let e =  self.arr.get_ptr(i);
+      if(Eq::eq(e.a, *k)){
+        return Option<V>::Some{e.b};
+      }
+    }
+    return Option<V>::None;
   }
   func get_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){

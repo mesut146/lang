@@ -49,8 +49,14 @@ impl Debug for Item{
       m.debug(f);
     }else if let Item::Impl(i)=(self){
       i.debug(f);
+    }else if let Item::Type(name, rhs)=(self){
+      f.print("type ");
+      f.print(name);
+      f.print(" = ");
+      rhs.debug(f);
+      f.print(";");
     }else{
-      panic("todo");
+      panic("Item::debug()");
     }
   }
 }

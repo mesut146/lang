@@ -67,6 +67,7 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
+      print("%s\n", self.lexer.path.cstr());
       panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(&tt).cstr());
     }
     
@@ -92,9 +93,16 @@ impl Parser{
         }else if(self.is(TokenType::ENUM)){
           self.unit.items.add(Item::Enum{self.parse_enum(derives)});
         }else if(self.is(TokenType::IMPL)){
-            self.unit.items.add(Item::Impl{self.parse_impl()});
+          self.unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::FUNC)){
-            self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None)});
+          self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None)});
+        }else if(self.is(TokenType::TYPE)){
+          self.pop();
+          let name = self.name();
+          self.consume(TokenType::EQ);
+          let rhs = self.parse_type();
+          self.consume(TokenType::SEMI);
+          self.unit.items.add(Item::Type{name: name, rhs: rhs});
         }else{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }
@@ -564,6 +572,8 @@ impl Parser{
       kind = LitKind::STR;
     }else if(self.is(TokenType::CHAR_LIT)){
       kind = LitKind::CHAR;
+    }else if(self.is(TokenType::FLOAT_LIT)){
+      kind = LitKind::FLOAT;
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
       kind = LitKind::BOOL;
     }else{
@@ -659,13 +669,17 @@ impl Parser{
         if(self.is(TokenType::LPAREN)){
           return self.call(nm, g);
         }
-        self.consume(TokenType::COLON2);
-        let ty = Type::new(nm, g);
-        let nm2 = self.name();
-        if(self.is(TokenType::LPAREN)){
-          return self.call(Expr::Type{ty}, nm2);
+        else if(self.is(TokenType::COLON2)){
+          self.consume(TokenType::COLON2);
+          let ty = Type::new(nm, g);
+          let nm2 = self.name();
+          if(self.is(TokenType::LPAREN)){
+            return self.call(Expr::Type{ty}, nm2);
+          }
+          return Expr::Type{Type::new(ty, nm2)};
+        }else {
+          return Expr::Type{Type::new(nm, g)};
         }
-        return Expr::Type{Type::new(ty, nm2)};
       }else if(self.is(TokenType::COLON2)){
         self.pop();
         let ty = self.parse_type();

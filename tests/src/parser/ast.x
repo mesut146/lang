@@ -130,15 +130,18 @@ impl Type{
     panic("cant unwrap");
   }
 
-  func isVoid(self): bool{
+  func is_void(self): bool{
     return self.print().eq("void");
   }
-  func isPrim(self): bool{
+  func is_prim(self): bool{
     return prim_size(self.print()).is_some();
   }
   func is_unsigned(self): bool{
     let str = self.print();
     return str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
+  }
+  func is_str(self): bool{
+    return self.print().eq("str");
   }
   
   func print(self): String{
@@ -188,7 +191,7 @@ struct Fragment{
 }
 
 enum LitKind{
-  INT, STR, CHAR, BOOL
+  INT, STR, CHAR, BOOL, FLOAT
 }
 
 enum Expr{

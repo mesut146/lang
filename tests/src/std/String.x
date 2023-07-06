@@ -152,6 +152,9 @@ impl String{
     func eq(self, s: str): bool{
       return self.str().eq(s);
     }
+    func eq(self, s: String*): bool{
+      return self.str().eq(s.str());
+    }
 }
 
 impl Clone for String{
@@ -163,6 +166,12 @@ impl Clone for String{
 impl Debug for String{
   func debug(self, f: Fmt*){
     f.print(*self);
+  }
+}
+
+impl Eq for String{
+  func eq(self, rhs: String): bool{
+    return self.eq(&rhs);
   }
 }
 
