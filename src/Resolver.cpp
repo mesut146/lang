@@ -1079,7 +1079,7 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
         if (cur->base) {
             auto base = resolve(*cur->base).targetDecl;
             cur = base;
-        }else{
+        } else {
             break;
         }
     }
@@ -1105,18 +1105,9 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
         return makeSimple("i32");
     }
     auto decl = scp.targetDecl;
-    if (decl->isEnum()) {
-        auto ed = dynamic_cast<EnumDecl *>(decl);
-        if (node->name != "index") {
-            err(node, "invalid field " + node->name + " of " + sct.print());
-        }
-        return makeSimple("i32");
-    } else {
-        auto td = dynamic_cast<StructDecl *>(decl);
-        auto [sd, idx] = findField(node->name, td);
-        auto &fd = sd->fields[idx];
-        return std::any_cast<RType>(fd.accept(this));
-    }
+    auto [sd, idx] = findField(node->name, decl);
+    auto &fd = sd->fields[idx];
+    return std::any_cast<RType>(fd.accept(this));
 }
 
 std::any Resolver::visitLiteral(Literal *node) {
@@ -1372,50 +1363,47 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         res = res.clone();
         res.type = Type(Type::Pointer, res.type);
     }
+    //base checks
+    auto decl = res.targetDecl;
+    if (decl->base && !base) {
+        error(node, "base class is not initialized");
+    }
+    if (!decl->base && base) {
+        error(node, "wasn't expecting base");
+    }
+    if (base) {
+        auto base_ty = getType(base);
+        if (base_ty.print() != decl->base->print()) {
+            error(node, "invalid base class type: " + base_ty.print() + " expecting: " + decl->base->print());
+        }
+    }
     std::unordered_set<std::string> names;
     std::vector<FieldDecl> *fields;
     Type type;
     if (res.targetDecl->isEnum()) {
-        if (base) error(node, "enum base not supported");
         auto ed = dynamic_cast<EnumDecl *>(res.targetDecl);
         int idx = findVariant(ed, node->type.name);
         auto &variant = ed->variants[idx];
         fields = &variant.fields;
         type = Type(ed->type, variant.name);
-        if (variant.fields.size() != node->entries.size()) {
-            error(node, "incorrect number of arguments passed to enum creation");
-        }
     } else {
         auto td = dynamic_cast<StructDecl *>(res.targetDecl);
         fields = &td->fields;
         type = td->type;
-        if (!base && td->base) {
-            error(node, "base class is not initialized");
-        }
-        if (base && !td->base) {
-            error(node, "wasn't expecting base");
-        }
-        if (base) {
-            auto base_ty = getType(base);
-            if (base_ty.print() != td->base->print()) {
-                error(node, "invalid base class type: " + base_ty.print() + " expecting: " + td->base->print());
-            }
-        }
-        int fcnt = td->fields.size();
-        if (base) fcnt++;
-        if (fcnt != node->entries.size()) {
-            //error(node, "incorrect number of arguments passed to class creation");
-        }
         if (td->isGeneric) {
             //infer
             auto inferred = inferStruct(node, hasNamed, td->type.typeArgs, td->fields, td->type);
-            auto decl = generateDecl(inferred, td);
-            //print("obj=\n"+decl->print());
-            td = dynamic_cast<StructDecl *>(decl);
-            addUsed(decl);
-            res = resolve(decl->type);
+            auto gen_decl = generateDecl(inferred, td);
+            td = dynamic_cast<StructDecl *>(gen_decl);
+            addUsed(gen_decl);
+            res = resolve(gen_decl->type);
             fields = &td->fields;
         }
+    }
+    int fcnt = fields->size();
+    if (base) fcnt++;
+    if (fcnt != node->entries.size()) {
+        //error(node, "incorrect number of arguments passed to object creation");
     }
     int field_idx = 0;
     for (int i = 0; i < node->entries.size(); i++) {

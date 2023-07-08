@@ -27,8 +27,6 @@
 
 namespace fs = std::filesystem;
 
-const int SLICE_LEN_INDEX = 1;
-
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -472,21 +470,21 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
     }
     auto mangled = bd->type.print();
     auto it = classMap.find(mangled);
-    if (it != classMap.end()) {
-        //fill body
-        //return it->second;
-    } else {
+    if (it == classMap.end()) {
         auto ty = llvm::StructType::create(ctx(), mangled);
         classMap[mangled] = ty;
         return ty;
     }
-    std::vector<llvm::Type *> elems;
+    //fill body
+    Resolver *r;
+    if (true || bd->unit == unit.get()) {
+        r = resolv.get();
+    } else {
+        r = Resolver::getResolver(bd->unit->path, resolv->root).get();
+    }
+    auto ty = (llvm::StructType *) it->second;
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
-        //ordinal, i32
-        elems.push_back(getInt(ENUM_INDEX_SIZE));
-        //data, i8*
-        //print("map " + ed->type.print());
         int max = 0;
         for (auto &ev : ed->variants) {
             std::vector<llvm::Type *> var_elems;
@@ -505,18 +503,17 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         }
         //auto sz = getSize2(ed);
         auto sz = max / 8;
-        elems.push_back(llvm::ArrayType::get(getInt(8), sz));
-    } else {
-        Resolver *r;
-        if (true || bd->unit == unit.get()) {
-            r = resolv.get();
+        auto tag = getInt(ENUM_TAG_BITS);
+        auto data = llvm::ArrayType::get(getInt(8), sz);
+        if (bd->base) {
+            auto base_ty = mapType(bd->base.value(), resolv.get());
+            Layout::set_elems_enum(ty, base_ty, tag, data);
         } else {
-            r = Resolver::getResolver(bd->unit->path, resolv->root).get();
+            Layout::set_elems_enum(ty, nullptr, tag, data);
         }
+    } else {
         auto td = dynamic_cast<StructDecl *>(bd);
-        if (td->base) {
-            elems.push_back(mapType(td->base.value(), r));
-        }
+        std::vector<llvm::Type *> elems;
         for (auto &field : td->fields) {
             if (false && field.type.isPointer()) {
                 elems.push_back(map_incomplete(field.type.unwrap(), this));
@@ -528,11 +525,13 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         if (!getVirtual(td, unit.get()).empty()) {
             elems.push_back(getInt(8)->getPointerTo()->getPointerTo());
         }
+        if (bd->base) {
+            auto base_ty = mapType(bd->base.value(), resolv.get());
+            Layout::set_elems_struct(ty, base_ty, elems);
+        } else {
+            Layout::set_elems_struct(ty, nullptr, elems);
+        }
     }
-    auto ty = (llvm::StructType *) it->second;
-    ty->setBody(elems);
-    //auto ty = llvm::StructType::create(ctx(), elems, mangled);
-    //classMap[mangled] = ty;
     return ty;
 }
 
@@ -1029,14 +1028,16 @@ std::any Compiler::visitUnary(Unary *node) {
         Builder->CreateStore(res, v);
     } else if (node->op == "--") {
         auto v = gen(node->expr);
-        res = Builder->CreateNSWSub(val, makeInt(1));
+        auto bits = val->getType()->getPrimitiveSizeInBits();
+        res = Builder->CreateNSWSub(val, makeInt(1, bits));
         Builder->CreateStore(res, v);
     } else if (node->op == "!") {
         res = Builder->CreateTrunc(val, getInt(1));
         res = Builder->CreateXor(res, Builder->getTrue());
         res = Builder->CreateZExt(res, getInt(8));
     } else if (node->op == "~") {
-        res = (llvm::Value *) Builder->CreateXor(val, makeInt(-1));
+        auto bits = val->getType()->getPrimitiveSizeInBits();
+        res = (llvm::Value *) Builder->CreateXor(val, makeInt(-1, bits));
     } else {
         throw std::runtime_error("Unary: " + node->print());
     }
@@ -1138,7 +1139,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto src = c->gen(a);
             //get ptr to inner char array
             if (src->getType()->isPointerTy()) {
-                auto slice = c->gep2(src, 0);
+                auto slice = c->gep2(src, SLICE_PTR_INDEX);
                 auto str = c->Builder->CreateLoad(c->getInt(8)->getPointerTo(), slice);
                 args.push_back(str);
             } else {
@@ -1284,8 +1285,8 @@ void Compiler::strLit(llvm::Value *ptr, Literal *node) {
     auto trimmed = node->val.substr(1, node->val.size() - 2);
     auto src = Builder->CreateGlobalStringPtr(trimmed);
     auto slice_ptr = Builder->CreateBitCast(ptr, sliceType->getPointerTo());
-    auto data_target = gep2(slice_ptr, 0);
-    auto len_target = gep2(slice_ptr, 1);
+    auto data_target = gep2(slice_ptr, SLICE_PTR_INDEX);
+    auto len_target = gep2(slice_ptr, SLICE_LEN_INDEX);
     //set ptr
     Builder->CreateStore(src, data_target);
     //set len
@@ -1419,17 +1420,29 @@ int Compiler::getOffset(EnumVariant *variant, int index) {
     return offset;
 }
 
+
 void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived) {
     auto ty = mapType(tt.type);
+    //set base
+    for (auto arg : node->entries) {
+        if (arg.isBase) {
+            auto base_ptr = gep2(ptr, tt.targetDecl->isClass() ? STRUCT_BASE_INDEX : ENUM_BASE_INDEX);
+            auto val = dynamic_cast<ObjExpr *>(arg.value);
+            auto key = tt.targetDecl->type.print();
+            object(val, base_ptr, resolv->resolve(val), derived ? derived : &key);
+            break;
+        }
+    }
     if (tt.targetDecl->isEnum()) {
         //enum
         auto decl = dynamic_cast<EnumDecl *>(tt.targetDecl);
         auto variant_index = Resolver::findVariant(decl, node->type.name);
-        setOrdinal(variant_index, ptr);
-        auto dataPtr = gep2(ptr, 1);
+        setOrdinal(variant_index, ptr, decl);
+        auto dataPtr = gep2(ptr, Layout::get_data_index(decl));
         auto &variant = decl->variants[variant_index];
         for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
+            if (e.isBase) continue;
             int index;
             if (e.key) {
                 index = fieldIndex(variant.fields, e.key.value(), Type(decl->type, variant.name));
@@ -1437,8 +1450,8 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
                 index = i;
             }
             auto &field = variant.fields[index];
-            auto entPtr = gep(dataPtr, 0, getOffset(&variant, index));
-            setField(e.value, field.type, true, entPtr);
+            auto field_target_ptr = gep(dataPtr, 0, getOffset(&variant, index));
+            setField(e.value, field.type, true, field_target_ptr);
         }
     } else {
         //class
@@ -1461,13 +1474,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         int field_idx = 0;
         for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
-            if (e.isBase) {
-                auto eptr = gep2(ptr, 0);
-                auto val = dynamic_cast<ObjExpr *>(e.value);
-                auto key = decl->type.print();
-                object(val, eptr, resolv->resolve(val), derived ? derived : &key);
-                continue;
-            }
+            if (e.isBase) continue;
             FieldDecl *field;
             int real_idx;
             if (e.key) {
@@ -1479,8 +1486,8 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
                 field = &decl->fields[field_idx++];
             }
             if (decl->base) real_idx++;
-            auto eptr = gep2(ptr, real_idx);
-            setField(e.value, field->type, true, eptr);
+            auto field_target_ptr = gep2(ptr, real_idx);
+            setField(e.value, field->type, true, field_target_ptr);
         }
     }
 }
@@ -1514,17 +1521,10 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
         scope = load(scope);
     }
     auto decl = rt.targetDecl;
-    int index;
-    if (decl->isEnum()) {
-        index = 0;
-    } else {
-        auto td = dynamic_cast<StructDecl *>(decl);
-        auto [sd, idx] = resolv->findField(node->name, decl);
-        index = idx;
-        if (sd->base) index++;
-        auto target = mapType(sd->type)->getPointerTo();
-        scope = Builder->CreateBitCast(scope, target);
-    }
+    auto [sd, index] = resolv->findField(node->name, decl);
+    auto target = mapType(sd->type)->getPointerTo();
+    scope = Builder->CreateBitCast(scope, target);
+    if (sd->base) index++;
     return gep2(scope, index);
 }
 
@@ -1575,10 +1575,10 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (isp(node->rhs.get(), rhs, this)) {
         rhs = load(rhs);
     }
-    auto tag = load(gep2(rhs, 0));
+    auto tag = load(gep2(rhs, Layout::get_tag_index(decl)));
 
     auto index = Resolver::findVariant(decl, node->type.name);
-    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_INDEX_SIZE));
+    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_TAG_BITS));
 
     auto then = llvm::BasicBlock::Create(ctx(), "", func);
     llvm::BasicBlock *elsebb;
@@ -1596,7 +1596,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (!variant.fields.empty()) {
         //declare vars
         auto &params = variant.fields;
-        auto dataPtr = gep2(rhs, 1);
+        auto dataPtr = gep2(rhs, Layout::get_data_index(decl));
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
@@ -1635,20 +1635,20 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
 
 llvm::Value *Compiler::getTag(Expression *expr) {
     auto tag = gen(expr);
-    auto lt = resolv->getType(expr);
-    return load(gep2(tag, ENUM_TAG_INDEX));
+    auto rt = resolv->resolve(expr);
+    return load(gep2(tag, Layout::get_tag_index(rt.targetDecl)));
 }
 
 std::any Compiler::visitIsExpr(IsExpr *node) {
     llvm::Value *tag1 = getTag(node->expr);
     llvm::Value *tag2;
-    auto rt = dynamic_cast<Type *>(node->rhs);
-    if (!rt) {
-        tag2 = getTag(node->rhs);
-    } else {
-        auto decl = (EnumDecl *) resolv->resolve(rt).targetDecl;
-        auto index = Resolver::findVariant(decl, rt->name);
+    auto rhs_type = dynamic_cast<Type *>(node->rhs);
+    if (rhs_type) {
+        auto decl = (EnumDecl *) resolv->resolve(rhs_type).targetDecl;
+        auto index = Resolver::findVariant(decl, rhs_type->name);
         tag2 = makeInt(index);
+    } else {
+        tag2 = getTag(node->rhs);
     }
     return (llvm::Value *) Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag1, tag2);
 }
@@ -1701,7 +1701,7 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) 
     src = gep(src, val_start);
     //i8*
     src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
-    auto ptr_target = gep2(sp, 0);
+    auto ptr_target = gep2(sp, SLICE_PTR_INDEX);
     Builder->CreateStore(src, ptr_target);
     //set len
     auto len_target = gep2(sp, SLICE_LEN_INDEX);
@@ -1739,7 +1739,7 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     auto elem = type.scope.get();
     auto elemty = mapType(*elem);
     //read array ptr
-    auto arr = gep2(src, 0);
+    auto arr = gep2(src, SLICE_PTR_INDEX);
     //arr = Builder->CreateBitCast(arr, arr->getType()->getPointerTo());
     arr = load(arr);
     arr = Builder->CreateBitCast(arr, elemty->getPointerTo());

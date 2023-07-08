@@ -96,12 +96,68 @@ void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
     auto bd = resolv->resolve(n.scope.get()).targetDecl;
     auto decl = dynamic_cast<EnumDecl *>(bd);
     int index = Resolver::findVariant(decl, n.name);
-    setOrdinal(index, ptr);
+    setOrdinal(index, ptr, bd);
 }
 
-void Compiler::setOrdinal(int index, llvm::Value *ptr) {
-    auto ordPtr = Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, ENUM_TAG_INDEX);
-    Builder->CreateStore(makeInt(index, ENUM_INDEX_SIZE), ordPtr);
+void Layout::set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields) {
+    if (base) {
+        if (STRUCT_BASE_INDEX == 0) {
+            fields.insert(fields.begin(), base);
+        } else if (STRUCT_BASE_INDEX == -1) {
+            fields.insert(fields.end(), base);
+        } else {
+            error("no valid base index");
+        }
+    }
+    st->setBody(fields);
+}
+
+void Layout::set_elems_enum(llvm::StructType *st, llvm::Type *base, llvm::Type *tag, llvm::ArrayType *data) {
+    std::vector<llvm::Type *> elems;
+    if (base) {
+        if (ENUM_BASE_INDEX == 0) {
+            elems.push_back(base);
+        } else {
+            error("no valid base index");
+        }
+    }
+    if (ENUM_TAG_INDEX < ENUM_DATA_INDEX) {
+        elems.push_back(tag);
+        elems.push_back(data);
+    } else {
+        elems.push_back(data);
+        elems.push_back(tag);
+    }
+    st->setBody(elems);
+}
+
+int Layout::get_tag_index(BaseDecl *decl) {
+    if (decl->base) {
+        return ENUM_TAG_INDEX;
+    } else if (ENUM_BASE_INDEX < ENUM_TAG_INDEX) {
+        //shift left
+        return ENUM_TAG_INDEX - 1;
+    } else {
+        //base right, doesnt matter
+        return ENUM_TAG_INDEX;
+    }
+}
+
+int Layout::get_data_index(BaseDecl *decl) {
+    if (decl->base) {
+        return ENUM_DATA_INDEX;
+    } else if (ENUM_BASE_INDEX < ENUM_DATA_INDEX) {
+        //shift left
+        return ENUM_DATA_INDEX - 1;
+    } else {
+        //base right, doesnt matter
+        return ENUM_DATA_INDEX;
+    }
+}
+
+void Compiler::setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl) {
+    auto ordPtr = gep2(ptr, Layout::get_tag_index(decl));
+    Builder->CreateStore(makeInt(index, ENUM_TAG_BITS), ordPtr);
 }
 
 llvm::Function *Compiler::make_printf() {
@@ -181,15 +237,9 @@ llvm::Type *Compiler::mapType(const Type &type0, Resolver *r) {
     if (it != classMap.end()) {
         return it->second;
     }
-    //return makeDecl(rt.targetDecl);
-    // for (auto bd : resolv->usedTypes) {
-    //     print(bd->type.print());
-    // }
-    // for (auto bd : resolv->genericTypes) {
-    //     print(bd->type.print());
-    // }
-    //throw std::runtime_error("mapType: " + type->print());
-    return makeDecl(rt.targetDecl);
+    auto res = makeDecl(rt.targetDecl);
+    makeDecl(rt.targetDecl);
+    return res;
 }
 
 llvm::DIType *Compiler::map_di(const Type *t) {
@@ -232,15 +282,16 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         auto st_size = getSize2(t);
         std::vector<llvm::Metadata *> elems;
         if (rt.targetDecl->isEnum()) {
+            //todo order
             auto ed = (EnumDecl *) rt.targetDecl;
-            auto tag = DBuilder->createBasicType("tag", ENUM_INDEX_SIZE, llvm::dwarf::DW_ATE_signed);
-            auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_INDEX_SIZE, 8, 0, llvm::DINode::FlagZero, tag);
+            auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
+            auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 8, 0, llvm::DINode::FlagZero, tag);
             elems.push_back(tagm);
             auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
-            auto sz = getSize2(ed) - ENUM_INDEX_SIZE;
+            auto sz = getSize2(ed) - ENUM_TAG_BITS;
             llvm::DINodeArray sub;
             auto at = DBuilder->createArrayType(sz, 8, chr, sub);
-            auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_INDEX_SIZE, llvm::DINode::FlagZero, at);
+            auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
             elems.push_back(arrm);
         } else {
             auto sd = (StructDecl *) rt.targetDecl;
@@ -279,7 +330,7 @@ int Compiler::getSize(BaseDecl *decl) {
             }
             res = cur > res ? cur : res;
         }
-        return res + ENUM_INDEX_SIZE;
+        return res + ENUM_TAG_BITS;
     } else {
         auto td = dynamic_cast<StructDecl *>(decl);
         int res = 0;

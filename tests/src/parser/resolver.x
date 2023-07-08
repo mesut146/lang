@@ -2,8 +2,27 @@ import parser/parser
 import parser/lexer
 import parser/ast
 import parser/printer
+import parser/method_resolver
 import std/map
 
+func is_struct(type: Type*): bool{
+  return !type.is_prim() && !type.is_pointer(); 
+}
+
+func makeSelf(type: Type*): Type{
+  if(type.is_prim()) return *type;
+  return type.toPtr();
+}
+
+func max_for(type: Type*): i64{
+  let bits: i64 = prim_size(type.print()).unwrap();
+  let tmp = 1 << (bits - 1);
+  if(type.is_unsigned()){
+    //do this not to overflow
+    return tmp - 1 + tmp;
+  }
+  return tmp - 1;
+}
 
 func isReturnLast(b: Block*): bool{
     let last = b.list.last();
@@ -37,6 +56,24 @@ func printMethod(m: Method*): String{
   return s;
 }
 
+//trait method signature for type
+func mangle2(m: Method*, type: Type*): String{
+  let s = String::new();
+  s.append(m.name);
+  s.append("(");
+  for(let i = 0;i < m.params.len();++i){
+    s.append("_");
+    let pstr = m.params.get_ptr(i).type.print();
+    if(pstr.eq("Self")){
+      s.append(type.print());
+    }else{
+      s.append(pstr);
+    }
+  }
+  s.append(")");
+  return s;
+}
+
 struct Scope{
   list: List<VarHolder>;
 }
@@ -49,6 +86,15 @@ struct VarHolder{
 impl Scope{
   func new(): Scope{
     return Scope{list: List<VarHolder>::new()};
+  }
+  func find(self, name: String*): Option<VarHolder*>{
+    for(let i = 0;i < self.list.len();++i){
+      let vh = self.list.get_ptr(i);
+      if(vh.name.eq(name)){
+        return Option::new(vh);
+      }
+    }
+    return Option<VarHolder*>::None;
   }
 }
 impl VarHolder{
@@ -72,11 +118,18 @@ struct Config{
   optimize_enum: bool;
 }
 
+/*enum Decl{
+  Struct(sd: StructDecl*),
+  Enum(ed: EnumDecl*)
+}*/
+
 struct RType{
   type: Type;
   trait: Option<Trait*>;
   method: Option<Method*>;
   value: Option<String>;
+  targetDecl: Option<Decl*>;
+  vh: Option<VarHolder*>;
 }
 
 impl RType{
@@ -84,7 +137,7 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None};
+    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder*>::None};
   }
   func clone(self): RType{
     let res = RType::new(self.type);
@@ -147,12 +200,9 @@ impl Resolver{
     for(let i=0;i<self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
-      if let Item::Struct(sd)=(it){
-        let res = RType::new(sd.type);
-        self.addType(sd.type.print(), res);
-      }else if let Item::Enum(ed)=(it){
-        let res = RType::new(ed.type);
-        self.addType(ed.type.print(), res);
+      if let Item::Decl(decl)=(it){
+        let res = RType::new(decl.type);
+        self.addType(decl.type.print(), res);
       }else if let Item::Trait(tr)=(it){
         let res = RType::new(tr.type);
         res.trait = Option::new(&tr);
@@ -167,13 +217,14 @@ impl Resolver{
   }
 
   func err(self, msg: String){
-    panic("%s", msg.cstr());
+    self.err(msg.str());
   }
   func err(self, msg: str){
     panic("%s", msg.cstr());
   }
   func err(self, msg: String, node: Node*){
-    panic("%s\n:%d %s %s", self.unit.path.cstr(), node.line);
+    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), node.line.str().str(), msg.str());
+    self.err(str.str());
   }
 
   func visit(self, node: Item*){
@@ -182,27 +233,85 @@ impl Resolver{
     }else if let Item::Type(name, rhs) = (node){
       //pass
     }else if let Item::Impl(imp) = (node){
-      if(imp.type_params.empty()){
-        //generic
-        return;
+      self.visit(&imp);
+    }else if let Item::Decl(decl) = (node){
+      if let Decl::Struct(fields) = (decl){
+        self.visit(&decl, &fields);
+      }else if let Decl::Enum(variants) = (decl){
+        //self.visit(&decl, &variants);
       }
-      //self.curImpl = imp;
-      //resolve non generic type args
-      //let args = &imp.type;
-      if(imp.trait_name.is_some()){
-        //todo
-        for(let i = 0;i < imp.methods.len();++i){
-          self.visit(imp.methods.get_ptr(i));
-        }
-      }else{
-        for(let i = 0;i < imp.methods.len();++i){
-          self.visit(imp.methods.get_ptr(i));
-        }
-      }
-    }else{
+    }
+    else{
       Fmt::str(node).dump();
       panic("item");
     }
+  }
+
+  func is_cyclic(self, type: Type*, target: Type*): bool{
+    return true;
+  }
+
+  func visit(self, node: Decl*, fields: List<FieldDecl>*){
+    if(node.is_generic) return;
+    node.is_resolved = true;
+    for(let i = 0;i < fields.len();++i){
+      let fd = fields.get_ptr(i);
+      self.visit(&fd.type);
+      if(self.is_cyclic(&fd.type, &node.type)){
+        self.err(Fmt::format("cyclic type {}", node.type.print().str()));
+      }
+    }
+  }
+
+  func visit(self, imp: Impl*){
+    if(imp.type_params.empty()){
+      //generic
+      return;
+    }
+    self.curImpl = Option::new(imp);
+    //resolve non generic type args
+    if(imp.trait_name.is_some()){
+      //todo
+      let required = Map<String, Method*>::new();
+      let trait_rt = self.visit(imp.trait_name.get());
+      let trait_decl = trait_rt.trait.unwrap();
+      for(let i = 0;i < trait_decl.methods.len();++i){
+        let m = trait_decl.methods.get_ptr(i);
+        if(!m.body.is_some()){
+          let mangled = mangle2(m, &imp.type);
+          required.add(mangled, m);
+        }
+      }
+      for(let i = 0;i < imp.methods.len();++i){
+        let m = imp.methods.get_ptr(i);
+        if(!m.type_args.empty()) continue;
+        self.visit(m);
+        let mangled = mangle2(m, &imp.type);
+        let idx = required.indexOf(&mangled);
+        if(idx != -1){
+          required.remove(idx);
+        }
+      }
+      if(!required.empty()){
+        let msg = String::new();
+        for(let i = 0;i < required.len();++i){
+          let p = required.get_idx(i);
+          msg.append("method ");
+          msg.append(printMethod(p.unwrap().b));
+          msg.append(" not implemented for ");
+          msg.append(imp.trait_name.get().print());
+          msg.append("\n");
+        }
+        self.err(msg);
+      }
+    }else{
+      for(let i = 0;i < imp.methods.len();++i){
+        let m = imp.methods.get_ptr(i);
+        if(!m.type_args.empty()) continue;
+        self.visit(m);
+      }
+    }
+    self.curImpl = Option<Impl*>::None;
   }
 
   func visit(self, node: Method*){
@@ -237,19 +346,10 @@ impl Resolver{
     self.curMethod = Option<Method*>::None;
   }
 
-
-
-
-}
-
-func max_for(type: Type*): i64{
-  let bits: i64 = prim_size(type.print()).unwrap();
-  let tmp = 1 << (bits - 1);
-  if(type.is_unsigned()){
-    //do this not to overflow
-    return tmp - 1 + tmp;
+  func addUsed(self, decl: Decl*){
+    panic("add used");
   }
-  return tmp - 1;
+
 }
 
 
@@ -325,10 +425,31 @@ impl Resolver{
       }else{
         return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
       }
-    }//else if let Expr::()
+    }else if let Expr::Call(call) = (node){
+      return self.visit(&call);
+    }else if let Expr::Name(name) = (node){
+      for(let i = self.scopes.len() - 1;i >= 0;--i){
+        let scope = self.scopes.get_ptr(i);
+        let vh = scope.find(&name);
+        if(vh.is_some()){
+          let res = self.visit(&vh.unwrap().type);
+          res.vh = Option::new(vh.unwrap());
+          return res;
+        }
+      }
+      self.err(Fmt::format("unknown identifier: {}", name.str()));
+    }
     panic("visit expr %s", node.print().cstr());
   }
 
+  func visit(self, call: Call*): RType{
+    let sig = Signature::new(call, self);
+    if(call.scope.is_some()){
+      let mr = MethodResolver::new(self);
+      return mr.handle(&sig);
+    }
+    panic("call %s", call.print().cstr());
+  }
 }
 
 func infix_result(l: str, r: str): str{

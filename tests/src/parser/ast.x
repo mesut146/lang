@@ -40,8 +40,7 @@ struct ImportStmt{
 
 enum Item{
   Method(m: Method),
-  Struct(s: StructDecl),
-  Enum(ed: EnumDecl),
+  Decl(decl: Decl),
   Impl(i: Impl),
   Trait(t: Trait),
   Type(name: String, rhs: Type)
@@ -64,17 +63,14 @@ struct BaseDecl{
   derives: List<Type>;
 }
 
-struct StructDecl: BaseDecl{
-  fields: List<FieldDecl>;
+enum Decl: BaseDecl{
+  Struct(fields: List<FieldDecl>),
+  Enum(variants: List<Variant>)
 }
 
 struct FieldDecl{
   name: String;
   type: Type;
-}
-
-struct EnumDecl: BaseDecl{
-  variants: List<Variant>;
 }
 
 struct Variant{
@@ -113,6 +109,9 @@ enum Type{
 }
 
 impl Type{
+  func new(s: str): Type{
+    return Type::new(String::new(s));
+  }
   func new(s: String): Type{
     return Type::Simple{Option<Box<Type>>::None, s, List<Type>::new()};
   }
@@ -121,6 +120,9 @@ impl Type{
   }
   func new(scp: Type, s: String): Type{
     return Type::Simple{Option::new(Box::new(scp)), s, List<Type>::new()};
+  }
+  func toPtr(self): Type{
+    return Type::Pointer{Box::new(*self)};
   }
   
   func name(self): String*{
@@ -142,6 +144,21 @@ impl Type{
   }
   func is_str(self): bool{
     return self.print().eq("str");
+  }
+  func is_generic(self): bool{
+    if let Type::Simple(scope, name, args) = (self){
+      return !args.empty();
+    }
+    return false;
+  }
+  func is_pointer(self): bool{
+    return self is Type::Pointer;
+  }
+  func unwrap(self): Type{
+    if let Type::Pointer(bx) = (self){
+      return bx.unwrap();
+    }
+    return *self;
   }
   
   func print(self): String{
@@ -221,6 +238,12 @@ struct Call{
   name: String;
   tp: List<Type>;
   args: List<Expr>;
+}
+
+impl Call{
+  func print(self): String{
+    return Fmt::str(self);
+  }
 }
 
 struct Entry{

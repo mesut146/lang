@@ -32,5 +32,21 @@ impl<T> Clone for Box<T>{
   }
 }
 
+struct Ptr<T>{
+  val: Option<Box<T>>;
+}
 
-
+impl<T> Ptr<T>{
+  func new(val: T): Ptr<T>{
+    return Ptr<T>{val: Option::new(Box::new(val))};
+  }
+  func new(): Ptr<T>{
+    return Ptr<T>{val: Option<Box<T>>::None};
+  }
+  func has(self): bool{
+    return self.val.is_some();
+  }
+  func get(self): T*{
+    return self.val.get().get();
+  }
+}

@@ -41,13 +41,11 @@ impl Debug for ImportStmt{
 
 impl Debug for Item{
   func debug(self, f: Fmt*){
-    if let Item::Struct(s)=(self){
-      s.debug(f);
-    }else if let Item::Enum(decl)=(self){
+    if let Item::Decl(decl) = (self){
       decl.debug(f);
-    }else if let Item::Method(m)=(self){
+    }else if let Item::Method(m) = (self){
       m.debug(f);
-    }else if let Item::Impl(i)=(self){
+    }else if let Item::Impl(i) = (self){
       i.debug(f);
     }else if let Item::Type(name, rhs)=(self){
       f.print("type ");
@@ -83,17 +81,45 @@ impl Debug for Impl{
   }
 }
 
-impl Debug for StructDecl{
+impl Debug for Decl{
     func debug(self, f: Fmt*){
-      f.print("struct ");
-      (self as BaseDecl*).type.debug(f);
-      f.print("{\n");
-      for(let i=0;i< self.fields.len();++i){
-        f.print("  ");
-        self.fields.get(i).debug(f);
-        f.print(";\n");
-      }
-      f.print("}\n");
+        if let Decl::Struct(fields) = (self){
+            debug_struct(self, &fields, f);
+        }else if let Decl::Enum(variants) = (self){
+            debug_enum(self, &variants, f);
+        }
+    }
+    func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+        f.print("struct ");
+        decl.type.debug(f);
+        f.print("{\n");
+        for(let i = 0;i < fields.len();++i){
+          f.print("  ");
+          fields.get(i).debug(f);
+          f.print(";\n");
+        }
+        f.print("}\n");
+    }
+    func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
+        f.print("enum ");
+        decl.type.debug(f);
+        f.print("{\n");
+        for(let i = 0;i < variants.len();++i){
+          let ev = variants.get_ptr(i);
+          f.print("  ");
+          f.print(ev.name);
+          if(ev.fields.len()>0){
+            f.print("(");
+            for(let j = 0;j < ev.fields.len();++j){
+              if(j > 0) f.print(", ");
+              ev.fields.get(j).debug(f);
+            }
+            f.print(")");
+          }
+          if(i < variants.len() - 1) f.print(",");
+          f.print("\n");
+        }
+        f.print("}\n");
     }
 }
 
@@ -103,30 +129,6 @@ impl Debug for FieldDecl{
     f.print(": ");
     self.type.debug(f);
     //f.print(";\n");
-  }
-}
-  
-impl Debug for EnumDecl {
-  func debug(self, f: Fmt*){
-    f.print("enum ");
-    (self as BaseDecl*).type.debug(f);
-    f.print("{\n");
-    for(let i=0;i<self.variants.len();++i){
-      let ev = self.variants.get_ptr(i);
-      f.print("  ");
-      f.print(ev.name);
-      if(ev.fields.len()>0){
-        f.print("(");
-        for(let j=0;j< ev.fields.len();++j){
-          if(j > 0) f.print(", ");
-          ev.fields.get(j).debug(f);
-        }
-        f.print(")");
-      }
-      if(i < self.variants.len() - 1) f.print(",");
-      f.print("\n");
-    }
-    f.print("}\n");
   }
 }
 
@@ -372,7 +374,7 @@ impl Debug for Expr{
       f.print("]");
     }
     else{
-     panic("expr %d", self.index);
+     panic("expr");
     }
   }
 }

@@ -16,12 +16,24 @@
 bool isStrLit(Expression *e);
 
 std::vector<Method *> getMethods(Unit *unit);
-void sort(std::vector<BaseDecl *> &list, Resolver* r);
+void sort(std::vector<BaseDecl *> &list, Resolver *r);
 
-constexpr int ENUM_INDEX_SIZE = 32;
-constexpr int ENUM_TAG_INDEX = 0;
-constexpr int ENUM_DATA_INDEX = 1;
+constexpr int STRUCT_BASE_INDEX = 0;
+constexpr int VPTR_INDEX = -1;//end
+constexpr int ENUM_TAG_BITS = 32;
+constexpr int ENUM_BASE_INDEX = 0;
+constexpr int ENUM_TAG_INDEX = 1;
+constexpr int ENUM_DATA_INDEX = 2;
 constexpr int SLICE_LEN_BITS = 32;
+constexpr int SLICE_PTR_INDEX = 0;
+constexpr int SLICE_LEN_INDEX = 1;
+
+struct Layout {
+    static void set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields);
+    static void set_elems_enum(llvm::StructType *st, llvm::Type *base, llvm::Type *tag, llvm::ArrayType *data);
+    static int get_tag_index(BaseDecl *decl);
+    static int get_data_index(BaseDecl *decl);
+};
 
 struct DebugInfo {
     llvm::DICompileUnit *cu;
@@ -90,7 +102,7 @@ public:
     llvm::ConstantInt *makeInt(int val);
     llvm::ConstantInt *makeInt(int val, int bits);
     llvm::Type *getInt(int bit);
-    void setOrdinal(int index, llvm::Value *ptr);
+    void setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl);
     void simpleVariant(const Type &n, llvm::Value *ptr);
     llvm::Value *getTag(Expression *expr);
     bool doesAlloc(Expression *e);

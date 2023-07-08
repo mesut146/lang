@@ -21,6 +21,7 @@ impl<K, V> Map<K, V>{
   }
   
   func len(self): i64{ return self.arr.len(); }
+  func empty(self): bool{ return self.arr.empty(); }
   
   func add(self, k: K, v: V){
     let p = Pair{k, v};
@@ -45,11 +46,24 @@ impl<K, V> Map<K, V>{
     }
     return Option<V>::None;
   }
+  func indexOf(self, k: K*): i64{
+    for(let i = 0;i < self.arr.len();i += 1){
+      let e =  self.arr.get_ptr(i);
+      if(Eq::eq(e.a, *k)){
+        return i as i64;
+      }
+    }
+    return -1 as i64;
+  }
   func get_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){
       return Option::new(self.arr.get_ptr(idx));
     }
     return Option<Pair<K, V>*>::None;
+  }
+
+  func remove(self, idx: i64){
+    self.arr.remove(idx);
   }
 }
 

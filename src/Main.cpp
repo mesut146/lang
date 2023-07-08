@@ -120,7 +120,8 @@ void compileTest() {
     auto printer = "../tests/src/parser/printer.x";
     auto ps = "../tests/src/parser/parser.x";
     auto rs = "../tests/src/parser/resolver.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs});
+    auto mr = "../tests/src/parser/method_resolver.x";
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
     //compile({ps});
 }
 

@@ -101,6 +101,10 @@ std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     if (!res->type.typeArgs.empty()) {
         res->isGeneric = true;
     }
+    if (is(COLON)) {
+        pop();
+        res->base = parseType();
+    }
     consume(LBRACE);
     if (!is(RBRACE)) {
         res->variants.push_back(parseEnumEntry(this));

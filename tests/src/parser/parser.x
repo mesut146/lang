@@ -89,9 +89,9 @@ impl Parser{
           self.consume(TokenType::RPAREN);
         }
         if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
-          self.unit.items.add(Item::Struct{self.parse_struct(derives)});
+          self.unit.items.add(Item::Decl{self.parse_struct(derives)});
         }else if(self.is(TokenType::ENUM)){
-          self.unit.items.add(Item::Enum{self.parse_enum(derives)});
+          self.unit.items.add(Item::Decl{self.parse_enum(derives)});
         }else if(self.is(TokenType::IMPL)){
           self.unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::FUNC)){
@@ -201,7 +201,7 @@ impl Parser{
       return Param{name.value, type, false};
     }
     
-    func parse_struct(self, derives: List<Type>): StructDecl{
+    func parse_struct(self, derives: List<Type>): Decl{
       let line = self.peek().line;
       if(self.is(TokenType::CLASS)){
         self.consume(TokenType::CLASS);
@@ -209,7 +209,7 @@ impl Parser{
         self.consume(TokenType::STRUCT);
       }
       let type = self.parse_type();
-      let is_generic = false;
+      let is_generic = type.is_generic();
       //isgen
       let base = Option<Type>::None;
       if(self.is(TokenType::COLON)){
@@ -226,7 +226,7 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      return StructDecl{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, fields: fields};
+      return Decl::Struct{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, fields: fields};
     }
     
     func parse_field(self, semi: bool): FieldDecl{
@@ -240,11 +240,11 @@ impl Parser{
       return FieldDecl{name, type};
     }
     
-    func parse_enum(self, derives: List<Type>): EnumDecl{
-      let line=self.peek().line;
+    func parse_enum(self, derives: List<Type>): Decl{
+      let line = self.peek().line;
       self.consume(TokenType::ENUM);
       let type = self.parse_type();
-      let is_generic = false;
+      let is_generic = type.is_generic();
       //isgen
       let base = Option<Type>::None;
       if(self.is(TokenType::COLON)){
@@ -259,7 +259,7 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      return EnumDecl{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, variants: variants};
+      return Decl::Enum{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, variants: variants};
     }
     
     func parse_variant(self): Variant{
