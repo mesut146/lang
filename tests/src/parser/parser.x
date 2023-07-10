@@ -95,7 +95,7 @@ impl Parser{
         }else if(self.is(TokenType::IMPL)){
           self.unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::FUNC)){
-          self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None)});
+          self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None, Parent::None)});
         }else if(self.is(TokenType::TYPE)){
           self.pop();
           let name = self.name();
@@ -132,25 +132,27 @@ impl Parser{
             self.pop();
             let target = self.parse_type();
             let op = Option::new(target);
-            return Impl{type_params, Option::new(t1), target, self.parse_methods(op)};
+            let parent = Parent::Impl{target, Option<Type>::new(t1)};
+            return Impl{type_params, Option::new(t1), target, self.parse_methods(op, parent)};
         }else{
           let op = Option::new(t1);
-          return Impl{type_params, Option<Type>::None, t1, self.parse_methods(op)};
+          let parent = Parent::Impl{t1, Option<Type>::None};
+          return Impl{type_params, Option<Type>::None, t1, self.parse_methods(op, parent)};
         }
         panic("");
     }
     
-    func parse_methods(self, imp: Option<Type>): List<Method>{
+    func parse_methods(self, imp: Option<Type>, parent: Parent): List<Method>{
         let arr = List<Method>::new();
         self.consume(TokenType::LBRACE);
         while(!self.is(TokenType::RBRACE)){
-            arr.add(self.parse_method(imp));
+            arr.add(self.parse_method(imp, parent));
         }
         self.consume(TokenType::RBRACE);
         return arr;
     }
     
-    func parse_method(self, imp: Option<Type>): Method{
+    func parse_method(self, imp: Option<Type>, parent: Parent): Method{
       if(self.is(TokenType::VIRTUAL)){
         self.pop();
       }
@@ -158,8 +160,10 @@ impl Parser{
       let line = self.peek().line;
       let name = self.pop().value;
       let type_args = List<Type>::new();
+      let is_generic = false;
       if(self.is(TokenType::LT)){
         type_args = self.type_params();
+        is_generic = true;
       }
       self.consume(TokenType::LPAREN);
       let params = List<Param>::new();
@@ -191,7 +195,7 @@ impl Parser{
       }else{
         body = Option::new(self.parse_block());
       }
-      return Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body};
+      return Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent};
     }
     
     func parse_param(self): Param{

@@ -83,6 +83,13 @@ struct Trait{
   methods: List<Method>;
 }
 
+enum Parent{
+  None,
+  Impl(type: Type, trait_name: Option<Type>),
+  Trait,
+  Extern
+}
+
 struct Method{
   line: i32;
   unit: Unit*;
@@ -93,6 +100,7 @@ struct Method{
   type: Type;
   body: Option<Block>;
   is_generic: bool;
+  parent: Parent;
 }
 
 struct Param{

@@ -1,0 +1,34 @@
+is_double_ptr
+  visitFieldAccess
+  setField, DerefExpr, struct
+
+
+needDeref
+ visitArrayAccess type.isPointer()
+
+isAlloc
+  as arg + ptr
+  
+  let a = &b;
+  f(a, &b)
+
+
+Infix
+Unary
+ParExpr
+Literal
+
+ObjExpr
+ArrayExpr
+ArrayAccess
+FieldAccess
+MethodCall
+
+IsExpr
+AsExpr
+
+DerefExpr
+RefExpr
+SimpleName
+
+Assign

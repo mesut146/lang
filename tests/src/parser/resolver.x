@@ -161,12 +161,15 @@ impl Resolver{
   }
 
   func newScope(self){
-    self.scopes.add(Scope::new());
+    let sc = Scope::new();
+    print("newScope %d\n", sc.list.len());
+    self.scopes.add(sc);
   }
   func dropScope(self){
     self.scopes.remove(self.scopes.len() - 1);
   }
   func addScope(self, name: String, type: Type, prm: bool){
+    print("addScope %s: %s\n", name.cstr(), type.print());
     let scope = self.scopes.last();
     scope.list.add(VarHolder::new(name, type, prm));
   }
@@ -264,7 +267,7 @@ impl Resolver{
   }
 
   func visit(self, imp: Impl*){
-    if(imp.type_params.empty()){
+    if(!imp.type_params.empty()){
       //generic
       return;
     }

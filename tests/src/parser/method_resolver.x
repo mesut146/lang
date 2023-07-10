@@ -48,6 +48,35 @@ impl Signature{
         }
         return res;
     }
+    func print(self): String{
+        let s = String::new();
+        if(self.mc.is_some()){
+            if(self.mc.unwrap().scope.is_some()){
+                s.append(self.scope.get().type.print());
+                s.append("::");
+            }
+            s.append(self.mc.unwrap().name);
+        }else{
+            /*let p = self.m.unwrap().parent;
+            if(p.is_some()){
+                if(p){
+
+                }
+                s.append("::");
+            }*/
+            s.append(self.m.unwrap().name);
+        }
+        s.append("(");
+        for(let i = 0;i < self.args.len();++i){
+            if(i > 0){
+                s.append(", ");
+            }
+            let arg = self.args.get_ptr(i);
+            s.append(arg.print());
+        }
+        s.append(")");
+        return s;
+    }
 }
 
 struct MethodResolver{
@@ -60,6 +89,6 @@ impl MethodResolver{
     }
 
     func handle(self, sig: Signature*): RType{
-        panic("handle");
+        panic("handle %s", sig.print().cstr());
     }
 }

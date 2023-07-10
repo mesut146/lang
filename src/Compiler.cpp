@@ -682,7 +682,7 @@ void dbg_prm(Param &p, int idx, llvm::Function *func, Compiler *c) {
     if (!c->debug) return;
     auto sp = c->di.sp;
     llvm::DIType *dt;
-    if (isStruct(*p.type)) {
+    if (false &&isStruct(*p.type)) {
         dt = c->map_di(Type(Type::Pointer, *p.type));
     } else {
         dt = c->map_di(*p.type);
@@ -1607,7 +1607,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             auto targetTy = mapType(prm.type)->getPointerTo();
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy);
             NamedValues[argName] = ptrReal;
-            dbg_var(argName, node->rhs->line, 0, prm.type, this);
+            dbg_var(argName, node->rhs->line, 0, Type(Type::Pointer, prm.type), this);
             offset += getSize(prm.type) / 8;
         }
     }
