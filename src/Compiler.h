@@ -77,6 +77,8 @@ public:
     std::map<std::string, llvm::Constant *> vtables;
     std::map<Method *, int> virtualIndex;
 
+    void set_and_insert(llvm::BasicBlock *bb);
+
     void init();
     void emit(std::string &Filename);
     void compileAll();
@@ -122,28 +124,35 @@ public:
     std::vector<llvm::Value *> makeIdx(int i1) {
         return {makeInt(i1, 64)};
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, int i2) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, int i2, llvm::Type* type) {
         auto idx = makeIdx(i1, i2);
-        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+        return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, llvm::Type* type) {
         auto idx = makeIdx(i1);
-        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+        return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1) {
+    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1, const Type &type) {
+        return gep(ptr, i1, mapType(type));
+    }
+    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1, llvm::Type *type) {
         std::vector<llvm::Value *> idx = {i1};
-        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+        return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2, llvm::Type* type) {
         std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, Type("i64"))};
-        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+        return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, Expression *i2) {
+    llvm::Value *gep(llvm::Value *ptr, Expression *i2, llvm::Type *type) {
         std::vector<llvm::Value *> idx = {cast(i2, Type("i64"))};
-        return Builder->CreateGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+        return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep2(llvm::Value *ptr, int idx) {
-        return Builder->CreateStructGEP(ptr->getType()->getPointerElementType(), ptr, idx);
+    llvm::Value *gep2(llvm::Value *ptr, int idx, llvm::Type *type) {
+        return Builder->CreateStructGEP(type, ptr, idx);
+    }
+    llvm::Value *gep2(llvm::Value *ptr, int idx, const Type &type) {
+        auto ty = mapType(type);
+        return Builder->CreateStructGEP(ty, ptr, idx);
     }
     llvm::Value *getAlloc(Expression *e) {
         auto &arr = allocMap[e->print()];
@@ -176,7 +185,12 @@ public:
     llvm::StructType *make_slice_type();
     llvm::StructType *make_string_type();
 
+    llvm::Value *load(llvm::Value *val, const Type &type);
     llvm::Value *load(llvm::Value *val);
+    llvm::Value *load(llvm::Value *val, llvm::Type* type){
+        return Builder->CreateLoad(type, val);
+    }
+    llvm::Value *deref(llvm::Value *val, const Type &orig);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
     llvm::Value *cast(Expression *expr, const Type &type);

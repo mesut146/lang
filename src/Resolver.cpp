@@ -175,12 +175,20 @@ bool has(std::vector<ImportStmt> &arr, ImportStmt &is) {
     return false;
 }
 
+bool contains(const std::vector<std::string> &vec, const std::string &elem) {
+    for (auto const &e : vec) {
+        if (e == elem) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::vector<ImportStmt> Resolver::get_imports() {
     std::vector<ImportStmt> imports;
     for (auto &is : unit->imports) {
         //ignore prelude imports
-        auto it = std::find(prelude.begin(), prelude.end(), join(is.list, "/"));
-        if (it == prelude.end()) {
+        if (!contains(prelude, join(is.list, "/"))) {
             imports.push_back(is);
         }
     }
@@ -198,12 +206,7 @@ std::vector<ImportStmt> Resolver::get_imports() {
             //skip self being cycle
             if (unit->path == getPath(is)) continue;
             imports.push_back(is);
-            //print("add "+is.print());
         }
-    }
-    ///print("\n"+unit->path);
-    for (auto &is : imports) {
-        //print(is.print());
     }
     return imports;
 }
@@ -862,13 +865,13 @@ std::any Resolver::visitType(Type *type) {
 
     BaseDecl *target = nullptr;
     if (!type->typeArgs.empty()) {
-        for (auto &ta : type->typeArgs) {
+        for (const auto &ta : type->typeArgs) {
             resolve(ta);
         }
         //we looking for generic type
-        auto it = typeMap.find(type->name);
-        if (it != typeMap.end()) {
-            target = it->second.targetDecl;
+        auto cached = typeMap.find(type->name);
+        if (cached != typeMap.end()) {
+            target = cached->second.targetDecl;
         } else {
             //generic from imports
         }
@@ -880,9 +883,9 @@ std::any Resolver::visitType(Type *type) {
             //try full type
             if (type->typeArgs.empty()) {
                 //non generic type
-                auto it = resolver->typeMap.find(str);
-                if (it != resolver->typeMap.end()) {
-                    auto res = it->second;
+                auto cached = resolver->typeMap.find(str);
+                if (cached != resolver->typeMap.end()) {
+                    auto res = cached->second;
                     addType(str, res);
                     if (res.targetDecl) {
                         if (!res.targetDecl->isGeneric) {
@@ -894,9 +897,9 @@ std::any Resolver::visitType(Type *type) {
             } else {
                 //generic type
                 //try root type
-                auto it = resolver->typeMap.find(type->name);
-                if (it != resolver->typeMap.end()) {
-                    target = it->second.targetDecl;
+                auto cached = resolver->typeMap.find(type->name);
+                if (cached != resolver->typeMap.end()) {
+                    target = cached->second.targetDecl;
                     break;
                 }
             }
@@ -958,10 +961,11 @@ void does_alloc(Expression *e, Resolver *r) {
     }
     auto de = dynamic_cast<DerefExpr *>(e);
     if (de) {
-        auto sn = dynamic_cast<SimpleName *>(de->expr.get());
-        auto rt = r->resolve(sn);
+        auto sn2 = dynamic_cast<SimpleName *>(de->expr.get());
+        if (!sn2) return;
+        auto rt = r->resolve(sn2);
         if (rt.vh->prm) {
-            r->mut_params[prm_id(*r->curMethod, sn->name)] = MutKind::DEREF;
+            r->mut_params[prm_id(*r->curMethod, sn2->name)] = MutKind::DEREF;
         }
         return;
     }
@@ -976,7 +980,8 @@ std::any Resolver::visitAssign(Assign *node) {
     auto t1 = resolve(node->left);
     auto t2 = resolve(node->right);
     if (MethodResolver::isCompatible(t2, t1.type)) {
-        error("cannot assign " + node->right->print() + " to " + node->left->print());
+        auto msg = format("cannot assign %s\n%s=%s", node->print().c_str(), t1.type.print().c_str(), t2.type.print().c_str());
+        error(msg);
     }
     does_alloc(node->left, this);
     return t1;
@@ -1439,26 +1444,24 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     auto idx = getType(node->index);
     //todo unsigned
     if (idx.print() == "bool" || !idx.isPrim()) error("array index is not an integer");
+
     if (node->index2) {
         auto idx2 = getType(node->index2.get());
         if (idx2.print() == "bool" || !idx2.isPrim()) error("range end is not an integer");
-        if (arr.isSlice()) {
-            return RType(clone(arr));
-        } else if (arr.isArray()) {
-            return RType(Type(Type::Slice, clone(*arr.scope)));
+        auto inner = arr.unwrap();
+        if (inner.isSlice()) {
+            return RType(clone(inner));
+        } else if (inner.isArray()) {
+            return RType(Type(Type::Slice, clone(*inner.scope)));
         } else if (arr.isPointer()) {
-            return RType(Type(Type::Slice, clone(*arr.scope)));
+            //from raw pointer
+            return RType(Type(Type::Slice, inner));
         } else {
             error("can't make slice out of " + arr.print());
         }
     }
     if (arr.isPointer()) {
-        auto res = resolve(arr.scope.get());
-        if (res.type.isArray() || res.type.isSlice()) {
-            arr = res.type;
-        } else {
-            return res;
-        }
+        arr = getType(arr.scope.get());
     }
     if (arr.isArray()) {
         return resolve(arr.scope.get());
@@ -1501,15 +1504,25 @@ std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
 }
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
-    //auto id = getId(mc);
-    //auto it = cache.find(id);
-    //if (it != cache.end()) return it->second;
+    if (is_ptr_get(mc)) {
+        if (mc->args.size() != 2) {
+            err("ptr access must have 2 args");
+        }
+        auto arg = getType(mc->args[0]);
+        if (!arg.isPointer()) {
+            err("ptr arg is not ptr " + mc->print());
+        }
+        auto idx = getType(mc->args[1]).print();
+        if (idx == "i32" || idx == "i64" || idx == "u32" || idx == "u64" || idx == "i8" || idx == "i16") {
+            return resolve(arg);
+        } else {
+            err("ptr access index is not integer");
+        }
+    }
     auto sig = Signature::make(mc, this);
     if (mc->scope) {
         MethodResolver mr(this);
         auto res = mr.handleCallResult(sig);
-        //print(format("%s => %s => %s\n",mc->print().c_str(), sig.print().c_str(), printMethod(res.targetMethod).c_str()));
-        //cache[id] = res;
         return res;
     }
     if (mc->name == "print") {

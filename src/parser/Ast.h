@@ -3,15 +3,17 @@
 #include <any>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+
 
 class Visitor;
 class Type;
 class StructDecl;
 class Impl;
-class Method;
+//class Method;
 class Expression;
 class Statement;
 class VarDecl;
@@ -73,18 +75,18 @@ public:
     };
     Kind kind = None;
 
-    Type() {}
+    Type() = default;
     Type(const Type &rhs) {
         (*this) = rhs;
     }
     Type &operator=(const Type &rhs) {
+        kind = rhs.kind;
         if (rhs.scope) {
             set(*rhs.scope.get());
         } else {
             scope.reset();
         }
         name = rhs.name;
-        kind = rhs.kind;
         typeArgs = rhs.typeArgs;
         size = rhs.size;
         return *this;
@@ -109,7 +111,7 @@ public:
     bool isPointer() const { return kind == Pointer; }
     bool isRef() const { return kind == Ref; }
 
-    Type unwrap() const{
+    Type unwrap() const {
         if (isPointer()) return *scope.get();
         return *this;
     }
@@ -185,7 +187,7 @@ public:
     std::string name;
     Type type;
 
-    FieldDecl(std::string name, const Type &type) : name(name), type(type) {}
+    FieldDecl(const std::string &name, const Type &type) : name(name), type(type) {}
 
     std::string print() const;
     std::any accept(Visitor *v);
@@ -200,15 +202,46 @@ public:
     std::any accept(Visitor *v) override;
 };
 
+class Param : public Node {
+public:
+    std::string name;
+    std::optional<Type> type;
+
+    explicit Param(const std::string &name) : name(name) {}
+    explicit Param(const std::string &name, const Type &type) : name(name), type(type){};
+    std::string print() const;
+    std::any accept(Visitor *v);
+};
+
+class Method : public Item {
+public:
+    std::string name;
+    Type type;
+    std::vector<Type> typeArgs;
+    std::optional<Param> self;
+    std::vector<Param> params;
+    std::unique_ptr<Block> body;
+    Item *parent = nullptr;
+    Unit *unit;
+    bool isGeneric = false;
+    bool isVirtual = false;
+
+    explicit Method(Unit *unit) : unit(unit) {}
+
+    bool isMethod() override { return true; }
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
+};
+
 class Trait : public Item {
 public:
     Type type;
     std::vector<Method> methods;
 
     explicit Trait(const Type &type) : type(type) {}
-    bool isTrait() { return true; }
-    std::string print() const;
-    std::any accept(Visitor *v);
+    bool isTrait() override { return true; }
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
 };
 
 class Impl : public Item {
@@ -220,9 +253,9 @@ public:
 
     explicit Impl(const Type &type) : type(type) {}
 
-    bool isImpl() { return true; }
-    std::string print() const;
-    std::any accept(Visitor *v);
+    bool isImpl() override { return true; }
+    std::string print() const override;
+    std::any accept(Visitor *v) override;
 };
 
 class EnumVariant : public Node {
@@ -261,37 +294,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class Param : public Node {
-public:
-    std::string name;
-    std::optional<Type> type;
-
-    explicit Param(const std::string &name) : name(name) {}
-    explicit Param(const std::string &name, const Type &type) : name(name), type(type){};
-    std::string print() const;
-    std::any accept(Visitor *v);
-};
-
-class Method : public Item {
-public:
-    std::string name;
-    Type type;
-    std::vector<Type> typeArgs;
-    std::optional<Param> self;
-    std::vector<Param> params;
-    std::unique_ptr<Block> body;
-    Item *parent = nullptr;
-    Unit *unit;
-    bool isGeneric = false;
-    bool isVirtual = false;
-
-    explicit Method(Unit *unit) : unit(unit) {}
-
-    bool isMethod() override { return true; }
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
-
 
 class Statement : public Node {
 public:
@@ -314,7 +316,7 @@ public:
     std::vector<std::string> args;
     Ptr<Statement> rhs;
 
-    bool us() { return !type.has_value(); }
+    bool us() const { return !type.has_value(); }
 };
 
 class Match : public Statement {
@@ -330,7 +332,7 @@ class SimpleName : public Expression {
 public:
     std::string name;
 
-    explicit SimpleName(const std::string &name) : name(move(name)){};
+    explicit SimpleName(const std::string &name) : name(name){};
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -340,7 +342,7 @@ class RefExpr : public Expression {
 public:
     std::unique_ptr<Expression> expr;
 
-    RefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
+    RefExpr(std::unique_ptr<Expression> e) : expr(std::move(e)){};
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -350,7 +352,7 @@ class DerefExpr : public Expression {
 public:
     std::unique_ptr<Expression> expr;
 
-    DerefExpr(std::unique_ptr<Expression> e) : expr(move(e)){};
+    DerefExpr(std::unique_ptr<Expression> e) : expr(std::move(e)){};
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -366,11 +368,11 @@ public:
         STR,
         CHAR,
     };
-    std::string val;
     LiteralType type;
+    std::string val;
     std::optional<Type> suffix;
 
-    Literal(LiteralType type, const std::string &val) : type(type), val(move(val)) {}
+    Literal(LiteralType type, const std::string &val) : type(type), val(val) {}
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -379,14 +381,14 @@ public:
 
 class Unary : public Expression {
 public:
-    enum ops {
+    /*enum ops {
         PLUS,
         MINUS,
         PLUSPLUS,
         MINUSMINUS,
         BANG,
         TILDE,
-    };
+    };*/
     std::string op;
     Expression *expr;
 
@@ -439,7 +441,7 @@ public:
     std::unique_ptr<Expression> scope;
     std::string name;
     std::vector<Expression *> args;
-    bool isOptional = false;
+    bool is_static = false;
     std::vector<Type> typeArgs;
 
     std::string print() const override;

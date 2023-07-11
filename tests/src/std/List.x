@@ -23,7 +23,7 @@ impl<T> List<T>{
     }
     let tmp = malloc<T>(self.cap * 2);
     for(let i = 0;i < self.count;++i){
-      tmp[i] = self.arr[i];
+      *ptr::get(tmp, i) = *ptr::get(self.arr, i);
     }
     //free(self.arr as u8*);
     self.arr = tmp;
@@ -33,14 +33,14 @@ impl<T> List<T>{
   func remove(self, pos: i64){
     //copy right of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
-      self.arr[i] = self.arr[i + 1];
+      *ptr::get(self.arr, i) = *ptr::get(self.arr, i + 1);
     }
     self.count =- 1;
   }
 
   func add(self, e: T){
     self.expand();
-    self.arr[self.count] = e;
+    *ptr::get(self.arr, self.count) = e;
     ++self.count;
   }
 
@@ -61,7 +61,7 @@ impl<T> List<T>{
   }
 
   func set(self, pos: i64, val: T){
-      self.arr[pos] = val;
+      *self.get_ptr(pos) = val;
   }
 
   func get(self, pos: i64): T{
@@ -72,7 +72,7 @@ impl<T> List<T>{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
     }
-    return &self.arr[pos];
+    return ptr::get(self.arr, pos);
   }
 
   func clear(self){
@@ -99,7 +99,7 @@ impl<T> List<T>{
   func indexOf(self, e: T, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(self.arr[i] == e) return i;
+      if(*ptr::get(self.arr, i) == e) return i;
       ++i;
     }
     return -1;
@@ -108,7 +108,7 @@ impl<T> List<T>{
   func indexOf2<Q>(self, e: Q, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(Eq::eq(self.arr[i], e)) return i;
+      if(Eq::eq(*ptr::get(self.arr, i), e)) return i;
       ++i;
     }
     return -1;

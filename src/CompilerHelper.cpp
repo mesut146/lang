@@ -110,6 +110,7 @@ void Layout::set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vecto
         }
     }
     st->setBody(fields);
+    //st->dump();
 }
 
 void Layout::set_elems_enum(llvm::StructType *st, llvm::Type *base, llvm::Type *tag, llvm::ArrayType *data) {
@@ -156,7 +157,7 @@ int Layout::get_data_index(BaseDecl *decl) {
 }
 
 void Compiler::setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl) {
-    auto ordPtr = gep2(ptr, Layout::get_tag_index(decl));
+    auto ordPtr = gep2(ptr, Layout::get_tag_index(decl), decl->type);
     Builder->CreateStore(makeInt(index, ENUM_TAG_BITS), ordPtr);
 }
 
@@ -185,11 +186,11 @@ llvm::Function *Compiler::make_malloc() {
     auto ft = llvm::FunctionType::get(ret, getInt(64), false);
     auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", *mod);
     f->setCallingConv(llvm::CallingConv::C);
-    llvm::AttributeList attr;
-    llvm::AttrBuilder builder;
-    builder.addAlignmentAttr(16);
-    attr = attr.addAttributes(ctx(), 0, builder);
-    f->setAttributes(attr);
+    /*llvm::AttributeList attr;
+    llvm::AttrBuilder builder(ctx());
+    //builder.addAlignmentAttr(16);
+    attr = attr.addFnAttributes(ctx(), builder);
+    f->setAttributes(attr);*/
     return f;
 }
 

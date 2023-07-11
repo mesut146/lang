@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.x": "rust",
         "array": "cpp",
         "functional": "cpp",
         "istream": "cpp",
@@ -71,6 +72,11 @@
         "locale": "cpp",
         "queue": "cpp",
         "stack": "cpp",
-        "any": "cpp"
-    }
+        "any": "cpp",
+        "numbers": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "set": "cpp"
+    },
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

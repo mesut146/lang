@@ -1,5 +1,7 @@
-clang-format-13 -i ../src/*.cpp
-clang-format-13 -i ../src/*.h
+prog=clang-format-16
 
-clang-format-13 -i ../src/parser/*.cpp
-clang-format-13 -i ../src/parser/*.h
+${prog} -i ../src/*.cpp
+${prog} -i ../src/*.h
+
+${prog} -i ../src/parser/*.cpp
+${prog} -i ../src/parser/*.h

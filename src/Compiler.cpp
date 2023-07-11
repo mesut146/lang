@@ -18,9 +18,9 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Host.h>
-#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
 
@@ -61,7 +61,7 @@ void Compiler::init() {
     auto Features = "";
 
     llvm::TargetOptions opt;
-    auto RM = llvm::Optional<llvm::Reloc::Model>();
+    auto RM = std::optional<llvm::Reloc::Model>();
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 
     Resolver::init_prelude();
@@ -84,7 +84,7 @@ void Compiler::link_run() {
     if (fs::exists("a.out")) {
         system("rm a.out");
     }
-    std::string cmd = "clang-13 -O0 ";
+    std::string cmd = "clang-16 ";
     for (auto &obj : compiled) {
         cmd.append(obj);
         cmd.append(" ");
@@ -156,9 +156,9 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     if (path.compare(path.size() - 2, 2, ".x") != 0) {
         //copy res
         std::ifstream src;
-        src.open(path, src.binary);
+        src.open(path, std::ifstream::binary);
         std::ofstream trg;
-        trg.open(outDir + "/" + name, trg.binary);
+        trg.open(outDir + "/" + name, std::ofstream::binary);
         trg << src.rdbuf();
         return {};
     }
@@ -168,7 +168,6 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     resolv = Resolver::getResolver(path, srcDir);
     unit = resolv->unit;
     resolv->resolveAll();
-    //print("resolved");
 
     initModule(path, this);
     createProtos();
@@ -243,7 +242,11 @@ bool need_alloc(Method &m, Param &p, Compiler *c) {
 }
 
 llvm::Value *Compiler::load(llvm::Value *val) {
-    auto ty = val->getType()->getPointerElementType();
+    auto ty = val->getType();
+    return Builder->CreateLoad(ty, val);
+}
+llvm::Value *Compiler::load(llvm::Value *val, const Type &type) {
+    auto ty = mapType(type);
     return Builder->CreateLoad(ty, val);
 }
 
@@ -303,7 +306,7 @@ llvm::Value *Compiler::loadPtr(Expression *e) {
         return val;
     }
     //local, fa, aa
-    return load(val);
+    return load(val, rt.type);
 }
 
 llvm::Value *Compiler::loadPtr(std::unique_ptr<Expression> &e) {
@@ -311,7 +314,7 @@ llvm::Value *Compiler::loadPtr(std::unique_ptr<Expression> &e) {
 }
 
 llvm::Value *extend(llvm::Value *val, const Type &type, Compiler *c) {
-    int src = val->getType()->getPrimitiveSizeInBits();
+    auto src = val->getType()->getPrimitiveSizeInBits();
     int bits = c->getSize(type);
     if (src < bits) {
         return c->Builder->CreateZExt(val, c->getInt(bits));
@@ -336,15 +339,14 @@ void Compiler::setField(Expression *expr, const Type &type, bool do_cast, llvm::
         ptr = Builder->CreateBitCast(ptr, targetTy->getPointerTo());
     }
     auto de = dynamic_cast<DerefExpr *>(expr);
-    if (de) {
-        if (isStruct(type)) {
-            auto val = gen(de->expr.get());
-            if (is_double_ptr(resolv->getType(de->expr.get()), expr, val)) {
-                val = load(val);
-            }
-            copy(ptr, val, type);
-            return;
+    if (de && isStruct(type)) {
+        auto val = gen(de->expr.get());
+        auto tt = resolv->getType(de->expr.get());
+        if (is_double_ptr(tt, expr, val)) {
+            val = load(val, tt);
         }
+        copy(ptr, val, type);
+        return;
     }
     if (isRvo(expr)) {
         auto val = gen(expr);
@@ -407,7 +409,7 @@ void Compiler::make_proto(Method *m) {
     f->addFnAttr(llvm::Attribute::NoInline);
     f->addFnAttr(llvm::Attribute::NoUnwind);
     f->addFnAttr(llvm::Attribute::OptimizeNone);
-    f->addFnAttr(llvm::Attribute::UWTable);
+    //f->addFnAttr(llvm::Attribute::UWTable);
     f->addFnAttr("frame-pointer", "non-leaf");
     f->addFnAttr("min-legal-vector-width", "0");
     f->addFnAttr("no-trapping-math", "true");
@@ -425,7 +427,8 @@ void Compiler::make_proto(Method *m) {
         i++;
     }
     for (int pi = 0; i < f->arg_size(); i++) {
-        f->getArg(i)->setName(m->params[pi++].name);
+        f->getArg(i)->setName(m->params[pi].name);
+        pi++;
     }
     funcMap[mangled] = f;
     resolv->curMethod = nullptr;
@@ -476,12 +479,8 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         return ty;
     }
     //fill body
-    Resolver *r;
-    if (true || bd->unit == unit.get()) {
-        r = resolv.get();
-    } else {
-        r = Resolver::getResolver(bd->unit->path, resolv->root).get();
-    }
+    auto *r = resolv.get();
+
     auto ty = (llvm::StructType *) it->second;
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
@@ -682,7 +681,7 @@ void dbg_prm(Param &p, int idx, llvm::Function *func, Compiler *c) {
     if (!c->debug) return;
     auto sp = c->di.sp;
     llvm::DIType *dt;
-    if (false &&isStruct(*p.type)) {
+    if (false && isStruct(*p.type)) {
         dt = c->map_di(Type(Type::Pointer, *p.type));
     } else {
         dt = c->map_di(*p.type);
@@ -912,6 +911,11 @@ bool is_logic(Expression *e) {
     return false;
 }
 
+void Compiler::set_and_insert(llvm::BasicBlock *bb) {
+    Builder->SetInsertPoint(bb);
+    func->insert(func->end(), bb);
+}
+
 std::pair<llvm::Value *, llvm::BasicBlock *> Compiler::andOr(Infix *node) {
     bool isand = node->op == "&&";
     auto l = loadPtr(node->left);
@@ -935,8 +939,7 @@ std::pair<llvm::Value *, llvm::BasicBlock *> Compiler::andOr(Infix *node) {
     }
     auto rbit = Builder->CreateZExt(r, getInt(8));
     Builder->CreateBr(next);
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     auto phi = Builder->CreatePHI(getInt(8), 2);
     phi->addIncoming(isand ? makeInt(0, 8) : makeInt(1, 8), bb);
     phi->addIncoming(rbit, then);
@@ -1051,7 +1054,8 @@ std::any Compiler::visitAssign(Assign *node) {
     if (de) {
         l = gen(de->expr.get());
         if (is_mut_prm(de->expr.get(), this)) {
-            l = load(l);
+            //todo ??
+            l = load(l, resolv->getType(de->expr.get()));
         }
     } else {
         l = gen(node->left);
@@ -1069,7 +1073,7 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto r = cast(node->right, lt);
     if (isVar(node->left)) {
-        val = load(l);
+        val = load(l, lt);
     }
     if (node->op == "+=") {
         auto tmp = Builder->CreateNSWAdd(val, r);
@@ -1139,7 +1143,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
             auto src = c->gen(a);
             //get ptr to inner char array
             if (src->getType()->isPointerTy()) {
-                auto slice = c->gep2(src, SLICE_PTR_INDEX);
+                auto slice = c->gep2(src, SLICE_PTR_INDEX, c->stringType);
                 auto str = c->Builder->CreateLoad(c->getInt(8)->getPointerTo(), slice);
                 args.push_back(str);
             } else {
@@ -1155,6 +1159,11 @@ void callPrint(MethodCall *mc, Compiler *c) {
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
+    if (is_ptr_get(mc)) {
+        auto src = gen(mc->args[0]);
+        auto idx = loadPtr(mc->args[1]);
+        return gep(src, idx, resolv->getType(mc));
+    }
     if (mc->name == "print" && !mc->scope) {
         callPrint(mc, this);
         return nullptr;
@@ -1202,7 +1211,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         if (scope_type.isPointer() && isAlloc(e, obj) ||
             (scope_type.isPrim() && isVar(e) && !scp.vh->prm)) {
             //auto deref
-            obj = load(obj);
+            obj = load(obj, scope_type);
         }
         //base method
         if (target->self->type->unwrap().print() != scope_type.unwrap().print()) {
@@ -1225,7 +1234,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         llvm::Value *av;
         if (at.isPointer()) {
             av = gen(a);
-            if (isAlloc(a, av)) av = load(av);
+            if (isAlloc(a, av)) av = load(av, at);
         } else if (isStruct(at)) {
             auto de = dynamic_cast<DerefExpr *>(a);
             if (de && isStruct(pt)) {
@@ -1263,13 +1272,13 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         auto decl = (StructDecl *) scp.targetDecl;
         int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-        auto vt = gep2(obj, vt_index);
+        auto vt = gep2(obj, vt_index, decl->type);
         vt = load(vt);
         auto ft = f->getType();
         auto real = llvm::ArrayType::get(ft, 1)->getPointerTo();
 
         vt = Builder->CreateBitCast(vt, real);
-        auto fptr = load(gep(vt, 0, index));
+        auto fptr = load(gep(vt, 0, index, real));
         auto ff = (llvm::FunctionType *) f->getFunctionType();
         res = (llvm::Value *) Builder->CreateCall(ff, fptr, args);
     } else {
@@ -1285,8 +1294,8 @@ void Compiler::strLit(llvm::Value *ptr, Literal *node) {
     auto trimmed = node->val.substr(1, node->val.size() - 2);
     auto src = Builder->CreateGlobalStringPtr(trimmed);
     auto slice_ptr = Builder->CreateBitCast(ptr, sliceType->getPointerTo());
-    auto data_target = gep2(slice_ptr, SLICE_PTR_INDEX);
-    auto len_target = gep2(slice_ptr, SLICE_LEN_INDEX);
+    auto data_target = gep2(slice_ptr, SLICE_PTR_INDEX, sliceType);
+    auto len_target = gep2(slice_ptr, SLICE_LEN_INDEX, sliceType);
     //set ptr
     Builder->CreateStore(src, data_target);
     //set len
@@ -1338,8 +1347,7 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     std::vector<llvm::Value *> args = {makeInt(1)};
     Builder->CreateCall(exit_proto, args);
     Builder->CreateUnreachable();
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     return nullptr;
 }
 
@@ -1388,7 +1396,7 @@ std::any Compiler::visitRefExpr(RefExpr *node) {
 
 std::any Compiler::visitDerefExpr(DerefExpr *node) {
     auto val = gen(node->expr);
-    return load(val);
+    return load(val, resolv->getType(node));
 }
 
 EnumDecl *findEnum(const Type &type, Resolver *resolv) {
@@ -1426,7 +1434,8 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
     //set base
     for (auto arg : node->entries) {
         if (arg.isBase) {
-            auto base_ptr = gep2(ptr, tt.targetDecl->isClass() ? STRUCT_BASE_INDEX : ENUM_BASE_INDEX);
+            auto base_index = tt.targetDecl->isClass() ? STRUCT_BASE_INDEX : ENUM_BASE_INDEX;
+            auto base_ptr = gep2(ptr, base_index, ty);
             auto val = dynamic_cast<ObjExpr *>(arg.value);
             auto key = tt.targetDecl->type.print();
             object(val, base_ptr, resolv->resolve(val), derived ? derived : &key);
@@ -1438,7 +1447,8 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         auto decl = dynamic_cast<EnumDecl *>(tt.targetDecl);
         auto variant_index = Resolver::findVariant(decl, node->type.name);
         setOrdinal(variant_index, ptr, decl);
-        auto dataPtr = gep2(ptr, Layout::get_data_index(decl));
+        auto data_index = Layout::get_data_index(decl);
+        auto dataPtr = gep2(ptr, data_index, ty);
         auto &variant = decl->variants[variant_index];
         for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
@@ -1450,7 +1460,8 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
                 index = i;
             }
             auto &field = variant.fields[index];
-            auto field_target_ptr = gep(dataPtr, 0, getOffset(&variant, index));
+            auto off = getOffset(&variant, index);
+            auto field_target_ptr = gep(dataPtr, 0, off, ty->getStructElementType(data_index));
             setField(e.value, field.type, true, field_target_ptr);
         }
     } else {
@@ -1467,7 +1478,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
                 }
             }
             int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-            auto vt_target = gep2(ptr, vt_index);
+            auto vt_target = gep2(ptr, vt_index, ty);
             auto casted = Builder->CreateBitCast(vt, getInt(8)->getPointerTo()->getPointerTo());
             Builder->CreateStore(casted, vt_target);
         }
@@ -1486,7 +1497,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
                 field = &decl->fields[field_idx++];
             }
             if (decl->base) real_idx++;
-            auto field_target_ptr = gep2(ptr, real_idx);
+            auto field_target_ptr = gep2(ptr, real_idx, ty);
             setField(e.value, field->type, true, field_target_ptr);
         }
     }
@@ -1507,7 +1518,7 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     //slice len
     if (rt.type.unwrap().isSlice()) {
         auto scopeVar = gen(node->scope);
-        return gep2(scopeVar, SLICE_LEN_INDEX);
+        return gep2(scopeVar, SLICE_LEN_INDEX, rt.type.unwrap());
         //todo load since cant mutate
     }
     //array len
@@ -1522,10 +1533,11 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     }
     auto decl = rt.targetDecl;
     auto [sd, index] = resolv->findField(node->name, decl);
-    auto target = mapType(sd->type)->getPointerTo();
+    auto sd_ty = mapType(sd->type);
+    auto target = sd_ty->getPointerTo();
     scope = Builder->CreateBitCast(scope, target);
     if (sd->base) index++;
-    return gep2(scope, index);
+    return gep2(scope, index, sd_ty);
 }
 
 std::any Compiler::visitIfStmt(IfStmt *node) {
@@ -1546,16 +1558,14 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
-        Builder->SetInsertPoint(elsebb);
-        func->getBasicBlockList().push_back(elsebb);
+        set_and_insert(elsebb);
         resolv->newScope();
         node->elseStmt->accept(this);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     }
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     return nullptr;
 }
 
@@ -1575,7 +1585,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (isp(node->rhs.get(), rhs, this)) {
         rhs = load(rhs);
     }
-    auto tag = load(gep2(rhs, Layout::get_tag_index(decl)));
+    auto tag_ty = getInt(ENUM_TAG_BITS);
+    auto tag = gep2(rhs, Layout::get_tag_index(decl), decl->type);
+    tag = load(tag, tag_ty);
 
     auto index = Resolver::findVariant(decl, node->type.name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_TAG_BITS));
@@ -1596,13 +1608,14 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (!variant.fields.empty()) {
         //declare vars
         auto &params = variant.fields;
-        auto dataPtr = gep2(rhs, Layout::get_data_index(decl));
+        auto data_index = Layout::get_data_index(decl);
+        auto dataPtr = gep2(rhs, data_index, decl->type);
         int offset = 0;
         for (int i = 0; i < params.size(); i++) {
             //regular var decl
             auto &prm = params[i];
             auto argName = node->args[i];
-            auto ptr = gep(dataPtr, 0, offset);
+            auto ptr = gep(dataPtr, 0, offset, mapType(decl->type)->getStructElementType(data_index));
             //bitcast to real type
             auto targetTy = mapType(prm.type)->getPointerTo();
             auto ptrReal = Builder->CreateBitCast(ptr, targetTy);
@@ -1620,23 +1633,22 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
-        Builder->SetInsertPoint(elsebb);
-        func->getBasicBlockList().push_back(elsebb);
+        set_and_insert(elsebb);
         resolv->newScope();
         node->elseStmt->accept(this);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     }
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     return nullptr;
 }
 
 llvm::Value *Compiler::getTag(Expression *expr) {
     auto tag = gen(expr);
     auto rt = resolv->resolve(expr);
-    return load(gep2(tag, Layout::get_tag_index(rt.targetDecl)));
+    auto tag_idx = Layout::get_tag_index(rt.targetDecl);
+    return load(gep2(tag, tag_idx, rt.type.unwrap()), getInt(ENUM_TAG_BITS));
 }
 
 std::any Compiler::visitIsExpr(IsExpr *node) {
@@ -1688,7 +1700,6 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) 
         src = gen(node->array);
     }
     auto &elemty = *arrty.scope.get();
-    ;
     if (arrty.isSlice()) {
         //deref inner pointer
         src = Builder->CreateBitCast(src, src->getType()->getPointerTo());
@@ -1696,15 +1707,16 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) 
     } else if (arrty.isPointer()) {
         src = load(src);
     }
-    src = Builder->CreateBitCast(src, mapType(elemty)->getPointerTo());
+    auto elem_ptr_ty = mapType(elemty)->getPointerTo();
+    src = Builder->CreateBitCast(src, elem_ptr_ty);
     //shift by start
-    src = gep(src, val_start);
+    src = gep(src, val_start, elem_ptr_ty);
     //i8*
     src = Builder->CreateBitCast(src, getInt(8)->getPointerTo());
-    auto ptr_target = gep2(sp, SLICE_PTR_INDEX);
+    auto ptr_target = gep2(sp, SLICE_PTR_INDEX, sliceType);
     Builder->CreateStore(src, ptr_target);
     //set len
-    auto len_target = gep2(sp, SLICE_LEN_INDEX);
+    auto len_target = gep2(sp, SLICE_LEN_INDEX, sliceType);
     auto val_end = cast(node->index2.get(), Type("i32"));
     auto len = Builder->CreateSub(val_end, val_start);
     Builder->CreateStore(len, len_target);
@@ -1720,30 +1732,24 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     }
     auto src = gen(node->array);
     if (type.isPointer()) {
-        auto inner = type.unwrap();
         if (needDeref(node->array, src)) {
             src = load(src);
         }
-        if (inner.isArray() || inner.isSlice()) {
-            type = inner;
-        } else {
-            //pointer access
-            return gep(src, node->index);
-        }
+        type = type.unwrap();
     }
     if (type.isArray()) {
         //regular array access
-        return gep(src, 0, node->index);
+        return gep(src, 0, node->index, mapType(type));
     }
     //slice access
     auto elem = type.scope.get();
     auto elemty = mapType(*elem);
     //read array ptr
-    auto arr = gep2(src, SLICE_PTR_INDEX);
+    auto arr = gep2(src, SLICE_PTR_INDEX, sliceType);
     //arr = Builder->CreateBitCast(arr, arr->getType()->getPointerTo());
     arr = load(arr);
     arr = Builder->CreateBitCast(arr, elemty->getPointerTo());
-    return gep(arr, node->index);
+    return gep(arr, node->index, elemty->getPointerTo());
 }
 
 std::any Compiler::visitWhileStmt(WhileStmt *node) {
@@ -1754,8 +1760,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     Builder->SetInsertPoint(condbb);
     auto c = loadPtr(node->expr.get());
     Builder->CreateCondBr(branch(c), then, next);
-    Builder->SetInsertPoint(then);
-    func->getBasicBlockList().push_back(then);
+    set_and_insert(then);
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
@@ -1763,8 +1768,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     return nullptr;
 }
 
@@ -1785,8 +1789,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     } else {
         Builder->CreateBr(then);
     }
-    Builder->SetInsertPoint(then);
-    func->getBasicBlockList().push_back(then);
+    set_and_insert(then);
     loops.push_back(updatebb);
     loopNext.push_back(next);
     int backup = resolv->max_scope;
@@ -1802,8 +1805,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
-    Builder->SetInsertPoint(next);
-    func->getBasicBlockList().push_back(next);
+    set_and_insert(next);
     return {};
 }
 
@@ -1861,10 +1863,11 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
 
 std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     auto type = resolv->getType(node->list[0]);
+    auto arr_ty = mapType(resolv->getType(node));
     if (!node->isSized()) {
         int i = 0;
         for (auto e : node->list) {
-            auto elem_target = gep(ptr, 0, i++);
+            auto elem_target = gep(ptr, 0, i++, arr_ty);
             setField(e, resolv->getType(e), true, elem_target);
         }
         return ptr;
@@ -1875,30 +1878,28 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
         elem_ptr = gen(elem);
     }
     auto bb = Builder->GetInsertBlock();
-    auto cur = gep(ptr, 0, 0);
-    auto end = gep(ptr, 0, node->size.value());
+    auto cur = gep(ptr, 0, 0, arr_ty);
+    auto end = gep(ptr, 0, node->size.value(), arr_ty);
     //create cons and memcpy
     auto condbb = llvm::BasicBlock::Create(ctx(), "cond");
     auto setbb = llvm::BasicBlock::Create(ctx(), "set");
     auto nextbb = llvm::BasicBlock::Create(ctx(), "next");
     Builder->CreateBr(condbb);
-    func->getBasicBlockList().push_back(condbb);
-    Builder->SetInsertPoint(condbb);
-    auto phi = Builder->CreatePHI(mapType(type)->getPointerTo(), 2);
+    set_and_insert(condbb);
+    auto phi_ty = mapType(type)->getPointerTo();
+    auto phi = Builder->CreatePHI(phi_ty, 2);
     phi->addIncoming(cur, bb);
     auto ne = Builder->CreateCmp(llvm::CmpInst::ICMP_NE, phi, end);
     Builder->CreateCondBr(branch(ne), setbb, nextbb);
-    Builder->SetInsertPoint(setbb);
-    func->getBasicBlockList().push_back(setbb);
+    set_and_insert(setbb);
     if (elem_ptr) {
         copy(phi, elem_ptr, type);
     } else {
         setField(node->list[0], type, true, phi);
     }
-    auto step = gep(phi, 1);
+    auto step = gep(phi, 1, phi_ty);
     phi->addIncoming(step, setbb);
     Builder->CreateBr(condbb);
-    func->getBasicBlockList().push_back(nextbb);
-    Builder->SetInsertPoint(nextbb);
+    set_and_insert(nextbb);
     return ptr;
 }

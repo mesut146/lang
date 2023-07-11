@@ -26,6 +26,10 @@ bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType binCast(const std::string &s1, const std::string &s2);
 
+static bool is_ptr_get(MethodCall *mc) {
+    return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "get";
+}
+
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {
@@ -277,7 +281,7 @@ public:
     std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
     std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl);
-    void addUsed(BaseDecl* bd);
+    void addUsed(BaseDecl *bd);
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

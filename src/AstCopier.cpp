@@ -153,7 +153,7 @@ std::any AstCopier::visitObjExpr(ObjExpr *node) {
 
 std::any AstCopier::visitMethodCall(MethodCall *node) {
     auto res = new MethodCall;
-    res->isOptional = node->isOptional;
+    res->is_static = node->is_static;
     if (node->scope) {
         res->scope.reset(expr(node->scope.get(), this));
     }
@@ -211,7 +211,7 @@ std::any AstCopier::visitUnary(Unary *node) {
     res->expr = expr(node->expr, this);
     return loc(res, node);
 }
-std::any AstCopier::visitAsExpr(AsExpr *node){
+std::any AstCopier::visitAsExpr(AsExpr *node) {
     auto res = new AsExpr;
     res->expr = expr(node->expr, this);
     res->type = visit(node->type, this);

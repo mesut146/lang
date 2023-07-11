@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(lang)
 
-set(CMAKE_CXX_FLAGS "-std=c++2a -g -pg")
+set(CMAKE_CXX_FLAGS "-std=c++2a -g -pg -opaque-pointers=0")
 
 file(GLOB src src/*.cpp src/parser/*.cpp)
 
@@ -22,7 +22,7 @@ else ()
     #message(STATUS "libs: ${llvm_libs}")
 
     #target_link_libraries(lang ${llvm_libs})
-    target_link_libraries(lang LLVM-13)
+    target_link_libraries(lang LLVM-16)
 
     target_link_libraries(lang stdc++fs)
 endif()

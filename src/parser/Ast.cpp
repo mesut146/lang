@@ -327,10 +327,7 @@ std::string MethodCall::print() const {
     std::string s;
     if (scope) {
         s.append(scope->print());
-        if (isOptional) {
-            s.append("?");
-        }
-        if (dynamic_cast<Type *>(scope.get())) {
+        if (is_static) {
             s.append("::");
         } else {
             s.append(".");

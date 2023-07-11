@@ -1,6 +1,7 @@
 #include "Lexer.h"
 #include <map>
 #include <vector>
+#include <optional>
 
 TokenType kw(std::string &s) {
     if (s == "assert") return ASSERT_KW;

@@ -249,6 +249,7 @@ Expression *PRIM(Parser *p) {
                 typeArgs = p->generics();
             }
             auto mc = parseCall(p, name);
+            mc->is_static = true;
             mc->scope.reset(type);
             mc->typeArgs = typeArgs;
             return loc(mc, line);
@@ -275,6 +276,7 @@ Expression *PRIM(Parser *p) {
                 auto name = p->name();
                 if (p->is(LPAREN)) {
                     auto res = parseCall(p, name);
+                    res->is_static = true;
                     res->line = line;
                     res->scope.reset(scope);
                     return res;
@@ -289,6 +291,7 @@ Expression *PRIM(Parser *p) {
             if (p->is(LPAREN)) {//id::name<...>(args)
                 auto res = parseCall(p, t.name);
                 res->line = line;
+                res->is_static = true;
                 if (!t.typeArgs.empty()) {
                     res->typeArgs = t.typeArgs;
                 }
@@ -338,7 +341,7 @@ Expression *PRIM2(Parser *p) {
             if (p->is(LPAREN) || isTypeArg(p, p->pos) != -1) {
                 auto res = Expression::make<MethodCall>();
                 res->line = line;
-                res->isOptional = isOptional;
+                res->is_static = false;
                 res->scope.reset(lhs);
                 res->name = name;
                 if (p->is(LT)) {
