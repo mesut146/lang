@@ -12,6 +12,10 @@
 #include <unordered_set>
 #include <variant>
 
+static bool is_main(const Method *m) {
+    return m->name == "main" && m->params.empty();
+}
+
 struct Config {
     static bool optimize_enum;
     static bool verbose;

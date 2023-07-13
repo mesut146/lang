@@ -14,7 +14,7 @@ func sized(){
   assert arr[0] == 5 && arr[1] == 5 && arr[2] == 5;
   arr[0] = 8;
   arr[2] = 9;
-  assert arr[0]==8 && arr[1] == 5 && arr[2] == 9;
+  assert arr[0] == 8 && arr[1] == 5 && arr[2] == 9;
 }
 
 func elems(){
@@ -34,7 +34,7 @@ func ptr(){
   let arr = [5, 6, 7];
   let arr2 = [50, 60, 70];
   let arr3 = [&arr, &arr2];
-  assert (*arr3[0])[0] == 5;
+  assert (arr3[0])[0] == 5;
 }
 
 func main(){
@@ -51,7 +51,7 @@ func sliceTest(){
   let arr = [2, 3, 5, 7, 11, 13];
   let slice = arr[2..5];//[5, 7, 11]
   assert slice.len == 3;
-  assert slice[0] == 5 && slice[3]==13;
+  assert slice[0] == 5 && slice[3] == 13;
   //mutate original
   slice[0] = 55; //[55, 7 ,11]
   assert slice[0] == 55 && arr[2] == 55;

@@ -67,8 +67,10 @@ impl String{
     }
     
     func cstr(self): u8*{
-      if(self.len() == 0 || self.get((self.len()-1) as i32)!=0){
-        self.append(0u8);
+      if(self.len() == 0 || self.get((self.len() - 1) as i32) != 0){
+        let res = self.clone();
+        res.append(0u8);
+        return res.arr.arr;
       }
       return self.arr.arr;
     }

@@ -282,6 +282,7 @@ void initSelf(Unit *unit) {
 
 MethodCall *newStr(std::shared_ptr<Unit> &unit, const std::string &name) {
     auto mc = new MethodCall;
+    mc->is_static = true;
     mc->line = unit->lastLine;
     mc->scope.reset(new Type("String"));
     mc->name = "new";
@@ -326,6 +327,7 @@ Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
 Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, const std::string &fmt) {
     auto mc = new MethodCall;
     mc->line = ++unit->lastLine;
+    mc->is_static = true;
     mc->scope.reset(new Type("Debug"));
     mc->name = "debug";
     mc->args.push_back(e);
@@ -684,6 +686,9 @@ Method *Resolver::isOverride(Method *method) {
 std::any Resolver::visitMethod(Method *m) {
     if (m->isGeneric) {
         return nullptr;
+    }
+    if (is_main(m) && m->type.print() != "void" && m->type.print() != "i32") {
+        err("main method's return type must be 'void' or 'i32'");
     }
     curMethod = m;
     if (m->isVirtual && !m->self) {
@@ -1490,6 +1495,7 @@ std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
     res->body = std::make_unique<Block>();
     auto body = res->body.get();
     auto rhs = new MethodCall;
+    rhs->is_static = true;
     rhs->scope.reset(new Type("Fmt"));
     rhs->name = "new";
     body->list.push_back(make_var("f", rhs));

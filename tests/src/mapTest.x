@@ -24,7 +24,7 @@ func main(){
   let m3 = Map<i32, En>::new();
   m3.add(5, En::A);
   m3.add(7, En::B{77});
-  assert m3.get(5).unwrap().index == 0;
+  assert m3.get(5).unwrap() is En::A;
   assert m3.get(7).unwrap() is En::B;
   
   print("map_test done\n");

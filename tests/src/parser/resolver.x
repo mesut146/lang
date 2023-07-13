@@ -169,7 +169,7 @@ impl Resolver{
     self.scopes.remove(self.scopes.len() - 1);
   }
   func addScope(self, name: String, type: Type, prm: bool){
-    print("addScope %s: %s\n", name.cstr(), type.print());
+    print("addScope %s: %s\n", name.cstr(), type.print().cstr());
     let scope = self.scopes.last();
     scope.list.add(VarHolder::new(name, type, prm));
   }
@@ -185,10 +185,19 @@ impl Resolver{
   }
 
   func dump(self){
+    print("---dump---");
     print("%d types\n", self.typeMap.len());
     for(let i=0;i<self.typeMap.len();++i){
       let pair = self.typeMap.get_idx(i).unwrap();
       print("%s -> %s\n", pair.a.cstr(), Fmt::str(&pair.b.type).cstr());
+    }
+    print("scope count %d\n", self.scopes.len());
+    for(let i = 0;i < self.scopes.len();++i){
+      let scope = self.scopes.get_ptr(i);
+      for(let j = 0;j < scope.list.len();++j){
+        let vh = scope.list.get_ptr(j);
+        print("%s:%s\n", vh.name.cstr(), vh.type.print().cstr());
+      }
     }
   }
 
@@ -374,6 +383,11 @@ impl Resolver{
       self.addType(str, res);
       return res;
     }
+    if(node.is_pointer()){
+      let inner = node.unwrap();
+      let elem = self.visit(&inner);
+      return RType::new(elem.type.toPtr());
+    }
     panic("type %s", node.print().cstr());
   }
 
@@ -440,9 +454,23 @@ impl Resolver{
           return res;
         }
       }
+      self.dump();
       self.err(Fmt::format("unknown identifier: {}", name.str()));
+    }else if let Expr::Unary(op, ebox) = (node){
+      if(op.eq("&")){
+        return self.visit_ref(ebox.get());
+      }
     }
     panic("visit expr %s", node.print().cstr());
+  }
+
+  func visit_ref(self, e: Expr*): RType{
+    if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess){
+      let res = self.visit(e);
+      res.type = res.type.toPtr();
+      return res;
+    }
+    panic("ref expr is not supported: %s", e.print().cstr());
   }
 
   func visit(self, call: Call*): RType{
@@ -495,6 +523,7 @@ impl Resolver{
       if(!self.is_condition(&e)){
         panic("assert expr is not bool: %s", e.print().cstr());
       }
+      return;
     }
     panic("visit stmt %s", node.print().cstr());
   }

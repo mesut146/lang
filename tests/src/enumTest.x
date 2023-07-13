@@ -40,9 +40,6 @@ func enumTest(){
   let c: E = E::C{100};
   let d: E = E::A2{A{a: 100, b: 200}};
   
-  assert a.index == 0;
-  assert b.index == 1;
-  assert c.index == 2;
   assert a is E::A && b is E::B && c is E::C && d is E::A2;
 
   let isA = false;

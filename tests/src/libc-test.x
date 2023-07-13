@@ -2,7 +2,7 @@ import std/libc
 import std/io
 
 func read_test(){
-  let buf = read_bytes("./Box.ll");
+  let buf = read_bytes("./libc-test.ll");
   print("read %d\n", buf.len());
   //str{buf.slice(0, buf.len())}.dump();
 }

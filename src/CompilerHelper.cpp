@@ -278,45 +278,45 @@ llvm::DIType *Compiler::map_di(const Type *t) {
     if (s == "u16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_unsigned);
     if (s == "u32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_unsigned);
     if (s == "u64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_unsigned);
-    if (rt.targetDecl) {
-        auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
-        auto st_size = getSize2(t);
-        std::vector<llvm::Metadata *> elems;
-        if (rt.targetDecl->isEnum()) {
-            //todo order
-            auto ed = (EnumDecl *) rt.targetDecl;
-            auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
-            auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 8, 0, llvm::DINode::FlagZero, tag);
-            elems.push_back(tagm);
-            auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
-            auto sz = getSize2(ed) - ENUM_TAG_BITS;
-            llvm::DINodeArray sub;
-            auto at = DBuilder->createArrayType(sz, 8, chr, sub);
-            auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
-            elems.push_back(arrm);
-        } else {
-            auto sd = (StructDecl *) rt.targetDecl;
-            int idx = 0;
-            auto st = (llvm::StructType *) mapType(sd->type);
-            auto sl = mod->getDataLayout().getStructLayout(st);
-            for (auto &fd : sd->fields) {
-                auto off = sl->getElementOffsetInBits(idx);
-                int sz;
-                if (idx == sd->fields.size() - 1) {
-                    //sz = st_size - off;
-                    sz = getSize2(fd.type);
-                } else {
-                    sz = sl->getElementOffsetInBits(idx + 1) - off;
-                }
-                auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 0, off, llvm::DINode::FlagZero, map_di(fd.type));
-                elems.push_back(mt);
-                idx++;
-            }
-        }
-        auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
+    if (!rt.targetDecl) {
+        throw std::runtime_error("di type: " + t->print());
     }
-    throw std::runtime_error("di type: " + t->print());
+    auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
+    auto st_size = getSize2(t);
+    std::vector<llvm::Metadata *> elems;
+    if (rt.targetDecl->isEnum()) {
+        //todo order
+        auto ed = (EnumDecl *) rt.targetDecl;
+        auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
+        auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 8, 0, llvm::DINode::FlagZero, tag);
+        elems.push_back(tagm);
+        auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
+        auto sz = getSize2(ed) - ENUM_TAG_BITS;
+        llvm::DINodeArray sub;
+        auto at = DBuilder->createArrayType(sz, 8, chr, sub);
+        auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
+        elems.push_back(arrm);
+    } else {
+        auto sd = (StructDecl *) rt.targetDecl;
+        int idx = 0;
+        auto st = (llvm::StructType *) mapType(sd->type);
+        auto sl = mod->getDataLayout().getStructLayout(st);
+        for (auto &fd : sd->fields) {
+            auto off = sl->getElementOffsetInBits(idx);
+            int sz;
+            if (idx == sd->fields.size() - 1) {
+                //sz = st_size - off;
+                sz = getSize2(fd.type);
+            } else {
+                sz = sl->getElementOffsetInBits(idx + 1) - off;
+            }
+            auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 0, off, llvm::DINode::FlagZero, map_di(fd.type));
+            elems.push_back(mt);
+            idx++;
+        }
+    }
+    auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+    return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
 }
 
 int Compiler::getSize(BaseDecl *decl) {
@@ -458,7 +458,7 @@ public:
         }
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
-            if (!node->scope && node->name == "print" && isStrLit(a)) {
+            if (!node->scope && (node->name == "print" || node->name == "panic") && isStrLit(a)) {
                 continue;
             }
             a->accept(this);
@@ -485,8 +485,8 @@ public:
         }
         auto obj = dynamic_cast<ObjExpr *>(e);
         if (obj) {
-            for (auto &e : obj->entries) {
-                if (!e.isBase) child(e.value);
+            for (auto &ent : obj->entries) {
+                if (!ent.isBase) child(ent.value);
             }
             return;
         }

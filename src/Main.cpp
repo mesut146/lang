@@ -81,6 +81,14 @@ void compile(std::initializer_list<std::string> list) {
 }
 
 void compileTest() {
+    //clean
+    for (const auto &e : std::filesystem::recursive_directory_iterator(".")) {
+        if (e.is_directory()) continue;
+        auto ext = e.path().extension().string();
+        if (ext == ".ll" || ext == ".o") {
+            std::filesystem::remove(e.path());
+        }
+    }
     auto s1 = "../tests/src/std/String.x";
     auto s2 = "../tests/src/std/str.x";
     auto op = "../tests/src/std/ops.x";
@@ -105,6 +113,7 @@ void compileTest() {
     compile("../tests/src/as.x");
     compile("../tests/src/alias.x");
 
+    //std tests
     compile({"../tests/src/classTest.x", s1, s2, op});
     compile({"../tests/src/boxTest.x", s1, s2, op});
     compile({"../tests/src/listTest.x", s1, s2, op});
