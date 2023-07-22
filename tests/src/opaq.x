@@ -4,13 +4,12 @@ struct A{
 }
 
 func take(ptr: A*){
-    let a = ptr.a;
+    assert ptr.a == 10;
 }
 
 func main(){
     print("opaq run\n");
 
     let obj = A{a: 10, b: 20i64};
-    //obj.a = 11;
     take(&obj);
 }

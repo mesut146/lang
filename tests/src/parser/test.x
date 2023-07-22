@@ -38,7 +38,7 @@ func resolver_test(){
     file.append(name.str());
     if(is_dir(file.str())) continue;
     let r = Resolver::new(file.str());
-    print("resolving %s\n", file.cstr());
+    //print("resolving %s\n", file.cstr());
     r.resolve_all();
   }
   //let s = "../tests/src/lit.x";

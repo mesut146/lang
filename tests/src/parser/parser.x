@@ -107,6 +107,7 @@ impl Parser{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }
       }
+      //Fmt::str(&self.unit).dump();
       return &self.unit;
     }
     
@@ -193,9 +194,11 @@ impl Parser{
       if(self.is(TokenType::SEMI)){
         self.pop();
       }else{
-        body = Option::new(self.parse_block());
+        let bl = self.parse_block();
+        body = Option::new(bl);
       }
-      return Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent};
+      let res = Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent};
+      return res;
     }
     
     func parse_param(self): Param{
@@ -360,7 +363,8 @@ impl Parser{
         //dump(arr.last());
       }
       self.consume(TokenType::RBRACE);
-      return Block{arr};
+      let res = Block{arr};
+      return res;
     }
     
     func var(self): VarExpr{
@@ -697,12 +701,13 @@ impl Parser{
       }
     }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS)){
       let op = self.pop().value;
-      let e = self.parse_expr();
+      let e = self.prim2();
       return Expr::Unary{op, Box::new(e)};
     }
     panic("invalid expr %s", self.peek().print().cstr());
   }
   
+  //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
   func prim2(self): Expr{
     let e = self.prim();
     if(self.is(TokenType::LBRACE)){
@@ -745,26 +750,31 @@ impl Parser{
           e = Expr::ArrAccess{Box::new(e), Box::new(idx), idx2}; 
       }
     }
-    if(self.is(TokenType::AS)){
-        self.pop();
-        let t = self.parse_type();
-        e = Expr::As{Box::new(e), t};
-    }
-    if(self.is(TokenType::IS)){
-        self.pop();
-        let rhs = self.parse_expr();
-        e = Expr::Is{Box::new(e), Box::new(rhs)};
-    }
+    
     return e; 
   }
   
+  func as_is(self): Expr{
+    let e = self.prim2();
+    if(self.is(TokenType::AS)){
+      self.pop();
+      let t = self.parse_type();
+      e = Expr::As{Box::new(e), t};
+    }
+    if(self.is(TokenType::IS)){
+      self.pop();
+      let rhs = self.parse_expr();
+      e = Expr::Is{Box::new(e), Box::new(rhs)};
+    }
+    return e;
+  }
   
   func expr_level(self, prec: i32): Expr{
-    if(prec==11) return self.prim2();
-    let e = self.expr_level(prec+1);
+    if(prec == 11) return self.as_is();
+    let e = self.expr_level(prec + 1);
     while(Parser::get_prec(&self.peek().type) == prec){
       let op = self.pop().value;
-      let r = self.expr_level(prec+1);
+      let r = self.expr_level(prec + 1);
       e = Expr::Infix{op, Box::new(e), Box::new(r)};
     }
     return e;

@@ -3,9 +3,17 @@ import std/ops
 import std/libc
 
 class List<T>{
-  arr: T*;
+  ptr: T*;
   count: i64;
   cap: i64;
+}
+
+func get_malloc<T>(size: i64): T*{
+  let ptr = malloc<T>(size);
+  if(ptr as u64 == 0){
+    panic("malloc returned null for size: %lld", size);
+  }
+  return ptr;
 }
 
 impl<T> List<T>{
@@ -14,33 +22,38 @@ impl<T> List<T>{
   }
 
   func new(cap: i64): List<T>{
-    return List<T>{arr: malloc<T>(cap), count: 0, cap: cap};
+    let ptr = get_malloc<T>(cap);
+    return List<T>{ptr: ptr, count: 0, cap: cap};
+  }
+
+  func ptr(self): T*{
+    return self.ptr;
   }
 
   func expand(self){
     if(self.count < self.cap){
       return;
     }
-    let tmp = malloc<T>(self.cap * 2);
+    let tmp = get_malloc<T>(self.cap * 2);
     for(let i = 0;i < self.count;++i){
-      *ptr::get(tmp, i) = *ptr::get(self.arr, i);
+      *ptr::get(tmp, i) = *ptr::get(self.ptr, i);
     }
-    //free(self.arr as u8*);
-    self.arr = tmp;
+    //free(self.ptr as u8*);
+    self.ptr = tmp;
     self.cap = self.cap * 2;
   }
   
   func remove(self, pos: i64){
     //copy right of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
-      *ptr::get(self.arr, i) = *ptr::get(self.arr, i + 1);
+      *ptr::get(self.ptr, i) = *ptr::get(self.ptr, i + 1);
     }
     self.count =- 1;
   }
 
   func add(self, e: T){
     self.expand();
-    *ptr::get(self.arr, self.count) = e;
+    *ptr::get(self.ptr, self.count) = e;
     ++self.count;
   }
 
@@ -54,7 +67,7 @@ impl<T> List<T>{
 
   func add(self, sl: [T]){
     let i = 0;
-    while(i < sl.len){
+    while(i < sl.len()){
         self.add(sl[i]);
         ++i;
     }
@@ -72,7 +85,7 @@ impl<T> List<T>{
     if(pos >= self.count) {
       panic("index %d out of bounds %d", pos, self.count);
     }
-    return ptr::get(self.arr, pos);
+    return ptr::get(self.ptr, pos);
   }
 
   func clear(self){
@@ -99,7 +112,7 @@ impl<T> List<T>{
   func indexOf(self, e: T, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(*ptr::get(self.arr, i) == e) return i;
+      if(*ptr::get(self.ptr, i) == e) return i;
       ++i;
     }
     return -1;
@@ -108,7 +121,7 @@ impl<T> List<T>{
   func indexOf2<Q>(self, e: Q, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(Eq::eq(*ptr::get(self.arr, i), e)) return i;
+      if(Eq::eq(*ptr::get(self.ptr, i), e)) return i;
       ++i;
     }
     return -1;
@@ -119,7 +132,11 @@ impl<T> List<T>{
   }
 
   func slice(self, start: i64, end: i64): [T]{
-    return self.arr[start..end];
+    return self.ptr[start..end];
+  }
+
+  func slice(self): [T]{
+    return self.slice(0, self.len());
   }
   
   func iter(self): ListIter<T>{

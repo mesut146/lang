@@ -1,13 +1,17 @@
 import std/libc
 
-func read_bytes(path: str): List<i8>{
-  let f = fopen(path.cstr(), "r".cstr());
+func open_checked(path: str, mode: str): FILE*{
+  let f = fopen(path.cstr(), mode.cstr());
   if(!is_valid(f)){
     panic("no such file %s", path.cstr());
   }
+  return f;
+}
+
+func read_bytes(path: str): List<i8>{
+  let f = open_checked(path, "r");
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
-  //print("size = %lld\n", size);
   fseek(f, 0, SEEK_SET());
   let res = List<i8>::new(size);
   let buf = [0i8; 1024];
@@ -24,15 +28,15 @@ func read_string(path: str): String{
   return String::new(read_bytes(path));
 }
 
-func write_bytes(data: List<i8>*, path: str){
-  let f = fopen(path.cstr(), "w".cstr());
-  let c = fwrite(data.arr, 1, data.len() as i32, f);
+func write_bytes(data: [u8], path: str){
+  let f = open_checked(path, "w");
+  let c = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
   print("wrote %d of %lld\n", c, data.len());
   fclose(f);
 }
 
 func dump(arr: [i8; 256], len: i32){
-  for(let i=0;i<len;++i){
+  for(let i = 0;i < len;++i){
     print("%c", arr[i]);
   }
   print("\n");
@@ -41,7 +45,7 @@ func dump(arr: [i8; 256], len: i32){
 func list(path: str): List<String>{
   let list = List<String>::new();
   let dp = opendir(path.cstr());
-  if(dp as u64 == 0) panic("no such dir");
+  if(dp as u64 == 0) panic("no such dir %s", path.cstr());
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
@@ -80,7 +84,11 @@ func exist(path: str): bool{
 
 func resolve(path: str): String{
   let buf = [0i8; 256];
-  let ptr = realpath(path.cstr(), &buf[0] as i8*);
+  let path_c = path.cstr();
+  let ptr = realpath(path_c, &buf[0] as i8*);
+  if(ptr as u64 == 0){
+    panic("resolving path is null '%s'\n", path_c);
+  }
   let len = strlen(buf[0..256]);
   return String::new(buf[0..len]);
 }

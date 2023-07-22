@@ -67,7 +67,6 @@ public:
         Prim,
         Simple,
         Pointer,
-        Ref,
         Option,
         Array,
         Slice,
@@ -109,7 +108,6 @@ public:
     bool isArray() const { return kind == Array; }
     bool isSlice() const { return kind == Slice; }
     bool isPointer() const { return kind == Pointer; }
-    bool isRef() const { return kind == Ref; }
 
     Type unwrap() const {
         if (isPointer()) return *scope.get();
@@ -573,10 +571,24 @@ public:
     std::any accept(Visitor *v) override;
 };
 
+struct ArgBind {
+    std::string name;
+    bool ptr = false;
+
+    explicit ArgBind(const std::string &name) : name(name) {}
+
+    std::string print() const{
+        if(ptr){
+            return name + "*";
+        }
+        return name;
+    }
+};
+
 class IfLetStmt : public Statement {
 public:
     Type type;
-    std::vector<std::string> args;
+    std::vector<ArgBind> args;
     std::unique_ptr<Expression> rhs;
     std::unique_ptr<Statement> thenStmt;
     std::unique_ptr<Statement> elseStmt;

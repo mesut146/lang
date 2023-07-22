@@ -109,16 +109,13 @@ Type Parser::parseType() {
         }
     }
 
-    while (is(STAR) || is(QUES) || is(AND)) {
+    while (is(STAR) || is(QUES)) {
         if (is(STAR)) {
             consume(STAR);
             res = Type(Type::Pointer, res);
         } else if (is(QUES)) {
             consume(QUES);
             res = Type(Type::Option, res);
-        } else if (AND) {
-            consume(AND);
-            res = Type(Type::Ref, res);
         }
     }
     return res;

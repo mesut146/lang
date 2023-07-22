@@ -9,13 +9,21 @@ struct Signature {
     std::vector<Type> args;
     std::optional<RType> scope;
     Type ret;
+    Resolver *r = nullptr;
 
     static Signature make(MethodCall *mc, Resolver *r);
-    static Signature make(Method *m, Resolver *r);
+    static Signature make(Method *m, const std::map<std::string, Type> &map);
     std::string print();
 };
 
-typedef std::vector<std::string> Names;
+/*struct Result {
+    std::string msg;
+    bool exact;
+};*/
+
+using SigResult = std::variant<std::string, bool>;
+
+//using std::vector<std::string> Names;
 
 class MethodResolver {
     Resolver *r;
@@ -34,12 +42,14 @@ public:
     }
 
     static std::optional<std::string> isCompatible(const RType &arg, const Type &target, const std::vector<Type> &typeParams);
+
     static void infer(const Type &arg, const Type &prm, std::map<std::string, std::optional<Type>> &typeMap);
 
-    std::optional<std::string> checkArgs(Signature &sig, Signature &sig2);
+    SigResult checkArgs(Signature &sig, Signature &sig2);
 
-    std::optional<std::string> isSame(Signature &sig, Signature &sig2);
+    SigResult isSame(Signature &sig, Signature &sig2);
 
     std::vector<Signature> collect(Signature &sig);
+
     RType handleCallResult(Signature &sig);
 };

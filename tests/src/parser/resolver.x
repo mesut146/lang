@@ -33,15 +33,15 @@ func isReturnLast(stmt: Stmt*): bool{
   if (isRet(stmt)) {
     return true;
   }
-  if let Stmt::Block(b)=(stmt){
-    return isReturnLast(&b);
+  if let Stmt::Block(b*)=(stmt){
+    return isReturnLast(b);
   }
   return false;
 }
 
 func isRet(stmt: Stmt*): bool{
-  if let Stmt::Expr(expr)=(stmt){
-    if let Expr::Call(mc)=(expr){
+  if let Stmt::Expr(expr*)=(stmt){
+    if let Expr::Call(mc*)=(expr){
       return mc.name.eq("panic");
     }
     return false;
@@ -176,6 +176,7 @@ impl Resolver{
   
   func resolve_all(self){
     if(self.is_resolved) return;
+    print("resolving %s\n", self.unit.path.cstr());
     self.is_resolved = true;
     self.init();
     for(let i = 0;i < self.unit.items.len();++i){
@@ -187,7 +188,7 @@ impl Resolver{
   func dump(self){
     print("---dump---");
     print("%d types\n", self.typeMap.len());
-    for(let i=0;i<self.typeMap.len();++i){
+    for(let i = 0;i < self.typeMap.len();++i){
       let pair = self.typeMap.get_idx(i).unwrap();
       print("%s -> %s\n", pair.a.cstr(), Fmt::str(&pair.b.type).cstr());
     }
@@ -204,6 +205,9 @@ impl Resolver{
   func addType(self, name: String, res: RType){
     self.typeMap.add(name, res);
   }
+  func addType(self, name: String*, res: RType){
+    self.typeMap.add(*name, res);
+  }
   
   func init(self){
     if(self.is_init) return;
@@ -215,14 +219,14 @@ impl Resolver{
       if let Item::Decl(decl)=(it){
         let res = RType::new(decl.type);
         self.addType(decl.type.print(), res);
-      }else if let Item::Trait(tr)=(it){
+      }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type);
-        res.trait = Option::new(&tr);
+        res.trait = Option::new(tr);
         self.addType(tr.type.print(), res);
       }else if let Item::Impl(imp)=(it){
         //pass
-      }else if let Item::Type(name, rhs)=(it){
-        let res = self.visit(&rhs);
+      }else if let Item::Type(name*, rhs*)=(it){
+        let res = self.visit(rhs);
         self.addType(name, res);
       }
     }
@@ -240,17 +244,17 @@ impl Resolver{
   }
 
   func visit(self, node: Item*){
-    if let Item::Method(m) = (node){
-      self.visit(&m);
+    if let Item::Method(m*) = (node){
+      self.visit(m);
     }else if let Item::Type(name, rhs) = (node){
       //pass
-    }else if let Item::Impl(imp) = (node){
-      self.visit(&imp);
-    }else if let Item::Decl(decl) = (node){
-      if let Decl::Struct(fields) = (decl){
-        self.visit(&decl, &fields);
-      }else if let Decl::Enum(variants) = (decl){
-        //self.visit(&decl, &variants);
+    }else if let Item::Impl(imp*) = (node){
+      self.visit(imp);
+    }else if let Item::Decl(decl*) = (node){
+      if let Decl::Struct(fields*) = (decl){
+        self.visit(decl, fields);
+      }else if let Decl::Enum(variants*) = (decl){
+        //self.visit(decl, variants);
       }
     }
     else{
@@ -392,7 +396,7 @@ impl Resolver{
   }
 
   func visit(self, node: Expr*): RType{
-    if let Expr::Lit(kind, value, suffix)=(node){
+    if let Expr::Lit(kind, value, suffix*)=(node){
       if(suffix.is_some()){
         if(i64::parse(&value) > max_for(suffix.get())){
           self.err("literal out of range");
@@ -416,38 +420,14 @@ impl Resolver{
         res.value = Option::new(value);
         return res;
       }
-    }else if let Expr::Infix(op, lhs, rhs) = (node){
-      let lt = self.visit(lhs.get());
-      let rt = self.visit(rhs.get());
-      if(lt.type.is_void() || rt.type.is_void()){
-        self.err("operation on void type");
-      }
-      if(lt.type.is_str() || rt.type.is_str()){
-        self.err("string op not supported yet");
-      }
-      if(!(lt.type.is_prim() && rt.type.is_prim())){
-        panic("infix on non prim type: %s", node.print().cstr());
-      }
-      if(is_comp(&op)){
-        return RType::new("bool");
-      }
-      else if(op.eq("&&") || op.eq("||")){
-        if (!lt.type.print().eq("bool")) {
-          panic("infix lhs is not boolean: %s", lhs.get().print().cstr());
-        }
-        if (!rt.type.print().eq("bool")) {
-          panic("infix rhs is not boolean: %s", rhs.get().print().cstr());
-        }        
-        return RType::new("bool");
-      }else{
-        return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
-      }
-    }else if let Expr::Call(call) = (node){
-      return self.visit(&call);
-    }else if let Expr::Name(name) = (node){
+    }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
+      return self.visit_infix(node, op, lhs.get(), rhs.get());
+    }else if let Expr::Call(call*) = (node){
+      return self.visit(call);
+    }else if let Expr::Name(name*) = (node){
       for(let i = self.scopes.len() - 1;i >= 0;--i){
         let scope = self.scopes.get_ptr(i);
-        let vh = scope.find(&name);
+        let vh = scope.find(name);
         if(vh.is_some()){
           let res = self.visit(&vh.unwrap().type);
           res.vh = Option::new(vh.unwrap());
@@ -460,8 +440,40 @@ impl Resolver{
       if(op.eq("&")){
         return self.visit_ref(ebox.get());
       }
+      if(op.eq("*")){
+        return self.visit_deref(node, ebox.get());
+      }
     }
     panic("visit expr %s", node.print().cstr());
+  }
+
+  func visit_infix(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
+    let lt = self.visit(lhs);
+    let rt = self.visit(rhs);
+    if(lt.type.is_void() || rt.type.is_void()){
+      self.err("operation on void type");
+    }
+    if(lt.type.is_str() || rt.type.is_str()){
+      self.err("string op not supported yet");
+    }
+    if(!(lt.type.is_prim() && rt.type.is_prim())){
+      panic("infix on non prim type: %s", node.print().cstr());
+    }
+    if(is_comp(op)){
+      return RType::new("bool");
+    }
+    else if(op.eq("&&") || op.eq("||")){
+      if (!lt.type.print().eq("bool")) {
+        panic("infix lhs is not boolean: %s", lhs.print().cstr());
+      }
+      if (!rt.type.print().eq("bool")) {
+        panic("infix rhs is not boolean: %s", rhs.print().cstr());
+      }        
+      return RType::new("bool");
+    }else{
+      return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
+    }
+    panic("%s\n", node.print().cstr());
   }
 
   func visit_ref(self, e: Expr*): RType{
@@ -473,11 +485,43 @@ impl Resolver{
     panic("ref expr is not supported: %s", e.print().cstr());
   }
 
+  func visit_deref(self, node: Expr*, e: Expr*): RType{
+    let inner = self.visit(e);
+    if(!inner.type.is_pointer()){
+      self.err(Fmt::format("deref expr is not pointer: %s -> %s", node.print().str(), inner.type.print().str()));
+    }
+    inner.type = inner.type.unwrap();
+    return inner;
+  }  
+
   func visit(self, call: Call*): RType{
     let sig = Signature::new(call, self);
     if(call.scope.is_some()){
       let mr = MethodResolver::new(self);
       return mr.handle(&sig);
+    }
+    if(call.name.eq("print")){
+      return RType::new("void");
+    }
+    if(call.name.eq("panic")){
+      if(!call.args.empty()){
+        let arg = call.args.get_ptr(0);
+        if let Expr::Lit(kind, val, sf) = (arg){
+          if(kind is LitKind::STR){
+            return RType::new("void");
+          }
+        }
+        self.err(Fmt::format("invalid panic argument: {}", arg.print().str()));
+      }
+      return RType::new("void");
+    }
+    if(call.name.eq("malloc")){
+      if(call.tp.empty()){
+        return RType::new(Type::new("i8").toPtr());
+      }else{
+        let arg = self.visit(call.tp.get_ptr(0));
+        return RType::new(arg.type.toPtr());
+      }
     }
     panic("call %s", call.print().cstr());
   }
@@ -504,23 +548,24 @@ func is_comp(s: String*): bool{
 //statements-------------------------------------
 impl Resolver{
   func visit(self, node: Stmt*){
-    if let Stmt::Expr(e) = (node){
-      self.visit(&e);
+    if let Stmt::Expr(e*) = (node){
+      self.visit(e);
       return;
     }else if let Stmt::Ret(e) = (node){
       if(e.is_some()){
-        //self.visit(&e);
+        //todo
+        self.visit(e.get());
       }else{
         if(!self.curMethod.unwrap().type.is_void()){
           self.err("non-void method returns void");
         }
       }
       return;
-    }else if let Stmt::Var(ve) = (node){
-      self.visit(&ve);
+    }else if let Stmt::Var(ve*) = (node){
+      self.visit(ve);
       return;
-    }else if let Stmt::Assert(e) = (node){
-      if(!self.is_condition(&e)){
+    }else if let Stmt::Assert(e*) = (node){
+      if(!self.is_condition(e)){
         panic("assert expr is not bool: %s", e.print().cstr());
       }
       return;

@@ -20,11 +20,10 @@ void sort(std::vector<BaseDecl *> &list, Resolver *r);
 
 constexpr int STRUCT_BASE_INDEX = 0;
 constexpr int VPTR_INDEX = -1;//end
-constexpr int ENUM_TAG_BITS = 32;
+constexpr int ENUM_TAG_BITS = 64;
 constexpr int ENUM_BASE_INDEX = 0;
 constexpr int ENUM_TAG_INDEX = 1;
 constexpr int ENUM_DATA_INDEX = 2;
-constexpr int SLICE_LEN_BITS = 32;
 constexpr int SLICE_PTR_INDEX = 0;
 constexpr int SLICE_LEN_INDEX = 1;
 
@@ -49,7 +48,6 @@ public:
     std::string outDir;
     std::vector<std::string> compiled;
     std::shared_ptr<Unit> unit;
-    bool debug = true;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
     std::shared_ptr<Resolver> resolv;
@@ -69,6 +67,8 @@ public:
     std::map<std::string, llvm::Type *> classMap;
     std::map<std::string, llvm::Function *> funcMap;
     llvm::Function *printf_proto = nullptr;
+    llvm::Function *fflush_proto = nullptr;
+    llvm::GlobalVariable *stdout_ptr = nullptr;
     llvm::Function *exit_proto = nullptr;
     llvm::Function *mallocf = nullptr;
     llvm::StructType *sliceType = nullptr;
@@ -91,15 +91,11 @@ public:
     void make_vtables();
     llvm::LLVMContext &ctx() { return *ctxp; };
 
-    int getSize(const Type *type);
-    int getSize(const Type &type) { return getSize(&type); }
     int getSize2(const Type *type);
     int getSize2(const Type &type) { return getSize2(&type); }
-    void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
-    int getSize(BaseDecl *decl);
     int getSize2(BaseDecl *decl);
-    int getOffset(EnumVariant *variant, int index);
-    void setField(Expression *expr, const Type &type, bool do_cast, llvm::Value *entPtr);
+    void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
+    void setField(Expression *expr, const Type &type, llvm::Value *entPtr);
     llvm::Value *branch(llvm::Value *val);
     llvm::ConstantInt *makeInt(int val);
     llvm::ConstantInt *makeInt(int val, int bits);
@@ -107,7 +103,13 @@ public:
     void setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl);
     void simpleVariant(const Type &n, llvm::Value *ptr);
     llvm::Value *getTag(Expression *expr);
+
     bool doesAlloc(Expression *e);
+    llvm::Value *get_obj_ptr(Expression *e);
+    bool need_alloc(const std::string &name, const Type &type);
+    bool need_alloc(const Param &p) {
+        return need_alloc(p.name, *p.type);
+    }
 
     bool isRvo(Method *m) {
         return !m->type.isVoid() && isStruct(m->type);
@@ -118,17 +120,21 @@ public:
         return m && isRvo(m);
     }
 
+    llvm::Type *getPtr() {
+        return llvm::PointerType::getUnqual(ctx());
+    }
+
     std::vector<llvm::Value *> makeIdx(int i1, int i2) {
         return {makeInt(i1, 64), makeInt(i2, 64)};
     }
     std::vector<llvm::Value *> makeIdx(int i1) {
         return {makeInt(i1, 64)};
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, int i2, llvm::Type* type) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, int i2, llvm::Type *type) {
         auto idx = makeIdx(i1, i2);
         return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, llvm::Type* type) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, llvm::Type *type) {
         auto idx = makeIdx(i1);
         return Builder->CreateGEP(type, ptr, idx);
     }
@@ -139,7 +145,7 @@ public:
         std::vector<llvm::Value *> idx = {i1};
         return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2, llvm::Type* type) {
+    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2, llvm::Type *type) {
         std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, Type("i64"))};
         return Builder->CreateGEP(type, ptr, idx);
     }
@@ -180,6 +186,7 @@ public:
     }
 
     llvm::Function *make_printf();
+    llvm::Function *make_fflush();
     llvm::Function *make_exit();
     llvm::Function *make_malloc();
     llvm::StructType *make_slice_type();
@@ -187,12 +194,14 @@ public:
 
     llvm::Value *load(llvm::Value *val, const Type &type);
     llvm::Value *load(llvm::Value *val);
-    llvm::Value *load(llvm::Value *val, llvm::Type* type){
+    llvm::Value *load(llvm::Value *val, llvm::Type *type) {
         return Builder->CreateLoad(type, val);
     }
     llvm::Value *deref(llvm::Value *val, const Type &orig);
     llvm::Value *loadPtr(Expression *e);
-    llvm::Value *loadPtr(std::unique_ptr<Expression> &e);
+    llvm::Value *loadPtr(const std::unique_ptr<Expression> &e) {
+        return loadPtr(e.get());
+    }
     llvm::Value *cast(Expression *expr, const Type &type);
     llvm::Type *mapType(const Type &t, Resolver *r);
     llvm::Type *mapType(const Type *t, Resolver *r) {

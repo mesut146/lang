@@ -17,13 +17,13 @@ impl dirent{
     }
     panic("no eof");
   }
-  func cstr(self): [i8]{
+  func cstr(self): [u8]{
     return self.d_name[0..self.len()];
   }
 }
 
 func strlen(arr: [i8]): i32{
-  for(let i = 0;i < arr.len;++i){
+  for(let i = 0;i < arr.len();++i){
     if(arr[i] == 0) return i;
   }
   panic("no eof");
@@ -45,7 +45,7 @@ extern{
   func memcpy(dest: i8*, src: i8*, cnt: i32);
   func fopen(name: i8*, mode: i8*): FILE*;
   func fclose(file: FILE*): i32;
-  func fflush(file: FILE*): i32;
+  //func fflush(file: FILE*): i32;
   func fwrite(buf: i8*, size: i32, count: i32, target: FILE*): i32;
   func fread(buf: i8*, size: i32, count: i32, target: FILE*): i32;
   func fseek(file: FILE*, offset: i64, origin: i32): i32;

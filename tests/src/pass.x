@@ -1,6 +1,6 @@
 class A{
  a: i64;
- b: [i32; 100];
+ b: [i32; 5];
 }
 
 func by_val_mut(p: A){
@@ -22,7 +22,7 @@ func by_val_arr_mut(arr: [i32; 2]){
 }
 
 func main(){  
-  let p = A{a: 10, b: [0; 100]};
+  let p = A{a: 10, b: [0; 5]};
   by_val_mut(p);
   assert p.a == 10;
 

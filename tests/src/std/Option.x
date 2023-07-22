@@ -18,14 +18,15 @@ impl<T> Option<T>{
   }
 
   func unwrap(self): T{
-    if let Option<T>::Some(val) = (self){
-      return val;
+    if let Option<T>::Some(val*) = (self){
+      return *val;
     }
     panic("unwrap on None");
   }
+
   func get(self): T*{
-    if let Option<T>::Some(val) = (self){
-      return &val;
+    if let Option<T>::Some(val*) = (self){
+      return val;
     }
     panic("unwrap on None");
   }

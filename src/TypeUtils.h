@@ -1,5 +1,5 @@
-#include "parser/Ast.h"
 #include "AstCopier.h"
+#include "parser/Ast.h"
 
 static Type clone(const Type &type) {
     AstCopier copier;
@@ -12,12 +12,48 @@ static Type makeSelf(const Type &scope) {
     return Type(Type::Pointer, scope);
 }
 
-bool isGeneric(const Type &type, const std::vector<Type> &typeParams);
+static bool hasGeneric(const Type &type, const std::vector<Type> &typeParams) {
+    if (type.isSlice() || type.isArray() || type.isPointer()) {
+        auto elem = type.scope.get();
+        return hasGeneric(*elem, typeParams);
+    }
+    if (type.scope) throw std::runtime_error("hasGeneric::scope");
+    if (type.typeArgs.empty()) {
+        for (auto &tp : typeParams) {
+            if (tp.print() == type.print()) return true;
+        }
+    } else {
+        for (auto &ta : type.typeArgs) {
+            if (hasGeneric(ta, typeParams)) return true;
+        }
+    }
+    return false;
+}
+
+static bool isGeneric(const Type &type, const std::vector<Type> &typeParams) {
+    if (type.isSlice() || type.isArray() || type.isPointer()) return false;
+    if (type.scope) throw std::runtime_error("isGeneric::scope");
+    if (type.typeArgs.empty()) {
+        for (auto &tp : typeParams) {
+            if (tp.print() == type.print()) return true;
+        }
+    } else {
+        for (auto &ta : type.typeArgs) {
+            if (isGeneric(ta, typeParams)) return true;
+        }
+    }
+    return false;
+}
 
 static bool isUnsigned(const Type &type) {
     auto s = type.print();
     return s == "u8" || s == "u16" ||
            s == "u32" || s == "u64";
+}
+static bool isSigned(const Type &type) {
+    auto s = type.print();
+    return s == "i8" || s == "i16" ||
+           s == "i32" || s == "i64";
 }
 
 static uint64_t max_for(const Type &type) {

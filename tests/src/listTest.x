@@ -66,7 +66,7 @@ func main(){
   assert list.indexOf(20) == 1;
   assert list.contains(30) && !list.contains(40);
   let s = list.slice(1, 3);
-  assert s.len == 2 && s[0] == 20;
+  assert s.len() == 2 && s[0] == 20;
   iterTest(list);
   list.remove(1);
   listStruct();

@@ -1,5 +1,5 @@
 func main(){
-    let helloArr = ['h' as i8, 'e', 'l', 'l', 'o'];
+    let helloArr = ['h' as u8, 'e', 'l', 'l', 'o'];
     let helloSlice = helloArr[0..5];
     let s = str::new(helloSlice);
 

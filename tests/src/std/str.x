@@ -21,7 +21,7 @@ impl str{
     }
 
     func len(self): i32{
-      return self.buf.len;
+      return self.buf.len() as i32;
     }
 
     func new(buf: [u8]): str{
@@ -51,7 +51,7 @@ impl str{
         //rest
         let j = 1;
         let found = true;
-        while(i<s.len()){
+        while(i < s.len()){
           if(self.buf[i + j - 1] != s.buf[j]){
             found = false;
             break;
@@ -66,10 +66,7 @@ impl str{
     func contains(self, s: str): bool{
       return self.indexOf(s, 0) != -1;
     }
-    
-    func cstr(self): u8*{
-      return self.str().cstr();
-    }
+  
 
     func substr(self, start: i32): str{
       return self.substr(start, self.len());
@@ -102,6 +99,10 @@ impl str{
     
     func str(self): String{
       return String::new(*self);
+    }
+
+    func cstr(self): i8*{
+      return self.str().cstr() as i8*;
     }
     
     func split(self, sep: str): List<str>{

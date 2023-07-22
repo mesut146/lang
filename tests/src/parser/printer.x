@@ -83,10 +83,10 @@ impl Debug for Impl{
 
 impl Debug for Decl{
     func debug(self, f: Fmt*){
-        if let Decl::Struct(fields) = (self){
-            debug_struct(self, &fields, f);
-        }else if let Decl::Enum(variants) = (self){
-            debug_enum(self, &variants, f);
+        if let Decl::Struct(fields*) = (self){
+            debug_struct(self, fields, f);
+        }else if let Decl::Enum(variants*) = (self){
+            debug_enum(self, variants, f);
         }
     }
     func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
@@ -165,7 +165,7 @@ impl Debug for Param{
 
 impl Debug for Type{
   func debug(self, f: Fmt*){
-    if let Type::Simple(scp, name, args)=(self){
+    if let Type::Simple(scp*, name, args*)=(self){
       if(scp.is_some()){
         scp.get().get().debug(f);
         f.print("::");
@@ -173,29 +173,29 @@ impl Debug for Type{
       f.print(name);
       if(!args.empty()){
         f.print("<");
-        for(let i=0;i<args.len();++i){
+        for(let i = 0;i < args.len();++i){
           if(i>0) f.print(", ");
           args.get_ptr(i).debug(f);
         }
         f.print(">");
       }
     }
-    else if let Type::Pointer(ty)=(self){
+    else if let Type::Pointer(ty*) = (self){
       ty.get().debug(f);
       f.print("*");
     }
-    else if let Type::Array(box, sz)=(self){
+    else if let Type::Array(box*, sz) = (self){
       f.print("[");
       box.get().debug(f);
       f.print("; ");
       sz.debug(f);
       f.print("]");
     }
-    else if let Type::Slice(box)=(self){
+    else if let Type::Slice(box*) = (self){
       f.print("[");
       box.get().debug(f);
       f.print("]");
-    }else panic("");
+    }else panic("Type::debug");
   }
 }
 
@@ -263,17 +263,17 @@ impl Debug for Stmt{
       join(f, u, ", ");
       f.print(")");
       b.get().debug(f);
-    }else if let Stmt::Continue=(self){
+    }else if let Stmt::Continue = (self){
       f.print("continue;");
-    }else if let Stmt::Break=(self){
+    }else if let Stmt::Break = (self){
       f.print("break;");
-    }else if let Stmt::Assert(e)=(self){
+    }else if let Stmt::Assert(e) = (self){
       f.print("assert ");
       e.debug(f);
       f.print(";");
     }
     else{
-      panic("stmt");
+      panic("Stmt::debug");
     }
   }
 }
@@ -281,12 +281,13 @@ impl Debug for Stmt{
 impl Debug for Block{
   func debug(self, f: Fmt*){
     f.print("{\n");
-    for(let i=0;i<self.list.len();++i){
+    for(let i = 0;i < self.list.len();++i){
        body(self.list.get_ptr(i), f);
     }
     f.print("}");
   }
 }
+
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
     for(let i=0;i<self.list.len();++i){
@@ -294,6 +295,7 @@ impl Debug for VarExpr{
     }
   }
 }
+
 impl Debug for Fragment{
   func debug(self, f: Fmt*){
     f.print(self.name);
@@ -374,7 +376,7 @@ impl Debug for Expr{
       f.print("]");
     }
     else{
-     panic("expr");
+     panic("Expr::debug");
     }
   }
 }

@@ -134,8 +134,8 @@ impl Type{
   }
   
   func name(self): String*{
-    if let Type::Simple(scp, nm, args)=(self){
-      return &nm;
+    if let Type::Simple(scp*, nm*, args*)=(self){
+      return nm;
     }
     panic("cant unwrap");
   }
@@ -154,7 +154,7 @@ impl Type{
     return self.print().eq("str");
   }
   func is_generic(self): bool{
-    if let Type::Simple(scope, name, args) = (self){
+    if let Type::Simple(scope*, name*, args*) = (self){
       return !args.empty();
     }
     return false;
@@ -163,7 +163,7 @@ impl Type{
     return self is Type::Pointer;
   }
   func unwrap(self): Type{
-    if let Type::Pointer(bx) = (self){
+    if let Type::Pointer(bx*) = (self){
       return bx.unwrap();
     }
     return *self;

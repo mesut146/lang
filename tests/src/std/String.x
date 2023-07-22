@@ -25,34 +25,36 @@ impl String{
     }
 
     func new(s: str): String{
-        let res = String::new();
+        let res = String::new(s.len());
         res.append(s);
         return res;
     }
     
     func new(arr: List<u8>*): String{
-        let s = String::new(arr.len());
-        for(let i=0;i<arr.len();++i){
-          s.append(arr.get(i));
-        }
-        return s;
+        return String::new(arr.slice());
     }
     
     func new(arr: List<i8>): String{
-        let s = String::new(arr.len());
-        for(let i=0;i<arr.len();++i){
-          s.append(arr.get(i));
-        }
-        return s;
+        return String::new(arr.slice());
     }
     
     func new(arr: [i8]): String{
-        let s = String::new(arr.len);
-        for(let i=0;i<arr.len;++i){
+        let ptr = arr.ptr();
+        let len = arr.len();
+        let s = String::new(len);
+        for(let i = 0;i < len;++i){
           s.append(arr[i]);
         }
         return s;
-    }    
+    }
+
+    func new(arr: [u8]): String{
+      let s = String::new(arr.len());
+      for(let i = 0;i < arr.len();++i){
+        s.append(arr[i]);
+      }
+      return s;
+  }      
 
     func len(self): i64{
         return self.arr.len();
@@ -65,31 +67,39 @@ impl String{
     func str(self): str{
         return str{self.arr.slice(0, self.len())};
     }
+
+    func slice(self): [u8]{
+      return self.arr.slice(0, self.len());
+    }
     
     func cstr(self): u8*{
       if(self.len() == 0 || self.get((self.len() - 1) as i32) != 0){
         let res = self.clone();
         res.append(0u8);
-        return res.arr.arr;
+        return res.arr.ptr();
       }
-      return self.arr.arr;
+      return self.arr.ptr();
     }
 
     func append(self, s: str){
         for(let i = 0;i < s.len();++i){
-            self.arr.add(s.get(i));
+            self.append(s.get(i));
         }
     }
     
     func append(self, s: String){
         for(let i = 0;i < s.len();++i){
-            self.arr.add(s.get(i));
+            self.append(s.get(i));
         }
     }
 
     func append(self, chr: i8){
-        self.arr.add(chr);
+        self.arr.add(chr as u8);
     }
+
+    func append(self, chr: u8){
+      self.arr.add(chr);
+    }    
     
     func set(self, pos: i32, c: u8){
       self.arr.set(pos, c);

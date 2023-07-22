@@ -12,6 +12,9 @@
 #include <unordered_set>
 #include <variant>
 
+
+constexpr int SLICE_LEN_BITS = 64;
+
 static bool is_main(const Method *m) {
     return m->name == "main" && m->params.empty();
 }
@@ -20,6 +23,7 @@ struct Config {
     static bool optimize_enum;
     static bool verbose;
     static bool rvo_ptr;
+    static bool debug;
 };
 
 class RType;
@@ -59,12 +63,20 @@ static std::vector<BaseDecl *> getTypes(Unit *unit) {
     return list;
 }
 
-static bool isMember(Method *m) {
-    if (m->self) return true;
-    return false;
+static std::vector<Type> get_type_params(Method &m) {
+    std::vector<Type> res;
+    if (!m.isGeneric) {
+        return res;
+    }
+    if (m.parent) {
+        auto imp = dynamic_cast<Impl *>(m.parent);
+        res = imp->type_params;
+    }
+    res.insert(res.end(), m.typeArgs.begin(), m.typeArgs.end());
+    return res;
 }
 
-static std::string methodParent(Method *m) {
+static std::string methodParent(const Method *m) {
     if (!m->parent) return m->name;
     if (m->parent->isImpl()) {
         auto impl = dynamic_cast<Impl *>(m->parent);
@@ -76,7 +88,7 @@ static std::string methodParent(Method *m) {
     return m->name;
 }
 
-static std::string printMethod(Method *m) {
+static std::string printMethod(const Method *m) {
     std::string s = methodParent(m);
     if (!m->typeArgs.empty()) {
         s += "<";
@@ -97,12 +109,13 @@ static std::string printMethod(Method *m) {
     for (auto &prm : m->params) {
         if (i > 0) s += ",";
         s += prm.type->print();
+        i++;
     }
     s += ")";
     return s;
 }
 
-static std::string mangle(Method *m) {
+static std::string mangle(const Method *m) {
     std::string s = methodParent(m);
     if (!m->typeArgs.empty()) {
         s += "<";
@@ -156,6 +169,13 @@ struct VarHolder {
     VarHolder(std::string &name, const Type &type) : name(name), type(type) {}
 };
 
+struct Lit {
+    std::string value;
+    bool kind_char = false;
+    bool kind_float = false;
+    bool kind_int = false;
+};
+
 class RType {
 public:
     Unit *unit = nullptr;
@@ -186,11 +206,14 @@ class Generator : public AstCopier {
 public:
     const std::map<std::string, Type> &map;
 
-    Generator(const std::map<std::string, Type> &map) : map(map) {}
-    std::any visitType(Type *type) override;
+    explicit Generator(const std::map<std::string, Type> &map) : map(map){};
+
+    static Type make(const Type &type, const std::map<std::string, Type> &map);
+
+    std::any visitType(Type *type);
 };
 
-static std::string prm_id(Method &m, std::string &p) {
+static std::string prm_id(const Method &m, const std::string &p) {
     return mangle(&m) + "." + p;
 }
 
@@ -234,7 +257,7 @@ public:
         return root + "/" + join(is.list, "/") + ".x";
     }
 
-    void err(Expression *e, const std::string &msg);
+    void err(Node *e, const std::string &msg);
     void err(const std::string &msg);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
@@ -284,8 +307,23 @@ public:
     void addType(const std::string &name, const RType &rt);
     std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
-    std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl);
+    std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl, const Type &type);
     void addUsed(BaseDecl *bd);
+
+    bool is_slice_get_ptr(MethodCall *mc) {
+        if (!mc->scope || mc->name != "ptr" || !mc->args.empty()) {
+            return false;
+        }
+        auto scope = getType(mc->scope.get()).unwrap();
+        return scope.isSlice();
+    }
+    bool is_slice_get_len(MethodCall *mc) {
+        if (!mc->scope || mc->name != "len" || !mc->args.empty()) {
+            return false;
+        }
+        auto scope = getType(mc->scope.get()).unwrap();
+        return scope.isSlice();
+    }
 
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;

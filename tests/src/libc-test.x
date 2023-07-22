@@ -1,10 +1,15 @@
 import std/libc
 import std/io
 
+func file_name(): str{
+  return "./test.txt";
+}
+
 func read_test(){
-  let buf = read_bytes("./libc-test.ll");
-  print("read %d\n", buf.len());
-  //str{buf.slice(0, buf.len())}.dump();
+  let buf = read_bytes(file_name());
+  assert buf.len() == 5;
+  let s = String::new(buf);
+  assert s.eq("hello");
 }
 
 func seek_test(f: FILE*){
@@ -13,9 +18,8 @@ func seek_test(f: FILE*){
 }
 
 func write_test(){
-  let path = "./test.txt";
-  //let buf = String::new("hello").arr;
-  //write_bytes(buf.arr, path);
+  let buf = String::new("hello");
+  write_bytes(buf.slice(), file_name());
 }
 
 func list_test(){
@@ -24,9 +28,9 @@ func list_test(){
 }
 
 func main(){
-  read_test();
+  print("pwd = %s\n", resolve(".").cstr());
   write_test();
+  read_test();
   list_test();
-  print("res=%s\n", resolve(".").cstr());
   print("libc_test done\n");
 }

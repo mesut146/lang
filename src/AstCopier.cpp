@@ -62,10 +62,6 @@ std::any AstCopier::visitType(Type *node) {
         auto inner = expr(node->scope.get(), this);
         return (Expression *) new Type(Type::Pointer, *inner);
     }
-    if (node->isRef()) {
-        auto inner = expr(node->scope.get(), this);
-        return (Expression *) new Type(Type::Ref, *inner);
-    }
     if (node->isArray()) {
         auto inner = expr(node->scope.get(), this);
         return (Expression *) new Type(*inner, node->size);

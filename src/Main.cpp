@@ -27,29 +27,13 @@ void parse(const std::string &path, bool print = false) {
     }
 }
 
-void resolveTest() {
-    debug = false;
-    //std::string path="../tests/resolve1";
-    //std::string path="../tests/resolveClass";
-    //std::string path="../tests/arrow";
-    std::string path = "../tests/importTest";
-    //std::string path="../tests/a";
-    //std::string path="../tests/core/List";
-    auto root = "../tests";
-    auto r = Resolver::getResolver(path, root);
-    r->resolveAll();
-}
-
 void parseTest() {
     debug = true;
-    parse("../tests/exprs");
-    parse("../tests/stmts");
-    parse("../tests/types");
-    parse("../tests/core/Array");
-    parse("../tests/core/Optional");
-    parse("../tests/core/String");
-    parse("../tests/core/List");
-    parse("../tests/src/a.x", true);
+    auto path = "../tests/parser";
+    for (auto &file : std::filesystem::directory_iterator(path)) {
+        auto file_path = "./tests/" + file.path().string();
+        parse(file_path);
+    }
 }
 
 void compile(const std::string &path) {
@@ -80,22 +64,29 @@ void compile(std::initializer_list<std::string> list) {
     c.link_run();
 }
 
-void compileTest() {
-    //clean
-    for (const auto &e : std::filesystem::recursive_directory_iterator(".")) {
+void clean() {
+    for (const auto &e : std::filesystem::directory_iterator(".")) {
         if (e.is_directory()) continue;
         auto ext = e.path().extension().string();
         if (ext == ".ll" || ext == ".o") {
             std::filesystem::remove(e.path());
         }
     }
+}
+
+void compileTest() {
+    clean();
+
     auto s1 = "../tests/src/std/String.x";
     auto s2 = "../tests/src/std/str.x";
     auto op = "../tests/src/std/ops.x";
     auto libc = "../tests/src/std/libc.x";
     auto io = "../tests/src/std/io.x";
 
-    /*compile("../tests/src/lit.x");
+    //compile("../tests/src/opaq.x");
+    //compile("../tests/src/dbg.x");
+
+    compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
     compile("../tests/src/flow.x");
@@ -106,6 +97,7 @@ void compileTest() {
     compile("../tests/src/importTest");
     compile("../tests/src/traits.x");
     compile("../tests/src/generic.x");
+    compile("../tests/src/structTest.x");
     compile("../tests/src/enumTest.x");
     compile("../tests/src/malloc.x");
     compile("../tests/src/impl.x");
@@ -120,9 +112,7 @@ void compileTest() {
     compile({"../tests/src/strTest.x", s1, s2, op});
     compile({"../tests/src/opt.x", s1, s2, op});
     compile({"../tests/src/mapTest.x", s1, s2, op});
-    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});*/
-    //compile("../tests/src/dbg.x");
-    //compile("../tests/src/opaq.x");
+    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
 
     auto tok = "../tests/src/parser/token.x";
     auto lx = "../tests/src/parser/lexer.x";
@@ -131,8 +121,7 @@ void compileTest() {
     auto ps = "../tests/src/parser/parser.x";
     auto rs = "../tests/src/parser/resolver.x";
     auto mr = "../tests/src/parser/method_resolver.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
-    //compile({ps});
+    //compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
 }
 
 void usage() {
@@ -142,13 +131,6 @@ void usage() {
 int main(int argc, char **args) {
     try {
         if (argc == 1) {
-            /*std::vector<int> arr{6, 9, 1, 3};
-            std::sort(arr.begin(), arr.end(), [](int a, int b) {
-                if (b >= a) {
-                    return true;
-                }
-                return false;
-            });*/
             compileTest();
             return 0;
         }
@@ -157,8 +139,6 @@ int main(int argc, char **args) {
             usage();
         } else if (arg == "parse") {
             parseTest();
-        } else if (arg == "resolve") {
-            resolveTest();
         } else if (arg == "c") {
             auto file = std::string(args[2]);
             Compiler c;

@@ -172,6 +172,14 @@ llvm::Function *Compiler::make_printf() {
     return f;
 }
 
+llvm::Function *Compiler::make_fflush() {
+    std::vector<llvm::Type *> args{getPtr()};
+    auto ft = llvm::FunctionType::get(getInt(32), args, false);
+    auto f = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "fflush", *mod);
+    f->setCallingConv(llvm::CallingConv::C);
+    return f;
+}
+
 llvm::Function *Compiler::make_exit() {
     auto ft = llvm::FunctionType::get(Builder->getVoidTy(), getInt(32), false);
     auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "exit", *mod);
@@ -197,7 +205,7 @@ llvm::Function *Compiler::make_malloc() {
 llvm::StructType *Compiler::make_slice_type() {
     std::vector<llvm::Type *> elems;
     elems.push_back(getInt(8)->getPointerTo());
-    elems.push_back(getInt(32));//len
+    elems.push_back(getInt(SLICE_LEN_BITS));
     return llvm::StructType::create(ctx(), elems, "__slice");
 }
 
@@ -253,18 +261,25 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         return DBuilder->createPointerType(map_di(t->scope.get()), 64);
     }
     if (t->isArray()) {
-        llvm::DINodeArray sub;
+        std::vector<llvm::Metadata *> elems;
+        elems.push_back(DBuilder->getOrCreateSubrange(0, t->size));
+        llvm::DINodeArray sub(llvm::MDTuple::get(ctx(), elems));
         auto elem = map_di(t->scope.get());
-        return DBuilder->createArrayType(t->size, 8, elem, sub);
+        auto size = getSize2(t);
+        return DBuilder->createArrayType(size, 0, elem, sub);
     }
     if (t->isSlice()) {
-        auto sz = getSize(t);
+        auto sz = getSize2(t);
         auto file = DBuilder->createFile(di.cu->getFilename(), di.cu->getDirectory());
         std::vector<llvm::Metadata *> elems;
-        elems.push_back(DBuilder->createPointerType(map_di(t->scope.get()), 64));
-        elems.push_back(map_di(new Type("i32")));
+        auto ptr_ty = DBuilder->createPointerType(map_di(t->scope.get()), 64);
+        auto ptr_mem = DBuilder->createMemberType(nullptr, "ptr", file, 0, 64, 0, 0, llvm::DINode::FlagZero, ptr_ty);
+        elems.push_back(ptr_mem);
+        auto len_ty = map_di(new Type("i32"));
+        auto len_mem = DBuilder->createMemberType(nullptr, "len", file, 0, SLICE_LEN_BITS, 0, 64, llvm::DINode::FlagZero, len_ty);
+        elems.push_back(len_mem);
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-        return DBuilder->createStructType(di.cu, s, file, 0, sz, 8, llvm::DINode::FlagZero, nullptr, et);
+        return DBuilder->createStructType(di.cu, s, file, 0, sz, 0, llvm::DINode::FlagZero, nullptr, et);
     }
     if (s == "bool") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_boolean);
     if (s == "i8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_signed);
@@ -288,13 +303,13 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         //todo order
         auto ed = (EnumDecl *) rt.targetDecl;
         auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
-        auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 8, 0, llvm::DINode::FlagZero, tag);
+        auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 0, 0, llvm::DINode::FlagZero, tag);
         elems.push_back(tagm);
+        auto data_size = getSize2(ed) - ENUM_TAG_BITS;
         auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
-        auto sz = getSize2(ed) - ENUM_TAG_BITS;
         llvm::DINodeArray sub;
-        auto at = DBuilder->createArrayType(sz, 8, chr, sub);
-        auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, sz, 8, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
+        auto at = DBuilder->createArrayType(data_size, 0, chr, sub);
+        auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, data_size, 0, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
         elems.push_back(arrm);
     } else {
         auto sd = (StructDecl *) rt.targetDecl;
@@ -303,14 +318,8 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         auto sl = mod->getDataLayout().getStructLayout(st);
         for (auto &fd : sd->fields) {
             auto off = sl->getElementOffsetInBits(idx);
-            int sz;
-            if (idx == sd->fields.size() - 1) {
-                //sz = st_size - off;
-                sz = getSize2(fd.type);
-            } else {
-                sz = sl->getElementOffsetInBits(idx + 1) - off;
-            }
-            auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, sz, 0, off, llvm::DINode::FlagZero, map_di(fd.type));
+            auto di_type = map_di(fd.type);
+            auto mt = DBuilder->createMemberType(nullptr, fd.name, file, fd.line, di_type->getSizeInBits(), 0, off, llvm::DINode::FlagZero, di_type);
             elems.push_back(mt);
             idx++;
         }
@@ -319,28 +328,6 @@ llvm::DIType *Compiler::map_di(const Type *t) {
     return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
 }
 
-int Compiler::getSize(BaseDecl *decl) {
-    if (decl->isEnum()) {
-        auto ed = dynamic_cast<EnumDecl *>(decl);
-        int res = 0;
-        for (auto &ev : ed->variants) {
-            if (ev.fields.empty()) continue;
-            int cur = 0;
-            for (auto &f : ev.fields) {
-                cur += getSize(f.type);
-            }
-            res = cur > res ? cur : res;
-        }
-        return res + ENUM_TAG_BITS;
-    } else {
-        auto td = dynamic_cast<StructDecl *>(decl);
-        int res = 0;
-        for (auto &fd : td->fields) {
-            res += getSize(fd.type);
-        }
-        return res;
-    }
-}
 
 int Compiler::getSize2(BaseDecl *decl) {
     auto st = (llvm::StructType *) mapType(decl->type);
@@ -348,28 +335,9 @@ int Compiler::getSize2(BaseDecl *decl) {
     return sl->getSizeInBits();
 }
 
-int Compiler::getSize(const Type *type) {
-    auto tt = resolv->getType(*type);
-    type = &tt;
-    if (type->isPointer()) {
-        return 64;
-    }
-    if (type->isPrim()) {
-        return sizeMap[type->name];
-        //return 64;
-    }
-    if (type->isArray()) {
-        return getSize(type->scope.get()) * type->size;
-    }
-    if (type->isSlice()) {
-        //ptr + len
-        return 64 + 32;
-    }
-    auto decl = resolv->resolve(*type).targetDecl;
-    if (decl) {
-        return getSize(decl);
-    }
-    throw std::runtime_error("size(" + type->print() + ")");
+int getSize(llvm::StructType *type, Compiler *c) {
+    auto sl = c->mod->getDataLayout().getStructLayout(type);
+    return sl->getSizeInBits();
 }
 
 int Compiler::getSize2(const Type *type) {
@@ -385,8 +353,8 @@ int Compiler::getSize2(const Type *type) {
     }
     if (type->isSlice()) {
         //ptr + len
-        //todo align
-        return 64 + 32;
+        //return 64 + 32;
+        return getSize(sliceType, this);
     }
     auto decl = resolv->resolve(*type).targetDecl;
     if (decl) {
@@ -651,6 +619,22 @@ public:
     std::any visitIfLetStmt(IfLetStmt *node) override {
         node->rhs->accept(this);
         compiler->resolv->max_scope++;
+        auto rhs_rt = compiler->resolv->resolve(node->type);
+        auto decl = (EnumDecl *) rhs_rt.targetDecl;
+        auto index = Resolver::findVariant(decl, node->type.name);
+        auto &variant = decl->variants[index];
+        int i = 0;
+        for (auto &arg : node->args) {
+            Type type = variant.fields[i].type;
+            if (arg.ptr) {
+                type = Type(Type::Pointer, type);
+            }
+            auto ptr = alloc(type, node);
+            ptr->setName(arg.name);
+            auto id = compiler->getId(arg.name);
+            compiler->varAlloc[id] = ptr;
+            i++;
+        }
         node->thenStmt->accept(this);
         if (node->elseStmt) {
             compiler->resolv->max_scope++;

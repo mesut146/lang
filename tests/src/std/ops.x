@@ -47,7 +47,7 @@ class Fmt{
 impl Debug for [i32]{
   func debug(self, f: Fmt*){
     f.print("[");
-    for(let i = 0;i < self.len;++i){
+    for(let i = 0;i < self.len();++i){
       if(i > 0) print(", ");
       Debug::debug(i, f);
       f.print("=");

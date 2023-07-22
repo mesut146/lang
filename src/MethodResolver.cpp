@@ -34,6 +34,7 @@ std::string Signature::print() {
 Signature Signature::make(MethodCall *mc, Resolver *r) {
     Signature res;
     res.mc = mc;
+    res.r = r;
     RType scp;
     if (mc->scope) {
         scp = r->resolve(mc->scope.get());
@@ -69,20 +70,19 @@ Type handleSelf(const Type &type, Method *m) {
     return imp->type;
 }
 
-Signature Signature::make(Method *m, Resolver *r) {
+Signature Signature::make(Method *m, const std::map<std::string, Type> &map) {
     Signature res;
     res.m = m;
-    if (m->parent) {
-        if (m->parent->isImpl()) {
-            auto imp = (Impl *) m->parent;
-            res.scope = RType(imp->type);
-        }
+    if (m->parent && m->parent->isImpl()) {
+        auto imp = (Impl *) m->parent;
+        res.scope = RType(imp->type);
     }
     if (m->self) {
         res.args.push_back(*m->self->type);
     }
     for (auto &prm : m->params) {
-        res.args.push_back(handleSelf(*prm.type, m));
+        auto mapped = Generator::make(prm.type.value(), map);
+        res.args.push_back(handleSelf(mapped, m));
     }
     res.ret = handleSelf(m->type, m);
     return res;
@@ -106,36 +106,18 @@ std::vector<Signature> MethodResolver::collect(Signature &sig) {
     return list;
 }
 
-bool isGeneric(const Type &type, const std::vector<Type> &typeParams) {
-    if (type.isSlice() || type.isArray() || type.isPointer()) return false;
-    if (type.scope) error("isGeneric::scope");
-    if (type.typeArgs.empty()) {
-        for (auto &tp : typeParams) {
-            if (tp.print() == type.print()) return true;
-        }
-    } else {
-        for (auto &ta : type.typeArgs) {
-            if (isGeneric(ta, typeParams)) return true;
-        }
-    }
-    return false;
-}
-
 void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list) {
     for (auto &item : r->unit->items) {
         if (item->isMethod()) {
             auto m = dynamic_cast<Method *>(item.get());
             if (m->name == name) {
-                list.push_back(Signature::make(m, r));
+                list.push_back(Signature::make(m, {}));
             }
         } else if (item->isExtern()) {
             auto ex = dynamic_cast<Extern *>(item.get());
             for (auto &m : ex->methods) {
                 if (m.name == name) {
-                    if (name == "free") {
-                        print("free " + r->unit->path);
-                    }
-                    list.push_back(Signature::make(&m, r));
+                    list.push_back(Signature::make(&m, {}));
                 }
             }
         }
@@ -144,27 +126,52 @@ void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list)
         //sibling
         for (auto &m : r->curImpl->methods) {
             if (!m.self && m.name == name) {
-                list.push_back(Signature::make(&m, r));
+                //todo map
+                list.push_back(Signature::make(&m, {}));
             }
         }
     }
 }
 
+void get_type_map(const Type &type, Type &generic, std::map<std::string, Type> &map) {
+    if (type.isArray() || type.isPointer() || type.isSlice()|| type.isVoid() || type.scope) {
+        throw std::runtime_error(type.print() + " " + generic.print());
+    }
+    if (type.isPrim() || generic.typeArgs.empty() /*|| !type.scope && type.typeArgs.empty()*/) {
+        map[generic.print()] = type;
+        return;
+    }
+    for (int i = 0; i < type.typeArgs.size(); ++i) {
+        get_type_map(type.typeArgs[i], generic.typeArgs[i], map);
+    }
+}
+
 void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bool imports) {
     auto &name = sig.mc->name;
-    auto &rt = sig.scope.value();
-    auto type = rt.type.unwrap();
-    if (rt.targetDecl && rt.targetDecl->base) {
+    auto &scope = sig.scope.value();
+    auto type = scope.type.unwrap();
+    /*if (rt.targetDecl && rt.targetDecl->base) {
         auto rr = Resolver::getResolver(rt.unit->path, r->root);
         auto base = rr->resolve(*rt.targetDecl->base);
         //getMethods(base, name, list, false);
+    }*/
+    if (sig.mc->print() == "res.add(self)") {
+        int cc = 55;
+    }
+    auto type_plain = type;
+    type_plain.typeArgs.clear();
+    auto decl = sig.r->resolve(type_plain).targetDecl;
+
+    std::map<std::string, Type> map;
+    if (decl) {
+        get_type_map(type, decl->type, map);
     }
     for (auto &item : r->unit->items) {
         if (!item->isImpl()) {
             continue;
         }
         auto impl = dynamic_cast<Impl *>(item.get());
-        if (rt.trait) {
+        if (scope.trait) {
             if (!impl->trait_name || impl->trait_name->name != type.name) continue;
             auto uw = sig.args[0].unwrap();
             if (impl->type.name != uw.name) continue;
@@ -177,17 +184,16 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
                 continue;
             }
             if (type.typeArgs.empty()) {
-                list.push_back(Signature::make(&m, r));
+                list.push_back(Signature::make(&m, map));
             } else {
                 std::map<std::string, Type> typeMap;
                 for (int i = 0; i < m.typeArgs.size(); i++) {
                     auto &ta = m.typeArgs[i];
                     typeMap[ta.name] = type.typeArgs[i];
                 }
-                Generator gen(typeMap);
-                auto sig = Signature::make(&m, r);
+                auto sig = Signature::make(&m, map);
                 for (auto &a : sig.args) {
-                    a = *(Type *) std::any_cast<Expression *>(a.accept(&gen));
+                    a = Generator::make(a, typeMap);
                 }
                 list.push_back(std::move(sig));
             }
@@ -207,6 +213,7 @@ void error(Resolver *r, const std::string &str) {
     error(printMethod(r->curMethod) + "\n" + str);
 }
 
+
 RType MethodResolver::handleCallResult(Signature &sig) {
     auto mc = sig.mc;
     auto list = collect(sig);
@@ -215,12 +222,16 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     }
     std::vector<Signature> real;
     std::map<Method *, std::string> errors;
+    Signature *exact = nullptr;
     for (auto &sig2 : list) {
         auto msg = isSame(sig, sig2);
-        if (!msg) {
-            real.push_back(std::move(sig2));
+        if (std::holds_alternative<bool>(msg)) {
+            if (*std::get_if<bool>(&msg)) {
+                exact = &sig2;
+            }
+            real.push_back(sig2);
         } else {
-            errors[sig2.m] = msg.value();
+            errors[sig2.m] = std::get<std::string>(msg);
         }
     }
     if (real.empty()) {
@@ -230,19 +241,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         }
         r->err(mc, s);
     }
-    //remove base method if derived exist
-    if (mc->scope && real.size() == 2) {
-        auto &m1 = real[0];
-        auto &m2 = real[1];
-        if (m1.m->self->type->print() == sig.scope->type.print()) {
-            //m1 is derived
-            real.erase(real.begin() + 1);
-        } else {
-            //m2 is derived
-            real.erase(real.begin());
-        }
-    }
-    if (real.size() > 1) {
+    if (real.size() > 1 && !exact) {
         std::string s;
         for (auto &m : real) {
             s += m.print() + "\n";
@@ -250,7 +249,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         error(r, "method:  " + mc->print() + "\n" + sig.print() + " has " +
                          std::to_string(real.size()) + " candidates;\n" + s);
     }
-    auto &sig2 = real[0];
+    auto &sig2 = exact ? *exact : real[0];
     auto target = sig2.m;
     if (!target->isGeneric) {
         if (target->unit->path != r->unit->path) {
@@ -261,41 +260,40 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         return res;
     }
     std::map<std::string, std::optional<Type>> typeMap;
-    if (mc->typeArgs.empty()) {
-        //infer
-        for (auto &ta : target->typeArgs) {
-            typeMap[ta.name] = std::optional<Type>();
+    auto type_params = get_type_params(*target);
+    //mark all as non inferred
+    for (auto &ta : type_params) {
+        typeMap[ta.name] = std::optional<Type>();
+    }
+    if (mc->scope) {
+        //todo trait
+        auto &scope = sig.scope->type;
+        for (int i = 0; i < scope.typeArgs.size(); i++) {
+            typeMap[type_params[i].name] = scope.typeArgs[i];
         }
-        if (mc->scope) {
-            if (sig.scope->trait) {
-            }
-            auto &scope = sig.scope->type;
-            for (int i = 0; i < scope.typeArgs.size(); i++) {
-                typeMap[target->typeArgs[i].name] = scope.typeArgs[i];
-            }
-        }
-        for (int i = 0; i < sig.args.size(); i++) {
-            auto &arg_type = sig.args[i];
-            auto &target_type = sig2.args[i];
-            MethodResolver::infer(arg_type, target_type, typeMap);
-        }
-        for (auto &[tp, stat] : typeMap) {
-            if (!stat) {
-                error(r, "can't infer type parameter: " + tp);
-            }
+        if (!mc->typeArgs.empty()) {
+            error("todo");
         }
     } else {
-        if (mc->typeArgs.size() < target->typeArgs.size()) {
-            error(r, "not enough type args: " + mc->print());
-        }
-        //place specified type args
-        for (int i = 0; i < mc->typeArgs.size(); i++) {
-            typeMap[target->typeArgs[i].name] = r->getType(mc->typeArgs[i]);
+        if (!mc->typeArgs.empty()) {
+            //place specified type args in order
+            for (int i = 0; i < mc->typeArgs.size(); i++) {
+                typeMap[type_params[i].name] = r->getType(mc->typeArgs[i]);
+            }
         }
     }
+    //infer from args
+    for (int i = 0; i < sig.args.size(); i++) {
+        auto &arg_type = sig.args[i];
+        auto &target_type = sig2.args[i];
+        MethodResolver::infer(arg_type, target_type, typeMap);
+    }
     std::map<std::string, Type> tmap;
-    for (auto &[k, v] : typeMap) {
-        tmap[k] = *v;
+    for (auto &[tp, stat] : typeMap) {
+        if (!stat.has_value()) {
+            error(r, "can't infer type parameter: " + tp);
+        }
+        tmap[tp] = stat.value();
     }
     target = generateMethod(tmap, target, sig);
     auto res = r->resolve(target->type).clone();
@@ -310,13 +308,17 @@ void MethodResolver::infer(const Type &arg, const Type &prm, std::map<std::strin
         infer(*arg.scope.get(), *prm.scope.get(), typeMap);
         return;
     }//todo
-    auto it = typeMap.find(prm.name);
     if (prm.typeArgs.empty()) {
-        if (it != typeMap.end()) {
+        auto it = typeMap.find(prm.name);
+        if (typeMap.contains(prm.name)) {
             if (!it->second) {
                 it->second = arg;
-            } else if (MethodResolver::isCompatible(arg, *it->second)) {
-                error("type infer failed: " + it->second->print() + " vs " + arg.print());
+            } else {
+                auto m = MethodResolver::isCompatible(arg, *it->second);
+                if (m.has_value()) {
+                    print(m.value());
+                    error("type infer failed: " + it->second->print() + " vs " + arg.print());
+                }
             }
         }
     } else {
@@ -333,24 +335,38 @@ void MethodResolver::infer(const Type &arg, const Type &prm, std::map<std::strin
 }
 
 Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method *m, Signature &sig) {
-    auto mc = sig.mc;
-    for (auto &gm : r->generatedMethods) {
-        auto sig2 = Signature::make(gm, r);
-        if (!isSame(sig, sig2).has_value()) {
+    for (auto gm : r->generatedMethods) {
+        auto sig2 = Signature::make(gm, {});
+        auto res = isSame(sig, sig2);
+        if (std::holds_alternative<bool>(res)) {
             return gm;
         }
     }
     Generator gen(map);
     auto res = std::any_cast<Method *>(gen.visitMethod(m));
-    if (m->parent && m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        auto st = sig.scope->type;
-        if (sig.scope->trait) {
-            st = sig.args[0].unwrap();
-        }
-        auto newImpl = new Impl(clone(st));
-        res->parent = newImpl;
+    //print(res->print());
+    if (!m->parent || !m->parent->isImpl()) {
+        r->generatedMethods.push_back(res);
+        return res;
     }
+    auto impl = dynamic_cast<Impl *>(m->parent);
+    auto st = sig.scope->type;
+    if (sig.scope->trait) {
+        st = sig.args[0].unwrap();
+    }
+    //put full type, Box::new(...) -> Box<...>::new()
+    if (sig.mc->is_static && !impl->type.typeArgs.empty()) {
+        st.typeArgs.clear();
+        for (auto &ta : impl->type.typeArgs) {
+            auto resolved = map.at(ta.print());
+            st.typeArgs.push_back(resolved);
+        }
+    }
+    auto newImpl = new Impl(clone(st));
+    if (m->self) {
+        newImpl->print();
+    }
+    res->parent = newImpl;
     r->generatedMethods.push_back(res);
     return res;
 }
@@ -359,55 +375,56 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
     auto &arg = arg0.type;
     if (isGeneric(target, typeParams)) return {};
     if (arg.print() == target.print()) return {};
-    if (arg.isPointer()) {
-        if (!target.isPointer()) return "target is not pointer";
-        return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
+    if (arg.isPointer() || arg.isSlice() || arg.isArray()) {
+        if (arg.print() == target.print()) {
+            return {};
+        }
+        if (arg.kind != target.kind) {
+            return "";
+        }
+        if (hasGeneric(target, typeParams)) {
+            return isCompatible(*arg.scope, *target.scope, typeParams);
+        }
+        //return arg.print() + " is not compatible with " + target.print();
+        return "";
     }
-    if (arg.isRef()) {
-        if (!target.isRef()) return "target is not ref";
-        return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
+    if (!arg.isPrim()) {
+        return "";
     }
-    if (arg.isSlice()) {
-        if (!target.isSlice()) return "target is not slice";
-        return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
-    }
-    if (arg.isArray()) {
-        if (!target.isArray()) return "target is not array";
-        return isCompatible(*arg.scope.get(), *target.scope.get(), typeParams);
-    }
-    if (arg.isPrim()) {
-        if (!target.isPrim()) return "target is not prim";
-        if (arg.print() == "bool" || target.print() == "bool") return "target is not bool";
-        if (arg0.value) {
-            //autocast literal
-            auto &v = arg0.value.value();
-            if (v[0] == '-') {
-                if (isUnsigned(target)) return v + " is signed but " + target.print() + " is unsigned";
-                //check range
+    if (!target.isPrim()) return "target is not prim";
+    if (arg.print() == "bool" || target.print() == "bool") return "target is not bool";
+    if (arg0.value) {
+        //autocast literal
+        auto &v = arg0.value.value();
+        if (v[0] == '-') {
+            if (isUnsigned(target)) return v + " is signed but " + target.print() + " is unsigned";
+            //check range
+        } else {
+            if (max_for(target) >= stoll(v)) {
+                return {};
             } else {
-                if (max_for(target) >= stoll(v)) {
-                    return {};
-                } else {
-                    return v + " can't fit into " + target.print();
-                }
+                return v + " can't fit into " + target.print();
             }
         }
-        // auto cast to larger size
-        if (sizeMap[arg.name] <= sizeMap[target.name]) return {};
-        else
-            return "arg can't fit into target";
     }
-    return "";
+    if (isUnsigned(target) && isSigned(arg)) {
+        return "arg is signed but target is unsigned";
+    }
+    // auto cast to larger size
+    if (sizeMap[arg.name] <= sizeMap[target.name]) return {};
+    else {
+        return "arg can't fit into target";
+    }
 }
 
-std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig2) {
+
+SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
     auto mc = sig.mc;
     auto m = sig2.m;
     if (mc->name != m->name) return "";
     if (!m->typeArgs.empty()) {
-        if (!mc->typeArgs.empty()) {
-            //size mismatch
-            if (mc->typeArgs.size() != m->typeArgs.size()) return "type arg size mismatched";
+        if (!mc->typeArgs.empty() && mc->typeArgs.size() != m->typeArgs.size()) {
+            return "type arg size mismatched";
         }
         if (!m->isGeneric) {
             //check if args are compatible with generic type params
@@ -441,26 +458,23 @@ std::optional<std::string> MethodResolver::isSame(Signature &sig, Signature &sig
 }
 
 
-std::optional<std::string> MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
+SigResult MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
     if (sig2.m->self && !sig.mc->scope) {
         return "member method called without scope";
     }
     if (sig.args.size() != sig2.args.size()) return "arg size mismatched";
-    const auto &typeParams = sig2.m->isGeneric ? sig2.m->typeArgs : std::vector<Type>();
+    std::vector<Type> typeParams = get_type_params(*sig2.m);
+    bool all_exact = true;
     for (int i = 0; i < sig.args.size(); i++) {
         auto &t1 = sig.args[i];
         auto &t2 = sig2.args[i];
-        if (sig2.m->self && i == 0) {
-            //t1 = PointerType::unwrap(t1);
-            //if base method, skip self
-            auto imp = (Impl *) sig2.m->parent;
-            if (imp->type.name != sig.scope->type.name) {
-                //continue;
-            }
+        //todo if base method, skip self
+        if (t1.print() != t2.print()) {
+            all_exact = false;
         }
-        if (isCompatible(t1, t2, typeParams)) {
+        if (isCompatible(RType(t1), t2, typeParams)) {
             return "arg type " + t1.print() + " is not compatible with param " + t2.print();
         }
     }
-    return {};
+    return all_exact;
 }

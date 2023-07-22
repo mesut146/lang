@@ -14,6 +14,16 @@ std::unique_ptr<Block> Parser::parseBlock() {
     return res;
 }
 
+ArgBind parse_bind(Parser *p) {
+    auto name = p->name();
+    auto res = ArgBind(name);
+    if (p->is(STAR)) {
+        p->pop();
+        res.ptr = true;
+    }
+    return res;
+}
+
 //destructure enum
 std::unique_ptr<IfLetStmt> parseIfLet(Parser *p) {
     auto res = std::make_unique<IfLetStmt>();
@@ -22,10 +32,10 @@ std::unique_ptr<IfLetStmt> parseIfLet(Parser *p) {
     res->type = p->parseType();
     if (p->is(LPAREN)) {
         p->consume(LPAREN);
-        res->args.push_back(p->name());
+        res->args.push_back(parse_bind(p));
         while (p->is(COMMA)) {
             p->consume(COMMA);
-            res->args.push_back(p->name());
+            res->args.push_back(parse_bind(p));
         }
         p->consume(RPAREN);
     }
@@ -61,9 +71,9 @@ std::unique_ptr<Statement> parseFor(Parser *p) {
     auto res = std::make_unique<ForStmt>();
     p->consume(FOR);
     p->consume(LPAREN);
-    if(!p->is(SEMI)){
-      auto var = p->parseVarDeclExpr();
-      res->decl.reset(var);
+    if (!p->is(SEMI)) {
+        auto var = p->parseVarDeclExpr();
+        res->decl.reset(var);
     }
     p->consume(SEMI);
     if (!p->is(SEMI)) {
@@ -109,29 +119,29 @@ std::unique_ptr<Statement> Parser::parseStmt() {
     return res;
 }
 std::unique_ptr<Statement> Parser::parseStmt2() {
-    if(is(MATCH)){
+    if (is(MATCH)) {
         auto ret = std::make_unique<Match>();
         pop();
         consume(LPAREN);
         ret->expr.reset(parseExpr());
         consume(RPAREN);
         consume(LBRACE);
-        while(!is(RBRACE)){
+        while (!is(RBRACE)) {
             MatchArm arm;
-            arm.type=parseType();
-            if(is(LPAREN)){
+            arm.type = parseType();
+            if (is(LPAREN)) {
                 consume(LPAREN);
                 arm.args.push_back(pop().value);
-                while(is(COMMA)){
+                while (is(COMMA)) {
                     pop();
                     arm.args.push_back(pop().value);
                 }
                 consume(RPAREN);
             }
             consume(ARROW);
-            arm.rhs=parseStmt();
+            arm.rhs = parseStmt();
             ret->arms.push_back(std::move(arm));
-            if(is(COMMA)) pop();
+            if (is(COMMA)) pop();
         }
         consume(RBRACE);
         return ret;
