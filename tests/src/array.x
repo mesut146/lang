@@ -1,3 +1,13 @@
+func main(){
+  sized();
+  elems();
+  deref();
+  ptr();  
+  sliceTest();
+  arr2d();
+  print("arrayTest done\n");
+}
+
 impl [i32]{
   func dump(self){
     print("[");
@@ -37,20 +47,11 @@ func ptr(){
   assert (arr3[0])[0] == 5;
 }
 
-func main(){
-  sized();
-  elems();
-  deref();
-  ptr();  
-  sliceTest();
-  arr2d();
-  print("arrayTest done\n");
-}
-
 func sliceTest(){
   let arr = [2, 3, 5, 7, 11, 13];
   let slice = arr[2..5];//[5, 7, 11]
   assert slice.len() == 3;
+  slice.dump();
   assert slice[0] == 5 && slice[3] == 13;
   //mutate original
   slice[0] = 55; //[55, 7 ,11]

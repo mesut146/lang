@@ -300,6 +300,9 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
         copy(ptr, val, type);
+    } else if (type.isPointer()) {
+        auto val = get_obj_ptr(expr);
+        Builder->CreateStore(val, ptr);
     } else {
         auto val = cast(expr, type);
         Builder->CreateStore(val, ptr);
@@ -802,6 +805,10 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     }
     auto &type = curMethod->type;
     auto e = node->expr.get();
+    if (type.isPointer()) {
+        auto val = get_obj_ptr(e);
+        return Builder->CreateRet(val);
+    }
     if (!isStruct(type)) {
         auto expr_type = resolv->getType(type);
         return Builder->CreateRet(cast(e, expr_type));
@@ -1071,7 +1078,8 @@ void callPrint(MethodCall *mc, Compiler *c) {
 
 std::any callPanic(MethodCall *mc, Compiler *c) {
     std::string message = "\"panic ";
-    message += c->unit->path + ":" + std::to_string(mc->line);
+    message += c->curMethod->unit->path + ":" + std::to_string(mc->line);
+    message += " " + printMethod(c->curMethod);
     if (!mc->args.empty()) {
         message += "\n";
         auto val = dynamic_cast<Literal *>(mc->args[0])->val;
@@ -1095,7 +1103,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto elem_type = resolv->getType(mc).unwrap();
         auto src = get_obj_ptr(mc->args[0]);
         auto idx = loadPtr(mc->args[1]);
-        return gep(src, idx, elem_type);
+        return gep(src, idx, mapType(elem_type));
     }
     if (resolv->is_slice_get_ptr(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();
@@ -1107,6 +1115,14 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto slice = get_obj_ptr(mc->scope.get());
         auto len_ptr = gep2(slice, SLICE_LEN_INDEX, sliceType);
         return load(len_ptr, getInt(SLICE_LEN_BITS));
+    }
+    if (resolv->is_array_get_len(mc)) {
+        auto scope = resolv->getType(mc->scope.get()).unwrap();
+        return (llvm::Value *) makeInt(scope.size, 64);
+    }
+    if (resolv->is_array_get_ptr(mc)) {
+        auto src = get_obj_ptr(mc->scope.get());
+        return src;
     }
     if (mc->name == "print" && !mc->scope) {
         callPrint(mc, this);
@@ -1226,7 +1242,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
 void Compiler::strLit(llvm::Value *ptr, Literal *node) {
     auto trimmed = node->val.substr(1, node->val.size() - 2);
     auto src = Builder->CreateGlobalStringPtr(trimmed);
-    auto slice_ptr = ptr;
+    auto slice_ptr = gep2(ptr, 0, stringType);
     auto data_target = gep2(slice_ptr, SLICE_PTR_INDEX, sliceType);
     auto len_target = gep2(slice_ptr, SLICE_LEN_INDEX, sliceType);
     //set ptr
@@ -1445,6 +1461,11 @@ llvm::Value *Compiler::get_obj_ptr(Expression *e) {
     if (pe) {
         e = pe->expr;
     }
+    auto de = dynamic_cast<DerefExpr *>(e);
+    if (de) {
+        auto val = gen(de);
+        return val;
+    }
     auto val = gen(e);
     if (dynamic_cast<ObjExpr *>(e)) {
         return val;
@@ -1488,17 +1509,12 @@ llvm::Value *Compiler::get_obj_ptr(Expression *e) {
     if (dynamic_cast<RefExpr *>(e) || dynamic_cast<Literal *>(e) || dynamic_cast<Unary *>(e) || dynamic_cast<AsExpr *>(e)) {
         return val;
     }
+
     throw std::runtime_error("get_obj_ptr " + e->print());
 }
 
 std::any Compiler::visitFieldAccess(FieldAccess *node) {
     auto rt = resolv->resolve(node->scope);
-    auto unwrapped = rt.type.unwrap();
-    //array len
-    if (unwrapped.isArray()) {
-        auto size = unwrapped.size;
-        return (llvm::Value *) makeInt(size);
-    }
     auto scope = get_obj_ptr(node->scope);
     auto decl = rt.targetDecl;
     auto [sd, index] = resolv->findField(node->name, decl, rt.type);
@@ -1649,12 +1665,15 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) 
     auto &elemty = *arrty.scope.get();
     if (arrty.isSlice()) {
         //deref inner pointer
-        src = load(src);
+        src = load(src, getPtr());
     } else if (arrty.isPointer()) {
         src = load(src);
+    } else {
+        //array
     }
     //shift by start
-    src = gep(src, val_start, mapType(elemty));
+    auto ptr_ty = mapType(elemty);
+    src = gep(src, val_start, ptr_ty);
     //i8*
     auto ptr_target = gep2(sp, SLICE_PTR_INDEX, sliceType);
     Builder->CreateStore(src, ptr_target);
@@ -1662,6 +1681,7 @@ std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) 
     auto len_target = gep2(sp, SLICE_LEN_INDEX, sliceType);
     auto val_end = cast(node->index2.get(), Type("i32"));
     auto len = Builder->CreateSub(val_end, val_start);
+    len = Builder->CreateSExt(len, getInt(SLICE_LEN_BITS));
     Builder->CreateStore(len, len_target);
     return sp;
 }
@@ -1677,7 +1697,9 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     type = type.unwrap();
     if (type.isArray()) {
         //regular array access
-        return gep(src, 0, node->index, mapType(type));
+        auto i1 = makeInt(0, 64);
+        auto i2 = cast(node->index, Type("i64"));
+        return gep(src, i1, i2, mapType(type));
     }
     //slice access
     auto elem = type.scope.get();
@@ -1685,7 +1707,8 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     //read array ptr
     auto arr = gep2(src, SLICE_PTR_INDEX, sliceType);
     arr = load(arr);
-    return gep(arr, node->index, elemty);
+    auto index = cast(node->index, Type("i64"));
+    return gep(arr, index, elemty);
 }
 
 std::any Compiler::visitWhileStmt(WhileStmt *node) {

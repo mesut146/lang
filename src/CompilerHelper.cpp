@@ -491,6 +491,7 @@ public:
     std::any visitArrayExpr(ArrayExpr *node) override {
         auto ty = compiler->resolv->getType(node);
         auto ptr = alloc(ty, node);
+        //((llvm::AllocaInst*)ptr)->setAlignment(llvm::Align(100));
         if (node->isSized() && compiler->doesAlloc(node->list[0])) {
             node->list[0]->accept(this);
         }

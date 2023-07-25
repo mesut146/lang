@@ -131,34 +131,33 @@ public:
         return {makeInt(i1, 64)};
     }
     llvm::Value *gep(llvm::Value *ptr, int i1, int i2, llvm::Type *type) {
-        auto idx = makeIdx(i1, i2);
-        return Builder->CreateGEP(type, ptr, idx);
+        return gep(ptr, makeInt(i1, 64), makeInt(i2, 64), type);
     }
     llvm::Value *gep(llvm::Value *ptr, int i1, llvm::Type *type) {
-        auto idx = makeIdx(i1);
-        return Builder->CreateGEP(type, ptr, idx);
+        return gep(ptr, makeInt(i1, 64), type);
     }
-    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1, const Type &type) {
-        return gep(ptr, i1, mapType(type));
-    }
+
     llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1, llvm::Type *type) {
         std::vector<llvm::Value *> idx = {i1};
+        if (type->isArrayTy()) {
+            return Builder->CreateInBoundsGEP(type, ptr, idx);
+        }
         return Builder->CreateGEP(type, ptr, idx);
     }
-    llvm::Value *gep(llvm::Value *ptr, int i1, Expression *i2, llvm::Type *type) {
-        std::vector<llvm::Value *> idx = {makeInt(i1), cast(i2, Type("i64"))};
-        return Builder->CreateGEP(type, ptr, idx);
-    }
-    llvm::Value *gep(llvm::Value *ptr, Expression *i2, llvm::Type *type) {
-        std::vector<llvm::Value *> idx = {cast(i2, Type("i64"))};
+    llvm::Value *gep(llvm::Value *ptr, llvm::Value *i1, llvm::Value *i2, llvm::Type *type) {
+        std::vector<llvm::Value *> idx = {i1, i2};
+        if (type->isArrayTy()) {
+            return Builder->CreateInBoundsGEP(type, ptr, idx);
+        }
         return Builder->CreateGEP(type, ptr, idx);
     }
     llvm::Value *gep2(llvm::Value *ptr, int idx, llvm::Type *type) {
         return Builder->CreateStructGEP(type, ptr, idx);
+        //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
     }
     llvm::Value *gep2(llvm::Value *ptr, int idx, const Type &type) {
         auto ty = mapType(type);
-        return Builder->CreateStructGEP(ty, ptr, idx);
+        return gep2(ptr, idx, ty);
     }
     llvm::Value *getAlloc(Expression *e) {
         auto &arr = allocMap[e->print()];
@@ -197,7 +196,6 @@ public:
     llvm::Value *load(llvm::Value *val, llvm::Type *type) {
         return Builder->CreateLoad(type, val);
     }
-    llvm::Value *deref(llvm::Value *val, const Type &orig);
     llvm::Value *loadPtr(Expression *e);
     llvm::Value *loadPtr(const std::unique_ptr<Expression> &e) {
         return loadPtr(e.get());

@@ -67,7 +67,7 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
-      print("%s\n", self.lexer.path.cstr());
+      print("%s:%d\n", self.lexer.path.cstr(), t.line);
       panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(&tt).cstr());
     }
     
@@ -174,7 +174,10 @@ impl Parser{
           params.add(self.parse_param());
         }else{
           let self_name = self.name();
-          let self_ty = Type::Pointer{Box::new(imp.unwrap())};
+          let self_ty = imp.unwrap();
+          if(!imp.get().is_prim()){
+            self_ty = Type::Pointer{Box::new(imp.unwrap())};
+          }
           selfp = Option::new(Param{self_name, self_ty, true});
         }
         while (self.is(TokenType::COMMA)) {

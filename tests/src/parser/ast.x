@@ -3,7 +3,7 @@ import parser/printer
 func prim_size(s: str): Option<u32>{
   let prims = ["bool", "i8","i16","i32","i64","u8","u16","u32","u64","f32","f64"];
   let sizes = [8,8,16,32,64, 8,16,32,64,32,64];
-  for(let i = 0;i < prims.len;++i){
+  for(let i = 0;i < prims.len();++i){
     if(prims[i].eq(s)){
       return Option::new(sizes[i] as u32);
     }
@@ -161,12 +161,27 @@ impl Type{
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
+  } 
+  func is_slice(self): bool{
+    return self is Type::Slice;
   }
   func unwrap(self): Type{
     if let Type::Pointer(bx*) = (self){
       return bx.unwrap();
     }
     return *self;
+  }
+  func elem(self): Type{
+    if let Type::Pointer(bx*) = (self){
+      return bx.unwrap();
+    }
+    if let Type::Array(bx*, sz) = (self){
+      return bx.unwrap();
+    }
+    if let Type::Slice(bx*) = (self){
+      return bx.unwrap();
+    }
+    panic("elem");       
   }
   
   func print(self): String{
@@ -175,17 +190,17 @@ impl Type{
 }
 
 enum Stmt{
- Block(x: Block),
- Var(ve: VarExpr),
- Expr(e: Expr),
- Ret(e: Option<Expr>),
- While(e: Expr, b: Block),
- If(e: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
- IfLet(ty: Type, args: List<String>, rhs: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
- For(v: Option<VarExpr>, e: Option<Expr>, u: List<Expr>, s: Box<Stmt>),
- Continue,
- Break,
- Assert(e: Expr)
+    Block(x: Block),
+    Var(ve: VarExpr),
+    Expr(e: Expr),
+    Ret(e: Option<Expr>),
+    While(e: Expr, b: Block),
+    If(e: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
+    IfLet(ty: Type, args: List<String>, rhs: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
+    For(v: Option<VarExpr>, e: Option<Expr>, u: List<Expr>, s: Box<Stmt>),
+    Continue,
+    Break,
+    Assert(e: Expr)
 }
 
 impl Stmt{

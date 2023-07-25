@@ -130,7 +130,7 @@ impl Token{
     }
 
     func is(self, arr: [TokenType]): bool {
-        for (let i = 0;i < arr.len;++i) {
+        for (let i = 0;i < arr.len();++i) {
             if (self.type is arr[i]) return true;
         }
         return false;

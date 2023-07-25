@@ -1106,23 +1106,13 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
-    if (scp.type.isString()) {
+    /*if (scp.type.isString()) {
         scp = resolve(scp.type);
-    }
-    auto sct = scp.type.unwrap();
-    if (sct.isSlice()) {
-        if (node->name != "len") {
-            err(node, "invalid field " + node->name + " of " + sct.print());
-        }
-        return makeSimple("i32");
-    } else if (sct.isArray()) {
-        //error("array field access not supported yet");
-        if (node->name != "len") {
-            err(node, "invalid field " + node->name + " of " + sct.print());
-        }
-        return makeSimple("i32");
-    }
+    }*/
     auto decl = scp.targetDecl;
+    if(!decl){
+        err(node, "invalid field " + node->name + " of " + scp.type.print());
+    }
     auto [sd, idx] = findField(node->name, decl, scp.type);
     auto &fd = sd->fields[idx];
     return std::any_cast<RType>(fd.accept(this));
@@ -1541,6 +1531,14 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         resolve(mc->scope.get());
         auto type = SLICE_LEN_BITS == 64 ? "i64" : "i32";
         return RType(Type(type));
+    }
+    if (is_array_get_len(mc)) {
+        resolve(mc->scope.get());
+        return RType(Type("i64"));
+    }
+    if (is_array_get_ptr(mc)) {
+        auto arr_type = getType(mc->scope.get()).unwrap();
+        return RType(Type(Type::Pointer, *arr_type.scope.get()));
     }
     auto sig = Signature::make(mc, this);
     if (mc->scope) {

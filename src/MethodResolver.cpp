@@ -134,12 +134,15 @@ void MethodResolver::findMethod(std::string &name, std::vector<Signature> &list)
 }
 
 void get_type_map(const Type &type, Type &generic, std::map<std::string, Type> &map) {
-    if (type.isArray() || type.isPointer() || type.isSlice()|| type.isVoid() || type.scope) {
+    if (type.isArray() || type.isPointer() || type.isSlice() || type.isVoid() || type.scope) {
         throw std::runtime_error(type.print() + " " + generic.print());
     }
     if (type.isPrim() || generic.typeArgs.empty() /*|| !type.scope && type.typeArgs.empty()*/) {
         map[generic.print()] = type;
         return;
+    }
+    if (type.name != generic.name) {
+        throw std::runtime_error(type.print() + " " + generic.print());
     }
     for (int i = 0; i < type.typeArgs.size(); ++i) {
         get_type_map(type.typeArgs[i], generic.typeArgs[i], map);
@@ -163,8 +166,13 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
     auto decl = sig.r->resolve(type_plain).targetDecl;
 
     std::map<std::string, Type> map;
-    if (decl) {
-        get_type_map(type, decl->type, map);
+    if (decl && decl->isGeneric && !type.typeArgs.empty()) {
+        //get_type_map(type, decl->type, map);
+        int i = 0;
+        for (auto &tp : decl->type.typeArgs) {
+            map[tp.print()] = type.typeArgs[i];
+            ++i;
+        }
     }
     for (auto &item : r->unit->items) {
         if (!item->isImpl()) {

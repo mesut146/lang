@@ -114,6 +114,16 @@ void compileTest() {
     compile({"../tests/src/mapTest.x", s1, s2, op});
     compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
 
+    //compile({"../tests/src/bug1.x", s1, s2, op, libc, io});
+}
+
+void bootstrap() {
+    clean();
+    auto s1 = "../tests/src/std/String.x";
+    auto s2 = "../tests/src/std/str.x";
+    auto op = "../tests/src/std/ops.x";
+    auto libc = "../tests/src/std/libc.x";
+    auto io = "../tests/src/std/io.x";
     auto tok = "../tests/src/parser/token.x";
     auto lx = "../tests/src/parser/lexer.x";
     auto ast = "../tests/src/parser/ast.x";
@@ -121,7 +131,7 @@ void compileTest() {
     auto ps = "../tests/src/parser/parser.x";
     auto rs = "../tests/src/parser/resolver.x";
     auto mr = "../tests/src/parser/method_resolver.x";
-    //compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
 }
 
 void usage() {
@@ -131,7 +141,8 @@ void usage() {
 int main(int argc, char **args) {
     try {
         if (argc == 1) {
-            compileTest();
+            //compileTest();
+            bootstrap();
             return 0;
         }
         auto arg = std::string(args[1]);

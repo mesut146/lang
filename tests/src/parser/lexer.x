@@ -246,7 +246,7 @@ impl Lexer{
     if(c.is_letter() || c == '_'){
       return self.read_ident();
     }
-    if(c.is_digit()){
+    if(c.is_digit() || c == '-' && self.peek(1).is_digit()){
       return self.read_number();
     }
     if (c == '/') {
@@ -309,7 +309,7 @@ impl Lexer{
   func read_number(self):Token {
     let dot = false;
     let start = self.pos;
-    if(self.peek()=='0' && self.peek(1)=='x'){
+    if(self.peek() == '0' && self.peek(1) == 'x'){
       self.pos+=2;
       while(self.peek().is_hex()){
         self.pos+=1;

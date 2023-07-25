@@ -154,6 +154,7 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
+    print("%s\n%s\n",unit.path.cstr(), Fmt::str(unit).cstr());
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new()};
@@ -162,11 +163,13 @@ impl Resolver{
 
   func newScope(self){
     let sc = Scope::new();
-    print("newScope %d\n", sc.list.len());
     self.scopes.add(sc);
+    print("newScope %d\n", self.scopes.len());
   }
   func dropScope(self){
-    self.scopes.remove(self.scopes.len() - 1);
+    //self.scopes.remove(self.scopes.len() - 1);
+    --self.scopes.count;
+    print("dropped %d\n", self.scopes.len());
   }
   func addScope(self, name: String, type: Type, prm: bool){
     print("addScope %s: %s\n", name.cstr(), type.print().cstr());
@@ -242,6 +245,14 @@ impl Resolver{
     let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), node.line.str().str(), msg.str());
     self.err(str.str());
   }
+  func err(self, msg: str, node: Node*){
+    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), node.line.str().str(), msg);
+    self.err(str.str());
+  }
+  func err(self, msg: str, node: Expr*){
+    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), 0.str().str() /*node.line.str().str()*/, msg);
+    self.err(str.str());
+  }    
 
   func visit(self, node: Item*){
     if let Item::Method(m*) = (node){
@@ -392,6 +403,11 @@ impl Resolver{
       let elem = self.visit(&inner);
       return RType::new(elem.type.toPtr());
     }
+    if(node.is_slice()){
+      let inner = node.elem();
+      let elem = self.visit(&inner);
+      return RType::new(Type::Slice{Box::new(elem.type)});      
+    }
     panic("type %s", node.print().cstr());
   }
 
@@ -429,22 +445,46 @@ impl Resolver{
         let scope = self.scopes.get_ptr(i);
         let vh = scope.find(name);
         if(vh.is_some()){
-          let res = self.visit(&vh.unwrap().type);
-          res.vh = Option::new(vh.unwrap());
+          let vh2 = vh.unwrap();
+          let res = self.visit(&vh2.type);
+          res.vh = Option::new(vh2);
           return res;
         }
       }
       self.dump();
       self.err(Fmt::format("unknown identifier: {}", name.str()));
-    }else if let Expr::Unary(op, ebox) = (node){
-      if(op.eq("&")){
-        return self.visit_ref(ebox.get());
-      }
-      if(op.eq("*")){
-        return self.visit_deref(node, ebox.get());
-      }
+    }else if let Expr::Unary(op*, ebox*) = (node){
+      return self.visit_unary(node, op, ebox.get());
     }
     panic("visit expr %s", node.print().cstr());
+  }
+  func visit_unary(self, node: Expr*, op: String*, e: Expr*): RType{
+    if(op.eq("&")){
+      return self.visit_ref(e);
+    }
+    if(op.eq("*")){
+      return self.visit_deref(node, e);
+    }
+    let res = self.visit(e);
+    if(op.eq("!")){
+      if(!res.type.print().eq("bool")){
+        self.err("unary on non bool", node);
+      }
+      return res;
+    }
+    if (res.type.print().eq("bool") || !res.type.is_prim()) {
+      self.err("unary on non integer" , node);
+    }
+    if (op.eq("--") || op.eq("++")) {
+      if (!(e is Expr::Name || e is Expr::Access)) {
+          self.err("pre-incr/decr on non variable", node);
+      }
+    }
+    //optimization?
+    /*if (op.eq("-") && res.value.is_some()) {
+      res.value = "-" + res.value.get();
+    }*/   
+    return res;
   }
 
   func visit_infix(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
@@ -532,7 +572,7 @@ func infix_result(l: str, r: str): str{
     return l;
   }
   let arr = ["f64", "f32", "i64", "i32", "i16", "i8", "u64", "u32", "u16"];
-  for(let i = 0;i < arr.len;++i){
+  for(let i = 0;i < arr.len();++i){
     let op = arr[i];
     if(l.eq(op) || r.eq(op)){
       return op;
@@ -565,10 +605,24 @@ impl Resolver{
       self.visit(ve);
       return;
     }else if let Stmt::Assert(e*) = (node){
+      print("%s\n", e.print().cstr());
       if(!self.is_condition(e)){
         panic("assert expr is not bool: %s", e.print().cstr());
       }
       return;
+    }else if let Stmt::If(e*, then*, els*) = (node){
+      if (!self.is_condition(e)) {
+        self.err("if condition is not a boolean", e);
+      }
+      self.newScope();
+      self.visit(then.get());
+      self.dropScope();
+      if (els.is_some()) {
+        self.newScope();
+        self.visit(els.get().get());
+        self.dropScope();
+      }
+      return;      
     }
     panic("visit stmt %s", node.print().cstr());
   }

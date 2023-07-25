@@ -169,13 +169,6 @@ struct VarHolder {
     VarHolder(std::string &name, const Type &type) : name(name), type(type) {}
 };
 
-struct Lit {
-    std::string value;
-    bool kind_char = false;
-    bool kind_float = false;
-    bool kind_int = false;
-};
-
 class RType {
 public:
     Unit *unit = nullptr;
@@ -323,6 +316,20 @@ public:
         }
         auto scope = getType(mc->scope.get()).unwrap();
         return scope.isSlice();
+    }
+    bool is_array_get_len(MethodCall *mc) {
+        if (!mc->scope || mc->name != "len" || !mc->args.empty()) {
+            return false;
+        }
+        auto scope = getType(mc->scope.get()).unwrap();
+        return scope.isArray();
+    }
+    bool is_array_get_ptr(MethodCall *mc) {
+        if (!mc->scope || mc->name != "ptr" || !mc->args.empty()) {
+            return false;
+        }
+        auto scope = getType(mc->scope.get()).unwrap();
+        return scope.isArray();
     }
 
     std::any visitLiteral(Literal *lit) override;

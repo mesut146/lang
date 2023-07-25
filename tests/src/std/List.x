@@ -74,7 +74,7 @@ impl<T> List<T>{
   }
 
   func set(self, pos: i64, val: T){
-      *self.get_ptr(pos) = val;
+      *self.get_ptr_write(pos) = val;
   }
 
   func get(self, pos: i64): T{
@@ -83,6 +83,12 @@ impl<T> List<T>{
   
   func get_ptr(self, pos: i64): T*{
     if(pos >= self.count) {
+      panic("index %d out of bounds %d", pos, self.count);
+    }
+    return ptr::get(self.ptr, pos);
+  }
+  func get_ptr_write(self, pos: i64): T*{
+    if(pos >= self.cap) {
       panic("index %d out of bounds %d", pos, self.count);
     }
     return ptr::get(self.ptr, pos);

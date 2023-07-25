@@ -29,6 +29,10 @@ func strlen(arr: [i8]): i32{
   panic("no eof");
 }
 
+func is_null<T>(ptr: T*): bool{
+  return ptr as u64 == 0;
+}
+
 //type char = i8
 //type int i32
 type ino_t = u64;
