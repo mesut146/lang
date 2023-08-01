@@ -711,10 +711,10 @@ void dbg_func(Method *m, llvm::Function *func, Compiler *c) {
     llvm::SmallVector<llvm::Metadata *, 8> tys;
     tys.push_back(c->map_di(m->type));
     if (m->self) {
-        tys.push_back(c->map_di((*m->self->type)));
+        tys.push_back(c->map_di(*m->self->type));
     }
     for (auto &p : m->params) {
-        tys.push_back(c->map_di((*p.type)));
+        tys.push_back(c->map_di(*p.type));
     }
     auto ft = c->DBuilder->createSubroutineType(c->DBuilder->getOrCreateTypeArray(tys));
     auto file = c->DBuilder->createFile(m->unit->path, ".");

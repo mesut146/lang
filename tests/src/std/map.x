@@ -46,6 +46,15 @@ impl<K, V> Map<K, V>{
     }
     return Option<V>::None;
   }
+  func get_ptr(self, k: K*): Option<V*>{
+    for(let i = 0;i < self.arr.len();i += 1){
+      let e =  self.arr.get_ptr(i);
+      if(Eq::eq(e.a, *k)){
+        return Option<V*>::Some{&e.b};
+      }
+    }
+    return Option<V*>::None;
+  }  
   func indexOf(self, k: K*): i64{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);

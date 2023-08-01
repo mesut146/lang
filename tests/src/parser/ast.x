@@ -38,6 +38,12 @@ struct ImportStmt{
   list: List<String>;
 }
 
+impl ImportStmt{
+  func new(): ImportStmt{
+    return ImportStmt{list: List<String>::new()};
+  }
+}
+
 enum Item{
   Method(m: Method),
   Decl(decl: Decl),
@@ -101,6 +107,7 @@ struct Method{
   body: Option<Block>;
   is_generic: bool;
   parent: Parent;
+  path: String;
 }
 
 struct Param{
@@ -109,8 +116,35 @@ struct Param{
   is_self: bool;
 }
 
+impl Method{
+  func print(self): String{
+    return Fmt::str(self);
+  }
+}
+
+struct Simple{
+  scope: Ptr<Type>;
+  name: String;
+  args: List<Type>;
+}
+
+impl Simple{
+  func new(name: String): Simple{
+    return Simple{scope: Ptr<Type>::new(), name: name, args: List<Type>::new()};
+  }
+  func new(name: String, args: List<Type>): Simple{
+    return Simple{scope: Ptr<Type>::new(), name: name, args: args};
+  }
+  func new(scope: Type, name: String): Simple{
+    return Simple{scope: Ptr<Type>::new(scope), name: name, args: List<Type>::new()};
+  }
+  func into(self): Type{
+    return Type::Simple{*self};
+  }
+}
+
 enum Type{
-  Simple(scope: Option<Box<Type>>, name: String, args: List<Type>),
+  Simple(type: Simple),
   Pointer(type: Box<Type>),
   Array(type: Box<Type>, size: i32),
   Slice(type: Box<Type>)
@@ -121,21 +155,21 @@ impl Type{
     return Type::new(String::new(s));
   }
   func new(s: String): Type{
-    return Type::Simple{Option<Box<Type>>::None, s, List<Type>::new()};
+    return Simple::new(s).into();
   }
-  func new(s: String, g: List<Type>): Type{
-    return Type::Simple{Option<Box<Type>>::None, s, g};
+  func new(s: String, args: List<Type>): Type{
+    return Simple::new(s, args).into();
   }
   func new(scp: Type, s: String): Type{
-    return Type::Simple{Option::new(Box::new(scp)), s, List<Type>::new()};
+    return Simple::new(scp, s).into();
   }
   func toPtr(self): Type{
     return Type::Pointer{Box::new(*self)};
   }
   
   func name(self): String*{
-    if let Type::Simple(scp*, nm*, args*)=(self){
-      return nm;
+    if let Type::Simple(smp*)=(self){
+      return &smp.name;
     }
     panic("cant unwrap");
   }
@@ -154,10 +188,16 @@ impl Type{
     return self.print().eq("str");
   }
   func is_generic(self): bool{
-    if let Type::Simple(scope*, name*, args*) = (self){
-      return !args.empty();
+    if let Type::Simple(smp*) = (self){
+      return !smp.args.empty();
     }
     return false;
+  }
+  func get_args(self): List<Type>*{
+    if let Type::Simple(smp*) = (self){
+      return &smp.args;
+    }
+    panic("get_args");
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
@@ -182,6 +222,18 @@ impl Type{
       return bx.unwrap();
     }
     panic("elem");       
+  }
+
+  //get plain(generic)
+  func erase(self): Type{
+    if let Type::Simple(smp*) = (self){
+      if(smp.scope.has()){
+        return Type::new(smp.scope.unwrap(), smp.name);
+      }else{
+        return Type::new(smp.name);
+      }
+    }
+    panic("erase");
   }
   
   func print(self): String{

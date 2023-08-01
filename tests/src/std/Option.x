@@ -44,6 +44,7 @@ impl<T> Option<T>{
   
   func set(self, val: T){
     //todo
+    *self = Option::new(val);
   }
 
   func dump(self){

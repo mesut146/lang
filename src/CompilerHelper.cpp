@@ -251,14 +251,28 @@ llvm::Type *Compiler::mapType(const Type &type0, Resolver *r) {
     return res;
 }
 
-llvm::DIType *Compiler::map_di(const Type *t) {
+llvm::DIType *Compiler::map_di0(const Type *t) {
     auto rt = resolv->resolve(*t);
     t = &rt.type;
     auto s = t->print();
     auto it = di.types.find(s);
     if (it != di.types.end()) return it->second;
     if (t->isPointer()) {
-        return DBuilder->createPointerType(map_di(t->scope.get()), 64);
+        auto elem = t->unwrap();
+        if (di.types.contains(elem.print())) {
+            return DBuilder->createPointerType(map_di(&elem), 64);
+        } else {
+            if(!rt.targetDecl){
+                return DBuilder->createPointerType(map_di(&elem), 64);
+            }
+            auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
+            auto st_size = getSize2(t);
+            std::vector<llvm::Metadata *> elems;
+            auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+            auto st = DBuilder->createStructType(di.cu, s, file, 0, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
+            di.incomplete_types[elem.print()] = st;
+            return DBuilder->createPointerType(st, 64);
+        }
     }
     if (t->isArray()) {
         std::vector<llvm::Metadata *> elems;
@@ -297,7 +311,6 @@ llvm::DIType *Compiler::map_di(const Type *t) {
         throw std::runtime_error("di type: " + t->print());
     }
     auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
-    auto st_size = getSize2(t);
     std::vector<llvm::Metadata *> elems;
     if (rt.targetDecl->isEnum()) {
         //todo order
@@ -324,8 +337,15 @@ llvm::DIType *Compiler::map_di(const Type *t) {
             idx++;
         }
     }
-    auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-    return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+    if (di.incomplete_types.contains(s)) {
+        auto st = di.incomplete_types[s];
+        st->replaceElements(arr);
+        return st;
+    } else {
+        auto st_size = getSize2(t);
+        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    }
 }
 
 

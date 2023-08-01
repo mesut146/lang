@@ -149,31 +149,28 @@ void get_type_map(const Type &type, Type &generic, std::map<std::string, Type> &
     }
 }
 
-void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bool imports) {
-    auto &name = sig.mc->name;
-    auto &scope = sig.scope.value();
-    auto type = scope.type.unwrap();
-    /*if (rt.targetDecl && rt.targetDecl->base) {
-        auto rr = Resolver::getResolver(rt.unit->path, r->root);
-        auto base = rr->resolve(*rt.targetDecl->base);
-        //getMethods(base, name, list, false);
-    }*/
-    if (sig.mc->print() == "res.add(self)") {
-        int cc = 55;
-    }
+std::map<std::string, Type> make_map(Signature &sig, Type& type) {
     auto type_plain = type;
     type_plain.typeArgs.clear();
     auto decl = sig.r->resolve(type_plain).targetDecl;
-
     std::map<std::string, Type> map;
     if (decl && decl->isGeneric && !type.typeArgs.empty()) {
-        //get_type_map(type, decl->type, map);
         int i = 0;
         for (auto &tp : decl->type.typeArgs) {
             map[tp.print()] = type.typeArgs[i];
             ++i;
         }
     }
+    return map;
+}
+
+void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bool imports) {
+    auto &name = sig.mc->name;
+    auto &scope = sig.scope.value();
+    auto type = scope.type.unwrap();
+
+    auto map = make_map(sig, type);
+
     for (auto &item : r->unit->items) {
         if (!item->isImpl()) {
             continue;
@@ -199,11 +196,11 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
                     auto &ta = m.typeArgs[i];
                     typeMap[ta.name] = type.typeArgs[i];
                 }
-                auto sig = Signature::make(&m, map);
-                for (auto &a : sig.args) {
+                auto sig2 = Signature::make(&m, map);
+                for (auto &a : sig2.args) {
                     a = Generator::make(a, typeMap);
                 }
-                list.push_back(std::move(sig));
+                list.push_back(std::move(sig2));
             }
         }
     }

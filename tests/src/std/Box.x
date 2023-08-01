@@ -45,8 +45,14 @@ impl<T> Ptr<T>{
   }
   func has(self): bool{
     return self.val.is_some();
+  } 
+  func is_some(self): bool{
+    return self.val.is_some();
   }
   func get(self): T*{
     return self.val.get().get();
+  }
+  func unwrap(self): T{
+    return *self.get();
   }
 }

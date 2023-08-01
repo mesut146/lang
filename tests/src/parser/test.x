@@ -8,7 +8,7 @@ import std/map
 import std/io
 
 func lexer_test(){
-  let lexer = Lexer::new("../tests/src/parser/parser.x");
+  let lexer = Lexer::new("../tests/src/parser/parser.x".str());
   let i=0;
   for(;; ++i){
     let t = lexer.next();
@@ -20,7 +20,7 @@ func lexer_test(){
 }
 
 func parser_test(){
-    let lexer = Lexer::new("../tests/src/parser/parser.x");
+    let lexer = Lexer::new("../tests/src/parser/parser.x".str());
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
     print("%s\n", Fmt::str(unit).cstr());
@@ -37,7 +37,8 @@ func resolver_test(){
     file.append("/");
     file.append(name.str());
     if(is_dir(file.str())) continue;
-    let r = Resolver::new(file.str());
+    let ctx = Context::new(dir.str());
+    let r = Resolver::new(file, &ctx);
     //print("resolving %s\n", file.cstr());
     r.resolve_all();
   }

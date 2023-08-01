@@ -165,17 +165,17 @@ impl Debug for Param{
 
 impl Debug for Type{
   func debug(self, f: Fmt*){
-    if let Type::Simple(scp*, name, args*)=(self){
-      if(scp.is_some()){
-        scp.get().get().debug(f);
+    if let Type::Simple(smp*)=(self){
+      if(smp.scope.is_some()){
+        smp.scope.get().debug(f);
         f.print("::");
       }
-      f.print(name);
-      if(!args.empty()){
+      f.print(smp.name);
+      if(!smp.args.empty()){
         f.print("<");
-        for(let i = 0;i < args.len();++i){
+        for(let i = 0;i < smp.args.len();++i){
           if(i>0) f.print(", ");
-          args.get_ptr(i).debug(f);
+          smp.args.get_ptr(i).debug(f);
         }
         f.print(">");
       }

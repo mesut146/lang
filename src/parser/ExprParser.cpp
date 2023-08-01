@@ -219,6 +219,12 @@ T loc(T t, int line) {
     return t;
 }
 
+_GLIBCXX_NORETURN
+void err(Parser *p, const std::string &msg) {
+    std::cout << p->unit->path << ":" << p->first()->line << std::endl;
+    throw std::runtime_error(msg);
+}
+
 //"(" expr ")" | literal | objCreation | arrayCreation | name | mc
 Expression *PRIM(Parser *p) {
     int line = p->first()->line;
@@ -317,7 +323,7 @@ Expression *PRIM(Parser *p) {
         p->consume(RBRACKET);
         return loc(res, line);
     } else {
-        throw std::runtime_error("invalid primary " + p->first()->value + " line: " + std::to_string(p->first()->line));
+        err(p, "invalid primary " + p->first()->value);
     }
 }
 

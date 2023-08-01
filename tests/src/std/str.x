@@ -44,19 +44,19 @@ impl str{
     func indexOf(self, s: str, off: i32): i32{
       let i = off;
       while (i < self.len()){
+        //check first char
         if(self.buf[i] != s.buf[0]){
           ++i;
           continue;
         }
-        //rest
-        let j = 1;
+        //check rest
         let found = true;
-        while(i < s.len()){
-          if(self.buf[i + j - 1] != s.buf[j]){
+        for(let j = 1;j < s.len();++j){
+          if(self.buf[i + j] != s.buf[j]){
             found = false;
             break;
           }
-         }
+        }
         if(found) return i;
         ++i;
       }

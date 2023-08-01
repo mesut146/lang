@@ -40,6 +40,7 @@ struct DebugInfo {
     llvm::DIFile *file;
     llvm::DIScope *sp = nullptr;
     std::unordered_map<std::string, llvm::DIType *> types;
+    std::unordered_map<std::string, llvm::DICompositeType *> incomplete_types;
 };
 
 struct Compiler : public Visitor {
@@ -209,7 +210,16 @@ public:
     llvm::Type *mapType(const Type *type) {
         return mapType(type, resolv.get());
     }
-    llvm::DIType *map_di(const Type *t);
+    llvm::DIType *map_di0(const Type *t);
+    llvm::DIType *map_di(const Type *t){
+        auto str = t->print();
+        if(di.types.contains(str)){
+            return di.types.at(str);
+        }
+        auto res = map_di0(t);
+        di.types.insert({str, res});
+        return res;
+    }
     llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     void loc(Node *e);
     void loc(int line, int pos);

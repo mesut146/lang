@@ -29,9 +29,9 @@ impl i8{
 }
 
 impl Lexer{
-  func new(path: str): Lexer{
-    let s = String::new(read_bytes(path));
-    return Lexer{path: path.str(), buf: s, pos: 0, line: 1, ops: make_ops()};
+  func new(path: String): Lexer{
+    let s = String::new(read_bytes(path.str()));
+    return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
   }
   
   func peek(self): i8{

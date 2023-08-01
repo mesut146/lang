@@ -306,8 +306,8 @@ impl Parser{
       while(self.is(TokenType::COLON2)){
         self.pop();
         let part = self.gen_part();
-        if let Type::Simple(scope, name, args) = (part){
-          res = Type::Simple{Option::new(Box::new(res)), name, args};
+        if let Type::Simple(smp*) = (part){
+          res = Type::Simple{Simple{Ptr::new(res), smp.name, smp.args}};
         }
       }
       while (self.is(TokenType::STAR)) {
@@ -321,9 +321,9 @@ impl Parser{
     //a<b>::c<d>
       let id = self.pop().value;
       if(self.is(TokenType::LT)){
-        return Type::Simple{Option<Box<Type>>::None, id, self.generics()};
+        return Simple{Ptr<Type>::new(), id, self.generics()}.into();
       }
-      return Type::Simple{Option<Box<Type>>::None, id, List<Type>::new()};
+      return Simple{Ptr<Type>::new(), id, List<Type>::new()}.into();
     }
     
     func generics(self): List<Type>{

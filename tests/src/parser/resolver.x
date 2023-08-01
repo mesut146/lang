@@ -5,6 +5,45 @@ import parser/printer
 import parser/method_resolver
 import std/map
 
+struct Context{
+  map: Map<String, Resolver>;
+  root: String;
+  prelude: List<String>;
+}
+
+impl Context{
+  func new(src_dir: String): Context{
+    let pre = List<String>::new(6);
+    let arr = ["Box", "List", "str", "String", "Option", "ops"];
+    for(let i = 0;i < arr.len();++i){
+      pre.add(arr[i].str());
+    }
+    return Context{map: Map<String, Resolver>::new(), root: src_dir, prelude: pre};
+  }
+  func create_resolver(self, path: String): Resolver*{
+    let res = self.map.get_ptr(&path);
+    if(res.is_some()){
+      return res.unwrap();
+    }
+    let r = Resolver::new(path, self);
+    self.map.add(path, r);
+    return self.map.get_ptr(&path).unwrap();
+  }
+  func get_resolver(self, is: ImportStmt*): Resolver*{
+    let path = String::new(self.root.str());
+    path.append("/");
+    for(let i = 0;i < is.list.len();++i){
+      let part = is.list.get_ptr(i);
+      if(i > 0){
+        path.append("/");
+      }
+      path.append(part.str());
+    }
+    path.append(".x");
+    return self.create_resolver(path);
+  }
+}
+
 func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer(); 
 }
@@ -112,6 +151,8 @@ struct Resolver{
   curMethod: Option<Method*>;
   curImpl: Option<Impl*>;
   scopes: List<Scope>;
+  ctx: Context*;
+  used_methods: List<Method*>;
 }
 
 struct Config{
@@ -148,16 +189,44 @@ impl RType{
   }
 }
 
+func join(list: List<String>*, sep: str): String{
+  let s = String::new();
+  for(let i = 0;i < list.len();++i){
+    let path = list.get_ptr(i);
+    s.append(path.str());
+  }
+  return s;
+}
+
+func contains(list: List<String>*, s: String): bool{
+  for(let i = 0;i < list.len();++i){
+    if(list.get_ptr(i).eq(s)){
+      return true;
+    }
+  }
+  return false;
+}
+
+func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
+  for (let i = 0;i < arr.len();++i) {
+      let i1 = arr.get_ptr(i);
+      let s1 = join(&i1.list, "/");
+      let s2 = join(&is.list, "/");
+      if (s1.eq(s2)) return true;
+  }
+  return false;
+}
 
 impl Resolver{
-  func new(path: str): Resolver{
+  func new(path: String, ctx: Context*): Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
     print("%s\n%s\n",unit.path.cstr(), Fmt::str(unit).cstr());
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
-      curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new()};
+      curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
+      used_methods: List<Method*>::new()};
     return res;
   }
 
@@ -176,6 +245,47 @@ impl Resolver{
     let scope = self.scopes.last();
     scope.list.add(VarHolder::new(name, type, prm));
   }
+ 
+  func get_unit(self, path: String): Unit*{
+    let r = self.ctx.create_resolver(path);
+    return &r.unit;
+  }
+
+  func getPath(self, is: ImportStmt*): String {
+    return Fmt::format("{}/{}.x", self.ctx.root.str(), join(&is.list, "/").str());
+  }
+
+  func get_imports(self): List<ImportStmt>{
+    let imports = List<ImportStmt>::new();
+    for (let i = 0;i < self.unit.imports.len();++i) {
+        let is = self.unit.imports.get_ptr(i);
+        //ignore prelude imports
+        if (!contains(&self.ctx.prelude, join(&is.list, "/"))) {
+            imports.add(*is);
+        }
+    }
+    for (let i = 0;i < self.ctx.prelude.len();++i) {
+        let pre = self.ctx.prelude.get_ptr(i);
+        //skip self unit being prelude
+        let path = Fmt::format("{}/std/{}.x", self.ctx.root.str(), pre.str());
+        if (self.unit.path.eq(path)) continue;
+        let is = ImportStmt::new();
+        is.list.add("std".str());
+        is.list.add(*pre);
+        imports.add(is);
+    }
+    if (self.curMethod.is_some() && !self.curMethod.get().type_args.empty()) {
+        let tmp = self.get_unit(self.curMethod.get().path).imports;
+        for (let i = 0;i < tmp.len();++i) {
+            let is = tmp.get_ptr(i);
+            if (has(&imports, is)) continue;
+            //skip self being cycle
+            if (self.unit.path.eq(self.getPath(is))) continue;
+            imports.add(*is);
+        }
+    }
+    return imports;
+}
   
   func resolve_all(self){
     if(self.is_resolved) return;
@@ -241,16 +351,8 @@ impl Resolver{
   func err(self, msg: str){
     panic("%s", msg.cstr());
   }
-  func err(self, msg: String, node: Node*){
-    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), node.line.str().str(), msg.str());
-    self.err(str.str());
-  }
-  func err(self, msg: str, node: Node*){
-    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), node.line.str().str(), msg);
-    self.err(str.str());
-  }
   func err(self, msg: str, node: Expr*){
-    let str = Fmt::format("{}:{}\n{}", self.unit.path.str(), 0.str().str() /*node.line.str().str()*/, msg);
+    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
     self.err(str.str());
   }    
 
@@ -455,6 +557,8 @@ impl Resolver{
       self.err(Fmt::format("unknown identifier: {}", name.str()));
     }else if let Expr::Unary(op*, ebox*) = (node){
       return self.visit_unary(node, op, ebox.get());
+    }else if let Expr::Par(expr*) = (node){
+      return self.visit(expr.get());
     }
     panic("visit expr %s", node.print().cstr());
   }
