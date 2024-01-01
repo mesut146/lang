@@ -133,14 +133,16 @@ impl Parser{
             self.pop();
             let target = self.parse_type();
             let op = Option::new(target);
-            let parent = Parent::Impl{target, Option<Type>::new(t1)};
-            return Impl{type_params, Option::new(t1), target, self.parse_methods(op, parent)};
+            let info = ImplInfo{type_params, Option::new(t1), target};
+            let parent = Parent::Impl{info};
+            return Impl{info, self.parse_methods(op, parent)};
         }else{
           let op = Option::new(t1);
-          let parent = Parent::Impl{t1, Option<Type>::None};
-          return Impl{type_params, Option<Type>::None, t1, self.parse_methods(op, parent)};
+          let info = ImplInfo{type_params, Option<Type>::None, t1};
+          let parent = Parent::Impl{info};
+          return Impl{info, self.parse_methods(op, parent)};
         }
-        panic("");
+        panic("parse_impl");
     }
     
     func parse_methods(self, imp: Option<Type>, parent: Parent): List<Method>{

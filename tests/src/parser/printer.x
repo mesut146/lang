@@ -61,12 +61,7 @@ impl Debug for Item{
 
 impl Debug for Impl{
   func debug(self, f: Fmt*){
-    f.print("impl ");
-    if(self.trait_name.is_some()){
-      self.trait_name.get().debug(f);
-      f.print(" for ");
-    }
-    self.type.debug(f);
+    self.info.debug(f);
     f.print("{\n");
     for(let i=0;i<self.methods.len();++i){
       let ms = Fmt::str(self.methods.get_ptr(i));
@@ -78,6 +73,17 @@ impl Debug for Impl{
       }
     }
     f.print("\n}");
+  }
+}
+
+impl Debug for ImplInfo{
+  func debug(self, f: Fmt*){
+    f.print("impl ");
+    if(self.trait_name.is_some()){
+      self.trait_name.get().debug(f);
+      f.print(" for ");
+    }
+    self.type.debug(f);
   }
 }
 

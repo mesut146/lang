@@ -53,10 +53,14 @@ enum Item{
 }
 
 struct Impl{
+  info: ImplInfo;
+  methods: List<Method>;
+}
+
+struct ImplInfo{
   type_params: List<Type>;
   trait_name: Option<Type>;
   type: Type;
-  methods: List<Method>;
 }
 
 struct BaseDecl{
@@ -91,7 +95,7 @@ struct Trait{
 
 enum Parent{
   None,
-  Impl(type: Type, trait_name: Option<Type>),
+  Impl(info: ImplInfo),
   Trait,
   Extern
 }

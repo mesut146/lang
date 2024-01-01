@@ -242,4 +242,28 @@ impl i64{
     }
     return x;  
   }
+  func str(self): String{
+    let x = self;
+    let len = self.str_size();
+    let list = List<u8>::new(len + 1);
+    list.set(len, 0u8);//null terminate
+    list.count = len;
+    for(let i = len - 1;i >= 0;--i){
+      let c = x % 10;
+      list.set(i, (c + ('0' as i32)) as u8);
+      x = x / 10;
+    }
+    return String{list};
+  }
+  
+  func str_size(self): i32{
+    if(self == 0) return 1;
+    let x = self;
+    let res = 0;
+    while(x > 0){
+      x /= 10;
+      res += 1;
+    }
+    return res;
+  }
 }

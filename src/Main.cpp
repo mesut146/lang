@@ -140,6 +140,7 @@ void usage() {
 
 int main(int argc, char **args) {
     try {
+        //no arg
         if (argc == 1) {
             //compileTest();
             bootstrap();

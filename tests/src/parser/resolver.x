@@ -289,7 +289,7 @@ impl Resolver{
   
   func resolve_all(self){
     if(self.is_resolved) return;
-    print("resolving %s\n", self.unit.path.cstr());
+    print("resolve_all %s\n", self.unit.path.cstr());
     self.is_resolved = true;
     self.init();
     for(let i = 0;i < self.unit.items.len();++i){
@@ -393,21 +393,21 @@ impl Resolver{
   }
 
   func visit(self, imp: Impl*){
-    if(!imp.type_params.empty()){
+    if(!imp.info.type_params.empty()){
       //generic
       return;
     }
     self.curImpl = Option::new(imp);
     //resolve non generic type args
-    if(imp.trait_name.is_some()){
+    if(imp.info.trait_name.is_some()){
       //todo
       let required = Map<String, Method*>::new();
-      let trait_rt = self.visit(imp.trait_name.get());
+      let trait_rt = self.visit(imp.info.trait_name.get());
       let trait_decl = trait_rt.trait.unwrap();
       for(let i = 0;i < trait_decl.methods.len();++i){
         let m = trait_decl.methods.get_ptr(i);
         if(!m.body.is_some()){
-          let mangled = mangle2(m, &imp.type);
+          let mangled = mangle2(m, &imp.info.type);
           required.add(mangled, m);
         }
       }
@@ -415,7 +415,7 @@ impl Resolver{
         let m = imp.methods.get_ptr(i);
         if(!m.type_args.empty()) continue;
         self.visit(m);
-        let mangled = mangle2(m, &imp.type);
+        let mangled = mangle2(m, &imp.info.type);
         let idx = required.indexOf(&mangled);
         if(idx != -1){
           required.remove(idx);
@@ -428,7 +428,7 @@ impl Resolver{
           msg.append("method ");
           msg.append(printMethod(p.unwrap().b));
           msg.append(" not implemented for ");
-          msg.append(imp.trait_name.get().print());
+          msg.append(imp.info.trait_name.get().print());
           msg.append("\n");
         }
         self.err(msg);

@@ -27,6 +27,7 @@ func parser_test(){
 }
 
 func resolver_test(){
+  print("resolver_test\n");
   //let s = "../tests/src/parser/token.x";
   let dir = "../tests/src";
   let list = list(dir);

@@ -7,6 +7,12 @@ class Pair<T, U>{
   b: U;
 }
 
+impl<K, V> Pair<K, V>{
+  func new(a: K, b: V): Pair<K, V>{
+    return Pair{a, b};
+  }
+}
+
 class Map<K, V>{
   arr: List<Pair<K, V>>;
 }

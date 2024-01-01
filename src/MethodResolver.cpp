@@ -149,7 +149,7 @@ void get_type_map(const Type &type, Type &generic, std::map<std::string, Type> &
     }
 }
 
-std::map<std::string, Type> make_map(Signature &sig, Type& type) {
+std::map<std::string, Type> make_map(Signature &sig, Type &type) {
     auto type_plain = type;
     type_plain.typeArgs.clear();
     auto decl = sig.r->resolve(type_plain).targetDecl;
@@ -225,18 +225,19 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     if (list.empty()) {
         r->err(mc, "no such method: " + sig.mc->print() + " => " + sig.print());
     }
+    //test candidates and get errors
     std::vector<Signature> real;
     std::map<Method *, std::string> errors;
     Signature *exact = nullptr;
     for (auto &sig2 : list) {
-        auto msg = isSame(sig, sig2);
-        if (std::holds_alternative<bool>(msg)) {
-            if (*std::get_if<bool>(&msg)) {
+        auto cmp_res = isSame(sig, sig2);
+        if (std::holds_alternative<std::string>(cmp_res)) {
+            errors[sig2.m] = std::get<std::string>(cmp_res);
+        } else {
+            if (*std::get_if<bool>(&cmp_res)) {
                 exact = &sig2;
             }
             real.push_back(sig2);
-        } else {
-            errors[sig2.m] = std::get<std::string>(msg);
         }
     }
     if (real.empty()) {
@@ -426,7 +427,7 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
 SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
     auto mc = sig.mc;
     auto m = sig2.m;
-    if (mc->name != m->name) return "";
+    if (mc->name != m->name) return "not possible";
     if (!m->typeArgs.empty()) {
         if (!mc->typeArgs.empty() && mc->typeArgs.size() != m->typeArgs.size()) {
             return "type arg size mismatched";

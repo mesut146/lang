@@ -13,6 +13,12 @@ struct Signature{
     r: Option<Resolver*>;
 }
 
+enum SigResult{
+    Err(s: String),
+    Exact,
+    Compatible
+  }
+
 func is_static(mc: Call*): bool{
     return mc.scope.get().get() is Expr::Type;
 }
@@ -62,8 +68,8 @@ impl Signature{
         if(!type.print().eq("Self")){
             return *type;
         }
-        if let Parent::Impl(type, trait_name) = (m.parent){
-            return type;
+        if let Parent::Impl(info*) = (m.parent){
+            return info.type;
         }
         panic("replace_self");
     }
@@ -93,8 +99,8 @@ impl Signature{
             scope: Option<RType>::None,
             ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None};
-            if let Parent::Impl(type*, tr*) = (m.parent){
-                let scp = RType::new(*type);
+            if let Parent::Impl(info*) = (m.parent){
+                let scp = RType::new(info.type);
                 res.scope = Option::new(scp);
             }
             if(m.self.is_some()){
@@ -169,7 +175,7 @@ impl MethodResolver{
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item = self.r.unit.items.get_ptr(i);
             if let Item::Impl(imp*) = (item){
-                if(imp.type.print().eq(type.print())){
+                if(imp.info.type.print().eq(type.print())){
                     list.add(imp);
                 }
             }
@@ -198,16 +204,43 @@ impl MethodResolver{
     }
 
     func handle(self, sig: Signature*): RType{
+        let mc = sig.mc.unwrap();
         let list = self.collect(sig);
         if(list.empty()){
             let e = Expr::Call{*sig.mc.unwrap()};
             self.r.err("no such method", &e);
         }
-        if(list.len() > 1){
-            let e = Expr::Call{*sig.mc.unwrap()};
-            self.r.err("multiple cantidates for method ", &e);
+        //test candidates and get errors
+        let real = List<Signature*>::new();
+        let errors = List<Pair<Method*,String>>::new();
+        let exact = Option<Signature*>::None;
+        for(let i = 0;i < list.size();++i){
+            let sig2 = list.get_ptr(i);
+            let cmp_res = self.is_same(sig, sig2);
+            if let SigResult::Err(err) = (cmp_res){
+                errors.add(Pair::new(sig2.m.unwrap(), err.clone()));
+            }else{
+                if(cmp_res is SigResult::Exact){
+                    exact = Option::new(sig2);
+                }
+                real.add(sig2);
+            }
         }
-        let sig2 = list.get_ptr(0);
+        if(real.empty()){
+            let e = Expr::Call{*mc};
+            let msg = Fmt::format("method {} not found from candidates\n", mc.print().str());
+            self.r.err(msg.str(), &e);
+        }
+        if (real.size() > 1 && exact.is_none()) {
+            let e = Expr::Call{*mc};
+            //let msg = format("method {} has {} candidates\n", mc.print().str(), real.size());
+            let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), real.size().str().str());
+            self.r.err(msg.str(), &e);
+        }
+        let sig2 = real.get(0);
+        if(exact.is_some()){
+            sig2 = exact.unwrap();
+        }
         let target = sig2.m.unwrap();
         if (!target.is_generic) {
             if (!target.path.eq(self.r.unit.path)) {
@@ -219,5 +252,58 @@ impl MethodResolver{
         }    
         print("%s\n", target.print().cstr()); 
         panic("handle %s", sig.print().cstr());
-    }    
+    }
+
+    func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
+        let mc = sig.mc.unwrap();
+        let m = sig2.m.unwrap();
+        assert mc.name.eq(m.name);
+        if(!m.type_args.empty()){
+            let mc_targs = get_type_args(mc);
+            if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {
+                return SigResult::Err{"type arg size mismatched".str()};
+            }
+            if (!m.is_generic) {
+                //check if args are compatible with generic type params
+                for (let i = 0; i < mc_targs.size(); ++i) {
+                    let ta1 = mc_targs.get_ptr(i).print();
+                    let ta2 = m.type_args.get_ptr(i).print();
+                    if (!ta1.eq(ta2)) {
+                        let err = Fmt::format("type arg {} not compatible with {}", ta1.str(), ta2.str());
+                        return SigResult::Err{err};
+                    }
+                }
+            }
+        }
+        if let Parent::Impl(imp*) = (m.parent) {
+            if(mc.scope.is_some()){
+                let ty = &imp.type;
+                let scope = sig.scope.get().type;
+                if (sig.scope.get().trait.is_some()) {
+                    let scp = sig.args.get_ptr(0).unwrap();
+                    if (!scp.name.eq(ty.name())) {
+                        return Fmt::format("not same impl {} vs {}", scp.print(), ty.print());
+                    }
+                } else if (!scope.name().eq(ty.name())) {
+                    return Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str());
+                }
+                if (imp.type_params.empty() && !ty.type_args.empty()) {
+                    //check they belong same impl
+                    let scope_args = scope.get_args();
+                    for (let i = 0; i < scope_args.size(); ++i) {
+                        if (!scope_args.get_ptr(i).print().eq(ty.type_args.get_ptr(i).print())){
+                            return SigResult::Err{"not same impl".str()};
+                        }
+                    }
+                }
+            }
+        }
+        //check if args are compatible with non generic params
+        return check_args(sig, sig2);
+    }
+}
+
+
+func get_type_args(mc: Call*): List<Type>{
+    panic("get_type_args");
 }

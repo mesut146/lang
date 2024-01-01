@@ -701,6 +701,7 @@ std::any Resolver::visitMethod(Method *m) {
         err("main method's return type must be 'void' or 'i32'");
     }
     curMethod = m;
+    //print("visitMethod "+ printMethod(m));
     if (m->isVirtual && !m->self) {
         err("virtual method must have self parameter");
     }
@@ -732,6 +733,7 @@ std::any Resolver::visitMethod(Method *m) {
     }
     dropScope();
     curMethod = nullptr;
+    //print("exiting visitMethod "+ printMethod(m));
     return res;
 }
 
@@ -1285,6 +1287,9 @@ std::any Resolver::visitIfStmt(IfStmt *node) {
 
 std::any Resolver::visitReturnStmt(ReturnStmt *node) {
     if (node->expr) {
+        if(curMethod == nullptr){
+            throw std::runtime_error("");
+        }
         if (curMethod->type.isVoid()) {
             error("void method returns expr");
         }
@@ -1564,6 +1569,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     } else if (mc->name == "format") {
+        throw std::runtime_error("format todo");
         if (mc->args.empty()) {
             err("format expects format string");
         }
@@ -1578,9 +1584,9 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             err(mc->print() + " must have id");
         }
         //cache generated method
-        if (format_methods.find(mc->id) == format_methods.end()) {
+        if (!format_methods.contains(mc->id)) {
             auto gm = generate_format(mc, this);
-            gm->accept(this);
+            //gm->accept(this);
             format_methods[mc->id] = std::move(gm);
         }
         //unit->items.push_back(std::move(gm));
