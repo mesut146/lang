@@ -315,8 +315,8 @@ void MethodResolver::infer(const Type &arg, const Type &prm, std::map<std::strin
         return;
     }//todo
     if (prm.typeArgs.empty()) {
-        auto it = typeMap.find(prm.name);
         if (typeMap.contains(prm.name)) {
+            auto it = typeMap.find(prm.name);
             if (!it->second) {
                 it->second = arg;
             } else {

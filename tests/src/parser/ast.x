@@ -178,6 +178,10 @@ impl Type{
     panic("cant unwrap");
   }
 
+  func is_simple(self): bool{
+    return self is Type::Simple;
+  }
+
   func is_void(self): bool{
     return self.print().eq("void");
   }
@@ -205,7 +209,10 @@ impl Type{
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
-  } 
+  }
+  func is_array(self): bool{
+    return self is Type::Array;
+  }
   func is_slice(self): bool{
     return self is Type::Slice;
   }
@@ -242,6 +249,13 @@ impl Type{
   
   func print(self): String{
     return Fmt::str(self);
+  }
+
+  func scope(self): Type*{
+    if let Type::Simple(smp*) = (self){
+      return smp.scope.get();
+    }
+    panic("Type::scope");
   }
 }
 

@@ -27,6 +27,7 @@ impl<K, V> Map<K, V>{
   }
   
   func len(self): i64{ return self.arr.len(); }
+  func size(self): i64{ return self.arr.len(); }
   func empty(self): bool{ return self.arr.empty(); }
   
   func add(self, k: K, v: V){

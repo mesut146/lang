@@ -1,6 +1,7 @@
 import parser/resolver
 import parser/ast
 import parser/printer
+import parser/utils
 import std/map
 
 struct Signature{
@@ -249,9 +250,54 @@ impl MethodResolver{
             let res = self.r.visit(&sig2.ret);
             res.method = Option::new(target);
             return res;
-        }    
-        print("%s\n", target.print().cstr()); 
-        panic("handle %s", sig.print().cstr());
+        }
+        let typeMap = Map<String, Option<Type>>::new();
+        let type_params = get_type_params(target);
+
+        //mark all as non inferred
+        for (let i = 0;i < type_params.size();++i) {
+            let ta = type_params.get_ptr(i);
+            typeMap.add(*ta.name(), Option<Type>::None);
+        }
+        if (mc.scope.is_some()) {
+            //todo trait
+            let scope = &sig.scope.get().type;
+            let scope_args = scope.get_args();
+            for (let i = 0; i < scope_args.size(); ++i) {
+                typeMap.add(*type_params.get_ptr(i).name(), Option::new(scope_args.get(i)));
+            }
+            if (!mc.tp.empty()) {
+                panic("todo");
+            }
+        } else {
+            if (!mc.tp.empty()) {
+                //place specified type args in order
+                for (let i = 0; i < mc.tp.size(); ++i) {
+                    typeMap.add(*type_params.get_ptr(i).name(), Option::new(self.r.getType(mc.tp.get_ptr(i))));
+                }
+            }
+        }
+        //infer from args
+        for (let i = 0; i < sig.args.size(); ++i) {
+            let arg_type = sig.args.get_ptr(i);
+            let target_type = sig2.args.get_ptr(i);
+            MethodResolver::infer(arg_type, target_type, &typeMap);
+        }
+        let tmap = Map<String, Type>::new();
+        for (let i = 0;i < typeMap.size();++i) {
+            let pair = typeMap.get_idx(i).unwrap();
+            if (pair.b.is_none()) {
+                let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
+                let e = Expr::Call{*mc};
+                self.r.err(msg.str(), &e);
+            }
+            tmap.add(pair.a, *pair.b.get());
+        }
+        let target2 = self.generateMethod(&tmap, target, sig);
+        target = &target2;
+        let res = self.r.visit(&target.type);
+        res.method = Option::new(target);
+        return res;
     }
 
     func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
@@ -259,7 +305,7 @@ impl MethodResolver{
         let m = sig2.m.unwrap();
         assert mc.name.eq(m.name);
         if(!m.type_args.empty()){
-            let mc_targs = get_type_args(mc);
+            let mc_targs = &mc.tp;
             if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {
                 return SigResult::Err{"type arg size mismatched".str()};
             }
@@ -281,17 +327,17 @@ impl MethodResolver{
                 let scope = sig.scope.get().type;
                 if (sig.scope.get().trait.is_some()) {
                     let scp = sig.args.get_ptr(0).unwrap();
-                    if (!scp.name.eq(ty.name())) {
-                        return Fmt::format("not same impl {} vs {}", scp.print(), ty.print());
+                    if (!scp.name().eq(ty.name())) {
+                        return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
                     }
                 } else if (!scope.name().eq(ty.name())) {
-                    return Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str());
+                    return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
                 }
-                if (imp.type_params.empty() && !ty.type_args.empty()) {
+                if (imp.type_params.empty() && !ty.get_args().empty()) {
                     //check they belong same impl
                     let scope_args = scope.get_args();
                     for (let i = 0; i < scope_args.size(); ++i) {
-                        if (!scope_args.get_ptr(i).print().eq(ty.type_args.get_ptr(i).print())){
+                        if (!scope_args.get_ptr(i).print().eq(ty.get_args().get(i).print())){
                             return SigResult::Err{"not same impl".str()};
                         }
                     }
@@ -299,11 +345,144 @@ impl MethodResolver{
             }
         }
         //check if args are compatible with non generic params
-        return check_args(sig, sig2);
+        return self.check_args(sig, sig2);
+    }
+
+    func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
+        if (sig2.m.unwrap().self.is_some() && !sig.mc.unwrap().scope.is_some()) {
+            return SigResult::Err{"member method called without scope".str()};
+        }
+        if (sig.args.size() != sig2.args.size()) return SigResult::Err{"arg size mismatched".str()};
+        let typeParams = get_type_params(sig2.m.unwrap());
+        let all_exact = true;
+        for (let i = 0; i < sig.args.size(); ++i) {
+            let t1 = sig.args.get_ptr(i);
+            let t2 = sig2.args.get_ptr(i);
+            //todo if base method, skip self
+            if (!t1.print().eq(t2.print())) {
+                all_exact = false;
+            }
+            if (MethodResolver::is_compatible(RType::new(*t1), t2, &typeParams).is_some()) {
+                return SigResult::Err{Fmt::format("arg type {} is not compatible with param {}", t1.print().str(), t2.print().str())};
+            }
+        }
+        if(all_exact){
+            return SigResult::Exact;
+        }
+        return SigResult::Compatible;
+    }
+
+    func is_compatible(arg0: RType, target: Type*, typeParams: List<Type>*): Option<String>{
+        let arg = &arg0.type;
+        if (isGeneric(target, typeParams)) return Option<String>::None;
+        if (arg.print() == target.print()) return Option<String>::None;
+        if (!arg.is_simple()) {
+            if (arg.print().eq(target.print())) {
+                return Option<String>::None;
+            }
+            if (kind(arg) != kind(target)) {
+                return Option::new("".str());
+            }
+            if (hasGeneric(target, typeParams)) {
+                let trg_elem = target.elem();
+                return MethodResolver::is_compatible(RType::new(arg.elem()), &trg_elem, typeParams);
+            }
+            //return arg.print() + " is not compatible with " + target.print();
+            return Option::new("".str());
+        }
+        if (!arg.is_prim()) {
+            return Option::new("".str());
+        }
+        if (!target.is_prim()) return Option::new("target is not prim".str());
+        if (arg.print().eq("bool") || target.print().eq("bool")) return Option::new("target is not bool".str());
+        if (arg0.value.is_some()) {
+            //autocast literal
+            let v = arg0.value.get();
+            if (v.get(0) == '-') {
+                if (isUnsigned(target)) return Option::new(Fmt::format("{} is signed but {} is unsigned", v.str(), target.print().str()));
+                //check range
+            } else {
+                if (max_for(target) >= i64::parse(v)) {
+                    return Option<String>::None;
+                } else {
+                    return Option::new(Fmt::format("{} can't fit into {}" ,v.str(), target.print().str()));
+                }
+            }
+        }
+        if (isUnsigned(target) && isSigned(arg)) {
+            return Option::new("arg is signed but target is unsigned".str());
+        }
+        // auto cast to larger size
+        if (prim_size(arg.name().str()).unwrap() <= prim_size(target.name().str()).unwrap()){
+            return Option<String>::None;
+        }
+        else {
+            return Option::new("arg can't fit into target".str());
+        }
+        panic("MethodResolver::is_compatible");
+    }
+
+    func is_compatible(arg0: RType, target: Type*): Option<String>{
+        let arr = List<Type>::new();
+        return MethodResolver::is_compatible(arg0, target, &arr);
+    }
+
+    func infer(arg: Type*, prm: Type*, typeMap: Map<String, Option<Type>>*) {
+        if (prm.is_pointer()) {
+            if (!arg.is_pointer()) return;
+            infer(arg.scope(), prm.scope(), typeMap);
+            return;
+        }//todo
+        let ta1 = arg.get_args();
+        let ta2 = prm.get_args();
+        if (ta2.empty()) {
+            let op = typeMap.get_p(prm.name());
+            if (op.is_some()) {//is_tp
+                let it = op.unwrap();
+                if (it.is_none()) {
+                    typeMap.add(*prm.name(), Option::new(*arg));
+                } else {
+                    let m = MethodResolver::is_compatible(RType::new(*arg), it.get());
+                    if (m.is_some()) {
+                        print("%s", m.get().cstr());
+                        panic("type infer failed: %s vs %s", it.get().print().cstr(), arg.print().cstr());
+                    }
+                }
+            }
+        } else {
+            if (ta1.size() != ta2.size()) {
+                let msg = Fmt::format("type arg size mismatch, {} = {}", arg.print().str(), prm.print().str());
+                panic("%s", msg.cstr());
+            }
+            if (!arg.name().eq(prm.name())) panic("cant infer");
+            for (let i = 0; i < ta1.size(); ++i) {
+                let ta = ta1.get_ptr(i);
+                let tp = ta2.get_ptr(i);
+                infer(ta, tp, typeMap);
+            }
+        }
+    }
+
+    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method{
+        panic("generateMethod");
     }
 }
 
+func kind(type: Type*): i32{
+    if(type is Type::Pointer) return 0;
+    if(type is Type::Array) return 1;
+    if(type is Type::Slice) return 2;
+    panic("");
+}
 
-func get_type_args(mc: Call*): List<Type>{
-    panic("get_type_args");
+func get_type_params(m: Method*): List<Type>{
+    let res = List<Type>::new();
+    if (!m.is_generic) {
+        return res;
+    }
+    if let Parent::Impl(info*) = (m.parent){
+        res = info.type_params;
+    }
+    res.add(&m.type_args);
+    return res;
 }

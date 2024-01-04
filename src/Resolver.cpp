@@ -1017,7 +1017,7 @@ std::any Resolver::visitInfix(Infix *node) {
             return makeSimple("bool");
     }
     if (!rt1.type.isPrim() || !rt2.type.isPrim()) {
-        error("infix on non prim type: " + node->print());
+        err(node, "infix on non prim type: " + rt1.type.print()+" vs "+rt2.type.print());
     }
     /*if (node->op == "==" || node->op == "!=") {
         auto u1 = isUnsigned(rt1.type);
@@ -1112,12 +1112,17 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
         scp = resolve(scp.type);
     }*/
     auto decl = scp.targetDecl;
-    if(!decl){
+    if (!decl) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
     }
-    auto [sd, idx] = findField(node->name, decl, scp.type);
-    auto &fd = sd->fields[idx];
-    return std::any_cast<RType>(fd.accept(this));
+    try {
+        auto [sd, idx] = findField(node->name, decl, scp.type);
+        auto &fd = sd->fields[idx];
+        return std::any_cast<RType>(fd.accept(this));
+    } catch (std::runtime_error &e) {
+        err(node, "invalid field " + node->name + " of " + scp.type.print());
+        throw std::runtime_error("");
+    }
 }
 
 std::any Resolver::visitLiteral(Literal *node) {
@@ -1287,9 +1292,6 @@ std::any Resolver::visitIfStmt(IfStmt *node) {
 
 std::any Resolver::visitReturnStmt(ReturnStmt *node) {
     if (node->expr) {
-        if(curMethod == nullptr){
-            throw std::runtime_error("");
-        }
         if (curMethod->type.isVoid()) {
             error("void method returns expr");
         }
@@ -1297,7 +1299,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         auto mtype = getType(curMethod->type);
         if (MethodResolver::isCompatible(type, mtype)) {
             //err(node, );
-            error("method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
+            err(node ,"method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
     } else {
         if (!curMethod->type.isVoid()) {

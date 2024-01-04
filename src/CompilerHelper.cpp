@@ -262,7 +262,7 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         if (di.types.contains(elem.print())) {
             return DBuilder->createPointerType(map_di(&elem), 64);
         } else {
-            if(!rt.targetDecl){
+            if (!rt.targetDecl) {
                 return DBuilder->createPointerType(map_di(&elem), 64);
             }
             auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
@@ -407,20 +407,23 @@ public:
     }
     std::any visitVarDeclExpr(VarDeclExpr *node) override {
         for (auto &f : node->list) {
-            auto type = f.type ? compiler->resolv->resolve(*f.type) : compiler->resolv->resolve(f.rhs.get());
+            auto rhs = f.rhs.get();
+            auto type = f.type ? compiler->resolv->resolve(*f.type) : compiler->resolv->resolve(rhs);
             llvm::Value *ptr;
-            if (compiler->doesAlloc(f.rhs.get())) {
+            if (compiler->doesAlloc(rhs)) {
                 //auto alloc
                 auto rhs = f.rhs->accept(this);
                 ptr = std::any_cast<llvm::Value *>(rhs);
             } else {
+                //prim_size(s).unwrap() as i32;
                 //manual alloc, prims, struct copy
                 ptr = alloc(type.type, node);
-                if (dynamic_cast<MethodCall *>(f.rhs.get())//args
-                    || dynamic_cast<FieldAccess *>(f.rhs.get()) /*scope*/) {
-                    //todo not just this
-                    f.rhs->accept(this);
-                }
+                f.rhs->accept(this);
+                // if (dynamic_cast<MethodCall *>(rhs)//args
+                //     || dynamic_cast<FieldAccess *>(rhs) /*scope*/) {
+                //     //todo not just this
+                //     f.rhs->accept(this);
+                // }
             }
             ptr->setName(f.name);
             auto id = compiler->getId(f.name);
@@ -672,6 +675,7 @@ public:
 };
 
 void Compiler::makeLocals(Statement *st) {
+    //std::cout << "makeLocals " << resolv->unit->path << " " << curMethod->name << "\n";
     allocMap.clear();
     if (st) {
         resolv->max_scope = 1;

@@ -63,6 +63,7 @@ public:
     std::unique_ptr<llvm::LLVMContext> ctxp;
     std::unique_ptr<llvm::Module> mod;
     std::map<std::string, std::vector<llvm::Value *>> allocMap;
+    std::map<int, std::vector<llvm::Value *>> allocMap2;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Value *> varAlloc;
     std::map<std::string, llvm::Type *> classMap;
@@ -161,6 +162,11 @@ public:
         return gep2(ptr, idx, ty);
     }
     llvm::Value *getAlloc(Expression *e) {
+        /*if (e->id == -1) {
+            resolv->err(e, "alloc no id");
+        } else {
+            resolv->err(e, "alloc id");
+        }*/
         auto &arr = allocMap[e->print()];
         if (arr.empty()) {
             resolv->err(e, "alloc error for " + e->print());
@@ -211,9 +217,9 @@ public:
         return mapType(type, resolv.get());
     }
     llvm::DIType *map_di0(const Type *t);
-    llvm::DIType *map_di(const Type *t){
+    llvm::DIType *map_di(const Type *t) {
         auto str = t->print();
-        if(di.types.contains(str)){
+        if (di.types.contains(str)) {
             return di.types.at(str);
         }
         auto res = map_di0(t);

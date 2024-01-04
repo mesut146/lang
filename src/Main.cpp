@@ -131,7 +131,8 @@ void bootstrap() {
     auto ps = "../tests/src/parser/parser.x";
     auto rs = "../tests/src/parser/resolver.x";
     auto mr = "../tests/src/parser/method_resolver.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr});
+    auto u = "../tests/src/parser/utils.x";
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr, u});
 }
 
 void usage() {
@@ -152,14 +153,20 @@ int main(int argc, char **args) {
         } else if (arg == "parse") {
             parseTest();
         } else if (arg == "c") {
-            auto file = std::string(args[2]);
+            auto path = std::string(args[2]);
             Compiler c;
-            if (std::filesystem::is_directory(file)) {
-                c.srcDir = file;
-                c.compileAll();
+            if (std::filesystem::is_directory(path)) {
+                c.srcDir = path;
+                auto file = path + "/" + std::string(args[3]);
+                if (argc - 1 == 3) {
+                    c.init();
+                    c.compile(file);
+                } else {
+                    c.compileAll();
+                }
             } else {
                 c.init();
-                c.compile(file);
+                c.compile(path);
             }
         } else {
             std::cerr << "invalid cmd: " << arg << std::endl;

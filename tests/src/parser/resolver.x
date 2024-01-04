@@ -3,6 +3,7 @@ import parser/lexer
 import parser/ast
 import parser/printer
 import parser/method_resolver
+import parser/utils
 import std/map
 
 struct Context{
@@ -46,21 +47,6 @@ impl Context{
 
 func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer(); 
-}
-
-func makeSelf(type: Type*): Type{
-  if(type.is_prim()) return *type;
-  return type.toPtr();
-}
-
-func max_for(type: Type*): i64{
-  let bits: i64 = prim_size(type.print()).unwrap();
-  let tmp = 1 << (bits - 1);
-  if(type.is_unsigned()){
-    //do this not to overflow
-    return tmp - 1 + tmp;
-  }
-  return tmp - 1;
 }
 
 func isReturnLast(b: Block*): bool{
@@ -354,7 +340,11 @@ impl Resolver{
   func err(self, msg: str, node: Expr*){
     let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
     self.err(str.str());
-  }    
+  }
+
+  func getType(self, e: Type*): Type{
+    return self.visit(e).type;
+  }  
 
   func visit(self, node: Item*){
     if let Item::Method(m*) = (node){
