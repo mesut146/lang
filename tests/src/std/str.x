@@ -87,10 +87,17 @@ impl str{
       return self.cmp(s) == 0;
     }
 
+    func real_len(self): i32{
+      if(self.get(self.len() - 1) == 0){
+        return self.len() - 1;
+      }
+      return self.len();
+    }
+
     func cmp(self, s: str): i32{
-      if(self.len() < s.len()) return -1;
-      if(self.len() > s.len()) return 1;
-      for(let i=0;i < self.len();++i){
+      if(self.real_len() < s.real_len()) return -1;
+      if(self.real_len() > s.real_len()) return 1;
+      for(let i=0;i < self.real_len();++i){
         if(self.get(i) < s.get(i)) return -1;
         if(self.get(i) > s.get(i)) return 1;
       }

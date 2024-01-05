@@ -286,7 +286,7 @@ impl Lexer{
     if(self.ops.get(os.str()).is_some()){
       return self.read_op();
     }
-    panic("unexpected char: %c(%d) at %d" , c, c, start);
+    panic("in file %s\nunexpected char: %c(%d) at %d" ,self.path.cstr(),  c, c, start);
   }
   
   func read_ident(self): Token {

@@ -4,7 +4,17 @@ import parser/ast
 import parser/printer
 import parser/method_resolver
 import parser/utils
+import parser/token
 import std/map
+
+
+impl Debug for Resolver{
+  func debug(self, f: Fmt*){}
+}
+impl Debug for RType{
+  func debug(self, f: Fmt*){}
+}
+
 
 struct Context{
   map: Map<String, Resolver>;

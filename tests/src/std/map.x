@@ -31,8 +31,29 @@ impl<K, V> Map<K, V>{
   func empty(self): bool{ return self.arr.empty(); }
   
   func add(self, k: K, v: V){
-    let p = Pair{k, v};
-    self.arr.add(p);
+    let i = self.indexOf(&k);
+    if(i == -1){
+      let p = Pair{k, v};
+      self.arr.add(p);
+    }
+    else{
+      let p = self.arr.get_ptr(i);
+      print("map set from (%s,", Fmt::str2(p.a).cstr());
+      print("%s) to (", Fmt::str2(p.b).cstr());
+      print("%s,", Fmt::str(&k).cstr());
+      print("%s)\n", Fmt::str2(v).cstr());
+      p.b = v;
+    }
+  }
+
+  func has(self, k: K*): bool{
+    for(let i = 0;i < self.arr.len();i += 1){
+      let e =  self.arr.get_ptr(i);
+      if(Eq::eq(e.a, *k)){
+        return true;
+      }
+    }
+    return false;
   }
   
   func get(self, k: K): Option<V>{

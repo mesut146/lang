@@ -73,12 +73,13 @@ impl String{
     }
     
     func cstr(self): u8*{
-      if(self.len() == 0 || self.get((self.len() - 1) as i32) != 0){
-        let res = self.clone();
-        res.append(0u8);
-        return res.arr.ptr();
+      //already cstr
+      if(self.len() > 0 && self.get((self.len() - 1) as i32) == 0){
+        return self.arr.ptr();
       }
-      return self.arr.ptr();
+      let res = self.clone();
+      res.append(0u8);
+      return res.arr.ptr();
     }
 
     func append(self, s: str){

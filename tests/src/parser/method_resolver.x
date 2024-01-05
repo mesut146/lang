@@ -436,12 +436,17 @@ impl MethodResolver{
         let ta1 = arg.get_args();
         let ta2 = prm.get_args();
         if (ta2.empty()) {
-            let op = typeMap.get_p(prm.name());
-            if (op.is_some()) {//is_tp
-                let it = op.unwrap();
-                if (it.is_none()) {
+            let nm = prm.name();
+            if (typeMap.has(nm)) {//is_tp
+                let it = typeMap.get_p(prm.name()).unwrap();
+                if (it.is_none()) {//not set yet
                     typeMap.add(*prm.name(), Option::new(*arg));
-                } else {
+                    print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
+                    for(let i=0;i<typeMap.size();++i){
+                        let p=typeMap.get_idx(i).unwrap();
+                        print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
+                    }
+                } else {//already set
                     let m = MethodResolver::is_compatible(RType::new(*arg), it.get());
                     if (m.is_some()) {
                         print("%s", m.get().cstr());

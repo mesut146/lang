@@ -76,6 +76,11 @@ impl Fmt{
     Debug::debug(node, &f);
     return f.buf;
   }
+  func str2<T>(node: T): String{
+    let f = Fmt::new();
+    Debug::debug(node, &f);
+    return f.buf;
+  }
 
   func format(s: str, args: List<str>*): String{
     let res = String::new();
@@ -129,6 +134,12 @@ impl Debug for bool{
     }else{
       f.print("false");
     }
+  }
+}
+
+impl Debug for str{
+  func debug(self, f: Fmt*){
+    f.print(*self);
   }
 }
 
