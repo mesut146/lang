@@ -1342,6 +1342,10 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
 std::any Compiler::visitRefExpr(RefExpr *node) {
     auto inner = gen(node->expr);
     //todo rvalue
+    auto mc = dynamic_cast<MethodCall*>(node->expr.get());
+    if(mc){
+        throw std::runtime_error("visitRefExpr mc"+node->print());
+    }
     return inner;
 }
 

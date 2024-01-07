@@ -194,7 +194,7 @@ func join(list: List<String>*, sep: str): String{
   return s;
 }
 
-func contains(list: List<String>*, s: String): bool{
+func contains(list: List<String>*, s: String*): bool{
   for(let i = 0;i < list.len();++i){
     if(list.get_ptr(i).eq(s)){
       return true;
@@ -208,7 +208,7 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
       let i1 = arr.get_ptr(i);
       let s1 = join(&i1.list, "/");
       let s2 = join(&is.list, "/");
-      if (s1.eq(s2)) return true;
+      if (s1.eq(&s2)) return true;
   }
   return false;
 }
@@ -256,7 +256,8 @@ impl Resolver{
     for (let i = 0;i < self.unit.imports.len();++i) {
         let is = self.unit.imports.get_ptr(i);
         //ignore prelude imports
-        if (!contains(&self.ctx.prelude, join(&is.list, "/"))) {
+        let rest = join(&is.list, "/");
+        if (!contains(&self.ctx.prelude, &rest)) {
             imports.add(*is);
         }
     }
@@ -264,7 +265,7 @@ impl Resolver{
         let pre = self.ctx.prelude.get_ptr(i);
         //skip self unit being prelude
         let path = Fmt::format("{}/std/{}.x", self.ctx.root.str(), pre.str());
-        if (self.unit.path.eq(path)) continue;
+        if (self.unit.path.eq(&path)) continue;
         let is = ImportStmt::new();
         is.list.add("std".str());
         is.list.add(*pre);
@@ -276,7 +277,8 @@ impl Resolver{
             let is = tmp.get_ptr(i);
             if (has(&imports, is)) continue;
             //skip self being cycle
-            if (self.unit.path.eq(self.getPath(is))) continue;
+            let iss = self.getPath(is);
+            if (self.unit.path.eq(&iss)) continue;
             imports.add(*is);
         }
     }

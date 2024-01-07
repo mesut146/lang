@@ -1,22 +1,22 @@
 trait Eq{
-  func eq(self, x: Self): bool;
+  func eq(self, x: Self*): bool;
 }
 
 impl Eq for i32{
-  func eq(self, x: i32): bool{
-    return self == x;
+  func eq(self, x: i32*): bool{
+    return self == *x;
   }
 }
 
 impl Eq for i64{
-  func eq(self, x: i64): bool{
-    return self == x;
+  func eq(self, x: i64*): bool{
+    return self == *x;
   }
 }
 
 impl Eq for str{
-  func eq(self, x: str): bool{
-    return self.eq(x);
+  func eq(self, x: str*): bool{
+    return self.eq(*x);
   }
 }
 

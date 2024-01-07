@@ -37,7 +37,7 @@ impl Signature{
         if(mc.scope.is_some()){
             let scp = r.visit(mc.scope.get().get());
             //we need this to handle cases like Option::new(...)
-            if (scp.targetDecl.is_some() && !scp.targetDecl.get().unit.path.eq(r.unit.path)) {
+            if (scp.targetDecl.is_some() && !scp.targetDecl.get().unit.path.eq(&r.unit.path)) {
                 r.addUsed(scp.targetDecl.unwrap());
             }
             if (scp.type.is_pointer()) {
@@ -176,7 +176,8 @@ impl MethodResolver{
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item = self.r.unit.items.get_ptr(i);
             if let Item::Impl(imp*) = (item){
-                if(imp.info.type.print().eq(type.print())){
+                let type_str = type.print();
+                if(imp.info.type.print().eq(&type_str)){
                     list.add(imp);
                 }
             }
@@ -197,7 +198,7 @@ impl MethodResolver{
             //print("impl found\n%s", Fmt::str(imp).cstr());
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);
-                if(m.name.eq(sig.name)){
+                if(m.name.eq(&sig.name)){
                     list.add(Signature::new(m));
                 }
             }
@@ -244,7 +245,7 @@ impl MethodResolver{
         }
         let target = sig2.m.unwrap();
         if (!target.is_generic) {
-            if (!target.path.eq(self.r.unit.path)) {
+            if (!target.path.eq(&self.r.unit.path)) {
                 self.r.used_methods.add(target);
             }
             let res = self.r.visit(&sig2.ret);
@@ -303,7 +304,7 @@ impl MethodResolver{
     func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
         let mc = sig.mc.unwrap();
         let m = sig2.m.unwrap();
-        assert mc.name.eq(m.name);
+        assert mc.name.eq(&m.name);
         if(!m.type_args.empty()){
             let mc_targs = &mc.tp;
             if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {
@@ -314,7 +315,7 @@ impl MethodResolver{
                 for (let i = 0; i < mc_targs.size(); ++i) {
                     let ta1 = mc_targs.get_ptr(i).print();
                     let ta2 = m.type_args.get_ptr(i).print();
-                    if (!ta1.eq(ta2)) {
+                    if (!ta1.eq(&ta2)) {
                         let err = Fmt::format("type arg {} not compatible with {}", ta1.str(), ta2.str());
                         return SigResult::Err{err};
                     }
@@ -337,7 +338,8 @@ impl MethodResolver{
                     //check they belong same impl
                     let scope_args = scope.get_args();
                     for (let i = 0; i < scope_args.size(); ++i) {
-                        if (!scope_args.get_ptr(i).print().eq(ty.get_args().get(i).print())){
+                        let tp_str = ty.get_args().get(i).print();
+                        if (!scope_args.get_ptr(i).print().eq(&tp_str)){
                             return SigResult::Err{"not same impl".str()};
                         }
                     }
@@ -359,7 +361,8 @@ impl MethodResolver{
             let t1 = sig.args.get_ptr(i);
             let t2 = sig2.args.get_ptr(i);
             //todo if base method, skip self
-            if (!t1.print().eq(t2.print())) {
+            let t2_str = t2.print();
+            if (!t1.print().eq(&t2_str)) {
                 all_exact = false;
             }
             if (MethodResolver::is_compatible(RType::new(*t1), t2, &typeParams).is_some()) {
@@ -377,7 +380,8 @@ impl MethodResolver{
         if (isGeneric(target, typeParams)) return Option<String>::None;
         if (arg.print() == target.print()) return Option<String>::None;
         if (!arg.is_simple()) {
-            if (arg.print().eq(target.print())) {
+            let target_str = target.print();
+            if (arg.print().eq(&target_str)) {
                 return Option<String>::None;
             }
             if (kind(arg) != kind(target)) {

@@ -47,19 +47,13 @@ impl<K, V> Map<K, V>{
   }
 
   func has(self, k: K*): bool{
-    for(let i = 0;i < self.arr.len();i += 1){
-      let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, *k)){
-        return true;
-      }
-    }
-    return false;
+    return self.indexOf(k) != -1;
   }
   
   func get(self, k: K): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get(i);
-      if(Eq::eq(e.a, k)){
+      if(Eq::eq(e.a, &k)){
         return Option<V>::Some{e.b};
       }
     }
@@ -68,7 +62,7 @@ impl<K, V> Map<K, V>{
   func get_p(self, k: K*): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, *k)){
+      if(Eq::eq(e.a, k)){
         return Option<V>::Some{e.b};
       }
     }
@@ -77,7 +71,7 @@ impl<K, V> Map<K, V>{
   func get_ptr(self, k: K*): Option<V*>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, *k)){
+      if(Eq::eq(e.a, k)){
         return Option<V*>::Some{&e.b};
       }
     }
@@ -86,7 +80,7 @@ impl<K, V> Map<K, V>{
   func indexOf(self, k: K*): i64{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, *k)){
+      if(Eq::eq(e.a, k)){
         return i as i64;
       }
     }

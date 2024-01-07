@@ -103,7 +103,11 @@ static std::string printMethod(const Method *m) {
     s += "(";
     int i = 0;
     if (m->self) {
-        s += m->self->type->print();
+        if (m->self->type.has_value()) {
+            s += m->self->type->print();
+        } else {
+            s += "self";
+        }
         i++;
     }
     for (auto &prm : m->params) {

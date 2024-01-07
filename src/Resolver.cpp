@@ -586,10 +586,14 @@ std::vector<Method> &Resolver::get_trait_methods(const Type &type) {
 
 std::string mangle2(Method &m, const Type &parent) {
     std::string s = m.name;
+    std::map<std::string, Type> map = {{"Self", parent}};
     for (auto &p : m.params) {
-        auto s = p.type->print();
-        if (s == "Self") s = parent.print();
-        s += "_" + s;
+        s += "_";
+        auto ty = Generator::make(p.type.value(), map);
+        s += ty.print();
+    }
+    if (m.name == "eq") {
+        print("eq " + s);
     }
     return s;
 }
@@ -600,28 +604,28 @@ std::any Resolver::visitImpl(Impl *node) {
     }
     curImpl = node;
     if (node->trait_name) {
+        //mark required methods
         std::map<std::string, Method *> required;
         auto &methods = get_trait_methods(*node->trait_name);
-        std::vector<bool> done;
         for (auto &m : methods) {
             if (!m.body) {
                 required[mangle2(m, node->type)] = &m;
             }
         }
+        //delete the matching required method
         for (auto &m : node->methods) {
             if (!m.typeArgs.empty()) {
                 continue;
             }
             m.accept(this);
             auto mng = mangle2(m, node->type);
-            auto it = required.find(mng);
-            if (it != required.end()) {
-                required.erase(it);
+            if (required.contains(mng)) {
+                required.erase(mng);
             }
         }
         if (!required.empty()) {
             std::string msg;
-            for (auto [mng, m] : required) {
+            for (auto &[mng, m] : required) {
                 msg += "method " + printMethod(m) + " not implemented for " + node->type.print();
             }
             error(msg);
@@ -1017,7 +1021,7 @@ std::any Resolver::visitInfix(Infix *node) {
             return makeSimple("bool");
     }
     if (!rt1.type.isPrim() || !rt2.type.isPrim()) {
-        err(node, "infix on non prim type: " + rt1.type.print()+" vs "+rt2.type.print());
+        err(node, "infix on non prim type: " + rt1.type.print() + " vs " + rt2.type.print());
     }
     /*if (node->op == "==" || node->op == "!=") {
         auto u1 = isUnsigned(rt1.type);
@@ -1299,7 +1303,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         auto mtype = getType(curMethod->type);
         if (MethodResolver::isCompatible(type, mtype)) {
             //err(node, );
-            err(node ,"method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
+            err(node, "method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
     } else {
         if (!curMethod->type.isVoid()) {
