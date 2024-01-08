@@ -111,7 +111,7 @@ impl<T> List<T>{
     return self.count == 0;
   }
 
-  func indexOf(self, e: T): i32{
+  func indexOf(self, e: T*): i32{
     return self.indexOf(e, 0);
   }
 
@@ -125,10 +125,10 @@ impl<T> List<T>{
     return self.indexOf2(e, off);
   }
   
-  func indexOf2<Q>(self, e: Q*, off: i32): i32{
+  func indexOf2(self, e: T*, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(Eq::eq(ptr::get(self.ptr, i), e)) return i;
+      if(Eq::eq(*ptr::get(self.ptr, i), e)) return i;
       ++i;
     }
     return -1;

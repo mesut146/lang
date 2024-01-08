@@ -8,6 +8,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <regex>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -76,16 +77,25 @@ static std::vector<Type> get_type_params(Method &m) {
     return res;
 }
 
-static std::string methodParent(const Method *m) {
-    if (!m->parent) return m->name;
+static std::optional<Type> methodParent2(const Method *m) {
+    if (!m->parent) return std::nullopt;
     if (m->parent->isImpl()) {
         auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type.print() + "::" + m->name;
+        return impl->type;
     } else if (m->parent->isTrait()) {
         auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type.print() + "::" + m->name;
+        return t->type;
     }
-    return m->name;
+    return std::nullopt;
+}
+
+static std::string methodParent(const Method *m) {
+    auto p = methodParent2(m);
+    if (p.has_value()) {
+        return p.value().print() + "::" + m->name;
+    } else {
+        return m->name;
+    }
 }
 
 static std::string printMethod(const Method *m) {
@@ -119,22 +129,36 @@ static std::string printMethod(const Method *m) {
     return s;
 }
 
+static std::string mangleType(const Type &type) {
+    auto s = type.print();
+    s = std::regex_replace(s, std::regex("\\*"), "P");
+    s = std::regex_replace(s, std::regex("<"), "$LT");
+    s = std::regex_replace(s, std::regex(">"), "$GT");
+    return s;
+}
+
 static std::string mangle(const Method *m) {
-    std::string s = methodParent(m);
+    auto p = methodParent2(m);
+    std::string s;
+    if (p.has_value()) {
+        s += mangleType(p.value());
+        s += "::";
+    }
+    s += m->name;
     if (!m->typeArgs.empty()) {
-        s += "<";
+        s += "$LT";
         for (int i = 0; i < m->typeArgs.size(); i++) {
-            s += m->typeArgs[i].print();
+            s += mangleType(m->typeArgs[i]);
             if (i < m->typeArgs.size() - 1) {
                 s += ",";
             }
         }
-        s += ">";
+        s += "$GT";
     }
     if (m->parent && m->parent->isExtern()) return s;
-    if (m->self) s += "_" + m->self->type->print();
+    if (m->self) s += "_" + mangleType(m->self->type.value());
     for (auto &prm : m->params) {
-        s += "_" + prm.type->print();
+        s += "_" + mangleType(prm.type.value());
     }
     return s;
 }

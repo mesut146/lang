@@ -245,7 +245,7 @@ impl MethodResolver{
         }
         let target = sig2.m.unwrap();
         if (!target.is_generic) {
-            if (!target.path.eq(&self.r.unit.path)) {
+            if (!f.eq(&self.r.unit.path)) {
                 self.r.used_methods.add(target);
             }
             let res = self.r.visit(&sig2.ret);

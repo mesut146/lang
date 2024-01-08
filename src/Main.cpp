@@ -152,6 +152,8 @@ int main(int argc, char **args) {
             usage();
         } else if (arg == "parse") {
             parseTest();
+        } else if (arg == "test") {
+            compileTest();
         } else if (arg == "c") {
             auto path = std::string(args[2]);
             Compiler c;

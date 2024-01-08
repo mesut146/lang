@@ -63,8 +63,9 @@ func main(){
   assert list.get(1) == 20;
   assert list.get(2) == 30;
   //list.get(3); //will panic
-  assert list.indexOf(&20) == 1;
-  assert list.contains(&30) && !list.contains(&40);
+  let x1 = 20, x2 = 30, x3 = 40;
+  assert list.indexOf(&x1) == 1;
+  assert list.contains(&x2) && !list.contains(&x3);
   let s = list.slice(1, 3);
   assert s.len() == 2 && s[0] == 20;
   iterTest(list);

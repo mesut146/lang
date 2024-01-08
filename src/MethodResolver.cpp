@@ -252,8 +252,8 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         for (auto &m : real) {
             s += m.print() + "\n";
         }
-        error(r, "method:  " + mc->print() + "\n" + sig.print() + " has " +
-                         std::to_string(real.size()) + " candidates;\n" + s);
+        s = format("multiple candidates for %s\n%s", mc->print().c_str(), s.c_str());
+        error(r, s);
     }
     auto &sig2 = exact ? *exact : real[0];
     auto target = sig2.m;

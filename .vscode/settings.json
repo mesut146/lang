@@ -76,7 +76,8 @@
         "numbers": "cpp",
         "compare": "cpp",
         "concepts": "cpp",
-        "set": "cpp"
+        "set": "cpp",
+        "regex": "cpp"
     },
     "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

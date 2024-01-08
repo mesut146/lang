@@ -7,5 +7,9 @@ func main(){
   assert o2.is_some();
   assert o2.unwrap() == 5;
 
+  let num = 111;
+  let o3 = Option::new(&num);
+  assert *o3.unwrap() == 111;
+
   print("optionalTest done\n");
 }

@@ -706,6 +706,18 @@ Type prm_type(const Type &type) {
     return type;
 }
 
+std::string dbg_name(Method *m) {
+    if (!m->parent) return m->name;
+    if (m->parent->isImpl()) {
+        auto impl = dynamic_cast<Impl *>(m->parent);
+        return impl->type.name + "::" + m->name;
+    } else if (m->parent->isTrait()) {
+        auto t = dynamic_cast<Trait *>(m->parent);
+        return t->type.name + "::" + m->name;
+    }
+    return m->name;
+}
+
 void dbg_func(Method *m, llvm::Function *func, Compiler *c) {
     if (!Config::debug) return;
     llvm::SmallVector<llvm::Metadata *, 8> tys;
@@ -726,8 +738,13 @@ void dbg_func(Method *m, llvm::Function *func, Compiler *c) {
     } else {
         linkage_name = mangle(m);
     }
-    auto name = methodParent(m);
-    auto sp = c->DBuilder->createFunction(file, name, linkage_name, file, m->line, ft, m->line, llvm::DINode::FlagPrototyped, spflags);
+    llvm::DIScope *scope = nullptr;
+    if (m->parent) {
+        auto p = methodParent2(m);
+        scope = c->map_di(p.value());
+    }
+    auto name = dbg_name(m);
+    auto sp = c->DBuilder->createFunction(scope, name, linkage_name, file, m->line, ft, m->line, llvm::DINode::FlagPrototyped, spflags);
     c->di.sp = sp;
     func->setSubprogram(sp);
     c->loc(nullptr);
@@ -1342,9 +1359,9 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
 std::any Compiler::visitRefExpr(RefExpr *node) {
     auto inner = gen(node->expr);
     //todo rvalue
-    auto mc = dynamic_cast<MethodCall*>(node->expr.get());
-    if(mc){
-        throw std::runtime_error("visitRefExpr mc"+node->print());
+    auto mc = dynamic_cast<MethodCall *>(node->expr.get());
+    if (mc) {
+        throw std::runtime_error("visitRefExpr mc" + node->print());
     }
     return inner;
 }

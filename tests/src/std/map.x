@@ -32,11 +32,13 @@ impl<K, V> Map<K, V>{
   
   func add(self, k: K, v: V){
     let i = self.indexOf(&k);
-    if(i == -1){
+    if(i == -1_i64){
+      print("map noset %d\n", i);
       let p = Pair{k, v};
       self.arr.add(p);
     }
     else{
+      print("map set %d\n", i);
       let p = self.arr.get_ptr(i);
       print("map set from (%s,", Fmt::str2(p.a).cstr());
       print("%s) to (", Fmt::str2(p.b).cstr());

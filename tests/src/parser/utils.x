@@ -15,7 +15,8 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
             let tp = typeParams.get_ptr(i);
-            if (tp.print().eq(type.print())) return true;
+            let type_str = type.print();
+            if (tp.print().eq(&type_str)) return true;
         }
     } else {
         for (let i = 0;i < targs.size();++i) {
@@ -36,7 +37,8 @@ func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
     let targs = typ.get_args();
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
-            if (typeParams.get_ptr(i).print().eq(typ.print())) return true;
+            let type_str = typ.print();
+            if (typeParams.get_ptr(i).print().eq(&type_str)) return true;
         }
     } else {
         for (let i = 0;i < targs.size();++i) {
