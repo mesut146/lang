@@ -602,16 +602,6 @@ void Compiler::allocParams(Method *m) {
     }
 }
 
-void dbg_prm(Param &p, const Type &type, int idx, Compiler *c) {
-    if (!Config::debug) return;
-    auto sp = c->di.sp;
-    auto dt = c->map_di(type);
-    auto v = c->DBuilder->createParameterVariable(sp, p.name, idx, c->di.file, p.line, dt, true);
-    auto val = c->NamedValues[p.name];
-    auto lc = llvm::DILocation::get(sp->getContext(), p.line, p.pos, sp);
-    c->DBuilder->insertDeclare(val, v, c->DBuilder->createExpression(), lc, c->Builder->GetInsertBlock());
-}
-
 void storeParams(Method *m, Compiler *c) {
     auto func = c->funcMap[mangle(m)];
     int argIdx = c->isRvo(m) ? 1 : 0;
@@ -622,10 +612,10 @@ void storeParams(Method *m, Compiler *c) {
         if (isStruct(*m->self->type)) {
             c->copy(ptr, val, *m->self->type);
             //self is always ptr
-            dbg_prm(*m->self, Type(Type::Pointer, m->self->type.value()), didx, c);
+            c->dbg_prm(*m->self, Type(Type::Pointer, m->self->type.value()), didx);
         } else {
             c->Builder->CreateStore(val, ptr);
-            dbg_prm(*m->self, m->self->type.value(), didx, c);
+            c->dbg_prm(*m->self, m->self->type.value(), didx);
         }
         didx++;
         argIdx++;
@@ -637,10 +627,10 @@ void storeParams(Method *m, Compiler *c) {
         auto ptr = c->NamedValues[prm.name];
         if (isStruct(*prm.type)) {
             c->copy(ptr, val, *prm.type);
-            dbg_prm(prm, prm.type.value(), didx, c);
+            c->dbg_prm(prm, prm.type.value(), didx);
         } else {
             c->Builder->CreateStore(val, ptr);
-            dbg_prm(prm, prm.type.value(), didx, c);
+            c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
     }
@@ -685,69 +675,11 @@ void Compiler::loc(int line, int pos) {
     Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
 
-void dbg_var(const std::string &name, int line, int pos, const Type &type, Compiler *c) {
-    if (!Config::debug) return;
-    auto sp = c->di.sp;
-    auto v = c->DBuilder->createAutoVariable(sp, name, c->di.file, line, c->map_di(type), true);
-    auto val = c->NamedValues[name];
-    auto lc = llvm::DILocation::get(sp->getContext(), line, pos, sp);
-    auto e = c->DBuilder->createExpression();
-    c->DBuilder->insertDeclare(val, v, e, lc, c->Builder->GetInsertBlock());
-}
-
-void dbg_var(const Fragment &f, const Type &type, Compiler *c) {
-    dbg_var(f.name, f.line, f.pos, type, c);
-}
-
 Type prm_type(const Type &type) {
     if (isStruct(type)) {
         return Type(Type::Pointer, type);
     }
     return type;
-}
-
-std::string dbg_name(Method *m) {
-    if (!m->parent) return m->name;
-    if (m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type.name + "::" + m->name;
-    } else if (m->parent->isTrait()) {
-        auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type.name + "::" + m->name;
-    }
-    return m->name;
-}
-
-void dbg_func(Method *m, llvm::Function *func, Compiler *c) {
-    if (!Config::debug) return;
-    llvm::SmallVector<llvm::Metadata *, 8> tys;
-    tys.push_back(c->map_di(m->type));
-    if (m->self) {
-        tys.push_back(c->map_di(*m->self->type));
-    }
-    for (auto &p : m->params) {
-        tys.push_back(c->map_di(*p.type));
-    }
-    auto ft = c->DBuilder->createSubroutineType(c->DBuilder->getOrCreateTypeArray(tys));
-    auto file = c->DBuilder->createFile(m->unit->path, ".");
-    c->di.file = file;
-    std::string linkage_name;
-    auto spflags = llvm::DISubprogram::SPFlagDefinition;
-    if (is_main(m)) {
-        spflags |= llvm::DISubprogram::SPFlagMainSubprogram;
-    } else {
-        linkage_name = mangle(m);
-    }
-    llvm::DIScope *scope = nullptr;
-    if (m->parent) {
-        auto p = methodParent2(m);
-        scope = c->map_di(p.value());
-    }
-    auto name = dbg_name(m);
-    auto sp = c->DBuilder->createFunction(scope, name, linkage_name, file, m->line, ft, m->line, llvm::DINode::FlagPrototyped, spflags);
-    c->di.sp = sp;
-    func->setSubprogram(sp);
-    c->loc(nullptr);
 }
 
 void Compiler::genCode(std::unique_ptr<Method> &m) {
@@ -767,7 +699,7 @@ void Compiler::genCode(Method *m) {
     Builder->SetInsertPoint(bb);
     //dbg
     if (Config::debug) {
-        dbg_func(m, func, this);
+        dbg_func(m, func);
     }
     allocParams(m);
     makeLocals(m->body.get());
@@ -1335,7 +1267,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         //no unnecessary alloc
         if (doesAlloc(rhs)) {
             gen(rhs);
-            dbg_var(f, type, this);
+            dbg_var(f, type);
             continue;
         }
         auto ptr = NamedValues[f.name];
@@ -1351,7 +1283,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
             Builder->CreateStore(val, ptr);
         }
         //dbg after init
-        dbg_var(f, type, this);
+        dbg_var(f, type);
     }
     return nullptr;
 }
@@ -1611,14 +1543,14 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             NamedValues[arg.name] = alloc_ptr;
             if (arg.ptr) {
                 Builder->CreateStore(field_ptr, alloc_ptr);
-                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, prm.type), this);
+                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, prm.type));
             } else {
                 if (prm.type.isPrim() || prm.type.isPointer()) {
                     Builder->CreateStore(load(field_ptr, mapType(prm.type)), alloc_ptr);
                 } else {
                     copy(alloc_ptr, field_ptr, prm.type);
                 }
-                dbg_var(arg.name, node->rhs->line, 0, prm.type, this);
+                dbg_var(arg.name, node->rhs->line, 0, prm.type);
             }
         }
     }

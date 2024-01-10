@@ -216,6 +216,8 @@ public:
     llvm::Type *mapType(const Type *type) {
         return mapType(type, resolv.get());
     }
+
+
     llvm::DIType *map_di0(const Type *t);
     llvm::DIType *map_di(const Type *t) {
         auto str = t->print();
@@ -227,6 +229,14 @@ public:
         return res;
     }
     llvm::DIType *map_di(const Type &t) { return map_di(&t); }
+    void dbg_prm(Param &p, const Type &type, int idx);
+    void dbg_var(const std::string &name, int line, int pos, const Type &type);
+    void dbg_var(const Fragment &f, const Type &type) {
+        dbg_var(f.name, f.line, f.pos, type);
+    }
+    static std::string dbg_name(Method *m);
+    void dbg_func(Method *m, llvm::Function *func);
+
     void loc(Node *e);
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
