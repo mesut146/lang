@@ -64,6 +64,27 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     loc(nullptr);
 }
 
+llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler *c, llvm::DICompositeType *var_part, llvm::DIFile *file, int size, int idx, llvm::DICompositeType *scope) {
+    auto name = ed->type.print() + "::" + evar.name;
+    auto var_type = (llvm::StructType *) c->classMap[name];
+    std::vector<llvm::Metadata *> elems;
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems));
+    auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
+    auto st = c->DBuilder->createStructType(scope, evar.name, file, ed->line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    auto sl = c->mod->getDataLayout().getStructLayout(var_type);
+    int i = 0;
+    for (auto &fd : evar.fields) {
+        auto fdd = c->map_di(fd.type);
+        auto off = sl->getElementOffsetInBits(i) + ENUM_TAG_BITS;
+        auto member = c->DBuilder->createMemberType(st, fd.name, file, ed->line, c->getSize2(fd.type), 0, off, llvm::DINode::FlagZero, fdd);
+        elems.push_back(member);
+        ++i;
+    }
+    st->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems)));
+    int align = 0;
+    return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, size, align, 0, c->makeInt(idx), llvm::DINode::FlagZero, st);
+}
+
 
 llvm::DIType *Compiler::map_di0(const Type *t) {
     auto rt = resolv->resolve(*t);
@@ -126,24 +147,47 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
     }
     auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
     std::vector<llvm::Metadata *> elems;
+    llvm::DICompositeType *st;
+
+    if (di.incomplete_types.contains(s)) {
+        st = di.incomplete_types[s];
+    } else {
+        //empty type
+        auto st_size = getSize2(t);
+        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+        st = DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    }
+
     if (rt.targetDecl->isEnum()) {
         //todo order
         auto ed = (EnumDecl *) rt.targetDecl;
         auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
-        auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 0, 0, llvm::DINode::FlagZero, tag);
-        elems.push_back(tagm);
-        auto data_size = getSize2(ed) - ENUM_TAG_BITS;
-        auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
-        llvm::DINodeArray sub;
-        auto at = DBuilder->createArrayType(data_size, 0, chr, sub);
-        auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, data_size, 0, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
-        elems.push_back(arrm);
-        //DBuilder->createEnumerationType(di.cu, s, file, rt.targetDecl->line, size, 0, elems, );
+        /*auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 0, 0, llvm::DINode::FlagZero, tag);
+        elems.push_back(tagm);*/
+        auto enum_size = getSize2(ed);
+        auto data_size = enum_size - ENUM_TAG_BITS;
+        //auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
+        /*llvm::DINodeArray sub;
+        auto at = DBuilder->createArrayType(data_size, 0, chr, sub);*/
+        /*auto arrm = DBuilder->createMemberType(nullptr, "data", file, ed->line, data_size, 0, ENUM_TAG_BITS, llvm::DINode::FlagZero, at);
+        elems.push_back(arrm);*/
+        std::vector<llvm::Metadata *> elems2;
+        auto disc = DBuilder->createMemberType(nullptr, "", file, ed->line, ENUM_TAG_BITS, 0, 0, llvm::DINode::FlagArtificial, tag);
+        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2));
+        auto var_part = DBuilder->createVariantPart(st, "", file, rt.targetDecl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);
+        int idx = 0;
+        for (auto &evar : ed->variants) {
+            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st);
+            elems2.push_back(var_type);
+            ++idx;
+        }
+        var_part->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2)));
+        elems.push_back(var_part);
     } else {
         auto sd = (StructDecl *) rt.targetDecl;
         int idx = 0;
-        auto st = (llvm::StructType *) mapType(sd->type);
-        auto sl = mod->getDataLayout().getStructLayout(st);
+        auto st1 = (llvm::StructType *) mapType(sd->type);
+        auto sl = mod->getDataLayout().getStructLayout(st1);
         for (auto &fd : sd->fields) {
             auto off = sl->getElementOffsetInBits(idx);
             auto di_type = map_di(fd.type);
@@ -153,12 +197,6 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         }
     }
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-    if (di.incomplete_types.contains(s)) {
-        auto st = di.incomplete_types[s];
-        st->replaceElements(arr);
-        return st;
-    } else {
-        auto st_size = getSize2(t);
-        return DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
-    }
+    st->replaceElements(arr);
+    return st;
 }
