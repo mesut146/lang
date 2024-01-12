@@ -8,18 +8,62 @@ import parser/token
 import std/map
 
 
-impl Debug for Resolver{
-  func debug(self, f: Fmt*){}
-}
-impl Debug for RType{
-  func debug(self, f: Fmt*){}
-}
-
-
 struct Context{
   map: Map<String, Resolver>;
   root: String;
   prelude: List<String>;
+}
+
+struct Scope{
+  list: List<VarHolder>;
+}
+struct VarHolder{
+  name: String;
+  type: Type;
+  prm: bool;
+}
+
+//#derive(debug)
+struct Resolver{
+  unit: Unit;
+  is_resolved: bool;
+  is_init: bool;
+  typeMap: Map<String, RType>;
+  curMethod: Option<Method*>;
+  curImpl: Option<Impl*>;
+  scopes: List<Scope>;
+  ctx: Context*;
+  used_methods: List<Method*>;
+  generated_methods: List<Method>;
+}
+
+struct Config{
+  optimize_enum: bool;
+}
+
+/*enum Decl{
+  Struct(sd: StructDecl*),
+  Enum(ed: EnumDecl*)
+}*/
+
+struct RType{
+  type: Type;
+  trait: Option<Trait*>;
+  method: Option<Method*>;
+  value: Option<String>;
+  targetDecl: Option<Decl*>;
+  vh: Option<VarHolder*>;
+}
+
+impl Debug for Resolver{
+  func debug(self, f: Fmt*){
+    panic("Resolver::debug");
+  }
+}
+impl Debug for RType{
+  func debug(self, f: Fmt*){
+    panic("RType::debug");
+  }
 }
 
 impl Context{
@@ -109,15 +153,6 @@ func mangle2(m: Method*, type: Type*): String{
   return s;
 }
 
-struct Scope{
-  list: List<VarHolder>;
-}
-struct VarHolder{
-  name: String;
-  type: Type;
-  prm: bool;
-}
-
 impl Scope{
   func new(): Scope{
     return Scope{list: List<VarHolder>::new()};
@@ -136,37 +171,6 @@ impl VarHolder{
   func new(name: String, type: Type, prm: bool): VarHolder{
     return VarHolder{name: name, type: type, prm: prm};
   }
-}
-
-//#derive(debug)
-struct Resolver{
-  unit: Unit;
-  is_resolved: bool;
-  is_init: bool;
-  typeMap: Map<String, RType>;
-  curMethod: Option<Method*>;
-  curImpl: Option<Impl*>;
-  scopes: List<Scope>;
-  ctx: Context*;
-  used_methods: List<Method*>;
-}
-
-struct Config{
-  optimize_enum: bool;
-}
-
-/*enum Decl{
-  Struct(sd: StructDecl*),
-  Enum(ed: EnumDecl*)
-}*/
-
-struct RType{
-  type: Type;
-  trait: Option<Trait*>;
-  method: Option<Method*>;
-  value: Option<String>;
-  targetDecl: Option<Decl*>;
-  vh: Option<VarHolder*>;
 }
 
 impl RType{
@@ -222,7 +226,7 @@ impl Resolver{
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
-      used_methods: List<Method*>::new()};
+      used_methods: List<Method*>::new(), generated_methods: List<Method>::new()};
     return res;
   }
 

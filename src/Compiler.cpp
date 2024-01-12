@@ -266,9 +266,9 @@ llvm::Value *extend(llvm::Value *val, const Type &type, Compiler *c) {
     auto src = val->getType()->getPrimitiveSizeInBits();
     int bits = c->getSize2(type);
     if (src < bits) {
-        return c->Builder->CreateZExt(val, c->getInt(bits));
+        return c->Builder->CreateSExt(val, c->getInt(bits));
     }
-    if (src > bits) {
+    else if (src > bits) {
         return c->Builder->CreateTrunc(val, c->getInt(bits));
     }
     return val;

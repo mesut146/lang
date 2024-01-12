@@ -100,11 +100,12 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
             if (!rt.targetDecl) {
                 return DBuilder->createPointerType(map_di(&elem), 64);
             }
+            //make incomplete type to fill later
             auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
             auto st_size = getSize2(t);
             std::vector<llvm::Metadata *> elems;
             auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-            auto st = DBuilder->createStructType(di.cu, s, file, 0, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
+            auto st = DBuilder->createStructType(di.cu, elem.print(), file, 0, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
             di.incomplete_types[elem.print()] = st;
             return DBuilder->createPointerType(st, 64);
         }

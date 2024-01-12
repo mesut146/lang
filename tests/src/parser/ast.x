@@ -63,6 +63,12 @@ struct ImplInfo{
   type: Type;
 }
 
+impl ImplInfo{
+  func new(type: Type): ImplInfo{
+    return ImplInfo{List<Type>::new(), Option<Type>::None, type};
+  }
+}
+
 struct BaseDecl{
   line: i32;
   unit: Unit*;
@@ -216,21 +222,21 @@ impl Type{
   func is_slice(self): bool{
     return self is Type::Slice;
   }
-  func unwrap(self): Type{
+  func unwrap_ptr(self): Type{
     if let Type::Pointer(bx*) = (self){
       return bx.unwrap();
     }
     return *self;
   }
-  func elem(self): Type{
+  func elem(self): Type*{
     if let Type::Pointer(bx*) = (self){
-      return bx.unwrap();
+      return bx.get();
     }
     if let Type::Array(bx*, sz) = (self){
-      return bx.unwrap();
+      return bx.get();
     }
     if let Type::Slice(bx*) = (self){
-      return bx.unwrap();
+      return bx.get();
     }
     panic("elem");       
   }
@@ -256,6 +262,13 @@ impl Type{
       return smp.scope.get();
     }
     panic("Type::scope");
+  }
+
+  func as_simple(self): Simple*{
+    if let Type::Simple(simple*) = (self){
+      return simple;
+    }
+    panic("as_simple");
   }
 }
 
@@ -331,6 +344,7 @@ struct Call{
   name: String;
   tp: List<Type>;
   args: List<Expr>;
+  is_static: bool;
 }
 
 impl Call{

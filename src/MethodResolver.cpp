@@ -369,9 +369,9 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
         }
     }
     auto newImpl = new Impl(clone(st));
-    if (m->self) {
+    /*if (m->self) {
         newImpl->print();
-    }
+    }*/
     res->parent = newImpl;
     r->generatedMethods.push_back(res);
     return res;

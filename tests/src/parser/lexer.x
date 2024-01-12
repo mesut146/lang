@@ -86,7 +86,6 @@ impl Lexer{
     ops.add(")", TokenType::RPAREN);
     ops.add("[", TokenType::LBRACKET);
     ops.add("]", TokenType::RBRACKET);
-    ops.add("/", TokenType::DIV);
     ops.add(":", TokenType::COLON);
     ops.add("::", TokenType::COLON2);
     ops.add(";", TokenType::SEMI);

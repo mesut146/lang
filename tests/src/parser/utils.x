@@ -5,6 +5,16 @@ func makeSelf(scope: Type*): Type{
     return scope.toPtr();
 }
 
+func replace_self(typ: Type*, m: Method*): Type{
+    if(!typ.print().eq("Self")){
+        return *typ;
+    }
+    if let Parent::Impl(info*)=(m.parent){
+        return info.type;
+    }
+    panic("replace_self not impl method");
+}
+
 func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     if (type.is_slice() || type.is_array() || type.is_pointer()) {
         let elem = type.elem();
@@ -66,4 +76,39 @@ func max_for(type: Type*): i64{
         return x - 1 + x;
     }
     return x - 1;
+}
+
+//struct Generator{}
+
+//replace any type in decl with src by same index
+func replace_type(type: Type*, map: Map<String, Type>*): Type {
+    if let Type::Pointer(bx*) = (type){
+        let scope = replace_type(bx.get(), map);
+        let res = Type::Pointer{Box::new(scope)};
+        return res;
+    }
+    if let Type::Array(bx*, size) = (type){
+        let scope = replace_type(bx.get(), map);
+        let res = Type::Array{Box::new(scope), size};
+        return res;
+    }
+    if let Type::Slice(bx*) = (type){
+        let scope = replace_type(bx.get(), map);
+        let res = Type::Slice{Box::new(scope)};
+        return res;
+    }
+    let str = type.print();
+    if (map.has(&str)) {
+        return map.get(&str);
+    }
+    let smp = type.as_simple();
+    let res = Simple::new(smp.name);
+    if (smp.scope.is_some()) {
+        res.scope = Ptr::new(replace_type(smp.scope.get(), map));
+    }
+    for (let i = 0; i < smp.args.size(); ++i) {
+        let ta = smp.args.get_ptr(i);
+        res.args.add(replace_type(ta, map));
+    }
+    return res;
 }

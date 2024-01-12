@@ -1396,7 +1396,6 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             err(node, "invalid base class type: " + base_ty.print() + " expecting: " + decl->base->print());
         }
     }
-    std::unordered_set<std::string> names;
     std::vector<FieldDecl> *fields;
     Type type;
     if (res.targetDecl->isEnum()) {
@@ -1425,6 +1424,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         //error(node, "incorrect number of arguments passed to object creation");
     }
     int field_idx = 0;
+    std::unordered_set<std::string> names;
     for (int i = 0; i < node->entries.size(); i++) {
         auto &e = node->entries[i];
         if (e.isBase) continue;
@@ -1436,6 +1436,10 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             prm_idx = field_idx++;
         }
         auto &prm = fields->at(prm_idx);
+        //todo if we support unnamed fields, change this
+        if (!hasNamed) {
+            names.insert(prm.name);
+        }
         auto pt = getType(prm.type);
         auto arg = resolve(e.value);
         if (MethodResolver::isCompatible(arg, pt)) {
@@ -1443,11 +1447,9 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
             err(node, f);
         }
     }
-    if (hasNamed) {
-        for (auto &p : *fields) {
-            if (names.find(p.name) == names.end()) {
-                err(node, "field not covered: " + p.name);
-            }
+    for (auto &p : *fields) {
+        if (!names.contains(p.name)) {
+            err(node, "field not covered: " + p.name);
         }
     }
     return res;

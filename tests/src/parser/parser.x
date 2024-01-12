@@ -202,7 +202,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent};
+      let res = Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
       return res;
     }
     
@@ -687,7 +687,7 @@ impl Parser{
           let ty = Type::new(nm, g);
           let nm2 = self.name();
           if(self.is(TokenType::LPAREN)){
-            return self.call(Expr::Type{ty}, nm2);
+            return self.call(Expr::Type{ty}, nm2, true);
           }
           return Expr::Type{Type::new(ty, nm2)};
         }else {
@@ -697,7 +697,7 @@ impl Parser{
         self.pop();
         let ty = self.parse_type();
         if(self.is(TokenType::LPAREN)){
-          return self.call(Expr::Type{Type::new(nm)}, *ty.name());
+          return self.call(Expr::Type{Type::new(nm)}, *ty.name(), true);
         }else{
           return Expr::Type{Type::new(Type::new(nm), *ty.name())};
         }

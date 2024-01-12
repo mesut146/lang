@@ -2,6 +2,7 @@ import parser/resolver
 import parser/ast
 import parser/printer
 import parser/utils
+import parser/copier
 import std/map
 
 struct Signature{
@@ -41,7 +42,7 @@ impl Signature{
                 r.addUsed(scp.targetDecl.unwrap());
             }
             if (scp.type.is_pointer()) {
-                let inner = scp.type.unwrap();
+                let inner = scp.type.unwrap_ptr();
                 res.scope = Option::new(r.visit(&inner));
             } else {
                 res.scope = Option::new(scp);
@@ -65,15 +66,6 @@ impl Signature{
 
         }
     }*/
-    func replace_self(type: Type*, m: Method*): Type{
-        if(!type.print().eq("Self")){
-            return *type;
-        }
-        if let Parent::Impl(info*) = (m.parent){
-            return info.type;
-        }
-        panic("replace_self");
-    }
     func make_inferred(sig: Signature*, type: Type*): Map<String, Type>{
         let type_plain = type.erase();
         let decl_opt = sig.r.unwrap().visit(&type_plain).targetDecl;
@@ -93,6 +85,10 @@ impl Signature{
         return map;
     }
     func new(m: Method*): Signature{
+        let map = Map<String, Type>::new();
+        return Signature::new(m, &map);
+    }
+    func new(m: Method*, map: Map<String, Type>*): Signature{
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
             name: m.name,
@@ -100,17 +96,19 @@ impl Signature{
             scope: Option<RType>::None,
             ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None};
-            if let Parent::Impl(info*) = (m.parent){
-                let scp = RType::new(info.type);
-                res.scope = Option::new(scp);
-            }
-            if(m.self.is_some()){
-                res.args.add(m.self.get().type);
-            }
-            for(let i = 0;i < m.params.len();++i){
-                let prm = m.params.get_ptr(i);
-                res.args.add(prm.type);
-            }
+        if let Parent::Impl(info*) = (m.parent){
+            let scp = RType::new(info.type);
+            res.scope = Option::new(scp);
+        }
+        if(m.self.is_some()){
+            res.args.add(m.self.get().type);
+        }
+        for(let i = 0;i < m.params.len();++i){
+            let prm = m.params.get_ptr(i);
+            //if m is generic, replace <T> with real type
+            let mapped = replace_type(&prm.type, map);
+            res.args.add(replace_self(&mapped, m));
+        }
         return res;
     }
     func print(self): String{
@@ -295,7 +293,7 @@ impl MethodResolver{
             tmap.add(pair.a, *pair.b.get());
         }
         let target2 = self.generateMethod(&tmap, target, sig);
-        target = &target2;
+        target = target2;
         let res = self.r.visit(&target.type);
         res.method = Option::new(target);
         return res;
@@ -327,7 +325,7 @@ impl MethodResolver{
                 let ty = &imp.type;
                 let scope = sig.scope.get().type;
                 if (sig.scope.get().trait.is_some()) {
-                    let scp = sig.args.get_ptr(0).unwrap();
+                    let scp = sig.args.get_ptr(0).unwrap_ptr();
                     if (!scp.name().eq(ty.name())) {
                         return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
                     }
@@ -389,7 +387,7 @@ impl MethodResolver{
             }
             if (hasGeneric(target, typeParams)) {
                 let trg_elem = target.elem();
-                return MethodResolver::is_compatible(RType::new(arg.elem()), &trg_elem, typeParams);
+                return MethodResolver::is_compatible(RType::new(*arg.elem()), trg_elem, typeParams);
             }
             //return arg.print() + " is not compatible with " + target.print();
             return Option::new("".str());
@@ -472,8 +470,47 @@ impl MethodResolver{
         }
     }
 
-    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method{
-        panic("generateMethod");
+    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method*{
+        for (let i=0;i<self.r.generated_methods.size();++i) {
+            let gm = self.r.generated_methods.get_ptr(i);
+            let sig2 = Signature::new(gm);
+            let res = self.is_same(sig, &sig2);
+            if(!(res is SigResult::Err)){
+                return gm;
+            }
+        }
+        let copier = AstCopier::new(map);
+        let res = copier.visit(m);
+        if(!(m.parent is Parent::Impl)){
+            self.r.generated_methods.add(res);
+            return self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
+        }
+        let imp: ImplInfo* = get_impl(m);
+        let st = *sig.scope.get().type.as_simple();
+        if(sig.scope.get().trait.is_some()){
+            st = *sig.args.get(0).unwrap_ptr().as_simple();
+        }
+        //put full type, Box::new(...) -> Box<...>::new()
+        let imp_args = imp.type.get_args();
+        if (sig.mc.unwrap().is_static && !imp_args.empty()) {
+            st.args.clear();
+            for (let i = 0;i < imp_args.size();++i) {
+                let ta = imp_args.get_ptr();
+                let ta_str = ta.print();
+                let resolved = map.get_ptr(&ta_str);
+                st.args.add(*resolved);
+            }
+        }
+        res.parent = Parent::Impl{ImplInfo::new(st.into())};
+        self.r.generated_methods.add(res);
+        return res;
+    }
+
+    func get_impl(m: Method*): ImplInfo*{
+        if let Parent::Impl(info*) = (m.parent){
+            return info;
+        }
+        panic("get_impl");
     }
 }
 
