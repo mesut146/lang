@@ -507,13 +507,13 @@ impl Resolver{
       return res;
     }
     if(node.is_pointer()){
-      let inner = node.unwrap();
+      let inner = node.unwrap_ptr();
       let elem = self.visit(&inner);
       return RType::new(elem.type.toPtr());
     }
     if(node.is_slice()){
       let inner = node.elem();
-      let elem = self.visit(&inner);
+      let elem = self.visit(inner);
       return RType::new(Type::Slice{Box::new(elem.type)});      
     }
     panic("type %s", node.print().cstr());
@@ -640,7 +640,7 @@ impl Resolver{
     if(!inner.type.is_pointer()){
       self.err(Fmt::format("deref expr is not pointer: %s -> %s", node.print().str(), inner.type.print().str()));
     }
-    inner.type = inner.type.unwrap();
+    inner.type = inner.type.unwrap_ptr();
     return inner;
   }  
 

@@ -255,6 +255,21 @@ void Resolver::resolveAll() {
     if (isResolved) return;
     isResolved = true;
     init();
+    for(Global& g:unit->globals){
+         auto rhs = resolve(g.expr);
+         if(g.type){
+         	auto type = getType(g.type.value());
+             //todo check
+             auto err_opt = MethodResolver::isCompatible(rhs.type, type);
+             if (err_opt) {
+                 std::string msg = "variable type mismatch '" + g.name + "'\n";
+                 msg += "expected: " + type.print() + " got " + rhs.type.print();
+                 msg += "\n" + err_opt.value();
+                 err(msg);
+             }
+         }
+    	addScope(g.name, rhs.type, false);
+    }
     for (auto &item : unit->items) {
         item->accept(this);
     }

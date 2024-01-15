@@ -51,6 +51,7 @@ public:
     std::shared_ptr<Unit> unit;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
+    llvm::Function *staticf = nullptr;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;

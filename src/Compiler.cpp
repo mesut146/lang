@@ -161,6 +161,24 @@ void copy_file(const std::string &path, const std::string &outDir, const std::st
     trg << src.rdbuf();
 }
 
+void init_globals(Compiler* c){
+	auto mangled = "static_init";
+	std::vector<llvm::Type *> argTypes;
+	auto fr = llvm::FunctionType::get(c->Builder->getVoidTy(), argTypes, false);
+    auto linkage = llvm::Function::ExternalLinkage;
+    //c->staticf= llvm::Function::Create(fr, linkage, mangled, *c->mod);
+    
+	for(Global& g:c->unit->globals){
+    	auto type = c->resolv->getType(g.expr.get());
+        auto ty = c->mapType(type);
+        auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
+        llvm::Constant* init = nullptr;
+    	//auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
+        //c->NamedValues[g.name] = gv;
+    }
+	
+}
+
 std::optional<std::string> Compiler::compile(const std::string &path) {
     fs::path p(path);
     auto ext = p.extension().string();
@@ -176,7 +194,8 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
 
     initModule(path, this);
     createProtos();
-
+    init_globals(this);
+    
     for (auto &m : getMethods(unit.get())) {
         genCode(m);
     }

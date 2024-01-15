@@ -103,6 +103,9 @@ impl Parser{
           let rhs = self.parse_type();
           self.consume(TokenType::SEMI);
           self.unit.items.add(Item::Type{name: name, rhs: rhs});
+        }else if(self.is(TokenType::STATIC)){
+        	self.pop();
+            let name = self.name();
         }else{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }
@@ -546,11 +549,11 @@ impl Parser{
     return t.is([TokenType::BOOLEAN, TokenType::VOID, TokenType::I8, TokenType::I16, TokenType::I32, TokenType::I64, TokenType::F32, TokenType::F64, TokenType::U8, TokenType::U16, TokenType::U32, TokenType::U64][0..12]);
   }
   
-  func call(self, scp: Expr, nm: String): Expr{
+  func call(self, scp: Expr, nm: String, st: bool): Expr{
     self.consume(TokenType::LPAREN);
     let args = self.exprList(TokenType::RPAREN);
     self.consume(TokenType::RPAREN);
-    return newCall(scp, nm, args);
+    return newCall(scp, nm, args, st);
   }
   func call(self, nm: String): Expr{
     self.consume(TokenType::LPAREN);
@@ -739,7 +742,7 @@ impl Parser{
         self.pop();
         let nm = self.name();
         if(self.is(TokenType::LPAREN)){
-          e = self.call(e, nm);
+          e = self.call(e, nm, false);
         }else{
           e = Expr::Access{Box::new(e), nm};
         }

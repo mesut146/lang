@@ -159,9 +159,16 @@ struct TypeItem : public Item {
     bool isType() { return true; }
 };
 
+struct Global{
+    std::string name;
+    std::optional<Type> type;
+    std::unique_ptr<Expression> expr;
+};
+
 class Unit {
 public:
     std::vector<ImportStmt> imports;
+    std::vector<Global> globals;
     std::vector<std::unique_ptr<Item>> items;
     std::string path;
     int lastLine = 0;

@@ -1,4 +1,5 @@
 import parser/ast
+import std/map
 
 func makeSelf(scope: Type*): Type{
     if (scope.is_prim()) return *scope;
@@ -18,7 +19,7 @@ func replace_self(typ: Type*, m: Method*): Type{
 func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     if (type.is_slice() || type.is_array() || type.is_pointer()) {
         let elem = type.elem();
-        return hasGeneric(&elem, typeParams);
+        return hasGeneric(elem, typeParams);
     }
     if (!(type is Type::Simple)) panic("hasGeneric::Complex");
     let targs = type.get_args();
@@ -99,7 +100,7 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
     }
     let str = type.print();
     if (map.has(&str)) {
-        return map.get(&str);
+        return *map.get_ptr(&str).unwrap();
     }
     let smp = type.as_simple();
     let res = Simple::new(smp.name);
@@ -110,5 +111,5 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
         let ta = smp.args.get_ptr(i);
         res.args.add(replace_type(ta, map));
     }
-    return res;
+    return res.into();
 }

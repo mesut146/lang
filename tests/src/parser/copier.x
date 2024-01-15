@@ -1,3 +1,6 @@
+import parser/ast
+import std/map
+
 struct AstCopier{
     map: Map<String, Type>*;
 }

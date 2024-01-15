@@ -480,10 +480,11 @@ impl MethodResolver{
             }
         }
         let copier = AstCopier::new(map);
-        let res = copier.visit(m);
+        let res2 = copier.visit(m);
+        self.r.generated_methods.add(res2);
+        let res = self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
         if(!(m.parent is Parent::Impl)){
-            self.r.generated_methods.add(res);
-            return self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
+            return res;
         }
         let imp: ImplInfo* = get_impl(m);
         let st = *sig.scope.get().type.as_simple();
@@ -495,14 +496,13 @@ impl MethodResolver{
         if (sig.mc.unwrap().is_static && !imp_args.empty()) {
             st.args.clear();
             for (let i = 0;i < imp_args.size();++i) {
-                let ta = imp_args.get_ptr();
+                let ta = imp_args.get_ptr(i);
                 let ta_str = ta.print();
-                let resolved = map.get_ptr(&ta_str);
+                let resolved = map.get_ptr(&ta_str).unwrap();
                 st.args.add(*resolved);
             }
         }
         res.parent = Parent::Impl{ImplInfo::new(st.into())};
-        self.r.generated_methods.add(res);
         return res;
     }
 

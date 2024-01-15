@@ -132,7 +132,8 @@ void bootstrap() {
     auto rs = "../tests/src/parser/resolver.x";
     auto mr = "../tests/src/parser/method_resolver.x";
     auto u = "../tests/src/parser/utils.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr, u});
+    auto cp = "../tests/src/parser/copier.x";
+    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr, u, cp});
 }
 
 void usage() {

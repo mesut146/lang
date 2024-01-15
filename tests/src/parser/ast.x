@@ -360,11 +360,11 @@ struct Entry{
 }
 
 func newCall(name: String, args: List<Expr>): Expr{
-  return Expr::Call{Call{Option<Box<Expr>>::None, name, List<Type>::new(), args}};
+  return Expr::Call{Call{Option<Box<Expr>>::None, name, List<Type>::new(), args, false}};
 }
 func newCall(name: String, g: List<Type>, args: List<Expr>): Expr{
-  return Expr::Call{Call{Option<Box<Expr>>::None, name, g, args}};
+  return Expr::Call{Call{Option<Box<Expr>>::None, name, g, args, false}};
 }
-func newCall(scp: Expr, name: String, args: List<Expr>): Expr{
-  return Expr::Call{Call{Option::new(Box::new(scp)), name, List<Type>::new(), args}};
+func newCall(scp: Expr, name: String, args: List<Expr>, st: bool): Expr{
+  return Expr::Call{Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, st}};
 }

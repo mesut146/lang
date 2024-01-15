@@ -33,7 +33,7 @@ impl<K, V> Map<K, V>{
   func add(self, k: K, v: V){
     let i = self.indexOf(&k);
     if(i == -1_i64){
-      print("map noset %d\n", i);
+      //print("map noset %d\n", i);
       let p = Pair{k, v};
       self.arr.add(p);
     }

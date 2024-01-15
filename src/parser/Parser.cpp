@@ -228,7 +228,19 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             consume(SEMI);
             auto ti = std::make_unique<TypeItem>(name, rhs);
             res->items.push_back(std::move(ti));
-        } else {
+        } else if(is(STATIC)){
+        	pop();
+            Global g;
+            g. name = pop().value;
+            if(is(COLON)){
+            	pop();
+                g.type = parseType();
+            }
+            consume(EQ);
+            g.expr.reset(parseExpr());
+            consume(SEMI);
+            res->globals.push_back(std::move(g));
+        }else {
             throw std::runtime_error("invalid top level decl: " + first()->print() + " line: " + std::to_string(first()->line));
         }
     }
