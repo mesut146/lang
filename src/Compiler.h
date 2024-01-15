@@ -52,6 +52,8 @@ public:
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
     llvm::Function *staticf = nullptr;
+    std::map<std::string, llvm::Value*> globals;
+    static std::vector<llvm::Function *> global_protos;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;

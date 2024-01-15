@@ -255,6 +255,7 @@ void Resolver::resolveAll() {
     if (isResolved) return;
     isResolved = true;
     init();
+    newScope();//globals
     for(Global& g:unit->globals){
          auto rhs = resolve(g.expr);
          if(g.type){

@@ -161,22 +161,57 @@ void copy_file(const std::string &path, const std::string &outDir, const std::st
     trg << src.rdbuf();
 }
 
+llvm::Constant* getDefault(Type& type, Compiler* c){
+	if(type.isPointer()){
+		return llvm::ConstantPointerNull::get(c->Builder->getPtrTy());
+	}
+	auto s = type.print();
+	auto bits = c->getSize2(type);
+	/*if(s=="bool"){
+		return c->Builder->getBoolTy();
+	}*/
+	if(s=="bool"||s=="i8" || s=="i16"||s=="i32"||s=="i64"){
+		return c->makeInt(0, bits);
+	}
+	throw std::runtime_error("def "+s);
+}
+
+std::vector<llvm::Function *> Compiler::global_protos;
+
 void init_globals(Compiler* c){
-	auto mangled = "static_init";
+	std::string mangled = "static_init";
 	std::vector<llvm::Type *> argTypes;
 	auto fr = llvm::FunctionType::get(c->Builder->getVoidTy(), argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
-    //c->staticf= llvm::Function::Create(fr, linkage, mangled, *c->mod);
-    
+    c->staticf= llvm::Function::Create(fr, linkage, mangled, *c->mod);
+    Compiler::global_protos.push_back(c->staticf);
+    Method m(c->unit.get());
+    m.type = Type("void");
+    m.name = mangled;
+    c->dbg_func(&m, c->staticf);
 	for(Global& g:c->unit->globals){
     	auto type = c->resolv->getType(g.expr.get());
         auto ty = c->mapType(type);
-        auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
-        llvm::Constant* init = nullptr;
-    	//auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
-        //c->NamedValues[g.name] = gv;
+        //auto linkage = llvm::GlobalValue::LinkageTypes::InternalLinkage;
+        auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+        llvm::Constant* init = getDefault(type, c);
+    	auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
+        c->globals[g.name] = gv;
+        
+        auto bb = llvm::BasicBlock::Create(c->ctx(), "", c->staticf);
+        c->Builder->SetInsertPoint(bb);
+        c->loc(0, 0);
+        c->setField(g.expr.get(), type, gv);
     }
+	c->Builder->CreateRetVoid();
 	
+	if (Config::debug) {
+        c->DBuilder->finalizeSubprogram((llvm::DISubprogram *) c->di.sp);
+        c->di.sp = nullptr;
+    }
+    if (llvm::verifyFunction(*c->staticf, &llvm::outs())) {
+        error(mangled+" has errors");
+    }
 }
 
 std::optional<std::string> Compiler::compile(const std::string &path) {
@@ -723,6 +758,15 @@ void Compiler::genCode(Method *m) {
     allocParams(m);
     makeLocals(m->body.get());
     storeParams(curMethod, this);
+    if(is_main(m)){
+    	std::vector<llvm::Value *> args2;
+        for(auto init_proto:Compiler::global_protos){
+        	if (Config::debug) {
+        	    loc(0, 0);
+        	}
+            Builder->CreateCall(init_proto, args2);
+        }
+    }
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
@@ -1000,6 +1044,9 @@ std::any Compiler::visitAssign(Assign *node) {
 }
 
 std::any Compiler::visitSimpleName(SimpleName *node) {
+	if(globals.contains(node->name)){
+		return globals[node->name];
+	}
     return NamedValues[node->name];
 }
 
