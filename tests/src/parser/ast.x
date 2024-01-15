@@ -84,6 +84,15 @@ enum Decl: BaseDecl{
   Enum(variants: List<Variant>)
 }
 
+impl Decl{
+  func get_variants(self): List<Variant>*{
+    if let Decl::Enum(variants*)=(self){
+      return variants;
+    }
+    panic("get_variants");
+  }
+}
+
 struct FieldDecl{
   name: String;
   type: Type;
@@ -104,6 +113,18 @@ enum Parent{
   Impl(info: ImplInfo),
   Trait,
   Extern
+}
+
+impl Parent{
+  func is_none(self): bool{
+    return self is Parent::None;
+  }
+  func as_impl(self): ImplInfo*{
+    if let Parent::Impl(info*)=(self){
+      return info;
+    }
+    panic("as_impl");
+  }
 }
 
 struct Method{
@@ -187,6 +208,12 @@ impl Type{
   func is_simple(self): bool{
     return self is Type::Simple;
   }
+  func as_simple(self): Simple*{
+    if let Type::Simple(simple*) = (self){
+      return simple;
+    }
+    panic("as_simple");
+  }
 
   func is_void(self): bool{
     return self.print().eq("void");
@@ -264,12 +291,6 @@ impl Type{
     panic("Type::scope");
   }
 
-  func as_simple(self): Simple*{
-    if let Type::Simple(simple*) = (self){
-      return simple;
-    }
-    panic("as_simple");
-  }
 }
 
 enum Stmt{

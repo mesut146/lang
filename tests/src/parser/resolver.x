@@ -516,7 +516,37 @@ impl Resolver{
       let elem = self.visit(inner);
       return RType::new(Type::Slice{Box::new(elem.type)});      
     }
+    if let Type::Array(inner*, size) = (node){
+      let elem = self.visit(inner.get());
+      return RType::new(Type::Array{Box::new(elem.type), size});      
+    }
+    if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
+      let imp = self.curMethod.unwrap().parent.as_impl();
+      return self.visit(&imp.type);
+    }
+    let simple = type.as_simple();
+    if (simple.scope.is_some()) {
+      let scope = self.visit(simple.scope.get());
+      let decl = scope.targetDecl.unwrap();
+      if (!(decl is Decl::Enum)) {
+          panic("couldn't find type: %s", str.cstr());
+      }
+      //enum variant creation
+      let variants = decl.get_variants();
+      findVariant(variants, &simple.name);
+      let res = self.getTypeCached(decl.type.print().str());
+      self.addType(str, res);
+      return res;
+    }
     panic("type %s", node.print().cstr());
+  }
+
+  func getTypeCached(self, str: str): RType{
+    let res = self.typeMap.get_p();
+    if(res.is_some()){
+      return res.unwrap();
+    }
+    panic("not cached %s", str.cstr());
   }
 
   func visit(self, node: Expr*): RType{
