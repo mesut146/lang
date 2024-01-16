@@ -68,7 +68,7 @@ void clean() {
     for (const auto &e : std::filesystem::directory_iterator(".")) {
         if (e.is_directory()) continue;
         auto ext = e.path().extension().string();
-        if (ext == ".ll" || ext == ".o") {
+        if (ext == ".ll" /*|| ext == ".o"*/) {
             std::filesystem::remove(e.path());
         }
     }

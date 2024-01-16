@@ -54,6 +54,7 @@ public:
     llvm::Function *staticf = nullptr;
     std::map<std::string, llvm::Value*> globals;
     static std::vector<llvm::Function *> global_protos;
+    static std::map<std::string, std::string> cache;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;

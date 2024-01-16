@@ -331,14 +331,16 @@ impl Resolver{
     for(let i=0;i<self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
-      if let Item::Decl(decl)=(it){
+      if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type);
+        res.targetDecl=Option::new(decl);
         self.addType(decl.type.print(), res);
+        //todo derive
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type);
         res.trait = Option::new(tr);
         self.addType(tr.type.print(), res);
-      }else if let Item::Impl(imp)=(it){
+      }else if let Item::Impl(imp*)=(it){
         //pass
       }else if let Item::Type(name*, rhs*)=(it){
         let res = self.visit(rhs);
@@ -354,6 +356,10 @@ impl Resolver{
     panic("%s", msg.cstr());
   }
   func err(self, msg: str, node: Expr*){
+    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
+    self.err(str.str());
+  }
+  func err(self, node: Expr*, msg: str){
     let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
     self.err(str.str());
   }
@@ -382,8 +388,41 @@ impl Resolver{
     }
   }
 
-  func is_cyclic(self, type: Type*, target: Type*): bool{
-    return true;
+  func is_cyclic(self, type0: Type*, target: Type*): bool{
+    let rt = self.visit(type0); 
+    let type = &rt.type;
+    if (type.is_pointer()) return false;
+    if (type.is_array()) {
+        return self.is_cyclic(type.elem(), target);
+    }
+    if (type.is_slice()) return false;
+    if (!is_struct(type)) return false;
+    if (type.print().eq(target.print().str())) {
+        return true;
+    }
+    let bd = rt.targetDecl.unwrap();
+    if (bd.base.is_some() && self.is_cyclic(bd.base.get(), target)) {
+        return true;
+    }
+    if let Decl::Enum(variants*)=(bd) {
+        for (let i=0;i<variants.len();++i) {
+            let ev = variants.get_ptr(i);
+            for (let j=0;j<ev.fields.len();++j) {
+                let f = ev.fields.get_ptr(j);
+                if (self.is_cyclic(&f.type, target)) {
+                    return true;
+                }
+            }
+        }
+    } else if let Decl::Struct(fields)=(bd){
+            for (let j=0;j<fields.len();++j) {
+                let f = fields.get_ptr(j);
+                if (self.is_cyclic(&f.type, target)) {
+                    return true;
+                }
+            }
+    }
+    return false;
   }
 
   func visit(self, node: Decl*, fields: List<FieldDecl>*){
@@ -484,7 +523,10 @@ impl Resolver{
   func addUsed(self, decl: Decl*){
     panic("add used");
   }
-
+  
+  func visit(self, node: FieldDecl*): RType{
+    return self.visit(&node.type);
+  }
 }
 
 
@@ -524,7 +566,7 @@ impl Resolver{
       let imp = self.curMethod.unwrap().parent.as_impl();
       return self.visit(&imp.type);
     }
-    let simple = type.as_simple();
+    let simple = node.as_simple();
     if (simple.scope.is_some()) {
       let scope = self.visit(simple.scope.get());
       let decl = scope.targetDecl.unwrap();
@@ -532,17 +574,29 @@ impl Resolver{
           panic("couldn't find type: %s", str.cstr());
       }
       //enum variant creation
-      let variants = decl.get_variants();
-      findVariant(variants, &simple.name);
-      let res = self.getTypeCached(decl.type.print().str());
+      
+      findVariant(decl, &simple.name);
+      let ds = decl.type.print();
+      let res = self.getTypeCached(&ds);
       self.addType(str, res);
       return res;
     }
     panic("type %s", node.print().cstr());
   }
+  
+  func findVariant(decl: Decl*, name: String*): i32{
+    let variants = decl.get_variants();
+    for(let i=0;i<variants.len();++i){
+      let v = variants.get_ptr(i);
+      if(v.name.eq(name)){
+        return i;
+      }
+    }
+    panic("unknown variant %s::%s", decl.type.print().cstr(), name.cstr());
+  }
 
-  func getTypeCached(self, str: str): RType{
-    let res = self.typeMap.get_p();
+  func getTypeCached(self, str: String*): RType{
+    let res = self.typeMap.get_p(str);
     if(res.is_some()){
       return res.unwrap();
     }
@@ -595,9 +649,157 @@ impl Resolver{
       return self.visit_unary(node, op, ebox.get());
     }else if let Expr::Par(expr*) = (node){
       return self.visit(expr.get());
+    }else if let Expr::Access(scope*,name*) = (node){
+      return self.visit_access(node, scope.get(), name);
+    }else if let Expr::Obj(type*,args*) = (node){
+      return self.visit_obj(node, type, args);
     }
     panic("visit expr %s", node.print().cstr());
   }
+  
+  func findField(self, node: Expr*, name: String*, decl: Decl*, type: Type*): Pair<Decl*, i32>{
+    let cur = decl;
+    while (true) {
+        if (cur is Decl::Struct) {
+            let fields=cur.get_fields();
+            let idx = 0;
+            for (let i=0;i<fields.len();++i) {
+                let fd=fields.get_ptr(i);
+                if (fd.name.eq(name)) {
+                    return Pair::new(cur, idx);
+                }
+                ++idx;
+            }
+        }
+        if (cur.base.is_some()) {
+            let base = self.visit(cur.base.get()).targetDecl;
+            if(base.is_none()) break;
+            cur = base.unwrap();
+        } else {
+            break;
+        }
+    }
+    let msg=Fmt::format("invalid field {} of {}", name.str(),type.print().str()); 
+    self.err(node, msg.str());
+    panic("");
+  }
+  
+  func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
+    let scp = self.visit(scope);
+    if (scp.targetDecl.is_none()) {
+      let msg=Fmt::format("invalid field {} of {}", name.str(),scp.type.print().str()); 
+      self.err(node, msg.str());
+    }
+    let decl = scp.targetDecl.unwrap();
+    let pair = self.findField(node, name, decl, &scp.type);
+    let fd = pair.a.get_fields().get_ptr(pair.b);
+    return self.visit(fd);
+  }
+  
+  func fieldIndex(arr: List<FieldDecl>*, name: str, type: Type*): i32{
+    for(let i=0;i<arr.len();++i){
+      let fd = arr.get_ptr(i);
+      if(fd.name.eq(name)){
+        return i;
+      }
+    }
+    panic("unknown field %s.%s", type.print().cstr(), name.cstr());
+  }
+  
+  func visit_obj(self, node: Expr*, type0: Type*, args: List<Entry>*): RType{
+    let hasNamed = false;
+    let hasNonNamed = false;
+    let base=Option<Expr*>::new();
+    for (let i=0;i<args.len();++i) {
+        let e = args.get_ptr(i);
+        if (e.isBase) {
+            if (base.is_some()) self.err(node, "base already set");
+            base = Option::new(&e.expr);
+        } else if (e.name.is_some()) {
+            hasNamed = true;
+        } else {
+            hasNonNamed = true;
+        }
+    }
+    if (hasNamed && hasNonNamed) {
+        self.err(node, "obj creation can't have mixed values");
+    }
+    let res = self.visit(type0);
+    let decl = res.targetDecl.unwrap();
+    if (decl.base.is_some() && base.is_none()) {
+        self.err(node, "base class is not initialized");
+    }
+    if (decl.base.is_none() && base.is_some()) {
+        self.err(node, "wasn't expecting base");
+    }
+    if (base.is_some()) {
+        let base_ty = self.visit(base.unwrap()).type;
+        if (!base_ty.print().eq(decl.base.get().print().str())){
+            let msg = Fmt::format("invalid base class type: {} expecting {}", base_ty.print().str(), decl.base.get().print().str());
+            self.err(node, msg.str());
+        }
+    }
+    let fields0=Option<List<FieldDecl>*>::new();
+    let type = Type::new("");
+    
+    if let Decl::Enum(variants*)=(decl){
+        let idx = findVariant(decl, type.name());
+        let variant = variants.get_ptr(idx);
+        fields0 = Option::new(&variant.fields);
+        type = Type::new(decl.type, variant.name.clone());
+    }else if let Decl::Struct(f*)=(decl){
+        fields0 = Option::new(f);
+        type = decl.type;
+        if (decl.is_generic) {
+            //infer
+            panic("generic");
+            /*let inferred = inferStruct(node, hasNamed, td->type.typeArgs, f, &decl.type);
+            let gen_decl = generateDecl(inferred, td);
+            td = dynamic_cast<StructDecl *>(gen_decl);
+            addUsed(gen_decl);
+            res = self.visit(&gen_decl.type);
+            fields = &td->fields;
+            */
+        }
+    }
+    let fields=fields0.unwrap();
+    
+    let field_idx = 0;
+    let names=List<String>::new();
+    for (let i = 0; i < args.len(); ++i) {
+        let e = args.get_ptr(i);
+        if (e.isBase) continue;
+        let prm_idx = 0;
+        if (hasNamed) {
+            names.add(e.name.unwrap());
+            prm_idx = fieldIndex(fields, e.name.get().str(), &type);
+        } else {
+            prm_idx = field_idx;
+            ++field_idx;
+        }
+        let prm = fields.get_ptr(prm_idx);
+        //todo if we support unnamed fields, change this
+        if (!hasNamed) {
+            names.add(prm.name);
+        }
+        let pt = self.getType(&prm.type);
+        let arg = self.visit(&e.expr);
+        if (MethodResolver::is_compatible(arg, &pt).is_some()) {
+            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg.type.print().str());
+            self.err(node, f.str());
+        }
+    }
+    //check non set fields
+    for (let i=0;i<fields.len();++i) {
+        let fd=fields.get_ptr(i);
+        if (!names.contains(&fd.name)) {
+            let msg=Fmt::format("field not set: {}", fd.name.str());
+            self.err(node, msg.str());
+        }
+    }
+    return res;
+  }
+  
   func visit_unary(self, node: Expr*, op: String*, e: Expr*): RType{
     if(op.eq("&")){
       return self.visit_ref(e);

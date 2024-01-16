@@ -1128,9 +1128,6 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
-    /*if (scp.type.isString()) {
-        scp = resolve(scp.type);
-    }*/
     auto decl = scp.targetDecl;
     if (!decl) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
@@ -1626,10 +1623,10 @@ std::any Resolver::visitWhileStmt(WhileStmt *node) {
     if (!isCondition(node->expr.get(), this)) {
         error("while statement expr is not a bool");
     }
-    inLoop = true;
+    inLoop++;
     newScope();
     node->body->accept(this);
-    inLoop = false;
+    inLoop--;
     dropScope();
     return nullptr;
 }
@@ -1647,15 +1644,15 @@ std::any Resolver::visitForStmt(ForStmt *node) {
     for (auto &u : node->updaters) {
         resolve(u.get());
     }
-    inLoop = true;
+    inLoop++;
     node->body->accept(this);
-    inLoop = false;
+    inLoop--;
     dropScope();
     return nullptr;
 }
 
 std::any Resolver::visitContinueStmt(ContinueStmt *node) {
-    if (!inLoop) {
+    if (inLoop==0) {
         error("continue in outside of loop");
     }
     if (node->label) error("continue label");
@@ -1663,8 +1660,8 @@ std::any Resolver::visitContinueStmt(ContinueStmt *node) {
 }
 
 std::any Resolver::visitBreakStmt(BreakStmt *node) {
-    if (!inLoop) {
-        error("break in outside of loop");
+    if (inLoop==0) {
+        err(node, "break in outside of loop");
     }
     if (node->label) error("break label");
     return nullptr;

@@ -91,6 +91,12 @@ impl Decl{
     }
     panic("get_variants");
   }
+  func get_fields(self): List<FieldDecl>*{
+    if let Decl::Struct(fields*)=(self){
+      return fields;
+    }
+    panic("get_fields");
+  }
 }
 
 struct FieldDecl{

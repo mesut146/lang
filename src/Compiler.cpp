@@ -30,6 +30,9 @@
 
 namespace fs = std::filesystem;
 
+std::vector<llvm::Function *> Compiler::global_protos;
+std::map<std::string, std::string> Compiler::cache;
+
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -41,6 +44,69 @@ std::string trimExtenstion(const std::string &name) {
         return name;
     }
     return name.substr(0, i);
+}
+
+std::string get_out_file(const std::string& path){
+	auto name = getName(path);
+    auto noext = trimExtenstion(name);
+    return noext+".o";
+}
+
+std::string get_time(const fs::path& p){
+	auto time = fs::last_write_time(p).time_since_epoch()/std::chrono::milliseconds(1);
+	return std::to_string(time);
+}
+
+bool need_compile(const fs::path &p){
+	auto s = p.string();
+	auto out = get_out_file(s);
+	if(!fs::exists(fs::path(out))){
+		return true;
+	}
+	if(Compiler::cache.contains(s)){
+		auto time2 = Compiler::cache[s];
+		auto time1 = get_time(p);
+		return time1 != time2;
+	}else{
+		return true;
+	}
+}
+
+std::string read_file(const std::string& path){
+	std::fstream stream;
+    stream.open(path, std::fstream::in);
+    if (!stream.is_open()) throw std::system_error(errno, std::system_category(), "failed to open " + path);
+    std::stringstream ss;
+    ss << stream.rdbuf();
+    auto buf = ss.str();
+    stream.close();
+    return buf;
+}
+
+void read_cache(){
+	auto path = fs::path("cache.txt");
+	if(!fs::exists(path)){
+		std::ofstream os(path.string());
+		return;
+	}
+	std::fstream is(path.string());
+	std::string line;
+	while(std::getline(is, line)){
+	    auto idx = line.find(",");
+	    auto file=line.substr(0, idx);
+	    auto time=line.substr(idx+1);
+	    Compiler::cache[file]=time;
+	}
+}
+
+void write_cache(){
+	auto path = fs::path("cache.txt");
+	std::ofstream os(path.string());
+	for(auto [f, t]:Compiler::cache){
+	    os << f;
+	    os<<","<<t<<std::endl;
+	}
+	os.close();
 }
 
 void Compiler::init() {
@@ -69,6 +135,7 @@ void Compiler::init() {
     Resolver::init_prelude();
 
     llvm::sys::PrintStackTraceOnErrorSignal("lang");
+    read_cache();
 }
 
 void Compiler::compileAll() {
@@ -77,6 +144,7 @@ void Compiler::compileAll() {
         if (e.is_directory()) continue;
         compile(e.path().string());
     }
+    
     link_run();
     for (auto &[k, v] : Resolver::resolverMap) {
         //v.reset();
@@ -181,8 +249,6 @@ llvm::Constant *getDefault(Type &type, Compiler *c) {
     throw std::runtime_error("def " + s);
 }
 
-std::vector<llvm::Function *> Compiler::global_protos;
-
 void init_globals(Compiler *c) {
     std::string mangled = getName(c->unit->path) + "_static_init";
     std::vector<llvm::Type *> argTypes;
@@ -215,12 +281,17 @@ void init_globals(Compiler *c) {
         c->di.sp = nullptr;
     }
     if (llvm::verifyFunction(*c->staticf, &llvm::outs())) {
-        //error(mangled + " has errors");
+        error(mangled + " has errors");
     }
 }
 
 std::optional<std::string> Compiler::compile(const std::string &path) {
     fs::path p(path);
+    auto outFile = get_out_file(path);
+    if(!need_compile(path)){
+    	compiled.push_back(outFile);
+    	return outFile;
+    }
     auto ext = p.extension().string();
     if (ext != ".x") {
         error("invalid extension " + path);
@@ -257,10 +328,12 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     }
 
     //todo fullpath
-    auto outFile = noext + ".o";
+    
     emit(outFile);
     cleanup();
     compiled.push_back(outFile);
+    Compiler::cache[path]=get_time(p);
+    write_cache();
     return outFile;
 }
 

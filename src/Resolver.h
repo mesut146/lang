@@ -256,7 +256,7 @@ public:
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
     std::map<int, std::unique_ptr<Method>> format_methods;
-    bool inLoop = false;
+    int inLoop = 0;
     IdGen idgen;
     bool isResolved = false;
     bool is_init = false;

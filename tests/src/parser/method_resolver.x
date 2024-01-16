@@ -376,14 +376,14 @@ impl MethodResolver{
     func is_compatible(arg0: RType, target: Type*, typeParams: List<Type>*): Option<String>{
         let arg = &arg0.type;
         if (isGeneric(target, typeParams)) return Option<String>::None;
-        if (arg.print() == target.print()) return Option<String>::None;
+        if (arg.print().eq(target.print().str())) return Option<String>::None;
         if (!arg.is_simple()) {
             let target_str = target.print();
             if (arg.print().eq(&target_str)) {
                 return Option<String>::None;
             }
             if (kind(arg) != kind(target)) {
-                return Option::new("".str());
+                return Option::new("internal error in is_compatible".str());
             }
             if (hasGeneric(target, typeParams)) {
                 let trg_elem = target.elem();
