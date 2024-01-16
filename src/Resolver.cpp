@@ -1128,6 +1128,9 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
+    if(scp.type.isPointer() && scp.type.scope->isPointer()){
+        err(node, "invalid field " + node->name + " of " + scp.type.print());
+    }
     auto decl = scp.targetDecl;
     if (!decl) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());

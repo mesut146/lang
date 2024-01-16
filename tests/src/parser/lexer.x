@@ -337,9 +337,9 @@ impl Lexer{
       self.pos+=1;
       mustSuffix = true; 
     }
-    let suffixes = ["i8", "i16", "i32", "i64", "f32", "f64"];
+    let suffixes = get_suffix();
     let has = false;
-    for (let i =0;i < 6;++i) {
+    for (let i =0;i < suffixes.len();++i) {
       let sf = suffixes[i];
       if (self.str(self.pos, self.pos + sf.len()).eq(sf)) {
         self.pos += sf.len();
@@ -351,6 +351,10 @@ impl Lexer{
     let type = TokenType::INTEGER_LIT;
     if(dot) type = TokenType::FLOAT_LIT;
     return Token::new(type, self.str(start, self.pos));
+  }
+
+  func get_suffix(): [str; 10]{
+    return ["i8", "i16", "i32", "i64","u8","u16","u32","u64", "f32", "f64"];
   }
   
 }

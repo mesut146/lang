@@ -63,6 +63,21 @@ impl str{
       return -1;
     }
 
+    func lastIndexOf(self, s: str): i32{
+      let i = self.indexOf(s, 0);
+      if(i == -1){
+        return -1;
+      }
+      while(true){
+        let j = self.indexOf(s, i + 1);
+        if(j == -1){
+          return i; 
+        }
+        i = j;
+      }
+      panic("lastIndexOf");
+    }
+
     func contains(self, s: str): bool{
       return self.indexOf(s, 0) != -1;
     }

@@ -51,6 +51,10 @@ impl<K, V> Map<K, V>{
   func has(self, k: K*): bool{
     return self.indexOf(k) != -1;
   }
+
+  func contains(self, k: K*): bool{
+    return self.indexOf(k) != -1;
+  }
   
   func get(self, k: K): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){

@@ -94,6 +94,8 @@ impl Parser{
           self.unit.items.add(Item::Decl{self.parse_enum(derives)});
         }else if(self.is(TokenType::IMPL)){
           self.unit.items.add(Item::Impl{self.parse_impl()});
+        }else if(self.is(TokenType::TRAIT)){
+          self.unit.items.add(Item::Trait{self.parse_trait()});
         }else if(self.is(TokenType::FUNC)){
           self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None, Parent::None)});
         }else if(self.is(TokenType::TYPE)){
@@ -112,6 +114,20 @@ impl Parser{
       }
       //Fmt::str(&self.unit).dump();
       return &self.unit;
+    }
+
+    func parse_trait(self): Trait{
+      self.consume(TokenType::TRAIT);
+      let type = self.parse_type();
+      let res = Trait{type, List<Method>::new()};
+      //res->unit = p->unit;
+      self.consume(TokenType::LBRACE);
+      while (!self.is(TokenType::RBRACE)) {
+          res.methods.add(self.parse_method(Option::new(type), Parent::Trait));
+          res.methods.last().parent = Parent::Trait;
+      }
+      self.consume(TokenType::RBRACE);
+      return res;
     }
     
     func parse_import(self): ImportStmt{
@@ -385,6 +401,15 @@ impl Parser{
         }
         return vd;
     }
+
+    func parse_bind(self): ArgBind{
+      let name = self.name();
+      if(self.is(TokenType::STAR)){
+        self.pop();
+        return ArgBind{name, true};
+      }
+      return ArgBind{name, false};
+    }
     
     func parse_stmt(self): Stmt{
       if(self.is(TokenType::LBRACE)){
@@ -416,13 +441,13 @@ impl Parser{
         self.pop();
         self.consume(TokenType::LET);
         let ty = self.parse_type();
-        let args = List<String>::new();
+        let args = List<ArgBind>::new();
         if(self.is(TokenType::LPAREN)){
           self.consume(TokenType::LPAREN);
-          args.add(self.name());
+          args.add(self.parse_bind());
           while(self.is(TokenType::COMMA)){
             self.pop();
-            args.add(self.name());
+            args.add(self.parse_bind());
           }
           self.consume(TokenType::RPAREN);
         }
@@ -436,7 +461,7 @@ impl Parser{
             self.pop();
             els = Option::new(Box::new(self.parse_stmt()));
         }
-        return Stmt::IfLet{ty, args, rhs, Box::new(then), els};
+        return Stmt::IfLet{IfLet{ty, args, rhs, Box::new(then), els}};
       }else if(self.is(TokenType::IF)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -595,7 +620,19 @@ impl Parser{
     }else{
       panic("invalid literal %s", self.peek().print().cstr());
     }
-    return Expr::Lit{kind, self.pop().value, Option<Type>::None};
+    let arr = Lexer::get_suffix();
+    let val = self.pop().value;
+    for (let i=0;i<arr.len();++i) {
+      let sf = arr[i];
+      let pos = val.str().lastIndexOf(sf);
+      let support_suffix = (kind is LitKind::INT || kind is LitKind::FLOAT || kind is LitKind::CHAR);
+      if (pos != -1 && support_suffix) {
+          //trim suffix
+          val = val.substr(0, (val.len() - sf.len()) as i32).str();
+          return Expr::Lit{kind, val, Option<Type>::new(Type::new(sf))};
+      }
+    }
+    return Expr::Lit{kind, val, Option<Type>::None};
   }
   
   func name(self): String{
@@ -789,7 +826,7 @@ impl Parser{
   }
   
   func get_prec(tt: TokenType*): i32{
-    if(tt is TokenType::EQ || tt is TokenType::PLUSEQ || tt is TokenType::MINUSEQ) return 0;
+    if(tt is TokenType::EQ || tt is TokenType::PLUSEQ || tt is TokenType::MINUSEQ || tt is TokenType::MULEQ || tt is TokenType::DIVEQ || tt is TokenType::PERCENTEQ || tt is TokenType::ANDEQ || tt is TokenType::OREQ || tt is TokenType::POWEQ || tt is TokenType::LTLTEQ || tt is TokenType::GTGTEQ) return 0;
     if(tt is TokenType::OROR) return 1;
     if(tt is TokenType::ANDAND) return 2;
     if(tt is TokenType::OR) return 3;

@@ -55,6 +55,12 @@ struct RType{
   vh: Option<VarHolder*>;
 }
 
+enum TypeResult{
+  Decl(d: Decl*),
+  Res(r: RType),
+  None
+}
+
 impl Debug for Resolver{
   func debug(self, f: Fmt*){
     panic("Resolver::debug");
@@ -75,14 +81,14 @@ impl Context{
     }
     return Context{map: Map<String, Resolver>::new(), root: src_dir, prelude: pre};
   }
-  func create_resolver(self, path: String): Resolver*{
-    let res = self.map.get_ptr(&path);
+  func create_resolver(self, path: String*): Resolver*{
+    let res = self.map.get_ptr(path);
     if(res.is_some()){
       return res.unwrap();
     }
-    let r = Resolver::new(path, self);
-    self.map.add(path, r);
-    return self.map.get_ptr(&path).unwrap();
+    let r = Resolver::new(path.clone(), self);
+    self.map.add(path.clone(), r);
+    return self.map.get_ptr(path).unwrap();
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = String::new(self.root.str());
@@ -95,7 +101,7 @@ impl Context{
       path.append(part.str());
     }
     path.append(".x");
-    return self.create_resolver(path);
+    return self.create_resolver(&path);
   }
 }
 
@@ -222,7 +228,7 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
-    print("%s\n%s\n",unit.path.cstr(), Fmt::str(unit).cstr());
+    //print("%s\n%s\n",unit.path.cstr(), Fmt::str(unit).cstr());
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
@@ -246,7 +252,7 @@ impl Resolver{
     scope.list.add(VarHolder::new(name, type, prm));
   }
  
-  func get_unit(self, path: String): Unit*{
+  func get_unit(self, path: String*): Unit*{
     let r = self.ctx.create_resolver(path);
     return &r.unit;
   }
@@ -275,8 +281,9 @@ impl Resolver{
         is.list.add(*pre);
         imports.add(is);
     }
-    if (self.curMethod.is_some() && !self.curMethod.get().type_args.empty()) {
-        let tmp = self.get_unit(self.curMethod.get().path).imports;
+    if (self.curMethod.is_some() && !self.curMethod.unwrap().type_args.empty()) {
+        //let m = 
+        let tmp = self.get_unit(&self.curMethod.unwrap().path).imports;
         for (let i = 0;i < tmp.len();++i) {
             let is = tmp.get_ptr(i);
             if (has(&imports, is)) continue;
@@ -581,7 +588,69 @@ impl Resolver{
       self.addType(str, res);
       return res;
     }
+    let target0 = Option<Decl*>::None;
+    let targs = node.get_args();
+    if (!targs.empty()) {
+      for (let i = 0; i < targs.len();++i) {
+          self.visit(targs.get_ptr(i));
+      }
+      //we looking for generic type
+      let name = node.name();
+      let cached = self.typeMap.get_ptr(name);
+      if (cached.is_some()) {
+          target0 = cached.unwrap().targetDecl;
+      } else {
+          //generic from imports
+      }
+    }
+    if(target0.is_none()){
+      let imp_result = self.find_imports(node.as_simple(), &str);
+      if let TypeResult::Decl(d) = (imp_result){
+        target0 = Option::new(d);
+      }else if let TypeResult::Res(rt) = (imp_result){
+        return rt;
+      }else{
+        let expr = Expr::Type{*node};
+        self.err(&expr, "couldn't find type");
+      }
+    }
+    let target = target0.unwrap();
+    
     panic("type %s", node.print().cstr());
+  }
+
+
+  func find_imports(self, type: Simple*, str: String*): TypeResult{
+    let arr = self.get_imports();
+    for (let i=0;i < arr.len();++i) {
+      let is = arr.get_ptr(i);
+      let resolver = self.ctx.get_resolver(is);
+      resolver.init();
+      //try full type
+      if (type.args.empty()) {
+          //non generic type
+          let cached = resolver.typeMap.get_ptr(str);
+          if (cached.is_some()) {
+              let res = *cached.unwrap();
+              self.addType(str.clone(), res);
+              if (res.targetDecl.is_some()) {
+                  if (!res.targetDecl.unwrap().is_generic) {
+                      self.addUsed(res.targetDecl.unwrap());
+                  }
+              }
+              //todo trait
+              return TypeResult::Res{res};
+          }
+      } else {
+          //generic type
+          //try root type
+          let cached = resolver.typeMap.get_ptr(&type.name);
+          if (cached.is_some() && cached.unwrap().targetDecl.is_some()){
+              return TypeResult::Decl{cached.unwrap().targetDecl.unwrap()};
+          }
+      }
+    }
+    return TypeResult::None;
   }
   
   func findVariant(decl: Decl*, name: String*): i32{

@@ -299,6 +299,19 @@ impl Type{
 
 }
 
+struct ArgBind{
+  name: String;
+  is_ptr: bool;
+}
+
+struct IfLet{
+  ty: Type;
+  args: List<ArgBind>;
+  rhs: Expr;
+  then: Box<Stmt>;
+  els: Option<Box<Stmt>>;
+}
+
 enum Stmt{
     Block(x: Block),
     Var(ve: VarExpr),
@@ -306,7 +319,7 @@ enum Stmt{
     Ret(e: Option<Expr>),
     While(e: Expr, b: Block),
     If(e: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
-    IfLet(ty: Type, args: List<String>, rhs: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
+    IfLet(e: IfLet),
     For(v: Option<VarExpr>, e: Option<Expr>, u: List<Expr>, s: Box<Stmt>),
     Continue,
     Break,
