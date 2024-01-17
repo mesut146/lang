@@ -38,7 +38,7 @@ impl Signature{
         if(mc.scope.is_some()){
             let scp = r.visit(mc.scope.get().get());
             //we need this to handle cases like Option::new(...)
-            if (scp.targetDecl.is_some() && !scp.targetDecl.get().unit.path.eq(&r.unit.path)) {
+            if (scp.targetDecl.is_some() && !scp.targetDecl.unwrap().unit.path.eq(&r.unit.path)) {
                 r.addUsed(scp.targetDecl.unwrap());
             }
             if (scp.type.is_pointer()) {
@@ -184,7 +184,22 @@ impl MethodResolver{
     }
 
     func collect_static(self, sig: Signature*, list: List<Signature>*){
-
+      let name=&sig.name;
+      for (let i=0;i<self.r.unit.items.len();++i) {
+        let item=self.r.unit.items.get_ptr(i);
+        if let Item::Method(m*)=(item){
+            if (m.name.eq(name)) {
+                list.add(Signature::new(m));
+            }
+        } else if let Item::Extern(arr*)=(item){
+            for (let j=0;j<arr.len();++j) {
+                let m=arr.get_ptr(j);
+                if (m.name.eq(name)) {
+                    list.add(Signature::new(m));
+                }
+            }
+        }
+      }
     }
 
     func collect_member(self, sig: Signature*, list: List<Signature>*){
@@ -208,7 +223,8 @@ impl MethodResolver{
         let list = self.collect(sig);
         if(list.empty()){
             let e = Expr::Call{*sig.mc.unwrap()};
-            self.r.err("no such method", &e);
+            let msg = Fmt::format("no such method {}", sig.print().str());
+            self.r.err(msg.str(), &e);
         }
         //test candidates and get errors
         let real = List<Signature*>::new();

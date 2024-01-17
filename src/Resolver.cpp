@@ -1018,7 +1018,7 @@ std::any Resolver::visitAssign(Assign *node) {
         auto msg = format("cannot assign %s\n%s=%s", node->print().c_str(), t1.type.print().c_str(), t2.type.print().c_str());
         error(msg);
     }
-    does_alloc(node->left, this);
+    //does_alloc(node->left, this);
     return t1;
 }
 

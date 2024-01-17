@@ -35,6 +35,7 @@ struct Resolver{
   ctx: Context*;
   used_methods: List<Method*>;
   generated_methods: List<Method>;
+  inLoop: i32;
 }
 
 struct Config{
@@ -232,7 +233,8 @@ impl Resolver{
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
-      used_methods: List<Method*>::new(), generated_methods: List<Method>::new()};
+      used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
+      inLoop: 0};
     return res;
   }
 
@@ -372,8 +374,13 @@ impl Resolver{
   }
 
   func getType(self, e: Type*): Type{
-    return self.visit(e).type;
-  }  
+    let rt = self.visit(e);
+    return rt.type;
+  }
+  func getType(self, e: Expr*): Type{
+    let rt = self.visit(e);
+    return rt.type;
+  }
 
   func visit(self, node: Item*){
     if let Item::Method(m*) = (node){
@@ -672,59 +679,7 @@ impl Resolver{
     panic("not cached %s", str.cstr());
   }
 
-  func visit(self, node: Expr*): RType{
-    if let Expr::Lit(kind, value, suffix*)=(node){
-      if(suffix.is_some()){
-        if(i64::parse(&value) > max_for(suffix.get())){
-          self.err("literal out of range");
-        }
-        return self.visit(suffix.get());
-      }
-      if(kind is LitKind::INT){
-        let res = RType::new("i32");
-        res.value = Option::new(value);
-        return res;
-      }else if(kind is LitKind::STR){
-        return RType::new("str");
-      }else if(kind is LitKind::BOOL){
-        return RType::new("bool");
-      }else if(kind is LitKind::FLOAT){
-        let res = RType::new("f32");
-        res.value = Option::new(value);
-        return res;
-      }else if(kind is LitKind::CHAR){
-        let res = RType::new("u32");
-        res.value = Option::new(value);
-        return res;
-      }
-    }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
-      return self.visit_infix(node, op, lhs.get(), rhs.get());
-    }else if let Expr::Call(call*) = (node){
-      return self.visit(call);
-    }else if let Expr::Name(name*) = (node){
-      for(let i = self.scopes.len() - 1;i >= 0;--i){
-        let scope = self.scopes.get_ptr(i);
-        let vh = scope.find(name);
-        if(vh.is_some()){
-          let vh2 = vh.unwrap();
-          let res = self.visit(&vh2.type);
-          res.vh = Option::new(vh2);
-          return res;
-        }
-      }
-      self.dump();
-      self.err(Fmt::format("unknown identifier: {}", name.str()));
-    }else if let Expr::Unary(op*, ebox*) = (node){
-      return self.visit_unary(node, op, ebox.get());
-    }else if let Expr::Par(expr*) = (node){
-      return self.visit(expr.get());
-    }else if let Expr::Access(scope*,name*) = (node){
-      return self.visit_access(node, scope.get(), name);
-    }else if let Expr::Obj(type*,args*) = (node){
-      return self.visit_obj(node, type, args);
-    }
-    panic("visit expr %s", node.print().cstr());
-  }
+  
   
   func findField(self, node: Expr*, name: String*, decl: Decl*, type: Type*): Pair<Decl*, i32>{
     let cur = decl;
@@ -943,9 +898,57 @@ impl Resolver{
     }
     inner.type = inner.type.unwrap_ptr();
     return inner;
-  }  
+  }
+  
+  func is_slice_get_ptr(self, mc: Call*): bool{
+        if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
+            return false;
+        }
+        let scope = self.getType(mc.scope.get().get()).elem();
+        return scope.is_slice();
+   }
+   func is_slice_get_len(self, mc: Call*): bool{
+        if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
+            return false;
+        }
+        let scope = self.getType(mc.scope.get().get()).elem();
+        return scope.is_slice();
+  }
+  func is_array_get_ptr(self, mc: Call*): bool{
+        if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
+            return false;
+        }
+        let scope = self.getType(mc.scope.get().get()).elem();
+        return scope.is_array();
+   }
+   func is_array_get_len(self, mc: Call*): bool{
+        if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
+            return false;
+        }
+        let scope = self.getType(mc.scope.get().get()).elem();
+        return scope.is_array();
+  }
 
-  func visit(self, call: Call*): RType{
+  func as_type(bits: i32): Type{
+    if(bits==64){
+      return Type::new("i64");
+    }
+    return Type::new("i32");
+  }
+  
+  func SLICE_LEN_BITS(): i32{ return 64; }
+  
+
+  func visit(self, node: Expr*, call: Call*): RType{
+    if (self.is_slice_get_ptr(call)) {
+        let elem = self.getType(call.scope.get().get()).elem();
+        return RType::new(elem.toPtr());
+    }
+    if (self.is_slice_get_len(call)) {
+        self.visit(call.scope.get().get());
+        let type = as_type(SLICE_LEN_BITS());
+        return RType::new(type);
+    }
     let sig = Signature::new(call, self);
     if(call.scope.is_some()){
       let mr = MethodResolver::new(self);
@@ -974,7 +977,136 @@ impl Resolver{
         return RType::new(arg.type.toPtr());
       }
     }
-    panic("call %s", call.print().cstr());
+    if (call.name.eq("panic")) {
+        if (call.args.empty()) {
+            return RType::new("void");
+        }
+        let arg = call.args.get_ptr(0);
+        if let Expr::Lit(kind*, val*, sf*)=(arg){
+          if(kind is LitKind::STR){
+            return RType::new("void");
+          }
+        }
+        self.err(node, "invalid panic argument: ");
+    }
+    let mr = MethodResolver::new(self);
+    return mr.handle(&sig);
+  }
+  
+  func visit_arr_access(self, node: Expr*, aa: ArrAccess*): RType{
+    let arr = self.getType(aa.arr.get());
+    print("arr=%s\n", arr.print().cstr());
+    let idx = self.getType(aa.idx.get());
+    //todo unsigned
+    if (idx.print().eq("bool") || !idx.is_prim()){
+      self.err(node, "array index is not an integer");
+    }
+
+    if (aa.idx2.is_some()) {
+        let idx2 = self.getType(aa.idx2.get().get());
+        if (idx2.print().eq("bool") || !idx2.is_prim()){
+          self.err(node, "range end is not an integer");
+        }
+        let inner = arr.elem();
+        print("inner=%s\n", inner.print().cstr());
+        if (inner.is_slice()) {
+            return RType::new(*inner);
+        } else if (inner.is_array()) {
+            return RType::new(Type::Slice{Box::new(*inner.elem())});
+        } else if (arr.is_pointer()) {
+            //from raw pointer
+            return RType::new(Type::Slice{Box::new(*inner)});
+        } else {
+            self.err(node, "cant make slice out of ");
+        }
+    }
+    if (arr.is_pointer()) {
+        arr = self.getType(arr.elem());
+    }
+    if (arr.is_array() || arr.is_slice()) {
+        return self.visit(arr.elem());
+    }
+    self.err(node, "cant index: ");
+    panic("");
+  }
+  
+  func visit_array(self, node: Expr*, list: List<Expr>*, size: Option<i32>*): RType{
+    if (size.is_some()) {
+        let e = self.visit(list.get_ptr(0));
+        //let elemType = self.getType(list.get_ptr(0));
+        let elemType = e.type;
+        print("elem %s\n", elemType.print().cstr());
+        return RType::new(Type::Array{Box::new(elemType), size.unwrap()});
+    }
+    let elemType = self.getType(list.get_ptr(0));
+    for (let i = 1; i < list.len(); ++i) {
+        let cur = self.visit(list.get_ptr(i));
+        let cmp = MethodResolver::is_compatible(cur, &elemType);
+        if (cmp.is_some()) {
+            print("%s", cmp.get().cstr());
+            let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur.type.print().str());
+            self.err(node, msg.str());
+        }
+    }
+    return RType::new(Type::Array{Box::new(elemType), list.len() as i32});
+  }
+  
+  func visit(self, node: Expr*): RType{
+    if let Expr::Lit(kind, value, suffix*)=(node){
+      if(suffix.is_some()){
+        if(i64::parse(&value) > max_for(suffix.get())){
+          self.err("literal out of range");
+        }
+        return self.visit(suffix.get());
+      }
+      if(kind is LitKind::INT){
+        let res = RType::new("i32");
+        res.value = Option::new(value);
+        return res;
+      }else if(kind is LitKind::STR){
+        return RType::new("str");
+      }else if(kind is LitKind::BOOL){
+        return RType::new("bool");
+      }else if(kind is LitKind::FLOAT){
+        let res = RType::new("f32");
+        res.value = Option::new(value);
+        return res;
+      }else if(kind is LitKind::CHAR){
+        let res = RType::new("u32");
+        res.value = Option::new(value);
+        return res;
+      }
+    }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
+      return self.visit_infix(node, op, lhs.get(), rhs.get());
+    }else if let Expr::Call(call*) = (node){
+      return self.visit(node, call);
+    }else if let Expr::Name(name*) = (node){
+      for(let i = self.scopes.len() - 1;i >= 0;--i){
+        let scope = self.scopes.get_ptr(i);
+        let vh = scope.find(name);
+        if(vh.is_some()){
+          let vh2 = vh.unwrap();
+          let res = self.visit(&vh2.type);
+          res.vh = Option::new(vh2);
+          return res;
+        }
+      }
+      self.dump();
+      self.err(Fmt::format("unknown identifier: {}", name.str()));
+    }else if let Expr::Unary(op*, ebox*) = (node){
+      return self.visit_unary(node, op, ebox.get());
+    }else if let Expr::Par(expr*) = (node){
+      return self.visit(expr.get());
+    }else if let Expr::Access(scope*,name*) = (node){
+      return self.visit_access(node, scope.get(), name);
+    }else if let Expr::ArrAccess(aa*) = (node){
+      return self.visit_arr_access(node, aa);
+    }else if let Expr::Array(list*, size*) = (node){
+      return self.visit_array(node, list, size);
+    }else if let Expr::Obj(type*,args*) = (node){
+      return self.visit_obj(node, type, args);
+    }
+    panic("visit expr %s", node.print().cstr());
   }
 }
 
@@ -1002,6 +1134,9 @@ impl Resolver{
     if let Stmt::Expr(e*) = (node){
       self.visit(e);
       return;
+    }else if let Stmt::Block(b*) = (node){
+      self.visit(b);
+      return;
     }else if let Stmt::Ret(e) = (node){
       if(e.is_some()){
         //todo
@@ -1021,21 +1156,48 @@ impl Resolver{
         panic("assert expr is not bool: %s", e.print().cstr());
       }
       return;
-    }else if let Stmt::If(e*, then*, els*) = (node){
-      if (!self.is_condition(e)) {
-        self.err("if condition is not a boolean", e);
-      }
+    }else if let Stmt::For(f*) = (node){
       self.newScope();
-      self.visit(then.get());
-      self.dropScope();
-      if (els.is_some()) {
-        self.newScope();
-        self.visit(els.get().get());
-        self.dropScope();
+      if(f.v.is_some()){
+        self.visit(f.v.get());
       }
-      return;      
+      if(f.e.is_some()){
+        if (!self.isCondition(f.e.get())) {
+            self.err(f.e.get(), "for statement expr is not a bool");
+        }
+      }
+      for (let i=0;i<f.u.len();++i) {
+        self.visit(f.u.get_ptr(i));
+      }
+      self.inLoop+=1;
+      self.visit(f.s.get());
+      self.inLoop-=1;
+      self.dropScope();
+      return;
+    }else if let Stmt::If(is*) = (node){
+      self.visit(node, is);
+      return;
     }
     panic("visit stmt %s", node.print().cstr());
+  }
+  
+  func visit(self, node: Stmt*, is: IfStmt*){
+    if (!self.isCondition(&is.e)) {
+        self.err(&is.e, "if condition is not a boolean");
+    }
+    self.newScope();
+    self.visit(is.then.get());
+    self.dropScope();
+    if (is.els.is_some()) {
+        self.newScope();
+        self.visit(is.els.get().get());
+        self.dropScope();
+    }
+  }
+  
+  func isCondition(self, e: Expr*): bool{
+    let rt = self.visit(e);
+    return rt.type.print().eq("bool");
   }
 
   func visit(self, node: Block*){

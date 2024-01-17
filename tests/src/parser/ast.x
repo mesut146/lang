@@ -49,7 +49,8 @@ enum Item{
   Decl(decl: Decl),
   Impl(i: Impl),
   Trait(t: Trait),
-  Type(name: String, rhs: Type)
+  Type(name: String, rhs: Type),
+  Extern(arr: List<Method>)
 }
 
 struct Impl{
@@ -312,15 +313,28 @@ struct IfLet{
   els: Option<Box<Stmt>>;
 }
 
+struct ForStmt{
+  v: Option<VarExpr>;
+  e: Option<Expr>;
+  u: List<Expr>;
+  s: Box<Stmt>;
+}
+
+struct IfStmt{
+  e: Expr;
+  then: Box<Stmt>;
+  els: Option<Box<Stmt>>;
+}
+
 enum Stmt{
     Block(x: Block),
     Var(ve: VarExpr),
     Expr(e: Expr),
     Ret(e: Option<Expr>),
     While(e: Expr, b: Block),
-    If(e: Expr, then: Box<Stmt>, els: Option<Box<Stmt>>),
+    If(e: IfStmt),
     IfLet(e: IfLet),
-    For(v: Option<VarExpr>, e: Option<Expr>, u: List<Expr>, s: Box<Stmt>),
+    For(e: ForStmt),
     Continue,
     Break,
     Assert(e: Expr)
@@ -357,6 +371,12 @@ enum LitKind{
   INT, STR, CHAR, BOOL, FLOAT
 }
 
+struct ArrAccess{
+  arr: Box<Expr>;
+  idx: Box<Expr>;
+  idx2: Option<Box<Expr>>;
+}
+
 enum Expr{
   Lit(kind: LitKind, val: String, suffix: Option<Type>),
   Name(val: String),
@@ -370,7 +390,7 @@ enum Expr{
   As(e: Box<Expr>, type: Type),
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
-  ArrAccess(arr: Box<Expr>, idx: Box<Expr>, idx2: Option<Box<Expr>>)
+  ArrAccess(val: ArrAccess)
 }
 
 impl Expr{
