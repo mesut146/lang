@@ -231,44 +231,44 @@ impl Debug for Stmt{
      f.print(")");
      b.debug(f);
     }
-    else if let Stmt::If(e, then, els)=(self){
+    else if let Stmt::If(is*)=(self){
      f.print("if(");
-     e.debug(f);
+     is.e.debug(f);
      f.print(")");
-     if(!(then.get() is Stmt::Block)){
+     if(!(is.then.get() is Stmt::Block)){
        f.print(" ");
      }
-     then.get().debug(f);
-     if(els.is_some()){
+     is.then.get().debug(f);
+     if(is.els.is_some()){
        f.print("\nelse ");
-       els.get().get().debug(f);
+       is.els.get().get().debug(f);
      }
-    }else if let Stmt::IfLet(ty, args, rhs, then, els)=(self){
+    }else if let Stmt::IfLet(il*)=(self){
       f.print("if let ");
-      ty.debug(f);
+      il.ty.debug(f);
       f.print("(");
-      join(f, args, ", ");
+      join(f, il.args, ", ");
       f.print(") = (");
-      rhs.debug(f);
+      il.rhs.debug(f);
       f.print(")");
-      then.get().debug(f);
-      if(els.is_some()){
+      il.then.get().debug(f);
+      if(il.els.is_some()){
         f.print("else ");
-        els.get().get().debug(f);
+        il.els.get().get().debug(f);
       }
-    }else if let Stmt::For(v,e,u,b)=(self){
+    }else if let Stmt::For(fs*)=(self){
       f.print("for(");
-      if(v.is_some()){
-        v.get().debug(f);
+      if(fs.v.is_some()){
+        fs.v.get().debug(f);
       }
       f.print(";");
-      if(e.is_some()){
-        e.get().debug(f);
+      if(fs.e.is_some()){
+        fs.e.get().debug(f);
       }
       f.print(";");
-      join(f, u, ", ");
+      join(f, fs.u, ", ");
       f.print(")");
-      b.get().debug(f);
+      fs.body.get().debug(f);
     }else if let Stmt::Continue = (self){
       f.print("continue;");
     }else if let Stmt::Break = (self){
@@ -280,6 +280,15 @@ impl Debug for Stmt{
     }
     else{
       panic("Stmt::debug");
+    }
+  }
+}
+
+impl Debug for ArgBind{
+  func debug(self, f: Fmt*){
+    f.print(self.name);
+    if(self.is_ptr){
+      f.print("*");
     }
   }
 }
@@ -371,13 +380,13 @@ impl Debug for Expr{
         sz.unwrap().debug(f);
       }
       f.print("]");
-    }else if let Expr::ArrAccess(arr, idx, idx2)=(self){
-      arr.get().debug(f);
+    }else if let Expr::ArrAccess(aa*)=(self){
+      aa.arr.get().debug(f);
       f.print("[");
-      idx.get().debug(f);
-      if(idx2.is_some()){
+      aa.idx.get().debug(f);
+      if(aa.idx2.is_some()){
         f.print("..");
-        idx2.get().get().debug(f);
+        aa.idx2.get().get().debug(f);
       }
       f.print("]");
     }

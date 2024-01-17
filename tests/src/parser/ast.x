@@ -317,7 +317,7 @@ struct ForStmt{
   v: Option<VarExpr>;
   e: Option<Expr>;
   u: List<Expr>;
-  s: Box<Stmt>;
+  body: Box<Stmt>;
 }
 
 struct IfStmt{

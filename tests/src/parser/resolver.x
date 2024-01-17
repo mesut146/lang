@@ -5,6 +5,7 @@ import parser/printer
 import parser/method_resolver
 import parser/utils
 import parser/token
+import parser/copier
 import std/map
 
 
@@ -36,6 +37,7 @@ struct Resolver{
   used_methods: List<Method*>;
   generated_methods: List<Method>;
   inLoop: i32;
+  used_types: List<Decl>;
 }
 
 struct Config{
@@ -234,7 +236,7 @@ impl Resolver{
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
-      inLoop: 0};
+      inLoop: 0, used_types: List<Decl>::new()};
     return res;
   }
 
@@ -337,18 +339,18 @@ impl Resolver{
     if(self.is_init) return;
     self.is_init = true;
     let newItems = List<Impl>::new();
-    for(let i=0;i<self.unit.items.len();++i){
+    for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type);
         res.targetDecl=Option::new(decl);
-        self.addType(decl.type.print(), res);
+        self.addType(*decl.type.name(), res);
         //todo derive
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type);
         res.trait = Option::new(tr);
-        self.addType(tr.type.print(), res);
+        self.addType(*tr.type.name(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
       }else if let Item::Type(name*, rhs*)=(it){
@@ -534,8 +536,15 @@ impl Resolver{
     self.curMethod = Option<Method*>::None;
   }
 
-  func addUsed(self, decl: Decl*){
-    panic("add used");
+  func addUsed(self, decl: Decl*): Decl*{
+    for(let i = 0;i < self.used_types.len();++i){
+      let used = self.used_types.get_ptr(i);
+      if(used.type.print().eq(decl.type.print().str())){
+        return used;
+      }
+    }
+    self.used_types.add(*decl);
+    return self.used_types.last();
   }
   
   func visit(self, node: FieldDecl*): RType{
@@ -585,7 +594,7 @@ impl Resolver{
       let scope = self.visit(simple.scope.get());
       let decl = scope.targetDecl.unwrap();
       if (!(decl is Decl::Enum)) {
-          panic("couldn't find type: %s", str.cstr());
+          panic("type scope is not enum: %s", str.cstr());
       }
       //enum variant creation
       
@@ -622,8 +631,43 @@ impl Resolver{
       }
     }
     let target = target0.unwrap();
-    
-    panic("type %s", node.print().cstr());
+    //generic
+    if (node.get_args().empty()) {
+        //inferred later
+        let res = RType::new(target.type);
+        res.targetDecl = Option::new(target);
+        self.addType(str, res);
+        return res;
+    }
+    if (node.get_args().len() != target.type.get_args().len()) {
+      let expr = Expr::Type{*node};
+      self.err(&expr, "type arguments size not matched");
+    }
+    let map = make_type_map(node.as_simple(), target);
+    let copier = AstCopier::new(&map);
+    let decl0 = copier.visit(target);//todo owner who?
+    let decl = self.addUsed(&decl0);
+    let smp = Simple::new(node.name().clone());
+    let args = node.get_args();
+    for (let i=0;i < args.len();++i) {
+        let ta =  args.get_ptr(i);
+        smp.args.add(*ta);
+    }
+    let res = RType::new(smp.into());
+    res.targetDecl = Option::new(decl);
+    self.addType(str, res);
+    return res;
+  }
+
+  func make_type_map(type: Simple*, decl: Decl*): Map<String, Type>{
+    let map = Map<String, Type>::new();
+    let params = decl.type.get_args();
+    for(let i = 0;i < type.args.len();++i){
+      let arg = type.args.get_ptr(i);
+      let prm = params.get_ptr(i);
+      map.add(prm.name().clone(), *arg);
+    }
+    return map;
   }
 
 
@@ -1076,6 +1120,8 @@ impl Resolver{
         res.value = Option::new(value);
         return res;
       }
+    }else if let Expr::Type(type*) = (node){
+      return self.visit(type);
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){
@@ -1106,7 +1152,7 @@ impl Resolver{
     }else if let Expr::Obj(type*,args*) = (node){
       return self.visit_obj(node, type, args);
     }
-    panic("visit expr %s", node.print().cstr());
+    panic("visit expr '%s'", node.print().cstr());
   }
 }
 
@@ -1170,7 +1216,7 @@ impl Resolver{
         self.visit(f.u.get_ptr(i));
       }
       self.inLoop+=1;
-      self.visit(f.s.get());
+      self.visit(f.body.get());
       self.inLoop-=1;
       self.dropScope();
       return;

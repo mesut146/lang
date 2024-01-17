@@ -256,20 +256,20 @@ void Resolver::resolveAll() {
     isResolved = true;
     init();
     newScope();//globals
-    for(Global& g:unit->globals){
-         auto rhs = resolve(g.expr);
-         if(g.type){
-         	auto type = getType(g.type.value());
-             //todo check
-             auto err_opt = MethodResolver::isCompatible(rhs.type, type);
-             if (err_opt) {
-                 std::string msg = "variable type mismatch '" + g.name + "'\n";
-                 msg += "expected: " + type.print() + " got " + rhs.type.print();
-                 msg += "\n" + err_opt.value();
-                 err(msg);
-             }
-         }
-    	addScope(g.name, rhs.type, false);
+    for (Global &g : unit->globals) {
+        auto rhs = resolve(g.expr);
+        if (g.type) {
+            auto type = getType(g.type.value());
+            //todo check
+            auto err_opt = MethodResolver::isCompatible(rhs.type, type);
+            if (err_opt) {
+                std::string msg = "variable type mismatch '" + g.name + "'\n";
+                msg += "expected: " + type.print() + " got " + rhs.type.print();
+                msg += "\n" + err_opt.value();
+                err(msg);
+            }
+        }
+        addScope(g.name, rhs.type, false);
     }
     for (auto &item : unit->items) {
         item->accept(this);
@@ -1128,7 +1128,7 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
     auto scp = resolve(node->scope);
-    if(scp.type.isPointer() && scp.type.scope->isPointer()){
+    if (scp.type.isPointer() && scp.type.scope->isPointer()) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
     }
     auto decl = scp.targetDecl;
@@ -1239,17 +1239,17 @@ std::any Resolver::visitAssertStmt(AssertStmt *node) {
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     auto rt = resolve(node->type);
     if (!rt.targetDecl->isEnum()) {
-        error("type of if let is not enum: " + node->type.print());
+        err(node, "type of if let is not enum: " + node->type.print());
     }
     auto rhs = resolve(node->rhs.get());
     if (!rhs.targetDecl->isEnum()) {
-        error("if let rhs is not enum: " + node->rhs->print());
+        err(node, "if let rhs is not enum: " + node->rhs->print());
     }
     auto decl = dynamic_cast<EnumDecl *>(rt.targetDecl);
     int index = findVariant(decl, node->type.name);
     auto &variant = decl->variants[index];
     if (variant.fields.size() != node->args.size()) {
-        error("if let args size mismatch: " + join(node->args, ", "));
+        err(node, "if let args size mismatch: " + join(node->args, ", "));
     }
     int i = 0;
     newScope();
@@ -1655,7 +1655,7 @@ std::any Resolver::visitForStmt(ForStmt *node) {
 }
 
 std::any Resolver::visitContinueStmt(ContinueStmt *node) {
-    if (inLoop==0) {
+    if (inLoop == 0) {
         error("continue in outside of loop");
     }
     if (node->label) error("continue label");
@@ -1663,7 +1663,7 @@ std::any Resolver::visitContinueStmt(ContinueStmt *node) {
 }
 
 std::any Resolver::visitBreakStmt(BreakStmt *node) {
-    if (inLoop==0) {
+    if (inLoop == 0) {
         err(node, "break in outside of loop");
     }
     if (node->label) error("break label");

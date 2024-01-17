@@ -120,13 +120,11 @@ impl Signature{
             }
             s.append(self.mc.unwrap().name);
         }else{
-            /*let p = self.m.unwrap().parent;
-            if(p.is_some()){
-                if(p){
-
-                }
+            let p = &self.m.unwrap().parent;
+            if(p is Parent::Impl){
+                s.append(p.as_impl().type.print());
                 s.append("::");
-            }*/
+            }
             s.append(self.m.unwrap().name);
         }
         s.append("(");
@@ -228,13 +226,13 @@ impl MethodResolver{
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
-        let errors = List<Pair<Method*,String>>::new();
+        let errors = List<Pair<Signature*,String>>::new();
         let exact = Option<Signature*>::None;
         for(let i = 0;i < list.size();++i){
             let sig2 = list.get_ptr(i);
             let cmp_res = self.is_same(sig, sig2);
             if let SigResult::Err(err) = (cmp_res){
-                errors.add(Pair::new(sig2.m.unwrap(), err.clone()));
+                errors.add(Pair::new(sig2, err.clone()));
             }else{
                 if(cmp_res is SigResult::Exact){
                     exact = Option::new(sig2);
@@ -244,7 +242,14 @@ impl MethodResolver{
         }
         if(real.empty()){
             let e = Expr::Call{*mc};
-            let msg = Fmt::format("method {} not found from candidates\n", mc.print().str());
+            let msg = Fmt::format("method {} not found from candidates", mc.print().str());
+            for(let i=0;i < errors.len();++i){
+                let err = errors.get_ptr(i);
+                msg.append("\n");
+                msg.append(err.a.print());
+                msg.append(" ");
+                msg.append(err.b);
+            }
             self.r.err(msg.str(), &e);
         }
         if (real.size() > 1 && exact.is_none()) {
@@ -318,7 +323,9 @@ impl MethodResolver{
     func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
         let mc = sig.mc.unwrap();
         let m = sig2.m.unwrap();
-        assert mc.name.eq(&m.name);
+        if(!mc.name.eq(&m.name)){
+            return SigResult::Err{"not possible".str()};
+        }
         if(!m.type_args.empty()){
             let mc_targs = &mc.tp;
             if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {

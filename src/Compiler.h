@@ -52,7 +52,7 @@ public:
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
     llvm::Function *staticf = nullptr;
-    std::map<std::string, llvm::Value*> globals;
+    std::map<std::string, llvm::Value *> globals;
     static std::vector<llvm::Function *> global_protos;
     static std::map<std::string, std::string> cache;
     std::shared_ptr<Resolver> resolv;
@@ -102,6 +102,7 @@ public:
     int getSize2(BaseDecl *decl);
     void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
     void setField(Expression *expr, const Type &type, llvm::Value *entPtr);
+    void setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &entries, BaseDecl *decl, llvm::Type *ty, llvm::Value *ptr);
     llvm::Value *branch(llvm::Value *val);
     llvm::ConstantInt *makeInt(int val);
     llvm::ConstantInt *makeInt(int val, int bits);

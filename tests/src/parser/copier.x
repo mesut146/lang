@@ -31,6 +31,24 @@ impl AstCopier{
         return Box::new(self.visit(box.get()));
     }
 
+    func visit(self, node: Decl*): Decl{
+        let type = self.visit(&node.type);
+        //todo base type depends on map too
+        let base = BaseDecl{line: node.line,unit: node.unit,type: type ,
+            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), derives: node.derives};
+        if let Decl::Struct(fields*)=(node){
+            let res = self.visit_list(fields);
+            return Decl::Struct{.base, res};
+        }else{
+            //enum
+        }
+        panic("visit decl");
+    }
+
+    func visit(self, node: FieldDecl*): FieldDecl{
+        return FieldDecl{name: node.name.clone(), type: self.visit(&node.type)};
+    }
+
     func visit(self, type: Type*): Type{
         if let Type::Pointer(bx*) = (type){
             let scope = self.visit(bx.get());
@@ -48,6 +66,9 @@ impl AstCopier{
             return res;
         }
         let smp = type.as_simple();
+        if(self.map.contains(&smp.name)){
+            return *self.map.get_ptr(&smp.name).unwrap();
+        }
         let res = Simple::new(smp.name);
         if (smp.scope.is_some()) {
             res.scope = Ptr::new(self.visit(smp.scope.get()));

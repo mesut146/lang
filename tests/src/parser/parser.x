@@ -471,9 +471,9 @@ impl Parser{
         if(self.is(TokenType::ELSE)){
           self.pop();
           let els = self.parse_stmt();
-          return Stmt::If{e, b, Option::new(Box::new(els))};
+          return Stmt::If{IfStmt{e, b, Option::new(Box::new(els))}};
         }
-        return Stmt::If{e, b, Option<Box<Stmt>>::None};
+        return Stmt::If{IfStmt{e, b, Option<Box<Stmt>>::None}};
       }else if(self.is(TokenType::FOR)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -490,7 +490,7 @@ impl Parser{
         let u = self.exprList(TokenType::RPAREN);
         self.consume(TokenType::RPAREN);
         let b = self.parse_stmt();
-        return Stmt::For{v, e, u, Box::new(b)};
+        return Stmt::For{ForStmt{v, e, u, Box::new(b)}};
       }else if(self.is(TokenType::CONTINUE)){
         self.pop();
         self.consume(TokenType::SEMI);
@@ -781,7 +781,7 @@ impl Parser{
         if(self.is(TokenType::LPAREN)){
           e = self.call(e, nm, false);
         }else{
-          e = Expr::Access{Box::new(e), nm};
+          e = Expr::Access{Box::new(e), nm}; 
         }
       }else{
           self.pop();
@@ -792,7 +792,7 @@ impl Parser{
               idx2 = Option::new(Box::new(self.parse_expr()));
           }
           self.consume(TokenType::RBRACKET);
-          e = Expr::ArrAccess{Box::new(e), Box::new(idx), idx2}; 
+          e = Expr::ArrAccess{ArrAccess{Box::new(e), Box::new(idx), idx2}}; 
       }
     }
     

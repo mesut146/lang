@@ -46,34 +46,34 @@ std::string trimExtenstion(const std::string &name) {
     return name.substr(0, i);
 }
 
-std::string get_out_file(const std::string& path){
-	auto name = getName(path);
+std::string get_out_file(const std::string &path) {
+    auto name = getName(path);
     auto noext = trimExtenstion(name);
-    return noext+".o";
+    return noext + ".o";
 }
 
-std::string get_time(const fs::path& p){
-	auto time = fs::last_write_time(p).time_since_epoch()/std::chrono::milliseconds(1);
-	return std::to_string(time);
+std::string get_time(const fs::path &p) {
+    auto time = fs::last_write_time(p).time_since_epoch() / std::chrono::milliseconds(1);
+    return std::to_string(time);
 }
 
-bool need_compile(const fs::path &p){
-	auto s = p.string();
-	auto out = get_out_file(s);
-	if(!fs::exists(fs::path(out))){
-		return true;
-	}
-	if(Compiler::cache.contains(s)){
-		auto time2 = Compiler::cache[s];
-		auto time1 = get_time(p);
-		return time1 != time2;
-	}else{
-		return true;
-	}
+bool need_compile(const fs::path &p) {
+    auto s = p.string();
+    auto out = get_out_file(s);
+    if (!fs::exists(fs::path(out))) {
+        return true;
+    }
+    if (Compiler::cache.contains(s)) {
+        auto time2 = Compiler::cache[s];
+        auto time1 = get_time(p);
+        return time1 != time2;
+    } else {
+        return true;
+    }
 }
 
-std::string read_file(const std::string& path){
-	std::fstream stream;
+std::string read_file(const std::string &path) {
+    std::fstream stream;
     stream.open(path, std::fstream::in);
     if (!stream.is_open()) throw std::system_error(errno, std::system_category(), "failed to open " + path);
     std::stringstream ss;
@@ -83,30 +83,30 @@ std::string read_file(const std::string& path){
     return buf;
 }
 
-void read_cache(){
-	auto path = fs::path("cache.txt");
-	if(!fs::exists(path)){
-		std::ofstream os(path.string());
-		return;
-	}
-	std::fstream is(path.string());
-	std::string line;
-	while(std::getline(is, line)){
-	    auto idx = line.find(",");
-	    auto file=line.substr(0, idx);
-	    auto time=line.substr(idx+1);
-	    Compiler::cache[file]=time;
-	}
+void read_cache() {
+    auto path = fs::path("cache.txt");
+    if (!fs::exists(path)) {
+        std::ofstream os(path.string());
+        return;
+    }
+    std::fstream is(path.string());
+    std::string line;
+    while (std::getline(is, line)) {
+        auto idx = line.find(",");
+        auto file = line.substr(0, idx);
+        auto time = line.substr(idx + 1);
+        Compiler::cache[file] = time;
+    }
 }
 
-void write_cache(){
-	auto path = fs::path("cache.txt");
-	std::ofstream os(path.string());
-	for(auto [f, t]:Compiler::cache){
-	    os << f;
-	    os<<","<<t<<std::endl;
-	}
-	os.close();
+void write_cache() {
+    auto path = fs::path("cache.txt");
+    std::ofstream os(path.string());
+    for (auto [f, t] : Compiler::cache) {
+        os << f;
+        os << "," << t << std::endl;
+    }
+    os.close();
 }
 
 void Compiler::init() {
@@ -144,7 +144,7 @@ void Compiler::compileAll() {
         if (e.is_directory()) continue;
         compile(e.path().string());
     }
-    
+
     link_run();
     for (auto &[k, v] : Resolver::resolverMap) {
         //v.reset();
@@ -288,9 +288,9 @@ void init_globals(Compiler *c) {
 std::optional<std::string> Compiler::compile(const std::string &path) {
     fs::path p(path);
     auto outFile = get_out_file(path);
-    if(!need_compile(path)){
-    	compiled.push_back(outFile);
-    	return outFile;
+    if (!need_compile(path)) {
+        compiled.push_back(outFile);
+        return outFile;
     }
     auto ext = p.extension().string();
     if (ext != ".x") {
@@ -328,11 +328,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     }
 
     //todo fullpath
-    
+
     emit(outFile);
     cleanup();
     compiled.push_back(outFile);
-    Compiler::cache[path]=get_time(p);
+    Compiler::cache[path] = get_time(p);
     write_cache();
     return outFile;
 }
@@ -1398,6 +1398,9 @@ std::any Compiler::visitVarDecl(VarDecl *node) {
 }
 
 void Compiler::copy(llvm::Value *trg, llvm::Value *src, const Type &type) {
+    src->dump();
+    trg->dump();
+    print("---------------");
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), getSize2(type) / 8);
 }
 
@@ -1476,8 +1479,14 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
             auto base_index = tt.targetDecl->isClass() ? STRUCT_BASE_INDEX : ENUM_BASE_INDEX;
             auto base_ptr = gep2(ptr, base_index, ty);
             auto val = dynamic_cast<ObjExpr *>(arg.value);
-            auto key = tt.targetDecl->type.print();
-            object(val, base_ptr, resolv->resolve(val), derived ? derived : &key);
+            if (val) {
+                auto key = tt.targetDecl->type.print();
+                object(val, base_ptr, resolv->resolve(arg.value), derived ? derived : &key);
+            } else {
+                auto val_ptr = gen(arg.value);
+                copy(base_ptr, val_ptr, tt.type);
+                //setField(arg.value, resolv->getType(arg.value), base_ptr);
+            }
             break;
         }
     }
@@ -1490,19 +1499,18 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         auto dataPtr = gep2(ptr, data_index, ty);
         auto &variant = decl->variants[variant_index];
         auto var_ty = get_variant_type(node->type, this);
-        for (int i = 0; i < node->entries.size(); i++) {
+        setFields(variant.fields, node->entries, decl, ty, ptr);
+        /*for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
             if (e.isBase) continue;
-            int index;
+            int index = i;
             if (e.key) {
                 index = fieldIndex(variant.fields, e.key.value(), Type(decl->type, variant.name));
-            } else {
-                index = i;
             }
-            auto &field = variant.fields[index];
+            auto &field = variant.fields.at(index);
             auto field_target_ptr = gep2(dataPtr, index, var_ty);
             setField(e.value, field.type, field_target_ptr);
-        }
+        }*/
     } else {
         //class
         auto decl = dynamic_cast<StructDecl *>(tt.targetDecl);
@@ -1539,6 +1547,28 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
             auto field_target_ptr = gep2(ptr, real_idx, ty);
             setField(e.value, field->type, field_target_ptr);
         }
+    }
+}
+
+void Compiler::setFields(std::vector<FieldDecl>& fields, std::vector<Entry>& entries, BaseDecl* decl, llvm::Type* ty, llvm::Value* ptr) {
+    int field_idx = 0;
+    for (int i = 0; i < entries.size(); i++) {
+        auto &e = entries[i];
+        if (e.isBase) continue;
+        FieldDecl *field;
+        int real_idx;
+        if (e.key) {
+            auto index = fieldIndex(fields, e.key.value(), decl->type);
+            field = &fields[index];
+            real_idx = index;
+        } else {
+            real_idx = field_idx;
+            field = &fields[field_idx];
+            ++field_idx;
+        }
+        if (decl->base) real_idx++;
+        auto field_target_ptr = gep2(ptr, real_idx, ty);
+        setField(e.value, field->type, field_target_ptr);
     }
 }
 
