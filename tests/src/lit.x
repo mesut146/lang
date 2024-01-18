@@ -23,8 +23,9 @@ func test(u: u64){
 }
 
 func underflow_u8(){
-  let u: u8 = 0;
-  u = (u as i16 - 1) as u8;
+  let neg = -1;
+  let u: u8 = neg as u8;
+  print("%d\n", u);
   assert u == 255;
 }
 

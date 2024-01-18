@@ -1499,7 +1499,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         auto dataPtr = gep2(ptr, data_index, ty);
         auto &variant = decl->variants[variant_index];
         auto var_ty = get_variant_type(node->type, this);
-        setFields(variant.fields, node->entries, decl, ty, ptr);
+        setFields(variant.fields, node->entries, decl, var_ty, dataPtr);
         /*for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
             if (e.isBase) continue;
@@ -1566,7 +1566,7 @@ void Compiler::setFields(std::vector<FieldDecl>& fields, std::vector<Entry>& ent
             field = &fields[field_idx];
             ++field_idx;
         }
-        if (decl->base) real_idx++;
+        if (decl->base && decl->isClass()) real_idx++;
         auto field_target_ptr = gep2(ptr, real_idx, ty);
         setField(e.value, field->type, field_target_ptr);
     }
