@@ -114,6 +114,10 @@ public:
         return *this;
     }
 
+    Type toPtr() {
+        return Type(Type::Pointer, *this);
+    }
+
     bool isPrim() const {
         return sizeMap.find(print()) != sizeMap.end();
     }
@@ -159,7 +163,7 @@ struct TypeItem : public Item {
     bool isType() { return true; }
 };
 
-struct Global{
+struct Global {
     std::string name;
     std::optional<Type> type;
     std::unique_ptr<Expression> expr;
@@ -584,8 +588,8 @@ struct ArgBind {
 
     explicit ArgBind(const std::string &name) : name(name) {}
 
-    std::string print() const{
-        if(ptr){
+    std::string print() const {
+        if (ptr) {
             return name + "*";
         }
         return name;

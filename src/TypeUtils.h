@@ -8,7 +8,7 @@ static Type clone(const Type &type) {
 }
 
 static Type makeSelf(const Type &scope) {
-    if (scope.isPrim()) return clone(scope);
+    //if (scope.isPrim()) return clone(scope);
     return Type(Type::Pointer, scope);
 }
 

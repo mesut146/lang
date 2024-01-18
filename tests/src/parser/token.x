@@ -1,7 +1,7 @@
-import String
-import str
-import List
-import impl
+import std/String
+import std/str
+import std/List
+//import impl
 
 #derive(Debug)
 enum TokenType {

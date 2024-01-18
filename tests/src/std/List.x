@@ -128,7 +128,7 @@ impl<T> List<T>{
   func indexOf2(self, e: T*, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(Eq::eq(*ptr::get(self.ptr, i), e)) return i;
+      if(Eq::eq(ptr::get(self.ptr, i), e)) return i;
       ++i;
     }
     return -1;

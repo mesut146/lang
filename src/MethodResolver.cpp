@@ -188,7 +188,12 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
             if (m.name != name) {
                 continue;
             }
+            auto ss = sig.mc->print();
+
             if (type.typeArgs.empty()) {
+                if (ss == "Fmt::str2(p.a)") {
+                    print("here1");
+                }
                 list.push_back(Signature::make(&m, map));
             } else {
                 std::map<std::string, Type> typeMap;

@@ -28,7 +28,7 @@ impl<T> Debug for Box<T>{
 
 impl<T> Clone for Box<T>{
   func clone(self): Box<T>{
-    return Box<T>::new(Clone::clone(*self.val));
+    return Box<T>::new(Clone::clone(self.val));
   }
 }
 

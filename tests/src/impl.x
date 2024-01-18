@@ -3,19 +3,19 @@ impl i32{
   func MAX(): i32{ return 2147483647; }
 
   func min(x, y: i32): i32{
-    if(x <= y) return x;
+    if(*x <= y) return *x;
     return y;
   }
   func max(x, y: i32): i32{
-    if(x >= y) return x;
+    if(*x >= y) return *x;
     return y;
   }
   func abs(x): i32{
-    if(x >= 0) return x;
-    return -x;
+    if(*x >= 0) return *x;
+    return -*x;
   }
   func generic_sum<T>(x, y: T): T{
-    return x + y;
+    return *x + y;
   }
   func generic_other<T>(x: T): T{
     return x;
@@ -44,12 +44,13 @@ impl [i32; 3]{}
 
 func main(){
   let x = 5;
+  let neg = -5;
   assert x.min(6) == 5;
-  assert 5.max(6) == 6;
-  assert (-5).abs() == 5;
-  assert 5.generic_sum(6i64) == 11;
+  assert x.max(6) == 6;
+  assert neg.abs() == 5;
+  assert x.generic_sum(6i64) == 11;
   assert i32::generic_other(5) == 5;
-  assert i32::min(5, 6) == 5;
+  assert i32::min(&x, 6) == 5;
 
   assert A<i32>{a: 5}.get() == 5;
   assert A<i64>{a: 5}.get() == 5;

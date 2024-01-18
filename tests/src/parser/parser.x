@@ -196,9 +196,9 @@ impl Parser{
         }else{
           let self_name = self.name();
           let self_ty = imp.unwrap();
-          if(!imp.get().is_prim()){
+          //if(!imp.get().is_prim()){
             self_ty = Type::Pointer{Box::new(imp.unwrap())};
-          }
+          //}
           selfp = Option::new(Param{self_name, self_ty, true});
         }
         while (self.is(TokenType::COMMA)) {

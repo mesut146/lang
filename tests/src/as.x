@@ -1,5 +1,5 @@
 func prim(){
-  let a: i32= 5;
+  let a: i32 = 5;
   //extend
   let b = a as i64;
   assert b == 5;
@@ -27,4 +27,5 @@ func base(){
 func main(){
   prim();
   base();
+  print("as done\n");
 }

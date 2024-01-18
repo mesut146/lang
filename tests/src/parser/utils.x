@@ -2,7 +2,7 @@ import parser/ast
 import std/map
 
 func makeSelf(scope: Type*): Type{
-    if (scope.is_prim()) return *scope;
+    //if (scope.is_prim()) return *scope;
     return scope.toPtr();
 }
 

@@ -64,7 +64,7 @@ bool need_compile(const fs::path &p) {
         return true;
     }
     if (Compiler::cache.contains(s)) {
-        auto time2 = Compiler::cache[s];
+        auto& time2 = Compiler::cache[s];
         auto time1 = get_time(p);
         return time1 != time2;
     } else {
@@ -134,8 +134,9 @@ void Compiler::init() {
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
     Resolver::init_prelude();
 
-    llvm::sys::PrintStackTraceOnErrorSignal("lang");
+    //llvm::sys::PrintStackTraceOnErrorSignal("lang");
     read_cache();
+    Compiler::global_protos.clear();
 }
 
 void Compiler::compileAll() {
@@ -146,10 +147,10 @@ void Compiler::compileAll() {
     }
 
     link_run();
-    for (auto &[k, v] : Resolver::resolverMap) {
+    /*for (auto &[k, v] : Resolver::resolverMap) {
         //v.reset();
         //v->unit.reset();
-    }
+    }*/
 }
 
 void Compiler::link_run() {
@@ -249,8 +250,21 @@ llvm::Constant *getDefault(Type &type, Compiler *c) {
     throw std::runtime_error("def " + s);
 }
 
+std::string mangle_unit(const std::string &path) {
+    std::string res;
+    for (auto c : path) {
+        if (c == '.') {
+            c = '_';
+        } else if (c == '/') {
+            c = '_';
+        }
+        res.insert(res.end(), 1, c);
+    }
+    return res;
+}
+
 void init_globals(Compiler *c) {
-    std::string mangled = getName(c->unit->path) + "_static_init";
+    std::string mangled = mangle_unit(c->unit->path) + "_static_init";
     std::vector<llvm::Type *> argTypes;
     auto fr = llvm::FunctionType::get(c->Builder->getVoidTy(), argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
@@ -266,7 +280,7 @@ void init_globals(Compiler *c) {
         auto type = c->resolv->getType(g.expr.get());
         auto ty = c->mapType(type);
         //auto linkage = llvm::GlobalValue::LinkageTypes::InternalLinkage;
-        auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+        //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
         llvm::Constant *init = getDefault(type, c);
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
@@ -353,6 +367,8 @@ void Compiler::cleanup() {
     virtuals.clear();
     vtables.clear();
     virtualIndex.clear();
+    globals.clear();
+    //delete staticf;
 }
 
 llvm::Value *Compiler::branch(llvm::Value *val) {
@@ -394,10 +410,13 @@ llvm::Value *Compiler::loadPtr(Expression *e) {
     return load(val, rt.type);
 }
 
-llvm::Value *extend(llvm::Value *val, const Type &type, Compiler *c) {
+llvm::Value *extend(llvm::Value *val, const Type &srcType, const Type &trgType, Compiler *c) {
     auto src = val->getType()->getPrimitiveSizeInBits();
-    int bits = c->getSize2(type);
+    int bits = c->getSize2(trgType);
     if (src < bits) {
+        if (isUnsigned(srcType)) {
+            return c->Builder->CreateZExt(val, c->getInt(bits));
+        }
         return c->Builder->CreateSExt(val, c->getInt(bits));
     } else if (src > bits) {
         return c->Builder->CreateTrunc(val, c->getInt(bits));
@@ -405,10 +424,10 @@ llvm::Value *extend(llvm::Value *val, const Type &type, Compiler *c) {
     return val;
 }
 
-llvm::Value *Compiler::cast(Expression *expr, const Type &type) {
+llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
     auto val = loadPtr(expr);
-    if (type.isPrim()) {
-        return extend(val, type, this);
+    if (trgType.isPrim()) {
+        return extend(val, resolv->getType(expr), trgType, this);
     }
     return val;
 }
@@ -836,11 +855,11 @@ void Compiler::genCode(Method *m) {
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     if (is_main(m)) {
-        std::vector<llvm::Value *> args2;
         for (auto init_proto : Compiler::global_protos) {
             if (Config::debug) {
                 loc(0, 0);
             }
+            std::vector<llvm::Value *> args2;
             Builder->CreateCall(init_proto, args2);
         }
     }
@@ -1258,9 +1277,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         auto e = mc->scope.get();
         obj = get_obj_ptr(e);
         scp = resolv->resolve(e);
-        if (scp.type.isPrim() && obj->getType()->isPointerTy()) {
+        /*if (scp.type.isPrim() && obj->getType()->isPointerTy()) {
             obj = load(obj, scp.type);
-        }
+        }*/
         args.push_back(obj);
         paramIdx++;
     }
@@ -1398,9 +1417,9 @@ std::any Compiler::visitVarDecl(VarDecl *node) {
 }
 
 void Compiler::copy(llvm::Value *trg, llvm::Value *src, const Type &type) {
-    src->dump();
-    trg->dump();
-    print("---------------");
+    //src->dump();
+    //trg->dump();
+    //print("---------------");
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), getSize2(type) / 8);
 }
 
@@ -1550,7 +1569,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
     }
 }
 
-void Compiler::setFields(std::vector<FieldDecl>& fields, std::vector<Entry>& entries, BaseDecl* decl, llvm::Type* ty, llvm::Value* ptr) {
+void Compiler::setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &entries, BaseDecl *decl, llvm::Type *ty, llvm::Value *ptr) {
     int field_idx = 0;
     for (int i = 0; i < entries.size(); i++) {
         auto &e = entries[i];
@@ -1779,7 +1798,7 @@ std::any Compiler::visitAsExpr(AsExpr *node) {
     }
     if (ty.isPrim()) {
         auto val = loadPtr(node->expr);
-        return extend(val, ty, this);
+        return extend(val, lhs, ty, this);
     }
     return get_obj_ptr(node->expr);
 }

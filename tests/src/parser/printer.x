@@ -377,7 +377,7 @@ impl Debug for Expr{
       join(f, arr, ", ");
       if(sz.is_some()){
         f.print("; ");
-        sz.unwrap().debug(f);
+        sz.get().debug(f);
       }
       f.print("]");
     }else if let Expr::ArrAccess(aa*)=(self){

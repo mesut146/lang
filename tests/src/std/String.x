@@ -194,7 +194,7 @@ impl Debug for i32{
   }
   
   func str(self): String{
-    let x = self;
+    let x = *self;
     let len = self.str_size();
     let list = List<u8>::new(len + 1);
     list.set(len, 0u8);//null terminate
@@ -208,8 +208,8 @@ impl Debug for i32{
   }
   
   func str_size(self): i32{
-    if(self==0) return 1;
-    let x = self;
+    if(*self == 0) return 1;
+    let x = *self;
     let res = 0;
     while(x > 0){
       x /= 10;
@@ -224,8 +224,14 @@ impl i32{
     let x = i64::parse(s);
     return x as i32;
   }
+  func print(x: i32): String{
+    return x.str();
+  }
 }
 impl i64{
+  func print(x: i64): String{
+    return x.str();
+  }
   func parse(s: String*): i64{
     let x: i64 = 0;
     let neg = false;
@@ -244,7 +250,7 @@ impl i64{
     return x;  
   }
   func str(self): String{
-    let x = self;
+    let x = *self;
     let len = self.str_size();
     let list = List<u8>::new(len + 1);
     list.set(len, 0u8);//null terminate
@@ -258,8 +264,8 @@ impl i64{
   }
   
   func str_size(self): i32{
-    if(self == 0) return 1;
-    let x = self;
+    if(*self == 0) return 1;
+    let x = *self;
     let res = 0;
     while(x > 0){
       x /= 10;

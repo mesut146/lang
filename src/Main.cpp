@@ -176,7 +176,7 @@ int main(int argc, char **args) {
             usage();
         }
     } catch (std::exception &e) {
-        std::cout << "err:" << e.what() << "\n";
+        std::cout << "err: " << e.what() << "\n";
     }
     return 0;
 }

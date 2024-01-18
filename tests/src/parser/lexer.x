@@ -12,7 +12,7 @@ class Lexer{
 }
 
 impl i8{
-  func in(self, a: i32, b: i32): bool{ return self <= b && self >= a; }
+  func in(self, a: i32, b: i32): bool{ return *self <= b && *self >= a; }
   
   func is_letter(self): bool{
     return self.in('a', 'z') || self.in('A', 'Z');
@@ -50,6 +50,10 @@ impl Lexer{
   
   func has(self): bool{
     return self.pos < self.buf.len();
+  } 
+
+  func has(self, cnt: i32): bool{
+    return self.pos + cnt - 1 < self.buf.len();
   }
   
   func str(self, a: i32, b: i32): str{
@@ -245,9 +249,16 @@ impl Lexer{
     if(c.is_letter() || c == '_'){
       return self.read_ident();
     }
-    if(c.is_digit() || c == '-' && self.peek(1).is_digit()){
+    if(c.is_digit()){
       return self.read_number();
     }
+    if(c == '-' && self.has(2)){
+      let peeked = self.peek(1);
+      if(peeked.is_digit()){
+        return self.read_number();
+      }
+    }
+
     if (c == '/') {
         let c2 = self.peek(1);
         if (c2 == '/') {
@@ -310,8 +321,10 @@ impl Lexer{
     let start = self.pos;
     if(self.peek() == '0' && self.peek(1) == 'x'){
       self.pos+=2;
-      while(self.peek().is_hex()){
-        self.pos+=1;
+      while(true){
+        let c = self.peek();
+        if(!c.is_hex()) break;
+        self.pos += 1;
       }
       let type = TokenType::INTEGER_LIT;
       return Token::new(type, self.str(start, self.pos));
@@ -319,16 +332,20 @@ impl Lexer{
     self.pos += 1;
     while (true){
       let c = self.peek();
+      let c2 = self.peek(1);
       if(c.is_digit()){
-        self.pos+=1;
-      }else if(c == '_' && self.peek(1).is_digit()){
+        self.pos += 1;
+      }else if(c == '_' && c2.is_digit()){
         self.pos+=2;
       }else break;
     }
-    if(self.peek() == '.' && self.peek(1).is_digit()){
+    let c2 = self.peek(1);
+    if(self.peek() == '.' && c2.is_digit()){
       dot = true;
       self.pos += 2;
-      while (self.has() && self.peek().is_digit()) {
+      while (self.has()) {
+        let c = self.peek();
+        if(!c.is_digit()) break;
         self.pos += 1;
       }
     }

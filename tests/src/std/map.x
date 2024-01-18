@@ -13,6 +13,16 @@ impl<K, V> Pair<K, V>{
   }
 }
 
+impl<A,B> Debug for Pair<A,B>{
+  func debug(self, f: Fmt*){
+    f.print("{");
+    Debug::debug(&self.a);
+    f.print(", ");
+    Debug::debug(&self.b);
+    f.print("}");
+  }
+}
+
 class Map<K, V>{
   arr: List<Pair<K, V>>;
 }
@@ -40,10 +50,10 @@ impl<K, V> Map<K, V>{
     else{
       print("map set %d\n", i);
       let p = self.arr.get_ptr(i);
-      print("map set from (%s,", Fmt::str2(p.a).cstr());
-      print("%s) to (", Fmt::str2(p.b).cstr());
-      print("%s,", Fmt::str(&k).cstr());
-      print("%s)\n", Fmt::str2(v).cstr());
+      //print("map set from (%s,", Fmt::str2(p.a).cstr());
+      //print("%s) to (", Fmt::str2(p.b).cstr());
+      //print("%s,", Fmt::str(&k).cstr());
+      //print("%s)\n", Fmt::str2(v).cstr());
       p.b = v;
     }
   }
@@ -59,7 +69,7 @@ impl<K, V> Map<K, V>{
   func get(self, k: K): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get(i);
-      if(Eq::eq(e.a, &k)){
+      if(Eq::eq(&e.a, &k)){
         return Option<V>::Some{e.b};
       }
     }
@@ -86,7 +96,7 @@ impl<K, V> Map<K, V>{
   func indexOf(self, k: K*): i64{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, k)){
+      if(Eq::eq(&e.a, k)){
         return i as i64;
       }
     }

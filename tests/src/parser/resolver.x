@@ -938,7 +938,7 @@ impl Resolver{
   func visit_deref(self, node: Expr*, e: Expr*): RType{
     let inner = self.visit(e);
     if(!inner.type.is_pointer()){
-      self.err(Fmt::format("deref expr is not pointer: %s -> %s", node.print().str(), inner.type.print().str()));
+      self.err(Fmt::format("deref expr is not pointer: {} -> {}", node.print().str(), inner.type.print().str()));
     }
     inner.type = inner.type.unwrap_ptr();
     return inner;

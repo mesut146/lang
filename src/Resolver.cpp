@@ -196,21 +196,30 @@ bool contains(const std::vector<std::string> &vec, const std::string &elem) {
     return false;
 }
 
+std::string get_relative_root(const std::string &path, const std::string &root) {
+    //print("cur=" + path + ", root=" + root);
+    if (path.starts_with(root)) {
+        return path.substr(root.length() + 1);//+1 for slash
+    }
+    return path;
+}
+
 std::vector<ImportStmt> Resolver::get_imports() {
     std::vector<ImportStmt> imports;
-    for (auto &is : unit->imports) {
-        //ignore prelude imports
-        if (!contains(prelude, join(is.list, "/"))) {
-            imports.push_back(is);
-        }
-    }
+    auto cur = get_relative_root(unit->path, root);
     for (auto &pre : prelude) {
         //skip self unit being prelude
-        if (unit->path == root + "/std/" + pre + ".x") continue;
+        if (cur == "std/" + pre + ".x") continue;
         ImportStmt is;
         is.list.push_back("std");
         is.list.push_back(pre);
         imports.push_back(std::move(is));
+    }
+    for (auto &is : unit->imports) {
+        //ignore prelude imports
+        if (!has(imports, is)) {
+            imports.push_back(is);
+        }
     }
     if (curMethod && !curMethod->typeArgs.empty()) {
         for (auto &is : curMethod->unit->imports) {
@@ -344,6 +353,7 @@ Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, co
     res->line = unit->lastLine;
     return res;
 }
+
 Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
     auto ret = std::make_unique<ReturnStmt>();
     ret->line = ++unit->lastLine;
@@ -352,12 +362,15 @@ Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
 }
 
 //Debug::debug(e, f)
-Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, const std::string &fmt) {
+Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, Type &type, const std::string &fmt) {
     auto mc = new MethodCall;
     mc->line = ++unit->lastLine;
     mc->is_static = true;
     mc->scope.reset(new Type("Debug"));
     mc->name = "debug";
+    if (!type.isPointer()) {
+        e = new RefExpr(std::unique_ptr<Expression>(e));
+    }
     mc->args.push_back(e);
     mc->args.push_back(new SimpleName(fmt));
     auto res = std::make_unique<ExprStmt>(mc);
@@ -410,7 +423,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
                 for (auto &fd : ev.fields) {
                     if (j++ > 0) then->list.push_back(newPrint(unit, "f", ", "));
                     then->list.push_back(newPrint(unit, "f", fd.name + ": "));
-                    then->list.push_back(makeDebug(unit, new SimpleName(fd.name), "f"));
+                    then->list.push_back(makeDebug(unit, new SimpleName(fd.name), fd.type, "f"));
                 }
                 then->list.push_back(newPrint(unit, "f", "}"));
             }
@@ -422,8 +435,8 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         int i = 0;
         for (auto &fd : sd->fields) {
             bl->list.push_back(newPrint(unit, "f", (i > 0 ? ", " : "") + fd.name + ": "));
-            auto ts = fd.type.print();
-            bl->list.push_back(makeDebug(unit, makeFa(fd.name), "f"));
+            //auto ts = fd.type.print();
+            bl->list.push_back(makeDebug(unit, makeFa(fd.name), fd.type, "f"));
             i++;
         }
         bl->list.push_back(newPrint(unit, "f", "}"));
@@ -434,10 +447,10 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
     m.parent = imp.get();
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Debug")).trait;
-    for (auto &m : tr->methods) {
-        if (m.body) {
+    for (auto &mm : tr->methods) {
+        if (mm.body) {
             AstCopier copier;
-            auto m2 = std::any_cast<Method *>(m.accept(&copier));
+            auto m2 = std::any_cast<Method *>(mm.accept(&copier));
             imp->methods.push_back(std::move(*m2));
         }
     }
@@ -1571,6 +1584,10 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     }
     auto sig = Signature::make(mc, this);
     if (mc->scope) {
+        //rvalue
+        if(dynamic_cast<MethodCall*>(mc->scope.get()) && getType(mc->scope.get()).isPrim()){
+            err(mc, "method scope is rvalue");
+        }
         MethodResolver mr(this);
         auto res = mr.handleCallResult(sig);
         return res;

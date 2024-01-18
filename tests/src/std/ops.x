@@ -4,13 +4,13 @@ trait Eq{
 
 impl Eq for i32{
   func eq(self, x: i32*): bool{
-    return self == *x;
+    return *self == *x;
   }
 }
 
 impl Eq for i64{
   func eq(self, x: i64*): bool{
-    return self == *x;
+    return *self == *x;
   }
 }
 
@@ -26,13 +26,13 @@ trait Clone{
 
 impl Clone for i32{
   func clone(self): i32{
-    return self;
+    return *self;
   }
 }
 
 impl Clone for i64{
   func clone(self): i64{
-    return self;
+    return *self;
   }
 }
 
@@ -49,9 +49,9 @@ impl Debug for [i32]{
     f.print("[");
     for(let i = 0;i < self.len();++i){
       if(i > 0) print(", ");
-      Debug::debug(i, f);
+      Debug::debug(&i, f);
       f.print("=");
-      Debug::debug(self[i], f);
+      Debug::debug(&self[i], f);
     }
     f.print("]\n");
   }
@@ -78,7 +78,7 @@ impl Fmt{
   }
   func str2<T>(node: T): String{
     let f = Fmt::new();
-    Debug::debug(node, &f);
+    Debug::debug(&node, &f);
     return f.buf;
   }
 
@@ -129,7 +129,7 @@ impl Fmt{
 
 impl Debug for bool{
   func debug(self, f: Fmt*){
-    if(self){
+    if(*self){
       f.print("true");
     }else{
       f.print("false");
@@ -149,12 +149,12 @@ trait Hash{
 
 impl Hash for i32{
   func hash(self): i64{
-    return self as i64;
+    return *self as i64;
   }
 }
 impl Hash for i64{
   func hash(self): i64{
-    return self as i64;
+    return *self as i64;
   }
 }
 impl Hash for str{
