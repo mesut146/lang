@@ -256,11 +256,11 @@ impl Type{
   func is_slice(self): bool{
     return self is Type::Slice;
   }
-  func unwrap_ptr(self): Type{
+  func unwrap_ptr(self): Type*{
     if let Type::Pointer(bx*) = (self){
-      return bx.unwrap();
+      return bx.get();
     }
-    return *self;
+    return self;
   }
   func elem(self): Type*{
     if let Type::Pointer(bx*) = (self){

@@ -143,6 +143,9 @@ impl AstCopier{
         if let Expr::Infix(op*, l*, r*)=(node){
             return Expr::Infix{op.clone(), self.visit_box(l), self.visit_box(r)};
         }
+        if let Expr::Unary(op*, e*)=(node){
+            return Expr::Unary{op.clone(), self.visit_box(e)};
+        }
         panic("Expr %s", node.print().cstr());
     }
 }

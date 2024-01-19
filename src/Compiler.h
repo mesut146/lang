@@ -1,8 +1,10 @@
 #pragma once
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <utility>
+
 
 #include "Resolver.h"
 #include "Visitor.h"
@@ -12,11 +14,14 @@
 #include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
 
+namespace fs = std::filesystem;
 
 bool isStrLit(Expression *e);
 
 std::vector<Method *> getMethods(Unit *unit);
 void sort(std::vector<BaseDecl *> &list, Resolver *r);
+
+std::string get_out_file(const std::string &path);
 
 constexpr int STRUCT_BASE_INDEX = 0;
 constexpr int VPTR_INDEX = -1;//end
@@ -43,6 +48,22 @@ struct DebugInfo {
     std::unordered_map<std::string, llvm::DICompositeType *> incomplete_types;
 };
 
+struct Cache {
+    std::map<std::string, std::string> map;
+
+    void read_cache();
+    void write_cache();
+    bool need_compile(const fs::path &p);
+    void update(const fs::path &p) {
+        map[p.string()] = get_time(p);
+    }
+
+    std::string get_time(const fs::path &p) {
+        auto time = fs::last_write_time(p).time_since_epoch() / std::chrono::milliseconds(1);
+        return std::to_string(time);
+    }
+};
+
 struct Compiler : public Visitor {
 public:
     std::string srcDir;
@@ -55,6 +76,7 @@ public:
     std::map<std::string, llvm::Value *> globals;
     static std::vector<llvm::Function *> global_protos;
     static std::map<std::string, std::string> cache;
+    Cache cache2;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;

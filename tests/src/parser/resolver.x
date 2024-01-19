@@ -573,7 +573,7 @@ impl Resolver{
     }
     if(node.is_pointer()){
       let inner = node.unwrap_ptr();
-      let res = self.visit(&inner);
+      let res = self.visit(inner);
       let ptr = res.type.toPtr();
       res.type = ptr;
       return res;
@@ -942,7 +942,7 @@ impl Resolver{
     if(!inner.type.is_pointer()){
       self.err(Fmt::format("deref expr is not pointer: {} -> {}", node.print().str(), inner.type.print().str()));
     }
-    inner.type = inner.type.unwrap_ptr();
+    inner.type = *inner.type.unwrap_ptr();
     return inner;
   }
   
@@ -1056,12 +1056,12 @@ impl Resolver{
         let inner = arr.unwrap_ptr();
         print("inner=%s\n", inner.print().cstr());
         if (inner.is_slice()) {
-            return RType::new(inner);
+            return RType::new(*inner);
         } else if (inner.is_array()) {
             return RType::new(Type::Slice{Box::new(*inner.elem())});
         } else if (arr.is_pointer()) {
             //from raw pointer
-            return RType::new(Type::Slice{Box::new(inner)});
+            return RType::new(Type::Slice{Box::new(*inner)});
         } else {
             print("arr=%s\n", arr.print().cstr());
             self.err(node, "cant make slice out of ");

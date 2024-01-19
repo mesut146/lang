@@ -2,6 +2,52 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
+bool USE_CACHE = false;
+
+void Cache::read_cache() {
+    auto path = fs::path("cache.txt");
+    if (!fs::exists(path)) {
+        std::ofstream os(path.string());
+        return;
+    }
+    std::fstream is(path.string());
+    std::string line;
+    while (std::getline(is, line)) {
+        auto idx = line.find(",");
+        auto file = line.substr(0, idx);
+        auto time = line.substr(idx + 1);
+        map[file] = time;
+    }
+}
+
+void Cache::write_cache() {
+    auto path = fs::path("cache.txt");
+    std::ofstream os(path.string());
+    for (auto &[f, t] : map) {
+        os << f;
+        os << "," << t << std::endl;
+    }
+    os.close();
+}
+
+bool Cache::need_compile(const fs::path &p) {
+    if (!USE_CACHE) {
+        return true;
+    }
+    auto s = p.string();
+    auto out = get_out_file(s);
+    if (!fs::exists(fs::path(out))) {
+        return true;
+    }
+    if (map.contains(s)) {
+        auto &time2 = map[s];
+        auto time1 = get_time(p);
+        return time1 != time2;
+    } else {
+        return true;
+    }
+}
+
 void sort(std::vector<BaseDecl *> &list, Resolver *r) {
     // for (auto decl : list) {
     //     std::cout << decl->type.print() << ", ";

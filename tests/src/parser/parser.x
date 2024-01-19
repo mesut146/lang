@@ -30,7 +30,7 @@ impl Parser{
             continue;
         self.tokens.add(t);
       }
-      print("tokens %d\n", self.tokens.len());
+      print("tokens %d %s\n", self.tokens.len(), self.lexer.path.cstr());
     }
     
     func has(self): bool{

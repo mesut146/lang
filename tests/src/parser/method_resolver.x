@@ -38,12 +38,18 @@ impl Signature{
         if(mc.scope.is_some()){
             let scp = r.visit(mc.scope.get().get());
             //we need this to handle cases like Option::new(...)
-            if (scp.targetDecl.is_some() && !scp.targetDecl.unwrap().unit.path.eq(&r.unit.path)) {
-                r.addUsed(scp.targetDecl.unwrap());
+            if (scp.targetDecl.is_some()) {
+                let trg = scp.targetDecl.unwrap();
+                print("%s", Fmt::str(trg).cstr());
+                let u2 = trg.unit;
+                let p = u2.path;
+                if(!trg.unit.path.eq(&r.unit.path)){
+                    r.addUsed(scp.targetDecl.unwrap());
+                }
             }
             if (scp.type.is_pointer()) {
                 let inner = scp.type.unwrap_ptr();
-                res.scope = Option::new(r.visit(&inner));
+                res.scope = Option::new(r.visit(inner));
             } else {
                 res.scope = Option::new(scp);
             }
@@ -212,8 +218,8 @@ impl MethodResolver{
     func collect_member(self, sig: Signature*, list: List<Signature>*, imports: bool){
         let scope_type = sig.scope.get().type.unwrap_ptr();
         let type_plain = scope_type;
-        let imp_list = self.get_impl(&scope_type);
-        let map = Signature::make_inferred(sig, &scope_type);
+        let imp_list = self.get_impl(scope_type);
+        let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let imp = imp_list.get(i);
             print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
@@ -499,7 +505,7 @@ impl MethodResolver{
     func infer(arg: Type*, prm: Type*, typeMap: Map<String, Option<Type>>*) {
         if (prm.is_pointer()) {
             if (!arg.is_pointer()) return;
-            infer(arg.scope(), prm.scope(), typeMap);
+            infer(arg.unwrap_ptr(), prm.unwrap_ptr(), typeMap);
             return;
         }//todo
         let ta1 = arg.get_args();

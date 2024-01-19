@@ -69,7 +69,7 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
     auto var_type = (llvm::StructType *) c->classMap[name];
     std::vector<llvm::Metadata *> elems;
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems));
-    auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
+    //auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
     auto st = c->DBuilder->createStructType(scope, evar.name, file, ed->line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
     auto sl = c->mod->getDataLayout().getStructLayout(var_type);
     int i = 0;
@@ -99,6 +99,9 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         } else {
             if (!rt.targetDecl) {
                 return DBuilder->createPointerType(map_di(&elem), 64);
+            }
+            if (elem.print() == "Unit") {
+                print("unit in " + resolv->unit->path);
             }
             //make incomplete type to fill later
             auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());

@@ -31,7 +31,6 @@
 namespace fs = std::filesystem;
 
 std::vector<llvm::Function *> Compiler::global_protos;
-std::map<std::string, std::string> Compiler::cache;
 
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
@@ -52,25 +51,6 @@ std::string get_out_file(const std::string &path) {
     return noext + ".o";
 }
 
-std::string get_time(const fs::path &p) {
-    auto time = fs::last_write_time(p).time_since_epoch() / std::chrono::milliseconds(1);
-    return std::to_string(time);
-}
-
-bool need_compile(const fs::path &p) {
-    auto s = p.string();
-    auto out = get_out_file(s);
-    if (!fs::exists(fs::path(out))) {
-        return true;
-    }
-    if (Compiler::cache.contains(s)) {
-        auto& time2 = Compiler::cache[s];
-        auto time1 = get_time(p);
-        return time1 != time2;
-    } else {
-        return true;
-    }
-}
 
 std::string read_file(const std::string &path) {
     std::fstream stream;
@@ -83,31 +63,6 @@ std::string read_file(const std::string &path) {
     return buf;
 }
 
-void read_cache() {
-    auto path = fs::path("cache.txt");
-    if (!fs::exists(path)) {
-        std::ofstream os(path.string());
-        return;
-    }
-    std::fstream is(path.string());
-    std::string line;
-    while (std::getline(is, line)) {
-        auto idx = line.find(",");
-        auto file = line.substr(0, idx);
-        auto time = line.substr(idx + 1);
-        Compiler::cache[file] = time;
-    }
-}
-
-void write_cache() {
-    auto path = fs::path("cache.txt");
-    std::ofstream os(path.string());
-    for (auto [f, t] : Compiler::cache) {
-        os << f;
-        os << "," << t << std::endl;
-    }
-    os.close();
-}
 
 void Compiler::init() {
     TargetTriple = llvm::sys::getDefaultTargetTriple();
@@ -135,7 +90,7 @@ void Compiler::init() {
     Resolver::init_prelude();
 
     //llvm::sys::PrintStackTraceOnErrorSignal("lang");
-    read_cache();
+    cache2.read_cache();
     Compiler::global_protos.clear();
 }
 
@@ -302,7 +257,7 @@ void init_globals(Compiler *c) {
 std::optional<std::string> Compiler::compile(const std::string &path) {
     fs::path p(path);
     auto outFile = get_out_file(path);
-    if (!need_compile(path)) {
+    if (!cache2.need_compile(path)) {
         compiled.push_back(outFile);
         return outFile;
     }
@@ -346,8 +301,8 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     emit(outFile);
     cleanup();
     compiled.push_back(outFile);
-    Compiler::cache[path] = get_time(p);
-    write_cache();
+    cache2.update(p);
+    cache2.write_cache();
     return outFile;
 }
 
