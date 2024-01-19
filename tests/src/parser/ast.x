@@ -209,7 +209,7 @@ impl Type{
     if let Type::Simple(smp*)=(self){
       return &smp.name;
     }
-    panic("cant unwrap");
+    panic("cant name() %s", self.print().cstr());
   }
 
   func is_simple(self): bool{
@@ -245,7 +245,7 @@ impl Type{
     if let Type::Simple(smp*) = (self){
       return &smp.args;
     }
-    panic("get_args");
+    panic("get_args %s", self.print().cstr());
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
@@ -272,7 +272,7 @@ impl Type{
     if let Type::Slice(bx*) = (self){
       return bx.get();
     }
-    panic("elem");       
+    panic("elem %s", self.print().cstr());
   }
 
   //get plain(generic)
@@ -284,7 +284,7 @@ impl Type{
         return Type::new(smp.name);
       }
     }
-    panic("erase");
+    panic("erase %s", self.print().cstr());
   }
   
   func print(self): String{

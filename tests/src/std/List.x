@@ -43,12 +43,20 @@ impl<T> List<T>{
     self.cap = self.cap * 2;
   }
   
+  func check(self, pos: i64){
+    if(pos >= 0 && pos < self.count){
+      return;
+    }
+    panic("index out of bounds %d", pos);
+  }
+  
   func remove(self, pos: i64){
+    self.check(pos);
     //copy right of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
       *ptr::get(self.ptr, i) = *ptr::get(self.ptr, i + 1);
     }
-    self.count =- 1;
+    self.count -= 1;
   }
 
   func add(self, e: T){

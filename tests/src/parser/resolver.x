@@ -467,7 +467,7 @@ impl Resolver{
       let trait_decl = trait_rt.trait.unwrap();
       for(let i = 0;i < trait_decl.methods.len();++i){
         let m = trait_decl.methods.get_ptr(i);
-        if(!m.body.is_some()){
+        if(m.body.is_none()){
           let mangled = mangle2(m, &imp.info.type);
           required.add(mangled, m);
         }
@@ -573,8 +573,10 @@ impl Resolver{
     }
     if(node.is_pointer()){
       let inner = node.unwrap_ptr();
-      let elem = self.visit(&inner);
-      return RType::new(elem.type.toPtr());
+      let res = self.visit(&inner);
+      let ptr = res.type.toPtr();
+      res.type = ptr;
+      return res;
     }
     if(node.is_slice()){
       let inner = node.elem();
@@ -948,28 +950,28 @@ impl Resolver{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).elem();
+        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_slice();
    }
    func is_slice_get_len(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).elem();
+        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_slice();
   }
   func is_array_get_ptr(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).elem();
+        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_array();
    }
    func is_array_get_len(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).elem();
+        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_array();
   }
 
@@ -1051,16 +1053,17 @@ impl Resolver{
         if (idx2.print().eq("bool") || !idx2.is_prim()){
           self.err(node, "range end is not an integer");
         }
-        let inner = arr.elem();
+        let inner = arr.unwrap_ptr();
         print("inner=%s\n", inner.print().cstr());
         if (inner.is_slice()) {
-            return RType::new(*inner);
+            return RType::new(inner);
         } else if (inner.is_array()) {
             return RType::new(Type::Slice{Box::new(*inner.elem())});
         } else if (arr.is_pointer()) {
             //from raw pointer
-            return RType::new(Type::Slice{Box::new(*inner)});
+            return RType::new(Type::Slice{Box::new(inner)});
         } else {
+            print("arr=%s\n", arr.print().cstr());
             self.err(node, "cant make slice out of ");
         }
     }
@@ -1093,6 +1096,33 @@ impl Resolver{
         }
     }
     return RType::new(Type::Array{Box::new(elemType), list.len() as i32});
+  }
+  
+  func visit_as(self, node: Expr*, lhs: Expr*, type: Type*): RType{
+    let left = self.visit(lhs);
+    let right = self.visit(type);
+    //prim->prim
+    if (left.type.is_prim() && right.type.is_prim()) {
+        return right;
+    }
+    //derived->base
+    if (left.targetDecl.is_some() && left.targetDecl.unwrap().base.is_some()) {
+        let cur = left.targetDecl;
+        while (cur.is_some() && cur.unwrap().base.is_some()) {
+            let bs = cur.unwrap().base.get().print();
+            bs.append("*");
+            if (bs.eq(right.type.print().str())) return right;
+            cur = self.visit(cur.unwrap().base.get()).targetDecl;
+        }
+    }
+    if (right.type.is_pointer()) {
+        return right;
+    }
+    if (left.type.is_pointer() && right.type.print().eq("u64")) {
+        return RType::new("u64");
+    }
+    self.err(node, "invalid as expr");
+    panic("");
   }
   
   func visit(self, node: Expr*): RType{
@@ -1151,6 +1181,8 @@ impl Resolver{
       return self.visit_array(node, list, size);
     }else if let Expr::Obj(type*,args*) = (node){
       return self.visit_obj(node, type, args);
+    }else if let Expr::As(lhs*, type*) = (node){
+      return self.visit_as(node, lhs.get(), type);
     }
     panic("visit expr '%s'", node.print().cstr());
   }

@@ -67,9 +67,11 @@ impl Signature{
         }
     }*/
     func make_inferred(sig: Signature*, type: Type*): Map<String, Type>{
+        let map = Map<String, Type>::new();
+        if(!type.is_simple()) return map;
         let type_plain = type.erase();
         let decl_opt = sig.r.unwrap().visit(&type_plain).targetDecl;
-        let map = Map<String, Type>::new();
+        
         if(decl_opt.is_none()){
             return map;
         }
@@ -152,7 +154,7 @@ impl MethodResolver{
     func collect(self, sig: Signature*): List<Signature>{
         let list = List<Signature>::new();
         if(sig.mc.unwrap().scope.is_some()){
-            self.collect_member(sig, &list);
+            self.collect_member(sig, &list, true);
         }else{
             self.collect_static(sig, &list);
             let imports = self.r.get_imports();
@@ -167,14 +169,21 @@ impl MethodResolver{
         return list;
     }
     
+    func print_erased(type: Type*): String{
+      if(type.is_simple()){
+        return type.name().clone();
+      }
+      return type.print();
+    }
+    
     func get_impl(self, type: Type*): List<Impl*>{
         let list = List<Impl*>::new();
+        let s = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item = self.r.unit.items.get_ptr(i);
             if let Item::Impl(imp*) = (item){
-                let type_str = type.print();
-                if(imp.info.type.print().eq(&type_str)){
-                    list.add(imp);
+                if(print_erased(&imp.info.type).eq(s.str())){
+                  list.add(imp);
                 }
             }
         }
@@ -200,24 +209,59 @@ impl MethodResolver{
       }
     }
 
-    func collect_member(self, sig: Signature*, list: List<Signature>*){
-        let scope_type = sig.scope.get().type;
+    func collect_member(self, sig: Signature*, list: List<Signature>*, imports: bool){
+        let scope_type = sig.scope.get().type.unwrap_ptr();
         let type_plain = scope_type;
         let imp_list = self.get_impl(&scope_type);
+        let map = Signature::make_inferred(sig, &scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let imp = imp_list.get(i);
-            //print("impl found\n%s", Fmt::str(imp).cstr());
+            print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
             for(let j = 0;j < imp.methods.len();++j){
-                let m = imp.methods.get_ptr(j);
-                if(m.name.eq(&sig.name)){
-                    list.add(Signature::new(m));
+                let m = imp.methods.get_ptr(j);       
+                if(!m.name.eq(&sig.name)) continue;
+                if(!scope_type.is_simple()){
+                  list.add(Signature::new(m));
+                  continue;
+                }
+                let scp_args = scope_type.get_args();
+                if(scp_args.empty()){
+                  list.add(Signature::new(m, &map));
+                }else{
+                  let typeMap = Map<String, Type>::new();
+                  for(let k=0;k<m.type_args.len();++k){
+                    let ta = m.type_args.get_ptr(k);
+                    typeMap.add(*ta.name(), *scp_args.get_ptr(k));
+                  }
+                  let sig2 = Signature::new(m, &map);
+                  for (let i2=0;i2<sig2.args.len();++i2) {
+                    let a = sig2.args.get_ptr(i);
+                    let ac = AstCopier::new(&typeMap);
+                    *a = ac.visit(a);
+                  }
+                  list.add(sig2);
+                  print("sig2=%s\n", sig2.print().cstr());
+             
+                  //panic("scp args");
                 }
             }
         }
+        if (imports) {
+          let ims = self.r.get_imports();
+          for (let i=0;i<ims.len();++i) {
+            let is = ims.get_ptr(i);
+            print("is=%s\n", "/".join(&is.list).cstr());
+            let resolver = self.r.ctx.get_resolver(is);
+            resolver.init();
+            let mr = MethodResolver::new(resolver);
+            mr.collect_member(sig, list, false);
+        }
+      }
     }
 
     func handle(self, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
+        print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
             let e = Expr::Call{*sig.mc.unwrap()};
@@ -352,10 +396,10 @@ impl MethodResolver{
                     if (!scp.name().eq(ty.name())) {
                         return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
                     }
-                } else if (!scope.name().eq(ty.name())) {
+                } else if (!scope.print().eq(ty.print().str())) {
                     return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
                 }
-                if (imp.type_params.empty() && !ty.get_args().empty()) {
+                if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
                     //check they belong same impl
                     let scope_args = scope.get_args();
                     for (let i = 0; i < scope_args.size(); ++i) {
