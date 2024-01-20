@@ -30,7 +30,7 @@
 
 namespace fs = std::filesystem;
 
-std::vector<llvm::Function *> Compiler::global_protos;
+std::vector<std::string> Compiler::global_protos;
 
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
@@ -95,10 +95,15 @@ void Compiler::init() {
 }
 
 void Compiler::compileAll() {
+    single_mode = false;
     init();
     for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
         if (e.is_directory()) continue;
         compile(e.path().string());
+    }
+    //compile main file last so that we collect all globals
+    if (main_file.has_value()) {
+        compile(main_file.value());
     }
 
     link_run();
@@ -218,24 +223,34 @@ std::string mangle_unit(const std::string &path) {
     return res;
 }
 
-void init_globals(Compiler *c) {
-    std::string mangled = mangle_unit(c->unit->path) + "_static_init";
+llvm::Function *make_init_proto(const std::string &path, Compiler *c) {
     std::vector<llvm::Type *> argTypes;
     auto fr = llvm::FunctionType::get(c->Builder->getVoidTy(), argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
-    c->staticf = llvm::Function::Create(fr, linkage, mangled, *c->mod);
-    Compiler::global_protos.push_back(c->staticf);
+    std::string mangled = mangle_unit(path) + "_static_init";
+    return llvm::Function::Create(fr, linkage, mangled, *c->mod);
+}
+
+void init_globals(Compiler *c) {
+    if (c->unit->globals.empty()) {
+        return;
+    }
+    //std::string mangled = mangle_unit(c->unit->path) + "_static_init";
+
+    auto staticf = make_init_proto(c->unit->path, c);
+    std::string mangled = staticf->getName().str();
+    Compiler::global_protos.push_back(c->unit->path);
     Method m(c->unit.get());
     m.type = Type("void");
     m.name = mangled;
-    c->dbg_func(&m, c->staticf);
-    auto bb = llvm::BasicBlock::Create(c->ctx(), "", c->staticf);
+    c->dbg_func(&m, staticf);
+    auto bb = llvm::BasicBlock::Create(c->ctx(), "", staticf);
     c->Builder->SetInsertPoint(bb);
     for (Global &g : c->unit->globals) {
         auto type = c->resolv->getType(g.expr.get());
         auto ty = c->mapType(type);
         //auto linkage = llvm::GlobalValue::LinkageTypes::InternalLinkage;
-        //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+        auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
         llvm::Constant *init = getDefault(type, c);
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
@@ -249,9 +264,21 @@ void init_globals(Compiler *c) {
         c->DBuilder->finalizeSubprogram((llvm::DISubprogram *) c->di.sp);
         c->di.sp = nullptr;
     }
-    if (llvm::verifyFunction(*c->staticf, &llvm::outs())) {
+    if (llvm::verifyFunction(*staticf, &llvm::outs())) {
         error(mangled + " has errors");
     }
+}
+
+bool has_main(Unit *unit) {
+    for (auto &it : unit->items) {
+        if (it->isMethod()) {
+            auto m = dynamic_cast<Method *>(it.get());
+            if (m && is_main(m)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 std::optional<std::string> Compiler::compile(const std::string &path) {
@@ -270,6 +297,10 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     }
     resolv = Resolver::getResolver(path, srcDir);
     unit = resolv->unit;
+    if (!single_mode && has_main(unit.get())) {
+        main_file = path;
+        return outFile;
+    }
     resolv->resolveAll();
 
     initModule(path, this);
@@ -283,8 +314,6 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         genCode(m);
     }
 
-    llvm::verifyModule(*mod, &llvm::outs());
-
     //emit llvm
     auto name = getName(path);
     auto noext = trimExtenstion(name);
@@ -295,6 +324,8 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     if (Config::verbose) {
         print("writing " + llvm_file);
     }
+
+    llvm::verifyModule(*mod, &llvm::outs());
 
     //todo fullpath
 
@@ -513,8 +544,7 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         return nullptr;
     }
     auto mangled = bd->type.print();
-    auto it = classMap.find(mangled);
-    if (it == classMap.end()) {
+    if (!classMap.contains(mangled)) {
         auto ty = llvm::StructType::create(ctx(), mangled);
         classMap[mangled] = ty;
         return ty;
@@ -522,7 +552,7 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
     //fill body
     auto *r = resolv.get();
 
-    auto ty = (llvm::StructType *) it->second;
+    auto ty = (llvm::StructType *) classMap.at(mangled);
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
         int max = 0;
@@ -810,10 +840,11 @@ void Compiler::genCode(Method *m) {
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     if (is_main(m)) {
-        for (auto init_proto : Compiler::global_protos) {
+        for (auto init_proto_path : Compiler::global_protos) {
             if (Config::debug) {
                 loc(0, 0);
             }
+            auto init_proto = make_init_proto(init_proto_path, this);
             std::vector<llvm::Value *> args2;
             Builder->CreateCall(init_proto, args2);
         }
@@ -1618,6 +1649,9 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     auto scope = get_obj_ptr(node->scope);
     auto decl = rt.targetDecl;
     auto [sd, index] = resolv->findField(node->name, decl, rt.type);
+    if (index == -1) {
+        resolv->err(node, "internal error");
+    }
     auto sd_ty = mapType(sd->type);
     if (sd->base) index++;
     return gep2(scope, index, sd_ty);

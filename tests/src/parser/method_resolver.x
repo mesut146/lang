@@ -40,10 +40,10 @@ impl Signature{
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
                 let trg = scp.targetDecl.unwrap();
-                print("%s", Fmt::str(trg).cstr());
-                let u2 = trg.unit;
-                let p = u2.path;
-                if(!trg.unit.path.eq(&r.unit.path)){
+                print("trg=%s", Fmt::str(trg).cstr());
+                let bd = trg as BaseDecl*;
+                let p = &bd.path;
+                if(!trg.path.eq(&r.unit.path)){
                     r.addUsed(scp.targetDecl.unwrap());
                 }
             }
@@ -397,12 +397,20 @@ impl MethodResolver{
             if(mc.scope.is_some()){
                 let ty = &imp.type;
                 let scope = sig.scope.get().type;
+                if(ty.print().eq(scope.print().str())){
+                    return self.check_args(sig, sig2);
+                }
+                print("%s %s\n", scope.print().cstr(), ty.print().cstr());
+
+                if(!ty.is_simple()){
+                   
+                }
                 if (sig.scope.get().trait.is_some()) {
                     let scp = sig.args.get_ptr(0).unwrap_ptr();
                     if (!scp.name().eq(ty.name())) {
                         return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
                     }
-                } else if (!scope.print().eq(ty.print().str())) {
+                } else if (!scope.name().eq(ty.name().str())) {
                     return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
                 }
                 if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
@@ -450,6 +458,13 @@ impl MethodResolver{
         let arg = &arg0.type;
         if (isGeneric(target, typeParams)) return Option<String>::None;
         if (arg.print().eq(target.print().str())) return Option<String>::None;
+        if(arg.is_pointer()){
+            if(target.is_pointer()){
+                let trg_elem = target.elem();
+                return MethodResolver::is_compatible(RType::new(*arg.elem()), trg_elem, typeParams);
+            }
+            return Option::new("target is not pointer".str());
+        }
         if (!arg.is_simple()) {
             let target_str = target.print();
             if (arg.print().eq(&target_str)) {

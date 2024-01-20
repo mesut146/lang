@@ -106,7 +106,9 @@ void compileTest() {
     compile("../tests/src/alias.x");
 
     //std tests
-    compile({"../tests/src/classTest.x", s1, s2, op});
+    //compile({"../tests/src/virt.x", s1, s2, op});
+    //compile({"../tests/src/virt2.x", s1, s2, op});
+    compile({"../tests/src/base.x", s1, s2, op});
     compile({"../tests/src/boxTest.x", s1, s2, op});
     compile({"../tests/src/listTest.x", s1, s2, op});
     compile({"../tests/src/strTest.x", s1, s2, op});

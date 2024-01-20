@@ -187,6 +187,11 @@ impl Parser{
         type_args = self.type_params();
         is_generic = true;
       }
+      if let Parent::Impl(info*)=(parent){
+        if(!info.type_params.empty()){
+          is_generic = true;
+        }
+      }
       self.consume(TokenType::LPAREN);
       let params = List<Param>::new();
       let selfp = Option<Param>::None;
@@ -257,7 +262,8 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      return Decl::Struct{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, fields: fields};
+      let path = self.unit.path.clone();
+      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives}, fields: fields};
     }
     
     func parse_field(self, semi: bool): FieldDecl{
@@ -290,7 +296,8 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      return Decl::Enum{.BaseDecl{line, &self.unit, type, false, is_generic, base, derives}, variants: variants};
+      let path = self.unit.path.clone();
+      return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives}, variants: variants};
     }
     
     func parse_variant(self): Variant{

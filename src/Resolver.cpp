@@ -621,9 +621,6 @@ std::string mangle2(Method &m, const Type &parent) {
         auto ty = Generator::make(p.type.value(), map);
         s += ty.print();
     }
-    if (m.name == "eq") {
-        print("eq " + s);
-    }
     return s;
 }
 
@@ -1136,7 +1133,7 @@ std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDe
             break;
         }
     }
-    throw std::runtime_error("unknown field: " + type.print() + "." + name);
+    return std::make_pair(nullptr, -1);
 }
 
 std::any Resolver::visitFieldAccess(FieldAccess *node) {
@@ -1148,14 +1145,12 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
     if (!decl) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
     }
-    try {
-        auto [sd, idx] = findField(node->name, decl, scp.type);
-        auto &fd = sd->fields[idx];
-        return std::any_cast<RType>(fd.accept(this));
-    } catch (std::runtime_error &e) {
+    auto [sd, idx] = findField(node->name, decl, scp.type);
+    if (idx == -1) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
-        throw std::runtime_error("");
     }
+    auto &fd = sd->fields[idx];
+    return std::any_cast<RType>(fd.accept(this));
 }
 
 std::any Resolver::visitLiteral(Literal *node) {
@@ -1585,7 +1580,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     auto sig = Signature::make(mc, this);
     if (mc->scope) {
         //rvalue
-        if(dynamic_cast<MethodCall*>(mc->scope.get()) && getType(mc->scope.get()).isPrim()){
+        if (dynamic_cast<MethodCall *>(mc->scope.get()) && getType(mc->scope.get()).isPrim()) {
             err(mc, "method scope is rvalue");
         }
         MethodResolver mr(this);

@@ -70,7 +70,7 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
     std::vector<llvm::Metadata *> elems;
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems));
     //auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
-    auto st = c->DBuilder->createStructType(scope, evar.name, file, ed->line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    auto st = c->DBuilder->createStructType(scope, name, file, ed->line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
     auto sl = c->mod->getDataLayout().getStructLayout(var_type);
     int i = 0;
     for (auto &fd : evar.fields) {
@@ -90,6 +90,9 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
     auto rt = resolv->resolve(*t);
     t = &rt.type;
     auto s = t->print();
+    if(s=="Decl"){
+        int xx = 55;
+    }
     auto it = di.types.find(s);
     if (it != di.types.end()) return it->second;
     if (t->isPointer()) {
@@ -105,7 +108,7 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
             }
             //make incomplete type to fill later
             auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
-            auto st_size = getSize2(t);
+            auto st_size = getSize2(elem);
             std::vector<llvm::Metadata *> elems;
             auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
             auto st = DBuilder->createStructType(di.cu, elem.print(), file, 0, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
@@ -162,6 +165,10 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         st = DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
     }
 
+    if(rt.targetDecl->base.has_value()){
+        elems.push_back(map_di(rt.targetDecl->base.value()));
+    }
+
     if (rt.targetDecl->isEnum()) {
         //todo order
         auto ed = (EnumDecl *) rt.targetDecl;
@@ -169,7 +176,7 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         /*auto tagm = DBuilder->createMemberType(nullptr, "tag", file, ed->line, ENUM_TAG_BITS, 0, 0, llvm::DINode::FlagZero, tag);
         elems.push_back(tagm);*/
         auto enum_size = getSize2(ed);
-        auto data_size = enum_size - ENUM_TAG_BITS;
+        //auto data_size = enum_size - ENUM_TAG_BITS;
         //auto chr = DBuilder->createBasicType("i8", 8, llvm::dwarf::DW_ATE_signed);
         /*llvm::DINodeArray sub;
         auto at = DBuilder->createArrayType(data_size, 0, chr, sub);*/

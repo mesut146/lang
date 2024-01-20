@@ -72,7 +72,8 @@ impl ImplInfo{
 
 struct BaseDecl{
   line: i32;
-  unit: Unit*;
+  //unit: Unit*;
+  path: String;
   type: Type;
   is_resolved: bool;
   is_generic: bool;

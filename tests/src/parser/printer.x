@@ -98,6 +98,10 @@ impl Debug for Decl{
     func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
         f.print("struct ");
         decl.type.debug(f);
+        if(decl.base.is_some()){
+          f.print(": ");
+          decl.base.get().debug(f);
+        }
         f.print("{\n");
         for(let i = 0;i < fields.len();++i){
           f.print("  ");

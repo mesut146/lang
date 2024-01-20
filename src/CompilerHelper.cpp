@@ -2,7 +2,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
-bool USE_CACHE = false;
+bool USE_CACHE = true;
 
 void Cache::read_cache() {
     auto path = fs::path("cache.txt");

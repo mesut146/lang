@@ -72,10 +72,10 @@ public:
     std::shared_ptr<Unit> unit;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
-    llvm::Function *staticf = nullptr;
+    std::optional<std::string> main_file;
+    bool single_mode = true;
     std::map<std::string, llvm::Value *> globals;
-    static std::vector<llvm::Function *> global_protos;
-    static std::map<std::string, std::string> cache;
+    static std::vector<std::string> global_protos;
     Cache cache2;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;

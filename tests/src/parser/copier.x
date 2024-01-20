@@ -31,10 +31,14 @@ impl AstCopier{
         return Box::new(self.visit(box.get()));
     }
 
+    func visit<E>(self, s: String*): String{
+        return s.clone();
+    }
+
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
         //todo base type depends on map too
-        let base = BaseDecl{line: node.line,unit: node.unit,type: type ,
+        let base = BaseDecl{line: node.line,path: node.path.clone(),type: type ,
             is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), derives: node.derives};
         if let Decl::Struct(fields*)=(node){
             let res = self.visit_list(fields);
@@ -146,6 +150,16 @@ impl AstCopier{
         if let Expr::Unary(op*, e*)=(node){
             return Expr::Unary{op.clone(), self.visit_box(e)};
         }
+        if let Expr::Access(scope*, name*)=(node){
+            return Expr::Access{self.visit_box(scope), name.clone()};
+        }
+        if let Expr::Obj(type*, args*)=(node){
+            return Expr::Obj{self.visit(type), self.visit_list(args)};
+        }
         panic("Expr %s", node.print().cstr());
+    }
+
+    func visit(self, node: Entry*): Entry{
+        return Entry{name: self.visit_opt(&node.name), expr: self.visit(&node.expr), isBase: node.isBase};
     }
 }
