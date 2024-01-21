@@ -331,8 +331,13 @@ impl MethodResolver{
         }
         if (mc.scope.is_some()) {
             //todo trait
+            //is static & have type args
             let scope = &sig.scope.get().type;
             let scope_args = scope.get_args();
+            if let Expr::Type(scp*)=(mc.scope.get().get()){
+              scope = scp;
+              scope_args=scp.get_args();
+            }
             for (let i = 0; i < scope_args.size(); ++i) {
                 typeMap.add(*type_params.get_ptr(i).name(), Option::new(scope_args.get(i)));
             }
@@ -528,7 +533,7 @@ impl MethodResolver{
         if (ta2.empty()) {
             let nm = prm.name();
             if (typeMap.has(nm)) {//is_tp
-                let it = typeMap.get_p(prm.name()).unwrap();
+                let it = typeMap.get_p(nm).unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(*prm.name(), Option::new(*arg));
                     print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
@@ -539,8 +544,8 @@ impl MethodResolver{
                 } else {//already set
                     let m = MethodResolver::is_compatible(RType::new(*arg), it.get());
                     if (m.is_some()) {
-                        print("%s", m.get().cstr());
-                        panic("type infer failed: %s vs %s", it.get().print().cstr(), arg.print().cstr());
+                        print("%s\n", m.get().cstr());
+                        panic("type infer failed: %s vs %s\n", it.get().print().cstr(), arg.print().cstr());
                     }
                 }
             }

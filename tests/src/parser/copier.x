@@ -30,8 +30,12 @@ impl AstCopier{
     func visit_box<E>(self, box: Box<E>*): Box<E>{
         return Box::new(self.visit(box.get()));
     }
+    
+    func visit<E>(self, box: Box<E>*): Box<E>{
+        return Box::new(self.visit(box.get()));
+    }
 
-    func visit<E>(self, s: String*): String{
+    func visit(self, s: String*): String{
         return s.clone();
     }
 
@@ -126,6 +130,10 @@ impl AstCopier{
     func visit(self, node: Block*): Block{
         return Block{list: self.visit_list(&node.list)};
     }
+    
+    func visit(self, node: Fragment*): Fragment{
+      return Fragment{node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
+    }
 
     func visit(self, node: Stmt*): Stmt{
         if let Stmt::Block(b*)=(node){
@@ -137,12 +145,18 @@ impl AstCopier{
         if let Stmt::Ret(opt*)=(node){
             return Stmt::Ret{self.visit_opt(opt)};
         }
+        if let Stmt::Var(ve*)=(node){
+          return Stmt::Var{VarExpr{self.visit_list(&ve.list)}};
+        }
         panic("stmt %s", node.print().cstr());
     }
 
     func visit(self, node: Expr*): Expr{
         if let Expr::Name(name*)=(node){
             return Expr::Name{name.clone()};
+        }
+        if let Expr::Lit(kind*, val*, sf*)=(node){
+            return Expr::Lit{*kind, val.clone(), self.visit_opt(sf)};
         }
         if let Expr::Infix(op*, l*, r*)=(node){
             return Expr::Infix{op.clone(), self.visit_box(l), self.visit_box(r)};
@@ -156,10 +170,18 @@ impl AstCopier{
         if let Expr::Obj(type*, args*)=(node){
             return Expr::Obj{self.visit(type), self.visit_list(args)};
         }
+        if let Expr::Call(mc*)=(node){
+          return Expr::Call{self.visit(mc)};
+        }
         panic("Expr %s", node.print().cstr());
     }
 
     func visit(self, node: Entry*): Entry{
         return Entry{name: self.visit_opt(&node.name), expr: self.visit(&node.expr), isBase: node.isBase};
+    }
+    
+    func visit(self, node: Call*): Call{
+      return Call{scope: self.visit_opt(&node.scope), name: node.name.clone(),
+        tp: self.visit_list(&node.tp), args: self.visit_list(&node.args), is_static: node.is_static};
     }
 }
