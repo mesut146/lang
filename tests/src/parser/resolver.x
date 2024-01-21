@@ -64,6 +64,28 @@ enum TypeResult{
   None
 }
 
+enum TypeKind{
+  Array,
+  Slice,
+  Pointer,
+  Other
+}
+
+impl TypeKind{
+  func new(type: Type*): TypeKind{
+    if(type.is_array()){
+      return TypeKind::Array;
+    }
+    if(type.is_slice()){
+      return TypeKind::Slice;
+    }
+    if(type.is_pointer()){
+      return TypeKind::Pointer;
+    }
+    return TypeKind::Other;
+  }
+}
+
 impl Debug for Resolver{
   func debug(self, f: Fmt*){
     panic("Resolver::debug");
@@ -231,7 +253,6 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
-    //print("%s\n%s\n",unit.path.cstr(), Fmt::str(unit).cstr());
     let map = Map<String, RType>::new();
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
@@ -243,15 +264,12 @@ impl Resolver{
   func newScope(self){
     let sc = Scope::new();
     self.scopes.add(sc);
-    print("newScope %d\n", self.scopes.len());
   }
   func dropScope(self){
     //self.scopes.remove(self.scopes.len() - 1);
     --self.scopes.count;
-    print("dropped %d\n", self.scopes.len());
   }
   func addScope(self, name: String, type: Type, prm: bool){
-    print("addScope %s: %s\n", name.cstr(), type.print().cstr());
     let scope = self.scopes.last();
     scope.list.add(VarHolder::new(name, type, prm));
   }
@@ -308,7 +326,7 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       self.visit(self.unit.items.get_ptr(i));
     }
-    self.dump();
+    //self.dump();
   }
 
   func dump(self){
@@ -779,7 +797,7 @@ impl Resolver{
   func visit_obj(self, node: Expr*, type0: Type*, args: List<Entry>*): RType{
     let hasNamed = false;
     let hasNonNamed = false;
-    let base=Option<Expr*>::new();
+    let base = Option<Expr*>::new();
     for (let i=0;i<args.len();++i) {
         let e = args.get_ptr(i);
         if (e.isBase) {
@@ -809,11 +827,11 @@ impl Resolver{
             self.err(node, msg.str());
         }
     }
-    let fields0=Option<List<FieldDecl>*>::new();
+    let fields0 = Option<List<FieldDecl>*>::new();
     let type = Type::new("");
     
     if let Decl::Enum(variants*)=(decl){
-        let idx = findVariant(decl, type.name());
+        let idx = findVariant(decl, type0.name());
         let variant = variants.get_ptr(idx);
         fields0 = Option::new(&variant.fields);
         type = Type::new(decl.type, variant.name.clone());
@@ -822,14 +840,14 @@ impl Resolver{
         type = decl.type;
         if (decl.is_generic) {
             //infer
-            panic("generic");
-            /*let inferred = inferStruct(node, hasNamed, td->type.typeArgs, f, &decl.type);
-            let gen_decl = generateDecl(inferred, td);
-            td = dynamic_cast<StructDecl *>(gen_decl);
-            addUsed(gen_decl);
+            let inferred = self.inferStruct(node, &decl.type, hasNamed, f, args);
+            let map = get_type_map(&inferred, decl);
+            let copier = AstCopier::new(&map);
+            let gen_decl = copier.visit(decl);
             res = self.visit(&gen_decl.type);
-            fields = &td->fields;
-            */
+            fields0 = Option::new(gen_decl.get_fields());
+            self.addUsed(&gen_decl);
+            
         }
     }
     let fields=fields0.unwrap();
@@ -868,6 +886,36 @@ impl Resolver{
         }
     }
     return res;
+  }
+
+  func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>* ,args: List<Entry>*): Type{
+    let inferMap = Map<String, Option<Type>>::new();
+    let typeArgs = type.get_args();
+    for (let i=0;i<typeArgs.len();++i) {
+        let ta = typeArgs.get_ptr(i);
+        inferMap.add(ta.name().clone(), Option<Type>::None);
+    }
+    for (let i = 0; i < args.len(); ++i) {
+        let e = args.get_ptr(i);
+        let prm_idx = 0;
+        if (hasNamed) {
+            prm_idx = fieldIndex(fields, e.name.get().str(), type);
+        } else {
+            prm_idx = i;
+        }
+        let arg_type = self.visit(&e.expr);
+        let target_type = &fields.get_ptr(i).type;
+        MethodResolver::infer(&arg_type.type, target_type, &inferMap);
+    }
+    let res = Simple::new(type.name().clone());
+    for (let i = 0;i < inferMap.len();++i) {
+        let p = inferMap.get_idx(i).unwrap(); 
+        if (p.b.is_none()) {
+            self.err(node, Fmt::format("can't infer type parameter: {}", p.a.str()).str());
+        }
+        res.args.add(p.b.unwrap());
+    }
+    return res.into();
   }
   
   func visit_unary(self, node: Expr*, op: String*, e: Expr*): RType{
@@ -945,6 +993,14 @@ impl Resolver{
     inner.type = *inner.type.unwrap_ptr();
     return inner;
   }
+
+  func is_special(self, mc: Call*, name: str, kind: TypeKind): bool{
+    if (mc.scope.is_none() || !mc.name.eq(name) || !mc.args.empty()) {
+      return false;
+    }
+    let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+    return TypeKind::new(scope) is kind;
+  }
   
   func is_slice_get_ptr(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
@@ -960,6 +1016,7 @@ impl Resolver{
         let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_slice();
   }
+  //x.ptr()
   func is_array_get_ptr(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
             return false;
@@ -967,6 +1024,7 @@ impl Resolver{
         let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_array();
    }
+   //x.len()
    func is_array_get_len(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
             return false;
@@ -984,8 +1042,26 @@ impl Resolver{
   
   func SLICE_LEN_BITS(): i32{ return 64; }
   
+  func is_ptr_get(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("ptr") && mc.name.eq("get");
+}
 
   func visit(self, node: Expr*, call: Call*): RType{
+    if(is_ptr_get(call)){
+      if (call.args.len() != 2) {
+        self.err(node, "ptr access must have 2 args");
+      }
+      let arg = self.getType(call.args.get_ptr(0));
+      if (!arg.is_pointer()) {
+          self.err(node, "ptr arg is not ptr");
+      }
+      let idx = self.getType(call.args.get_ptr(1)).print();
+      if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
+          return self.visit(&arg);
+      } else {
+          self.err(node, "ptr access index is not integer");
+      }
+    }
     if (self.is_slice_get_ptr(call)) {
         let elem = self.getType(call.scope.get().get()).elem();
         return RType::new(elem.toPtr());
@@ -994,6 +1070,14 @@ impl Resolver{
         self.visit(call.scope.get().get());
         let type = as_type(SLICE_LEN_BITS());
         return RType::new(type);
+    }
+    if(self.is_array_get_len(call)){
+      self.visit(call.scope.get().get());
+      return RType::new("i64");
+    }
+    if(self.is_array_get_ptr(call)){
+      let arr_type = self.getType(call.scope.get().get()).unwrap_ptr();
+      return RType::new(arr_type.elem().toPtr());
     }
     let sig = Signature::new(call, self);
     if(call.scope.is_some()){
@@ -1124,6 +1208,23 @@ impl Resolver{
     self.err(node, "invalid as expr");
     panic("");
   }
+
+  func visit_is(self, node: Expr*, lhs: Expr*, rhs: Expr*): RType{
+    let rt = self.visit(lhs);
+    let decl1 = &rt.targetDecl;
+    if (decl1.is_none() || !(decl1.unwrap() is Decl::Enum)) {
+        self.err(node, Fmt::format("lhs of is expr is not enum: {}",rt.type.print().str()).str());
+    }
+    let rt2 = self.visit(rhs);
+    let decl2 = &rt2.targetDecl;
+    if (!decl1.unwrap().type.print().eq(decl2.unwrap().type.print().str())) {
+        self.err(node, Fmt::format("rhs is not same type with lhs {}", decl2.unwrap().type.print().str()).str());
+    }
+    if let Expr::Type(ty*) = (rhs){
+        findVariant(decl1.unwrap(), ty.name());
+    }
+    return RType::new("bool");
+  }
   
   func visit(self, node: Expr*): RType{
     if let Expr::Lit(kind, value, suffix*)=(node){
@@ -1183,6 +1284,8 @@ impl Resolver{
       return self.visit_obj(node, type, args);
     }else if let Expr::As(lhs*, type*) = (node){
       return self.visit_as(node, lhs.get(), type);
+    }else if let Expr::Is(lhs*, rhs*) = (node){
+      return self.visit_is(node, lhs.get(), rhs.get());
     }
     panic("visit expr '%s'", node.print().cstr());
   }
@@ -1229,7 +1332,6 @@ impl Resolver{
       self.visit(ve);
       return;
     }else if let Stmt::Assert(e*) = (node){
-      print("%s\n", e.print().cstr());
       if(!self.is_condition(e)){
         panic("assert expr is not bool: %s", e.print().cstr());
       }

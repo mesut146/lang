@@ -16,6 +16,18 @@ func replace_self(typ: Type*, m: Method*): Type{
     panic("replace_self not impl method");
 }
 
+func get_type_map(type: Type*, decl: Decl*): Map<String, Type>{
+    let res = Map<String, Type>::new();
+    let targs = type.get_args();
+    let type_params = decl.type.get_args();
+    for(let i = 0;i < type_params.len();++i) {
+        let ta = targs.get_ptr(i);
+        let tp = type_params.get_ptr(i);
+        res.add(tp.print(), *ta);
+    } 
+    return res;
+}
+
 func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     if (type.is_slice() || type.is_array() || type.is_pointer()) {
         let elem = type.elem();

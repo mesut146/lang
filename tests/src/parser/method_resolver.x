@@ -19,7 +19,11 @@ enum SigResult{
     Err(s: String),
     Exact,
     Compatible
-  }
+}
+
+struct MethodResolver{
+    r: Resolver*;
+}
 
 func is_static(mc: Call*): bool{
     return mc.scope.get().get() is Expr::Type;
@@ -40,7 +44,7 @@ impl Signature{
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
                 let trg = scp.targetDecl.unwrap();
-                print("trg=%s", Fmt::str(trg).cstr());
+                //print("trg=%s", Fmt::str(trg).cstr());
                 let bd = trg as BaseDecl*;
                 let p = &bd.path;
                 if(!trg.path.eq(&r.unit.path)){
@@ -148,9 +152,6 @@ impl Signature{
     }
 }
 
-struct MethodResolver{
-    r: Resolver*;
-}
 
 impl MethodResolver{
     func new(r: Resolver*): MethodResolver{
@@ -197,9 +198,9 @@ impl MethodResolver{
     }
 
     func collect_static(self, sig: Signature*, list: List<Signature>*){
-      let name=&sig.name;
-      for (let i=0;i<self.r.unit.items.len();++i) {
-        let item=self.r.unit.items.get_ptr(i);
+      let name = &sig.name;
+      for (let i = 0;i < self.r.unit.items.len();++i) {
+        let item = self.r.unit.items.get_ptr(i);
         if let Item::Method(m*)=(item){
             if (m.name.eq(name)) {
                 list.add(Signature::new(m));
@@ -222,7 +223,7 @@ impl MethodResolver{
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let imp = imp_list.get(i);
-            print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
+            //print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       
                 if(!m.name.eq(&sig.name)) continue;
@@ -246,9 +247,6 @@ impl MethodResolver{
                     *a = ac.visit(a);
                   }
                   list.add(sig2);
-                  print("sig2=%s\n", sig2.print().cstr());
-             
-                  //panic("scp args");
                 }
             }
         }
@@ -405,7 +403,6 @@ impl MethodResolver{
                 if(ty.print().eq(scope.print().str())){
                     return self.check_args(sig, sig2);
                 }
-                print("%s %s\n", scope.print().cstr(), ty.print().cstr());
 
                 if(!ty.is_simple()){
                    
@@ -536,10 +533,10 @@ impl MethodResolver{
                 let it = typeMap.get_p(nm).unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(*prm.name(), Option::new(*arg));
-                    print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
+                    //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
                     for(let i=0;i<typeMap.size();++i){
                         let p=typeMap.get_idx(i).unwrap();
-                        print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
+                        //print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
                     }
                 } else {//already set
                     let m = MethodResolver::is_compatible(RType::new(*arg), it.get());

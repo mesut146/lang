@@ -24,7 +24,7 @@ impl C{
 }
 
 
-fn main(){
+func main(){
   let a = A{5};
   assert a.foo().eq("A::foo");
   assert a.bar().eq("A::bar");

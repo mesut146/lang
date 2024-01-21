@@ -1,4 +1,5 @@
 import parser/ast
+import parser/printer
 import std/map
 
 struct AstCopier{
@@ -39,6 +40,10 @@ impl AstCopier{
         return s.clone();
     }
 
+    func visit(self, val: i32*): i32{
+        return *val;
+    }
+
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
         //todo base type depends on map too
@@ -47,14 +52,20 @@ impl AstCopier{
         if let Decl::Struct(fields*)=(node){
             let res = self.visit_list(fields);
             return Decl::Struct{.base, res};
-        }else{
+        }else if let Decl::Enum(variants*)=(node){
             //enum
+            let res = self.visit_list(variants);
+            return Decl::Enum{.base, res};
         }
-        panic("visit decl");
+        panic("visit decl %s*n", Fmt::str(node).cstr());
     }
 
     func visit(self, node: FieldDecl*): FieldDecl{
         return FieldDecl{name: node.name.clone(), type: self.visit(&node.type)};
+    }
+
+    func visit(self, node: Variant*): Variant{
+        return Variant{name: node.name.clone(), fields: self.visit_list(&node.fields)};
     }
 
     func visit(self, type: Type*): Type{
@@ -135,9 +146,20 @@ impl AstCopier{
       return Fragment{node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
     }
 
+    func visit(self, node: ArgBind*): ArgBind{
+        return ArgBind{node.name.clone(), node.is_ptr};
+    }
+
+    func visit(self, node: VarExpr*): VarExpr{
+        return VarExpr{list: self.visit_list(&node.list)};
+    }
+
     func visit(self, node: Stmt*): Stmt{
         if let Stmt::Block(b*)=(node){
             return Stmt::Block{self.visit(b)};
+        }
+        if let Stmt::Var(ve*)=(node){
+            return Stmt::Var{self.visit(ve)};
         }
         if let Stmt::Expr(e*)=(node){
             return Stmt::Expr{self.visit(e)};
@@ -145,24 +167,51 @@ impl AstCopier{
         if let Stmt::Ret(opt*)=(node){
             return Stmt::Ret{self.visit_opt(opt)};
         }
-        if let Stmt::Var(ve*)=(node){
-          return Stmt::Var{VarExpr{self.visit_list(&ve.list)}};
+        if let Stmt::While(e*, body*)=(node){
+            return Stmt::While{e: self.visit(e), b: self.visit(body)};
+        }
+        if let Stmt::If(is*)=(node){
+            return Stmt::If{IfStmt{e: self.visit(&is.e), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+        }
+        if let Stmt::IfLet(is*)=(node){
+            return Stmt::IfLet{IfLet{ty: self.visit(&is.ty), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+        }
+        if let Stmt::For(fs*)=(node){
+            return Stmt::For{ForStmt{v: self.visit_opt(&fs.v), e: self.visit_opt(&fs.e), u: self.visit_list(&fs.u), body: self.visit_box(&fs.body)}};
+        }
+        if let Stmt::Continue=(node){
+            return Stmt::Continue;
+        }
+        if let Stmt::Break=(node){
+            return Stmt::Break;
+        }
+        if let Stmt::Assert(e*)=(node){
+            return Stmt::Assert{self.visit(e)};
         }
         panic("stmt %s", node.print().cstr());
     }
 
     func visit(self, node: Expr*): Expr{
-        if let Expr::Name(name*)=(node){
-            return Expr::Name{name.clone()};
-        }
         if let Expr::Lit(kind*, val*, sf*)=(node){
             return Expr::Lit{*kind, val.clone(), self.visit_opt(sf)};
         }
-        if let Expr::Infix(op*, l*, r*)=(node){
-            return Expr::Infix{op.clone(), self.visit_box(l), self.visit_box(r)};
+        if let Expr::Name(name*)=(node){
+            return Expr::Name{name.clone()};
+        }
+        if let Expr::Call(mc*)=(node){
+            return Expr::Call{self.visit(mc)};
+        }
+        if let Expr::Par(e*)=(node){
+            return Expr::Par{self.visit_box(e)};
+        }
+        if let Expr::Type(type*)=(node){
+            return Expr::Type{self.visit(type)};
         }
         if let Expr::Unary(op*, e*)=(node){
             return Expr::Unary{op.clone(), self.visit_box(e)};
+        }
+        if let Expr::Infix(op*, l*, r*)=(node){
+            return Expr::Infix{op.clone(), self.visit_box(l), self.visit_box(r)};
         }
         if let Expr::Access(scope*, name*)=(node){
             return Expr::Access{self.visit_box(scope), name.clone()};
@@ -170,8 +219,17 @@ impl AstCopier{
         if let Expr::Obj(type*, args*)=(node){
             return Expr::Obj{self.visit(type), self.visit_list(args)};
         }
-        if let Expr::Call(mc*)=(node){
-          return Expr::Call{self.visit(mc)};
+        if let Expr::As(e*, type*)=(node){
+            return Expr::As{self.visit_box(e), self.visit(type)};
+        }
+        if let Expr::Is(e*, rhs*)=(node){
+            return Expr::Is{self.visit_box(e), self.visit_box(rhs)};
+        }
+        if let Expr::Array(list*, size*)=(node){
+            return Expr::Array{self.visit_list(list), self.visit_opt(size)};
+        }
+        if let Expr::ArrAccess(aa*)=(node){
+            return Expr::ArrAccess{ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_opt(&aa.idx2)}};
         }
         panic("Expr %s", node.print().cstr());
     }

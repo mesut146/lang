@@ -316,26 +316,28 @@ impl Parser{
     }
     
     func parse_type(self): Type{
+      let res = Type::new("");
       if(self.is(TokenType::LBRACKET)){
         self.pop();
         let type = self.parse_type();
         if(self.is(TokenType::SEMI)){
           self.pop();
-          let s = self.consume(TokenType::INTEGER_LIT);
+          let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          return Type::Array{bx,  i32::parse(&s.value)};
+          res = Type::Array{bx,  i32::parse(&size.value)};
         }else{
           self.consume(TokenType::RBRACKET);
-          return Type::Slice{Box::new(type)};
+          res = Type::Slice{Box::new(type)};
         }
-      }
-      let res = self.gen_part();
-      while(self.is(TokenType::COLON2)){
-        self.pop();
-        let part = self.gen_part();
-        if let Type::Simple(smp*) = (part){
-          res = Type::Simple{Simple{Ptr::new(res), smp.name, smp.args}};
+      }else{
+        res = self.gen_part();
+        while(self.is(TokenType::COLON2)){
+          self.pop();
+          let part = self.gen_part();
+          if let Type::Simple(smp*) = (part){
+            res = Type::Simple{Simple{Ptr::new(res), smp.name, smp.args}};
+          }
         }
       }
       while (self.is(TokenType::STAR)) {
