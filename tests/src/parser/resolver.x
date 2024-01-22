@@ -212,7 +212,7 @@ impl RType{
     return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder*>::None};
   }
   func clone(self): RType{
-    let res = RType::new(self.type);
+    let res = RType::new(self.type.clone());
     res.trait = self.trait;
     res.method = self.method;
     res.value = self.value;
@@ -246,6 +246,10 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
       if (s1.eq(&s2)) return true;
   }
   return false;
+}
+
+func dumpp(r: Resolver*){
+  r.dump();
 }
 
 impl Resolver{
@@ -347,10 +351,14 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
+    //print("addType %s->%s\n", name.cstr(), res.type.print().cstr());
+    if(name.eq("Option") && res.type.print().eq("Option<i32*>")){
+      panic("");
+    }
     self.typeMap.add(name, res);
   }
   func addType(self, name: String*, res: RType){
-    self.typeMap.add(*name, res);
+    self.addType(name.clone(), res);
   }
   
   func init(self){
@@ -389,6 +397,10 @@ impl Resolver{
     self.err(str.str());
   }
   func err(self, node: Expr*, msg: str){
+    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
+    self.err(str.str());
+  }
+  func err(self, node: Stmt*, msg: str){
     let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
     self.err(str.str());
   }
@@ -624,6 +636,9 @@ impl Resolver{
       self.addType(str, res);
       return res;
     }
+    if(str.eq("Option<i32*>")){
+      let x = 11;
+    }
     let target0 = Option<Decl*>::None;
     let targs = node.get_args();
     if (!targs.empty()) {
@@ -643,8 +658,8 @@ impl Resolver{
       let imp_result = self.find_imports(node.as_simple(), &str);
       if let TypeResult::Decl(d) = (imp_result){
         target0 = Option::new(d);
-      }else if let TypeResult::Res(rt) = (imp_result){
-        return rt;
+      }else if let TypeResult::Res(rt*) = (imp_result){
+        return rt.clone();
       }else{
         let expr = Expr::Type{*node};
         self.err(&expr, "couldn't find type");
@@ -652,7 +667,7 @@ impl Resolver{
     }
     let target = target0.unwrap();
     //generic
-    if (node.get_args().empty()) {
+    if (node.get_args().empty() || !target.is_generic) {
         //inferred later
         let res = RType::new(target.type);
         res.targetDecl = Option::new(target);
@@ -663,6 +678,10 @@ impl Resolver{
       let expr = Expr::Type{*node};
       self.err(&expr, "type arguments size not matched");
     }
+    /*if(target.is_generic){
+
+    }*/
+    print("target %s\n", Fmt::str(target).cstr());
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);//todo owner who?
@@ -698,21 +717,20 @@ impl Resolver{
       let resolver = self.ctx.get_resolver(is);
       resolver.init();
       //try full type
-      if (type.args.empty()) {
-          //non generic type
-          let cached = resolver.typeMap.get_ptr(str);
-          if (cached.is_some()) {
-              let res = *cached.unwrap();
-              self.addType(str.clone(), res);
-              if (res.targetDecl.is_some()) {
-                  if (!res.targetDecl.unwrap().is_generic) {
-                      self.addUsed(res.targetDecl.unwrap());
-                  }
+      let cached = resolver.typeMap.get_ptr(str);
+      if (cached.is_some()) {
+          let res = cached.unwrap().clone();
+          //let res = *cached.unwrap();
+          self.addType(str.clone(), res);
+          if (res.targetDecl.is_some()) {
+              if (!res.targetDecl.unwrap().is_generic) {
+                  self.addUsed(res.targetDecl.unwrap());
               }
-              //todo trait
-              return TypeResult::Res{res};
           }
-      } else {
+          //todo trait
+          return TypeResult::Res{res};
+      }
+      if (!type.args.empty()) {
           //generic type
           //try root type
           let cached = resolver.typeMap.get_ptr(&type.name);
@@ -947,17 +965,34 @@ impl Resolver{
     return res;
   }
 
+  func is_assign(s: str): bool{
+    return s.eq("=") || s.eq("+=") || s.eq("-=") || s.eq("*=") || s.eq("/=");
+  }
+
+  func visit_assign(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
+    let t1 = self.visit(lhs);
+    let t2 = self.visit(rhs);
+    if (MethodResolver::is_compatible(t2, &t1.type).is_some()) {
+      let msg = Fmt::format("cannot assign %s=%s", t1.type.print().str(), t2.type.print().str());
+      self.err(node, msg.str());
+    }
+    return t1;
+  }
+
   func visit_infix(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
+    if(is_assign(op.str())){
+      return self.visit_assign(node, op, lhs, rhs);
+    }
     let lt = self.visit(lhs);
     let rt = self.visit(rhs);
     if(lt.type.is_void() || rt.type.is_void()){
-      self.err("operation on void type");
+      self.err(node, "operation on void type");
     }
     if(lt.type.is_str() || rt.type.is_str()){
-      self.err("string op not supported yet");
+      self.err(node, "string op not supported yet");
     }
     if(!(lt.type.is_prim() && rt.type.is_prim())){
-      panic("infix on non prim type: %s", node.print().cstr());
+      self.err(node, "infix on non prim type");
     }
     if(is_comp(op)){
       return RType::new("bool");
@@ -1357,6 +1392,9 @@ impl Resolver{
     }else if let Stmt::If(is*) = (node){
       self.visit(node, is);
       return;
+    }else if let Stmt::IfLet(is*) = (node){
+      self.visit(node, is);
+      return;
     }
     panic("visit stmt %s", node.print().cstr());
   }
@@ -1366,6 +1404,48 @@ impl Resolver{
         self.err(&is.e, "if condition is not a boolean");
     }
     self.newScope();
+    self.visit(is.then.get());
+    self.dropScope();
+    if (is.els.is_some()) {
+        self.newScope();
+        self.visit(is.els.get().get());
+        self.dropScope();
+    }
+  }
+
+  func visit(self, node: Stmt*, is: IfLet*){
+    //check lhs
+    let rt = self.visit(&is.ty);
+    if (rt.targetDecl.is_none() || !rt.targetDecl.unwrap().is_enum()) {
+        let msg = Fmt::format("if let type is not enum: {}", is.ty.print().str());
+        self.err(node, msg.str());
+    }
+    //check rhs
+    let rhs = self.visit(&is.rhs);
+    if (rhs.targetDecl.is_none() || !rhs.targetDecl.unwrap().is_enum()) {
+      let msg = Fmt::format("if let rhs is not enum: {}", rhs.type.print().str());
+      self.err(node, msg.str());
+    }
+    //match variant
+    let decl = rt.targetDecl.unwrap();
+    let index = Resolver::findVariant(decl, is.ty.name());
+    let variant = decl.get_variants().get_ptr(index);
+    if (variant.fields.len() != is.args.len()) {
+        let msg = Fmt::format("if let args size mismatch got:{} expected: {}", i64::print(is.args.len()).str(), i64::print(variant.fields.len()).str());
+        self.err(node, msg.str());
+    }
+    //init arg variables
+    let i = 0;
+    self.newScope();
+    for (let i=0;i<is.args.len();++i) {
+        let arg = is.args.get_ptr(i);
+        let field = variant.fields.get_ptr(i);
+        if (arg.is_ptr) {
+            self.addScope(arg.name.clone(), field.type.toPtr(), false);
+        } else {
+            self.addScope(arg.name.clone(), field.type, false);
+        }
+    }
     self.visit(is.then.get());
     self.dropScope();
     if (is.els.is_some()) {

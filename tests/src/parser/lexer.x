@@ -97,6 +97,8 @@ impl Lexer{
     ops.add(".", TokenType::DOT);
     ops.add("<", TokenType::LT);
     ops.add(">", TokenType::GT);
+    ops.add("<<", TokenType::LTLT);
+    //ops.add(">>", TokenType::GTGT);
     ops.add("=", TokenType::EQ);
     ops.add("+=", TokenType::PLUSEQ);
     ops.add("-=", TokenType::MINUSEQ);
@@ -122,7 +124,6 @@ impl Lexer{
     ops.add("#", TokenType::HASH);
     ops.add("++", TokenType::PLUSPLUS);
     ops.add("..", TokenType::DOTDOT);
-    ops.add("<<", TokenType::LTLT);
     return ops;
   }
   

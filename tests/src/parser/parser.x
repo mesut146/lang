@@ -105,6 +105,10 @@ impl Parser{
           let rhs = self.parse_type();
           self.consume(TokenType::SEMI);
           self.unit.items.add(Item::Type{name: name, rhs: rhs});
+        }else if(self.is(TokenType::EXTERN)){
+          self.pop();
+          let list = self.parse_methods(Option<Type>::None, Parent::Extern);
+          self.unit.items.add(Item::Extern{methods: list});
         }else if(self.is(TokenType::STATIC)){
         	self.pop();
             let name = self.name();
@@ -817,7 +821,7 @@ impl Parser{
     }
     if(self.is(TokenType::IS)){
       self.pop();
-      let rhs = self.parse_expr();
+      let rhs = self.prim2();
       e = Expr::Is{Box::new(e), Box::new(rhs)};
     }
     return e;
@@ -828,6 +832,10 @@ impl Parser{
     let e = self.expr_level(prec + 1);
     while(Parser::get_prec(&self.peek().type) == prec){
       let op = self.pop().value;
+      if(op.eq(">") && self.is(TokenType::GT)){
+        self.pop();
+        op.append(">");
+      }
       let r = self.expr_level(prec + 1);
       e = Expr::Infix{op, Box::new(e), Box::new(r)};
     }

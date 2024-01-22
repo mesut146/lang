@@ -1,3 +1,5 @@
+import std/map
+import parser/copier
 import parser/printer
 
 func prim_size(s: str): Option<u32>{
@@ -50,7 +52,7 @@ enum Item{
   Impl(i: Impl),
   Trait(t: Trait),
   Type(name: String, rhs: Type),
-  Extern(arr: List<Method>)
+  Extern(methods: List<Method>)
 }
 
 struct Impl{
@@ -98,6 +100,9 @@ impl Decl{
       return fields;
     }
     panic("get_fields");
+  }
+  func is_enum(self): bool{
+    return self is Decl::Enum;
   }
 }
 
@@ -297,6 +302,12 @@ impl Type{
       return smp.scope.get();
     }
     panic("Type::scope");
+  }
+
+  func clone(self): Type{
+    let map = Map<String, Type>::new();
+    let copier = AstCopier::new(&map);
+    return copier.visit(self);
   }
 
 }

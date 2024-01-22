@@ -41,6 +41,7 @@ impl Signature{
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let scp = r.visit(mc.scope.get().get());
+            is_trait = scp.trait.is_some();
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
                 let trg = scp.targetDecl.unwrap();
@@ -64,7 +65,7 @@ impl Signature{
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get_ptr(i);
             let type = r.visit(arg).type;
-            if(i == 0 && mc.scope.is_some() && is_struct(&type)){
+            if(i == 0 && mc.scope.is_some() && is_trait && is_struct(&type)){
                 type = type.toPtr();
             }
             res.args.add(type);
@@ -254,7 +255,7 @@ impl MethodResolver{
           let ims = self.r.get_imports();
           for (let i=0;i<ims.len();++i) {
             let is = ims.get_ptr(i);
-            print("is=%s\n", "/".join(&is.list).cstr());
+            //print("is=%s\n", "/".join(&is.list).cstr());
             let resolver = self.r.ctx.get_resolver(is);
             resolver.init();
             let mr = MethodResolver::new(resolver);
@@ -266,6 +267,9 @@ impl MethodResolver{
     func handle(self, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
         print("mc=%s\n", mc.print().cstr());
+        if(mc.print().eq("s.eq(\"hello\")")){
+            print("%s\n", sig.print().cstr());
+        }
         let list = self.collect(sig);
         if(list.empty()){
             let e = Expr::Call{*sig.mc.unwrap()};
@@ -468,6 +472,9 @@ impl MethodResolver{
             return Option::new("target is not pointer".str());
         }
         if (!arg.is_simple()) {
+            if(target.is_simple()){
+                return Option::new("".str());
+            }
             let target_str = target.print();
             if (arg.print().eq(&target_str)) {
                 return Option<String>::None;
@@ -524,7 +531,15 @@ impl MethodResolver{
             if (!arg.is_pointer()) return;
             infer(arg.unwrap_ptr(), prm.unwrap_ptr(), typeMap);
             return;
-        }//todo
+        }
+        else if(arg.is_pointer()) {
+            if(typeMap.has(prm.name())){
+                typeMap.add(prm.name().clone(), Option::new(*arg));
+                return;
+            }
+            panic("cant infer ");
+        }
+        //todo
         let ta1 = arg.get_args();
         let ta2 = prm.get_args();
         if (ta2.empty()) {
@@ -534,10 +549,10 @@ impl MethodResolver{
                 if (it.is_none()) {//not set yet
                     typeMap.add(*prm.name(), Option::new(*arg));
                     //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
-                    for(let i=0;i<typeMap.size();++i){
-                        let p=typeMap.get_idx(i).unwrap();
+                    //for(let i=0;i<typeMap.size();++i){
+                        //let p=typeMap.get_idx(i).unwrap();
                         //print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
-                    }
+                    //}
                 } else {//already set
                     let m = MethodResolver::is_compatible(RType::new(*arg), it.get());
                     if (m.is_some()) {
@@ -608,7 +623,7 @@ func kind(type: Type*): i32{
     if(type is Type::Pointer) return 0;
     if(type is Type::Array) return 1;
     if(type is Type::Slice) return 2;
-    panic("");
+    panic("%s\n", type.print().cstr());
 }
 
 func get_type_params(m: Method*): List<Type>{

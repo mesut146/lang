@@ -25,7 +25,8 @@ func read_bytes(path: str): List<i8>{
 }
 
 func read_string(path: str): String{
-  return String::new(read_bytes(path));
+  let data = read_bytes(path);
+  return String::new(&data);
 }
 
 func write_bytes(data: [u8], path: str){

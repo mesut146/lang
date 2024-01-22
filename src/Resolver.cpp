@@ -1247,7 +1247,7 @@ std::any Resolver::visitAssertStmt(AssertStmt *node) {
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     auto rt = resolve(node->type);
     if (!rt.targetDecl->isEnum()) {
-        err(node, "type of if let is not enum: " + node->type.print());
+        err(node, "if let type is not enum: " + node->type.print());
     }
     auto rhs = resolve(node->rhs.get());
     if (!rhs.targetDecl->isEnum()) {

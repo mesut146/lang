@@ -34,9 +34,13 @@ impl String{
         return String::new(arr.slice());
     }
     
-    func new(arr: List<i8>): String{
+    func new(arr: List<i8>*): String{
         return String::new(arr.slice());
     }
+
+    func new(arr: List<i8>): String{
+      return String::new(arr.slice());
+  }
     
     func new(arr: [i8]): String{
         let ptr = arr.ptr();
