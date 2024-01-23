@@ -297,9 +297,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     }
     resolv = Resolver::getResolver(path, srcDir);
     unit = resolv->unit;
-    if (!single_mode && has_main(unit.get())) {
+    if (has_main(unit.get())) {
         main_file = path;
-        return outFile;
+        if (!single_mode) {//compile last
+            return outFile;
+        }
     }
     resolv->resolveAll();
 

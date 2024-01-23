@@ -55,6 +55,7 @@ struct Cache {
     void write_cache();
     bool need_compile(const fs::path &p);
     void update(const fs::path &p) {
+        if (!Config::use_cache) return;
         map[p.string()] = get_time(p);
     }
 

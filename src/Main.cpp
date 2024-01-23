@@ -6,6 +6,12 @@
 #include <filesystem>
 #include <iostream>
 
+
+bool Config::verbose = true;
+bool Config::rvo_ptr = false;
+bool Config::debug = true;
+bool Config::use_cache = true;
+
 void lex(std::string &path) {
     Lexer lexer(path);
 
@@ -160,18 +166,23 @@ int main(int argc, char **args) {
         } else if (arg == "c") {
             auto path = std::string(args[2]);
             Compiler c;
+            c.srcDir = "../tests/src";
             if (std::filesystem::is_directory(path)) {
-                c.srcDir = path;
-                auto file = path + "/" + std::string(args[3]);
+                //c.srcDir = path;
                 if (argc - 1 == 3) {
+                    auto file = path + "/" + std::string(args[3]);
                     c.init();
                     c.compile(file);
                 } else {
                     c.compileAll();
                 }
             } else {
+                Config::use_cache = false;
                 c.init();
                 c.compile(path);
+                if (c.main_file.has_value()) {
+                    c.link_run();
+                }
             }
         } else {
             std::cerr << "invalid cmd: " << arg << std::endl;

@@ -1,11 +1,11 @@
 struct A{
- a: i32;
- b: i64;
+  a: i32;
+  b: i64;
 }
 
 struct B{
- a: bool;
- b: i16;
+  a: bool;
+  b: i16;
 }
 
 func bool_test(){
@@ -15,7 +15,7 @@ func bool_test(){
 }
 
 impl A{
-  func myfunc(self){
+  func f1(self){
     let a = self.a + 1;
   }
 }
@@ -33,13 +33,7 @@ func test2(a: A){
 func main(){
  bool_test();
  let a = A{50, 10};
- let aa = a.a;
- let b = &a;
- let bb = b.b;
- let l = List<i32>::new();
- l.add(55);
-
- a.myfunc();
+ a.f1();
  test(&a);
  test2(a);
 }

@@ -8,9 +8,6 @@
 #include <memory>
 #include <unordered_set>
 
-bool Config::verbose = true;
-bool Config::rvo_ptr = false;
-bool Config::debug = true;
 
 bool isCondition(Expression *e, Resolver *r) {
     return r->getType(e).print() == "bool";

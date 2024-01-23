@@ -25,6 +25,7 @@ struct Config {
     static bool verbose;
     static bool rvo_ptr;
     static bool debug;
+    static bool use_cache;
 };
 
 class RType;
@@ -37,6 +38,10 @@ RType binCast(const std::string &s1, const std::string &s2);
 
 static bool is_ptr_get(MethodCall *mc) {
     return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "get";
+}
+
+static bool is_ptr_copy(MethodCall *mc) {
+    return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "copy";
 }
 
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {

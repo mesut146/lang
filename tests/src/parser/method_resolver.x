@@ -59,7 +59,7 @@ impl Signature{
                 res.scope = Option::new(scp);
             }
             if (!is_static(mc)) {
-                res.args.add(makeSelf(&res.scope.get().type));
+                res.args.add(makeSelf(&res.scope.get().type).clone());
             }
         }
         for(let i = 0;i < mc.args.len();++i){
@@ -68,7 +68,7 @@ impl Signature{
             if(i == 0 && mc.scope.is_some() && is_trait && is_struct(&type)){
                 type = type.toPtr();
             }
-            res.args.add(type);
+            res.args.add(type.clone());
         }
         return res;
     }
@@ -92,7 +92,7 @@ impl Signature{
             let args2 = type.get_args();
             for (let i = 0;i < args.len();++i) {
                 let tp = args.get_ptr(i);
-                map.add(tp.print(), *args2.get_ptr(i));
+                map.add(tp.print(), args2.get_ptr(i).clone());
             }
         }
         return map;
@@ -114,13 +114,13 @@ impl Signature{
             res.scope = Option::new(scp);
         }
         if(m.self.is_some()){
-            res.args.add(m.self.get().type);
+            res.args.add(m.self.get().type.clone());
         }
         for(let i = 0;i < m.params.len();++i){
             let prm = m.params.get_ptr(i);
             //if m is generic, replace <T> with real type
             let mapped = replace_type(&prm.type, map);
-            res.args.add(replace_self(&mapped, m));
+            res.args.add(replace_self(&mapped, m).clone());
         }
         return res;
     }
@@ -239,7 +239,7 @@ impl MethodResolver{
                   let typeMap = Map<String, Type>::new();
                   for(let k=0;k<m.type_args.len();++k){
                     let ta = m.type_args.get_ptr(k);
-                    typeMap.add(*ta.name(), *scp_args.get_ptr(k));
+                    typeMap.add(ta.name().clone(), scp_args.get_ptr(k).clone());
                   }
                   let sig2 = Signature::new(m, &map);
                   for (let i2=0;i2<sig2.args.len();++i2) {
@@ -329,7 +329,7 @@ impl MethodResolver{
         //mark all as non inferred
         for (let i = 0;i < type_params.size();++i) {
             let ta = type_params.get_ptr(i);
-            typeMap.add(*ta.name(), Option<Type>::None);
+            typeMap.add(ta.name().clone(), Option<Type>::None);
         }
         if (mc.scope.is_some()) {
             //todo trait
@@ -341,7 +341,7 @@ impl MethodResolver{
               scope_args=scp.get_args();
             }
             for (let i = 0; i < scope_args.size(); ++i) {
-                typeMap.add(*type_params.get_ptr(i).name(), Option::new(scope_args.get(i)));
+                typeMap.add(type_params.get_ptr(i).name().clone(), Option::new(scope_args.get_ptr(i).clone()));
             }
             if (!mc.tp.empty()) {
                 panic("todo");
@@ -350,7 +350,7 @@ impl MethodResolver{
             if (!mc.tp.empty()) {
                 //place specified type args in order
                 for (let i = 0; i < mc.tp.size(); ++i) {
-                    typeMap.add(*type_params.get_ptr(i).name(), Option::new(self.r.getType(mc.tp.get_ptr(i))));
+                    typeMap.add(type_params.get_ptr(i).name().clone(), Option::new(self.r.getType(mc.tp.get_ptr(i))));
                 }
             }
         }
@@ -368,7 +368,7 @@ impl MethodResolver{
                 let e = Expr::Call{*mc};
                 self.r.err(msg.str(), &e);
             }
-            tmap.add(pair.a, *pair.b.get());
+            tmap.add(pair.a, pair.b.get().clone());
         }
         let target2 = self.generateMethod(&tmap, target, sig);
         target = target2;
@@ -450,7 +450,7 @@ impl MethodResolver{
             if (!t1.print().eq(&t2_str)) {
                 all_exact = false;
             }
-            if (MethodResolver::is_compatible(RType::new(*t1), t2, &typeParams).is_some()) {
+            if (MethodResolver::is_compatible(RType::new(t1.clone()), t2, &typeParams).is_some()) {
                 return SigResult::Err{Fmt::format("arg type {} is not compatible with param {}", t1.print().str(), t2.print().str())};
             }
         }
@@ -467,7 +467,7 @@ impl MethodResolver{
         if(arg.is_pointer()){
             if(target.is_pointer()){
                 let trg_elem = target.elem();
-                return MethodResolver::is_compatible(RType::new(*arg.elem()), trg_elem, typeParams);
+                return MethodResolver::is_compatible(RType::new(arg.elem().clone()), trg_elem, typeParams);
             }
             return Option::new("target is not pointer".str());
         }
@@ -484,7 +484,7 @@ impl MethodResolver{
             }
             if (hasGeneric(target, typeParams)) {
                 let trg_elem = target.elem();
-                return MethodResolver::is_compatible(RType::new(*arg.elem()), trg_elem, typeParams);
+                return MethodResolver::is_compatible(RType::new(arg.elem().clone()), trg_elem, typeParams);
             }
             //return arg.print() + " is not compatible with " + target.print();
             return Option::new("".str());
@@ -534,7 +534,7 @@ impl MethodResolver{
         }
         else if(arg.is_pointer()) {
             if(typeMap.has(prm.name())){
-                typeMap.add(prm.name().clone(), Option::new(*arg));
+                typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                 return;
             }
             panic("cant infer ");
@@ -547,14 +547,14 @@ impl MethodResolver{
             if (typeMap.has(nm)) {//is_tp
                 let it = typeMap.get_p(nm).unwrap();
                 if (it.is_none()) {//not set yet
-                    typeMap.add(*prm.name(), Option::new(*arg));
+                    typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                     //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
                     //for(let i=0;i<typeMap.size();++i){
                         //let p=typeMap.get_idx(i).unwrap();
                         //print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
                     //}
                 } else {//already set
-                    let m = MethodResolver::is_compatible(RType::new(*arg), it.get());
+                    let m = MethodResolver::is_compatible(RType::new(arg.clone()), it.get());
                     if (m.is_some()) {
                         print("%s\n", m.get().cstr());
                         panic("type infer failed: %s vs %s\n", it.get().print().cstr(), arg.print().cstr());
@@ -592,7 +592,7 @@ impl MethodResolver{
             return res;
         }
         let imp: ImplInfo* = get_impl(m);
-        let st = *sig.scope.get().type.as_simple();
+        let st = *sig.scope.get().type.clone().as_simple();
         if(sig.scope.get().trait.is_some()){
             st = *sig.args.get(0).unwrap_ptr().as_simple();
         }
@@ -604,7 +604,7 @@ impl MethodResolver{
                 let ta = imp_args.get_ptr(i);
                 let ta_str = ta.print();
                 let resolved = map.get_ptr(&ta_str).unwrap();
-                st.args.add(*resolved);
+                st.args.add(resolved.clone());
             }
         }
         res.parent = Parent::Impl{ImplInfo::new(st.into())};

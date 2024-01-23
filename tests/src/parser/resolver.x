@@ -371,12 +371,12 @@ impl Resolver{
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type);
         res.targetDecl=Option::new(decl);
-        self.addType(*decl.type.name(), res);
+        self.addType(decl.type.name().clone(), res);
         //todo derive
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type);
         res.trait = Option::new(tr);
-        self.addType(*tr.type.name(), res);
+        self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
       }else if let Item::Type(name*, rhs*)=(it){
@@ -690,7 +690,7 @@ impl Resolver{
     let args = node.get_args();
     for (let i=0;i < args.len();++i) {
         let ta =  args.get_ptr(i);
-        smp.args.add(*ta);
+        smp.args.add(ta.clone());
     }
     let res = RType::new(smp.into());
     res.targetDecl = Option::new(decl);
@@ -704,7 +704,7 @@ impl Resolver{
     for(let i = 0;i < type.args.len();++i){
       let arg = type.args.get_ptr(i);
       let prm = params.get_ptr(i);
-      map.add(prm.name().clone(), *arg);
+      map.add(prm.name().clone(), arg.clone());
     }
     return map;
   }
@@ -1025,7 +1025,7 @@ impl Resolver{
     if(!inner.type.is_pointer()){
       self.err(Fmt::format("deref expr is not pointer: {} -> {}", node.print().str(), inner.type.print().str()));
     }
-    inner.type = *inner.type.unwrap_ptr();
+    inner.type = inner.type.unwrap_ptr().clone();
     return inner;
   }
 
@@ -1175,12 +1175,12 @@ impl Resolver{
         let inner = arr.unwrap_ptr();
         print("inner=%s\n", inner.print().cstr());
         if (inner.is_slice()) {
-            return RType::new(*inner);
+            return RType::new(inner.clone());
         } else if (inner.is_array()) {
-            return RType::new(Type::Slice{Box::new(*inner.elem())});
+            return RType::new(Type::Slice{Box::new(inner.elem().clone())});
         } else if (arr.is_pointer()) {
             //from raw pointer
-            return RType::new(Type::Slice{Box::new(*inner)});
+            return RType::new(Type::Slice{Box::new(inner.clone())});
         } else {
             print("arr=%s\n", arr.print().cstr());
             self.err(node, "cant make slice out of ");

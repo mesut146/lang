@@ -2,9 +2,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 
-bool USE_CACHE = true;
-
 void Cache::read_cache() {
+    if (!Config::use_cache) return;
     auto path = fs::path("cache.txt");
     if (!fs::exists(path)) {
         std::ofstream os(path.string());
@@ -21,6 +20,7 @@ void Cache::read_cache() {
 }
 
 void Cache::write_cache() {
+    if (!Config::use_cache) return;
     auto path = fs::path("cache.txt");
     std::ofstream os(path.string());
     for (auto &[f, t] : map) {
@@ -31,7 +31,7 @@ void Cache::write_cache() {
 }
 
 bool Cache::need_compile(const fs::path &p) {
-    if (!USE_CACHE) {
+    if (!Config::use_cache) {
         return true;
     }
     auto s = p.string();
