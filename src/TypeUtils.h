@@ -66,3 +66,9 @@ static uint64_t max_for(const Type &type) {
     }
     return (1ULL << (bits - 1)) - 1;
 }
+
+static Type getType(int bits) {
+    if (bits == 32) return Type("i32");
+    if (bits == 64) return Type("i64");
+    throw std::runtime_error("getType");
+}

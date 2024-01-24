@@ -41,9 +41,8 @@ struct Layout {
 
 struct DebugInfo {
     llvm::DICompileUnit *cu;
-    llvm::DIType *type;
     llvm::DIFile *file;
-    llvm::DIScope *sp = nullptr;
+    llvm::DISubprogram *sp = nullptr;
     std::unordered_map<std::string, llvm::DIType *> types;
     std::unordered_map<std::string, llvm::DICompositeType *> incomplete_types;
 };
@@ -246,6 +245,7 @@ public:
     }
 
 
+    llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     llvm::DIType *map_di0(const Type *t);
     llvm::DIType *map_di(const Type *t) {
         auto str = t->print();
@@ -256,7 +256,7 @@ public:
         di.types.insert({str, res});
         return res;
     }
-    llvm::DIType *map_di(const Type &t) { return map_di(&t); }
+    void init_dbg(const std::string &path);
     void dbg_prm(Param &p, const Type &type, int idx);
     void dbg_var(const std::string &name, int line, int pos, const Type &type);
     void dbg_var(const Fragment &f, const Type &type) {

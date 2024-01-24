@@ -11,7 +11,7 @@ enum E: A{
   E2
 }
 
-fn main(){
+func main(){
   let b = B{.A{a: 10}, b: 20};
   assert b.b == 20;
   assert b.a == 10;

@@ -212,11 +212,12 @@ impl RType{
     return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder*>::None};
   }
   func clone(self): RType{
-    let res = RType::new(self.type.clone());
-    res.trait = self.trait;
-    res.method = self.method;
-    res.value = self.value;
-    return res;
+    return RType{type: self.type.clone(),
+      trait: self.trait,
+      method: self.method,
+      value: self.value,
+      targetDecl: self.targetDecl,
+      vh: self.vh};
   }
 }
 
@@ -287,28 +288,36 @@ impl Resolver{
     return Fmt::format("{}/{}.x", self.ctx.root.str(), join(&is.list, "/").str());
   }
 
+  func get_relative_root(path: str, root: str): str{
+    //print("cur=" + path + ", root=" + root);
+    if (path.starts_with(root)) {
+        return path.substr(root.len() + 1);//+1 for slash
+    }
+    return path;
+}
+
   func get_imports(self): List<ImportStmt>{
     let imports = List<ImportStmt>::new();
+    let cur = get_relative_root(self.unit.path.str(), self.ctx.root.str());
+    for (let i = 0;i < self.ctx.prelude.len();++i) {
+      let pre = self.ctx.prelude.get_ptr(i);
+      //skip self unit being prelude
+      let path = Fmt::format("std/{}.x", pre.str());
+      if (cur.eq(path.str())) continue;
+      let is = ImportStmt::new();
+      is.list.add("std".str());
+      is.list.add(pre.clone());
+      imports.add(is);
+    }
     for (let i = 0;i < self.unit.imports.len();++i) {
         let is = self.unit.imports.get_ptr(i);
         //ignore prelude imports
-        let rest = join(&is.list, "/");
-        if (!contains(&self.ctx.prelude, &rest)) {
+        //let rest = join(&is.list, "/");
+        if (!has(&imports, is)) {
             imports.add(*is);
         }
     }
-    for (let i = 0;i < self.ctx.prelude.len();++i) {
-        let pre = self.ctx.prelude.get_ptr(i);
-        //skip self unit being prelude
-        let path = Fmt::format("{}/std/{}.x", self.ctx.root.str(), pre.str());
-        if (self.unit.path.eq(&path)) continue;
-        let is = ImportStmt::new();
-        is.list.add("std".str());
-        is.list.add(*pre);
-        imports.add(is);
-    }
     if (self.curMethod.is_some() && !self.curMethod.unwrap().type_args.empty()) {
-        //let m = 
         let tmp = self.get_unit(&self.curMethod.unwrap().path).imports;
         for (let i = 0;i < tmp.len();++i) {
             let is = tmp.get_ptr(i);
@@ -656,11 +665,14 @@ impl Resolver{
     }
     if(target0.is_none()){
       let imp_result = self.find_imports(node.as_simple(), &str);
-      if let TypeResult::Decl(d) = (imp_result){
-        target0 = Option::new(d);
-      }else if let TypeResult::Res(rt*) = (imp_result){
-        return rt.clone();
-      }else{
+      if(imp_result.is_some()){
+        let tmp = imp_result.unwrap();
+        if(!tmp.targetDecl.unwrap().is_generic){
+          return tmp;
+        }
+        target0 = tmp.targetDecl;
+      }
+      else{
         let expr = Expr::Type{*node};
         self.err(&expr, "couldn't find type");
       }
@@ -710,7 +722,7 @@ impl Resolver{
   }
 
 
-  func find_imports(self, type: Simple*, str: String*): TypeResult{
+  func find_imports(self, type: Simple*, str: String*): Option<RType>{
     let arr = self.get_imports();
     for (let i=0;i < arr.len();++i) {
       let is = arr.get_ptr(i);
@@ -719,27 +731,27 @@ impl Resolver{
       //try full type
       let cached = resolver.typeMap.get_ptr(str);
       if (cached.is_some()) {
-          let res = cached.unwrap().clone();
+          let res = cached.unwrap();
           //let res = *cached.unwrap();
-          self.addType(str.clone(), res);
+          self.addType(str.clone(), res.clone());
           if (res.targetDecl.is_some()) {
               if (!res.targetDecl.unwrap().is_generic) {
                   self.addUsed(res.targetDecl.unwrap());
               }
           }
           //todo trait
-          return TypeResult::Res{res};
+          return Option::new(res.clone());
       }
       if (!type.args.empty()) {
           //generic type
           //try root type
           let cached = resolver.typeMap.get_ptr(&type.name);
           if (cached.is_some() && cached.unwrap().targetDecl.is_some()){
-              return TypeResult::Decl{cached.unwrap().targetDecl.unwrap()};
+              return Option::new(cached.unwrap().clone());
           }
       }
     }
-    return TypeResult::None;
+    return Option<RType>::None;
   }
   
   func findVariant(decl: Decl*, name: String*): i32{
@@ -829,6 +841,10 @@ impl Resolver{
     }
     if (hasNamed && hasNonNamed) {
         self.err(node, "obj creation can't have mixed values");
+    }
+    print("obj %s\n", node.print().cstr());
+    if(node.print().eq("Pair{4, 5}")){
+      let xx=55;
     }
     let res = self.visit(type0);
     let decl = res.targetDecl.unwrap();

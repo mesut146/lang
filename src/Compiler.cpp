@@ -172,13 +172,7 @@ void initModule(const std::string &path, Compiler *c) {
     c->mod->setTargetTriple(c->TargetTriple);
     c->mod->setDataLayout(c->TargetMachine->createDataLayout());
     c->Builder = std::make_unique<llvm::IRBuilder<>>(c->ctx());
-    if (Config::debug) {
-        c->DBuilder = std::make_unique<llvm::DIBuilder>(*c->mod);
-        auto dfile = c->DBuilder->createFile(path, ".");
-        c->di.cu = c->DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C_plus_plus_14, dfile, "lang dbg", false, "", 0);
-        c->mod->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
-        c->mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
-    }
+    c->init_dbg(path);
     /*c->mod->addModuleFlag(llvm::Module::Warning, "branch-target-enforcement", (uint32_t) 0);
     c->mod->addModuleFlag(llvm::Module::Warning, "sign-return-address", (uint32_t) 0);
     c->mod->addModuleFlag(llvm::Module::Warning, "sign-return-address-all", (uint32_t) 0);
@@ -787,31 +781,6 @@ bool isReturnLast(Statement *stmt) {
     return false;
 }
 
-void Compiler::loc(Node *e) {
-    if (!Config::debug) return;
-    if (!e) {
-        Builder->SetCurrentDebugLocation(0);
-        return;
-    }
-    if (e->line == 0) {
-        auto expr = dynamic_cast<Expression *>(e);
-        if (expr)
-            error(std::string("line 0, ") + expr->print());
-        else
-            error(std::string("line 0, ") + typeid(*e).name());
-    }
-    loc(e->line, 0);
-}
-
-void Compiler::loc(int line, int pos) {
-    if (!Config::debug) return;
-    auto scope = di.sp;
-    if (!scope) {
-        scope = di.cu;
-    }
-    Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
-}
-
 Type prm_type(const Type &type) {
     if (isStruct(type)) {
         return Type(Type::Pointer, type);
@@ -835,17 +804,14 @@ void Compiler::genCode(Method *m) {
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
     Builder->SetInsertPoint(bb);
     //dbg
-    if (Config::debug) {
-        dbg_func(m, func);
-    }
+    dbg_func(m, func);
+
     allocParams(m);
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     if (is_main(m)) {
-        for (auto init_proto_path : Compiler::global_protos) {
-            if (Config::debug) {
-                loc(0, 0);
-            }
+        for (auto& init_proto_path : Compiler::global_protos) {
+            loc(0, 0);
             auto init_proto = make_init_proto(init_proto_path, this);
             std::vector<llvm::Value *> args2;
             Builder->CreateCall(init_proto, args2);
@@ -864,7 +830,7 @@ void Compiler::genCode(Method *m) {
         Builder->CreateRetVoid();
     }
     if (Config::debug) {
-        DBuilder->finalizeSubprogram((llvm::DISubprogram *) di.sp);
+        DBuilder->finalizeSubprogram(di.sp);
         di.sp = nullptr;
     }
     if (llvm::verifyFunction(*func, &llvm::outs())) {

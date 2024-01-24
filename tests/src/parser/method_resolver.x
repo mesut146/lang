@@ -306,8 +306,12 @@ impl MethodResolver{
         }
         if (real.size() > 1 && exact.is_none()) {
             let e = Expr::Call{*mc};
-            //let msg = format("method {} has {} candidates\n", mc.print().str(), real.size());
             let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), i64::print(real.size()).str());
+            for(let i=0;i < real.len();++i){
+                let err = *real.get_ptr(i);
+                msg.append("\n");
+                msg.append(err.print().str());
+            }
             self.r.err(msg.str(), &e);
         }
         let sig2 = real.get(0);

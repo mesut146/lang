@@ -7,6 +7,7 @@ func get(e: E*): i32*{
     if let E::A(a)= (e){
         return &a;
     }
+    panic("");
 }
 
 func main(){

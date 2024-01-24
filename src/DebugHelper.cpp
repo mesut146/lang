@@ -1,4 +1,41 @@
 #include "Compiler.h"
+#include "TypeUtils.h"
+
+void Compiler::init_dbg(const std::string &path) {
+    if (!Config::debug) return;
+    DBuilder = std::make_unique<llvm::DIBuilder>(*mod);
+    auto dfile = DBuilder->createFile(path, ".");
+    di.cu = DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_Zig, dfile, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
+    mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 5);
+    mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
+    mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
+    mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
+}
+
+void Compiler::loc(Node *e) {
+    if (!Config::debug) return;
+    if (!e) {
+        Builder->SetCurrentDebugLocation(0);
+        return;
+    }
+    if (e->line == 0) {
+        auto expr = dynamic_cast<Expression *>(e);
+        if (expr)
+            error(std::string("line 0, ") + expr->print());
+        else
+            error(std::string("line 0, ") + typeid(*e).name());
+    }
+    loc(e->line, 0);
+}
+
+void Compiler::loc(int line, int pos) {
+    if (!Config::debug) return;
+    llvm::DIScope *scope = di.sp;
+    if (!scope) {
+        scope = di.cu;
+    }
+    Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
+}
 
 void Compiler::dbg_prm(Param &p, const Type &type, int idx) {
     if (!Config::debug) return;
@@ -37,7 +74,9 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     llvm::SmallVector<llvm::Metadata *, 8> tys;
     tys.push_back(map_di(m->type));
     if (m->self) {
-        tys.push_back(map_di(*m->self->type));
+        auto elem = map_di(m->self->type->unwrap());
+        auto ty = llvm::DIBuilder::createObjectPointerType(elem);
+        tys.push_back(ty);
     }
     for (auto &p : m->params) {
         tys.push_back(map_di(*p.type));
@@ -57,10 +96,11 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
         auto p = methodParent2(m);
         scope = map_di(p.value());
     }
-    auto name = dbg_name(m);
-    auto sp = DBuilder->createFunction(scope, name, linkage_name, file, m->line, ft, m->line, llvm::DINode::FlagPrototyped, spflags);
-    di.sp = sp;
-    f->setSubprogram(sp);
+    //auto name = dbg_name(m);
+    auto &name = m->name;
+
+    di.sp = DBuilder->createFunction(scope, name, linkage_name, file, m->line, ft, m->line, llvm::DINode::FlagPrototyped, spflags);
+    f->setSubprogram(di.sp);
     loc(nullptr);
 }
 
@@ -90,23 +130,33 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
     auto rt = resolv->resolve(*t);
     t = &rt.type;
     auto s = t->print();
-    if (s == "Decl") {
-        int xx = 55;
+    if (di.types.contains(s)) {
+        return di.types.at(s);
     }
-    auto it = di.types.find(s);
-    if (it != di.types.end()) return it->second;
+    if (s == "void") return nullptr;
+    if (s == "bool") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_boolean);
+    if (s == "i8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_signed);
+    if (s == "i16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_signed);
+    if (s == "i32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_signed);
+    if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_signed);
+    if (s == "f32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_float);
+    if (s == "f64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_float);
+    if (s == "u8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_unsigned);
+    if (s == "u64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_unsigned);
     if (t->name == "List") {
         //DBuilder->cre
         std::vector<int> arrrr;
     }
+    if (s == "Decl") {
+        int xx = 55;
+    }
     if (t->isPointer()) {
         auto elem = t->unwrap();
-        if (di.types.contains(elem.print())) {
+        if (di.types.contains(elem.print()) || rt.targetDecl == nullptr) {
             return DBuilder->createPointerType(map_di(&elem), 64);
         } else {
-            if (!rt.targetDecl) {
-                return DBuilder->createPointerType(map_di(&elem), 64);
-            }
             if (elem.print() == "Unit") {
                 print("unit in " + resolv->unit->path);
             }
@@ -135,24 +185,12 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         auto ptr_ty = DBuilder->createPointerType(map_di(t->scope.get()), 64);
         auto ptr_mem = DBuilder->createMemberType(nullptr, "ptr", file, 0, 64, 0, 0, llvm::DINode::FlagZero, ptr_ty);
         elems.push_back(ptr_mem);
-        auto len_ty = map_di(new Type("i32"));
+        auto len_ty = map_di(getType(SLICE_LEN_BITS));
         auto len_mem = DBuilder->createMemberType(nullptr, "len", file, 0, SLICE_LEN_BITS, 0, 64, llvm::DINode::FlagZero, len_ty);
         elems.push_back(len_mem);
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
         return DBuilder->createStructType(di.cu, s, file, 0, sz, 0, llvm::DINode::FlagZero, nullptr, et);
     }
-    if (s == "bool") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_boolean);
-    if (s == "i8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_signed);
-    if (s == "i16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_signed);
-    if (s == "i32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_signed);
-    if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_signed);
-    if (s == "f32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_float);
-    if (s == "i64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_float);
-    if (s == "void") return nullptr;
-    if (s == "u8") return DBuilder->createBasicType(s, 8, llvm::dwarf::DW_ATE_unsigned);
-    if (s == "u16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_unsigned);
-    if (s == "u32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_unsigned);
-    if (s == "u64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_unsigned);
     if (!rt.targetDecl) {
         throw std::runtime_error("di type: " + t->print());
     }
