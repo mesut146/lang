@@ -10,13 +10,13 @@ func body(node: Stmt*, f: Fmt*){
   }
 }
 
-func join<T>(f: Fmt*, arr: List<T>){
+func join<T>(f: Fmt*, arr: List<T>*){
   for(let i=0;i<arr.len();++i){
     if(i>0) f.print(", ");
     arr.get(i).debug(f);
   }
 }
-func join<T>(f: Fmt*, arr: List<T>, sep: str){
+func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   for(let i=0;i<arr.len();++i){
     if(i>0) f.print(sep);
     arr.get(i).debug(f);
@@ -25,9 +25,9 @@ func join<T>(f: Fmt*, arr: List<T>, sep: str){
 
 impl Debug for Unit{
   func debug(self, f: Fmt*){
-    join(f, self.imports, "\n");
+    join(f, &self.imports, "\n");
     f.print("\n");
-    join(f, self.items, "\n");
+    join(f, &self.items, "\n");
   }
 }
 
@@ -35,7 +35,7 @@ impl Debug for Unit{
 impl Debug for ImportStmt{
   func debug(self, f: Fmt*){
     f.print("import ");
-    join(f, self.list, "/");
+    join(f, &self.list, "/");
   }
 }
 
@@ -56,6 +56,10 @@ impl Debug for Item{
     }else if let Item::Trait(tr*)=(self){
       f.print("trait ");
       tr.type.debug(f);
+    }else if let Item::Extern(methods*)=(self){
+      f.print("extern{\n");
+      join(f, methods, "\n");
+      f.print("\n}");
     }else{
       panic("Item::debug()");
     }
@@ -156,7 +160,7 @@ impl Debug for Method{
         f.print(", ");
       }
     }
-    join(f, self.params, ", ");
+    join(f, &self.params, ", ");
     f.print("): ");
     self.type.debug(f);
     if(self.body.is_some()){
@@ -254,7 +258,7 @@ impl Debug for Stmt{
       f.print("if let ");
       il.ty.debug(f);
       f.print("(");
-      join(f, il.args, ", ");
+      join(f, &il.args, ", ");
       f.print(") = (");
       il.rhs.debug(f);
       f.print(")");
@@ -273,7 +277,7 @@ impl Debug for Stmt{
         fs.e.get().debug(f);
       }
       f.print(";");
-      join(f, fs.u, ", ");
+      join(f, &fs.u, ", ");
       f.print(")");
       fs.body.get().debug(f);
     }else if let Stmt::Continue = (self){
@@ -369,7 +373,7 @@ impl Debug for Expr{
     }else if let Expr::Obj(ty, args)=(self){
       ty.debug(f);
       f.print("{");
-      join(f, args, ", ");
+      join(f, &args, ", ");
       f.print("}");
     }else if let Expr::As(e, type)=(self){
       e.get().debug(f);
@@ -381,7 +385,7 @@ impl Debug for Expr{
       rhs.get().debug(f);
     }else if let Expr::Array(arr, sz)=(self){
       f.print("[");
-      join(f, arr, ", ");
+      join(f, &arr, ", ");
       if(sz.is_some()){
         f.print("; ");
         sz.get().debug(f);
@@ -417,7 +421,7 @@ impl Debug for Call{
     }
     f.print(self.name);
     f.print("(");
-    join(f, self.args);
+    join(f, &self.args);
     f.print(")");
   }
 }

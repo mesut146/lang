@@ -2,7 +2,7 @@
 //import std/Option
 import std/ops
 
-class Pair<T, U>{
+struct Pair<T, U>{
   a: T;
   b: U;
 }
@@ -23,7 +23,7 @@ impl<A,B> Debug for Pair<A,B>{
   }
 }
 
-class Map<K, V>{
+struct Map<K, V>{
   arr: List<Pair<K, V>>;
 }
 

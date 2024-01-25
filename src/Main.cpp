@@ -150,13 +150,21 @@ void usage() {
 
 int main(int argc, char **args) {
     try {
+        argc--;
+        int i = 1;
+        if (argc > 0 && std::string(args[i]) == "-nc") {
+            Config::use_cache = false;
+            ++i;
+            argc--;
+        }
         //no arg
-        if (argc == 1) {
+        if (argc == 0) {
             //compileTest();
             bootstrap();
             return 0;
         }
-        auto arg = std::string(args[1]);
+        auto arg = std::string(args[i]);
+        ++i;
         if (arg == "help") {
             usage();
         } else if (arg == "parse") {
@@ -164,13 +172,15 @@ int main(int argc, char **args) {
         } else if (arg == "test") {
             compileTest();
         } else if (arg == "c") {
-            auto path = std::string(args[2]);
+            auto path = std::string(args[i]);
+            i++;
             Compiler c;
             c.srcDir = "../tests/src";
             if (std::filesystem::is_directory(path)) {
                 //c.srcDir = path;
                 if (argc - 1 == 3) {
-                    auto file = path + "/" + std::string(args[3]);
+                    auto file = path + "/" + std::string(args[i]);
+                    i++;
                     c.init();
                     c.compile(file);
                 } else {

@@ -1,7 +1,7 @@
 //import std/List
 //import std/str
 
-class String{
+struct String{
     arr: List<u8>;
 }
 

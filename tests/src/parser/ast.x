@@ -129,7 +129,7 @@ struct Trait{
 enum Parent{
   None,
   Impl(info: ImplInfo),
-  Trait,
+  Trait(type: Type),
   Extern
 }
 

@@ -1,7 +1,7 @@
 //import std/String
 //import std/List
 
-class str{
+struct str{
   buf: [u8];
 }
 

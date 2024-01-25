@@ -30,7 +30,7 @@ impl Parser{
             continue;
         self.tokens.add(t);
       }
-      print("tokens %d %s\n", self.tokens.len(), self.lexer.path.cstr());
+      //print("tokens %d %s\n", self.tokens.len(), self.lexer.path.cstr());
     }
     
     func has(self): bool{
@@ -136,8 +136,7 @@ impl Parser{
       //res->unit = p->unit;
       self.consume(TokenType::LBRACE);
       while (!self.is(TokenType::RBRACE)) {
-          res.methods.add(self.parse_method(Option::new(type), Parent::Trait));
-          res.methods.last().parent = Parent::Trait;
+          res.methods.add(self.parse_method(Option::new(type), Parent::Trait{type: type.clone()}));
       }
       self.consume(TokenType::RBRACE);
       return res;

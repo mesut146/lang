@@ -91,8 +91,6 @@ func max_for(type: Type*): i64{
     return x - 1;
 }
 
-//struct Generator{}
-
 //replace any type in decl with src by same index
 func replace_type(type: Type*, map: Map<String, Type>*): Type {
     if let Type::Pointer(bx*) = (type){

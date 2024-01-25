@@ -44,11 +44,6 @@ struct Config{
   optimize_enum: bool;
 }
 
-/*enum Decl{
-  Struct(sd: StructDecl*),
-  Enum(ed: EnumDecl*)
-}*/
-
 struct RType{
   type: Type;
   trait: Option<Trait*>;
@@ -56,12 +51,6 @@ struct RType{
   value: Option<String>;
   targetDecl: Option<Decl*>;
   vh: Option<VarHolder*>;
-}
-
-enum TypeResult{
-  Decl(d: Decl*),
-  Res(r: RType),
-  None
 }
 
 enum TypeKind{
@@ -161,6 +150,13 @@ func isRet(stmt: Stmt*): bool{
 
 func printMethod(m: Method*): String{
   let s = String::new();
+  if let Parent::Impl(info*)=(&m.parent){
+    s.append(info.type.print());
+    s.append("::");
+  }else if let Parent::Trait(type*)=(&m.parent){
+    s.append(type.print());
+    s.append("::");
+  }
   s.append(m.name);
   s.append("()");
   return s;
@@ -171,14 +167,13 @@ func mangle2(m: Method*, type: Type*): String{
   let s = String::new();
   s.append(m.name);
   s.append("(");
+  let map = Map<String, Type>::new();
+  map.add("Self".str(), type.clone());
+  let copier = AstCopier::new(&map);
   for(let i = 0;i < m.params.len();++i){
     s.append("_");
-    let pstr = m.params.get_ptr(i).type.print();
-    if(pstr.eq("Self")){
-      s.append(type.print());
-    }else{
-      s.append(pstr);
-    }
+    let prm_type = &m.params.get_ptr(i).type;
+    s.append(copier.visit(prm_type).print());
   }
   s.append(")");
   return s;
@@ -456,10 +451,16 @@ impl Resolver{
         //self.visit(decl, variants);
       }
     }else if let Item::Trait(tr*) = (node){
+    }else if let Item::Extern(methods*) = (node){
+      for(let i=0;i<methods.len();++i){
+        let m=methods.get_ptr(i);
+        if(m.is_generic) continue;
+        self.visit(m);
+      }
     }
     else{
       Fmt::str(node).dump();
-      panic("item");
+      panic("visitItem");
     }
   }
 
@@ -536,6 +537,7 @@ impl Resolver{
         if(!m.type_args.empty()) continue;
         self.visit(m);
         let mangled = mangle2(m, &imp.info.type);
+        print("impl %s\n", mangled.cstr());
         let idx = required.indexOf(&mangled);
         if(idx != -1){
           required.remove(idx);
@@ -544,11 +546,13 @@ impl Resolver{
       if(!required.empty()){
         let msg = String::new();
         for(let i = 0;i < required.len();++i){
-          let p = required.get_idx(i);
+          let p = required.get_idx(i).unwrap();
           msg.append("method ");
-          msg.append(printMethod(p.unwrap().b));
+          msg.append(p.a.str());
+          msg.append(" ");
+          msg.append(printMethod(p.b));
           msg.append(" not implemented for ");
-          msg.append(imp.info.trait_name.get().print());
+          msg.append(imp.info.type.print());
           msg.append("\n");
         }
         self.err(msg);
@@ -564,7 +568,7 @@ impl Resolver{
   }
 
   func visit(self, node: Method*){
-    print("visiting %s\n", printMethod(node).cstr());
+    //print("visiting %s\n", printMethod(node).cstr());
     if(node.is_generic){
       return;
     }
@@ -716,10 +720,11 @@ impl Resolver{
     /*if(target.is_generic){
 
     }*/
-    print("target %s\n", Fmt::str(target).cstr());
+    //print("target %s\n", Fmt::str(target).cstr());
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);//todo owner who?
+    //print("generated %s\n", Fmt::str(&decl0).cstr());
     let decl = self.addUsed(&decl0);
     let smp = Simple::new(node.name().clone());
     let args = node.get_args();
@@ -865,10 +870,7 @@ impl Resolver{
     if (hasNamed && hasNonNamed) {
         self.err(node, "obj creation can't have mixed values");
     }
-    print("obj %s\n", node.print().cstr());
-    if(node.print().eq("Pair{4, 5}")){
-      let xx=55;
-    }
+    //print("obj %s\n", node.print().cstr());
     let res = self.visit(type0);
     let decl = res.targetDecl.unwrap();
     if (decl.base.is_some() && base.is_none()) {
@@ -1199,7 +1201,6 @@ impl Resolver{
   
   func visit_arr_access(self, node: Expr*, aa: ArrAccess*): RType{
     let arr = self.getType(aa.arr.get());
-    print("arr=%s\n", arr.print().cstr());
     let idx = self.getType(aa.idx.get());
     //todo unsigned
     if (idx.print().eq("bool") || !idx.is_prim()){
@@ -1212,7 +1213,6 @@ impl Resolver{
           self.err(node, "range end is not an integer");
         }
         let inner = arr.unwrap_ptr();
-        print("inner=%s\n", inner.print().cstr());
         if (inner.is_slice()) {
             return RType::new(inner.clone());
         } else if (inner.is_array()) {
@@ -1221,7 +1221,6 @@ impl Resolver{
             //from raw pointer
             return RType::new(Type::Slice{Box::new(inner.clone())});
         } else {
-            print("arr=%s\n", arr.print().cstr());
             self.err(node, "cant make slice out of ");
         }
     }
@@ -1240,7 +1239,6 @@ impl Resolver{
         let e = self.visit(list.get_ptr(0));
         //let elemType = self.getType(list.get_ptr(0));
         let elemType = e.type;
-        print("elem %s\n", elemType.print().cstr());
         return RType::new(Type::Array{Box::new(elemType), size.unwrap()});
     }
     let elemType = self.getType(list.get_ptr(0));
@@ -1299,32 +1297,37 @@ impl Resolver{
     }
     return RType::new("bool");
   }
+
+  func visit_lit(self, kind: LitKind, value: String, suffix: Option<Type>*): RType{
+    if(suffix.is_some()){
+      if(i64::parse(&value) > max_for(suffix.get())){
+        self.err("literal out of range");
+      }
+      return self.visit(suffix.get());
+    }
+    if(kind is LitKind::INT){
+      let res = RType::new("i32");
+      res.value = Option::new(value);
+      return res;
+    }else if(kind is LitKind::STR){
+      return RType::new("str");
+    }else if(kind is LitKind::BOOL){
+      return RType::new("bool");
+    }else if(kind is LitKind::FLOAT){
+      let res = RType::new("f32");
+      res.value = Option::new(value);
+      return res;
+    }else if(kind is LitKind::CHAR){
+      let res = RType::new("u32");
+      res.value = Option::new(value);
+      return res;
+    }
+    panic("lit");
+  }
   
   func visit(self, node: Expr*): RType{
-    if let Expr::Lit(kind, value, suffix*)=(node){
-      if(suffix.is_some()){
-        if(i64::parse(&value) > max_for(suffix.get())){
-          self.err("literal out of range");
-        }
-        return self.visit(suffix.get());
-      }
-      if(kind is LitKind::INT){
-        let res = RType::new("i32");
-        res.value = Option::new(value);
-        return res;
-      }else if(kind is LitKind::STR){
-        return RType::new("str");
-      }else if(kind is LitKind::BOOL){
-        return RType::new("bool");
-      }else if(kind is LitKind::FLOAT){
-        let res = RType::new("f32");
-        res.value = Option::new(value);
-        return res;
-      }else if(kind is LitKind::CHAR){
-        let res = RType::new("u32");
-        res.value = Option::new(value);
-        return res;
-      }
+    if let Expr::Lit(kind, value*, suffix*)=(node){
+      return self.visit_lit(kind, value.clone(), suffix);
     }else if let Expr::Type(type*) = (node){
       return self.visit(type);
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){

@@ -40,7 +40,7 @@ trait Debug{
   func debug(self, f: Fmt*);
 }
 
-class Fmt{
+struct Fmt{
   buf: String;
 }
 

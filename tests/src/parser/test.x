@@ -28,10 +28,14 @@ func parser_test(){
 
 func resolver_test(){
   print("resolver_test\n");
-  //let s = "../tests/src/parser/token.x";
-  let dir = "../tests/src";
+  let root = "../tests/src";
+  let ctx = Context::new(root.str());
+  resolver_dir(&ctx, root);
+  resolver_dir(&ctx, "../tests/src/std");
+}
+
+func resolver_dir(ctx: Context*, dir: str){
   let list = list(dir);
-  let ctx = Context::new(dir.str());
   for(let i = 0;i < list.len();++i){
     let name = list.get_ptr(i);
     if(!name.str().ends_with(".x")) continue;
@@ -39,11 +43,9 @@ func resolver_test(){
     file.append("/");
     file.append(name.str());
     if(is_dir(file.str())) continue;
-    let r = Resolver::new(file, &ctx);
-    //print("resolving %s\n", file.cstr());
+    let r = Resolver::new(file, ctx);
     r.resolve_all();
   }
-  //let s = "../tests/src/lit.x";
 }
 
 func main(){

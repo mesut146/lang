@@ -2,7 +2,7 @@ import std/it
 import std/ops
 import std/libc
 
-class List<T>{
+struct List<T>{
   ptr: T*;
   count: i64;
   cap: i64;
@@ -122,21 +122,11 @@ impl<T> List<T>{
   func indexOf(self, e: T*): i32{
     return self.indexOf(e, 0);
   }
-
-  func indexOf(self, e: T*, off: i32): i32{
-    /*let i = off;
-    while(i < self.count){
-      if(*ptr::get(self.ptr, i) == e) return i;
-      ++i;
-    }
-    return -1;*/
-    return self.indexOf2(e, off);
-  }
   
-  func indexOf2(self, e: T*, off: i32): i32{
+  func indexOf(self, e: T*, off: i32): i32{
     let i = off;
     while(i < self.count){
-      if(Eq::eq(ptr::get(self.ptr, i), e)) return i;
+      if(Eq::eq(self.get_ptr(i), e)) return i;
       ++i;
     }
     return -1;
@@ -177,7 +167,7 @@ impl<T> Debug for List<T>{
   }
 }
 
-class ListIter<T>{
+struct ListIter<T>{
   list: List<T>*;
   pos: i32;
 }

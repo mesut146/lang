@@ -271,10 +271,7 @@ impl MethodResolver{
 
     func handle(self, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
-        print("mc=%s\n", mc.print().cstr());
-        if(mc.print().eq("s.eq(\"hello\")")){
-            print("%s\n", sig.print().cstr());
-        }
+        //print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
             let e = Expr::Call{*sig.mc.unwrap()};
@@ -410,32 +407,36 @@ impl MethodResolver{
             }
         }
         if let Parent::Impl(imp*) = (m.parent) {
-            if(mc.scope.is_some()){
-                let ty = &imp.type;
-                let scope = sig.scope.get().type;
-                if(ty.print().eq(scope.print().str())){
+            if(mc.scope.is_none()){//static sibling
+                return self.check_args(sig, sig2);
+            }
+            let ty = &imp.type;
+            let scope = sig.scope.get().type;
+            if(ty.print().eq(scope.print().str())){
+                return self.check_args(sig, sig2);
+            }
+
+            if (sig.scope.get().trait.is_some()) {
+                let scp = sig.args.get_ptr(0).unwrap_ptr();
+                if(imp.trait_name.is_some()){
+                    if(!imp.trait_name.get().name().eq(sig.scope.get().type.name().str())){
+                        return SigResult::Err{"not same trait".str()};
+                    }
                     return self.check_args(sig, sig2);
                 }
-
-                if(!ty.is_simple()){
-                   
+                else if (!scp.name().eq(ty.name())) {
+                    return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
                 }
-                if (sig.scope.get().trait.is_some()) {
-                    let scp = sig.args.get_ptr(0).unwrap_ptr();
-                    if (!scp.name().eq(ty.name())) {
-                        return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
-                    }
-                } else if (!scope.name().eq(ty.name().str())) {
-                    return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
-                }
-                if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
-                    //check they belong same impl
-                    let scope_args = scope.get_args();
-                    for (let i = 0; i < scope_args.size(); ++i) {
-                        let tp_str = ty.get_args().get(i).print();
-                        if (!scope_args.get_ptr(i).print().eq(&tp_str)){
-                            return SigResult::Err{"not same impl".str()};
-                        }
+            } else if (!scope.name().eq(ty.name().str())) {
+                return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
+            }
+            if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
+                //check they belong same impl
+                let scope_args = scope.get_args();
+                for (let i = 0; i < scope_args.size(); ++i) {
+                    let tp_str = ty.get_args().get(i).print();
+                    if (!scope_args.get_ptr(i).print().eq(&tp_str)){
+                        return SigResult::Err{"not same impl".str()};
                     }
                 }
             }
@@ -548,10 +549,20 @@ impl MethodResolver{
             }
             panic("cant infer ");
         }
+        if(prm.is_slice()){
+            if (!arg.is_slice()) return;
+            infer(arg.elem(), prm.elem(), typeMap);
+            return;
+        }
+        if(arg.is_slice()){
+            if(typeMap.has(prm.name())){
+                typeMap.add(prm.name().clone(), Option::new(arg.clone()));
+                return;
+            }
+            panic("cant infer ");
+        }
         //todo
-        let ta1 = arg.get_args();
-        let ta2 = prm.get_args();
-        if (ta2.empty()) {
+        if (prm.as_simple().args.empty()) {
             let nm = prm.name();
             if (typeMap.has(nm)) {//is_tp
                 let it = typeMap.get_p(nm).unwrap();
@@ -571,6 +582,8 @@ impl MethodResolver{
                 }
             }
         } else {
+            let ta1 = arg.get_args();
+            let ta2 = prm.get_args();
             if (ta1.size() != ta2.size()) {
                 let msg = Fmt::format("type arg size mismatch, {} = {}", arg.print().str(), prm.print().str());
                 panic("%s", msg.cstr());
