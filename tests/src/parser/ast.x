@@ -27,13 +27,18 @@ struct Unit{
   last_line: i32;
   imports: List<ImportStmt>;
   items: List<Item>;
+  globals: List<Global>;
 }
-
-
 impl Unit{
   func new(path: String): Unit{
-    return Unit{path.clone(), 0, List<ImportStmt>::new(), List<Item>::new()};
+    return Unit{path.clone(), 0, List<ImportStmt>::new(), List<Item>::new(), List<Global>::new()};
   }
+}
+
+struct Global{
+  name: String;
+  type: Option<Type>;
+  expr: Expr;
 }
 
 struct ImportStmt{

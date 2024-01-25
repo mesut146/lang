@@ -5,7 +5,7 @@ void Compiler::init_dbg(const std::string &path) {
     if (!Config::debug) return;
     DBuilder = std::make_unique<llvm::DIBuilder>(*mod);
     auto dfile = DBuilder->createFile(path, ".");
-    di.cu = DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_Zig, dfile, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
+    di.cu = DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C, dfile, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
     mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 5);
     mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
     mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);

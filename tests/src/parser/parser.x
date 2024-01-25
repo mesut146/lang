@@ -112,6 +112,15 @@ impl Parser{
         }else if(self.is(TokenType::STATIC)){
         	self.pop();
             let name = self.name();
+            let type=Option<Type>::None;
+            if(self.is(TokenType::COLON)){
+              self.pop();
+              type=Option::new(self.parse_type());
+            }
+            self.consume(TokenType::EQ);
+            let rhs = self.parse_expr();
+            self.consume(TokenType::SEMI);
+            self.unit.globals.add(Global{name, type, rhs});
         }else{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }

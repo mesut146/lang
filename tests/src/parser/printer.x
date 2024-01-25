@@ -41,9 +41,9 @@ impl Debug for ImportStmt{
 
 impl Debug for Item{
   func debug(self, f: Fmt*){
-    if let Item::Decl(decl) = (self){
+    if let Item::Decl(decl*) = (self){
       decl.debug(f);
-    }else if let Item::Method(m) = (self){
+    }else if let Item::Method(m*) = (self){
       m.debug(f);
     }else if let Item::Impl(i) = (self){
       i.debug(f);
@@ -53,6 +53,9 @@ impl Debug for Item{
       f.print(" = ");
       rhs.debug(f);
       f.print(";");
+    }else if let Item::Trait(tr*)=(self){
+      f.print("trait ");
+      tr.type.debug(f);
     }else{
       panic("Item::debug()");
     }

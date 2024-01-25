@@ -192,6 +192,11 @@ impl MethodResolver{
             if let Item::Impl(imp*) = (item){
                 if(print_erased(&imp.info.type).eq(s.str())){
                   list.add(imp);
+                }else if(imp.info.trait_name.is_some()){
+                  let tr = imp.info.trait_name.get().name();
+                  if(tr.eq(s.str())){
+                    list.add(imp);
+                  }
                 }
             }
         }
@@ -243,7 +248,7 @@ impl MethodResolver{
                   }
                   let sig2 = Signature::new(m, &map);
                   for (let i2=0;i2<sig2.args.len();++i2) {
-                    let a = sig2.args.get_ptr(i);
+                    let a = sig2.args.get_ptr(i2);
                     let ac = AstCopier::new(&typeMap);
                     *a = ac.visit(a);
                   }

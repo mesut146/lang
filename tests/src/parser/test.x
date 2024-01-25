@@ -31,6 +31,7 @@ func resolver_test(){
   //let s = "../tests/src/parser/token.x";
   let dir = "../tests/src";
   let list = list(dir);
+  let ctx = Context::new(dir.str());
   for(let i = 0;i < list.len();++i){
     let name = list.get_ptr(i);
     if(!name.str().ends_with(".x")) continue;
@@ -38,7 +39,6 @@ func resolver_test(){
     file.append("/");
     file.append(name.str());
     if(is_dir(file.str())) continue;
-    let ctx = Context::new(dir.str());
     let r = Resolver::new(file, &ctx);
     //print("resolving %s\n", file.cstr());
     r.resolve_all();

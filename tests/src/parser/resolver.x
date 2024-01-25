@@ -336,10 +336,29 @@ impl Resolver{
     print("resolve_all %s\n", self.unit.path.cstr());
     self.is_resolved = true;
     self.init();
+    self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       self.visit(self.unit.items.get_ptr(i));
     }
     //self.dump();
+  }
+  
+  func init_globals(self){
+    self.newScope();//globals
+    for (let i=0;i<self.unit.globals.len();++i) {
+        let g = self.unit.globals.get_ptr(i);
+        let rhs = self.visit(&g.expr);
+        if (g.type.is_some()) {
+            let type = self.getType(g.type.get());
+            //todo check
+            let err_opt = MethodResolver::is_compatible(RType::new(rhs.type), &type);
+            if (err_opt.is_some()) {
+                let msg = Fmt::format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name.str(),type.print().str(),rhs.type.print().str(), err_opt.get().str());
+                self.err(msg.str());
+            }
+        }
+        self.addScope(g.name.clone(), rhs.type, false);
+    }
   }
 
   func dump(self){
@@ -436,6 +455,7 @@ impl Resolver{
       }else if let Decl::Enum(variants*) = (decl){
         //self.visit(decl, variants);
       }
+    }else if let Item::Trait(tr*) = (node){
     }
     else{
       Fmt::str(node).dump();
@@ -667,6 +687,9 @@ impl Resolver{
       let imp_result = self.find_imports(node.as_simple(), &str);
       if(imp_result.is_some()){
         let tmp = imp_result.unwrap();
+        if(tmp.trait.is_some()){
+          return tmp;
+        }
         if(!tmp.targetDecl.unwrap().is_generic){
           return tmp;
         }
@@ -1411,8 +1434,33 @@ impl Resolver{
     }else if let Stmt::IfLet(is*) = (node){
       self.visit(node, is);
       return;
+    }else if let Stmt::While(e*,b*) = (node){
+      self.visit_while(node, e, b);
+      return;
+    }
+    else if let Stmt::Continue = (node){
+      if (self.inLoop == 0) {
+        self.err(node, "continue in outside of loop");
+      }
+      return;
+    }else if let Stmt::Break = (node){
+      if (self.inLoop == 0) {
+        self.err(node, "break in outside of loop");
+      }
+      return;
     }
     panic("visit stmt %s", node.print().cstr());
+  }
+  
+  func visit_while(self, node: Stmt*, e: Expr*, b: Block*){
+    if (!self.isCondition(e)) {
+        self.err(node, "while statement expr is not a bool");
+    }
+    ++self.inLoop;
+    self.newScope();
+    self.visit(b);
+    --self.inLoop;
+    self.dropScope();
   }
   
   func visit(self, node: Stmt*, is: IfStmt*){
