@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(lang)
 
-set(CMAKE_CXX_FLAGS "-std=c++2a -g -pg")
+set(CMAKE_CXX_FLAGS "-std=c++2a -g")
 
 file(GLOB src src/*.cpp src/parser/*.cpp)
 
@@ -21,5 +21,8 @@ else ()
     target_link_libraries(lang LLVM-16)
     target_link_libraries(lang stdc++fs)
 endif()
+
+
+add_library(bridge STATIC src/bridge/bridge.cpp)
 
 

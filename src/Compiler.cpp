@@ -10,7 +10,6 @@
 #include <variant>
 
 
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Constants.h>
@@ -22,8 +21,6 @@
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Host.h>
-#include <llvm/Support/InitLLVM.h>
-#include <llvm/Support/Signals.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetOptions.h>
 
@@ -85,7 +82,7 @@ void Compiler::init() {
     auto Features = "";
 
     llvm::TargetOptions opt;
-    auto RM = std::optional<llvm::Reloc::Model>();
+    auto RM = std::optional<llvm::Reloc::Model>(llvm::Reloc::Model::PIC_);
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
     Resolver::init_prelude();
 
@@ -133,6 +130,28 @@ void Compiler::link_run() {
     }
 }
 
+void Compiler::build_library(const std::string &name, bool shared) {
+    std::string cmd = "";
+    if (shared) {
+        cmd += "clang-16 ";
+        cmd += "-shared -o ";
+        cmd += name;
+    } else {
+        cmd += "ar rcs ";
+        cmd += name;
+    }
+    cmd += " ";
+    for (auto &obj : compiled) {
+        cmd.append(obj);
+        cmd.append(" ");
+    }
+    print(cmd+"\n");
+    if (system(cmd.c_str()) == 0) {
+    } else {
+        throw std::runtime_error("link failed");
+    }
+}
+
 void Compiler::emit(std::string &Filename) {
     if (Config::debug) DBuilder->finalize();
 
@@ -148,7 +167,9 @@ void Compiler::emit(std::string &Filename) {
     }
 
     //TargetMachine->setOptLevel(llvm::CodeGenOpt::Aggressive);
+
     llvm::legacy::PassManager pass;
+
 
     if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CGFT_ObjectFile)) {
         std::cerr << "TargetMachine can't emit a file of this type";
@@ -810,7 +831,7 @@ void Compiler::genCode(Method *m) {
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     if (is_main(m)) {
-        for (auto& init_proto_path : Compiler::global_protos) {
+        for (auto &init_proto_path : Compiler::global_protos) {
             loc(0, 0);
             auto init_proto = make_init_proto(init_proto_path, this);
             std::vector<llvm::Value *> args2;

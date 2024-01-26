@@ -144,6 +144,35 @@ void bootstrap() {
     compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr, u, cp});
 }
 
+void build_std() {
+    auto s1 = "../tests/src/std/String.x";
+    auto s2 = "../tests/src/std/str.x";
+    auto op = "../tests/src/std/ops.x";
+    auto libc = "../tests/src/std/libc.x";
+    auto io = "../tests/src/std/io.x";
+    std::vector<std::string> list{s1, s2, op, libc, io};
+
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.init();
+    for (auto &file : list) {
+        c.compile(file);
+    }
+    c.build_library("std.a", false);
+}
+
+void bridge() {
+    auto b = "../tests/src/parser/bridge.x";
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.init();
+    c.compile(b);
+
+    c.build_library("xbridge.a", false);
+}
+
 void usage() {
     throw std::runtime_error("usage: ./lang <cmd>\n");
 }
@@ -171,6 +200,10 @@ int main(int argc, char **args) {
             parseTest();
         } else if (arg == "test") {
             compileTest();
+        } else if (arg == "std") {
+            build_std();
+        } else if (arg == "br") {
+            bridge();
         } else if (arg == "c") {
             auto path = std::string(args[i]);
             i++;

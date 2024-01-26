@@ -112,6 +112,7 @@ public:
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
     void link_run();
+    void build_library(const std::string& name, bool shared);
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
