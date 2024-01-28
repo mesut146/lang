@@ -52,10 +52,10 @@ void compile(const std::string &path) {
             if (e.is_directory()) continue;
             c.compile(e.path().string());
         }
-        c.link_run();
+        c.link_run("");
     } else {
         c.compile(path);
-        c.link_run();
+        c.link_run("");
     }
 }
 
@@ -67,7 +67,7 @@ void compile(std::initializer_list<std::string> list) {
     for (auto &file : list) {
         c.compile(file);
     }
-    c.link_run();
+    c.link_run("");
 }
 
 void clean() {
@@ -127,21 +127,33 @@ void compileTest() {
 
 void bootstrap() {
     clean();
-    auto s1 = "../tests/src/std/String.x";
-    auto s2 = "../tests/src/std/str.x";
-    auto op = "../tests/src/std/ops.x";
-    auto libc = "../tests/src/std/libc.x";
-    auto io = "../tests/src/std/io.x";
-    auto tok = "../tests/src/parser/token.x";
-    auto lx = "../tests/src/parser/lexer.x";
-    auto ast = "../tests/src/parser/ast.x";
-    auto printer = "../tests/src/parser/printer.x";
-    auto ps = "../tests/src/parser/parser.x";
-    auto rs = "../tests/src/parser/resolver.x";
-    auto mr = "../tests/src/parser/method_resolver.x";
-    auto u = "../tests/src/parser/utils.x";
-    auto cp = "../tests/src/parser/copier.x";
-    compile({"../tests/src/parser/test.x", s1, s2, op, tok, libc, io, lx, ast, printer, ps, rs, mr, u, cp});
+    std::vector<std::string> list{
+            "../tests/src/std/String.x",
+            "../tests/src/std/str.x",
+            "../tests/src/std/ops.x",
+            "../tests/src/std/libc.x",
+            "../tests/src/std/io.x",
+            "../tests/src/parser/token.x",
+            "../tests/src/parser/lexer.x",
+            "../tests/src/parser/ast.x",
+            "../tests/src/parser/printer.x",
+            "../tests/src/parser/parser.x",
+            "../tests/src/parser/resolver.x",
+            "../tests/src/parser/method_resolver.x",
+            "../tests/src/parser/utils.x",
+            "../tests/src/parser/copier.x",
+            "../tests/src/parser/bridge.x",
+            "../tests/src/parser/compiler.x",
+            "../tests/src/parser/compiler_helper.x",
+            "../tests/src/parser/test.x"};
+    Compiler c;
+    c.srcDir = "../tests/src";
+    c.outDir = "../out";
+    c.init();
+    for (auto &file : list) {
+        c.compile(file);
+    }
+    c.link_run("libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
 void build_std() {
@@ -224,7 +236,7 @@ int main(int argc, char **args) {
                 c.init();
                 c.compile(path);
                 if (c.main_file.has_value()) {
-                    c.link_run();
+                    c.link_run("");
                 }
             }
         } else {

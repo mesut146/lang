@@ -76,14 +76,14 @@ impl String{
       return self.arr.slice(0, self.len());
     }
     
-    func cstr(self): u8*{
+    func cstr(self): i8*{
       //already cstr
       if(self.len() > 0 && self.get((self.len() - 1) as i32) == 0){
-        return self.arr.ptr();
+        return self.arr.ptr() as i8*;
       }
       let res = self.clone();
       res.append(0u8);
-      return res.arr.ptr();
+      return res.arr.ptr() as i8*;
     }
 
     func append(self, s: str){

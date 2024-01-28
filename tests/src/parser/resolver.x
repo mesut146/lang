@@ -37,7 +37,7 @@ struct Resolver{
   used_methods: List<Method*>;
   generated_methods: List<Method>;
   inLoop: i32;
-  used_types: List<Decl>;
+  used_types: List<Decl*>;
 }
 
 struct Config{
@@ -103,6 +103,10 @@ impl Context{
     let r = Resolver::new(path.clone(), self);
     self.map.add(path.clone(), r);
     return self.map.get_ptr(path).unwrap();
+  }
+  func create_resolver(self, path: str): Resolver*{
+    let path2 = path.str();
+    return self.create_resolver(&path2);
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = String::new(self.root.str());
@@ -257,7 +261,7 @@ impl Resolver{
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
-      inLoop: 0, used_types: List<Decl>::new()};
+      inLoop: 0, used_types: List<Decl*>::new()};
     return res;
   }
 
@@ -601,13 +605,13 @@ impl Resolver{
 
   func addUsed(self, decl: Decl*): Decl*{
     for(let i = 0;i < self.used_types.len();++i){
-      let used = self.used_types.get_ptr(i);
+      let used = *self.used_types.get_ptr(i);
       if(used.type.print().eq(decl.type.print().str())){
         return used;
       }
     }
-    self.used_types.add(*decl);
-    return self.used_types.last();
+    self.used_types.add(decl);
+    return *self.used_types.last();
   }
   
   func visit(self, node: FieldDecl*): RType{
@@ -900,12 +904,13 @@ impl Resolver{
         if (decl.is_generic) {
             //infer
             let inferred = self.inferStruct(node, &decl.type, hasNamed, f, args);
-            let map = get_type_map(&inferred, decl);
-            let copier = AstCopier::new(&map);
-            let gen_decl = copier.visit(decl);
-            res = self.visit(&gen_decl.type);
+            res = self.visit(&inferred);
+            //let map = get_type_map(&inferred, decl);
+            //let copier = AstCopier::new(&map);
+            let gen_decl = res.targetDecl.unwrap();
+            //res = self.visit(&gen_decl.type);
             fields0 = Option::new(gen_decl.get_fields());
-            self.addUsed(&gen_decl);
+            //self.addUsed(gen_decl);
             
         }
     }

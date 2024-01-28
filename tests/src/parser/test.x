@@ -4,6 +4,7 @@ import parser/parser
 import parser/ast
 import parser/printer
 import parser/resolver
+import parser/compiler
 import std/map
 import std/io
 
@@ -48,9 +49,32 @@ func resolver_dir(ctx: Context*, dir: str){
   }
 }
 
+func compile_dir(cmp: Compiler*, dir: str){
+  let list = list(dir);
+  for(let i = 0;i < list.len();++i){
+    let name = list.get_ptr(i);
+    if(!name.str().ends_with(".x")) continue;
+    let file = String::new(dir);
+    file.append("/");
+    file.append(name.str());
+    if(is_dir(file.str())) continue;
+    cmp.compile(file.str());
+  }
+}
+
+func compiler_test(){
+  print("compiler_test\n");
+  let root = "../tests/src";
+  let ctx = Context::new(root.str());
+  let cmp = Compiler::new(ctx);
+  compile_dir(&cmp, root);
+  compile_dir(&cmp, "../tests/src/std");
+}
+
 func main(){
   print("##########running##########\n");
   //lexer_test();
   //parser_test();
-  resolver_test();
+  //resolver_test();
+  compiler_test();
 }

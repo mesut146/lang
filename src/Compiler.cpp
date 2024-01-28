@@ -101,14 +101,14 @@ void Compiler::compileAll() {
         compile(main_file.value());
     }
 
-    link_run();
+    link_run("");
     /*for (auto &[k, v] : Resolver::resolverMap) {
         //v.reset();
         //v->unit.reset();
     }*/
 }
 
-void Compiler::link_run() {
+void Compiler::link_run(const std::string& args) {
     if (fs::exists("a.out")) {
         system("rm a.out");
     }
@@ -117,6 +117,7 @@ void Compiler::link_run() {
         cmd.append(obj);
         cmd.append(" ");
     }
+    cmd.append(args);
     if (system(cmd.c_str()) == 0) {
         auto code = system("./a.out");
         if (code != 0) {

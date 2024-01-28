@@ -93,3 +93,17 @@ func resolve(path: str): String{
   let len = strlen(buf[0..256]);
   return String::new(buf[0..len]);
 }
+
+struct Path{
+  path: String;
+}
+
+impl Path{
+  func new(path: String): Path{
+    return Path{path: path};
+  }
+  func ext(self): str{
+    let i = self.path.str().lastIndexOf(".");
+    return self.path.substr(i + 1);
+  }
+}
