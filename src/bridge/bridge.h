@@ -21,4 +21,13 @@ extern "C"{
     void init();
     //write to ptr, return length
     int getDefaultTargetTriple(char* ptr);
+    void InitializeAllTargetInfos();
+    void InitializeAllTargets();
+    void InitializeAllTargetMCs();
+    void InitializeAllAsmParsers();
+    void InitializeAllAsmPrinters();
+    const void* lookupTarget(const char* triple);
+    void* createTargetMachine(const char* TargetTriple);
+    
+    void emit(const char* name, void* target, char* triple, void* module);
 }

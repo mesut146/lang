@@ -54,6 +54,8 @@ TokenType kw(std::string &s) {
         return FUNC;
     if (s == "let")
         return LET;
+    if (s == "namespace")
+        return NAMESPACE;
     if (s == "new")
         return NEW;
     if (s == "const")

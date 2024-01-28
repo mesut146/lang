@@ -17,6 +17,7 @@ std::string printType(TokenType t) {
         TOKEN_CASE(FROM)
         TOKEN_CASE(IS)
         TOKEN_CASE(VIRTUAL)
+        TOKEN_CASE(NAMESPACE)
 
         TOKEN_CASE(BOOLEAN)
         TOKEN_CASE(U8)

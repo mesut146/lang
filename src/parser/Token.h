@@ -59,6 +59,7 @@ enum TokenType {
     TRY,
     CATCH,
     VIRTUAL,
+    NAMESPACE,
     EQ,
     PLUS,
     MINUS,

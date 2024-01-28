@@ -72,8 +72,6 @@ void Compiler::init() {
     std::string Error;
     //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
     auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
-    //std::cout << "triple: " << TargetTriple << std::endl;
-    //std::cout << "target: " << Target->getName() << std::endl;
 
     if (!Target) {
         throw std::runtime_error(Error);
@@ -169,8 +167,6 @@ void Compiler::emit(std::string &Filename) {
     //TargetMachine->setOptLevel(llvm::CodeGenOpt::Aggressive);
 
     llvm::legacy::PassManager pass;
-
-
     if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CGFT_ObjectFile)) {
         std::cerr << "TargetMachine can't emit a file of this type";
         exit(1);
