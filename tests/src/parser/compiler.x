@@ -18,6 +18,16 @@ struct Compiler{
 
 struct Protos{
   sliceType: StructType*;
+  stringType: StructType*;
+  classMap: Map<String, llvm_Type*>;
+}
+
+impl Protos{
+  func get(self, d: Decl*): llvm_Type*{
+    let name=d.type.print();
+    let res = self.classMap.get_ptr(&name);
+    return *res.unwrap();
+  }
 }
 
 struct llvm_holder{
@@ -100,13 +110,15 @@ impl Compiler{
     self.resolver.resolve_all();
     self.initModule(path0);
     self.createProtos();
-    panic("");
+    return outFile;
+    //panic("");
   }
 
   //make all struct decl & method decl used by this module
   func createProtos(self){
     let sliceType = make_slice_type();
-    make_string_type(sliceType as llvm_Type*);
+    let stringType = make_string_type(sliceType as llvm_Type*);
+    let p = Protos{sliceType:sliceType, stringType: stringType, classMap: Map<String, llvm_Type*>::new()};
 
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
@@ -117,6 +129,17 @@ impl Compiler{
           continue;
       }
       list.add(decl);
+    }
+    //sort(&list, self.resolver);
+    //first create just protos to fill later
+    for(let i=0;i<list.len();++i){
+      let decl = list.get(i);
+      make_decl_proto(decl);
+    }
+    //fill with elems
+    for(let i=0;i<list.len();++i){
+      let decl = list.get(i);
+      make_decl(decl, p.get(decl) as StructType*);
     }
   }
 

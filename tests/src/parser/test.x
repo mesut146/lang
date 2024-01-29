@@ -5,6 +5,7 @@ import parser/ast
 import parser/printer
 import parser/resolver
 import parser/compiler
+import parser/bridge
 import std/map
 import std/io
 

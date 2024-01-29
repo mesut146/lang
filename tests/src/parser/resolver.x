@@ -38,6 +38,7 @@ struct Resolver{
   generated_methods: List<Method>;
   inLoop: i32;
   used_types: List<Decl*>;
+  generated_decl: List<Decl>;
 }
 
 struct Config{
@@ -261,7 +262,8 @@ impl Resolver{
     let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
-      inLoop: 0, used_types: List<Decl*>::new()};
+      inLoop: 0, used_types: List<Decl*>::new(1000),
+      generated_decl: List<Decl>::new()};
     return res;
   }
 
@@ -494,7 +496,7 @@ impl Resolver{
                 }
             }
         }
-    } else if let Decl::Struct(fields)=(bd){
+    } else if let Decl::Struct(fields*)=(bd){
             for (let j=0;j<fields.len();++j) {
                 let f = fields.get_ptr(j);
                 if (self.is_cyclic(&f.type, target)) {
@@ -605,7 +607,9 @@ impl Resolver{
 
   func addUsed(self, decl: Decl*): Decl*{
     for(let i = 0;i < self.used_types.len();++i){
-      let used = *self.used_types.get_ptr(i);
+      let used = self.used_types.get(i);
+      //used.type.print();
+      decl.type.print();
       if(used.type.print().eq(decl.type.print().str())){
         return used;
       }
@@ -728,7 +732,7 @@ impl Resolver{
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);//todo owner who?
-    //print("generated %s\n", Fmt::str(&decl0).cstr());
+    print("generated %s\n", Fmt::str(&decl0).cstr());
     let decl = self.addUsed(&decl0);
     let smp = Simple::new(node.name().clone());
     let args = node.get_args();
