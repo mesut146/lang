@@ -60,7 +60,7 @@ impl<K, V> Map<K, V>{
     return self.indexOf(k) != -1;
   }
   
-  func get(self, k: K): Option<V>{
+  /*func get(self, k: K): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get(i);
       if(Eq::eq(&e.a, &k)){
@@ -68,7 +68,7 @@ impl<K, V> Map<K, V>{
       }
     }
     return Option<V>::None;
-  }
+  }*/
   func get_p(self, k: K*): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);

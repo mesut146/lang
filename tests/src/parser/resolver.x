@@ -263,7 +263,7 @@ impl Resolver{
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
       inLoop: 0, used_types: List<Decl*>::new(1000),
-      generated_decl: List<Decl>::new()};
+      generated_decl: List<Decl>::new(1000)};
     return res;
   }
 
@@ -483,8 +483,12 @@ impl Resolver{
         return true;
     }
     let bd = rt.targetDecl.unwrap();
-    if (bd.base.is_some() && self.is_cyclic(bd.base.get(), target)) {
+    //print("bd %s\n", Fmt::str(bd).cstr());
+    let base = bd.base;
+    if (base.is_some()) {
+      if(self.is_cyclic(base.get(), target)){
         return true;
+      }
     }
     if let Decl::Enum(variants*)=(bd) {
         for (let i=0;i<variants.len();++i) {
@@ -543,7 +547,7 @@ impl Resolver{
         if(!m.type_args.empty()) continue;
         self.visit(m);
         let mangled = mangle2(m, &imp.info.type);
-        print("impl %s\n", mangled.cstr());
+        //print("impl %s\n", mangled.cstr());
         let idx = required.indexOf(&mangled);
         if(idx != -1){
           required.remove(idx);
@@ -608,13 +612,21 @@ impl Resolver{
   func addUsed(self, decl: Decl*): Decl*{
     for(let i = 0;i < self.used_types.len();++i){
       let used = self.used_types.get(i);
-      //used.type.print();
-      decl.type.print();
       if(used.type.print().eq(decl.type.print().str())){
         return used;
       }
     }
+    //print("addUsed %s\n", decl.type.print().cstr());
     self.used_types.add(decl);
+    if(decl is Decl::Struct){
+      let fields = decl.get_fields();
+      for(let i = 0;i < fields.len();++i){
+        let fd = fields.get_ptr(i);
+        self.visit(&fd.type);
+      }
+    }else{
+      //todo
+    }
     return *self.used_types.last();
   }
   
@@ -677,9 +689,6 @@ impl Resolver{
       self.addType(str, res);
       return res;
     }
-    if(str.eq("Option<i32*>")){
-      let x = 11;
-    }
     let target0 = Option<Decl*>::None;
     let targs = node.get_args();
     if (!targs.empty()) {
@@ -702,10 +711,15 @@ impl Resolver{
         if(tmp.trait.is_some()){
           return tmp;
         }
-        if(!tmp.targetDecl.unwrap().is_generic){
+        else if(tmp.targetDecl.is_some()){
+          target0 = tmp.targetDecl;
+          if(!target0.unwrap().is_generic){
+            return tmp;
+          }
+        }else{
+          //type alias from imports
           return tmp;
         }
-        target0 = tmp.targetDecl;
       }
       else{
         let expr = Expr::Type{*node};
@@ -732,8 +746,10 @@ impl Resolver{
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);//todo owner who?
-    print("generated %s\n", Fmt::str(&decl0).cstr());
-    let decl = self.addUsed(&decl0);
+    self.generated_decl.add(decl0);
+    let decl = self.generated_decl.last();
+    self.addUsed(decl);
+    //print("generated %s\n%s\n", decl.type.print().cstr(), self.unit.path.cstr());
     let smp = Simple::new(node.name().clone());
     let args = node.get_args();
     for (let i=0;i < args.len();++i) {

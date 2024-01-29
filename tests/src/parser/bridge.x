@@ -7,6 +7,7 @@ struct IRBuilder;
 struct StructType;
 struct llvm_Type;
 struct PointerType;
+struct ArrayType;
 
 extern{
     func make_vec(): vector*;
@@ -26,8 +27,11 @@ extern{
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;
+    func setBody(st: StructType*, elems: vector*);
+    func getSizeInBits(st: StructType*): i32;
     func getInt(bits: i32): llvm_Type*;
     func getPointerTo(type: llvm_Type*): llvm_Type*;
+    func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
 }
 
 func getDefaultTargetTriple2(): String{

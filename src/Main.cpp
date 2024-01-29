@@ -195,6 +195,9 @@ int main(int argc, char **args) {
         int i = 1;
         if (argc > 0 && std::string(args[i]) == "-nc") {
             Config::use_cache = false;
+            if (fs::exists(Cache::CACHE_FILE)) {
+                fs::remove(Cache::CACHE_FILE);
+            }
             ++i;
             argc--;
         }

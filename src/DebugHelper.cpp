@@ -125,6 +125,71 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
     return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, size, align, 0, c->makeInt(idx), llvm::DINode::FlagZero, st);
 }
 
+llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
+    std::vector<llvm::Metadata *> elems;
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+    auto st_size = getSize2(decl);
+    auto file = DBuilder->createFile(decl->unit->path, di.cu->getDirectory());
+    auto name = decl->type.print();
+    auto st = DBuilder->createStructType(di.cu, name, file, decl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    di.incomplete_types[name] = st;
+    return st;
+}
+
+llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
+    auto st = di.incomplete_types.at(decl->type.print());
+    di.types[decl->type.print()] = st;
+    auto file = st->getFile();
+    std::vector<llvm::Metadata *> elems;
+
+    if (decl->base.has_value()) {
+        auto base_ty = map_di(decl->base.value());
+        auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
+        elems.push_back(in);
+    }
+
+    auto st1 = (llvm::StructType *) mapType(decl->type);
+    auto sl = mod->getDataLayout().getStructLayout(st1);
+
+    if (decl->isEnum()) {
+        //todo order
+        auto ed = (EnumDecl *) decl;
+        auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
+        auto enum_size = getSize2(ed);
+        int tag_off = 0;
+        if (decl->base.has_value()) {
+            tag_off = sl->getElementOffsetInBits(1);
+        }
+        std::vector<llvm::Metadata *> elems2;
+        auto disc = DBuilder->createMemberType(nullptr, "", file, ed->line, ENUM_TAG_BITS, 0, tag_off, llvm::DINode::FlagArtificial, tag);
+        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2));
+        auto var_part = DBuilder->createVariantPart(st, "", file, decl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);
+        int idx = 0;
+        for (auto &evar : ed->variants) {
+            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st);
+            elems2.push_back(var_type);
+            ++idx;
+        }
+        var_part->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2)));
+        elems.push_back(var_part);
+    } else {
+        auto sd = (StructDecl *) decl;
+        int idx = 0;
+        if (decl->base.has_value()) {
+            idx++;
+        }
+        for (auto &fd : sd->fields) {
+            auto off = sl->getElementOffsetInBits(idx);
+            auto di_type = map_di(fd.type);
+            auto mt = DBuilder->createMemberType(st, fd.name, file, fd.line, di_type->getSizeInBits(), 0, off, llvm::DINode::FlagZero, di_type);
+            elems.push_back(mt);
+            idx++;
+        }
+    }
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
+    st->replaceElements(arr);
+    return st;
+}
 
 llvm::DIType *Compiler::map_di0(const Type *t) {
     auto rt = resolv->resolve(*t);
@@ -145,21 +210,17 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
     if (s == "u16") return DBuilder->createBasicType(s, 16, llvm::dwarf::DW_ATE_unsigned);
     if (s == "u32") return DBuilder->createBasicType(s, 32, llvm::dwarf::DW_ATE_unsigned);
     if (s == "u64") return DBuilder->createBasicType(s, 64, llvm::dwarf::DW_ATE_unsigned);
-    if (t->name == "List") {
-        //DBuilder->cre
-        std::vector<int> arrrr;
-    }
-    if (s == "Decl") {
-        int xx = 55;
-    }
     if (t->isPointer()) {
         auto elem = t->unwrap();
-        if (di.types.contains(elem.print()) || rt.targetDecl == nullptr) {
+        if (di.incomplete_types.contains(elem.print())) {
+            auto st = di.incomplete_types.at(elem.print());
+            return DBuilder->createPointerType(st, 64);
+        } else {
+            return DBuilder->createPointerType(map_di(&elem), 64);
+        }
+        /*if (di.types.contains(elem.print()) || rt.targetDecl == nullptr) {
             return DBuilder->createPointerType(map_di(&elem), 64);
         } else {
-            if (elem.print() == "Unit") {
-                print("unit in " + resolv->unit->path);
-            }
             //make incomplete type to fill later
             auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
             auto st_size = getSize2(elem);
@@ -168,7 +229,7 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
             auto st = DBuilder->createStructType(di.cu, elem.print(), file, 0, st_size, 0, llvm::DINode::FlagZero, nullptr, et);
             di.incomplete_types[elem.print()] = st;
             return DBuilder->createPointerType(st, 64);
-        }
+        }*/
     }
     if (t->isArray()) {
         std::vector<llvm::Metadata *> elems;
@@ -191,67 +252,5 @@ llvm::DIType *Compiler::map_di0(const Type *t) {
         auto et = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
         return DBuilder->createStructType(di.cu, s, file, 0, sz, 0, llvm::DINode::FlagZero, nullptr, et);
     }
-    if (!rt.targetDecl) {
-        throw std::runtime_error("di type: " + t->print());
-    }
-    auto file = DBuilder->createFile(rt.targetDecl->unit->path, di.cu->getDirectory());
-    std::vector<llvm::Metadata *> elems;
-    llvm::DICompositeType *st;
-
-    if (di.incomplete_types.contains(s)) {
-        st = di.incomplete_types[s];
-    } else {
-        //empty type
-        auto st_size = getSize2(t);
-        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-        st = DBuilder->createStructType(di.cu, s, file, rt.targetDecl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
-    }
-
-    if (rt.targetDecl->base.has_value()) {
-        auto base_ty = map_di(rt.targetDecl->base.value());
-        auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
-        elems.push_back(in);
-    }
-
-    auto st1 = (llvm::StructType *) mapType(rt.targetDecl->type);
-    auto sl = mod->getDataLayout().getStructLayout(st1);
-
-    if (rt.targetDecl->isEnum()) {
-        //todo order
-        auto ed = (EnumDecl *) rt.targetDecl;
-        auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
-        auto enum_size = getSize2(ed);
-        int tag_off = 0;
-        if (rt.targetDecl->base.has_value()) {
-            tag_off = sl->getElementOffsetInBits(1);
-        }
-        std::vector<llvm::Metadata *> elems2;
-        auto disc = DBuilder->createMemberType(nullptr, "", file, ed->line, ENUM_TAG_BITS, 0, tag_off, llvm::DINode::FlagArtificial, tag);
-        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2));
-        auto var_part = DBuilder->createVariantPart(st, "", file, rt.targetDecl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);
-        int idx = 0;
-        for (auto &evar : ed->variants) {
-            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st);
-            elems2.push_back(var_type);
-            ++idx;
-        }
-        var_part->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2)));
-        elems.push_back(var_part);
-    } else {
-        auto sd = (StructDecl *) rt.targetDecl;
-        int idx = 0;
-        if (rt.targetDecl->base.has_value()) {
-            idx++;
-        }
-        for (auto &fd : sd->fields) {
-            auto off = sl->getElementOffsetInBits(idx);
-            auto di_type = map_di(fd.type);
-            auto mt = DBuilder->createMemberType(st, fd.name, file, fd.line, di_type->getSizeInBits(), 0, off, llvm::DINode::FlagZero, di_type);
-            elems.push_back(mt);
-            idx++;
-        }
-    }
-    auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
-    st->replaceElements(arr);
-    return st;
+    throw std::runtime_error("di type: " + t->print());
 }

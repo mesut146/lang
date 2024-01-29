@@ -175,7 +175,7 @@ impl Lexer{
           continue;
         }
         let s = self.str(self.pos, self.pos + i); 
-        let it = self.ops.get(s);
+        let it = self.ops.get_p(&s);
         if (it.is_some()) {
             self.pos += i;
             let tok = it.unwrap(); 
@@ -294,7 +294,8 @@ impl Lexer{
     }
     let os = String::new();
     os.append(c);
-    if(self.ops.get(os.str()).is_some()){
+    let oss=os.str();
+    if(self.ops.get_p(&oss).is_some()){
       return self.read_op();
     }
     panic("in file %s\nunexpected char: %c(%d) at %d" ,self.path.cstr(),  c, c, start);

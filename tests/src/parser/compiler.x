@@ -24,9 +24,18 @@ struct Protos{
 
 impl Protos{
   func get(self, d: Decl*): llvm_Type*{
-    let name=d.type.print();
-    let res = self.classMap.get_ptr(&name);
-    return *res.unwrap();
+    let name = d.type.print();
+    return self.get(&name);
+  }
+  func get(self, name: String*): llvm_Type*{
+    let res = self.classMap.get_p(name);
+    return res.unwrap();
+  }
+  func dump(self){
+    for(let i=0;i<self.classMap.len();++i){
+      let e = self.classMap.get_idx(i).unwrap();
+      print("%s -> %s\n", e.a.cstr());
+    }
   }
 }
 
@@ -125,7 +134,6 @@ impl Compiler{
     for (let i=0;i<self.resolver.used_types.len();++i) {
       let decl = self.resolver.used_types.get(i);
       if (decl.is_generic) {
-          //error("gen");
           continue;
       }
       list.add(decl);
@@ -134,13 +142,28 @@ impl Compiler{
     //first create just protos to fill later
     for(let i=0;i<list.len();++i){
       let decl = list.get(i);
-      make_decl_proto(decl);
+      let st = make_decl_proto(decl);
+      p.classMap.add(decl.type.print(), st as llvm_Type*);
     }
     //fill with elems
     for(let i=0;i<list.len();++i){
       let decl = list.get(i);
-      make_decl(decl, p.get(decl) as StructType*);
+      make_decl(&p, self.resolver, decl, p.get(decl) as StructType*);
     }
+    //todo di proto
+    //methods
+    let methods = getMethods(self.unit());
+    for (let i=0;i<methods.len();++i) {
+      let m = methods.get_ptr(i);
+      make_proto(m);
+    }
+      //generic methods from resolver
+      for (auto gm : resolv->generatedMethods) {
+          make_proto(gm);
+      }
+      for (auto m : resolv->usedMethods) {
+          make_proto(m);
+      }
   }
 
   func initModule(self, path: str){

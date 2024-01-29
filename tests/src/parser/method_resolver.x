@@ -45,7 +45,7 @@ impl Signature{
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
                 let trg = scp.targetDecl.unwrap();
-                print("trg=%s", Fmt::str(trg).cstr());
+                //print("trg=%s", Fmt::str(trg).cstr());
                 let bd = trg as BaseDecl*;
                 let p = &bd.path;
                 if(!trg.path.eq(&r.unit.path)){

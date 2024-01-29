@@ -108,7 +108,7 @@ void Compiler::compileAll() {
     }*/
 }
 
-void Compiler::link_run(const std::string& args) {
+void Compiler::link_run(const std::string &args) {
     if (fs::exists("a.out")) {
         system("rm a.out");
     }
@@ -144,7 +144,7 @@ void Compiler::build_library(const std::string &name, bool shared) {
         cmd.append(obj);
         cmd.append(" ");
     }
-    print(cmd+"\n");
+    print(cmd + "\n");
     if (system(cmd.c_str()) == 0) {
     } else {
         throw std::runtime_error("link failed");
@@ -637,6 +637,12 @@ void Compiler::createProtos() {
     }
     for (auto bd : list) {
         makeDecl(bd);
+    }
+    for (auto bd : list) {
+        map_di_proto(bd);
+    }
+    for (auto bd : list) {
+        map_di_fill(bd);
     }
     //methods
     for (auto m : getMethods(unit.get())) {

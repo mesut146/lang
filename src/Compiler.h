@@ -49,6 +49,7 @@ struct DebugInfo {
 
 struct Cache {
     std::map<std::string, std::string> map;
+    static std::string CACHE_FILE;
 
     void read_cache();
     void write_cache();
@@ -111,8 +112,8 @@ public:
     void emit(std::string &Filename);
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
-    void link_run(const std::string& args);
-    void build_library(const std::string& name, bool shared);
+    void link_run(const std::string &args);
+    void build_library(const std::string &name, bool shared);
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
@@ -248,6 +249,8 @@ public:
 
     llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     llvm::DIType *map_di0(const Type *t);
+    llvm::DIType *map_di_proto(BaseDecl* decl);
+    llvm::DIType *map_di_fill(BaseDecl* decl);
     llvm::DIType *map_di(const Type *t) {
         auto str = t->print();
         if (di.types.contains(str)) {

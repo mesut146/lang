@@ -3,7 +3,7 @@ import parser/copier
 import parser/printer
 
 func prim_size(s: str): Option<u32>{
-  let prims = ["bool", "i8","i16","i32","i64","u8","u16","u32","u64","f32","f64"];
+  let prims = ["bool", "i8", "i16", "i32", "i64","u8","u16","u32","u64","f32","f64"];
   let sizes = [8,8,16,32,64, 8,16,32,64,32,64];
   for(let i = 0;i < prims.len();++i){
     if(prims[i].eq(s)){
