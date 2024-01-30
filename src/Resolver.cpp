@@ -239,7 +239,13 @@ void Resolver::dropScope() {
     scopes.pop_back();
 }
 
-void Resolver::addScope(std::string &name, const Type &type, bool prm) {
+void Resolver::addScope(std::string &name, const Type &type, bool prm, int line) {
+    for (auto &scope : this->scopes) {
+        if (scope.find(name)) {
+            print("in " + unit->path + ":" + std::to_string(line));
+            throw std::runtime_error("variable " + name + " already declared in the same scope");
+        }
+    }
     scopes.back().add(VarHolder(name, type, prm));
 }
 
@@ -275,7 +281,7 @@ void Resolver::resolveAll() {
                 err(msg);
             }
         }
-        addScope(g.name, rhs.type, false);
+        addScope(g.name, rhs.type, false, 0);
     }
     for (auto &item : unit->items) {
         item->accept(this);
@@ -744,11 +750,11 @@ std::any Resolver::visitMethod(Method *m) {
     newScope();
     if (m->self) {
         if (!m->self->type) err("self type is not set");
-        addScope(m->self->name, *m->self->type, true);
+        addScope(m->self->name, *m->self->type, true, m->line);
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        addScope(prm.name, *prm.type, true);
+        addScope(prm.name, *prm.type, true, m->line);
         prm.accept(this);
     }
     if (m->body) {
@@ -785,7 +791,7 @@ std::any Resolver::visitFragment(Fragment *f) {
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
     for (auto &f : vd->list) {
         auto rt = std::any_cast<RType>(f.accept(this));
-        addScope(f.name, rt.type);
+        addScope(f.name, rt.type, false, f.line);
     }
     return nullptr;
 }
@@ -1260,9 +1266,9 @@ std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     newScope();
     for (auto &arg : node->args) {
         if (arg.ptr) {
-            addScope(arg.name, Type(Type::Pointer, variant.fields[i].type));
+            addScope(arg.name, Type(Type::Pointer, variant.fields[i].type), false, node->line);
         } else {
-            addScope(arg.name, variant.fields[i].type);
+            addScope(arg.name, variant.fields[i].type, false, node->line);
         }
         i++;
     }

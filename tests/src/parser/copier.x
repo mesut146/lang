@@ -143,7 +143,8 @@ impl AstCopier{
     }
     
     func visit(self, node: Fragment*): Fragment{
-      return Fragment{node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
+      let n = node as Node*;
+      return Fragment{.*n, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
     }
 
     func visit(self, node: ArgBind*): ArgBind{

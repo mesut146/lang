@@ -33,7 +33,7 @@ impl Signature{
     func new(mc: Call*, r: Resolver*): Signature{
         let res = Signature{mc: Option::new(mc),
                             m: Option<Method*>::None,
-                            name: mc.name,
+                            name: mc.name.clone(),
                             args: List<Type>::new(),
                             scope: Option<RType>::None,
                             ret: Type::new("void"),
@@ -104,7 +104,7 @@ impl Signature{
     func new(m: Method*, map: Map<String, Type>*): Signature{
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
-            name: m.name,
+            name: m.name.clone(),
             args: List<Type>::new(),
             scope: Option<RType>::None,
             ret: replace_self(&m.type, m),

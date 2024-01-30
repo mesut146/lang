@@ -20,6 +20,14 @@ func prim_size(s: String): Option<u32>{
 struct Node{
   line: i32;
   pos: i32;
+  id: i32;
+}
+
+
+impl Node{
+  func new(id: i32): Node{
+    return Node{line: 0, pos: 0, id: id};
+  }
 }
 
 struct Unit{
@@ -378,7 +386,7 @@ impl VarExpr{
   }
 }
 
-struct Fragment{
+struct Fragment: Node{
   name: String;
   type: Option<Type>;
   rhs: Expr;

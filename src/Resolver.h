@@ -299,8 +299,7 @@ public:
 
     void newScope();
     void dropScope();
-    Scope &curScope();
-    void addScope(std::string &name, const Type &type, bool prm = false);
+    void addScope(std::string &name, const Type &type, bool prm, int line);
 
     void init();
     void resolveAll();

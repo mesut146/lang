@@ -112,113 +112,139 @@ func make_decl_proto(decl: Decl*): StructType*{
   return make_struct_ty(decl.type.print().cstr());
 }
 
-func make_variant_type(p: Protos*,r: Resolver*, ev: Variant*, decl: Decl*): StructType*{
-  let elems = make_vec();
-  for(let j=0;j < ev.fields.len();++j){
-    let fd = ev.fields.get_ptr(j);
-    let ft = mapType(p, r, &fd.type);
-    vec_push(elems, ft);
+impl Compiler{
+  func mapType(self, type: Type*): llvm_Type*{
+    let p = self.protos.get();
+    let r = self.resolver;
+    let rt = r.visit(type);
+    type = &rt.type;
+    let s = type.print();
+    //print("mapType %s\n", s.cstr());
+    if(type.is_void()) return getVoidTy();
+    let prim_size = prim_size(s.str());
+    if(prim_size.is_some()){
+      return getInt(prim_size.unwrap());
+    }
+    if let Type::Array(elem*,size)=(type){
+      let elem_ty = self.mapType(elem.get());
+      return getArrTy(elem_ty, size) as llvm_Type*;
+    }
+    if let Type::Slice(elem*)=(type){
+      return p.std("slice") as llvm_Type*;
+    }
+    if let Type::Pointer(elem*)=(type){
+      let elem_ty = self.mapType(elem.get());
+      return getPointerTo(elem_ty);
+    }
+    if(!p.classMap.contains(&s)){
+      p.dump();
+      panic("mapType %s\n", s.cstr());
+    }
+    return p.get(&s);
   }
-  let name = Fmt::format("{}::{}",decl.type.print().str(), ev.name.str());
-  return make_struct_ty2(name.cstr(), elems);
-}
 
-func make_decl(p: Protos*,r: Resolver*, decl: Decl*, st: StructType*){
-  //print("make_decl %s\n", decl.type.print().cstr());
-  let elems = make_vec();
-  if(decl.base.is_some()){
-    vec_push(elems, mapType(p, r, decl.base.get()));
-  }
-  if let Decl::Enum(variants*)=(decl){
-    //calc enum size
-    let max = 0;
-    for(let i=0;i < variants.len();++i){
-      let ev = variants.get_ptr(i);
-      let var_ty = make_variant_type(p,r,ev,decl);
-      let sz = getSizeInBits(var_ty);
-      if(sz > max){
-        max = sz;
+  func make_decl(self, decl: Decl*, st: StructType*){
+    //print("make_decl %s\n", decl.type.print().cstr());
+    let elems = make_vec();
+    if(decl.base.is_some()){
+      vec_push(elems, self.mapType(decl.base.get()));
+    }
+    if let Decl::Enum(variants*)=(decl){
+      //calc enum size
+      let max = 0;
+      for(let i=0;i < variants.len();++i){
+        let ev = variants.get_ptr(i);
+        let var_ty = self.make_variant_type(ev,decl);
+        let sz = getSizeInBits(var_ty);
+        if(sz > max){
+          max = sz;
+        }
+      }
+      vec_push(elems, getInt(ENUM_TAG_BITS()));
+      vec_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
+    }else if let Decl::Struct(fields*)=(decl){
+      if(fields.empty()) return;
+      for(let i = 0;i < fields.len();++i){
+        let fd = fields.get_ptr(i);
+        let ft = self.mapType(&fd.type);
+        vec_push(elems, ft);
       }
     }
-    vec_push(elems, getInt(ENUM_TAG_BITS()));
-    vec_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
-  }else if let Decl::Struct(fields*)=(decl){
-    if(fields.empty()) return;
-    for(let i = 0;i < fields.len();++i){
-      let fd = fields.get_ptr(i);
-      let ft = mapType(p, r, &fd.type);
+    setBody(st, elems);
+  }
+  func make_variant_type(self, ev: Variant*, decl: Decl*): StructType*{
+    let elems = make_vec();
+    for(let j=0;j < ev.fields.len();++j){
+      let fd = ev.fields.get_ptr(j);
+      let ft = self.mapType(&fd.type);
       vec_push(elems, ft);
     }
+    let name = Fmt::format("{}::{}",decl.type.print().str(), ev.name.str());
+    return make_struct_ty2(name.cstr(), elems);
   }
-  setBody(st, elems);
-}
 
-func mapType(p: Protos*, r: Resolver*, type: Type*): llvm_Type*{
-  let rt = r.visit(type);
-  type = &rt.type;
-  let s = type.print();
-  //print("mapType %s\n", s.cstr());
-  if(type.is_void()) return getVoidTy();
-  let prim_size = prim_size(s.str());
-  if(prim_size.is_some()){
-    return getInt(prim_size.unwrap());
-  }
-  if let Type::Array(elem*,size)=(type){
-    let elem_ty = mapType(p, r, elem.get());
-    return getArrTy(elem_ty, size) as llvm_Type*;
-  }
-  if let Type::Slice(elem*)=(type){
-    return p.std("slice") as llvm_Type*;
-  }
-  if let Type::Pointer(elem*)=(type){
-    let elem_ty = mapType(p, r, elem.get());
-    return getPointerTo(elem_ty);
-  }
-  if(!p.classMap.contains(&s)){
-    p.dump();
-    print("mapType %s\n", s.cstr());
-  }
-  return p.get(&s);
-  //panic("mapType %s\n", s.cstr());
-}
-
-func make_proto(p: Protos*, r: Resolver*,m: Method*){
-  if(m.is_generic) return;
-  let rvo = is_struct(&m.type);
-  let ret = getVoidTy();
-  if(is_main(m)){
-    ret = getInt(32);
-  }else if(!rvo){
-    ret = mapType(p,r,&m.type);
-  }
-  let args = make_vec();
-  if(rvo){
-    let rvo_ty = getPointerTo(mapType(p, r, &m.type));
-    vec_push(args, rvo_ty);
-  }
-  if(m.self.is_some()){
-    let self_ty = mapType(p, r, &m.self.get().type);
-    vec_push(args, self_ty);
-  }
-  for(let i=0;i<m.params.len();++i){
-    let prm = m.params.get_ptr(i);
-    let pt = mapType(p, r, &prm.type);
-    if(is_struct(&prm.type)){
-      pt = getPointerTo(pt);
+  func make_proto(self, m: Method*){
+    if(m.is_generic) return;
+    let rvo = is_struct(&m.type);
+    let ret = getVoidTy();
+    if(is_main(m)){
+      ret = getInt(32);
+    }else if(!rvo){
+      ret = self.mapType(&m.type);
     }
-    vec_push(args, pt);
+    let args = make_vec();
+    if(rvo){
+      let rvo_ty = getPointerTo(self.mapType(&m.type));
+      vec_push(args, rvo_ty);
+    }
+    if(m.self.is_some()){
+      let self_ty = self.mapType(&m.self.get().type);
+      vec_push(args, self_ty);
+    }
+    for(let i=0;i<m.params.len();++i){
+      let prm = m.params.get_ptr(i);
+      let pt = self.mapType(&prm.type);
+      if(is_struct(&prm.type)){
+        pt = getPointerTo(pt);
+      }
+      vec_push(args, pt);
+    }
+    let ft = make_ft(ret, args, false);
+    let linkage = ext();
+    if(!m.type_args.empty()){
+      linkage = odr();
+    }
+    let mangled = mangle(m);
+    let f = make_func(ft, linkage, mangled.cstr());
+    if(rvo){
+      let arg = get_arg(f, 0);
+      let sret = get_sret();
+      arg_attr(arg, &sret);
+    }
+    self.protos.get().funcMap.add(mangled, f);
   }
-  let ft = make_ft(ret, args, false);
-  let linkage = ext();
-  if(!m.type_args.empty()){
-    linkage = odr();
+}
+
+
+func doesAlloc(e: Expr*, r: Resolver*): bool{
+  if(e is Expr::Obj) return true;
+  if let Expr::ArrAccess(aa*)=(e){
+    return aa.idx2.is_some();//slice creation
   }
-  let mangled = mangle(m);
-  let f = make_func(ft, linkage, mangled.cstr());
-  if(rvo){
-    let arg = get_arg(f, 0);
-    let sret = get_sret();
-    arg_attr(arg, &sret);
+  if let Expr::Lit(kind*, val*, sf)=(e){
+    return kind is LitKind::STR;
   }
-  p.funcMap.add(mangled, f);
+  if let Expr::Type(ty*)=(e){
+    return true;//enum creation
+  }
+  if let Expr::Array(list*,size)=(e){
+    return true;
+  }
+  if let Expr::Call(call*)=(e){
+    let target = r.visit(e).method;
+    if(target.is_some()){
+      return is_struct(&target.unwrap().type);
+    }
+  }
+  panic("doesAlloc");
 }

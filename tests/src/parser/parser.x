@@ -11,12 +11,13 @@ class Parser{
   is_marked: bool;
   mark: i32;
   unit: Unit;
+  last_id: i32;
 }
 
 impl Parser{
   
   func new(l: Lexer*): Parser{
-    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path)};
+    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path), -1};
     res.fill();
     return res;
   }
@@ -542,7 +543,12 @@ impl Parser{
       }
       self.consume(TokenType::EQ);
       let rhs = self.parse_expr();
-      return Fragment{nm.value, type, rhs};
+      let n = self.node();
+      return Fragment{.n, nm.value, type, rhs};
+    }
+
+    func node(self): Node{
+      return Node::new(++self.last_id);
     }
 }
 

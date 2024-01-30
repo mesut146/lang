@@ -696,9 +696,8 @@ impl Resolver{
       }
       //we looking for generic type
       let name = node.name();
-      let cached = self.typeMap.get_ptr(name);
-      if (cached.is_some()) {
-          target0 = cached.unwrap().targetDecl;
+      if (self.typeMap.contains(name)) {
+          target0 = self.typeMap.get_ptr(name).unwrap().targetDecl;
       } else {
           //generic from imports
       }
@@ -796,9 +795,9 @@ impl Resolver{
       if (!type.args.empty()) {
           //generic type
           //try root type
-          let cached = resolver.typeMap.get_ptr(&type.name);
-          if (cached.is_some() && cached.unwrap().targetDecl.is_some()){
-              return Option::new(cached.unwrap().clone());
+          let cached2 = resolver.typeMap.get_ptr(&type.name);
+          if (cached2.is_some() && cached2.unwrap().targetDecl.is_some()){
+              return Option::new(cached2.unwrap().clone());
           }
       }
     }
@@ -1526,9 +1525,8 @@ impl Resolver{
         self.err(node, msg.str());
     }
     //init arg variables
-    let i = 0;
     self.newScope();
-    for (let i=0;i<is.args.len();++i) {
+    for (let i=0;i < is.args.len();++i) {
         let arg = is.args.get_ptr(i);
         let field = variant.fields.get_ptr(i);
         if (arg.is_ptr) {

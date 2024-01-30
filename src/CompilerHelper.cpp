@@ -362,8 +362,8 @@ public:
             llvm::Value *ptr;
             if (compiler->doesAlloc(rhs)) {
                 //auto alloc
-                auto rhs = f.rhs->accept(this);
-                ptr = std::any_cast<llvm::Value *>(rhs);
+                auto rhs2 = f.rhs->accept(this);
+                ptr = std::any_cast<llvm::Value *>(rhs2);
             } else {
                 //prim_size(s).unwrap() as i32;
                 //manual alloc, prims, struct copy

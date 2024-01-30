@@ -18,6 +18,7 @@ struct Compiler{
   compiled: List<String>;
   protos: Option<Protos>;
   NamedValues: Map<String, Value*>;
+  allocMap: Map<i32, Value*>;
 }
 
 struct Protos{
@@ -158,7 +159,8 @@ impl Compiler{
      llvm: vm,
      compiled: List<String>::new(),
      protos: Option<Protos>::new(),
-     NamedValues: Map<String, Value*>::new()};
+     NamedValues: Map<String, Value*>::new(),
+     allocMap: Map<i32, Value*>::new()};
   }
 
   func unit(self): Unit*{
@@ -233,23 +235,23 @@ impl Compiler{
     //fill with elems
     for(let i=0;i<list.len();++i){
       let decl = list.get(i);
-      make_decl(p, self.resolver, decl, p.get(decl) as StructType*);
+      self.make_decl(decl, p.get(decl) as StructType*);
     }
     //todo di proto
     //methods
     let methods = getMethods(self.unit());
     for (let i=0;i<methods.len();++i) {
       let m = methods.get(i);
-      make_proto(p, self.resolver, m);
+      self.make_proto(m);
     }
     //generic methods from resolver
     for (let i=0;i<self.resolver.generated_methods.len();++i) {
         let m = self.resolver.generated_methods.get_ptr(i);
-        make_proto(p, self.resolver, m);
+        self.make_proto(m);
     }
     for (let i=0;i<self.resolver.used_methods.len();++i) {
         let m=self.resolver.used_methods.get(i);
-        make_proto(p, self.resolver, m);
+        self.make_proto(m);
     }
   }
 
@@ -279,14 +281,14 @@ impl Compiler{
     //if (isRvo(m)) arg_idx+=1;
     if (m.self.is_some()) {
         let prm = m.self.get();
-        let ty = mapType(p, self.resolver, &prm.type);
+        let ty = self.mapType(&prm.type);
         let ptr = CreateAlloca(ty);
         Value_setName(ptr, prm.name.cstr());
         self.NamedValues.add(prm.name.clone(), ptr);
     }
     for (let i=0;i<m.params.len();++i) {
         let prm = m.params.get_ptr(i);
-        let ty = mapType(p, self.resolver, &prm.type);
+        let ty = self.mapType(&prm.type);
         let ptr = CreateAlloca(ty);
         Value_setName(ptr, prm.name.cstr());
         self.NamedValues.add(prm.name.clone(), ptr);
