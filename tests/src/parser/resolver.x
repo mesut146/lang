@@ -124,10 +124,6 @@ impl Context{
   }
 }
 
-func is_struct(type: Type*): bool{
-  return !type.is_prim() && !type.is_pointer(); 
-}
-
 func isReturnLast(b: Block*): bool{
     let last = b.list.last();
     return isRet(last);
@@ -276,6 +272,12 @@ impl Resolver{
     --self.scopes.count;
   }
   func addScope(self, name: String, type: Type, prm: bool){
+    for(let i=0;i<self.scopes.len();++i){
+      let s = self.scopes.get_ptr(i);
+      if(s.find(&name).is_some()){
+        panic("variable %s already exists\n", name.cstr());
+      }
+    }
     let scope = self.scopes.last();
     scope.list.add(VarHolder::new(name, type, prm));
   }
@@ -381,9 +383,6 @@ impl Resolver{
 
   func addType(self, name: String, res: RType){
     //print("addType %s->%s\n", name.cstr(), res.type.print().cstr());
-    if(name.eq("Option") && res.type.print().eq("Option<i32*>")){
-      panic("");
-    }
     self.typeMap.add(name, res);
   }
   func addType(self, name: String*, res: RType){

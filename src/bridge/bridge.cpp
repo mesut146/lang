@@ -146,21 +146,26 @@ llvm::FunctionType *make_ft(llvm::Type *retType, std::vector<llvm::Type *> *argT
     return llvm::FunctionType::get(retType, *argTypes, vararg);
 }
 
-llvm::Function *make_func(llvm::FunctionType *ft, llvm::GlobalValue::LinkageTypes *linkage, char *name) {
-    return llvm::Function::Create(ft, *linkage, name, *mod);
+llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name) {
+    return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes)linkage, name, *mod);
 }
 
 void setCallingConv(llvm::Function *f) {
     f->setCallingConv(llvm::CallingConv::C);
 }
 
-llvm::GlobalValue::LinkageTypes ext() {
+int ext() {
     return llvm::Function::ExternalLinkage;
 }
-
-llvm::GlobalValue::LinkageTypes odr() {
+int odr() {
     return llvm::Function::LinkOnceODRLinkage;
 }
+/*llvm::GlobalValue::LinkageTypes ext() {
+    return llvm::Function::ExternalLinkage;
+}
+llvm::GlobalValue::LinkageTypes odr() {
+    return llvm::Function::LinkOnceODRLinkage;
+}*/
 
 llvm::Argument *get_arg(llvm::Function *f, int i) {
     return f->getArg(i);
@@ -203,7 +208,7 @@ llvm::GlobalVariable *make_stdout() {
     return res;
 }
 
-llvm::AllocaInst *Builder_alloca(llvm::Type *ty) {
+llvm::Value *CreateAlloca(llvm::Type *ty) {
     return Builder->CreateAlloca(ty);
 }
 
@@ -223,23 +228,23 @@ llvm::BasicBlock *create_bb() {
     return llvm::BasicBlock::Create(*ctx, "");
 }
 
-void set_insert(llvm::BasicBlock *bb) {
+void SetInsertPoint(llvm::BasicBlock *bb) {
     Builder->SetInsertPoint(bb);
 }
 
-llvm::BasicBlock *get_insert() {
+llvm::BasicBlock *GetInsertBlock() {
     return Builder->GetInsertBlock();
 }
 
-void call(llvm::Function *f, std::vector<llvm::Value *> *args) {
+void CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
     Builder->CreateCall(f, *args);
 }
 
-void ret(llvm::Value *val) {
+void CreateRet(llvm::Value *val) {
     Builder->CreateRet(val);
 }
 
-void ret_void() {
+void CreateRetVoid() {
     Builder->CreateRetVoid();
 }
 

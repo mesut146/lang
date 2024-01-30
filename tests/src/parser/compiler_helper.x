@@ -2,6 +2,7 @@ import parser/bridge
 import parser/ast
 import parser/resolver
 import parser/compiler
+import parser/utils
 import std/map
 
 func SLICE_LEN_BITS(): i32{ return 64; }
@@ -18,6 +19,39 @@ func make_string_type(sliceType: llvm_Type*): StructType*{
     let elems = make_vec();
     vec_push(elems, sliceType);
     return make_struct_ty2("str".cstr(), elems);
+}
+
+func make_printf(): Function*{
+    let args = make_vec();
+    vec_push(args, getPointerTo(getInt(8)));
+    let ft = make_ft(getInt(32), args, true);
+    let f = make_func(ft, ext(), "printf".cstr());
+    setCallingConv(f);
+    return f;
+}
+func make_fflush(): Function*{
+    let args = make_vec();
+    vec_push(args, getPointerTo(getInt(8)));
+    let ft = make_ft(getInt(32), args, false);
+    let f = make_func(ft, ext(), "fflush".cstr());
+    setCallingConv(f);
+    return f;
+}
+func make_exit(): Function*{
+    let args = make_vec();
+    vec_push(args, getInt(32));
+    let ft = make_ft(getVoidTy(), args, false);
+    let f = make_func(ft, ext(), "exit".cstr());
+    setCallingConv(f);
+    return f;
+}
+func make_malloc(): Function*{
+    let args = make_vec();
+    vec_push(args, getInt(64));
+    let ft = make_ft(getPointerTo(getInt(8)), args, false);
+    let f = make_func(ft, ext(), "malloc".cstr());
+    setCallingConv(f);
+    return f;
 }
 
 func getTypes(unit: Unit*, list: List<Decl*>*){
@@ -59,13 +93,18 @@ func getMethods(unit: Unit*): List<Method*>{
     if let Item::Method(m*)=(item){
         if(m.is_generic) continue;
         list.add(m);
-    }else if let Item::Impl(info*, methods*)=(item){
-      if(!info.type_params.empty()) continue;
-      list.add(methods);
+    }else if let Item::Impl(imp*)=(item){
+      if(!imp.info.type_params.empty()) continue;
+      for(let j=0;j<imp.methods.len();++j){
+        list.add(imp.methods.get_ptr(j));
+      }
     }else if let Item::Extern(methods*)=(item){
-      list.add(methods);
+      for(let j=0;j<methods.len();++j){
+        list.add(methods.get_ptr(j));
+      }
     }
   }
+  return list;
 }
 
 func make_decl_proto(decl: Decl*): StructType*{
@@ -119,6 +158,7 @@ func mapType(p: Protos*, r: Resolver*, type: Type*): llvm_Type*{
   type = &rt.type;
   let s = type.print();
   //print("mapType %s\n", s.cstr());
+  if(type.is_void()) return getVoidTy();
   let prim_size = prim_size(s.str());
   if(prim_size.is_some()){
     return getInt(prim_size.unwrap());
@@ -128,7 +168,7 @@ func mapType(p: Protos*, r: Resolver*, type: Type*): llvm_Type*{
     return getArrTy(elem_ty, size) as llvm_Type*;
   }
   if let Type::Slice(elem*)=(type){
-    return p.sliceType as llvm_Type*;
+    return p.std("slice") as llvm_Type*;
   }
   if let Type::Pointer(elem*)=(type){
     let elem_ty = mapType(p, r, elem.get());
@@ -136,7 +176,49 @@ func mapType(p: Protos*, r: Resolver*, type: Type*): llvm_Type*{
   }
   if(!p.classMap.contains(&s)){
     p.dump();
+    print("mapType %s\n", s.cstr());
   }
   return p.get(&s);
   //panic("mapType %s\n", s.cstr());
+}
+
+func make_proto(p: Protos*, r: Resolver*,m: Method*){
+  if(m.is_generic) return;
+  let rvo = is_struct(&m.type);
+  let ret = getVoidTy();
+  if(is_main(m)){
+    ret = getInt(32);
+  }else if(!rvo){
+    ret = mapType(p,r,&m.type);
+  }
+  let args = make_vec();
+  if(rvo){
+    let rvo_ty = getPointerTo(mapType(p, r, &m.type));
+    vec_push(args, rvo_ty);
+  }
+  if(m.self.is_some()){
+    let self_ty = mapType(p, r, &m.self.get().type);
+    vec_push(args, self_ty);
+  }
+  for(let i=0;i<m.params.len();++i){
+    let prm = m.params.get_ptr(i);
+    let pt = mapType(p, r, &prm.type);
+    if(is_struct(&prm.type)){
+      pt = getPointerTo(pt);
+    }
+    vec_push(args, pt);
+  }
+  let ft = make_ft(ret, args, false);
+  let linkage = ext();
+  if(!m.type_args.empty()){
+    linkage = odr();
+  }
+  let mangled = mangle(m);
+  let f = make_func(ft, linkage, mangled.cstr());
+  if(rvo){
+    let arg = get_arg(f, 0);
+    let sret = get_sret();
+    arg_attr(arg, &sret);
+  }
+  p.funcMap.add(mangled, f);
 }

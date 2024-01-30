@@ -145,6 +145,7 @@ void bootstrap() {
             "../tests/src/parser/bridge.x",
             "../tests/src/parser/compiler.x",
             "../tests/src/parser/compiler_helper.x",
+            "../tests/src/parser/alloc_helper.x",
             "../tests/src/parser/test.x"};
     Compiler c;
     c.srcDir = "../tests/src";

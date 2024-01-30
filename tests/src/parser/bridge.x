@@ -8,6 +8,13 @@ struct StructType;
 struct llvm_Type;
 struct PointerType;
 struct ArrayType;
+struct FunctionType;
+struct LinkageTypes;
+struct Function;
+struct Argument;
+struct AttrKind;
+struct Value;
+struct BasicBlock;
 
 extern{
     func make_vec(): vector*;
@@ -24,6 +31,7 @@ extern{
     func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
+    func emit_llvm(out: i8*);
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;
@@ -32,6 +40,24 @@ extern{
     func getInt(bits: i32): llvm_Type*;
     func getPointerTo(type: llvm_Type*): llvm_Type*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
+    func getVoidTy(): llvm_Type*;
+    
+    func make_ft(ret: llvm_Type*, args: vector*, vararg: bool): FunctionType*;
+    func ext(): i32;
+    func odr(): i32;
+    func make_func(fr: FunctionType*, l: i32, name: i8*): Function*;
+    func get_arg(f: Function*, i: i32): Argument*;
+    func arg_attr(a: Argument* , at: i32*);
+    func get_sret(): i32;
+    func setCallingConv(f: Function*);
+    
+    func make_stdout(): Value*;
+    
+    func create_bb2(f: Function*): BasicBlock*;
+    func SetInsertPoint(bb: BasicBlock *);
+    
+    func CreateAlloca(ty: llvm_Type*): Value*;
+    func Value_setName(v: Value*, name: i8*);
 }
 
 func getDefaultTargetTriple2(): String{

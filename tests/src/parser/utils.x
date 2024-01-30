@@ -124,3 +124,35 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
     return res.into();
 }
 
+func is_struct(type: Type*): bool{
+  return !type.is_prim() && !type.is_pointer() && !type.is_void(); 
+}
+
+func mangleType(type: Type*): String{
+  let s = type.print();
+  return s;
+}
+
+func mangle(m: Method*): String{
+  let s = String::new();
+  if let Parent::Impl(info*)=(m.parent){
+    s.append(info.type.print().str());
+    s.append("::");
+  }else if let Parent::Trait(ty*)=(m.parent){
+    s.append(ty.print().str());
+    s.append("::");
+  }else if let Parent::Extern=(m.parent){
+    return m.name.clone();
+  }
+  s.append(m.name.str());
+  if(m.self.is_some()){
+    s.append("_");
+    s.append(mangleType(&m.self.get().type).str());
+  }
+  for(let i=0;i<m.params.len();++i){
+    let prm = m.params.get_ptr(i);
+    s.append("_");
+    s.append(mangleType(&prm.type).str());
+  }
+  return s;
+}
