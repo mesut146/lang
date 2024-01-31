@@ -148,7 +148,8 @@ impl AstCopier{
     }
 
     func visit(self, node: ArgBind*): ArgBind{
-        return ArgBind{node.name.clone(), node.is_ptr};
+        let id = node as Node*;
+        return ArgBind{.*id,node.name.clone(), node.is_ptr};
     }
 
     func visit(self, node: VarExpr*): VarExpr{

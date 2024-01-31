@@ -1,11 +1,7 @@
-#include <llvm/IR/DIBuilder.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Value.h>
-#include <llvm/Target/TargetMachine.h>
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/Constants.h>
+#include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -15,6 +11,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
 #include <iostream>
@@ -147,7 +144,7 @@ llvm::FunctionType *make_ft(llvm::Type *retType, std::vector<llvm::Type *> *argT
 }
 
 llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name) {
-    return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes)linkage, name, *mod);
+    return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes) linkage, name, *mod);
 }
 
 void setCallingConv(llvm::Function *f) {
@@ -216,7 +213,7 @@ void Value_setName(llvm::Value *val, char *name) {
     val->setName(name);
 }
 
-void store(llvm::Value *val, llvm::Value *ptr) {
+void CreateStore(llvm::Value *val, llvm::Value *ptr) {
     Builder->CreateStore(val, ptr);
 }
 
@@ -248,16 +245,12 @@ void CreateRetVoid() {
     Builder->CreateRetVoid();
 }
 
-void verify(llvm::Function *func) {
-    llvm::verifyFunction(*func, &llvm::outs());
+bool verifyFunction(llvm::Function *func) {
+    return llvm::verifyFunction(*func, &llvm::outs());
 }
 
 void CreateCondBr(llvm::Value *cond, llvm::BasicBlock *then, llvm::BasicBlock *next) {
     Builder->CreateCondBr(cond, then, next);
-}
-
-llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
-    return Builder->CreateZExt(val, type);
 }
 
 int getPrimitiveSizeInBits(llvm::Type *type) {
@@ -355,7 +348,7 @@ bool isPointerTy(llvm::Type *type) {
     return type->isPointerTy();
 }
 
-llvm::UnreachableInst* CreateUnreachable() {
+llvm::UnreachableInst *CreateUnreachable() {
     return Builder->CreateUnreachable();
 }
 
@@ -367,7 +360,7 @@ llvm::Constant *getConstF(llvm::Type *type, double val) {
     return llvm::ConstantFP::get(type, val);
 }
 
-void CreateMemCpy(llvm::Value *trg, llvm::Value *src, int size) {
+void CreateMemCpy(llvm::Value *trg, llvm::Value *src, uint64_t size) {
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), size);
 }
 
@@ -375,7 +368,7 @@ llvm::Value *CreatePtrToInt(llvm::Value *val, llvm::Type *type) {
     return Builder->CreatePtrToInt(val, type);
 }
 
-llvm::ConstantInt *makeInt(int val, int bits) {
+llvm::ConstantInt *makeInt(uint64_t val, int bits) {
     auto intType = llvm::IntegerType::get(*ctx, bits);
     return llvm::ConstantInt::get(intType, val);
 }
@@ -394,5 +387,12 @@ llvm::PointerType *getPointerTo(llvm::Type *type) {
 
 void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
     st->setBody(*elems);
+}
+
+llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {
+    return Builder->CreateSExt(val, type);
+}
+llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
+    return Builder->CreateZExt(val, type);
 }
 }

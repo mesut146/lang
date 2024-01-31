@@ -48,7 +48,7 @@ impl Signature{
                 //print("trg=%s", Fmt::str(trg).cstr());
                 let bd = trg as BaseDecl*;
                 let p = &bd.path;
-                if(!trg.path.eq(&r.unit.path)){
+                if(!trg.is_generic && !trg.path.eq(&r.unit.path)){
                     r.addUsed(trg);
                 }
             }
@@ -277,7 +277,7 @@ impl MethodResolver{
         let list = self.collect(sig);
         if(list.empty()){
             let msg = Fmt::format("no such method {}", sig.print().str());
-            self.r.err(msg.str(), &e);
+            self.r.err(&e, msg.str());
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
@@ -304,7 +304,7 @@ impl MethodResolver{
                 msg.append(" ");
                 msg.append(err.b);
             }
-            self.r.err(msg.str(), &e);
+            self.r.err(&e, msg.str());
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), i64::print(real.size()).str());
@@ -313,7 +313,7 @@ impl MethodResolver{
                 msg.append("\n");
                 msg.append(err.print().str());
             }
-            self.r.err(msg.str(), &e);
+            self.r.err(&e, msg.str());
         }
         let sig2 = real.get(0);
         if(exact.is_some()){
@@ -370,7 +370,7 @@ impl MethodResolver{
             let pair = typeMap.get_idx(i).unwrap();
             if (pair.b.is_none()) {
                 let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
-                self.r.err(msg.str(), &e);
+                self.r.err(&e, msg.str());
             }
             tmap.add(pair.a, pair.b.get().clone());
         }

@@ -30,6 +30,7 @@ struct Resolver{
   is_resolved: bool;
   is_init: bool;
   typeMap: Map<String, RType>;
+  cache: Map<i32, RType>;
   curMethod: Option<Method*>;
   curImpl: Option<Impl*>;
   scopes: List<Scope>;
@@ -122,31 +123,6 @@ impl Context{
     path.append(".x");
     return self.create_resolver(&path);
   }
-}
-
-func isReturnLast(b: Block*): bool{
-    let last = b.list.last();
-    return isRet(last);
-}
-
-func isReturnLast(stmt: Stmt*): bool{
-  if (isRet(stmt)) {
-    return true;
-  }
-  if let Stmt::Block(b*)=(stmt){
-    return isReturnLast(b);
-  }
-  return false;
-}
-
-func isRet(stmt: Stmt*): bool{
-  if let Stmt::Expr(expr*)=(stmt){
-    if let Expr::Call(mc*)=(expr){
-      return mc.name.eq("panic");
-    }
-    return false;
-  }
-  return stmt is Stmt::Ret || stmt is Stmt::Continue || stmt is Stmt::Break;
 }
 
 func printMethod(m: Method*): String{
@@ -255,7 +231,8 @@ impl Resolver{
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
     let map = Map<String, RType>::new();
-    let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map, 
+    let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map,
+      cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
       inLoop: 0, used_types: List<Decl*>::new(1000),
@@ -420,12 +397,8 @@ impl Resolver{
   func err(self, msg: str){
     panic("%s", msg.cstr());
   }
-  func err(self, msg: str, node: Expr*){
-    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
-    self.err(str.str());
-  }
   func err(self, node: Expr*, msg: str){
-    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
+    let str = Fmt::format("{}:{}\n{} {}", self.unit.path.str(), i32::print(node.line).str(),msg, node.print().str());
     self.err(str.str());
   }
   func err(self, node: Stmt*, msg: str){
@@ -1010,16 +983,16 @@ impl Resolver{
     let res = self.visit(e);
     if(op.eq("!")){
       if(!res.type.print().eq("bool")){
-        self.err("unary on non bool", node);
+        self.err(node, "unary on non bool");
       }
       return res;
     }
     if (res.type.print().eq("bool") || !res.type.is_prim()) {
-      self.err("unary on non integer" , node);
+      self.err(node, "unary on non integer");
     }
     if (op.eq("--") || op.eq("++")) {
       if (!(e is Expr::Name || e is Expr::Access)) {
-          self.err("pre-incr/decr on non variable", node);
+          self.err(node, "pre-incr/decr on non variable");
       }
     }
     //optimization?
@@ -1347,8 +1320,19 @@ impl Resolver{
     }
     panic("lit");
   }
-  
+
   func visit(self, node: Expr*): RType{
+    let id = node.id;
+    if(id==-1) panic("id");
+    if(self.cache.contains(&node.id)){
+      return self.cache.get_ptr(&node.id).unwrap().clone();
+    }
+    let res = self.visit_nc(node);
+    self.cache.add(node.id, res);
+    return res.clone();
+  }
+  
+  func visit_nc(self, node: Expr*): RType{
     if let Expr::Lit(kind, value*, suffix*)=(node){
       return self.visit_lit(kind, value.clone(), suffix);
     }else if let Expr::Type(type*) = (node){
@@ -1369,7 +1353,7 @@ impl Resolver{
         }
       }
       self.dump();
-      self.err(Fmt::format("unknown identifier: {}", name.str()));
+      self.err(node, Fmt::format("unknown identifier: {}", name.str()).str());
     }else if let Expr::Unary(op*, ebox*) = (node){
       return self.visit_unary(node, op, ebox.get());
     }else if let Expr::Par(expr*) = (node){
@@ -1529,11 +1513,12 @@ impl Resolver{
     for (let i=0;i < is.args.len();++i) {
         let arg = is.args.get_ptr(i);
         let field = variant.fields.get_ptr(i);
+        let ty = field.type;
         if (arg.is_ptr) {
-            self.addScope(arg.name.clone(), field.type.toPtr(), false);
-        } else {
-            self.addScope(arg.name.clone(), field.type, false);
-        }
+            ty = field.type.toPtr();
+        } 
+        self.addScope(arg.name.clone(), ty, false);
+        self.cache.add(arg.id, RType::new(ty));
     }
     self.visit(is.then.get());
     self.dropScope();

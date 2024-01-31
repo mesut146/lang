@@ -156,3 +156,22 @@ func mangle(m: Method*): String{
   }
   return s;
 }
+
+func isReturnLast(b: Block*): bool{
+    if(b.list.empty()) return false;
+    let last = b.list.last();
+    return isReturnLast(last);
+  }
+  
+func isReturnLast(stmt: Stmt*): bool{
+    if let Stmt::Block(b*)=(stmt){
+        return isReturnLast(b);
+    }
+    if let Stmt::Expr(expr*)=(stmt){
+        if let Expr::Call(mc*)=(expr){
+        return mc.name.eq("panic");
+        }
+        return false;
+    }
+    return stmt is Stmt::Ret || stmt is Stmt::Continue || stmt is Stmt::Break;
+}

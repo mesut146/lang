@@ -26,6 +26,9 @@ impl Node{
   func new(id: i32): Node{
     return Node{line: 0, pos: 0, id: id};
   }
+  func new(id: i32, line: i32): Node{
+    return Node{line: line, pos: 0, id: id};
+  }
 }
 
 struct Unit{
@@ -323,7 +326,7 @@ impl Type{
 
 }
 
-struct ArgBind{
+struct ArgBind: Node{
   name: String;
   is_ptr: bool;
 }

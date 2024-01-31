@@ -10,8 +10,8 @@ func main(){
   let m = Map<i32, i32>::new();
   m.add(2, 4);
   m.add(7, 49);
-  assert m.get(2).unwrap() == 4;
-  assert m.get(7).unwrap() == 49;
+  assert *m.get(2).unwrap() == 4;
+  assert *m.get(7).unwrap() == 49;
   
   let m2 = Map<i32, Pair<i32, i32>>::new();
   m2.add(3, Pair{4, 5});

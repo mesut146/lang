@@ -223,6 +223,49 @@ impl Compiler{
     }
     self.protos.get().funcMap.add(mangled, f);
   }
+
+  func getSize(self, type: Type*): i64{
+    if(type.is_prim()){
+      return prim_size(type.name().str()).unwrap();
+    }
+    if let Type::Array(elem*, sz)=(type){
+      return self.getSize(elem.get()) * sz;
+    }
+    if let Type::Slice(elem*)=(type){
+      let st = self.protos.get().std("slice");
+      return getSizeInBits(st);
+    }
+    let rt = self.resolver.visit(type);
+    if(rt.targetDecl.is_some()){
+      let decl = rt.targetDecl.unwrap();
+      return self.getSize(decl);
+    }
+    panic("getSize %s", type.print().cstr());
+  }
+
+  func getSize(self, decl: Decl*): i64{
+    let mapped = self.mapType(&decl.type);
+    return getSizeInBits(mapped as StructType*);
+  }
+
+  func cast(self, expr: Expr*, type: Type*): Value*{
+    let val = self.visit(expr);
+    let val_ty = Value_getType(val);
+    let src = getPrimitiveSizeInBits(val_ty);
+    let trg = self.getSize(type);
+    let trg_ty = getInt(trg as i32);
+    let src_type = self.resolver.visit(expr).type;
+    if(src < trg){
+      if(isUnsigned(&src_type)){
+        return CreateZExt(val, trg_ty);
+      }else{
+        return CreateSExt(val, trg_ty);
+      }
+    }else if(src > trg){
+      return CreateTrunc(val, trg_ty);
+    }
+    return val;
+  }
 }
 
 
@@ -245,6 +288,7 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     if(target.is_some()){
       return is_struct(&target.unwrap().type);
     }
+    return false;
   }
-  panic("doesAlloc");
+  return false;
 }

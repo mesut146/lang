@@ -1265,11 +1265,11 @@ std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
     int i = 0;
     newScope();
     for (auto &arg : node->args) {
+        auto ty = variant.fields[i].type;
         if (arg.ptr) {
-            addScope(arg.name, Type(Type::Pointer, variant.fields[i].type), false, node->line);
-        } else {
-            addScope(arg.name, variant.fields[i].type, false, node->line);
+            ty = Type(Type::Pointer, ty);
         }
+        addScope(arg.name, ty, false, node->line);
         i++;
     }
     node->thenStmt->accept(this);

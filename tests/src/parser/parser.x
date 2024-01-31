@@ -426,11 +426,12 @@ impl Parser{
 
     func parse_bind(self): ArgBind{
       let name = self.name();
+      let id = self.node();
       if(self.is(TokenType::STAR)){
         self.pop();
-        return ArgBind{name, true};
+        return ArgBind{.id, name, true};
       }
-      return ArgBind{name, false};
+      return ArgBind{.id, name, false};
     }
     
     func parse_stmt(self): Stmt{
@@ -548,7 +549,7 @@ impl Parser{
     }
 
     func node(self): Node{
-      return Node::new(++self.last_id);
+      return Node::new(++self.last_id, self.peek().line);
     }
 }
 

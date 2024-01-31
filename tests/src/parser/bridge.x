@@ -37,7 +37,9 @@ extern{
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;
     func setBody(st: StructType*, elems: vector*);
     func getSizeInBits(st: StructType*): i32;
+    func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
+    func makeInt(val: i64, bits: i32): Value*;
     func getPointerTo(type: llvm_Type*): llvm_Type*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
@@ -50,14 +52,24 @@ extern{
     func arg_attr(a: Argument* , at: i32*);
     func get_sret(): i32;
     func setCallingConv(f: Function*);
+    func verifyFunction(f: Function*): bool;
     
     func make_stdout(): Value*;
     
     func create_bb2(f: Function*): BasicBlock*;
     func SetInsertPoint(bb: BasicBlock *);
     
-    func CreateAlloca(ty: llvm_Type*): Value*;
     func Value_setName(v: Value*, name: i8*);
+    func Value_getType(val: Value*): llvm_Type*;
+    func CreateAlloca(ty: llvm_Type*): Value*;
+    func CreateStore(val: Value*, ptr: Value*);
+    func CreateMemCpy(trg: Value*, src: Value*, size: i64);
+    func CreateRet(val: Value*);
+    func CreateRetVoid();
+    func CreateSExt(val: Value*, type: llvm_Type*): Value*;
+    func CreateZExt(val: Value*, type: llvm_Type*): Value*;
+    func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
+
 }
 
 func getDefaultTargetTriple2(): String{

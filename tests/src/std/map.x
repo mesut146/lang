@@ -60,15 +60,9 @@ impl<K, V> Map<K, V>{
     return self.indexOf(k) != -1;
   }
   
-  /*func get(self, k: K): Option<V>{
-    for(let i = 0;i < self.arr.len();i += 1){
-      let e =  self.arr.get(i);
-      if(Eq::eq(&e.a, &k)){
-        return Option<V>::Some{e.b};
-      }
-    }
-    return Option<V>::None;
-  }*/
+  func get(self, k: K): Option<V*>{
+    return self.get_ptr(&k);
+  }
   func get_p(self, k: K*): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
@@ -81,7 +75,7 @@ impl<K, V> Map<K, V>{
   func get_ptr(self, k: K*): Option<V*>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, k)){
+      if(Eq::eq(&e.a, k)){
         return Option<V*>::Some{&e.b};
       }
     }
@@ -105,6 +99,10 @@ impl<K, V> Map<K, V>{
 
   func remove(self, idx: i64){
     self.arr.remove(idx);
+  }
+
+  func clear(self){
+    self.arr.clear();
   }
 }
 

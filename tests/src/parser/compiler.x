@@ -19,6 +19,7 @@ struct Compiler{
   protos: Option<Protos>;
   NamedValues: Map<String, Value*>;
   allocMap: Map<i32, Value*>;
+  curMethod: Option<Method*>;
 }
 
 struct Protos{
@@ -154,13 +155,14 @@ impl llvm_holder{
 impl Compiler{
   func new(ctx: Context): Compiler{
     let vm = llvm_holder::new();
-    return Compiler{ctx: ctx, config: Config{verbose: true, single_mode: false},
+    return Compiler{ctx: ctx, config: Config{verbose: true, single_mode: true},
      resolver: dummy_resolver(&ctx), main_file: Option<String>::new(),
      llvm: vm,
      compiled: List<String>::new(),
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
-     allocMap: Map<i32, Value*>::new()};
+     allocMap: Map<i32, Value*>::new(),
+     curMethod: Option<Method*>::new()};
   }
 
   func unit(self): Unit*{
@@ -182,6 +184,7 @@ impl Compiler{
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.str());
       if (!self.config.single_mode) {//compile last
+          print("skip main file\n");
           return outFile;
       }
     }
@@ -259,13 +262,27 @@ impl Compiler{
     //print("gen %s\n", m.name.cstr());
     if(m.body.is_none()) return;
     if(m.is_generic) return;
+    self.curMethod = Option<Method*>::new(m);
     let id = mangle(m);
     let f = self.protos.get().get_func(&id);
     let bb = create_bb2(f);
+    self.NamedValues.clear();
     SetInsertPoint(bb);
-    self.allocParams(m);
     self.makeLocals(m.body.get());
-    //storeParams(curMethod, this);
+    self.allocParams(m);
+    self.storeParams(m,f);
+    //todo call globals
+
+    self.visit(m.body.get());
+
+    if(m.type.is_void()){
+      if(is_main(m)){
+        CreateRet(makeInt(0, 32));
+      }else if(!isReturnLast(m.body.get())){
+        CreateRetVoid();
+      }
+    }
+    verifyFunction(f);
   }
   
   func makeLocals(self, b: Block*){
@@ -277,22 +294,97 @@ impl Compiler{
   func allocParams(self, m: Method*){
     let p = self.protos.get();
     let ff = p.get_func(m);
-    let arg_idx = 0;
-    //if (isRvo(m)) arg_idx+=1;
     if (m.self.is_some()) {
         let prm = m.self.get();
-        let ty = self.mapType(&prm.type);
-        let ptr = CreateAlloca(ty);
-        Value_setName(ptr, prm.name.cstr());
-        self.NamedValues.add(prm.name.clone(), ptr);
+        self.alloc_prm(prm);
     }
     for (let i=0;i<m.params.len();++i) {
         let prm = m.params.get_ptr(i);
-        let ty = self.mapType(&prm.type);
-        let ptr = CreateAlloca(ty);
-        Value_setName(ptr, prm.name.cstr());
-        self.NamedValues.add(prm.name.clone(), ptr);
+        self.alloc_prm(prm);
+    }
+  }
+
+  func alloc_prm(self, prm: Param*){
+    let ty = self.mapType(&prm.type);
+    let ptr = CreateAlloca(ty);
+    Value_setName(ptr, prm.name.cstr());
+    self.NamedValues.add(prm.name.clone(), ptr);
+  }
+
+  func copy(self, trg: Value*, src: Value*, type: Type*){
+    let size = self.getSize(type) / 8;
+    CreateMemCpy(trg, src, size);
+  }
+
+  func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
+    let ptr = *self.NamedValues.get_ptr(&prm.name).unwrap();
+    let val = get_arg(f, argIdx) as Value*;
+    if(is_struct(&prm.type)){
+      self.copy(ptr, val, &prm.type);
+    }else{
+      CreateStore(val, ptr);
+    }
+  }
+
+  func storeParams(self, m: Method*, f: Function*){
+    let argIdx = 0;
+    if(is_struct(&m.type)){
+      ++argIdx;//sret
+    }
+    if (m.self.is_some()) {
+      let prm = m.self.get();
+      self.store_prm(prm, f, argIdx);
+      ++argIdx;
+    }
+    for(let i=0;i<m.params.len();++i){
+      let prm = m.params.get_ptr(i);
+      self.store_prm(prm, f, argIdx);
+      ++argIdx;
     }
   }
  
+}
+
+//visitor
+impl Compiler{
+  func visit(self, node: Stmt*){
+    if let Stmt::Ret(e*)=(node){
+      if(e.is_none()){
+        CreateRetVoid();
+        return;
+      }
+      self.visit_ret(e.get());
+      return;
+    }
+    //panic("visit %s", node.print().cstr());
+  }
+  func visit(self, node: Block*){
+    for(let i=0;i<node.list.len();++i){
+      let st = node.list.get_ptr(i);
+      self.visit(st);
+    }
+  }
+  func visit_ret(self, expr: Expr*){
+    let type = &self.curMethod.unwrap().type;
+    type = &self.resolver.visit(type).type;
+    if(type.is_pointer()){
+
+    }
+    if(is_struct(type)){
+      let val = self.cast(expr, type);
+      CreateRet(val);
+    }
+    print("ret %s\n", type.print().cstr());
+  }
+}
+
+//expr
+impl Compiler{
+  func visit(self, node: Expr*): Value*{
+    if let Expr::Array(list*,sz*)=(node){
+      //let ptr = getalloc();
+
+    }
+    panic("expr %s", node.print().cstr());
+  }
 }
