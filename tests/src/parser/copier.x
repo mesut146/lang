@@ -193,44 +193,45 @@ impl AstCopier{
     }
 
     func visit(self, node: Expr*): Expr{
+        let id = *(node as Node*);
         if let Expr::Lit(kind*, val*, sf*)=(node){
-            return Expr::Lit{*kind, val.clone(), self.visit_opt(sf)};
+            return Expr::Lit{.id, *kind, val.clone(), self.visit_opt(sf)};
         }
         if let Expr::Name(name*)=(node){
-            return Expr::Name{name.clone()};
+            return Expr::Name{.id,name.clone()};
         }
         if let Expr::Call(mc*)=(node){
-            return Expr::Call{self.visit(mc)};
+            return Expr::Call{.id,self.visit(mc)};
         }
         if let Expr::Par(e*)=(node){
-            return Expr::Par{self.visit_box(e)};
+            return Expr::Par{.id,self.visit_box(e)};
         }
         if let Expr::Type(type*)=(node){
-            return Expr::Type{self.visit(type)};
+            return Expr::Type{.id,self.visit(type)};
         }
         if let Expr::Unary(op*, e*)=(node){
-            return Expr::Unary{op.clone(), self.visit_box(e)};
+            return Expr::Unary{.id,op.clone(), self.visit_box(e)};
         }
         if let Expr::Infix(op*, l*, r*)=(node){
-            return Expr::Infix{op.clone(), self.visit_box(l), self.visit_box(r)};
+            return Expr::Infix{.id,op.clone(), self.visit_box(l), self.visit_box(r)};
         }
         if let Expr::Access(scope*, name*)=(node){
-            return Expr::Access{self.visit_box(scope), name.clone()};
+            return Expr::Access{.id,self.visit_box(scope), name.clone()};
         }
         if let Expr::Obj(type*, args*)=(node){
-            return Expr::Obj{self.visit(type), self.visit_list(args)};
+            return Expr::Obj{.id,self.visit(type), self.visit_list(args)};
         }
         if let Expr::As(e*, type*)=(node){
-            return Expr::As{self.visit_box(e), self.visit(type)};
+            return Expr::As{.id,self.visit_box(e), self.visit(type)};
         }
         if let Expr::Is(e*, rhs*)=(node){
-            return Expr::Is{self.visit_box(e), self.visit_box(rhs)};
+            return Expr::Is{.id,self.visit_box(e), self.visit_box(rhs)};
         }
         if let Expr::Array(list*, size*)=(node){
-            return Expr::Array{self.visit_list(list), self.visit_opt(size)};
+            return Expr::Array{.id,self.visit_list(list), self.visit_opt(size)};
         }
         if let Expr::ArrAccess(aa*)=(node){
-            return Expr::ArrAccess{ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_opt(&aa.idx2)}};
+            return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_opt(&aa.idx2)}};
         }
         panic("Expr %s", node.print().cstr());
     }

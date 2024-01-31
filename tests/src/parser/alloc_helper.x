@@ -19,6 +19,15 @@ impl AllocHelper{
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
+  func alloc_ty(self, ty: Type*, node: Expr*): Value*{
+    let mapped = self.c.mapType(ty);
+    return self.alloc_ty(mapped, node);
+  }
+  func alloc_ty(self, ty: llvm_Type*, node: Expr*): Value*{
+    let ptr = CreateAlloca(ty);
+    self.c.allocMap.add(node.id, ptr);
+    return ptr;
+  }
   func visit(self, node: Block*){
     for(let i=0;i<node.list.len();++i){
       let st = node.list.get_ptr(i);
@@ -47,6 +56,13 @@ impl AllocHelper{
   }
   
   func visit(self, node: Expr*): Option<Value*>{
+    if let Expr::Lit(kind, val*, sf*)=(node){
+      if(kind is LitKind::STR){
+        let st = self.c.protos.get().std("str");
+        return Option::new(self.alloc_ty(st as llvm_Type*, node));
+      }
+      return Option<Value*>::new();
+    }
     panic("alloc %s\n", node.print().cstr());
   }
 }

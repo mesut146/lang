@@ -605,19 +605,19 @@ impl Parser{
     self.consume(TokenType::LPAREN);
     let args = self.exprList(TokenType::RPAREN);
     self.consume(TokenType::RPAREN);
-    return newCall(scp, nm, args, st);
+    return self.newCall(scp, nm, args, st);
   }
   func call(self, nm: String): Expr{
     self.consume(TokenType::LPAREN);
     let args = self.exprList(TokenType::RPAREN);
     self.consume(TokenType::RPAREN);
-    return newCall(nm, args);
+    return self.newCall(nm, args);
   }
   func call(self, nm: String, g: List<Type>): Expr{
     self.consume(TokenType::LPAREN);
     let args = self.exprList(TokenType::RPAREN);
     self.consume(TokenType::RPAREN);
-    return newCall(nm, g, args);
+    return self.newCall(nm, g, args);
   }
   
   func exprList(self, tt: TokenType): List<Expr>{
@@ -649,6 +649,7 @@ impl Parser{
     }
     let arr = Lexer::get_suffix();
     let val = self.pop().value;
+    let n = self.node();
     for (let i=0;i<arr.len();++i) {
       let sf = arr[i];
       let pos = val.str().lastIndexOf(sf);
@@ -656,10 +657,10 @@ impl Parser{
       if (pos != -1 && support_suffix) {
           //trim suffix
           val = val.substr(0, (val.len() - sf.len()) as i32).str();
-          return Expr::Lit{kind, val, Option<Type>::new(Type::new(sf))};
+          return Expr::Lit{.n,kind, val, Option<Type>::new(Type::new(sf))};
       }
     }
-    return Expr::Lit{kind, val, Option<Type>::None};
+    return Expr::Lit{.n,kind, val, Option<Type>::None};
   }
   
   func name(self): String{
@@ -708,13 +709,14 @@ impl Parser{
   }
 
   func prim(self): Expr{
+    let n = self.node();
     if(isLit(self.peek())){
       return self.parseLit();
     }else if(self.is(TokenType::LPAREN)){
         self.pop();
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
-        return Expr::Par{Box::new(e)};
+        return Expr::Par{.n,Box::new(e)};
     }else if(self.is(TokenType::LBRACKET)){
         self.pop();
         let arr = self.exprList(TokenType::SEMI);
@@ -725,7 +727,7 @@ impl Parser{
             sz = Option::new(i32::parse(&s.value));
         }
         self.consume(TokenType::RBRACKET);
-        return Expr::Array{arr, sz};
+        return Expr::Array{.n, arr, sz};
     }else if(false && self.isObj()){
       let ty = self.parse_type();
       let args = List<Entry>::new();
@@ -738,7 +740,7 @@ impl Parser{
         }
       }
       self.consume(TokenType::RBRACE);
-      return Expr::Obj{ty, args};
+      return Expr::Obj{.n, ty, args};
     }
     else if(isName(self.peek()) || isPrim(self.peek())){
       let nm = self.pop().value;
@@ -754,27 +756,27 @@ impl Parser{
           let ty = Type::new(nm, g);
           let nm2 = self.name();
           if(self.is(TokenType::LPAREN)){
-            return self.call(Expr::Type{ty}, nm2, true);
+            return self.call(Expr::Type{.n, ty}, nm2, true);
           }
-          return Expr::Type{Type::new(ty, nm2)};
+          return Expr::Type{.n, Type::new(ty, nm2)};
         }else {
-          return Expr::Type{Type::new(nm, g)};
+          return Expr::Type{.n, Type::new(nm, g)};
         }
       }else if(self.is(TokenType::COLON2)){
         self.pop();
         let ty = self.parse_type();
         if(self.is(TokenType::LPAREN)){
-          return self.call(Expr::Type{Type::new(nm)}, *ty.name(), true);
+          return self.call(Expr::Type{.n,Type::new(nm)}, *ty.name(), true);
         }else{
-          return Expr::Type{Type::new(Type::new(nm), *ty.name())};
+          return Expr::Type{.n,Type::new(Type::new(nm), *ty.name())};
         }
       }else{
-        return Expr::Name{nm};
+        return Expr::Name{.n,nm};
       }
     }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS)){
       let op = self.pop().value;
       let e = self.prim2();
-      return Expr::Unary{op, Box::new(e)};
+      return Expr::Unary{.n,op, Box::new(e)};
     }
     panic("invalid expr %s", self.peek().print().cstr());
   }
@@ -782,6 +784,7 @@ impl Parser{
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
   func prim2(self): Expr{
     let e = self.prim();
+    let n = self.node();
     if(self.is(TokenType::LBRACE)){
       let ty = Option<Type>::None; 
       if let Expr::Name(nm)=(e){
@@ -799,7 +802,7 @@ impl Parser{
         }
       }
       self.consume(TokenType::RBRACE);
-      e = Expr::Obj{ty.unwrap(), args};
+      e = Expr::Obj{.n,ty.unwrap(), args};
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
       if(self.is(TokenType::DOT)){
@@ -808,7 +811,7 @@ impl Parser{
         if(self.is(TokenType::LPAREN)){
           e = self.call(e, nm, false);
         }else{
-          e = Expr::Access{Box::new(e), nm}; 
+          e = Expr::Access{.n,Box::new(e), nm}; 
         }
       }else{
           self.pop();
@@ -819,24 +822,24 @@ impl Parser{
               idx2 = Option::new(Box::new(self.parse_expr()));
           }
           self.consume(TokenType::RBRACKET);
-          e = Expr::ArrAccess{ArrAccess{Box::new(e), Box::new(idx), idx2}}; 
+          e = Expr::ArrAccess{.n,ArrAccess{Box::new(e), Box::new(idx), idx2}}; 
       }
     }
-    
     return e; 
   }
   
   func as_is(self): Expr{
     let e = self.prim2();
+    let n = self.node();
     if(self.is(TokenType::AS)){
       self.pop();
       let t = self.parse_type();
-      e = Expr::As{Box::new(e), t};
+      e = Expr::As{.n,Box::new(e), t};
     }
     if(self.is(TokenType::IS)){
       self.pop();
       let rhs = self.prim2();
-      e = Expr::Is{Box::new(e), Box::new(rhs)};
+      e = Expr::Is{.n,Box::new(e), Box::new(rhs)};
     }
     return e;
   }
@@ -851,7 +854,8 @@ impl Parser{
         op.append(">");
       }
       let r = self.expr_level(prec + 1);
-      e = Expr::Infix{op, Box::new(e), Box::new(r)};
+      let n = self.node();
+      e = Expr::Infix{.n, op, Box::new(e), Box::new(r)};
     }
     return e;
   }
@@ -879,6 +883,18 @@ impl Parser{
   
   func parse_expr(self): Expr{
     return self.expr_level(0);
+  }
+  
+  func newCall(self,name: String, args: List<Expr>): Expr{
+    return self.newCall(name, List<Type>::new(), args);
+  }
+  func newCall(self, name: String, g: List<Type>, args: List<Expr>): Expr{
+    let n = self.node();
+    return Expr::Call{.n,Call{Option<Box<Expr>>::None, name, g, args, false}};
+  }
+  func newCall(self,scp: Expr, name: String, args: List<Expr>, st: bool): Expr{
+    let n = self.node();
+    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, st}};
   }
 }
 

@@ -278,7 +278,7 @@ Token Lexer::next() {
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {
-        throw std::runtime_error("unexpected char: " + std::string(&c));
+        err("unexpected char: " + std::string(&c));
     }
     token->start = start;
     token->end = pos;

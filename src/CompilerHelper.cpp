@@ -458,6 +458,9 @@ public:
         auto ptr = alloc(ty, node);
         for (auto &e : node->entries) {
             if (!e.isBase) child(e.value);
+            else{
+                child(e.value);                
+            }
         }
         return ptr;
     }

@@ -22,8 +22,6 @@ struct Node{
   pos: i32;
   id: i32;
 }
-
-
 impl Node{
   func new(id: i32): Node{
     return Node{line: 0, pos: 0, id: id};
@@ -402,7 +400,7 @@ struct ArrAccess{
   idx2: Option<Box<Expr>>;
 }
 
-enum Expr{
+enum Expr: Node{
   Lit(kind: LitKind, val: String, suffix: Option<Type>),
   Name(val: String),
   Call(mc: Call),
@@ -444,7 +442,7 @@ struct Entry{
   isBase: bool;
 }
 
-func newCall(name: String, args: List<Expr>): Expr{
+/*func newCall(name: String, args: List<Expr>): Expr{
   return Expr::Call{Call{Option<Box<Expr>>::None, name, List<Type>::new(), args, false}};
 }
 func newCall(name: String, g: List<Type>, args: List<Expr>): Expr{
@@ -452,4 +450,4 @@ func newCall(name: String, g: List<Type>, args: List<Expr>): Expr{
 }
 func newCall(scp: Expr, name: String, args: List<Expr>, st: bool): Expr{
   return Expr::Call{Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, st}};
-}
+}*/

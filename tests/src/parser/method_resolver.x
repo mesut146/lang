@@ -271,10 +271,11 @@ impl MethodResolver{
 
     func handle(self, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
+        let id = Node::new(-1);
+        let e = Expr::Call{.id,*mc};
         //print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
-            let e = Expr::Call{*sig.mc.unwrap()};
             let msg = Fmt::format("no such method {}", sig.print().str());
             self.r.err(msg.str(), &e);
         }
@@ -295,7 +296,6 @@ impl MethodResolver{
             }
         }
         if(real.empty()){
-            let e = Expr::Call{*mc};
             let msg = Fmt::format("method {} not found from candidates", mc.print().str());
             for(let i=0;i < errors.len();++i){
                 let err = errors.get_ptr(i);
@@ -307,7 +307,6 @@ impl MethodResolver{
             self.r.err(msg.str(), &e);
         }
         if (real.size() > 1 && exact.is_none()) {
-            let e = Expr::Call{*mc};
             let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), i64::print(real.size()).str());
             for(let i=0;i < real.len();++i){
                 let err = *real.get_ptr(i);
@@ -371,7 +370,6 @@ impl MethodResolver{
             let pair = typeMap.get_idx(i).unwrap();
             if (pair.b.is_none()) {
                 let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
-                let e = Expr::Call{*mc};
                 self.r.err(msg.str(), &e);
             }
             tmap.add(pair.a, pair.b.get().clone());

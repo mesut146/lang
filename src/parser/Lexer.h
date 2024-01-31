@@ -37,6 +37,10 @@ public:
     std::string str(int a, int b) const {
         return buf.substr(a, b - a);
     }
+    
+    void err(const std::string &msg){
+        throw std::runtime_error(path+":"+std::to_string(line)+"\n"+msg);
+    }
 
     Token next();
     Token readNumber();

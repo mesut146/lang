@@ -643,6 +643,8 @@ impl Resolver{
   }
 
   func visit(self, node: Type*): RType{
+    let id = Node::new(-1);
+    let expr = Expr::Type{.id, *node};
     let str = node.print();
     let cached = self.typeMap.get_p(&str);
     if(cached.is_some()){
@@ -720,7 +722,6 @@ impl Resolver{
         }
       }
       else{
-        let expr = Expr::Type{*node};
         self.err(&expr, "couldn't find type");
       }
     }
@@ -734,7 +735,6 @@ impl Resolver{
         return res;
     }
     if (node.get_args().len() != target.type.get_args().len()) {
-      let expr = Expr::Type{*node};
       self.err(&expr, "type arguments size not matched");
     }
     /*if(target.is_generic){
@@ -743,7 +743,7 @@ impl Resolver{
     //print("target %s\n", Fmt::str(target).cstr());
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
-    let decl0 = copier.visit(target);//todo owner who?
+    let decl0 = copier.visit(target);
     self.generated_decl.add(decl0);
     let decl = self.generated_decl.last();
     self.addUsed(decl);
