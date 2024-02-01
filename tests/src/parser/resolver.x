@@ -1031,7 +1031,7 @@ impl Resolver{
     if(!(lt.type.is_prim() && rt.type.is_prim())){
       self.err(node, "infix on non prim type");
     }
-    if(is_comp(op)){
+    if(is_comp(op.str())){
       return RType::new("bool");
     }
     else if(op.eq("&&") || op.eq("||")){
@@ -1389,10 +1389,6 @@ func infix_result(l: str, r: str): str{
     }
   }
   panic("infix_result: %s, %s", l, r);
-}
-
-func is_comp(s: String*): bool{
-  return s.eq("==") || s.eq("!=") || s.eq("<") || s.eq(">") || s.eq("<=") || s.eq(">=");
 }
 
 //statements-------------------------------------

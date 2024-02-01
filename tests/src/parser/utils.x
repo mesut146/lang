@@ -175,3 +175,23 @@ func isReturnLast(stmt: Stmt*): bool{
     }
     return stmt is Stmt::Ret || stmt is Stmt::Continue || stmt is Stmt::Break;
 }
+
+func is_comp(s: str): bool{
+    return s.eq("==") || s.eq("!=") || s.eq("<") || s.eq(">") || s.eq("<=") || s.eq(">=");
+}
+
+func is_str_lit(e: Expr*): Option<String*>{
+    if let Expr::Lit(lit*)=(e){
+        if(lit.kind is LitKind::STR){
+            return Option::new(&lit.val);
+        }
+    }
+    return Option<String*>::new();
+}
+
+func is_deref(expr: Expr*): Option<Expr*>{
+    if let Expr::Unary(op*, e*)=(expr){
+        if(op.eq("*")) return Option::new(e.get());
+    }
+    return Option<Expr*>::new();
+}

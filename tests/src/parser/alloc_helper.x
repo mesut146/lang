@@ -114,12 +114,14 @@ impl AllocHelper{
     for(let i=0;i<node.list.len();++i){
       let f = node.list.get_ptr(i);
       let ty = self.c.resolver.visit(f);
-      let rhs = self.visit(&f.rhs);
+      let rhs: Option<Value*> = self.visit(&f.rhs);
       if(!doesAlloc(&f.rhs, self.c.resolver)){
         let ptr = self.alloc_ty(&ty.type, f);
         Value_setName(ptr, f.name.cstr());
+        self.c.NamedValues.add(f.name.clone(), ptr);
       }else{
         Value_setName(rhs.unwrap(), f.name.cstr());
+        self.c.NamedValues.add(f.name.clone(), rhs.unwrap());
       }
     }
   }
@@ -181,7 +183,7 @@ impl AllocHelper{
       let print_panic = call.scope.is_none() && (call.name.eq("print") || call.name.eq("panic"));
       for(let i=0;i<call.args.len();++i){
         let arg = call.args.get_ptr(i);
-        if(print_panic && is_str_lit(arg)) continue;//already cstr, no need to alloc
+        if(print_panic && is_str_lit(arg).is_some()) continue;//already cstr, no need to alloc
         self.visit(arg);
       }
       return res;
@@ -228,11 +230,4 @@ impl AllocHelper{
   func child(self, node: Expr*){
 
   }
-}
-
-func is_str_lit(e: Expr*): bool{
-  if let Expr::Lit(lit*)=(e){
-    return lit.kind is LitKind::STR;
-  }
-  return false;
 }

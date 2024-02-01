@@ -228,6 +228,7 @@ impl Compiler{
     if(type.is_prim()){
       return prim_size(type.name().str()).unwrap();
     }
+    if(type.is_pointer()) return 64;
     if let Type::Array(elem*, sz)=(type){
       return self.getSize(elem.get()) * sz;
     }
@@ -249,7 +250,7 @@ impl Compiler{
   }
 
   func cast(self, expr: Expr*, type: Type*): Value*{
-    let val = self.visit(expr);
+    let val = self.loadPrim(expr);
     let val_ty = Value_getType(val);
     let src = getPrimitiveSizeInBits(val_ty);
     let trg = self.getSize(type);
@@ -266,6 +267,14 @@ impl Compiler{
     }
     return val;
   }
+
+  func loadPrim(self, expr: Expr*): Value*{
+    let val = self.visit(expr);
+    let ty = Value_getType(val);
+    if(!isPointerTy(ty))  return val;
+    let type = self.getType(expr);
+    return CreateLoad(self.mapType(&type), val);
+  }
   
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
     if(is_struct(type)){
@@ -277,6 +286,40 @@ impl Compiler{
       let val = self.cast(expr, type);
       CreateStore(val, trg); 
     }
+  }
+
+  //returns 1 bit for br
+  func branch(self, expr: Expr*): Value*{
+    let val = self.visit(expr);
+    return CreateTrunc(val, getInt(1));
+  }
+
+  func load(self, val: Value*, ty: Type*): Value*{
+    let mapped = self.mapType(ty);
+    return CreateLoad(mapped, val);
+  }
+
+  func get_obj_ptr(self, node: Expr*): Value*{
+    if let Expr::Par(e*)=(node){
+      return self.get_obj_ptr(e.get());
+    }
+    if let Expr::Unary(op*,e*)=(node){
+      if(op.eq("*")){
+        return self.visit(e.get());
+      }
+    }
+    let val = self.visit(node);
+    if(node is Expr::Obj || node is Expr::Call|| node is Expr::Lit || node is Expr::Unary || node is Expr::As){
+      return val;
+    }
+    if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
+      let ty = self.getType(node);
+      if(ty.is_pointer()){
+        return CreateLoad(getPtr(), val);
+      }
+      return val;
+    }
+    panic("get_obj_ptr %s", node.print().cstr());
   }
 }
 

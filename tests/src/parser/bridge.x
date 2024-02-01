@@ -1,4 +1,5 @@
 struct vector;
+struct Args;
 struct Target;
 struct TargetMachine;
 struct Module;
@@ -19,6 +20,8 @@ struct BasicBlock;
 extern{
     func make_vec(): vector*;
     func vec_push(vec: vector*, elem: llvm_Type*);
+    func make_args(): Args*;
+    func args_push(vec: Args*, elem: Value*);
 
     func getDefaultTargetTriple(ptr: i8*): i32;
     func InitializeAllTargetInfos();
@@ -43,6 +46,9 @@ extern{
     func getPointerTo(type: llvm_Type*): llvm_Type*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
+    func isPointerTy(type: llvm_Type*): bool;
+    func getPtr(): llvm_Type*;
+    func Value_isPointerTy(val: Value*): bool;
     
     func make_ft(ret: llvm_Type*, args: vector*, vararg: bool): FunctionType*;
     func ext(): i32;
@@ -56,8 +62,10 @@ extern{
     
     func make_stdout(): Value*;
     
+    func create_bb(): BasicBlock*;
     func create_bb2(f: Function*): BasicBlock*;
-    func SetInsertPoint(bb: BasicBlock *);
+    func SetInsertPoint(bb: BasicBlock*);
+    func func_insert(f: Function*, bb: BasicBlock*);
     
     func Value_setName(v: Value*, name: i8*);
     func Value_getType(val: Value*): llvm_Type*;
@@ -70,6 +78,13 @@ extern{
     func CreateZExt(val: Value*, type: llvm_Type*): Value*;
     func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
     func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type *): Value*;
+    func CreateGlobalStringPtr(s: i8*): Value*;
+    func CreateCall(f: Function*, args: Args*): Value*;
+    func CreateUnreachable();
+    func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
+    func CreateCmp(op: i32, l: Value*, r: Value*): Value*;
+    func get_comp_op(op: i8*): i32;
+    func CreateLoad(type: llvm_Type*, val: Value*): Value*;
 }
 
 func getDefaultTargetTriple2(): String{

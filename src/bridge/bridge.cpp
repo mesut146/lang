@@ -31,6 +31,13 @@ std::vector<llvm::Type *> *make_vec() {
 void vec_push(std::vector<llvm::Type *> *vec, llvm::Type *type) {
     vec->push_back(type);
 }
+std::vector<llvm::Value *> *make_args() {
+    return new std::vector<llvm::Value *>();
+}
+
+void args_push(std::vector<llvm::Value *> *vec, llvm::Value *val) {
+    vec->push_back(val);
+}
 
 void setBuilder(llvm::IRBuilder<> *b) {
     Builder = b;
@@ -233,8 +240,12 @@ llvm::BasicBlock *GetInsertBlock() {
     return Builder->GetInsertBlock();
 }
 
-void CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
-    Builder->CreateCall(f, *args);
+void func_insert(llvm::Function *f, llvm::BasicBlock *bb) {
+    f->insert(f->end(), bb);
+}
+
+llvm::Value *CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
+    return Builder->CreateCall(f, *args);
 }
 
 void CreateRet(llvm::Value *val) {
@@ -273,7 +284,8 @@ void addIncoming(llvm::PHINode *phi, llvm::Value *val, llvm::BasicBlock *bb) {
     phi->addIncoming(val, bb);
 }
 
-llvm::CmpInst::Predicate get_comp_op(const std::string &op) {
+int get_comp_op(char* ops) {
+    std::string op(ops);
     if (op == "==") {
         return llvm::CmpInst::ICMP_EQ;
     }
@@ -295,8 +307,8 @@ llvm::CmpInst::Predicate get_comp_op(const std::string &op) {
     throw std::runtime_error("get_comp_op");
 }
 
-llvm::Value *CreateCmp(llvm::CmpInst::Predicate op, llvm::Value *l, llvm::Value *r) {
-    return Builder->CreateCmp(op, l, r);
+llvm::Value *CreateCmp(int op, llvm::Value *l, llvm::Value *r) {
+    return Builder->CreateCmp((llvm::CmpInst::Predicate)op, l, r);
 }
 
 llvm::Value *CreateNSWAdd(llvm::Value *l, llvm::Value *r) {
@@ -346,6 +358,9 @@ llvm::Constant *CreateGlobalStringPtr(char *str) {
 
 bool isPointerTy(llvm::Type *type) {
     return type->isPointerTy();
+}
+bool Value_isPointerTy(llvm::Value *val) {
+    return val->getType()->isPointerTy();
 }
 
 llvm::UnreachableInst *CreateUnreachable() {
@@ -397,7 +412,11 @@ llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
 }
 
 llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
-      return Builder->CreateStructGEP(type, ptr, idx);
-      //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
-    }
+    return Builder->CreateStructGEP(type, ptr, idx);
+    //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
+}
+
+llvm::Value* CreateLoad(llvm::Type* type, llvm::Value* val){
+    return Builder->CreateLoad(type, val);
+}
 }

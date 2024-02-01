@@ -354,21 +354,91 @@ impl Compiler{
   func gep2(self, ptr: Value*, idx: i32, ty: llvm_Type*): Value*{
     return CreateStructGEP(ptr, idx, ty);
   }
+
+  func cur_func(self): Function*{
+    return self.protos.get().cur.unwrap();
+  }
+
+  func call_exit(self, code: i32){
+    let args = make_args();
+    args_push(args, makeInt(code, 32));
+    let exit_proto = self.protos.get().libc("exit");
+    CreateCall(exit_proto, args);
+    CreateUnreachable();
+  }
+
+  func set_and_insert(self, bb: BasicBlock*){
+    SetInsertPoint(bb);
+    func_insert(self.cur_func(), bb);
+  }
+
+  func getType(self, e: Expr*): Type{
+    return self.resolver.visit(e).type;
+  }
  
 }
 
-//visitor
+//stmt
 impl Compiler{
   func visit(self, node: Stmt*){
     if let Stmt::Ret(e*)=(node){
       if(e.is_none()){
         CreateRetVoid();
-        return;
+      }else{
+        self.visit_ret(e.get());
       }
-      self.visit_ret(e.get());
-      return;
     }
-    //panic("visit %s", node.print().cstr());
+    else if let Stmt::Var(ve*)=(node){
+      self.visit(ve);
+    }else if let Stmt::Assert(e*)=(node){
+      self.visit_assert(e);
+    }
+    else if let Stmt::Expr(e*)=(node){
+      self.visit(e);
+    }
+    else{
+      panic("visit %s", node.print().cstr());
+    }
+    return;
+  }
+  func visit_assert(self, expr: Expr*){
+    let msg = Fmt::format("assertion {} failed in {}:{}", expr.print().str(), self.curMethod.unwrap().name.str(), i32::print(expr.line).str());
+    let ptr = CreateGlobalStringPtr(msg.cstr());
+    let then = create_bb2(self.cur_func());
+    let next = create_bb();
+    let cond = self.branch(expr);
+    CreateCondBr(cond, next, then);
+    SetInsertPoint(then);
+    //print error and exit
+    let pr_args = make_args();
+    args_push(pr_args, ptr);
+    let printf_proto = self.protos.get().libc("printf");
+    CreateCall(printf_proto, pr_args);
+    self.call_exit(1);
+    self.set_and_insert(next);
+  }
+  func visit(self, node: VarExpr*){
+    for(let i=0;i<node.list.len();++i){
+      let f = node.list.get_ptr(i);
+      let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
+      if(doesAlloc(&f.rhs, self.resolver)){
+        //self allocated
+        self.visit(&f.rhs);
+        continue;
+      }
+      let type = self.resolver.visit(f).type;
+      if(is_struct(&type)){
+        let val = self.visit(&f.rhs);
+        if(Value_isPointerTy(val)){
+          self.copy(ptr, val, &type);
+        }else{
+          CreateStore(val, ptr);
+        }
+      }else{
+        let val = self.cast(&f.rhs, &type);
+        CreateStore(val, ptr);
+      }
+    }
   }
   func visit(self, node: Block*){
     for(let i=0;i<node.list.len();++i){
@@ -393,7 +463,8 @@ impl Compiler{
   }
 }
 
-//expr
+//----------------------------------------------------------
+//expr------------------------------------------------------
 impl Compiler{
   func visit(self, node: Expr*): Value*{
     if let Expr::Array(list*,sz*)=(node){
@@ -406,7 +477,139 @@ impl Compiler{
     if let Expr::Lit(lit*)=(node){
       return self.visit_lit(lit);
     }
+    if let Expr::Infix(op*, l*, r*)=(node){
+      return self.visit_infix(op, l.get(), r.get());
+    }
+    if let Expr::Name(name*)=(node){
+      return *self.NamedValues.get_ptr(name).unwrap();
+    }
+    if let Expr::Unary(op*, e*)=(node){
+      if(op.eq("&")){
+        return self.visit(e.get());
+      }
+      if(op.eq("*")){
+        return self.visit_deref(e.get());
+      }
+    }
+    if let Expr::Call(mc*)=(node){
+      return self.visit_call(node, mc);
+    }
     panic("expr %s", node.print().cstr());
+  }
+
+  func visit_call(self, expr: Expr*, mc: Call*): Value*{
+    if(mc.name.eq("print") && mc.scope.is_none()){
+      return self.visit_print(mc);
+    }
+    return self.visit_call2(expr, mc);
+  }
+
+  func visit_call2(self, expr: Expr*, mc: Call*): Value*{
+    let rt = self.resolver.visit(expr);
+    let type = &rt.type;
+    let ptr = Option<Value*>::new();
+    if(is_struct(type)){
+      ptr = Option::new(self.get_alloc(expr));
+    }
+    let target = rt.method.unwrap();
+    let proto = self.protos.get().get_func(target);
+    let args = make_args();
+    if(ptr.is_some()){
+      args_push(args, ptr.unwrap());
+    }
+    let paramIdx = 0;
+    if(target.self.is_some()){
+      let scp = self.get_obj_ptr(mc.scope.get().get());
+      args_push(args, scp);
+      ++paramIdx;
+    }
+    for(let i=0;i<mc.args.len();++i){
+      let arg = mc.args.get_ptr(i);
+      let at = self.getType(arg);
+      if (at.is_pointer()) {
+        args_push(args, self.get_obj_ptr(arg));
+      }
+      else if (is_struct(&at)) {
+        let de = is_deref(arg);
+        if (de.is_some()) {
+          args_push(args, self.get_obj_ptr(de.unwrap()));
+        }
+        else {
+          args_push(args, self.visit(arg));
+        }
+      } else {
+        let prm = target.params.get_ptr(paramIdx);
+        let pt = self.resolver.visit(&prm.type).type;
+        args_push(args, self.cast(arg, &pt));
+      }
+    }
+    let res = CreateCall(proto, args);
+    if(ptr.is_some()) return ptr.unwrap();
+    return res;
+  }
+
+  func visit_print(self, mc: Call*): Value*{
+    let args = make_args();
+    for(let i=0;i<mc.args.len();++i){
+      let arg = mc.args.get_ptr(i);
+      let lit = is_str_lit(arg);
+      if(lit.is_some()){
+        let val = lit.unwrap().str();
+        val = val.substr(1, val.len() - 1);//trim quotes
+        let ptr = CreateGlobalStringPtr(val.cstr());
+        args_push(args, ptr);
+        continue;
+      }
+      let arg_type = self.getType(arg);
+      if(arg_type.print().eq("i8*") || arg_type.print().eq("u8*")){
+        let val = self.get_obj_ptr(arg);
+        args_push(args, val);
+      }
+      else if(arg_type.is_str()){
+        panic("print str");
+      }else{
+        panic("print ?");
+      }
+    }
+    let printf_proto = self.protos.get().libc("printf");
+    let res = CreateCall(printf_proto, args);
+    //flush
+    let fflush_proto = self.protos.get().libc("fflush");
+    let args2 = make_args();
+    let stdout_ptr = self.protos.get().stdout_ptr;
+    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+    CreateCall(fflush_proto, args2);
+    return res;
+  }
+
+  func visit_deref(self, e: Expr*): Value*{
+    let type = self.getType(e);
+    let val = self.get_obj_ptr(e);
+    if (type.is_prim() || type.is_pointer()) {
+        return self.load(val, &type);
+    }
+    return val;
+  }
+
+  func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
+    if(is_comp(op.str())){
+      let type = self.resolver.visit(l).type;
+      let lv = self.cast(l, &type);//todo remove
+      let rv = self.cast(r, &type);
+      return CreateCmp(get_comp_op(op.cstr()), lv, rv);
+    }
+    if(op.eq("=")){
+      return self.visit_assign(l, r);
+    }
+    panic("infix '%s'\n", op.cstr());
+  }
+
+  func visit_assign(self, l: Expr*, r: Expr*): Value*{
+    if(l is Expr::Infix) panic("assign lhs");
+    let lhs = self.visit(l);
+    let type = self.getType(l);
+    self.setField(r, &type, lhs);
+    return lhs;
   }
   
   func visit_lit(self, node: Literal*): Value*{
