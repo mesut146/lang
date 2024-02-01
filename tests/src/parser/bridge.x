@@ -69,7 +69,7 @@ extern{
     func CreateSExt(val: Value*, type: llvm_Type*): Value*;
     func CreateZExt(val: Value*, type: llvm_Type*): Value*;
     func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
-
+    func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type *): Value*;
 }
 
 func getDefaultTargetTriple2(): String{

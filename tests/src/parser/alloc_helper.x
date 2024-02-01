@@ -136,8 +136,8 @@ impl AllocHelper{
       }
       return res;
     }
-    if let Expr::Lit(kind, val*, sf*)=(node){
-      if(kind is LitKind::STR){
+    if let Expr::Lit(lit*)=(node){
+      if(lit.kind is LitKind::STR){
         let st = self.c.protos.get().std("str");
         return Option::new(self.alloc_ty(st as llvm_Type*, node));
       }
@@ -231,8 +231,8 @@ impl AllocHelper{
 }
 
 func is_str_lit(e: Expr*): bool{
-  if let Expr::Lit(kind*,val*,sf*)=(e){
-    return kind is LitKind::STR;
+  if let Expr::Lit(lit*)=(e){
+    return lit.kind is LitKind::STR;
   }
   return false;
 }

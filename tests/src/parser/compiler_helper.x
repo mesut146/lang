@@ -266,6 +266,18 @@ impl Compiler{
     }
     return val;
   }
+  
+  func setField(self, expr: Expr*, type: Type*, trg: Value*){
+    if(is_struct(type)){
+      let val = self.visit(expr);
+      self.copy(trg, val, type);
+    }else if(type.is_pointer()){
+      panic("ptr");
+    }else{
+      let val = self.cast(expr, type);
+      CreateStore(val, trg); 
+    }
+  }
 }
 
 
@@ -274,8 +286,8 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
   if let Expr::ArrAccess(aa*)=(e){
     return aa.idx2.is_some();//slice creation
   }
-  if let Expr::Lit(kind*, val*, sf)=(e){
-    return kind is LitKind::STR;
+  if let Expr::Lit(lit*)=(e){
+    return lit.kind is LitKind::STR;
   }
   if let Expr::Type(ty*)=(e){
     return true;//enum creation

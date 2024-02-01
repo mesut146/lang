@@ -195,8 +195,8 @@ impl AstCopier{
 
     func visit(self, node: Expr*): Expr{
         let id = *(node as Node*);
-        if let Expr::Lit(kind*, val*, sf*)=(node){
-            return Expr::Lit{.id, *kind, val.clone(), self.visit_opt(sf)};
+        if let Expr::Lit(lit*)=(node){
+            return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}};
         }
         if let Expr::Name(name*)=(node){
             return Expr::Name{.id,name.clone()};

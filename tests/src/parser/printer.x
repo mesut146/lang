@@ -337,11 +337,11 @@ impl Debug for Fragment{
 //expr---------------------------------
 impl Debug for Expr{
   func debug(self, f: Fmt*){
-    if let Expr::Lit(kind, val, suffix)=(self){
-      f.print(val.replace("\n", "\\n"));
-      if(suffix.is_some()){
+    if let Expr::Lit(lit*)=(self){
+      f.print(lit.val.replace("\n", "\\n"));
+      if(lit.suffix.is_some()){
         f.print("_");
-        suffix.get().debug(f);
+        lit.suffix.get().debug(f);
       }
     }
     else if let Expr::Name(v)=(self){

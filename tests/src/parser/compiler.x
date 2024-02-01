@@ -28,6 +28,7 @@ struct Protos{
   libc: Map<str, Function*>;
   stdout_ptr: Value*;
   std: Map<str, StructType*>;
+  cur: Option<Function*>;
 }
 
 impl Protos{
@@ -37,7 +38,8 @@ impl Protos{
       funcMap: Map<String, Function*>::new(),
       libc: Map<str, Function*>::new(),
       stdout_ptr: make_stdout(),
-      std: Map<str, StructType*>::new()};
+      std: Map<str, StructType*>::new(),
+      cur: Option<Function*>::new()};
       res.init();
       return res;
   }
@@ -265,6 +267,7 @@ impl Compiler{
     self.curMethod = Option<Method*>::new(m);
     let id = mangle(m);
     let f = self.protos.get().get_func(&id);
+    self.protos.get().cur = Option::new(f);
     let bb = create_bb2(f);
     self.NamedValues.clear();
     SetInsertPoint(bb);
@@ -342,6 +345,15 @@ impl Compiler{
       ++argIdx;
     }
   }
+  
+  func get_alloc(self, e: Expr*): Value*{
+    let ptr = self.allocMap.get(e.id);
+    return *ptr.unwrap();
+  }
+  
+  func gep2(self, ptr: Value*, idx: i32, ty: llvm_Type*): Value*{
+    return CreateStructGEP(ptr, idx, ty);
+  }
  
 }
 
@@ -368,13 +380,16 @@ impl Compiler{
     let type = &self.curMethod.unwrap().type;
     type = &self.resolver.visit(type).type;
     if(type.is_pointer()){
-
+      panic("ptr ret");
     }
-    if(is_struct(type)){
+    else if(!is_struct(type)){
       let val = self.cast(expr, type);
       CreateRet(val);
+    }else{
+      let ptr = get_arg(self.protos.get().cur.unwrap(), 0);
+      CreateRetVoid();
     }
-    print("ret %s\n", type.print().cstr());
+    print("ret %s:%s\n", self.curMethod.unwrap().name.cstr(), type.print().cstr());
   }
 }
 
@@ -385,6 +400,58 @@ impl Compiler{
       //let ptr = getalloc();
 
     }
+    if let Expr::Obj(type*,args*)=(node){
+      return self.visit_obj(node, type, args);
+    }
+    if let Expr::Lit(lit*)=(node){
+      return self.visit_lit(lit);
+    }
     panic("expr %s", node.print().cstr());
+  }
+  
+  func visit_lit(self, node: Literal*): Value*{
+    if(node.kind is LitKind::INT){
+        let bits = 32_i64;
+        if (node.suffix.is_some()) {
+            bits = self.getSize(node.suffix.get());
+        }
+        let base = 10;
+        if (node.val.str().starts_with("0x")) base = 16;
+        let val = i32::parse(&node.val);
+        return makeInt(val, bits as i32);
+    }
+    panic("lit %s", node.val.cstr());
+  }
+  
+  func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
+      let ptr = self.get_alloc(node);
+      let rt = self.resolver.visit(node);
+      let ty = self.mapType(&rt.type);
+      let decl = rt.targetDecl.unwrap();
+      if let Decl::Struct(fields*)=(decl){
+        let field_idx = 0;
+        for(let i=0;i<args.len();++i){
+          let arg = args.get_ptr(i);
+          if(arg.isBase){
+            let base_ptr = self.gep2(ptr, 0, ty);
+            let val_ptr = self.visit(&arg.expr);
+            self.copy(base_ptr, val_ptr, &rt.type);
+            continue;
+          }
+          let prm_idx = 0;
+          if(arg.name.is_some()){
+            prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &rt.type);
+          }else{
+            prm_idx = field_idx;
+            ++field_idx;
+          }
+          let fd = fields.get_ptr(prm_idx);
+          if(decl.base.is_some()) ++prm_idx;
+          let field_target_ptr = self.gep2(ptr, prm_idx, ty);
+          self.setField(&arg.expr, &fd.type, field_target_ptr);
+        }
+      }else{
+      }
+      return ptr;
   }
 }

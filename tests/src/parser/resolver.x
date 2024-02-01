@@ -1162,8 +1162,8 @@ impl Resolver{
     if(call.name.eq("panic")){
       if(!call.args.empty()){
         let arg = call.args.get_ptr(0);
-        if let Expr::Lit(kind, val, sf) = (arg){
-          if(kind is LitKind::STR){
+        if let Expr::Lit(lit*) = (arg){
+          if(lit.kind is LitKind::STR){
             return RType::new("void");
           }
         }
@@ -1184,8 +1184,8 @@ impl Resolver{
             return RType::new("void");
         }
         let arg = call.args.get_ptr(0);
-        if let Expr::Lit(kind*, val*, sf*)=(arg){
-          if(kind is LitKind::STR){
+        if let Expr::Lit(lit*)=(arg){
+          if(lit.kind is LitKind::STR){
             return RType::new("void");
           }
         }
@@ -1294,12 +1294,14 @@ impl Resolver{
     return RType::new("bool");
   }
 
-  func visit_lit(self, kind: LitKind, value: String, suffix: Option<Type>*): RType{
-    if(suffix.is_some()){
-      if(i64::parse(&value) > max_for(suffix.get())){
+  func visit_lit(self, lit: Literal*): RType{
+    let kind = &lit.kind;
+    let value = lit.val.clone();
+    if(lit.suffix.is_some()){
+      if(i64::parse(&value) > max_for(lit.suffix.get())){
         self.err("literal out of range");
       }
-      return self.visit(suffix.get());
+      return self.visit(lit.suffix.get());
     }
     if(kind is LitKind::INT){
       let res = RType::new("i32");
@@ -1333,8 +1335,8 @@ impl Resolver{
   }
   
   func visit_nc(self, node: Expr*): RType{
-    if let Expr::Lit(kind, value*, suffix*)=(node){
-      return self.visit_lit(kind, value.clone(), suffix);
+    if let Expr::Lit(lit*)=(node){
+      return self.visit_lit(lit);
     }else if let Expr::Type(type*) = (node){
       return self.visit(type);
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){

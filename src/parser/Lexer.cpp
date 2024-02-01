@@ -210,7 +210,7 @@ Token Lexer::quoted(char c1) {
             s.append(1, c);
         }
     }
-    throw std::runtime_error("unterminated char literal " + s);
+    throw std::runtime_error("unterminated char literal " + s+" line: "+std::to_string(line));
 }
 
 Token Lexer::next() {

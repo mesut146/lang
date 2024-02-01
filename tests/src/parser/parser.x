@@ -658,10 +658,10 @@ impl Parser{
       if (pos != -1 && support_suffix) {
           //trim suffix
           val = val.substr(0, (val.len() - sf.len()) as i32).str();
-          return Expr::Lit{.n,kind, val, Option<Type>::new(Type::new(sf))};
+          return Expr::Lit{.n, Literal{kind, val, Option<Type>::new(Type::new(sf))}};
       }
     }
-    return Expr::Lit{.n,kind, val, Option<Type>::None};
+    return Expr::Lit{.n, Literal{kind, val, Option<Type>::None}};
   }
   
   func name(self): String{

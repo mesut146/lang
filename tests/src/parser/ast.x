@@ -393,6 +393,11 @@ struct Fragment: Node{
   rhs: Expr;
 }
 
+struct Literal{
+  kind: LitKind;
+  val: String;
+  suffix: Option<Type>;
+}
 enum LitKind{
   INT, STR, CHAR, BOOL, FLOAT
 }
@@ -404,7 +409,7 @@ struct ArrAccess{
 }
 
 enum Expr: Node{
-  Lit(kind: LitKind, val: String, suffix: Option<Type>),
+  Lit(val: Literal),
   Name(val: String),
   Call(mc: Call),
   Par(e: Box<Expr>),
@@ -444,13 +449,3 @@ struct Entry{
   expr: Expr;
   isBase: bool;
 }
-
-/*func newCall(name: String, args: List<Expr>): Expr{
-  return Expr::Call{Call{Option<Box<Expr>>::None, name, List<Type>::new(), args, false}};
-}
-func newCall(name: String, g: List<Type>, args: List<Expr>): Expr{
-  return Expr::Call{Call{Option<Box<Expr>>::None, name, g, args, false}};
-}
-func newCall(scp: Expr, name: String, args: List<Expr>, st: bool): Expr{
-  return Expr::Call{Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, st}};
-}*/

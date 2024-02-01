@@ -395,4 +395,9 @@ llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {
 llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
     return Builder->CreateZExt(val, type);
 }
+
+llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
+      return Builder->CreateStructGEP(type, ptr, idx);
+      //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
+    }
 }
