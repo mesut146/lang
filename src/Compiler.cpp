@@ -1951,7 +1951,8 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     if (!node->isSized()) {
         int i = 0;
         for (auto e : node->list) {
-            auto elem_target = gep(ptr, 0, i++, arr_ty);
+            auto elem_target = gep(ptr, 0, i, arr_ty);
+            i++;
             setField(e, resolv->getType(e), elem_target);
         }
         return ptr;

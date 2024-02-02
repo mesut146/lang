@@ -60,6 +60,7 @@ extern{
   func readdir(dp: DIR*): dirent*;
   func closedir(dp: DIR*): i32;
   func realpath(path: i8*, resolved: i8*): i8*;
+  func system(cmd: i8*): i32;
 }
 
 

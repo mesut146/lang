@@ -60,6 +60,7 @@ func compile_dir(cmp: Compiler*, dir: str){
     file.append(name.str());
     if(is_dir(file.str())) continue;
     cmp.compile(file.str());
+    cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
   }
 }
 

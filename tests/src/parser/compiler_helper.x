@@ -271,9 +271,9 @@ impl Compiler{
   func loadPrim(self, expr: Expr*): Value*{
     let val = self.visit(expr);
     let ty = Value_getType(val);
-    if(!isPointerTy(ty))  return val;
+    if(!isPointerTy(ty)) return val;
     let type = self.getType(expr);
-    return CreateLoad(self.mapType(&type), val);
+    return CreateLoad(self.mapType(&type), val);//local var
   }
   
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
@@ -305,7 +305,7 @@ impl Compiler{
     }
     if let Expr::Unary(op*,e*)=(node){
       if(op.eq("*")){
-        return self.visit(e.get());
+        return self.visit(node);
       }
     }
     let val = self.visit(node);
@@ -346,4 +346,16 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     return false;
   }
   return false;
+}
+
+func getPrimitiveSizeInBits2(val: Value*): i32{
+  let ty = Value_getType(val);
+  return getPrimitiveSizeInBits(ty);
+}
+
+func gep_arr(type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
+  let args = make_args();
+  args_push(args, makeInt(i1, 64));
+  args_push(args, makeInt(i2, 64));
+  return CreateInBoundsGEP(type, ptr, args);
 }

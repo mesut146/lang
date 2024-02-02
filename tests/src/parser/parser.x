@@ -602,25 +602,6 @@ impl Parser{
     return t.is([TokenType::BOOLEAN, TokenType::VOID, TokenType::I8, TokenType::I16, TokenType::I32, TokenType::I64, TokenType::F32, TokenType::F64, TokenType::U8, TokenType::U16, TokenType::U32, TokenType::U64][0..12]);
   }
   
-  func call(self, scp: Expr, nm: String, st: bool): Expr{
-    self.consume(TokenType::LPAREN);
-    let args = self.exprList(TokenType::RPAREN);
-    self.consume(TokenType::RPAREN);
-    return self.newCall(scp, nm, args, st);
-  }
-  func call(self, nm: String): Expr{
-    self.consume(TokenType::LPAREN);
-    let args = self.exprList(TokenType::RPAREN);
-    self.consume(TokenType::RPAREN);
-    return self.newCall(nm, args);
-  }
-  func call(self, nm: String, g: List<Type>): Expr{
-    self.consume(TokenType::LPAREN);
-    let args = self.exprList(TokenType::RPAREN);
-    self.consume(TokenType::RPAREN);
-    return self.newCall(nm, g, args);
-  }
-  
   func exprList(self, tt: TokenType): List<Expr>{
     let arr = List<Expr>::new();
     if(self.is(tt)) return arr;
@@ -885,6 +866,25 @@ impl Parser{
   func parse_expr(self): Expr{
     return self.expr_level(0);
   }
+
+  func call(self, scp: Expr, nm: String, is_static: bool): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return self.newCall(scp, nm, args, is_static);
+  }
+  func call(self, nm: String): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return self.newCall(nm, args);
+  }
+  func call(self, nm: String, g: List<Type>): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return self.newCall(nm, g, args);
+  }
   
   func newCall(self,name: String, args: List<Expr>): Expr{
     return self.newCall(name, List<Type>::new(), args);
@@ -893,9 +893,9 @@ impl Parser{
     let n = self.node();
     return Expr::Call{.n,Call{Option<Box<Expr>>::None, name, g, args, false}};
   }
-  func newCall(self,scp: Expr, name: String, args: List<Expr>, st: bool): Expr{
+  func newCall(self,scp: Expr, name: String, args: List<Expr>, is_static: bool): Expr{
     let n = self.node();
-    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, st}};
+    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, is_static}};
   }
 }
 

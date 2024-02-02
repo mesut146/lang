@@ -92,7 +92,7 @@ llvm::TargetMachine *createTargetMachine(const char *triple) {
     return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
-void emit(const char *name, llvm::TargetMachine *TargetMachine, char *triple) {
+void emit_object(const char *name, llvm::TargetMachine *TargetMachine, char *triple) {
     std::string TargetTriple(triple);
     std::string Filename(name);
     llvm::verifyModule(*mod, &llvm::outs());
@@ -415,8 +415,15 @@ llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
     return Builder->CreateStructGEP(type, ptr, idx);
     //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
 }
+llvm::Value *CreateInBoundsGEP(llvm::Type* type,llvm::Value *ptr, std::vector<llvm::Value*>* idx) {
+    return Builder->CreateInBoundsGEP(type, ptr, *idx);
+}
 
 llvm::Value* CreateLoad(llvm::Type* type, llvm::Value* val){
     return Builder->CreateLoad(type, val);
+}
+
+llvm::Value* getTrue(){
+    return Builder->getTrue();
 }
 }

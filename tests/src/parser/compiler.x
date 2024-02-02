@@ -8,6 +8,7 @@ import parser/compiler_helper
 import parser/alloc_helper
 import std/map
 import std/io
+import std/libc
 
 struct Compiler{
   ctx: Context;
@@ -171,6 +172,32 @@ impl Compiler{
     return &self.resolver.unit;
   }
 
+  func link_run(self, name0: str, args: str){
+    name0 = Fmt::format("./{}", name0).str();
+    let name = name0.cstr();
+    if(exist(name0)){
+      remove(name);
+    }
+    let cmd = "clang-16 ".str();
+    cmd.append("-o ");
+    cmd.append(name0);
+    cmd.append(" ");
+    for(let i = 0;i < self.compiled.len();++i){
+      let file = self.compiled.get_ptr(i);
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+    cmd.append(args);
+    if(system(cmd.cstr()) == 0){
+      //run if linked
+      if(system(name) != 0){
+        panic("error while running a.out");
+      }
+    }else{
+      panic("lin failed");
+    }
+  }
+
   func compile(self, path0: str): String{
     //print("compile %s\n", path0.cstr());
     let path = Path::new(path0.str());
@@ -207,14 +234,23 @@ impl Compiler{
     }
     
     let name = getName(path0);
-    let llvm_file = Fmt::format("{}.lll", trimExtenstion(name));
+    let llvm_file = Fmt::format("{}-bt.ll", trimExtenstion(name));
     emit_llvm(llvm_file.cstr());
     if(self.config.verbose){
       print("writing %s\n", llvm_file.cstr());
     }
     self.compiled.add(outFile);
+    emit_object(outFile.cstr(), self.llvm.target_machine, self.llvm.target_triple.cstr());
+    if(self.config.verbose){
+      print("writing %s\n", outFile.cstr());
+    }
+    self.cleanup();
     return outFile;
     //panic("");
+  }
+
+  func cleanup(self){
+    self.NamedValues.clear();
   }
 
   //make all struct decl & method decl used by this module
@@ -396,10 +432,38 @@ impl Compiler{
     else if let Stmt::Expr(e*)=(node){
       self.visit(e);
     }
+    else if let Stmt::If(is*)=(node){
+      self.visit_if(is);
+    }
     else{
       panic("visit %s", node.print().cstr());
     }
     return;
+  }
+  func visit_if(self, node: IfStmt*){
+    let cond = self.branch(&node.e);
+    let then = create_bb2(self.cur_func());
+    let elsebb = Option<BasicBlock*>::new();
+    let next = create_bb();
+    if(node.els.is_some()){
+      elsebb = Option::new(create_bb());
+      CreateCondBr(cond, then, elsebb.unwrap());
+    }else{
+      CreateCondBr(cond, then, next);
+    }
+    SetInsertPoint(then);
+    self.visit(node.then.get());
+    if(!isReturnLast(node.then.get())){
+      CreateBr(next);
+    }
+    if(node.els.is_some()){
+      self.set_and_insert(elsebb.unwrap());
+      self.visit(node.els.get().get());
+      if(!isReturnLast(node.then.get())){
+        CreateBr(next);
+      }
+    }
+    self.set_and_insert(next);
   }
   func visit_assert(self, expr: Expr*){
     let msg = Fmt::format("assertion {} failed in {}:{}", expr.print().str(), self.curMethod.unwrap().name.str(), i32::print(expr.line).str());
@@ -434,7 +498,10 @@ impl Compiler{
         }else{
           CreateStore(val, ptr);
         }
-      }else{
+      }else if(type.is_pointer()){
+        let val = self.visit(&f.rhs);
+        CreateStore(val, ptr);
+      } else{
         let val = self.cast(&f.rhs, &type);
         CreateStore(val, ptr);
       }
@@ -488,13 +555,78 @@ impl Compiler{
         return self.visit(e.get());
       }
       if(op.eq("*")){
-        return self.visit_deref(e.get());
+        return self.visit_deref(node, e.get());
       }
+      return self.visit_unary(op, e.get());
     }
     if let Expr::Call(mc*)=(node){
       return self.visit_call(node, mc);
     }
+    if let Expr::ArrAccess(aa*)=(node){
+      return self.visit_aa(aa);
+    }
+    if let Expr::Array(list*, sz*)=(node){
+      return self.visit_array(node, list, sz);
+    }
     panic("expr %s", node.print().cstr());
+  }
+
+  func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
+    let ptr = self.get_alloc(node);
+    let elem_type = self.getType(list.get_ptr(0));
+    let arr_ty = self.mapType(&elem_type);
+    if(sz.is_none()){
+      for(let i = 0;i<list.len();++i){
+        let e = list.get_ptr(i);
+        let elem_target = gep_arr(arr_ty, ptr, 0, i);
+        let et = self.getType(e);
+        self.setField(e, &et, elem_target);
+      }
+      return ptr;
+    }
+    panic("arr");
+  }
+
+  func visit_aa(self, node: ArrAccess*): Value*{
+    let type = self.getType(node.arr.get());
+    if(node.idx2.is_some()){
+      return self.visit_slice(node);
+    }
+    panic("aa");
+  }
+  func visit_slice(self, node: ArrAccess*): Value*{
+    let arr = self.visit(node.arr.get());
+    panic("slice");
+  }
+
+  func visit_unary(self, op: String*, e: Expr*): Value*{
+    let val = self.loadPrim(e);
+    if(op.eq("+")) return val;
+    if(op.eq("!")){
+      val = CreateTrunc(val, getInt(1));
+      val = CreateXor(val, getTrue());
+      return CreateZExt(val, getInt(8));
+    }
+    let bits = getPrimitiveSizeInBits2(val);
+    if(op.eq("-")){
+      return CreateNSWSub(makeInt(0, bits), val);
+    }
+    if(op.eq("++")){
+      let v = self.visit(e);//var without load
+      let res = CreateNSWAdd(val, makeInt(1, bits));
+      CreateStore(res, v);
+      return res;
+    }
+    if(op.eq("--")){
+      let v = self.visit(e);//var without load
+      let res = CreateNSWSub(val, makeInt(1, bits));
+      CreateStore(res, v);
+      return res;
+    }
+    if(op.eq("~")){
+      return CreateXor(val, makeInt(-1, bits));
+    }
+    panic("unary %s", op.cstr());
   }
 
   func visit_call(self, expr: Expr*, mc: Call*): Value*{
@@ -505,6 +637,10 @@ impl Compiler{
   }
 
   func visit_call2(self, expr: Expr*, mc: Call*): Value*{
+    print("mc %s\n", expr.print().cstr());
+    if(expr.print().eq("i32::min(&x, 6)")){
+      let x = 1;
+    }
     let rt = self.resolver.visit(expr);
     let type = &rt.type;
     let ptr = Option<Value*>::new();
@@ -518,12 +654,19 @@ impl Compiler{
       args_push(args, ptr.unwrap());
     }
     let paramIdx = 0;
+    let i = 0;
     if(target.self.is_some()){
-      let scp = self.get_obj_ptr(mc.scope.get().get());
-      args_push(args, scp);
-      ++paramIdx;
+      if(mc.is_static){
+        let scp = self.get_obj_ptr(mc.args.get_ptr(0));
+        args_push(args, scp);
+        ++i;
+      }else{
+        let scp = self.get_obj_ptr(mc.scope.get().get());
+        args_push(args, scp);
+      }
+      //++paramIdx;
     }
-    for(let i=0;i<mc.args.len();++i){
+    for(;i < mc.args.len();++i){
       let arg = mc.args.get_ptr(i);
       let at = self.getType(arg);
       if (at.is_pointer()) {
@@ -542,6 +685,7 @@ impl Compiler{
         let pt = self.resolver.visit(&prm.type).type;
         args_push(args, self.cast(arg, &pt));
       }
+      ++paramIdx;
     }
     let res = CreateCall(proto, args);
     if(ptr.is_some()) return ptr.unwrap();
@@ -582,8 +726,8 @@ impl Compiler{
     return res;
   }
 
-  func visit_deref(self, e: Expr*): Value*{
-    let type = self.getType(e);
+  func visit_deref(self, node: Expr*, e: Expr*): Value*{
+    let type = self.getType(node);
     let val = self.get_obj_ptr(e);
     if (type.is_prim() || type.is_pointer()) {
         return self.load(val, &type);

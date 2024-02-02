@@ -280,8 +280,8 @@ impl Lexer{
         while (self.pos < self.buf.len()) {
             c = self.read();
             if (c == '\\') {
-                s.append("\\");
-                s.append(self.peek());
+                //s.append("\\");
+                s.append(checkEscape(self.peek()) as i8);
                 self.pos+=1;
             } else if (c == open) {
                 s.append(c);

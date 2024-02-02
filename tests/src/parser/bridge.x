@@ -35,6 +35,7 @@ extern{
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
     func emit_llvm(out: i8*);
+    func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;
@@ -77,14 +78,21 @@ extern{
     func CreateSExt(val: Value*, type: llvm_Type*): Value*;
     func CreateZExt(val: Value*, type: llvm_Type*): Value*;
     func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
-    func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type *): Value*;
+    func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type*): Value*;
+    func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: Args*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
     func CreateCall(f: Function*, args: Args*): Value*;
     func CreateUnreachable();
     func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
+    func CreateBr(bb: BasicBlock*);
     func CreateCmp(op: i32, l: Value*, r: Value*): Value*;
     func get_comp_op(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
+    func getTrue(): Value*;
+
+    func CreateNSWSub(l: Value*, r: Value*): Value*;
+    func CreateNSWAdd(l: Value*, r: Value*): Value*;
+    func CreateXor(l: Value*, r: Value*): Value*;
 }
 
 func getDefaultTargetTriple2(): String{

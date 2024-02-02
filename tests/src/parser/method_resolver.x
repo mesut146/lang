@@ -606,6 +606,7 @@ impl MethodResolver{
         }
         let copier = AstCopier::new(map);
         let res2 = copier.visit(m);
+        res2.is_generic = false;
         self.r.generated_methods.add(res2);
         let res = self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
         if(!(m.parent is Parent::Impl)){
