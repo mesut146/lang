@@ -2,20 +2,20 @@ impl i32{
   func MIN(): i32{ return -2147483648; }
   func MAX(): i32{ return 2147483647; }
 
-  func min(x, y: i32): i32{
-    if(*x <= y) return *x;
+  func min(x1, y: i32): i32{
+    if(*x1 <= y) return *x1;
     return y;
   }
-  func max(x, y: i32): i32{
-    if(*x >= y) return *x;
+  func max(x2, y: i32): i32{
+    if(*x2 >= y) return *x2;
     return y;
   }
-  func abs(x): i32{
-    if(*x >= 0) return *x;
-    return -*x;
+  func abs(x3): i32{
+    if(*x3 >= 0) return *x3;
+    return -*x3;
   }
-  func generic_sum<T>(x, y: T): T{
-    return *x + y;
+  func generic_sum<T>(x4, y: T): T{
+    return *x4 + y;
   }
   func generic_other<T>(x: T): T{
     return x;

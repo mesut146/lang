@@ -604,7 +604,7 @@ impl MethodResolver{
                 return gm;
             }
         }
-        let copier = AstCopier::new(map);
+        let copier = AstCopier::new(map, &self.r.unit);
         let res2 = copier.visit(m);
         res2.is_generic = false;
         self.r.generated_methods.add(res2);

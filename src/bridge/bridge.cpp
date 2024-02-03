@@ -276,11 +276,11 @@ void CreateBr(llvm::BasicBlock *bb) {
     Builder->CreateBr(bb);
 }
 
-llvm::PHINode *CreatePHI(llvm::Type *type) {
-    return Builder->CreatePHI(type, 2);
+llvm::PHINode *CreatePHI(llvm::Type *type, int cnt) {
+    return Builder->CreatePHI(type, cnt);
 }
 
-void addIncoming(llvm::PHINode *phi, llvm::Value *val, llvm::BasicBlock *bb) {
+void phi_addIncoming(llvm::PHINode *phi, llvm::Value *val, llvm::BasicBlock *bb) {
     phi->addIncoming(val, bb);
 }
 
@@ -418,6 +418,11 @@ llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
 llvm::Value *CreateInBoundsGEP(llvm::Type* type,llvm::Value *ptr, std::vector<llvm::Value*>* idx) {
     return Builder->CreateInBoundsGEP(type, ptr, *idx);
 }
+
+llvm::Value *CreateGEP(llvm::Type* type,llvm::Value *ptr, std::vector<llvm::Value*>* idx) {
+    return Builder->CreateGEP(type, ptr, *idx);
+}
+
 
 llvm::Value* CreateLoad(llvm::Type* type, llvm::Value* val){
     return Builder->CreateLoad(type, val);

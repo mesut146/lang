@@ -185,6 +185,8 @@ impl Compiler{
 
   func make_proto(self, m: Method*){
     if(m.is_generic) return;
+    let mangled = mangle(m);
+    print("proto %s\n", mangled.cstr());
     let rvo = is_struct(&m.type);
     let ret = getVoidTy();
     if(is_main(m)){
@@ -214,7 +216,7 @@ impl Compiler{
     if(!m.type_args.empty()){
       linkage = odr();
     }
-    let mangled = mangle(m);
+
     let f = make_func(ft, linkage, mangled.cstr());
     if(rvo){
       let arg = get_arg(f, 0);
@@ -281,7 +283,8 @@ impl Compiler{
       let val = self.visit(expr);
       self.copy(trg, val, type);
     }else if(type.is_pointer()){
-      panic("ptr");
+      let val = self.get_obj_ptr(expr);
+      CreateStore(val, trg);
     }else{
       let val = self.cast(expr, type);
       CreateStore(val, trg); 
@@ -321,6 +324,15 @@ impl Compiler{
     }
     panic("get_obj_ptr %s", node.print().cstr());
   }
+
+  func getTag(self, expr: Expr*): Value*{
+    let rt = self.resolver.visit(expr);
+    let tag_idx = get_tag_index(rt.targetDecl.unwrap());
+    let tag = self.get_obj_ptr(expr);
+    let mapped = self.mapType(rt.type.unwrap_ptr());
+    tag = self.gep2(tag, tag_idx, mapped);
+    return CreateLoad(getInt(ENUM_TAG_BITS()), tag);
+  }
 }
 
 
@@ -358,4 +370,17 @@ func gep_arr(type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
   args_push(args, makeInt(i1, 64));
   args_push(args, makeInt(i2, 64));
   return CreateInBoundsGEP(type, ptr, args);
+}
+
+func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
+  let args = make_args();
+  args_push(args, i1);
+  return CreateGEP(type, ptr, args);
+}
+
+func get_tag_index(decl: Decl*): i32{
+  if(decl.base.is_some()){
+    return 1;
+  }
+  return 0;
 }

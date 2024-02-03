@@ -11,13 +11,12 @@ class Parser{
   is_marked: bool;
   mark: i32;
   unit: Unit;
-  last_id: i32;
 }
 
 impl Parser{
   
   func new(l: Lexer*): Parser{
-    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path), -1};
+    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path)};
     res.fill();
     return res;
   }
@@ -549,7 +548,7 @@ impl Parser{
     }
 
     func node(self): Node{
-      return Node::new(++self.last_id, self.peek().line);
+      return Node::new(++self.unit.last_id, self.peek().line);
     }
 }
 

@@ -320,6 +320,10 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       self.visit(self.unit.items.get_ptr(i));
     }
+    for(let i=0;i<self.generated_methods.len();++i){
+      let gm = self.generated_methods.get_ptr(i);
+      self.visit(gm);
+    }
     //self.dump();
   }
   
@@ -820,7 +824,7 @@ impl Resolver{
             break;
         }
     }
-    let msg=Fmt::format("invalid field {} of {}", name.str(),type.print().str()); 
+    let msg = Fmt::format("invalid field {} of {}", name.str(),type.print().str()); 
     self.err(node, msg.str());
     panic("");
   }
@@ -1116,7 +1120,7 @@ impl Resolver{
   
   func is_ptr_get(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("ptr") && mc.name.eq("get");
-}
+  }
 
   func visit(self, node: Expr*, call: Call*): RType{
     if(is_ptr_get(call)){
@@ -1325,10 +1329,12 @@ impl Resolver{
 
   func visit(self, node: Expr*): RType{
     let id = node.id;
-    if(id==-1) panic("id");
+    if(id == -1) panic("id");
     if(self.cache.contains(&node.id)){
+      //print("cached %d, %s\n", node.id, node.print().cstr());
       return self.cache.get_ptr(&node.id).unwrap().clone();
     }
+    //print("visit %d, %s\n", node.id, node.print().cstr());
     let res = self.visit_nc(node);
     self.cache.add(node.id, res);
     return res.clone();

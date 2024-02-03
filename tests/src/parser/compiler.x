@@ -21,6 +21,8 @@ struct Compiler{
   NamedValues: Map<String, Value*>;
   allocMap: Map<i32, Value*>;
   curMethod: Option<Method*>;
+  loops: List<BasicBlock*>;
+  loopNext: List<BasicBlock*>;
 }
 
 struct Protos{
@@ -165,7 +167,9 @@ impl Compiler{
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
      allocMap: Map<i32, Value*>::new(),
-     curMethod: Option<Method*>::new()};
+     curMethod: Option<Method*>::new(),
+     loops: List<BasicBlock*>::new(),
+     loopNext: List<BasicBlock*>::new()};
   }
 
   func unit(self): Unit*{
@@ -187,6 +191,7 @@ impl Compiler{
       cmd.append(file.str());
       cmd.append(" ");
     }
+    self.compiled.clear();
     cmd.append(args);
     if(system(cmd.cstr()) == 0){
       //run if linked
@@ -435,11 +440,57 @@ impl Compiler{
     else if let Stmt::If(is*)=(node){
       self.visit_if(is);
     }
+    else if let Stmt::IfLet(is*)=(node){
+      self.visit_iflet(is);
+    }
+    else if let Stmt::Block(b*)=(node){
+      self.visit(b);
+    }
+    else if let Stmt::For(fs*)=(node){
+      self.visit_for(fs);
+    }
     else{
       panic("visit %s", node.print().cstr());
     }
     return;
   }
+  func visit_iflet(self, node: IfLet*){
+
+  }
+
+  func visit_for(self, node: ForStmt*){
+    if(node.v.is_some()){
+      self.visit(node.v.get());
+    }
+    let f = self.cur_func();
+    let then = create_bb();
+    let condbb = create_bb2(f);
+    let updatebb = create_bb2(f);
+    let next = create_bb();
+
+    CreateBr(condbb);
+    SetInsertPoint(condbb);
+    if (node.e.is_some()) {
+      CreateCondBr(self.branch(node.e.get()), then, next);
+    } else {
+      CreateBr(then);
+    }
+    self.set_and_insert(then);
+    self.loops.add(updatebb);
+    self.loopNext.add(next);
+    self.visit(node.body.get());
+    CreateBr(updatebb);
+    SetInsertPoint(updatebb);
+    for (let i=0;i<node.u.len();++i) {
+      let u = node.u.get_ptr(i);
+      self.visit(u);
+    }
+    self.loops.pop_back();
+    self.loopNext.pop_back();
+    CreateBr(condbb);
+    self.set_and_insert(next);
+  }
+
   func visit_if(self, node: IfStmt*){
     let cond = self.branch(&node.e);
     let then = create_bb2(self.cur_func());
@@ -517,16 +568,19 @@ impl Compiler{
     let type = &self.curMethod.unwrap().type;
     type = &self.resolver.visit(type).type;
     if(type.is_pointer()){
-      panic("ptr ret");
+      let val = self.get_obj_ptr(expr);
+      CreateRet(val);
+      return;
     }
-    else if(!is_struct(type)){
+    if(!is_struct(type)){
       let val = self.cast(expr, type);
       CreateRet(val);
-    }else{
-      let ptr = get_arg(self.protos.get().cur.unwrap(), 0);
-      CreateRetVoid();
+      return;
     }
-    print("ret %s:%s\n", self.curMethod.unwrap().name.cstr(), type.print().cstr());
+    let ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
+    let val = self.visit(expr);
+    self.copy(ptr, val, type);
+    CreateRetVoid();
   }
 }
 
@@ -563,18 +617,80 @@ impl Compiler{
       return self.visit_call(node, mc);
     }
     if let Expr::ArrAccess(aa*)=(node){
-      return self.visit_aa(aa);
+      return self.visit_aa(node, aa);
     }
     if let Expr::Array(list*, sz*)=(node){
       return self.visit_array(node, list, sz);
     }
+    if let Expr::Access(scope*, name*)=(node){
+      return self.visit_access(node, scope.get(), name);
+    }
+    if let Expr::Type(type*)=(node){
+      return self.simple_enum(node ,type);
+    }
+    if let Expr::Is(lhs*, rhs*)=(node){
+      return self.visit_is(lhs.get(), rhs.get());
+    }
+    if let Expr::As(lhs*, rhs*)=(node){
+      return self.visit_as(lhs.get(), rhs);
+    }
     panic("expr %s", node.print().cstr());
+  }
+
+  func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
+    let lhs_type = self.getType(lhs);
+    let rhs_type = self.resolver.visit(rhs).type;
+    //ptr to int
+    if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
+      let val = self.get_obj_ptr(lhs);
+        return CreatePtrToInt(val, self.mapType(&rhs_type));
+    }
+    if (lhs_type.is_prim()) {
+      return self.cast(lhs, &rhs_type);
+    }
+    return self.get_obj_ptr(lhs);
+  }
+
+  func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
+    let tag1 = self.getTag(lhs);
+    let op = get_comp_op("==".cstr());
+    if let Expr::Type(rhs_ty*)=(rhs){
+      let decl = self.resolver.visit(rhs_ty).targetDecl.unwrap();
+      let index = Resolver::findVariant(decl, rhs_ty.name());
+      let tag2 = makeInt(index, ENUM_TAG_BITS());
+      return CreateCmp(op, tag1, tag2);
+    }
+    let tag2 = self.getTag(rhs);
+    return CreateCmp(op, tag1, tag2);
+  }
+
+  func simple_enum(self, node: Expr*, type: Type*): Value*{
+    let smp = type.as_simple();
+    let decl = self.resolver.visit(smp.scope.get()).targetDecl.unwrap();
+    let index = Resolver::findVariant(decl, &smp.name);
+    let ptr = self.get_alloc(node);
+    let decl_ty = self.mapType(&decl.type);
+    let tag_ptr = self.gep2(ptr, get_tag_index(decl),decl_ty);
+    CreateStore(makeInt(index, ENUM_TAG_BITS()), tag_ptr);
+    return ptr;
+  }
+
+  func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
+    let scope_ptr = self.get_obj_ptr(scope);
+    let rt = self.resolver.visit(scope);
+    let decl = rt.targetDecl.unwrap();
+    let pair = self.resolver.findField(node, name, decl, &decl.type);
+    let index = pair.b;
+    if (decl.base.is_some()) ++index;
+    let sd_ty = self.mapType(&decl.type);
+    return self.gep2(scope_ptr, index, sd_ty);
   }
 
   func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
     let ptr = self.get_alloc(node);
+    let arrt = self.getType(node);
     let elem_type = self.getType(list.get_ptr(0));
-    let arr_ty = self.mapType(&elem_type);
+    let arr_ty = self.mapType(&arrt);
     if(sz.is_none()){
       for(let i = 0;i<list.len();++i){
         let e = list.get_ptr(i);
@@ -587,16 +703,37 @@ impl Compiler{
     panic("arr");
   }
 
-  func visit_aa(self, node: ArrAccess*): Value*{
+  func visit_aa(self, expr: Expr*, node: ArrAccess*): Value*{
     let type = self.getType(node.arr.get());
     if(node.idx2.is_some()){
-      return self.visit_slice(node);
+      return self.visit_slice(expr, node);
     }
     panic("aa");
   }
-  func visit_slice(self, node: ArrAccess*): Value*{
+  func visit_slice(self,expr: Expr*, node: ArrAccess*): Value*{
+    let ptr = self.get_alloc(expr);
     let arr = self.visit(node.arr.get());
-    panic("slice");
+    let arr_ty = self.getType(node.arr.get());
+    let elem_ty = arr_ty.elem();
+    let i32_ty = Type::new("i32");
+    let val_start = self.cast(node.idx.get(), &i32_ty);
+
+    let ptr_ty = self.mapType(elem_ty);
+    //shift by start
+    arr = gep_ptr(ptr_ty, arr, val_start);
+
+    let sliceType = self.protos.get().std("slice");
+
+    let trg_ptr = self.gep2(ptr, 0, sliceType as llvm_Type*);
+    let trg_len = self.gep2(ptr, 1, sliceType as llvm_Type*);
+    //store ptr
+    CreateStore(arr, trg_ptr);
+    //set len
+    let val_end = self.cast(node.idx2.get().get(), &i32_ty);
+    let len = CreateSub(val_end, val_start);
+    len = CreateSExt(len, getInt(SLICE_LEN_BITS()));
+    CreateStore(len, trg_len);
+    return ptr;
   }
 
   func visit_unary(self, op: String*, e: Expr*): Value*{
@@ -633,15 +770,54 @@ impl Compiler{
     if(mc.name.eq("print") && mc.scope.is_none()){
       return self.visit_print(mc);
     }
+    if(mc.name.eq("panic") && mc.scope.is_none()){
+      self.visit_panic(expr, mc);
+      return getTrue();
+    }
+    if(mc.name.eq("malloc") && mc.scope.is_none()){
+      let i64_ty = Type::new("i64");
+      let size = self.cast(mc.args.get_ptr(0), &i64_ty);
+      if (!mc.tp.empty()) {
+          let typeSize = self.getSize(mc.tp.get_ptr(0)) / 8;
+          size = CreateNSWMul(size, makeInt(typeSize, 64));
+      }
+      let proto = self.protos.get().libc("malloc");
+      let args = make_args();
+      args_push(args, size);
+      return CreateCall(proto, args);
+    }
+    if(Resolver::is_ptr_get(mc)){
+      let elem_type = self.getType(expr).unwrap_ptr();
+      let src = self.get_obj_ptr(mc.args.get_ptr(0));
+      let idx = self.loadPrim(mc.args.get_ptr(1));
+      return gep_ptr(self.mapType(elem_type), src, idx);
+    }
     return self.visit_call2(expr, mc);
   }
 
+  func visit_panic(self, node: Expr*, mc: Call*){
+    let msg = String::new("panic in ");
+    msg.append(mc.name.str());
+    msg.append("\n");
+    msg.append(self.unit().path.str());
+    msg.append(":");
+    msg.append(i32::print(node.line).str());
+
+    //printf
+    let pr_mc = Call::new("print".str());
+    let id = node as Node*;
+    pr_mc.args.add(Expr::Lit{.*id, Literal{LitKind::STR, msg, Option<Type>::new()}});
+    self.visit_print(&pr_mc);
+    //exit
+    self.call_exit(1);
+  }
+
   func visit_call2(self, expr: Expr*, mc: Call*): Value*{
-    print("mc %s\n", expr.print().cstr());
-    if(expr.print().eq("i32::min(&x, 6)")){
-      let x = 1;
-    }
+    //print("mc %s\n", expr.print().cstr());
     let rt = self.resolver.visit(expr);
+    if(rt.method.is_none()){
+      panic("mc %s", expr.print().cstr());
+    }
     let type = &rt.type;
     let ptr = Option<Value*>::new();
     if(is_struct(type)){
@@ -736,16 +912,92 @@ impl Compiler{
   }
 
   func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
+    let type = self.resolver.visit(l).type;
     if(is_comp(op.str())){
-      let type = self.resolver.visit(l).type;
-      let lv = self.cast(l, &type);//todo remove
+      //todo remove redundant cast
+      let lv = self.cast(l, &type);
       let rv = self.cast(r, &type);
       return CreateCmp(get_comp_op(op.cstr()), lv, rv);
+    }
+    if(op.eq("&&") || op.eq("||")){
+      return self.andOr(op, l, r).a;
     }
     if(op.eq("=")){
       return self.visit_assign(l, r);
     }
+    if(op.eq("+")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateNSWAdd(lv, rv);
+    }
+    if(op.eq("*")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateNSWMul(lv, rv);
+    }
+    if(op.eq("+=")){
+      let lv = self.visit(l);
+      let lval = self.loadPrim(l);
+      let rval = self.visit(r);
+      let tmp = CreateNSWAdd(lval, rval);
+      CreateStore(tmp, lv);
+      return lv;
+    }
     panic("infix '%s'\n", op.cstr());
+  }
+
+  func is_logic(expr: Expr*): bool{
+    if let Expr::Par(e*)=(expr){
+      return is_logic(e.get());
+    }
+    if let Expr::Infix(op*, l*, r*)=(expr){
+      if(op.eq("&&") || op.eq("||")){
+        return true;
+      }
+    }
+    return false;
+  }
+
+  func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<Value*, BasicBlock*>{
+    let isand = true;
+    if(op.eq("||")) isand = false;
+
+    let bb = GetInsertBlock();
+    let then = create_bb2(self.cur_func());
+    let next = create_bb();
+    if (isand) {
+      CreateCondBr(self.branch(l), then, next);
+    } else {
+      CreateCondBr(self.branch(l), next, then);
+    }
+    SetInsertPoint(then);
+    let rv = Option<Value*>::new();
+    if(is_logic(r)){
+      let r_inner = r;
+      if let Expr::Par(e*)=(r){
+        r_inner = e.get();
+      }
+      if let Expr::Infix(op2*,l2*,r2*)=(r_inner){
+        let pair = self.andOr(op2, l2.get(), r2.get());
+        then = pair.b;
+        rv = Option::new(pair.a);
+      }else{
+        panic("");
+      }
+    }else{
+      rv = Option::new(self.loadPrim(r));
+    }
+    let rbit = CreateZExt(rv.unwrap(), getInt(8));
+    CreateBr(next);
+    self.set_and_insert(next);
+    let phi = CreatePHI(getInt(8), 2);
+    let i8val = 0;
+    if(!isand){
+      i8val = 1;
+    }
+    phi_addIncoming(phi, makeInt(i8val, 8), bb);
+    phi_addIncoming(phi, rbit, then);
+    return Pair::new(CreateZExt(phi as Value*, getInt(8)), next);
   }
 
   func visit_assign(self, l: Expr*, r: Expr*): Value*{

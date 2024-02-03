@@ -104,7 +104,7 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     loc(nullptr);
 }
 
-llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler *c, llvm::DICompositeType *var_part, llvm::DIFile *file, int size, int idx, llvm::DICompositeType *scope) {
+llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler *c, llvm::DICompositeType *var_part, llvm::DIFile *file, int size, int idx, llvm::DICompositeType *scope, int var_off) {
     auto name = ed->type.print() + "::" + evar.name;
     auto var_type = (llvm::StructType *) c->classMap[name];
     std::vector<llvm::Metadata *> elems;
@@ -115,14 +115,14 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
     int i = 0;
     for (auto &fd : evar.fields) {
         auto fdd = c->map_di(fd.type);
-        auto off = sl->getElementOffsetInBits(i) + ENUM_TAG_BITS;
+        auto off = sl->getElementOffsetInBits(i);
         auto member = c->DBuilder->createMemberType(st, fd.name, file, ed->line, c->getSize2(fd.type), 0, off, llvm::DINode::FlagZero, fdd);
         elems.push_back(member);
         ++i;
     }
     st->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems)));
     int align = 0;
-    return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, size, align, 0, c->makeInt(idx), llvm::DINode::FlagZero, st);
+    return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, size, align, var_off, c->makeInt(idx), llvm::DINode::FlagZero, st);
 }
 
 llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
@@ -142,10 +142,13 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
     auto file = st->getFile();
     std::vector<llvm::Metadata *> elems;
 
+    llvm::DIType *base_ty = nullptr;
+
     if (decl->base.has_value()) {
-        auto base_ty = map_di(decl->base.value());
-        auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
-        elems.push_back(in);
+        base_ty = map_di(decl->base.value());
+        //auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
+        auto mt = DBuilder->createMemberType(st, "super", file, decl->line, base_ty->getSizeInBits(), 0, 0, llvm::DINode::FlagZero, base_ty);
+        elems.push_back(mt);
     }
 
     auto st1 = (llvm::StructType *) mapType(decl->type);
@@ -156,7 +159,12 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
         auto ed = (EnumDecl *) decl;
         auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
         auto enum_size = getSize2(ed);
+        if (base_ty) {
+            enum_size -= base_ty->getSizeInBits();
+        }
+        int var_idx = decl->base.has_value() ? 2 : 1;
         int tag_off = 0;
+        int var_off = sl->getElementOffsetInBits(var_idx);
         if (decl->base.has_value()) {
             tag_off = sl->getElementOffsetInBits(1);
         }
@@ -166,7 +174,7 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
         auto var_part = DBuilder->createVariantPart(st, "", file, decl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);
         int idx = 0;
         for (auto &evar : ed->variants) {
-            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st);
+            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st, var_off);
             elems2.push_back(var_type);
             ++idx;
         }

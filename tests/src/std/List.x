@@ -59,6 +59,10 @@ impl<T> List<T>{
     self.count -= 1;
   }
 
+  func pop_back(self){
+    self.remove(self.len() - 1);
+  }
+
   func add(self, e: T){
     self.expand();
     *ptr::get(self.ptr, self.count) = e;

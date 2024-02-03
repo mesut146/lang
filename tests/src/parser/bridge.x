@@ -16,6 +16,7 @@ struct Argument;
 struct AttrKind;
 struct Value;
 struct BasicBlock;
+struct PHINode;
 
 extern{
     func make_vec(): vector*;
@@ -66,6 +67,7 @@ extern{
     func create_bb(): BasicBlock*;
     func create_bb2(f: Function*): BasicBlock*;
     func SetInsertPoint(bb: BasicBlock*);
+    func GetInsertBlock(): BasicBlock*;
     func func_insert(f: Function*, bb: BasicBlock*);
     
     func Value_setName(v: Value*, name: i8*);
@@ -78,8 +80,10 @@ extern{
     func CreateSExt(val: Value*, type: llvm_Type*): Value*;
     func CreateZExt(val: Value*, type: llvm_Type*): Value*;
     func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
+    func CreatePtrToInt(val: Value*, type: llvm_Type*): Value*;
     func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type*): Value*;
     func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: Args*): Value*;
+    func CreateGEP(type: llvm_Type*, ptr: Value*, idx: Args*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
     func CreateCall(f: Function*, args: Args*): Value*;
     func CreateUnreachable();
@@ -89,9 +93,13 @@ extern{
     func get_comp_op(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
     func getTrue(): Value*;
+    func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
+    func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
 
-    func CreateNSWSub(l: Value*, r: Value*): Value*;
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
+    func CreateNSWSub(l: Value*, r: Value*): Value*;
+    func CreateNSWMul(l: Value*, r: Value*): Value*;
+    func CreateSub(l: Value*, r: Value*): Value*;
     func CreateXor(l: Value*, r: Value*): Value*;
 }
 

@@ -37,10 +37,14 @@ struct Unit{
   imports: List<ImportStmt>;
   items: List<Item>;
   globals: List<Global>;
+  last_id: i32;
 }
 impl Unit{
   func new(path: String): Unit{
-    return Unit{path.clone(), 0, List<ImportStmt>::new(), List<Item>::new(), List<Global>::new()};
+    return Unit{path: path.clone(), last_line: 0,
+                imports: List<ImportStmt>::new(),
+                items: List<Item>::new(),
+                globals: List<Global>::new(), last_id: -1};
   }
 }
 
@@ -441,6 +445,9 @@ struct Call{
 impl Call{
   func print(self): String{
     return Fmt::str(self);
+  }
+  func new(name: String): Call{
+    return Call{scope: Option<Box<Expr>>::new(), name: name, tp: List<Type>::new(), args: List<Expr>::new(), is_static: false};
   }
 }
 

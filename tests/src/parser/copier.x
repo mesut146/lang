@@ -4,11 +4,15 @@ import std/map
 
 struct AstCopier{
     map: Map<String, Type>*;
+    unit: Option<Unit*>;
 }
 
 impl AstCopier{
+    func new(map: Map<String, Type>*, unit: Unit*): AstCopier{
+        return AstCopier{map: map, unit: Option::new(unit)};
+    }
     func new(map: Map<String, Type>*): AstCopier{
-        return AstCopier{map: map};
+        return AstCopier{map: map, unit: Option<Unit*>::None};
     }
 
     func visit_list<E>(self, list: List<E>*): List<E>{
@@ -147,9 +151,13 @@ impl AstCopier{
       return Fragment{.*n, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
     }
 
+    func node(self, old: Node*): Node{
+        return Node::new(++self.unit.unwrap().last_id, old.line);
+    }
+
     func visit(self, node: ArgBind*): ArgBind{
-        let id = node as Node*;
-        return ArgBind{.*id,node.name.clone(), node.is_ptr};
+        let id = self.node(node as Node*);
+        return ArgBind{.id,node.name.clone(), node.is_ptr};
     }
 
     func visit(self, node: VarExpr*): VarExpr{
@@ -194,7 +202,7 @@ impl AstCopier{
     }
 
     func visit(self, node: Expr*): Expr{
-        let id = *(node as Node*);
+        let id = self.node(node as Node*);
         if let Expr::Lit(lit*)=(node){
             return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}};
         }
