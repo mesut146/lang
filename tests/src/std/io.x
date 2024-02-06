@@ -106,4 +106,14 @@ impl Path{
     let i = self.path.str().lastIndexOf(".");
     return self.path.substr(i + 1);
   }
+
+  func name(self): str{
+    let i = self.path.str().lastIndexOf("/");
+    return self.path.substr(i + 1);
+  }
+
+  func noext(self): str{
+    let i = self.name().lastIndexOf(".");
+    return self.path.substr(0, i);
+  }
 }

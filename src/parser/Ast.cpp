@@ -221,6 +221,9 @@ std::string Type::print() const {
 
 std::string Param::print() const {
     std::string s;
+    if(is_deref){
+        s.append("*");
+    }
     s.append(name);
     s.append(": ");
     s.append(type->print());

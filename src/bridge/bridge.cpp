@@ -284,7 +284,7 @@ void phi_addIncoming(llvm::PHINode *phi, llvm::Value *val, llvm::BasicBlock *bb)
     phi->addIncoming(val, bb);
 }
 
-int get_comp_op(char* ops) {
+int get_comp_op(char *ops) {
     std::string op(ops);
     if (op == "==") {
         return llvm::CmpInst::ICMP_EQ;
@@ -308,7 +308,7 @@ int get_comp_op(char* ops) {
 }
 
 llvm::Value *CreateCmp(int op, llvm::Value *l, llvm::Value *r) {
-    return Builder->CreateCmp((llvm::CmpInst::Predicate)op, l, r);
+    return Builder->CreateCmp((llvm::CmpInst::Predicate) op, l, r);
 }
 
 llvm::Value *CreateNSWAdd(llvm::Value *l, llvm::Value *r) {
@@ -415,23 +415,23 @@ llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
     return Builder->CreateStructGEP(type, ptr, idx);
     //return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
 }
-llvm::Value *CreateInBoundsGEP(llvm::Type* type,llvm::Value *ptr, std::vector<llvm::Value*>* idx) {
+llvm::Value *CreateInBoundsGEP(llvm::Type *type, llvm::Value *ptr, std::vector<llvm::Value *> *idx) {
     return Builder->CreateInBoundsGEP(type, ptr, *idx);
 }
 
-llvm::Value *CreateGEP(llvm::Type* type,llvm::Value *ptr, std::vector<llvm::Value*>* idx) {
+llvm::Value *CreateGEP(llvm::Type *type, llvm::Value *ptr, std::vector<llvm::Value *> *idx) {
     return Builder->CreateGEP(type, ptr, *idx);
 }
 
 
-llvm::Value* CreateLoad(llvm::Type* type, llvm::Value* val){
+llvm::Value *CreateLoad(llvm::Type *type, llvm::Value *val) {
     return Builder->CreateLoad(type, val);
 }
 
-llvm::Value* getTrue(){
+llvm::Value *getTrue() {
     return Builder->getTrue();
 }
-llvm::Value* getFalse(){
+llvm::Value *getFalse() {
     return Builder->getFalse();
 }
 }

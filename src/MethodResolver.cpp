@@ -48,7 +48,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
             res.scope = std::move(scp);
         }
         if (!dynamic_cast<Type *>(mc->scope.get())) {
-            res.args.push_back(makeSelf(res.scope->type));
+            res.args.push_back(res.scope->type.toPtr());
         }
     }
     int i = 0;

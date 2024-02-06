@@ -228,19 +228,19 @@ std::shared_ptr<Unit> Parser::parseUnit() {
             consume(SEMI);
             auto ti = std::make_unique<TypeItem>(name, rhs);
             res->items.push_back(std::move(ti));
-        } else if(is(STATIC)){
-        	pop();
+        } else if (is(STATIC)) {
+            pop();
             Global g;
-            g. name = pop().value;
-            if(is(COLON)){
-            	pop();
+            g.name = pop().value;
+            if (is(COLON)) {
+                pop();
                 g.type = parseType();
             }
             consume(EQ);
             g.expr.reset(parseExpr());
             consume(SEMI);
             res->globals.push_back(std::move(g));
-        }else {
+        } else {
             throw std::runtime_error("invalid top level decl: " + first()->print() + " line: " + std::to_string(first()->line));
         }
     }
@@ -264,22 +264,28 @@ Method Parser::parseMethod() {
         pop();
     }
     consume(FUNC);
-    auto nm = pop();
-    res.line = nm.line;
-    res.name = nm.value;
+    auto name = pop();
+    res.line = name.line;
+    res.name = name.value;
     if (is(LT)) {
         res.typeArgs = type_params();
         res.isGeneric = true;
     }
     consume(LPAREN);
     if (!is(RPAREN)) {
-        if (isName() && peek(1)->is(COLON)) {
-            res.params.push_back(parseParam());
-        } else {
+        if (is(STAR) || isName() && !peek(1)->is(COLON)) {
+            bool is_deref = false;
+            if (is(STAR)) {
+                pop();
+                is_deref = true;
+            }
             auto nm = pop();
             Param self(nm.value);
             self.line = nm.line;
+            self.is_deref = is_deref;
             res.self = std::move(self);
+        } else {
+            res.params.push_back(parseParam());
         }
         while (is(COMMA)) {
             consume(COMMA);

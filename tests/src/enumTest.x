@@ -16,7 +16,9 @@ func main(){
   let c: E = E::C{100};
   let d: E = E::D{A{a: 100, b: 200}};
   
-  assert a is E::A && c is E::C && d is E::D;
+  assert a is E::A;
+  assert c is E::C;
+  assert d is E::D;
 
   let isA = false;
   let isC = false;
@@ -43,14 +45,17 @@ func main(){
 func test_mut(){
   let isB = false;
   let b: E = E::B{b: 6, a: 5};//random order
+  //let b: E = E::B{a: 5, b: 6};//random order
   assert b is E::B;
 
   if let E::B(p1, p2) = (b){
     isB = true;
-    assert p1 == 5 && p2 == 6;
+    assert p1 == 5;
+    assert p2 == 6;
     //mutate local var
     p1 = 10;
-    assert p1 == 10 && p2 == 6;
+    assert p1 == 10;
+    assert p2 == 6;
   }
   //mutate real
   if let E::B(p1*, p2*) = (b){

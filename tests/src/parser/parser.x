@@ -747,14 +747,14 @@ impl Parser{
         self.pop();
         let ty = self.parse_type();
         if(self.is(TokenType::LPAREN)){
-          return self.call(Expr::Type{.n,Type::new(nm)}, *ty.name(), true);
+          return self.call(Expr::Type{.n,Type::new(nm)}, ty.name().clone(), true);
         }else{
-          return Expr::Type{.n,Type::new(Type::new(nm), *ty.name())};
+          return Expr::Type{.n,Type::new(Type::new(nm), ty.name().clone())};
         }
       }else{
         return Expr::Name{.n,nm};
       }
-    }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS)){
+    }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
       let op = self.pop().value;
       let e = self.prim2();
       return Expr::Unary{.n,op, Box::new(e)};

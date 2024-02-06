@@ -101,7 +101,13 @@ extern{
     func CreateNSWSub(l: Value*, r: Value*): Value*;
     func CreateNSWMul(l: Value*, r: Value*): Value*;
     func CreateSub(l: Value*, r: Value*): Value*;
+    func CreateSDiv(l: Value*, r: Value*): Value*;
+    func CreateSRem(l: Value*, r: Value*): Value*;
+    func CreateAnd(l: Value*, r: Value*): Value*;
+    func CreateOr(l: Value*, r: Value*): Value*;
     func CreateXor(l: Value*, r: Value*): Value*;
+    func CreateShl(l: Value*, r: Value*): Value*;
+    func CreateAShr(l: Value*, r: Value*): Value*;
 }
 
 func getDefaultTargetTriple2(): String{

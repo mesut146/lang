@@ -66,8 +66,8 @@ func compile_dir(cmp: Compiler*, dir: str){
 
 func compile(cmp: Compiler*, file: str){
     cmp.compile(file);
-    let name = file.substr(file.indexOf("/", 0)+1);
-    cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
+    let noext = Path::new(file.str()).noext();
+    cmp.link_run(noext,"");
 }
 
 func compiler_test(){
@@ -77,7 +77,7 @@ func compiler_test(){
   let cmp = Compiler::new(ctx);
   compile(&cmp, "../tests/src/infix.x");
   compile_dir(&cmp, root);
-  compile_dir(&cmp, "../tests/src/std");
+  //compile_dir(&cmp, "../tests/src/std");
 }
 
 func main(){

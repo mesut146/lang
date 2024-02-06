@@ -215,6 +215,7 @@ class Param : public Node {
 public:
     std::string name;
     std::optional<Type> type;
+    bool is_deref = false;
 
     explicit Param(const std::string &name) : name(name) {}
     explicit Param(const std::string &name, const Type &type) : name(name), type(type){};

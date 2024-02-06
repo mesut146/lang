@@ -3,6 +3,7 @@ import parser/lexer
 import parser/ast
 import parser/printer
 import parser/method_resolver
+import parser/method_resolver
 import parser/utils
 import parser/token
 import parser/copier
@@ -1108,15 +1109,6 @@ impl Resolver{
         let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
         return scope.is_array();
   }
-
-  func as_type(bits: i32): Type{
-    if(bits==64){
-      return Type::new("i64");
-    }
-    return Type::new("i32");
-  }
-  
-  func SLICE_LEN_BITS(): i32{ return 64; }
   
   func is_ptr_get(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("ptr") && mc.name.eq("get");

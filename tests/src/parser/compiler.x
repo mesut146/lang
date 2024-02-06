@@ -199,7 +199,7 @@ impl Compiler{
         panic("error while running a.out");
       }
     }else{
-      panic("lin failed");
+      panic("link failed '%s'", cmd.cstr());
     }
   }
 
@@ -391,6 +391,10 @@ impl Compiler{
     let ptr = self.allocMap.get(e.id);
     return *ptr.unwrap();
   }
+  func get_alloc(self, id: i32): Value*{
+    let ptr = self.allocMap.get(id);
+    return *ptr.unwrap();
+  }
   
   func gep2(self, ptr: Value*, idx: i32, ty: llvm_Type*): Value*{
     return CreateStructGEP(ptr, idx, ty);
@@ -414,7 +418,8 @@ impl Compiler{
   }
 
   func getType(self, e: Expr*): Type{
-    return self.resolver.visit(e).type;
+    let rt = self.resolver.visit(e);
+    return rt.type;
   }
  
 }
@@ -454,8 +459,64 @@ impl Compiler{
     }
     return;
   }
-  func visit_iflet(self, node: IfLet*){
 
+  func visit_iflet(self, node: IfLet*){
+    let rt = self.resolver.visit(&node.ty);
+    let decl = rt.targetDecl.unwrap();
+    let rhs = self.get_obj_ptr(&node.rhs);
+    let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
+    let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
+    let index = Resolver::findVariant(decl, node.ty.name());
+    let cmp = CreateCmp(get_comp_op("==".cstr()), tag, makeInt(index, ENUM_TAG_BITS()));
+
+    let then = create_bb2(self.cur_func());
+    let next = create_bb();
+    let elsebb = Option<BasicBlock*>::new();
+    if(node.els.is_some()){
+      elsebb = Option<BasicBlock*>::new(create_bb());
+      CreateCondBr(self.branch(cmp), then, elsebb.unwrap());
+    }else{
+      CreateCondBr(self.branch(cmp), then, next);
+    }
+    SetInsertPoint(then);
+    let variant = decl.get_variants().get_ptr(index);
+    if(!variant.fields.empty()){
+        //declare vars
+        let params = &variant.fields;
+        let data_index = get_data_index(decl);
+        let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
+        let var_ty = self.get_variant_ty(decl, variant);
+        for (let i = 0; i < params.size(); ++i) {
+            //regular var decl
+            let prm = params.get_ptr(i);
+            let arg = node.args.get_ptr(i);
+            let field_ptr = self.gep2(dataPtr, i, var_ty);
+            let alloc_ptr = self.get_alloc(arg.id);
+            self.NamedValues.add(arg.name.clone(), alloc_ptr);
+            if (arg.is_ptr) {
+                CreateStore(field_ptr, alloc_ptr);
+            } else {
+                if (prm.type.is_prim() || prm.type.is_pointer()) {
+                    let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
+                    CreateStore(field_val, alloc_ptr);
+                } else {
+                    self.copy(alloc_ptr, field_ptr, &prm.type);
+                }
+            }
+        }
+    }
+    self.visit(node.then.get());
+    if (!isReturnLast(node.then.get())) {
+      CreateBr(next);
+    }
+    if (node.els.is_some()) {
+        self.set_and_insert(elsebb.unwrap());
+        self.visit(node.els.get().get());
+        if (!isReturnLast(node.els.get().get())) {
+            CreateBr(next);
+        }
+    }
+    self.set_and_insert(next);
   }
 
   func visit_for(self, node: ForStmt*){
@@ -517,7 +578,7 @@ impl Compiler{
     self.set_and_insert(next);
   }
   func visit_assert(self, expr: Expr*){
-    let msg = Fmt::format("assertion {} failed in {}:{}", expr.print().str(), self.curMethod.unwrap().name.str(), i32::print(expr.line).str());
+    let msg = Fmt::format("assertion {} failed in {}:{}\n", expr.print().str(), self.curMethod.unwrap().name.str(), i32::print(expr.line).str());
     let ptr = CreateGlobalStringPtr(msg.cstr());
     let then = create_bb2(self.cur_func());
     let next = create_bb();
@@ -599,7 +660,7 @@ impl Compiler{
       return self.visit_obj(node, type, args);
     }
     if let Expr::Lit(lit*)=(node){
-      return self.visit_lit(lit);
+      return self.visit_lit(node, lit);
     }
     if let Expr::Infix(op*, l*, r*)=(node){
       return self.visit_infix(op, l.get(), r.get());
@@ -765,6 +826,9 @@ impl Compiler{
     let ptr = self.get_alloc(expr);
     let arr = self.visit(node.arr.get());
     let arr_ty = self.getType(node.arr.get());
+    if(arr_ty.is_slice()){
+      arr = CreateLoad(getPtr(), arr);
+    }
     let elem_ty = arr_ty.elem();
     let i32_ty = Type::new("i32");
     let val_start = self.cast(node.idx.get(), &i32_ty);
@@ -849,6 +913,10 @@ impl Compiler{
         return makeInt(sz, 64);
       }
       panic("");
+    }
+    //arr.ptr()
+    if(self.resolver.is_array_get_ptr(mc)){
+      return self.get_obj_ptr(mc.scope.get().get());
     }
     if(self.resolver.is_slice_get_len(mc)){
       let sl = self.get_obj_ptr(mc.scope.get().get());
@@ -1008,6 +1076,41 @@ impl Compiler{
       let rv = self.cast(r, &type);
       return CreateNSWMul(lv, rv);
     }
+    if(op.eq("/")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateSDiv(lv, rv);
+    }
+    if(op.eq("%")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateSRem(lv, rv);
+    }
+    if(op.eq("&")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateAnd(lv, rv);
+    }
+    if(op.eq("|")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateOr(lv, rv);
+    }
+    if(op.eq("^")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateXor(lv, rv);
+    }
+    if(op.eq("<<")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateShl(lv, rv);
+    }
+    if(op.eq(">>")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateAShr(lv, rv);
+    }
     if(op.eq("+=")){
       let lv = self.visit(l);
       let lval = self.loadPrim(l);
@@ -1035,13 +1138,14 @@ impl Compiler{
     let isand = true;
     if(op.eq("||")) isand = false;
 
+    let lval = self.branch(l);//must be eval first
     let bb = GetInsertBlock();
     let then = create_bb2(self.cur_func());
     let next = create_bb();
     if (isand) {
-      CreateCondBr(self.branch(l), then, next);
+      CreateCondBr(lval, then, next);
     } else {
-      CreateCondBr(self.branch(l), next, then);
+      CreateCondBr(lval, next, then);
     }
     SetInsertPoint(then);
     let rv = Option<Value*>::new();
@@ -1076,21 +1180,23 @@ impl Compiler{
   func visit_assign(self, l: Expr*, r: Expr*): Value*{
     if(l is Expr::Infix) panic("assign lhs");
     //let lhs = Option<Value*>::new();
+    let type = self.getType(l);
     if let Expr::Unary(op*,l2*)=(l){
       if(op.eq("*")){
         let lhs = self.get_obj_ptr(l2.get());
-        let type = self.getType(l);
+        let rt = self.resolver.visit(l);
+        print("assign deref %s\n", l.print().cstr());
         self.setField(r, &type, lhs);
         return lhs;
       }
     }
     let lhs = self.visit(l);
-    let type = self.getType(l);
+    print("assign %s\n", l.print().cstr());
     self.setField(r, &type, lhs);
     return lhs;
   }
   
-  func visit_lit(self, node: Literal*): Value*{
+  func visit_lit(self, expr: Expr*, node: Literal*): Value*{
     if(node.kind is LitKind::INT){
         let bits = 32_i64;
         if (node.suffix.is_some()) {
@@ -1103,7 +1209,47 @@ impl Compiler{
     }
     if(node.val.eq("true")) return getTrue();
     if(node.val.eq("false")) return getFalse();
+    if(node.kind is LitKind::STR){
+      let trg_ptr = self.get_alloc(expr);
+      let trimmed = node.val.substr(1, (node.val.len() as i32) - 2);//quote
+      let src = CreateGlobalStringPtr(trimmed.cstr());
+      let stringType = self.protos.get().std("str") as llvm_Type*;
+      let sliceType = self.protos.get().std("slice") as llvm_Type*;
+      let slice_ptr = self.gep2(trg_ptr, 0, stringType);
+      let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
+      let len_target = self.gep2(slice_ptr, SLICE_LEN_INDEX(), sliceType);
+      //set ptr
+      CreateStore(src, data_target);
+      //set len
+      let len = makeInt(trimmed.len(), SLICE_LEN_BITS());
+      CreateStore(len, len_target);
+      return trg_ptr;
+    }
     panic("lit %s", node.val.cstr());
+  }
+
+  func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
+    let field_idx = 0;
+    for(let i=0;i<args.len();++i){
+      let arg = args.get_ptr(i);
+      if(arg.isBase){
+        let base_ptr = self.gep2(ptr, 0, ty);
+        let val_ptr = self.visit(&arg.expr);
+        self.copy(base_ptr, val_ptr, &decl.type);
+        continue;
+      }
+      let prm_idx = 0;
+      if(arg.name.is_some()){
+        prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &decl.type);
+      }else{
+        prm_idx = field_idx;
+        ++field_idx;
+      }
+      let fd = fields.get_ptr(prm_idx);
+      if(decl.base.is_some()) ++prm_idx;
+      let field_target_ptr = self.gep2(ptr, prm_idx, ty);
+      self.setField(&arg.expr, &fd.type, field_target_ptr);
+    }
   }
   
   func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
@@ -1134,6 +1280,16 @@ impl Compiler{
           self.setField(&arg.expr, &fd.type, field_target_ptr);
         }
       }else{
+        let variant_index = Resolver::findVariant(decl, type.name());
+        let variant = decl.get_variants().get_ptr(variant_index);
+        //set tag
+        let tag_ptr = self.gep2(ptr, 0, ty);
+        let tag_val = makeInt(variant_index, ENUM_TAG_BITS());
+        CreateStore(tag_val, tag_ptr);
+        //set data
+        let data_ptr = self.gep2(ptr, 1, ty);
+        let var_ty = self.get_variant_ty(decl, variant);
+        self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
       }
       return ptr;
   }

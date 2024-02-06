@@ -123,6 +123,7 @@ impl Lexer{
     ops.add("!", TokenType::BANG);
     ops.add("#", TokenType::HASH);
     ops.add("++", TokenType::PLUSPLUS);
+    ops.add("--", TokenType::MINUSMINUS);
     ops.add("..", TokenType::DOTDOT);
     return ops;
   }

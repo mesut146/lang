@@ -267,6 +267,7 @@ std::any AstCopier::visitMethod(Method *node) {
     if (node->self) {
         Param self(node->self->name);
         self.line = node->self->line;
+        self.is_deref = node->self->is_deref;
         if (node->self->type) {
             self.type.emplace(visit(*node->self->type, this));
         }

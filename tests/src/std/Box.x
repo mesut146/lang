@@ -53,6 +53,6 @@ impl<T> Ptr<T>{
     return self.val.get().get();
   }
   func unwrap(self): T{
-    return *self.get();
+    return self.val.unwrap().unwrap();
   }
 }

@@ -5,13 +5,6 @@ import parser/compiler
 import parser/utils
 import std/map
 
-
-func SLICE_PTR_INDEX(): i32{ return 0; }
-func SLICE_LEN_INDEX(): i32{ return 1; }
-func SLICE_LEN_BITS(): i32{ return 64; }
-func ENUM_TAG_BITS(): i32{ return 64; }
-
-
 func make_slice_type(): StructType*{
     let elems = make_vec();
     vec_push(elems, getPointerTo(getInt(8)));
@@ -158,7 +151,9 @@ impl Compiler{
       let max = 0;
       for(let i=0;i < variants.len();++i){
         let ev = variants.get_ptr(i);
-        let var_ty = self.make_variant_type(ev,decl);
+        let name = Fmt::format("{}::{}",decl.type.print().str(), ev.name.str());
+        let var_ty = self.make_variant_type(ev, decl, &name);
+        self.protos.get().classMap.add(name, var_ty as llvm_Type*);
         let sz = getSizeInBits(var_ty);
         if(sz > max){
           max = sz;
@@ -176,14 +171,13 @@ impl Compiler{
     }
     setBody(st, elems);
   }
-  func make_variant_type(self, ev: Variant*, decl: Decl*): StructType*{
+  func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*): StructType*{
     let elems = make_vec();
     for(let j=0;j < ev.fields.len();++j){
       let fd = ev.fields.get_ptr(j);
       let ft = self.mapType(&fd.type);
       vec_push(elems, ft);
     }
-    let name = Fmt::format("{}::{}",decl.type.print().str(), ev.name.str());
     return make_struct_ty2(name.cstr(), elems);
   }
 
@@ -297,7 +291,11 @@ impl Compiler{
 
   //returns 1 bit for br
   func branch(self, expr: Expr*): Value*{
-    let val = self.visit(expr);
+    let val = self.loadPrim(expr);
+    return CreateTrunc(val, getInt(1));
+  }
+  //returns 1 bit for br
+  func branch(self, val: Value*): Value*{
     return CreateTrunc(val, getInt(1));
   }
 
@@ -336,6 +334,11 @@ impl Compiler{
     let mapped = self.mapType(rt.type.unwrap_ptr());
     tag = self.gep2(tag, tag_idx, mapped);
     return CreateLoad(getInt(ENUM_TAG_BITS()), tag);
+  }
+
+  func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
+    let name = Fmt::format("{}::{}", decl.type.print().str(), variant.name.str());
+    return self.protos.get().classMap.get_p(&name).unwrap();
   }
 }
 
@@ -395,4 +398,7 @@ func get_tag_index(decl: Decl*): i32{
     return 1;
   }
   return 0;
+}
+func get_data_index(decl: Decl*): i32{
+  return get_tag_index(decl) + 1;
 }

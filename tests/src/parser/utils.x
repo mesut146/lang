@@ -1,6 +1,18 @@
 import parser/ast
 import std/map
 
+func SLICE_PTR_INDEX(): i32{ return 0; }
+func SLICE_LEN_INDEX(): i32{ return 1; }
+func SLICE_LEN_BITS(): i32{ return 64; }
+func ENUM_TAG_BITS(): i32{ return 64; }
+
+func as_type(bits: i32): Type{
+  if(bits==64){
+    return Type::new("i64");
+  }
+  return Type::new("i32");
+}
+
 func makeSelf(scope: Type*): Type{
     //if (scope.is_prim()) return *scope;
     return scope.toPtr();

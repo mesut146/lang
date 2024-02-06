@@ -76,10 +76,10 @@ std::shared_ptr<Resolver> Resolver::getResolver(ImportStmt &is, const std::strin
     return Resolver::getResolver(root + "/" + join(is.list, "/") + ".x", root);
 }
 
-void printLine(Resolver* r, Node* n){
-    std::cout << r->unit->path<<":"<<n->line<<std::endl;
+void printLine(Resolver *r, Node *n) {
+    std::cout << r->unit->path << ":" << n->line << std::endl;
     if (r->curMethod) {
-        std::cout<<"in " + printMethod(r->curMethod)<<std::endl;
+        std::cout << "in " + printMethod(r->curMethod) << std::endl;
     }
 }
 
@@ -316,11 +316,16 @@ void Resolver::resolveAll() {
 
 void initSelf(Unit *unit) {
     for (auto &item : unit->items) {
-        if (item->isImpl()) {
-            auto imp = (Impl *) item.get();
-            for (auto &m : imp->methods) {
-                if (m.self && !m.self->type) {
-                    m.self->type = clone(makeSelf(imp->type));
+        if (!item->isImpl()) {
+            continue;
+        }
+        auto imp = (Impl *) item.get();
+        for (auto &m : imp->methods) {
+            if (m.self && !m.self->type) {
+                if (m.self->is_deref) {
+                    m.self->type = clone(imp->type);
+                } else {
+                    m.self->type = clone(imp->type.toPtr());
                 }
             }
         }
@@ -405,7 +410,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
     int line = unit->lastLine;
     Method m(unit.get());
     m.name = "debug";
-    Param s("self", clone(makeSelf(bd->type)));
+    Param s("self", clone(bd->type).toPtr());
     m.self = std::move(s);
     m.type = Type("void");
     Param fp("f", Type(Type::Pointer, Type("Fmt")));
@@ -1031,14 +1036,65 @@ void does_alloc(Expression *e, Resolver *r) {
     }
 }
 
+bool has_pointer(const Type &ty, Resolver *r) {
+    auto rt = r->resolve(ty);
+    if (rt.targetDecl == nullptr) return false;
+    auto bd = rt.targetDecl;
+    if (bd->base && has_pointer(bd->base.value(), r)) {
+        return true;
+    }
+    if (bd->isEnum()) {
+        auto en = dynamic_cast<EnumDecl *>(bd);
+        for (auto &ev : en->variants) {
+            for (auto &f : ev.fields) {
+                if (f.type.isPointer() || has_pointer(f.type, r)) {
+                    return true;
+                }
+            }
+        }
+    } else {
+        auto td = dynamic_cast<StructDecl *>(bd);
+        for (auto &fd : td->fields) {
+            if (fd.type.isPointer() || has_pointer(fd.type, r)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+RType visit_deref(DerefExpr *node, Resolver *r, bool check) {
+    auto rt = r->resolve(node->expr.get());
+    auto &inner = rt.type;
+    if (!inner.isPointer()) {
+        error("deref expr is not pointer: " + node->expr->print());
+    }
+    if (check && has_pointer(*inner.scope.get(), r)) {
+        auto mc = dynamic_cast<MethodCall *>(node->expr.get());
+        if (!mc || !is_ptr_get(mc)) {
+            //r->err(node, "unsafe deref");
+            //printLine(r, node);
+            //std::cout << "unsafe " << node->print() << std::endl;
+        }
+    }
+    auto res = rt.clone();
+    res.type = *inner.scope.get();
+    return res;
+}
+
 std::any Resolver::visitAssign(Assign *node) {
-    auto t1 = resolve(node->left);
+    RType t1;
+    auto de = dynamic_cast<DerefExpr *>(node->left);
+    if (de) {
+        t1 = visit_deref(de, this, false);
+    } else {
+        t1 = resolve(node->left);
+    }
     auto t2 = resolve(node->right);
     if (MethodResolver::isCompatible(t2, t1.type)) {
         auto msg = format("cannot assign %s\n%s=%s", node->print().c_str(), t1.type.print().c_str(), t2.type.print().c_str());
         error(msg);
     }
-    //does_alloc(node->left, this);
     return t1;
 }
 
@@ -1236,50 +1292,8 @@ std::any Resolver::visitRefExpr(RefExpr *node) {
     return inner;
 }
 
-bool has_pointer(const Type& ty, Resolver* r){
-    auto rt = r->resolve(ty);
-    if(rt.targetDecl == nullptr) return false;
-    auto bd = rt.targetDecl;
-    if (bd->base && has_pointer(bd->base.value(), r)) {
-        return true;
-    }
-    if (bd->isEnum()) {
-        auto en = dynamic_cast<EnumDecl *>(bd);
-        for (auto &ev : en->variants) {
-            for (auto &f : ev.fields) {
-                if (f.type.isPointer() || has_pointer(f.type, r)) {
-                    return true;
-                }
-            }
-        }
-    } else {
-        auto td = dynamic_cast<StructDecl *>(bd);
-        for (auto &fd : td->fields) {
-            if (fd.type.isPointer() || has_pointer(fd.type, r)) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 std::any Resolver::visitDerefExpr(DerefExpr *node) {
-    auto rt = resolve(node->expr.get());
-    auto &inner = rt.type;
-    if (!inner.isPointer()) {
-        error("deref expr is not pointer: " + node->expr->print());
-    }
-    if(has_pointer(*inner.scope.get(), this)){
-        auto mc = dynamic_cast<MethodCall*>(node->expr.get());
-        if(!mc || !is_ptr_get(mc)){
-          //err(node, "unsafe deref");
-          printLine(this, node);
-          std::cout<<"unsafe "<<node->print()<<std::endl;
-        }
-    }
-    auto res = rt.clone();
-    res.type = *inner.scope.get();
-    return res;
+    return visit_deref(node, this, true);
 }
 
 std::any Resolver::visitAssertStmt(AssertStmt *node) {
