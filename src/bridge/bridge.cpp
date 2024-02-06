@@ -431,4 +431,7 @@ llvm::Value* CreateLoad(llvm::Type* type, llvm::Value* val){
 llvm::Value* getTrue(){
     return Builder->getTrue();
 }
+llvm::Value* getFalse(){
+    return Builder->getFalse();
+}
 }

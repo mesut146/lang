@@ -214,7 +214,7 @@ impl Parser{
           let self_name = self.name();
           let self_ty = imp.unwrap();
           //if(!imp.get().is_prim()){
-            self_ty = Type::Pointer{Box::new(imp.unwrap())};
+            self_ty = imp.get().toPtr();
           //}
           selfp = Option::new(Param{self_name, self_ty, true});
         }
@@ -765,7 +765,6 @@ impl Parser{
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
   func prim2(self): Expr{
     let e = self.prim();
-    let n = self.node();
     if(self.is(TokenType::LBRACE)){
       let ty = Option<Type>::None; 
       if let Expr::Name(nm)=(e){
@@ -783,6 +782,7 @@ impl Parser{
         }
       }
       self.consume(TokenType::RBRACE);
+      let n = self.node();
       e = Expr::Obj{.n,ty.unwrap(), args};
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
@@ -792,6 +792,7 @@ impl Parser{
         if(self.is(TokenType::LPAREN)){
           e = self.call(e, nm, false);
         }else{
+          let n = self.node();
           e = Expr::Access{.n,Box::new(e), nm}; 
         }
       }else{
@@ -803,6 +804,7 @@ impl Parser{
               idx2 = Option::new(Box::new(self.parse_expr()));
           }
           self.consume(TokenType::RBRACKET);
+          let n = self.node();
           e = Expr::ArrAccess{.n,ArrAccess{Box::new(e), Box::new(idx), idx2}}; 
       }
     }

@@ -64,11 +64,18 @@ func compile_dir(cmp: Compiler*, dir: str){
   }
 }
 
+func compile(cmp: Compiler*, file: str){
+    cmp.compile(file);
+    let name = file.substr(file.indexOf("/", 0)+1);
+    cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
+}
+
 func compiler_test(){
   print("compiler_test\n");
   let root = "../tests/src";
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
+  compile(&cmp, "../tests/src/infix.x");
   compile_dir(&cmp, root);
   compile_dir(&cmp, "../tests/src/std");
 }

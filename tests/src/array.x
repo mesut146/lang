@@ -63,7 +63,7 @@ func sliceTest(){
   let slice2 = slice[1..3];//[7, 11]
   assert slice2[0] == 7 && slice2[1] == 11;
   //multi alloc
-  assert [1, 2, 3][1..2][1] == 3;
+  assert [1_i16, 2, 3][1..2][1] == 3;
   print("sliceTest done\n");
 }
 

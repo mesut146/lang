@@ -128,13 +128,13 @@ impl Context{
 func printMethod(m: Method*): String{
   let s = String::new();
   if let Parent::Impl(info*)=(&m.parent){
-    s.append(info.type.print());
+    s.append(info.type.print().str());
     s.append("::");
   }else if let Parent::Trait(type*)=(&m.parent){
-    s.append(type.print());
+    s.append(type.print().str());
     s.append("::");
   }
-  s.append(m.name);
+  s.append(&m.name);
   s.append("()");
   return s;
 }
@@ -142,7 +142,7 @@ func printMethod(m: Method*): String{
 //trait method signature for type
 func mangle2(m: Method*, type: Type*): String{
   let s = String::new();
-  s.append(m.name);
+  s.append(&m.name);
   s.append("(");
   let map = Map<String, Type>::new();
   map.add("Self".str(), type.clone());
@@ -150,7 +150,7 @@ func mangle2(m: Method*, type: Type*): String{
   for(let i = 0;i < m.params.len();++i){
     s.append("_");
     let prm_type = &m.params.get_ptr(i).type;
-    s.append(copier.visit(prm_type).print());
+    s.append(copier.visit(prm_type).print().str());
   }
   s.append(")");
   return s;
@@ -536,9 +536,9 @@ impl Resolver{
           msg.append("method ");
           msg.append(p.a.str());
           msg.append(" ");
-          msg.append(printMethod(p.b));
+          msg.append(printMethod(p.b).str());
           msg.append(" not implemented for ");
-          msg.append(imp.info.type.print());
+          msg.append(imp.info.type.print().str());
           msg.append("\n");
         }
         self.err(msg);
@@ -576,7 +576,7 @@ impl Resolver{
       //todo check unreachable
       if (!node.type.is_void() && !isReturnLast(node.body.get())) {
         let msg = String::new("non void function ");
-        msg.append(printMethod(self.curMethod.unwrap()));
+        msg.append(printMethod(self.curMethod.unwrap()).str());
         msg.append(" must return a value");
         self.err(msg);
       }

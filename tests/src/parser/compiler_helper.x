@@ -5,8 +5,12 @@ import parser/compiler
 import parser/utils
 import std/map
 
+
+func SLICE_PTR_INDEX(): i32{ return 0; }
+func SLICE_LEN_INDEX(): i32{ return 1; }
 func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
+
 
 func make_slice_type(): StructType*{
     let elems = make_vec();
@@ -372,11 +376,19 @@ func gep_arr(type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
   return CreateInBoundsGEP(type, ptr, args);
 }
 
+func gep_arr(type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
+  let args = make_args();
+  args_push(args, i1);
+  args_push(args, i2);
+  return CreateInBoundsGEP(type, ptr, args);
+}
+
 func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
   let args = make_args();
   args_push(args, i1);
   return CreateGEP(type, ptr, args);
 }
+
 
 func get_tag_index(decl: Decl*): i32{
   if(decl.base.is_some()){

@@ -115,6 +115,9 @@ impl AstCopier{
                 trait_name: self.visit_opt(&info.trait_name),
                 type: self.visit(&info.type)}};
         }
+        if let Parent::Trait(ty*) = (p){
+          return Parent::Trait{self.visit(ty)};
+        }
         return *p;
     }
 

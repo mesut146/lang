@@ -128,17 +128,17 @@ impl Signature{
         let s = String::new();
         if(self.mc.is_some()){
             if(self.mc.unwrap().scope.is_some()){
-                s.append(self.scope.get().type.print());
+                s.append(self.scope.get().type.print().str());
                 s.append("::");
             }
-            s.append(self.mc.unwrap().name);
+            s.append(&self.mc.unwrap().name);
         }else{
             let p = &self.m.unwrap().parent;
             if(p is Parent::Impl){
-                s.append(p.as_impl().type.print());
+                s.append(p.as_impl().type.print().str());
                 s.append("::");
             }
-            s.append(self.m.unwrap().name);
+            s.append(&self.m.unwrap().name);
         }
         s.append("(");
         for(let i = 0;i < self.args.len();++i){
@@ -146,7 +146,7 @@ impl Signature{
                 s.append(", ");
             }
             let arg = self.args.get_ptr(i);
-            s.append(arg.print());
+            s.append(arg.print().str());
         }
         s.append(")");
         return s;
@@ -300,9 +300,9 @@ impl MethodResolver{
             for(let i=0;i < errors.len();++i){
                 let err = errors.get_ptr(i);
                 msg.append("\n");
-                msg.append(err.a.print());
+                msg.append(err.a.print().str());
                 msg.append(" ");
-                msg.append(err.b);
+                msg.append(err.b.str());
             }
             self.r.err(&e, msg.str());
         }

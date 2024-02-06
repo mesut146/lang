@@ -93,6 +93,7 @@ extern{
     func get_comp_op(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
     func getTrue(): Value*;
+    func getFalse(): Value*;
     func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
 

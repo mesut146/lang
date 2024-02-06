@@ -201,7 +201,7 @@ impl Simple{
     return Simple{scope: Ptr<Type>::new(scope), name: name, args: List<Type>::new()};
   }
   func into(self): Type{
-    return Type::Simple{*self};
+    return Type::Simple{*ptr::get(self, 0)};
   }
 }
 
@@ -226,7 +226,7 @@ impl Type{
     return Simple::new(scp, s).into();
   }
   func toPtr(self): Type{
-    return Type::Pointer{Box::new(*self)};
+    return Type::Pointer{Box::new(self.clone())};
   }
   
   func name(self): String*{

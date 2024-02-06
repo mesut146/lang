@@ -588,6 +588,9 @@ impl Compiler{
 //expr------------------------------------------------------
 impl Compiler{
   func visit(self, node: Expr*): Value*{
+    if let Expr::Par(e*)=(node){
+      return self.visit(e.get());
+    }
     if let Expr::Array(list*,sz*)=(node){
       //let ptr = getalloc();
 
@@ -700,7 +703,37 @@ impl Compiler{
       }
       return ptr;
     }
-    panic("arr");
+    let elem = list.get_ptr(0);
+    let elem_ptr = Option<Value*>::new();
+    let elem_ty = self.mapType(&elem_type);
+    if (doesAlloc(elem, self.resolver)) {
+        elem_ptr = Option::new(self.visit(elem));
+    }
+    let bb = GetInsertBlock();
+    let cur = gep_arr(arr_ty, ptr, 0, 0);
+    let end = gep_arr(arr_ty, ptr, 0, sz.unwrap());
+    //create cons and memcpy
+    let condbb = create_bb();
+    let setbb = create_bb();
+    let nextbb = create_bb();
+    CreateBr(condbb);
+    self.set_and_insert(condbb);
+    let phi_ty = getPointerTo(elem_ty);
+    let phi = CreatePHI(phi_ty, 2);
+    phi_addIncoming(phi, cur, bb);
+    let ne = CreateCmp(get_comp_op("!=".cstr()), phi as Value*, end);
+    CreateCondBr(ne, setbb, nextbb);
+    self.set_and_insert(setbb);
+    if (elem_ptr.is_some()) {
+        self.copy(phi as Value*, elem_ptr.unwrap(), &elem_type);
+    } else {
+        self.setField(elem, &elem_type, phi as Value*);
+    }
+    let step = gep_ptr(elem_ty, phi as Value*, makeInt(1, 64));
+    phi_addIncoming(phi, step, setbb);
+    CreateBr(condbb);
+    self.set_and_insert(nextbb);
+    return ptr;
   }
 
   func visit_aa(self, expr: Expr*, node: ArrAccess*): Value*{
@@ -708,7 +741,25 @@ impl Compiler{
     if(node.idx2.is_some()){
       return self.visit_slice(expr, node);
     }
-    panic("aa");
+    let i64t = Type::new("i64");
+    let ty = type.unwrap_ptr();
+    let src = self.get_obj_ptr(node.arr.get());
+    if(ty.is_array()){
+        //regular array access
+        let i1 = makeInt(0, 64);
+        let i2 = self.cast(node.idx.get(), &i64t);
+        return gep_arr(self.mapType(ty), src, i1, i2);
+    }
+    
+    //slice access
+    let elem = ty.elem();
+    let elemty = self.mapType(elem);
+    //read array ptr
+    let sliceType = self.protos.get().std("slice") as llvm_Type*;
+    let arr = self.gep2(src, SLICE_PTR_INDEX(), sliceType);
+    arr = CreateLoad(getPtr(), arr);
+    let index = self.cast(node.idx.get(), &i64t);
+    return gep_ptr(elemty, arr, index);
   }
   func visit_slice(self,expr: Expr*, node: ArrAccess*): Value*{
     let ptr = self.get_alloc(expr);
@@ -791,6 +842,19 @@ impl Compiler{
       let src = self.get_obj_ptr(mc.args.get_ptr(0));
       let idx = self.loadPrim(mc.args.get_ptr(1));
       return gep_ptr(self.mapType(elem_type), src, idx);
+    }
+    if(self.resolver.is_array_get_len(mc)){
+      let arr_type = self.getType(mc.scope.get().get()).unwrap_ptr();
+      if let Type::Array(elem*, sz)=(arr_type){
+        return makeInt(sz, 64);
+      }
+      panic("");
+    }
+    if(self.resolver.is_slice_get_len(mc)){
+      let sl = self.get_obj_ptr(mc.scope.get().get());
+      let sliceType=self.protos.get().std("slice") as llvm_Type*;
+      let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
+      return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
     }
     return self.visit_call2(expr, mc);
   }
@@ -887,8 +951,12 @@ impl Compiler{
       }
       else if(arg_type.is_str()){
         panic("print str");
+      }else if(arg_type.is_prim()){
+        let val = self.loadPrim(arg);
+        //val = CreateLoad(self.mapType(&arg_type), val);
+        args_push(args, val);
       }else{
-        panic("print ?");
+        panic("print %s", arg_type.print().cstr());
       }
     }
     let printf_proto = self.protos.get().libc("printf");
@@ -929,6 +997,11 @@ impl Compiler{
       let lv = self.cast(l, &type);
       let rv = self.cast(r, &type);
       return CreateNSWAdd(lv, rv);
+    }
+    if(op.eq("-")){
+      let lv = self.cast(l, &type);
+      let rv = self.cast(r, &type);
+      return CreateNSWSub(lv, rv);
     }
     if(op.eq("*")){
       let lv = self.cast(l, &type);
@@ -1002,6 +1075,15 @@ impl Compiler{
 
   func visit_assign(self, l: Expr*, r: Expr*): Value*{
     if(l is Expr::Infix) panic("assign lhs");
+    //let lhs = Option<Value*>::new();
+    if let Expr::Unary(op*,l2*)=(l){
+      if(op.eq("*")){
+        let lhs = self.get_obj_ptr(l2.get());
+        let type = self.getType(l);
+        self.setField(r, &type, lhs);
+        return lhs;
+      }
+    }
     let lhs = self.visit(l);
     let type = self.getType(l);
     self.setField(r, &type, lhs);
@@ -1019,6 +1101,8 @@ impl Compiler{
         let val = i32::parse(&node.val);
         return makeInt(val, bits as i32);
     }
+    if(node.val.eq("true")) return getTrue();
+    if(node.val.eq("false")) return getFalse();
     panic("lit %s", node.val.cstr());
   }
   

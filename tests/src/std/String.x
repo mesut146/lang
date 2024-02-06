@@ -92,7 +92,7 @@ impl String{
         }
     }
     
-    func append(self, s: String){
+    func append(self, s: String*){
         for(let i = 0;i < s.len();++i){
             self.append(s.get(i));
         }
@@ -182,7 +182,7 @@ impl Clone for String{
 
 impl Debug for String{
   func debug(self, f: Fmt*){
-    f.print(*self);
+    f.print(self.str());
   }
 }
 
@@ -194,7 +194,7 @@ impl Eq for String{
 
 impl Debug for i32{
   func debug(self, f: Fmt*){
-    f.print(self.str());
+    f.print(self.str().str());
   }
   
   func str(self): String{

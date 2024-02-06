@@ -13,13 +13,13 @@ func body(node: Stmt*, f: Fmt*){
 func join<T>(f: Fmt*, arr: List<T>*){
   for(let i=0;i<arr.len();++i){
     if(i>0) f.print(", ");
-    arr.get(i).debug(f);
+    arr.get_ptr(i).debug(f);
   }
 }
 func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   for(let i=0;i<arr.len();++i){
     if(i>0) f.print(sep);
-    arr.get(i).debug(f);
+    arr.get_ptr(i).debug(f);
   }
 }
 
@@ -45,11 +45,11 @@ impl Debug for Item{
       decl.debug(f);
     }else if let Item::Method(m*) = (self){
       m.debug(f);
-    }else if let Item::Impl(i) = (self){
+    }else if let Item::Impl(i*) = (self){
       i.debug(f);
-    }else if let Item::Type(name, rhs)=(self){
+    }else if let Item::Type(name*, rhs*)=(self){
       f.print("type ");
-      f.print(name);
+      f.print(name.str());
       f.print(" = ");
       rhs.debug(f);
       f.print(";");
@@ -112,7 +112,7 @@ impl Debug for Decl{
         f.print("{\n");
         for(let i = 0;i < fields.len();++i){
           f.print("  ");
-          fields.get(i).debug(f);
+          fields.get_ptr(i).debug(f);
           f.print(";\n");
         }
         f.print("}\n");
@@ -124,12 +124,12 @@ impl Debug for Decl{
         for(let i = 0;i < variants.len();++i){
           let ev = variants.get_ptr(i);
           f.print("  ");
-          f.print(ev.name);
+          f.print(&ev.name);
           if(ev.fields.len()>0){
             f.print("(");
             for(let j = 0;j < ev.fields.len();++j){
               if(j > 0) f.print(", ");
-              ev.fields.get(j).debug(f);
+              ev.fields.get_ptr(j).debug(f);
             }
             f.print(")");
           }
@@ -142,7 +142,7 @@ impl Debug for Decl{
 
 impl Debug for FieldDecl{
   func debug(self, f: Fmt*){
-    f.print(self.name);
+    f.print(&self.name);
     f.print(": ");
     self.type.debug(f);
     //f.print(";\n");
@@ -152,7 +152,7 @@ impl Debug for FieldDecl{
 impl Debug for Method{
   func debug(self, f: Fmt*){
     f.print("func ");
-    f.print(self.name);
+    f.print(&self.name);
     f.print("(");
     if(self.self.is_some()){
       self.self.get().debug(f);
@@ -173,7 +173,7 @@ impl Debug for Method{
 
 impl Debug for Param{
   func debug(self, f: Fmt*){
-    f.print(self.name);
+    f.print(&self.name);
     if(self.is_self){}
     f.print(": ");
     self.type.debug(f);
@@ -187,7 +187,7 @@ impl Debug for Type{
         smp.scope.get().debug(f);
         f.print("::");
       }
-      f.print(smp.name);
+      f.print(&smp.name);
       if(!smp.args.empty()){
         f.print("<");
         for(let i = 0;i < smp.args.len();++i){
@@ -219,24 +219,24 @@ impl Debug for Type{
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
-    if let Stmt::Block(b)=(self){
+    if let Stmt::Block(b*)=(self){
       b.debug(f);
     }
-    else if let Stmt::Var(ve)=(self){
+    else if let Stmt::Var(ve*)=(self){
       f.print("let ");
       ve.debug(f);
       f.print(";");
-    }else if let Stmt::Expr(e) =(self){
+    }else if let Stmt::Expr(e*) =(self){
       e.debug(f);
       f.print(";");
-    }else if let Stmt::Ret(e) =(self){
+    }else if let Stmt::Ret(e*) =(self){
       f.print("return");
       if(e.is_some()){
         f.print(" ");
         e.unwrap().debug(f);
       }
       f.print(";");
-    }else if let Stmt::While(e, b)=(self){
+    }else if let Stmt::While(e*, b*)=(self){
      f.print("while(");
      e.debug(f);
      f.print(")");
@@ -297,7 +297,7 @@ impl Debug for Stmt{
 
 impl Debug for ArgBind{
   func debug(self, f: Fmt*){
-    f.print(self.name);
+    f.print(&self.name);
     if(self.is_ptr){
       f.print("*");
     }
@@ -317,14 +317,14 @@ impl Debug for Block{
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
     for(let i=0;i<self.list.len();++i){
-      self.list.get(i).debug(f);
+      self.list.get_ptr(i).debug(f);
     }
   }
 }
 
 impl Debug for Fragment{
   func debug(self, f: Fmt*){
-    f.print(self.name);
+    f.print(&self.name);
     if(self.type.is_some()){
       f.print(": ");
       self.type.unwrap().debug(f);
@@ -338,54 +338,54 @@ impl Debug for Fragment{
 impl Debug for Expr{
   func debug(self, f: Fmt*){
     if let Expr::Lit(lit*)=(self){
-      f.print(lit.val.replace("\n", "\\n"));
+      f.print(lit.val.replace("\n", "\\n").str());
       if(lit.suffix.is_some()){
         f.print("_");
         lit.suffix.get().debug(f);
       }
     }
-    else if let Expr::Name(v)=(self){
-      f.print(v);
+    else if let Expr::Name(v*)=(self){
+      f.print(v.str());
     }
-    else if let Expr::Call(call)=(self){
+    else if let Expr::Call(call*)=(self){
       call.debug(f);
-    }else if let Expr::Par(e)=(self){
+    }else if let Expr::Par(e*)=(self){
       f.print("(");
       e.get().debug(f);
       f.print(")");
     }
-    else if let Expr::Type(t)=(self){
+    else if let Expr::Type(t*)=(self){
       t.debug(f);
-    }else if let Expr::Unary(op, e)=(self){
+    }else if let Expr::Unary(op*, e*)=(self){
       f.print(op);
       e.get().debug(f);
     }
-    else if let Expr::Infix(op, l, r)=(self){
+    else if let Expr::Infix(op*, l*, r*)=(self){
       l.get().debug(f);
       f.print(" ");
       f.print(op);
       f.print(" ");
       r.get().debug(f);
-    }else if let Expr::Access(scp, nm)=(self){
+    }else if let Expr::Access(scp*, nm*)=(self){
       scp.get().debug(f);
       f.print(".");
       f.print(nm);
-    }else if let Expr::Obj(ty, args)=(self){
+    }else if let Expr::Obj(ty*, args*)=(self){
       ty.debug(f);
       f.print("{");
-      join(f, &args, ", ");
+      join(f, args, ", ");
       f.print("}");
-    }else if let Expr::As(e, type)=(self){
+    }else if let Expr::As(e*, type*)=(self){
       e.get().debug(f);
       f.print(" as ");
       type.debug(f);
-    }else if let Expr::Is(e, rhs)=(self){
+    }else if let Expr::Is(e*, rhs*)=(self){
       e.get().debug(f);
       f.print(" is ");
       rhs.get().debug(f);
-    }else if let Expr::Array(arr, sz)=(self){
+    }else if let Expr::Array(arr*, sz*)=(self){
       f.print("[");
-      join(f, &arr, ", ");
+      join(f, arr, ", ");
       if(sz.is_some()){
         f.print("; ");
         sz.get().debug(f);
@@ -419,7 +419,7 @@ impl Debug for Call{
         f.print(".");
       }
     }
-    f.print(self.name);
+    f.print(&self.name);
     f.print("(");
     join(f, &self.args);
     f.print(")");

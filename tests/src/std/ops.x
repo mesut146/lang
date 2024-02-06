@@ -67,7 +67,7 @@ impl Fmt{
   func print(self, s: str){
     self.buf.append(s); 
   }
-  func print(self, s: String){
+  func print(self, s: String*){
     self.buf.append(s); 
   }
   

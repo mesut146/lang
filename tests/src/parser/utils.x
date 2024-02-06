@@ -110,7 +110,7 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
     }
     let str = type.print();
     if (map.has(&str)) {
-        return *map.get_ptr(&str).unwrap();
+        return map.get_ptr(&str).unwrap().clone();
     }
     let smp = type.as_simple();
     let res = Simple::new(smp.name);
