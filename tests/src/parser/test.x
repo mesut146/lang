@@ -50,7 +50,7 @@ func resolver_dir(ctx: Context*, dir: str){
   }
 }
 
-func compile_dir(cmp: Compiler*, dir: str){
+func compile_dir(cmp: Compiler*, dir: str, link: bool){
   let list = list(dir);
   for(let i = 0;i < list.len();++i){
     let name = list.get_ptr(i);
@@ -60,7 +60,9 @@ func compile_dir(cmp: Compiler*, dir: str){
     file.append(name.str());
     if(is_dir(file.str())) continue;
     cmp.compile(file.str());
-    cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
+    if(link){
+      cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
+    }
   }
 }
 
@@ -76,8 +78,16 @@ func compiler_test(){
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
   compile(&cmp, "../tests/src/infix.x");
-  compile_dir(&cmp, root);
-  //compile_dir(&cmp, "../tests/src/std");
+  compile_dir(&cmp, root, true);
+  //compile_dir(&cmp, "../tests/src/std", false);
+}
+
+func bootstrap(){
+  print("bootstrap\n");
+  let root = "../tests/src";
+  let ctx = Context::new(root.str());
+  let cmp = Compiler::new(ctx);
+  compile_dir(&cmp, "../tests/src/parser", false);
 }
 
 func main(){
@@ -85,5 +95,6 @@ func main(){
   //lexer_test();
   //parser_test();
   //resolver_test();
-  compiler_test();
+  //compiler_test();
+  bootstrap();
 }

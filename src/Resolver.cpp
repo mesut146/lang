@@ -1604,6 +1604,10 @@ std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
 }
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
+    if(is_std_size(mc)){
+        //mc->args[0]->accept(this);
+        return RType(Type("i64"));
+    }
     if (is_ptr_get(mc)) {
         if (mc->args.size() != 2) {
             err("ptr access must have 2 args");

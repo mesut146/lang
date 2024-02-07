@@ -224,7 +224,7 @@ impl Debug for i32{
 }
 
 impl i32{
-  func parse(s: String*): i32{
+  func parse(s: str): i32{
     let x = i64::parse(s);
     return x as i32;
   }
@@ -236,7 +236,7 @@ impl i64{
   func print(x: i64): String{
     return x.str();
   }
-  func parse(s: String*): i64{
+  func parse(s: str): i64{
     let x: i64 = 0;
     let neg = false;
     let pos = 0;

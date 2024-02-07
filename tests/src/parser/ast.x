@@ -158,8 +158,7 @@ impl Parent{
   }
 }
 
-struct Method{
-  line: i32;
+struct Method: Node{
   unit: Unit*;
   type_args: List<Type>;
   name: String;
@@ -179,6 +178,12 @@ struct Param{
 }
 
 impl Method{
+  func new(node: Node, unit: Unit*, name: String, type: Type): Method{
+    return Method{.node, unit: unit, type_args: List<Type>::new(),
+                 name: name, self: Option<Param>::None, params: List<Param>::new(),
+                 type: type, body: Option<Block>::None, is_generic: false,
+                 parent: Parent::None, path: String::new()};
+  }
   func print(self): String{
     return Fmt::str(self);
   }
@@ -380,6 +385,11 @@ struct Block{
   list: List<Stmt>;
 }
 
+impl Block{
+  func new(): Block{
+    return Block{List<Stmt>::new()};
+  }
+}
 
 struct VarExpr{
   list: List<Fragment>;

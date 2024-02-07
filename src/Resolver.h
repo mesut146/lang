@@ -364,6 +364,10 @@ public:
         return scope.isArray();
     }
 
+    static bool is_std_size(MethodCall *mc) {
+        return mc->scope && mc->scope->print() == "std" && mc->name == "size";
+    }
+
     std::any visitLiteral(Literal *lit) override;
     std::any visitInfix(Infix *infix) override;
     std::any visitUnary(Unary *u) override;

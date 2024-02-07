@@ -162,8 +162,16 @@ impl MethodResolver{
     func collect(self, sig: Signature*): List<Signature>{
         let list = List<Signature>::new();
         if(sig.mc.unwrap().scope.is_some()){
-            self.collect_member(sig, &list, true);
+            let scope_type = sig.scope.get().type.unwrap_ptr();
+            self.collect_member(sig, scope_type, &list, true);
         }else{
+            //static sibling
+            if(self.r.curMethod.is_some()){
+                let cur = self.r.curMethod.unwrap();
+                if let Parent::Impl(info*)=(cur.parent){
+                    self.collect_member(sig, &info.type, &list, false);
+                }
+            }            
             self.collect_static(sig, &list);
             let imports = self.r.get_imports();
             for (let i = 0;i < imports.len();++i) {
@@ -222,10 +230,16 @@ impl MethodResolver{
       }
     }
 
-    func collect_member(self, sig: Signature*, list: List<Signature>*, imports: bool){
-        let scope_type = sig.scope.get().type.unwrap_ptr();
-        let type_plain = scope_type;
+    func collect_member(self, sig: Signature*,scope_type: Type*, list: List<Signature>*, imports: bool){
+        //let scope_type = sig.scope.get().type.unwrap_ptr();
+        //let type_plain = scope_type;
         let imp_list = self.get_impl(scope_type);
+        if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
+            let actual = sig.args.get_ptr(0).unwrap_ptr();
+            let tmp = self.get_impl(actual);
+            //print("trait %s\n", sig.print().cstr());
+            imp_list.add(&tmp);
+        }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let imp = imp_list.get(i);
@@ -264,7 +278,7 @@ impl MethodResolver{
             let resolver = self.r.ctx.get_resolver(is);
             resolver.init();
             let mr = MethodResolver::new(resolver);
-            mr.collect_member(sig, list, false);
+            mr.collect_member(sig, scope_type, list, false);
         }
       }
     }
@@ -509,7 +523,7 @@ impl MethodResolver{
                 if (isUnsigned(target)) return Option::new(Fmt::format("{} is signed but {} is unsigned", v.str(), target.print().str()));
                 //check range
             } else {
-                if (max_for(target) >= i64::parse(v)) {
+                if (max_for(target) >= i64::parse(v.str())) {
                     return Option<String>::None;
                 } else {
                     return Option::new(Fmt::format("{} can't fit into {}" ,v.str(), target.print().str()));

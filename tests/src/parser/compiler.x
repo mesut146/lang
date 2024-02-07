@@ -64,6 +64,7 @@ impl Protos{
     return res.unwrap();
   }
   func dump(self){
+    print("dump classmap\n");
     for(let i=0;i<self.classMap.len();++i){
       let e = self.classMap.get_idx(i).unwrap();
       print("%s\n", e.a.cstr());
@@ -597,7 +598,7 @@ impl Compiler{
     if(node.els.is_some()){
       self.set_and_insert(elsebb.unwrap());
       self.visit(node.els.get().get());
-      if(!isReturnLast(node.then.get())){
+      if(!isReturnLast(node.els.get().get())){
         CreateBr(next);
       }
     }
@@ -1145,8 +1146,16 @@ impl Compiler{
     if(op.eq("+=")){
       let lv = self.visit(l);
       let lval = self.loadPrim(l);
-      let rval = self.visit(r);
+      let rval = self.cast(r, &type);
       let tmp = CreateNSWAdd(lval, rval);
+      CreateStore(tmp, lv);
+      return lv;
+    }
+    if(op.eq("-=")){
+      let lv = self.visit(l);
+      let lval = self.loadPrim(l);
+      let rval = self.cast(r, &type);
+      let tmp = CreateNSWSub(lval, rval);
       CreateStore(tmp, lv);
       return lv;
     }
@@ -1215,14 +1224,13 @@ impl Compiler{
     if let Expr::Unary(op*,l2*)=(l){
       if(op.eq("*")){
         let lhs = self.get_obj_ptr(l2.get());
-        let rt = self.resolver.visit(l);
-        print("assign deref %s\n", l.print().cstr());
+        //let rt = self.resolver.visit(l);
         self.setField(r, &type, lhs);
         return lhs;
       }
     }
     let lhs = self.visit(l);
-    print("assign %s\n", l.print().cstr());
+    //print("assign %s\n", l.print().cstr());
     self.setField(r, &type, lhs);
     return lhs;
   }
@@ -1238,17 +1246,17 @@ impl Compiler{
           let val = i64::parse_hex(s.str());
           return makeInt(val, bits);
         }
-        let val = i32::parse(&node.val);
+        let val = i64::parse(s.str());
         let res = makeInt(val, bits);
-        print("lit %s=%d bits=%d\n", expr.print().cstr(), val, bits);
-        Value_dump(res);
+        //print("lit %s=%d bits=%d s=%s\n", expr.print().cstr(), val, bits, s.cstr());
+        //Value_dump(res);
         return res;
     }
     if(node.val.eq("true")) return getTrue();
     if(node.val.eq("false")) return getFalse();
     if(node.kind is LitKind::STR){
       let trg_ptr = self.get_alloc(expr);
-      let trimmed = node.val.substr(1, (node.val.len() as i32) - 2);//quote
+      let trimmed = node.val.substr(1, (node.val.len() as i32) - 1);//quote
       let src = CreateGlobalStringPtr(trimmed.cstr());
       let stringType = self.protos.get().std("str") as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
@@ -1261,6 +1269,10 @@ impl Compiler{
       let len = makeInt(trimmed.len(), SLICE_LEN_BITS());
       CreateStore(len, len_target);
       return trg_ptr;
+    }
+    if(node.kind is LitKind::CHAR){
+      let trimmed = node.val.get(1);
+      return makeInt(trimmed, 32);
     }
     panic("lit %s", node.val.cstr());
   }
@@ -1280,7 +1292,10 @@ impl Compiler{
         ++field_idx;
       }
       let fd = fields.get_ptr(prm_idx);
-      if(decl.base.is_some()) ++prm_idx;
+      if(decl.base.is_some() && decl is Decl::Struct) ++prm_idx;
+      //Value_dump(ptr);
+      //Type_dump(ty);
+      //print("idx=%d\n", prm_idx);
       let field_target_ptr = self.gep2(ptr, prm_idx, ty);
       self.setField(&arg.expr, &fd.type, field_target_ptr);
     }

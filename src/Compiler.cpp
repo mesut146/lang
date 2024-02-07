@@ -1188,6 +1188,10 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
+    if (Resolver::is_std_size(mc)) {
+        auto ty = resolv->getType(mc->args[0]);
+        return makeInt(getSize2(ty), 64);
+    }
     if (is_ptr_get(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();
         auto src = get_obj_ptr(mc->args[0]);

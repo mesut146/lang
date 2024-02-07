@@ -21,6 +21,7 @@ impl<T> List<T>{
     return List<T>::new(10);
   }
 
+
   func new(cap: i64): List<T>{
     let ptr = get_malloc<T>(cap);
     return List<T>{ptr: ptr, count: 0, cap: cap};

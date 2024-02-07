@@ -132,7 +132,8 @@ impl AstCopier{
             selff = Option::new(self.visit(m.self.get()));
         }
         let params = self.visit_list(&m.params);
-        return Method{line: m.line,
+        let id = self.node(m as Node*);
+        return Method{.id,
             unit: m.unit,
             type_args: type_args,
             name: m.name.clone(),

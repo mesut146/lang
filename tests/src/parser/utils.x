@@ -157,6 +157,11 @@ func mangle(m: Method*): String{
     return m.name.clone();
   }
   s.append(m.name.str());
+  for(let i=0;i<m.type_args.len();++i){
+    let tp = m.type_args.get_ptr(i);
+    s.append("_");
+    s.append(tp.print().str());
+  }
   if(m.self.is_some()){
     s.append("_");
     s.append(mangleType(&m.self.get().type).str());

@@ -191,7 +191,7 @@ impl Parser{
         self.pop();
       }
       self.consume(TokenType::FUNC);
-      let line = self.peek().line;
+      let line = self.node();
       let name = self.pop().value;
       let type_args = List<Type>::new();
       let is_generic = false;
@@ -208,14 +208,11 @@ impl Parser{
       let params = List<Param>::new();
       let selfp = Option<Param>::None;
       if(!self.is(TokenType::RPAREN)){
-        if(self.is(TokenType::IDENT, TokenType::COLON)){
+        if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
           params.add(self.parse_param());
         }else{
           let self_name = self.name();
-          let self_ty = imp.unwrap();
-          //if(!imp.get().is_prim()){
-            self_ty = imp.get().toPtr();
-          //}
+          let self_ty = imp.get().toPtr();
           selfp = Option::new(Param{self_name, self_ty, true});
         }
         while (self.is(TokenType::COMMA)) {
@@ -238,7 +235,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
+      let res = Method{.line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
       return res;
     }
     
@@ -337,7 +334,7 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          res = Type::Array{bx,  i32::parse(&size.value)};
+          res = Type::Array{bx,  i32::parse(size.value.str())};
         }else{
           self.consume(TokenType::RBRACKET);
           res = Type::Slice{Box::new(type)};
@@ -557,7 +554,7 @@ impl Parser{
 impl Parser{
   func isName(tok: Token*): bool{
     let t = tok.type;
-    return t is TokenType::IDENT || t is TokenType::IS || t is TokenType::AS || t is TokenType::TYPE || t is TokenType::NEW;
+    return t is TokenType::IDENT || t is TokenType::IS || t is TokenType::AS || t is TokenType::TYPE || t is TokenType::TRAIT || t is TokenType::NEW;
   }
   
   func isTypeArg(self, pos: i32): i32{
@@ -674,7 +671,7 @@ impl Parser{
   }
   
   func entry(self): Entry{
-    if(self.is(TokenType::IDENT) && self.peek(1).is(TokenType::COLON)){
+    if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
       let name = self.pop().value;
       self.consume(TokenType::COLON);
       let e = self.parse_expr();
@@ -705,7 +702,7 @@ impl Parser{
         if(self.is(TokenType::SEMI)){
             self.pop();
             let s = self.consume(TokenType::INTEGER_LIT);
-            sz = Option::new(i32::parse(&s.value));
+            sz = Option::new(i32::parse(s.value.str()));
         }
         self.consume(TokenType::RBRACKET);
         return Expr::Array{.n, arr, sz};

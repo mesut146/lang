@@ -184,7 +184,7 @@ impl Compiler{
   func make_proto(self, m: Method*){
     if(m.is_generic) return;
     let mangled = mangle(m);
-    print("proto %s\n", mangled.cstr());
+    //print("proto %s\n", mangled.cstr());
     let rvo = is_struct(&m.type);
     let ret = getVoidTy();
     if(is_main(m)){

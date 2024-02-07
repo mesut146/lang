@@ -7,6 +7,7 @@ import parser/method_resolver
 import parser/utils
 import parser/token
 import parser/copier
+import parser/derive
 import std/map
 
 
@@ -374,7 +375,7 @@ impl Resolver{
   func init(self){
     if(self.is_init) return;
     self.is_init = true;
-    let newItems = List<Impl>::new();
+    let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
@@ -383,6 +384,10 @@ impl Resolver{
         res.targetDecl=Option::new(decl);
         self.addType(decl.type.name().clone(), res);
         //todo derive
+        if(!decl.derives.empty()){
+          let imp = generate_derive(decl, &self.unit);
+          newItems.add(Item::Impl{imp});
+        }
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type);
         res.trait = Option::new(tr);
@@ -394,12 +399,19 @@ impl Resolver{
         self.addType(name, res);
       }
     }
+    for(let i=0;i<newItems.len();++i){
+      let it = newItems.get(i);
+      self.unit.items.add(it);
+    }
   }
 
   func err(self, msg: String){
     self.err(msg.str());
   }
   func err(self, msg: str){
+    if(self.curMethod.is_some()){
+      print(printMethod(self.curMethod.unwrap()).cstr());
+    }
     panic("%s", msg.cstr());
   }
   func err(self, node: Expr*, msg: str){
@@ -491,11 +503,14 @@ impl Resolver{
   func visit(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
     node.is_resolved = true;
+    if(node.base.is_some()){
+      self.visit(node.base.get());
+    }
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get_ptr(i);
       self.visit(&fd.type);
       if(self.is_cyclic(&fd.type, &node.type)){
-        self.err(Fmt::format("cyclic type {}", node.type.print().str()));
+        self.err(Fmt::format("cyclic type {}", node.type.print().str()).str());
       }
     }
   }
@@ -542,7 +557,7 @@ impl Resolver{
           msg.append(imp.info.type.print().str());
           msg.append("\n");
         }
-        self.err(msg);
+        self.err(msg.str());
       }
     }else{
       for(let i = 0;i < imp.methods.len();++i){
@@ -579,7 +594,7 @@ impl Resolver{
         let msg = String::new("non void function ");
         msg.append(printMethod(self.curMethod.unwrap()).str());
         msg.append(" must return a value");
-        self.err(msg);
+        self.err(msg.str());
       }
     }
     self.dropScope();
@@ -595,6 +610,9 @@ impl Resolver{
     }
     //print("addUsed %s\n", decl.type.print().cstr());
     self.used_types.add(decl);
+    if(decl.base.is_some()){
+      self.visit(decl.base.get());
+    }
     if(decl is Decl::Struct){
       let fields = decl.get_fields();
       for(let i = 0;i < fields.len();++i){
@@ -602,7 +620,14 @@ impl Resolver{
         self.visit(&fd.type);
       }
     }else{
-      //todo
+      let variants = decl.get_variants();
+      for(let i = 0;i < variants.len();++i){
+        let ev = variants.get_ptr(i);
+        for(let j = 0;j < ev.fields.len();++j){
+          let f = ev.fields.get_ptr(j);
+          self.visit(&f.type);
+        }
+      }
     }
     return *self.used_types.last();
   }
@@ -1294,7 +1319,7 @@ impl Resolver{
     let kind = &lit.kind;
     let value = lit.val.clone();
     if(lit.suffix.is_some()){
-      if(i64::parse(&value) > max_for(lit.suffix.get())){
+      if(i64::parse(value.str()) > max_for(lit.suffix.get())){
         self.err("literal out of range");
       }
       return self.visit(lit.suffix.get());

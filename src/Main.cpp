@@ -139,6 +139,7 @@ void bootstrap() {
             "../tests/src/parser/printer.x",
             "../tests/src/parser/parser.x",
             "../tests/src/parser/resolver.x",
+            "../tests/src/parser/derive.x",
             "../tests/src/parser/method_resolver.x",
             "../tests/src/parser/utils.x",
             "../tests/src/parser/copier.x",
