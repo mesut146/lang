@@ -55,6 +55,7 @@ func main(){
 
 func inferTest(){
   assert one(3, 4) == 7;//reuse
+  print("one=%d\n", one(5i64, 6i64));
   assert one(5i64, 6i64) == 11;
   assert two(9, 10) == 19;
 

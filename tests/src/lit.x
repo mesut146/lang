@@ -1,9 +1,13 @@
 func main(){
-  let a8 = 5i8;
-  let a16 = 5i16;
-  let a32 = 5i32;
-  let a64 = 5i64;
-  assert a8 == 5 && a16 == 5 && a32 == 5 && a64 == 5;
+  let a8 = 8i8;
+  let a16 = 16i16;
+  let a32 = 32i32;
+  let a64 = 64i64;
+  assert a8 == 8;
+  assert a16 == 16;
+  assert a32 == 32;
+  //print("a64=%d\n", a64);
+  assert a64 == 64;
   overflow_u8();
   overflow_u16();
   overflow_u32();

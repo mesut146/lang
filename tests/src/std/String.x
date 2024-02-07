@@ -253,6 +253,20 @@ impl i64{
     }
     return x;  
   }
+  func parse_hex(s: str): i64{
+    let x = 0_i64;
+    let pos = 2;
+    while(pos<s.len()){
+      let ch = s.get(pos) as i32;
+      let y = 0;
+      if(ch>='0'&&ch<='9') y = ch - ('0' as i32);
+      else if(ch>='a'&&ch<='z') y=ch-('a' as i32)+10;
+      else y = ch-'A'+10;
+      x = 16*x+y;
+      ++pos;
+    }
+    return x;
+  }
   func str(self): String{
     let x = *self;
     let len = self.str_size();

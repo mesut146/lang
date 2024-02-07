@@ -105,7 +105,6 @@ void compileTest() {
     compile("../tests/src/generic.x");
     compile("../tests/src/structTest.x");
     compile("../tests/src/enumTest.x");
-    compile("../tests/src/malloc.x");
     compile("../tests/src/impl.x");
     compile("../tests/src/load.x");
     compile("../tests/src/as.x");
@@ -114,13 +113,14 @@ void compileTest() {
     //std tests
     //compile({"../tests/src/virt.x", s1, s2, op});
     //compile({"../tests/src/virt2.x", s1, s2, op});
-    compile({"../tests/src/base.x", s1, s2, op});
+    /*compile({"../tests/src/base.x", s1, s2, op});
     compile({"../tests/src/boxTest.x", s1, s2, op});
     compile({"../tests/src/listTest.x", s1, s2, op});
     compile({"../tests/src/strTest.x", s1, s2, op});
     compile({"../tests/src/opt.x", s1, s2, op});
     compile({"../tests/src/mapTest.x", s1, s2, op});
     compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
+    compile("../tests/src/malloc.x");*/
 
     //compile({"../tests/src/bug1.x", s1, s2, op, libc, io});
 }

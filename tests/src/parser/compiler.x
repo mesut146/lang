@@ -454,10 +454,36 @@ impl Compiler{
     else if let Stmt::For(fs*)=(node){
       self.visit_for(fs);
     }
+    else if let Stmt::While(cnd*, body*)=(node){
+      self.visit_while(cnd, body);
+    }
+    else if(node is Stmt::Continue){
+      CreateBr(*self.loops.last());
+    }
+    else if(node is Stmt::Break){
+      CreateBr(*self.loopNext.last());
+    }
     else{
       panic("visit %s", node.print().cstr());
     }
     return;
+  }
+  
+  func visit_while(self, c: Expr*, body: Block*){
+    let then = create_bb();
+    let condbb = create_bb2(self.cur_func());
+    let next = create_bb();
+    CreateBr(condbb);
+    SetInsertPoint(condbb);
+    CreateCondBr(self.branch(c), then, next);
+    self.set_and_insert(then);
+    self.loops.add(condbb);
+    self.loopNext.add(next);
+    self.visit(body);
+    self.loops.pop_back();
+    self.loopNext.pop_back();
+    CreateBr(condbb);
+    self.set_and_insert(next);
   }
 
   func visit_iflet(self, node: IfLet*){
@@ -745,8 +771,13 @@ impl Compiler{
     let decl = rt.targetDecl.unwrap();
     let pair = self.resolver.findField(node, name, decl, &decl.type);
     let index = pair.b;
-    if (decl.base.is_some()) ++index;
-    let sd_ty = self.mapType(&decl.type);
+    if(decl is Decl::Enum){
+      //enum base
+      //todo more depth
+      //scope_ptr = self.gep2(scope_ptr, 1, self.mapType(&decl.type));
+    }
+    if (pair.a.base.is_some()) ++index;
+    let sd_ty = self.mapType(&pair.a.type);
     return self.gep2(scope_ptr, index, sd_ty);
   }
 
@@ -1198,14 +1229,20 @@ impl Compiler{
   
   func visit_lit(self, expr: Expr*, node: Literal*): Value*{
     if(node.kind is LitKind::INT){
-        let bits = 32_i64;
+        let bits = 32;
         if (node.suffix.is_some()) {
-            bits = self.getSize(node.suffix.get());
+            bits = self.getSize(node.suffix.get()) as i32;
         }
-        let base = 10;
-        if (node.val.str().starts_with("0x")) base = 16;
+        let s = node.val.clone().replace("_", "");
+        if (node.val.str().starts_with("0x")){
+          let val = i64::parse_hex(s.str());
+          return makeInt(val, bits);
+        }
         let val = i32::parse(&node.val);
-        return makeInt(val, bits as i32);
+        let res = makeInt(val, bits);
+        print("lit %s=%d bits=%d\n", expr.print().cstr(), val, bits);
+        Value_dump(res);
+        return res;
     }
     if(node.val.eq("true")) return getTrue();
     if(node.val.eq("false")) return getFalse();
@@ -1233,9 +1270,6 @@ impl Compiler{
     for(let i=0;i<args.len();++i){
       let arg = args.get_ptr(i);
       if(arg.isBase){
-        let base_ptr = self.gep2(ptr, 0, ty);
-        let val_ptr = self.visit(&arg.expr);
-        self.copy(base_ptr, val_ptr, &decl.type);
         continue;
       }
       let prm_idx = 0;
@@ -1257,14 +1291,18 @@ impl Compiler{
       let rt = self.resolver.visit(node);
       let ty = self.mapType(&rt.type);
       let decl = rt.targetDecl.unwrap();
+      for(let i=0;i<args.len();++i){
+        let arg = args.get_ptr(i);
+        if(!arg.isBase) continue;
+        let base_ptr = self.gep2(ptr, 0, ty);
+        let val_ptr = self.visit(&arg.expr);
+        self.copy(base_ptr, val_ptr, &rt.type);
+      }
       if let Decl::Struct(fields*)=(decl){
         let field_idx = 0;
         for(let i=0;i<args.len();++i){
           let arg = args.get_ptr(i);
           if(arg.isBase){
-            let base_ptr = self.gep2(ptr, 0, ty);
-            let val_ptr = self.visit(&arg.expr);
-            self.copy(base_ptr, val_ptr, &rt.type);
             continue;
           }
           let prm_idx = 0;
@@ -1283,11 +1321,11 @@ impl Compiler{
         let variant_index = Resolver::findVariant(decl, type.name());
         let variant = decl.get_variants().get_ptr(variant_index);
         //set tag
-        let tag_ptr = self.gep2(ptr, 0, ty);
+        let tag_ptr = self.gep2(ptr, get_tag_index(decl), ty);
         let tag_val = makeInt(variant_index, ENUM_TAG_BITS());
         CreateStore(tag_val, tag_ptr);
         //set data
-        let data_ptr = self.gep2(ptr, 1, ty);
+        let data_ptr = self.gep2(ptr, get_data_index(decl), ty);
         let var_ty = self.get_variant_ty(decl, variant);
         self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
       }

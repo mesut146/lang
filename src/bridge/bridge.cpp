@@ -383,9 +383,9 @@ llvm::Value *CreatePtrToInt(llvm::Value *val, llvm::Type *type) {
     return Builder->CreatePtrToInt(val, type);
 }
 
-llvm::ConstantInt *makeInt(uint64_t val, int bits) {
+llvm::ConstantInt *makeInt(int64_t val, int bits) {
     auto intType = llvm::IntegerType::get(*ctx, bits);
-    return llvm::ConstantInt::get(intType, val);
+    return llvm::ConstantInt::getSigned(intType, val);
 }
 
 llvm::Type *getInt(int bit) {
@@ -402,6 +402,14 @@ llvm::PointerType *getPointerTo(llvm::Type *type) {
 
 void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
     st->setBody(*elems);
+}
+
+void Value_dump(llvm::Value* v){
+    v->dump();
+}
+
+void Type_dump(llvm::Type* v){
+    v->dump();
 }
 
 llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {

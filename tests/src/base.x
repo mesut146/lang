@@ -24,7 +24,8 @@ func main(){
   let a2 = b as A*;
   assert a2.a == 10;
 
-  let e = E::E1{.A{a: 30}};
+  let e = E::E2{.A{a: 30}};
+  //let ea = e as A*;
   assert e.a == 30;
 
   print("base done\n");
