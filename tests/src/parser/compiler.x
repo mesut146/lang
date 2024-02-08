@@ -119,7 +119,7 @@ func has_main(unit: Unit*): bool{
 func get_out_file(path: str): String{
   let name = getName(path);
   let noext = trimExtenstion(name).str();
-  noext.append(".o");
+  noext.append("-bt.o");
   return noext;
 }
 
@@ -956,6 +956,12 @@ impl Compiler{
       let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
       return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
     }
+    if(self.resolver.is_slice_get_ptr(mc)){
+      let sl = self.get_obj_ptr(mc.scope.get().get());
+      let sliceType=self.protos.get().std("slice") as llvm_Type*;
+      let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
+      return CreateLoad(getInt(64), ptr);
+    }
     return self.visit_call2(expr, mc);
   }
 
@@ -1156,6 +1162,14 @@ impl Compiler{
       let lval = self.loadPrim(l);
       let rval = self.cast(r, &type);
       let tmp = CreateNSWSub(lval, rval);
+      CreateStore(tmp, lv);
+      return lv;
+    }
+    if(op.eq("/=")){
+      let lv = self.visit(l);
+      let lval = self.loadPrim(l);
+      let rval = self.cast(r, &type);
+      let tmp = CreateSDiv(lval, rval);
       CreateStore(tmp, lv);
       return lv;
     }

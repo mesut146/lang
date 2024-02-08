@@ -142,6 +142,7 @@ func is_struct(type: Type*): bool{
 
 func mangleType(type: Type*): String{
   let s = type.print();
+  s = s.replace("*", "P");
   return s;
 }
 

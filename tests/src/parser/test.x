@@ -88,6 +88,16 @@ func bootstrap(){
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
   compile_dir(&cmp, "../tests/src/parser", false);
+  let arr = ["../tests/src/std/String.x",
+            "../tests/src/std/str.x",
+            "../tests/src/std/ops.x",
+            "../tests/src/std/libc.x",
+            "../tests/src/std/io.x"];
+  for(let i=0;i<arr.len();++i){
+    let file = arr[i];
+    cmp.compile(file);
+  }
+  cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
 func main(){

@@ -213,6 +213,10 @@ impl Compiler{
     let linkage = ext();
     if(!m.type_args.empty()){
       linkage = odr();
+    }else if let Parent::Impl(info*)=(m.parent){
+      if(!info.type.get_args().empty()){
+        linkage = odr();
+      }
     }
 
     let f = make_func(ft, linkage, mangled.cstr());
@@ -220,6 +224,9 @@ impl Compiler{
       let arg = get_arg(f, 0);
       let sret = get_sret();
       arg_attr(arg, &sret);
+    }
+    if(self.protos.get().funcMap.has(&mangled)){
+      panic("already proto %s\n", mangled.cstr());
     }
     self.protos.get().funcMap.add(mangled, f);
   }

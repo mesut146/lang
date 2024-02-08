@@ -632,6 +632,15 @@ impl Resolver{
     return *self.used_types.last();
   }
   
+  func addUsed(self, m: Method*){
+    let mng = mangle(m);
+    for(let i=0;i<self.used_methods.len();++i){
+      let prev = self.used_methods.get(i);
+      if(mangle(prev).eq(mng.str())) return;
+    }
+    self.used_methods.add(m);
+  }
+  
   func visit(self, node: FieldDecl*): RType{
     return self.visit(&node.type);
   }
