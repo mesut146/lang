@@ -19,6 +19,11 @@ func main(){
     let b = B{a: obj, b: 3};
     assert b.b == 3;
     assert b.a.a == 10 && b.a.b == 6;
+
+    assert std::size<A>() == 64;
+    assert std::size<B>() == 96;
+    assert std::size(obj) == 64;
+    assert std::size(b) == 96;
   
     print("structTest done\n");
   }

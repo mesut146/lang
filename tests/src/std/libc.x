@@ -28,6 +28,12 @@ func strlen(arr: [i8]): i32{
   }
   panic("no eof");
 }
+func strlen(arr: i8*, max: i32): i32{
+  for(let i = 0;i < max;++i){
+    if(*ptr::get(arr, i) == 0) return i;
+  }
+  panic("no eof");
+}
 
 func is_null<T>(ptr: T*): bool{
   return ptr as u64 == 0;

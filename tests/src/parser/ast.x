@@ -447,7 +447,7 @@ impl Expr{
 struct Call{
   scope: Option<Box<Expr>>;
   name: String;
-  tp: List<Type>;
+  type_args: List<Type>;
   args: List<Expr>;
   is_static: bool;
 }
@@ -457,7 +457,7 @@ impl Call{
     return Fmt::str(self);
   }
   func new(name: String): Call{
-    return Call{scope: Option<Box<Expr>>::new(), name: name, tp: List<Type>::new(), args: List<Expr>::new(), is_static: false};
+    return Call{scope: Option<Box<Expr>>::new(), name: name, type_args: List<Type>::new(), args: List<Expr>::new(), is_static: false};
   }
 }
 

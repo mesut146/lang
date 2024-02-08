@@ -48,6 +48,12 @@ impl AstCopier{
         return *val;
     }
 
+    func node(self, old: Node*): Node{
+        let unit = self.unit.unwrap();
+        let id = ++unit.last_id;
+        return Node::new(id, old.line);
+    }
+
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
         //todo base type depends on map too
@@ -151,21 +157,17 @@ impl AstCopier{
     }
     
     func visit(self, node: Fragment*): Fragment{
-      let n = node as Node*;
-      return Fragment{.*n, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
-    }
-
-    func node(self, old: Node*): Node{
-        return Node::new(++self.unit.unwrap().last_id, old.line);
-    }
-
-    func visit(self, node: ArgBind*): ArgBind{
-        let id = self.node(node as Node*);
-        return ArgBind{.id,node.name.clone(), node.is_ptr};
+      let id = self.node(node as Node*);
+      return Fragment{.id, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
     }
 
     func visit(self, node: VarExpr*): VarExpr{
         return VarExpr{list: self.visit_list(&node.list)};
+    }
+
+    func visit(self, node: ArgBind*): ArgBind{
+        let id = self.node(node as Node*);
+        return ArgBind{.id, node.name.clone(), node.is_ptr};
     }
 
     func visit(self, node: Stmt*): Stmt{
@@ -255,6 +257,6 @@ impl AstCopier{
     
     func visit(self, node: Call*): Call{
       return Call{scope: self.visit_opt(&node.scope), name: node.name.clone(),
-        tp: self.visit_list(&node.tp), args: self.visit_list(&node.args), is_static: node.is_static};
+        type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
     }
 }

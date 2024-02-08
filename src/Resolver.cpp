@@ -1604,8 +1604,15 @@ std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
 }
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
-    if(is_std_size(mc)){
-        //mc->args[0]->accept(this);
+    if (is_std_size(mc)) {
+        if (!mc->args.empty()) {
+            mc->args[0]->accept(this);
+        } else {
+            if (mc->typeArgs.size() != 1) {
+                err(mc, "std::size requires one type argument");
+            }
+            mc->typeArgs[0].accept(this);
+        }
         return RType(Type("i64"));
     }
     if (is_ptr_get(mc)) {

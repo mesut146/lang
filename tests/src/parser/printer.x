@@ -252,7 +252,9 @@ impl Debug for Stmt{
      is.then.get().debug(f);
      if(is.els.is_some()){
        f.print("\nelse ");
-       is.els.get().get().debug(f);
+       //is.els.get().get().debug(f);
+       let els = is.els.get();
+       els.get().debug(f);
      }
     }else if let Stmt::IfLet(il*)=(self){
       f.print("if let ");

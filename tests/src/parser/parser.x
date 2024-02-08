@@ -744,7 +744,8 @@ impl Parser{
         self.pop();
         let ty = self.parse_type();
         if(self.is(TokenType::LPAREN)){
-          return self.call(Expr::Type{.n,Type::new(nm)}, ty.name().clone(), true);
+          let ta = ty.as_simple().args;
+          return self.call(Expr::Type{.n, Type::new(nm)}, ty.name().clone(), true, ta);
         }else{
           return Expr::Type{.n,Type::new(Type::new(nm), ty.name().clone())};
         }
@@ -871,6 +872,12 @@ impl Parser{
     self.consume(TokenType::RPAREN);
     return self.newCall(scp, nm, args, is_static);
   }
+  func call(self, scp: Expr, nm: String, is_static: bool, ta: List<Type>): Expr{
+    self.consume(TokenType::LPAREN);
+    let args = self.exprList(TokenType::RPAREN);
+    self.consume(TokenType::RPAREN);
+    return self.newCall(scp, nm, args, is_static, ta);
+  }
   func call(self, nm: String): Expr{
     self.consume(TokenType::LPAREN);
     let args = self.exprList(TokenType::RPAREN);
@@ -891,9 +898,13 @@ impl Parser{
     let n = self.node();
     return Expr::Call{.n,Call{Option<Box<Expr>>::None, name, g, args, false}};
   }
-  func newCall(self,scp: Expr, name: String, args: List<Expr>, is_static: bool): Expr{
+  func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool): Expr{
     let n = self.node();
     return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, is_static}};
+  }
+  func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool, ta: List<Type>): Expr{
+    let n = self.node();
+    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, ta, args, is_static}};
   }
 }
 

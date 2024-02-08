@@ -13,6 +13,5 @@ func getA(): A{
 func main(){
   let a = getA().a;
   assert a.a == 5;
-  //let c = getA().c;
   print("allocTest done\n");
 }

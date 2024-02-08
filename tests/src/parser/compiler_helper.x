@@ -214,7 +214,7 @@ impl Compiler{
     if(!m.type_args.empty()){
       linkage = odr();
     }else if let Parent::Impl(info*)=(m.parent){
-      if(!info.type.get_args().empty()){
+      if(info.type.is_simple() && !info.type.get_args().empty()){
         linkage = odr();
       }
     }

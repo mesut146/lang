@@ -8,6 +8,7 @@ import parser/compiler
 import parser/bridge
 import std/map
 import std/io
+import std/libc
 
 func lexer_test(){
   let lexer = Lexer::new("../tests/src/parser/parser.x".str());
@@ -77,7 +78,6 @@ func compiler_test(){
   let root = "../tests/src";
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile(&cmp, "../tests/src/infix.x");
   compile_dir(&cmp, root, true);
   //compile_dir(&cmp, "../tests/src/std", false);
 }
@@ -100,11 +100,19 @@ func bootstrap(){
   cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
-func main(){
+func main(argc: i32, args: i8**){
   print("##########running##########\n");
+  if(argc == 1){
+    bootstrap();
+    return;
+  }
+  let a1 = get_arg(args, 1);
+  if(a1.eq("test")){
+    compiler_test();
+  }
+  
   //lexer_test();
   //parser_test();
   //resolver_test();
-  //compiler_test();
-  bootstrap();
+  
 }

@@ -17,7 +17,8 @@
 constexpr int SLICE_LEN_BITS = 64;
 
 static bool is_main(const Method *m) {
-    return m->name == "main" && m->params.empty();
+    //return m->name == "main" && m->params.empty();
+    return m->name == "main" && (m->params.empty() || m->params.size() == 2);
 }
 
 struct Config {
@@ -143,6 +144,8 @@ static std::string mangleType(const Type &type) {
 }
 
 static std::string mangle(const Method *m) {
+    if (is_main(m)) return m->name;
+    if (m->parent && m->parent->isExtern()) return m->name;
     auto p = methodParent2(m);
     std::string s;
     if (p.has_value()) {
@@ -160,7 +163,6 @@ static std::string mangle(const Method *m) {
         }
         s += "$GT";
     }
-    if (m->parent && m->parent->isExtern()) return s;
     if (m->self) s += "_" + mangleType(m->self->type.value());
     for (auto &prm : m->params) {
         s += "_" + mangleType(prm.type.value());

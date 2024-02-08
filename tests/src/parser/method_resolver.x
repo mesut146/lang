@@ -21,6 +21,15 @@ enum SigResult{
     Compatible
 }
 
+impl SigResult{
+    func get_err(self): str{
+        if let SigResult::Err(s*)=(self){
+            return s.str();
+        }
+        panic("SigResult::get");
+    }
+}
+
 struct MethodResolver{
     r: Resolver*;
 }
@@ -283,15 +292,13 @@ impl MethodResolver{
       }
     }
 
-    func handle(self, sig: Signature*): RType{
+    func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
-        let id = Node::new(-1);
-        let e = Expr::Call{.id,*mc};
         //print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
             let msg = Fmt::format("no such method {}", sig.print().str());
-            self.r.err(&e, msg.str());
+            self.r.err(expr, msg.str());
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
@@ -318,7 +325,7 @@ impl MethodResolver{
                 msg.append(" ");
                 msg.append(err.b.str());
             }
-            self.r.err(&e, msg.str());
+            self.r.err(expr, msg.str());
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), i64::print(real.size()).str());
@@ -327,7 +334,7 @@ impl MethodResolver{
                 msg.append("\n");
                 msg.append(err.print().str());
             }
-            self.r.err(&e, msg.str());
+            self.r.err(expr, msg.str());
         }
         let sig2 = real.get(0);
         if(exact.is_some()){
@@ -338,7 +345,8 @@ impl MethodResolver{
             if (!target.path.eq(&self.r.unit.path)) {
                 self.r.addUsed(target);
             }
-            let res = self.r.visit(&sig2.ret);
+            //let res = self.r.visit(&sig2.ret);
+            let res = self.r.visit(&target.type);
             res.method = Option::new(target);
             return res;
         }
@@ -362,14 +370,14 @@ impl MethodResolver{
             for (let i = 0; i < scope_args.size(); ++i) {
                 typeMap.add(type_params.get_ptr(i).name().clone(), Option::new(scope_args.get_ptr(i).clone()));
             }
-            if (!mc.tp.empty()) {
+            if (!mc.type_args.empty()) {
                 panic("todo");
             }
         } else {
-            if (!mc.tp.empty()) {
+            if (!mc.type_args.empty()) {
                 //place specified type args in order
-                for (let i = 0; i < mc.tp.size(); ++i) {
-                    typeMap.add(type_params.get_ptr(i).name().clone(), Option::new(self.r.getType(mc.tp.get_ptr(i))));
+                for (let i = 0; i < mc.type_args.size(); ++i) {
+                    typeMap.add(type_params.get_ptr(i).name().clone(), Option::new(self.r.getType(mc.type_args.get_ptr(i))));
                 }
             }
         }
@@ -384,7 +392,7 @@ impl MethodResolver{
             let pair = typeMap.get_idx(i).unwrap();
             if (pair.b.is_none()) {
                 let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
-                self.r.err(&e, msg.str());
+                self.r.err(expr, msg.str());
             }
             tmap.add(pair.a, pair.b.get().clone());
         }
@@ -402,7 +410,7 @@ impl MethodResolver{
             return SigResult::Err{"not possible".str()};
         }
         if(!m.type_args.empty()){
-            let mc_targs = &mc.tp;
+            let mc_targs = &mc.type_args;
             if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {
                 return SigResult::Err{"type arg size mismatched".str()};
             }
@@ -418,32 +426,43 @@ impl MethodResolver{
                 }
             }
         }
-        if let Parent::Impl(imp*) = (m.parent) {
-            if(mc.scope.is_none()){//static sibling
-                return self.check_args(sig, sig2);
-            }
-            let ty = &imp.type;
-            let scope = sig.scope.get().type;
-            if(ty.print().eq(scope.print().str())){
-                return self.check_args(sig, sig2);
-            }
+        if(!(m.parent is Parent::Impl)){
+            return self.check_args(sig, sig2);
+        }
+        if(mc.scope.is_none()){//static sibling
+            return self.check_args(sig, sig2);
+        }
+        let imp = m.parent.as_impl();
+        let ty = &imp.type;
+        let scope = &sig.scope.get().type;
+        if(ty.print().eq(scope.print().str())){
+            return self.check_args(sig, sig2);
+        }
 
-            if (sig.scope.get().trait.is_some()) {
-                let scp = sig.args.get_ptr(0).unwrap_ptr();
-                if(imp.trait_name.is_some()){
-                    if(!imp.trait_name.get().name().eq(sig.scope.get().type.name().str())){
-                        return SigResult::Err{"not same trait".str()};
-                    }
-                    return self.check_args(sig, sig2);
+        if (sig.scope.get().trait.is_some()) {
+            let real_scope = sig.args.get_ptr(0).unwrap_ptr();
+            if(imp.trait_name.is_some()){
+                if(!imp.trait_name.get().name().eq(scope.name().str())){
+                    return SigResult::Err{"not same trait".str()};
                 }
-                else if (!scp.name().eq(ty.name())) {
-                    return SigResult::Err{Fmt::format("not same impl {} vs {}", scp.print().str(), ty.print().str())};
-                }
-            } else if (!scope.name().eq(ty.name().str())) {
-                return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
+                return self.check_args(sig, sig2);
             }
-            if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
-                //check they belong same impl
+            else if (!real_scope.name().eq(ty.name())) {
+                return SigResult::Err{Fmt::format("not same impl {} vs {}", real_scope.print().str(), ty.print().str())};
+            }
+        } else if (!scope.name().eq(ty.name().str())) {
+            return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), ty.print().str())};
+            //return self.check_args(sig, sig2);
+        } else{
+        }
+        /*let cmp = is_compatible(RType::new(scope.clone()), &imp.type, &imp.type_params);
+        if(cmp.is_some()){
+            return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), imp.type.print().str())};
+        }*/
+        if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
+            //generated method impl
+            //check they belong same impl
+            if(!sig.scope.get().targetDecl.unwrap().is_generic){
                 let scope_args = scope.get_args();
                 for (let i = 0; i < scope_args.size(); ++i) {
                     let tp_str = ty.get_args().get(i).print();
@@ -452,6 +471,7 @@ impl MethodResolver{
                     }
                 }
             }
+
         }
         //check if args are compatible with non generic params
         return self.check_args(sig, sig2);
@@ -610,12 +630,27 @@ impl MethodResolver{
     }
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method*{
-        for (let i=0;i<self.r.generated_methods.size();++i) {
+        //print("gen %s\n", sig.print().cstr());
+        //print("gen m %s\n", mangle(m).cstr());
+        for (let i=0;i<self.r.generated_methods.len();++i) {
             let gm = self.r.generated_methods.get_ptr(i);
+            if(!m.name.eq(gm.name.str())) continue;
             let sig2 = Signature::new(gm);
+            /*if(!m.parent.is_none() && !gm.parent.is_none() && m.parent.as_impl().type.name().eq(gm.parent.as_impl().type.name().str())){
+                if(!(self.check_args(sig, &sig2) is SigResult::Err)){
+                    print("reuse %s %s\n", sig.print().cstr(), sig2.print().cstr());
+                    return gm;
+                }
+            }*/
+            if(sig2.print().eq("Option<RType>::new(RType)")){
+                let x = 55;
+            }
             let res = self.is_same(sig, &sig2);
+            //print("gen2 %s\n", sig2.print().cstr());
             if(!(res is SigResult::Err)){
                 return gm;
+            }else{
+                //print("no use %s\n", res.get_err().cstr());
             }
         }
         let copier = AstCopier::new(map, &self.r.unit);
@@ -623,6 +658,7 @@ impl MethodResolver{
         res2.is_generic = false;
         self.r.generated_methods.add(res2);
         let res = self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
+        //print("add gen %s\n", mangle(res).cstr());
         if(!(m.parent is Parent::Impl)){
             return res;
         }

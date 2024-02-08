@@ -322,6 +322,7 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       self.visit(self.unit.items.get_ptr(i));
     }
+    //todo these would generate more methods, whose are not visited
     for(let i=0;i<self.generated_methods.len();++i){
       let gm = self.generated_methods.get_ptr(i);
       self.visit(gm);
@@ -638,6 +639,7 @@ impl Resolver{
       let prev = self.used_methods.get(i);
       if(mangle(prev).eq(mng.str())) return;
     }
+    //print("used %s\n", mng.cstr());
     self.used_methods.add(m);
   }
   
@@ -1148,7 +1150,19 @@ impl Resolver{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("ptr") && mc.name.eq("get");
   }
 
+  func std_size(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("size");
+  }
+
   func visit(self, node: Expr*, call: Call*): RType{
+    if(std_size(call)){
+      if(!call.args.empty()){
+        self.visit(call.args.get_ptr(0));
+      }else{
+        self.visit(call.type_args.get_ptr(0));
+      }
+      return RType::new("i64");
+    }
     if(is_ptr_get(call)){
       if (call.args.len() != 2) {
         self.err(node, "ptr access must have 2 args");
@@ -1181,10 +1195,13 @@ impl Resolver{
       let arr_type = self.getType(call.scope.get().get()).unwrap_ptr();
       return RType::new(arr_type.elem().toPtr());
     }
+    if(node.print().eq("is.els.get().get()")){
+      let xx = 5;
+    }
     let sig = Signature::new(call, self);
     if(call.scope.is_some()){
       let mr = MethodResolver::new(self);
-      return mr.handle(&sig);
+      return mr.handle(node, &sig);
     }
     if(call.name.eq("print")){
       return RType::new("void");
@@ -1202,10 +1219,10 @@ impl Resolver{
       return RType::new("void");
     }
     if(call.name.eq("malloc")){
-      if(call.tp.empty()){
+      if(call.type_args.empty()){
         return RType::new(Type::new("i8").toPtr());
       }else{
-        let arg = self.visit(call.tp.get_ptr(0));
+        let arg = self.visit(call.type_args.get_ptr(0));
         return RType::new(arg.type.toPtr());
       }
     }
@@ -1222,7 +1239,7 @@ impl Resolver{
         self.err(node, "invalid panic argument: ");
     }
     let mr = MethodResolver::new(self);
-    return mr.handle(&sig);
+    return mr.handle(node, &sig);
   }
   
   func visit_arr_access(self, node: Expr*, aa: ArrAccess*): RType{

@@ -914,6 +914,17 @@ impl Compiler{
   }
 
   func visit_call(self, expr: Expr*, mc: Call*): Value*{
+    if(Resolver::std_size(mc)){
+      if(!mc.args.empty()){
+        let ty = self.getType(mc.args.get_ptr(0));
+        let sz = self.getSize(&ty);
+        return makeInt(sz, 32);
+      }else{
+        let ty = mc.type_args.get_ptr(0);
+        let sz = self.getSize(ty);
+        return makeInt(sz, 32);
+      }
+    }
     if(mc.name.eq("print") && mc.scope.is_none()){
       return self.visit_print(mc);
     }
@@ -924,8 +935,8 @@ impl Compiler{
     if(mc.name.eq("malloc") && mc.scope.is_none()){
       let i64_ty = Type::new("i64");
       let size = self.cast(mc.args.get_ptr(0), &i64_ty);
-      if (!mc.tp.empty()) {
-          let typeSize = self.getSize(mc.tp.get_ptr(0)) / 8;
+      if (!mc.type_args.empty()) {
+          let typeSize = self.getSize(mc.type_args.get_ptr(0)) / 8;
           size = CreateNSWMul(size, makeInt(typeSize, 64));
       }
       let proto = self.protos.get().libc("malloc");

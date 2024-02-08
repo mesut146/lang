@@ -887,6 +887,9 @@ std::any Compiler::visitBlock(Block *node) {
 std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     loc(node);
     if (!node->expr) {
+        if(is_main(curMethod)){
+            return Builder->CreateRet(makeInt(0, 32));
+        }
         return Builder->CreateRetVoid();
     }
     auto &type = curMethod->type;
@@ -1189,8 +1192,13 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
 std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
     if (Resolver::is_std_size(mc)) {
-        auto ty = resolv->getType(mc->args[0]);
-        return makeInt(getSize2(ty), 64);
+        if (!mc->args.empty()) {
+            auto ty = resolv->getType(mc->args[0]);
+            return (llvm::Value *) makeInt(getSize2(ty), 64);
+        } else {
+            auto ty = resolv->getType(mc->typeArgs[0]);
+            return (llvm::Value *) makeInt(getSize2(ty), 64);
+        }
     }
     if (is_ptr_get(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();

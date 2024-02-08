@@ -20,10 +20,10 @@ func makeSelf(scope: Type*): Type{
 
 func replace_self(typ: Type*, m: Method*): Type{
     if(!typ.print().eq("Self")){
-        return *typ;
+        return typ.clone();
     }
     if let Parent::Impl(info*)=(m.parent){
-        return info.type;
+        return info.type.clone();
     }
     panic("replace_self not impl method");
 }
