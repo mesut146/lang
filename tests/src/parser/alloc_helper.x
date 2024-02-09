@@ -4,6 +4,7 @@ import parser/compiler_helper
 import parser/ast
 import parser/resolver
 import parser/utils
+import parser/debug_helper
 import std/map
 
 struct AllocHelper{

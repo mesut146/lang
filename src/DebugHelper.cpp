@@ -15,7 +15,7 @@ void Compiler::init_dbg(const std::string &path) {
 void Compiler::loc(Node *e) {
     if (!Config::debug) return;
     if (!e) {
-        Builder->SetCurrentDebugLocation(0);
+        Builder->SetCurrentDebugLocation(nullptr);
         return;
     }
     if (e->line == 0) {
@@ -30,8 +30,10 @@ void Compiler::loc(Node *e) {
 
 void Compiler::loc(int line, int pos) {
     if (!Config::debug) return;
-    llvm::DIScope *scope = di.sp;
-    if (!scope) {
+    llvm::DIScope *scope;
+    if (di.sp) {
+        scope = di.sp;
+    } else {
         scope = di.cu;
     }
     Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
@@ -71,7 +73,8 @@ std::string Compiler::dbg_name(Method *m) {
 
 void Compiler::dbg_func(Method *m, llvm::Function *f) {
     if (!Config::debug) return;
-    llvm::SmallVector<llvm::Metadata *, 8> tys;
+    //llvm::SmallVector<llvm::Metadata *, 8> tys;
+    std::vector<llvm::Metadata*> tys;
     tys.push_back(map_di(m->type));
     if (m->self) {
         auto elem = map_di(m->self->type->unwrap());

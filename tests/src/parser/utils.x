@@ -7,7 +7,7 @@ func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
 
 func as_type(bits: i32): Type{
-  if(bits==64){
+  if(bits == 64){
     return Type::new("i64");
   }
   return Type::new("i32");

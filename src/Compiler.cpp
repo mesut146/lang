@@ -273,7 +273,7 @@ void init_globals(Compiler *c) {
     c->Builder->CreateRetVoid();
 
     if (Config::debug) {
-        c->DBuilder->finalizeSubprogram((llvm::DISubprogram *) c->di.sp);
+        c->DBuilder->finalizeSubprogram(c->di.sp);
         c->di.sp = nullptr;
     }
     if (llvm::verifyFunction(*staticf, &llvm::outs())) {

@@ -18,6 +18,17 @@ struct Value;
 struct BasicBlock;
 struct PHINode;
 
+struct DICompileUnit;
+struct DIFile;
+struct DISubprogram;
+struct DISubroutineType;
+struct DIType;
+struct DICompositeType;
+struct DIDerivedType;
+struct DIScope;
+struct Metadata;
+struct Metadata_vector;
+
 extern{
     func make_vec(): vector*;
     func vec_push(vec: vector*, elem: llvm_Type*);
@@ -37,6 +48,31 @@ extern{
     func make_builder(): IRBuilder*;
     func emit_llvm(out: i8*);
     func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
+
+    func init_dbg();
+    func createFile(file: i8*, dir: i8*): DIFile*;
+    func createCompileUnit(file: DIFile*): DICompileUnit*;
+    func SetCurrentDebugLocation(scope: DIScope*, line: i32, pos: i32);
+    func createObjectPointerType(type: DIType*): DIType*;
+    func Metadata_vector_new(): Metadata_vector*;
+    func Metadata_vector_push(vec: Metadata_vector*, elem: Metadata*);
+    func createSubroutineType(tys: Metadata_vector*): DISubroutineType*;
+    func make_spflags(is_main: bool): i32;
+    func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
+    func setSubprogram(f: Function*, sp: DISubprogram*);
+    func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata_vector*): DICompositeType*;
+    func get_di_null(): DIType*;
+    func get_null_scope(): DIScope*;
+    func createBasicType(name: i8*, size: i64, enco: i32): DIType*;
+    func DW_ATE_boolean(): i32;
+    func DW_ATE_signed(): i32;
+    func DW_ATE_unsigned(): i32;
+    func DW_ATE_float(): i32;
+    func createPointerType(elem: DIType*, size: i64): DIType*;
+    func getOrCreateSubrange(lo: i64, count: i64): Metadata*;
+    func createArrayType(size: i64, ty: DIType*, elems: Metadata_vector*): DIType*;
+    func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, ty: DIType*): DIDerivedType*;
+
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;

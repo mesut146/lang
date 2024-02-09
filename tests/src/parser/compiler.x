@@ -6,6 +6,7 @@ import parser/copier
 import parser/bridge
 import parser/compiler_helper
 import parser/alloc_helper
+import parser/debug_helper
 import std/map
 import std/io
 import std/libc
@@ -88,6 +89,7 @@ impl Protos{
 struct llvm_holder{
   target_machine: TargetMachine*;
   target_triple: String;
+  di: Option<DebugInfo>;
 }
 
 struct Config{
@@ -135,7 +137,7 @@ impl llvm_holder{
     make_ctx();
     make_module(name.cstr(), self.target_machine, self.target_triple.cstr());
     make_builder();
-    //c->init_dbg(path);
+    self.di = Option::new(DebugInfo::new(path));
   }
 
   func new(): llvm_holder{
@@ -147,7 +149,7 @@ impl llvm_holder{
     
     let target_triple = getDefaultTargetTriple2();
     let target_machine = createTargetMachine(target_triple.cstr());
-    return llvm_holder{target_triple: target_triple, target_machine: target_machine};
+    return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
     //todo cache
   }
@@ -978,20 +980,22 @@ impl Compiler{
   }
 
   func visit_panic(self, node: Expr*, mc: Call*){
-    let msg = String::new("\"panic in ");
-    msg.append(printMethod(self.curMethod.unwrap()).str());
+    let msg = String::new("panic");
     msg.append("\n");
-    msg.append(self.unit().path.str());
+    msg.append(self.curMethod.unwrap().path.str());
     msg.append(":");
     msg.append(i32::print(node.line).str());
-    msg.append("\n\"");
+    msg.append("\n in function ");
+    msg.append(printMethod(self.curMethod.unwrap()).str());
+    msg.append("\n");
     
     self.call_printf(msg.str());
     //printf
     let pr_mc = Call::new("print".str());
-    let id = node as Node*;
+    //let id = node as Node*;
     //pr_mc.args.add(Expr::Lit{.*id, Literal{LitKind::STR, msg, Option<Type>::new()}});
     self.visit_print(mc);
+    self.call_printf("\n");
     //exit
     self.call_exit(1);
   }

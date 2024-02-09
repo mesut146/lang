@@ -69,7 +69,7 @@ impl String{
     }
 
     func str(self): str{
-        return str{self.arr.slice(0, self.len())};
+        return str{self.slice()};
     }
 
     func slice(self): [u8]{

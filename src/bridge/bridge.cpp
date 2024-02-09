@@ -21,6 +21,7 @@
 static llvm::IRBuilder<> *Builder = nullptr;
 static llvm::LLVMContext *ctx = nullptr;
 static llvm::Module *mod = nullptr;
+static llvm::DIBuilder *DBuilder = nullptr;
 
 extern "C" {
 
@@ -134,6 +135,104 @@ llvm::Module *make_module(char *name, llvm::TargetMachine *TargetMachine, char *
 llvm::IRBuilder<> *make_builder() {
     Builder = new llvm::IRBuilder<>(*ctx);
     return Builder;
+}
+
+void init_dbg() {
+    DBuilder = new llvm::DIBuilder(*mod);
+    mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 5);
+    mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
+    mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
+    mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
+}
+
+llvm::DIFile *createFile(char *path, char *dir) {
+    return DBuilder->createFile(path, dir);
+}
+
+llvm::DICompileUnit *createCompileUnit(llvm::DIFile *file) {
+    return DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C, file, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
+}
+
+void SetCurrentDebugLocation(llvm::DIScope *scope, int line, int pos) {
+    Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
+}
+
+std::vector<llvm::Metadata *> *Metadata_vector_new() {
+    return new std::vector<llvm::Metadata *>();
+}
+
+void Metadata_vector_push(std::vector<llvm::Metadata *> *vec, llvm::Metadata *md) {
+    vec->push_back(md);
+}
+
+int make_spflags(bool is_main) {
+    auto spflags = llvm::DISubprogram::SPFlagDefinition;
+    if (is_main) {
+        spflags |= llvm::DISubprogram::SPFlagMainSubprogram;
+    }
+    return spflags;
+}
+
+llvm::DISubroutineType *createSubroutineType(std::vector<llvm::Metadata *> *types) {
+    return DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray(*types));
+}
+
+llvm::DISubprogram *createFunction(llvm::DIScope *scope, char *name, char *linkage_name, llvm::DIFile *file, int line, llvm::DISubroutineType *ft, int spflags) {
+    return DBuilder->createFunction(scope, name, linkage_name, file, line, ft, line, llvm::DINode::FlagPrototyped, (llvm::DISubprogram::DISPFlags) spflags);
+}
+
+void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
+    f->setSubprogram(sp);
+}
+
+llvm::DICompositeType *createStructType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int size, std::vector<llvm::Metadata *> *elems) {
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+    return DBuilder->createStructType(scope, name, file, line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
+}
+
+llvm::DIType *get_di_null() {
+    return nullptr;
+}
+
+llvm::DIType *createBasicType(char *name, uint64_t size, int encoding) {
+    return DBuilder->createBasicType(name, size, encoding);
+}
+
+int DW_ATE_boolean() {
+    return llvm::dwarf::DW_ATE_boolean;
+}
+
+int DW_ATE_signed() {
+    return llvm::dwarf::DW_ATE_signed;
+}
+
+int DW_ATE_unsigned() {
+    return llvm::dwarf::DW_ATE_unsigned;
+}
+
+int DW_ATE_float() {
+    return llvm::dwarf::DW_ATE_float;
+}
+
+llvm::DIType *createPointerType(llvm::DIType *elem, int64_t size) {
+    return DBuilder->createPointerType(elem, size);
+}
+
+llvm::Metadata *getOrCreateSubrange(int64_t lo, int64_t count) {
+    return DBuilder->getOrCreateSubrange(lo, count);
+}
+
+llvm::DIType *createArrayType(int64_t size, llvm::DIType *ty, std::vector<llvm::Metadata *> *elems) {
+    llvm::DINodeArray subs(llvm::MDTuple::get(*ctx, *elems));
+    return DBuilder->createArrayType(size, 0, ty, subs);
+}
+
+llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int64_t size, int64_t off, llvm::DIType *ty) {
+    return DBuilder->createMemberType(scope, name, file, line, size, 0, off, llvm::DINode::FlagZero, ty);
+}
+
+llvm::DIScope* get_null_scope(){
+    return nullptr;
 }
 
 void emit_llvm(char *llvm_file) {
@@ -404,11 +503,11 @@ void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
     st->setBody(*elems);
 }
 
-void Value_dump(llvm::Value* v){
+void Value_dump(llvm::Value *v) {
     v->dump();
 }
 
-void Type_dump(llvm::Type* v){
+void Type_dump(llvm::Type *v) {
     v->dump();
 }
 
