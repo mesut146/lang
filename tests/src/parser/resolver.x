@@ -1437,7 +1437,7 @@ func infix_result(l: str, r: str): str{
       return op;
     }
   }
-  panic("infix_result: %s, %s", l, r);
+  panic("infix_result: %s, %s", l.cstr(), r.cstr());
 }
 
 //statements-------------------------------------

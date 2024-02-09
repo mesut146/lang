@@ -212,7 +212,7 @@ impl Debug for Type{
       f.print("[");
       box.get().debug(f);
       f.print("]");
-    }else panic("Type::debug %p", self);
+    }else panic("Type::debug");
   }
 }
 

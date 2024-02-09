@@ -140,6 +140,10 @@ func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer() && !type.is_void(); 
 }
 
+func is_main(m: Method*): bool{
+  return m.name.eq("main") && (m.params.empty() || m.params.len()==2);
+}
+
 func mangleType(type: Type*): String{
   let s = type.print();
   s = s.replace("*", "P");
@@ -147,6 +151,7 @@ func mangleType(type: Type*): String{
 }
 
 func mangle(m: Method*): String{
+  if(is_main(m)) return m.name.clone();
   let s = String::new();
   if let Parent::Impl(info*)=(m.parent){
     s.append(info.type.print().str());

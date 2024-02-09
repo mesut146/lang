@@ -1,23 +1,30 @@
 import parser/ast
 
-func make_impl(decl: Decl*): Impl{
+func make_info(decl: Decl*): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
     info.trait_name = Option::new(Type::new("Debug"));
     for(let i=0;i<decl.type.get_args().len();++i){
         let ta = decl.type.get_args().get_ptr(i);
         info.type_params.add(ta.clone());
     }
+    return info;
+}
+
+func make_impl(decl: Decl*): Impl{
+    let info = make_info(decl);
     return Impl{info: info, methods: List<Method>::new()};
 }
 
 
 func generate_derive(decl: Decl*, unit: Unit*): Impl{
-    print("derive\n");
+    print("derive %s\n", decl.type.print().cstr());
     assert decl.derives.get_ptr(0).print().eq("Debug");
     let imp = make_impl(decl);
     let m = Method::new(Node::new(++unit.last_id, 0), unit, "debug".str(), Type::new("void"));
     m.self = Option::new(Param{"self".str(), decl.type.clone().toPtr(), true});
     m.params.add(Param{"f".str(), Type::new("Fmt").toPtr(), false});
+    m.parent = Parent::Impl{make_info(decl)};
+    m.path = unit.path.clone();
     let body = Block::new();
     if let Decl::Enum(variants*)=(decl){
         for(let i=0;i<variants.len();++i){

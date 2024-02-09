@@ -100,10 +100,6 @@ func dummy_resolver(ctx: Context*): Resolver*{
   return ctx.create_resolver(&path);
 }
 
-func is_main(m: Method*): bool{
-  return m.name.eq("main") && m.params.empty();
-}
-
 func has_main(unit: Unit*): bool{
   for (let i=0;i<unit.items.len();++i) {
     let it = unit.items.get_ptr(i);
@@ -197,7 +193,8 @@ impl Compiler{
     if(system(cmd.cstr()) == 0){
       //run if linked
       if(system(name) != 0){
-        panic("error while running a.out");
+        print("%s\n", cmd.cstr());
+        panic("error while running %s", name);
       }
     }else{
       panic("link failed '%s'", cmd.cstr());
@@ -430,7 +427,11 @@ impl Compiler{
   func visit(self, node: Stmt*){
     if let Stmt::Ret(e*)=(node){
       if(e.is_none()){
-        CreateRetVoid();
+        if(is_main(self.curMethod.unwrap())){
+          CreateRet(makeInt(0, 32));
+        }else{
+          CreateRetVoid();
+        }
       }else{
         self.visit_ret(e.get());
       }
@@ -971,24 +972,26 @@ impl Compiler{
       let sl = self.get_obj_ptr(mc.scope.get().get());
       let sliceType=self.protos.get().std("slice") as llvm_Type*;
       let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
-      return CreateLoad(getInt(64), ptr);
+      return CreateLoad(getPtr(), ptr);
     }
     return self.visit_call2(expr, mc);
   }
 
   func visit_panic(self, node: Expr*, mc: Call*){
-    let msg = String::new("panic in ");
-    msg.append(mc.name.str());
+    let msg = String::new("\"panic in ");
+    msg.append(printMethod(self.curMethod.unwrap()).str());
     msg.append("\n");
     msg.append(self.unit().path.str());
     msg.append(":");
     msg.append(i32::print(node.line).str());
-
+    msg.append("\n\"");
+    
+    self.call_printf(msg.str());
     //printf
     let pr_mc = Call::new("print".str());
     let id = node as Node*;
-    pr_mc.args.add(Expr::Lit{.*id, Literal{LitKind::STR, msg, Option<Type>::new()}});
-    self.visit_print(&pr_mc);
+    //pr_mc.args.add(Expr::Lit{.*id, Literal{LitKind::STR, msg, Option<Type>::new()}});
+    self.visit_print(mc);
     //exit
     self.call_exit(1);
   }
@@ -1085,6 +1088,20 @@ impl Compiler{
     args_push(args2, CreateLoad(getPtr(), stdout_ptr));
     CreateCall(fflush_proto, args2);
     return res;
+  }
+  
+  func call_printf(self, s: str){
+    let args = make_args();
+    let val = CreateGlobalStringPtr(s.cstr());
+    args_push(args, val);
+    let printf_proto = self.protos.get().libc("printf");
+    let res = CreateCall(printf_proto, args);
+    //flush
+    let fflush_proto = self.protos.get().libc("fflush");
+    let args2 = make_args();
+    let stdout_ptr = self.protos.get().stdout_ptr;
+    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+    CreateCall(fflush_proto, args2);
   }
 
   func visit_deref(self, node: Expr*, e: Expr*): Value*{
