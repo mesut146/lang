@@ -60,6 +60,7 @@ extern{
     func make_spflags(is_main: bool): i32;
     func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
     func setSubprogram(f: Function*, sp: DISubprogram*);
+    func finalizeSubprogram(sp: DISubprogram*);
     func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata_vector*): DICompositeType*;
     func get_di_null(): DIType*;
     func get_null_scope(): DIScope*;

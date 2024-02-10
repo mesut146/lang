@@ -312,6 +312,7 @@ impl Compiler{
     let bb = create_bb2(f);
     self.NamedValues.clear();
     SetInsertPoint(bb);
+    self.llvm.di.get().dbg_func(m, f, self);
     self.makeLocals(m.body.get());
     self.allocParams(m);
     self.storeParams(m,f);
@@ -326,6 +327,7 @@ impl Compiler{
         CreateRetVoid();
       }
     }
+    self.llvm.di.get().finalize();
     verifyFunction(f);
   }
   

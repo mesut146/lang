@@ -36,6 +36,12 @@ impl DebugInfo{
              incomplete_types: Map<String, DICompositeType*>::new(),
              debug: false};
     }
+    
+    func finalize(self){
+        if (!self.debug) return;
+        finalizeSubprogram(self.sp.unwrap());
+        self.sp = Option<DISubprogram*>::new();
+    }
 
     func loc(self, line: i32, pos: i32) {
         if (!self.debug) return;
@@ -76,6 +82,15 @@ impl DebugInfo{
         setSubprogram(f, sp);
         //loc();
     }
+    
+    func dbg_prm(self, p: Param*, idx: i32, c: Compiler*) {
+    if (!self.debug) return;
+    let dt = self.map_di(&p.type, c);
+    let v = createParameterVariable(self.sp.unwrap(), p.name.cstr(), idx, self.file, p.line, dt, true);
+    let val = c.NamedValues.get_p(&p.name);
+    let lc = llvm::DILocation::get(sp->getContext(), p.line, p.pos, sp);
+    insertDeclare(val, v, DBuilder->createExpression(), lc, GetInsertBlock());
+}
 
     func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{
         let name = decl.type.print();

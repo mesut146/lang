@@ -235,6 +235,14 @@ llvm::DIScope* get_null_scope(){
     return nullptr;
 }
 
+llvm::DIType* createObjectPointerType(llvm::DIType* ty){
+    return DBuilder->createObjectPointerType(ty);
+}
+
+void finalizeSubprogram(llvm::DISubprogram* sp){
+    DBuilder->finalizeSubprogram(sp);
+}
+
 void emit_llvm(char *llvm_file) {
     std::error_code ec;
     llvm::raw_fd_ostream fd(llvm_file, ec);
