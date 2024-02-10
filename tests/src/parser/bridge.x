@@ -28,6 +28,10 @@ struct DIDerivedType;
 struct DIScope;
 struct Metadata;
 struct Metadata_vector;
+struct DILocalVariable;
+struct DIExpression;
+struct DILocation;
+struct StructLayout;
 
 extern{
     func make_vec(): vector*;
@@ -61,6 +65,10 @@ extern{
     func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
     func setSubprogram(f: Function*, sp: DISubprogram*);
     func finalizeSubprogram(sp: DISubprogram*);
+    func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool): DILocalVariable*;
+    func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
+    func createExpression(): DIExpression*;
+    func insertDeclare(value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
     func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata_vector*): DICompositeType*;
     func get_di_null(): DIType*;
     func get_null_scope(): DIScope*;
@@ -73,6 +81,12 @@ extern{
     func getOrCreateSubrange(lo: i64, count: i64): Metadata*;
     func createArrayType(size: i64, ty: DIType*, elems: Metadata_vector*): DIType*;
     func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, ty: DIType*): DIDerivedType*;
+    func DIType_getSizeInBits(ty: DIType*): i64;
+    func getStructLayout(st: StructType*): StructLayout*;
+    func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
+    func replaceElements(st: DICompositeType*, elems: Metadata_vector*);
+    func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata_vector*): DICompositeType*;
+    func createVariantMemberType(scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
 
 
     func make_struct_ty(name: i8*): StructType*;

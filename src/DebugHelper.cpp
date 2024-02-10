@@ -6,10 +6,10 @@ void Compiler::init_dbg(const std::string &path) {
     DBuilder = std::make_unique<llvm::DIBuilder>(*mod);
     auto dfile = DBuilder->createFile(path, ".");
     di.cu = DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C, dfile, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
-    mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 5);
+    /*mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 3);
     mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
     mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
-    mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
+    mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);*/
 }
 
 void Compiler::loc(Node *e) {
@@ -160,7 +160,6 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
     if (decl->isEnum()) {
         //todo order
         auto ed = (EnumDecl *) decl;
-        auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
         auto enum_size = getSize2(ed);
         if (base_ty) {
             enum_size -= base_ty->getSizeInBits();
@@ -172,6 +171,7 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
             tag_off = sl->getElementOffsetInBits(1);
         }
         std::vector<llvm::Metadata *> elems2;
+        auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
         auto disc = DBuilder->createMemberType(nullptr, "", file, ed->line, ENUM_TAG_BITS, 0, tag_off, llvm::DINode::FlagArtificial, tag);
         auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2));
         auto var_part = DBuilder->createVariantPart(st, "", file, decl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);

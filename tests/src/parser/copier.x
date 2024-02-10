@@ -110,7 +110,8 @@ impl AstCopier{
     }
 
     func visit(self, p: Param*): Param{
-        return Param{name: p.name.clone(),
+        let id = self.node(p as Node*);
+        return Param{.id, name: p.name.clone(),
             type: self.visit(&p.type),
             is_self: p.is_self};
     }

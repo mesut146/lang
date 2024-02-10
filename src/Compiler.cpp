@@ -737,7 +737,7 @@ void Compiler::make_vtables() {
 
 void Compiler::allocParams(Method *m) {
     //alloc
-    auto ff = funcMap[mangle(m)];
+    //auto ff = funcMap[mangle(m)];
     int arg_idx = 0;
     if (isRvo(m)) arg_idx++;
     if (m->self) {

@@ -84,9 +84,12 @@ void printLine(Resolver *r, Node *n) {
 }
 
 void Resolver::err(Node *e, const std::string &msg) {
-    std::string s = unit->path + ":" + std::to_string(e->line) + "\n";
+    std::string s;
     if (curMethod) {
+        s += curMethod->unit->path + ":" + std::to_string(e->line) + "\n";
         s += "in " + printMethod(curMethod) + "\n";
+    } else {
+        s += unit->path + ":" + std::to_string(e->line) + "\n";
     }
     auto expr = dynamic_cast<Expression *>(e);
     if (expr) {
@@ -1092,8 +1095,10 @@ std::any Resolver::visitAssign(Assign *node) {
     }
     auto t2 = resolve(node->right);
     if (MethodResolver::isCompatible(t2, t1.type)) {
-        auto msg = format("cannot assign %s\n%s=%s", node->print().c_str(), t1.type.print().c_str(), t2.type.print().c_str());
-        error(msg);
+        err(node, "cannot assign");
+    }
+    if (has_pointer(t1.type, this)) {
+        err(node, "destroy left");
     }
     return t1;
 }

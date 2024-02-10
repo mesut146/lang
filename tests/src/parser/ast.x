@@ -171,7 +171,7 @@ struct Method: Node{
   path: String;
 }
 
-struct Param{
+struct Param: Node{
   name: String;
   type: Type;
   is_self: bool;

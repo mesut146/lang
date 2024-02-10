@@ -120,26 +120,39 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine, char *tri
 }
 
 llvm::LLVMContext *make_ctx() {
+    if (ctx != nullptr) {
+        //delete ctx;
+        return ctx;
+    }
     ctx = new llvm::LLVMContext();
     return ctx;
 }
 
 llvm::Module *make_module(char *name, llvm::TargetMachine *TargetMachine, char *triple) {
-    std::string TargetTriple(triple);
+    if (mod != nullptr) {
+        delete mod;
+    }
+    // std::string TargetTriple(triple);
     mod = new llvm::Module(name, *ctx);
-    mod->setTargetTriple(TargetTriple);
+    mod->setTargetTriple(triple);
     mod->setDataLayout(TargetMachine->createDataLayout());
     return mod;
 }
 
 llvm::IRBuilder<> *make_builder() {
+    if (Builder != nullptr) {
+        delete Builder;
+    }
     Builder = new llvm::IRBuilder<>(*ctx);
     return Builder;
 }
 
 void init_dbg() {
+    if (DBuilder != nullptr) {
+        delete DBuilder;
+    }
     DBuilder = new llvm::DIBuilder(*mod);
-    mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 5);
+    mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 4);
     mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
     mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
     mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
@@ -185,13 +198,57 @@ void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
     f->setSubprogram(sp);
 }
 
+llvm::DILocalVariable *createParameterVariable(llvm::DIScope *scope, char *name, int idx, llvm::DIFile *file, int line, llvm::DIType *type, bool preserve) {
+    return DBuilder->createParameterVariable(scope, name, idx, file, line, type, preserve);
+}
+
+llvm::DIExpression *createExpression() {
+    return DBuilder->createExpression();
+}
+
+llvm::DILocation *DILocation_get(llvm::DIScope *scope, int line, int pos) {
+    return llvm::DILocation::get(scope->getContext(), line, pos, scope);
+}
+
+void insertDeclare(llvm::Value *value, llvm::DILocalVariable *var_info, llvm::DIExpression *expr, llvm::DILocation *loc, llvm::BasicBlock *bb) {
+    DBuilder->insertDeclare(value, var_info, expr, loc, bb);
+}
+
 llvm::DICompositeType *createStructType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int size, std::vector<llvm::Metadata *> *elems) {
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
     return DBuilder->createStructType(scope, name, file, line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
 }
 
+const llvm::StructLayout *getStructLayout(llvm::StructType *st) {
+    return mod->getDataLayout().getStructLayout(st);
+}
+
+int64_t getElementOffsetInBits(llvm::StructLayout *sl, int idx) {
+    return sl->getElementOffsetInBits(idx);
+}
+
 llvm::DIType *get_di_null() {
     return nullptr;
+}
+
+int64_t DIType_getSizeInBits(llvm::DIType *ty) {
+    return ty->getSizeInBits();
+}
+
+void replaceElements(llvm::DICompositeType *st, std::vector<llvm::Metadata *> *elems) {
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+    st->replaceElements(arr);
+}
+
+llvm::DICompositeType *createVariantPart(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int64_t size, llvm::DIDerivedType *disc, std::vector<llvm::Metadata *> *elems) {
+    auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+    return DBuilder->createVariantPart(scope, name, file, line, size, 0, llvm::DINode::FlagZero, disc, arr);
+}
+
+llvm::DIDerivedType *createVariantMemberType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int64_t size, int64_t off, int idx, llvm::DIType *ty) {
+    auto intType = llvm::IntegerType::get(*ctx, 32);
+    auto disc = llvm::ConstantInt::getSigned(intType, idx);
+    return DBuilder->createVariantMemberType(scope, name, file, line, size, 0, off, disc, llvm::DINode::FlagZero, ty);
 }
 
 llvm::DIType *createBasicType(char *name, uint64_t size, int encoding) {
@@ -231,15 +288,15 @@ llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name, llvm::DI
     return DBuilder->createMemberType(scope, name, file, line, size, 0, off, llvm::DINode::FlagZero, ty);
 }
 
-llvm::DIScope* get_null_scope(){
+llvm::DIScope *get_null_scope() {
     return nullptr;
 }
 
-llvm::DIType* createObjectPointerType(llvm::DIType* ty){
+llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
     return DBuilder->createObjectPointerType(ty);
 }
 
-void finalizeSubprogram(llvm::DISubprogram* sp){
+void finalizeSubprogram(llvm::DISubprogram *sp) {
     DBuilder->finalizeSubprogram(sp);
 }
 

@@ -137,7 +137,7 @@ impl llvm_holder{
     make_ctx();
     make_module(name.cstr(), self.target_machine, self.target_triple.cstr());
     make_builder();
-    self.di = Option::new(DebugInfo::new(path));
+    self.di = Option::new(DebugInfo::new(path, true));
   }
 
   func new(): llvm_holder{
@@ -214,7 +214,9 @@ impl Compiler{
     if(self.config.verbose){
       print("compiling %s\n", path0.cstr());
     }
-    self.resolver = self.ctx.create_resolver(path0);
+    let r = Resolver::new(path0.str(), &self.ctx);
+    self.resolver = &r;
+    //self.resolver = self.ctx.create_resolver(path0);
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.str());
       if (!self.config.single_mode) {//compile last
@@ -223,12 +225,15 @@ impl Compiler{
       }
     }
     self.resolver.resolve_all();
+    if(true){
+      return outFile;
+    }
     self.llvm.initModule(path0);
     self.createProtos();
     //init_globals(this);
     
     let methods = getMethods(self.unit());
-    for (let i=0;i<methods.len();++i) {
+    for (let i = 0;i < methods.len();++i) {
       let m = methods.get(i);
       self.genCode(m);
     }
@@ -271,7 +276,7 @@ impl Compiler{
       }
       list.add(decl);
     }
-    //sort(&list, self.resolver);
+    sort(&list, self.resolver);
     //first create just protos to fill later
     for(let i=0;i<list.len();++i){
       let decl = list.get(i);
@@ -283,7 +288,17 @@ impl Compiler{
       let decl = list.get(i);
       self.make_decl(decl, p.get(decl) as StructType*);
     }
-    //todo di proto
+    //di proto
+    for(let i=0;i<list.len();++i){
+      let decl = list.get(i);
+      self.llvm.di.get().map_di_proto(decl, self);
+    }
+    //di fill
+    for(let i=0;i<list.len();++i){
+      let decl = list.get(i);
+      self.llvm.di.get().map_di_fill(decl, self);
+    }
+    
     //methods
     let methods = getMethods(self.unit());
     for (let i=0;i<methods.len();++i) {
@@ -377,15 +392,20 @@ impl Compiler{
     if(is_struct(&m.type)){
       ++argIdx;//sret
     }
+    let argNo = 1;
     if (m.self.is_some()) {
       let prm = m.self.get();
       self.store_prm(prm, f, argIdx);
+      self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
+      ++argNo;
     }
     for(let i=0;i<m.params.len();++i){
       let prm = m.params.get_ptr(i);
       self.store_prm(prm, f, argIdx);
+      self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
+      ++argNo;
     }
   }
   
@@ -681,12 +701,9 @@ impl Compiler{
 //expr------------------------------------------------------
 impl Compiler{
   func visit(self, node: Expr*): Value*{
+    self.llvm.di.get().loc(node.line, node.pos);
     if let Expr::Par(e*)=(node){
       return self.visit(e.get());
-    }
-    if let Expr::Array(list*,sz*)=(node){
-      //let ptr = getalloc();
-
     }
     if let Expr::Obj(type*,args*)=(node){
       return self.visit_obj(node, type, args);

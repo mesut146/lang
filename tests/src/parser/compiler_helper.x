@@ -2,6 +2,7 @@ import parser/bridge
 import parser/ast
 import parser/resolver
 import parser/compiler
+import parser/debug_helper
 import parser/utils
 import std/map
 
@@ -162,7 +163,7 @@ impl Compiler{
       vec_push(elems, getInt(ENUM_TAG_BITS()));
       vec_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
     }else if let Decl::Struct(fields*)=(decl){
-      if(fields.empty()) return;
+      //if(fields.empty()) return;
       for(let i = 0;i < fields.len();++i){
         let fd = fields.get_ptr(i);
         let ft = self.mapType(&fd.type);
@@ -170,6 +171,7 @@ impl Compiler{
       }
     }
     setBody(st, elems);
+    //Type_dump(st as llvm_Type*);
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*): StructType*{
     let elems = make_vec();

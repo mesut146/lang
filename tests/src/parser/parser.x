@@ -211,9 +211,10 @@ impl Parser{
         if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
           params.add(self.parse_param());
         }else{
+          let id = self.node();
           let self_name = self.name();
           let self_ty = imp.get().toPtr();
-          selfp = Option::new(Param{self_name, self_ty, true});
+          selfp = Option::new(Param{.id, self_name, self_ty, true});
         }
         while (self.is(TokenType::COMMA)) {
             self.consume(TokenType::COMMA);
@@ -240,10 +241,11 @@ impl Parser{
     }
     
     func parse_param(self): Param{
+      let id = self.node();
       let name = self.pop();
       self.consume(TokenType::COLON);
       let type=self.parse_type();
-      return Param{name.value, type, false};
+      return Param{.id, name.value, type, false};
     }
     
     func parse_struct(self, derives: List<Type>): Decl{
