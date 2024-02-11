@@ -1,5 +1,6 @@
 //import std/List
 //import std/str
+import std/libc
 
 struct String{
     arr: List<u8>;
@@ -25,40 +26,36 @@ impl String{
     }
 
     func new(s: str): String{
-        let res = String::new(s.len());
-        res.append(s);
-        return res;
+      let res = String::new(s.len());
+      res.append(s);
+      res.str().check_all();
+      return res;
     }
     
     func new(arr: List<u8>*): String{
-        return String::new(arr.slice());
+      return String::new(arr.slice());
     }
     
     func new(arr: List<i8>*): String{
-        return String::new(arr.slice());
-    }
-
-    func new(arr: List<i8>): String{
       return String::new(arr.slice());
-  }
+    }
     
     func new(arr: [i8]): String{
-        let ptr = arr.ptr();
-        let len = arr.len();
-        let s = String::new(len);
-        for(let i = 0;i < len;++i){
-          s.append(arr[i]);
-        }
-        return s;
+      let ptr = arr.ptr() as u8*;
+      let len = arr.len();
+      return String::new(ptr[0..len]);
     }
 
     func new(arr: [u8]): String{
-      let s = String::new(arr.len());
-      for(let i = 0;i < arr.len();++i){
-        s.append(arr[i]);
-      }
-      return s;
-  }      
+     let ptr = arr.ptr();
+     let len = arr.len();
+     let s = String::new(len);
+     for(let i = 0;i < len;++i){
+       s.append(arr[i]);
+     }
+     s.str().check_all();
+     return s;
+    }      
 
     func len(self): i64{
         return self.arr.len();
@@ -290,5 +287,12 @@ impl i64{
       res += 1;
     }
     return res;
+  }
+}
+
+
+impl Drop for String{
+  func drop(self){
+    self.arr.drop();
   }
 }

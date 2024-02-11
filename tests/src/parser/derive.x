@@ -1,4 +1,5 @@
 import parser/ast
+import std/libc
 
 func make_info(decl: Decl*): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());

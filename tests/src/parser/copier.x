@@ -1,6 +1,7 @@
 import parser/ast
 import parser/printer
 import std/map
+import std/libc
 
 struct AstCopier{
     map: Map<String, Type>*;
@@ -96,9 +97,9 @@ impl AstCopier{
         }
         let smp = type.as_simple();
         if(self.map.contains(&smp.name)){
-            return *self.map.get_ptr(&smp.name).unwrap();
+            return self.map.get_ptr(&smp.name).unwrap().clone();
         }
-        let res = Simple::new(smp.name);
+        let res = Simple::new(smp.name.clone());
         if (smp.scope.is_some()) {
             res.scope = Ptr::new(self.visit(smp.scope.get()));
         }
@@ -125,7 +126,13 @@ impl AstCopier{
         if let Parent::Trait(ty*) = (p){
           return Parent::Trait{self.visit(ty)};
         }
-        return *p;
+        if(p is Parent::None){
+            return Parent::None;
+        }
+        if(p is Parent::Extern){
+            return Parent::Extern;
+        }
+        panic("parent clone");
     }
 
     func visit(self, m: Method*): Method{

@@ -408,6 +408,90 @@ FieldAccess *makeFa(const std::string &name) {
     fa->name = name;
     return fa;
 }
+//fd.drop();
+std::unique_ptr<Statement> newDrop(FieldDecl &fd, Unit *unit) {
+    auto mc = new MethodCall;
+    mc->line = ++unit->lastLine;
+    mc->scope.reset(new SimpleName(fd.name));
+    mc->name = "drop";
+    auto res = std::make_unique<ExprStmt>(mc);
+    res->line = unit->lastLine;
+    return res;
+}
+//scope.fd.drop();
+std::unique_ptr<Statement> newDrop(const std::string &scope, FieldDecl &fd, Unit *unit) {
+    auto mc = new MethodCall;
+    mc->line = ++unit->lastLine;
+    auto fa = new FieldAccess;
+    fa->line = mc->line;
+    fa->scope = new SimpleName(scope);
+    fa->name = fd.name;
+    mc->scope.reset(fa);
+    mc->name = "drop";
+    auto res = std::make_unique<ExprStmt>(mc);
+    res->line = unit->lastLine;
+    return res;
+}
+
+std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
+    int line = unit->lastLine;
+    Method m(unit.get());
+    m.name = "drop";
+    Param s("self", clone(bd->type).toPtr());
+    m.self = std::move(s);
+    m.type = Type("void");
+    auto bl = new Block;
+    m.body.reset(bl);
+
+
+    if (bd->isEnum()) {
+        auto ed = (EnumDecl *) bd;
+        for (int i = 0; i < ed->variants.size(); i++) {
+            auto &ev = ed->variants[i];
+            auto ifs = std::make_unique<IfLetStmt>();
+            ifs->line = line;
+            ifs->type = (Type(clone(bd->type), ev.name));
+            for (auto &fd : ev.fields) {
+                //todo make this ptr
+                ifs->args.push_back(ArgBind(fd.name, true));
+            }
+            ifs->rhs.reset(new SimpleName("self"));
+            auto then = new Block;
+            ifs->thenStmt.reset(then);
+            int j = 0;
+            for (auto &fd : ev.fields) {
+                if (fd.type.isPointer()) continue;//borrowed, no drop
+                //fd.drop();
+                then->list.push_back(newDrop(fd, unit.get()));
+            }
+
+            bl->list.push_back(std::move(ifs));
+        }
+    } else {
+        auto sd = (StructDecl *) bd;
+        for (auto &fd : sd->fields) {
+            if (fd.type.isPointer()) continue;//borrowed, no drop
+            //self.fd.drop();
+            bl->list.push_back(newDrop("self", fd, unit.get()));
+        }
+    }
+
+    auto imp = std::make_unique<Impl>(bd->type);
+    imp->trait_name = Type("Drop");
+    imp->type_params = bd->type.typeArgs;
+    m.parent = imp.get();
+    imp->methods.push_back(std::move(m));
+    auto tr = resolve(Type("Drop")).trait;
+    for (auto &mm : tr->methods) {
+        if (mm.body) {
+            AstCopier copier;
+            auto m2 = std::any_cast<Method *>(mm.accept(&copier));
+            imp->methods.push_back(std::move(*m2));
+        }
+    }
+    print(imp->print() + "\n");
+    return imp;
+}
 
 std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
     int line = unit->lastLine;
@@ -429,7 +513,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
             ifs->type = (Type(clone(bd->type), ev.name));
             for (auto &fd : ev.fields) {
                 //todo make this ptr
-                ifs->args.push_back(ArgBind(fd.name));
+                ifs->args.push_back(ArgBind(fd.name, true));
             }
             ifs->rhs.reset(new SimpleName("self"));
             auto then = new Block;
@@ -502,10 +586,16 @@ void Resolver::init() {
             res.unit = unit.get();
             res.targetDecl = bd;
             addType(bd->getName(), res);
-            if (!bd->derives.empty()) {
-                newItems.push_back(derive(bd));
-                init_impl(newItems.back().get(), this);
+            for (auto &der : bd->derives) {
+                if (der.print() == "Drop") {
+                    newItems.push_back(derive_drop(bd));
+                    init_impl(newItems.back().get(), this);
+                } else if (der.print() == "Debug") {
+                    newItems.push_back(derive(bd));
+                    init_impl(newItems.back().get(), this);
+                }
             }
+
         } else if (item->isTrait()) {
             auto tr = (Trait *) item.get();
             auto res = makeSimple(tr->type.name);
@@ -634,6 +724,10 @@ std::vector<Method> &Resolver::get_trait_methods(const Type &type) {
 std::string mangle2(Method &m, const Type &parent) {
     std::string s = m.name;
     std::map<std::string, Type> map = {{"Self", parent}};
+    if (m.self.has_value()) {
+        s += "_";
+        s += parent.print() + "*";
+    }
     for (auto &p : m.params) {
         s += "_";
         auto ty = Generator::make(p.type.value(), map);
@@ -1040,6 +1134,7 @@ void does_alloc(Expression *e, Resolver *r) {
 }
 
 bool has_pointer(const Type &ty, Resolver *r) {
+    if (ty.isPointer()) return false;
     auto rt = r->resolve(ty);
     if (rt.targetDecl == nullptr) return false;
     auto bd = rt.targetDecl;
@@ -1085,6 +1180,16 @@ RType visit_deref(DerefExpr *node, Resolver *r, bool check) {
     return res;
 }
 
+bool is_var(Expression *e) {
+    auto sn = dynamic_cast<SimpleName *>(e);
+    if (sn) return true;
+    auto fa = dynamic_cast<FieldAccess *>(e);
+    if (fa) return is_var(fa->scope);
+    /*auto de = dynamic_cast<DerefExpr *>(e);
+    if (de) return is_var(de->expr.get());*/
+    return false;
+}
+
 std::any Resolver::visitAssign(Assign *node) {
     RType t1;
     auto de = dynamic_cast<DerefExpr *>(node->left);
@@ -1097,8 +1202,8 @@ std::any Resolver::visitAssign(Assign *node) {
     if (MethodResolver::isCompatible(t2, t1.type)) {
         err(node, "cannot assign");
     }
-    if (has_pointer(t1.type, this)) {
-        err(node, "destroy left");
+    if (has_pointer(t1.type, this) && is_var(node->left)) {
+        //err(node, "destroy left");
     }
     return t1;
 }
@@ -1619,6 +1724,13 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             mc->typeArgs[0].accept(this);
         }
         return RType(Type("i64"));
+    }
+    if (is_std_is_ptr(mc)) {
+        if (mc->typeArgs.size() != 1) {
+            err(mc, "std::is_ptr requires one type argument");
+        }
+        mc->typeArgs[0].accept(this);
+        return RType(Type("bool"));
     }
     if (is_ptr_get(mc)) {
         if (mc->args.size() != 2) {

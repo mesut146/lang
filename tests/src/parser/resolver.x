@@ -9,6 +9,7 @@ import parser/token
 import parser/copier
 import parser/derive
 import std/map
+import std/libc
 
 
 struct Context{
@@ -55,6 +56,13 @@ struct RType{
   value: Option<String>;
   targetDecl: Option<Decl*>;
   vh: Option<VarHolder*>;
+}
+
+impl Drop for RType{
+  func drop(self){
+      self.type.drop();
+      self.value.drop();
+  }
 }
 
 enum TypeKind{
@@ -146,6 +154,11 @@ func mangle2(m: Method*, type: Type*): String{
   let s = String::new();
   s.append(&m.name);
   s.append("(");
+  if(m.self.is_some()){
+    s.append("_");
+    s.append(type.print().str());
+    s.append("*");
+  }
   let map = Map<String, Type>::new();
   map.add("Self".str(), type.clone());
   let copier = AstCopier::new(&map);
@@ -232,8 +245,10 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
+    Fmt::str(unit);
+    //print("unit=%s\n", Fmt::str(unit).cstr());
     let map = Map<String, RType>::new();
-    let res = Resolver{unit: *unit, is_resolved: false, is_init: false, typeMap: map,
+    let res = Resolver{unit: parser.unit, is_resolved: false, is_init: false, typeMap: map,
       cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
@@ -1153,6 +1168,9 @@ impl Resolver{
   func std_size(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("size");
   }
+  func std_is_ptr(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("is_ptr");
+  }
 
   func visit(self, node: Expr*, call: Call*): RType{
     if(std_size(call)){
@@ -1162,6 +1180,10 @@ impl Resolver{
         self.visit(call.type_args.get_ptr(0));
       }
       return RType::new("i64");
+    }
+    if(std_is_ptr(call)){
+      self.visit(call.type_args.get_ptr(0));
+      return RType::new("bool");
     }
     if(is_ptr_get(call)){
       if (call.args.len() != 2) {

@@ -39,7 +39,7 @@ impl<T> List<T>{
     for(let i = 0;i < self.count;++i){
       *ptr::get(tmp, i) = *ptr::get(self.ptr, i);
     }
-    //free(self.ptr as u8*);
+    free(self.ptr as i8*);
     self.ptr = tmp;
     self.cap = self.cap * 2;
   }
@@ -197,5 +197,11 @@ impl<T> Clone for List<T>{
     let res = List<T>::new(self.cap);
     res.add(self);
     return res;
+  }
+}
+
+impl<T> Drop for List<T>{
+  func drop(self){
+    free(self.ptr as i8*);
   }
 }

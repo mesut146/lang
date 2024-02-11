@@ -1,3 +1,5 @@
+import std/libc
+
 struct Box<T>{
     val: T*;
 }
@@ -32,6 +34,12 @@ impl<T> Clone for Box<T>{
   }
 }
 
+impl<T> Drop for Box<T>{
+  func drop(self){
+    free(self.val as i8*);
+  }
+}
+
 struct Ptr<T>{
   val: Option<Box<T>>;
 }
@@ -54,5 +62,11 @@ impl<T> Ptr<T>{
   }
   func unwrap(self): T{
     return self.val.unwrap().unwrap();
+  }
+}
+
+impl<T> Drop for Ptr<T>{
+  func drop(self){
+    self.val.drop();
   }
 }

@@ -66,6 +66,20 @@ impl Debug for Item{
   }
 }
 
+impl Debug for Global{
+  func debug(self, f: Fmt*){
+    f.print("static ");
+    f.print(self.name.str());
+    if(self.type.is_some()){
+      f.print(": ");
+      self.type.get().debug(f);
+    }
+    f.print(" = ");
+    self.expr.debug(f);
+    f.print(";");
+  }
+}
+
 impl Debug for Impl{
   func debug(self, f: Fmt*){
     self.info.debug(f);

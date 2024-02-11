@@ -6,6 +6,7 @@ import parser/resolver
 import parser/utils
 import parser/debug_helper
 import std/map
+import std/libc
 
 struct AllocHelper{
   c: Compiler*;

@@ -588,6 +588,7 @@ struct ArgBind {
     bool ptr = false;
 
     explicit ArgBind(const std::string &name) : name(name) {}
+    explicit ArgBind(const std::string &name, bool ptr) : name(name), ptr(ptr) {}
 
     std::string print() const {
         if (ptr) {

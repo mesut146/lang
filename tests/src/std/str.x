@@ -1,5 +1,6 @@
 //import std/String
 //import std/List
+import std/libc
 
 struct str{
   buf: [u8];
@@ -25,11 +26,17 @@ impl str{
     }
 
     func new(buf: [u8]): str{
-        return str{buf: buf};
+        let res = str{buf: buf};
+        res.check_all();
+        return res;
     }
 
     func get(self, i: i32): u8{
       return self.buf[i];
+    }
+
+    func check(self, pos: i32){
+      if(pos < 0 || pos >= self.len()) panic("str::check %s of idx %d", self.cstr(), pos);
     }
 
     func starts_with(self, s: str): bool{
@@ -37,21 +44,49 @@ impl str{
     }
     
     func ends_with(self, s: str): bool{
+      if(s.len() > self.len()) return false;
       let pos = self.len() - s.len();
       return self.indexOf(s, pos) == pos;
-    }    
+    }
+
+    func is_valid(c: i8){
+      if(c == 0) return;
+      if(c >= '0' && c <= '9') return;
+      if(c >= 'a' && c <= 'z') return;
+      if(c >= 'A' && c <= 'Z') return;
+      let arr = ['"', '\'', '\n','\r','\t', ' ', '{', '}', '(',')','=','*','+','-','/',':',';','!','%',',','.','^','$','&','|','[',']','?','\\','_','<','>','~','#'];
+      for(let i=0;i<arr.len();++i){
+        if(arr[i] == c) return;
+      }
+      print("valid (%d)='%c'\n", c, c);
+      panic("");
+    }
+
+    func check_all(self){
+      for(let i=0;i<self.len();++i){
+        is_valid(self.buf[i]);
+      }
+    }
 
     func indexOf(self, s: str, off: i32): i32{
+      if(off < 0) panic("indexof off=%d", off);
+      //if(off == self.len()) return -1;
+      //self.check(off);
       let i = off;
       while (i < self.len()){
         //check first char
+        is_valid(self.buf[i]);
+        is_valid(s.buf[0]);
+        //print("iof %c(%d) %c(%d)\n", self.buf[i], self.buf[i], s.buf[0], s.buf[0]);
         if(self.buf[i] != s.buf[0]){
           ++i;
           continue;
         }
         //check rest
         let found = true;
-        for(let j = 1;j < s.len();++j){
+        for(let j = 1;j < s.len() && (i + j) < self.len();++j){
+          is_valid(self.buf[i + j]);
+          is_valid(s.buf[j]);
           if(self.buf[i + j] != s.buf[j]){
             found = false;
             break;
@@ -64,6 +99,7 @@ impl str{
     }
 
     func lastIndexOf(self, s: str): i32{
+      //todo optimize
       let i = self.indexOf(s, 0);
       if(i == -1){
         return -1;

@@ -3,6 +3,7 @@ import parser/token
 import parser/ast
 import parser/printer
 import std/map
+import std/libc
 
 class Parser{
   lexer: Lexer*;
@@ -16,7 +17,7 @@ class Parser{
 impl Parser{
   
   func new(l: Lexer*): Parser{
-    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path)};
+    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path.str())};
     res.fill();
     return res;
   }
@@ -112,10 +113,10 @@ impl Parser{
         }else if(self.is(TokenType::STATIC)){
         	self.pop();
             let name = self.name();
-            let type=Option<Type>::None;
+            let type = Option<Type>::None;
             if(self.is(TokenType::COLON)){
               self.pop();
-              type=Option::new(self.parse_type());
+              type = Option::new(self.parse_type());
             }
             self.consume(TokenType::EQ);
             let rhs = self.parse_expr();
@@ -336,12 +337,15 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
+          res.drop();
           res = Type::Array{bx,  i32::parse(size.value.str())};
         }else{
           self.consume(TokenType::RBRACKET);
+          res.drop();
           res = Type::Slice{Box::new(type)};
         }
       }else{
+        res.drop();
         res = self.gen_part();
         while(self.is(TokenType::COLON2)){
           self.pop();

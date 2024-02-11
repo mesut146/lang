@@ -106,3 +106,8 @@ impl<K, V> Map<K, V>{
   }
 }
 
+impl<K,V> Drop for Map<K,V>{
+  func drop(self){
+    self.arr.drop();
+  }
+}

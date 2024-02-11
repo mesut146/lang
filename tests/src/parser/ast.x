@@ -1,4 +1,5 @@
 import std/map
+import std/libc
 import parser/copier
 import parser/printer
 
@@ -31,6 +32,7 @@ impl Node{
   }
 }
 
+//#derive(Drop)
 struct Unit{
   path: String;
   last_line: i32;
@@ -40,11 +42,23 @@ struct Unit{
   last_id: i32;
 }
 impl Unit{
-  func new(path: String): Unit{
-    return Unit{path: path.clone(), last_line: 0,
+  func new(path: str): Unit{
+    return Unit{path: path.str(), last_line: 0,
                 imports: List<ImportStmt>::new(),
                 items: List<Item>::new(),
                 globals: List<Global>::new(), last_id: -1};
+  }
+}
+
+impl Drop for Unit{
+  func drop(self: Unit*){
+      self.path.drop();
+      self.last_line.drop();
+      self.imports.drop();
+      self.items.drop();
+      self.globals.drop();
+      self.last_id.drop();
+  
   }
 }
 
@@ -333,6 +347,25 @@ impl Type{
     return copier.visit(self);
   }
 
+}
+
+impl Drop for Type{
+  func drop(self){
+    if let Type::Pointer(bx*) = (self){
+      bx.drop();
+    }
+    else if let Type::Array(bx*, sz) = (self){
+      bx.drop();
+    }
+    else if let Type::Slice(bx*) = (self){
+      bx.drop();
+    }
+    else if let Type::Simple(smp*) = (self){
+      smp.scope.drop();
+      smp.args.drop();
+      smp.name.drop();
+    }
+  }
 }
 
 struct ArgBind: Node{

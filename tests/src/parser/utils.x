@@ -1,5 +1,6 @@
 import parser/ast
 import std/map
+import std/libc
 
 func SLICE_PTR_INDEX(): i32{ return 0; }
 func SLICE_LEN_INDEX(): i32{ return 1; }

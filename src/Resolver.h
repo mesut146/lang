@@ -137,9 +137,9 @@ static std::string printMethod(const Method *m) {
 
 static std::string mangleType(const Type &type) {
     auto s = type.print();
-    s = std::regex_replace(s, std::regex("\\*"), "P");
+    /*s = std::regex_replace(s, std::regex("\\*"), "P");
     s = std::regex_replace(s, std::regex("<"), "$LT");
-    s = std::regex_replace(s, std::regex(">"), "$GT");
+    s = std::regex_replace(s, std::regex(">"), "$GT");*/
     return s;
 }
 
@@ -297,6 +297,7 @@ public:
     Type inferStruct(ObjExpr *node, bool hasNamed, const std::vector<Type> &typeArgs, std::vector<FieldDecl> &fields, const Type &type);
     std::vector<Method> &get_trait_methods(const Type &type);
     std::unique_ptr<Impl> derive(BaseDecl *bd);
+    std::unique_ptr<Impl> derive_drop(BaseDecl *bd);
     std::vector<ImportStmt> get_imports();
 
     void newScope();
@@ -368,6 +369,9 @@ public:
 
     static bool is_std_size(MethodCall *mc) {
         return mc->scope && mc->scope->print() == "std" && mc->name == "size";
+    }
+    static bool is_std_is_ptr(MethodCall *mc) {
+        return mc->scope && mc->scope->print() == "std" && mc->name == "is_ptr";
     }
 
     std::any visitLiteral(Literal *lit) override;

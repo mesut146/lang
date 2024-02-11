@@ -5,6 +5,7 @@ import parser/compiler
 import parser/debug_helper
 import parser/utils
 import std/map
+import std/libc
 
 func make_slice_type(): StructType*{
     let elems = make_vec();

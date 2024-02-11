@@ -4,6 +4,7 @@ import parser/printer
 import parser/utils
 import parser/copier
 import std/map
+import std/libc
 
 struct Signature{
     mc: Option<Call*>;
@@ -13,6 +14,15 @@ struct Signature{
     scope: Option<RType>;
     ret: Type;
     r: Option<Resolver*>;
+}
+
+impl Drop for Signature{
+    func drop(self){
+        self.name.drop();
+        self.args.drop();
+        self.scope.drop();
+        self.ret.drop();
+    }
 }
 
 enum SigResult{

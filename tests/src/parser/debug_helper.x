@@ -5,6 +5,7 @@ import parser/compiler_helper
 import parser/resolver
 import parser/utils
 import std/map
+import std/libc
 
 struct DebugInfo{
     cu: DICompileUnit*;

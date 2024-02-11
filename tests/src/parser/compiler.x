@@ -226,6 +226,7 @@ impl Compiler{
     }
     self.resolver.resolve_all();
     if(true){
+      //r.unit.drop();
       return outFile;
     }
     self.llvm.initModule(path0);
@@ -946,6 +947,13 @@ impl Compiler{
         let sz = self.getSize(ty);
         return makeInt(sz, 32);
       }
+    }    
+    if(Resolver::std_is_ptr(mc)){
+      let ty = mc.type_args.get_ptr(0);
+      if(ty.is_pointer()){
+        return getTrue();
+      }
+      return getFalse();
     }
     if(mc.name.eq("print") && mc.scope.is_none()){
       return self.visit_print(mc);

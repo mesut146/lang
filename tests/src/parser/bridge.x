@@ -164,17 +164,8 @@ extern{
 }
 
 func getDefaultTargetTriple2(): String{
-    let arr = [0i8; 100];
+    let arr = [0u8; 100];
     let ptr = arr.ptr();
-    let len = getDefaultTargetTriple(ptr);
+    let len = getDefaultTargetTriple(ptr as i8*);
     return String::new(arr[0..len]);
-}
-
-
-func bridge_test(){
-    let arr = [0i8; 100];
-    let ptr = arr.ptr();
-    let len = getDefaultTargetTriple(ptr);
-    let str = String::new(arr[0..len]);
-    print("target=%s\n", ptr);
 }

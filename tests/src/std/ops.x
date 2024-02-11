@@ -1,3 +1,5 @@
+import std/libc
+
 trait Eq{
   func eq(self, x: Self*): bool;
 }
@@ -166,3 +168,24 @@ impl Hash for str{
     return x;
   }
 }
+
+trait Drop{
+  func drop(self);
+}
+
+impl Drop for i32{
+  func drop(self){
+    
+  }
+}
+impl Drop for i64{
+  func drop(self){
+    
+  }
+}
+impl Drop for str{
+  func drop(self){
+    
+  }
+}
+

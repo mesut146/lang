@@ -30,7 +30,7 @@ impl i8{
 
 impl Lexer{
   func new(path: String): Lexer{
-    let s = String::new(read_bytes(path.str()));
+    let s = read_string(path.str());
     return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
   }
   
@@ -65,7 +65,7 @@ impl Lexer{
     self.pos += 2;
     let c = self.peek();
     while (c != '\n' && c != '\0') {
-        self.pos+=1;
+        self.pos += 1;
         c = self.peek();
     }
     return Token::new(TokenType::COMMENT, self.str(start, self.pos));
@@ -283,7 +283,7 @@ impl Lexer{
             if (c == '\\') {
                 //s.append("\\");
                 s.append(checkEscape(self.peek()) as i8);
-                self.pos+=1;
+                self.pos += 1;
             } else if (c == open) {
                 s.append(c);
                 return Token::new(type, s);

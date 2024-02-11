@@ -56,3 +56,12 @@ impl<T> Option<T>{
   }
 }
 
+
+impl<T> Drop for Option<T>{
+  func drop(self){
+    if(std::is_ptr<T>()) return;
+    if let Option<T>::Some(val*)=(self){
+      val.drop();
+    }
+  }
+}
