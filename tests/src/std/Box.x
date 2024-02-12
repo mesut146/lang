@@ -1,5 +1,6 @@
 import std/libc
 
+#drop
 struct Box<T>{
     val: T*;
 }
@@ -36,6 +37,7 @@ impl<T> Clone for Box<T>{
 
 impl<T> Drop for Box<T>{
   func drop(self){
+    print("drop box\n");
     free(self.val as i8*);
   }
 }
@@ -67,6 +69,7 @@ impl<T> Ptr<T>{
 
 impl<T> Drop for Ptr<T>{
   func drop(self){
+    print("drop Ptr<T>\n");
     self.val.drop();
   }
 }

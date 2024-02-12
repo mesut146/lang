@@ -214,9 +214,9 @@ impl Compiler{
     if(self.config.verbose){
       print("compiling %s\n", path0.cstr());
     }
-    let r = Resolver::new(path0.str(), &self.ctx);
-    self.resolver = &r;
-    //self.resolver = self.ctx.create_resolver(path0);
+    //let r = Resolver::new(path0.str(), &self.ctx);
+    //self.resolver = &r;
+    self.resolver = self.ctx.create_resolver(path0);
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.str());
       if (!self.config.single_mode) {//compile last
@@ -270,11 +270,9 @@ impl Compiler{
     let p = self.protos.get();
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
-    for (let i=0;i<self.resolver.used_types.len();++i) {
+    for (let i = 0;i < self.resolver.used_types.len();++i) {
       let decl = self.resolver.used_types.get(i);
-      if (decl.is_generic) {
-          continue;
-      }
+      if (decl.is_generic) continue;
       list.add(decl);
     }
     sort(&list, self.resolver);
@@ -307,12 +305,12 @@ impl Compiler{
       self.make_proto(m);
     }
     //generic methods from resolver
-    for (let i=0;i<self.resolver.generated_methods.len();++i) {
+    for (let i = 0;i < self.resolver.generated_methods.len();++i) {
         let m = self.resolver.generated_methods.get_ptr(i);
         self.make_proto(m);
     }
-    for (let i=0;i<self.resolver.used_methods.len();++i) {
-        let m=self.resolver.used_methods.get(i);
+    for (let i = 0;i < self.resolver.used_methods.len();++i) {
+        let m = self.resolver.used_methods.get(i);
         self.make_proto(m);
     }
   }

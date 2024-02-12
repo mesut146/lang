@@ -623,6 +623,7 @@ void Compiler::createProtos() {
     for (auto bd : getTypes(unit.get())) {
         if (bd->isGeneric) continue;
         list.push_back(bd);
+        //print("local "+bd->type.print());
     }
     for (auto bd : resolv->usedTypes) {
         if (bd->isGeneric) {
@@ -630,6 +631,7 @@ void Compiler::createProtos() {
             continue;
         }
         list.push_back(bd);
+        //print("used "+bd->type.print());
     }
     sort(list, resolv.get());
     for (auto bd : list) {
@@ -823,6 +825,8 @@ void Compiler::genCode(Method *m) {
     resolv->curMethod = m;
     curMethod = m;
     auto id = mangle(m);
+    ownerMap.insert({id, Ownership{}});
+    curOwner = &ownerMap.at(id);
     func = funcMap[id];
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
@@ -1094,6 +1098,7 @@ std::any Compiler::visitAssign(Assign *node) {
         } else {
             setField(node->right, lt, l);
         }
+        curOwner->doMove(node->left, node->right);
         return l;
     }
     auto val = l;
@@ -1123,6 +1128,9 @@ std::any Compiler::visitAssign(Assign *node) {
 std::any Compiler::visitSimpleName(SimpleName *node) {
     if (globals.contains(node->name)) {
         return globals[node->name];
+    }
+    if(curOwner->isMoved(node->name)){
+        resolv->err(node, "use after move");
     }
     return NamedValues[node->name];
 }

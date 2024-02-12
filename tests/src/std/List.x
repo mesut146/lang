@@ -2,6 +2,7 @@ import std/it
 import std/ops
 import std/libc
 
+#drop
 struct List<T>{
   ptr: T*;
   count: i64;
@@ -202,6 +203,7 @@ impl<T> Clone for List<T>{
 
 impl<T> Drop for List<T>{
   func drop(self){
+    print("drop list\n");
     free(self.ptr as i8*);
   }
 }

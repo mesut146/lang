@@ -1,0 +1,23 @@
+generated_methods
+
+targetDecl: local type, generic
+
+
+#derive(Drop, Clone)
+#drop
+
+
+//use after move
+let v = get();
+let v2 = v; moves
+send(v) //moves
+return v; //moves
+print(v) //fails
+
+
+//prevent memcpy of drop
+
+
+return A{}
+
+return get()

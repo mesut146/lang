@@ -237,7 +237,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{.line, &self.unit, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
+      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
       return res;
     }
     
@@ -337,15 +337,15 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          res.drop();
+          //res.drop();
           res = Type::Array{bx,  i32::parse(size.value.str())};
         }else{
           self.consume(TokenType::RBRACKET);
-          res.drop();
+          //res.drop();
           res = Type::Slice{Box::new(type)};
         }
       }else{
-        res.drop();
+        //res.drop();
         res = self.gen_part();
         while(self.is(TokenType::COLON2)){
           self.pop();

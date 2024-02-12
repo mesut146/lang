@@ -843,6 +843,9 @@ std::any Resolver::visitMethod(Method *m) {
         err("main method's return type must be 'void' or 'i32'");
     }
     curMethod = m;
+    //ownerMap.insert({mangle(m), Ownership{}});
+    //curOwner = &ownerMap.at(mangle(m));
+
     //print("visitMethod "+ printMethod(m));
     if (m->isVirtual && !m->self) {
         err("virtual method must have self parameter");
@@ -875,6 +878,7 @@ std::any Resolver::visitMethod(Method *m) {
     }
     dropScope();
     curMethod = nullptr;
+    //curOwner = nullptr;
     //print("exiting visitMethod "+ printMethod(m));
     return res;
 }
@@ -920,6 +924,8 @@ BaseDecl *generateDecl(const Type &type, BaseDecl *decl) {
         auto res = new EnumDecl;
         res->unit = decl->unit;
         res->type = clone(type);
+        res->attr = decl->attr;
+        res->derives = decl->derives;
         auto ed = dynamic_cast<EnumDecl *>(decl);
         for (auto &ev : ed->variants) {
             EnumVariant ev2;
@@ -935,6 +941,8 @@ BaseDecl *generateDecl(const Type &type, BaseDecl *decl) {
         auto res = new StructDecl;
         res->unit = decl->unit;
         res->type = clone(type);
+        res->attr = decl->attr;
+        res->derives = decl->derives;
         auto td = dynamic_cast<StructDecl *>(decl);
         for (auto &field : td->fields) {
             auto ftype = Generator::make(field.type, map);
@@ -1038,10 +1046,9 @@ std::any Resolver::visitType(Type *type) {
                 if (cached != resolver->typeMap.end()) {
                     auto res = cached->second;
                     addType(str, res);
-                    if (res.targetDecl) {
-                        if (!res.targetDecl->isGeneric) {
-                            addUsed(res.targetDecl);
-                        }
+                    if (res.targetDecl && !res.targetDecl->isGeneric) {
+                        addUsed(res.targetDecl);
+
                     }//todo trait
                     return res;
                 }
@@ -1083,10 +1090,30 @@ std::any Resolver::visitType(Type *type) {
 }
 
 void Resolver::addUsed(BaseDecl *bd) {
+    if (bd->unit->path == unit->path) return;
     for (auto prev : usedTypes) {
         if (prev->type.print() == bd->type.print()) return;
     }
     usedTypes.push_back(bd);
+    auto sd = dynamic_cast<StructDecl *>(bd);
+    if (sd != nullptr) {
+        for (auto &fd : sd->fields) {
+            auto rt = resolve(fd.type);
+            if (rt.targetDecl != nullptr) {
+                addUsed(rt.targetDecl);
+            }
+        }
+    } else {
+        auto ed = dynamic_cast<EnumDecl *>(bd);
+        for (auto &ev : ed->variants) {
+            for (auto &fd : ev.fields) {
+                auto rt = resolve(fd.type);
+                if (rt.targetDecl != nullptr) {
+                    addUsed(rt.targetDecl);
+                }
+            }
+        }
+    }
 }
 
 SimpleName *find_base(Expression *e) {
@@ -1205,6 +1232,7 @@ std::any Resolver::visitAssign(Assign *node) {
     if (has_pointer(t1.type, this) && is_var(node->left)) {
         //err(node, "destroy left");
     }
+    //curOwner->doMove(node->left, node->right);
     return t1;
 }
 
@@ -1498,6 +1526,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
             //err(node, );
             err(node, "method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
+        //curOwner->doMoveReturn(node->expr.get());
     } else {
         if (!curMethod->type.isVoid()) {
             error("non-void method returns void");
@@ -1770,6 +1799,9 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         if (dynamic_cast<MethodCall *>(mc->scope.get()) && getType(mc->scope.get()).isPrim()) {
             err(mc, "method scope is rvalue");
         }
+        /*for (auto arg : mc->args) {
+            curOwner->doMoveCall(arg);
+        }*/
         MethodResolver mr(this);
         auto res = mr.handleCallResult(sig);
         return res;
@@ -1815,6 +1847,9 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         //unit->items.push_back(std::move(gm));
         return RType(Type("String"));
     }
+    /*for (auto arg : mc->args) {
+        curOwner->doMoveCall(arg);
+    }*/
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);
     //cache[id] = res;

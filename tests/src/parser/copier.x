@@ -136,10 +136,10 @@ impl AstCopier{
     }
 
     func visit(self, m: Method*): Method{
-        let type_args = List<Type>::new();
-        for(let i = 0;i < m.type_args.size();++i){
-            let ta = m.type_args.get_ptr(i);
-            type_args.add(self.visit(ta));
+        let type_params = List<Type>::new();
+        for(let i = 0;i < m.type_params.size();++i){
+            let ta = m.type_params.get_ptr(i);
+            type_params.add(self.visit(ta));
         }
         let selff = Option<Param>::new();
         if(m.self.is_some()){
@@ -148,8 +148,7 @@ impl AstCopier{
         let params = self.visit_list(&m.params);
         let id = self.node(m as Node*);
         return Method{.id,
-            unit: m.unit,
-            type_args: type_args,
+            type_params: type_params,
             name: m.name.clone(),
             self: selff,
             params: params,

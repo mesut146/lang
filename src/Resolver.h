@@ -2,6 +2,7 @@
 
 #include "AstCopier.h"
 #include "IdGen.h"
+#include "Ownership.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
 #include "parser/Util.h"

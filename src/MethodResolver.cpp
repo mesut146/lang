@@ -39,7 +39,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     if (mc->scope) {
         scp = r->resolve(mc->scope.get());
         //we need this to handle cases like Option::new(...)
-        if (scp.targetDecl && scp.targetDecl->unit->path != r->unit->path) {
+        if (scp.targetDecl && scp.targetDecl->unit->path != r->unit->path && !scp.targetDecl->isGeneric) {
             r->addUsed(scp.targetDecl);
         }
         if (scp.type.isPointer()) {
@@ -448,10 +448,10 @@ SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
         if (sig.scope->trait) {
             auto scp = sig.args[0].unwrap();
             if (scp.name != impl->type.name) {
-                return format("not same impl %s vs %s", scp.print().c_str(), impl->type.print().c_str());
+                return format("not same impl %s vs %s", scp.name.c_str(), impl->type.name.c_str());
             }
         } else if (scope.name != impl->type.name) {
-            return format("not same impl %s vs %s", scope.print().c_str(), impl->type.print().c_str());
+            return format("not same impl %s vs %s", scope.name.c_str(), impl->type.name.c_str());
         }
         if (impl->type_params.empty() && !impl->type.typeArgs.empty()) {
             //check they belong same impl

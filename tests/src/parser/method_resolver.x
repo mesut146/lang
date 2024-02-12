@@ -91,11 +91,7 @@ impl Signature{
         }
         return res;
     }
-    /*func find_parent(m: Method*): Impl*{
-        if(){
 
-        }
-    }*/
     func make_inferred(sig: Signature*, type: Type*): Map<String, Type>{
         let map = Map<String, Type>::new();
         if(!type.is_simple()) return map;
@@ -275,15 +271,16 @@ impl MethodResolver{
                   list.add(Signature::new(m, &map));
                 }else{
                   let typeMap = Map<String, Type>::new();
-                  for(let k=0;k<m.type_args.len();++k){
-                    let ta = m.type_args.get_ptr(k);
+                  for(let k = 0;k < m.type_params.len();++k){
+                    let ta = m.type_params.get_ptr(k);
                     typeMap.add(ta.name().clone(), scp_args.get_ptr(k).clone());
                   }
                   let sig2 = Signature::new(m, &map);
-                  for (let i2=0;i2<sig2.args.len();++i2) {
-                    let a = sig2.args.get_ptr(i2);
+                  for (let k = 0;k < sig2.args.len();++k) {
+                    let arg = sig2.args.get_ptr(k);
                     let ac = AstCopier::new(&typeMap);
-                    *a = ac.visit(a);
+                    let mapped = ac.visit(arg);
+                    sig2.args.set(k, mapped);
                   }
                   list.add(sig2);
                 }
@@ -419,16 +416,16 @@ impl MethodResolver{
         if(!mc.name.eq(&m.name)){
             return SigResult::Err{"not possible".str()};
         }
-        if(!m.type_args.empty()){
+        if(!m.type_params.empty()){
             let mc_targs = &mc.type_args;
-            if (!mc_targs.empty() && mc_targs.size() != m.type_args.size()) {
+            if (!mc_targs.empty() && mc_targs.size() != m.type_params.size()) {
                 return SigResult::Err{"type arg size mismatched".str()};
             }
             if (!m.is_generic) {
                 //check if args are compatible with generic type params
                 for (let i = 0; i < mc_targs.size(); ++i) {
                     let ta1 = mc_targs.get_ptr(i).print();
-                    let ta2 = m.type_args.get_ptr(i).print();
+                    let ta2 = m.type_params.get_ptr(i).print();
                     if (!ta1.eq(&ta2)) {
                         let err = Fmt::format("type arg {} not compatible with {}", ta1.str(), ta2.str());
                         return SigResult::Err{err};
@@ -715,6 +712,6 @@ func get_type_params(m: Method*): List<Type>{
     if let Parent::Impl(info*) = (m.parent){
         res = info.type_params;
     }
-    res.add(&m.type_args);
+    res.add(&m.type_params);
     return res;
 }

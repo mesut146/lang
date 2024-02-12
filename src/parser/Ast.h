@@ -44,10 +44,12 @@ public:
 
     virtual ~Node() = default;
 
-    template<class T>
-    static T *make() {
-        auto res = new T();
-        res->id = last_id++;
+    //Node(int id) : id(id) {}
+
+    template<typename T, typename... Args>
+    static T *make(Args&&... args) {
+        auto res = new T(std::forward<Args>(args)...);
+        res->id = ++last_id;
         return res;
     }
 };
@@ -186,8 +188,14 @@ struct BaseDecl : public Item {
     bool isGeneric = false;
     std::optional<Type> base;
     std::vector<Type> derives;
+    std::vector<std::string> attr;
 
-    //explicit BaseDecl(const Type &type) : type(type) {}
+    bool isDrop() {
+        for (auto &at : attr) {
+            if (at == "drop") return true;
+        }
+        return false;
+    }
     std::string &getName();
 };
 

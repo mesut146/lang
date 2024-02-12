@@ -106,7 +106,6 @@ impl ImplInfo{
 
 struct BaseDecl{
   line: i32;
-  //unit: Unit*;
   path: String;
   type: Type;
   is_resolved: bool;
@@ -173,8 +172,7 @@ impl Parent{
 }
 
 struct Method: Node{
-  unit: Unit*;
-  type_args: List<Type>;
+  type_params: List<Type>;
   name: String;
   self: Option<Param>;
   params: List<Param>;
@@ -192,8 +190,8 @@ struct Param: Node{
 }
 
 impl Method{
-  func new(node: Node, unit: Unit*, name: String, type: Type): Method{
-    return Method{.node, unit: unit, type_args: List<Type>::new(),
+  func new(node: Node, name: String, type: Type): Method{
+    return Method{.node, type_params: List<Type>::new(),
                  name: name, self: Option<Param>::None, params: List<Param>::new(),
                  type: type, body: Option<Block>::None, is_generic: false,
                  parent: Parent::None, path: String::new()};
@@ -342,11 +340,15 @@ impl Type{
   }
 
   func clone(self): Type{
-    let map = Map<String, Type>::new();
-    let copier = AstCopier::new(&map);
-    return copier.visit(self);
+    return clone(self);
   }
 
+}
+
+func clone<T>(node: T*): T{
+  let map = Map<String, Type>::new();
+  let copier = AstCopier::new(&map);
+  return copier.visit(node);
 }
 
 impl Drop for Type{

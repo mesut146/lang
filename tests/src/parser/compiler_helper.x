@@ -214,7 +214,7 @@ impl Compiler{
     }
     let ft = make_ft(ret, args, false);
     let linkage = ext();
-    if(!m.type_args.empty()){
+    if(!m.type_params.empty()){
       linkage = odr();
     }else if let Parent::Impl(info*)=(m.parent){
       if(info.type.is_simple() && !info.type.get_args().empty()){

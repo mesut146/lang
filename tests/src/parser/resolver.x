@@ -245,14 +245,15 @@ impl Resolver{
     let lexer = Lexer::new(path);
     let parser = Parser::new(&lexer);
     let unit = parser.parse_unit();
-    Fmt::str(unit);
-    //print("unit=%s\n", Fmt::str(unit).cstr());
+    let str = Fmt::str(unit);
+    //print("unit=%s\n", str.cstr());
     let map = Map<String, RType>::new();
     let res = Resolver{unit: parser.unit, is_resolved: false, is_init: false, typeMap: map,
       cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
-      used_methods: List<Method*>::new(), generated_methods: List<Method>::new(),
-      inLoop: 0, used_types: List<Decl*>::new(1000),
+      used_methods: List<Method*>::new(1000), generated_methods: List<Method>::new(1000),
+      inLoop: 0,
+      used_types: List<Decl*>::new(1000),
       generated_decl: List<Decl>::new(1000)};
     return res;
   }
@@ -314,7 +315,7 @@ impl Resolver{
             imports.add(*is);
         }
     }
-    if (self.curMethod.is_some() && !self.curMethod.unwrap().type_args.empty()) {
+    if (self.curMethod.is_some() && !self.curMethod.unwrap().type_params.empty()) {
         let tmp = self.get_unit(&self.curMethod.unwrap().path).imports;
         for (let i = 0;i < tmp.len();++i) {
             let is = tmp.get_ptr(i);
@@ -397,7 +398,7 @@ impl Resolver{
       //Fmt::str(it).dump();
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type);
-        res.targetDecl=Option::new(decl);
+        res.targetDecl = Option::new(decl);
         self.addType(decl.type.name().clone(), res);
         //todo derive
         if(!decl.derives.empty()){
@@ -552,7 +553,7 @@ impl Resolver{
       }
       for(let i = 0;i < imp.methods.len();++i){
         let m = imp.methods.get_ptr(i);
-        if(!m.type_args.empty()) continue;
+        if(!m.type_params.empty()) continue;
         self.visit(m);
         let mangled = mangle2(m, &imp.info.type);
         //print("impl %s\n", mangled.cstr());
@@ -578,7 +579,7 @@ impl Resolver{
     }else{
       for(let i = 0;i < imp.methods.len();++i){
         let m = imp.methods.get_ptr(i);
-        if(!m.type_args.empty()) continue;
+        if(!m.type_params.empty()) continue;
         self.visit(m);
       }
     }
@@ -675,13 +676,13 @@ impl Resolver{
     let id = Node::new(-1);
     let expr = Expr::Type{.id, *node};
     let str = node.print();
-    let cached = self.typeMap.get_p(&str);
+    let cached = self.typeMap.get_ptr(&str);
     if(cached.is_some()){
-      return cached.unwrap();
+      return cached.unwrap().clone();
     }
     if(node.is_prim() || node.is_void()){
       let res = RType::new(str.str());
-      self.addType(str, res);
+      self.addType(str, res.clone());
       return res;
     }
     if(node.is_pointer()){
@@ -716,7 +717,7 @@ impl Resolver{
       findVariant(decl, &simple.name);
       let ds = decl.type.print();
       let res = self.getTypeCached(&ds);
-      self.addType(str, res);
+      self.addType(str, res.clone());
       return res;
     }
     let target0 = Option<Decl*>::None;
@@ -760,15 +761,12 @@ impl Resolver{
         //inferred later
         let res = RType::new(target.type);
         res.targetDecl = Option::new(target);
-        self.addType(str, res);
+        self.addType(str, res.clone());
         return res;
     }
     if (node.get_args().len() != target.type.get_args().len()) {
       self.err(&expr, "type arguments size not matched");
     }
-    /*if(target.is_generic){
-
-    }*/
     //print("target %s\n", Fmt::str(target).cstr());
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
@@ -785,7 +783,7 @@ impl Resolver{
     }
     let res = RType::new(smp.into());
     res.targetDecl = Option::new(decl);
-    self.addType(str, res);
+    self.addType(str, res.clone());
     return res;
   }
 
@@ -1401,7 +1399,7 @@ impl Resolver{
     }
     //print("visit %d, %s\n", node.id, node.print().cstr());
     let res = self.visit_nc(node);
-    self.cache.add(node.id, res);
+    self.cache.add(node.id, res.clone());
     return res.clone();
   }
   

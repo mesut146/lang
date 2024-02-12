@@ -55,18 +55,23 @@ void sort(std::vector<BaseDecl *> &list, Resolver *r) {
     //     std::cout << decl->type.print() << ", ";
     // }
     // std::cout << std::endl;
-    for (int i = 0; i < list.size(); i++) {
-        //find min that belongs to i'th index
-        auto min = list[i];
-        for (int j = i + 1; j < list.size(); j++) {
-            auto &cur = list[j];
-            if (r->isCyclic(min->type, cur)) {
-                //print("swap " + min->type.print() + " and " + cur->type.print());
-                min = cur;
-                std::swap(list[i], list[j]);
+    bool swapped = false;
+    do {
+        swapped = false;
+        for (int i = 0; i < list.size(); i++) {
+            //find min that belongs to i'th index
+            auto min = list[i];
+            for (int j = i + 1; j < list.size(); j++) {
+                auto &cur = list[j];
+                if (r->isCyclic(min->type, cur)) {
+                    //print("swap " + min->type.print() + " and " + cur->type.print());
+                    min = cur;
+                    std::swap(list[i], list[j]);
+                    swapped = true;
+                }
             }
         }
-    }
+    } while (swapped);
 }
 
 std::vector<Method *> getMethods(Unit *unit) {
@@ -458,8 +463,8 @@ public:
         auto ptr = alloc(ty, node);
         for (auto &e : node->entries) {
             if (!e.isBase) child(e.value);
-            else{
-                child(e.value);                
+            else {
+                child(e.value);
             }
         }
         return ptr;

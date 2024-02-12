@@ -7,6 +7,7 @@
 
 
 #include "Resolver.h"
+#include "Ownership.h"
 #include "Visitor.h"
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
@@ -73,6 +74,8 @@ public:
     std::shared_ptr<Unit> unit;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
+    std::map<std::string, Ownership> ownerMap;
+    Ownership *curOwner = nullptr;
     std::optional<std::string> main_file;
     bool single_mode = true;
     std::map<std::string, llvm::Value *> globals;
@@ -249,8 +252,8 @@ public:
 
     llvm::DIType *map_di(const Type &t) { return map_di(&t); }
     llvm::DIType *map_di0(const Type *t);
-    llvm::DIType *map_di_proto(BaseDecl* decl);
-    llvm::DIType *map_di_fill(BaseDecl* decl);
+    llvm::DIType *map_di_proto(BaseDecl *decl);
+    llvm::DIType *map_di_fill(BaseDecl *decl);
     llvm::DIType *map_di(const Type *t) {
         auto str = t->print();
         if (di.types.contains(str)) {

@@ -4,6 +4,12 @@
 #include "Parser.h"
 #include "Util.h"
 
+template<class T>
+T loc(T t, int line) {
+    t->line = line;
+    t->id = ++Node::last_id;
+    return t;
+}
 
 std::vector<Expression *> Parser::exprList() {
     std::vector<Expression *> res;
@@ -49,7 +55,7 @@ Literal *parseLit(Parser *p) {
             break;
         }
     }
-    return res;
+    return loc(res, t.line);
 }
 
 int isTypeArg(Parser *p, int pos) {
@@ -174,7 +180,7 @@ bool isObj(Parser *p) {
 }
 
 Expression *makeObj(Parser *p, bool isPointer, const Type &type) {
-    auto res = new ObjExpr;
+    auto res = Node::make<ObjExpr>();
     res->isPointer = isPointer;
     res->type = type;
     p->consume(LBRACE);
@@ -200,7 +206,7 @@ Expression *makeAlloc(Parser *p) {
 }
 
 MethodCall *parseCall(Parser *p, const std::string &name) {
-    auto res = Expression::make<MethodCall>();
+    auto res = Node::make<MethodCall>();
     res->name = name;
     if (p->is(LT)) {
         res->typeArgs = p->generics();
@@ -211,12 +217,6 @@ MethodCall *parseCall(Parser *p, const std::string &name) {
     }
     p->consume(RPAREN);
     return res;
-}
-
-template<class T>
-T loc(T t, int line) {
-    t->line = line;
-    return t;
 }
 
 _GLIBCXX_NORETURN
@@ -329,9 +329,9 @@ Expression *PRIM(Parser *p) {
 
 //PRIM ('.' name ('(' args? ')')? | [ E ])*
 Expression *PRIM2(Parser *p) {
-    int line = p->first()->line;
     Expression *lhs = PRIM(p);
     while (p->is({DOT, LBRACKET}) || p->is({QUES}, {DOT, LBRACKET})) {
+        int line = p->first()->line;
         bool isOptional = false;
         if (p->is({QUES}, {DOT, LBRACKET})) {
             p->consume(QUES);
@@ -339,11 +339,9 @@ Expression *PRIM2(Parser *p) {
         }
         if (p->is(DOT)) {
             p->consume(DOT);
-            int line = p->first()->line;
             auto name = p->name();
             if (p->is(LPAREN) || isTypeArg(p, p->pos) != -1) {
-                auto res = Expression::make<MethodCall>();
-                res->line = line;
+                auto res = new MethodCall;
                 res->is_static = false;
                 res->scope.reset(lhs);
                 res->name = name;
@@ -355,14 +353,13 @@ Expression *PRIM2(Parser *p) {
                     res->args = p->exprList();
                 }
                 p->consume(RPAREN);
-                lhs = res;
+                lhs = loc(res, line);
             } else {
                 auto res = new FieldAccess;
                 res->isOptional = isOptional;
                 res->scope = lhs;
                 res->name = name;
-                res->line = lhs->line;
-                lhs = res;
+                lhs = loc(res, lhs->line);
             }
         } else {
             auto res = new ArrayAccess;

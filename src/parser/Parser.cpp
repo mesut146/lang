@@ -1,6 +1,7 @@
 #include "Parser.h"
 #include "TypeUtils.h"
 #include "Util.h"
+#include <algorithm>
 
 std::string Parser::strLit() {
     auto t = consume(STRING_LIT);
@@ -85,17 +86,6 @@ EnumVariant parseEnumEntry(Parser *p) {
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
     res->unit = unit;
-    if (is(HASH)) {
-        pop();
-        consume(IDENT);
-        consume(LPAREN);
-        res->derives.push_back(parseType());
-        while (is(COMMA)) {
-            consume(COMMA);
-            res->derives.push_back(parseType());
-        }
-        consume(RPAREN);
-    }
     consume(ENUM);
     res->type = parseType();
     if (!res->type.typeArgs.empty()) {
@@ -193,24 +183,38 @@ std::shared_ptr<Unit> Parser::parseUnit() {
     while (first() != nullptr) {
         //top level decl
         std::vector<Type> derives;
+        std::vector<std::string> attr;
         if (is(HASH)) {
             pop();
-            consume(IDENT);
-            consume(LPAREN);
-            derives.push_back(parseType());
-            while (is(COMMA)) {
-                consume(COMMA);
+            auto name = consume(IDENT);
+            if (name.value == "derive") {
+                consume(LPAREN);
                 derives.push_back(parseType());
+                while (is(COMMA)) {
+                    consume(COMMA);
+                    derives.push_back(parseType());
+                }
+                consume(RPAREN);
+            } else if (name.value == "drop") {
+                attr.push_back(name.value);
+            } else {
+                throw std::runtime_error(name.value + " invalid attr");
             }
-            consume(RPAREN);
+            for (auto &der : derives) {
+                if (der.print() == "Drop" && std::find(attr.begin(), attr.end(), std::string("drop")) == attr.end()) {
+                    attr.push_back("drop");
+                }
+            }
         }
         if (is({CLASS}) || is({STRUCT})) {
             auto td = parseTypeDecl();
             td->derives = derives;
+            td->attr = attr;
             res->items.push_back(std::move(td));
         } else if (is(ENUM)) {
             auto ed = parseEnumDecl();
             ed->derives = derives;
+            ed->attr = attr;
             res->items.push_back(std::move(ed));
         } else if (is(TRAIT)) {
             res->items.push_back(parseTrait(this));

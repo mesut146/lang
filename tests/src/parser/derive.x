@@ -21,7 +21,7 @@ func generate_derive(decl: Decl*, unit: Unit*): Impl{
     print("derive %s\n", decl.type.print().cstr());
     assert decl.derives.get_ptr(0).print().eq("Debug");
     let imp = make_impl(decl);
-    let m = Method::new(Node::new(++unit.last_id, 0), unit, "debug".str(), Type::new("void"));
+    let m = Method::new(Node::new(++unit.last_id, 0), "debug".str(), Type::new("void"));
     m.self = Option::new(Param{.Node::new(++unit.last_id, 0), "self".str(), decl.type.clone().toPtr(), true});
     m.params.add(Param{.Node::new(++unit.last_id, 0), "f".str(), Type::new("Fmt").toPtr(), false});
     m.parent = Parent::Impl{make_info(decl)};
