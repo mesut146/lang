@@ -17,6 +17,7 @@ std::unique_ptr<Block> Parser::parseBlock() {
 ArgBind parse_bind(Parser *p) {
     auto name = p->name();
     auto res = ArgBind(name);
+    res.id = ++Node::last_id;
     if (p->is(STAR)) {
         p->pop();
         res.ptr = true;

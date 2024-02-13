@@ -47,7 +47,7 @@ public:
     //Node(int id) : id(id) {}
 
     template<typename T, typename... Args>
-    static T *make(Args&&... args) {
+    static T *make(Args &&...args) {
         auto res = new T(std::forward<Args>(args)...);
         res->id = ++last_id;
         return res;
@@ -165,7 +165,7 @@ struct TypeItem : public Item {
     bool isType() { return true; }
 };
 
-struct Global {
+struct Global : public Node {
     std::string name;
     std::optional<Type> type;
     std::unique_ptr<Expression> expr;
@@ -591,7 +591,7 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-struct ArgBind {
+struct ArgBind : public Node{
     std::string name;
     bool ptr = false;
 

@@ -200,9 +200,10 @@ struct VarHolder {
     std::string name;
     Type type;
     bool prm = false;
+    int id;
 
-    VarHolder(std::string &name, const Type &type, bool prm) : name(name), type(type), prm(prm) {}
-    VarHolder(std::string &name, const Type &type) : name(name), type(type) {}
+    explicit VarHolder(std::string &name, const Type &type, bool prm,int id) : name(name), type(type), prm(prm),id(id) {}
+    explicit VarHolder(std::string &name, const Type &type, int id) : name(name), type(type) ,id(id){}
 };
 
 class RType {
@@ -303,7 +304,7 @@ public:
 
     void newScope();
     void dropScope();
-    void addScope(std::string &name, const Type &type, bool prm, int line);
+    void addScope(std::string &name, const Type &type, bool prm, int line, int id);
 
     void init();
     void resolveAll();

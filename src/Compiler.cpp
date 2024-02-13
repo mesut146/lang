@@ -776,6 +776,7 @@ void storeParams(Method *m, Compiler *c) {
         }
         didx++;
         argIdx++;
+        c->curOwner->add(m->self.value());
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto &prm = m->params[i];
@@ -790,6 +791,7 @@ void storeParams(Method *m, Compiler *c) {
             c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
+        c->curOwner->add(prm);
     }
 }
 
@@ -825,8 +827,9 @@ void Compiler::genCode(Method *m) {
     resolv->curMethod = m;
     curMethod = m;
     auto id = mangle(m);
-    ownerMap.insert({id, Ownership{}});
+    ownerMap.insert({id, Ownership(resolv.get(), m)});
     curOwner = &ownerMap.at(id);
+    curOwner->newScope();//params scope
     func = funcMap[id];
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
@@ -1092,13 +1095,13 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
+        curOwner->doAssign(node->left, node->right);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             auto rhs = gen(node->right);
             copy(l, rhs, lt);
         } else {
             setField(node->right, lt, l);
         }
-        curOwner->doMove(node->left, node->right);
         return l;
     }
     auto val = l;
@@ -1129,8 +1132,9 @@ std::any Compiler::visitSimpleName(SimpleName *node) {
     if (globals.contains(node->name)) {
         return globals[node->name];
     }
-    if(curOwner->isMoved(node->name)){
-        resolv->err(node, "use after move");
+    auto moved = curOwner->isMoved(node);
+    if (moved != nullptr) {
+        resolv->err(node, "use after move, line: " + std::to_string(moved->moveLine));
     }
     return NamedValues[node->name];
 }
@@ -1314,6 +1318,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         args.push_back(av);
         paramIdx++;
+        curOwner->doMoveCall(a);
     }
 
     //virtual logic
@@ -1433,6 +1438,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
         NamedValues[f.name] = varAlloc[getId(f.name)];
         loc(&f);
+        curOwner->add(f, type);
         //no unnecessary alloc
         if (doesAlloc(rhs)) {
             gen(rhs);
@@ -1445,6 +1451,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
             if (val->getType()->isPointerTy()) {
                 copy(ptr, val, type);
             } else {
+                error("var");
                 Builder->CreateStore(val, ptr);
             }
         } else {
@@ -1688,14 +1695,18 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     }
     Builder->SetInsertPoint(then);
     resolv->newScope();
+    curOwner->newScope();
     node->thenStmt->accept(this);
+    curOwner->dropScope();
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
+        curOwner->newScope();
         node->elseStmt->accept(this);
+        curOwner->dropScope();
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
@@ -1753,7 +1764,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             }
         }
     }
+    curOwner->newScope();
     node->thenStmt->accept(this);
+    curOwner->dropScope();
     //clear params
     for (auto &p : node->args) {
         //NamedValues.erase(p);
@@ -1764,7 +1777,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
+        curOwner->newScope();
         node->elseStmt->accept(this);
+        curOwner->dropScope();
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
@@ -1875,7 +1890,9 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
+    curOwner->newScope();
     node->body->accept(this);
+    curOwner->dropScope();
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -1885,6 +1902,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 
 std::any Compiler::visitForStmt(ForStmt *node) {
     resolv->newScope();
+    curOwner->newScope();
     if (node->decl) {
         node->decl->accept(this);
     }
@@ -1917,6 +1935,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loopNext.pop_back();
     Builder->CreateBr(condbb);
     set_and_insert(next);
+    curOwner->dropScope();
     return {};
 }
 

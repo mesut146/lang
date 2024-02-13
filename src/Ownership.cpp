@@ -24,3 +24,42 @@ bool isDrop(BaseDecl *decl, Resolver *r) {
     }
     return false;
 }
+
+void Ownership::doMove(Expression *expr) {
+    auto rt = r->resolve(expr);
+    if (!isStruct(rt.type)) return;
+    if (rt.type.isString()) return;
+    auto sn = dynamic_cast<SimpleName *>(expr);
+    if (sn) {
+        auto id = rt.vh.value().id;
+        for (int j = scopes.size() - 1; j >= 0; --j) {
+            auto &scope = scopes[j];
+            for (int i = 0; i < scope.vars.size(); ++i) {
+                auto &v = scope.vars[i];
+                if (v.name == sn->name && v.id == id) {
+                    auto v2 = v;
+                    v2.moveLine = expr->line;
+                    scope.moved.push_back(v2);
+                    scope.vars.erase(scope.vars.begin() + i);
+                    break;
+                }
+            }
+        }
+        return;
+    }
+    auto fa = dynamic_cast<FieldAccess *>(expr);
+    if (fa) {
+        throw std::runtime_error("domove " + expr->print());
+    }
+}
+
+Variable *Ownership::isMoved(SimpleName *expr) {
+    auto rt = r->resolve(expr);
+    if (!isStruct(rt.type)) return nullptr;
+    if (rt.type.isString()) return nullptr;
+    auto id = rt.vh.value().id;
+    for (auto &v : moved) {
+        if (v.name == expr->name && v.id == id) return &v;
+    }
+    return nullptr;
+}

@@ -3,6 +3,7 @@ import std/map
 import std/libc
 import std/io
 
+#derive(Drop)
 class Lexer{
   path: String;
   buf: String;
@@ -295,7 +296,7 @@ impl Lexer{
     }
     let os = String::new();
     os.append(c);
-    let oss=os.str();
+    let oss = os.str();
     if(self.ops.get_p(&oss).is_some()){
       return self.read_op();
     }

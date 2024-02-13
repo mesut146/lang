@@ -124,6 +124,7 @@ std::any AstCopier::visitVarDeclExpr(VarDeclExpr *node) {
 
 std::any AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment();
+    res->id = ++Node::last_id;
     res->name = node->name;
     if (node->type) {
         res->type = visit(*node->type, this);
@@ -266,6 +267,7 @@ std::any AstCopier::visitMethod(Method *node) {
     }
     if (node->self) {
         Param self(node->self->name);
+        self.id = ++Node::last_id;
         self.line = node->self->line;
         self.is_deref = node->self->is_deref;
         if (node->self->type) {
@@ -275,6 +277,7 @@ std::any AstCopier::visitMethod(Method *node) {
     }
     for (auto &prm : node->params) {
         Param param(prm.name, visit(*prm.type, this));
+        param.id = ++Node::last_id;
         param.line = prm.line;
         res->params.push_back(std::move(param));
     }

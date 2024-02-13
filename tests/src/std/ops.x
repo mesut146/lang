@@ -145,6 +145,12 @@ impl Debug for str{
   }
 }
 
+impl Debug for u8{
+  func debug(self, f: Fmt*){
+    f.print(*self);
+  }
+}
+
 trait Hash{
   func hash(self): i64;
 }

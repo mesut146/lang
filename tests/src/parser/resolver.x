@@ -12,22 +12,25 @@ import std/map
 import std/libc
 
 
+#derive(Drop)
 struct Context{
   map: Map<String, Resolver>;
   root: String;
   prelude: List<String>;
 }
 
+#derive(Drop)
 struct Scope{
   list: List<VarHolder>;
 }
+
+#derive(Drop, Debug)
 struct VarHolder{
   name: String;
   type: Type;
   prm: bool;
 }
 
-//#derive(debug)
 struct Resolver{
   unit: Unit;
   is_resolved: bool;
@@ -43,6 +46,19 @@ struct Resolver{
   inLoop: i32;
   used_types: List<Decl*>;
   generated_decl: List<Decl>;
+}
+
+impl Drop for Resolver{
+  func drop(self){
+    self.unit.drop();
+    self.typeMap.drop();
+    self.cache.drop();
+    self.scopes.drop();
+    self.used_methods.drop();
+    self.generated_methods.drop();
+    self.used_types.drop();
+    self.generated_decl.drop();
+  }
 }
 
 struct Config{
@@ -242,13 +258,15 @@ func dumpp(r: Resolver*){
 
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
-    let lexer = Lexer::new(path);
-    let parser = Parser::new(&lexer);
+    print("Resolver::new %s\n", path.cstr());
+    let parser = Parser::new(path);
     let unit = parser.parse_unit();
-    let str = Fmt::str(unit);
+    parser.drop();
+    //let str = Fmt::str(&unit);
     //print("unit=%s\n", str.cstr());
+    
     let map = Map<String, RType>::new();
-    let res = Resolver{unit: parser.unit, is_resolved: false, is_init: false, typeMap: map,
+    let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: map,
       cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(1000), generated_methods: List<Method>::new(1000),
@@ -400,9 +418,10 @@ impl Resolver{
         let res = RType::new(decl.type);
         res.targetDecl = Option::new(decl);
         self.addType(decl.type.name().clone(), res);
-        //todo derive
-        if(!decl.derives.empty()){
-          let imp = generate_derive(decl, &self.unit);
+        //derive
+        for(let j=0;j<decl.derives.len();++i){
+          let der = decl.derives.get_ptr(j);
+          let imp = generate_derive(decl, &self.unit, der.print().str());
           newItems.add(Item::Impl{imp});
         }
       }else if let Item::Trait(tr*)=(it){

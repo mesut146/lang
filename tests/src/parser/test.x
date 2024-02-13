@@ -24,10 +24,11 @@ func lexer_test(){
 }
 
 func parser_test(){
-    let lexer = Lexer::new("../tests/src/parser/parser.x".str());
-    let parser = Parser::new(&lexer);
+    let path = "../tests/src/parser/parser.x".str();
+    let parser = Parser::new(path);
     let unit = parser.parse_unit();
-    print("%s\n", Fmt::str(unit).cstr());
+    print("%s\n", Fmt::str(&unit).cstr());
+    parser.drop();
 }
 
 func resolver_test(){
@@ -110,6 +111,20 @@ func main(argc: i32, args: i8**){
   let a1 = get_arg(args, 1);
   if(a1.eq("test")){
     compiler_test();
+  }
+  else if(a1.eq("c")){
+    let path = get_arg(args, 2);
+    if(is_dir(path)){
+      let root = "../tests/src";
+      let ctx = Context::new(root.str());
+      let cmp = Compiler::new(ctx);
+      compile_dir(&cmp, path, true);
+    }else{
+      let root = "../tests/src";
+      let ctx = Context::new(root.str());
+      let cmp = Compiler::new(ctx);
+      cmp.compile(path);
+    }
   }
   
   //lexer_test();

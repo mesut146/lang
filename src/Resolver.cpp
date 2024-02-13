@@ -249,14 +249,14 @@ void Resolver::dropScope() {
     scopes.pop_back();
 }
 
-void Resolver::addScope(std::string &name, const Type &type, bool prm, int line) {
+void Resolver::addScope(std::string &name, const Type &type, bool prm, int line, int id) {
     for (auto &scope : this->scopes) {
         if (scope.find(name)) {
             print("in " + unit->path + ":" + std::to_string(line));
             throw std::runtime_error("variable " + name + " already declared in the same scope");
         }
     }
-    scopes.back().add(VarHolder(name, type, prm));
+    scopes.back().add(VarHolder(name, type, prm, id));
 }
 
 void dump(Resolver *r) {
@@ -291,7 +291,7 @@ void Resolver::resolveAll() {
                 err(msg);
             }
         }
-        addScope(g.name, rhs.type, false, 0);
+        addScope(g.name, rhs.type, false, 0, g.id);
     }
     for (auto &item : unit->items) {
         item->accept(this);
@@ -461,6 +461,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
             int j = 0;
             for (auto &fd : ev.fields) {
                 if (fd.type.isPointer()) continue;//borrowed, no drop
+                if(fd.type.isPrim()) continue;
                 //fd.drop();
                 then->list.push_back(newDrop(fd, unit.get()));
             }
@@ -471,6 +472,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
         auto sd = (StructDecl *) bd;
         for (auto &fd : sd->fields) {
             if (fd.type.isPointer()) continue;//borrowed, no drop
+            if(fd.type.isPrim()) continue;
             //self.fd.drop();
             bl->list.push_back(newDrop("self", fd, unit.get()));
         }
@@ -862,11 +864,11 @@ std::any Resolver::visitMethod(Method *m) {
     newScope();
     if (m->self) {
         if (!m->self->type) err("self type is not set");
-        addScope(m->self->name, *m->self->type, true, m->line);
+        addScope(m->self->name, *m->self->type, true, m->line, m->self->id);
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        addScope(prm.name, *prm.type, true, m->line);
+        addScope(prm.name, *prm.type, true, m->line, m->self->id);
         prm.accept(this);
     }
     if (m->body) {
@@ -904,7 +906,7 @@ std::any Resolver::visitFragment(Fragment *f) {
 std::any Resolver::visitVarDeclExpr(VarDeclExpr *vd) {
     for (auto &f : vd->list) {
         auto rt = std::any_cast<RType>(f.accept(this));
-        addScope(f.name, rt.type, false, f.line);
+        addScope(f.name, rt.type, false, f.line, f.id);
     }
     return nullptr;
 }
@@ -1463,7 +1465,7 @@ std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
         if (arg.ptr) {
             ty = Type(Type::Pointer, ty);
         }
-        addScope(arg.name, ty, false, node->line);
+        addScope(arg.name, ty, false, node->line, arg.id);
         i++;
     }
     node->thenStmt->accept(this);

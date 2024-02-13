@@ -16,9 +16,9 @@ impl<K, V> Pair<K, V>{
 impl<A,B> Debug for Pair<A,B>{
   func debug(self, f: Fmt*){
     f.print("{");
-    Debug::debug(&self.a);
+    Debug::debug(&self.a, f);
     f.print(", ");
-    Debug::debug(&self.b);
+    Debug::debug(&self.b, f);
     f.print("}");
   }
 }
@@ -37,23 +37,21 @@ impl<K, V> Map<K, V>{
   }
   
   func len(self): i64{ return self.arr.len(); }
-  func size(self): i64{ return self.arr.len(); }
   func empty(self): bool{ return self.arr.empty(); }
   
   func add(self, k: K, v: V){
     let i = self.indexOf(&k);
+    //doesnt exist, add last
     if(i == -1_i64){
       let p = Pair{k, v};
       self.arr.add(p);
     }
     else{
+      //already exist, change old
       let p = self.arr.get_ptr(i);
+      //p.b.drop();
       p.b = v;
     }
-  }
-
-  func has(self, k: K*): bool{
-    return self.indexOf(k) != -1;
   }
 
   func contains(self, k: K*): bool{
@@ -66,7 +64,7 @@ impl<K, V> Map<K, V>{
   func get_p(self, k: K*): Option<V>{
     for(let i = 0;i < self.arr.len();i += 1){
       let e =  self.arr.get_ptr(i);
-      if(Eq::eq(e.a, k)){
+      if(Eq::eq(&e.a, k)){
         return Option<V>::Some{e.b};
       }
     }

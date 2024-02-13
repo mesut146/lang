@@ -48,17 +48,21 @@ impl Unit{
                 items: List<Item>::new(),
                 globals: List<Global>::new(), last_id: -1};
   }
+
+  func node(self, line: i32): Node{
+    let id = ++self.last_id;
+    return Node::new(id, line);
+  }
 }
 
 impl Drop for Unit{
-  func drop(self: Unit*){
+  func drop(self){
       self.path.drop();
       self.last_line.drop();
       self.imports.drop();
       self.items.drop();
       self.globals.drop();
       self.last_id.drop();
-  
   }
 }
 
@@ -112,6 +116,7 @@ struct BaseDecl{
   is_generic: bool;
   base: Option<Type>;
   derives: List<Type>;
+  attr: List<String>;
 }
 
 enum Decl: BaseDecl{
@@ -124,7 +129,7 @@ impl Decl{
     if let Decl::Enum(variants*)=(self){
       return variants;
     }
-    panic("get_variants");
+    panic("get_variants %s", self.type.print().cstr());
   }
   func get_fields(self): List<FieldDecl>*{
     if let Decl::Struct(fields*)=(self){

@@ -235,6 +235,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
         } else if (is(STATIC)) {
             pop();
             Global g;
+            g.id = ++Node::last_id;
             g.name = pop().value;
             if (is(COLON)) {
                 pop();
@@ -256,6 +257,7 @@ Param Parser::parseParam() {
     auto nm = pop();
     Param res(nm.value);
     res.line = nm.line;
+    res.id = ++Node::last_id;
     consume(COLON);
     res.type = (parseType());
     return res;
@@ -285,6 +287,7 @@ Method Parser::parseMethod() {
             }
             auto nm = pop();
             Param self(nm.value);
+            self.id = ++Node::last_id;
             self.line = nm.line;
             self.is_deref = is_deref;
             res.self = std::move(self);
@@ -316,6 +319,7 @@ Method Parser::parseMethod() {
 //name (":" type)? ("=" expr)?;
 Fragment frag(Parser *p) {
     Fragment res;
+    res.id = ++Node::last_id;
     res.line = p->first()->line;
     res.name = p->name();
     if (p->is(COLON)) {

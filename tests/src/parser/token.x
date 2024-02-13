@@ -1,7 +1,7 @@
 import std/String
 import std/str
 import std/List
-//import impl
+import std/ops
 
 #derive(Debug)
 enum TokenType {
@@ -145,5 +145,17 @@ impl Token{
         s.append(&self.value);
         s.append("}");
         return s;
+    }
+}
+
+impl Debug for Token{
+    func debug(self, f: Fmt*){
+        f.print("Token{");
+        f.print("line: ");
+        f.print(self.line.str().str());
+        f.print(", ");
+        f.print("value: ");
+        f.print(&self.value);
+        f.print("}");
     }
 }

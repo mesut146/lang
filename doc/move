@@ -21,3 +21,11 @@ print(v) //fails
 return A{}
 
 return get()
+
+
+drop of half object?
+
+
+let v = get()
+let v2 = v
+v = get() //realloc

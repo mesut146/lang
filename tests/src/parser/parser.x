@@ -5,19 +5,28 @@ import parser/printer
 import std/map
 import std/libc
 
+//#derive(Drop)
 class Parser{
-  lexer: Lexer*;
+  lexer: Lexer;
   tokens: List<Token>;
   pos: i32;
   is_marked: bool;
   mark: i32;
-  unit: Unit;
+  unit: Option<Unit*>;
+}
+
+impl Drop for Parser{
+  func drop(self){
+    self.lexer.drop();
+    self.tokens.drop();
+  }
 }
 
 impl Parser{
   
-  func new(l: Lexer*): Parser{
-    let res = Parser{l, List<Token>::new(), 0, false, 0, Unit::new(l.path.str())};
+  func new(path: String): Parser{
+    let lexer = Lexer::new(path);
+    let res = Parser{lexer, List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
     res.fill();
     return res;
   }
@@ -72,44 +81,53 @@ impl Parser{
       panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(&tt).cstr());
     }
     
-    func parse_unit(self): Unit*{
+    func parse_unit(self): Unit{
+      let unit = Unit::new(self.lexer.path.str());
+      self.unit = Option::new(&unit);
       while(self.has() && self.is(TokenType::IMPORT)){
-        self.unit.imports.add(self.parse_import());
+        unit.imports.add(self.parse_import());
       }
       while(self.has()){
         let derives = List<Type>::new();
+        let attr = List<String>::new();
         if(self.is(TokenType::HASH)){
           self.pop();
-          self.consume(TokenType::IDENT);
-          self.consume(TokenType::LPAREN);
-          derives.add(self.parse_type());
-          while(self.is(TokenType::COMMA)){
-            self.pop();
+          let name = self.consume(TokenType::IDENT);
+          if(name.value.eq("derive")){
+            self.consume(TokenType::LPAREN);
             derives.add(self.parse_type());
+            while(self.is(TokenType::COMMA)){
+              self.pop();
+              derives.add(self.parse_type());
+            }
+            self.consume(TokenType::RPAREN);
+          }else if(name.value.eq("drop")){
+            attr.add(name.value.clone());
+          }else{
+            panic("invalid attr %s", name.value.cstr());
           }
-          self.consume(TokenType::RPAREN);
         }
         if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
-          self.unit.items.add(Item::Decl{self.parse_struct(derives)});
+          unit.items.add(Item::Decl{self.parse_struct(derives, attr)});
         }else if(self.is(TokenType::ENUM)){
-          self.unit.items.add(Item::Decl{self.parse_enum(derives)});
+          unit.items.add(Item::Decl{self.parse_enum(derives, attr)});
         }else if(self.is(TokenType::IMPL)){
-          self.unit.items.add(Item::Impl{self.parse_impl()});
+          unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::TRAIT)){
-          self.unit.items.add(Item::Trait{self.parse_trait()});
+          unit.items.add(Item::Trait{self.parse_trait()});
         }else if(self.is(TokenType::FUNC)){
-          self.unit.items.add(Item::Method{self.parse_method(Option<Type>::None, Parent::None)});
+          unit.items.add(Item::Method{self.parse_method(Option<Type>::None, Parent::None)});
         }else if(self.is(TokenType::TYPE)){
           self.pop();
           let name = self.name();
           self.consume(TokenType::EQ);
           let rhs = self.parse_type();
           self.consume(TokenType::SEMI);
-          self.unit.items.add(Item::Type{name: name, rhs: rhs});
+          unit.items.add(Item::Type{name: name, rhs: rhs});
         }else if(self.is(TokenType::EXTERN)){
           self.pop();
           let list = self.parse_methods(Option<Type>::None, Parent::Extern);
-          self.unit.items.add(Item::Extern{methods: list});
+          unit.items.add(Item::Extern{methods: list});
         }else if(self.is(TokenType::STATIC)){
         	self.pop();
             let name = self.name();
@@ -121,20 +139,18 @@ impl Parser{
             self.consume(TokenType::EQ);
             let rhs = self.parse_expr();
             self.consume(TokenType::SEMI);
-            self.unit.globals.add(Global{name, type, rhs});
+            unit.globals.add(Global{name, type, rhs});
         }else{
           panic("invalid top level decl: %s", self.peek().print().cstr());
         }
       }
-      //Fmt::str(&self.unit).dump();
-      return &self.unit;
+      return unit;
     }
 
     func parse_trait(self): Trait{
       self.consume(TokenType::TRAIT);
       let type = self.parse_type();
       let res = Trait{type, List<Method>::new()};
-      //res->unit = p->unit;
       self.consume(TokenType::LBRACE);
       while (!self.is(TokenType::RBRACE)) {
           res.methods.add(self.parse_method(Option::new(type), Parent::Trait{type: type.clone()}));
@@ -249,7 +265,7 @@ impl Parser{
       return Param{.id, name.value, type, false};
     }
     
-    func parse_struct(self, derives: List<Type>): Decl{
+    func parse_struct(self, derives: List<Type>, attr: List<String>): Decl{
       let line = self.peek().line;
       if(self.is(TokenType::CLASS)){
         self.consume(TokenType::CLASS);
@@ -274,8 +290,8 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      let path = self.unit.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives}, fields: fields};
+      let path = self.lexer.path.clone();
+      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, fields: fields};
     }
     
     func parse_field(self, semi: bool): FieldDecl{
@@ -289,7 +305,7 @@ impl Parser{
       return FieldDecl{name, type};
     }
     
-    func parse_enum(self, derives: List<Type>): Decl{
+    func parse_enum(self, derives: List<Type>, attr: List<String>): Decl{
       let line = self.peek().line;
       self.consume(TokenType::ENUM);
       let type = self.parse_type();
@@ -308,8 +324,8 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      let path = self.unit.path.clone();
-      return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives}, variants: variants};
+      let path = self.lexer.path.clone();
+      return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, variants: variants};
     }
     
     func parse_variant(self): Variant{
@@ -551,7 +567,7 @@ impl Parser{
     }
 
     func node(self): Node{
-      return Node::new(++self.unit.last_id, self.peek().line);
+      return Node::new(++self.unit.unwrap().last_id, self.peek().line);
     }
 }
 

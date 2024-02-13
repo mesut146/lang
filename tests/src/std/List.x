@@ -167,7 +167,7 @@ impl<T> Debug for List<T>{
     f.print("[");
     for(let i=0;i<self.count;++i){
       if(i>0) f.print(", ");
-      Debug::debug(self.get(i), f);
+      Debug::debug(self.get_ptr(i), f);
     }
     f.print("]");
   }
@@ -203,7 +203,7 @@ impl<T> Clone for List<T>{
 
 impl<T> Drop for List<T>{
   func drop(self){
-    print("drop list\n");
+    //print("drop list %s\n", Fmt::str(self).cstr());
     free(self.ptr as i8*);
   }
 }

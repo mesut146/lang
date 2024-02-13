@@ -59,7 +59,7 @@ impl AstCopier{
         let type = self.visit(&node.type);
         //todo base type depends on map too
         let base = BaseDecl{line: node.line,path: node.path.clone(),type: type ,
-            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), derives: node.derives};
+            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), derives: node.derives.clone(), attr: node.attr.clone()};
         if let Decl::Struct(fields*)=(node){
             let res = self.visit_list(fields);
             return Decl::Struct{.base, res};
