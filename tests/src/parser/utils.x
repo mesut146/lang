@@ -122,7 +122,7 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
         return res;
     }
     let str = type.print();
-    if (map.has(&str)) {
+    if (map.contains(&str)) {
         return map.get_ptr(&str).unwrap().clone();
     }
     let smp = type.as_simple();

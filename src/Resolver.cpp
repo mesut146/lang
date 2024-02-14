@@ -461,7 +461,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
             int j = 0;
             for (auto &fd : ev.fields) {
                 if (fd.type.isPointer()) continue;//borrowed, no drop
-                if(fd.type.isPrim()) continue;
+                if (fd.type.isPrim()) continue;
                 //fd.drop();
                 then->list.push_back(newDrop(fd, unit.get()));
             }
@@ -472,7 +472,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
         auto sd = (StructDecl *) bd;
         for (auto &fd : sd->fields) {
             if (fd.type.isPointer()) continue;//borrowed, no drop
-            if(fd.type.isPrim()) continue;
+            if (fd.type.isPrim()) continue;
             //self.fd.drop();
             bl->list.push_back(newDrop("self", fd, unit.get()));
         }
@@ -1092,7 +1092,7 @@ std::any Resolver::visitType(Type *type) {
 }
 
 void Resolver::addUsed(BaseDecl *bd) {
-    if (bd->unit->path == unit->path) return;
+    if (bd->unit->path == unit->path && bd->type.typeArgs.empty()) return;
     for (auto prev : usedTypes) {
         if (prev->type.print() == bd->type.print()) return;
     }
@@ -1628,6 +1628,10 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         auto &variant = ed->variants[idx];
         fields = &variant.fields;
         type = Type(ed->type, variant.name);
+        //todo generic enum
+        if (!ed->isGeneric && !ed->type.typeArgs.empty()) {
+            addUsed(ed);
+        }
     } else {
         auto td = dynamic_cast<StructDecl *>(res.targetDecl);
         fields = &td->fields;

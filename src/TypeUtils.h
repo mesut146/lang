@@ -31,6 +31,7 @@ static bool hasGeneric(const Type &type, const std::vector<Type> &typeParams) {
 }
 
 static bool isGeneric(const Type &type, const std::vector<Type> &typeParams) {
+    if(type.isPointer()) return isGeneric(*type.scope.get(), typeParams);
     if (type.isSlice() || type.isArray() || type.isPointer()) return false;
     if (type.scope) throw std::runtime_error("isGeneric::scope");
     if (type.typeArgs.empty()) {

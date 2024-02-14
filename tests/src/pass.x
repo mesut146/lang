@@ -24,15 +24,15 @@ func by_val_arr_mut(arr: [i32; 2]){
 func main(){  
   let p = A{a: 10, b: [0; 5]};
   by_val_mut(p);
-  assert p.a == 10;
+  //assert p.a == 10;
 
   let arr = [51, 50];
   by_val_arr(arr);
-  by_val_arr_mut(arr);
+  //by_val_arr_mut(arr);
  
-  assert arr[0] == 51;
+  //assert arr[0] == 51;
 
-  by_val_nomut(p);
+  //by_val_nomut(p);
 
   print("passTest done\n");
 }

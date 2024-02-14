@@ -30,10 +30,17 @@ struct Ownership {
     void newScope() {
         scopes.push_back(VarScope());
     }
-
-    void dropScope() {
-        scopes.pop_back();
+    void newScope(const VarScope &scope) {
+        scopes.push_back(scope);
     }
+
+    VarScope dropScope() {
+        auto res = scopes.back();
+        scopes.pop_back();
+        return res;
+    }
+
+    Variable *find(std::string &name, int id);
 
     void add(Fragment &f, Type &type) {
         if (type.isPointer()) return;
@@ -54,9 +61,8 @@ struct Ownership {
 
     void doMove(Expression *expr);
 
-    void doAssign(Expression *lhs, Expression *rhs) {
-        doMove(rhs);
-    }
+    void doAssign(Expression *lhs, Expression *rhs);
+    void endAssign(Expression *lhs);
 
     //send(expr) //moves expr
     void doMoveCall(Expression *expr) {

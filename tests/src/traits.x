@@ -22,15 +22,15 @@ impl Print for B{
   }
 }
 
-func common<T>(obj: T){
+func common<T>(obj: T*){
   obj.prin();
 }
 
 func main(){
   let a = A{5};
   let b = B{6};
-  common(a);
-  common(b);
+  common(&a);
+  common(&b);
   Print::prin(a);
   Print::prin(b);
   print("traitTest done\n");

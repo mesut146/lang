@@ -153,7 +153,8 @@ impl Parser{
       let res = Trait{type, List<Method>::new()};
       self.consume(TokenType::LBRACE);
       while (!self.is(TokenType::RBRACE)) {
-          res.methods.add(self.parse_method(Option::new(type), Parent::Trait{type: type.clone()}));
+          let parent = Parent::Trait{type: type.clone()};
+          res.methods.add(self.parse_method(Option::new(type), parent));
       }
       self.consume(TokenType::RBRACE);
       return res;
@@ -180,12 +181,12 @@ impl Parser{
         if(self.is(TokenType::FOR)){
             self.pop();
             let target = self.parse_type();
-            let op = Option::new(target);
+            let op = Option::new(target.clone());
             let info = ImplInfo{type_params, Option::new(t1), target};
             let parent = Parent::Impl{info};
             return Impl{info, self.parse_methods(op, parent)};
         }else{
-          let op = Option::new(t1);
+          let op = Option::new(t1.clone());
           let info = ImplInfo{type_params, Option<Type>::None, t1};
           let parent = Parent::Impl{info};
           return Impl{info, self.parse_methods(op, parent)};
@@ -367,6 +368,7 @@ impl Parser{
           self.pop();
           let part = self.gen_part();
           if let Type::Simple(smp*) = (part){
+            //res.drop();nope
             res = Type::Simple{Simple{Ptr::new(res), smp.name, smp.args}};
           }
         }
@@ -379,7 +381,7 @@ impl Parser{
     }
     
     func gen_part(self): Type{
-    //a<b>::c<d>
+      //a<b>::c<d>
       let id = self.pop().value;
       if(self.is(TokenType::LT)){
         return Simple{Ptr<Type>::new(), id, self.generics()}.into();

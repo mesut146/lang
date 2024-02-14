@@ -395,7 +395,7 @@ impl MethodResolver{
             MethodResolver::infer(arg_type, target_type, &typeMap);
         }
         let tmap = Map<String, Type>::new();
-        for (let i = 0;i < typeMap.size();++i) {
+        for (let i = 0;i < typeMap.len();++i) {
             let pair = typeMap.get_idx(i).unwrap();
             if (pair.b.is_none()) {
                 let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
@@ -582,7 +582,7 @@ impl MethodResolver{
             return;
         }
         else if(arg.is_pointer()) {
-            if(typeMap.has(prm.name())){
+            if(typeMap.contains(prm.name())){
                 typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                 return;
             }
@@ -594,7 +594,7 @@ impl MethodResolver{
             return;
         }
         if(arg.is_slice()){
-            if(typeMap.has(prm.name())){
+            if(typeMap.contains(prm.name())){
                 typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                 return;
             }
@@ -603,7 +603,7 @@ impl MethodResolver{
         //todo
         if (prm.as_simple().args.empty()) {
             let nm = prm.name();
-            if (typeMap.has(nm)) {//is_tp
+            if (typeMap.contains(nm)) {//is_tp
                 let it = typeMap.get_p(nm).unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(prm.name().clone(), Option::new(arg.clone()));

@@ -278,7 +278,7 @@ impl Lexer{
         if(c == '\'') type = TokenType::CHAR_LIT;
         let s = String::new();
         s.append(c);
-        self.pos+=1;
+        self.pos += 1;
         while (self.pos < self.buf.len()) {
             c = self.read();
             if (c == '\\') {

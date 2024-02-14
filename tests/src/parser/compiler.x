@@ -250,7 +250,7 @@ impl Compiler{
     if(self.config.verbose){
       print("writing %s\n", llvm_file.cstr());
     }
-    self.compiled.add(outFile);
+    self.compiled.add(outFile.clone());
     emit_object(outFile.cstr(), self.llvm.target_machine, self.llvm.target_triple.cstr());
     if(self.config.verbose){
       print("writing %s\n", outFile.cstr());

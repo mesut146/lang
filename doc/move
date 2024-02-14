@@ -29,3 +29,19 @@ drop of half object?
 let v = get()
 let v2 = v
 v = get() //realloc
+
+
+//while
+let v = get();
+while(c){
+  if(c2){
+    send(v)
+  }
+  else{
+    //valid
+  }
+  //invalid
+}
+//invalid
+
+else reachable from if, bc they are in loop

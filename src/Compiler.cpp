@@ -1095,13 +1095,14 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
-        curOwner->doAssign(node->left, node->right);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             auto rhs = gen(node->right);
             copy(l, rhs, lt);
         } else {
             setField(node->right, lt, l);
         }
+        curOwner->doAssign(node->left, node->right);
+        curOwner->endAssign(node->left);
         return l;
     }
     auto val = l;
@@ -1682,112 +1683,6 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     return gep2(scope, index, sd_ty);
 }
 
-std::any Compiler::visitIfStmt(IfStmt *node) {
-    auto cond = branch(loadPtr(node->expr));
-    auto then = llvm::BasicBlock::Create(ctx(), "", func);
-    llvm::BasicBlock *elsebb = nullptr;
-    auto next = llvm::BasicBlock::Create(ctx(), "");
-    if (node->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(ctx(), "");
-        Builder->CreateCondBr(cond, then, elsebb);
-    } else {
-        Builder->CreateCondBr(cond, then, next);
-    }
-    Builder->SetInsertPoint(then);
-    resolv->newScope();
-    curOwner->newScope();
-    node->thenStmt->accept(this);
-    curOwner->dropScope();
-    if (!isReturnLast(node->thenStmt.get())) {
-        Builder->CreateBr(next);
-    }
-    if (node->elseStmt) {
-        set_and_insert(elsebb);
-        resolv->newScope();
-        curOwner->newScope();
-        node->elseStmt->accept(this);
-        curOwner->dropScope();
-        if (!isReturnLast(node->elseStmt.get())) {
-            Builder->CreateBr(next);
-        }
-    }
-    set_and_insert(next);
-    return nullptr;
-}
-
-
-std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
-    auto decl = findEnum(node->type, resolv.get());
-    auto rhs = get_obj_ptr(node->rhs.get());
-    auto tag = gep2(rhs, Layout::get_tag_index(decl), decl->type);
-    tag = load(tag, getInt(ENUM_TAG_BITS));
-
-    auto index = Resolver::findVariant(decl, node->type.name);
-    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_TAG_BITS));
-
-    auto then = llvm::BasicBlock::Create(ctx(), "", func);
-    llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(ctx(), "");
-    if (node->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(ctx(), "");
-        Builder->CreateCondBr(branch(cmp), then, elsebb);
-    } else {
-        Builder->CreateCondBr(branch(cmp), then, next);
-    }
-    resolv->newScope();
-    Builder->SetInsertPoint(then);
-
-    auto &variant = decl->variants[index];
-    if (!variant.fields.empty()) {
-        //declare vars
-        auto &params = variant.fields;
-        auto data_index = Layout::get_data_index(decl);
-        auto dataPtr = gep2(rhs, data_index, decl->type);
-        auto var_ty = get_variant_type(node->type, this);
-        for (int i = 0; i < params.size(); i++) {
-            //regular var decl
-            auto &prm = params[i];
-            auto arg = node->args[i];
-            auto field_ptr = gep2(dataPtr, i, var_ty);
-            auto alloc_ptr = varAlloc[getId(arg.name)];
-            NamedValues[arg.name] = alloc_ptr;
-            if (arg.ptr) {
-                Builder->CreateStore(field_ptr, alloc_ptr);
-                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, prm.type));
-            } else {
-                if (prm.type.isPrim() || prm.type.isPointer()) {
-                    Builder->CreateStore(load(field_ptr, mapType(prm.type)), alloc_ptr);
-                } else {
-                    copy(alloc_ptr, field_ptr, prm.type);
-                }
-                dbg_var(arg.name, node->rhs->line, 0, prm.type);
-            }
-        }
-    }
-    curOwner->newScope();
-    node->thenStmt->accept(this);
-    curOwner->dropScope();
-    //clear params
-    for (auto &p : node->args) {
-        //NamedValues.erase(p);
-    }
-    if (!isReturnLast(node->thenStmt.get())) {
-        Builder->CreateBr(next);
-    }
-    if (node->elseStmt) {
-        set_and_insert(elsebb);
-        resolv->newScope();
-        curOwner->newScope();
-        node->elseStmt->accept(this);
-        curOwner->dropScope();
-        if (!isReturnLast(node->elseStmt.get())) {
-            Builder->CreateBr(next);
-        }
-    }
-    set_and_insert(next);
-    return nullptr;
-}
-
 llvm::Value *Compiler::getTag(Expression *expr) {
     auto rt = resolv->resolve(expr);
     auto tag_idx = Layout::get_tag_index(rt.targetDecl);
@@ -1876,67 +1771,6 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     arr = load(arr);
     auto index = cast(node->index, Type("i64"));
     return gep(arr, index, elemty);
-}
-
-std::any Compiler::visitWhileStmt(WhileStmt *node) {
-    auto then = llvm::BasicBlock::Create(ctx(), "body");
-    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
-    auto next = llvm::BasicBlock::Create(ctx(), "next");
-    Builder->CreateBr(condbb);
-    Builder->SetInsertPoint(condbb);
-    auto c = loadPtr(node->expr.get());
-    Builder->CreateCondBr(branch(c), then, next);
-    set_and_insert(then);
-    loops.push_back(condbb);
-    loopNext.push_back(next);
-    resolv->newScope();
-    curOwner->newScope();
-    node->body->accept(this);
-    curOwner->dropScope();
-    loops.pop_back();
-    loopNext.pop_back();
-    Builder->CreateBr(condbb);
-    set_and_insert(next);
-    return nullptr;
-}
-
-std::any Compiler::visitForStmt(ForStmt *node) {
-    resolv->newScope();
-    curOwner->newScope();
-    if (node->decl) {
-        node->decl->accept(this);
-    }
-    auto then = llvm::BasicBlock::Create(ctx(), "body");
-    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
-    auto updatebb = llvm::BasicBlock::Create(ctx(), "update", func);
-    auto next = llvm::BasicBlock::Create(ctx(), "next");
-    Builder->CreateBr(condbb);
-    Builder->SetInsertPoint(condbb);
-    if (node->cond) {
-        auto c = loadPtr(node->cond.get());
-        Builder->CreateCondBr(branch(c), then, next);
-    } else {
-        Builder->CreateBr(then);
-    }
-    set_and_insert(then);
-    loops.push_back(updatebb);
-    loopNext.push_back(next);
-    int backup = resolv->max_scope;
-    node->body->accept(this);
-    int backup2 = resolv->max_scope;
-    resolv->max_scope = backup;
-    Builder->CreateBr(updatebb);
-    Builder->SetInsertPoint(updatebb);
-    for (auto &u : node->updaters) {
-        u->accept(this);
-    }
-    resolv->max_scope = backup2;
-    loops.pop_back();
-    loopNext.pop_back();
-    Builder->CreateBr(condbb);
-    set_and_insert(next);
-    curOwner->dropScope();
-    return {};
 }
 
 std::any Compiler::visitContinueStmt(ContinueStmt *node) {
@@ -2033,4 +1867,177 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     Builder->CreateBr(condbb);
     set_and_insert(nextbb);
     return ptr;
+}
+
+std::any Compiler::visitIfStmt(IfStmt *node) {
+    auto cond = branch(loadPtr(node->expr));
+    auto then = llvm::BasicBlock::Create(ctx(), "", func);
+    llvm::BasicBlock *elsebb = nullptr;
+    auto next = llvm::BasicBlock::Create(ctx(), "");
+    if (node->elseStmt) {
+        elsebb = llvm::BasicBlock::Create(ctx(), "");
+        Builder->CreateCondBr(cond, then, elsebb);
+    } else {
+        Builder->CreateCondBr(cond, then, next);
+    }
+    Builder->SetInsertPoint(then);
+    resolv->newScope();
+    curOwner->newScope();
+    node->thenStmt->accept(this);
+    //drop so that else doesnt see drop, bc unreachable
+    auto then_scope = curOwner->dropScope();
+    if (!isReturnLast(node->thenStmt.get())) {
+        Builder->CreateBr(next);
+    }
+    if (node->elseStmt) {
+        set_and_insert(elsebb);
+        resolv->newScope();
+        curOwner->newScope();
+        node->elseStmt->accept(this);
+        //curOwner->dropScope();
+        if (!isReturnLast(node->elseStmt.get())) {
+            Builder->CreateBr(next);
+        }
+    }
+    //next stmts will see drop, bc reachable
+    if (!isReturnLast(node->thenStmt.get())) {
+        curOwner->newScope(then_scope);
+    }
+    set_and_insert(next);
+    return nullptr;
+}
+
+
+std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
+    auto decl = findEnum(node->type, resolv.get());
+    auto rhs = get_obj_ptr(node->rhs.get());
+    auto tag = gep2(rhs, Layout::get_tag_index(decl), decl->type);
+    tag = load(tag, getInt(ENUM_TAG_BITS));
+
+    auto index = Resolver::findVariant(decl, node->type.name);
+    auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_TAG_BITS));
+
+    auto then = llvm::BasicBlock::Create(ctx(), "", func);
+    llvm::BasicBlock *elsebb;
+    auto next = llvm::BasicBlock::Create(ctx(), "");
+    if (node->elseStmt) {
+        elsebb = llvm::BasicBlock::Create(ctx(), "");
+        Builder->CreateCondBr(branch(cmp), then, elsebb);
+    } else {
+        Builder->CreateCondBr(branch(cmp), then, next);
+    }
+    resolv->newScope();
+    Builder->SetInsertPoint(then);
+
+    auto &variant = decl->variants[index];
+    if (!variant.fields.empty()) {
+        //declare vars
+        auto &params = variant.fields;
+        auto data_index = Layout::get_data_index(decl);
+        auto dataPtr = gep2(rhs, data_index, decl->type);
+        auto var_ty = get_variant_type(node->type, this);
+        for (int i = 0; i < params.size(); i++) {
+            //regular var decl
+            auto &prm = params[i];
+            auto arg = node->args[i];
+            auto field_ptr = gep2(dataPtr, i, var_ty);
+            auto alloc_ptr = varAlloc[getId(arg.name)];
+            NamedValues[arg.name] = alloc_ptr;
+            if (arg.ptr) {
+                Builder->CreateStore(field_ptr, alloc_ptr);
+                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, prm.type));
+            } else {
+                if (prm.type.isPrim() || prm.type.isPointer()) {
+                    Builder->CreateStore(load(field_ptr, mapType(prm.type)), alloc_ptr);
+                } else {
+                    copy(alloc_ptr, field_ptr, prm.type);
+                }
+                dbg_var(arg.name, node->rhs->line, 0, prm.type);
+            }
+        }
+    }
+    curOwner->newScope();
+    node->thenStmt->accept(this);
+    auto then_scope = curOwner->dropScope();
+    //clear params
+    for (auto &p : node->args) {
+        //NamedValues.erase(p);
+    }
+    if (!isReturnLast(node->thenStmt.get())) {
+        Builder->CreateBr(next);
+    }
+    if (node->elseStmt) {
+        set_and_insert(elsebb);
+        resolv->newScope();
+        curOwner->newScope();
+        node->elseStmt->accept(this);
+        //curOwner->dropScope();
+        if (!isReturnLast(node->elseStmt.get())) {
+            Builder->CreateBr(next);
+        }
+    }
+    curOwner->newScope(then_scope);
+    set_and_insert(next);
+    return nullptr;
+}
+
+std::any Compiler::visitWhileStmt(WhileStmt *node) {
+    auto then = llvm::BasicBlock::Create(ctx(), "body");
+    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
+    auto next = llvm::BasicBlock::Create(ctx(), "next");
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(condbb);
+    auto c = loadPtr(node->expr.get());
+    Builder->CreateCondBr(branch(c), then, next);
+    set_and_insert(then);
+    loops.push_back(condbb);
+    loopNext.push_back(next);
+    resolv->newScope();
+    curOwner->newScope();
+    node->body->accept(this);
+    //curOwner->dropScope();
+    loops.pop_back();
+    loopNext.pop_back();
+    Builder->CreateBr(condbb);
+    set_and_insert(next);
+    return nullptr;
+}
+
+std::any Compiler::visitForStmt(ForStmt *node) {
+    resolv->newScope();
+    curOwner->newScope();
+    if (node->decl) {
+        node->decl->accept(this);
+    }
+    auto then = llvm::BasicBlock::Create(ctx(), "body");
+    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
+    auto updatebb = llvm::BasicBlock::Create(ctx(), "update", func);
+    auto next = llvm::BasicBlock::Create(ctx(), "next");
+    Builder->CreateBr(condbb);
+    Builder->SetInsertPoint(condbb);
+    if (node->cond) {
+        auto c = loadPtr(node->cond.get());
+        Builder->CreateCondBr(branch(c), then, next);
+    } else {
+        Builder->CreateBr(then);
+    }
+    set_and_insert(then);
+    loops.push_back(updatebb);
+    loopNext.push_back(next);
+    int backup = resolv->max_scope;
+    node->body->accept(this);
+    int backup2 = resolv->max_scope;
+    resolv->max_scope = backup;
+    Builder->CreateBr(updatebb);
+    Builder->SetInsertPoint(updatebb);
+    for (auto &u : node->updaters) {
+        u->accept(this);
+    }
+    resolv->max_scope = backup2;
+    loops.pop_back();
+    loopNext.pop_back();
+    Builder->CreateBr(condbb);
+    set_and_insert(next);
+    //curOwner->dropScope();
+    return {};
 }

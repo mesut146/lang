@@ -25,6 +25,19 @@ bool isDrop(BaseDecl *decl, Resolver *r) {
     return false;
 }
 
+Variable *Ownership::find(std::string &name, int id) {
+    for (int j = scopes.size() - 1; j >= 0; --j) {
+        auto &scope = scopes[j];
+        for (int i = 0; i < scope.vars.size(); ++i) {
+            auto &v = scope.vars[i];
+            if (v.name == name && v.id == id) {
+                return &v;
+            }
+        }
+    }
+    return nullptr;
+}
+
 void Ownership::doMove(Expression *expr) {
     auto rt = r->resolve(expr);
     if (!isStruct(rt.type)) return;
@@ -39,9 +52,10 @@ void Ownership::doMove(Expression *expr) {
                 if (v.name == sn->name && v.id == id) {
                     auto v2 = v;
                     v2.moveLine = expr->line;
-                    scope.moved.push_back(v2);
-                    scope.vars.erase(scope.vars.begin() + i);
-                    break;
+                    auto &last = scopes.back();
+                    last.moved.push_back(v2);
+                    //scope.vars.erase(scope.vars.begin() + i);
+                    return;
                 }
             }
         }
@@ -49,7 +63,8 @@ void Ownership::doMove(Expression *expr) {
     }
     auto fa = dynamic_cast<FieldAccess *>(expr);
     if (fa) {
-        throw std::runtime_error("domove " + expr->print());
+        doMove(fa->scope);
+        //r->err(expr, "domove");
     }
 }
 
@@ -58,8 +73,41 @@ Variable *Ownership::isMoved(SimpleName *expr) {
     if (!isStruct(rt.type)) return nullptr;
     if (rt.type.isString()) return nullptr;
     auto id = rt.vh.value().id;
-    for (auto &v : moved) {
-        if (v.name == expr->name && v.id == id) return &v;
+    for (int j = scopes.size() - 1; j >= 0; --j) {
+        auto &scope = scopes[j];
+        for (int i = 0; i < scope.moved.size(); ++i) {
+            auto &v = scope.moved[i];
+            if (v.name == expr->name && v.id == id) {
+                return &v;
+            }
+        }
     }
     return nullptr;
+}
+
+void Ownership::doAssign(Expression *lhs, Expression *rhs) {
+    doMove(rhs);
+    //if lhs is moved too, reassign
+}
+
+//redeclare var
+void Ownership::endAssign(Expression *lhs) {
+    auto rt = r->resolve(lhs);
+    if (!isStruct(rt.type)) return;
+    if (rt.type.isString()) return;
+    auto sn = dynamic_cast<SimpleName *>(lhs);
+    if (sn) {
+        auto id = rt.vh.value().id;
+        for (int j = scopes.size() - 1; j >= 0; --j) {
+            auto &scope = scopes[j];
+            for (int i = 0; i < scope.moved.size(); ++i) {
+                auto &v = scope.moved[i];
+                if (v.name == sn->name && v.id == id) {
+                    scope.moved.erase(scope.moved.begin() + i);
+                    return;
+                }
+            }
+        }
+        return;
+    }
 }

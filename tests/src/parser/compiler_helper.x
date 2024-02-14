@@ -228,7 +228,7 @@ impl Compiler{
       let sret = get_sret();
       arg_attr(arg, &sret);
     }
-    if(self.protos.get().funcMap.has(&mangled)){
+    if(self.protos.get().funcMap.contains(&mangled)){
       panic("already proto %s\n", mangled.cstr());
     }
     self.protos.get().funcMap.add(mangled, f);

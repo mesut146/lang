@@ -372,7 +372,7 @@ impl Resolver{
         if (g.type.is_some()) {
             let type = self.getType(g.type.get());
             //todo check
-            let err_opt = MethodResolver::is_compatible(RType::new(rhs.type), &type);
+            let err_opt = MethodResolver::is_compatible(RType::new(rhs.type.clone()), &type);
             if (err_opt.is_some()) {
                 let msg = Fmt::format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name.str(),type.print().str(),rhs.type.print().str(), err_opt.get().str());
                 self.err(msg.str());
@@ -691,6 +691,11 @@ impl Resolver{
     return tmp.type.print().eq("bool");
   }
 
+  func clone_op(op: Option<Decl*>*): Option<Decl*>{
+    if(op.is_none()) return Option<Decl*>::new();
+    return Option<Decl*>::new(op.unwrap());
+  }
+
   func visit(self, node: Type*): RType{
     let id = Node::new(-1);
     let expr = Expr::Type{.id, *node};
@@ -761,7 +766,7 @@ impl Resolver{
           return tmp;
         }
         else if(tmp.targetDecl.is_some()){
-          target0 = tmp.targetDecl;
+          target0 = clone_op(&tmp.targetDecl);
           if(!target0.unwrap().is_generic){
             return tmp;
           }
@@ -1000,8 +1005,9 @@ impl Resolver{
         }
         let pt = self.getType(&prm.type);
         let arg = self.visit(&e.expr);
+        let arg_type = arg.type.clone();
         if (MethodResolver::is_compatible(arg, &pt).is_some()) {
-            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg.type.print().str());
+            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg_type.print().str());
             self.err(node, f.str());
         }
     }
@@ -1082,8 +1088,9 @@ impl Resolver{
   func visit_assign(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
     let t1 = self.visit(lhs);
     let t2 = self.visit(rhs);
+    let rhs_type = t2.type.print();
     if (MethodResolver::is_compatible(t2, &t1.type).is_some()) {
-      let msg = Fmt::format("cannot assign %s=%s", t1.type.print().str(), t2.type.print().str());
+      let msg = Fmt::format("cannot assign %s=%s", t1.type.print().str(), rhs_type.str());
       self.err(node, msg.str());
     }
     return t1;
@@ -1326,10 +1333,11 @@ impl Resolver{
     let elemType = self.getType(list.get_ptr(0));
     for (let i = 1; i < list.len(); ++i) {
         let cur = self.visit(list.get_ptr(i));
+        let cur_type = cur.type.print();
         let cmp = MethodResolver::is_compatible(cur, &elemType);
         if (cmp.is_some()) {
             print("%s", cmp.get().cstr());
-            let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur.type.print().str());
+            let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur_type.str());
             self.err(node, msg.str());
         }
     }
@@ -1599,11 +1607,11 @@ impl Resolver{
     for (let i=0;i < is.args.len();++i) {
         let arg = is.args.get_ptr(i);
         let field = variant.fields.get_ptr(i);
-        let ty = field.type;
+        let ty = field.type.clone();
         if (arg.is_ptr) {
             ty = field.type.toPtr();
         } 
-        self.addScope(arg.name.clone(), ty, false);
+        self.addScope(arg.name.clone(), ty.clone(), false);
         self.cache.add(arg.id, RType::new(ty));
     }
     self.visit(is.then.get());
