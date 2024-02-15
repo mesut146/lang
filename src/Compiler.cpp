@@ -924,6 +924,8 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
         auto val = gen(e);
         copy(ptr, val, resolv->getType(e));
     }
+    //todo move
+    curOwner->doMoveReturn(e);
     return Builder->CreateRetVoid();
 }
 
@@ -1264,7 +1266,9 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     if (isRvo(target)) {
-        return call(mc, getAlloc(mc));
+        auto ptr = getAlloc(mc);
+        curOwner->addPtr(mc, ptr);
+        return call(mc, ptr);
     } else {
         return call(mc, nullptr);
     }
@@ -1421,16 +1425,16 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     return nullptr;
 }
 
-std::any Compiler::visitVarDecl(VarDecl *node) {
-    node->decl->accept(this);
-    return {};
-}
-
 void Compiler::copy(llvm::Value *trg, llvm::Value *src, const Type &type) {
     //src->dump();
     //trg->dump();
     //print("---------------");
     Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0), getSize2(type) / 8);
+}
+
+std::any Compiler::visitVarDecl(VarDecl *node) {
+    node->decl->accept(this);
+    return {};
 }
 
 std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
@@ -1492,12 +1496,8 @@ EnumDecl *findEnum(const Type &type, Resolver *resolv) {
 std::any Compiler::visitObjExpr(ObjExpr *node) {
     loc(node);
     auto tt = resolv->resolve(node);
-    llvm::Value *ptr;
-    if (node->isPointer) {
-        ptr = callMalloc(makeInt(getSize2(tt.targetDecl) / 8, 64), this);
-    } else {
-        ptr = getAlloc(node);
-    }
+    llvm::Value *ptr = getAlloc(node);
+    curOwner->addPtr(node, ptr);
     object(node, ptr, tt, nullptr);
     return ptr;
 }
@@ -1609,6 +1609,7 @@ std::any Compiler::visitType(Type *node) {
     }
     //enum variant without struct
     auto ptr = getAlloc(node);
+    curOwner->addPtr(node, ptr);
     simpleVariant(*node, ptr);
     return ptr;
 }
@@ -1785,6 +1786,7 @@ std::any Compiler::visitBreakStmt(BreakStmt *node) {
 
 std::any Compiler::visitArrayExpr(ArrayExpr *node) {
     auto ptr = getAlloc(node);
+    //todo curOwner->addPtr(node, ptr);
     array(node, ptr);
     return ptr;
 }
@@ -1802,7 +1804,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
         return;
     }
     auto obj = dynamic_cast<ObjExpr *>(e);
-    if (obj && !obj->isPointer) {
+    if (obj) {
         object(obj, ptr, resolv->resolve(obj), nullptr);
         return;
     }

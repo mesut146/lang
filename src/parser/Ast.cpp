@@ -149,8 +149,7 @@ std::string VarDecl::print() const {
 
 std::string VarDeclExpr::print() const {
     std::string s;
-    if (isStatic) s.append("static ");
-    s.append(!isConst ? "let" : "const");
+    s.append("let");
     s.append(" ");
     s.append(join(list, ", "));
     return s;
@@ -221,7 +220,7 @@ std::string Type::print() const {
 
 std::string Param::print() const {
     std::string s;
-    if(is_deref){
+    if (is_deref) {
         s.append("*");
     }
     s.append(name);
@@ -236,9 +235,6 @@ std::string ParExpr::print() const {
 
 std::string ObjExpr::print() const {
     std::string s;
-    if (isPointer) {
-        s.append("new ");
-    }
     s.append(type.print());
     s.append("{");
     s.append(join(entries, ", "));
@@ -320,9 +316,6 @@ std::string Unary::print() const {
 }
 
 std::string FieldAccess::print() const {
-    if (isOptional) {
-        return scope->print() + "?." + name;
-    }
     return scope->print() + "." + name;
 }
 
@@ -344,9 +337,6 @@ std::string MethodCall::print() const {
 
 std::string ArrayAccess::print() const {
     std::string s = array->print();
-    if (isOptional) {
-        s.append("?");
-    }
     s.append("[");
     s.append(index->print());
     if (index2) {

@@ -470,7 +470,6 @@ class FieldAccess : public Expression {
 public:
     Expression *scope;
     std::string name;
-    bool isOptional = false;
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -481,7 +480,6 @@ public:
     Expression *array;
     Expression *index;
     std::unique_ptr<Expression> index2;
-    bool isOptional = false;
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -521,7 +519,6 @@ class ObjExpr : public Expression {
 public:
     Type type;
     std::vector<Entry> entries;
-    bool isPointer = false;
 
     std::string print() const override;
     std::any accept(Visitor *v) override;
@@ -543,7 +540,6 @@ public:
     std::string name;
     std::optional<Type> type;
     std::unique_ptr<Expression> rhs;
-    bool isOptional = false;
 
     std::string print() const;
     std::any accept(Visitor *v);
@@ -551,8 +547,6 @@ public:
 
 class VarDeclExpr : public Statement {
 public:
-    bool isConst = false;
-    bool isStatic = false;
     std::vector<Fragment> list;
 
     std::string print() const override;

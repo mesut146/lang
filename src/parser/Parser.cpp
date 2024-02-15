@@ -345,16 +345,8 @@ std::unique_ptr<VarDecl> Parser::parseVarDecl() {
 //varType varDeclFrag ("," varDeclFrag)*;
 VarDeclExpr *Parser::parseVarDeclExpr() {
     auto res = new VarDeclExpr;
-    if (is(STATIC)) {
-        consume(STATIC);
-        res->isStatic = true;
-    }
-    if (is(CONST_KW)) {
-        consume(CONST_KW);
-        res->isConst = true;
-    } else {
-        consume(LET);
-    }
+    consume(LET);
+
     res->list.push_back(frag(this));
     //rest if any
     while (is(COMMA)) {

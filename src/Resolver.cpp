@@ -260,13 +260,13 @@ void Resolver::addScope(std::string &name, const Type &type, bool prm, int line,
 }
 
 void dump(Resolver *r) {
-    for (auto &[k, v] : r->cache) {
+    /*for (auto &[k, v] : r->cache) {
         print(k);
         for (auto &[k2, v2] : v) {
             print(k2 + "=" + v2.type.print());
         }
         print("");
-    }
+    }*/
 }
 
 void dump(Method *node) {
@@ -620,19 +620,20 @@ void Resolver::init() {
 
 RType Resolver::resolve(Expression *expr) {
     //print("resolve " + expr->print());
-    auto idtmp = expr->accept(&idgen);
-    if (!idtmp.has_value()) {
+    if (dynamic_cast<Type *>(expr)) {
         return std::any_cast<RType>(expr->accept(this));
     }
-    auto id = std::any_cast<std::string>(idtmp);
-    auto scp = printMethod(curMethod);
-    auto &map = cache[scp];
-    auto it = map.find(id);
-    if (it != map.end()) {
-        return it->second;
+    if (expr->id == -1) {
+        err(expr, "id -1");
     }
+    if (cache.contains(expr->id)) {
+        return cache[expr->id];
+    }
+    std::cout << unit->path << "\n";
+    std::cout << printMethod(curMethod) << ", ";
+    std::cout << expr->id << ", " << expr->print() << std::endl;
     auto res = std::any_cast<RType>(expr->accept(this));
-    map[id] = res;
+    cache[expr->id] = res;
     return res;
 }
 
@@ -1602,10 +1603,6 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         throw std::runtime_error("obj creation can't have mixed values");
     }
     auto res = resolve(node->type);
-    if (node->isPointer) {
-        res = res.clone();
-        res.type = Type(Type::Pointer, res.type);
-    }
     //base checks
     auto decl = res.targetDecl;
     if (decl->base && !base) {
@@ -1805,9 +1802,6 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         if (dynamic_cast<MethodCall *>(mc->scope.get()) && getType(mc->scope.get()).isPrim()) {
             err(mc, "method scope is rvalue");
         }
-        /*for (auto arg : mc->args) {
-            curOwner->doMoveCall(arg);
-        }*/
         MethodResolver mr(this);
         auto res = mr.handleCallResult(sig);
         return res;

@@ -99,7 +99,7 @@ std::vector<Method *> getMethods(Unit *unit) {
 bool Compiler::doesAlloc(Expression *e) {
     auto obj = dynamic_cast<ObjExpr *>(e);
     if (obj) {
-        return !obj->isPointer;
+        return true;
     }
     auto aa = dynamic_cast<ArrayAccess *>(e);
     if (aa) {
@@ -455,10 +455,6 @@ public:
         }
     }
     std::any visitObjExpr(ObjExpr *node) override {
-        if (node->isPointer) {
-            //todo this too
-            return {};
-        }
         auto ty = compiler->resolv->getType(node);
         auto ptr = alloc(ty, node);
         for (auto &e : node->entries) {

@@ -37,6 +37,9 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     res.r = r;
     RType scp;
     if (mc->scope) {
+        if(mc->print()=="self.expand()"){
+            auto x = 66;
+        }
         scp = r->resolve(mc->scope.get());
         //we need this to handle cases like Option::new(...)
         if (scp.targetDecl && scp.targetDecl->unit->path != r->unit->path && !scp.targetDecl->isGeneric) {

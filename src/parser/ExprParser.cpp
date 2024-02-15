@@ -181,7 +181,6 @@ bool isObj(Parser *p) {
 
 Expression *makeObj(Parser *p, bool isPointer, const Type &type) {
     auto res = Node::make<ObjExpr>();
-    res->isPointer = isPointer;
     res->type = type;
     p->consume(LBRACE);
     if (!p->is(RBRACE)) {
@@ -332,11 +331,6 @@ Expression *PRIM2(Parser *p) {
     Expression *lhs = PRIM(p);
     while (p->is({DOT, LBRACKET}) || p->is({QUES}, {DOT, LBRACKET})) {
         int line = p->first()->line;
-        bool isOptional = false;
-        if (p->is({QUES}, {DOT, LBRACKET})) {
-            p->consume(QUES);
-            isOptional = true;
-        }
         if (p->is(DOT)) {
             p->consume(DOT);
             auto name = p->name();
@@ -356,14 +350,12 @@ Expression *PRIM2(Parser *p) {
                 lhs = loc(res, line);
             } else {
                 auto res = new FieldAccess;
-                res->isOptional = isOptional;
                 res->scope = lhs;
                 res->name = name;
                 lhs = loc(res, lhs->line);
             }
         } else {
             auto res = new ArrayAccess;
-            res->isOptional = isOptional;
             res->array = lhs;
             p->consume(LBRACKET);
             res->index = p->parseExpr();
@@ -511,11 +503,10 @@ Expression *expr7(Parser *p) {
     int line = p->first()->line;
     auto lhs = expr8(p);
     while (p->is({EQEQ, NOTEQ})) {
-        auto res = new Infix;
+        auto res = loc(new Infix, line);
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr8(p);
-        res->line = line;
         lhs = res;
     }
     return lhs;
@@ -526,8 +517,7 @@ Expression *expr6(Parser *p) {
     int line = p->first()->line;
     auto lhs = expr7(p);
     while (p->is(AND)) {
-        auto res = new Infix;
-        res->line = line;
+        auto res = loc(new Infix, line);
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr7(p);
@@ -538,10 +528,10 @@ Expression *expr6(Parser *p) {
 
 //expr6 ("^" expr6)*
 Expression *expr5(Parser *p) {
-    int line = p->first()->line;
+    //int line = p->first()->line;
     auto lhs = expr6(p);
     while (p->is(POW)) {
-        auto res = new Infix;
+        auto res = loc(new Infix, lhs->line);
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr6(p);
@@ -554,7 +544,7 @@ Expression *expr5(Parser *p) {
 Expression *expr4(Parser *p) {
     auto lhs = expr5(p);
     while (p->is(OR)) {
-        auto res = new Infix;
+        auto res = loc(new Infix, lhs->line);
         res->left = lhs;
         res->op = p->pop().value;
         res->right = expr5(p);
@@ -598,8 +588,7 @@ bool isAssign(std::string &s) {
 Expression *Parser::parseExpr() {
     auto res = expr2(this);
     if (first() && isAssign(first()->value)) {
-        auto assign = new Assign;
-        assign->line = first()->line;
+        auto assign = loc(new Assign, res->line);
         assign->left = res;
         assign->op = pop().value;
         assign->right = parseExpr();

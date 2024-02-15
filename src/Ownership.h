@@ -1,6 +1,7 @@
 #pragma once
 
 #include "parser/Ast.h"
+#include <llvm/IR/Value.h>
 
 struct Resolver;
 
@@ -18,12 +19,19 @@ struct VarScope {
     std::vector<Variable> moved;
 };
 
+struct Object{
+    Expression* expr;
+    llvm::Value* ptr;
+};
+
 struct Ownership {
     Resolver *r;
     Method *method;
     //std::vector<Variable> moved;
     std::vector<VarScope> scopes;
     //std::vector<Variable> vars;
+    std::vector<Object> objects;
+    std::vector<Object> partials;
 
     Ownership(Resolver *r, Method *m) : r(r), method(m) {}
 
@@ -41,6 +49,10 @@ struct Ownership {
     }
 
     Variable *find(std::string &name, int id);
+
+    void addPtr(Expression* expr, llvm::Value* ptr){
+        objects.push_back({expr, ptr});
+    }
 
     void add(Fragment &f, Type &type) {
         if (type.isPointer()) return;
@@ -65,11 +77,10 @@ struct Ownership {
     void endAssign(Expression *lhs);
 
     //send(expr) //moves expr
-    void doMoveCall(Expression *expr) {
-        doMove(expr);
-    }
+    void doMoveCall(Expression *expr);
+    
 
-    void doMoveReturn(Expression *expr){};
+    void doMoveReturn(Expression *expr);
 
 
     Variable *isMoved(SimpleName *sn);

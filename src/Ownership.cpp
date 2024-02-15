@@ -1,6 +1,12 @@
 #include "Ownership.h"
 #include "Resolver.h"
 
+bool isDropType(Type &type) {
+    if (type.isString() || type.isSlice()) return false;
+    if (type.isPointer()) return false;
+    return isStruct(type);
+}
+
 bool isDrop(BaseDecl *decl, Resolver *r) {
     if (decl->isDrop()) return true;
     auto sd = dynamic_cast<StructDecl *>(decl);
@@ -40,8 +46,7 @@ Variable *Ownership::find(std::string &name, int id) {
 
 void Ownership::doMove(Expression *expr) {
     auto rt = r->resolve(expr);
-    if (!isStruct(rt.type)) return;
-    if (rt.type.isString()) return;
+    if (!isDropType(rt.type)) return;
     auto sn = dynamic_cast<SimpleName *>(expr);
     if (sn) {
         auto id = rt.vh.value().id;
@@ -63,6 +68,13 @@ void Ownership::doMove(Expression *expr) {
     }
     auto fa = dynamic_cast<FieldAccess *>(expr);
     if (fa) {
+        auto scp = r->resolve(fa->scope);
+        if (scp.type.isPointer()) {
+            r->err(expr, "move field of ptr");
+        }
+        if(isDropType(scp.type)){
+            r->err(expr, "partial move");
+        }
         doMove(fa->scope);
         //r->err(expr, "domove");
     }
@@ -70,8 +82,7 @@ void Ownership::doMove(Expression *expr) {
 
 Variable *Ownership::isMoved(SimpleName *expr) {
     auto rt = r->resolve(expr);
-    if (!isStruct(rt.type)) return nullptr;
-    if (rt.type.isString()) return nullptr;
+    if (!isDropType(rt.type)) return nullptr;
     auto id = rt.vh.value().id;
     for (int j = scopes.size() - 1; j >= 0; --j) {
         auto &scope = scopes[j];
@@ -93,8 +104,7 @@ void Ownership::doAssign(Expression *lhs, Expression *rhs) {
 //redeclare var
 void Ownership::endAssign(Expression *lhs) {
     auto rt = r->resolve(lhs);
-    if (!isStruct(rt.type)) return;
-    if (rt.type.isString()) return;
+    if (!isDropType(rt.type)) return;
     auto sn = dynamic_cast<SimpleName *>(lhs);
     if (sn) {
         auto id = rt.vh.value().id;
@@ -110,4 +120,28 @@ void Ownership::endAssign(Expression *lhs) {
         }
         return;
     }
+}
+
+
+void Ownership::doMoveReturn(Expression *expr) {
+    for (auto i = objects.begin(); i != objects.end(); ++i) {
+        auto &obj = *i;
+        if (obj.expr->id == expr->id) {
+            //move of rvalue, release ownership
+            objects.erase(i);
+            break;
+        }
+    }
+}
+
+void Ownership::doMoveCall(Expression *arg) {
+    for (auto i = objects.begin(); i != objects.end(); ++i) {
+        auto &obj = *i;
+        if (obj.expr->id == arg->id) {
+            //move of rvalue, release ownership
+            objects.erase(i);
+            break;
+        }
+    }
+    doMove(arg);
 }

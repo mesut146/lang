@@ -202,8 +202,8 @@ struct VarHolder {
     bool prm = false;
     int id;
 
-    explicit VarHolder(std::string &name, const Type &type, bool prm,int id) : name(name), type(type), prm(prm),id(id) {}
-    explicit VarHolder(std::string &name, const Type &type, int id) : name(name), type(type) ,id(id){}
+    explicit VarHolder(std::string &name, const Type &type, bool prm, int id) : name(name), type(type), prm(prm), id(id) {}
+    explicit VarHolder(std::string &name, const Type &type, int id) : name(name), type(type), id(id) {}
 };
 
 class RType {
@@ -240,7 +240,7 @@ public:
 
     static Type make(const Type &type, const std::map<std::string, Type> &map);
 
-    std::any visitType(Type *type);
+    std::any visitType(Type *type) override;
 };
 
 static std::string prm_id(const Method &m, const std::string &p) {
@@ -256,7 +256,7 @@ enum class MutKind {
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
-    std::unordered_map<std::string, std::map<std::string, RType>> cache;
+    std::unordered_map<int, RType> cache;
     std::unordered_map<std::string, RType> typeMap;
     std::vector<Scope> scopes;
     int max_scope;
@@ -277,6 +277,7 @@ public:
     std::string root;
 
     explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
+    ~Resolver() = default;
 
     static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
     static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);

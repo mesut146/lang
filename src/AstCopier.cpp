@@ -37,11 +37,13 @@ Type visit(Type &node, AstCopier *t) {
 
 Expression *loc(Expression *res, Expression *src) {
     res->line = src->line;
+    res->id = ++Node::last_id;
     return res;
 }
 
 Statement *loc(Statement *res, Statement *src) {
     res->line = src->line;
+    //res->id = ++Node::last_id;
     return res;
 }
 
@@ -112,8 +114,6 @@ std::any AstCopier::visitVarDecl(VarDecl *node) {
 
 std::any AstCopier::visitVarDeclExpr(VarDeclExpr *node) {
     auto res = new VarDeclExpr;
-    res->isConst = node->isConst;
-    res->isStatic = node->isStatic;
     for (auto &f : node->list) {
         auto fr = std::any_cast<Fragment *>(visitFragment(&f));
         res->list.push_back(std::move(*fr));
@@ -125,19 +125,17 @@ std::any AstCopier::visitVarDeclExpr(VarDeclExpr *node) {
 std::any AstCopier::visitFragment(Fragment *node) {
     auto res = new Fragment();
     res->id = ++Node::last_id;
+    res->line = node->line;
     res->name = node->name;
     if (node->type) {
         res->type = visit(*node->type, this);
     }
     res->rhs = expr(node->rhs, this);
-    res->isOptional = node->isOptional;
-    res->line = node->line;
     return res;
 }
 
 std::any AstCopier::visitObjExpr(ObjExpr *node) {
     auto res = new ObjExpr;
-    res->isPointer = node->isPointer;
     res->type = visit(node->type, this);
     for (auto &e : node->entries) {
         auto ent = Entry();
