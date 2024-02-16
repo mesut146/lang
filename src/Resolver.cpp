@@ -86,7 +86,7 @@ void printLine(Resolver *r, Node *n) {
 void Resolver::err(Node *e, const std::string &msg) {
     std::string s;
     if (curMethod) {
-        s += curMethod->unit->path + ":" + std::to_string(e->line) + "\n";
+        s += curMethod->path + ":" + std::to_string(e->line) + "\n";
         s += "in " + printMethod(curMethod) + "\n";
     } else {
         s += unit->path + ":" + std::to_string(e->line) + "\n";
@@ -101,7 +101,7 @@ void Resolver::err(Node *e, const std::string &msg) {
 
 void Resolver::err(const std::string &msg) {
     if (curMethod) {
-        std::string s = format("%s\nin %s\n%s", unit->path.c_str(), printMethod(curMethod).c_str(), msg.c_str());
+        std::string s = format("%s\nin %s\n%s", curMethod->path.c_str(), printMethod(curMethod).c_str(), msg.c_str());
         error(s);
     } else {
         std::string s = format("%s\n%s", unit->path.c_str(), msg.c_str());
@@ -229,7 +229,8 @@ std::vector<ImportStmt> Resolver::get_imports() {
         }
     }
     if (curMethod && !curMethod->typeArgs.empty()) {
-        for (auto &is : curMethod->unit->imports) {
+        auto r = getResolver(curMethod->path, root);
+        for (auto &is : r->unit->imports) {
             if (has(imports, is)) continue;
             //skip self being cycle
             if (unit->path == getPath(is)) continue;
@@ -288,7 +289,7 @@ void Resolver::resolveAll() {
                 std::string msg = "variable type mismatch '" + g.name + "'\n";
                 msg += "expected: " + type.print() + " got " + rhs.type.print();
                 msg += "\n" + err_opt.value();
-                err(msg);
+                err(&g, msg);
             }
         }
         addScope(g.name, rhs.type, false, 0, g.id);
@@ -434,7 +435,7 @@ std::unique_ptr<Statement> newDrop(const std::string &scope, FieldDecl &fd, Unit
 
 std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
     int line = unit->lastLine;
-    Method m(unit.get());
+    Method m(unit->path);
     m.name = "drop";
     Param s("self", clone(bd->type).toPtr());
     m.self = std::move(s);
@@ -496,7 +497,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
 
 std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
     int line = unit->lastLine;
-    Method m(unit.get());
+    Method m(unit->path);
     m.name = "debug";
     Param s("self", clone(bd->type).toPtr());
     m.self = std::move(s);
@@ -684,7 +685,7 @@ std::any Resolver::visitEnumDecl(EnumDecl *node) {
             for (auto &ep : ev.fields) {
                 resolve(ep.type);
                 if (isCyclic(ep.type, node)) {
-                    err("cyclic type " + node->type.print());
+                    err(node, "cyclic type " + ep.type.print());
                 }
             }
         }
@@ -711,7 +712,7 @@ std::any Resolver::visitStructDecl(StructDecl *node) {
     for (auto &fd : node->fields) {
         fd.accept(this);
         if (isCyclic(fd.type, node)) {
-            err("cyclic type " + node->type.print());
+            err(node, "cyclic type " + fd.type.print());
         }
     }
     //}
@@ -842,7 +843,7 @@ std::any Resolver::visitMethod(Method *m) {
         return nullptr;
     }
     if (is_main(m) && m->type.print() != "void" && m->type.print() != "i32") {
-        err("main method's return type must be 'void' or 'i32'");
+        err(m, "main method's return type must be 'void' or 'i32'");
     }
     curMethod = m;
     //ownerMap.insert({mangle(m), Ownership{}});
@@ -850,12 +851,12 @@ std::any Resolver::visitMethod(Method *m) {
 
     //print("visitMethod "+ printMethod(m));
     if (m->isVirtual && !m->self) {
-        err("virtual method must have self parameter");
+        err(m, "virtual method must have self parameter");
     }
     //todo check if both virtual and override
     auto orr = isOverride(m);
     if (orr) {
-        print(printMethod(m) + " overrides " + printMethod(orr));
+        //print(printMethod(m) + " overrides " + printMethod(orr));
         overrideMap[m] = orr;
     }
     auto res = resolve(m->type).clone();
@@ -863,7 +864,7 @@ std::any Resolver::visitMethod(Method *m) {
     max_scope = 0;
     newScope();
     if (m->self) {
-        if (!m->self->type) err("self type is not set");
+        if (!m->self->type) err(m, "self type is not set");
         addScope(m->self->name, *m->self->type, true, m->line, m->self->id);
         m->self->accept(this);
     }
@@ -875,7 +876,7 @@ std::any Resolver::visitMethod(Method *m) {
         m->body->accept(this);
         //todo check unreachable
         if (!m->type.isVoid() && !isReturnLast(m->body.get())) {
-            err("non void function must return a value");
+            err(m, "non void function must return a value");
         }
     }
     dropScope();
@@ -924,7 +925,7 @@ BaseDecl *generateDecl(const Type &type, BaseDecl *decl) {
     }
     if (decl->isEnum()) {
         auto res = new EnumDecl;
-        res->unit = decl->unit;
+        res->path = decl->path;
         res->type = clone(type);
         res->attr = decl->attr;
         res->derives = decl->derives;
@@ -941,7 +942,7 @@ BaseDecl *generateDecl(const Type &type, BaseDecl *decl) {
         return res;
     } else {
         auto res = new StructDecl;
-        res->unit = decl->unit;
+        res->path = decl->path;
         res->type = clone(type);
         res->attr = decl->attr;
         res->derives = decl->derives;
@@ -1092,7 +1093,7 @@ std::any Resolver::visitType(Type *type) {
 }
 
 void Resolver::addUsed(BaseDecl *bd) {
-    if (bd->unit->path == unit->path && bd->type.typeArgs.empty()) return;
+    if (bd->path == unit->path && bd->type.typeArgs.empty()) return;
     for (auto prev : usedTypes) {
         if (prev->type.print() == bd->type.print()) return;
     }
@@ -1722,8 +1723,8 @@ Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
     return res;
 }
 
-std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
-    auto res = std::make_unique<Method>(r->unit.get());
+/*std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
+    auto res = std::make_unique<Method>(r->unit->path);
     res->name = "format";
     res->type = Type("String");
     res->params.push_back(Param("s", Type("str")));
@@ -1742,7 +1743,7 @@ std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
     }
     body->list.push_back(makeRet(r->unit, makeFa("f", "buf")));
     return res;
-}
+}*/
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (is_std_size(mc)) {
@@ -1765,17 +1766,17 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     }
     if (is_ptr_get(mc)) {
         if (mc->args.size() != 2) {
-            err("ptr access must have 2 args");
+            err(mc, "ptr access must have 2 args");
         }
         auto arg = getType(mc->args[0]);
         if (!arg.isPointer()) {
-            err("ptr arg is not ptr " + mc->print());
+            err(mc, "ptr arg is not ptr ");
         }
         auto idx = getType(mc->args[1]).print();
         if (idx == "i32" || idx == "i64" || idx == "u32" || idx == "u64" || idx == "i8" || idx == "i16") {
             return resolve(arg);
         } else {
-            err("ptr access index is not integer");
+            err(mc, "ptr access index is not integer");
         }
     }
     if (is_slice_get_ptr(mc)) {
@@ -1824,31 +1825,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
     } else if (mc->name == "format") {
         throw std::runtime_error("format todo");
-        if (mc->args.empty()) {
-            err("format expects format string");
-        }
-        auto lit = dynamic_cast<Literal *>(mc->args[0]);
-        if (!lit || lit->type != Literal::STR) {
-            err("invalid format argument: " + mc->args[0]->print());
-        }
-        for (auto a : mc->args) {
-            auto arg_type = resolve(a);
-        }
-        if (mc->id == -1) {
-            err(mc->print() + " must have id");
-        }
-        //cache generated method
-        if (!format_methods.contains(mc->id)) {
-            auto gm = generate_format(mc, this);
-            //gm->accept(this);
-            format_methods[mc->id] = std::move(gm);
-        }
-        //unit->items.push_back(std::move(gm));
-        return RType(Type("String"));
     }
-    /*for (auto arg : mc->args) {
-        curOwner->doMoveCall(arg);
-    }*/
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);
     //cache[id] = res;

@@ -85,7 +85,7 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
         tys.push_back(map_di(*p.type));
     }
     auto ft = DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray(tys));
-    auto file = DBuilder->createFile(m->unit->path, ".");
+    auto file = DBuilder->createFile(m->path, ".");
     di.file = file;
     std::string linkage_name;
     auto spflags = llvm::DISubprogram::SPFlagDefinition;
@@ -132,7 +132,7 @@ llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
     std::vector<llvm::Metadata *> elems;
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
     auto st_size = getSize2(decl);
-    auto file = DBuilder->createFile(decl->unit->path, di.cu->getDirectory());
+    auto file = DBuilder->createFile(decl->path, di.cu->getDirectory());
     auto name = decl->type.print();
     auto st = DBuilder->createStructType(di.cu, name, file, decl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
     di.incomplete_types[name] = st;

@@ -145,7 +145,6 @@ public:
 class Unit;
 
 struct Item : public Node {
-    Unit *unit;
 
     virtual bool isClass() { return false; }
     virtual bool isEnum() { return false; }
@@ -194,6 +193,7 @@ struct BaseDecl : public Item {
     std::optional<Type> base;
     std::vector<Type> derives;
     std::vector<std::string> attr;
+    std::string path;
 
     bool isDrop() {
         for (auto &at : attr) {
@@ -245,11 +245,12 @@ public:
     std::vector<Param> params;
     std::unique_ptr<Block> body;
     Item *parent = nullptr;
-    Unit *unit;
+    std::string path;
+    std::string used_path;
     bool isGeneric = false;
     bool isVirtual = false;
 
-    explicit Method(Unit *unit) : unit(unit) {}
+    explicit Method(std::string& path) : path(path) {}
 
     bool isMethod() override { return true; }
     std::string print() const override;
@@ -260,6 +261,7 @@ class Trait : public Item {
 public:
     Type type;
     std::vector<Method> methods;
+    std::string path;
 
     explicit Trait(const Type &type) : type(type) {}
     bool isTrait() override { return true; }
@@ -273,6 +275,7 @@ public:
     std::optional<Type> trait_name;
     Type type;
     std::vector<Method> methods;
+    std::string path;
 
     explicit Impl(const Type &type) : type(type) {}
 

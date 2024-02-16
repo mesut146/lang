@@ -256,7 +256,10 @@ std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
 }
 
 std::any AstCopier::visitMethod(Method *node) {
-    auto res = new Method(node->unit);
+    auto res = new Method(node->path);
+    if (node->name == "get_malloc") {
+        int xx = 55;
+    }
     res->name = node->name;
     res->type = visit(node->type, this);
     res->isVirtual = node->isVirtual;

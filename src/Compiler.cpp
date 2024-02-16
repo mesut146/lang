@@ -252,7 +252,7 @@ void init_globals(Compiler *c) {
     auto staticf = make_init_proto(c->unit->path, c);
     std::string mangled = staticf->getName().str();
     Compiler::global_protos.push_back(c->unit->path);
-    Method m(c->unit.get());
+    Method m(c->unit->path);
     m.type = Type("void");
     m.name = mangled;
     c->dbg_func(&m, staticf);
@@ -368,6 +368,7 @@ void Compiler::cleanup() {
     vtables.clear();
     virtualIndex.clear();
     globals.clear();
+    ownerMap.clear();
     //delete staticf;
 }
 
@@ -827,6 +828,7 @@ void Compiler::genCode(Method *m) {
     resolv->curMethod = m;
     curMethod = m;
     auto id = mangle(m);
+    //print("genCode " + id + "\n");
     ownerMap.insert({id, Ownership(resolv.get(), m)});
     curOwner = &ownerMap.at(id);
     curOwner->newScope();//params scope
@@ -1097,12 +1099,12 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
-        if (dynamic_cast<ObjExpr *>(node->right)) {
+        /*if (dynamic_cast<ObjExpr *>(node->right)) {
             auto rhs = gen(node->right);
             copy(l, rhs, lt);
         } else {
-            setField(node->right, lt, l);
-        }
+        }*/
+        setField(node->right, lt, l);
         curOwner->doAssign(node->left, node->right);
         curOwner->endAssign(node->left);
         return l;
@@ -1185,7 +1187,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
 
 std::any callPanic(MethodCall *mc, Compiler *c) {
     std::string message = "\"panic ";
-    message += c->curMethod->unit->path + ":" + std::to_string(mc->line);
+    message += c->curMethod->path + ":" + std::to_string(mc->line);
     message += " " + printMethod(c->curMethod);
     if (!mc->args.empty()) {
         message += "\n";

@@ -37,12 +37,12 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     res.r = r;
     RType scp;
     if (mc->scope) {
-        if(mc->print()=="self.expand()"){
+        if (mc->print() == "self.expand()") {
             auto x = 66;
         }
         scp = r->resolve(mc->scope.get());
         //we need this to handle cases like Option::new(...)
-        if (scp.targetDecl && scp.targetDecl->unit->path != r->unit->path && !scp.targetDecl->isGeneric) {
+        if (scp.targetDecl && scp.targetDecl->path != r->unit->path && !scp.targetDecl->isGeneric) {
             r->addUsed(scp.targetDecl);
         }
         if (scp.type.isPointer()) {
@@ -262,7 +262,7 @@ RType MethodResolver::handleCallResult(Signature &sig) {
     auto &sig2 = exact ? *exact : real[0];
     auto target = sig2.m;
     if (!target->isGeneric) {
-        if (target->unit->path != r->unit->path) {
+        if (target->path != r->unit->path) {
             r->usedMethods.insert(target);
         }
         auto res = r->resolve(sig2.ret).clone();
@@ -354,9 +354,9 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
     }
     Generator gen(map);
     auto res = std::any_cast<Method *>(gen.visitMethod(m));
+    res->used_path = r->unit->path;
     //print(res->print());
     if (!m->parent || !m->parent->isImpl()) {
-        res->unit = r->unit.get();
         r->generatedMethods.push_back(res);
         return res;
     }
@@ -378,7 +378,6 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
         newImpl->print();
     }*/
     res->parent = newImpl;
-    res->unit = r->unit.get();
     r->generatedMethods.push_back(res);
     return res;
 }

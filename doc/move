@@ -45,3 +45,28 @@ while(c){
 //invalid
 
 else reachable from if, bc they are in loop
+
+//////
+let a = get().a;
+
+get().b();
+
+call | type(enum) | obj | array
+
+
+return get().a;
+
+send(get())  release ownership
+send(get().a) //still here
+send(get().b: B) move partially
+return get() //moved, no need to add
+return get().a //move partially
+
+
+let a = get() //
+return a //move
+
+if(c){
+  a = get2();
+  return;
+}

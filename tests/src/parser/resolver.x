@@ -269,10 +269,11 @@ impl Resolver{
     let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: map,
       cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
-      used_methods: List<Method*>::new(1000), generated_methods: List<Method>::new(1000),
+      used_methods: List<Method*>::new(10),
+      generated_methods: List<Method>::new(10),
       inLoop: 0,
-      used_types: List<Decl*>::new(1000),
-      generated_decl: List<Decl>::new(1000)};
+      used_types: List<Decl*>::new(),
+      generated_decl: List<Decl>::new(10)};
     return res;
   }
 
@@ -637,11 +638,11 @@ impl Resolver{
     self.curMethod = Option<Method*>::None;
   }
 
-  func addUsed(self, decl: Decl*): Decl*{
+  func addUsed(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
       let used = self.used_types.get(i);
       if(used.type.print().eq(decl.type.print().str())){
-        return used;
+        return;
       }
     }
     //print("addUsed %s\n", decl.type.print().cstr());
@@ -665,7 +666,7 @@ impl Resolver{
         }
       }
     }
-    return *self.used_types.last();
+    //return *self.used_types.last();
   }
   
   func addUsed(self, m: Method*){

@@ -34,7 +34,7 @@ FieldDecl parseField(Parser *p) {
 std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     res->line = first()->line;
-    res->unit = unit;
+    res->path = unit->path;
     if (is(CLASS)) {
         consume(CLASS);
     } else {
@@ -85,7 +85,7 @@ EnumVariant parseEnumEntry(Parser *p) {
 
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
-    res->unit = unit;
+    res->path = unit->path;
     consume(ENUM);
     res->type = parseType();
     if (!res->type.typeArgs.empty()) {
@@ -111,7 +111,7 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
     p->consume(TRAIT);
     auto type = p->parseType();
     auto res = std::make_unique<Trait>(type);
-    res->unit = p->unit;
+    res->path = p->unit->path;
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         res->methods.push_back(std::move(p->parseMethod()));
@@ -130,7 +130,7 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     auto type = p->parseType();
     auto res = std::make_unique<Impl>(type);
     res->type_params = type_params;
-    res->unit = p->unit;
+    res->path = p->unit->path;
     if (p->is(FOR)) {
         res->trait_name.emplace(type);
         p->consume(FOR);
@@ -264,7 +264,7 @@ Param Parser::parseParam() {
 }
 
 Method Parser::parseMethod() {
-    Method res(unit);
+    Method res(unit->path);
     if (is(VIRTUAL)) {
         res.isVirtual = true;
         pop();
