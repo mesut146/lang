@@ -74,6 +74,10 @@ impl Parser{
       return t;
     }
     
+    func popv(self): String{
+    	return self.pop().value.clone();
+    }
+    
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
@@ -163,10 +167,10 @@ impl Parser{
     func parse_import(self): ImportStmt{
       self.consume(TokenType::IMPORT);
       let res = ImportStmt{list: List<String>::new()};
-      res.list.add(self.pop().value);
+      res.list.add(self.popv());
       while(self.is(TokenType::DIV)){
         self.pop();
-        res.list.add(self.pop().value);
+        res.list.add(self.popv());
       }
       return res;
     }

@@ -1,13 +1,13 @@
 class Node<T>{
   value: T;
-  next: Node<T>*?;
+  next: Node<T>*;
 }
 
-func makeNode(arr: int[]): Node<int>{
+func makeNode(arr: [i32]): Node<i32>{
   let pos = 0;
-  let head = Node<int>{value: arr[pos++]};
+  let head = Node<i32>{value: arr[pos++]};
   let cur = &head;
-  while(pos < arr.length){
+  while(pos < arr.len()){
     cur.next = new Node<int>{value: arr[pos++]};
     cur = cur.next;
   }

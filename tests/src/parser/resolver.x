@@ -378,7 +378,7 @@ impl Resolver{
                 self.err(msg.str());
             }
         }
-        self.addScope(g.name.clone(), rhs.type, false);
+        self.addScope(g.name.clone(), rhs.type.clone(), false);
     }
   }
 
@@ -415,7 +415,7 @@ impl Resolver{
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
       if let Item::Decl(decl*)=(it){
-        let res = RType::new(decl.type);
+        let res = RType::new(decl.type.clone());
         res.targetDecl = Option::new(decl);
         self.addType(decl.type.name().clone(), res);
         //derive
@@ -425,7 +425,7 @@ impl Resolver{
           newItems.add(Item::Impl{imp});
         }
       }else if let Item::Trait(tr*)=(it){
-        let res = RType::new(tr.type);
+        let res = RType::new(tr.type.clone());
         res.trait = Option::new(tr);
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
@@ -616,12 +616,12 @@ impl Resolver{
     self.newScope();
     if(node.self.is_some()){
       self.visit(&node.self.get().type);
-      self.addScope(node.self.get().name, node.self.get().type, true);
+      self.addScope(node.self.get().name.clone(), node.self.get().type.clone(), true);
     }
     for(let i = 0;i<node.params.len();++i){
       let prm = node.params.get_ptr(i);
       self.visit(&prm.type);
-      self.addScope(prm.name, prm.type, true);
+      self.addScope(prm.name.clone(), prm.type.clone(), true);
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
@@ -719,11 +719,11 @@ impl Resolver{
     if(node.is_slice()){
       let inner = node.elem();
       let elem = self.visit(inner);
-      return RType::new(Type::Slice{Box::new(elem.type)});      
+      return RType::new(Type::Slice{Box::new(elem.type.clone())});      
     }
     if let Type::Array(inner*, size) = (node){
       let elem = self.visit(inner.get());
-      return RType::new(Type::Array{Box::new(elem.type), size});      
+      return RType::new(Type::Array{Box::new(elem.type.clone()), size});      
     }
     if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
       let imp = self.curMethod.unwrap().parent.as_impl();
@@ -753,7 +753,7 @@ impl Resolver{
       //we looking for generic type
       let name = node.name();
       if (self.typeMap.contains(name)) {
-          target0 = self.typeMap.get_ptr(name).unwrap().targetDecl;
+          target0 = clone_op(&self.typeMap.get_ptr(name).unwrap().targetDecl);
       } else {
           //generic from imports
       }
@@ -783,7 +783,7 @@ impl Resolver{
     //generic
     if (node.get_args().empty() || !target.is_generic) {
         //inferred later
-        let res = RType::new(target.type);
+        let res = RType::new(target.type.clone());
         res.targetDecl = Option::new(target);
         self.addType(str, res.clone());
         return res;
@@ -966,10 +966,10 @@ impl Resolver{
         let idx = findVariant(decl, type0.name());
         let variant = variants.get_ptr(idx);
         fields0 = Option::new(&variant.fields);
-        type = Type::new(decl.type, variant.name.clone());
+        type = Type::new(decl.type.clone(), variant.name.clone());
     }else if let Decl::Struct(f*)=(decl){
         fields0 = Option::new(f);
-        type = decl.type;
+        type = decl.type.clone();
         if (decl.is_generic) {
             //infer
             let inferred = self.inferStruct(node, &decl.type, hasNamed, f, args);
@@ -1001,7 +1001,7 @@ impl Resolver{
         let prm = fields.get_ptr(prm_idx);
         //todo if we support unnamed fields, change this
         if (!hasNamed) {
-            names.add(prm.name);
+            names.add(prm.name.clone());
         }
         let pt = self.getType(&prm.type);
         let arg = self.visit(&e.expr);
@@ -1358,7 +1358,7 @@ impl Resolver{
             let bs = cur.unwrap().base.get().print();
             bs.append("*");
             if (bs.eq(right.type.print().str())) return right;
-            cur = self.visit(cur.unwrap().base.get()).targetDecl;
+            cur = clone_op(&self.visit(cur.unwrap().base.get()).targetDecl);
         }
     }
     if (right.type.is_pointer()) {
@@ -1638,7 +1638,7 @@ impl Resolver{
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
       let res = self.visit(f);
-      self.addScope(f.name, res.type, false);
+      self.addScope(f.name.clone(), res.type.clone(), false);
     }
   }
 

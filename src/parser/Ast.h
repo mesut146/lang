@@ -58,6 +58,11 @@ public:
     virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
+    Expression* loc(int line){
+      this->line = line;
+      this->id = ++Node::last_id;
+       return this;
+    }
 };
 class Type : public Expression {
 public:

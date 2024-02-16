@@ -356,6 +356,7 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
     auto res = std::any_cast<Method *>(gen.visitMethod(m));
     //print(res->print());
     if (!m->parent || !m->parent->isImpl()) {
+        res->unit = r->unit.get();
         r->generatedMethods.push_back(res);
         return res;
     }
@@ -377,6 +378,7 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
         newImpl->print();
     }*/
     res->parent = newImpl;
+    res->unit = r->unit.get();
     r->generatedMethods.push_back(res);
     return res;
 }

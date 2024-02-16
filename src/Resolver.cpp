@@ -361,11 +361,11 @@ Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, Ex
 //scope.print(str);
 Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, const std::string &str) {
     auto mc = new MethodCall;
-    mc->line = unit->lastLine;
-    mc->scope.reset(new SimpleName(scope));
+    mc->loc(unit->lastLine);
+    mc->scope.reset((new SimpleName(scope))->loc(0));
     mc->name = "print";
     auto lit = new Literal(Literal::STR, "\"" + str + "\"");
-    lit->line = unit->lastLine;
+    lit->loc(unit->lastLine);
     mc->args.push_back(lit);
     auto res = std::make_unique<ExprStmt>(mc);
     res->line = unit->lastLine;
@@ -382,15 +382,16 @@ Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
 //Debug::debug(e, f)
 Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, Type &type, const std::string &fmt) {
     auto mc = new MethodCall;
-    mc->line = ++unit->lastLine;
+    mc->loc(++unit->lastLine);
     mc->is_static = true;
     mc->scope.reset(new Type("Debug"));
     mc->name = "debug";
     if (!type.isPointer()) {
         e = new RefExpr(std::unique_ptr<Expression>(e));
+        e->loc(0);
     }
     mc->args.push_back(e);
-    mc->args.push_back(new SimpleName(fmt));
+    mc->args.push_back((new SimpleName(fmt))->loc(0));
     auto res = std::make_unique<ExprStmt>(mc);
     res->line = unit->lastLine;
     return res;
@@ -398,21 +399,19 @@ Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, Type &type, 
 
 FieldAccess *makeFa(const std::string &scope, const std::string &name) {
     auto fa = new FieldAccess;
-    fa->scope = new SimpleName(scope);
+    fa->scope = (new SimpleName(scope))->loc(0);
     fa->name = name;
+    fa->loc(0);
     return fa;
 }
 FieldAccess *makeFa(const std::string &name) {
-    auto fa = new FieldAccess;
-    fa->scope = new SimpleName("self");
-    fa->name = name;
-    return fa;
+    return makeFa("self", name);
 }
 //fd.drop();
 std::unique_ptr<Statement> newDrop(FieldDecl &fd, Unit *unit) {
     auto mc = new MethodCall;
-    mc->line = ++unit->lastLine;
-    mc->scope.reset(new SimpleName(fd.name));
+    mc->loc(++unit->lastLine);
+    mc->scope.reset((new SimpleName(fd.name))->loc(0));
     mc->name = "drop";
     auto res = std::make_unique<ExprStmt>(mc);
     res->line = unit->lastLine;
@@ -421,10 +420,10 @@ std::unique_ptr<Statement> newDrop(FieldDecl &fd, Unit *unit) {
 //scope.fd.drop();
 std::unique_ptr<Statement> newDrop(const std::string &scope, FieldDecl &fd, Unit *unit) {
     auto mc = new MethodCall;
-    mc->line = ++unit->lastLine;
+    mc->loc(++unit->lastLine);
     auto fa = new FieldAccess;
-    fa->line = mc->line;
-    fa->scope = new SimpleName(scope);
+    fa->loc(mc->line);
+    fa->scope = (new SimpleName(scope))->loc(0);
     fa->name = fd.name;
     mc->scope.reset(fa);
     mc->name = "drop";
@@ -491,7 +490,7 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
             imp->methods.push_back(std::move(*m2));
         }
     }
-    print(imp->print() + "\n");
+    //print(imp->print() + "\n");
     return imp;
 }
 
@@ -517,7 +516,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
                 //todo make this ptr
                 ifs->args.push_back(ArgBind(fd.name, true));
             }
-            ifs->rhs.reset(new SimpleName("self"));
+            ifs->rhs.reset((new SimpleName("self"))->loc(0));
             auto then = new Block;
             ifs->thenStmt.reset(then);
             then->list.push_back(newPrint(unit, "f", bd->type.print() + "::" + ev.name));
@@ -629,9 +628,9 @@ RType Resolver::resolve(Expression *expr) {
     if (cache.contains(expr->id)) {
         return cache[expr->id];
     }
-    std::cout << unit->path << "\n";
+    /*std::cout << unit->path << ":"<<expr->line<<"\n";
     std::cout << printMethod(curMethod) << ", ";
-    std::cout << expr->id << ", " << expr->print() << std::endl;
+    std::cout << expr->id << ", " << expr->print() << std::endl;*/
     auto res = std::any_cast<RType>(expr->accept(this));
     cache[expr->id] = res;
     return res;

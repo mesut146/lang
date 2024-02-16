@@ -126,7 +126,7 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
         return map.get_ptr(&str).unwrap().clone();
     }
     let smp = type.as_simple();
-    let res = Simple::new(smp.name);
+    let res = Simple::new(smp.name.clone());
     if (smp.scope.is_some()) {
         res.scope = Ptr::new(replace_type(smp.scope.get(), map));
     }

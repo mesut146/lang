@@ -325,9 +325,9 @@ impl Type{
   func erase(self): Type{
     if let Type::Simple(smp*) = (self){
       if(smp.scope.has()){
-        return Type::new(smp.scope.unwrap(), smp.name);
+        return Type::new(smp.scope.unwrap(), smp.name.clone());
       }else{
-        return Type::new(smp.name);
+        return Type::new(smp.name.clone());
       }
     }
     panic("erase %s", self.print().cstr());

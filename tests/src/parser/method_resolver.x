@@ -125,7 +125,7 @@ impl Signature{
             ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None};
         if let Parent::Impl(info*) = (m.parent){
-            let scp = RType::new(info.type);
+            let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);
         }
         if(m.self.is_some()){
@@ -401,7 +401,7 @@ impl MethodResolver{
                 let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
                 self.r.err(expr, msg.str());
             }
-            tmap.add(pair.a, pair.b.get().clone());
+            tmap.add(pair.a.clone(), pair.b.get().clone());
         }
         let target2 = self.generateMethod(&tmap, target, sig);
         target = target2;
@@ -710,7 +710,7 @@ func get_type_params(m: Method*): List<Type>{
         return res;
     }
     if let Parent::Impl(info*) = (m.parent){
-        res = info.type_params;
+        res = info.type_params.clone();
     }
     res.add(&m.type_params);
     return res;
