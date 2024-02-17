@@ -284,7 +284,7 @@ void Resolver::resolveAll() {
         if (g.type) {
             auto type = getType(g.type.value());
             //todo check
-            auto err_opt = MethodResolver::isCompatible(rhs.type, type);
+            auto err_opt = MethodResolver::isCompatible(RType(rhs.type), type);
             if (err_opt) {
                 std::string msg = "variable type mismatch '" + g.name + "'\n";
                 msg += "expected: " + type.print() + " got " + rhs.type.print();
@@ -1748,7 +1748,7 @@ Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (is_std_size(mc)) {
         if (!mc->args.empty()) {
-            mc->args[0]->accept(this);
+            resolve(mc->args[0]);
         } else {
             if (mc->typeArgs.size() != 1) {
                 err(mc, "std::size requires one type argument");

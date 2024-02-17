@@ -324,7 +324,7 @@ void MethodResolver::infer(const Type &arg, const Type &prm, std::map<std::strin
             if (!it->second) {
                 it->second = arg;
             } else {
-                auto m = MethodResolver::isCompatible(arg, *it->second);
+                auto m = MethodResolver::isCompatible(RType(arg), *it->second);
                 if (m.has_value()) {
                     print(m.value());
                     error("type infer failed: " + it->second->print() + " vs " + arg.print());
@@ -394,7 +394,7 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
             return "";
         }
         if (hasGeneric(target, typeParams)) {
-            return isCompatible(*arg.scope, *target.scope, typeParams);
+            return isCompatible(RType(*arg.scope), *target.scope, typeParams);
         }
         //return arg.print() + " is not compatible with " + target.print();
         return "";

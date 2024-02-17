@@ -653,11 +653,11 @@ impl Compiler{
         self.visit(&f.rhs);
         continue;
       }
-      let type = self.resolver.visit(f).type;
-      if(is_struct(&type)){
+      let type = &self.resolver.visit(f).type;
+      if(is_struct(type)){
         let val = self.visit(&f.rhs);
         if(Value_isPointerTy(val)){
-          self.copy(ptr, val, &type);
+          self.copy(ptr, val, type);
         }else{
           CreateStore(val, ptr);
         }
@@ -665,7 +665,7 @@ impl Compiler{
         let val = self.visit(&f.rhs);
         CreateStore(val, ptr);
       } else{
-        let val = self.cast(&f.rhs, &type);
+        let val = self.cast(&f.rhs, type);
         CreateStore(val, ptr);
       }
     }
@@ -751,14 +751,14 @@ impl Compiler{
 
   func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
     let lhs_type = self.getType(lhs);
-    let rhs_type = self.resolver.visit(rhs).type;
+    let rhs_type = &self.resolver.visit(rhs).type;
     //ptr to int
     if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
       let val = self.get_obj_ptr(lhs);
-        return CreatePtrToInt(val, self.mapType(&rhs_type));
+        return CreatePtrToInt(val, self.mapType(rhs_type));
     }
     if (lhs_type.is_prim()) {
-      return self.cast(lhs, &rhs_type);
+      return self.cast(lhs, rhs_type);
     }
     return self.get_obj_ptr(lhs);
   }
@@ -1071,8 +1071,8 @@ impl Compiler{
         }
       } else {
         let prm = target.params.get_ptr(paramIdx);
-        let pt = self.resolver.visit(&prm.type).type;
-        args_push(args, self.cast(arg, &pt));
+        let pt = &self.resolver.visit(&prm.type).type;
+        args_push(args, self.cast(arg, pt));
       }
       ++paramIdx;
     }
@@ -1143,11 +1143,11 @@ impl Compiler{
   }
 
   func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
-    let type = self.resolver.visit(l).type;
+    let type = &self.resolver.visit(l).type;
     if(is_comp(op.str())){
       //todo remove redundant cast
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateCmp(get_comp_op(op.cstr()), lv, rv);
     }
     if(op.eq("&&") || op.eq("||")){
@@ -1157,59 +1157,59 @@ impl Compiler{
       return self.visit_assign(l, r);
     }
     if(op.eq("+")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateNSWAdd(lv, rv);
     }
     if(op.eq("-")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateNSWSub(lv, rv);
     }
     if(op.eq("*")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateNSWMul(lv, rv);
     }
     if(op.eq("/")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateSDiv(lv, rv);
     }
     if(op.eq("%")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateSRem(lv, rv);
     }
     if(op.eq("&")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateAnd(lv, rv);
     }
     if(op.eq("|")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateOr(lv, rv);
     }
     if(op.eq("^")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateXor(lv, rv);
     }
     if(op.eq("<<")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateShl(lv, rv);
     }
     if(op.eq(">>")){
-      let lv = self.cast(l, &type);
-      let rv = self.cast(r, &type);
+      let lv = self.cast(l, type);
+      let rv = self.cast(r, type);
       return CreateAShr(lv, rv);
     }
     if(op.eq("+=")){
       let lv = self.visit(l);
       let lval = self.loadPrim(l);
-      let rval = self.cast(r, &type);
+      let rval = self.cast(r, type);
       let tmp = CreateNSWAdd(lval, rval);
       CreateStore(tmp, lv);
       return lv;
@@ -1217,7 +1217,7 @@ impl Compiler{
     if(op.eq("-=")){
       let lv = self.visit(l);
       let lval = self.loadPrim(l);
-      let rval = self.cast(r, &type);
+      let rval = self.cast(r, type);
       let tmp = CreateNSWSub(lval, rval);
       CreateStore(tmp, lv);
       return lv;
@@ -1225,7 +1225,7 @@ impl Compiler{
     if(op.eq("/=")){
       let lv = self.visit(l);
       let lval = self.loadPrim(l);
-      let rval = self.cast(r, &type);
+      let rval = self.cast(r, type);
       let tmp = CreateSDiv(lval, rval);
       CreateStore(tmp, lv);
       return lv;

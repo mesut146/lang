@@ -31,7 +31,7 @@ func underflow_u8(){
   //let neg = 255;
   //let u: u8 = neg as u8;
   let u: u8 = 255u8;
-  print("%d\n", u);
+  //print("%d\n", u);
   assert u == 255;
 }
 

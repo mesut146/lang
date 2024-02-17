@@ -217,7 +217,7 @@ public:
     std::optional<std::string> value;
 
     RType() = default;
-    RType(const Type &t) : type(t) {}
+    explicit RType(const Type &t) : type(t) {}
 
     RType clone();
 };

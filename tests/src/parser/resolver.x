@@ -335,7 +335,7 @@ impl Resolver{
         }
     }
     if (self.curMethod.is_some() && !self.curMethod.unwrap().type_params.empty()) {
-        let tmp = self.get_unit(&self.curMethod.unwrap().path).imports;
+        let tmp = &self.get_unit(&self.curMethod.unwrap().path).imports;
         for (let i = 0;i < tmp.len();++i) {
             let is = tmp.get_ptr(i);
             if (has(&imports, is)) continue;
@@ -510,9 +510,8 @@ impl Resolver{
     }
     let bd = rt.targetDecl.unwrap();
     //print("bd %s\n", Fmt::str(bd).cstr());
-    let base = bd.base;
-    if (base.is_some()) {
-      if(self.is_cyclic(base.get(), target)){
+    if (bd.base.is_some()) {
+      if(self.is_cyclic(bd.base.get(), target)){
         return true;
       }
     }
@@ -954,7 +953,7 @@ impl Resolver{
         self.err(node, "wasn't expecting base");
     }
     if (base.is_some()) {
-        let base_ty = self.visit(base.unwrap()).type;
+        let base_ty = &self.visit(base.unwrap()).type;
         if (!base_ty.print().eq(decl.base.get().print().str())){
             let msg = Fmt::format("invalid base class type: {} expecting {}", base_ty.print().str(), decl.base.get().print().str());
             self.err(node, msg.str());
@@ -1328,7 +1327,7 @@ impl Resolver{
     if (size.is_some()) {
         let e = self.visit(list.get_ptr(0));
         //let elemType = self.getType(list.get_ptr(0));
-        let elemType = e.type;
+        let elemType = e.type.clone();
         return RType::new(Type::Array{Box::new(elemType), size.unwrap()});
     }
     let elemType = self.getType(list.get_ptr(0));

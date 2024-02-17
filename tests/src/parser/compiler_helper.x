@@ -265,9 +265,9 @@ impl Compiler{
     let src = getPrimitiveSizeInBits(val_ty);
     let trg = self.getSize(type);
     let trg_ty = getInt(trg as i32);
-    let src_type = self.resolver.visit(expr).type;
+    let src_type = &self.resolver.visit(expr).type;
     if(src < trg){
-      if(isUnsigned(&src_type)){
+      if(isUnsigned(src_type)){
         return CreateZExt(val, trg_ty);
       }else{
         return CreateSExt(val, trg_ty);

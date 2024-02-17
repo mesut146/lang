@@ -4,14 +4,16 @@
 #include <llvm/IR/Value.h>
 
 struct Resolver;
+struct RType;
 
 struct Variable {
     std::string name;
+    llvm::Value *ptr;
     int id;
     int line;
     int moveLine = -1;
 
-    Variable(const std::string &name, int id, int line) : name(name), id(id), line(line) {}
+    Variable(const std::string &name, llvm::Value *ptr, int id, int line) : name(name), ptr(ptr), id(id), line(line) {}
 };
 
 struct VarScope {
@@ -19,17 +21,15 @@ struct VarScope {
     std::vector<Variable> moved;
 };
 
-struct Object{
-    Expression* expr;
-    llvm::Value* ptr;
+struct Object {
+    Expression *expr;
+    llvm::Value *ptr;
 };
 
 struct Ownership {
     Resolver *r;
     Method *method;
-    //std::vector<Variable> moved;
     std::vector<VarScope> scopes;
-    //std::vector<Variable> vars;
     std::vector<Object> objects;
     std::vector<Object> partials;
 
@@ -48,27 +48,33 @@ struct Ownership {
         return res;
     }
 
+    bool isDropType(const RType& rt);
+    bool isDropType(const Type& type);
+    bool isDrop(BaseDecl *decl);
+
     Variable *find(std::string &name, int id);
 
-    void addPtr(Expression* expr, llvm::Value* ptr){
+    void addPtr(Expression *expr, llvm::Value *ptr) {
         objects.push_back({expr, ptr});
     }
 
-    void add(Fragment &f, Type &type) {
-        if (type.isPointer()) return;
-        if (f.id == -1) {
-            throw std::runtime_error("add id");
+    void bindPtr(Fragment &f, llvm::Value *ptr) {
+        for (int i = 0; i < objects.size(); ++i) {
+            auto &ob = objects[i];
+            if (ob.ptr == ptr) {
+                return;
+            }
         }
-        scopes.back().vars.push_back(Variable(f.name, f.id, f.line));
     }
-    void add(Param &p) {
-        if (p.type->isPointer()) {
-            return;
-        }
-        if (p.id == -1) {
-            throw std::runtime_error("add id");
-        }
-        scopes.back().vars.push_back(Variable(p.name, p.id, p.line));
+
+    void add(std::string &name, Type &type, llvm::Value *ptr, int id, int line);
+
+    void add(Fragment &f, Type &type, llvm::Value *ptr) {
+        add(f.name, type, ptr, f.id, f.line);
+    }
+
+    void add(Param &p, llvm::Value *ptr) {
+        add(p.name, p.type.value(), ptr, p.id, p.line);
     }
 
     void doMove(Expression *expr);
@@ -78,7 +84,7 @@ struct Ownership {
 
     //send(expr) //moves expr
     void doMoveCall(Expression *expr);
-    
+
 
     void doMoveReturn(Expression *expr);
 

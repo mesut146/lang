@@ -8,6 +8,9 @@ struct Box<T>{
 impl<T> Box<T>{
     func new(val: T): Box<T>{
         let ptr = malloc<T>(1);
+        if((ptr as u64) == 0){
+          panic("box alloc failed");
+        }
         *ptr = val;
         return Box<T>{val: ptr};
     }

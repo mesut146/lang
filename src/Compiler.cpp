@@ -777,7 +777,7 @@ void storeParams(Method *m, Compiler *c) {
         }
         didx++;
         argIdx++;
-        c->curOwner->add(m->self.value());
+        c->curOwner->add(m->self.value(), ptr);
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto &prm = m->params[i];
@@ -792,7 +792,7 @@ void storeParams(Method *m, Compiler *c) {
             c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
-        c->curOwner->add(prm);
+        c->curOwner->add(prm, ptr);
     }
 }
 
@@ -1099,12 +1099,13 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
-        /*if (dynamic_cast<ObjExpr *>(node->right)) {
+        if (dynamic_cast<ObjExpr *>(node->right)) {
+            //dont delete this
             auto rhs = gen(node->right);
             copy(l, rhs, lt);
         } else {
-        }*/
-        setField(node->right, lt, l);
+            setField(node->right, lt, l);
+        }
         curOwner->doAssign(node->left, node->right);
         curOwner->endAssign(node->left);
         return l;
@@ -1445,25 +1446,19 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
         NamedValues[f.name] = varAlloc[getId(f.name)];
         loc(&f);
-        curOwner->add(f, type);
-        //no unnecessary alloc
-        if (doesAlloc(rhs)) {
-            gen(rhs);
-            dbg_var(f, type);
-            continue;
-        }
         auto ptr = NamedValues[f.name];
-        if (isStruct(type)) {
-            auto val = gen(rhs);
-            if (val->getType()->isPointerTy()) {
-                copy(ptr, val, type);
-            } else {
-                error("var");
-                Builder->CreateStore(val, ptr);
-            }
-        } else {
+        if (!isStruct(type)) {
             auto val = cast(rhs, type);
             Builder->CreateStore(val, ptr);
+        } else if (doesAlloc(rhs)) {
+            //no unnecessary alloc
+            auto val = gen(rhs);
+            curOwner->add(f, type, val);
+        } else {
+            auto val = gen(rhs);
+            copy(ptr, val, type);
+            curOwner->add(f, type, ptr);
+            curOwner->doMove(rhs);
         }
         //dbg after init
         dbg_var(f, type);
@@ -1936,27 +1931,29 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     auto &variant = decl->variants[index];
     if (!variant.fields.empty()) {
         //declare vars
-        auto &params = variant.fields;
+        auto &fields = variant.fields;
         auto data_index = Layout::get_data_index(decl);
         auto dataPtr = gep2(rhs, data_index, decl->type);
         auto var_ty = get_variant_type(node->type, this);
-        for (int i = 0; i < params.size(); i++) {
+        for (int i = 0; i < fields.size(); i++) {
             //regular var decl
-            auto &prm = params[i];
+            auto &fd = fields[i];
             auto arg = node->args[i];
             auto field_ptr = gep2(dataPtr, i, var_ty);
             auto alloc_ptr = varAlloc[getId(arg.name)];
             NamedValues[arg.name] = alloc_ptr;
             if (arg.ptr) {
                 Builder->CreateStore(field_ptr, alloc_ptr);
-                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, prm.type));
+                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, fd.type));
             } else {
-                if (prm.type.isPrim() || prm.type.isPointer()) {
-                    Builder->CreateStore(load(field_ptr, mapType(prm.type)), alloc_ptr);
+                if (fd.type.isPrim() || fd.type.isPointer()) {
+                    Builder->CreateStore(load(field_ptr, mapType(fd.type)), alloc_ptr);
                 } else {
-                    copy(alloc_ptr, field_ptr, prm.type);
+                    //resolv->err("iflet deref");
+                    copy(alloc_ptr, field_ptr, fd.type);
+                    curOwner->add(fd.name, fd.type, alloc_ptr, arg.id, arg.line);
                 }
-                dbg_var(arg.name, node->rhs->line, 0, prm.type);
+                dbg_var(arg.name, node->rhs->line, 0, fd.type);
             }
         }
     }
@@ -1964,9 +1961,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     node->thenStmt->accept(this);
     auto then_scope = curOwner->dropScope();
     //clear params
-    for (auto &p : node->args) {
-        //NamedValues.erase(p);
-    }
+    /*for (auto &p : node->args) {
+        NamedValues.erase(p);
+    }*/
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }

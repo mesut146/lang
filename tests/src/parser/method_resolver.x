@@ -82,7 +82,7 @@ impl Signature{
         }
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get_ptr(i);
-            let type = r.visit(arg).type;
+            let type = r.visit(arg).type.clone();
             if(i == 0 && mc.scope.is_some() && is_trait && is_struct(&type)){
                 type = type.toPtr();
             }

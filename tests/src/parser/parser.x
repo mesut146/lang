@@ -214,7 +214,7 @@ impl Parser{
       }
       self.consume(TokenType::FUNC);
       let line = self.node();
-      let name = self.pop().value;
+      let name = self.popv();
       let type_args = List<Type>::new();
       let is_generic = false;
       if(self.is(TokenType::LT)){
@@ -266,7 +266,7 @@ impl Parser{
       let id = self.node();
       let name = self.pop();
       self.consume(TokenType::COLON);
-      let type=self.parse_type();
+      let type = self.parse_type();
       return Param{.id, name.value, type, false};
     }
     
@@ -301,7 +301,7 @@ impl Parser{
     
     func parse_field(self, semi: bool): FieldDecl{
       let line=self.peek().line;
-      let name = self.pop().value;
+      let name = self.popv();
       self.consume(TokenType::COLON);
       let type=self.parse_type();
       if(semi){
@@ -386,7 +386,7 @@ impl Parser{
     
     func gen_part(self): Type{
       //a<b>::c<d>
-      let id = self.pop().value;
+      let id = self.popv();
       if(self.is(TokenType::LT)){
         return Simple{Ptr<Type>::new(), id, self.generics()}.into();
       }
@@ -418,7 +418,7 @@ impl Parser{
     }
     
     func parse_tp(self): Type{
-        let id = self.pop().value;
+        let id = self.popv();
         return Type::new(id);
     }
 }
@@ -654,7 +654,7 @@ impl Parser{
       panic("invalid literal %s", self.peek().print().cstr());
     }
     let arr = Lexer::get_suffix();
-    let val = self.pop().value;
+    let val = self.popv();
     let n = self.node();
     for (let i=0;i<arr.len();++i) {
       let sf = arr[i];
@@ -671,7 +671,7 @@ impl Parser{
   
   func name(self): String{
     if(isName(self.peek())){
-      return self.pop().value;
+      return self.popv();
     }
     panic("expected name got %s", self.peek().print().cstr());
   }
@@ -700,7 +700,7 @@ impl Parser{
   
   func entry(self): Entry{
     if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
-      let name = self.pop().value;
+      let name = self.popv();
       self.consume(TokenType::COLON);
       let e = self.parse_expr();
       return Entry{Option::new(name), e, false};
@@ -749,7 +749,7 @@ impl Parser{
       return Expr::Obj{.n, ty, args};
     }
     else if(isName(self.peek()) || isPrim(self.peek())){
-      let nm = self.pop().value;
+      let nm = self.popv();
       if(self.is(TokenType::LPAREN)){
         return self.call(nm);
       }else if(self.isTypeArg(self.pos) != -1){
@@ -772,7 +772,7 @@ impl Parser{
         self.pop();
         let ty = self.parse_type();
         if(self.is(TokenType::LPAREN)){
-          let ta = ty.as_simple().args;
+          let ta = ty.as_simple().args.clone();
           return self.call(Expr::Type{.n, Type::new(nm)}, ty.name().clone(), true, ta);
         }else{
           return Expr::Type{.n,Type::new(Type::new(nm), ty.name().clone())};
@@ -781,7 +781,7 @@ impl Parser{
         return Expr::Name{.n,nm};
       }
     }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
-      let op = self.pop().value;
+      let op = self.popv();
       let e = self.prim2();
       return Expr::Unary{.n,op, Box::new(e)};
     }
@@ -857,7 +857,7 @@ impl Parser{
     if(prec == 11) return self.as_is();
     let e = self.expr_level(prec + 1);
     while(Parser::get_prec(&self.peek().type) == prec){
-      let op = self.pop().value;
+      let op = self.popv();
       if(op.eq(">") && self.is(TokenType::GT)){
         self.pop();
         op.append(">");

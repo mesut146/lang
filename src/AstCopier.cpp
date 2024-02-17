@@ -200,6 +200,12 @@ std::any AstCopier::visitFieldAccess(FieldAccess *node) {
     return loc(res, node);
 }
 
+std::any AstCopier::visitParExpr(ParExpr *node){
+    auto res = new ParExpr;
+    res->expr = expr(node->expr, this);
+    return loc(res, node);
+}
+
 std::any AstCopier::visitUnary(Unary *node) {
     auto res = new Unary;
     res->op = node->op;
@@ -257,9 +263,6 @@ std::any AstCopier::visitIfLetStmt(IfLetStmt *node) {
 
 std::any AstCopier::visitMethod(Method *node) {
     auto res = new Method(node->path);
-    if (node->name == "get_malloc") {
-        int xx = 55;
-    }
     res->name = node->name;
     res->type = visit(node->type, this);
     res->isVirtual = node->isVirtual;

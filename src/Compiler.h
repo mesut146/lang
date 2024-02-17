@@ -212,12 +212,12 @@ public:
         return name + "#" + std::to_string(resolv->max_scope);
     }
 
-    llvm::Value *getVar(const std::string &name) {
+    /*llvm::Value *getVar(const std::string &name) {
         auto id = getId(name);
         auto it = NamedValues.find(id);
         if (it == NamedValues.end()) error("get var " + name);
         return it->second;
-    }
+    }*/
     void addVar(const std::string &name, llvm::Value *ptr) {
         auto id = getId(name);
         NamedValues[id] = ptr;
