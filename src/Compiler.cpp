@@ -436,12 +436,17 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
+        if(curOwner->isDropType(type)){
+            curOwner->drop(expr, ptr);
+            //resolv->err(expr, "can't deref drop type");
+        }
         auto val = get_obj_ptr(de->expr.get());
         copy(ptr, val, type);
         return;
     }
     if (isRvo(expr)) {
         auto val = gen(expr);
+        curOwner->drop(expr, ptr);
         copy(ptr, val, type);
         return;
     }
@@ -450,6 +455,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
         child(expr, ptr);
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
+        curOwner->drop(expr, ptr);
         copy(ptr, val, type);
     } else if (type.isPointer()) {
         auto val = get_obj_ptr(expr);
@@ -464,9 +470,9 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
 }
 
-void Compiler::make_proto(Method *m) {
+llvm::Function* Compiler::make_proto(Method *m) {
     if (m->isGeneric) {
-        return;
+        return nullptr;
     }
     resolv->curMethod = m;
     std::vector<llvm::Type *> argTypes;
@@ -528,6 +534,7 @@ void Compiler::make_proto(Method *m) {
     funcMap[mangled] = f;
     resolv->curMethod = nullptr;
     if (m->isVirtual) virtuals.push_back(m);
+    return f;
 }
 
 std::vector<Method *> getVirtual(StructDecl *decl, Unit *unit) {
@@ -829,9 +836,8 @@ void Compiler::genCode(Method *m) {
     curMethod = m;
     auto id = mangle(m);
     //print("genCode " + id + "\n");
-    ownerMap.insert({id, Ownership(resolv.get(), m)});
+    ownerMap.insert({id, Ownership(this, m)});
     curOwner = &ownerMap.at(id);
-    curOwner->newScope();//params scope
     func = funcMap[id];
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
@@ -917,6 +923,8 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     }
     //rvo
     auto ptr = func->getArg(0);
+
+    curOwner->check(e);
 
     if (doesAlloc(e)) {
         child(e, ptr);
@@ -1108,6 +1116,7 @@ std::any Compiler::visitAssign(Assign *node) {
         if (dynamic_cast<ObjExpr *>(node->right)) {
             //dont delete this
             auto rhs = gen(node->right);
+            curOwner->drop(node->left, l);
             copy(l, rhs, lt);
         } else {
             setField(node->right, lt, l);
@@ -1144,10 +1153,7 @@ std::any Compiler::visitSimpleName(SimpleName *node) {
     if (globals.contains(node->name)) {
         return globals[node->name];
     }
-    auto moved = curOwner->isMoved(node);
-    if (moved != nullptr) {
-        resolv->err(node, "use after move, line: " + std::to_string(moved->moveLine));
-    }
+    curOwner->check(node);
     return NamedValues[node->name];
 }
 
@@ -1461,6 +1467,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
             auto val = gen(rhs);
             curOwner->add(f, type, val);
         } else {
+            curOwner->check(rhs);
             auto val = gen(rhs);
             copy(ptr, val, type);
             curOwner->add(f, type, ptr);
@@ -1531,20 +1538,9 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
         setOrdinal(variant_index, ptr, decl);
         auto data_index = Layout::get_data_index(decl);
         auto dataPtr = gep2(ptr, data_index, ty);
-        auto &variant = decl->variants[variant_index];
+        auto &fields = decl->variants[variant_index].fields;
         auto var_ty = get_variant_type(node->type, this);
-        setFields(variant.fields, node->entries, decl, var_ty, dataPtr);
-        /*for (int i = 0; i < node->entries.size(); i++) {
-            auto &e = node->entries[i];
-            if (e.isBase) continue;
-            int index = i;
-            if (e.key) {
-                index = fieldIndex(variant.fields, e.key.value(), Type(decl->type, variant.name));
-            }
-            auto &field = variant.fields.at(index);
-            auto field_target_ptr = gep2(dataPtr, index, var_ty);
-            setField(e.value, field.type, field_target_ptr);
-        }*/
+        setFields(fields, node->entries, decl, var_ty, dataPtr);
     } else {
         //class
         auto decl = dynamic_cast<StructDecl *>(tt.targetDecl);
@@ -1580,6 +1576,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
             if (decl->base) real_idx++;
             auto field_target_ptr = gep2(ptr, real_idx, ty);
             setField(e.value, field->type, field_target_ptr);
+            curOwner->moveToField(e.value);
         }
     }
 }
@@ -1897,7 +1894,6 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        curOwner->newScope();
         node->elseStmt->accept(this);
         //curOwner->dropScope();
         if (!isReturnLast(node->elseStmt.get())) {
@@ -1966,19 +1962,13 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     curOwner->newScope();
     node->thenStmt->accept(this);
     auto then_scope = curOwner->dropScope();
-    //clear params
-    /*for (auto &p : node->args) {
-        NamedValues.erase(p);
-    }*/
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        curOwner->newScope();
         node->elseStmt->accept(this);
-        //curOwner->dropScope();
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
@@ -2000,9 +1990,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
-    curOwner->newScope();
     node->body->accept(this);
-    //curOwner->dropScope();
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -2012,7 +2000,6 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 
 std::any Compiler::visitForStmt(ForStmt *node) {
     resolv->newScope();
-    curOwner->newScope();
     if (node->decl) {
         node->decl->accept(this);
     }
@@ -2045,6 +2032,5 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loopNext.pop_back();
     Builder->CreateBr(condbb);
     set_and_insert(next);
-    //curOwner->dropScope();
     return {};
 }

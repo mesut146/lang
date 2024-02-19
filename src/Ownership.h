@@ -2,8 +2,10 @@
 
 #include "parser/Ast.h"
 #include <llvm/IR/Value.h>
+#include <optional>
 
 struct Resolver;
+struct Compiler;
 struct RType;
 
 struct Variable {
@@ -19,6 +21,20 @@ struct Variable {
 struct VarScope {
     std::vector<Variable> vars;
     std::vector<Variable> moved;
+
+    std::optional<VarScope> next_scope;
+
+    VarScope(const VarScope &other) {
+        vars = other.vars;
+        moved = other.moved;
+        //next_scope = other.next_scope;
+    }
+    VarScope(VarScope &&other) {
+    }
+
+    VarScope operator=(VarScope &rhs) {
+        return *this;
+    }
 };
 
 struct Object {
@@ -27,29 +43,42 @@ struct Object {
 };
 
 struct Ownership {
+    Compiler *compiler;
     Resolver *r;
     Method *method;
-    std::vector<VarScope> scopes;
+    VarScope scope;
+    VarScope *last_scope = nullptr;
     std::vector<Object> objects;
     std::vector<Object> partials;
 
-    Ownership(Resolver *r, Method *m) : r(r), method(m) {}
+    Ownership(Compiler *compiler, Method *m);
+
 
     void newScope() {
-        scopes.push_back(VarScope());
+        //scope.next_scope = std::move(std::make_optional<VarScope>());
+        scope.next_scope.emplace();
     }
-    void newScope(const VarScope &scope) {
-        scopes.push_back(scope);
+
+    void newScope(VarScope &s) {
+        last_scope->next_scope = s;
     }
 
     VarScope dropScope() {
-        auto res = scopes.back();
-        scopes.pop_back();
-        return res;
+        /*auto prev = &scope;
+        auto cur = &prev->next_scope.value();
+        for (true) {
+            if (cur->next_scope.has_value()) {
+
+            } else {
+                auto res = prev->next_scope.value();
+                prev->next_scope.reset();
+                return res;
+            }
+        }*/
     }
 
-    bool isDropType(const RType& rt);
-    bool isDropType(const Type& type);
+    bool isDropType(const RType &rt);
+    bool isDropType(const Type &type);
     bool isDrop(BaseDecl *decl);
 
     Variable *find(std::string &name, int id);
@@ -66,6 +95,8 @@ struct Ownership {
             }
         }
     }
+
+    void check(Expression *expr);
 
     void add(std::string &name, Type &type, llvm::Value *ptr, int id, int line);
 
@@ -85,13 +116,16 @@ struct Ownership {
     //send(expr) //moves expr
     void doMoveCall(Expression *expr);
 
-
     void doMoveReturn(Expression *expr);
+
+    void moveToField(Expression *expr);
 
 
     Variable *isMoved(SimpleName *sn);
 
     bool needDrop() { return false; }
-    
+
     void doReturn();
+
+    void drop(Expression *expr, llvm::Value *ptr);
 };

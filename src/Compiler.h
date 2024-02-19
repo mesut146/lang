@@ -275,7 +275,7 @@ public:
     void loc(Node *e);
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
-    void make_proto(Method *m);
+    llvm::Function* make_proto(Method *m);
     llvm::Type *makeDecl(BaseDecl *bd);
     void allocParams(Method *m);
     void makeLocals(Statement *st);

@@ -1,11 +1,3 @@
-generated_methods
-
-targetDecl: local type, generic
-
-
-#derive(Drop, Clone)
-#drop
-
 
 //use after move
 let v = get();
@@ -15,14 +7,6 @@ return v; //moves
 print(v) //fails
 
 
-//prevent memcpy of drop
-
-
-return A{}
-
-return get()
-
-
 drop of half object?
 
 
@@ -30,21 +14,6 @@ let v = get()
 let v2 = v
 v = get() //realloc
 
-
-//while
-let v = get();
-while(c){
-  if(c2){
-    send(v)
-  }
-  else{
-    //valid
-  }
-  //invalid
-}
-//invalid
-
-else reachable from if, bc they are in loop
 
 //////
 let a = get().a;
