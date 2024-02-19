@@ -98,6 +98,14 @@ void Ownership::doMove(Expression *expr) {
         }
         doMove(fa->scope);
         //r->err(expr, "domove");
+        return;
+    }
+    for(int i=0;i<objects.size();++i){
+        auto &ob=objects[i];
+        if(ob.expr->id == expr->id){
+            objects.erase(objects.begin()+i);
+            break;
+        }
     }
 }
 
@@ -165,4 +173,13 @@ void Ownership::doMoveCall(Expression *arg) {
         }
     }
     doMove(arg);
+}
+
+void Ownership::doReturn(){
+    if(!objects.empty()){
+        std::cout<<"return "<<printMethod(method)<<"\n";
+    }
+    for(auto &ob : objects){
+        std::cout << "drop "<<ob.expr->print()<<"\n";
+    }
 }

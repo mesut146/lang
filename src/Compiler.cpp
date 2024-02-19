@@ -853,6 +853,7 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
+    curOwner->doReturn();
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
         Builder->CreateRet(makeInt(0, 32));
@@ -896,6 +897,7 @@ std::any Compiler::visitBlock(Block *node) {
 std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     loc(node);
     if (!node->expr) {
+    	curOwner->doReturn();
         if (is_main(curMethod)) {
             return Builder->CreateRet(makeInt(0, 32));
         }
@@ -905,10 +907,12 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     auto e = node->expr.get();
     if (type.isPointer()) {
         auto val = get_obj_ptr(e);
+        curOwner->doReturn();
         return Builder->CreateRet(val);
     }
     if (!isStruct(type)) {
         auto expr_type = resolv->getType(type);
+        curOwner->doReturn();
         return Builder->CreateRet(cast(e, expr_type));
     }
     //rvo
@@ -916,6 +920,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
 
     if (doesAlloc(e)) {
         child(e, ptr);
+        curOwner->doReturn();
         return Builder->CreateRetVoid();
     }
     auto de = dynamic_cast<DerefExpr *>(e);
@@ -928,6 +933,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     }
     //todo move
     curOwner->doMoveReturn(e);
+    curOwner->doReturn();
     return Builder->CreateRetVoid();
 }
 

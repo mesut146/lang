@@ -91,6 +91,7 @@ struct Ownership {
 
     Variable *isMoved(SimpleName *sn);
 
-
     bool needDrop() { return false; }
+    
+    void doReturn();
 };
