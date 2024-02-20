@@ -436,7 +436,7 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
-        if(curOwner->isDropType(type)){
+        if (curOwner->isDropType(type)) {
             curOwner->drop(expr, ptr);
             //resolv->err(expr, "can't deref drop type");
         }
@@ -470,7 +470,7 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
     make_proto(m.get());
 }
 
-llvm::Function* Compiler::make_proto(Method *m) {
+llvm::Function *Compiler::make_proto(Method *m) {
     if (m->isGeneric) {
         return nullptr;
     }
@@ -784,7 +784,7 @@ void storeParams(Method *m, Compiler *c) {
         }
         didx++;
         argIdx++;
-        c->curOwner->add(m->self.value(), ptr);
+        c->curOwner->addPrm(m->self.value(), ptr);
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto &prm = m->params[i];
@@ -799,7 +799,7 @@ void storeParams(Method *m, Compiler *c) {
             c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
-        c->curOwner->add(prm, ptr);
+        c->curOwner->addPrm(prm, ptr);
     }
 }
 
@@ -903,7 +903,7 @@ std::any Compiler::visitBlock(Block *node) {
 std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     loc(node);
     if (!node->expr) {
-    	curOwner->doReturn();
+        curOwner->doReturn();
         if (is_main(curMethod)) {
             return Builder->CreateRet(makeInt(0, 32));
         }
@@ -1884,25 +1884,28 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     }
     Builder->SetInsertPoint(then);
     resolv->newScope();
-    curOwner->newScope();
+    auto then_scope = curOwner->newScope();
     node->thenStmt->accept(this);
-    //drop so that else doesnt see drop, bc unreachable
-    auto then_scope = curOwner->dropScope();
+    curOwner->endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
+        //drop so that else doesnt see moves in then, bc unreachable
+        curOwner->dropScope(then_scope);
+        auto else_scope = curOwner->newScope();
         node->elseStmt->accept(this);
-        //curOwner->dropScope();
+        curOwner->endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
-    }
-    //next stmts will see drop, bc reachable
-    if (!isReturnLast(node->thenStmt.get())) {
-        curOwner->newScope(then_scope);
+        //next stmts will see moves, bc reachable
+        //todo proper return detection
+        if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
+            curOwner->restore(then_scope);
+        }
     }
     set_and_insert(next);
     return nullptr;
@@ -1959,21 +1962,26 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             }
         }
     }
-    curOwner->newScope();
+    auto then_scope = curOwner->newScope();
     node->thenStmt->accept(this);
-    auto then_scope = curOwner->dropScope();
+    curOwner->endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
+        curOwner->dropScope(then_scope);
+        auto else_scope = curOwner->newScope();
         node->elseStmt->accept(this);
+        curOwner->endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
+        if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
+            curOwner->restore(then_scope);
+        }
     }
-    curOwner->newScope(then_scope);
     set_and_insert(next);
     return nullptr;
 }
@@ -1990,7 +1998,9 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
+    auto then_scope = curOwner->newScope();
     node->body->accept(this);
+    curOwner->endScope(then_scope);
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -1999,6 +2009,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 }
 
 std::any Compiler::visitForStmt(ForStmt *node) {
+    auto then_scope = curOwner->newScope();
     resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);
@@ -2020,6 +2031,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loopNext.push_back(next);
     int backup = resolv->max_scope;
     node->body->accept(this);
+    curOwner->endScope(then_scope);
     int backup2 = resolv->max_scope;
     resolv->max_scope = backup;
     Builder->CreateBr(updatebb);

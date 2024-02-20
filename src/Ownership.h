@@ -18,28 +18,23 @@ struct Variable {
     Variable(const std::string &name, llvm::Value *ptr, int id, int line) : name(name), ptr(ptr), id(id), line(line) {}
 };
 
-struct VarScope {
-    std::vector<Variable> vars;
-    std::vector<Variable> moved;
-
-    std::optional<VarScope> next_scope;
-
-    VarScope(const VarScope &other) {
-        vars = other.vars;
-        moved = other.moved;
-        //next_scope = other.next_scope;
-    }
-    VarScope(VarScope &&other) {
-    }
-
-    VarScope operator=(VarScope &rhs) {
-        return *this;
-    }
-};
-
 struct Object {
     Expression *expr;
     llvm::Value *ptr;
+    int id;          //prm
+    std::string name;//prm
+};
+
+struct Move{
+    int from;
+};
+
+struct VarScope {
+    std::vector<Variable> vars;
+    std::vector<Variable> moved;
+    std::vector<Object> objects;
+    VarScope *next_scope = nullptr;
+    VarScope *parent = nullptr;
 };
 
 struct Ownership {
@@ -48,34 +43,27 @@ struct Ownership {
     Method *method;
     VarScope scope;
     VarScope *last_scope = nullptr;
-    std::vector<Object> objects;
-    std::vector<Object> partials;
 
     Ownership(Compiler *compiler, Method *m);
 
 
-    void newScope() {
-        //scope.next_scope = std::move(std::make_optional<VarScope>());
-        scope.next_scope.emplace();
+    VarScope *newScope() {
+        auto then = new VarScope;
+        then->parent = last_scope;
+        last_scope->next_scope = then;
+        last_scope = then;
+        return then;
     }
 
-    void newScope(VarScope &s) {
-        last_scope->next_scope = s;
+    void restore(VarScope *then) {
+        last_scope->next_scope = then;
     }
 
-    VarScope dropScope() {
-        /*auto prev = &scope;
-        auto cur = &prev->next_scope.value();
-        for (true) {
-            if (cur->next_scope.has_value()) {
-
-            } else {
-                auto res = prev->next_scope.value();
-                prev->next_scope.reset();
-                return res;
-            }
-        }*/
+    void dropScope(VarScope *then) {
     }
+
+    //drop vars in this scope
+    void endScope(VarScope* s);
 
     bool isDropType(const RType &rt);
     bool isDropType(const Type &type);
@@ -84,17 +72,17 @@ struct Ownership {
     Variable *find(std::string &name, int id);
 
     void addPtr(Expression *expr, llvm::Value *ptr) {
-        objects.push_back({expr, ptr});
+        last_scope->objects.push_back({expr, ptr, expr->id, std::string("")});
     }
 
-    void bindPtr(Fragment &f, llvm::Value *ptr) {
-        for (int i = 0; i < objects.size(); ++i) {
+    /*void bindPtr(Fragment &f, llvm::Value *ptr) {
+        for (int i = 0; i < last_scope->objects.size(); ++i) {
             auto &ob = objects[i];
             if (ob.ptr == ptr) {
                 return;
             }
         }
-    }
+    }*/
 
     void check(Expression *expr);
 
@@ -104,8 +92,9 @@ struct Ownership {
         add(f.name, type, ptr, f.id, f.line);
     }
 
-    void add(Param &p, llvm::Value *ptr) {
+    void addPrm(Param &p, llvm::Value *ptr) {
         add(p.name, p.type.value(), ptr, p.id, p.line);
+        last_scope->objects.push_back({nullptr, ptr, p.id, p.name});
     }
 
     void doMove(Expression *expr);
