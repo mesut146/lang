@@ -28,6 +28,7 @@ struct Config {
     static bool rvo_ptr;
     static bool debug;
     static bool use_cache;
+    static std::string root;
 };
 
 class RType;

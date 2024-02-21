@@ -1114,7 +1114,7 @@ std::any Compiler::visitAssign(Assign *node) {
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
         if (dynamic_cast<ObjExpr *>(node->right)) {
-            //dont delete this
+            //dont delete, setField can't handle this
             auto rhs = gen(node->right);
             curOwner->drop(node->left, l);
             copy(l, rhs, lt);

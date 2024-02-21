@@ -18,20 +18,42 @@ struct Variable {
     Variable(const std::string &name, llvm::Value *ptr, int id, int line) : name(name), ptr(ptr), id(id), line(line) {}
 };
 
+//dropable
 struct Object {
     Expression *expr;
     llvm::Value *ptr;
     int id;          //prm
     std::string name;//prm
+
+    static Object make(Expression *expr) {
+        return Object{expr, nullptr, expr->id, ""};
+    }
 };
 
-struct Move{
-    int from;
+struct Move {
+    Variable *lhs = nullptr;//null means transfer
+    Object rhs;
+    int line;
+
+    static Move make_var_move(Variable *lhs, const Object &rhs) {
+        Move m;
+        m.lhs = lhs;
+        m.rhs = rhs;
+        m.line = rhs.expr->line;
+        return m;
+    }
+
+    static Move make_transfer(const Object& rhs) {
+        Move res;
+        res.rhs = rhs;
+        res.line = rhs.expr->line;
+        return res;
+    }
 };
 
 struct VarScope {
     std::vector<Variable> vars;
-    std::vector<Variable> moved;
+    std::vector<Move> moves;
     std::vector<Object> objects;
     VarScope *next_scope = nullptr;
     VarScope *parent = nullptr;
@@ -63,7 +85,7 @@ struct Ownership {
     }
 
     //drop vars in this scope
-    void endScope(VarScope* s);
+    void endScope(VarScope *s);
 
     bool isDropType(const RType &rt);
     bool isDropType(const Type &type);

@@ -4,6 +4,7 @@
 #include "parser/Util.h"
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 
 
@@ -12,56 +13,36 @@ bool Config::rvo_ptr = false;
 bool Config::debug = true;
 bool Config::use_cache = true;
 
-void lex(std::string &path) {
-    Lexer lexer(path);
-
-    for (;;) {
-        auto t = lexer.next();
-        if (t.is(EOF_))
-            break;
-        printf("type=%d off=%d val='%s'\n", t.type, t.start, t.value.c_str());
-    }
-}
-
-void parse(const std::string &path, bool print = false) {
-    info("parsing " + path);
-    Lexer lexer(path);
-    Parser parser(lexer);
-    auto u = parser.parseUnit();
-    if (print) {
-        std::cout << u->print() << "\n";
-    }
-}
-
-void parseTest() {
-    debug = true;
-    auto path = "../tests/parser";
-    for (auto &file : std::filesystem::directory_iterator(path)) {
-        auto file_path = "./tests/" + file.path().string();
-        parse(file_path);
-    }
-}
+std::string Config::root = "../tests";
 
 void compile(const std::string &path) {
     Compiler c;
-    c.srcDir = "../tests/src";
+    c.srcDir = Config::root;
     c.outDir = "../out";
     c.init();
     if (std::filesystem::is_directory(path)) {
         for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
             if (e.is_directory()) continue;
+            if (e.path().extension() != "x") continue;
             c.compile(e.path().string());
         }
-        c.link_run("");
     } else {
         c.compile(path);
-        c.link_run("");
+    }
+    c.link_run("");
+}
+
+void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
+    for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
+        if (e.is_directory()) continue;
+        if (e.path().extension() != "x") continue;
+        f(e.path().string());
     }
 }
 
 void compile(std::initializer_list<std::string> list) {
     Compiler c;
-    c.srcDir = "../tests/src";
+    c.srcDir = Config::root;
     c.outDir = "../out";
     c.init();
     for (auto &file : list) {
@@ -83,16 +64,19 @@ void clean() {
 void compileTest() {
     clean();
 
-    auto s1 = "../tests/src/std/String.x";
-    auto s2 = "../tests/src/std/str.x";
-    auto op = "../tests/src/std/ops.x";
-    auto libc = "../tests/src/std/libc.x";
-    auto io = "../tests/src/std/io.x";
-
     //compile("../tests/src/opaq.x");
     //compile("../tests/src/dbg.x");
+    Compiler c;
+    c.srcDir = Config::root;
+    c.outDir = "../out";
+    c.init();
+    std::function<void(const std::string &)> f = [&](const std::string &file) {
+        c.compile(file);
+    };
+    list_dir(Config::root + "/normal", f);
 
-    compile("../tests/src/lit.x");
+
+    /*compile("../tests/src/lit.x");
     compile("../tests/src/var.x");
     compile("../tests/src/infix.x");
     compile("../tests/src/flow.x");
@@ -108,9 +92,14 @@ void compileTest() {
     compile("../tests/src/impl.x");
     compile("../tests/src/load.x");
     compile("../tests/src/as.x");
-    compile("../tests/src/alias.x");
+    compile("../tests/src/alias.x");*/
 
     //std tests
+    auto s1 = "../tests/src/std/String.x";
+    auto s2 = "../tests/src/std/str.x";
+    auto op = "../tests/src/std/ops.x";
+    auto libc = "../tests/src/std/libc.x";
+    auto io = "../tests/src/std/io.x";
     //compile({"../tests/src/virt.x", s1, s2, op});
     //compile({"../tests/src/virt2.x", s1, s2, op});
     /*compile({"../tests/src/base.x", s1, s2, op});
@@ -150,7 +139,7 @@ void bootstrap() {
             "../tests/src/parser/debug_helper.x",
             "../tests/src/parser/test.x"};
     Compiler c;
-    c.srcDir = "../tests/src";
+    c.srcDir = Config::root;
     c.outDir = "../out";
     c.init();
     for (auto &file : list) {
@@ -175,17 +164,6 @@ void build_std() {
         c.compile(file);
     }
     c.build_library("std.a", false);
-}
-
-void bridge() {
-    auto b = "../tests/src/parser/bridge.x";
-    Compiler c;
-    c.srcDir = "../tests/src";
-    c.outDir = "../out";
-    c.init();
-    c.compile(b);
-
-    c.build_library("xbridge.a", false);
 }
 
 void usage() {
@@ -214,14 +192,10 @@ int main(int argc, char **args) {
         ++i;
         if (arg == "help") {
             usage();
-        } else if (arg == "parse") {
-            parseTest();
         } else if (arg == "test") {
             compileTest();
         } else if (arg == "std") {
             build_std();
-        } else if (arg == "br") {
-            bridge();
         } else if (arg == "c") {
             auto path = std::string(args[i]);
             i++;

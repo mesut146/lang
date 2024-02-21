@@ -181,7 +181,7 @@ Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(u
 
 void Resolver::init_prelude() {
     for (auto &pre : prelude) {
-        getResolver("../tests/src/std/" + pre + ".x", "../tests/src");
+        getResolver(Config::root + "/std/" + pre + ".x", Config::root);
     }
 }
 

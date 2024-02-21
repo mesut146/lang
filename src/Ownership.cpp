@@ -97,7 +97,7 @@ void Ownership::doMove(Expression *expr) {
                     auto v2 = v;
                     v2.moveLine = expr->line;
                     auto last = last_scope;
-                    last->moved.push_back(v2);
+                    //last->moved.push_back(v2);
                     //scope.vars.erase(scope.vars.begin() + i);
                     return;
                 }
@@ -118,13 +118,13 @@ void Ownership::doMove(Expression *expr) {
         //r->err(expr, "domove");
         return;
     }
-    for (int i = 0; i < last_scope->objects.size(); ++i) {
+    /*for (int i = 0; i < last_scope->objects.size(); ++i) {
         auto &ob = last_scope->objects[i];
         if (ob.expr->id == expr->id) {
             last_scope->objects.erase(last_scope->objects.begin() + i);
             break;
         }
-    }
+    }*/
 }
 
 Variable *Ownership::isMoved(SimpleName *expr) {
@@ -173,30 +173,19 @@ void Ownership::endAssign(Expression *lhs) {
 
 void Ownership::doMoveReturn(Expression *expr) {
     if(true) return;
-    /*for (auto i = objects.begin(); i != objects.end(); ++i) {
-        auto &obj = *i;
-        if (obj.expr->id == expr->id) {
-            //move of rvalue, release ownership
-            objects.erase(i);
-            break;
-        }
-    }*/
+    check(expr);
+    last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
 }
 
 void Ownership::moveToField(Expression *expr) {
+    check(expr);
+    last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
     doMove(expr);
 }
 
 void Ownership::doMoveCall(Expression *arg) {
-    /*for (auto i = objects.begin(); i != objects.end(); ++i) {
-        auto &obj = *i;
-        if (obj.expr->id == arg->id) {
-            //move of rvalue, release ownership
-            objects.erase(i);
-            break;
-        }
-    }
-    doMove(arg);*/
+    check(arg);
+    last_scope->moves.push_back(Move::make_transfer(Object::make(arg)));
 }
 
 void Ownership::doReturn() {
