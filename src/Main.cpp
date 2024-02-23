@@ -15,6 +15,12 @@ bool Config::use_cache = true;
 
 std::string Config::root = "../tests";
 
+void delete_cache() {
+    if (fs::exists(Cache::CACHE_FILE)) {
+        fs::remove(Cache::CACHE_FILE);
+    }
+}
+
 void compile(const std::string &path) {
     Compiler c;
     c.srcDir = Config::root;
@@ -35,9 +41,22 @@ void compile(const std::string &path) {
 void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
     for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
         if (e.is_directory()) continue;
-        if (e.path().extension() != "x") continue;
+        if (e.path().extension() != ".x") continue;
         f(e.path().string());
     }
+}
+
+void build_std() {
+    //delete_cache();
+    Compiler c;
+    c.srcDir = Config::root;
+    c.outDir = "../out";
+    c.init();
+    std::function<void(const std::string &)> f = [&](const std::string &file) {
+        c.compile(file);
+    };
+    list_dir(Config::root + "/std", f);
+    c.build_library("std.a", false);
 }
 
 void compile(std::initializer_list<std::string> list) {
@@ -63,9 +82,29 @@ void clean() {
 
 void compileTest() {
     clean();
+    delete_cache();
 
-    //compile("../tests/src/opaq.x");
-    //compile("../tests/src/dbg.x");
+    Compiler c;
+    c.srcDir = Config::root;
+    c.outDir = "../out";
+    c.init();
+    std::function<void(const std::string &)> f = [&](const std::string &file) {
+        c.compile(file);
+        c.link_run("");
+    };
+    list_dir(Config::root + "/normal", f);
+
+    //std tests
+    build_std();
+    std::function<void(const std::string &)> f2 = [&](const std::string &file) {
+        c.compile(file);
+        c.link_run("std.a");
+    };
+    list_dir(Config::root + "/std_test", f2);
+}
+
+void bootstrap() {
+    clean();
     Compiler c;
     c.srcDir = Config::root;
     c.outDir = "../out";
@@ -73,98 +112,13 @@ void compileTest() {
     std::function<void(const std::string &)> f = [&](const std::string &file) {
         c.compile(file);
     };
-    list_dir(Config::root + "/normal", f);
+    list_dir(Config::root + "/parser", f);
 
+    build_std();
 
-    /*compile("../tests/src/lit.x");
-    compile("../tests/src/var.x");
-    compile("../tests/src/infix.x");
-    compile("../tests/src/flow.x");
-    compile("../tests/src/pass.x");
-    compile("../tests/src/ret.x");
-    compile("../tests/src/alloc.x");
-    compile("../tests/src/array.x");
-    compile("../tests/src/importTest");
-    compile("../tests/src/traits.x");
-    compile("../tests/src/generic.x");
-    compile("../tests/src/structTest.x");
-    compile("../tests/src/enumTest.x");
-    compile("../tests/src/impl.x");
-    compile("../tests/src/load.x");
-    compile("../tests/src/as.x");
-    compile("../tests/src/alias.x");*/
-
-    //std tests
-    auto s1 = "../tests/src/std/String.x";
-    auto s2 = "../tests/src/std/str.x";
-    auto op = "../tests/src/std/ops.x";
-    auto libc = "../tests/src/std/libc.x";
-    auto io = "../tests/src/std/io.x";
-    //compile({"../tests/src/virt.x", s1, s2, op});
-    //compile({"../tests/src/virt2.x", s1, s2, op});
-    /*compile({"../tests/src/base.x", s1, s2, op});
-    compile({"../tests/src/boxTest.x", s1, s2, op});
-    compile({"../tests/src/listTest.x", s1, s2, op});
-    compile({"../tests/src/strTest.x", s1, s2, op});
-    compile({"../tests/src/opt.x", s1, s2, op});
-    compile({"../tests/src/mapTest.x", s1, s2, op});
-    compile({"../tests/src/libc-test.x", s1, s2, op, libc, io});
-    compile("../tests/src/malloc.x");*/
-
-    //compile({"../tests/src/bug1.x", s1, s2, op, libc, io});
+    c.link_run("std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
-void bootstrap() {
-    clean();
-    std::vector<std::string> list{
-            "../tests/src/std/String.x",
-            "../tests/src/std/str.x",
-            "../tests/src/std/ops.x",
-            "../tests/src/std/libc.x",
-            "../tests/src/std/io.x",
-            "../tests/src/parser/token.x",
-            "../tests/src/parser/lexer.x",
-            "../tests/src/parser/ast.x",
-            "../tests/src/parser/printer.x",
-            "../tests/src/parser/parser.x",
-            "../tests/src/parser/resolver.x",
-            "../tests/src/parser/derive.x",
-            "../tests/src/parser/method_resolver.x",
-            "../tests/src/parser/utils.x",
-            "../tests/src/parser/copier.x",
-            "../tests/src/parser/bridge.x",
-            "../tests/src/parser/compiler.x",
-            "../tests/src/parser/compiler_helper.x",
-            "../tests/src/parser/alloc_helper.x",
-            "../tests/src/parser/debug_helper.x",
-            "../tests/src/parser/test.x"};
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
-    for (auto &file : list) {
-        c.compile(file);
-    }
-    c.link_run("libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
-}
-
-void build_std() {
-    auto s1 = "../tests/src/std/String.x";
-    auto s2 = "../tests/src/std/str.x";
-    auto op = "../tests/src/std/ops.x";
-    auto libc = "../tests/src/std/libc.x";
-    auto io = "../tests/src/std/io.x";
-    std::vector<std::string> list{s1, s2, op, libc, io};
-
-    Compiler c;
-    c.srcDir = "../tests/src";
-    c.outDir = "../out";
-    c.init();
-    for (auto &file : list) {
-        c.compile(file);
-    }
-    c.build_library("std.a", false);
-}
 
 void usage() {
     throw std::runtime_error("usage: ./lang <cmd>\n");
@@ -176,9 +130,7 @@ int main(int argc, char **args) {
         int i = 1;
         if (argc > 0 && std::string(args[i]) == "-nc") {
             Config::use_cache = false;
-            if (fs::exists(Cache::CACHE_FILE)) {
-                fs::remove(Cache::CACHE_FILE);
-            }
+            delete_cache();
             ++i;
             argc--;
         }
@@ -200,7 +152,7 @@ int main(int argc, char **args) {
             auto path = std::string(args[i]);
             i++;
             Compiler c;
-            c.srcDir = "../tests/src";
+            c.srcDir = Config::root;
             if (std::filesystem::is_directory(path)) {
                 //c.srcDir = path;
                 if (argc - 1 == 3) {

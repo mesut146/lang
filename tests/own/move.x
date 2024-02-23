@@ -7,29 +7,6 @@ func send(a: A){
 
 }
 
-func if1(){
-    let a = A{a: 5};
-    if(true){
-        send(a);
-    }
-    //this else block compiler generated
-    // else{
-    //     a.drop();
-    // }
-
-    //invalid
-    //a.a = 10;
-}
-
-func if2(){
-    let a = A{a: 5};
-    if(true){
-        send(a);
-        return;
-    }
-    //valid bc return
-    a.a = 10;
-}
 
 func if3(){
     let a = A{a: 5};

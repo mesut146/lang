@@ -117,6 +117,7 @@ void Compiler::link_run(const std::string &args) {
         cmd.append(obj);
         cmd.append(" ");
     }
+    compiled.clear();
     cmd.append(args);
     if (system(cmd.c_str()) == 0) {
         auto code = system("./a.out");
@@ -125,6 +126,7 @@ void Compiler::link_run(const std::string &args) {
             exit(1);
         }
     } else {
+        print(cmd + "\n");
         throw std::runtime_error("link failed");
     }
 }
@@ -144,9 +146,11 @@ void Compiler::build_library(const std::string &name, bool shared) {
         cmd.append(obj);
         cmd.append(" ");
     }
-    print(cmd + "\n");
+    compiled.clear();
     if (system(cmd.c_str()) == 0) {
+        print("build library " + name);
     } else {
+        print(cmd + "\n");
         throw std::runtime_error("link failed");
     }
 }
@@ -368,7 +372,6 @@ void Compiler::cleanup() {
     vtables.clear();
     virtualIndex.clear();
     globals.clear();
-    ownerMap.clear();
     //delete staticf;
 }
 
@@ -436,8 +439,8 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
-        if (curOwner->isDropType(type)) {
-            curOwner->drop(expr, ptr);
+        if (curOwner.isDropType(type)) {
+            curOwner.drop(expr, ptr);
             //resolv->err(expr, "can't deref drop type");
         }
         auto val = get_obj_ptr(de->expr.get());
@@ -446,7 +449,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     }
     if (isRvo(expr)) {
         auto val = gen(expr);
-        curOwner->drop(expr, ptr);
+        curOwner.drop(expr, ptr);
         copy(ptr, val, type);
         return;
     }
@@ -455,7 +458,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
         child(expr, ptr);
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
-        curOwner->drop(expr, ptr);
+        curOwner.drop(expr, ptr);
         copy(ptr, val, type);
     } else if (type.isPointer()) {
         auto val = get_obj_ptr(expr);
@@ -784,7 +787,7 @@ void storeParams(Method *m, Compiler *c) {
         }
         didx++;
         argIdx++;
-        c->curOwner->addPrm(m->self.value(), ptr);
+        c->curOwner.addPrm(m->self.value(), ptr);
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto &prm = m->params[i];
@@ -799,8 +802,30 @@ void storeParams(Method *m, Compiler *c) {
             c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
-        c->curOwner->addPrm(prm, ptr);
+        c->curOwner.addPrm(prm, ptr);
     }
+}
+
+bool ends_with_return(Statement *stmt) {
+    if (dynamic_cast<ReturnStmt *>(stmt)) return true;
+    auto expr = dynamic_cast<ExprStmt *>(stmt);
+    if (expr) {
+        auto mc = dynamic_cast<MethodCall *>(expr->expr);
+        return mc && !mc->scope && mc->name == "panic";
+    }
+    auto block = dynamic_cast<Block *>(stmt);
+    if (block && !block->list.empty()) {
+        auto &last = block->list.back();
+        return ends_with_return(last.get());
+    }
+    auto is = dynamic_cast<IfStmt *>(stmt);
+    if (is) {
+        if (is->elseStmt) {
+            return ends_with_return(is->thenStmt.get()) || ends_with_return(is->elseStmt.get());
+        }
+        return ends_with_return(is->thenStmt.get());
+    }
+    return false;
 }
 
 bool isReturnLast(Statement *stmt) {
@@ -836,8 +861,9 @@ void Compiler::genCode(Method *m) {
     curMethod = m;
     auto id = mangle(m);
     //print("genCode " + id + "\n");
-    ownerMap.insert({id, Ownership(this, m)});
-    curOwner = &ownerMap.at(id);
+    curOwner.compiler = this;
+    curOwner.r = resolv.get();
+    curOwner.init(m);
     func = funcMap[id];
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
@@ -859,7 +885,7 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
-    curOwner->doReturn();
+    curOwner.endScope(&curOwner.scope);
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
         Builder->CreateRet(makeInt(0, 32));
@@ -903,7 +929,7 @@ std::any Compiler::visitBlock(Block *node) {
 std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     loc(node);
     if (!node->expr) {
-        curOwner->doReturn();
+        curOwner.doReturn();
         if (is_main(curMethod)) {
             return Builder->CreateRet(makeInt(0, 32));
         }
@@ -913,22 +939,22 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     auto e = node->expr.get();
     if (type.isPointer()) {
         auto val = get_obj_ptr(e);
-        curOwner->doReturn();
+        curOwner.doReturn();
         return Builder->CreateRet(val);
     }
     if (!isStruct(type)) {
         auto expr_type = resolv->getType(type);
-        curOwner->doReturn();
+        curOwner.doReturn();
         return Builder->CreateRet(cast(e, expr_type));
     }
     //rvo
     auto ptr = func->getArg(0);
 
-    curOwner->check(e);
+    curOwner.check(e);
 
     if (doesAlloc(e)) {
         child(e, ptr);
-        curOwner->doReturn();
+        curOwner.doReturn();
         return Builder->CreateRetVoid();
     }
     auto de = dynamic_cast<DerefExpr *>(e);
@@ -940,8 +966,8 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
         copy(ptr, val, resolv->getType(e));
     }
     //todo move
-    curOwner->doMoveReturn(e);
-    curOwner->doReturn();
+    curOwner.doMoveReturn(e);
+    curOwner.doReturn();
     return Builder->CreateRetVoid();
 }
 
@@ -1113,16 +1139,15 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
+        curOwner.drop(node->left, l);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             //dont delete, setField can't handle this
             auto rhs = gen(node->right);
-            curOwner->drop(node->left, l);
             copy(l, rhs, lt);
         } else {
             setField(node->right, lt, l);
         }
-        curOwner->doAssign(node->left, node->right);
-        curOwner->endAssign(node->left);
+        curOwner.doAssign(node->left, node->right);
         return l;
     }
     auto val = l;
@@ -1153,7 +1178,7 @@ std::any Compiler::visitSimpleName(SimpleName *node) {
     if (globals.contains(node->name)) {
         return globals[node->name];
     }
-    curOwner->check(node);
+    curOwner.check(node);
     return NamedValues[node->name];
 }
 
@@ -1282,7 +1307,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     auto target = rt.targetMethod;
     if (isRvo(target)) {
         auto ptr = getAlloc(mc);
-        curOwner->addPtr(mc, ptr);
+        curOwner.addPtr(mc, ptr);
         return call(mc, ptr);
     } else {
         return call(mc, nullptr);
@@ -1338,7 +1363,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         args.push_back(av);
         paramIdx++;
-        curOwner->doMoveCall(a);
+        curOwner.doMoveCall(a);
     }
 
     //virtual logic
@@ -1465,13 +1490,12 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         } else if (doesAlloc(rhs)) {
             //no unnecessary alloc
             auto val = gen(rhs);
-            curOwner->add(f, type, val);
+            curOwner.addVar(f, type, val, rhs);
         } else {
-            curOwner->check(rhs);
+            curOwner.check(rhs);
             auto val = gen(rhs);
             copy(ptr, val, type);
-            curOwner->add(f, type, ptr);
-            curOwner->doMove(rhs);
+            curOwner.addVar(f, type, ptr, rhs);
         }
         //dbg after init
         dbg_var(f, type);
@@ -1507,7 +1531,7 @@ std::any Compiler::visitObjExpr(ObjExpr *node) {
     loc(node);
     auto tt = resolv->resolve(node);
     llvm::Value *ptr = getAlloc(node);
-    curOwner->addPtr(node, ptr);
+    curOwner.addPtr(node, ptr);
     object(node, ptr, tt, nullptr);
     return ptr;
 }
@@ -1576,7 +1600,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
             if (decl->base) real_idx++;
             auto field_target_ptr = gep2(ptr, real_idx, ty);
             setField(e.value, field->type, field_target_ptr);
-            curOwner->moveToField(e.value);
+            curOwner.moveToField(e.value);
         }
     }
 }
@@ -1609,7 +1633,7 @@ std::any Compiler::visitType(Type *node) {
     }
     //enum variant without struct
     auto ptr = getAlloc(node);
-    curOwner->addPtr(node, ptr);
+    curOwner.addPtr(node, ptr);
     simpleVariant(*node, ptr);
     return ptr;
 }
@@ -1786,7 +1810,7 @@ std::any Compiler::visitBreakStmt(BreakStmt *node) {
 
 std::any Compiler::visitArrayExpr(ArrayExpr *node) {
     auto ptr = getAlloc(node);
-    //todo curOwner->addPtr(node, ptr);
+    //todo curOwner.addPtr(node, ptr);
     array(node, ptr);
     return ptr;
 }
@@ -1884,9 +1908,9 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     }
     Builder->SetInsertPoint(then);
     resolv->newScope();
-    auto then_scope = curOwner->newScope();
+    auto then_scope = curOwner.newScope(ends_with_return(node->thenStmt.get()));
     node->thenStmt->accept(this);
-    curOwner->endScope(then_scope);
+    curOwner.endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
@@ -1894,17 +1918,17 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         set_and_insert(elsebb);
         resolv->newScope();
         //drop so that else doesnt see moves in then, bc unreachable
-        curOwner->dropScope(then_scope);
-        auto else_scope = curOwner->newScope();
+        curOwner.dropScope();
+        auto else_scope = curOwner.newScope(ends_with_return(node->elseStmt.get()));
         node->elseStmt->accept(this);
-        curOwner->endScope(else_scope);
+        curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
         //next stmts will see moves, bc reachable
         //todo proper return detection
         if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
-            curOwner->restore(then_scope);
+            curOwner.restore(then_scope);
         }
     }
     set_and_insert(next);
@@ -1956,30 +1980,30 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
                 } else {
                     //resolv->err("iflet deref");
                     copy(alloc_ptr, field_ptr, fd.type);
-                    curOwner->add(fd.name, fd.type, alloc_ptr, arg.id, arg.line);
+                    curOwner.add(fd.name, fd.type, alloc_ptr, arg.id, arg.line);
                 }
                 dbg_var(arg.name, node->rhs->line, 0, fd.type);
             }
         }
     }
-    auto then_scope = curOwner->newScope();
+    auto then_scope = curOwner.newScope(ends_with_return(node->thenStmt.get()));
     node->thenStmt->accept(this);
-    curOwner->endScope(then_scope);
+    curOwner.endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        curOwner->dropScope(then_scope);
-        auto else_scope = curOwner->newScope();
+        curOwner.dropScope();
+        auto else_scope = curOwner.newScope(ends_with_return(node->elseStmt.get()));
         node->elseStmt->accept(this);
-        curOwner->endScope(else_scope);
+        curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
         if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
-            curOwner->restore(then_scope);
+            curOwner.restore(then_scope);
         }
     }
     set_and_insert(next);
@@ -1998,9 +2022,9 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
-    auto then_scope = curOwner->newScope();
+    auto then_scope = curOwner.newScope(ends_with_return(node->body.get()));
     node->body->accept(this);
-    curOwner->endScope(then_scope);
+    curOwner.endScope(then_scope);
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -2009,7 +2033,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 }
 
 std::any Compiler::visitForStmt(ForStmt *node) {
-    auto then_scope = curOwner->newScope();
+    auto then_scope = curOwner.newScope(ends_with_return(node->body.get()));
     resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);
@@ -2031,7 +2055,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loopNext.push_back(next);
     int backup = resolv->max_scope;
     node->body->accept(this);
-    curOwner->endScope(then_scope);
+    curOwner.endScope(then_scope);
     int backup2 = resolv->max_scope;
     resolv->max_scope = backup;
     Builder->CreateBr(updatebb);

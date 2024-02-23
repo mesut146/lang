@@ -74,8 +74,7 @@ public:
     std::shared_ptr<Unit> unit;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
-    std::map<std::string, Ownership> ownerMap;
-    Ownership *curOwner = nullptr;
+    Ownership curOwner;
     std::optional<std::string> main_file;
     bool single_mode = true;
     std::map<std::string, llvm::Value *> globals;

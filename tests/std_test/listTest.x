@@ -1,3 +1,5 @@
+import std/libc
+
 func iterTest(list: List<i32>){
   let it = list.iter();
   assert it.has();

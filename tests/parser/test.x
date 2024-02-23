@@ -11,46 +11,8 @@ import std/map
 import std/io
 import std/libc
 
-func lexer_test(){
-  let lexer = Lexer::new("../tests/src/parser/parser.x".str());
-  let i=0;
-  for(;; ++i){
-    let t = lexer.next();
-    print("%s\n", t.print().cstr());
-    if(t.is(TokenType::EOF_)) break;
-  }
-  print("%d tokens\n", i);
-  print("lexer_test done\n");
-}
-
-func parser_test(){
-    let path = "../tests/src/parser/parser.x".str();
-    let parser = Parser::new(path);
-    let unit = parser.parse_unit();
-    print("%s\n", Fmt::str(&unit).cstr());
-    parser.drop();
-}
-
-func resolver_test(){
-  print("resolver_test\n");
-  let root = "../tests/src";
-  let ctx = Context::new(root.str());
-  resolver_dir(&ctx, root);
-  resolver_dir(&ctx, "../tests/src/std");
-}
-
-func resolver_dir(ctx: Context*, dir: str){
-  let list = list(dir);
-  for(let i = 0;i < list.len();++i){
-    let name = list.get_ptr(i);
-    if(!name.str().ends_with(".x")) continue;
-    let file = String::new(dir);
-    file.append("/");
-    file.append(name.str());
-    if(is_dir(file.str())) continue;
-    let r = Resolver::new(file, ctx);
-    r.resolve_all();
-  }
+func root(): str{
+  return "../tests";
 }
 
 func compile_dir(cmp: Compiler*, dir: str, link: bool){
@@ -77,24 +39,24 @@ func compile(cmp: Compiler*, file: str){
 
 func compiler_test(){
   print("compiler_test\n");
-  let root = "../tests/src";
+  let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, root, true);
+  compile_dir(&cmp, "../tests/normal", true);
   //compile_dir(&cmp, "../tests/src/std", false);
 }
 
 func bootstrap(){
   print("bootstrap\n");
-  let root = "../tests/src";
+  let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, "../tests/src/parser", false);
-  let arr = ["../tests/src/std/String.x",
-            "../tests/src/std/str.x",
-            "../tests/src/std/ops.x",
-            "../tests/src/std/libc.x",
-            "../tests/src/std/io.x"];
+  compile_dir(&cmp, "../tests/parser", false);
+  let arr = ["../tests/std/String.x",
+            "../tests/std/str.x",
+            "../tests/std/ops.x",
+            "../tests/std/libc.x",
+            "../tests/std/io.x"];
   for(let i=0;i<arr.len();++i){
     let file = arr[i];
     cmp.compile(file);
@@ -126,9 +88,6 @@ func main(argc: i32, args: i8**){
       cmp.compile(path);
     }
   }
-  
-  //lexer_test();
-  //parser_test();
-  //resolver_test();
+
   
 }

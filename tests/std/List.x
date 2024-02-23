@@ -36,7 +36,7 @@ impl<T> List<T>{
     if(self.count < self.cap){
       return;
     }
-    let tmp = get_malloc<T>(self.cap * 2);
+    let tmp = get_malloc<T>(self.cap + 10);
     for(let i = 0;i < self.count;++i){
       *ptr::get(tmp, i) = *ptr::get(self.ptr, i);
     }

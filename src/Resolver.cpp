@@ -37,7 +37,9 @@ RType RType::clone() {
     res.unit = unit;
     res.targetDecl = targetDecl;
     res.targetMethod = targetMethod;
-    res.vh = vh;
+    if (vh) {
+        res.vh = vh.value();
+    }
     if (value) {
         res.value = value.value();
     }
@@ -381,13 +383,13 @@ Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
 }
 
 //Debug::debug(e, f)
-Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, Type &type, const std::string &fmt) {
+Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, bool use_ref, const std::string &fmt) {
     auto mc = new MethodCall;
     mc->loc(++unit->lastLine);
     mc->is_static = true;
     mc->scope.reset(new Type("Debug"));
     mc->name = "debug";
-    if (!type.isPointer()) {
+    if (use_ref) {
         e = new RefExpr(std::unique_ptr<Expression>(e));
         e->loc(0);
     }
@@ -513,9 +515,10 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
             auto ifs = std::make_unique<IfLetStmt>();
             ifs->line = line;
             ifs->type = (Type(clone(bd->type), ev.name));
+            bool is_ptr = true;
             for (auto &fd : ev.fields) {
                 //todo make this ptr
-                ifs->args.push_back(ArgBind(fd.name, true));
+                ifs->args.push_back(ArgBind(fd.name, is_ptr));
             }
             ifs->rhs.reset((new SimpleName("self"))->loc(0));
             auto then = new Block;
@@ -525,9 +528,10 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
                 then->list.push_back(newPrint(unit, "f", "{"));
                 int j = 0;
                 for (auto &fd : ev.fields) {
+                    if (fd.type.isPointer()) continue;
                     if (j++ > 0) then->list.push_back(newPrint(unit, "f", ", "));
                     then->list.push_back(newPrint(unit, "f", fd.name + ": "));
-                    then->list.push_back(makeDebug(unit, new SimpleName(fd.name), fd.type, "f"));
+                    then->list.push_back(makeDebug(unit, (new SimpleName(fd.name))->loc(0), false, "f"));
                 }
                 then->list.push_back(newPrint(unit, "f", "}"));
             }
@@ -538,9 +542,10 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
         bl->list.push_back(newPrint(unit, "f", sd->type.name + "{"));
         int i = 0;
         for (auto &fd : sd->fields) {
+            if (fd.type.isPointer()) continue;
             bl->list.push_back(newPrint(unit, "f", (i > 0 ? ", " : "") + fd.name + ": "));
             //auto ts = fd.type.print();
-            bl->list.push_back(makeDebug(unit, makeFa(fd.name), fd.type, "f"));
+            bl->list.push_back(makeDebug(unit, makeFa(fd.name), true, "f"));
             i++;
         }
         bl->list.push_back(newPrint(unit, "f", "}"));
@@ -869,7 +874,7 @@ std::any Resolver::visitMethod(Method *m) {
         m->self->accept(this);
     }
     for (auto &prm : m->params) {
-        addScope(prm.name, *prm.type, true, m->line, m->self->id);
+        addScope(prm.name, *prm.type, true, m->line, prm.id);
         prm.accept(this);
     }
     if (m->body) {

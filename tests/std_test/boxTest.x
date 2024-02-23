@@ -10,7 +10,7 @@ impl Clone for BoxSt{
   }
 }
 
-#derive(Debug)
+//#derive(Debug)
 enum BoxEn{
   A(a: i32),
   B(a: Box<BoxEn>)

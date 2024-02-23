@@ -1,8 +1,14 @@
 #include "Ownership.h"
 #include "Compiler.h"
 
-Ownership::Ownership(Compiler *compiler, Method *m) : compiler(compiler), method(m) {
+/*Ownership::Ownership(Compiler *compiler, Method *m) : compiler(compiler), method(m) {
     this->r = compiler->resolv.get();
+    this->last_scope = nullptr;
+}*/
+
+void Ownership::init(Method *m) {
+    this->method = m;
+    this->scope = VarScope{};
     this->last_scope = &scope;
 }
 
@@ -50,59 +56,59 @@ bool Ownership::isDropType(const RType &rt) {
 }
 
 void Ownership::check(Expression *expr) {
-    auto sn = dynamic_cast<SimpleName *>(expr);
-    if (sn) {
-        auto moved = isMoved(sn);
-        if (moved != nullptr) {
-            r->err(expr, "use after move, line: " + std::to_string(moved->moveLine));
+    for (auto &mv : last_scope->moves) {
+        if (mv.rhs.id == expr->id) {
+            r->err(expr, "use after move, line: " + std::to_string(mv.line));
         }
     }
 }
 
-void Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id, int line) {
+Variable *Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id, int line) {
     auto rt = r->resolve(type);
-    if (!isDropType(rt)) return;
+    if (!isDropType(rt)) return nullptr;
     if (id == -1) {
         throw std::runtime_error("add id");
     }
-    last_scope->vars.push_back(Variable(name, ptr, id, line));
+    last_scope->vars.push_back(Variable(name, type, ptr, id, line));
+    return &last_scope->vars.back();
 }
 
 Variable *Ownership::find(std::string &name, int id) {
-    while (true) {
-        auto sc = last_scope;
+    auto sc = last_scope;
+    while (sc) {
         for (int i = 0; i < sc->vars.size(); ++i) {
             auto &v = sc->vars[i];
             if (v.name == name && v.id == id) {
                 return &v;
             }
         }
+        sc = sc->parent;
     }
+    return nullptr;
+}
+Variable *Ownership::findLhs(Expression *expr) {
+    auto sc = last_scope;
+    while (sc != nullptr) {
+        for (int i = 0; i < sc->vars.size(); ++i) {
+            auto &v = sc->vars[i];
+            if (v.id == expr->id) {
+                return &v;
+            }
+        }
+        sc = sc->parent;
+    }
+    r->err(expr, "cant find lhs");
     return nullptr;
 }
 
 void Ownership::doMove(Expression *expr) {
-    if(true) return;
+    if (true) return;
     auto rt = r->resolve(expr);
     if (!isDropType(rt)) return;
     auto sn = dynamic_cast<SimpleName *>(expr);
     if (sn) {
         check(expr);
         auto id = rt.vh.value().id;
-        while (true) {
-            auto sc = last_scope;
-            for (int i = 0; i < sc->vars.size(); ++i) {
-                auto &v = sc->vars[i];
-                if (v.name == sn->name && v.id == id) {
-                    auto v2 = v;
-                    v2.moveLine = expr->line;
-                    auto last = last_scope;
-                    //last->moved.push_back(v2);
-                    //scope.vars.erase(scope.vars.begin() + i);
-                    return;
-                }
-            }
-        }
         return;
     }
     auto fa = dynamic_cast<FieldAccess *>(expr);
@@ -118,16 +124,9 @@ void Ownership::doMove(Expression *expr) {
         //r->err(expr, "domove");
         return;
     }
-    /*for (int i = 0; i < last_scope->objects.size(); ++i) {
-        auto &ob = last_scope->objects[i];
-        if (ob.expr->id == expr->id) {
-            last_scope->objects.erase(last_scope->objects.begin() + i);
-            break;
-        }
-    }*/
 }
 
-Variable *Ownership::isMoved(SimpleName *expr) {
+Move *Ownership::isMoved(SimpleName *expr) {
     auto rt = r->resolve(expr);
     if (!isDropType(rt)) return nullptr;
     auto id = rt.vh.value().id;
@@ -143,14 +142,53 @@ Variable *Ownership::isMoved(SimpleName *expr) {
     return nullptr;
 }
 
+std::vector<VarScope *> Ownership::rev_scopes() {
+    std::vector<VarScope *> res;
+    auto sc = last_scope;
+    while (sc != nullptr) {
+        res.push_back(sc);
+        sc = sc->parent;
+    }
+    return res;
+}
+
+std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
+    auto fa = dynamic_cast<FieldAccess *>(expr);
+    if (fa) {
+        auto rt_new = r->resolve(fa->scope);
+        if (rt_new.type.isPointer()) {
+            r->err(expr, "move field of ptr");
+        }
+        if (isDropType(rt_new)) {
+            //r->err(expr, "partial move");
+        }
+        for (auto scp : rev_scopes()) {
+            for (auto &mv : scp->moves) {
+                auto rt_old = r->resolve(mv.rhs.expr);
+                if (rt_old.vh.has_value() && rt_new.vh.has_value() && rt_old.vh.value().id == rt_new.vh.value().id) {
+                    if (!scp->ends_with_return) {
+                        r->err(expr, "assign field to moved variable, moved in " + std::to_string(mv.line));
+                    }
+                    return {nullptr, nullptr};
+                }
+            }
+        }
+    }
+    return {nullptr, nullptr};
+}
+
 void Ownership::doAssign(Expression *lhs, Expression *rhs) {
-    doMove(rhs);
+    is_assignable(lhs);
+    auto rt = r->resolve(rhs);
+    if (!isDropType(rt)) return;
+    check(rhs);
     //if lhs is moved too, reassign
+    last_scope->moves.push_back(Move::make_var_move(lhs, Object::make(rhs)));
 }
 
 //redeclare var
 void Ownership::endAssign(Expression *lhs) {
-    if(true) return;
+    if (true) return;
     auto rt = r->resolve(lhs);
     if (!isDropType(rt)) return;
     auto sn = dynamic_cast<SimpleName *>(lhs);
@@ -172,13 +210,15 @@ void Ownership::endAssign(Expression *lhs) {
 
 
 void Ownership::doMoveReturn(Expression *expr) {
-    if(true) return;
+    if (true) return;
     check(expr);
     last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
 }
 
 void Ownership::moveToField(Expression *expr) {
     check(expr);
+    auto rt = r->resolve(expr);
+    if (!isDropType(rt)) return;
     last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
     doMove(expr);
 }
@@ -189,12 +229,7 @@ void Ownership::doMoveCall(Expression *arg) {
 }
 
 void Ownership::doReturn() {
-    /*if (!objects.empty()) {
-        std::cout << "return " << printMethod(method) << "\n";
-    }
-    for (auto &ob : objects) {
-        std::cout << "drop " << ob.expr->print() << "\n";
-    }*/
+    endScope(last_scope);
 }
 
 Method *findDrop(Unit *unit, const Type &type) {
@@ -209,7 +244,7 @@ Method *findDrop(Unit *unit, const Type &type) {
 }
 
 Method *findDrop(Compiler *c, const Type &type) {
-    auto m = findDrop(c, type);
+    auto m = findDrop(c->unit.get(), type);
     if (m) {
         return m;
     }
@@ -220,7 +255,7 @@ Method *findDrop(Compiler *c, const Type &type) {
             return m2;
         }
     }
-    throw std::runtime_error("cant find drop method");
+    throw std::runtime_error("cant find drop method for " + type.print());
 }
 
 Method *findDrop0(Compiler *c, Expression *expr) {
@@ -237,23 +272,85 @@ Method *findDrop0(Compiler *c, Expression *expr) {
     return res.targetMethod;
 }
 
+void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
+    llvm::Function *proto;
+    //todo, separate from compiler protos
+    if (own->protos.contains(type.print())) {
+        proto = own->protos[type.print()];
+    } else {
+        auto drop_method = findDrop(own->compiler, type);
+        proto = own->compiler->make_proto(drop_method);
+        own->protos[type.print()] = proto;
+    }
+    std::vector<llvm::Value *> args{ptr};
+    own->compiler->loc(0, 0);
+    own->compiler->Builder->CreateCall(proto, args);
+}
+
 //Drop::drop(ptr) -> Type::drop(self)
 void Ownership::drop(Expression *expr, llvm::Value *ptr) {
-    if(true) return;
+    //if (true) return;
     auto rt = r->resolve(expr);
     if (!isDrop(rt.targetDecl)) return;
-    print("dropping " + expr->print() + "\n");
-    auto drop_method = findDrop0(compiler, expr);
-    auto proto = compiler->make_proto(drop_method);
-    std::vector<llvm::Value *> args{ptr};
-    compiler->Builder->CreateCall(proto, args);
+    print("dropping " + expr->print());
+    call_drop(this, rt.type, ptr);
+}
+
+void Ownership::drop(Variable *v) {
+    call_drop(this, v->type, v->ptr);
+}
+
+bool is_moved(Ownership *own, Variable &v, VarScope &scp) {
+    auto cur = &scp;
+    while (cur) {
+        for (auto &v : cur->vars) {
+            for (auto &mv : cur->moves) {
+                //todo redeclare?
+                auto rt = own->r->resolve(mv.rhs.expr);
+                if (rt.vh && rt.vh->id == v.id) {
+                    return true;
+                }
+            }
+        }
+        cur = cur->parent;
+    }
+    cur = &scp;
+    while (cur) {
+        for (auto &v : cur->vars) {
+            for (auto &mv : cur->moves) {
+                //todo redeclare?
+                auto rt = own->r->resolve(mv.rhs.expr);
+                if (rt.vh && rt.vh->id == v.id) {
+                    return true;
+                }
+            }
+        }
+        cur = cur->next_scope;
+    }
+    return false;
 }
 
 //drop vars in this scope
-void Ownership::endScope(VarScope* s){
-    if(true) return;
-    for(auto &obj : s->objects) {
+void Ownership::endScope(VarScope *s) {
+    //if (true) return;
+    print("endscope " + printMethod(method));
+    for (auto &obj : s->objects) {
         //todo is valid
-        drop(obj.expr, obj.ptr);
+        bool is_moved = false;
+        for (auto &mv : s->moves) {
+            if (mv.rhs.id == obj.id) {
+                is_moved = true;
+                break;
+            }
+        }
+        if (!is_moved) {
+            drop(obj.expr, obj.ptr);
+        }
+    }
+    for (auto &v : s->vars) {
+        if (!is_moved(this, v, *s)) {
+            std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
+            drop(&v);
+        }
     }
 }

@@ -8,7 +8,7 @@ func file_name(): str{
 func read_test(){
   let buf = read_bytes(file_name());
   assert buf.len() == 5;
-  let s = String::new(buf);
+  let s = String::new(&buf);
   assert s.eq("hello");
 }
 

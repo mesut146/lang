@@ -8,14 +8,15 @@ struct Resolver;
 struct Compiler;
 struct RType;
 
+//prm or var
 struct Variable {
     std::string name;
+    Type type;
     llvm::Value *ptr;
     int id;
     int line;
-    int moveLine = -1;
 
-    Variable(const std::string &name, llvm::Value *ptr, int id, int line) : name(name), ptr(ptr), id(id), line(line) {}
+    Variable(const std::string &name, const Type &type, llvm::Value *ptr, int id, int line) : name(name), type(type), ptr(ptr), id(id), line(line) {}
 };
 
 //dropable
@@ -32,6 +33,7 @@ struct Object {
 
 struct Move {
     Variable *lhs = nullptr;//null means transfer
+    Expression *lhs_expr = nullptr;
     Object rhs;
     int line;
 
@@ -42,8 +44,15 @@ struct Move {
         m.line = rhs.expr->line;
         return m;
     }
+    static Move make_var_move(Expression *lhs, const Object &rhs) {
+        Move m;
+        m.lhs_expr = lhs;
+        m.rhs = rhs;
+        m.line = rhs.expr->line;
+        return m;
+    }
 
-    static Move make_transfer(const Object& rhs) {
+    static Move make_transfer(const Object &rhs) {
         Move res;
         res.rhs = rhs;
         res.line = rhs.expr->line;
@@ -57,31 +66,36 @@ struct VarScope {
     std::vector<Object> objects;
     VarScope *next_scope = nullptr;
     VarScope *parent = nullptr;
+    bool ends_with_return = false;
 };
 
 struct Ownership {
     Compiler *compiler;
-    Resolver *r;
-    Method *method;
+    Resolver *r=nullptr;
+    Method *method = nullptr;
     VarScope scope;
     VarScope *last_scope = nullptr;
+    std::map<std::string, llvm::Function *> protos;
 
-    Ownership(Compiler *compiler, Method *m);
+    //Ownership(Compiler *compiler);
 
+    void init(Method *m);
 
-    VarScope *newScope() {
+    VarScope *newScope(bool ends_with_return) {
         auto then = new VarScope;
         then->parent = last_scope;
+        then->ends_with_return = ends_with_return;
         last_scope->next_scope = then;
         last_scope = then;
         return then;
     }
 
-    void restore(VarScope *then) {
-        last_scope->next_scope = then;
+    void restore(VarScope *then_scope) {
+        last_scope = then_scope;
     }
 
-    void dropScope(VarScope *then) {
+    void dropScope() {
+        last_scope = last_scope->parent;
     }
 
     //drop vars in this scope
@@ -92,34 +106,35 @@ struct Ownership {
     bool isDrop(BaseDecl *decl);
 
     Variable *find(std::string &name, int id);
+    Variable *findLhs(Expression *expr);
 
     void addPtr(Expression *expr, llvm::Value *ptr) {
         last_scope->objects.push_back({expr, ptr, expr->id, std::string("")});
     }
 
-    /*void bindPtr(Fragment &f, llvm::Value *ptr) {
-        for (int i = 0; i < last_scope->objects.size(); ++i) {
-            auto &ob = objects[i];
-            if (ob.ptr == ptr) {
-                return;
-            }
-        }
-    }*/
-
     void check(Expression *expr);
 
-    void add(std::string &name, Type &type, llvm::Value *ptr, int id, int line);
+    Variable *add(std::string &name, Type &type, llvm::Value *ptr, int id, int line);
 
-    void add(Fragment &f, Type &type, llvm::Value *ptr) {
-        add(f.name, type, ptr, f.id, f.line);
+    Variable *addVar(Fragment &f, Type &type, llvm::Value *ptr, Expression *rhs) {
+        auto v = add(f.name, type, ptr, f.id, f.line);
+        if (v) {
+            last_scope->moves.push_back(Move::make_var_move(v, Object::make(rhs)));
+        }
+        return v;
     }
 
-    void addPrm(Param &p, llvm::Value *ptr) {
-        add(p.name, p.type.value(), ptr, p.id, p.line);
-        last_scope->objects.push_back({nullptr, ptr, p.id, p.name});
+    Variable *addPrm(Param &p, llvm::Value *ptr) {
+        auto v = add(p.name, p.type.value(), ptr, p.id, p.line);
+        if (v) {
+            //last_scope->objects.push_back({nullptr, ptr, p.id, p.name});
+        }
+        return v;
     }
 
     void doMove(Expression *expr);
+    std::pair<Move *, VarScope *> is_assignable(Expression *expr);
+    Move *isMoved(SimpleName *expr);
 
     void doAssign(Expression *lhs, Expression *rhs);
     void endAssign(Expression *lhs);
@@ -131,12 +146,12 @@ struct Ownership {
 
     void moveToField(Expression *expr);
 
-
-    Variable *isMoved(SimpleName *sn);
-
     bool needDrop() { return false; }
 
     void doReturn();
 
     void drop(Expression *expr, llvm::Value *ptr);
+    void drop(Variable *v);
+
+    std::vector<VarScope *> rev_scopes();
 };
