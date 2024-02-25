@@ -3,7 +3,9 @@ struct A{
     a: i32;
 }
 
-func main(){
+static cnt = 0;
+
+func test(){
     let i = 0;
     let a = A{a: ++i};
     while(true){
@@ -20,8 +22,14 @@ func main(){
     //A::drop 5
 }
 
+func main(){
+    test();
+    assert cnt == 5;
+}
+
 impl Drop for A{
     func drop(self){
         print("A::drop %d\n", self.a);
+        cnt += 1;
     }
 }

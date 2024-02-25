@@ -239,11 +239,15 @@ std::string mangle_unit(const std::string &path) {
     return res;
 }
 
+std::string mangle_static(const std::string &path) {
+    return mangle_unit(path) + "_static_init";
+}
+
 llvm::Function *make_init_proto(const std::string &path, Compiler *c) {
     std::vector<llvm::Type *> argTypes;
     auto fr = llvm::FunctionType::get(c->Builder->getVoidTy(), argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
-    std::string mangled = mangle_unit(path) + "_static_init";
+    std::string mangled = mangle_static(path);
     return llvm::Function::Create(fr, linkage, mangled, *c->mod);
 }
 
@@ -877,7 +881,10 @@ void Compiler::genCode(Method *m) {
     if (is_main(m)) {
         for (auto &init_proto_path : Compiler::global_protos) {
             loc(0, 0);
-            auto init_proto = make_init_proto(init_proto_path, this);
+            auto init_proto = mod->getFunction(mangle_static(init_proto_path));
+            if (!init_proto) {
+                init_proto = make_init_proto(init_proto_path, this);
+            }
             std::vector<llvm::Value *> args2;
             Builder->CreateCall(init_proto, args2);
         }
@@ -885,7 +892,7 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
-    curOwner.endScope(&curOwner.scope);
+    curOwner.endScope(curOwner.main_scope);
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
         Builder->CreateRet(makeInt(0, 32));
@@ -1908,7 +1915,8 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     }
     Builder->SetInsertPoint(then);
     resolv->newScope();
-    auto then_scope = curOwner.newScope(ends_with_return(node->thenStmt.get()));
+    int cur_scope = curOwner.last_scope->id;
+    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
     node->thenStmt->accept(this);
     curOwner.endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
@@ -1917,9 +1925,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        //drop so that else doesnt see moves in then, bc unreachable
-        curOwner.dropScope();
-        auto else_scope = curOwner.newScope(ends_with_return(node->elseStmt.get()));
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
         node->elseStmt->accept(this);
         curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
@@ -1927,9 +1933,6 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         }
         //next stmts will see moves, bc reachable
         //todo proper return detection
-        if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
-            curOwner.restore(then_scope);
-        }
     }
     set_and_insert(next);
     return nullptr;
@@ -1986,7 +1989,8 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             }
         }
     }
-    auto then_scope = curOwner.newScope(ends_with_return(node->thenStmt.get()));
+    int cur_scope = curOwner.last_scope->id;
+    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
     node->thenStmt->accept(this);
     curOwner.endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
@@ -1995,15 +1999,11 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        curOwner.dropScope();
-        auto else_scope = curOwner.newScope(ends_with_return(node->elseStmt.get()));
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
         node->elseStmt->accept(this);
         curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
-        }
-        if (!isReturnLast(node->thenStmt.get()) && !isReturnLast(node->elseStmt.get())) {
-            curOwner.restore(then_scope);
         }
     }
     set_and_insert(next);
@@ -2022,7 +2022,8 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loops.push_back(condbb);
     loopNext.push_back(next);
     resolv->newScope();
-    auto then_scope = curOwner.newScope(ends_with_return(node->body.get()));
+    auto cur_scope = curOwner.last_scope->id;
+    auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope);
     node->body->accept(this);
     curOwner.endScope(then_scope);
     loops.pop_back();
@@ -2033,7 +2034,8 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 }
 
 std::any Compiler::visitForStmt(ForStmt *node) {
-    auto then_scope = curOwner.newScope(ends_with_return(node->body.get()));
+    auto cur_scope = curOwner.last_scope->id;
+    auto then_scope = curOwner.newScope(ScopeId::FOR, ends_with_return(node->body.get()), cur_scope);
     resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);

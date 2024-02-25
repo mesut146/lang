@@ -12,7 +12,7 @@ func if_else(c: bool){
     if(c){
         send(a);
     }else{
-        send(a);
+        //send(a);
     }
     print("after if\n");
     //no drop

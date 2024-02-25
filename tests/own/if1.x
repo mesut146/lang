@@ -7,6 +7,19 @@ func send(a: A){
 
 }
 
+
+func els(){
+    let a = A{a: 5};
+    if(true){
+        //a.drop()
+    }else{
+        send(a);
+    }
+
+    //invalid
+    //a.a = 10;
+}
+
 func main(){
     let a = A{a: 5};
     if(true){

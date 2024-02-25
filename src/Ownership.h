@@ -60,42 +60,55 @@ struct Move {
     }
 };
 
+enum class ScopeId {
+    MAIN,
+    IF,
+    ELSE,
+    WHILE,
+    FOR,
+};
+
 struct VarScope {
+    ScopeId type;
+    int id;
     std::vector<Variable> vars;
     std::vector<Move> moves;
     std::vector<Object> objects;
-    VarScope *next_scope = nullptr;
-    VarScope *parent = nullptr;
+    std::vector<int> scopes;
     bool ends_with_return = false;
+    int parent = -1;
+    static int last_id;
+
+    explicit VarScope(ScopeId type, int id) : type(type), id(id) {}
 };
+
 
 struct Ownership {
     Compiler *compiler;
-    Resolver *r=nullptr;
+    Resolver *r = nullptr;
     Method *method = nullptr;
-    VarScope scope;
+    VarScope *main_scope = nullptr;
     VarScope *last_scope = nullptr;
     std::map<std::string, llvm::Function *> protos;
+    std::map<int, VarScope> scope_map;
 
     //Ownership(Compiler *compiler);
 
     void init(Method *m);
 
-    VarScope *newScope(bool ends_with_return) {
-        auto then = new VarScope;
-        then->parent = last_scope;
-        then->ends_with_return = ends_with_return;
-        last_scope->next_scope = then;
-        last_scope = then;
-        return then;
+    VarScope *newScope(ScopeId type, bool ends_with_return, int parent) {
+        int id = ++VarScope::last_id;
+        scope_map.insert({id, VarScope(type, id)});
+        auto &then = scope_map.at(id);
+        then.parent = parent;
+        then.ends_with_return = ends_with_return;
+        last_scope->scopes.push_back(then.id);
+        last_scope = &then;
+        return &then;
     }
 
-    void restore(VarScope *then_scope) {
-        last_scope = then_scope;
-    }
-
-    void dropScope() {
-        last_scope = last_scope->parent;
+    VarScope &getScope(int id) {
+        return scope_map.at(id);
     }
 
     //drop vars in this scope

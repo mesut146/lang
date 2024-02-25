@@ -1,6 +1,8 @@
 #include "Ownership.h"
 #include "Compiler.h"
 
+int VarScope::last_id = 0;
+
 /*Ownership::Ownership(Compiler *compiler, Method *m) : compiler(compiler), method(m) {
     this->r = compiler->resolv.get();
     this->last_scope = nullptr;
@@ -8,8 +10,10 @@
 
 void Ownership::init(Method *m) {
     this->method = m;
-    this->scope = VarScope{};
-    this->last_scope = &scope;
+    auto ms = VarScope(ScopeId::MAIN, ++VarScope::last_id);
+    scope_map.insert({ms.id, ms});
+    this->main_scope = &scope_map.at(ms.id);
+    this->last_scope = main_scope;
 }
 
 bool Ownership::isDrop(BaseDecl *decl) {
@@ -72,35 +76,6 @@ Variable *Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id
     last_scope->vars.push_back(Variable(name, type, ptr, id, line));
     return &last_scope->vars.back();
 }
-
-Variable *Ownership::find(std::string &name, int id) {
-    auto sc = last_scope;
-    while (sc) {
-        for (int i = 0; i < sc->vars.size(); ++i) {
-            auto &v = sc->vars[i];
-            if (v.name == name && v.id == id) {
-                return &v;
-            }
-        }
-        sc = sc->parent;
-    }
-    return nullptr;
-}
-Variable *Ownership::findLhs(Expression *expr) {
-    auto sc = last_scope;
-    while (sc != nullptr) {
-        for (int i = 0; i < sc->vars.size(); ++i) {
-            auto &v = sc->vars[i];
-            if (v.id == expr->id) {
-                return &v;
-            }
-        }
-        sc = sc->parent;
-    }
-    r->err(expr, "cant find lhs");
-    return nullptr;
-}
-
 void Ownership::doMove(Expression *expr) {
     if (true) return;
     auto rt = r->resolve(expr);
@@ -147,7 +122,7 @@ std::vector<VarScope *> Ownership::rev_scopes() {
     auto sc = last_scope;
     while (sc != nullptr) {
         res.push_back(sc);
-        sc = sc->parent;
+        sc = &getScope(sc->parent);
     }
     return res;
 }
@@ -279,7 +254,12 @@ void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
         proto = own->protos[type.print()];
     } else {
         auto drop_method = findDrop(own->compiler, type);
-        proto = own->compiler->make_proto(drop_method);
+        auto mangled = mangle(drop_method);
+        if (own->compiler->funcMap.contains(mangled)) {
+            proto = own->compiler->funcMap[mangled];
+        } else {
+            proto = own->compiler->make_proto(drop_method);
+        }
         own->protos[type.print()] = proto;
     }
     std::vector<llvm::Value *> args{ptr};
@@ -300,34 +280,30 @@ void Ownership::drop(Variable *v) {
     call_drop(this, v->type, v->ptr);
 }
 
-bool is_moved(Ownership *own, Variable &v, VarScope &scp) {
-    auto cur = &scp;
-    while (cur) {
-        for (auto &v : cur->vars) {
-            for (auto &mv : cur->moves) {
-                //todo redeclare?
-                auto rt = own->r->resolve(mv.rhs.expr);
-                if (rt.vh && rt.vh->id == v.id) {
-                    return true;
-                }
-            }
-        }
-        cur = cur->parent;
-    }
-    cur = &scp;
-    while (cur) {
-        for (auto &v : cur->vars) {
-            for (auto &mv : cur->moves) {
-                //todo redeclare?
-                auto rt = own->r->resolve(mv.rhs.expr);
-                if (rt.vh && rt.vh->id == v.id) {
-                    return true;
-                }
-            }
-        }
-        cur = cur->next_scope;
+bool same(Move &mv, Variable &v, Resolver *r) {
+    auto rt = r->resolve(mv.rhs.expr);
+    if (rt.vh && rt.vh->id == v.id) {
+        return true;
     }
     return false;
+}
+
+bool need_drop(Ownership *own, Variable &v, VarScope &scp) {
+    for (auto &mv : scp.moves) {
+        if (same(mv, v, own->r)) {
+            return false;
+        }
+    }
+    for (auto cur_id : scp.scopes) {
+        auto &cur = own->getScope(cur_id);
+        for (auto &mv : cur.moves) {
+            //todo redeclare?
+            if (same(mv, v, own->r)) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 //drop vars in this scope
@@ -348,7 +324,7 @@ void Ownership::endScope(VarScope *s) {
         }
     }
     for (auto &v : s->vars) {
-        if (!is_moved(this, v, *s)) {
+        if (need_drop(this, v, *s)) {
             std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
             drop(&v);
         }
