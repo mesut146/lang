@@ -252,11 +252,21 @@ llvm::Function *make_init_proto(const std::string &path, Compiler *c) {
 }
 
 void init_globals(Compiler *c) {
+    for (auto &is : c->resolv->get_imports()) {
+        auto res = Resolver::getResolver(is, c->resolv->root);
+        for (auto &g : res->unit->globals) {
+            auto type = c->resolv->getType(g.expr.get());
+            auto ty = c->mapType(type);
+            auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
+            //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+            llvm::Constant *init = nullptr;//getDefault(type, c);
+            auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
+            c->globals[g.name] = gv;
+        }
+    }
     if (c->unit->globals.empty()) {
         return;
     }
-    //std::string mangled = mangle_unit(c->unit->path) + "_static_init";
-
     auto staticf = make_init_proto(c->unit->path, c);
     std::string mangled = staticf->getName().str();
     Compiler::global_protos.push_back(c->unit->path);
@@ -269,8 +279,8 @@ void init_globals(Compiler *c) {
     for (Global &g : c->unit->globals) {
         auto type = c->resolv->getType(g.expr.get());
         auto ty = c->mapType(type);
-        //auto linkage = llvm::GlobalValue::LinkageTypes::InternalLinkage;
-        auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+        auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
+        //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
         llvm::Constant *init = getDefault(type, c);
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
@@ -865,6 +875,7 @@ void Compiler::genCode(Method *m) {
     curMethod = m;
     auto id = mangle(m);
     //print("genCode " + id + "\n");
+    curOwner = Ownership{};
     curOwner.compiler = this;
     curOwner.r = resolv.get();
     curOwner.init(m);
@@ -1154,7 +1165,7 @@ std::any Compiler::visitAssign(Assign *node) {
         } else {
             setField(node->right, lt, l);
         }
-        curOwner.doAssign(node->left, node->right);
+        curOwner.endAssign(node->left, node->right);
         return l;
     }
     auto val = l;
@@ -1457,10 +1468,10 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     loc(node);
     auto str = node->expr->print();
     auto cond = loadPtr(node->expr.get());
-    auto then = llvm::BasicBlock::Create(ctx(), "", func);
-    auto next = llvm::BasicBlock::Create(ctx(), "");
+    auto then = llvm::BasicBlock::Create(ctx(), "assert_body");
+    auto next = llvm::BasicBlock::Create(ctx(), "assert_next");
     Builder->CreateCondBr(branch(cond), next, then);
-    Builder->SetInsertPoint(then);
+    set_and_insert(then);
     //print error and exit
     auto msg = std::string("assertion ") + str + " failed in " + printMethod(curMethod) + ":" + std::to_string(node->line) + "\n";
     std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
@@ -1904,16 +1915,11 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
 
 std::any Compiler::visitIfStmt(IfStmt *node) {
     auto cond = branch(loadPtr(node->expr));
-    auto then = llvm::BasicBlock::Create(ctx(), "", func);
-    llvm::BasicBlock *elsebb = nullptr;
-    auto next = llvm::BasicBlock::Create(ctx(), "");
-    if (node->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(ctx(), "");
-        Builder->CreateCondBr(cond, then, elsebb);
-    } else {
-        Builder->CreateCondBr(cond, then, next);
-    }
-    Builder->SetInsertPoint(then);
+    auto then = llvm::BasicBlock::Create(ctx(), "if_then_" + std::to_string(node->line));
+    auto elsebb = llvm::BasicBlock::Create(ctx(), "if_else_" + std::to_string(node->line));
+    auto next = llvm::BasicBlock::Create(ctx(), "if_next_" + std::to_string(node->line));
+    Builder->CreateCondBr(cond, then, elsebb);
+    set_and_insert(then);
     resolv->newScope();
     int cur_scope = curOwner.last_scope->id;
     auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
@@ -1922,18 +1928,24 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
+    set_and_insert(elsebb);
+    curOwner.last_scope = &curOwner.getScope(cur_scope);//else inserted into main scope, not then scope
     if (node->elseStmt) {
-        set_and_insert(elsebb);
         resolv->newScope();
         auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
+        else_scope->sibling = then_scope->id;
         node->elseStmt->accept(this);
         curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
-        //next stmts will see moves, bc reachable
-        //todo proper return detection
+    } else {
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope);
+        else_scope->sibling = then_scope->id;
+        curOwner.endScope(else_scope);
+        Builder->CreateBr(next);
     }
+    curOwner.last_scope = &curOwner.getScope(cur_scope);
     set_and_insert(next);
     return nullptr;
 }

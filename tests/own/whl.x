@@ -1,18 +1,15 @@
-#drop
-struct A{
-    a: i32;
-}
-
-static cnt = 0;
+import own/common
 
 func test(){
     let i = 0;
     let a = A{a: ++i};
-    while(true){
+    while(i <= 4){
         //a.drop()
         a = A{a: ++i};
+        assert check(i - 1, i - 1);
         if(i == 5) break;
     }
+    assert check(4, 4);
     print("after while\n");
     //A::drop 1
     //A::drop 2
@@ -24,12 +21,5 @@ func test(){
 
 func main(){
     test();
-    assert cnt == 5;
-}
-
-impl Drop for A{
-    func drop(self){
-        print("A::drop %d\n", self.a);
-        cnt += 1;
-    }
+    assert check(5, 5);
 }

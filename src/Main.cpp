@@ -119,6 +119,9 @@ void bootstrap() {
     c.link_run("std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
+void ownership() {
+}
+
 
 void usage() {
     throw std::runtime_error("usage: ./lang <cmd>\n");
@@ -153,9 +156,10 @@ int main(int argc, char **args) {
             i++;
             Compiler c;
             c.srcDir = Config::root;
+            //single file in dir
             if (std::filesystem::is_directory(path)) {
                 //c.srcDir = path;
-                if (argc - 1 == 3) {
+                if (i <= argc) {
                     auto file = path + "/" + std::string(args[i]);
                     i++;
                     c.init();
@@ -167,6 +171,11 @@ int main(int argc, char **args) {
                 Config::use_cache = false;
                 c.init();
                 c.compile(path);
+                if (i <= argc) {
+                    auto path2 = args[i];
+                    ++i;
+                    c.compile(path2);
+                }
                 if (c.main_file.has_value()) {
                     c.link_run("");
                 }

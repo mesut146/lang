@@ -29,6 +29,10 @@ struct Object {
     static Object make(Expression *expr) {
         return Object{expr, nullptr, expr->id, ""};
     }
+
+    static Object make(Expression *expr, llvm::Value* ptr){
+        return Object{expr, ptr, expr->id, ""};
+    }
 };
 
 struct Move {
@@ -36,6 +40,10 @@ struct Move {
     Expression *lhs_expr = nullptr;
     Object rhs;
     int line;
+
+    bool is_assign() {
+        return lhs != nullptr || lhs_expr != nullptr;
+    }
 
     static Move make_var_move(Variable *lhs, const Object &rhs) {
         Move m;
@@ -77,6 +85,7 @@ struct VarScope {
     std::vector<int> scopes;
     bool ends_with_return = false;
     int parent = -1;
+    int sibling = -1;
     static int last_id;
 
     explicit VarScope(ScopeId type, int id) : type(type), id(id) {}
@@ -116,13 +125,14 @@ struct Ownership {
 
     bool isDropType(const RType &rt);
     bool isDropType(const Type &type);
+    bool isDropType(Expression* e);
     bool isDrop(BaseDecl *decl);
 
     Variable *find(std::string &name, int id);
     Variable *findLhs(Expression *expr);
 
     void addPtr(Expression *expr, llvm::Value *ptr) {
-        last_scope->objects.push_back({expr, ptr, expr->id, std::string("")});
+        last_scope->objects.push_back(Object::make(expr, ptr));
     }
 
     void check(Expression *expr);
@@ -139,9 +149,6 @@ struct Ownership {
 
     Variable *addPrm(Param &p, llvm::Value *ptr) {
         auto v = add(p.name, p.type.value(), ptr, p.id, p.line);
-        if (v) {
-            //last_scope->objects.push_back({nullptr, ptr, p.id, p.name});
-        }
         return v;
     }
 
@@ -149,8 +156,7 @@ struct Ownership {
     std::pair<Move *, VarScope *> is_assignable(Expression *expr);
     Move *isMoved(SimpleName *expr);
 
-    void doAssign(Expression *lhs, Expression *rhs);
-    void endAssign(Expression *lhs);
+    void endAssign(Expression *lhs, Expression *rhs);
 
     //send(expr) //moves expr
     void doMoveCall(Expression *expr);

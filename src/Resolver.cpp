@@ -1321,6 +1321,14 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
             return res;
         }
     }
+    for (auto &is : get_imports()) {
+        auto res = getResolver(is, root);
+        for (auto &glob : res->unit->globals) {
+            if (glob.name == node->name) {
+                return resolve(glob.expr);
+            }
+        }
+    }
     err(node, "unknown identifier: " + node->name);
     return {};
 }
