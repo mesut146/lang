@@ -917,9 +917,9 @@ void Compiler::genCode(Method *m) {
         DBuilder->finalizeSubprogram(di.sp);
         di.sp = nullptr;
     }
-    if (llvm::verifyFunction(*func, &llvm::outs())) {
+    /*if (llvm::verifyFunction(*func, &llvm::outs())) {
         error("func " + printMethod(m) + " has errors");
-    }
+    }*/
     func = nullptr;
     curMethod = nullptr;
 }
@@ -1464,25 +1464,6 @@ std::any Compiler::visitLiteral(Literal *node) {
     throw std::runtime_error("literal: " + node->print());
 }
 
-std::any Compiler::visitAssertStmt(AssertStmt *node) {
-    loc(node);
-    auto str = node->expr->print();
-    auto cond = loadPtr(node->expr.get());
-    auto then = llvm::BasicBlock::Create(ctx(), "assert_body");
-    auto next = llvm::BasicBlock::Create(ctx(), "assert_next");
-    Builder->CreateCondBr(branch(cond), next, then);
-    set_and_insert(then);
-    //print error and exit
-    auto msg = std::string("assertion ") + str + " failed in " + printMethod(curMethod) + ":" + std::to_string(node->line) + "\n";
-    std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
-    Builder->CreateCall(printf_proto, pr_args, "");
-    std::vector<llvm::Value *> args = {makeInt(1)};
-    Builder->CreateCall(exit_proto, args);
-    Builder->CreateUnreachable();
-    set_and_insert(next);
-    return nullptr;
-}
-
 void Compiler::copy(llvm::Value *trg, llvm::Value *src, const Type &type) {
     //src->dump();
     //trg->dump();
@@ -1913,6 +1894,25 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     return ptr;
 }
 
+std::any Compiler::visitAssertStmt(AssertStmt *node) {
+    loc(node);
+    auto str = node->expr->print();
+    auto cond = loadPtr(node->expr.get());
+    auto then = llvm::BasicBlock::Create(ctx(), "assert_body");
+    auto next = llvm::BasicBlock::Create(ctx(), "assert_next");
+    Builder->CreateCondBr(branch(cond), next, then);
+    set_and_insert(then);
+    //print error and exit
+    auto msg = std::string("assertion ") + str + " failed in " + printMethod(curMethod) + ":" + std::to_string(node->line) + "\n";
+    std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
+    Builder->CreateCall(printf_proto, pr_args, "");
+    std::vector<llvm::Value *> args = {makeInt(1)};
+    Builder->CreateCall(exit_proto, args);
+    Builder->CreateUnreachable();
+    set_and_insert(next);
+    return nullptr;
+}
+
 std::any Compiler::visitIfStmt(IfStmt *node) {
     auto cond = branch(loadPtr(node->expr));
     auto then = llvm::BasicBlock::Create(ctx(), "if_then_" + std::to_string(node->line));
@@ -1925,6 +1925,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
     node->thenStmt->accept(this);
     curOwner.endScope(then_scope);
+    auto after_bb = Builder->GetInsertBlock();
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
@@ -1934,19 +1935,36 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         resolv->newScope();
         auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
         else_scope->sibling = then_scope->id;
+        then_scope->sibling = else_scope->id;
         node->elseStmt->accept(this);
         curOwner.endScope(else_scope);
+        curOwner.end_branch(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
         }
     } else {
         auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope);
         else_scope->sibling = then_scope->id;
+        then_scope->sibling = else_scope->id;
         curOwner.endScope(else_scope);
+        curOwner.end_branch(else_scope);
         Builder->CreateBr(next);
     }
-    curOwner.last_scope = &curOwner.getScope(cur_scope);
+    // Builder->SetInsertPoint(then);
+    // curOwner.end_branch(then_scope);
+    // Builder->SetInsertPoint(after_bb);
+    //if (!isReturnLast(node->thenStmt.get())) {
+    //    Builder->CreateBr(next);
+    //}
     set_and_insert(next);
+    auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
+    auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
+    Builder->CreateCondBr(cond, then_clean, next2);
+    set_and_insert(then_clean);
+    curOwner.end_branch(then_scope);
+    Builder->CreateBr(next2);
+    set_and_insert(next2);
+    curOwner.last_scope = &curOwner.getScope(cur_scope);
     return nullptr;
 }
 

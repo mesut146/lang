@@ -629,7 +629,8 @@ impl Compiler{
     self.set_and_insert(next);
   }
   func visit_assert(self, expr: Expr*){
-    let msg = Fmt::format("assertion {} failed in {}:{}\n", expr.print().str(), self.curMethod.unwrap().name.str(), i32::print(expr.line).str());
+    let m = self.curMethod.unwrap();
+    let msg = Fmt::format("{}:{} in {}\nassertion {} failed\n", m.path, i32::print(expr.line).str(), m.name.str(), expr.print().str());
     let ptr = CreateGlobalStringPtr(msg.cstr());
     let then = create_bb2(self.cur_func());
     let next = create_bb();

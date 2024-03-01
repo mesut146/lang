@@ -15,8 +15,9 @@ struct Variable {
     llvm::Value *ptr;
     int id;
     int line;
+    int scope;
 
-    Variable(const std::string &name, const Type &type, llvm::Value *ptr, int id, int line) : name(name), type(type), ptr(ptr), id(id), line(line) {}
+    Variable(const std::string &name, const Type &type, llvm::Value *ptr, int id, int line, int scope) : name(name), type(type), ptr(ptr), id(id), line(line), scope(scope) {}
 };
 
 //dropable
@@ -30,7 +31,7 @@ struct Object {
         return Object{expr, nullptr, expr->id, ""};
     }
 
-    static Object make(Expression *expr, llvm::Value* ptr){
+    static Object make(Expression *expr, llvm::Value *ptr) {
         return Object{expr, ptr, expr->id, ""};
     }
 };
@@ -79,7 +80,7 @@ enum class ScopeId {
 struct VarScope {
     ScopeId type;
     int id;
-    std::vector<Variable> vars;
+    std::vector<int> vars;
     std::vector<Move> moves;
     std::vector<Object> objects;
     std::vector<int> scopes;
@@ -100,6 +101,7 @@ struct Ownership {
     VarScope *last_scope = nullptr;
     std::map<std::string, llvm::Function *> protos;
     std::map<int, VarScope> scope_map;
+    std::map<int, Variable> var_map;
 
     //Ownership(Compiler *compiler);
 
@@ -119,17 +121,20 @@ struct Ownership {
     VarScope &getScope(int id) {
         return scope_map.at(id);
     }
+    Variable &getVar(int id) {
+        return var_map.at(id);
+    }
 
     //drop vars in this scope
     void endScope(VarScope *s);
 
     bool isDropType(const RType &rt);
     bool isDropType(const Type &type);
-    bool isDropType(Expression* e);
+    bool isDropType(Expression *e);
     bool isDrop(BaseDecl *decl);
 
-    Variable *find(std::string &name, int id);
-    Variable *findLhs(Expression *expr);
+    //Variable *find(std::string &name, int id);
+    //Variable *findLhs(Expression *expr);
 
     void addPtr(Expression *expr, llvm::Value *ptr) {
         last_scope->objects.push_back(Object::make(expr, ptr));
@@ -148,8 +153,7 @@ struct Ownership {
     }
 
     Variable *addPrm(Param &p, llvm::Value *ptr) {
-        auto v = add(p.name, p.type.value(), ptr, p.id, p.line);
-        return v;
+        return add(p.name, p.type.value(), ptr, p.id, p.line);
     }
 
     void doMove(Expression *expr);
@@ -170,7 +174,10 @@ struct Ownership {
     void doReturn();
 
     void drop(Expression *expr, llvm::Value *ptr);
-    void drop(Variable *v);
+    void drop(Variable &v);
 
     std::vector<VarScope *> rev_scopes();
+
+    static void endIf(VarScope *then_scope, Ownership *own);
+    void end_branch(VarScope *scope);
 };
