@@ -80,6 +80,7 @@ enum class ScopeId {
 struct VarScope {
     ScopeId type;
     int id;
+    int line = -1;
     std::vector<int> vars;
     std::vector<Move> moves;
     std::vector<Object> objects;

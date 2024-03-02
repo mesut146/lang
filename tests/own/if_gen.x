@@ -45,10 +45,11 @@ func if_var_if(c: bool, c2: bool, id: i32){
         let a = A{a: id};
         if(c2){
             send(a);
-            //assert check(1, id);
+            assert check(1, id);
         }//gen drop in else
-        //assert check(1, id);
+        assert check(1, id);
     }
+    assert check(0, -1) || check(1, id);
 }
 
 func var_if_if(c: bool, c2: bool, id: i32){
@@ -107,14 +108,16 @@ func main(){
     assert check(1, 8);
     reset();
     if_var_if(false, true, 9);
+    assert check(0, -1);
+    reset();
 
-    var_if_if(true, true, 10);
-    assert check(1, 10);
-    reset();
-    var_if_if(true, false, 11);
-    assert check(1, 11);
-    reset();
-    var_if_if(false, true, 12);
-    reset();
+     var_if_if(true, true, 10);
+     assert check(1, 10);
+     reset();
+     var_if_if(true, false, 11);
+     assert check(1, 11);
+     reset();
+     var_if_if(false, true, 12);
+     reset();
 
 }

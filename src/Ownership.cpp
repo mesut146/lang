@@ -484,24 +484,43 @@ void Ownership::endScope(VarScope *s) {
     }
 }
 
-void Ownership::end_branch(VarScope *scope) {
+bool is_declared_in(Variable &v, VarScope &scope, Ownership *own) {
+    for (auto v2 : scope.vars) {
+        if (v2 == v.id) {
+            return true;
+        }
+    }
+    for (auto ch : scope.scopes) {
+        auto ch_scope = own->getScope(ch);
+        if (is_declared_in(v, ch_scope, own)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//if sibling moves outer var, we must drop it
+void Ownership::end_branch(VarScope *branch) {
     //assert(scope->type == ScopeId::IF || scope->type == ScopeId::ELSE);
-    auto &sibling = getScope(scope->sibling);
+    auto &sibling = getScope(branch->sibling);
     //if then_scope drops var, else_scope must drop it too
-    for (auto &mv : sibling.moves) {
-        auto rt = r->resolve(mv.rhs.expr);
+    for (auto mv : rev(sibling.moves)) {
+        auto rt = r->resolve(mv->rhs.expr);
         if (rt.vh.has_value()) {
             auto v = getVar(rt.vh->id);
+            if (is_declared_in(v, *branch, this)) {
+                continue;
+            }
             if (isDropped(v, sibling, this)) {
                 //transferred, so drop
                 drop(v);
             }
         }
     }
-    for (auto inner_id : scope->scopes) {
+    /*for (auto inner_id : sibling.scopes) {
         auto inner = getScope(inner_id);
         end_branch(&inner);
-    }
+    }*/
 }
 
 void Ownership::endIf(VarScope *then_scope, Ownership *own) {
