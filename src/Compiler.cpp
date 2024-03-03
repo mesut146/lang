@@ -1903,7 +1903,11 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     Builder->CreateCondBr(branch(cond), next, then);
     set_and_insert(then);
     //print error and exit
-    auto msg = std::string("assertion ") + str + " failed in " + printMethod(curMethod) + ":" + std::to_string(node->line) + "\n";
+    auto msg = curMethod->path;
+    msg += ":";
+    msg += std::to_string(node->line);
+    msg += "\n";
+    msg += std::string("assertion ") + str + " failed in " + printMethod(curMethod) + "\n";
     std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
     Builder->CreateCall(printf_proto, pr_args, "");
     std::vector<llvm::Value *> args = {makeInt(1)};

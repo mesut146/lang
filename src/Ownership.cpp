@@ -434,9 +434,13 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
 }
 
 bool isDropped(Variable &v, VarScope &scope, Ownership *own) {
+    //todo line order
     for (auto mv : rev(scope.moves)) {
-        if (is_rhs(*mv, v, own)) {//todo reassign
+        if (is_rhs(*mv, v, own)) {//move
             return true;
+        }
+        if(is_lhs(*mv, v, own)){//reassign
+            return false;
         }
     }
     for (auto scp_id : scope.scopes) {
@@ -499,24 +503,42 @@ bool is_declared_in(Variable &v, VarScope &scope, Ownership *own) {
     return false;
 }
 
+std::vector<Variable *> get_outer_vars(VarScope &scope, Ownership *own) {
+    std::vector<Variable *> vars;
+    auto cur_id = scope.parent;
+    while (cur_id != -1) {
+        auto cur = own->getScope(cur_id);
+        for (auto v_id : cur.vars) {
+            auto &v = own->getVar(v_id);
+            vars.push_back(&v);
+        }
+        cur_id = cur.parent;
+    }
+    return vars;
+}
+
 //if sibling moves outer var, we must drop it
 void Ownership::end_branch(VarScope *branch) {
     //assert(scope->type == ScopeId::IF || scope->type == ScopeId::ELSE);
     auto &sibling = getScope(branch->sibling);
     //if then_scope drops var, else_scope must drop it too
-    for (auto mv : rev(sibling.moves)) {
+    auto outers = get_outer_vars(sibling, this);
+    for (auto v : outers) {
+        if (isDropped(*v, sibling, this)) {
+            //transferred, so drop
+            drop(*v);
+        }
+    }
+    /*for (auto mv : rev(sibling.moves)) {
         auto rt = r->resolve(mv->rhs.expr);
         if (rt.vh.has_value()) {
             auto v = getVar(rt.vh->id);
-            if (is_declared_in(v, *branch, this)) {
-                continue;
-            }
             if (isDropped(v, sibling, this)) {
                 //transferred, so drop
                 drop(v);
             }
         }
-    }
+    }*/
     /*for (auto inner_id : sibling.scopes) {
         auto inner = getScope(inner_id);
         end_branch(&inner);

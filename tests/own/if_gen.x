@@ -63,20 +63,23 @@ func var_if_if(c: bool, c2: bool, id: i32){
     }//gen drop
     assert check(1, id);
 }
-/*
+
 func if1_redo(c: bool, id: i32){
     let a = A{a: id};
     if(c){
         send(a);
         assert check(1, id);
         a = A{a: id + 1};
+        reset();
+        assert check(0, -1);
     }
     //no drop bc reassign
     assert check(1, id);
 
     //valid
     a.a = 10;
-}*/
+    //drop at end
+}
 
 
 func main(){
@@ -111,13 +114,17 @@ func main(){
     assert check(0, -1);
     reset();
 
-     var_if_if(true, true, 10);
-     assert check(1, 10);
-     reset();
-     var_if_if(true, false, 11);
-     assert check(1, 11);
-     reset();
-     var_if_if(false, true, 12);
-     reset();
+    var_if_if(true, true, 10);
+    assert check(1, 10);
+    reset();
+    var_if_if(true, false, 11);
+    assert check(1, 11);
+    reset();
+    var_if_if(false, true, 12);
+    reset();
+
+    if1_redo(true, 13);
+    assert check(1, 13);
+    reset();
 
 }
