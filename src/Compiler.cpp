@@ -1898,8 +1898,8 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     loc(node);
     auto str = node->expr->print();
     auto cond = loadPtr(node->expr.get());
-    auto then = llvm::BasicBlock::Create(ctx(), "assert_body");
-    auto next = llvm::BasicBlock::Create(ctx(), "assert_next");
+    auto then = llvm::BasicBlock::Create(ctx(), "assert_body_" + std::to_string(node->line));
+    auto next = llvm::BasicBlock::Create(ctx(), "assert_next_" + std::to_string(node->line));
     Builder->CreateCondBr(branch(cond), next, then);
     set_and_insert(then);
     //print error and exit
@@ -1926,7 +1926,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     set_and_insert(then);
     resolv->newScope();
     int cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
+    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
     curOwner.endScope(then_scope);
     auto after_bb = Builder->GetInsertBlock();
@@ -1934,10 +1934,10 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         Builder->CreateBr(next);
     }
     set_and_insert(elsebb);
-    curOwner.last_scope = &curOwner.getScope(cur_scope);//else inserted into main scope, not then scope
+    curOwner.setScope(cur_scope);//else inserted into main scope, not then scope
     if (node->elseStmt) {
         resolv->newScope();
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope, node->elseStmt->line);
         else_scope->sibling = then_scope->id;
         then_scope->sibling = else_scope->id;
         node->elseStmt->accept(this);
@@ -1947,19 +1947,13 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
             Builder->CreateBr(next);
         }
     } else {
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope);
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
         else_scope->sibling = then_scope->id;
         then_scope->sibling = else_scope->id;
         curOwner.endScope(else_scope);
         curOwner.end_branch(else_scope);
         Builder->CreateBr(next);
     }
-    // Builder->SetInsertPoint(then);
-    // curOwner.end_branch(then_scope);
-    // Builder->SetInsertPoint(after_bb);
-    //if (!isReturnLast(node->thenStmt.get())) {
-    //    Builder->CreateBr(next);
-    //}
     set_and_insert(next);
     auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
     auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
@@ -1968,7 +1962,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     curOwner.end_branch(then_scope);
     Builder->CreateBr(next2);
     set_and_insert(next2);
-    curOwner.last_scope = &curOwner.getScope(cur_scope);
+    curOwner.setScope(cur_scope);
     return nullptr;
 }
 
@@ -2024,7 +2018,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         }
     }
     int cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope);
+    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
     curOwner.endScope(then_scope);
     if (!isReturnLast(node->thenStmt.get())) {
@@ -2033,7 +2027,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     if (node->elseStmt) {
         set_and_insert(elsebb);
         resolv->newScope();
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope);
+        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope, node->elseStmt->line);
         node->elseStmt->accept(this);
         curOwner.endScope(else_scope);
         if (!isReturnLast(node->elseStmt.get())) {
@@ -2057,7 +2051,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loopNext.push_back(next);
     resolv->newScope();
     auto cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope);
+    auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope, node->body->line);
     node->body->accept(this);
     curOwner.endScope(then_scope);
     loops.pop_back();
@@ -2069,7 +2063,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 
 std::any Compiler::visitForStmt(ForStmt *node) {
     auto cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::FOR, ends_with_return(node->body.get()), cur_scope);
+    auto then_scope = curOwner.newScope(ScopeId::FOR, ends_with_return(node->body.get()), cur_scope, node->body->line);
     resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);

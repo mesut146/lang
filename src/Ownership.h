@@ -108,12 +108,17 @@ struct Ownership {
 
     void init(Method *m);
 
-    VarScope *newScope(ScopeId type, bool ends_with_return, int parent) {
+    void setScope(int id) {
+        last_scope = &scope_map.at(id);
+    }
+
+    VarScope *newScope(ScopeId type, bool ends_with_return, int parent, int line) {
         int id = ++VarScope::last_id;
         scope_map.insert({id, VarScope(type, id)});
         auto &then = scope_map.at(id);
         then.parent = parent;
         then.ends_with_return = ends_with_return;
+        then.line = line;
         last_scope->scopes.push_back(then.id);
         last_scope = &then;
         return &then;

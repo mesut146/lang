@@ -401,6 +401,7 @@ Move *get_move(Ownership *own, Variable &v, VarScope &scp) {
 }
 
 void Ownership::drop(Variable &v) {
+    std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
     call_drop(this, v.type, v.ptr);
 }
 
@@ -408,58 +409,88 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
     //if (true) return;
     auto rt = r->resolve(expr);
     if (!isDrop(rt.targetDecl)) return;
-    if (rt.vh) {
-        auto v = getVar(rt.vh->id);
-        std::cout << "v id: " << v.id << " line: " << v.line << "\n";
-        if (v.id == 2313) {
-            int aa = 55;
-        }
-        auto last_mv = get_move(this, v, *last_scope);
-        if (!last_mv) {//nothing, just drop
-            std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
-            drop(v);
-        } else if (is_moved_to(*last_mv, v, r)) {//moved and reassign, drop
-            std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
-            drop(v);
-        } else {
-            //moved from, reassign, no drop
-        }
-        // if (!is_moved(this, *v, *last_scope)) {
-        //     std::cout << "dropping " << expr->print() << " line: " << expr->line << "\n";
-        //     call_drop(this, rt.type, ptr);
-        // }
-    } else {
-        throw std::runtime_error("novar drop other " + expr->print());
+    if (!rt.vh.has_value()) {
+        throw std::runtime_error("drop obj " + expr->print());
     }
+    auto v = getVar(rt.vh->id);
+    std::cout << "v id: " << v.id << " line: " << v.line << "\n";
+    auto last_mv = get_move(this, v, *last_scope);
+    if (!last_mv) {//nothing, just drop
+        drop(v);
+    } else if (is_moved_to(*last_mv, v, r)) {//moved and reassign, drop
+        drop(v);
+    } else {
+        //moved from, reassign, no drop
+    }
+    // if (!is_moved(this, *v, *last_scope)) {
+    //     std::cout << "dropping " << expr->print() << " line: " << expr->line << "\n";
+    //     call_drop(this, rt.type, ptr);
+    // }
+}
+
+Move *get_last_move(Variable &v, VarScope &scope, Ownership *own) {
+    if (scope.ends_with_return) return nullptr;
+    Move *res = nullptr;
+    for (auto mv : rev(scope.moves)) {
+        if (is_rhs(*mv, v, own)) {//move
+            res = mv;
+            break;
+        }
+        if (is_lhs(*mv, v, own)) {//reassign
+            res = mv;
+            break;
+        }
+    }
+    for (auto scp_id : rev(scope.scopes)) {
+        auto ch_scope = own->getScope(*scp_id);
+        auto tmp = get_last_move(v, ch_scope, own);
+        if (!tmp) continue;
+        if (!res) return tmp;
+        if (tmp->line > res->line) {
+            return tmp;
+        } else {
+            return res;
+        }
+    }
+    return res;
 }
 
 bool isDropped(Variable &v, VarScope &scope, Ownership *own) {
-    //todo line order
-    for (auto mv : rev(scope.moves)) {
-        if (is_rhs(*mv, v, own)) {//move
-            return true;
-        }
-        if(is_lhs(*mv, v, own)){//reassign
-            return false;
-        }
-    }
-    for (auto scp_id : scope.scopes) {
-        auto ch_scope = own->getScope(scp_id);
-        if (isDropped(v, ch_scope, own)) {
-            return true;
-        }
+    if (scope.ends_with_return) return false;
+    auto mv = get_last_move(v, scope, own);
+    if (mv) {
+        return is_rhs(*mv, v, own);
     }
     return false;
 }
 
+std::string print_type(VarScope *scope) {
+    if (scope->type == ScopeId::MAIN) {
+        return "ScopeId::MAIN";
+    }
+    if (scope->type == ScopeId::IF) {
+        return "ScopeId::IF";
+    }
+    if (scope->type == ScopeId::ELSE) {
+        return "ScopeId::ELSE";
+    }
+    if (scope->type == ScopeId::WHILE) {
+        return "ScopeId::WHILE";
+    }
+    if (scope->type == ScopeId::FOR) {
+        return "ScopeId::FOR";
+    }
+    throw std::runtime_error("type");
+}
+
 //drop vars in this scope
-void Ownership::endScope(VarScope *s) {
+void Ownership::endScope(VarScope *scope) {
     //if (true) return;
-    print("endscope " + printMethod(method));
-    for (auto &obj : s->objects) {
+    print("endscope " + printMethod(method) + " " + print_type(scope) + " line: " + std::to_string(scope->line));
+    for (auto &obj : scope->objects) {
         //todo is valid
         bool is_moved = false;
-        for (auto &mv : s->moves) {
+        for (auto &mv : scope->moves) {
             if (mv.rhs.id == obj.id) {
                 is_moved = true;
                 break;
@@ -472,19 +503,11 @@ void Ownership::endScope(VarScope *s) {
     if (method->name == "if1") {
         int aa = 5555;
     }
-    for (auto v_id : s->vars) {
+    for (auto v_id : scope->vars) {
         auto &v = getVar(v_id);
-        if (!isDropped(v, *s, this)) {
+        if (!isDropped(v, *scope, this)) {
             drop(v);
         }
-        /*auto last_mv = get_move(this, v, *s);
-        if (!last_mv) {//nothing, just drop
-            std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
-            drop(&v);
-        } else if (is_moved_to(*last_mv, v, r)) {//reassign, drop
-            std::cout << "drop var " << v.name << ": " << v.type.print() << " id: " << v.id << " line: " << v.line << "\n";
-            drop(&v);
-        }*/
     }
 }
 
@@ -519,30 +542,20 @@ std::vector<Variable *> get_outer_vars(VarScope &scope, Ownership *own) {
 
 //if sibling moves outer var, we must drop it
 void Ownership::end_branch(VarScope *branch) {
-    //assert(scope->type == ScopeId::IF || scope->type == ScopeId::ELSE);
+    print("end_branch " + printMethod(method) + " " + print_type(branch) + " line: " + std::to_string(branch->line));
+
+    if (branch->line == 57) {
+        int aa = 55;
+    }
     auto &sibling = getScope(branch->sibling);
     //if then_scope drops var, else_scope must drop it too
-    auto outers = get_outer_vars(sibling, this);
+    auto outers = get_outer_vars(*branch, this);
     for (auto v : outers) {
         if (isDropped(*v, sibling, this)) {
             //transferred, so drop
             drop(*v);
         }
     }
-    /*for (auto mv : rev(sibling.moves)) {
-        auto rt = r->resolve(mv->rhs.expr);
-        if (rt.vh.has_value()) {
-            auto v = getVar(rt.vh->id);
-            if (isDropped(v, sibling, this)) {
-                //transferred, so drop
-                drop(v);
-            }
-        }
-    }*/
-    /*for (auto inner_id : sibling.scopes) {
-        auto inner = getScope(inner_id);
-        end_branch(&inner);
-    }*/
 }
 
 void Ownership::endIf(VarScope *then_scope, Ownership *own) {

@@ -7,17 +7,18 @@ func if_ret(c: bool, id: i32){
         assert check(1, id);
         return;
         //panic("");
-    }//no else generated bc return
-    print("after if\n");
+    }//no drop in else bc return
+    assert check(0, -1);
     //valid bc return
-    a.a += 1;
-    //a.drop()
+    let tmp = a.a;
+    //drop at end
 }
 
 func main(){
     if_ret(true, 5);
     assert check(1, 5);
+    reset();
     
     if_ret(false, 10);
-    assert check(2, 11);
+    assert check(1, 10);
 }
