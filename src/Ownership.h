@@ -164,7 +164,6 @@ struct Ownership {
 
     void doMove(Expression *expr);
     std::pair<Move *, VarScope *> is_assignable(Expression *expr);
-    Move *isMoved(SimpleName *expr);
 
     void endAssign(Expression *lhs, Expression *rhs);
 
@@ -177,13 +176,12 @@ struct Ownership {
 
     bool needDrop() { return false; }
 
-    void doReturn();
+    void doReturn(int line);
 
     void drop(Expression *expr, llvm::Value *ptr);
     void drop(Variable &v);
 
     std::vector<VarScope *> rev_scopes();
 
-    static void endIf(VarScope *then_scope, Ownership *own);
     void end_branch(VarScope *scope);
 };

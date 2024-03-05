@@ -43,12 +43,38 @@ func if_else_redo(c: bool, id: i32){
         a = A{a: id + 1};//no drop
         assert check(0, -1);
     }else{
+        send(a);
+        assert check(1, id);
+        reset();
+        a = A{a: id + 2};//no drop
         assert check(0, -1);
-        //no drop
     }
     //a.drop
 }
+func if_else_redo1(c: bool, id: i32){
+    let a = A{a: id};
+    if(c){
+        send(a);
+        assert check(1, id);
+        reset();
+        a = A{a: id + 1};//no drop
+        assert check(0, -1);
+        //drop at end bc else moves
+    }else{
+        send(a);
+        assert check(1, id);
+        reset();
+    }//no drop in else
+    //no drop at end
+}
 
+func test(){
+    if_else_redo1(true, 7);
+    assert check(1, 8);
+    reset();
+    if_else_redo1(false, 10);
+    assert check(0, -1);
+}
 
 func if_var_if(c: bool, c2: bool, id: i32){
     if(c){
@@ -162,7 +188,7 @@ func main(){
     assert check(1, 8);
     reset();
     if_else_redo(false, 8);
-    assert check(1, 8);
+    assert check(1, 10);
     reset();
 
     if_var_if(true, true, 7);
@@ -215,4 +241,5 @@ func main(){
     assert check(1, 21);
     reset();
 
+    test();
 }

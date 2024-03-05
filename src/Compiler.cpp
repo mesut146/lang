@@ -947,7 +947,7 @@ std::any Compiler::visitBlock(Block *node) {
 std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     loc(node);
     if (!node->expr) {
-        curOwner.doReturn();
+        curOwner.doReturn(node->line);
         if (is_main(curMethod)) {
             return Builder->CreateRet(makeInt(0, 32));
         }
@@ -957,12 +957,12 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     auto e = node->expr.get();
     if (type.isPointer()) {
         auto val = get_obj_ptr(e);
-        curOwner.doReturn();
+        curOwner.doReturn(node->line);
         return Builder->CreateRet(val);
     }
     if (!isStruct(type)) {
         auto expr_type = resolv->getType(type);
-        curOwner.doReturn();
+        curOwner.doReturn(node->line);
         return Builder->CreateRet(cast(e, expr_type));
     }
     //rvo
@@ -972,7 +972,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
 
     if (doesAlloc(e)) {
         child(e, ptr);
-        curOwner.doReturn();
+        curOwner.doReturn(node->line);
         return Builder->CreateRetVoid();
     }
     auto de = dynamic_cast<DerefExpr *>(e);
@@ -985,7 +985,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     }
     //todo move
     curOwner.doMoveReturn(e);
-    curOwner.doReturn();
+    curOwner.doReturn(node->line);
     return Builder->CreateRetVoid();
 }
 
@@ -1926,10 +1926,12 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     set_and_insert(then);
     resolv->newScope();
     int cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
+    auto then_returns = ends_with_return(node->thenStmt.get());
+    auto then_scope = curOwner.newScope(ScopeId::IF, then_returns, cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
-    curOwner.endScope(then_scope);
-    auto after_bb = Builder->GetInsertBlock();
+    if (!then_scope->ends_with_return) {
+        curOwner.endScope(then_scope);
+    }
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
@@ -1941,10 +1943,14 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         else_scope->sibling = then_scope->id;
         then_scope->sibling = else_scope->id;
         node->elseStmt->accept(this);
-        curOwner.endScope(else_scope);
-        curOwner.end_branch(else_scope);
+        if (!else_scope->ends_with_return) {
+            curOwner.endScope(else_scope);
+            curOwner.end_branch(else_scope);
+        }
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
+        } else {
+            //return cleans all
         }
     } else {
         auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
