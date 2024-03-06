@@ -146,6 +146,17 @@ std::any AstCopier::visitObjExpr(ObjExpr *node) {
     return loc(res, node);
 }
 
+std::any AstCopier::visitArrayExpr(ArrayExpr *node) {
+    auto res = new ArrayExpr;
+    if (node->size.has_value()) {
+        res->size = node->size.value();
+    }
+    for (auto &e : node->list) {
+        res->list.push_back(visit(e, this));
+    }
+    return loc(res, node);
+}
+
 std::any AstCopier::visitMethodCall(MethodCall *node) {
     auto res = new MethodCall;
     res->is_static = node->is_static;
@@ -200,7 +211,7 @@ std::any AstCopier::visitFieldAccess(FieldAccess *node) {
     return loc(res, node);
 }
 
-std::any AstCopier::visitParExpr(ParExpr *node){
+std::any AstCopier::visitParExpr(ParExpr *node) {
     auto res = new ParExpr;
     res->expr = expr(node->expr, this);
     return loc(res, node);

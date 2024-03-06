@@ -1,4 +1,5 @@
 import own/common
+import std/deque
 
 func test(c: bool, id: i32){
     let a = A{a: id};
@@ -28,6 +29,8 @@ func if_if(c1: bool, c2: bool){
         //cleanup shouldn't drop b, already dropped in else
         //a -> moved, b -> moved
     }else{
+        let t1 = a.a;
+        let t2 = b.a;
         if(c2){
             let e = b;
             e.a = 23;
@@ -35,17 +38,28 @@ func if_if(c1: bool, c2: bool){
         }else{
             //a.drop()
             a = b;
-            assert check(0, -1);
+            //assert check(1, 5);
             reset();
             //!b.drop bc then moves=no drop
         }
-        //b->moved, a->valid but a moved in :17 so mark as moved too
+        //b->moved, a->valid but a moved in :18 so mark as moved too
     }
     //if_next_15
 }//no drop
 
 func test_if_if(){
-    if_if(true, true);
+    /*if_if(true, true);
+    assert check_ids(7, 17);
+    reset();
+    if_if(true, false);
+    assert check_ids(19, 5);
+    reset();
+    if_if(false, true);
+    assert check_ids(23, 5);
+    reset();*/
+    if_if(false, false);
+    assert check_ids(23, 17);
+    reset();
 }
 
 func main(){

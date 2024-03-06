@@ -12,10 +12,17 @@ std::vector<T *> rev(std::vector<T> &vec) {
     return res;
 }
 
+bool isDropped(Variable &v, VarScope &scope, Ownership *own, bool use_return);
+
 /*Ownership::Ownership(Compiler *compiler, Method *m) : compiler(compiler), method(m) {
     this->r = compiler->resolv.get();
     this->last_scope = nullptr;
 }*/
+
+void Ownership::init(Compiler *c) {
+    this->compiler = c;
+    this->r = compiler->resolv.get();
+}
 
 void Ownership::init(Method *m) {
     this->method = m;
@@ -133,17 +140,18 @@ std::vector<VarScope *> Ownership::rev_scopes() {
 std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
     auto fa = dynamic_cast<FieldAccess *>(expr);
     if (fa) {
-        auto rt_new = r->resolve(fa->scope);
-        if (rt_new.type.isPointer()) {
+        auto rt = r->resolve(expr);
+        auto rt_scope = r->resolve(fa->scope);
+        if (rt_scope.type.isPointer() && isDropType(rt)) {
             r->err(expr, "move field of ptr");
         }
-        if (isDropType(rt_new)) {
+        if (isDropType(rt_scope)) {
             //r->err(expr, "partial move");
         }
         for (auto scp : rev_scopes()) {
             for (auto &mv : scp->moves) {
                 auto rt_old = r->resolve(mv.rhs.expr);
-                if (rt_old.vh.has_value() && rt_new.vh.has_value() && rt_old.vh.value().id == rt_new.vh.value().id) {
+                if (rt_old.vh.has_value() && rt_scope.vh.has_value() && rt_old.vh.value().id == rt_scope.vh.value().id) {
                     if (!scp->ends_with_return) {
                         r->err(expr, "assign field to moved variable, moved in " + std::to_string(mv.line));
                     }
@@ -175,20 +183,49 @@ void Ownership::doMoveReturn(Expression *expr) {
     last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
 }
 
+void is_movable(Expression *expr, Ownership *own) {
+    auto rt = own->r->resolve(expr);
+    if (rt.vh) {
+        auto &v = own->getVar(rt.vh->id);
+        if (isDropped(v, *own->last_scope, own, true)) {
+            own->r->err(expr, "use of moved variable " + std::to_string(v.line));
+        }
+        return;
+    }
+    auto fa = dynamic_cast<FieldAccess *>(expr);
+    if (fa) {
+        auto rt_scope = own->r->resolve(fa->scope);
+        if (rt_scope.type.isPointer() && own->isDropType(rt)) {
+            own->r->err(expr, "move field of ptr");
+        }
+        if (own->isDropType(rt_scope)) {
+            //r->err(expr, "partial move");
+        }
+        for (auto scp : own->rev_scopes()) {
+            for (auto &mv : scp->moves) {
+                auto rt_old = own->r->resolve(mv.rhs.expr);
+                if (rt_old.vh.has_value() && rt_scope.vh.has_value() && rt_old.vh.value().id == rt_scope.vh.value().id) {
+                    if (!scp->ends_with_return) {
+                        own->r->err(expr, "assign field to moved variable, moved in " + std::to_string(mv.line));
+                    }
+                }
+            }
+        }
+        return;
+    }
+}
+
+//?.name = expr
 void Ownership::moveToField(Expression *expr) {
-    check(expr);
-    auto rt = r->resolve(expr);
-    if (!isDropType(rt)) return;
-    //todo transfer or ?
-    doMove(expr);
-    last_scope->moves.push_back(Move::make_transfer(Object::make(expr)));
+    doMoveCall(expr);
 }
 
 void Ownership::doMoveCall(Expression *arg) {
-    check(arg);
-    if (isDropType(arg)) {
-        last_scope->moves.push_back(Move::make_transfer(Object::make(arg)));
-    }
+    auto rt = r->resolve(arg);
+    if (!isDropType(rt)) return;
+    is_movable(arg, this);
+    last_scope->actions.push_back(Action(Move::make_transfer(Object::make(arg))));
+    last_scope->moves.push_back(Move::make_transfer(Object::make(arg)));
 }
 
 Method *findDrop(Unit *unit, const Type &type) {
@@ -354,16 +391,6 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
     }
 }
 
-enum class States {
-    MOVED,
-    ASSIGNED,
-    NONE
-};
-
-struct State {
-    States state;
-    Move *mv;
-};
 
 State get_state(Variable &v, VarScope &scope, Ownership *own, bool use_return) {
     if (use_return && scope.ends_with_return) return State{States::NONE, nullptr};

@@ -346,10 +346,11 @@ public:
 
     template<class T>
     llvm::Value *alloc(llvm::Type *type, T *e) {
+        if (e->id == -1) {
+            throw std::runtime_error("id -1 for " + e->print());
+        }
         auto ptr = compiler->Builder->CreateAlloca(type);
-        auto &arr = compiler->allocMap[e->print()];
-        arr.push_back(ptr);
-        //print("alloc "+e->print());
+        compiler->allocMap2[e->id] = ptr;
         return ptr;
     }
     template<class T>
@@ -372,7 +373,7 @@ public:
             } else {
                 //prim_size(s).unwrap() as i32;
                 //manual alloc, prims, struct copy
-                ptr = alloc(type.type, node);
+                ptr = alloc(type.type, &f);
                 f.rhs->accept(this);
                 // if (dynamic_cast<MethodCall *>(rhs)//args
                 //     || dynamic_cast<FieldAccess *>(rhs) /*scope*/) {
@@ -630,7 +631,7 @@ public:
 
 void Compiler::makeLocals(Statement *st) {
     //std::cout << "makeLocals " << resolv->unit->path << " " << curMethod->name << "\n";
-    allocMap.clear();
+    allocMap2.clear();
     if (st) {
         resolv->max_scope = 1;
         AllocCollector col(this);

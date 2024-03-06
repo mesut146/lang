@@ -6,14 +6,15 @@
 #include <utility>
 
 
-#include "Resolver.h"
 #include "Ownership.h"
+#include "Resolver.h"
 #include "Visitor.h"
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Target/TargetMachine.h>
+
 
 namespace fs = std::filesystem;
 
@@ -91,8 +92,7 @@ public:
     DebugInfo di;
     std::unique_ptr<llvm::LLVMContext> ctxp;
     std::unique_ptr<llvm::Module> mod;
-    std::map<std::string, std::vector<llvm::Value *>> allocMap;
-    std::map<int, std::vector<llvm::Value *>> allocMap2;
+    std::map < int, llvm::Value *> allocMap2;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Value *> varAlloc;
     std::map<std::string, llvm::Type *> classMap;
@@ -193,18 +193,10 @@ public:
         return gep2(ptr, idx, ty);
     }
     llvm::Value *getAlloc(Expression *e) {
-        /*if (e->id == -1) {
+        if (e->id == -1) {
             resolv->err(e, "alloc no id");
-        } else {
-            resolv->err(e, "alloc id");
-        }*/
-        auto &arr = allocMap[e->print()];
-        if (arr.empty()) {
-            resolv->err(e, "alloc error for " + e->print());
         }
-        auto res = arr[0];
-        arr.erase(arr.begin());
-        return res;
+        return allocMap2[e->id];
     }
 
     std::string getId(const std::string &name) {
@@ -274,7 +266,7 @@ public:
     void loc(Node *e);
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
-    llvm::Function* make_proto(Method *m);
+    llvm::Function *make_proto(Method *m);
     llvm::Type *makeDecl(BaseDecl *bd);
     void allocParams(Method *m);
     void makeLocals(Statement *st);

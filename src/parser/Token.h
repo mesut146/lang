@@ -136,6 +136,6 @@ public:
     }
 
     std::string print() const {
-        return printType(type) + ": " + value;
+        return "{type: " + printType(type) + ", val: " + value + "}";
     }
 };

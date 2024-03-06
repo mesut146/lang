@@ -215,13 +215,24 @@ llvm::Constant *getDefault(Type &type, Compiler *c) {
     if (type.isPointer()) {
         return llvm::ConstantPointerNull::get(c->Builder->getPtrTy());
     }
+    if (type.isArray()) {
+        int snt = type.size;
+        //create llvm array
+        auto ty = c->mapType(type);
+        std::vector<llvm::Constant *> vals;
+        auto arr = llvm::ConstantArray::get((llvm::ArrayType *) ty, vals);
+        return arr;
+        //return llvm::ConstantExpr::getGetElementPtr(arr, llvm::ConstantInt::get(c->Builder->getInt32Ty(), 0));
+    }
     auto s = type.print();
     auto bits = c->getSize2(type);
-    /*if(s=="bool"){
-		return c->Builder->getBoolTy();
-	}*/
     if (s == "bool" || s == "i8" || s == "i16" || s == "i32" || s == "i64") {
         return c->makeInt(0, bits);
+    }
+    if (isStruct(type)) {
+        //return zero init
+        auto ty = c->mapType(type);
+        return llvm::ConstantStruct::get((llvm::StructType *) ty);
     }
     throw std::runtime_error("def " + s);
 }
@@ -277,7 +288,8 @@ void init_globals(Compiler *c) {
     auto bb = llvm::BasicBlock::Create(c->ctx(), "", staticf);
     c->Builder->SetInsertPoint(bb);
     for (Global &g : c->unit->globals) {
-        auto type = c->resolv->getType(g.expr.get());
+        auto rt = c->resolv->resolve(g.expr.get());
+        auto &type = rt.type;
         auto ty = c->mapType(type);
         auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
         //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
@@ -286,7 +298,12 @@ void init_globals(Compiler *c) {
         c->globals[g.name] = gv;
 
         c->loc(0, 0);
-        c->setField(g.expr.get(), type, gv);
+        if (rt.targetMethod && isStruct(type)) {
+            auto mc = dynamic_cast<MethodCall *>(g.expr.get());
+            c->call(mc, gv);
+        } else if (!type.isArray()) {
+            c->setField(g.expr.get(), type, gv);
+        }
     }
     c->Builder->CreateRetVoid();
 
@@ -294,7 +311,9 @@ void init_globals(Compiler *c) {
         c->DBuilder->finalizeSubprogram(c->di.sp);
         c->di.sp = nullptr;
     }
+
     if (llvm::verifyFunction(*staticf, &llvm::outs())) {
+        staticf->dump();
         error(mangled + " has errors");
     }
 }
@@ -326,6 +345,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         std::cout << "compiling " << path << std::endl;
     }
     resolv = Resolver::getResolver(path, srcDir);
+    curOwner.init(this);
     unit = resolv->unit;
     if (has_main(unit.get())) {
         main_file = path;
@@ -489,6 +509,7 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
 
 llvm::Function *Compiler::make_proto(Method *m) {
     if (m->isGeneric) {
+        print("skip generic " + printMethod(m));
         return nullptr;
     }
     resolv->curMethod = m;
@@ -876,10 +897,13 @@ void Compiler::genCode(Method *m) {
     auto id = mangle(m);
     //print("genCode " + id + "\n");
     curOwner = Ownership{};
-    curOwner.compiler = this;
-    curOwner.r = resolv.get();
+    curOwner.init(this);
     curOwner.init(m);
-    func = funcMap[id];
+    if (funcMap.contains(id)) {
+        func = funcMap.at(id);
+    } else {
+        func = make_proto(m);
+    }
     NamedValues.clear();
     auto bb = llvm::BasicBlock::Create(ctx(), "", func);
     Builder->SetInsertPoint(bb);

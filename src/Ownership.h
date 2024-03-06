@@ -77,6 +77,26 @@ enum class ScopeId {
     FOR,
 };
 
+enum class States {
+    MOVED,
+    ASSIGNED,
+    NONE
+};
+
+struct State {
+    States state;
+    Move *mv;
+};
+
+struct Action {
+    int line = -1;
+    Move mv;
+    int scope = -1;
+
+    explicit Action(const Move &mv) : mv(mv) {}
+    explicit Action(int scope) : scope(scope) {}
+};
+
 struct VarScope {
     ScopeId type;
     int id;
@@ -85,14 +105,15 @@ struct VarScope {
     std::vector<Move> moves;
     std::vector<Object> objects;
     std::vector<int> scopes;
+    std::vector<Action> actions;
     bool ends_with_return = false;
     int parent = -1;
     int sibling = -1;
+    std::map<int, State> var_states;
     static int last_id;
 
     explicit VarScope(ScopeId type, int id) : type(type), id(id) {}
 };
-
 
 struct Ownership {
     Compiler *compiler;
@@ -105,6 +126,8 @@ struct Ownership {
     std::map<int, Variable> var_map;
 
     //Ownership(Compiler *compiler);
+
+    void init(Compiler *c);
 
     void init(Method *m);
 
@@ -139,11 +162,10 @@ struct Ownership {
     bool isDropType(Expression *e);
     bool isDrop(BaseDecl *decl);
 
-    //Variable *find(std::string &name, int id);
-    //Variable *findLhs(Expression *expr);
-
     void addPtr(Expression *expr, llvm::Value *ptr) {
-        last_scope->objects.push_back(Object::make(expr, ptr));
+        if (last_scope) {
+            last_scope->objects.push_back(Object::make(expr, ptr));
+        }
     }
 
     void check(Expression *expr);

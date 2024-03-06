@@ -19,6 +19,7 @@ public:
     std::any visitRefExpr(RefExpr *node) override;
     std::any visitAsExpr(AsExpr *node) override;
     std::any visitParExpr(ParExpr *node) override;
+    std::any visitArrayExpr(ArrayExpr *node) override;
 
     std::any visitVarDecl(VarDecl *node) override;
     std::any visitVarDeclExpr(VarDeclExpr *node) override;
