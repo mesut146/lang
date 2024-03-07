@@ -1,4 +1,5 @@
 import own/common
+import std/deque
 
 func whl_ret(c: bool, id: i32){
     let a = A{a: id};

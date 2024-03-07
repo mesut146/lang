@@ -120,6 +120,20 @@ void bootstrap() {
 }
 
 void ownership() {
+    auto common = Config::root + "/own/common.x";
+    auto path = Config::root + "/own";
+    std::function<void(const std::string &)> f = [&](const std::string &file) {
+        if (!file.ends_with("common.x")) {
+            Compiler c;
+            c.srcDir = Config::root;
+            c.outDir = "../out";
+            c.init();
+            c.compile(common);
+            c.compile(file);
+            c.link_run("");
+        }
+    };
+    list_dir(path, f);
 }
 
 
@@ -151,6 +165,8 @@ int main(int argc, char **args) {
             compileTest();
         } else if (arg == "std") {
             build_std();
+        } else if (arg == "own") {
+            ownership();
         } else if (arg == "c") {
             auto path = std::string(args[i]);
             i++;

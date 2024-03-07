@@ -18,6 +18,8 @@ struct Variable {
     int scope;
 
     Variable(const std::string &name, const Type &type, llvm::Value *ptr, int id, int line, int scope) : name(name), type(type), ptr(ptr), id(id), line(line), scope(scope) {}
+
+    std::string print();
 };
 
 //dropable
@@ -188,6 +190,7 @@ struct Ownership {
     std::pair<Move *, VarScope *> is_assignable(Expression *expr);
 
     void endAssign(Expression *lhs, Expression *rhs);
+    void beginAssign(Expression *lhs, llvm::Value* ptr);
 
     //send(expr) //moves expr
     void doMoveCall(Expression *expr);

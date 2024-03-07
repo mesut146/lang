@@ -37,9 +37,9 @@ func if_if(c1: bool, c2: bool){
             //e.drop() -> b.drop()
         }else{
             //a.drop()
+            let t3 = a.a;
             a = b;
-            //assert check(1, 5);
-            reset();
+            assert check(1, 5);
             //!b.drop bc then moves=no drop
         }
         //b->moved, a->valid but a moved in :18 so mark as moved too
@@ -48,7 +48,7 @@ func if_if(c1: bool, c2: bool){
 }//no drop
 
 func test_if_if(){
-    /*if_if(true, true);
+    if_if(true, true);
     assert check_ids(7, 17);
     reset();
     if_if(true, false);
@@ -56,19 +56,19 @@ func test_if_if(){
     reset();
     if_if(false, true);
     assert check_ids(23, 5);
-    reset();*/
+    reset();
     if_if(false, false);
-    assert check_ids(23, 17);
+    assert check_ids(5, 17);
     reset();
 }
 
 func main(){
-    /*test(true, 1);
+    test(true, 1);
     assert check(1, 2);
     reset();
     test(false, 3);
     assert check(1, 3);
-    reset();*/
+    reset();
 
     test_if_if();
 }

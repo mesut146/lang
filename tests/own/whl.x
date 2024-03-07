@@ -1,4 +1,5 @@
 import own/common
+import std/deque
 
 func test(){
     let i = 0;

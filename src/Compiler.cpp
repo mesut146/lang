@@ -473,17 +473,17 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
-        if (curOwner.isDropType(type)) {
+        /*if (curOwner.isDropType(type)) {
             curOwner.drop(expr, ptr);
             //resolv->err(expr, "can't deref drop type");
-        }
+        }*/
         auto val = get_obj_ptr(de->expr.get());
         copy(ptr, val, type);
         return;
     }
     if (isRvo(expr)) {
         auto val = gen(expr);
-        curOwner.drop(expr, ptr);
+        //curOwner.drop(expr, ptr);
         copy(ptr, val, type);
         return;
     }
@@ -492,7 +492,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
         child(expr, ptr);
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
-        curOwner.drop(expr, ptr);
+        //curOwner.drop(expr, ptr);
         copy(ptr, val, type);
     } else if (type.isPointer()) {
         auto val = get_obj_ptr(expr);
@@ -1181,7 +1181,7 @@ std::any Compiler::visitAssign(Assign *node) {
     }
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
-        curOwner.drop(node->left, l);
+        curOwner.beginAssign(node->left, l);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             //dont delete, setField can't handle this
             auto rhs = gen(node->right);
