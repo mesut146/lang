@@ -101,18 +101,23 @@ void Compiler::compileAll() {
         compile(main_file.value());
     }
 
-    link_run("");
+    link_run("", "");
     /*for (auto &[k, v] : Resolver::resolverMap) {
         //v.reset();
         //v->unit.reset();
     }*/
 }
 
-void Compiler::link_run(const std::string &args) {
-    if (fs::exists("a.out")) {
-        system("rm a.out");
+void Compiler::link_run(const std::string &name0, const std::string &args) {
+    auto name = name0;
+    if (name0.empty()) {
+        name = "a.out";
+    }
+    if (fs::exists(name)) {
+        system(("rm " + name).c_str());
     }
     std::string cmd = "clang-16 -no-pie ";
+    cmd.append("-o ").append(name).append(" ");
     for (auto &obj : compiled) {
         cmd.append(obj);
         cmd.append(" ");
@@ -120,7 +125,7 @@ void Compiler::link_run(const std::string &args) {
     compiled.clear();
     cmd.append(args);
     if (system(cmd.c_str()) == 0) {
-        auto code = system("./a.out");
+        auto code = system(("./" + name).c_str());
         if (code != 0) {
             print("code = " + std::to_string(code));
             exit(1);
@@ -262,17 +267,30 @@ llvm::Function *make_init_proto(const std::string &path, Compiler *c) {
     return llvm::Function::Create(fr, linkage, mangled, *c->mod);
 }
 
+void dbg_glob(Compiler *c, Global &g, const Type &type) {
+    if (!Config::debug) return;
+    auto sp = c->di.sp;
+    //auto v = c->DBuilder->createAutoVariable(sp, name, c->di.file, line, c->map_di(type), true);
+    auto val = c->NamedValues[g.name];
+    auto lc = llvm::DILocation::get(sp->getContext(), g.line, g.pos, sp);
+    auto e = c->DBuilder->createExpression();
+    //c->DBuilder->insertDeclare(val, v, e, lc, c->Builder->GetInsertBlock());
+    //c->DBuilder->createGlobalVariableExpression(nullptr, g.name, g.name, nullptr, g.line, c->map_di(type), false, true, val);
+}
+
 void init_globals(Compiler *c) {
     for (auto &is : c->resolv->get_imports()) {
         auto res = Resolver::getResolver(is, c->resolv->root);
         for (auto &g : res->unit->globals) {
-            auto type = c->resolv->getType(g.expr.get());
+            //auto type = c->resolv->getType(g.expr.get());
+            auto type = res->getType(g.expr.get());
             auto ty = c->mapType(type);
             auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
             //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
             llvm::Constant *init = nullptr;//getDefault(type, c);
             auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
             c->globals[g.name] = gv;
+            c->NamedValues[g.name] = gv;
         }
     }
     if (c->unit->globals.empty()) {
@@ -296,6 +314,9 @@ void init_globals(Compiler *c) {
         llvm::Constant *init = getDefault(type, c);
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
+        c->NamedValues[g.name] = gv;
+        auto glob_di = c->DBuilder->createGlobalVariableExpression(c->di.cu, g.name, g.name, nullptr, g.line, c->map_di(type), false, true, nullptr);
+        gv->addDebugInfo(glob_di);
 
         c->loc(0, 0);
         if (rt.targetMethod && isStruct(type)) {
@@ -304,6 +325,7 @@ void init_globals(Compiler *c) {
         } else if (!type.isArray()) {
             c->setField(g.expr.get(), type, gv);
         }
+        //dbg_glob();
     }
     c->Builder->CreateRetVoid();
 

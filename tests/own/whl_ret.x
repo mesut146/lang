@@ -1,5 +1,5 @@
 import own/common
-import std/deque
+//import std/deque
 
 func whl_ret(c: bool, id: i32){
     let a = A{a: id};
@@ -18,8 +18,9 @@ func whl_ret(c: bool, id: i32){
 }
 
 func main(){
-    whl_ret(true, 1);
+    whl_ret(true, 10);
+    assert check_ids([10, 11][0..2]);
     reset();
-    whl_ret(false, 2);
-    assert check(1, 2);
+    whl_ret(false, 20);
+    assert check(1, 20);
 }

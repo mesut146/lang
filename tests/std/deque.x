@@ -34,7 +34,7 @@ impl<T> Deque<T>{
         self.end_pos = 0;
     }
 
-    func len(): i32{
+    func len(self): i32{
         return self.end_pos - self.start_pos;
     }
 }

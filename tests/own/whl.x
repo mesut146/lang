@@ -10,8 +10,9 @@ func test(){
         assert check(i - 1, i - 1);
         if(i == 5) break;
     }
-    assert check(4, 4);
-    print("after while\n");
+    assert check_ids([1,2,3,4][0..4]);
+    reset();
+    //print("after while\n");
     //A::drop 1
     //A::drop 2
     //A::drop 3
@@ -22,5 +23,5 @@ func test(){
 
 func main(){
     test();
-    assert check(5, 5);
+    assert check(1, 5);
 }

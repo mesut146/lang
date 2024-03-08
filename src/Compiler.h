@@ -92,7 +92,7 @@ public:
     DebugInfo di;
     std::unique_ptr<llvm::LLVMContext> ctxp;
     std::unique_ptr<llvm::Module> mod;
-    std::map < int, llvm::Value *> allocMap2;
+    std::map<int, llvm::Value *> allocMap2;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Value *> varAlloc;
     std::map<std::string, llvm::Type *> classMap;
@@ -114,7 +114,7 @@ public:
     void emit(std::string &Filename);
     void compileAll();
     std::optional<std::string> compile(const std::string &path);
-    void link_run(const std::string &args);
+    void link_run(const std::string &name, const std::string &args);
     void build_library(const std::string &name, bool shared);
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);

@@ -35,3 +35,13 @@ func check(cnt2: i32, id: i32): bool{
 func check_ids(id1: i32, id2: i32): bool{
     return ids.pop_front() == id1 && ids.pop_front() == id2;
 }
+
+func check_ids(arr: [i32]): bool{
+    assert arr.len() == ids.len();
+    let res = true;
+    for(let i = 0;i < arr.len();++i){
+        let id = arr[i];
+        res = res && ids.pop_front() == id;
+    }
+    return res;
+}

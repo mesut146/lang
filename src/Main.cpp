@@ -35,7 +35,7 @@ void compile(const std::string &path) {
     } else {
         c.compile(path);
     }
-    c.link_run("");
+    c.link_run("", "");
 }
 
 void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
@@ -67,7 +67,7 @@ void compile(std::initializer_list<std::string> list) {
     for (auto &file : list) {
         c.compile(file);
     }
-    c.link_run("");
+    c.link_run("", "");
 }
 
 void clean() {
@@ -90,7 +90,7 @@ void compileTest() {
     c.init();
     std::function<void(const std::string &)> f = [&](const std::string &file) {
         c.compile(file);
-        c.link_run("");
+        c.link_run("", "");
     };
     list_dir(Config::root + "/normal", f);
 
@@ -98,7 +98,7 @@ void compileTest() {
     build_std();
     std::function<void(const std::string &)> f2 = [&](const std::string &file) {
         c.compile(file);
-        c.link_run("std.a");
+        c.link_run("", "std.a");
     };
     list_dir(Config::root + "/std_test", f2);
 }
@@ -116,12 +116,13 @@ void bootstrap() {
 
     build_std();
 
-    c.link_run("std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+    c.link_run("", "std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
 void ownership() {
     auto common = Config::root + "/own/common.x";
     auto path = Config::root + "/own";
+    Config::use_cache = false;
     std::function<void(const std::string &)> f = [&](const std::string &file) {
         if (!file.ends_with("common.x")) {
             Compiler c;
@@ -130,7 +131,9 @@ void ownership() {
             c.init();
             c.compile(common);
             c.compile(file);
-            c.link_run("");
+            auto name = std::filesystem::path(file).filename().string() + ".bin";
+            print("##running " + name);
+            c.link_run(name, "");
         }
     };
     list_dir(path, f);
@@ -193,7 +196,7 @@ int main(int argc, char **args) {
                     c.compile(path2);
                 }
                 if (c.main_file.has_value()) {
-                    c.link_run("");
+                    c.link_run("", "");
                 }
             }
         } else {

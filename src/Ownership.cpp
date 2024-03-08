@@ -99,6 +99,10 @@ void Ownership::check(Expression *expr) {
 
 Variable *Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id, int line) {
     auto rt = r->resolve(type);
+    /*if (type.isPointer()) {
+        ptr = compiler->Builder->CreateLoad(llvm::PointerType::get(compiler->ctx(), 0), ptr);
+        return add(name, *type.scope.get(), ptr, id, line);
+    }*/
     if (!isDropType(rt)) return nullptr;
     if (id == -1) {
         throw std::runtime_error("Ownership::add id");
@@ -146,12 +150,19 @@ std::vector<VarScope *> Ownership::rev_scopes() {
 }
 
 std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
+    auto de = dynamic_cast<DerefExpr *>(expr);
+    if (de) {
+        auto rt = r->resolve(expr);
+        if (isDropType(rt)) {
+        }
+        return {nullptr, nullptr};
+    }
     auto fa = dynamic_cast<FieldAccess *>(expr);
     if (fa) {
         auto rt = r->resolve(expr);
         auto rt_scope = r->resolve(fa->scope);
         if (rt_scope.type.isPointer() && isDropType(rt)) {
-            r->err(expr, "move field of ptr");
+            //r->err(expr, "move field of ptr");
         }
         if (isDropType(rt_scope)) {
             //r->err(expr, "partial move");
@@ -173,18 +184,23 @@ std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
 
 void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
     if (verbose) std::cout << "beginAssign " << lhs->print() << " line: " << lhs->line << std::endl;
+    is_assignable(lhs);
     drop(lhs, ptr);
 }
 
 void Ownership::endAssign(Expression *lhs, Expression *rhs) {
-    is_assignable(lhs);
     auto rt = r->resolve(rhs);
     if (!isDropType(rt)) return;
     check(rhs);
-    auto rt1 = r->resolve(lhs);
+    auto de = dynamic_cast<DerefExpr *>(lhs);
+    if (de) {
+        last_scope->moves.push_back(Move::make_transfer(Object::make(rhs)));
+        return;
+    }
+    auto rt_lhs = r->resolve(lhs);
     //auto v = getVar(this, lhs);
-    if (rt1.vh) {
-        auto &v = getVar(rt1.vh->id);
+    if (rt_lhs.vh) {
+        auto &v = getVar(rt_lhs.vh->id);
         last_scope->moves.push_back(Move::make_var_move(&v, Object::make(rhs)));
     } else {
         last_scope->moves.push_back(Move::make_var_move(lhs, Object::make(rhs)));
@@ -389,15 +405,31 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
     auto rt = r->resolve(expr);
     if (!isDrop(rt.targetDecl)) return;
     if (!rt.vh.has_value()) {
-        throw std::runtime_error("drop obj " + expr->print());
+        auto fa = dynamic_cast<FieldAccess *>(expr);
+        if (fa) {
+            if (verbose) {
+                print("drop " + fa->print());
+            }
+            call_drop(this, rt.type, ptr);
+            return;
+        }
+        throw std::runtime_error("drop obj not var " + expr->print());
     }
-    auto v = getVar(rt.vh->id);
     if (verbose) std::cout << "drop expr " << expr->print() << "\n";
-    auto last_mv = get_move(this, v, *last_scope);
+    Variable *v = nullptr;
+    auto de = dynamic_cast<DerefExpr *>(expr);
+    if (de) {
+        //auto rt2 = r->resolve(de->expr);
+        call_drop(this, rt.type, ptr);
+        return;
+    } else {
+        v = &getVar(rt.vh->id);
+    }
+    auto last_mv = get_move(this, *v, *last_scope);
     if (!last_mv) {//nothing, just drop
-        drop(v);
-    } else if (is_moved_to(*last_mv, v, r)) {//moved and reassign, drop
-        drop(v);
+        drop(*v);
+    } else if (is_moved_to(*last_mv, *v, r)) {//moved and reassign, drop
+        drop(*v);
     } else {
         //moved from, reassign, no drop
     }
@@ -566,7 +598,12 @@ void Ownership::endScope(VarScope *scope) {
             }
         }
         if (!is_moved) {
-            drop(obj.expr, obj.ptr);
+            auto rt = r->resolve(obj.expr);
+            //drop(obj.expr, obj.ptr);
+            if (verbose) {
+                std::cout << "drop obj" << obj.expr->print() << " line: " << obj.expr->line << "\n";
+            }
+            call_drop(this, rt.type, obj.ptr);
         }
     }
     for (auto v_id : scope->vars) {
