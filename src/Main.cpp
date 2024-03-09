@@ -39,7 +39,7 @@ void compile(const std::string &path) {
 }
 
 void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
-    for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
+    for (const auto &e : std::filesystem::directory_iterator(path)) {
         if (e.is_directory()) continue;
         if (e.path().extension() != ".x") continue;
         f(e.path().string());

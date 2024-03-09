@@ -21,7 +21,7 @@ std::string Variable::print() {
 }
 
 bool isDropped(Variable &v, VarScope &scope, Ownership *own, bool use_return);
-
+void is_movable(Expression *expr, Ownership *own);
 /*Ownership::Ownership(Compiler *compiler, Method *m) : compiler(compiler), method(m) {
     this->r = compiler->resolv.get();
     this->last_scope = nullptr;
@@ -88,6 +88,15 @@ bool Ownership::isDropType(Expression *e) {
     return isDropType(rt);
 }
 
+void Ownership::addPtr(Expression *expr, llvm::Value *ptr) {
+    if (last_scope) {
+        auto rt = r->resolve(expr);
+        if (isDropType(rt)) {
+            last_scope->objects.push_back(Object::make(expr, ptr));
+        }
+    }
+}
+
 
 void Ownership::check(Expression *expr) {
     for (auto &mv : last_scope->moves) {
@@ -95,6 +104,7 @@ void Ownership::check(Expression *expr) {
             r->err(expr, "use after move, line: " + std::to_string(mv.line));
         }
     }
+    is_movable(expr, this);
 }
 
 Variable *Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id, int line) {
@@ -191,7 +201,7 @@ void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
 void Ownership::endAssign(Expression *lhs, Expression *rhs) {
     auto rt = r->resolve(rhs);
     if (!isDropType(rt)) return;
-    check(rhs);
+    is_movable(rhs, this);
     auto de = dynamic_cast<DerefExpr *>(lhs);
     if (de) {
         last_scope->moves.push_back(Move::make_transfer(Object::make(rhs)));
@@ -214,7 +224,11 @@ void Ownership::doMoveReturn(Expression *expr) {
 
 void is_movable(Expression *expr, Ownership *own) {
     auto rt = own->r->resolve(expr);
+    if (!own->isDropType(rt)) return;
     if (rt.vh) {
+        if (rt.type.isPointer()) {
+            return;
+        }
         auto &v = own->getVar(rt.vh->id);
         if (isDropped(v, *own->last_scope, own, true)) {
             own->r->err(expr, "use of moved variable " + std::to_string(v.line));
@@ -228,7 +242,7 @@ void is_movable(Expression *expr, Ownership *own) {
             own->r->err(expr, "move field of ptr");
         }
         if (own->isDropType(rt_scope)) {
-            //r->err(expr, "partial move");
+            own->r->err(expr, "partial move not supported");
         }
         for (auto scp : own->rev_scopes()) {
             for (auto &mv : scp->moves) {

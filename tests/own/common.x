@@ -1,13 +1,18 @@
 import std/deque
 
+static cnt: i32 = 0;
+static last_id: i32 = -1;
+static ids = Deque<i32>::new();
+
 #drop
 struct A{
     a: i32;
 }
-
-static cnt: i32 = 0;
-static last_id: i32 = -1;
-static ids = Deque<i32>::new();
+impl A{
+    func new(id: i32): A{
+        return A{a: id};
+    }
+}
 
 impl Drop for A{
     func drop(self){
@@ -15,6 +20,26 @@ impl Drop for A{
         cnt += 1;
         last_id = self.a;
         ids.push_back(self.a);
+    }
+}
+
+#drop
+struct B{
+    b: A;
+}
+
+impl B{
+    func new(id: i32): B{
+        return B{b: A{a: id}};
+    }
+}
+
+impl Drop for B{
+    func drop(self){
+        print("B::drop %d\n", self.b.a);
+        cnt += 1;
+        last_id = self.b.a;
+        ids.push_back(self.b.a);
     }
 }
 

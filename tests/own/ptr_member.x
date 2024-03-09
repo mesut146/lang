@@ -1,19 +1,6 @@
 import own/common
 import std/deque
 
-#drop
-struct B{
-    b: A;
-}
-
-impl Drop for B{
-    func drop(self){
-        print("B::drop %d\n", self.b.a);
-        cnt += 1;
-        last_id = self.b.a;
-        ids.push_back(self.b.a);
-    }
-}
 
 func test(p: B*, id: i32){
     //p.b.drop()

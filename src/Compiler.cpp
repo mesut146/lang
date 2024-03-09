@@ -1192,15 +1192,36 @@ std::any Compiler::visitUnary(Unary *node) {
     return res;
 }
 
+//gen lhs ptr without own check
+llvm::Value *gen_left(Expression *lhs, Compiler *c) {
+    auto sn = dynamic_cast<SimpleName *>(lhs);
+    if (sn) {
+        if (c->globals.contains(sn->name)) {
+            return c->globals[sn->name];
+        }
+        return c->NamedValues[sn->name];
+    }
+    auto aa = dynamic_cast<ArrayAccess *>(lhs);
+    if(aa){
+        //todo
+        return c->gen(lhs); 
+    }
+    auto fa = dynamic_cast<FieldAccess *>(lhs);
+    if(fa){
+        //todo
+        return c->gen(lhs); 
+    }
+    auto de = dynamic_cast<DerefExpr *>(lhs);
+    if (de) {
+        return c->get_obj_ptr(de->expr.get());
+    }
+    c->resolv->err(lhs, "gen left");
+    return nullptr;
+}
+
 std::any Compiler::visitAssign(Assign *node) {
     loc(node);
-    llvm::Value *l;
-    auto de = dynamic_cast<DerefExpr *>(node->left);
-    if (de) {
-        l = get_obj_ptr(de->expr.get());
-    } else {
-        l = gen(node->left);
-    }
+    llvm::Value *l = gen_left(node->left, this);
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
         curOwner.beginAssign(node->left, l);
@@ -1528,6 +1549,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
         NamedValues[f.name] = varAlloc[getId(f.name)];
         loc(&f);
+        curOwner.check(rhs);
         auto ptr = NamedValues[f.name];
         if (!isStruct(type)) {
             auto val = cast(rhs, type);
@@ -1537,7 +1559,6 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
             auto val = gen(rhs);
             curOwner.addVar(f, type, val, rhs);
         } else {
-            curOwner.check(rhs);
             auto val = gen(rhs);
             copy(ptr, val, type);
             curOwner.addVar(f, type, ptr, rhs);

@@ -10,7 +10,7 @@ func normal(c: bool, id: i32){
 }
 func test_normal(){
     normal(true, 1);
-    assert check(2, 2);
+    assert check_ids([1,2][0..2]);
     reset();
     normal(false, 3);
     assert check(1, 3);

@@ -87,8 +87,10 @@ int isTypeArg(Parser *p, int pos) {
 
 Type Parser::parseType() {
     Type res;
+    int line = first()->line;
     if (isPrim(*first())) {
         res = Type(pop().value);
+        res.loc(line);
     } else if (is(LBRACKET)) {
         consume(LBRACKET);
         auto type = parseType();
@@ -102,9 +104,11 @@ Type Parser::parseType() {
         } else {
             res = Type(Type::Slice, type);
         }
+        res.loc(line);
         consume(RBRACKET);
     } else {
         res = Type(name());
+        res.loc(line);
         while (is({COLON2, LT})) {
             if (is(LT)) {
                 res.typeArgs = generics();
@@ -112,6 +116,7 @@ Type Parser::parseType() {
                 consume(COLON2);
                 res = Type(res, name());
             }
+            res.loc(line);
         }
     }
 
@@ -123,6 +128,7 @@ Type Parser::parseType() {
             consume(QUES);
             res = Type(Type::Option, res);
         }
+        res.loc(line);
     }
     return res;
 }
@@ -243,6 +249,7 @@ Expression *PRIM(Parser *p) {
         return loc(makeObj(p, false), line);
     } else if (p->isPrim(*p->first())) {
         auto type = new Type(p->pop().value);
+        type->loc(line);
         p->consume(COLON2);
         auto name = p->name();
         if (p->is(LPAREN) || p->is(LT)) {
@@ -256,7 +263,7 @@ Expression *PRIM(Parser *p) {
             mc->typeArgs = typeArgs;
             return loc(mc, line);
         }
-        return new Type(*type, name);
+        return (new Type(*type, name))->loc(line);
     } else if (p->is({IDENT, IS, AS, TYPE})) {
         auto id = p->pop().value;
         if (p->is(LPAREN)) {
@@ -274,6 +281,7 @@ Expression *PRIM(Parser *p) {
             } else {
                 p->consume(COLON2);//id<...>::
                 auto scope = new Type(id);
+                scope->loc(line);
                 scope->typeArgs = typeArgs;
                 auto name = p->name();
                 if (p->is(LPAREN)) {
@@ -284,7 +292,7 @@ Expression *PRIM(Parser *p) {
                     return res;
                 } else {
                     //id<...>::name
-                    return new Type(*scope, name);
+                    return (new Type(*scope, name))->loc(line);
                 }
             }
         } else if (p->is(COLON2)) {
@@ -297,12 +305,14 @@ Expression *PRIM(Parser *p) {
                 if (!t.typeArgs.empty()) {
                     res->typeArgs = t.typeArgs;
                 }
-                res->scope.reset(new Type(id));
+                res->scope.reset((new Type(id))->loc(line));
                 return res;
             } else {
                 //id::t
                 //static field access, or enum variant
-                return new Type(Type(id), t.name);
+                Type scope(id);
+                scope.loc(line);
+                return (new Type(scope, t.name))->loc(line);
             }
         } else {
             return loc(new SimpleName(id), line);

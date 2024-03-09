@@ -164,11 +164,7 @@ struct Ownership {
     bool isDropType(Expression *e);
     bool isDrop(BaseDecl *decl);
 
-    void addPtr(Expression *expr, llvm::Value *ptr) {
-        if (last_scope) {
-            last_scope->objects.push_back(Object::make(expr, ptr));
-        }
-    }
+    void addPtr(Expression *expr, llvm::Value *ptr);
 
     void check(Expression *expr);
 
@@ -190,7 +186,7 @@ struct Ownership {
     std::pair<Move *, VarScope *> is_assignable(Expression *expr);
 
     void endAssign(Expression *lhs, Expression *rhs);
-    void beginAssign(Expression *lhs, llvm::Value* ptr);
+    void beginAssign(Expression *lhs, llvm::Value *ptr);
 
     //send(expr) //moves expr
     void doMoveCall(Expression *expr);

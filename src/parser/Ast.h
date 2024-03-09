@@ -58,10 +58,10 @@ public:
     virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
-    Expression* loc(int line){
-      this->line = line;
-      this->id = ++Node::last_id;
-       return this;
+    Expression *loc(int line) {
+        this->line = line;
+        this->id = ++Node::last_id;
+        return this;
     }
 };
 class Type : public Expression {
@@ -250,7 +250,7 @@ public:
     bool isGeneric = false;
     bool isVirtual = false;
 
-    explicit Method(std::string& path) : path(path) {}
+    explicit Method(std::string &path) : path(path) {}
 
     bool isMethod() override { return true; }
     std::string print() const override;
@@ -593,7 +593,7 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-struct ArgBind : public Node{
+struct ArgBind : public Node {
     std::string name;
     bool ptr = false;
 
