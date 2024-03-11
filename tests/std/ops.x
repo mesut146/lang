@@ -46,6 +46,12 @@ struct Fmt{
   buf: String;
 }
 
+impl Drop for Fmt{
+  func drop(self){
+    self.buf.drop();
+  }
+}
+
 impl Debug for [i32]{
   func debug(self, f: Fmt*){
     f.print("[");
@@ -76,7 +82,7 @@ impl Fmt{
   func str<T>(node: T*): String{
     let f = Fmt::new();
     Debug::debug(node, &f);
-    return f.buf;
+    return f.buf.clone();
   }
   func str2<T>(node: T): String{
     let f = Fmt::new();

@@ -949,7 +949,10 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
-    curOwner.endScope(curOwner.main_scope);
+    if (!ends_with_return(m->body.get())) {
+        //return already drops all
+        curOwner.endScope(curOwner.main_scope);
+    }
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
         Builder->CreateRet(makeInt(0, 32));
@@ -1202,14 +1205,14 @@ llvm::Value *gen_left(Expression *lhs, Compiler *c) {
         return c->NamedValues[sn->name];
     }
     auto aa = dynamic_cast<ArrayAccess *>(lhs);
-    if(aa){
+    if (aa) {
         //todo
-        return c->gen(lhs); 
+        return c->gen(lhs);
     }
     auto fa = dynamic_cast<FieldAccess *>(lhs);
-    if(fa){
+    if (fa) {
         //todo
-        return c->gen(lhs); 
+        return c->gen(lhs);
     }
     auto de = dynamic_cast<DerefExpr *>(lhs);
     if (de) {
@@ -1351,6 +1354,16 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto src = get_obj_ptr(mc->args[0]);
         auto idx = loadPtr(mc->args[1]);
         return gep(src, idx, mapType(elem_type));
+    }
+    if (is_ptr_copy(mc)) {
+        //ptr::copy(src_ptr, src_idx, elem)
+        auto src_ptr = get_obj_ptr(mc->args[0]);
+        auto idx = cast(mc->args[1], Type("i64"));
+        auto val = gen(mc->args[2]);
+        auto elem_type = resolv->getType(mc->args[2]);
+        auto trg_ptr = gep(src_ptr, idx, mapType(elem_type));
+        copy(trg_ptr, val, elem_type);
+        return (llvm::Value *) Builder->getVoidTy();
     }
     if (resolv->is_slice_get_ptr(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();

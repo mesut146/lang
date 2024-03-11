@@ -52,7 +52,7 @@ func SEEK_SET(): i32 { return 0; }
 extern{
   func free(ptr: i8*);
   //func malloc(size: i64): i8*;
-  func memcpy(dest: i8*, src: i8*, cnt: i32);
+  func memcpy(dest: i8*, src: i8*, cnt: i64);
   func fopen(name: i8*, mode: i8*): FILE*;
   func fclose(file: FILE*): i32;
   //func fflush(file: FILE*): i32;

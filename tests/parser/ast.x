@@ -401,6 +401,7 @@ struct IfStmt{
   els: Option<Box<Stmt>>;
 }
 
+#derive(Drop)
 enum Stmt{
     Block(x: Block),
     Var(ve: VarExpr),
@@ -462,6 +463,7 @@ struct ArrAccess{
   idx2: Option<Box<Expr>>;
 }
 
+#derive(Drop)
 enum Expr: Node{
   Lit(val: Literal),
   Name(val: String),

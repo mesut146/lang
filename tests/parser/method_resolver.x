@@ -25,6 +25,7 @@ impl Drop for Signature{
     }
 }
 
+#derive(Drop)
 enum SigResult{
     Err(s: String),
     Exact,

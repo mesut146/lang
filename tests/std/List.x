@@ -38,7 +38,9 @@ impl<T> List<T>{
     }
     let tmp = get_malloc<T>(self.cap + 10);
     for(let i = 0;i < self.count;++i){
-      *ptr::get(tmp, i) = *ptr::get(self.ptr, i);
+      //*ptr::get(tmp, i) = *ptr::get(self.ptr, i);
+      let old = *ptr::get(self.ptr, i);
+      ptr::copy(tmp, i, old);
     }
     free(self.ptr as i8*);
     self.ptr = tmp;
@@ -67,7 +69,10 @@ impl<T> List<T>{
 
   func add(self, e: T){
     self.expand();
-    *ptr::get(self.ptr, self.count) = e;
+    let trg = ptr::get(self.ptr, self.count);
+    //*ptr::get(self.ptr, self.count) = e;
+    ptr::copy(self.ptr, self.count, e);
+    //memcpy(trg as i8*, &e as i8*, std::size<T>());
     ++self.count;
   }
 
@@ -165,8 +170,8 @@ impl<T> List<T>{
 impl<T> Debug for List<T>{
   func debug(self, f: Fmt*){
     f.print("[");
-    for(let i=0;i<self.count;++i){
-      if(i>0) f.print(", ");
+    for(let i = 0;i < self.count;++i){
+      if(i > 0) f.print(", ");
       Debug::debug(self.get_ptr(i), f);
     }
     f.print("]");

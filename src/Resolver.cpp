@@ -514,6 +514,7 @@ std::unique_ptr<Impl> Resolver::derive(BaseDecl *bd) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
             ifs->line = line;
+            ifs->id = ++Node::last_id;
             ifs->type = (Type(clone(bd->type), ev.name));
             bool is_ptr = true;
             for (auto &fd : ev.fields) {
@@ -1791,6 +1792,25 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         } else {
             err(mc, "ptr access index is not integer");
         }
+    }
+    if (is_ptr_copy(mc)) {
+        if (mc->args.size() != 3) {
+            err(mc, "ptr copy must have 3 args");
+        }
+        //ptr::copy(src_ptr, src_idx, elem)
+        auto ptr_type = getType(mc->args.at(0));
+        auto idx_type = getType(mc->args.at(1));
+        auto elem_type = getType(mc->args.at(2));
+        if (!ptr_type.isPointer()) {
+            err(mc, "ptr arg is not ptr ");
+        }
+        if (idx_type.print() != "i32" && idx_type.print() != "i64" && idx_type.print() != "u32" && idx_type.print() != "u64" && idx_type.print() != "i8" && idx_type.print() != "i16") {
+            err(mc, "ptr access index is not integer");
+        }
+        if (elem_type.print() != ptr_type.scope->print()) {
+            err(mc, "ptr elem type dont match val type");
+        }
+        return RType(Type("void"));
     }
     if (is_slice_get_ptr(mc)) {
         auto elem = getType(mc->scope.get());

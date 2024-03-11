@@ -1,5 +1,6 @@
 #include "Ownership.h"
 #include "Compiler.h"
+#include "MethodResolver.h"
 
 int VarScope::last_id = 0;
 
@@ -195,6 +196,8 @@ std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
 void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
     if (verbose) std::cout << "beginAssign " << lhs->print() << " line: " << lhs->line << std::endl;
     is_assignable(lhs);
+    auto rt = r->resolve(lhs);
+    if (!isDropType(rt)) return;
     drop(lhs, ptr);
 }
 
@@ -271,44 +274,70 @@ void Ownership::doMoveCall(Expression *arg) {
     last_scope->moves.push_back(Move::make_transfer(Object::make(arg)));
 }
 
-Method *findDrop(Unit *unit, const Type &type) {
+/*std::map<std::string, Type> make_map(const Type &type, Compiler *c) {
+    std::map<std::string, Type> res;
+    auto rt = c->resolv->resolve(type);
+    if (!rt.targetDecl) {
+        c->resolv->err(&type, "cant make map");
+    }
+    return res;
+}*/
+
+
+MethodCall make_drop_mc(Compiler *c, Expression *expr) {
+    //{expr}.drop()
+    MethodCall mc;
+    mc.id = ++Node::last_id;
+    mc.scope.reset(expr);
+    mc.name = "drop";
+    return mc;
+}
+
+Method *findDrop(Unit *unit, const Type &type, Compiler *c) {
     for (auto &it : unit->items) {
         auto impl = dynamic_cast<Impl *>(it.get());
         if (!impl) continue;
-        if (impl->trait_name.has_value() && impl->trait_name->print() == "Drop" && impl->type.print() == type.print()) {
-            return &impl->methods.at(0);
+        if (impl->trait_name.has_value() && impl->trait_name->print() == "Drop" && impl->type.name == type.name) {
+            auto m = &impl->methods.at(0);
+            if (type.typeArgs.empty()) {
+                return m;
+            }
+            //generic
+            MethodResolver mr(c->resolv.get());
+            std::map<std::string, Type> map;
+            int i = 0;
+            for (auto &ta : impl->type.typeArgs) {
+                map[ta.name] = type.typeArgs.at(i);
+                ++i;
+            }
+            MethodCall mc;
+            mc.name = "drop";
+            mc.scope.reset(new Type("Drop"));
+            mc.is_static = true;
+            auto sig = Signature::make(&mc, c->resolv.get());
+            //return mr.generateMethod(map, m, sig);
+            Generator gen(map);
+            auto res = std::any_cast<Method *>(gen.visitMethod(m));
+            res->used_path = c->resolv->unit->path;
+            return res;
         }
     }
     return nullptr;
 }
 
 Method *findDrop(Compiler *c, const Type &type) {
-    auto m = findDrop(c->unit.get(), type);
+    auto m = findDrop(c->unit.get(), type, c);
     if (m) {
         return m;
     }
     for (auto &is : c->resolv->get_imports()) {
         auto r2 = c->resolv->getResolver(is, c->resolv->root);
-        auto m2 = findDrop(r2->unit.get(), type);
+        auto m2 = findDrop(r2->unit.get(), type, c);
         if (m2) {
             return m2;
         }
     }
     throw std::runtime_error("cant find drop method for " + type.print());
-}
-
-Method *findDrop0(Compiler *c, Expression *expr) {
-    //{expr}.drop()
-    MethodCall mc;
-    mc.id = ++Node::last_id;
-    mc.scope.reset(expr);
-    mc.name = "drop";
-    auto res = c->resolv->resolve(&mc);
-    mc.scope.release();
-    if (res.targetMethod == nullptr) {
-        throw std::runtime_error("can't find drop");
-    }
-    return res.targetMethod;
 }
 
 void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
@@ -427,7 +456,7 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
             call_drop(this, rt.type, ptr);
             return;
         }
-        throw std::runtime_error("drop obj not var " + expr->print());
+        compiler->resolv->err(expr, " drop obj not var");
     }
     if (verbose) std::cout << "drop expr " << expr->print() << "\n";
     Variable *v = nullptr;

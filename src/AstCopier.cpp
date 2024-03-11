@@ -43,7 +43,7 @@ Expression *loc(Expression *res, Expression *src) {
 
 Statement *loc(Statement *res, Statement *src) {
     res->line = src->line;
-    //res->id = ++Node::last_id;
+    res->id = ++Node::last_id;
     return res;
 }
 
