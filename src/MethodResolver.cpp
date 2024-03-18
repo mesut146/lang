@@ -256,8 +256,8 @@ RType MethodResolver::handleCallResult(Signature &sig) {
         for (auto &m : real) {
             s += m.print() + "\n";
         }
-        s = format("multiple candidates for %s\n%s", mc->print().c_str(), s.c_str());
-        error(r, s);
+        s = format("multiple candidates for %s=>%s\n%s", mc->print().c_str(), sig.print().c_str(), s.c_str());
+        r->err(mc, s);
     }
     auto &sig2 = exact ? *exact : real[0];
     auto target = sig2.m;
@@ -378,53 +378,6 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
     return res;
 }
 
-std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const Type &target, const std::vector<Type> &typeParams) {
-    auto &arg = arg0.type;
-    if (isGeneric(target, typeParams)) return {};
-    if (arg.print() == target.print()) return {};
-    if (arg.isPointer() || arg.isSlice() || arg.isArray()) {
-        if (arg.print() == target.print()) {
-            return {};
-        }
-        if (arg.kind != target.kind) {
-            return "";
-        }
-        if (hasGeneric(target, typeParams)) {
-            return isCompatible(RType(*arg.scope), *target.scope, typeParams);
-        }
-        //return arg.print() + " is not compatible with " + target.print();
-        return "";
-    }
-    if (!arg.isPrim()) {
-        return "";
-    }
-    if (!target.isPrim()) return "target is not prim";
-    if (arg.print() == "bool" || target.print() == "bool") return "target is not bool";
-    if (arg0.value) {
-        //autocast literal
-        auto &v = arg0.value.value();
-        if (v[0] == '-') {
-            if (isUnsigned(target)) return v + " is signed but " + target.print() + " is unsigned";
-            //check range
-        } else {
-            if (max_for(target) >= stoll(v)) {
-                return {};
-            } else {
-                return v + " can't fit into " + target.print();
-            }
-        }
-    }
-    if (isUnsigned(target) && isSigned(arg)) {
-        return "arg is signed but target is unsigned";
-    }
-    // auto cast to larger size
-    if (sizeMap[arg.name] <= sizeMap[target.name]) return {};
-    else {
-        return "arg can't fit into target";
-    }
-}
-
-
 SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
     auto mc = sig.mc;
     auto m = sig2.m;
@@ -484,4 +437,87 @@ SigResult MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
         }
     }
     return all_exact;
+}
+
+std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const Type &target, const std::vector<Type> &typeParams) {
+    auto &arg = arg0.type;
+    if (arg.print() == target.print()) return {};
+    if (isGeneric2(target.print(), typeParams)) {
+        return {};
+    }
+    if (arg.isPointer()) {
+        auto elem = arg.scope.get();
+        if (target.isPointer()) {
+            //A* -> T* | A*
+            return isCompatible(RType(*elem), *target.scope, typeParams);
+        } else {
+            //A* -> T
+            if (isGeneric2(target.print(), typeParams)) {
+                return {};
+            }
+            return "target is not ptr";
+        }
+    }
+    if(target.isPointer()){
+        return "arg is not ptr";
+    }
+    if (arg.isPointer() || arg.isSlice() || arg.isArray()) {
+        if (arg.print() == target.print()) {
+            return {};
+        }
+        if (arg.kind != target.kind) {
+            return "";
+        }
+        if (hasGeneric(target, typeParams)) {
+            return isCompatible(RType(*arg.scope), *target.scope, typeParams);
+        }
+        //return arg.print() + " is not compatible with " + target.print();
+        return "";
+    }
+    if (!target.typeArgs.empty()) {
+        if (arg.typeArgs.size() != target.typeArgs.size()) {
+            return "type args size don't match";
+        }
+        for (int i = 0; i < arg.typeArgs.size(); ++i) {
+            auto &ta = arg.typeArgs[i];
+            auto &tp = target.typeArgs[i];
+            auto res = isCompatible(RType(ta), tp, typeParams);
+            if (res.has_value()) {
+                return res;
+            }
+        }
+        return {};
+    }
+    if (hasGeneric(target, typeParams)) {
+        return isCompatible(RType(*arg.scope), *target.scope, typeParams);
+    }
+    //if (isGeneric(target, typeParams)) return {};
+    if (!arg.isPrim()) {
+        return "";
+    }
+    if (!target.isPrim()) return "target is not prim";
+    if (arg.print() == "bool" || target.print() == "bool") return "target is not bool";
+    if (arg0.value) {
+        //autocast literal
+        auto &v = arg0.value.value();
+        if (v[0] == '-') {
+            if (isUnsigned(target)) return v + " is signed but " + target.print() + " is unsigned";
+            //check range
+        } else {
+            if (max_for(target) >= stoll(v)) {
+                return {};
+            } else {
+                return v + " can't fit into " + target.print();
+            }
+        }
+    }
+    if (isUnsigned(target) && isSigned(arg)) {
+        return "arg is signed but target is unsigned";
+    }
+    // auto cast to larger size
+    if (sizeMap[arg.name] <= sizeMap[target.name]) {
+        return {};
+    } else {
+        return "arg can't fit into target";
+    }
 }

@@ -387,6 +387,21 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     for (auto m : resolv->generatedMethods) {
         genCode(m);
     }
+    /*for (auto &imp : curOwner.drop_impls) {
+        AstCopier cp;
+        auto target = Impl(imp->type);
+        unit->items.push_back(target);
+    }*/
+    /*for (auto &imp : curOwner.drop_impls) {
+        print("resolve drop_impl " + imp->type.print());
+        imp->accept(resolv.get());
+        auto m = &imp->methods.at(0);
+    }*/
+    /*for (auto &imp : curOwner.drop_impls) {
+        auto m = &imp->methods.at(0);
+        print("drop_impl " + imp->type.print());
+        genCode(m);
+    }*/
 
     //emit llvm
     auto name = getName(path);
@@ -918,8 +933,6 @@ void Compiler::genCode(Method *m) {
     curMethod = m;
     auto id = mangle(m);
     //print("genCode " + id + "\n");
-    curOwner = Ownership{};
-    curOwner.init(this);
     curOwner.init(m);
     if (funcMap.contains(id)) {
         func = funcMap.at(id);
@@ -1364,6 +1377,10 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto trg_ptr = gep(src_ptr, idx, mapType(elem_type));
         copy(trg_ptr, val, elem_type);
         return (llvm::Value *) Builder->getVoidTy();
+    }
+    if (is_ptr_deref(mc)) {
+        auto src_ptr = get_obj_ptr(mc->args[0]);
+        return src_ptr;
     }
     if (resolv->is_slice_get_ptr(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();
@@ -2017,11 +2034,13 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     }
     set_and_insert(elsebb);
     curOwner.setScope(cur_scope);//else inserted into main scope, not then scope
+    auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
+    else_scope->sibling = then_scope->id;
+    then_scope->sibling = else_scope->id;
     if (node->elseStmt) {
         resolv->newScope();
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope, node->elseStmt->line);
-        else_scope->sibling = then_scope->id;
-        then_scope->sibling = else_scope->id;
+        else_scope->ends_with_return = ends_with_return(node->elseStmt.get());
+        else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
         if (!else_scope->ends_with_return) {
             curOwner.endScope(else_scope);
@@ -2033,9 +2052,6 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
             //return cleans all
         }
     } else {
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
-        else_scope->sibling = then_scope->id;
-        then_scope->sibling = else_scope->id;
         curOwner.endScope(else_scope);
         curOwner.end_branch(else_scope);
         Builder->CreateBr(next);
@@ -2062,17 +2078,15 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     auto index = Resolver::findVariant(decl, node->type.name);
     auto cmp = Builder->CreateCmp(llvm::CmpInst::ICMP_EQ, tag, makeInt(index, ENUM_TAG_BITS));
 
-    auto then = llvm::BasicBlock::Create(ctx(), "", func);
-    llvm::BasicBlock *elsebb;
-    auto next = llvm::BasicBlock::Create(ctx(), "");
-    if (node->elseStmt) {
-        elsebb = llvm::BasicBlock::Create(ctx(), "");
-        Builder->CreateCondBr(branch(cmp), then, elsebb);
-    } else {
-        Builder->CreateCondBr(branch(cmp), then, next);
-    }
+    auto then = llvm::BasicBlock::Create(ctx(), "if_then_" + std::to_string(node->line));
+    auto elsebb = llvm::BasicBlock::Create(ctx(), "if_else_" + std::to_string(node->line));
+    auto next = llvm::BasicBlock::Create(ctx(), "if_next_" + std::to_string(node->line));
+
+    auto cond = branch(cmp);
+
+    Builder->CreateCondBr(cond, then, elsebb);
+    set_and_insert(then);
     resolv->newScope();
-    Builder->SetInsertPoint(then);
 
     auto &variant = decl->variants[index];
     if (!variant.fields.empty()) {
@@ -2106,21 +2120,45 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     int cur_scope = curOwner.last_scope->id;
     auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
-    curOwner.endScope(then_scope);
+    if (!then_scope->ends_with_return) {
+        curOwner.endScope(then_scope);
+    }
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
+    set_and_insert(elsebb);
+    curOwner.setScope(cur_scope);//else inserted into main scope, not then scope
+    auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
+    else_scope->sibling = then_scope->id;
+    then_scope->sibling = else_scope->id;
     if (node->elseStmt) {
-        set_and_insert(elsebb);
         resolv->newScope();
-        auto else_scope = curOwner.newScope(ScopeId::ELSE, ends_with_return(node->elseStmt.get()), cur_scope, node->elseStmt->line);
+        else_scope->ends_with_return = ends_with_return(node->elseStmt.get());
+        else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
-        curOwner.endScope(else_scope);
+        if (!else_scope->ends_with_return) {
+            curOwner.endScope(else_scope);
+            curOwner.end_branch(else_scope);
+        }
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
+        } else {
+            //return cleans all
         }
+    } else {
+        curOwner.endScope(else_scope);
+        curOwner.end_branch(else_scope);
+        Builder->CreateBr(next);
     }
     set_and_insert(next);
+    auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
+    auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
+    Builder->CreateCondBr(cond, then_clean, next2);
+    set_and_insert(then_clean);
+    curOwner.end_branch(then_scope);
+    Builder->CreateBr(next2);
+    set_and_insert(next2);
+    curOwner.setScope(cur_scope);
     return nullptr;
 }
 

@@ -26,6 +26,7 @@ struct Compiler{
   loopNext: List<BasicBlock*>;
 }
 
+
 struct Protos{
   classMap: Map<String, llvm_Type*>;
   funcMap: Map<String, Function*>;
@@ -86,11 +87,13 @@ impl Protos{
   }
 }
 
+
 struct llvm_holder{
   target_machine: TargetMachine*;
   target_triple: String;
   di: Option<DebugInfo>;
 }
+
 
 struct Config{
   verbose: bool;
@@ -159,8 +162,9 @@ impl llvm_holder{
 impl Compiler{
   func new(ctx: Context): Compiler{
     let vm = llvm_holder::new();
+    let dummy = dummy_resolver(&ctx);
     return Compiler{ctx: ctx, config: Config{verbose: true, single_mode: true},
-     resolver: dummy_resolver(&ctx), main_file: Option<String>::new(),
+     resolver: dummy, main_file: Option<String>::new(),
      llvm: vm,
      compiled: List<String>::new(),
      protos: Option<Protos>::new(),
@@ -440,7 +444,7 @@ impl Compiler{
 
   func getType(self, e: Expr*): Type{
     let rt = self.resolver.visit(e);
-    return rt.type;
+    return rt.type.clone();
   }
  
 }
@@ -630,7 +634,7 @@ impl Compiler{
   }
   func visit_assert(self, expr: Expr*){
     let m = self.curMethod.unwrap();
-    let msg = Fmt::format("{}:{} in {}\nassertion {} failed\n", m.path, i32::print(expr.line).str(), m.name.str(), expr.print().str());
+    let msg = Fmt::format("{}:{} in {}\nassertion {} failed\n", m.path.str(), i32::print(expr.line).str(), m.name.str(), expr.print().str());
     let ptr = CreateGlobalStringPtr(msg.cstr());
     let then = create_bb2(self.cur_func());
     let next = create_bb();

@@ -94,6 +94,7 @@ func resolve(path: str): String{
   return String::new(buf[0..len]);
 }
 
+#derive(Drop)
 struct Path{
   path: String;
 }

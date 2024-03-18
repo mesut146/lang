@@ -20,7 +20,8 @@ impl<T> Box<T>{
     }
 
     func unwrap(self): T{
-        return *self.val;
+        //return *self.val;
+        return ptr::deref(self.val);
     }
 }
 
@@ -41,6 +42,7 @@ impl<T> Clone for Box<T>{
 impl<T> Drop for Box<T>{
   func drop(self){
     print("drop box\n");
+    Drop::drop(self.val);
     free(self.val as i8*);
   }
 }
@@ -74,5 +76,11 @@ impl<T> Drop for Ptr<T>{
   func drop(self){
     print("drop Ptr<T>\n");
     self.val.drop();
+  }
+}
+
+impl<T> Clone for Ptr<T>{
+  func clone(self): Ptr<T>{
+    return Ptr<T>{Clone::clone(&self.val)};
   }
 }

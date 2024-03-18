@@ -123,9 +123,10 @@ struct Ownership {
     Method *method = nullptr;
     VarScope *main_scope = nullptr;
     VarScope *last_scope = nullptr;
-    std::map<std::string, llvm::Function *> protos;
     std::map<int, VarScope> scope_map;
     std::map<int, Variable> var_map;
+    std::map<std::string, llvm::Function *> protos;
+    std::vector<std::unique_ptr<Impl>> drop_impls;
 
     //Ownership(Compiler *compiler);
 

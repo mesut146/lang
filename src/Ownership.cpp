@@ -34,6 +34,10 @@ void Ownership::init(Compiler *c) {
 }
 
 void Ownership::init(Method *m) {
+    //clear prev method
+    scope_map.clear();
+    var_map.clear();
+
     this->method = m;
     auto ms = VarScope(ScopeId::MAIN, ++VarScope::last_id);
     scope_map.insert({ms.id, ms});
@@ -228,6 +232,10 @@ void Ownership::doMoveReturn(Expression *expr) {
 void is_movable(Expression *expr, Ownership *own) {
     auto rt = own->r->resolve(expr);
     if (!own->isDropType(rt)) return;
+    auto de = dynamic_cast<DerefExpr *>(expr);
+    if (de) {
+        own->r->err(expr, "can't move by deref");
+    }
     if (rt.vh) {
         if (rt.type.isPointer()) {
             return;
@@ -325,7 +333,8 @@ Method *findDrop(Unit *unit, const Type &type, Compiler *c) {
     return nullptr;
 }
 
-Method *findDrop(Compiler *c, const Type &type) {
+Method *findDrop(Ownership *own, const Type &type) {
+    auto c = own->compiler;
     auto m = findDrop(c->unit.get(), type, c);
     if (m) {
         return m;
@@ -337,16 +346,26 @@ Method *findDrop(Compiler *c, const Type &type) {
             return m2;
         }
     }
-    throw std::runtime_error("cant find drop method for " + type.print());
+    auto rt = c->resolv->resolve(type);
+    if (!rt.targetDecl) {
+        throw std::runtime_error("non decl drop" + type.print());
+    }
+    auto imp = c->resolv->derive_drop(rt.targetDecl);
+    own->drop_impls.push_back(std::move(imp));
+    auto imp2 = dynamic_cast<Impl *>(own->drop_impls.back().get());
+    return &imp2->methods.at(0);
 }
 
 void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
+    if (type.print() == "Map<String, Type>") {
+        int xx = 555;
+    }
     llvm::Function *proto = nullptr;
     //todo, separate from compiler protos
     if (own->protos.contains(type.print())) {
         proto = own->protos[type.print()];
     } else {
-        auto drop_method = findDrop(own->compiler, type);
+        auto drop_method = findDrop(own, type);
         auto mangled = mangle(drop_method);
         if (own->compiler->funcMap.contains(mangled)) {
             proto = own->compiler->funcMap[mangled];

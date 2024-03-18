@@ -3,7 +3,6 @@ import std/map
 import std/libc
 import std/io
 
-#derive(Drop)
 class Lexer{
   path: String;
   buf: String;

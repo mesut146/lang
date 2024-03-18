@@ -47,6 +47,14 @@ static bool is_ptr_copy(MethodCall *mc) {
     return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "copy";
 }
 
+static bool is_ptr_deref(MethodCall *mc) {
+    return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "deref";
+}
+
+static bool is_drop_call(MethodCall *mc) {
+    return mc->name == "drop" && mc->scope && mc->scope->print() == "Drop" && mc->is_static;
+}
+
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {
@@ -300,7 +308,7 @@ public:
     bool is_base_of(const Type &base, BaseDecl *d);
     Type inferStruct(ObjExpr *node, bool hasNamed, const std::vector<Type> &typeArgs, std::vector<FieldDecl> &fields, const Type &type);
     std::vector<Method> &get_trait_methods(const Type &type);
-    std::unique_ptr<Impl> derive(BaseDecl *bd);
+    std::unique_ptr<Impl> derive_debug(BaseDecl *bd);
     std::unique_ptr<Impl> derive_drop(BaseDecl *bd);
     std::vector<ImportStmt> get_imports();
 

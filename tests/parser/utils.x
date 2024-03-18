@@ -7,6 +7,7 @@ func SLICE_LEN_INDEX(): i32{ return 1; }
 func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
 
+
 func as_type(bits: i32): Type{
   if(bits == 64){
     return Type::new("i64");
@@ -36,7 +37,7 @@ func get_type_map(type: Type*, decl: Decl*): Map<String, Type>{
     for(let i = 0;i < type_params.len();++i) {
         let ta = targs.get_ptr(i);
         let tp = type_params.get_ptr(i);
-        res.add(tp.print(), *ta);
+        res.add(tp.print(), ta.clone());
     } 
     return res;
 }

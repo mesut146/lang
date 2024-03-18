@@ -52,6 +52,11 @@ public:
         res->id = ++last_id;
         return res;
     }
+    Node *loc(int line) {
+        this->line = line;
+        this->id = ++Node::last_id;
+        return this;
+    }
 };
 class Expression : public Node {
 public:

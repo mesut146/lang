@@ -32,7 +32,7 @@ impl Node{
   }
 }
 
-//#derive(Drop)
+
 struct Unit{
   path: String;
   last_line: i32;
@@ -55,17 +55,6 @@ impl Unit{
   }
 }
 
-impl Drop for Unit{
-  func drop(self){
-      self.path.drop();
-      self.last_line.drop();
-      self.imports.drop();
-      self.items.drop();
-      self.globals.drop();
-      self.last_id.drop();
-  }
-}
-
 struct Global{
   name: String;
   type: Option<Type>;
@@ -74,6 +63,12 @@ struct Global{
 
 struct ImportStmt{
   list: List<String>;
+}
+
+impl Clone for ImportStmt{
+  func clone(self): ImportStmt{
+    return ImportStmt{list: self.list.clone()};
+  }
 }
 
 impl ImportStmt{
@@ -91,10 +86,12 @@ enum Item{
   Extern(methods: List<Method>)
 }
 
+
 struct Impl{
   info: ImplInfo;
   methods: List<Method>;
 }
+
 
 struct ImplInfo{
   type_params: List<Type>;
@@ -108,6 +105,7 @@ impl ImplInfo{
   }
 }
 
+
 struct BaseDecl{
   line: i32;
   path: String;
@@ -118,6 +116,7 @@ struct BaseDecl{
   derives: List<Type>;
   attr: List<String>;
 }
+
 
 enum Decl: BaseDecl{
   Struct(fields: List<FieldDecl>),
@@ -142,20 +141,24 @@ impl Decl{
   }
 }
 
+
 struct FieldDecl{
   name: String;
   type: Type;
 }
+
 
 struct Variant{
   name: String;
   fields: List<FieldDecl>;
 }
 
+
 struct Trait{
   type: Type;
   methods: List<Method>;
 }
+
 
 enum Parent{
   None,
@@ -176,6 +179,7 @@ impl Parent{
   }
 }
 
+
 struct Method: Node{
   type_params: List<Type>;
   name: String;
@@ -187,6 +191,7 @@ struct Method: Node{
   parent: Parent;
   path: String;
 }
+
 
 struct Param: Node{
   name: String;
@@ -206,6 +211,7 @@ impl Method{
   }
 }
 
+
 struct Simple{
   scope: Ptr<Type>;
   name: String;
@@ -224,6 +230,9 @@ impl Simple{
   }
   func into(self): Type{
     return Type::Simple{*ptr::get(self, 0)};
+  }
+  func clone(self): Simple{
+    return Simple{scope: self.scope.clone(), name: self.name.clone(), args: self.args.clone()};
   }
 }
 
@@ -264,6 +273,13 @@ impl Type{
   func as_simple(self): Simple*{
     if let Type::Simple(simple*) = (self){
       return simple;
+    }
+    panic("as_simple");
+  }
+  func unwrap_simple(self): Simple{
+    //todo self
+    if let Type::Simple(simple*) = (self){
+      return ptr::deref(simple);
     }
     panic("as_simple");
   }
@@ -344,35 +360,18 @@ impl Type{
     panic("Type::scope");
   }
 
+}
+
+impl Clone for Type{
   func clone(self): Type{
     return clone(self);
   }
-
 }
 
 func clone<T>(node: T*): T{
   let map = Map<String, Type>::new();
   let copier = AstCopier::new(&map);
   return copier.visit(node);
-}
-
-impl Drop for Type{
-  func drop(self){
-    if let Type::Pointer(bx*) = (self){
-      bx.drop();
-    }
-    else if let Type::Array(bx*, sz) = (self){
-      bx.drop();
-    }
-    else if let Type::Slice(bx*) = (self){
-      bx.drop();
-    }
-    else if let Type::Simple(smp*) = (self){
-      smp.scope.drop();
-      smp.args.drop();
-      smp.name.drop();
-    }
-  }
 }
 
 struct ArgBind: Node{
@@ -395,13 +394,14 @@ struct ForStmt{
   body: Box<Stmt>;
 }
 
+
 struct IfStmt{
   e: Expr;
   then: Box<Stmt>;
   els: Option<Box<Stmt>>;
 }
 
-#derive(Drop)
+
 enum Stmt{
     Block(x: Block),
     Var(ve: VarExpr),
@@ -453,6 +453,7 @@ struct Literal{
   val: String;
   suffix: Option<Type>;
 }
+
 enum LitKind{
   INT, STR, CHAR, BOOL, FLOAT
 }
@@ -463,7 +464,6 @@ struct ArrAccess{
   idx2: Option<Box<Expr>>;
 }
 
-#derive(Drop)
 enum Expr: Node{
   Lit(val: Literal),
   Name(val: String),

@@ -16,16 +16,6 @@ struct Signature{
     r: Option<Resolver*>;
 }
 
-impl Drop for Signature{
-    func drop(self){
-        self.name.drop();
-        self.args.drop();
-        self.scope.drop();
-        self.ret.drop();
-    }
-}
-
-#derive(Drop)
 enum SigResult{
     Err(s: String),
     Exact,
@@ -670,9 +660,9 @@ impl MethodResolver{
             return res;
         }
         let imp: ImplInfo* = get_impl(m);
-        let st = *sig.scope.get().type.clone().as_simple();
+        let st = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().trait.is_some()){
-            st = *sig.args.get(0).unwrap_ptr().as_simple();
+            st = sig.args.get(0).unwrap_ptr().as_simple().clone();
         }
         //put full type, Box::new(...) -> Box<...>::new()
         let imp_args = imp.type.get_args();

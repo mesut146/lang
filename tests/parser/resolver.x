@@ -12,19 +12,17 @@ import std/map
 import std/libc
 
 
-#derive(Drop)
 struct Context{
   map: Map<String, Resolver>;
   root: String;
   prelude: List<String>;
 }
 
-#derive(Drop)
 struct Scope{
   list: List<VarHolder>;
 }
 
-#derive(Drop, Debug)
+#derive(Debug)
 struct VarHolder{
   name: String;
   type: Type;
@@ -48,19 +46,6 @@ struct Resolver{
   generated_decl: List<Decl>;
 }
 
-impl Drop for Resolver{
-  func drop(self){
-    self.unit.drop();
-    self.typeMap.drop();
-    self.cache.drop();
-    self.scopes.drop();
-    self.used_methods.drop();
-    self.generated_methods.drop();
-    self.used_types.drop();
-    self.generated_decl.drop();
-  }
-}
-
 struct Config{
   optimize_enum: bool;
 }
@@ -72,13 +57,6 @@ struct RType{
   value: Option<String>;
   targetDecl: Option<Decl*>;
   vh: Option<VarHolder*>;
-}
-
-impl Drop for RType{
-  func drop(self){
-      self.type.drop();
-      self.value.drop();
-  }
 }
 
 enum TypeKind{
@@ -218,7 +196,7 @@ impl RType{
     return RType{type: self.type.clone(),
       trait: self.trait,
       method: self.method,
-      value: self.value,
+      value: self.value.clone(),
       targetDecl: self.targetDecl,
       vh: self.vh};
   }
@@ -261,7 +239,7 @@ impl Resolver{
     print("Resolver::new %s\n", path.cstr());
     let parser = Parser::new(path);
     let unit = parser.parse_unit();
-    parser.drop();
+    //parser.drop();
     //let str = Fmt::str(&unit);
     //print("unit=%s\n", str.cstr());
     
@@ -331,7 +309,7 @@ impl Resolver{
         //ignore prelude imports
         //let rest = join(&is.list, "/");
         if (!has(&imports, is)) {
-            imports.add(*is);
+            imports.add(is.clone());
         }
     }
     if (self.curMethod.is_some() && !self.curMethod.unwrap().type_params.empty()) {
@@ -342,7 +320,7 @@ impl Resolver{
             //skip self being cycle
             let iss = self.getPath(is);
             if (self.unit.path.eq(&iss)) continue;
-            imports.add(*is);
+            imports.add(is.clone());
         }
     }
     return imports;
@@ -462,11 +440,11 @@ impl Resolver{
 
   func getType(self, e: Type*): Type{
     let rt = self.visit(e);
-    return rt.type;
+    return rt.type.clone();
   }
   func getType(self, e: Expr*): Type{
     let rt = self.visit(e);
-    return rt.type;
+    return rt.type.clone();
   }
 
   func visit(self, node: Item*){

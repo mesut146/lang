@@ -4,11 +4,6 @@ enum Option<T>{
   Some(val: T)
 }
 
-/*match self{
-  Some(val) => return val;
-  None => panic("unwrap on None");
-}*/
-
 impl<T> Option<T>{
   func new(val: T): Option<T>{
     return Option<T>::Some{val};  
@@ -69,12 +64,20 @@ impl<T> Clone for Option<T>{
   }
 }
 
+func drop2<T>(a: T**){
+
+}
+func drop2<T>(a: T*){
+  Drop::drop(a);
+}
 
 impl<T> Drop for Option<T>{
   func drop(self){
     if(std::is_ptr<T>()) return;
     if let Option<T>::Some(val*)=(self){
-      val.drop();
+      //val.drop();
+      Drop::drop(val);
+      //drop2(val);
     }
   }
 }

@@ -39,7 +39,7 @@ impl<T> List<T>{
     let tmp = get_malloc<T>(self.cap + 10);
     for(let i = 0;i < self.count;++i){
       //*ptr::get(tmp, i) = *ptr::get(self.ptr, i);
-      let old = *ptr::get(self.ptr, i);
+      let old = ptr::deref(ptr::get(self.ptr, i));
       ptr::copy(tmp, i, old);
     }
     free(self.ptr as i8*);
@@ -56,9 +56,10 @@ impl<T> List<T>{
   
   func remove(self, pos: i64){
     self.check(pos);
-    //copy right of pos to 1 left
+    //shift rhs of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
-      *ptr::get(self.ptr, i) = *ptr::get(self.ptr, i + 1);
+      let lhs = ptr::get(self.ptr, i);
+      *lhs = ptr::deref(ptr::get(self.ptr, i + 1));
     }
     self.count -= 1;
   }
@@ -93,11 +94,12 @@ impl<T> List<T>{
   }
 
   func set(self, pos: i64, val: T){
-      *self.get_ptr_write(pos) = val;
+      //*self.get_ptr_write(pos) = val;
+      ptr::copy(self.ptr, pos, val);
   }
 
   func get(self, pos: i64): T{
-    return *self.get_ptr(pos);
+    return ptr::deref(self.get_ptr(pos));
   }
   
   func get_ptr(self, pos: i64): T*{
@@ -209,6 +211,7 @@ impl<T> Clone for List<T>{
 impl<T> Drop for List<T>{
   func drop(self){
     //print("drop list %s\n", Fmt::str(self).cstr());
+    //todo drop elems too
     free(self.ptr as i8*);
   }
 }

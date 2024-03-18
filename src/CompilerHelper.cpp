@@ -79,7 +79,9 @@ std::vector<Method *> getMethods(Unit *unit) {
     for (auto &item : unit->items) {
         if (item->isMethod()) {
             auto m = dynamic_cast<Method *>(item.get());
-            list.push_back(m);
+            if (m->typeArgs.empty()) {
+                list.push_back(m);
+            }
         } else if (item->isImpl()) {
             auto impl = dynamic_cast<Impl *>(item.get());
             if (!impl->type.typeArgs.empty()) { continue; }

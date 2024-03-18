@@ -5,7 +5,6 @@ import parser/printer
 import std/map
 import std/libc
 
-//#derive(Drop)
 class Parser{
   lexer: Lexer;
   tokens: List<Token>;
@@ -13,13 +12,6 @@ class Parser{
   is_marked: bool;
   mark: i32;
   unit: Option<Unit*>;
-}
-
-impl Drop for Parser{
-  func drop(self){
-    self.lexer.drop();
-    self.tokens.drop();
-  }
 }
 
 impl Parser{
@@ -267,7 +259,7 @@ impl Parser{
       let name = self.pop();
       self.consume(TokenType::COLON);
       let type = self.parse_type();
-      return Param{.id, name.value, type, false};
+      return Param{.id, name.value.clone(), type, false};
     }
     
     func parse_struct(self, derives: List<Type>, attr: List<String>): Decl{
@@ -373,7 +365,7 @@ impl Parser{
           let part = self.gen_part();
           if let Type::Simple(smp*) = (part){
             //res.drop();nope
-            res = Type::Simple{Simple{Ptr::new(res), smp.name, smp.args}};
+            res = Type::Simple{Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           }
         }
       }
@@ -569,7 +561,7 @@ impl Parser{
       self.consume(TokenType::EQ);
       let rhs = self.parse_expr();
       let n = self.node();
-      return Fragment{.n, nm.value, type, rhs};
+      return Fragment{.n, nm.value.clone(), type, rhs};
     }
 
     func node(self): Node{
