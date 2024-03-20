@@ -60,13 +60,11 @@ void Compiler::dbg_var(const std::string &name, int line, int pos, const Type &t
 }
 
 std::string Compiler::dbg_name(Method *m) {
-    if (!m->parent) return m->name;
-    if (m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type.name + "::" + m->name;
-    } else if (m->parent->isTrait()) {
-        auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type.name + "::" + m->name;
+    if (m->parent2.is_none()) return m->name;
+    if (m->parent2.is_impl()) {
+        return m->parent2.type->name + "::" + m->name;
+    } else if (m->parent2.is_trait()) {
+        return m->parent2.type->name + "::" + m->name;
     }
     return m->name;
 }
@@ -74,7 +72,7 @@ std::string Compiler::dbg_name(Method *m) {
 void Compiler::dbg_func(Method *m, llvm::Function *f) {
     if (!Config::debug) return;
     //llvm::SmallVector<llvm::Metadata *, 8> tys;
-    std::vector<llvm::Metadata*> tys;
+    std::vector<llvm::Metadata *> tys;
     tys.push_back(map_di(m->type));
     if (m->self) {
         auto elem = map_di(m->self->type->unwrap());
@@ -95,7 +93,7 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
         linkage_name = mangle(m);
     }
     llvm::DIScope *scope = file;
-    if (m->parent) {
+    if (!m->parent2.is_none()) {
         auto p = methodParent2(m);
         scope = map_di(p.value());
     }

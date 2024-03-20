@@ -31,6 +31,10 @@ void is_movable(Expression *expr, Ownership *own);
 void Ownership::init(Compiler *c) {
     this->compiler = c;
     this->r = compiler->resolv.get();
+    this->protos.clear();
+    scope_map.clear();
+    var_map.clear();
+    drop_impls.clear();
 }
 
 void Ownership::init(Method *m) {
@@ -356,6 +360,11 @@ Method *findDrop(Ownership *own, const Type &type) {
     return &imp2->methods.at(0);
 }
 
+void dump_proto(llvm::Function *proto) {
+    //std::cout << proto->getName().data() << " = " << std::endl;
+    //proto->dump();
+}
+
 void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
     if (type.print() == "Map<String, Type>") {
         int xx = 555;
@@ -364,13 +373,16 @@ void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
     //todo, separate from compiler protos
     if (own->protos.contains(type.print())) {
         proto = own->protos[type.print()];
+        dump_proto(proto);
     } else {
         auto drop_method = findDrop(own, type);
         auto mangled = mangle(drop_method);
         if (own->compiler->funcMap.contains(mangled)) {
             proto = own->compiler->funcMap[mangled];
+            dump_proto(proto);
         } else {
             proto = own->compiler->make_proto(drop_method);
+            dump_proto(proto);
         }
         own->protos[type.print()] = proto;
     }

@@ -115,7 +115,8 @@ std::unique_ptr<Trait> parseTrait(Parser *p) {
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         res->methods.push_back(std::move(p->parseMethod()));
-        res->methods.back().parent = res.get();
+        //res->methods.back().parent = res.get();
+        res->methods.back().parent2 = Parent{Parent::TRAIT, res->type};
     }
     p->consume(RBRACE);
     return res;
@@ -141,7 +142,8 @@ std::unique_ptr<Impl> parseImpl(Parser *p) {
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
-        m.parent = res.get();
+        //m.parent = res.get();
+        m.parent2 = Parent{Parent::IMPL, res->type, res->trait_name, res->type_params};
         res->methods.push_back(std::move(m));
     }
     p->consume(RBRACE);
@@ -154,7 +156,8 @@ std::unique_ptr<Extern> parseExtern(Parser *p) {
     p->consume(LBRACE);
     while (!p->is(RBRACE)) {
         auto m = p->parseMethod();
-        m.parent = res.get();
+        //m.parent = res.get();
+        m.parent2 = Parent{Parent::EXTERN};
         res->methods.push_back(std::move(m));
     }
     p->consume(RBRACE);

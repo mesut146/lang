@@ -241,6 +241,32 @@ public:
     std::any accept(Visitor *v);
 };
 
+struct Parent {
+    enum Kind {
+        NONE,
+        IMPL,
+        TRAIT,
+        EXTERN
+    };
+    Kind kind = NONE;
+    std::optional<Type> type = std::nullopt;
+    std::optional<Type> trait_type = std::nullopt;
+    std::vector<Type> type_params;
+
+    bool is_none() const {
+        return kind == NONE;
+    }
+    bool is_impl() const {
+        return kind == IMPL;
+    }
+    bool is_trait() const {
+        return kind == TRAIT;
+    }
+    bool is_extern() const {
+        return kind == EXTERN;
+    }
+};
+
 class Method : public Item {
 public:
     std::string name;
@@ -249,7 +275,7 @@ public:
     std::optional<Param> self;
     std::vector<Param> params;
     std::unique_ptr<Block> body;
-    Item *parent = nullptr;
+    Parent parent2;
     std::string path;
     std::string used_path;
     bool isGeneric = false;

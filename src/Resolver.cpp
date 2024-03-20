@@ -313,9 +313,9 @@ void Resolver::resolveAll() {
 
     for (int i = 0; i < generatedMethods.size(); i++) {
         auto gm = generatedMethods[i];
-        if (gm->parent) {
-            curImpl = dynamic_cast<Impl *>(gm->parent);
-        }
+        // if (!gm->parent2.is_none()) {
+        //     curImpl = dynamic_cast<Impl *>(gm->parent);
+        // }
         gm->accept(this);
         curImpl = nullptr;
     }
@@ -344,13 +344,6 @@ void init_impl(Impl *impl, Resolver *r) {
     if (impl->type_params.empty()) {
         return;
     }
-    auto &arr = impl->type.typeArgs;
-    //resolve non generic type args
-    for (auto &ta : arr) {
-        if (!hasGeneric(ta, impl->type_params)) {
-            r->resolve(ta);
-        }
-    }
     for (auto &m : impl->methods) {
         m.isGeneric = true;
     }
@@ -359,22 +352,30 @@ void init_impl(Impl *impl, Resolver *r) {
 //check if Drop trait implemented for this type
 bool is_drop_impl(BaseDecl *bd, Unit *unit) {
     for (auto &it : unit->items) {
-        if (it->isImpl()) {
-            auto tr = dynamic_cast<Impl *>(it.get());
-            if (tr->trait_name.has_value() && tr->trait_name->print() == "Drop") {
-                if (tr->type.name == bd->type.name) {
-                    return true;
-                }
+        if (!it->isImpl()) {
+            continue;
+        }
+        auto imp = dynamic_cast<Impl *>(it.get());
+        if (imp->trait_name.has_value() && imp->trait_name->print() == "Drop") {
+            if (imp->type.name == bd->type.name) {
+                return true;
             }
         }
     }
+
     return false;
 }
 
 void Resolver::init() {
     if (is_init) return;
     is_init = true;
-    std::vector<std::unique_ptr<Impl>> newItems;
+    //must handle first
+    // for (auto &item : unit->items) {
+    //     if (item->isType()) {
+    //         auto ti = (TypeItem *) item.get();
+    //         addType(ti->name, resolve(&ti->rhs));
+    //     }
+    // }
     for (auto &item : unit->items) {
         if (item->isClass() || item->isEnum()) {
             auto bd = dynamic_cast<BaseDecl *>(item.get());
@@ -382,29 +383,6 @@ void Resolver::init() {
             res.unit = unit.get();
             res.targetDecl = bd;
             addType(bd->getName(), res);
-            bool has_derive_drop = false;
-            for (auto &der : bd->derives) {
-                if (der.print() == "Drop") {
-                    if (!bd->isGeneric) {
-                        newItems.push_back(derive_drop(bd));
-                        init_impl(newItems.back().get(), this);
-                        has_derive_drop = true;
-                    } else {
-                        //err("generic drop");
-                    }
-                } else if (der.print() == "Debug") {
-                    newItems.push_back(derive_debug(bd));
-                    init_impl(newItems.back().get(), this);
-                }
-            }
-            Ownership own;
-            own.r = this;
-            //auto impl drop
-            if (!has_derive_drop && !is_drop_impl(bd, unit.get()) && own.isDrop(bd)) {
-                newItems.push_back(derive_drop(bd));
-                init_impl(newItems.back().get(), this);
-            }
-
         } else if (item->isTrait()) {
             auto tr = (Trait *) item.get();
             auto res = makeSimple(tr->type.name);
@@ -419,6 +397,36 @@ void Resolver::init() {
             addType(ti->name, resolve(&ti->rhs));
         }
     }//for
+    std::vector<std::unique_ptr<Impl>> newItems;
+    for (auto &item : unit->items) {
+        if (!item->isClass() && !item->isEnum()) continue;
+        auto bd = dynamic_cast<BaseDecl *>(item.get());
+        bool has_derive_drop = false;
+        for (auto &der : bd->derives) {
+            if (der.print() == "Drop") {
+                if (!bd->isGeneric) {
+                    newItems.push_back(derive_drop(bd));
+                    init_impl(newItems.back().get(), this);
+                    has_derive_drop = true;
+                } else {
+                    //err("generic drop");
+                    /*newItems.push_back(derive_drop(bd));
+                        init_impl(newItems.back().get(), this);
+                        has_derive_drop = true;*/
+                }
+            } else if (der.print() == "Debug") {
+                newItems.push_back(derive_debug(bd));
+                init_impl(newItems.back().get(), this);
+            }
+        }
+        Ownership own;
+        own.r = this;
+        //auto impl drop
+        if (!has_derive_drop && !is_drop_impl(bd, unit.get()) && !bd->isGeneric && own.isDrop(bd)) {
+            newItems.push_back(derive_drop(bd));
+            init_impl(newItems.back().get(), this);
+        }
+    }
     for (auto &ni : newItems) {
         unit->items.push_back(std::move(ni));
     }
@@ -800,9 +808,8 @@ std::any Resolver::visitType(Type *type) {
         addType(str, res);
         return res;
     }
-    if (str == "Self" && curMethod->parent) {
-        auto imp = dynamic_cast<Impl *>(curMethod->parent);
-        return resolve(&imp->type);
+    if (str == "Self" && !curMethod->parent2.is_none()) {
+        return resolve(curMethod->parent2.type.value());
     }
     if (type->scope) {
         auto scope = resolve(type->scope.get());

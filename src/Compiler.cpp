@@ -387,21 +387,47 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     for (auto m : resolv->generatedMethods) {
         genCode(m);
     }
-    /*for (auto &imp : curOwner.drop_impls) {
+    int lastpos = unit->items.size();
+    for (auto &imp : curOwner.drop_impls) {
+        auto m = &imp->methods.at(0);
         AstCopier cp;
-        auto target = Impl(imp->type);
-        unit->items.push_back(target);
-    }*/
-    /*for (auto &imp : curOwner.drop_impls) {
-        print("resolve drop_impl " + imp->type.print());
+        auto item = std::make_unique<Impl>(imp->type);
+        auto res = std::any_cast<Method *>(cp.visitMethod(m));
+        res->parent2 = m->parent2;
+        item->methods.push_back(std::move(*res));
+        unit->items.push_back(std::move(item));
+    }
+    for (int i = lastpos; i < unit->items.size(); ++i) {
+        auto it = unit->items[i].get();
+        auto imp = dynamic_cast<Impl *>(it);
+        auto m = &imp->methods.at(0);
+        print("resolve drop_impl " + imp->type.print() + " => " + mangle(m));
         imp->accept(resolv.get());
+    }
+    for (int i = lastpos; i < unit->items.size(); ++i) {
+        auto it = unit->items[i].get();
+        auto imp = dynamic_cast<Impl *>(it);
         auto m = &imp->methods.at(0);
-    }*/
-    /*for (auto &imp : curOwner.drop_impls) {
+        print("make_proto " + imp->type.print());
+        make_proto(m);
+    }
+    // for (auto &imp : curOwner.drop_impls) {
+    //     print("resolve drop_impl " + imp->type.print());
+    //     imp->accept(resolv.get());
+    //     //auto m = &imp->methods.at(0);
+    // }
+    // for (auto &imp : curOwner.drop_impls) {
+    //     auto m = &imp->methods.at(0);
+    //     print("genCode drop_impl " + imp->type.print());
+    //     genCode(m);
+    // }
+    for (int i = lastpos; i < unit->items.size(); ++i) {
+        auto it = unit->items[i].get();
+        auto imp = dynamic_cast<Impl *>(it);
         auto m = &imp->methods.at(0);
-        print("drop_impl " + imp->type.print());
+        print("genCode drop_impl " + imp->type.print() + " => " + mangle(m));
         genCode(m);
-    }*/
+    }
 
     //emit llvm
     auto name = getName(path);
@@ -549,6 +575,10 @@ llvm::Function *Compiler::make_proto(Method *m) {
         print("skip generic " + printMethod(m));
         return nullptr;
     }
+    auto mangled = mangle(m);
+    if (funcMap.contains(mangled)) {
+        return funcMap.at(mangled);
+    }
     resolv->curMethod = m;
     std::vector<llvm::Type *> argTypes;
     bool rvo = isRvo(m);
@@ -576,10 +606,9 @@ llvm::Function *Compiler::make_proto(Method *m) {
     } else {
         retType = mapType(m->type);
     }
-    auto mangled = mangle(m);
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
-    if (!m->typeArgs.empty() || (m->parent && m->parent->isImpl() && !((Impl *) m->parent)->type.typeArgs.empty())) {
+    if (!m->typeArgs.empty() || (!m->parent2.is_none() && m->parent2.is_impl() && !m->parent2.type->typeArgs.empty())) {
         linkage = llvm::Function::LinkOnceODRLinkage;
     }
     auto f = llvm::Function::Create(fr, linkage, mangled, *mod);
@@ -1418,6 +1447,13 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         error("format not implemented");
         //return callFormat(mc, this);
     }
+    if (is_drop_call(mc)) {
+        auto arg = resolv->getType(mc->args.at(0));
+        if (arg.print().ends_with("**")) {
+            //dont drop
+            return (llvm::Value *) Builder->getVoidTy();
+        }
+    }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     if (isRvo(target)) {
@@ -1433,6 +1469,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     auto f = funcMap[mangle(target)];
+    if (f == nullptr && is_drop_call(mc)) {
+        f = make_proto(target);
+    }
     std::vector<llvm::Value *> args;
     int paramIdx = 0;
     if (ptr) {
@@ -1478,7 +1517,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         }
         args.push_back(av);
         paramIdx++;
-        curOwner.doMoveCall(a);
+        if (!is_drop_call(mc)) {
+            curOwner.doMoveCall(a);
+        }
     }
 
     //virtual logic

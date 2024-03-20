@@ -85,22 +85,19 @@ static std::vector<Type> get_type_params(Method &m) {
     if (!m.isGeneric) {
         return res;
     }
-    if (m.parent) {
-        auto imp = dynamic_cast<Impl *>(m.parent);
-        res = imp->type_params;
+    if (!m.parent2.is_none()) {
+        res = m.parent2.type_params;
     }
     res.insert(res.end(), m.typeArgs.begin(), m.typeArgs.end());
     return res;
 }
 
 static std::optional<Type> methodParent2(const Method *m) {
-    if (!m->parent) return std::nullopt;
-    if (m->parent->isImpl()) {
-        auto impl = dynamic_cast<Impl *>(m->parent);
-        return impl->type;
-    } else if (m->parent->isTrait()) {
-        auto t = dynamic_cast<Trait *>(m->parent);
-        return t->type;
+    if (m->parent2.is_none()) return std::nullopt;
+    if (m->parent2.is_impl()) {
+        return m->parent2.type.value();
+    } else if (m->parent2.is_trait()) {
+        return m->parent2.type.value();
     }
     return std::nullopt;
 }
@@ -155,7 +152,7 @@ static std::string mangleType(const Type &type) {
 
 static std::string mangle(const Method *m) {
     if (is_main(m)) return m->name;
-    if (m->parent && m->parent->isExtern()) return m->name;
+    if (m->parent2.is_extern()) return m->name;
     auto p = methodParent2(m);
     std::string s;
     if (p.has_value()) {

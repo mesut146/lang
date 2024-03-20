@@ -42,7 +42,7 @@ std::unique_ptr<Statement> newDrop2(Expression *expr, Unit *unit) {
 }
 
 //Drop::drop({scope.fd});
-std::unique_ptr<Statement> newDrop(const std::string &scope, const std::string& field, Unit *unit) {
+std::unique_ptr<Statement> newDrop(const std::string &scope, const std::string &field, Unit *unit) {
     auto fa = new FieldAccess;
     fa->loc(++unit->lastLine);
     fa->scope = (new SimpleName(scope))->loc(fa->line);
@@ -50,7 +50,7 @@ std::unique_ptr<Statement> newDrop(const std::string &scope, const std::string& 
     return newDrop2(fa, unit);
 }
 //Drop::drop({fd.name});
-std::unique_ptr<Statement> newDrop(const std::string& field, Unit *unit) {
+std::unique_ptr<Statement> newDrop(const std::string &field, Unit *unit) {
     auto arg = new SimpleName(field);
     arg->loc(++unit->lastLine);
     return newDrop2(arg, unit);
@@ -149,7 +149,8 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Drop");
     imp->type_params = bd->type.typeArgs;
-    m.parent = imp.get();
+    //m.parent = imp.get();
+    m.parent2 = Parent{Parent::IMPL, imp->type, imp->trait_name};
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Drop")).trait;
     for (auto &mm : tr->methods) {
@@ -220,7 +221,8 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Debug");
     imp->type_params = bd->type.typeArgs;
-    m.parent = imp.get();
+    //m.parent = imp.get();
+    m.parent2 = Parent{Parent::IMPL, imp->type, imp->trait_name};
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Debug")).trait;
     for (auto &mm : tr->methods) {

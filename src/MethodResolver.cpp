@@ -7,13 +7,9 @@ std::string Signature::print() {
     if (mc && mc->scope) {
         s += scope->type.print();
         s += "::";
-    } else if (m && m->parent) {
-        auto p = m->parent;
-        if (p->isImpl()) {
-            auto imp = (Impl *) p;
-            s += imp->type.print();
-            s += "::";
-        }
+    } else if (m && m->parent2.is_impl()) {
+        s += m->parent2.type->print();
+        s += "::";
     }
     if (mc) {
         s += mc->name;
@@ -69,16 +65,14 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
 
 Type handleSelf(const Type &type, Method *m) {
     if (type.print() != "Self") return type;
-    auto imp = (Impl *) m->parent;
-    return imp->type;
+    return m->parent2.type.value();
 }
 
 Signature Signature::make(Method *m, const std::map<std::string, Type> &map) {
     Signature res;
     res.m = m;
-    if (m->parent && m->parent->isImpl()) {
-        auto imp = (Impl *) m->parent;
-        res.scope = RType(imp->type);
+    if (m->parent2.is_impl()) {
+        res.scope = RType(m->parent2.type.value());
     }
     if (m->self) {
         res.args.push_back(*m->self->type);
@@ -355,25 +349,25 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
     Generator gen(map);
     auto res = std::any_cast<Method *>(gen.visitMethod(m));
     res->used_path = r->unit->path;
-    if (!m->parent || !m->parent->isImpl()) {
+    if (m->parent2.is_none() || !m->parent2.is_impl()) {
         r->generatedMethods.push_back(res);
         return res;
     }
-    auto impl = dynamic_cast<Impl *>(m->parent);
+    auto &parent = m->parent2.type.value();
     auto st = sig.scope->type;
     if (sig.scope->trait) {
         st = sig.args[0].unwrap();
     }
     //put full type, Box::new(...) -> Box<...>::new()
-    if (sig.mc->is_static && !impl->type.typeArgs.empty()) {
+    if (sig.mc->is_static && !parent.typeArgs.empty()) {
         st.typeArgs.clear();
-        for (auto &ta : impl->type.typeArgs) {
+        for (auto &ta : parent.typeArgs) {
             auto resolved = map.at(ta.print());
             st.typeArgs.push_back(resolved);
         }
     }
     auto newImpl = new Impl(clone(st));
-    res->parent = newImpl;
+    res->parent2 = Parent{Parent::IMPL, st};
     r->generatedMethods.push_back(res);
     return res;
 }
@@ -395,21 +389,21 @@ SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
             }
         }
     }
-    if (m->parent && m->parent->isImpl() && mc->scope) {
+    if (m->parent2.is_impl() && mc->scope) {
         auto &scope = sig.scope->type;
-        auto impl = dynamic_cast<Impl *>(m->parent);
+        auto &parent = m->parent2;
         if (sig.scope->trait) {
             auto scp = sig.args[0].unwrap();
-            if (scp.name != impl->type.name) {
-                return format("not same impl %s vs %s", scp.name.c_str(), impl->type.name.c_str());
+            if (scp.name != parent.type.value().name) {
+                return format("not same impl %s vs %s", scp.name.c_str(), parent.type->name.c_str());
             }
-        } else if (scope.name != impl->type.name) {
-            return format("not same impl %s vs %s", scope.name.c_str(), impl->type.name.c_str());
+        } else if (scope.name != parent.type.value().name) {
+            return format("not same impl %s vs %s", scope.name.c_str(), parent.type.value().name.c_str());
         }
-        if (impl->type_params.empty() && !impl->type.typeArgs.empty()) {
+        if (parent.type_params.empty() && !parent.type.value().typeArgs.empty()) {
             //check they belong same impl
             for (int i = 0; i < scope.typeArgs.size(); i++) {
-                if (scope.typeArgs[i].print() != impl->type.typeArgs[i].print()) return "not same impl";
+                if (scope.typeArgs[i].print() != parent.type.value().typeArgs[i].print()) return "not same impl";
             }
         }
     }
@@ -458,7 +452,7 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
             return "target is not ptr";
         }
     }
-    if(target.isPointer()){
+    if (target.isPointer()) {
         return "arg is not ptr";
     }
     if (arg.isPointer() || arg.isSlice() || arg.isArray()) {
