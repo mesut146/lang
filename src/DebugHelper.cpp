@@ -60,11 +60,11 @@ void Compiler::dbg_var(const std::string &name, int line, int pos, const Type &t
 }
 
 std::string Compiler::dbg_name(Method *m) {
-    if (m->parent2.is_none()) return m->name;
-    if (m->parent2.is_impl()) {
-        return m->parent2.type->name + "::" + m->name;
-    } else if (m->parent2.is_trait()) {
-        return m->parent2.type->name + "::" + m->name;
+    if (m->parent.is_none()) return m->name;
+    if (m->parent.is_impl()) {
+        return m->parent.type->name + "::" + m->name;
+    } else if (m->parent.is_trait()) {
+        return m->parent.type->name + "::" + m->name;
     }
     return m->name;
 }
@@ -92,8 +92,11 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     } else {
         linkage_name = mangle(m);
     }
+    if (linkage_name == "List<Type>::drop_List<Type>*") {
+        int aa = 555;
+    }
     llvm::DIScope *scope = file;
-    if (!m->parent2.is_none()) {
+    if (!m->parent.is_none()) {
         auto p = methodParent2(m);
         scope = map_di(p.value());
     }

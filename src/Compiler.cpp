@@ -384,7 +384,8 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     for (auto &m : getMethods(unit.get())) {
         genCode(m);
     }
-    for (auto m : resolv->generatedMethods) {
+    for (int i = 0; i < resolv->generatedMethods.size(); i++) {
+        auto m = resolv->generatedMethods.at(i);
         genCode(m);
     }
     int lastpos = unit->items.size();
@@ -393,7 +394,7 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         AstCopier cp;
         auto item = std::make_unique<Impl>(imp->type);
         auto res = std::any_cast<Method *>(cp.visitMethod(m));
-        res->parent2 = m->parent2;
+        res->parent = m->parent;
         item->methods.push_back(std::move(*res));
         unit->items.push_back(std::move(item));
     }
@@ -411,16 +412,6 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         print("make_proto " + imp->type.print());
         make_proto(m);
     }
-    // for (auto &imp : curOwner.drop_impls) {
-    //     print("resolve drop_impl " + imp->type.print());
-    //     imp->accept(resolv.get());
-    //     //auto m = &imp->methods.at(0);
-    // }
-    // for (auto &imp : curOwner.drop_impls) {
-    //     auto m = &imp->methods.at(0);
-    //     print("genCode drop_impl " + imp->type.print());
-    //     genCode(m);
-    // }
     for (int i = lastpos; i < unit->items.size(); ++i) {
         auto it = unit->items[i].get();
         auto imp = dynamic_cast<Impl *>(it);
@@ -576,6 +567,9 @@ llvm::Function *Compiler::make_proto(Method *m) {
         return nullptr;
     }
     auto mangled = mangle(m);
+    if (mangled == "List<Pair<String, Type>>::drop_List<Pair<String, Type>>*") {
+        int xx = 555;
+    }
     if (funcMap.contains(mangled)) {
         return funcMap.at(mangled);
     }
@@ -608,7 +602,7 @@ llvm::Function *Compiler::make_proto(Method *m) {
     }
     auto fr = llvm::FunctionType::get(retType, argTypes, false);
     auto linkage = llvm::Function::ExternalLinkage;
-    if (!m->typeArgs.empty() || (!m->parent2.is_none() && m->parent2.is_impl() && !m->parent2.type->typeArgs.empty())) {
+    if (!m->typeArgs.empty() || (m->parent.is_impl() && !m->parent.type->typeArgs.empty())) {
         linkage = llvm::Function::LinkOnceODRLinkage;
     }
     auto f = llvm::Function::Create(fr, linkage, mangled, *mod);
@@ -839,7 +833,7 @@ void Compiler::make_vtables() {
         auto linkage = llvm::GlobalValue::ExternalLinkage;
         std::vector<llvm::Constant *> arr;
         for (auto m : v) {
-            auto f = funcMap[mangle(m)];
+            auto f = funcMap.at(mangle(m));
             auto fcast = llvm::ConstantExpr::getCast(llvm::Instruction::BitCast, f, i8p);
             arr.push_back(fcast);
         }
@@ -872,7 +866,7 @@ void Compiler::allocParams(Method *m) {
 }
 
 void storeParams(Method *m, Compiler *c) {
-    auto func = c->funcMap[mangle(m)];
+    auto func = c->funcMap.at(mangle(m));
     int argIdx = c->isRvo(m) ? 1 : 0;
     int didx = 1;
     if (m->self) {
@@ -1409,6 +1403,10 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
     if (is_ptr_deref(mc)) {
         auto src_ptr = get_obj_ptr(mc->args[0]);
+        auto rt = resolv->getType(mc);
+        if (rt.isPrim()) {
+            return load(src_ptr, mapType(rt));
+        }
         return src_ptr;
     }
     if (resolv->is_slice_get_ptr(mc)) {
@@ -1448,9 +1446,12 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         //return callFormat(mc, this);
     }
     if (is_drop_call(mc)) {
-        auto arg = resolv->getType(mc->args.at(0));
-        if (arg.print().ends_with("**")) {
+        auto arg = resolv->resolve(mc->args.at(0));
+        if (arg.type.print().ends_with("**")) {
             //dont drop
+            return (llvm::Value *) Builder->getVoidTy();
+        }
+        if (!curOwner.isDropType(arg)) {
             return (llvm::Value *) Builder->getVoidTy();
         }
     }
@@ -1468,9 +1469,17 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
 llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
-    auto f = funcMap[mangle(target)];
-    if (f == nullptr && is_drop_call(mc)) {
-        f = make_proto(target);
+    auto mangled = mangle(target);
+    llvm::Function *f = nullptr;
+    if (funcMap.contains(mangled)) {
+        f = funcMap.at(mangled);
+    } else {
+        if (is_drop_call(mc)) {
+            f = make_proto(target);
+        }
+    }
+    if (f == nullptr) {
+        resolv->err(mc, "proto not found");
     }
     std::vector<llvm::Value *> args;
     int paramIdx = 0;

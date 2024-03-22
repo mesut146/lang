@@ -148,9 +148,10 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
 
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Drop");
-    imp->type_params = bd->type.typeArgs;
-    //m.parent = imp.get();
-    m.parent2 = Parent{Parent::IMPL, imp->type, imp->trait_name};
+    if (bd->isGeneric) {
+        imp->type_params = bd->type.typeArgs;
+    }
+    m.parent = Parent{Parent::IMPL, imp->type, imp->trait_name};
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Drop")).trait;
     for (auto &mm : tr->methods) {
@@ -222,7 +223,7 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     imp->trait_name = Type("Debug");
     imp->type_params = bd->type.typeArgs;
     //m.parent = imp.get();
-    m.parent2 = Parent{Parent::IMPL, imp->type, imp->trait_name};
+    m.parent = Parent{Parent::IMPL, imp->type, imp->trait_name};
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Debug")).trait;
     for (auto &mm : tr->methods) {

@@ -18,19 +18,9 @@ bool isComp(const std::string &op) {
     return op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=";
 }
 
-bool isType(Item *item) {
-    return item->isClass() || item->isEnum();
-}
-
 template<class T>
 bool iof(Expression *e) {
     return dynamic_cast<T>(e) != nullptr;
-}
-
-Type copy(const Type &arg) {
-    AstCopier copier;
-    auto tmp = arg;
-    return *(Type *) std::any_cast<Expression *>(tmp.accept(&copier));
 }
 
 RType RType::clone() {
@@ -79,12 +69,12 @@ std::shared_ptr<Resolver> Resolver::getResolver(ImportStmt &is, const std::strin
     return Resolver::getResolver(root + "/" + join(is.list, "/") + ".x", root);
 }
 
-void printLine(Resolver *r, Node *n) {
-    std::cout << r->unit->path << ":" << n->line << std::endl;
-    if (r->curMethod) {
-        std::cout << "in " + printMethod(r->curMethod) << std::endl;
-    }
-}
+// void printLine(Resolver *r, Node *n) {
+//     std::cout << r->unit->path << ":" << n->line << std::endl;
+//     if (r->curMethod) {
+//         std::cout << "in " + printMethod(r->curMethod) << std::endl;
+//     }
+// }
 
 void Resolver::err(Node *e, const std::string &msg) {
     std::string s;
@@ -168,18 +158,18 @@ VarHolder *Scope::find(const std::string &name) {
     return nullptr;
 }
 
-std::string Resolver::getId(Expression *e) {
-    auto res = e->accept(&idgen);
-    if (res.has_value()) {
-        return std::any_cast<std::string>(res);
-    }
-    throw std::runtime_error("id: " + e->print());
-}
+// std::string Resolver::getId(Expression *e) {
+//     auto res = e->accept(&idgen);
+//     if (res.has_value()) {
+//         return std::any_cast<std::string>(res);
+//     }
+//     throw std::runtime_error("id: " + e->print());
+// }
 
 std::unordered_map<std::string, std::shared_ptr<Resolver>> Resolver::resolverMap;
-std::vector<std::string> Resolver::prelude = {"Box", "List", "str", "String", "Option", "ops"};
+std::vector<std::string> Resolver::prelude = {"Box", "List", "str", "String", "Option", "ops", "libc"};
 
-Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root), idgen(IdGen{this}) {
+Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root) {
 }
 
 void Resolver::init_prelude() {
@@ -300,6 +290,22 @@ void Resolver::resolveAll() {
     for (auto &item : unit->items) {
         item->accept(this);
     }
+    for (int i = 0; i < generated_impl.size(); ++i) {
+        auto &imp = generated_impl.at(i);
+        imp->accept(this);
+        auto m = &imp->methods.at(0);
+        auto mangled = mangle(m);
+        bool has = false;
+        for (auto prev : generatedMethods) {
+            if (mangled == mangle(prev)) {
+                has = true;
+                break;
+            }
+        }
+        if (!has) {
+            generatedMethods.push_back(m);
+        }
+    }
     int j = 0;
     while (true) {
         //todo dont visit used type methods they already visited
@@ -369,13 +375,6 @@ bool is_drop_impl(BaseDecl *bd, Unit *unit) {
 void Resolver::init() {
     if (is_init) return;
     is_init = true;
-    //must handle first
-    // for (auto &item : unit->items) {
-    //     if (item->isType()) {
-    //         auto ti = (TypeItem *) item.get();
-    //         addType(ti->name, resolve(&ti->rhs));
-    //     }
-    // }
     for (auto &item : unit->items) {
         if (item->isClass() || item->isEnum()) {
             auto bd = dynamic_cast<BaseDecl *>(item.get());
@@ -397,6 +396,7 @@ void Resolver::init() {
             addType(ti->name, resolve(&ti->rhs));
         }
     }//for
+    //derives
     std::vector<std::unique_ptr<Impl>> newItems;
     for (auto &item : unit->items) {
         if (!item->isClass() && !item->isEnum()) continue;
@@ -410,9 +410,9 @@ void Resolver::init() {
                     has_derive_drop = true;
                 } else {
                     //err("generic drop");
-                    /*newItems.push_back(derive_drop(bd));
-                        init_impl(newItems.back().get(), this);
-                        has_derive_drop = true;*/
+                    newItems.push_back(derive_drop(bd));
+                    init_impl(newItems.back().get(), this);
+                    has_derive_drop = true;
                 }
             } else if (der.print() == "Debug") {
                 newItems.push_back(derive_debug(bd));
@@ -439,7 +439,7 @@ RType Resolver::resolve(Expression *expr) {
         return std::any_cast<RType>(expr->accept(this));
     }
     if (expr->id == -1) {
-        err(expr, "id -1");
+        err(expr, "id=-1");
     }
     if (cache.contains(expr->id)) {
         return cache[expr->id];
@@ -808,8 +808,8 @@ std::any Resolver::visitType(Type *type) {
         addType(str, res);
         return res;
     }
-    if (str == "Self" && !curMethod->parent2.is_none()) {
-        return resolve(curMethod->parent2.type.value());
+    if (str == "Self" && !curMethod->parent.is_none()) {
+        return resolve(curMethod->parent.type.value());
     }
     if (type->scope) {
         auto scope = resolve(type->scope.get());
@@ -906,12 +906,53 @@ std::any Resolver::visitType(Type *type) {
     return res;
 }
 
+bool is_same_impl(Impl *a, Impl *b) {
+    if (a->trait_name.has_value()) {
+        if (!b->trait_name.has_value()) {
+            return false;
+        }
+        if (a->trait_name->print() != b->trait_name->print()) {
+            return false;
+        }
+    } else {
+        if (b->trait_name.has_value()) {
+            return false;
+        }
+    }
+    return a->type.print() == b->type.print();
+}
+
 void Resolver::addUsed(BaseDecl *bd) {
     if (bd->path == unit->path && bd->type.typeArgs.empty()) return;
     for (auto prev : usedTypes) {
         if (prev->type.print() == bd->type.print()) return;
     }
     usedTypes.push_back(bd);
+    if (bd->type.print() == "Map<String, Type>") {
+        int xxx = 555;
+    }
+    //generate drop impl
+    Ownership own;
+    own.r = this;
+    if (!bd->type.typeArgs.empty() && own.isDrop(bd)) {
+        auto imp = derive_drop(bd);
+        bool already_gen = false;
+        for (auto &prev_imp : generated_impl) {
+            if (is_same_impl(prev_imp.get(), imp.get())) {
+                already_gen = true;
+                break;
+            }
+        }
+        if (!already_gen) {
+            generated_impl.push_back(std::move(imp));
+            //print("generated_impl " + bd->type.print());
+        }
+
+        if (bd->type.print() == "List<Type>") {
+            int yyy = 555;
+        }
+        //unit->items.push_back(std::move(imp));
+    }
     auto sd = dynamic_cast<StructDecl *>(bd);
     if (sd != nullptr) {
         for (auto &fd : sd->fields) {
@@ -1574,11 +1615,15 @@ Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (is_drop_call(mc)) {
-        auto arg = getType(mc->args.at(0));
-        if (arg.isPointer() && arg.scope && arg.scope->isPointer()) {
+        auto arg = resolve(mc->args.at(0));
+        if (arg.type.isPointer() && arg.type.scope && arg.type.scope->isPointer()) {
             return RType(Type("void"));
         }
-        //return RType(Type("void"));
+        Ownership own;
+        own.r = this;
+        if (!own.isDropType(arg)) {
+            return RType(Type("void"));
+        }
     }
     if (is_std_size(mc)) {
         if (!mc->args.empty()) {

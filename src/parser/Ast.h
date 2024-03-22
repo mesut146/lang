@@ -275,7 +275,7 @@ public:
     std::optional<Param> self;
     std::vector<Param> params;
     std::unique_ptr<Block> body;
-    Parent parent2;
+    Parent parent;
     std::string path;
     std::string used_path;
     bool isGeneric = false;

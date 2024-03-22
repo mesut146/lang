@@ -305,34 +305,52 @@ MethodCall make_drop_mc(Compiler *c, Expression *expr) {
     return mc;
 }
 
+Method *is_drop_impl(Impl *impl, const Type &type) {
+    if (!impl->trait_name.has_value() || impl->trait_name->print() != "Drop") { return nullptr; }
+    auto m = &impl->methods.at(0);
+    if (impl->type.print() == type.print()) {
+        return m;
+    }
+    return nullptr;
+}
+
 Method *findDrop(Unit *unit, const Type &type, Compiler *c) {
+    for (auto &imp : c->resolv->generated_impl) {
+        auto m = is_drop_impl(imp.get(), type);
+        if (m) {
+            return m;
+        }
+    }
     for (auto &it : unit->items) {
         auto impl = dynamic_cast<Impl *>(it.get());
         if (!impl) continue;
-        if (impl->trait_name.has_value() && impl->trait_name->print() == "Drop" && impl->type.name == type.name) {
-            auto m = &impl->methods.at(0);
-            if (type.typeArgs.empty()) {
-                return m;
-            }
-            //generic
-            MethodResolver mr(c->resolv.get());
-            std::map<std::string, Type> map;
-            int i = 0;
-            for (auto &ta : impl->type.typeArgs) {
-                map[ta.name] = type.typeArgs.at(i);
-                ++i;
-            }
-            MethodCall mc;
-            mc.name = "drop";
-            mc.scope.reset(new Type("Drop"));
-            mc.is_static = true;
-            auto sig = Signature::make(&mc, c->resolv.get());
-            //return mr.generateMethod(map, m, sig);
-            Generator gen(map);
-            auto res = std::any_cast<Method *>(gen.visitMethod(m));
-            res->used_path = c->resolv->unit->path;
-            return res;
+        if (!impl->trait_name.has_value() || impl->trait_name->print() != "Drop") continue;
+        if (impl->type.name != type.name) continue;
+        auto m = &impl->methods.at(0);
+        if (type.typeArgs.empty()) {
+            return m;
         }
+        if (impl->type.print() == type.print()) {
+            return m;
+        }
+        //generic
+        /*MethodResolver mr(c->resolv.get());
+        std::map<std::string, Type> map;
+        int i = 0;
+        for (auto &ta : impl->type.typeArgs) {
+            map[ta.name] = type.typeArgs.at(i);
+            ++i;
+        }
+        MethodCall mc;
+        mc.name = "drop";
+        mc.scope.reset(new Type("Drop"));
+        mc.is_static = true;
+        auto sig = Signature::make(&mc, c->resolv.get());
+        //return mr.generateMethod(map, m, sig);
+        Generator gen(map);
+        auto res = std::any_cast<Method *>(gen.visitMethod(m));
+        res->used_path = c->resolv->unit->path;
+        return res;*/
     }
     return nullptr;
 }
@@ -354,10 +372,11 @@ Method *findDrop(Ownership *own, const Type &type) {
     if (!rt.targetDecl) {
         throw std::runtime_error("non decl drop" + type.print());
     }
-    auto imp = c->resolv->derive_drop(rt.targetDecl);
+    throw std::runtime_error("findDrop " + type.print());
+    /*auto imp = c->resolv->derive_drop(rt.targetDecl);
     own->drop_impls.push_back(std::move(imp));
     auto imp2 = dynamic_cast<Impl *>(own->drop_impls.back().get());
-    return &imp2->methods.at(0);
+    return &imp2->methods.at(0);*/
 }
 
 void dump_proto(llvm::Function *proto) {

@@ -7,8 +7,8 @@ std::string Signature::print() {
     if (mc && mc->scope) {
         s += scope->type.print();
         s += "::";
-    } else if (m && m->parent2.is_impl()) {
-        s += m->parent2.type->print();
+    } else if (m && m->parent.is_impl()) {
+        s += m->parent.type->print();
         s += "::";
     }
     if (mc) {
@@ -65,14 +65,14 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
 
 Type handleSelf(const Type &type, Method *m) {
     if (type.print() != "Self") return type;
-    return m->parent2.type.value();
+    return m->parent.type.value();
 }
 
 Signature Signature::make(Method *m, const std::map<std::string, Type> &map) {
     Signature res;
     res.m = m;
-    if (m->parent2.is_impl()) {
-        res.scope = RType(m->parent2.type.value());
+    if (m->parent.is_impl()) {
+        res.scope = RType(m->parent.type.value());
     }
     if (m->self) {
         res.args.push_back(*m->self->type);
@@ -168,11 +168,17 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
 
     auto map = make_map(sig, type);
 
+    std::vector<Impl *> impl_vec;
     for (auto &item : r->unit->items) {
-        if (!item->isImpl()) {
-            continue;
+        if (item->isImpl()) {
+            impl_vec.push_back(dynamic_cast<Impl *>(item.get()));
         }
-        auto impl = dynamic_cast<Impl *>(item.get());
+    }
+    for (auto &imp : r->generated_impl) {
+        impl_vec.push_back(imp.get());
+    }
+
+    for (auto impl : impl_vec) {
         if (scope.trait) {
             if (!impl->trait_name || impl->trait_name->name != type.name) continue;
             auto uw = sig.args[0].unwrap();
@@ -349,11 +355,11 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
     Generator gen(map);
     auto res = std::any_cast<Method *>(gen.visitMethod(m));
     res->used_path = r->unit->path;
-    if (m->parent2.is_none() || !m->parent2.is_impl()) {
+    if (m->parent.is_none() || !m->parent.is_impl()) {
         r->generatedMethods.push_back(res);
         return res;
     }
-    auto &parent = m->parent2.type.value();
+    auto &parent = m->parent.type.value();
     auto st = sig.scope->type;
     if (sig.scope->trait) {
         st = sig.args[0].unwrap();
@@ -367,7 +373,7 @@ Method *MethodResolver::generateMethod(std::map<std::string, Type> &map, Method 
         }
     }
     auto newImpl = new Impl(clone(st));
-    res->parent2 = Parent{Parent::IMPL, st};
+    res->parent = Parent{Parent::IMPL, st};
     r->generatedMethods.push_back(res);
     return res;
 }
@@ -389,9 +395,9 @@ SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
             }
         }
     }
-    if (m->parent2.is_impl() && mc->scope) {
+    if (m->parent.is_impl() && mc->scope) {
         auto &scope = sig.scope->type;
-        auto &parent = m->parent2;
+        auto &parent = m->parent;
         if (sig.scope->trait) {
             auto scp = sig.args[0].unwrap();
             if (scp.name != parent.type.value().name) {

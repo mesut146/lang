@@ -1,7 +1,6 @@
 #pragma once
 
 #include "AstCopier.h"
-#include "IdGen.h"
 #include "Ownership.h"
 #include "Visitor.h"
 #include "parser/Ast.h"
@@ -85,19 +84,19 @@ static std::vector<Type> get_type_params(Method &m) {
     if (!m.isGeneric) {
         return res;
     }
-    if (!m.parent2.is_none()) {
-        res = m.parent2.type_params;
+    if (!m.parent.is_none()) {
+        res = m.parent.type_params;
     }
     res.insert(res.end(), m.typeArgs.begin(), m.typeArgs.end());
     return res;
 }
 
 static std::optional<Type> methodParent2(const Method *m) {
-    if (m->parent2.is_none()) return std::nullopt;
-    if (m->parent2.is_impl()) {
-        return m->parent2.type.value();
-    } else if (m->parent2.is_trait()) {
-        return m->parent2.type.value();
+    if (m->parent.is_none()) return std::nullopt;
+    if (m->parent.is_impl()) {
+        return m->parent.type.value();
+    } else if (m->parent.is_trait()) {
+        return m->parent.type.value();
     }
     return std::nullopt;
 }
@@ -152,7 +151,7 @@ static std::string mangleType(const Type &type) {
 
 static std::string mangle(const Method *m) {
     if (is_main(m)) return m->name;
-    if (m->parent2.is_extern()) return m->name;
+    if (m->parent.is_extern()) return m->name;
     auto p = methodParent2(m);
     std::string s;
     if (p.has_value()) {
@@ -270,12 +269,12 @@ public:
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
-    std::map<int, std::unique_ptr<Method>> format_methods;
+    //std::map<int, std::unique_ptr<Method>> format_methods;
     int inLoop = 0;
-    IdGen idgen;
     bool isResolved = false;
     bool is_init = false;
     std::vector<BaseDecl *> usedTypes;
+    std::vector<std::unique_ptr<Impl>> generated_impl;
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
@@ -342,7 +341,7 @@ public:
     }
     RType getTypeCached(const std::string &name);
     void addType(const std::string &name, const RType &rt);
-    std::string getId(Expression *e);
+    //std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
     std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl, const Type &type);
     void addUsed(BaseDecl *bd);

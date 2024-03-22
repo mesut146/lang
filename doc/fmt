@@ -1,0 +1,10 @@
+print("{} asd", args...)
+
+
+Fmt::format2("{} {}", ..args): String{
+ let f = Fmt::new();
+ for arg in args{
+  Debug::debug(arg, &f)
+ }
+ return f.buf;
+}

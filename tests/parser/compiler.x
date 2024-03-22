@@ -101,7 +101,7 @@ struct Config{
 }
 
 func dummy_resolver(ctx: Context*): Resolver*{
-  let path = "../tests/src/std/str.x".str();
+  let path = "../tests/std/str.x".str();
   return ctx.create_resolver(&path);
 }
 
