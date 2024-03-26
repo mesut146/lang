@@ -46,12 +46,6 @@ struct Fmt{
   buf: String;
 }
 
-impl Drop for Fmt{
-  func drop(self){
-    self.buf.drop();
-  }
-}
-
 impl Debug for [i32]{
   func debug(self, f: Fmt*){
     f.print("[");
@@ -182,21 +176,21 @@ impl Hash for str{
 }
 
 trait Drop{
-  func drop(self);
+  func drop(*self);
 }
 
 impl Drop for i32{
-  func drop(self){
+  func drop(*self){
     
   }
 }
 impl Drop for i64{
-  func drop(self){
+  func drop(*self){
     
   }
 }
 impl Drop for str{
-  func drop(self){
+  func drop(*self){
     
   }
 }

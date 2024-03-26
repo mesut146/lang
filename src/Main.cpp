@@ -190,7 +190,7 @@ int main(int argc, char **args) {
                 Config::use_cache = false;
                 c.init();
                 c.compile(path);
-                if (i <= argc) {
+                for (; i <= argc;) {
                     auto path2 = args[i];
                     ++i;
                     c.compile(path2);

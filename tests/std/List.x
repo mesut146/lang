@@ -41,8 +41,9 @@ impl<T> List<T>{
       //*ptr::get(tmp, i) = *ptr::get(self.ptr, i);
       let old = ptr::deref(ptr::get(self.ptr, i));
       ptr::copy(tmp, i, old);
+      std::no_drop(old);
     }
-    free(self.ptr as i8*);
+    //free(self.ptr as i8*);
     self.ptr = tmp;
     self.cap = self.cap * 2;
   }
@@ -74,6 +75,7 @@ impl<T> List<T>{
     //*ptr::get(self.ptr, self.count) = e;
     ptr::copy(self.ptr, self.count, e);
     //memcpy(trg as i8*, &e as i8*, std::size<T>());
+    std::no_drop(e);//add this to prevent dropping e
     ++self.count;
   }
 
@@ -209,9 +211,13 @@ impl<T> Clone for List<T>{
 }
 
 impl<T> Drop for List<T>{
-  func drop(self){
+  func drop(*self){
     //print("drop list %s\n", Fmt::str(self).cstr());
-    //todo drop elems too
+    for(let i = 0;i < self.len();++i){
+      let ep = self.get(i);
+      Drop::drop(ep);
+      //std::no_drop(ep);
+    }
     free(self.ptr as i8*);
   }
 }

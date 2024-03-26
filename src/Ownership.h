@@ -41,6 +41,7 @@ struct Object {
 struct Move {
     Variable *lhs = nullptr;//null means transfer
     Expression *lhs_expr = nullptr;
+    bool field;
     Object rhs;
     int line;
 
@@ -206,4 +207,6 @@ struct Ownership {
     std::vector<VarScope *> rev_scopes();
 
     void end_branch(VarScope *scope);
+
+    void call_drop(Type &type, llvm::Value *ptr);
 };

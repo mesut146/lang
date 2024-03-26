@@ -1,9 +1,10 @@
 import std/libc
 
 func open_checked(path: str, mode: str): FILE*{
-  let f = fopen(path.cstr(), mode.cstr());
+  let cpath = path.cstr();
+  let f = fopen(cpath.ptr(), mode.cstr().ptr());
   if(!is_valid(f)){
-    panic("no such file %s", path.cstr());
+    panic("no such file %s", cpath.ptr());
   }
   return f;
 }
@@ -43,22 +44,22 @@ func dump(arr: [i8; 256], len: i32){
   print("\n");
 }
 
-func list(path: str): List<String>{
-  let list = List<String>::new();
-  let dp = opendir(path.cstr());
-  if(dp as u64 == 0) panic("no such dir %s", path.cstr());
+func list(path: CStr*): List<String>{
+  let list = List<String>::new(128);
+  let dp = opendir(path.ptr());
+  if(dp as u64 == 0) panic("no such dir %s", path.ptr());
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
-    let s = str::new(ep.d_name[0..ep.len()]);
-    list.add(s.str());
+    let entry = str::new(ep.d_name[0..ep.len()]);
+    list.add(entry.str());
   }
   closedir(dp);
   return list;
 }
 
 func is_dir(path: str): bool{
-  let dp = opendir(path.cstr());
+  let dp = opendir(path.cstr().ptr());
   if(dp as u64 != 0){
     closedir(dp);
     return true;
@@ -67,7 +68,7 @@ func is_dir(path: str): bool{
 }
 
 func is_file(path: str): bool{
-  let fp = fopen(path.cstr(), "r".cstr());
+  let fp = fopen(path.cstr().ptr(), "r".cptr());
   if(fp as u64 != 0){
     fclose(fp);
     return true;
@@ -85,10 +86,10 @@ func exist(path: str): bool{
 
 func resolve(path: str): String{
   let buf = [0i8; 256];
-  let path_c = path.cstr();
-  let ptr = realpath(path_c, &buf[0] as i8*);
+  let path_c: String = path.cstr();
+  let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
   if(ptr as u64 == 0){
-    panic("resolving path is null '%s'\n", path_c);
+    panic("resolving path is null '%s'\n", path_c.ptr());
   }
   let len = strlen(buf[0..256]);
   return String::new(buf[0..len]);

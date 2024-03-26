@@ -54,6 +54,10 @@ static bool is_drop_call(MethodCall *mc) {
     return mc->name == "drop" && mc->scope && mc->scope->print() == "Drop" && mc->is_static;
 }
 
+static bool is_std_no_drop(MethodCall *mc) {
+    return mc->name == "no_drop" && mc->scope && mc->scope->print() == "std" && mc->is_static;
+}
+
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {
@@ -275,6 +279,7 @@ public:
     bool is_init = false;
     std::vector<BaseDecl *> usedTypes;
     std::vector<std::unique_ptr<Impl>> generated_impl;
+    std::map<std::string, Method*> drop_methods;
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
@@ -306,6 +311,7 @@ public:
     std::vector<Method> &get_trait_methods(const Type &type);
     std::unique_ptr<Impl> derive_debug(BaseDecl *bd);
     std::unique_ptr<Impl> derive_drop(BaseDecl *bd);
+    Method derive_drop_method(BaseDecl *bd);
     std::vector<ImportStmt> get_imports();
 
     void newScope();

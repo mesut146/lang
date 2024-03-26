@@ -80,3 +80,8 @@ static Type getType(int bits) {
     if (bits == 64) return Type("i64");
     throw std::runtime_error("getType");
 }
+
+static std::map<std::string, Type> get_map_from(BaseDecl* bd){
+    std::map<std::string, Type> map;
+    return map;
+}

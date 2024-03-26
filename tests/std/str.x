@@ -21,6 +21,10 @@ impl str{
        return &self.buf[0];
     }
 
+    func cptr(self): i8*{
+      return &self.buf[0] as i8*;
+    }
+
     func len(self): i32{
       return self.buf.len() as i32;
     }
@@ -36,7 +40,7 @@ impl str{
     }
 
     func check(self, pos: i32){
-      if(pos < 0 || pos >= self.len()) panic("str::check %s of idx %d", self.cstr(), pos);
+      if(pos < 0 || pos >= self.len()) panic("str::check %s of idx %d", self.cstr().ptr(), pos);
     }
 
     func starts_with(self, s: str): bool{
@@ -117,7 +121,6 @@ impl str{
     func contains(self, s: str): bool{
       return self.indexOf(s, 0) != -1;
     }
-  
 
     func substr(self, start: i32): str{
       return self.substr(start, self.len());
@@ -159,8 +162,8 @@ impl str{
       return String::new(*self);
     }
 
-    func cstr(self): i8*{
-      return self.str().cstr() as i8*;
+    func cstr(self): String{
+      return self.str().cstr();
     }
     
     func split(self, sep: str): List<str>{
@@ -173,7 +176,6 @@ impl str{
           break;
         }else{
           arr.add(self.substr(last, i));
-          //print("s = %s\n", arr.last().str().cstr());
           last = i + sep.len();
         }
       }

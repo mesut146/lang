@@ -101,11 +101,20 @@ Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
     return ret;
 }
 
-std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
+bool need_drop(const Type &type) {
+    if (type.isPointer()) return false;
+    if (type.isPrim()) return false;
+    return type.print() != "str";
+}
+
+Method Resolver::derive_drop_method(BaseDecl *bd) {
+    if (bd->type.name == "List") {
+        throw std::runtime_error("derive drop list");
+    }
     int line = unit->lastLine;
     Method m(unit->path);
     m.name = "drop";
-    Param s("self", clone(bd->type).toPtr());
+    Param s("self", clone(bd->type));
     s.loc(line);
     m.self = std::move(s);
     m.type = Type("void");
@@ -126,11 +135,9 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
             ifs->rhs.reset((new SimpleName("self"))->loc(line));
             auto then = new Block;
             ifs->thenStmt.reset(then);
-            int j = 0;
             for (auto &fd : ev.fields) {
-                if (fd.type.isPointer()) continue;//borrowed, no drop
-                if (fd.type.isPrim()) continue;
-                //fd.drop();
+                if (!need_drop(fd.type)) continue;
+                //Drop::drop(fd)
                 then->list.push_back(newDrop(fd.name, unit.get()));
             }
 
@@ -139,29 +146,37 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
     } else {
         auto sd = (StructDecl *) bd;
         for (auto &fd : sd->fields) {
-            if (fd.type.isPointer()) continue;//borrowed, no drop
-            if (fd.type.isPrim()) continue;
-            //self.fd.drop();
+            if (!need_drop(fd.type)) continue;
+            //Drop::drop(self.fd);
             bl->list.push_back(newDrop("self", fd.name, unit.get()));
         }
     }
+    m.parent = Parent{Parent::IMPL, bd->type, Type("Drop")};
+    if (bd->isGeneric) {
+        m.parent.type_params = bd->type.typeArgs;
+    }
+    m.isGeneric = bd->isGeneric;
+    return m;
+}
 
+std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
+    if (bd->type.name == "List") {
+        throw std::runtime_error("derive drop list");
+    }
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Drop");
     if (bd->isGeneric) {
         imp->type_params = bd->type.typeArgs;
     }
-    m.parent = Parent{Parent::IMPL, imp->type, imp->trait_name};
-    imp->methods.push_back(std::move(m));
-    auto tr = resolve(Type("Drop")).trait;
-    for (auto &mm : tr->methods) {
-        if (mm.body) {
-            AstCopier copier;
-            auto m2 = std::any_cast<Method *>(mm.accept(&copier));
-            imp->methods.push_back(std::move(*m2));
-        }
-    }
-    //print(imp->print() + "\n");
+    imp->methods.push_back(derive_drop_method(bd));
+    // auto tr = resolve(Type("Drop")).trait;
+    // for (auto &mm : tr->methods) {
+    //     if (mm.body) {
+    //         AstCopier copier;
+    //         auto m2 = std::any_cast<Method *>(mm.accept(&copier));
+    //         imp->methods.push_back(std::move(*m2));
+    //     }
+    // }
     return imp;
 }
 

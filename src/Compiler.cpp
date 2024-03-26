@@ -581,7 +581,11 @@ llvm::Function *Compiler::make_proto(Method *m) {
     }
     if (m->self) {
         auto &self_type = *m->self->type;
-        auto ty = mapType(self_type);
+        llvm::Type *ty = mapType(self_type);
+        if (isStruct(self_type)) {
+            //structs are always pass by ptr
+            ty = ty->getPointerTo();
+        }
         argTypes.push_back(ty);
     }
     for (auto &prm : m->params) {
@@ -991,7 +995,9 @@ void Compiler::genCode(Method *m) {
     }
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
-        Builder->CreateRet(makeInt(0, 32));
+        if (!ends_with_return(m->body.get())) {
+            Builder->CreateRet(makeInt(0, 32));
+        }
     } else if (!isReturnLast(m->body.get()) && m->type.print() == "void") {
         if (!m->body->list.empty()) {
             loc(m->body->list.back()->line + 1, 0);
@@ -1054,6 +1060,9 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
     auto ptr = func->getArg(0);
 
     curOwner.check(e);
+    if (e->print() == "self.str().cstr()") {
+        int aa = 555;
+    }
 
     if (doesAlloc(e)) {
         child(e, ptr);
@@ -1069,7 +1078,7 @@ std::any Compiler::visitReturnStmt(ReturnStmt *node) {
         copy(ptr, val, resolv->getType(e));
     }
     //todo move
-    curOwner.doMoveReturn(e);
+    curOwner.doMoveReturn(e);//todo delete this?
     curOwner.doReturn(node->line);
     return Builder->CreateRetVoid();
 }
@@ -1370,6 +1379,11 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
+    if (is_std_no_drop(mc)) {
+        auto arg = mc->args.at(0);
+        curOwner.doMoveCall(arg);
+        return (llvm::Value *) Builder->getVoidTy();
+    }
     if (Resolver::is_std_is_ptr(mc)) {
         if (mc->typeArgs[0].isPointer()) {
             return (llvm::Value *) Builder->getTrue();
@@ -1446,14 +1460,22 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         //return callFormat(mc, this);
     }
     if (is_drop_call(mc)) {
-        auto arg = resolv->resolve(mc->args.at(0));
-        if (arg.type.print().ends_with("**")) {
+        auto argt = resolv->resolve(mc->args.at(0));
+        if (argt.type.print().ends_with("**")) {
             //dont drop
             return (llvm::Value *) Builder->getVoidTy();
         }
-        if (!curOwner.isDropType(arg)) {
+        if (argt.type.print().ends_with("*")) {
+            //dont drop
             return (llvm::Value *) Builder->getVoidTy();
         }
+        if (curOwner.isDropType(argt)) {
+            auto arg = mc->args.at(0);
+            auto ptr = gen(arg);
+            curOwner.call_drop(argt.type, ptr);
+            curOwner.doMoveCall(arg);
+        }
+        return (llvm::Value *) Builder->getVoidTy();
     }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
@@ -1487,15 +1509,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         args.push_back(ptr);
     }
     llvm::Value *obj = nullptr;
-    RType scp;
     if (target->self && !mc->is_static) {
         //add this object
-        auto e = mc->scope.get();
-        obj = get_obj_ptr(e);
-        scp = resolv->resolve(e);
-        /*if (scp.type.isPrim() && obj->getType()->isPointerTy()) {
-            obj = load(obj, scp.type);
-        }*/
+        obj = get_obj_ptr(mc->scope.get());
         args.push_back(obj);
         paramIdx++;
     }
@@ -1537,6 +1553,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     Method *base = nullptr;
     if (it != resolv->overrideMap.end()) base = it->second;
     if (target->isVirtual || base) {
+        auto scp = resolv->resolve(mc->scope.get());
         if (scp.type.isPointer()) {
             scp.type = *scp.type.scope.get();
         }
@@ -2213,9 +2230,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
 }
 
 std::any Compiler::visitWhileStmt(WhileStmt *node) {
-    auto then = llvm::BasicBlock::Create(ctx(), "body");
-    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
-    auto next = llvm::BasicBlock::Create(ctx(), "next");
+    auto then = llvm::BasicBlock::Create(ctx(), "while_body_" + std::to_string(node->line));
+    auto condbb = llvm::BasicBlock::Create(ctx(), "while_cond_" + std::to_string(node->line), func);
+    auto next = llvm::BasicBlock::Create(ctx(), "while_next_" + std::to_string(node->line));
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
     auto c = loadPtr(node->expr.get());

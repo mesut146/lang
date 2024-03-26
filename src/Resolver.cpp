@@ -278,10 +278,10 @@ void Resolver::resolveAll() {
             auto type = getType(g.type.value());
             //todo check
             auto err_opt = MethodResolver::isCompatible(RType(rhs.type), type);
-            if (err_opt) {
+            if (err_opt.is_err()) {
                 std::string msg = "variable type mismatch '" + g.name + "'\n";
                 msg += "expected: " + type.print() + " got " + rhs.type.print();
-                msg += "\n" + err_opt.value();
+                msg += "\n" + err_opt.err;
                 err(&g, msg);
             }
         }
@@ -355,20 +355,48 @@ void init_impl(Impl *impl, Resolver *r) {
     }
 }
 
+bool is_drop_impl(BaseDecl *bd, Impl *imp) {
+    if (!imp->trait_name.has_value() || imp->trait_name->print() != "Drop") return false;
+    if (bd->isGeneric) {
+        if (!imp->type_params.empty()) {//generic impl
+            return bd->type.name == imp->type.name;
+        } else {//full impl
+            //different impl of type param
+            return false;
+        }
+        return bd->type.name == bd->type.name;
+    } else {                           //full type
+        if (imp->type_params.empty()) {//full impl
+            return bd->type.print() == imp->type.print();
+        } else {//generic impl
+            return bd->type.name == imp->type.name;
+        }
+    }
+
+    return false;
+}
+
 //check if Drop trait implemented for this type
-bool is_drop_impl(BaseDecl *bd, Unit *unit) {
-    for (auto &it : unit->items) {
+bool has_drop_impl(BaseDecl *bd, Resolver *r) {
+    if (bd->path != r->unit->path) {
+        //need own resolver
+        r = r->getResolver(bd->path, r->root).get();
+        r->init();
+    }
+    for (auto &it : r->unit->items) {
         if (!it->isImpl()) {
             continue;
         }
         auto imp = dynamic_cast<Impl *>(it.get());
-        if (imp->trait_name.has_value() && imp->trait_name->print() == "Drop") {
-            if (imp->type.name == bd->type.name) {
-                return true;
-            }
+        if (is_drop_impl(bd, imp)) {
+            return true;
         }
     }
-
+    for (auto &imp : r->generated_impl) {
+        if (is_drop_impl(bd, imp.get())) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -422,7 +450,7 @@ void Resolver::init() {
         Ownership own;
         own.r = this;
         //auto impl drop
-        if (!has_derive_drop && !is_drop_impl(bd, unit.get()) && !bd->isGeneric && own.isDrop(bd)) {
+        if (!has_derive_drop && !has_drop_impl(bd, this) && !bd->isGeneric && own.isDrop(bd)) {
             newItems.push_back(derive_drop(bd));
             init_impl(newItems.back().get(), this);
         }
@@ -710,10 +738,10 @@ std::any Resolver::visitFragment(Fragment *f) {
     if (!f->type) return rhs.clone();
     auto res = resolve(*f->type);
     auto err_opt = MethodResolver::isCompatible(rhs, res.type);
-    if (err_opt) {
+    if (err_opt.is_err()) {
         std::string msg = "variable type mismatch '" + f->name + "'\n";
         msg += "expected: " + res.type.print() + " got " + rhs.type.print();
-        msg += "\n" + err_opt.value();
+        msg += "\n" + err_opt.err;
         err(f, msg);
     }
     return res;
@@ -922,6 +950,31 @@ bool is_same_impl(Impl *a, Impl *b) {
     return a->type.print() == b->type.print();
 }
 
+//find generated or user provided drop method
+Method *find_drop_method(BaseDecl *bd, Resolver *r0) {
+    auto r = r0->getResolver(bd->path, r0->root);
+    r->init();
+    for (auto &it : r->unit->items) {
+        if (!it->isImpl()) continue;
+        auto impl = dynamic_cast<Impl *>(it.get());
+        if (!impl->trait_name.has_value() || impl->trait_name->print() != "Drop") continue;
+        if (bd->type.print() == impl->type.print()) {
+            return &impl->methods.at(0);
+        }
+        if (bd->type.typeArgs.empty()) {//non generic
+            if (bd->type.print() == impl->type.print()) {
+                return &impl->methods.at(0);
+            }
+        } else {//generic struct & generic impl
+            if (bd->type.name == impl->type.name) {
+                return &impl->methods.at(0);
+            }
+        }
+    }
+    throw std::runtime_error("find_drop_method " + bd->type.print());
+    //return nullptr;
+}
+
 void Resolver::addUsed(BaseDecl *bd) {
     if (bd->path == unit->path && bd->type.typeArgs.empty()) return;
     for (auto prev : usedTypes) {
@@ -931,27 +984,26 @@ void Resolver::addUsed(BaseDecl *bd) {
     if (bd->type.print() == "Map<String, Type>") {
         int xxx = 555;
     }
+    //find drop impl and generate drop method
     //generate drop impl
     Ownership own;
     own.r = this;
-    if (!bd->type.typeArgs.empty() && own.isDrop(bd)) {
-        auto imp = derive_drop(bd);
-        bool already_gen = false;
-        for (auto &prev_imp : generated_impl) {
-            if (is_same_impl(prev_imp.get(), imp.get())) {
-                already_gen = true;
-                break;
+    if (!bd->type.typeArgs.empty() && own.isDrop(bd) /*&& !has_drop_impl(bd, this)*/) {
+        auto dropm = find_drop_method(bd, this);
+        if (dropm->isGeneric) {
+            std::map<std::string, Type> map;
+            for (int i = 0; i < dropm->parent.type_params.size(); ++i) {
+                map[dropm->parent.type_params[i].name] = bd->type.typeArgs.at(i);
             }
+            Generator gen(map);
+            auto genm = std::any_cast<Method *>(gen.visitMethod(dropm));
+            genm->parent.type_params.clear();
+            genm->parent.type = bd->type;
+            generatedMethods.push_back(genm);
+            drop_methods[bd->type.print()] = genm;
+        } else {
+            drop_methods[bd->type.print()] = dropm;
         }
-        if (!already_gen) {
-            generated_impl.push_back(std::move(imp));
-            //print("generated_impl " + bd->type.print());
-        }
-
-        if (bd->type.print() == "List<Type>") {
-            int yyy = 555;
-        }
-        //unit->items.push_back(std::move(imp));
     }
     auto sd = dynamic_cast<StructDecl *>(bd);
     if (sd != nullptr) {
@@ -1084,7 +1136,7 @@ std::any Resolver::visitAssign(Assign *node) {
         t1 = resolve(node->left);
     }
     auto t2 = resolve(node->right);
-    if (MethodResolver::isCompatible(t2, t1.type)) {
+    if (MethodResolver::isCompatible(t2, t1.type).is_err()) {
         err(node, "cannot assign");
     }
     if (has_pointer(t1.type, this) && is_var(node->left)) {
@@ -1393,7 +1445,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         }
         auto type = resolve(node->expr.get());
         auto mtype = getType(curMethod->type);
-        if (MethodResolver::isCompatible(type, mtype)) {
+        if (MethodResolver::isCompatible(type, mtype).is_err()) {
             //err(node, );
             err(node, "method " + printMethod(curMethod) + " expects '" + mtype.print() + " but returned '" + type.type.print() + "' => ");
         }
@@ -1535,7 +1587,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
         }
         auto pt = getType(prm.type);
         auto arg = resolve(e.value);
-        if (MethodResolver::isCompatible(arg, pt)) {
+        if (MethodResolver::isCompatible(arg, pt).is_err()) {
             auto f = format("field type is imcompatiple %s \n expected: %s got: %s", e.value->print().c_str(), pt.print().c_str(), arg.type.print().c_str());
             err(node, f);
         }
@@ -1614,6 +1666,10 @@ Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
 }*/
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
+    if (is_std_no_drop(mc)) {
+        auto rt = resolve(mc->args[0]);
+        return RType(Type("void"));
+    }
     if (is_drop_call(mc)) {
         auto arg = resolve(mc->args.at(0));
         if (arg.type.isPointer() && arg.type.scope && arg.type.scope->isPointer()) {
@@ -1795,8 +1851,8 @@ std::any Resolver::visitArrayExpr(ArrayExpr *node) {
     for (int i = 1; i < node->list.size(); i++) {
         auto cur = resolve(node->list[i]);
         auto cmp = MethodResolver::isCompatible(cur, elemType.type);
-        if (cmp.has_value()) {
-            print(cmp.value());
+        if (cmp.is_err()) {
+            print(cmp.err);
             error("array element type mismatch, expecting: " + elemType.type.print() + " got: " + cur.type.print());
         }
     }

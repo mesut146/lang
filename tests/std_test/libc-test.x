@@ -23,14 +23,14 @@ func write_test(){
 }
 
 func list_test(){
-  let dir = ".";
-  list(dir);
+  let dir = CStr::new(".");
+  let arr = list(&dir);
 }
 
 func main(){
-  print("pwd = %s\n", resolve(".").cstr());
+  /*print("pwd = %s\n", resolve(".").cstr().ptr());
   write_test();
-  read_test();
+  read_test();*/
   list_test();
-  print("libc_test done\n");
+  //print("libc_test done\n");
 }

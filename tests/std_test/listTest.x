@@ -1,6 +1,6 @@
 import std/libc
 
-func iterTest(list: List<i32>){
+func iterTest(list: List<i32>*){
   let it = list.iter();
   assert it.has();
   let n1 = it.next();
@@ -70,7 +70,7 @@ func main(){
   assert list.contains(&x2) && !list.contains(&x3);
   let s = list.slice(1, 3);
   assert s.len() == 2 && s[0] == 20;
-  iterTest(list);
+  iterTest(&list);
   list.remove(1);
   listStruct();
   //listStruct2();

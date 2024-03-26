@@ -31,12 +31,10 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     Signature res;
     res.mc = mc;
     res.r = r;
-    RType scp;
+    bool is_trait = false;
     if (mc->scope) {
-        if (mc->print() == "self.expand()") {
-            auto x = 66;
-        }
-        scp = r->resolve(mc->scope.get());
+        auto scp = r->resolve(mc->scope.get());
+        is_trait = scp.trait != nullptr;
         //we need this to handle cases like Option::new(...)
         if (scp.targetDecl && scp.targetDecl->path != r->unit->path && !scp.targetDecl->isGeneric) {
             r->addUsed(scp.targetDecl);
@@ -46,7 +44,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
         } else {
             res.scope = std::move(scp);
         }
-        if (!dynamic_cast<Type *>(mc->scope.get())) {
+        if (!mc->is_static) {
             res.args.push_back(res.scope->type.toPtr());
         }
     }
@@ -54,8 +52,10 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     for (auto a : mc->args) {
         //cast to pointer
         auto type = r->getType(a);
-        if (i == 0 && mc->scope && scp.trait && isStruct(type)) {
-            type = Type(Type::Pointer, type);
+        if (i == 0 && mc->scope && is_trait && isStruct(type)) {
+            if (mc->name != "drop") {//delete this shit
+                type = Type(Type::Pointer, type);
+            }
         }
         res.args.push_back(type);
         i++;
@@ -63,7 +63,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     return res;
 }
 
-Type handleSelf(const Type &type, Method *m) {
+Type map_self(const Type &type, Method *m) {
     if (type.print() != "Self") return type;
     return m->parent.type.value();
 }
@@ -79,9 +79,9 @@ Signature Signature::make(Method *m, const std::map<std::string, Type> &map) {
     }
     for (auto &prm : m->params) {
         auto mapped = Generator::make(prm.type.value(), map);
-        res.args.push_back(handleSelf(mapped, m));
+        res.args.push_back(map_self(mapped, m));
     }
-    res.ret = handleSelf(m->type, m);
+    res.ret = map_self(m->type, m);
     return res;
 }
 
@@ -325,8 +325,8 @@ void MethodResolver::infer(const Type &arg, const Type &prm, std::map<std::strin
                 it->second = arg;
             } else {
                 auto m = MethodResolver::isCompatible(RType(arg), *it->second);
-                if (m.has_value()) {
-                    print(m.value());
+                if (m.is_err()) {
+                    print(m.err);
                     error("type infer failed: " + it->second->print() + " vs " + arg.print());
                 }
             }
@@ -432,14 +432,14 @@ SigResult MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
         if (t1.print() != t2.print()) {
             all_exact = false;
         }
-        if (isCompatible(RType(t1), t2, typeParams)) {
+        if (isCompatible(RType(t1), t2, typeParams).is_err()) {
             return "arg type " + t1.print() + " is not compatible with param " + t2.print();
         }
     }
     return all_exact;
 }
 
-std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const Type &target, const std::vector<Type> &typeParams) {
+CompareResult MethodResolver::isCompatible(const RType &arg0, const Type &target, const std::vector<Type> &typeParams) {
     auto &arg = arg0.type;
     if (arg.print() == target.print()) return {};
     if (isGeneric2(target.print(), typeParams)) {
@@ -455,35 +455,38 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
             if (isGeneric2(target.print(), typeParams)) {
                 return {};
             }
-            return "target is not ptr";
+            return CompareResult("target is not ptr");
         }
-    }
-    if (target.isPointer()) {
-        return "arg is not ptr";
+    } else if (target.isPointer()) {
+        return CompareResult("arg is not ptr");
     }
     if (arg.isPointer() || arg.isSlice() || arg.isArray()) {
         if (arg.print() == target.print()) {
             return {};
         }
         if (arg.kind != target.kind) {
-            return "";
+            return CompareResult("diff kind");
         }
         if (hasGeneric(target, typeParams)) {
             return isCompatible(RType(*arg.scope), *target.scope, typeParams);
         }
         //return arg.print() + " is not compatible with " + target.print();
-        return "";
+        return CompareResult("wtf");
     }
     if (!target.typeArgs.empty()) {
         if (arg.typeArgs.size() != target.typeArgs.size()) {
-            return "type args size don't match";
+            return CompareResult("type args size don't match");
         }
+        //A<i32> and A<i64> not compatible
         for (int i = 0; i < arg.typeArgs.size(); ++i) {
             auto &ta = arg.typeArgs[i];
             auto &tp = target.typeArgs[i];
-            auto res = isCompatible(RType(ta), tp, typeParams);
-            if (res.has_value()) {
-                return res;
+            auto cmp = isCompatible(RType(ta), tp, typeParams);
+            if (cmp.is_err()) {
+                return cmp;
+            }
+            if (cmp.cast) {
+                return CompareResult("cant cast subtype");
             }
         }
         return {};
@@ -493,10 +496,10 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
     }
     //if (isGeneric(target, typeParams)) return {};
     if (!arg.isPrim()) {
-        return "";
+        return CompareResult("arg is unknown");
     }
-    if (!target.isPrim()) return "target is not prim";
-    if (arg.print() == "bool" || target.print() == "bool") return "target is not bool";
+    if (!target.isPrim()) return CompareResult("target is not prim");
+    if (arg.print() == "bool" || target.print() == "bool") return CompareResult("target is not bool");
     if (arg0.value) {
         //autocast literal
         auto &v = arg0.value.value();
@@ -505,19 +508,19 @@ std::optional<std::string> MethodResolver::isCompatible(const RType &arg0, const
             //check range
         } else {
             if (max_for(target) >= stoll(v)) {
-                return {};
+                return CompareResult::make_casted();
             } else {
                 return v + " can't fit into " + target.print();
             }
         }
     }
     if (isUnsigned(target) && isSigned(arg)) {
-        return "arg is signed but target is unsigned";
+        return CompareResult("arg is signed but target is unsigned");
     }
     // auto cast to larger size
     if (sizeMap[arg.name] <= sizeMap[target.name]) {
-        return {};
+        return CompareResult::make_casted();
     } else {
-        return "arg can't fit into target";
+        return CompareResult("arg can't fit into target");
     }
 }

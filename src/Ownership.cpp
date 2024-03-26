@@ -315,6 +315,9 @@ Method *is_drop_impl(Impl *impl, const Type &type) {
 }
 
 Method *findDrop(Unit *unit, const Type &type, Compiler *c) {
+    for (auto &[k, m] : c->resolv->drop_methods) {
+        if (k == type.print()) return m;
+    }
     for (auto &imp : c->resolv->generated_impl) {
         auto m = is_drop_impl(imp.get(), type);
         if (m) {
@@ -384,30 +387,27 @@ void dump_proto(llvm::Function *proto) {
     //proto->dump();
 }
 
-void call_drop(Ownership *own, Type &type, llvm::Value *ptr) {
-    if (type.print() == "Map<String, Type>") {
-        int xx = 555;
-    }
+void Ownership::call_drop(Type &type, llvm::Value *ptr) {
     llvm::Function *proto = nullptr;
     //todo, separate from compiler protos
-    if (own->protos.contains(type.print())) {
-        proto = own->protos[type.print()];
+    if (protos.contains(type.print())) {
+        proto = protos[type.print()];
         dump_proto(proto);
     } else {
-        auto drop_method = findDrop(own, type);
+        auto drop_method = findDrop(this, type);
         auto mangled = mangle(drop_method);
-        if (own->compiler->funcMap.contains(mangled)) {
-            proto = own->compiler->funcMap[mangled];
+        if (compiler->funcMap.contains(mangled)) {
+            proto = compiler->funcMap[mangled];
             dump_proto(proto);
         } else {
-            proto = own->compiler->make_proto(drop_method);
+            proto = compiler->make_proto(drop_method);
             dump_proto(proto);
         }
-        own->protos[type.print()] = proto;
+        protos[type.print()] = proto;
     }
     std::vector<llvm::Value *> args{ptr};
-    own->compiler->loc(0, 0);
-    own->compiler->Builder->CreateCall(proto, args);
+    compiler->loc(0, 0);
+    compiler->Builder->CreateCall(proto, args);
 }
 
 bool is_moved_from(Move &mv, Variable &v, Resolver *r) {
@@ -491,7 +491,7 @@ Move *get_move(Ownership *own, Variable &v, VarScope &scp) {
 
 void Ownership::drop(Variable &v) {
     if (verbose) print("drop " + v.print());
-    call_drop(this, v.type, v.ptr);
+    call_drop(v.type, v.ptr);
 }
 
 void Ownership::drop(Expression *expr, llvm::Value *ptr) {
@@ -503,7 +503,7 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
             if (verbose) {
                 print("drop " + fa->print());
             }
-            call_drop(this, rt.type, ptr);
+            call_drop(rt.type, ptr);
             return;
         }
         compiler->resolv->err(expr, " drop obj not var");
@@ -513,7 +513,7 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de) {
         //auto rt2 = r->resolve(de->expr);
-        call_drop(this, rt.type, ptr);
+        call_drop(rt.type, ptr);
         return;
     } else {
         v = &getVar(rt.vh->id);
@@ -674,6 +674,27 @@ std::vector<Variable *> get_outer_vars(VarScope &scope, Ownership *own) {
     return vars;
 }
 
+void drop_objects(VarScope &scope, Ownership *own) {
+    for (auto &obj : scope.objects) {
+        //todo is valid
+        bool is_moved = false;
+        for (auto &mv : scope.moves) {
+            if (mv.rhs.id == obj.id) {
+                is_moved = true;
+                break;
+            }
+        }
+        if (!is_moved) {
+            auto rt = own->r->resolve(obj.expr);
+            //drop(obj.expr, obj.ptr);
+            if (verbose) {
+                std::cout << "drop obj" << obj.expr->print() << " line: " << obj.expr->line << "\n";
+            }
+            own->call_drop(rt.type, obj.ptr);
+        }
+    }
+}
+
 //drop vars in this scope
 void Ownership::endScope(VarScope *scope) {
     //if (true) return;
@@ -681,24 +702,7 @@ void Ownership::endScope(VarScope *scope) {
     if (method->name == "if_if" && scope->type == ScopeId::IF && scope->line == 34) {
         int aa = 5555;
     }
-    for (auto &obj : scope->objects) {
-        //todo is valid
-        bool is_moved = false;
-        for (auto &mv : scope->moves) {
-            if (mv.rhs.id == obj.id) {
-                is_moved = true;
-                break;
-            }
-        }
-        if (!is_moved) {
-            auto rt = r->resolve(obj.expr);
-            //drop(obj.expr, obj.ptr);
-            if (verbose) {
-                std::cout << "drop obj" << obj.expr->print() << " line: " << obj.expr->line << "\n";
-            }
-            call_drop(this, rt.type, obj.ptr);
-        }
-    }
+    drop_objects(*scope, this);
     for (auto v_id : scope->vars) {
         auto &v = getVar(v_id);
         if (!isDropped(v, *scope, this, true)) {
@@ -723,6 +727,7 @@ void Ownership::end_branch(VarScope *branch) {
             drop(*v);
         }
     }
+    drop_objects(*branch, this);
 }
 
 //cleans all vars
@@ -741,4 +746,6 @@ void Ownership::doReturn(int line) {
             drop(v);
         }
     }
+    //todo all scopes
+    drop_objects(*last_scope, this);
 }

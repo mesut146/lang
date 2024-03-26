@@ -72,15 +72,19 @@ impl String{
     func slice(self): [u8]{
       return self.arr.slice(0, self.len());
     }
+
+    func ptr(self): i8*{
+      return self.arr.ptr() as i8*;
+    }
     
-    func cstr(self): i8*{
+    func cstr(self): String{
       //already cstr
       if(self.len() > 0 && self.get((self.len() - 1) as i32) == 0){
-        return self.arr.ptr() as i8*;
+        return self.clone();
       }
       let res = self.clone();
       res.append(0u8);
-      return res.arr.ptr() as i8*;
+      return res;
     }
 
     func append(self, s: str){
@@ -166,9 +170,6 @@ impl String{
     func eq(self, s: str): bool{
       return self.str().eq(s);
     }
-    /*func eq(self, s: String*): bool{
-      return self.str().eq(s.str());
-    }*/
 }
 
 impl Clone for String{
@@ -291,8 +292,34 @@ impl i64{
 }
 
 
-impl Drop for String{
+/*impl Drop for String{
   func drop(self){
     self.arr.drop();
+  }
+}*/
+
+
+enum CStr{
+  Lit(val: str),
+  Heap(val: String)
+}
+
+impl CStr{
+  func new(s: str): CStr{
+    return CStr::Lit{s};
+  }
+  func new(s: String): CStr{
+    return CStr::Heap{s};
+  }
+  func from_slice(s: str): CStr{
+    return CStr::Heap{s.cstr()};
+  }
+  func ptr(self): i8*{
+    if let CStr::Lit(v*)=(self){
+      return v.ptr() as i8*;
+    }else if let CStr::Heap(v*)=(self){
+      return v.ptr();
+    }
+    panic("CStr::ptr");
   }
 }

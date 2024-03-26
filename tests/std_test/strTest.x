@@ -9,6 +9,11 @@ func main(){
     print("strTest done\n");
 }
 
+func print_test(){
+  let s = CStr::new("hello");
+  print("s=%s\n", s.ptr());
+}
+
 func bug(){
   let arr = ['h' as i8, 'e', 'l'];
   let len = 3;

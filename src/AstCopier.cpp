@@ -277,9 +277,7 @@ std::any AstCopier::visitMethod(Method *node) {
     res->name = node->name;
     res->type = visit(node->type, this);
     res->isVirtual = node->isVirtual;
-    // if (node->parent != nullptr) {
-    //     res->parent = visit(node->parent, this);
-    // }
+    res->parent = node->parent;
     for (auto &ta : node->typeArgs) {
         res->typeArgs.push_back(visit(ta, this));
     }
