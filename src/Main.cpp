@@ -173,6 +173,12 @@ int main(int argc, char **args) {
         } else if (arg == "c") {
             auto path = std::string(args[i]);
             i++;
+            bool use_std = false;
+            if (path == "-std") {
+                use_std = true;
+                path = std::string(args[i]);
+                i++;
+            }
             Compiler c;
             c.srcDir = Config::root;
             //single file in dir
@@ -194,6 +200,12 @@ int main(int argc, char **args) {
                     auto path2 = args[i];
                     ++i;
                     c.compile(path2);
+                }
+                if (use_std) {
+                    std::function<void(const std::string &)> f = [&](const std::string &file) {
+                        c.compile(file);
+                    };
+                    list_dir(Config::root + "/std", f);
                 }
                 if (c.main_file.has_value()) {
                     c.link_run("", "");

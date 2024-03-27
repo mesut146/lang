@@ -75,9 +75,11 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     std::vector<llvm::Metadata *> tys;
     tys.push_back(map_di(m->type));
     if (m->self) {
-        auto elem = map_di(m->self->type->unwrap());
-        auto ty = llvm::DIBuilder::createObjectPointerType(elem);
-        tys.push_back(ty);
+        auto self_ty = map_di(m->self->type->unwrap());
+        /*if (!m->self->is_deref) {
+            self_ty = llvm::DIBuilder::createObjectPointerType(self_ty);
+        }*/
+        tys.push_back(self_ty);
     }
     for (auto &p : m->params) {
         tys.push_back(map_di(*p.type));

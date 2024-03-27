@@ -16,6 +16,7 @@ struct Variable {
     int id;
     int line;
     int scope;
+    bool is_self = false;
 
     Variable(const std::string &name, const Type &type, llvm::Value *ptr, int id, int line, int scope) : name(name), type(type), ptr(ptr), id(id), line(line), scope(scope) {}
 
@@ -180,8 +181,12 @@ struct Ownership {
         return v;
     }
 
-    Variable *addPrm(Param &p, llvm::Value *ptr) {
-        return add(p.name, p.type.value(), ptr, p.id, p.line);
+    Variable *addPrm(Param &p, llvm::Value *ptr, bool is_self) {
+        auto res = add(p.name, p.type.value(), ptr, p.id, p.line);
+        if (res) {
+            res->is_self = is_self;
+        }
+        return res;
     }
 
     void doMove(Expression *expr);

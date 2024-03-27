@@ -114,15 +114,17 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
     int line = unit->lastLine;
     Method m(unit->path);
     m.name = "drop";
-    Param s("self", clone(bd->type));
-    s.loc(line);
-    m.self = std::move(s);
+    Param slf("self", clone(bd->type));
+    slf.loc(line);
+    slf.is_deref = true;
+    m.self = std::move(slf);
     m.type = Type("void");
     auto bl = new Block;
     m.body.reset(bl);
 
     if (bd->isEnum()) {
         auto ed = (EnumDecl *) bd;
+        IfLetStmt *last_iflet = nullptr;
         for (int i = 0; i < ed->variants.size(); i++) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
@@ -140,8 +142,13 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
                 //Drop::drop(fd)
                 then->list.push_back(newDrop(fd.name, unit.get()));
             }
-
-            bl->list.push_back(std::move(ifs));
+            if (last_iflet == nullptr) {
+                bl->list.push_back(std::move(ifs));
+                last_iflet = (IfLetStmt *) bl->list.back().get();
+            } else {
+                last_iflet->elseStmt = std::move(ifs);
+                last_iflet = (IfLetStmt *) last_iflet->elseStmt.get();
+            }
         }
     } else {
         auto sd = (StructDecl *) bd;

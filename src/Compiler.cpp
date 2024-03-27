@@ -563,13 +563,10 @@ void Compiler::make_proto(std::unique_ptr<Method> &m) {
 
 llvm::Function *Compiler::make_proto(Method *m) {
     if (m->isGeneric) {
-        print("skip generic " + printMethod(m));
+        //print("skip generic " + printMethod(m));
         return nullptr;
     }
     auto mangled = mangle(m);
-    if (mangled == "List<Pair<String, Type>>::drop_List<Pair<String, Type>>*") {
-        int xx = 555;
-    }
     if (funcMap.contains(mangled)) {
         return funcMap.at(mangled);
     }
@@ -878,15 +875,16 @@ void storeParams(Method *m, Compiler *c) {
         auto val = func->getArg(argIdx);
         if (isStruct(*m->self->type)) {
             c->copy(ptr, val, *m->self->type);
-            //self is always ptr
-            c->dbg_prm(*m->self, Type(Type::Pointer, m->self->type.value()), didx);
+            //self is always ptr?
+            //c->dbg_prm(*m->self, Type(Type::Pointer, m->self->type.value()), didx);
+            c->dbg_prm(*m->self, m->self->type.value(), didx);
         } else {
             c->Builder->CreateStore(val, ptr);
             c->dbg_prm(*m->self, m->self->type.value(), didx);
         }
         didx++;
         argIdx++;
-        c->curOwner.addPrm(m->self.value(), ptr);
+        c->curOwner.addPrm(m->self.value(), ptr, true);
     }
     for (auto i = 0; i < m->params.size(); i++) {
         auto &prm = m->params[i];
@@ -901,7 +899,7 @@ void storeParams(Method *m, Compiler *c) {
             c->dbg_prm(prm, prm.type.value(), didx);
         }
         ++didx;
-        c->curOwner.addPrm(prm, ptr);
+        c->curOwner.addPrm(prm, ptr, false);
     }
 }
 
@@ -1381,7 +1379,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
     if (is_std_no_drop(mc)) {
         auto arg = mc->args.at(0);
-        curOwner.doMoveCall(arg);
+        curOwner.doMoveCall(arg);//fake move, so the will be no drop
         return (llvm::Value *) Builder->getVoidTy();
     }
     if (Resolver::is_std_is_ptr(mc)) {
@@ -1451,8 +1449,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             int typeSize = getSize2(mc->typeArgs[0]) / 8;
             size = Builder->CreateNSWMul(size, makeInt(typeSize, 64));
         }
-        auto call = callMalloc(size, this);
-        return call;
+        return callMalloc(size, this);
     } else if (mc->name == "panic" && !mc->scope) {
         return callPanic(mc, this);
     } else if (mc->name == "format" && !mc->scope) {
@@ -1473,7 +1470,11 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             auto arg = mc->args.at(0);
             auto ptr = gen(arg);
             curOwner.call_drop(argt.type, ptr);
-            curOwner.doMoveCall(arg);
+            //todo bc of partial drop we have to comment below
+            if (dynamic_cast<SimpleName *>(arg)) {
+                //todo f.access
+                curOwner.doMoveCall(arg);
+            }
         }
         return (llvm::Value *) Builder->getVoidTy();
     }
@@ -1787,6 +1788,7 @@ void Compiler::setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &ent
         if (decl->base && decl->isClass()) real_idx++;
         auto field_target_ptr = gep2(ptr, real_idx, ty);
         setField(e.value, field->type, field_target_ptr);
+        curOwner.moveToField(e.value);
     }
 }
 
@@ -2154,6 +2156,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     Builder->CreateCondBr(cond, then, elsebb);
     set_and_insert(then);
     resolv->newScope();
+    int cur_scope = curOwner.last_scope->id;
+    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
+    curOwner.doMoveCall(node->rhs.get());
 
     auto &variant = decl->variants[index];
     if (!variant.fields.empty()) {
@@ -2184,8 +2189,6 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             }
         }
     }
-    int cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
     if (!then_scope->ends_with_return) {
         curOwner.endScope(then_scope);

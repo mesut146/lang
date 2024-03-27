@@ -26,14 +26,43 @@ trait Clone{
   func clone(self): Self;
 }
 
+impl Clone for i8{
+  func clone(self): i8{
+    return *self;
+  }
+}
+impl Clone for u8{
+  func clone(self): u8{
+    return *self;
+  }
+}
+impl Clone for i16{
+  func clone(self): i16{
+    return *self;
+  }
+}
+impl Clone for u16{
+  func clone(self): u16{
+    return *self;
+  }
+}
 impl Clone for i32{
   func clone(self): i32{
     return *self;
   }
 }
-
+impl Clone for u32{
+  func clone(self): u32{
+    return *self;
+  }
+}
 impl Clone for i64{
   func clone(self): i64{
+    return *self;
+  }
+}
+impl Clone for u64{
+  func clone(self): u64{
     return *self;
   }
 }

@@ -204,15 +204,19 @@ impl<T> Iterator<T> for ListIter<T>{
 
 impl<T> Clone for List<T>{
   func clone(self): List<T>{
-    let res = List<T>::new(self.cap);
-    res.add(self);
+    let res = List<T>::new(self.count);
+    //res.add(self);
+    for(let i = 0;i < self.len();++i){
+      let elem = self.get_ptr(i);
+      res.add(Clone::clone(elem));
+    }
     return res;
   }
 }
 
 impl<T> Drop for List<T>{
   func drop(*self){
-    //print("drop list %s\n", Fmt::str(self).cstr());
+    //print("drop list %d\n", self.len());
     for(let i = 0;i < self.len();++i){
       let ep = self.get(i);
       Drop::drop(ep);

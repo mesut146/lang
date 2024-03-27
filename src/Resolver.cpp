@@ -333,15 +333,7 @@ void initSelf(Unit *unit) {
             continue;
         }
         auto imp = (Impl *) item.get();
-        for (auto &m : imp->methods) {
-            if (m.self && !m.self->type) {
-                if (m.self->is_deref) {
-                    m.self->type = clone(imp->type);
-                } else {
-                    m.self->type = clone(imp->type.toPtr());
-                }
-            }
-        }
+        init_self_type(imp);
     }
 }
 
@@ -450,7 +442,7 @@ void Resolver::init() {
         Ownership own;
         own.r = this;
         //auto impl drop
-        if (!has_derive_drop && !has_drop_impl(bd, this) && !bd->isGeneric && own.isDrop(bd)) {
+        if (!has_derive_drop && !has_drop_impl(bd, this) && (bd->isGeneric || own.isDrop(bd))) {
             newItems.push_back(derive_drop(bd));
             init_impl(newItems.back().get(), this);
         }

@@ -126,7 +126,7 @@ public:
         return *this;
     }
 
-    Type toPtr() {
+    Type toPtr() const {
         return Type(Type::Pointer, *this);
     }
 

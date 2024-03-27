@@ -292,11 +292,13 @@ impl i64{
 }
 
 
-/*impl Drop for String{
-  func drop(self){
-    self.arr.drop();
+impl Drop for String{
+  func drop(*self){
+    //print("String::drop ");
+    //self.dump();
+    Drop::drop(self.arr);
   }
-}*/
+}
 
 
 enum CStr{
@@ -311,6 +313,14 @@ impl CStr{
   func new(s: String): CStr{
     return CStr::Heap{s};
   }
+  func new(arr: [u8]): CStr{
+    let s = String::new(arr);
+    return CStr::Heap{s};
+  }
+  func new(arr: [i8]): CStr{
+    let s = String::new(arr);
+    return CStr::Heap{s};
+  }
   func from_slice(s: str): CStr{
     return CStr::Heap{s.cstr()};
   }
@@ -321,5 +331,14 @@ impl CStr{
       return v.ptr();
     }
     panic("CStr::ptr");
+  }
+}
+
+impl Drop for CStr{
+  func drop(*self){
+    //print("CStr::drop %s\n", self.ptr());
+    if let CStr::Heap(v)=(self){
+      Drop::drop(v);
+    }
   }
 }

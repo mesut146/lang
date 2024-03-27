@@ -114,7 +114,7 @@ impl Signature{
             scope: Option<RType>::None,
             ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None};
-        if let Parent::Impl(info*) = (m.parent){
+        if let Parent::Impl(info*) = (&m.parent){
             let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);
         }
@@ -173,7 +173,7 @@ impl MethodResolver{
             //static sibling
             if(self.r.curMethod.is_some()){
                 let cur = self.r.curMethod.unwrap();
-                if let Parent::Impl(info*)=(cur.parent){
+                if let Parent::Impl(info*)=(&cur.parent){
                     self.collect_member(sig, &info.type, &list, false);
                 }
             }            
@@ -592,9 +592,10 @@ impl MethodResolver{
         }
         //todo
         if (prm.as_simple().args.empty()) {
-            let nm = prm.name();
+            let nm: String* = prm.name();
             if (typeMap.contains(nm)) {//is_tp
-                let it = typeMap.get_p(nm).unwrap();
+                let opt = typeMap.get_ptr(nm);
+                let it = opt.unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                     //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
@@ -680,7 +681,7 @@ impl MethodResolver{
     }
 
     func get_impl(m: Method*): ImplInfo*{
-        if let Parent::Impl(info*) = (m.parent){
+        if let Parent::Impl(info*) = (&m.parent){
             return info;
         }
         panic("get_impl");
@@ -691,7 +692,7 @@ func kind(type: Type*): i32{
     if(type is Type::Pointer) return 0;
     if(type is Type::Array) return 1;
     if(type is Type::Slice) return 2;
-    panic("%s\n", type.print().cstr());
+    panic("%s\n", type.print().cstr().ptr());
 }
 
 func get_type_params(m: Method*): List<Type>{
@@ -699,7 +700,7 @@ func get_type_params(m: Method*): List<Type>{
     if (!m.is_generic) {
         return res;
     }
-    if let Parent::Impl(info*) = (m.parent){
+    if let Parent::Impl(info*) = (&m.parent){
         res = info.type_params.clone();
     }
     res.add(&m.type_params);

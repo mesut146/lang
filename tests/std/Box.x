@@ -40,8 +40,7 @@ impl<T> Clone for Box<T>{
 }
 
 impl<T> Drop for Box<T>{
-  func drop(self){
-    print("drop box\n");
+  func drop(*self){
     Drop::drop(self.val);
     free(self.val as i8*);
   }
@@ -69,13 +68,6 @@ impl<T> Ptr<T>{
   }
   func unwrap(self): T{
     return self.val.unwrap().unwrap();
-  }
-}
-
-impl<T> Drop for Ptr<T>{
-  func drop(self){
-    print("drop Ptr<T>\n");
-    self.val.drop();
   }
 }
 

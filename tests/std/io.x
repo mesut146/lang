@@ -1,16 +1,16 @@
 import std/libc
 
-func open_checked(path: str, mode: str): FILE*{
-  let cpath = path.cstr();
-  let f = fopen(cpath.ptr(), mode.cstr().ptr());
+func open_checked(path: CStr*, mode: CStr*): FILE*{
+  let f = fopen(path.ptr(), mode.ptr());
   if(!is_valid(f)){
-    panic("no such file %s", cpath.ptr());
+    panic("no such file %s", path.ptr());
   }
   return f;
 }
 
-func read_bytes(path: str): List<i8>{
-  let f = open_checked(path, "r");
+func read_bytes(path: CStr*): List<i8>{
+  let mode = CStr::new("r");
+  let f = open_checked(path, &mode);
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   fseek(f, 0, SEEK_SET());
@@ -25,26 +25,27 @@ func read_bytes(path: str): List<i8>{
   return res;
 }
 
-func read_string(path: str): String{
-  let data = read_bytes(path);
+func read_string(path: CStr*): String{
+  let data: List<i8> = read_bytes(path);
   return String::new(&data);
 }
 
-func write_bytes(data: [u8], path: str){
-  let f = open_checked(path, "w");
+func write_bytes(data: [u8], path: CStr*){
+  let mode = CStr::new("w");
+  let f = open_checked(path, &mode);
   let c = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
   print("wrote %d of %lld\n", c, data.len());
   fclose(f);
 }
 
-func dump(arr: [i8; 256], len: i32){
+func dump_arr(arr: [i8; 256], len: i32){
   for(let i = 0;i < len;++i){
     print("%c", arr[i]);
   }
   print("\n");
 }
 
-func list(path: CStr*): List<String>{
+/*func list(path: CStr*): List<String>{
   let list = List<String>::new(128);
   let dp = opendir(path.ptr());
   if(dp as u64 == 0) panic("no such dir %s", path.ptr());
@@ -53,6 +54,20 @@ func list(path: CStr*): List<String>{
     if(ep as u64 == 0) break;
     let entry = str::new(ep.d_name[0..ep.len()]);
     list.add(entry.str());
+  }
+  closedir(dp);
+  return list;
+}*/
+
+func listc(path: CStr*): List<CStr>{
+  let list = List<CStr>::new(128);
+  let dp = opendir(path.ptr());
+  if(dp as u64 == 0) panic("no such dir %s", path.ptr());
+  while(true){
+    let ep = readdir(dp);
+    if(ep as u64 == 0) break;
+    let name: [u8] = ep.d_name[0..ep.len() + 1];
+    list.add(CStr::new(name));
   }
   closedir(dp);
   return list;
@@ -84,15 +99,15 @@ func exist(path: str): bool{
   return is_file(path) || is_dir(path);
 }
 
-func resolve(path: str): String{
+func resolve(path: CStr*): CStr{
   let buf = [0i8; 256];
-  let path_c: String = path.cstr();
-  let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
+  let ptr = realpath(path.ptr(), &buf[0] as i8*);
   if(ptr as u64 == 0){
-    panic("resolving path is null '%s'\n", path_c.ptr());
+    panic("resolving path is null '%s'\n", path.ptr());
   }
   let len = strlen(buf[0..256]);
-  return String::new(buf[0..len]);
+  let slice = buf[0..len + 1];
+  return CStr::new(slice);
 }
 
 #derive(Drop)

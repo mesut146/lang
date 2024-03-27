@@ -72,9 +72,9 @@ func drop2<T>(a: T*){
 }
 
 impl<T> Drop for Option<T>{
-  func drop(self){
+  func drop(*self){
     if(std::is_ptr<T>()) return;
-    if let Option<T>::Some(val*)=(self){
+    if let Option<T>::Some(val)=(self){
       //val.drop();
       Drop::drop(val);
       //drop2(val);

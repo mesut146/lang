@@ -228,8 +228,9 @@ impl Simple{
   func new(scope: Type, name: String): Simple{
     return Simple{scope: Ptr<Type>::new(scope), name: name, args: List<Type>::new()};
   }
-  func into(self): Type{
-    return Type::Simple{*ptr::get(self, 0)};
+  func into(*self): Type{
+    //return Type::Simple{*ptr::get(self, 0)};
+    return Type::Simple{self};
   }
   func clone(self): Simple{
     return Simple{scope: self.scope.clone(), name: self.name.clone(), args: self.args.clone()};

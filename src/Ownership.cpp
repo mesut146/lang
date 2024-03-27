@@ -489,8 +489,19 @@ Move *get_move(Ownership *own, Variable &v, VarScope &scp) {
     return nullptr;
 }
 
+bool is_drop_method(Method &m) {
+    return m.name == "drop" &&
+           m.parent.is_impl() &&
+           m.parent.trait_type.has_value() &&
+           m.parent.trait_type->print() == "Drop";
+}
+
 void Ownership::drop(Variable &v) {
     if (verbose) print("drop " + v.print());
+    if (v.is_self && is_drop_method(*method)) {
+        //prevent recursion of drop self
+        return;
+    }
     call_drop(v.type, v.ptr);
 }
 

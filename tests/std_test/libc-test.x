@@ -1,12 +1,13 @@
 import std/libc
 import std/io
 
-func file_name(): str{
-  return "./test.txt";
+func file_name(): CStr{
+  return CStr::new("./test.txt");
 }
 
 func read_test(){
-  let buf = read_bytes(file_name());
+  let path = file_name();
+  let buf = read_bytes(&path);
   assert buf.len() == 5;
   let s = String::new(&buf);
   assert s.eq("hello");
@@ -19,18 +20,25 @@ func seek_test(f: FILE*){
 
 func write_test(){
   let buf = String::new("hello");
-  write_bytes(buf.slice(), file_name());
+  let path = file_name();
+  write_bytes(buf.slice(), &path);
 }
 
 func list_test(){
-  let dir = CStr::new(".");
-  let arr = list(&dir);
+  let dir: CStr = CStr::new(".");
+  let arr: List<CStr> = listc(&dir);
+  print("%d files in '%s'\n", arr.len(), dir.ptr());
+  /*for(let i = 0;i < arr.len();++i){
+    let file = arr.get_ptr(i);
+    print("%s\n", file.ptr());
+  }*/
 }
 
 func main(){
-  /*print("pwd = %s\n", resolve(".").cstr().ptr());
+  let cur = CStr::new(".");
+  print("pwd = %s\n", resolve(&cur).ptr());
   write_test();
-  read_test();*/
+  read_test();
   list_test();
-  //print("libc_test done\n");
+  print("libc_test done\n");
 }

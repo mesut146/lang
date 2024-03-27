@@ -30,7 +30,7 @@ static bool hasGeneric(const Type &type, const std::vector<Type> &typeParams) {
     return false;
 }
 
-static bool isGeneric2(const std::string& type, const std::vector<Type> &typeParams) {
+static bool isGeneric2(const std::string &type, const std::vector<Type> &typeParams) {
     for (auto &tp : typeParams) {
         if (tp.print() == type) return true;
     }
@@ -81,7 +81,24 @@ static Type getType(int bits) {
     throw std::runtime_error("getType");
 }
 
-static std::map<std::string, Type> get_map_from(BaseDecl* bd){
+static std::map<std::string, Type> get_map_from(BaseDecl *bd) {
     std::map<std::string, Type> map;
     return map;
+}
+
+static void init_self_type(Method &m, const Type &type) {
+    if (m.self && !m.self->type.has_value()) {
+        if (m.self->is_deref) {
+            m.self->type = clone(type);
+        } else {
+            m.self->type = type.toPtr();
+        }
+    }
+}
+
+
+static void init_self_type(Impl *imp) {
+    for (auto &m : imp->methods) {
+        init_self_type(m, imp->type);
+    }
 }
