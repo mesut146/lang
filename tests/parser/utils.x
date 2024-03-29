@@ -24,7 +24,7 @@ func replace_self(typ: Type*, m: Method*): Type{
     if(!typ.print().eq("Self")){
         return typ.clone();
     }
-    if let Parent::Impl(info*)=(m.parent){
+    if let Parent::Impl(info*)=(&m.parent){
         return info.type.clone();
     }
     panic("replace_self not impl method");
@@ -155,13 +155,13 @@ func mangleType(type: Type*): String{
 func mangle(m: Method*): String{
   if(is_main(m)) return m.name.clone();
   let s = String::new();
-  if let Parent::Impl(info*)=(m.parent){
+  if let Parent::Impl(info*)=(&m.parent){
     s.append(info.type.print().str());
     s.append("::");
-  }else if let Parent::Trait(ty*)=(m.parent){
+  }else if let Parent::Trait(ty*)=(&m.parent){
     s.append(ty.print().str());
     s.append("::");
-  }else if let Parent::Extern=(m.parent){
+  }else if let Parent::Extern=(&m.parent){
     return m.name.clone();
   }
   s.append(m.name.str());

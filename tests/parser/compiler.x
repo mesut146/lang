@@ -62,8 +62,8 @@ impl Protos{
     return self.get(&name);
   }
   func get(self, name: String*): llvm_Type*{
-    let res = self.classMap.get_p(name);
-    return res.unwrap();
+    let res = self.classMap.get_ptr(name);
+    return *res.unwrap();
   }
   func dump(self){
     print("dump classmap\n");
@@ -73,17 +73,17 @@ impl Protos{
     }
   }
   func libc(self, nm: str): Function*{
-    return self.libc.get_p(&nm).unwrap();
+    return *self.libc.get_ptr(&nm).unwrap();
   }
   func std(self, nm: str): StructType*{
-    return self.std.get_p(&nm).unwrap();
+    return *self.std.get_ptr(&nm).unwrap();
   }
   func get_func(self, nm: String*): Function*{
-    return self.funcMap.get_p(nm).unwrap();
+    return *self.funcMap.get_ptr(nm).unwrap();
   }
   func get_func(self, m: Method*): Function*{
     let id = mangle(m);
-    return self.funcMap.get_p(&id).unwrap();
+    return *self.funcMap.get_ptr(&id).unwrap();
   }
 }
 
@@ -138,7 +138,7 @@ impl llvm_holder{
   func initModule(self, path: str){
     let name = getName(path);
     make_ctx();
-    make_module(name.cstr(), self.target_machine, self.target_triple.cstr());
+    make_module(name.cstr().ptr(), self.target_machine, self.target_triple.cstr().ptr());
     make_builder();
     self.di = Option::new(DebugInfo::new(path, true));
   }
@@ -151,7 +151,7 @@ impl llvm_holder{
     InitializeAllAsmPrinters();
     
     let target_triple = getDefaultTargetTriple2();
-    let target_machine = createTargetMachine(target_triple.cstr());
+    let target_machine = createTargetMachine(target_triple.cstr().ptr());
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
     //todo cache
@@ -183,7 +183,7 @@ impl Compiler{
     name0 = Fmt::format("./{}", name0).str();
     let name = name0.cstr();
     if(exist(name0)){
-      remove(name);
+      remove(name.ptr());
     }
     let cmd = "clang-16 ".str();
     cmd.append("-o ");
@@ -196,11 +196,11 @@ impl Compiler{
     }
     self.compiled.clear();
     cmd.append(args);
-    if(system(cmd.cstr()) == 0){
+    if(system(cmd.cstr().ptr()) == 0){
       //run if linked
-      if(system(name) != 0){
+      if(system(name.cstr().ptr()) != 0){
         print("%s\n", cmd.cstr());
-        panic("error while running %s", name);
+        panic("error while running %s", name.ptr());
       }
     }else{
       panic("link failed '%s'", cmd.cstr());
@@ -250,12 +250,12 @@ impl Compiler{
     
     let name = getName(path0);
     let llvm_file = Fmt::format("{}-bt.ll", trimExtenstion(name));
-    emit_llvm(llvm_file.cstr());
+    emit_llvm(llvm_file.cstr().ptr());
     if(self.config.verbose){
-      print("writing %s\n", llvm_file.cstr());
+      print("writing %s\n", llvm_file.cstr().ptr());
     }
     self.compiled.add(outFile.clone());
-    emit_object(outFile.cstr(), self.llvm.target_machine, self.llvm.target_triple.cstr());
+    emit_object(outFile.cstr().ptr(), self.llvm.target_machine, self.llvm.target_triple.cstr().ptr());
     if(self.config.verbose){
       print("writing %s\n", outFile.cstr());
     }
@@ -371,7 +371,7 @@ impl Compiler{
   func alloc_prm(self, prm: Param*){
     let ty = self.mapType(&prm.type);
     let ptr = CreateAlloca(ty);
-    Value_setName(ptr, prm.name.cstr());
+    Value_setName(ptr, prm.name.cstr().ptr());
     self.NamedValues.add(prm.name.clone(), ptr);
   }
 
@@ -522,7 +522,7 @@ impl Compiler{
     let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
     let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
     let index = Resolver::findVariant(decl, node.ty.name());
-    let cmp = CreateCmp(get_comp_op("==".cstr()), tag, makeInt(index, ENUM_TAG_BITS()));
+    let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
 
     let then = create_bb2(self.cur_func());
     let next = create_bb();
@@ -635,7 +635,7 @@ impl Compiler{
   func visit_assert(self, expr: Expr*){
     let m = self.curMethod.unwrap();
     let msg = Fmt::format("{}:{} in {}\nassertion {} failed\n", m.path.str(), i32::print(expr.line).str(), m.name.str(), expr.print().str());
-    let ptr = CreateGlobalStringPtr(msg.cstr());
+    let ptr = CreateGlobalStringPtr(msg.cstr().ptr());
     let then = create_bb2(self.cur_func());
     let next = create_bb();
     let cond = self.branch(expr);
@@ -770,7 +770,7 @@ impl Compiler{
 
   func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
     let tag1 = self.getTag(lhs);
-    let op = get_comp_op("==".cstr());
+    let op = get_comp_op("==".ptr());
     if let Expr::Type(rhs_ty*)=(rhs){
       let decl = self.resolver.visit(rhs_ty).targetDecl.unwrap();
       let index = Resolver::findVariant(decl, rhs_ty.name());
@@ -840,7 +840,7 @@ impl Compiler{
     let phi_ty = getPointerTo(elem_ty);
     let phi = CreatePHI(phi_ty, 2);
     phi_addIncoming(phi, cur, bb);
-    let ne = CreateCmp(get_comp_op("!=".cstr()), phi as Value*, end);
+    let ne = CreateCmp(get_comp_op("!=".ptr()), phi as Value*, end);
     CreateCondBr(ne, setbb, nextbb);
     self.set_and_insert(setbb);
     if (elem_ptr.is_some()) {
@@ -1088,13 +1088,13 @@ impl Compiler{
 
   func visit_print(self, mc: Call*): Value*{
     let args = make_args();
-    for(let i=0;i<mc.args.len();++i){
+    for(let i = 0;i < mc.args.len();++i){
       let arg = mc.args.get_ptr(i);
       let lit = is_str_lit(arg);
       if(lit.is_some()){
-        let val = lit.unwrap().str();
+        let val: str = lit.unwrap().str();
         val = val.substr(1, val.len() - 1);//trim quotes
-        let ptr = CreateGlobalStringPtr(val.cstr());
+        let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
         args_push(args, ptr);
         continue;
       }
@@ -1110,7 +1110,7 @@ impl Compiler{
         //val = CreateLoad(self.mapType(&arg_type), val);
         args_push(args, val);
       }else{
-        panic("print %s", arg_type.print().cstr());
+        panic("print %s", arg_type.print().cstr().ptr());
       }
     }
     let printf_proto = self.protos.get().libc("printf");
@@ -1126,7 +1126,7 @@ impl Compiler{
   
   func call_printf(self, s: str){
     let args = make_args();
-    let val = CreateGlobalStringPtr(s.cstr());
+    let val = CreateGlobalStringPtr(s.cstr().ptr());
     args_push(args, val);
     let printf_proto = self.protos.get().libc("printf");
     let res = CreateCall(printf_proto, args);
@@ -1153,7 +1153,7 @@ impl Compiler{
       //todo remove redundant cast
       let lv = self.cast(l, type);
       let rv = self.cast(r, type);
-      return CreateCmp(get_comp_op(op.cstr()), lv, rv);
+      return CreateCmp(get_comp_op(op.cstr().ptr()), lv, rv);
     }
     if(op.eq("&&") || op.eq("||")){
       return self.andOr(op, l, r).a;
@@ -1333,7 +1333,7 @@ impl Compiler{
     if(node.kind is LitKind::STR){
       let trg_ptr = self.get_alloc(expr);
       let trimmed = node.val.substr(1, (node.val.len() as i32) - 1);//quote
-      let src = CreateGlobalStringPtr(trimmed.cstr());
+      let src = CreateGlobalStringPtr(trimmed.cstr().ptr());
       let stringType = self.protos.get().std("str") as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
       let slice_ptr = self.gep2(trg_ptr, 0, stringType);

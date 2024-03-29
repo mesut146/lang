@@ -84,6 +84,7 @@ impl String{
       }
       let res = self.clone();
       res.append(0u8);
+      //--res.count;
       return res;
     }
 
@@ -331,6 +332,17 @@ impl CStr{
       return v.ptr();
     }
     panic("CStr::ptr");
+  }
+  func get(self): str{
+    if let CStr::Lit(v)=(self){
+      return v;
+    }else if let CStr::Heap(v*)=(self){
+      return v.str();
+    }
+    panic("CStr::get");
+  }
+  func get_heap(self): String{
+    return self.get().str();
   }
 }
 

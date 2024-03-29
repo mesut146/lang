@@ -8,12 +8,15 @@ struct Signature {
     Method *m = nullptr;
     std::vector<Type> args;
     std::optional<RType> scope;
+    std::optional<RType> real_scope;//mc original scope, no deref
     Type ret;
     Resolver *r = nullptr;
 
     static Signature make(MethodCall *mc, Resolver *r);
     static Signature make(Method *m, const std::map<std::string, Type> &map);
     std::string print();
+
+    Type *get_self() { return &m->self->type.value(); }
 };
 
 /*struct Result {
@@ -36,7 +39,7 @@ struct CompareResult {
 
     bool is_err() { return has_err; }
 
-    static CompareResult make_casted(){
+    static CompareResult make_casted() {
         CompareResult res;
         res.cast = true;
         return res;

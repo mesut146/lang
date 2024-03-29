@@ -11,13 +11,22 @@ std::string Signature::print() {
         s += m->parent.type->print();
         s += "::";
     }
+    int i = 0;
     if (mc) {
         s += mc->name;
+        s += "(";
+        if (real_scope.has_value()) {
+            s += real_scope.value().type.print();
+            i++;
+        }
     } else {
         s += m->name;
+        s += "(";
+        if (m->self.has_value()) {
+            s += m->self->type->print();
+            i++;
+        }
     }
-    s += "(";
-    int i = 0;
     for (auto &a : args) {
         if (i++ > 0) s += ",";
         s += a.print();
@@ -35,6 +44,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     if (mc->scope) {
         auto scp = r->resolve(mc->scope.get());
         is_trait = scp.trait != nullptr;
+        res.real_scope = scp;
         //we need this to handle cases like Option::new(...)
         if (scp.targetDecl && scp.targetDecl->path != r->unit->path && !scp.targetDecl->isGeneric) {
             r->addUsed(scp.targetDecl);
@@ -44,19 +54,23 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
         } else {
             res.scope = std::move(scp);
         }
+        if (res.scope->type.isPointer()) {
+            r->err(mc, "scope type double ptr " + res.scope->type.print());
+        }
         if (!mc->is_static) {
-            res.args.push_back(res.scope->type.toPtr());
+            res.args.push_back(res.real_scope->type);
         }
     }
     int i = 0;
     for (auto a : mc->args) {
         //cast to pointer
         auto type = r->getType(a);
-        if (i == 0 && mc->scope && is_trait && isStruct(type)) {
+        //A::get(&a)
+        /*if (i == 0 && mc->scope && is_trait && isStruct(type)) {
             if (mc->name != "drop") {//delete this shit
                 type = Type(Type::Pointer, type);
             }
-        }
+        }*/
         res.args.push_back(type);
         i++;
     }
@@ -75,7 +89,8 @@ Signature Signature::make(Method *m, const std::map<std::string, Type> &map) {
         res.scope = RType(m->parent.type.value());
     }
     if (m->self) {
-        res.args.push_back(*m->self->type);
+        auto mapped = Generator::make(m->self->type.value(), map);
+        res.args.push_back(mapped);
     }
     for (auto &prm : m->params) {
         auto mapped = Generator::make(prm.type.value(), map);
@@ -164,7 +179,7 @@ std::map<std::string, Type> make_map(Signature &sig, Type &type) {
 void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bool imports) {
     auto &name = sig.mc->name;
     auto &scope = sig.scope.value();
-    auto type = scope.type.unwrap();
+    auto type = scope.type.unwrap();//todo not needed, scope already same
 
     auto map = make_map(sig, type);
 
@@ -422,12 +437,30 @@ SigResult MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
     if (sig2.m->self && !sig.mc->scope) {
         return "member method called without scope";
     }
-    if (sig.args.size() != sig2.args.size()) return "arg size mismatched";
+    int argc1 = sig.args.size();
+    int argc2 = sig2.args.size();
+    if (argc1 != argc2) {
+        return format("arg size mismatched %d vs %d", argc1, argc2);
+    }
     std::vector<Type> typeParams = get_type_params(*sig2.m);
     bool all_exact = true;
     for (int i = 0; i < sig.args.size(); i++) {
-        auto &t1 = sig.args[i];
+        auto t1 = sig.args[i];
         auto &t2 = sig2.args[i];
+        //self vs self, coerce to ptr
+        if (i == 0 && sig2.m->self) {
+            if (t2.isPointer()) {
+                if (!t1.isPointer()) {
+                    //coerce to ptr
+                    t1 = t1.toPtr();
+                }
+            } else {
+                if (t1.isPointer()) {
+                    return format("can't convert borrowed self to *self, %s vs %s", t1.print().c_str(), t2.print().c_str());
+                }
+            }
+        }
+        //return format("self type mismatch %s vs %s", self1.print().c_str(), self2.print().c_str());
         //todo if base method, skip self
         if (t1.print() != t2.print()) {
             all_exact = false;

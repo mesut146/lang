@@ -4,7 +4,7 @@ import std/libc
 import std/io
 
 class Lexer{
-  path: String;
+  path: CStr;
   buf: String;
   pos: i32;
   line: i32;
@@ -29,8 +29,8 @@ impl i8{
 }
 
 impl Lexer{
-  func new(path: String): Lexer{
-    let s = read_string(path.str());
+  func new(path: CStr): Lexer{
+    let s = read_string(&path);
     return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
   }
   
@@ -176,11 +176,11 @@ impl Lexer{
           continue;
         }
         let s = self.str(self.pos, self.pos + i); 
-        let it = self.ops.get_p(&s);
+        let it = self.ops.get_ptr(&s);
         if (it.is_some()) {
             self.pos += i;
             let tok = it.unwrap(); 
-            return Token::new(tok, s);
+            return Token::new(*tok, s);
         }
     }
     //never
@@ -296,10 +296,10 @@ impl Lexer{
     let os = String::new();
     os.append(c);
     let oss = os.str();
-    if(self.ops.get_p(&oss).is_some()){
+    if(self.ops.get_ptr(&oss).is_some()){
       return self.read_op();
     }
-    panic("in file %s\nunexpected char: %c(%d) at %d" ,self.path.cstr(),  c, c, start);
+    panic("in file %s\nunexpected char: %c(%d) at %d" ,self.path.ptr(),  c, c, start);
   }
   
   func read_ident(self): Token {

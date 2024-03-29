@@ -78,7 +78,7 @@ impl AllocHelper{
         let arg = is.args.get_ptr(i);
         let ty = self.c.resolver.cache.get(arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
-        Value_setName(arg_ptr, arg.name.cstr());
+        Value_setName(arg_ptr, arg.name.cstr().ptr());
         self.c.NamedValues.add(arg.name.clone(), arg_ptr);
       }
       self.visit(&is.rhs);
@@ -120,10 +120,10 @@ impl AllocHelper{
       let rhs: Option<Value*> = self.visit(&f.rhs);
       if(!doesAlloc(&f.rhs, self.c.resolver)){
         let ptr = self.alloc_ty(&ty.type, f);
-        Value_setName(ptr, f.name.cstr());
+        Value_setName(ptr, f.name.cstr().ptr());
         self.c.NamedValues.add(f.name.clone(), ptr);
       }else{
-        Value_setName(rhs.unwrap(), f.name.cstr());
+        Value_setName(rhs.unwrap(), f.name.cstr().ptr());
         self.c.NamedValues.add(f.name.clone(), rhs.unwrap());
       }
     }

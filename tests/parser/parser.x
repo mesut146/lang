@@ -16,7 +16,7 @@ class Parser{
 
 impl Parser{
   
-  func new(path: String): Parser{
+  func new(path: CStr): Parser{
     let lexer = Lexer::new(path);
     let res = Parser{lexer, List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
     res.fill();
@@ -73,12 +73,12 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
-      print("%s:%d\n", self.lexer.path.cstr(), t.line);
-      panic("unexpected token %s was expecting %s", t.print().cstr(), Fmt::str(&tt).cstr());
+      print("%s:%d\n", self.lexer.path.ptr(), t.line);
+      panic("unexpected token %s was expecting %s", t.print().cstr().ptr(), Fmt::str(&tt).cstr().ptr());
     }
     
     func parse_unit(self): Unit{
-      let unit = Unit::new(self.lexer.path.str());
+      let unit = Unit::new(self.lexer.path.get());
       self.unit = Option::new(&unit);
       while(self.has() && self.is(TokenType::IMPORT)){
         unit.imports.add(self.parse_import());
@@ -250,7 +250,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.clone()};
+      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.get_heap()};
       return res;
     }
     
@@ -287,7 +287,7 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      let path = self.lexer.path.clone();
+      let path = self.lexer.path.get_heap();
       return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, fields: fields};
     }
     
@@ -321,7 +321,7 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      let path = self.lexer.path.clone();
+      let path = self.lexer.path.get_heap();
       return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, variants: variants};
     }
     

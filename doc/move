@@ -1,4 +1,18 @@
-//////
-let a = get().a;
+let {a, moved} = (A::new(), false);
 
-get().b();
+for(;;){
+    if(c){
+        let a = A::new();
+        if(c1){
+            let b = A:new();
+            if(c2){
+                //Drop::drop(a)
+                continue;//causes to drop of b & a
+            }
+        }else{
+            break;
+        }
+        //Drop::drop(a)
+    }
+}
+

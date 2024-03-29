@@ -160,7 +160,7 @@ struct Ownership {
     }
 
     //drop vars in this scope
-    void endScope(VarScope *s);
+    void endScope(VarScope &s);
 
     bool isDropType(const RType &rt);
     bool isDropType(const Type &type);
@@ -211,7 +211,11 @@ struct Ownership {
 
     std::vector<VarScope *> rev_scopes();
 
-    void end_branch(VarScope *scope);
+    void end_branch(VarScope &scope);
 
     void call_drop(Type &type, llvm::Value *ptr);
+
+    void jump_continue();
+
+    void jump_break();
 };

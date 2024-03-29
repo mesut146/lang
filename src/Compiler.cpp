@@ -1963,16 +1963,6 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
     return gep(arr, index, elemty);
 }
 
-std::any Compiler::visitContinueStmt(ContinueStmt *node) {
-    Builder->CreateBr(loops.back());
-    return nullptr;
-}
-
-std::any Compiler::visitBreakStmt(BreakStmt *node) {
-    Builder->CreateBr(loopNext.back());
-    return nullptr;
-}
-
 std::any Compiler::visitArrayExpr(ArrayExpr *node) {
     auto ptr = getAlloc(node);
     //todo curOwner.addPtr(node, ptr);
@@ -2096,6 +2086,11 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     auto then_scope = curOwner.newScope(ScopeId::IF, then_returns, cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
     if (!then_scope->ends_with_return) {
+        auto &last_ins = Builder->GetInsertBlock()->back();
+        //auto &list = Builder->GetInsertBlock()->er
+        if(last_ins.isTerminator()){
+            
+        }
         curOwner.endScope(then_scope);
     }
     if (!isReturnLast(node->thenStmt.get())) {
@@ -2293,4 +2288,16 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     Builder->CreateBr(condbb);
     set_and_insert(next);
     return {};
+}
+
+std::any Compiler::visitContinueStmt(ContinueStmt *node) {
+    curOwner.jump_continue();
+    Builder->CreateBr(loops.back());
+    return nullptr;
+}
+
+std::any Compiler::visitBreakStmt(BreakStmt *node) {
+    curOwner.jump_break();
+    Builder->CreateBr(loopNext.back());
+    return nullptr;
 }

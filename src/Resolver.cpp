@@ -1346,7 +1346,7 @@ std::any Resolver::visitDerefExpr(DerefExpr *node) {
 
 std::any Resolver::visitAssertStmt(AssertStmt *node) {
     if (!isCondition(node->expr.get(), this)) {
-        error("assert expr is not boolean expr: " + node->expr->print());
+        err(node, "assert expr is not bool");
     }
     return nullptr;
 }
