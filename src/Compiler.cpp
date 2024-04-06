@@ -989,7 +989,7 @@ void Compiler::genCode(Method *m) {
     m->body->accept(this);
     if (!ends_with_return(m->body.get())) {
         //return already drops all
-        curOwner.endScope(curOwner.main_scope);
+        curOwner.endScope(*curOwner.main_scope);
     }
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
@@ -2091,7 +2091,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         if(last_ins.isTerminator()){
             
         }
-        curOwner.endScope(then_scope);
+        curOwner.endScope(*then_scope);
     }
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
@@ -2107,8 +2107,8 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
         if (!else_scope->ends_with_return) {
-            curOwner.endScope(else_scope);
-            curOwner.end_branch(else_scope);
+            curOwner.endScope(*else_scope);
+            curOwner.end_branch(*else_scope);
         }
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
@@ -2116,8 +2116,8 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
             //return cleans all
         }
     } else {
-        curOwner.endScope(else_scope);
-        curOwner.end_branch(else_scope);
+        curOwner.endScope(*else_scope);
+        curOwner.end_branch(*else_scope);
         Builder->CreateBr(next);
     }
     set_and_insert(next);
@@ -2125,7 +2125,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
     Builder->CreateCondBr(cond, then_clean, next2);
     set_and_insert(then_clean);
-    curOwner.end_branch(then_scope);
+    curOwner.end_branch(*then_scope);
     Builder->CreateBr(next2);
     set_and_insert(next2);
     curOwner.setScope(cur_scope);
@@ -2186,7 +2186,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     }
     node->thenStmt->accept(this);
     if (!then_scope->ends_with_return) {
-        curOwner.endScope(then_scope);
+        curOwner.endScope(*then_scope);
     }
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
@@ -2202,8 +2202,8 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
         if (!else_scope->ends_with_return) {
-            curOwner.endScope(else_scope);
-            curOwner.end_branch(else_scope);
+            curOwner.endScope(*else_scope);
+            curOwner.end_branch(*else_scope);
         }
         if (!isReturnLast(node->elseStmt.get())) {
             Builder->CreateBr(next);
@@ -2211,8 +2211,8 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             //return cleans all
         }
     } else {
-        curOwner.endScope(else_scope);
-        curOwner.end_branch(else_scope);
+        curOwner.endScope(*else_scope);
+        curOwner.end_branch(*else_scope);
         Builder->CreateBr(next);
     }
     set_and_insert(next);
@@ -2220,7 +2220,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
     Builder->CreateCondBr(cond, then_clean, next2);
     set_and_insert(then_clean);
-    curOwner.end_branch(then_scope);
+    curOwner.end_branch(*then_scope);
     Builder->CreateBr(next2);
     set_and_insert(next2);
     curOwner.setScope(cur_scope);
@@ -2242,7 +2242,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     auto cur_scope = curOwner.last_scope->id;
     auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope, node->body->line);
     node->body->accept(this);
-    curOwner.endScope(then_scope);
+    curOwner.endScope(*then_scope);
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -2274,7 +2274,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     loopNext.push_back(next);
     int backup = resolv->max_scope;
     node->body->accept(this);
-    curOwner.endScope(then_scope);
+    curOwner.endScope(*then_scope);
     int backup2 = resolv->max_scope;
     resolv->max_scope = backup;
     Builder->CreateBr(updatebb);
