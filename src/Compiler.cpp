@@ -1270,6 +1270,7 @@ std::any Compiler::visitAssign(Assign *node) {
     llvm::Value *l = gen_left(node->left, this);
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
+        //todo move this to setField where lhs is used completely
         curOwner.beginAssign(node->left, l);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             //dont delete, setField can't handle this
@@ -2243,6 +2244,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope, node->body->line);
     node->body->accept(this);
     curOwner.endScope(*then_scope);
+    curOwner.setScope(cur_scope);
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);
@@ -2275,6 +2277,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     int backup = resolv->max_scope;
     node->body->accept(this);
     curOwner.endScope(*then_scope);
+    curOwner.setScope(cur_scope);
     int backup2 = resolv->max_scope;
     resolv->max_scope = backup;
     Builder->CreateBr(updatebb);

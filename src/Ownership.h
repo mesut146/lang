@@ -109,7 +109,7 @@ struct VarScope {
     std::vector<Move> moves;
     std::vector<Object> objects;
     std::vector<int> scopes;
-    std::vector<Action> actions;
+    //std::vector<Action> actions;
     bool ends_with_return = false;
     int parent = -1;
     int sibling = -1;

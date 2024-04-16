@@ -12,6 +12,7 @@ func test_normal(){
     normal(true, 1);
     assert check_ids(1, 2);
     reset();
+    
     normal(false, 3);
     assert check_ids(3);
     reset();
