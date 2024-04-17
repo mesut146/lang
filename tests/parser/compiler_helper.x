@@ -11,20 +11,20 @@ func make_slice_type(): StructType*{
     let elems = make_vec();
     vec_push(elems, getPointerTo(getInt(8)));
     vec_push(elems, getInt(SLICE_LEN_BITS()));
-    return make_struct_ty2("__slice".cstr(), elems);
+    return make_struct_ty2("__slice".ptr(), elems);
 }
 
 func make_string_type(sliceType: llvm_Type*): StructType*{
     let elems = make_vec();
     vec_push(elems, sliceType);
-    return make_struct_ty2("str".cstr(), elems);
+    return make_struct_ty2("str".ptr(), elems);
 }
 
 func make_printf(): Function*{
     let args = make_vec();
     vec_push(args, getPointerTo(getInt(8)));
     let ft = make_ft(getInt(32), args, true);
-    let f = make_func(ft, ext(), "printf".cstr());
+    let f = make_func(ft, ext(), "printf".ptr());
     setCallingConv(f);
     return f;
 }
@@ -32,7 +32,7 @@ func make_fflush(): Function*{
     let args = make_vec();
     vec_push(args, getPointerTo(getInt(8)));
     let ft = make_ft(getInt(32), args, false);
-    let f = make_func(ft, ext(), "fflush".cstr());
+    let f = make_func(ft, ext(), "fflush".ptr());
     setCallingConv(f);
     return f;
 }
@@ -40,7 +40,7 @@ func make_exit(): Function*{
     let args = make_vec();
     vec_push(args, getInt(32));
     let ft = make_ft(getVoidTy(), args, false);
-    let f = make_func(ft, ext(), "exit".cstr());
+    let f = make_func(ft, ext(), "exit".ptr());
     setCallingConv(f);
     return f;
 }
@@ -48,7 +48,7 @@ func make_malloc(): Function*{
     let args = make_vec();
     vec_push(args, getInt(64));
     let ft = make_ft(getPointerTo(getInt(8)), args, false);
-    let f = make_func(ft, ext(), "malloc".cstr());
+    let f = make_func(ft, ext(), "malloc".ptr());
     setCallingConv(f);
     return f;
 }
@@ -108,7 +108,7 @@ func getMethods(unit: Unit*): List<Method*>{
 
 func make_decl_proto(decl: Decl*): StructType*{
   //print("make_decl_proto %s\n", decl.type.print().cstr());
-  return make_struct_ty(decl.type.print().cstr());
+  return make_struct_ty(decl.type.print().cstr().ptr());
 }
 
 impl Compiler{
@@ -181,7 +181,7 @@ impl Compiler{
       let ft = self.mapType(&fd.type);
       vec_push(elems, ft);
     }
-    return make_struct_ty2(name.cstr(), elems);
+    return make_struct_ty2(name.clone().cstr().ptr(), elems);
   }
 
   func make_proto(self, m: Method*){
@@ -216,20 +216,20 @@ impl Compiler{
     let linkage = ext();
     if(!m.type_params.empty()){
       linkage = odr();
-    }else if let Parent::Impl(info*)=(m.parent){
+    }else if let Parent::Impl(info*)=(&m.parent){
       if(info.type.is_simple() && !info.type.get_args().empty()){
         linkage = odr();
       }
     }
 
-    let f = make_func(ft, linkage, mangled.cstr());
+    let f = make_func(ft, linkage, mangled.clone().cstr().ptr());
     if(rvo){
       let arg = get_arg(f, 0);
       let sret = get_sret();
       arg_attr(arg, &sret);
     }
     if(self.protos.get().funcMap.contains(&mangled)){
-      panic("already proto %s\n", mangled.cstr());
+      panic("already proto %s\n", mangled.clone().cstr().ptr());
     }
     self.protos.get().funcMap.add(mangled, f);
   }
@@ -348,7 +348,7 @@ impl Compiler{
 
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
     let name = Fmt::format("{}::{}", decl.type.print().str(), variant.name.str());
-    return self.protos.get().classMap.get_p(&name).unwrap();
+    return *self.protos.get().classMap.get_ptr(&name).unwrap();
   }
 }
 

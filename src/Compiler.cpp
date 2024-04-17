@@ -903,6 +903,55 @@ void storeParams(Method *m, Compiler *c) {
     }
 }
 
+enum class ExitType {
+    NONE,
+    RETURN,
+    PANIC,
+    BREAK,
+    CONTINE,
+};
+
+struct Exit {
+    ExitType kind;
+    std::unique_ptr<Exit> if_kind;
+    std::unique_ptr<Exit> else_kind;
+
+    Exit(const ExitType &kind) : kind(kind) {}
+    Exit() {}
+};
+
+
+Exit get_exit_type(Statement *stmt) {
+    if (dynamic_cast<ReturnStmt *>(stmt)) return ExitType::RETURN;
+    if (dynamic_cast<BreakStmt *>(stmt)) return ExitType::BREAK;
+    if (dynamic_cast<ContinueStmt *>(stmt)) return ExitType::CONTINE;
+    auto expr = dynamic_cast<ExprStmt *>(stmt);
+    if (expr) {
+        auto mc = dynamic_cast<MethodCall *>(expr->expr);
+        if (mc && !mc->scope && mc->name == "panic") {
+            return ExitType::PANIC;
+        }
+        return ExitType::NONE;
+    }
+    auto block = dynamic_cast<Block *>(stmt);
+    if (block && !block->list.empty()) {
+        auto &last = block->list.back();
+        return get_exit_type(last.get());
+    }
+    auto is = dynamic_cast<IfStmt *>(stmt);
+    if (is) {
+        auto res = Exit{ExitType::NONE};
+        auto if_type = get_exit_type(is->thenStmt.get());
+        res.if_kind = std::make_unique<Exit>(std::move(if_type));
+        if (is->elseStmt) {
+            auto else_kind = get_exit_type(is->thenStmt.get());
+            res.else_kind = std::make_unique<Exit>(std::move(else_kind));
+        }
+        return res;
+    }
+    return ExitType::NONE;
+}
+
 bool ends_with_return(Statement *stmt) {
     if (dynamic_cast<ReturnStmt *>(stmt)) return true;
     auto expr = dynamic_cast<ExprStmt *>(stmt);
@@ -920,7 +969,7 @@ bool ends_with_return(Statement *stmt) {
         if (is->elseStmt) {
             return ends_with_return(is->thenStmt.get()) || ends_with_return(is->elseStmt.get());
         }
-        return ends_with_return(is->thenStmt.get());
+        //return ends_with_return(is->thenStmt.get());
     }
     return false;
 }
@@ -1516,6 +1565,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         obj = get_obj_ptr(mc->scope.get());
         args.push_back(obj);
         paramIdx++;
+        if(target->self->is_deref){
+            curOwner.doMoveCall(mc->scope.get());
+        }
     }
     std::vector<Param *> params;
     if (target->self) {
@@ -2088,11 +2140,9 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     node->thenStmt->accept(this);
     if (!then_scope->ends_with_return) {
         auto &last_ins = Builder->GetInsertBlock()->back();
-        //auto &list = Builder->GetInsertBlock()->er
-        if(last_ins.isTerminator()){
-            
+        if (!last_ins.isTerminator()) {
+            curOwner.endScope(*then_scope);
         }
-        curOwner.endScope(*then_scope);
     }
     if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);

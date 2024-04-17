@@ -595,7 +595,7 @@ impl MethodResolver{
             let nm: String* = prm.name();
             if (typeMap.contains(nm)) {//is_tp
                 let opt = typeMap.get_ptr(nm);
-                let it = opt.unwrap();
+                let it: Option<Type>* = opt.unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(prm.name().clone(), Option::new(arg.clone()));
                     //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
@@ -604,10 +604,10 @@ impl MethodResolver{
                         //print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
                     //}
                 } else {//already set
-                    let m = MethodResolver::is_compatible(RType::new(arg.clone()), it.get());
+                    let m: Option<String> = MethodResolver::is_compatible(RType::new(arg.clone()), it.get());
                     if (m.is_some()) {
-                        print("%s\n", m.get().cstr());
-                        panic("type infer failed: %s vs %s\n", it.get().print().cstr(), arg.print().cstr());
+                        print("%s\n", CStr::new(m.unwrap()));
+                        panic("type infer failed: %s vs %s\n", CStr::new(it.get().print()).ptr(), CStr::new(arg.print()).ptr());
                     }
                 }
             }
@@ -616,7 +616,7 @@ impl MethodResolver{
             let ta2 = prm.get_args();
             if (ta1.size() != ta2.size()) {
                 let msg = Fmt::format("type arg size mismatch, {} = {}", arg.print().str(), prm.print().str());
-                panic("%s", msg.cstr());
+                panic("%s", CStr::new(msg).ptr());
             }
             if (!arg.name().eq(prm.name())) panic("cant infer");
             for (let i = 0; i < ta1.size(); ++i) {
@@ -692,7 +692,7 @@ func kind(type: Type*): i32{
     if(type is Type::Pointer) return 0;
     if(type is Type::Array) return 1;
     if(type is Type::Slice) return 2;
-    panic("%s\n", type.print().cstr().ptr());
+    panic("%s\n", CStr::new(type.print()).ptr());
 }
 
 func get_type_params(m: Method*): List<Type>{

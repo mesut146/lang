@@ -62,7 +62,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let imp = make_impl(decl, "Drop");
     let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
-    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone().toPtr(), true});
+    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone().toPtr(), true, true});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
     m.path = unit.path.clone();
     let body = Block::new();
@@ -104,8 +104,8 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
 func generate_debug(decl: Decl*, unit: Unit*): Impl{
     let imp = make_impl(decl, "Debug");
     let m = Method::new(Node::new(++unit.last_id, 0), "debug".str(), Type::new("void"));
-    m.self = Option::new(Param{.Node::new(++unit.last_id, 0), "self".str(), decl.type.clone().toPtr(), true});
-    m.params.add(Param{.Node::new(++unit.last_id, 0), "f".str(), Type::new("Fmt").toPtr(), false});
+    m.self = Option::new(Param{.Node::new(++unit.last_id, 0), "self".str(), decl.type.clone().toPtr(), true, false});
+    m.params.add(Param{.Node::new(++unit.last_id, 0), "f".str(), Type::new("Fmt").toPtr(), false, false});
     m.parent = Parent::Impl{make_info(decl, "Debug")};
     m.path = unit.path.clone();
     let body = Block::new();

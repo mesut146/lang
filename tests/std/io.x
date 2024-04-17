@@ -60,7 +60,7 @@ func dump_arr(arr: [i8; 256], len: i32){
 }*/
 
 func listc(path: CStr*): List<CStr>{
-  let list = List<CStr>::new(128);
+  let list = List<CStr>::new(10);
   let dp = opendir(path.ptr());
   if(dp as u64 == 0) panic("no such dir %s", path.ptr());
   while(true){

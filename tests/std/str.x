@@ -59,10 +59,10 @@ impl str{
       if(c >= 'a' && c <= 'z') return;
       if(c >= 'A' && c <= 'Z') return;
       let arr = ['"', '\'', '\n','\r','\t', ' ', '{', '}', '(',')','=','*','+','-','/',':',';','!','%',',','.','^','$','&','|','[',']','?','\\','_','<','>','~','#'];
-      for(let i=0;i<arr.len();++i){
+      for(let i = 0;i < arr.len();++i){
         if(arr[i] == c) return;
       }
-      print("valid (%d)='%c'\n", c, c);
+      print("str::is_valid (%d)='%c'\n", c, c);
       panic("");
     }
 
@@ -162,7 +162,7 @@ impl str{
       return String::new(*self);
     }
 
-    func cstr(self): String{
+    func cstr(self): CStr{
       return self.str().cstr();
     }
     

@@ -187,6 +187,9 @@ impl Debug for Method{
 
 impl Debug for Param{
   func debug(self, f: Fmt*){
+    if(self.is_deref){
+      f.print("*");
+    }
     f.print(&self.name);
     if(self.is_self){}
     f.print(": ");

@@ -76,17 +76,6 @@ impl String{
     func ptr(self): i8*{
       return self.arr.ptr() as i8*;
     }
-    
-    func cstr(self): String{
-      //already cstr
-      if(self.len() > 0 && self.get((self.len() - 1) as i32) == 0){
-        return self.clone();
-      }
-      let res = self.clone();
-      res.append(0u8);
-      //--res.count;
-      return res;
-    }
 
     func append(self, s: str){
         for(let i = 0;i < s.len();++i){
@@ -170,6 +159,10 @@ impl String{
     
     func eq(self, s: str): bool{
       return self.str().eq(s);
+    }
+
+    func cstr(*self): CStr{
+      return CStr::new(self);
     }
 }
 
@@ -312,6 +305,10 @@ impl CStr{
     return CStr::Lit{s};
   }
   func new(s: String): CStr{
+    if(s.len() > 0 && s.get((s.len() - 1) as i32) != 0){
+      s.append(0u8);
+    }
+    //--res.count;
     return CStr::Heap{s};
   }
   func new(arr: [u8]): CStr{
@@ -323,7 +320,7 @@ impl CStr{
     return CStr::Heap{s};
   }
   func from_slice(s: str): CStr{
-    return CStr::Heap{s.cstr()};
+    return CStr::Heap{s.str()};
   }
   func ptr(self): i8*{
     if let CStr::Lit(v*)=(self){

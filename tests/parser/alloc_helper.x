@@ -78,8 +78,9 @@ impl AllocHelper{
         let arg = is.args.get_ptr(i);
         let ty = self.c.resolver.cache.get(arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
-        Value_setName(arg_ptr, arg.name.cstr().ptr());
-        self.c.NamedValues.add(arg.name.clone(), arg_ptr);
+        let arg_cloned = arg.name.clone();
+        Value_setName(arg_ptr, arg_cloned.clone().cstr().ptr());
+        self.c.NamedValues.add(arg_cloned, arg_ptr);
       }
       self.visit(&is.rhs);
       self.visit(is.then.get());
@@ -118,13 +119,14 @@ impl AllocHelper{
       let f = node.list.get_ptr(i);
       let ty = self.c.resolver.visit(f);
       let rhs: Option<Value*> = self.visit(&f.rhs);
+      let name: String = f.name.clone();
       if(!doesAlloc(&f.rhs, self.c.resolver)){
         let ptr = self.alloc_ty(&ty.type, f);
-        Value_setName(ptr, f.name.cstr().ptr());
-        self.c.NamedValues.add(f.name.clone(), ptr);
+        Value_setName(ptr, name.clone().cstr().ptr());
+        self.c.NamedValues.add(name, ptr);
       }else{
-        Value_setName(rhs.unwrap(), f.name.cstr().ptr());
-        self.c.NamedValues.add(f.name.clone(), rhs.unwrap());
+        Value_setName(rhs.unwrap(), name.clone().cstr().ptr());
+        self.c.NamedValues.add(name, rhs.unwrap());
       }
     }
   }

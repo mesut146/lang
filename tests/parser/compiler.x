@@ -69,7 +69,7 @@ impl Protos{
     print("dump classmap\n");
     for(let i=0;i<self.classMap.len();++i){
       let e = self.classMap.get_idx(i).unwrap();
-      print("%s\n", e.a.cstr());
+      print("%s\n", e.a.clone().cstr().ptr());
     }
   }
   func libc(self, nm: str): Function*{
@@ -135,10 +135,10 @@ func getName(path: str): str{
 }
 
 impl llvm_holder{
-  func initModule(self, path: str){
-    let name = getName(path);
+  func initModule(self, path: CStr*){
+    let name = getName(path.get());
     make_ctx();
-    make_module(name.cstr().ptr(), self.target_machine, self.target_triple.cstr().ptr());
+    make_module(name.str().cstr().ptr(), self.target_machine, self.target_triple.clone().cstr().ptr());
     make_builder();
     self.di = Option::new(DebugInfo::new(path, true));
   }
@@ -151,7 +151,7 @@ impl llvm_holder{
     InitializeAllAsmPrinters();
     
     let target_triple = getDefaultTargetTriple2();
-    let target_machine = createTargetMachine(target_triple.cstr().ptr());
+    let target_machine = createTargetMachine(target_triple.clone().cstr().ptr());
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
     //todo cache
@@ -181,7 +181,7 @@ impl Compiler{
 
   func link_run(self, name0: str, args: str){
     name0 = Fmt::format("./{}", name0).str();
-    let name = name0.cstr();
+    let name: CStr = name0.cstr();
     if(exist(name0)){
       remove(name.ptr());
     }
@@ -198,7 +198,7 @@ impl Compiler{
     cmd.append(args);
     if(system(cmd.cstr().ptr()) == 0){
       //run if linked
-      if(system(name.cstr().ptr()) != 0){
+      if(system(name.ptr()) != 0){
         print("%s\n", cmd.cstr());
         panic("error while running %s", name.ptr());
       }
@@ -207,22 +207,22 @@ impl Compiler{
     }
   }
 
-  func compile(self, path0: str): String{
+  func compile(self, path0: CStr): String{
     //print("compile %s\n", path0.cstr());
-    let path = Path::new(path0.str());
-    let outFile = get_out_file(path0);
+    let path = Path::new(path0.get_heap());
+    let outFile = get_out_file(path0.get());
     let ext = path.ext();
     if (!ext.eq("x")) {
       panic("invalid extension %s", ext.cstr());
     }
     if(self.config.verbose){
-      print("compiling %s\n", path0.cstr());
+      print("compiling %s\n", path0.ptr());
     }
     //let r = Resolver::new(path0.str(), &self.ctx);
     //self.resolver = &r;
-    self.resolver = self.ctx.create_resolver(path0);
+    self.resolver = self.ctx.create_resolver(&path.path);
     if (has_main(self.unit())) {
-      self.main_file = Option::new(path0.str());
+      self.main_file = Option::new(path0.get_heap());
       if (!self.config.single_mode) {//compile last
           print("skip main file\n");
           return outFile;
@@ -233,7 +233,7 @@ impl Compiler{
       //r.unit.drop();
       return outFile;
     }
-    self.llvm.initModule(path0);
+    self.llvm.initModule(&path0);
     self.createProtos();
     //init_globals(this);
     
@@ -248,16 +248,16 @@ impl Compiler{
         self.genCode(m);
     }
     
-    let name = getName(path0);
+    let name = getName(path0.get());
     let llvm_file = Fmt::format("{}-bt.ll", trimExtenstion(name));
     emit_llvm(llvm_file.cstr().ptr());
     if(self.config.verbose){
       print("writing %s\n", llvm_file.cstr().ptr());
     }
     self.compiled.add(outFile.clone());
-    emit_object(outFile.cstr().ptr(), self.llvm.target_machine, self.llvm.target_triple.cstr().ptr());
+    emit_object(outFile.clone().cstr().ptr(), self.llvm.target_machine, self.llvm.target_triple.clone().cstr().ptr());
     if(self.config.verbose){
-      print("writing %s\n", outFile.cstr());
+      print("writing %s\n", outFile.clone().cstr().ptr());
     }
     self.cleanup();
     return outFile;
@@ -371,7 +371,7 @@ impl Compiler{
   func alloc_prm(self, prm: Param*){
     let ty = self.mapType(&prm.type);
     let ptr = CreateAlloca(ty);
-    Value_setName(ptr, prm.name.cstr().ptr());
+    Value_setName(ptr, prm.name.clone().cstr().ptr());
     self.NamedValues.add(prm.name.clone(), ptr);
   }
 
@@ -936,7 +936,7 @@ impl Compiler{
     if(op.eq("~")){
       return CreateXor(val, makeInt(-1, bits));
     }
-    panic("unary %s", op.cstr());
+    panic("unary %s", CStr::new(op.clone()).ptr());
   }
 
   func visit_call(self, expr: Expr*, mc: Call*): Value*{
@@ -1089,7 +1089,7 @@ impl Compiler{
   func visit_print(self, mc: Call*): Value*{
     let args = make_args();
     for(let i = 0;i < mc.args.len();++i){
-      let arg = mc.args.get_ptr(i);
+      let arg: Expr* = mc.args.get_ptr(i);
       let lit = is_str_lit(arg);
       if(lit.is_some()){
         let val: str = lit.unwrap().str();
@@ -1153,7 +1153,7 @@ impl Compiler{
       //todo remove redundant cast
       let lv = self.cast(l, type);
       let rv = self.cast(r, type);
-      return CreateCmp(get_comp_op(op.cstr().ptr()), lv, rv);
+      return CreateCmp(get_comp_op(op.clone().cstr().ptr()), lv, rv);
     }
     if(op.eq("&&") || op.eq("||")){
       return self.andOr(op, l, r).a;
@@ -1235,7 +1235,7 @@ impl Compiler{
       CreateStore(tmp, lv);
       return lv;
     }
-    panic("infix '%s'\n", op.cstr());
+    panic("infix '%s'\n", op.clone().cstr().ptr());
   }
 
   func is_logic(expr: Expr*): bool{
@@ -1350,7 +1350,7 @@ impl Compiler{
       let trimmed = node.val.get(1);
       return makeInt(trimmed, 32);
     }
-    panic("lit %s", node.val.cstr());
+    panic("lit %s", node.val.clone().cstr().ptr());
   }
 
   func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){

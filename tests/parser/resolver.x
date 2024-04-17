@@ -106,7 +106,7 @@ impl Context{
     if(res.is_some()){
       return res.unwrap();
     }
-    let r = Resolver::new(path.clone(), self);
+    let r = Resolver::new(CStr::new(path.clone()), self);
     self.map.add(path.clone(), r);
     return self.map.get_ptr(path).unwrap();
   }
@@ -235,8 +235,8 @@ func dumpp(r: Resolver*){
 }
 
 impl Resolver{
-  func new(path: String, ctx: Context*): Resolver{
-    print("Resolver::new %s\n", path.cstr());
+  func new(path: CStr, ctx: Context*): Resolver{
+    print("Resolver::new %s\n", path.ptr());
     let parser = Parser::new(path);
     let unit = parser.parse_unit();
     //parser.drop();
@@ -328,7 +328,7 @@ impl Resolver{
   
   func resolve_all(self){
     if(self.is_resolved) return;
-    print("resolve_all %s\n", self.unit.path.cstr());
+    print("resolve_all %s\n", self.unit.path.clone().cstr().ptr());
     self.is_resolved = true;
     self.init();
     self.init_globals();
@@ -366,14 +366,14 @@ impl Resolver{
     print("%d types\n", self.typeMap.len());
     for(let i = 0;i < self.typeMap.len();++i){
       let pair = self.typeMap.get_idx(i).unwrap();
-      print("%s -> %s\n", pair.a.cstr(), Fmt::str(&pair.b.type).cstr());
+      print("%s -> %s\n", pair.a.clone().cstr().ptr(), Fmt::str(&pair.b.type).cstr().ptr());
     }
     print("scope count %d\n", self.scopes.len());
     for(let i = 0;i < self.scopes.len();++i){
       let scope = self.scopes.get_ptr(i);
       for(let j = 0;j < scope.list.len();++j){
         let vh = scope.list.get_ptr(j);
-        print("%s:%s\n", vh.name.cstr(), vh.type.print().cstr());
+        print("%s:%s\n", vh.name.clone().cstr(), vh.type.print().cstr().ptr());
       }
     }
   }
@@ -676,7 +676,7 @@ impl Resolver{
 
   func visit(self, node: Type*): RType{
     let id = Node::new(-1);
-    let expr = Expr::Type{.id, *node};
+    let expr = Expr::Type{.id, node.clone()};
     let str = node.print();
     let cached = self.typeMap.get_ptr(&str);
     if(cached.is_some()){
@@ -841,18 +841,17 @@ impl Resolver{
         return i;
       }
     }
-    panic("unknown variant %s::%s", decl.type.print().cstr(), name.cstr());
+    panic("unknown variant %s::%s", decl.type.print().cstr().ptr(), name.clone().cstr().ptr());
   }
 
   func getTypeCached(self, str: String*): RType{
-    let res = self.typeMap.get_p(str);
+    let res = self.typeMap.get_ptr(str);
     if(res.is_some()){
-      return res.unwrap();
+      return res.unwrap().clone();
     }
-    panic("not cached %s", str.cstr());
+    panic("not cached %s", str.clone().cstr().ptr());
   }
 
-  
   
   func findField(self, node: Expr*, name: String*, decl: Decl*, type: Type*): Pair<Decl*, i32>{
     let cur = decl;
@@ -1314,7 +1313,7 @@ impl Resolver{
         let cur_type = cur.type.print();
         let cmp = MethodResolver::is_compatible(cur, &elemType);
         if (cmp.is_some()) {
-            print("%s", cmp.get().cstr());
+            print("%s", cmp.get().clone().cstr().ptr());
             let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur_type.str());
             self.err(node, msg.str());
         }

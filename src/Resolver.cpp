@@ -1129,7 +1129,7 @@ std::any Resolver::visitAssign(Assign *node) {
     }
     auto t2 = resolve(node->right);
     if (MethodResolver::isCompatible(t2, t1.type).is_err()) {
-        err(node, "cannot assign");
+        err(node, "cannot assign " + t1.type.print() + " vs " + t2.type.print());
     }
     if (has_pointer(t1.type, this) && is_var(node->left)) {
         //err(node, "destroy left");

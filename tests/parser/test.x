@@ -15,16 +15,17 @@ func root(): str{
   return "../tests";
 }
 
-func compile_dir(cmp: Compiler*, dir: str, link: bool){
-  let list = list(dir);
+func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
+  let list = listc(&dir);
   for(let i = 0;i < list.len();++i){
-    let name = list.get_ptr(i);
-    if(!name.str().ends_with(".x")) continue;
-    let file = String::new(dir);
+    let name_c: CStr* = list.get_ptr(i);
+    let name = name_c.get(); 
+    if(!name.ends_with(".x")) continue;
+    let file = dir.get_heap();
     file.append("/");
-    file.append(name.str());
+    file.append(name);
     if(is_dir(file.str())) continue;
-    cmp.compile(file.str());
+    cmp.compile(file.cstr());
     if(link){
       cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
     }
@@ -32,7 +33,7 @@ func compile_dir(cmp: Compiler*, dir: str, link: bool){
 }
 
 func compile(cmp: Compiler*, file: str){
-    cmp.compile(file);
+    cmp.compile(file.str().cstr());
     let noext = Path::new(file.str()).noext();
     cmp.link_run(noext,"");
 }
@@ -42,7 +43,7 @@ func compiler_test(){
   let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, "../tests/normal", true);
+  compile_dir(&cmp, CStr::new("../tests/normal"), true);
   //compile_dir(&cmp, "../tests/src/std", false);
 }
 
@@ -51,7 +52,7 @@ func bootstrap(){
   let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, "../tests/parser", false);
+  compile_dir(&cmp, CStr::new("../tests/parser"), false);
   let arr = ["../tests/std/String.x",
             "../tests/std/str.x",
             "../tests/std/ops.x",
@@ -59,7 +60,7 @@ func bootstrap(){
             "../tests/std/io.x"];
   for(let i=0;i<arr.len();++i){
     let file = arr[i];
-    cmp.compile(file);
+    cmp.compile(CStr::new(file));
   }
   cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
@@ -80,12 +81,12 @@ func main(argc: i32, args: i8**){
       let root = "../tests/src";
       let ctx = Context::new(root.str());
       let cmp = Compiler::new(ctx);
-      compile_dir(&cmp, path, true);
+      compile_dir(&cmp, CStr::new(path), true);
     }else{
       let root = "../tests/src";
       let ctx = Context::new(root.str());
       let cmp = Compiler::new(ctx);
-      cmp.compile(path);
+      cmp.compile(CStr::new(path));
     }
   }
 

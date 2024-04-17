@@ -22,7 +22,6 @@ impl<T> List<T>{
     return List<T>::new(10);
   }
 
-
   func new(cap: i64): List<T>{
     let ptr = get_malloc<T>(cap);
     return List<T>{ptr: ptr, count: 0, cap: cap};
@@ -43,9 +42,9 @@ impl<T> List<T>{
       ptr::copy(tmp, i, old);
       std::no_drop(old);
     }
-    //free(self.ptr as i8*);
+    free(self.ptr as i8*);
     self.ptr = tmp;
-    self.cap = self.cap * 2;
+    self.cap = self.cap + 10;
   }
   
   func check(self, pos: i64){
