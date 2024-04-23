@@ -114,9 +114,15 @@ void bootstrap() {
     };
     list_dir(Config::root + "/parser", f);
 
-    build_std();
+    bool std_static = false;
+    if (std_static) {
+        build_std();
+        c.link_run("", "std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+    } else {
+        list_dir(Config::root + "/std", f);
+        c.link_run("", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+    }
 
-    c.link_run("", "std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 
 void ownership() {

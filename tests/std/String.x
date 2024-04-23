@@ -60,6 +60,10 @@ impl String{
     func len(self): i64{
         return self.arr.len();
     }
+
+    func empty(self): bool{
+      return self.len() == 0;
+    }
     
     func get(self, i: i64): i8{
          return self.arr.get(i);
@@ -305,22 +309,27 @@ impl CStr{
     return CStr::Lit{s};
   }
   func new(s: String): CStr{
-    if(s.len() > 0 && s.get((s.len() - 1) as i32) != 0){
-      s.append(0u8);
+    if(!s.empty()){
+      let last = *s.arr.last();
+      if(last != 0){
+        s.append(0u8);
+        --s.arr.count;
+      }else{
+        --s.arr.count;
+      }
     }
-    //--res.count;
     return CStr::Heap{s};
   }
   func new(arr: [u8]): CStr{
     let s = String::new(arr);
-    return CStr::Heap{s};
+    return CStr::new(s);
   }
   func new(arr: [i8]): CStr{
     let s = String::new(arr);
-    return CStr::Heap{s};
+    return CStr::new(s);
   }
   func from_slice(s: str): CStr{
-    return CStr::Heap{s.str()};
+    return CStr::new(s.str());
   }
   func ptr(self): i8*{
     if let CStr::Lit(v*)=(self){

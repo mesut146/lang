@@ -127,7 +127,7 @@ public:
     int getSize2(const Type &type) { return getSize2(&type); }
     int getSize2(BaseDecl *decl);
     void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
-    void setField(Expression *expr, const Type &type, llvm::Value *entPtr);
+    void setField(Expression *expr, const Type &type, llvm::Value *entPtr, Expression* lhs = nullptr);
     void setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &entries, BaseDecl *decl, llvm::Type *ty, llvm::Value *ptr);
     llvm::Value *branch(llvm::Value *val);
     llvm::ConstantInt *makeInt(int val);

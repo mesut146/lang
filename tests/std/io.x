@@ -66,7 +66,7 @@ func listc(path: CStr*): List<CStr>{
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
-    let name: [u8] = ep.d_name[0..ep.len() + 1];
+    let name: [u8] = ep.d_name[0..ep.len() + 1];//+1 for \0
     list.add(CStr::new(name));
   }
   closedir(dp);

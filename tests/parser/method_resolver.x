@@ -200,14 +200,16 @@ impl MethodResolver{
     func get_impl(self, type: Type*): List<Impl*>{
         let list = List<Impl*>::new();
         let s = print_erased(type);
+        let erased = s.str();
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item = self.r.unit.items.get_ptr(i);
             if let Item::Impl(imp*) = (item){
-                if(print_erased(&imp.info.type).eq(s.str())){
+                if(print_erased(&imp.info.type).eq(erased)){
+                  //print("get_impl add %p %s\n", imp, Fmt::str(imp).cstr().ptr());
                   list.add(imp);
                 }else if(imp.info.trait_name.is_some()){
                   let tr = imp.info.trait_name.get().name();
-                  if(tr.eq(s.str())){
+                  if(tr.eq(erased)){
                     list.add(imp);
                   }
                 }
@@ -247,7 +249,7 @@ impl MethodResolver{
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
-            let imp = imp_list.get(i);
+            let imp = *imp_list.get_ptr(i);
             //print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       

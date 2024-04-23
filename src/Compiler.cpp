@@ -323,6 +323,7 @@ void init_globals(Compiler *c) {
             auto mc = dynamic_cast<MethodCall *>(g.expr.get());
             c->call(mc, gv);
         } else if (!type.isArray()) {
+            //todo move & drop of global
             c->setField(g.expr.get(), type, gv);
         }
         //dbg_glob();
@@ -524,20 +525,18 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
     return val;
 }
 
-void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
+void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Expression* lhs) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
-        /*if (curOwner.isDropType(type)) {
-            curOwner.drop(expr, ptr);
-            //resolv->err(expr, "can't deref drop type");
-        }*/
         auto val = get_obj_ptr(de->expr.get());
+        curOwner.beginAssign(lhs, ptr);
         copy(ptr, val, type);
         return;
     }
     if (isRvo(expr)) {
         auto val = gen(expr);
         //curOwner.drop(expr, ptr);
+        curOwner.beginAssign(lhs, ptr);
         copy(ptr, val, type);
         return;
     }
@@ -547,6 +546,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr) {
     } else if (isStruct(type)) {//todo mc
         auto val = gen(expr);
         //curOwner.drop(expr, ptr);
+        curOwner.beginAssign(lhs, ptr);
         copy(ptr, val, type);
     } else if (type.isPointer()) {
         auto val = get_obj_ptr(expr);
@@ -1320,13 +1320,14 @@ std::any Compiler::visitAssign(Assign *node) {
     auto lt = resolv->getType(node->left);
     if (node->op == "=") {
         //todo move this to setField where lhs is used completely
-        curOwner.beginAssign(node->left, l);
         if (dynamic_cast<ObjExpr *>(node->right)) {
             //dont delete, setField can't handle this
             auto rhs = gen(node->right);
+            curOwner.beginAssign(node->left, l);
             copy(l, rhs, lt);
         } else {
-            setField(node->right, lt, l);
+            //curOwner.beginAssign(node->left, l);
+            setField(node->right, lt, l, node->left);
         }
         curOwner.endAssign(node->left, node->right);
         return l;
@@ -1565,7 +1566,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         obj = get_obj_ptr(mc->scope.get());
         args.push_back(obj);
         paramIdx++;
-        if(target->self->is_deref){
+        if (target->self->is_deref) {
             curOwner.doMoveCall(mc->scope.get());
         }
     }

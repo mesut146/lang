@@ -5,6 +5,7 @@
 int VarScope::last_id = 0;
 
 bool verbose = false;
+bool enabled = true;
 
 template<class T>
 std::vector<T *> rev(std::vector<T> &vec) {
@@ -470,6 +471,7 @@ void dump_proto(llvm::Function *proto) {
 }
 
 void Ownership::call_drop(Type &type, llvm::Value *ptr) {
+    if (!enabled) return;
     llvm::Function *proto = nullptr;
     //todo, separate from compiler protos
     if (protos.contains(type.print())) {

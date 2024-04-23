@@ -659,7 +659,8 @@ impl Parser{
       let support_suffix = (kind is LitKind::INT || kind is LitKind::FLOAT || kind is LitKind::CHAR);
       if (pos != -1 && support_suffix) {
           //trim suffix
-          val = val.substr(0, (val.len() - sf.len()) as i32).str();
+          let trimmed = val.substr(0, (val.len() - sf.len()) as i32).str();
+          val = trimmed;
           return Expr::Lit{.n, Literal{kind, val, Option<Type>::new(Type::new(sf))}};
       }
     }

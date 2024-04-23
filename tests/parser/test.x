@@ -17,6 +17,7 @@ func root(): str{
 
 func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
   let list = listc(&dir);
+  print("compile_dir '%s'->%d elems\n", dir.ptr(), list.len());
   for(let i = 0;i < list.len();++i){
     let name_c: CStr* = list.get_ptr(i);
     let name = name_c.get(); 

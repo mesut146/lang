@@ -329,11 +329,13 @@ impl Resolver{
   func resolve_all(self){
     if(self.is_resolved) return;
     print("resolve_all %s\n", self.unit.path.clone().cstr().ptr());
+    //print("unit=%s\n", Fmt::str(&self.unit).cstr().ptr());
     self.is_resolved = true;
     self.init();
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
-      self.visit(self.unit.items.get_ptr(i));
+      let item = self.unit.items.get_ptr(i);
+      self.visit(item);
     }
     //todo these would generate more methods, whose are not visited
     for(let i=0;i<self.generated_methods.len();++i){

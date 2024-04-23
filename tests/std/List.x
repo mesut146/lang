@@ -109,12 +109,13 @@ impl<T> List<T>{
     }
     return ptr::get(self.ptr, pos);
   }
-  func get_ptr_write(self, pos: i64): T*{
+
+  /*func get_ptr_write(self, pos: i64): T*{
     if(pos >= self.cap) {
       panic("index %d out of bounds %d", pos, self.count);
     }
     return ptr::get(self.ptr, pos);
-  }
+  }*/
 
   func clear(self){
     //todo dealloc
