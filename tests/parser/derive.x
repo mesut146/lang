@@ -56,7 +56,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Drop")){
         return generate_drop(decl, unit);
     }
-    panic("generate %s", der.cstr());
+    panic("generate_derive decl: %s der: '%s'", decl.type.print().cstr().ptr(), der.cstr().ptr());
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{

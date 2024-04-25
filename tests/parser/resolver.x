@@ -391,7 +391,6 @@ impl Resolver{
   func init(self){
     if(self.is_init) return;
     self.is_init = true;
-    let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
@@ -399,24 +398,31 @@ impl Resolver{
         let res = RType::new(decl.type.clone());
         res.targetDecl = Option::new(decl);
         self.addType(decl.type.name().clone(), res);
-        //derive
-        for(let j=0;j<decl.derives.len();++i){
-          let der = decl.derives.get_ptr(j);
-          let imp = generate_derive(decl, &self.unit, der.print().str());
-          newItems.add(Item::Impl{imp});
-        }
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type.clone());
         res.trait = Option::new(tr);
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
-      }else if let Item::Type(name*, rhs*)=(it){
+      }else if let Item::Type(name*, rhs*) = (it){
         let res = self.visit(rhs);
         self.addType(name, res);
       }
     }
-    for(let i=0;i<newItems.len();++i){
+    //derives
+    let newItems = List<Item>::new();
+    for(let i = 0;i < self.unit.items.len();++i){
+      let it = self.unit.items.get_ptr(i);
+      if let Item::Decl(decl*) = (it){
+        //derive
+        for(let j = 0;j < decl.derives.len();++i){
+          let der: Type* = decl.derives.get_ptr(j);
+          let imp = generate_derive(decl, &self.unit, der.print().str());
+          newItems.add(Item::Impl{imp});
+        }
+      }
+    }
+    for(let i = 0;i < newItems.len();++i){
       let it = newItems.get(i);
       self.unit.items.add(it);
     }

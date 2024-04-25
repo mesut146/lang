@@ -325,6 +325,7 @@ std::pair<Move *, VarScope *> Ownership::is_assignable(Expression *expr) {
 }
 
 void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
+    if (lhs == nullptr) return;
     if (verbose) std::cout << "beginAssign " << lhs->print() << " line: " << lhs->line << std::endl;
     is_assignable(lhs);
     auto rt = r->resolve(lhs);

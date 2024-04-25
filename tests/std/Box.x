@@ -11,7 +11,9 @@ impl<T> Box<T>{
         if((ptr as u64) == 0){
           panic("box alloc failed");
         }
-        *ptr = val;
+        //*ptr = val;
+        ptr::copy(ptr, 0, val);
+        std::no_drop(val);
         return Box<T>{val: ptr};
     }
 

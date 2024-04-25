@@ -163,7 +163,7 @@ impl str{
     }
 
     func cstr(self): CStr{
-      return self.str().cstr();
+      return CStr::from_slice(*self);
     }
     
     func split(self, sep: str): List<str>{

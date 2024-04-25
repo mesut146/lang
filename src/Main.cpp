@@ -104,7 +104,7 @@ void compileTest() {
 }
 
 void bootstrap() {
-    clean();
+    //clean();
     Compiler c;
     c.srcDir = Config::root;
     c.outDir = "../out";
