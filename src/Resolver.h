@@ -173,7 +173,9 @@ static std::string mangle(const Method *m) {
         }
         s += "$GT";
     }
-    if (m->self) s += "_" + mangleType(m->self->type.value());
+    if (m->self) {
+        s += "_" + mangleType(m->self->type.value());
+    }
     for (auto &prm : m->params) {
         s += "_" + mangleType(prm.type.value());
     }
@@ -279,7 +281,7 @@ public:
     bool is_init = false;
     std::vector<BaseDecl *> usedTypes;
     std::vector<std::unique_ptr<Impl>> generated_impl;
-    std::map<std::string, Method*> drop_methods;
+    std::map<std::string, Method *> drop_methods;
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;

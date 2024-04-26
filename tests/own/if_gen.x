@@ -1,7 +1,7 @@
 import own/common
 
 
-func if1(c: bool, id: i32){
+func if_no_else(c: bool, id: i32){
     let a = A{a: id};
     if(c){
         send(a);
@@ -163,10 +163,10 @@ func els_redo(c: bool, id: i32){
 
 
 func main(){
-    if1(true, 1);
+    if_no_else(true, 1);
     assert check(1, 1);
     reset();
-    if1(false, 2);
+    if_no_else(false, 2);
     assert check(1, 2);
     reset();
 
@@ -242,4 +242,39 @@ func main(){
     reset();
 
     test();
+
+    if_multi(true, false, 50);
+    assert check(1, 50);
+    reset();
+
+    while_if_multi(true ,false, 100);
+}
+
+func if_multi(c1: bool, c2: bool, id: i32){
+    let a = A::new(id);
+    if(c1){
+        send(a);
+    }else if(c2){
+        send(a);
+    }else{
+        let x = a.a;
+    }
+    assert check(1, id);
+}
+
+func while_if_multi(c1: bool, c2: bool, id: i32){
+    let i = 0;
+    while(i < 1){
+        let a = A::new(id);
+        if(c1){
+            send(a);
+        }else if(c2){
+            send(a);
+        }else{
+            let x = a.a;
+        }
+        assert check(1, id);
+        ++i;
+    }
+    assert check(1, id);
 }

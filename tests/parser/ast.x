@@ -373,6 +373,7 @@ impl Clone for Type{
 func clone<T>(node: T*): T{
   let map = Map<String, Type>::new();
   let copier = AstCopier::new(&map);
+  Drop::drop(map);
   return copier.visit(node);
 }
 

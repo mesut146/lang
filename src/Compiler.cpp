@@ -390,36 +390,36 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         genCode(m);
     }
     int lastpos = unit->items.size();
-    for (auto &imp : curOwner.drop_impls) {
-        auto m = &imp->methods.at(0);
-        AstCopier cp;
-        auto item = std::make_unique<Impl>(imp->type);
-        auto res = std::any_cast<Method *>(cp.visitMethod(m));
-        res->parent = m->parent;
-        item->methods.push_back(std::move(*res));
-        unit->items.push_back(std::move(item));
-    }
-    for (int i = lastpos; i < unit->items.size(); ++i) {
-        auto it = unit->items[i].get();
-        auto imp = dynamic_cast<Impl *>(it);
-        auto m = &imp->methods.at(0);
-        print("resolve drop_impl " + imp->type.print() + " => " + mangle(m));
-        imp->accept(resolv.get());
-    }
-    for (int i = lastpos; i < unit->items.size(); ++i) {
-        auto it = unit->items[i].get();
-        auto imp = dynamic_cast<Impl *>(it);
-        auto m = &imp->methods.at(0);
-        print("make_proto " + imp->type.print());
-        make_proto(m);
-    }
-    for (int i = lastpos; i < unit->items.size(); ++i) {
-        auto it = unit->items[i].get();
-        auto imp = dynamic_cast<Impl *>(it);
-        auto m = &imp->methods.at(0);
-        print("genCode drop_impl " + imp->type.print() + " => " + mangle(m));
-        genCode(m);
-    }
+    // for (auto &imp : curOwner.drop_impls) {
+    //     auto m = &imp->methods.at(0);
+    //     AstCopier cp;
+    //     auto item = std::make_unique<Impl>(imp->type);
+    //     auto res = std::any_cast<Method *>(cp.visitMethod(m));
+    //     res->parent = m->parent;
+    //     item->methods.push_back(std::move(*res));
+    //     unit->items.push_back(std::move(item));
+    // }
+    // for (int i = lastpos; i < unit->items.size(); ++i) {
+    //     auto it = unit->items[i].get();
+    //     auto imp = dynamic_cast<Impl *>(it);
+    //     auto m = &imp->methods.at(0);
+    //     print("resolve drop_impl " + imp->type.print() + " => " + mangle(m));
+    //     imp->accept(resolv.get());
+    // }
+    // for (int i = lastpos; i < unit->items.size(); ++i) {
+    //     auto it = unit->items[i].get();
+    //     auto imp = dynamic_cast<Impl *>(it);
+    //     auto m = &imp->methods.at(0);
+    //     print("make_proto " + imp->type.print());
+    //     make_proto(m);
+    // }
+    // for (int i = lastpos; i < unit->items.size(); ++i) {
+    //     auto it = unit->items[i].get();
+    //     auto imp = dynamic_cast<Impl *>(it);
+    //     auto m = &imp->methods.at(0);
+    //     print("genCode drop_impl " + imp->type.print() + " => " + mangle(m));
+    //     genCode(m);
+    // }
 
     //emit llvm
     auto name = getName(path);
@@ -525,7 +525,7 @@ llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
     return val;
 }
 
-void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Expression* lhs) {
+void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Expression *lhs) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de && isStruct(type)) {
         auto val = get_obj_ptr(de->expr.get());
@@ -1002,6 +1002,9 @@ void Compiler::genCode(std::unique_ptr<Method> &m) {
 void Compiler::genCode(Method *m) {
     if (m->isGeneric || !m->body) {
         return;
+    }
+    if (m->name == "drop" && m->parent.type && m->parent.type->print() == "Unit") {
+        print(m->print());
     }
     resolv->curMethod = m;
     curMethod = m;
@@ -1520,7 +1523,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         if (curOwner.isDropType(argt)) {
             auto arg = mc->args.at(0);
             auto ptr = gen(arg);
-            curOwner.call_drop(argt.type, ptr);
+            curOwner.call_drop_force(argt.type, ptr);
             //todo bc of partial drop we have to comment below
             if (dynamic_cast<SimpleName *>(arg)) {
                 //todo f.access

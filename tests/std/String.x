@@ -11,7 +11,7 @@ impl String{
       let i = 0;
       print("String{len: %d, \"", self.len());
       while (i < self.len()){
-        print("%c", self.arr.get(i));
+        print("%c", *self.arr.get_ptr(i));
         ++i;
       }
       print("\"}\n");

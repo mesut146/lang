@@ -391,6 +391,7 @@ impl Resolver{
   func init(self){
     if(self.is_init) return;
     self.is_init = true;
+
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();

@@ -105,9 +105,14 @@ impl Parser{
         }
         if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
           unit.items.add(Item::Decl{self.parse_struct(derives, attr)});
-        }else if(self.is(TokenType::ENUM)){
+          continue;
+        }
+        if(self.is(TokenType::ENUM)){
           unit.items.add(Item::Decl{self.parse_enum(derives, attr)});
-        }else if(self.is(TokenType::IMPL)){
+          continue;
+        }
+        Drop::drop(derives);
+        if(self.is(TokenType::IMPL)){
           unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::TRAIT)){
           unit.items.add(Item::Trait{self.parse_trait()});
@@ -344,9 +349,8 @@ impl Parser{
       }
       return Variant{name, fields};
     }
-    
-    func parse_type(self): Type{
-      let res = Type::new("");
+
+    func parse_type_prim(self): Type{
       if(self.is(TokenType::LBRACKET)){
         self.pop();
         let type = self.parse_type();
@@ -355,25 +359,27 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          //res.drop();
-          res = Type::Array{bx,  i32::parse(size.value.str())};
+          return Type::Array{bx,  i32::parse(size.value.str())};
         }else{
           self.consume(TokenType::RBRACKET);
-          //res.drop();
-          res = Type::Slice{Box::new(type)};
+          return Type::Slice{Box::new(type)};
         }
       }else{
-        //res.drop();
-        res = self.gen_part();
+        let res = self.gen_part();
         while(self.is(TokenType::COLON2)){
           self.pop();
           let part = self.gen_part();
           if let Type::Simple(smp*) = (part){
-            //res.drop();nope
             res = Type::Simple{Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           }
         }
+        return res;
       }
+      panic("impossible");
+    }
+    
+    func parse_type(self): Type{
+      let res = self.parse_type_prim();
       while (self.is(TokenType::STAR)) {
         self.consume(TokenType::STAR);
         res = Type::Pointer{Box::new(res)};

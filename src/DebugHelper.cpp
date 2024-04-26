@@ -132,19 +132,21 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
 }
 
 llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
+    auto name = decl->type.print();
     std::vector<llvm::Metadata *> elems;
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
     auto st_size = getSize2(decl);
     auto file = DBuilder->createFile(decl->path, di.cu->getDirectory());
-    auto name = decl->type.print();
+
     auto st = DBuilder->createStructType(di.cu, name, file, decl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
     di.incomplete_types[name] = st;
     return st;
 }
 
 llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
-    auto st = di.incomplete_types.at(decl->type.print());
-    di.types[decl->type.print()] = st;
+    auto name = decl->type.print();
+    auto st = di.incomplete_types.at(name);
+    di.types[name] = st;
     auto file = st->getFile();
     std::vector<llvm::Metadata *> elems;
 

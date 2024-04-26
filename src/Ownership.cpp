@@ -5,7 +5,7 @@
 int VarScope::last_id = 0;
 
 bool verbose = false;
-bool enabled = true;
+bool enabled = false;
 
 template<class T>
 std::vector<T *> rev(std::vector<T> &vec) {
@@ -35,7 +35,7 @@ void Ownership::init(Compiler *c) {
     this->protos.clear();
     scope_map.clear();
     var_map.clear();
-    drop_impls.clear();
+    //drop_impls.clear();
 }
 
 void Ownership::init(Method *m) {
@@ -470,9 +470,11 @@ void dump_proto(llvm::Function *proto) {
     //std::cout << proto->getName().data() << " = " << std::endl;
     //proto->dump();
 }
-
 void Ownership::call_drop(Type &type, llvm::Value *ptr) {
     if (!enabled) return;
+    call_drop_force(type, ptr); 
+}
+void Ownership::call_drop_force(Type &type, llvm::Value *ptr) {
     llvm::Function *proto = nullptr;
     //todo, separate from compiler protos
     if (protos.contains(type.print())) {

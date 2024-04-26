@@ -15,7 +15,7 @@ impl A{
 }
 
 impl Drop for A{
-    func drop(self){
+    func drop(*self){
         print("A::drop %d\n", self.a);
         cnt += 1;
         last_id = self.a;
@@ -35,7 +35,7 @@ impl B{
 }
 
 impl Drop for B{
-    func drop(self){
+    func drop(*self){
         print("B::drop %d\n", self.b.a);
         cnt += 1;
         last_id = self.b.a;
