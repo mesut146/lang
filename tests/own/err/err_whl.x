@@ -16,3 +16,12 @@ func test(c: bool, c2: bool){
 }
 
 //else reachable from if, bc they are in loop
+
+
+func test2(){
+    let a = A::new(10);
+    while(true){
+        send(a);//fails
+    }
+    //invalid
+}

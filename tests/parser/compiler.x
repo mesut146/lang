@@ -203,7 +203,7 @@ impl Compiler{
         panic("error while running %s", name.ptr());
       }
     }else{
-      panic("link failed '%s'", cmd.cstr());
+      panic("link failed '%s'", cmd.cstr().ptr());
     }
   }
 
@@ -220,7 +220,7 @@ impl Compiler{
     }
     //let r = Resolver::new(path0.str(), &self.ctx);
     //self.resolver = &r;
-    self.resolver = self.ctx.create_resolver(&path.path);
+    self.resolver = self.ctx.create_resolver(&path.path);//Resolver*
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.get_heap());
       if (!self.config.single_mode) {//compile last
@@ -228,7 +228,7 @@ impl Compiler{
           return outFile;
       }
     }
-    self.resolver.resolve_all();
+    //self.resolver.resolve_all();
     if(true){
       //r.unit.drop();
       return outFile;

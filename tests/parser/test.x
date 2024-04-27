@@ -49,21 +49,25 @@ func compiler_test(){
 }
 
 func bootstrap(){
-  print("bootstrap\n");
-  let root = root();
+  print("test::bootstrap\n");
+  let root: str = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, CStr::new("../tests/parser"), false);
+  //compile_dir(&cmp, CStr::new("../tests/parser"), false);
   let arr = ["../tests/std/String.x",
             "../tests/std/str.x",
             "../tests/std/ops.x",
             "../tests/std/libc.x",
             "../tests/std/io.x"];
-  for(let i=0;i<arr.len();++i){
+  for(let i = 0;i < arr.len();++i){
     let file = arr[i];
     cmp.compile(CStr::new(file));
+    if(i==0){
+      break;
+    }
   }
-  cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+  //cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+  Drop::drop(cmp);
 }
 
 func main(argc: i32, args: i8**){

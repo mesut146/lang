@@ -239,7 +239,7 @@ impl Resolver{
     print("Resolver::new %s\n", path.ptr());
     let parser = Parser::new(path);
     let unit = parser.parse_unit();
-    //parser.drop();
+    Drop::drop(parser);
     //let str = Fmt::str(&unit);
     //print("unit=%s\n", str.cstr());
     
@@ -699,7 +699,7 @@ impl Resolver{
     if(node.is_pointer()){
       let inner = node.unwrap_ptr();
       let res = self.visit(inner);
-      let ptr = res.type.toPtr();
+      let ptr = res.type.clone().toPtr();
       res.type = ptr;
       return res;
     }
@@ -1117,7 +1117,7 @@ impl Resolver{
   func visit_ref(self, e: Expr*): RType{
     if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess){
       let res = self.visit(e);
-      res.type = res.type.toPtr();
+      res.type = res.type.clone().toPtr();
       return res;
     }
     panic("ref expr is not supported: %s", e.print().cstr());
@@ -1212,7 +1212,7 @@ impl Resolver{
     }
     if (self.is_slice_get_ptr(call)) {
         let elem = self.getType(call.scope.get().get()).elem();
-        return RType::new(elem.toPtr());
+        return RType::new(elem.clone().toPtr());
     }
     if (self.is_slice_get_len(call)) {
         self.visit(call.scope.get().get());
@@ -1225,10 +1225,7 @@ impl Resolver{
     }
     if(self.is_array_get_ptr(call)){
       let arr_type = self.getType(call.scope.get().get()).unwrap_ptr();
-      return RType::new(arr_type.elem().toPtr());
-    }
-    if(node.print().eq("is.els.get().get()")){
-      let xx = 5;
+      return RType::new(arr_type.elem().clone().toPtr());
     }
     let sig = Signature::new(call, self);
     if(call.scope.is_some()){
@@ -1255,7 +1252,7 @@ impl Resolver{
         return RType::new(Type::new("i8").toPtr());
       }else{
         let arg = self.visit(call.type_args.get_ptr(0));
-        return RType::new(arg.type.toPtr());
+        return RType::new(arg.type.clone().toPtr());
       }
     }
     if (call.name.eq("panic")) {
@@ -1595,7 +1592,7 @@ impl Resolver{
         let field = variant.fields.get_ptr(i);
         let ty = field.type.clone();
         if (arg.is_ptr) {
-            ty = field.type.toPtr();
+            ty = ty.toPtr();
         } 
         self.addScope(arg.name.clone(), ty.clone(), false);
         self.cache.add(arg.id, RType::new(ty));

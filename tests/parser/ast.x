@@ -103,6 +103,9 @@ impl ImplInfo{
   func new(type: Type): ImplInfo{
     return ImplInfo{List<Type>::new(), Option<Type>::None, type};
   }
+  func clone(self): ImplInfo{
+    return ImplInfo{self.type_params.clone(), self.trait_name.clone(), self.type.clone()};
+  }
 }
 
 
@@ -176,6 +179,22 @@ impl Parent{
       return info;
     }
     panic("as_impl");
+  }
+
+  func clone(self): Parent{
+    if let Parent::None=(self){
+      return Parent::None;
+    }
+    if let Parent::Impl(info*)=(self){
+      return Parent::Impl{info.clone()};
+    }
+    if let Parent::Trait(type*)=(self){
+      return Parent::Trait{type.clone()};
+    }
+    if let Parent::Extern=(self){
+      return Parent::Extern;
+    }
+    panic("Parent::clone");
   }
 }
 
@@ -258,8 +277,8 @@ impl Type{
   func new(scp: Type, s: String): Type{
     return Simple::new(scp, s).into();
   }
-  func toPtr(self): Type{
-    return Type::Pointer{Box::new(self.clone())};
+  func toPtr(*self): Type{
+    return Type::Pointer{Box::new(self)};
   }
   
   func name(self): String*{

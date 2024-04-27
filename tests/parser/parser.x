@@ -176,6 +176,7 @@ impl Parser{
         self.consume(TokenType::IMPL);
         let type_params = List<Type>::new();
         if (self.is(TokenType::LT)) {
+          Drop::drop(type_params);
           type_params = self.type_params();
         }
         let t1 = self.parse_type();
@@ -184,12 +185,12 @@ impl Parser{
             let target = self.parse_type();
             let op = Option::new(target.clone());
             let info = ImplInfo{type_params, Option::new(t1), target};
-            let parent = Parent::Impl{info};
+            let parent = Parent::Impl{info.clone()};
             return Impl{info, self.parse_methods(op, parent)};
         }else{
           let op = Option::new(t1.clone());
           let info = ImplInfo{type_params, Option<Type>::None, t1};
-          let parent = Parent::Impl{info};
+          let parent = Parent::Impl{info.clone()};
           return Impl{info, self.parse_methods(op, parent)};
         }
         panic("parse_impl");
@@ -199,9 +200,10 @@ impl Parser{
         let arr = List<Method>::new();
         self.consume(TokenType::LBRACE);
         while(!self.is(TokenType::RBRACE)){
-            arr.add(self.parse_method(imp, parent));
+            arr.add(self.parse_method(imp, parent.clone()));
         }
         self.consume(TokenType::RBRACE);
+        Drop::drop(parent);
         return arr;
     }
     
@@ -237,7 +239,7 @@ impl Parser{
             is_deref = true;
           }
           let self_name = self.name();
-          let self_ty = imp.get().toPtr();
+          let self_ty = imp.unwrap().toPtr();
           selfp = Option::new(Param{.id, self_name, self_ty, true, is_deref});
         }
         while (self.is(TokenType::COMMA)) {
@@ -369,9 +371,10 @@ impl Parser{
         while(self.is(TokenType::COLON2)){
           self.pop();
           let part = self.gen_part();
-          if let Type::Simple(smp*) = (part){
+          if let Type::Simple(smp*) = (&part){
             res = Type::Simple{Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           }
+          Drop::drop(part);
         }
         return res;
       }

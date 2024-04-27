@@ -17,7 +17,7 @@ func as_type(bits: i32): Type{
 
 func makeSelf(scope: Type*): Type{
     //if (scope.is_prim()) return *scope;
-    return scope.toPtr();
+    return scope.clone().toPtr();
 }
 
 func replace_self(typ: Type*, m: Method*): Type{

@@ -1003,9 +1003,9 @@ void Compiler::genCode(Method *m) {
     if (m->isGeneric || !m->body) {
         return;
     }
-    if (m->name == "drop" && m->parent.type && m->parent.type->print() == "Unit") {
+    /*if (m->name == "drop" && m->parent.type && m->parent.type->print() == "Unit") {
         print(m->print());
-    }
+    }*/
     resolv->curMethod = m;
     curMethod = m;
     auto id = mangle(m);
@@ -2220,7 +2220,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         for (int i = 0; i < fields.size(); i++) {
             //regular var decl
             auto &fd = fields[i];
-            auto arg = node->args[i];
+            auto &arg = node->args[i];
             auto field_ptr = gep2(dataPtr, i, var_ty);
             auto alloc_ptr = varAlloc[getId(arg.name)];
             NamedValues[arg.name] = alloc_ptr;

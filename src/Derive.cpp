@@ -129,10 +129,12 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
             auto &ev = ed->variants[i];
             auto ifs = std::make_unique<IfLetStmt>();
             ifs->loc(line);
-            ifs->type = (Type(clone(bd->type), ev.name));
+            ifs->type = Type(clone(bd->type), ev.name);
             for (auto &fd : ev.fields) {
                 //todo make this ptr
-                ifs->args.push_back(ArgBind(fd.name, true));
+                auto arg = ArgBind(fd.name, false);
+                arg.loc(line);
+                ifs->args.push_back(arg);
             }
             ifs->rhs.reset((new SimpleName("self"))->loc(line));
             auto then = new Block;
@@ -150,6 +152,8 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
                 last_iflet = (IfLetStmt *) last_iflet->elseStmt.get();
             }
         }
+        print("derive drop enum " + bd->type.print());
+        //print(m.print());
     } else {
         auto sd = (StructDecl *) bd;
         for (auto &fd : sd->fields) {
