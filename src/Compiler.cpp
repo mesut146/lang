@@ -1431,6 +1431,16 @@ std::any callPanic(MethodCall *mc, Compiler *c) {
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
     loc(mc);
+    if (is_std_parent_name(mc)) {
+        auto ptr = getAlloc(mc);
+        if (curMethod->parent.is_impl()) {
+            auto parent_type = curMethod->parent.type.value().print();
+            strLit(ptr, parent_type);
+        } else {
+            strLit(ptr, "");
+        }
+        return ptr;
+    }
     if (is_std_no_drop(mc)) {
         auto arg = mc->args.at(0);
         curOwner.doMoveCall(arg);//fake move, so the will be no drop
@@ -1527,6 +1537,8 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             //todo bc of partial drop we have to comment below
             if (dynamic_cast<SimpleName *>(arg)) {
                 //todo f.access
+                curOwner.doMoveCall(arg);
+            }else{
                 curOwner.doMoveCall(arg);
             }
         }
@@ -1644,16 +1656,19 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     return res;
 }
 
-void Compiler::strLit(llvm::Value *ptr, Literal *node) {
-    auto trimmed = node->val.substr(1, node->val.size() - 2);
-    auto src = Builder->CreateGlobalStringPtr(trimmed);
+std::string trim_quotes(const std::string &str) {
+    return str.substr(1, str.size() - 2);
+}
+
+void Compiler::strLit(llvm::Value *ptr, const std::string &str) {
+    auto src = Builder->CreateGlobalStringPtr(str);
     auto slice_ptr = gep2(ptr, 0, stringType);
     auto data_target = gep2(slice_ptr, SLICE_PTR_INDEX, sliceType);
     auto len_target = gep2(slice_ptr, SLICE_LEN_INDEX, sliceType);
     //set ptr
     Builder->CreateStore(src, data_target);
     //set len
-    auto len = makeInt(trimmed.size(), SLICE_LEN_BITS);
+    auto len = makeInt(str.size(), SLICE_LEN_BITS);
     Builder->CreateStore(len, len_target);
 }
 
@@ -1661,7 +1676,7 @@ std::any Compiler::visitLiteral(Literal *node) {
     loc(node);
     if (node->type == Literal::STR) {
         auto ptr = getAlloc(node);
-        strLit(ptr, node);
+        strLit(ptr, trim_quotes(node->val));
         return (llvm::Value *) ptr;
     } else if (node->type == Literal::CHAR) {
         auto trimmed = node->val.substr(1, node->val.size() - 2);
@@ -2056,7 +2071,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
     }
     auto lit = dynamic_cast<Literal *>(e);
     if (lit) {
-        strLit(ptr, lit);
+        strLit(ptr, trim_quotes(lit->val));
         return;
     }
     error("child: " + e->print());

@@ -58,6 +58,10 @@ static bool is_std_no_drop(MethodCall *mc) {
     return mc->name == "no_drop" && mc->scope && mc->scope->print() == "std" && mc->is_static;
 }
 
+static bool is_std_parent_name(MethodCall *mc) {
+    return mc->name == "parent_name" && mc->scope && mc->scope->print() == "std" && mc->is_static;
+}
+
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {

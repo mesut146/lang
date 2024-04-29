@@ -8,7 +8,24 @@ func open_checked(path: CStr*, mode: CStr*): FILE*{
   return f;
 }
 
-func read_bytes(path: CStr*): List<i8>{
+func read_bytes(path: CStr*): List<u8>{
+  let mode = CStr::new("r");
+  let f = open_checked(path, &mode);
+  fseek(f, 0, SEEK_END());
+  let size = ftell(f);
+  fseek(f, 0, SEEK_SET());
+  let res = List<u8>::new(size);
+  let buf = [0u8; 1024];
+  while(true){
+      let rcnt = fread(&buf[0], 1, 1024, f);
+      if(rcnt <= 0){ break; }
+      res.add(buf[0..rcnt]);
+  }
+  fclose(f);
+  return res;
+}
+
+func read_bytes_i8(path: CStr*): List<i8>{
   let mode = CStr::new("r");
   let f = open_checked(path, &mode);
   fseek(f, 0, SEEK_END());
@@ -26,8 +43,8 @@ func read_bytes(path: CStr*): List<i8>{
 }
 
 func read_string(path: CStr*): String{
-  let data: List<i8> = read_bytes(path);
-  return String::new(&data);
+  let data: List<u8> = read_bytes(path);
+  return String::new(data);
 }
 
 func write_bytes(data: [u8], path: CStr*){

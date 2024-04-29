@@ -163,9 +163,9 @@ extern{
     func CreateAShr(l: Value*, r: Value*): Value*;
 }
 
-func getDefaultTargetTriple2(): String{
+func getDefaultTargetTriple2(): CStr{
     let arr = [0u8; 100];
     let ptr = arr.ptr();
     let len = getDefaultTargetTriple(ptr as i8*);
-    return String::new(arr[0..len]);
+    return CStr::new(arr[0..len + 1]);
 }

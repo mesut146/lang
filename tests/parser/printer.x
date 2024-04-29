@@ -2,12 +2,14 @@ import parser/ast
 
 func body(node: Stmt*, f: Fmt*){
   let s = Fmt::str(node); 
-  let lines = s.str().split("\n");
+  let lines: List<str> = s.str().split("\n");
   for(let j = 0;j < lines.len();++j){
     f.print("  ");
     f.print(lines.get(j));
     f.print("\n");
   }
+  Drop::drop(s);
+  Drop::drop(lines);
 }
 
 func join<T>(f: Fmt*, arr: List<T>*){
@@ -92,6 +94,8 @@ impl Debug for Impl{
         f.print(lines.get(j));
         f.print("\n");
       }
+      Drop::drop(ms);
+      Drop::drop(lines);
     }
     f.print("\n}");
   }
@@ -250,7 +254,7 @@ impl Debug for Stmt{
       f.print("return");
       if(e.is_some()){
         f.print(" ");
-        e.unwrap().debug(f);
+        e.get().debug(f);
       }
       f.print(";");
     }else if let Stmt::While(e*, b*)=(self){
@@ -303,7 +307,7 @@ impl Debug for Stmt{
       f.print("continue;");
     }else if let Stmt::Break = (self){
       f.print("break;");
-    }else if let Stmt::Assert(e) = (self){
+    }else if let Stmt::Assert(e*) = (self){
       f.print("assert ");
       e.debug(f);
       f.print(";");
@@ -346,7 +350,7 @@ impl Debug for Fragment{
     f.print(&self.name);
     if(self.type.is_some()){
       f.print(": ");
-      self.type.unwrap().debug(f);
+      self.type.get().debug(f);
     }
     f.print(" = ");
     self.rhs.debug(f);
@@ -357,11 +361,13 @@ impl Debug for Fragment{
 impl Debug for Expr{
   func debug(self, f: Fmt*){
     if let Expr::Lit(lit*)=(self){
-      f.print(lit.val.replace("\n", "\\n").str());
+      let replaced = lit.val.replace("\n", "\\n");
+      f.print(&replaced);
       if(lit.suffix.is_some()){
         f.print("_");
         lit.suffix.get().debug(f);
       }
+      Drop::drop(replaced);
     }
     else if let Expr::Name(v*)=(self){
       f.print(v.str());
@@ -429,12 +435,13 @@ impl Debug for Expr{
 impl Debug for Call{
   func debug(self, f: Fmt*){
     if(self.scope.is_some()){
-      let s = self.scope.unwrap().get();
-      if let Expr::Type(t)=(s){
+      //scope: Option<Box<Expr>>
+      let scp: Expr* = self.scope.get().get();
+      if let Expr::Type(t*)=(scp){
         t.debug(f);
         f.print("::");
       }else{
-        s.debug(f);
+        scp.debug(f);
         f.print(".");
       }
     }

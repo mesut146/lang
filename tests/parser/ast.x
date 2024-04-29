@@ -297,9 +297,9 @@ impl Type{
     }
     panic("as_simple");
   }
-  func unwrap_simple(self): Simple{
+  func unwrap_simple(*self): Simple{
     //todo self
-    if let Type::Simple(simple*) = (self){
+    if let Type::Simple(simple) = (self){
       return ptr::deref(simple);
     }
     panic("as_simple");

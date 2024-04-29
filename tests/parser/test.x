@@ -62,7 +62,7 @@ func bootstrap(){
   for(let i = 0;i < arr.len();++i){
     let file = arr[i];
     cmp.compile(CStr::new(file));
-    if(i==0){
+    if(i == 0){
       break;
     }
   }

@@ -35,6 +35,10 @@ impl String{
     func new(arr: List<u8>*): String{
       return String::new(arr.slice());
     }
+
+    func new(arr: List<u8>): String{
+      return String{arr: arr};
+    }
     
     func new(arr: List<i8>*): String{
       return String::new(arr.slice());

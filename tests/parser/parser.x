@@ -367,7 +367,7 @@ impl Parser{
           return Type::Slice{Box::new(type)};
         }
       }else{
-        let res = self.gen_part();
+        let res: Type = self.gen_part();
         while(self.is(TokenType::COLON2)){
           self.pop();
           let part = self.gen_part();
@@ -439,8 +439,7 @@ impl Parser{
         //dump(arr.last());
       }
       self.consume(TokenType::RBRACE);
-      let res = Block{arr};
-      return res;
+      return Block{arr};
     }
     
     func var(self): VarExpr{

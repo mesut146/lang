@@ -105,12 +105,12 @@ impl Fmt{
   func str<T>(node: T*): String{
     let f = Fmt::new();
     Debug::debug(node, &f);
-    return f.buf.clone();
+    let res = f.buf.clone();
+    Drop::drop(f);
+    return res;
   }
   func str2<T>(node: T): String{
-    let f = Fmt::new();
-    Debug::debug(&node, &f);
-    return f.buf;
+    return Fmt::str(&node);
   }
 
   func format(s: str, args: List<str>*): String{

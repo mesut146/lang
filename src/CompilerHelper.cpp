@@ -400,6 +400,9 @@ public:
         }
     }
     std::any visitMethodCall(MethodCall *node) override {
+        if (is_std_parent_name(node)) {
+            return alloc(Type("str"), node);
+        }
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;
         if (m && compiler->isRvo(m)) {

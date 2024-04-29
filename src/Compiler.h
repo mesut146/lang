@@ -296,7 +296,7 @@ public:
     void object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived);
     llvm::Value *call(MethodCall *node, llvm::Value *ptr);
     std::any slice(ArrayAccess *node, llvm::Value *ptr, const Type &arrty);
-    void strLit(llvm::Value *ptr, Literal *lit);
+    void strLit(llvm::Value *ptr, const std::string& str);
 
     std::any visitBlock(Block *node) override;
     std::any visitVarDecl(VarDecl *node) override;

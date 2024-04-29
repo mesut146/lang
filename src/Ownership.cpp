@@ -157,6 +157,13 @@ void is_movable(Expression *expr, Ownership *own) {
             own->r->err(expr, "move field of ptr");
         }
         if (own->isDropType(rt_scope)) {
+            if (own->method->name == "drop" && own->method->self.has_value() && own->method->params.empty()) {
+                return;
+            }
+            auto sd = dynamic_cast<StructDecl *>(rt.targetDecl);
+            /*if (sd->fields.size() == 1) {
+                return;
+            }*/
             own->r->err(expr, "partial move not supported");
         }
         for (auto scp : own->rev_scopes()) {
@@ -471,8 +478,10 @@ void dump_proto(llvm::Function *proto) {
     //proto->dump();
 }
 void Ownership::call_drop(Type &type, llvm::Value *ptr) {
-    if (!enabled) return;
-    call_drop_force(type, ptr); 
+    if (!enabled) {
+        return;
+    }
+    call_drop_force(type, ptr);
 }
 void Ownership::call_drop_force(Type &type, llvm::Value *ptr) {
     llvm::Function *proto = nullptr;
@@ -567,6 +576,13 @@ bool is_drop_method(Method &m) {
            m.parent.trait_type->print() == "Drop";
 }
 
+void drop_info(Variable &v) {
+    print("drop var " + v.name + " line: " + std::to_string(v.line));
+}
+void drop_info(Expression *expr) {
+    print("drop " + expr->print() + " line: " + std::to_string(expr->line));
+}
+
 void Ownership::drop(Variable &v) {
     if (verbose) print("drop " + v.print());
     if (v.is_self && is_drop_method(*method)) {
@@ -574,6 +590,7 @@ void Ownership::drop(Variable &v) {
         return;
     }
     call_drop(v.type, v.ptr);
+    drop_info(v);
 }
 
 void Ownership::drop(Expression *expr, llvm::Value *ptr) {
@@ -585,6 +602,7 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
             if (verbose) {
                 print("drop " + fa->print());
             }
+            drop_info(expr);
             call_drop(rt.type, ptr);
             return;
         }
@@ -594,6 +612,7 @@ void Ownership::drop(Expression *expr, llvm::Value *ptr) {
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de) {
         //auto rt2 = r->resolve(de->expr);
+        drop_info(expr);
         call_drop(rt.type, ptr);
         return;
     }
@@ -711,6 +730,7 @@ void drop_objects(VarScope &scope, Ownership *own) {
             if (verbose) {
                 std::cout << "drop obj" << obj.expr->print() << " line: " << obj.expr->line << "\n";
             }
+            drop_info(obj.expr);
             own->call_drop(rt.type, obj.ptr);
         }
     }

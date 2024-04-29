@@ -1658,6 +1658,9 @@ Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
 }*/
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
+    if (is_std_parent_name(mc)) {
+        return RType(Type("str"));
+    }
     if (is_std_no_drop(mc)) {
         auto rt = resolve(mc->args[0]);
         return RType(Type("void"));

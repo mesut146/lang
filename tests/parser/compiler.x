@@ -90,7 +90,7 @@ impl Protos{
 
 struct llvm_holder{
   target_machine: TargetMachine*;
-  target_triple: String;
+  target_triple: CStr;
   di: Option<DebugInfo>;
 }
 
@@ -101,8 +101,10 @@ struct Config{
 }
 
 func dummy_resolver(ctx: Context*): Resolver*{
-  let path = "../tests/std/str.x".str();
-  return ctx.create_resolver(&path);
+  let path: String = "../tests/std/str.x".str();
+  let res = ctx.create_resolver(&path);
+  Drop::drop(path);
+  return res;
 }
 
 func has_main(unit: Unit*): bool{
@@ -138,7 +140,7 @@ impl llvm_holder{
   func initModule(self, path: CStr*){
     let name = getName(path.get());
     make_ctx();
-    make_module(name.str().cstr().ptr(), self.target_machine, self.target_triple.clone().cstr().ptr());
+    make_module(name.str().cstr().ptr(), self.target_machine, self.target_triple.ptr());
     make_builder();
     self.di = Option::new(DebugInfo::new(path, true));
   }
@@ -151,7 +153,7 @@ impl llvm_holder{
     InitializeAllAsmPrinters();
     
     let target_triple = getDefaultTargetTriple2();
-    let target_machine = createTargetMachine(target_triple.clone().cstr().ptr());
+    let target_machine = createTargetMachine(target_triple.ptr());
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
     //todo cache
@@ -210,7 +212,7 @@ impl Compiler{
   func compile(self, path0: CStr): String{
     //print("compile %s\n", path0.cstr());
     let path = Path::new(path0.get_heap());
-    let outFile = get_out_file(path0.get());
+    let outFile: String = get_out_file(path0.get());
     let ext = path.ext();
     if (!ext.eq("x")) {
       panic("invalid extension %s", ext.cstr());
@@ -255,13 +257,15 @@ impl Compiler{
       print("writing %s\n", llvm_file.cstr().ptr());
     }
     self.compiled.add(outFile.clone());
-    emit_object(outFile.clone().cstr().ptr(), self.llvm.target_machine, self.llvm.target_triple.clone().cstr().ptr());
+    let outFile_cstr = CStr::new(outFile.clone());
+    emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
     if(self.config.verbose){
-      print("writing %s\n", outFile.clone().cstr().ptr());
+      print("writing %s\n", outFile_cstr.ptr());
     }
+    Drop::drop(outFile_cstr);
+    Drop::drop(path0);
     self.cleanup();
     return outFile;
-    //panic("");
   }
 
   func cleanup(self){

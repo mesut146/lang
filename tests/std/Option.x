@@ -73,11 +73,10 @@ func drop2<T>(a: T*){
 
 impl<T> Drop for Option<T>{
   func drop(*self){
-    if(std::is_ptr<T>()) return;
+    //if(std::is_ptr<T>()) return;
     if let Option<T>::Some(val)=(self){
-      //val.drop();
+      //print("%s::drop\n", std::parent_name());
       Drop::drop(val);
-      //drop2(val);
     }
   }
 }

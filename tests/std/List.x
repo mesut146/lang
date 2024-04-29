@@ -119,6 +119,7 @@ impl<T> List<T>{
 
   func clear(self){
     //todo dealloc
+    self.drop_elems();
     self.count = 0;
   }
 
@@ -217,11 +218,14 @@ impl<T> Clone for List<T>{
 impl<T> Drop for List<T>{
   func drop(*self){
     //print("drop list %d\n", self.len());
+    self.drop_elems();
+    free(self.ptr as i8*);
+  }
+
+  func drop_elems(self){
     for(let i = 0;i < self.len();++i){
       let ep = self.get(i);
       Drop::drop(ep);
-      //std::no_drop(ep);
     }
-    free(self.ptr as i8*);
   }
 }
