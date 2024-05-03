@@ -67,6 +67,7 @@ struct Cache {
     }
 };
 
+
 struct Compiler : public Visitor {
 public:
     std::string srcDir;
@@ -127,7 +128,7 @@ public:
     int getSize2(const Type &type) { return getSize2(&type); }
     int getSize2(BaseDecl *decl);
     void copy(llvm::Value *trg, llvm::Value *src, const Type &type);
-    void setField(Expression *expr, const Type &type, llvm::Value *entPtr, Expression* lhs = nullptr);
+    void setField(Expression *expr, const Type &type, llvm::Value *entPtr, Expression *lhs = nullptr);
     void setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &entries, BaseDecl *decl, llvm::Type *ty, llvm::Value *ptr);
     llvm::Value *branch(llvm::Value *val);
     llvm::ConstantInt *makeInt(int val);
@@ -296,7 +297,7 @@ public:
     void object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::string *derived);
     llvm::Value *call(MethodCall *node, llvm::Value *ptr);
     std::any slice(ArrayAccess *node, llvm::Value *ptr, const Type &arrty);
-    void strLit(llvm::Value *ptr, const std::string& str);
+    void strLit(llvm::Value *ptr, const std::string &str);
 
     std::any visitBlock(Block *node) override;
     std::any visitVarDecl(VarDecl *node) override;

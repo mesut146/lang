@@ -903,91 +903,6 @@ void storeParams(Method *m, Compiler *c) {
     }
 }
 
-enum class ExitType {
-    NONE,
-    RETURN,
-    PANIC,
-    BREAK,
-    CONTINE,
-};
-
-struct Exit {
-    ExitType kind;
-    std::unique_ptr<Exit> if_kind;
-    std::unique_ptr<Exit> else_kind;
-
-    Exit(const ExitType &kind) : kind(kind) {}
-    Exit() {}
-};
-
-
-Exit get_exit_type(Statement *stmt) {
-    if (dynamic_cast<ReturnStmt *>(stmt)) return ExitType::RETURN;
-    if (dynamic_cast<BreakStmt *>(stmt)) return ExitType::BREAK;
-    if (dynamic_cast<ContinueStmt *>(stmt)) return ExitType::CONTINE;
-    auto expr = dynamic_cast<ExprStmt *>(stmt);
-    if (expr) {
-        auto mc = dynamic_cast<MethodCall *>(expr->expr);
-        if (mc && !mc->scope && mc->name == "panic") {
-            return ExitType::PANIC;
-        }
-        return ExitType::NONE;
-    }
-    auto block = dynamic_cast<Block *>(stmt);
-    if (block && !block->list.empty()) {
-        auto &last = block->list.back();
-        return get_exit_type(last.get());
-    }
-    auto is = dynamic_cast<IfStmt *>(stmt);
-    if (is) {
-        auto res = Exit{ExitType::NONE};
-        auto if_type = get_exit_type(is->thenStmt.get());
-        res.if_kind = std::make_unique<Exit>(std::move(if_type));
-        if (is->elseStmt) {
-            auto else_kind = get_exit_type(is->thenStmt.get());
-            res.else_kind = std::make_unique<Exit>(std::move(else_kind));
-        }
-        return res;
-    }
-    return ExitType::NONE;
-}
-
-bool ends_with_return(Statement *stmt) {
-    if (dynamic_cast<ReturnStmt *>(stmt)) return true;
-    auto expr = dynamic_cast<ExprStmt *>(stmt);
-    if (expr) {
-        auto mc = dynamic_cast<MethodCall *>(expr->expr);
-        return mc && !mc->scope && mc->name == "panic";
-    }
-    auto block = dynamic_cast<Block *>(stmt);
-    if (block && !block->list.empty()) {
-        auto &last = block->list.back();
-        return ends_with_return(last.get());
-    }
-    auto is = dynamic_cast<IfStmt *>(stmt);
-    if (is) {
-        if (is->elseStmt) {
-            return ends_with_return(is->thenStmt.get()) || ends_with_return(is->elseStmt.get());
-        }
-        //return ends_with_return(is->thenStmt.get());
-    }
-    return false;
-}
-
-bool isReturnLast(Statement *stmt) {
-    if (isRet(stmt)) {
-        return true;
-    }
-    auto block = dynamic_cast<Block *>(stmt);
-    if (block && !block->list.empty()) {
-        auto &last = block->list.back();
-        if (isRet(last.get())) {
-            return true;
-        }
-    }
-    return false;
-}
-
 Type prm_type(const Type &type) {
     if (isStruct(type)) {
         return Type(Type::Pointer, type);
@@ -1039,16 +954,16 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
-    if (!ends_with_return(m->body.get())) {
+    if (!Exit::get_exit_type(m->body.get()).is_return()) {
         //return already drops all
         curOwner.endScope(*curOwner.main_scope);
     }
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
-        if (!ends_with_return(m->body.get())) {
+        if (!Exit::get_exit_type(m->body.get()).is_return()) {
             Builder->CreateRet(makeInt(0, 32));
         }
-    } else if (!isReturnLast(m->body.get()) && m->type.print() == "void") {
+    } else if (!Exit::get_exit_type(m->body.get()).is_return() && m->type.print() == "void") {
         if (!m->body->list.empty()) {
             loc(m->body->list.back()->line + 1, 0);
         }
@@ -1530,7 +1445,8 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             //dont drop
             return (llvm::Value *) Builder->getVoidTy();
         }
-        if (curOwner.isDropType(argt)) {
+        DropHelper helper(resolv.get());
+        if (helper.isDropType(argt)) {
             auto arg = mc->args.at(0);
             auto ptr = gen(arg);
             curOwner.call_drop_force(argt.type, ptr);
@@ -1538,7 +1454,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
             if (dynamic_cast<SimpleName *>(arg)) {
                 //todo f.access
                 curOwner.doMoveCall(arg);
-            }else{
+            } else {
                 curOwner.doMoveCall(arg);
             }
         }
@@ -2154,33 +2070,33 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     set_and_insert(then);
     resolv->newScope();
     int cur_scope = curOwner.last_scope->id;
-    auto then_returns = ends_with_return(node->thenStmt.get());
+    auto then_returns = Exit::get_exit_type(node->thenStmt.get());
     auto then_scope = curOwner.newScope(ScopeId::IF, then_returns, cur_scope, node->thenStmt->line);
     node->thenStmt->accept(this);
-    if (!then_scope->ends_with_return) {
+    if (!then_scope->exit.is_exit()) {
         auto &last_ins = Builder->GetInsertBlock()->back();
         if (!last_ins.isTerminator()) {
             curOwner.endScope(*then_scope);
         }
     }
-    if (!isReturnLast(node->thenStmt.get())) {
+    if (!then_returns.is_exit()) {
         Builder->CreateBr(next);
     }
     set_and_insert(elsebb);
     curOwner.setScope(cur_scope);//else inserted into main scope, not then scope
-    auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
+    auto else_scope = curOwner.newScope(ScopeId::ELSE, Exit(ExitType::NONE), cur_scope, node->thenStmt->line);
     else_scope->sibling = then_scope->id;
     then_scope->sibling = else_scope->id;
     if (node->elseStmt) {
         resolv->newScope();
-        else_scope->ends_with_return = ends_with_return(node->elseStmt.get());
+        else_scope->exit = Exit::get_exit_type(node->elseStmt.get());
         else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
-        if (!else_scope->ends_with_return) {
+        if (!else_scope->exit.is_return()) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
         }
-        if (!isReturnLast(node->elseStmt.get())) {
+        if (!else_scope->exit.is_exit()) {
             Builder->CreateBr(next);
         } else {
             //return cleans all
@@ -2222,7 +2138,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
     set_and_insert(then);
     resolv->newScope();
     int cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::IF, ends_with_return(node->thenStmt.get()), cur_scope, node->thenStmt->line);
+    auto then_scope = curOwner.newScope(ScopeId::IF, Exit::get_exit_type(node->thenStmt.get()), cur_scope, node->thenStmt->line);
     curOwner.doMoveCall(node->rhs.get());
 
     auto &variant = decl->variants[index];
@@ -2255,27 +2171,25 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         }
     }
     node->thenStmt->accept(this);
-    if (!then_scope->ends_with_return) {
+    if (!then_scope->exit.is_exit()) {
         curOwner.endScope(*then_scope);
-    }
-    if (!isReturnLast(node->thenStmt.get())) {
         Builder->CreateBr(next);
     }
     set_and_insert(elsebb);
     curOwner.setScope(cur_scope);//else inserted into main scope, not then scope
-    auto else_scope = curOwner.newScope(ScopeId::ELSE, false, cur_scope, node->thenStmt->line);
+    auto else_scope = curOwner.newScope(ScopeId::ELSE, Exit(ExitType::NONE), cur_scope, node->thenStmt->line);
     else_scope->sibling = then_scope->id;
     then_scope->sibling = else_scope->id;
     if (node->elseStmt) {
         resolv->newScope();
-        else_scope->ends_with_return = ends_with_return(node->elseStmt.get());
+        else_scope->exit = Exit::get_exit_type(node->elseStmt.get());
         else_scope->line = node->elseStmt->line;
         node->elseStmt->accept(this);
-        if (!else_scope->ends_with_return) {
+        if (!else_scope->exit.is_return()) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
         }
-        if (!isReturnLast(node->elseStmt.get())) {
+        if (!else_scope->exit.is_exit()) {
             Builder->CreateBr(next);
         } else {
             //return cleans all
@@ -2310,7 +2224,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     loopNext.push_back(next);
     resolv->newScope();
     auto cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::WHILE, ends_with_return(node->body.get()), cur_scope, node->body->line);
+    auto then_scope = curOwner.newScope(ScopeId::WHILE, Exit::get_exit_type(node->body.get()), cur_scope, node->body->line);
     node->body->accept(this);
     curOwner.endScope(*then_scope);
     curOwner.setScope(cur_scope);
@@ -2323,7 +2237,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
 
 std::any Compiler::visitForStmt(ForStmt *node) {
     auto cur_scope = curOwner.last_scope->id;
-    auto then_scope = curOwner.newScope(ScopeId::FOR, ends_with_return(node->body.get()), cur_scope, node->body->line);
+    auto then_scope = curOwner.newScope(ScopeId::FOR, Exit::get_exit_type(node->body.get()), cur_scope, node->body->line);
     resolv->newScope();
     if (node->decl) {
         node->decl->accept(this);

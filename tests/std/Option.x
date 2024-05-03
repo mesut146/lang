@@ -12,7 +12,7 @@ impl<T> Option<T>{
     return Option<T>::None;  
   }
 
-  func unwrap(self): T{
+  func unwrap(*self): T{
     if let Option<T>::Some(val) = (self){
       return val;
     }

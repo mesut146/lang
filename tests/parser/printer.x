@@ -1,5 +1,12 @@
 import parser/ast
 
+func join<T>(f: Fmt*, arr: List<T>*, sep: str){
+  for(let i=0;i<arr.len();++i){
+    if(i>0) f.print(sep);
+    arr.get_ptr(i).debug(f);
+  }
+}
+
 func body(node: Stmt*, f: Fmt*){
   let s = Fmt::str(node); 
   let lines: List<str> = s.str().split("\n");
@@ -10,19 +17,6 @@ func body(node: Stmt*, f: Fmt*){
   }
   Drop::drop(s);
   Drop::drop(lines);
-}
-
-func join<T>(f: Fmt*, arr: List<T>*){
-  for(let i=0;i<arr.len();++i){
-    if(i>0) f.print(", ");
-    arr.get_ptr(i).debug(f);
-  }
-}
-func join<T>(f: Fmt*, arr: List<T>*, sep: str){
-  for(let i=0;i<arr.len();++i){
-    if(i>0) f.print(sep);
-    arr.get_ptr(i).debug(f);
-  }
 }
 
 impl Debug for Unit{
@@ -222,7 +216,7 @@ impl Debug for Type{
       ty.get().debug(f);
       f.print("*");
     }
-    else if let Type::Array(box*, sz) = (self){
+    else if let Type::Array(box*, sz*) = (self){
       f.print("[");
       box.get().debug(f);
       f.print("; ");
@@ -447,7 +441,7 @@ impl Debug for Call{
     }
     f.print(&self.name);
     f.print("(");
-    join(f, &self.args);
+    join(f, &self.args, ", ");
     f.print(")");
   }
 }

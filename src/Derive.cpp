@@ -152,7 +152,7 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
                 last_iflet = (IfLetStmt *) last_iflet->elseStmt.get();
             }
         }
-        print("derive drop enum " + bd->type.print());
+        //print("derive drop enum " + bd->type.print());
         //print(m.print());
     } else {
         auto sd = (StructDecl *) bd;

@@ -6,6 +6,7 @@ func whl_ret(c: bool, id: i32){
     let i = 0;
     while(++i < 5){
         if(c){
+            Drop::drop(a);
             a = A{a: id + 1};//a.drop
             assert check(1, id);
             return;
@@ -15,6 +16,7 @@ func whl_ret(c: bool, id: i32){
         let tmp = a.a;
     }
     //drop at end
+    Drop::drop(a);
 }
 
 func main(){

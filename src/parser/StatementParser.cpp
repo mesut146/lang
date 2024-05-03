@@ -4,6 +4,7 @@
 
 std::unique_ptr<Block> Parser::parseBlock() {
     auto res = std::make_unique<Block>();
+    res->line = first()->line;
     consume(LBRACE);
     while (!is(RBRACE)) {
         auto line = first()->line;
@@ -98,6 +99,7 @@ std::unique_ptr<WhileStmt> parseWhile(Parser *p) {
     auto res = std::make_unique<WhileStmt>();
     p->consume(WHILE);
     p->consume(LPAREN);
+    res->line = p->first()->line;
     res->expr.reset(p->parseExpr());
     p->consume(RPAREN);
     res->body = p->parseBlock();

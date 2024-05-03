@@ -643,3 +643,59 @@ void Compiler::makeLocals(Statement *st) {
         st->accept(&col);
     }
 }
+
+bool Exit::is_return() {
+    if (kind == ExitType::RETURN) return true;
+    if (if_kind && else_kind) return if_kind->is_return() && else_kind->is_return();
+    return false;
+}
+bool Exit::is_jump() {
+    if (kind == ExitType::RETURN || kind == ExitType::CONTINE || kind == ExitType::BREAK || kind == ExitType::PANIC) return true;
+    if (if_kind && else_kind) return if_kind->is_jump() && else_kind->is_jump();
+    return false;
+}
+bool Exit::is_panic() {
+    if (kind == ExitType::PANIC) return true;
+    if (if_kind && else_kind) return if_kind->is_panic() && else_kind->is_panic();
+    return false;
+}
+bool Exit::is_exit() {
+    if (kind == ExitType::PANIC || kind == ExitType::RETURN) return true;
+    if (if_kind && else_kind) return if_kind->is_exit() && else_kind->is_exit();
+    return false;
+}
+
+
+Exit Exit::get_exit_type(Statement *stmt) {
+    if (stmt->line == 106) {
+        int x = 10;
+    }
+    if (dynamic_cast<ReturnStmt *>(stmt)) return ExitType::RETURN;
+    if (dynamic_cast<BreakStmt *>(stmt)) return ExitType::BREAK;
+    if (dynamic_cast<ContinueStmt *>(stmt)) return ExitType::CONTINE;
+    auto expr = dynamic_cast<ExprStmt *>(stmt);
+    if (expr) {
+        auto mc = dynamic_cast<MethodCall *>(expr->expr);
+        if (mc && !mc->scope && mc->name == "panic") {
+            return ExitType::PANIC;
+        }
+        return ExitType::NONE;
+    }
+    auto block = dynamic_cast<Block *>(stmt);
+    if (block && !block->list.empty()) {
+        auto &last = block->list.back();
+        return get_exit_type(last.get());
+    }
+    auto is = dynamic_cast<IfStmt *>(stmt);
+    if (is) {
+        auto res = Exit{ExitType::NONE};
+        auto if_type = get_exit_type(is->thenStmt.get());
+        res.if_kind = std::make_unique<Exit>(std::move(if_type));
+        if (is->elseStmt) {
+            auto else_kind = get_exit_type(is->elseStmt.get());
+            res.else_kind = std::make_unique<Exit>(std::move(else_kind));
+        }
+        return res;
+    }
+    return ExitType::NONE;
+}

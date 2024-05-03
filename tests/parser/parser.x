@@ -74,7 +74,12 @@ impl Parser{
       let t = self.pop();
       if(t.type is tt) return t;
       print("%s:%d\n", self.lexer.path.ptr(), t.line);
-      panic("unexpected token %s was expecting %s", CStr::new(t.print()).ptr(), CStr::new(Fmt::str(&tt)).ptr());
+      let tok_str = t.print();
+      let tt_str = Fmt::str(&tt);
+      let msg = Fmt::format("unexpected token {} was expecting {}", tok_str.str(), tt_str.str());
+      Drop::drop(tok_str);
+      Drop::drop(tt_str);
+      panic("%s", msg.str());
     }
     
     func parse_unit(self): Unit{
@@ -106,12 +111,13 @@ impl Parser{
         if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
           unit.items.add(Item::Decl{self.parse_struct(derives, attr)});
           continue;
-        }
-        if(self.is(TokenType::ENUM)){
+        }else if(self.is(TokenType::ENUM)){
           unit.items.add(Item::Decl{self.parse_enum(derives, attr)});
           continue;
+        }else{
+          Drop::drop(derives);
+          Drop::drop(attr);
         }
-        Drop::drop(derives);
         if(self.is(TokenType::IMPL)){
           unit.items.add(Item::Impl{self.parse_impl()});
         }else if(self.is(TokenType::TRAIT)){
@@ -151,7 +157,7 @@ impl Parser{
     func parse_trait(self): Trait{
       self.consume(TokenType::TRAIT);
       let type = self.parse_type();
-      let res = Trait{type, List<Method>::new()};
+      let res = Trait{type.clone(), List<Method>::new()};
       self.consume(TokenType::LBRACE);
       while (!self.is(TokenType::RBRACE)) {
           let parent = Parent::Trait{type: type.clone()};
@@ -193,7 +199,7 @@ impl Parser{
           let parent = Parent::Impl{info.clone()};
           return Impl{info, self.parse_methods(op, parent)};
         }
-        panic("parse_impl");
+        //panic("parse_impl");
     }
     
     func parse_methods(self, imp: Option<Type>, parent: Parent): List<Method>{
@@ -262,6 +268,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
+      Drop::drop(imp);
       let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.get_heap()};
       return res;
     }
@@ -378,7 +385,6 @@ impl Parser{
         }
         return res;
       }
-      panic("impossible");
     }
     
     func parse_type(self): Type{
@@ -561,7 +567,7 @@ impl Parser{
         self.consume(TokenType::SEMI);
         return Stmt::Expr{e};
       }
-      panic("invalid stmt %s", CStr::new(self.peek().print()).ptr());
+      //panic("invalid stmt %s", CStr::new(self.peek().print()).ptr());
     }
     
     func parse_frag(self): Fragment{
@@ -790,8 +796,9 @@ impl Parser{
       let op = self.popv();
       let e = self.prim2();
       return Expr::Unary{.n,op, Box::new(e)};
+    }else{
+      panic("invalid expr %s", CStr::new(self.peek().print()).ptr());
     }
-    panic("invalid expr %s", CStr::new(self.peek().print()).ptr());
   }
   
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"

@@ -1,3 +1,5 @@
+#pragma once
+
 #include "AstCopier.h"
 #include "parser/Ast.h"
 
@@ -96,9 +98,48 @@ static void init_self_type(Method &m, const Type &type) {
     }
 }
 
-
 static void init_self_type(Impl *imp) {
     for (auto &m : imp->methods) {
         init_self_type(m, imp->type);
     }
 }
+
+enum class ExitType {
+    NONE,
+    RETURN,
+    PANIC,
+    BREAK,
+    CONTINE,
+};
+
+struct Exit {
+    ExitType kind;
+    std::unique_ptr<Exit> if_kind;
+    std::unique_ptr<Exit> else_kind;
+
+    Exit(const ExitType &kind) : kind(kind) {}
+    Exit(const Exit &obj) {
+        operator=(obj);
+    }
+    Exit() {}
+
+    void operator=(const Exit &rhs) {
+        kind = rhs.kind;
+        if (rhs.if_kind) {
+            if_kind = std::make_unique<Exit>(*rhs.if_kind);
+        }
+        if (rhs.else_kind) {
+            else_kind = std::make_unique<Exit>(*rhs.else_kind);
+        }
+    }
+
+    bool is_return();
+
+    bool is_jump();
+
+    bool is_panic();
+    
+    bool is_exit();
+
+    static Exit get_exit_type(Statement *stmt);
+};

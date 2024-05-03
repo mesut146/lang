@@ -34,7 +34,6 @@ class RType;
 class Resolver;
 class Signature;
 
-bool isReturnLast(Statement *stmt);
 bool isComp(const std::string &op);
 RType binCast(const std::string &s1, const std::string &s2);
 
@@ -192,17 +191,6 @@ static void print(const std::string &msg) {
 
 static bool isStruct(const Type &t) {
     return !t.isPrim() && !t.isPointer();
-}
-
-static bool isRet(Statement *stmt) {
-    auto expr = dynamic_cast<ExprStmt *>(stmt);
-    if (expr) {
-        auto mc = dynamic_cast<MethodCall *>(expr->expr);
-        return mc && mc->name == "panic";
-    }
-    return dynamic_cast<ReturnStmt *>(stmt) ||
-           dynamic_cast<ContinueStmt *>(stmt) ||
-           dynamic_cast<BreakStmt *>(stmt);
 }
 
 class EnumPrm {

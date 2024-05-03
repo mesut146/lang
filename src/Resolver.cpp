@@ -439,10 +439,9 @@ void Resolver::init() {
                 init_impl(newItems.back().get(), this);
             }
         }
-        Ownership own;
-        own.r = this;
+        DropHelper helper(this);
         //auto impl drop
-        if (!has_derive_drop && !has_drop_impl(bd, this) && (bd->isGeneric || own.isDrop(bd))) {
+        if (!has_derive_drop && !has_drop_impl(bd, this) && (bd->isGeneric || helper.isDrop(bd))) {
             newItems.push_back(derive_drop(bd));
             init_impl(newItems.back().get(), this);
         }
@@ -710,7 +709,8 @@ std::any Resolver::visitMethod(Method *m) {
     if (m->body) {
         m->body->accept(this);
         //todo check unreachable
-        if (!m->type.isVoid() && !isReturnLast(m->body.get())) {
+        auto exit = Exit::get_exit_type(m->body.get());
+        if (!m->type.isVoid() && !exit.is_exit()) {
             err(m, "non void function must return a value");
         }
     }
@@ -978,9 +978,8 @@ void Resolver::addUsed(BaseDecl *bd) {
     }
     //find drop impl and generate drop method
     //generate drop impl
-    Ownership own;
-    own.r = this;
-    if (!bd->type.typeArgs.empty() && own.isDrop(bd) /*&& !has_drop_impl(bd, this)*/) {
+    DropHelper helper(this);
+    if (!bd->type.typeArgs.empty() && helper.isDrop(bd) /*&& !has_drop_impl(bd, this)*/) {
         auto dropm = find_drop_method(bd, this);
         if (dropm->isGeneric) {
             std::map<std::string, Type> map;
@@ -1406,8 +1405,11 @@ std::any Resolver::visitExprStmt(ExprStmt *node) {
 std::any Resolver::visitBlock(Block *node) {
     int i = 0;
     for (auto &st : node->list) {
-        if (i > 0 && isRet(node->list[i - 1].get())) {
-            error("unreachable code: " + st->print());
+        if (i > 0) {
+            auto prev_exit = Exit::get_exit_type(node->list[i - 1].get());
+            if (prev_exit.is_jump()) {
+                err(st.get(), "unreachable code");
+            }
         }
         st->accept(this);
         i++;
@@ -1670,9 +1672,8 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         if (arg.type.isPointer() && arg.type.scope && arg.type.scope->isPointer()) {
             return RType(Type("void"));
         }
-        Ownership own;
-        own.r = this;
-        if (!own.isDropType(arg)) {
+        DropHelper helper(this);
+        if (!helper.isDropType(arg)) {
             return RType(Type("void"));
         }
     }
