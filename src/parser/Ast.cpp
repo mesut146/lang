@@ -136,7 +136,17 @@ std::string SimpleName::print() const {
 
 std::string Literal::print() const {
     std::string s;
-    s.append(val);
+    if (type == STR) {
+        s.append("\"");
+        s.append(val);
+        s.append("\"");
+    } else if (type == CHAR) {
+        s.append("\'");
+        s.append(val);
+        s.append("\'");
+    } else {
+        s.append(val);
+    }
     if (suffix) {
         s.append(suffix->print());
     }

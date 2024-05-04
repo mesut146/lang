@@ -18,8 +18,6 @@
 
 namespace fs = std::filesystem;
 
-bool isStrLit(Expression *e);
-
 std::vector<Method *> getMethods(Unit *unit);
 void sort(std::vector<BaseDecl *> &list, Resolver *r);
 

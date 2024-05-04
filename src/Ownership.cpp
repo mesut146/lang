@@ -647,7 +647,7 @@ void Ownership::endScope(VarScope &scope) {
             auto x = 55;
         }
         if (!isMoved(v, scope, this, true)) {
-            drop_info(v, "endScope:" + scope.print_info());
+            drop_info(v, "endScope:" + scope.print_info() + " " + printMethod(method));
             drop(v);
         }
     }
@@ -668,7 +668,7 @@ void Ownership::end_branch(VarScope &branch) {
         }
         if (isMoved(*v, sibling, this, true, false) && !isMoved(*v, branch, this, true, false)) {
             //transferred, so drop
-            drop_info(*v, "end_branch:" + branch.print_info());
+            drop_info(*v, "end_branch:" + branch.print_info() + " " + printMethod(method));
             drop(*v);
         }
     }
@@ -692,7 +692,7 @@ void Ownership::doReturn(int line) {
             continue;
         }
         if (!isMoved(v, *last_scope, this, false)) {
-            drop_info(v, "return:" + std::to_string(line));
+            drop_info(v, "return:" + std::to_string(line) + " " + printMethod(method));
             drop(v);
         }
     }

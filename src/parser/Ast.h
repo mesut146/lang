@@ -57,12 +57,15 @@ public:
         this->id = ++Node::last_id;
         return this;
     }
+
+    virtual std::string print() const = 0;
 };
 class Expression : public Node {
 public:
     virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
+
     Expression *loc(int line) {
         this->line = line;
         this->id = ++Node::last_id;
@@ -178,6 +181,19 @@ struct Global : public Node {
     std::string name;
     std::optional<Type> type;
     std::unique_ptr<Expression> expr;
+
+    std::string print() const {
+        std::string s = "static ";
+        s += name;
+        if (type) {
+            s += ": ";
+            s += type->print();
+        }
+        s += " = ";
+        s += expr->print();
+        s += ";";
+        return s;
+    }
 };
 
 class Unit {

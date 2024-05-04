@@ -104,6 +104,12 @@ static void init_self_type(Impl *imp) {
     }
 }
 
+static bool isStrLit(Expression *e) {
+    auto l = dynamic_cast<Literal *>(e);
+    if (!l) return false;
+    return l->type == Literal::STR;
+}
+
 enum class ExitType {
     NONE,
     RETURN,

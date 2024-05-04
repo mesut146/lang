@@ -8,3 +8,15 @@ Fmt::format2("{} {}", ..args): String{
  }
  return f.buf;
 }
+
+
+let s = format("pre{}mid{}end", ...)
+{
+let f = Fmt::new();
+f.print("pre");
+a1.debug(f);
+f.print("mid");
+a2.debug(f);
+f.print("end");
+let s = f.unwrap();
+}

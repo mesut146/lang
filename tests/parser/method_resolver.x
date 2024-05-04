@@ -90,8 +90,10 @@ impl Signature{
         let map = Map<String, Type>::new();
         if(!type.is_simple()) return map;
         let type_plain: Type = type.erase();
-        let decl_opt = sig.r.unwrap().visit(&type_plain).targetDecl;
+        let decl_rt = sig.r.unwrap().visit(&type_plain);
+        let decl_opt = decl_rt.targetDecl;
         Drop::drop(type_plain);
+        Drop::drop(decl_rt);
         
         if(decl_opt.is_none()){
             return map;
@@ -138,40 +140,37 @@ impl Signature{
         return res;
     }
     func print(self): String{
-        let s = String::new();
-        if(self.mc.is_some()){
-            if(self.mc.unwrap().scope.is_some()){
-                let scope_str = self.scope.get().type.print();
-                s.append(scope_str.str());
-                s.append("::");
-                Drop::drop(scope_str);
-            }
-            s.append(&self.mc.unwrap().name);
-        }else{
-            let p = &self.m.unwrap().parent;
-            if(p is Parent::Impl){
-                let p_str = p.as_impl().type.print();
-                s.append(p_str.str());
-                s.append("::");
-                Drop::drop(p_str);
-            }
-            s.append(&self.m.unwrap().name);
-        }
-        s.append("(");
-        for(let i = 0;i < self.args.len();++i){
-            if(i > 0){
-                s.append(", ");
-            }
-            let arg = self.args.get_ptr(i);
-            let arg_s = arg.print();
-            s.append(arg_s.str());
-            Drop::drop(arg_s);
-        }
-        s.append(")");
-        return s;
+        return Fmt::str(self);
     }
 }
 
+impl Debug for Signature{
+    func debug(self, f: Fmt*){
+        if(self.mc.is_some()){
+            if(self.mc.unwrap().scope.is_some()){
+                self.scope.get().type.debug(f);
+                f.print("::");
+            }
+            f.print(&self.mc.unwrap().name);
+        }else{
+            let p = &self.m.unwrap().parent;
+            if(p is Parent::Impl){
+                p.as_impl().type.debug(f);
+                f.print("::");
+            }
+            f.print(&self.m.unwrap().name);
+        }
+        f.print("(");
+        for(let i = 0;i < self.args.len();++i){
+            if(i > 0){
+                f.print(", ");
+            }
+            let arg: Type* = self.args.get_ptr(i);
+            arg.debug(f);
+        }
+        f.print(")");
+    }
+}
 
 impl MethodResolver{
     func new(r: Resolver*): MethodResolver{
@@ -292,23 +291,25 @@ impl MethodResolver{
                     let mapped = ac.visit(arg);
                     sig2.args.set(k, mapped);
                   }
+                  Drop::drop(typeMap);
                   list.add(sig2);
                 }
             }
         }
         if (imports) {
-          let ims = self.r.get_imports();
-          for (let i=0;i<ims.len();++i) {
+          let ims: List<ImportStmt> = self.r.get_imports();
+          for (let i = 0;i < ims.len();++i) {
             let is = ims.get_ptr(i);
             //print("is=%s\n", "/".join(&is.list).cstr());
             let resolver = self.r.ctx.get_resolver(is);
             resolver.init();
             let mr = MethodResolver::new(resolver);
             mr.collect_member(sig, scope_type, list, false);
+          }
+          Drop::drop(ims);
         }
         Drop::drop(imp_list);
         Drop::drop(map);
-      }
     }
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
@@ -316,8 +317,10 @@ impl MethodResolver{
         //print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
-            let msg = Fmt::format("no such method {}", sig.print().str());
+            //let msg = Fmt::format("no such method {}", sig.print().str());
+            let msg = format("no such method {}", sig);
             self.r.err(expr, msg.str());
+            Drop::drop(msg);
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
@@ -325,14 +328,16 @@ impl MethodResolver{
         let exact = Option<Signature*>::None;
         for(let i = 0;i < list.size();++i){
             let sig2 = list.get_ptr(i);
-            let cmp_res = self.is_same(sig, sig2);
+            let cmp_res: SigResult = self.is_same(sig, sig2);
             if let SigResult::Err(err) = (cmp_res){
-                errors.add(Pair::new(sig2, err.clone()));
+                errors.add(Pair::new(sig2, err));
+                //std::no_drop(cmp_res);
             }else{
                 if(cmp_res is SigResult::Exact){
                     exact = Option::new(sig2);
                 }
                 real.add(sig2);
+                Drop::drop(cmp_res);
             }
         }
         if(real.empty()){

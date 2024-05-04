@@ -954,16 +954,17 @@ void Compiler::genCode(Method *m) {
     resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
-    if (!Exit::get_exit_type(m->body.get()).is_return()) {
+    auto exit = Exit::get_exit_type(m->body.get());
+    if (!exit.is_return()) {
         //return already drops all
         curOwner.endScope(*curOwner.main_scope);
     }
     //exit code 0
     if (is_main(m) && m->type.print() == "void") {
-        if (!Exit::get_exit_type(m->body.get()).is_return()) {
+        if (!exit.is_exit()) {
             Builder->CreateRet(makeInt(0, 32));
         }
-    } else if (!Exit::get_exit_type(m->body.get()).is_return() && m->type.print() == "void") {
+    } else if (!exit.is_exit() && m->type.print() == "void") {
         if (!m->body->list.empty()) {
             loc(m->body->list.back()->line + 1, 0);
         }
@@ -1431,9 +1432,12 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return callMalloc(size, this);
     } else if (mc->name == "panic" && !mc->scope) {
         return callPanic(mc, this);
-    } else if (mc->name == "format" && !mc->scope) {
-        error("format not implemented");
-        //return callFormat(mc, this);
+    } else if (is_format(mc)) {
+        auto &info = resolv->format_map.at(mc->id);
+        visitBlock(&info.block);
+        auto ptr = getAlloc(mc);
+        call(&info.ret_mc, ptr);
+        return ptr;
     }
     if (is_drop_call(mc)) {
         auto argt = resolv->resolve(mc->args.at(0));
@@ -2079,7 +2083,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
             curOwner.endScope(*then_scope);
         }
     }
-    if (!then_returns.is_exit()) {
+    if (!then_returns.is_jump()) {
         Builder->CreateBr(next);
     }
     set_and_insert(elsebb);
@@ -2096,7 +2100,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
         }
-        if (!else_scope->exit.is_exit()) {
+        if (!else_scope->exit.is_jump()) {
             Builder->CreateBr(next);
         } else {
             //return cleans all
@@ -2106,14 +2110,16 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         curOwner.end_branch(*else_scope);
         Builder->CreateBr(next);
     }
-    set_and_insert(next);
-    auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
-    auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
-    Builder->CreateCondBr(cond, then_clean, next2);
-    set_and_insert(then_clean);
-    curOwner.end_branch(*then_scope);
-    Builder->CreateBr(next2);
-    set_and_insert(next2);
+    if (!(then_returns.is_jump() && else_scope->exit.is_jump())) {
+        set_and_insert(next);
+        auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
+        auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
+        Builder->CreateCondBr(cond, then_clean, next2);
+        set_and_insert(then_clean);
+        curOwner.end_branch(*then_scope);
+        Builder->CreateBr(next2);
+        set_and_insert(next2);
+    }
     curOwner.setScope(cur_scope);
     return nullptr;
 }
@@ -2242,10 +2248,10 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     if (node->decl) {
         node->decl->accept(this);
     }
-    auto then = llvm::BasicBlock::Create(ctx(), "body");
-    auto condbb = llvm::BasicBlock::Create(ctx(), "cont_test", func);
-    auto updatebb = llvm::BasicBlock::Create(ctx(), "update", func);
-    auto next = llvm::BasicBlock::Create(ctx(), "next");
+    auto then = llvm::BasicBlock::Create(ctx(), "for_body_" + std::to_string(node->line));
+    auto condbb = llvm::BasicBlock::Create(ctx(), "for_cond_" + std::to_string(node->line), func);
+    auto updatebb = llvm::BasicBlock::Create(ctx(), "for_update_" + std::to_string(node->line), func);
+    auto next = llvm::BasicBlock::Create(ctx(), "for_next_" + std::to_string(node->line));
     Builder->CreateBr(condbb);
     Builder->SetInsertPoint(condbb);
     if (node->cond) {

@@ -349,11 +349,11 @@ impl Resolver{
     self.newScope();//globals
     for (let i=0;i<self.unit.globals.len();++i) {
         let g = self.unit.globals.get_ptr(i);
-        let rhs = self.visit(&g.expr);
+        let rhs: RType = self.visit(&g.expr);
         if (g.type.is_some()) {
             let type = self.getType(g.type.get());
             //todo check
-            let err_opt = MethodResolver::is_compatible(RType::new(rhs.type.clone()), &type);
+            let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
             if (err_opt.is_some()) {
                 let msg = Fmt::format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name.str(),type.print().str(),rhs.type.print().str(), err_opt.get().str());
                 self.err(msg.str());
@@ -680,7 +680,7 @@ impl Resolver{
 
   func clone_op(op: Option<Decl*>*): Option<Decl*>{
     if(op.is_none()) return Option<Decl*>::new();
-    return Option<Decl*>::new(op.unwrap());
+    return Option<Decl*>::new(*op.get());
   }
 
   func visit(self, node: Type*): RType{
@@ -991,9 +991,8 @@ impl Resolver{
         }
         let pt = self.getType(&prm.type);
         let arg = self.visit(&e.expr);
-        let arg_type = arg.type.clone();
-        if (MethodResolver::is_compatible(arg, &pt).is_some()) {
-            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg_type.print().str());
+        if (MethodResolver::is_compatible(&arg.type, &pt).is_some()) {
+            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg.type.print().str());
             self.err(node, f.str());
         }
     }
@@ -1075,7 +1074,7 @@ impl Resolver{
     let t1 = self.visit(lhs);
     let t2 = self.visit(rhs);
     let rhs_type = t2.type.print();
-    if (MethodResolver::is_compatible(t2, &t1.type).is_some()) {
+    if (MethodResolver::is_compatible(&t2.type, &t1.type).is_some()) {
       let msg = Fmt::format("cannot assign %s=%s", t1.type.print().str(), rhs_type.str());
       self.err(node, msg.str());
     }
@@ -1111,7 +1110,7 @@ impl Resolver{
     }else{
       return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
     }
-    panic("%s\n", node.print().cstr());
+    //panic("%s\n", node.print().cstr());
   }
 
   func visit_ref(self, e: Expr*): RType{
@@ -1311,14 +1310,14 @@ impl Resolver{
         let e = self.visit(list.get_ptr(0));
         //let elemType = self.getType(list.get_ptr(0));
         let elemType = e.type.clone();
-        return RType::new(Type::Array{Box::new(elemType), size.unwrap()});
+        return RType::new(Type::Array{Box::new(elemType), *size.get()});
     }
     let elemType = self.getType(list.get_ptr(0));
     for (let i = 1; i < list.len(); ++i) {
         let cur = self.visit(list.get_ptr(i));
-        let cur_type = cur.type.print();
-        let cmp = MethodResolver::is_compatible(cur, &elemType);
+        let cmp = MethodResolver::is_compatible(&cur.type, &elemType);
         if (cmp.is_some()) {
+            let cur_type = cur.type.print();
             print("%s", cmp.get().clone().cstr().ptr());
             let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur_type.str());
             self.err(node, msg.str());
@@ -1356,17 +1355,19 @@ impl Resolver{
 
   func visit_is(self, node: Expr*, lhs: Expr*, rhs: Expr*): RType{
     let rt = self.visit(lhs);
-    let decl1 = &rt.targetDecl;
-    if (decl1.is_none() || !(decl1.unwrap() is Decl::Enum)) {
-        self.err(node, Fmt::format("lhs of is expr is not enum: {}",rt.type.print().str()).str());
+    let decl1_opt = &rt.targetDecl;
+    if (decl1_opt.is_none() || !(*decl1_opt.get() is Decl::Enum)) {
+        self.err(node, Fmt::format("lhs of is expr is not enum: {}", rt.type.print().str()).str());
     }
+    let decl1 = *decl1_opt.get();
     let rt2 = self.visit(rhs);
-    let decl2 = &rt2.targetDecl;
-    if (!decl1.unwrap().type.print().eq(decl2.unwrap().type.print().str())) {
-        self.err(node, Fmt::format("rhs is not same type with lhs {}", decl2.unwrap().type.print().str()).str());
+    let decl2_opt = &rt2.targetDecl;
+    let decl2 = *decl2_opt.get();
+    if (!decl1.type.print().eq(decl2.type.print().str())) {
+        self.err(node, Fmt::format("rhs is not same type with lhs {}", decl2.type.print().str()).str());
     }
     if let Expr::Type(ty*) = (rhs){
-        findVariant(decl1.unwrap(), ty.name());
+        findVariant(decl1, ty.name());
     }
     return RType::new("bool");
   }

@@ -261,3 +261,86 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     }
     return imp;
 }
+
+void generate_format(MethodCall *mc, Resolver *r) {
+    if (mc->args.empty()) {
+        r->err(mc, "format no arg");
+    }
+    auto fmt = mc->args.at(0);
+    auto &fmt_str = dynamic_cast<Literal *>(fmt)->val;
+    if (!isStrLit(fmt)) {
+        r->err(mc, "format arg not str literal");
+    }
+    FormatInfo info(SimpleName("_f"));
+    info.ret.loc(mc->line);
+    Block block;
+    //let f = Fmt::new();
+    auto vd = std::make_unique<VarDecl>();
+    vd->loc(mc->line);
+    Fragment frag;
+    frag.loc(mc->line);
+    frag.name = "_f";
+    frag.type = Type("Fmt");
+    auto rhs = new MethodCall;
+    rhs->loc(mc->line);
+    rhs->is_static = true;
+    rhs->scope.reset(new Type("Fmt"));
+    rhs->name = "new";
+    frag.rhs.reset(rhs);
+    //r->addScope(frag.name, frag.type.value(), false, frag.line, frag.id);
+    vd->decl = new VarDeclExpr;
+    vd->decl->list.push_back(std::move(frag));
+    block.list.push_back(std::move(vd));
+    SimpleName f("_f");
+    f.loc(mc->line);
+    int i = 0;
+    int idx = 1;
+    while (i < fmt_str.size()) {
+        int pos = fmt_str.find("{}", i);
+        if (pos > i) {
+            auto sub = fmt_str.substr(i, pos - i);
+            auto sub_mc = new MethodCall;
+            sub_mc->loc(mc->line);
+            sub_mc->scope.reset(new SimpleName("_f"));
+            sub_mc->scope->loc(mc->line);
+            sub_mc->name = "print";
+            sub_mc->args.push_back((new Literal(Literal::STR, sub))->loc(mc->line));
+            //r->resolve(sub_mc);
+            auto sub_stmt = std::make_unique<ExprStmt>(sub_mc);
+            sub_stmt->loc(mc->line),
+            block.list.push_back(std::move(sub_stmt));
+            i = pos + 2;
+        }
+        if (pos == std::string::npos) {
+            break;
+        }
+        auto arg = mc->args.at(idx);
+        ++idx;
+        auto arg_debug_mc = new MethodCall;
+        arg_debug_mc->loc(mc->line);
+        arg_debug_mc->name = "debug";
+        arg_debug_mc->scope.reset(arg);
+        //todo lifetime of f?
+        auto ref = new RefExpr(std::make_unique<SimpleName>(f));
+        ref->loc(mc->line);
+        arg_debug_mc->args.push_back(ref);
+        /*auto mc_rt = r->resolve(arg_debug_mc);
+        if (!mc_rt.targetMethod) {
+            r->err(arg_debug_mc, "no debug method");
+        }*/
+        //arg_debug_mc->scope.release();
+        auto debug_stmt = std::make_unique<ExprStmt>(arg_debug_mc);
+        debug_stmt->loc(mc->line);
+        block.list.push_back(std::move(debug_stmt));
+    }
+    info.ret_mc.loc(mc->line);
+    info.ret_mc.scope.reset(new SimpleName("_f"));
+    info.ret_mc.scope->loc(mc->line);
+    info.ret_mc.name = "unwrap";
+    block.accept(r);
+    r->resolve(&info.ret_mc);
+    print(block.print());
+    print(info.ret_mc.print());
+    info.block = std::move(block);
+    r->format_map.insert({mc->id, std::move(info)});
+}

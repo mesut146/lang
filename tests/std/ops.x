@@ -92,6 +92,9 @@ impl Fmt{
   func new(): Fmt{
     return Fmt{String::new()};
   }
+  func unwrap(*self): String{
+    return self.buf;
+  }
   func print(self, c: i8){
     self.buf.append(c);
   }

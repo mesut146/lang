@@ -1627,35 +1627,13 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     throw std::runtime_error("cant index: " + node->print());
 }
 
-Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
+/*Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
     auto res = std::make_unique<VarDecl>();
     res->decl = new VarDeclExpr;
     Fragment f;
     f.name = name;
     f.rhs.reset(rhs);
     res->decl->list.push_back(std::move(f));
-    return res;
-}
-
-/*std::unique_ptr<Method> generate_format(MethodCall *node, Resolver *r) {
-    auto res = std::make_unique<Method>(r->unit->path);
-    res->name = "format";
-    res->type = Type("String");
-    res->params.push_back(Param("s", Type("str")));
-    res->body = std::make_unique<Block>();
-    auto body = res->body.get();
-    auto rhs = new MethodCall;
-    rhs->is_static = true;
-    rhs->scope.reset(new Type("Fmt"));
-    rhs->name = "new";
-    body->list.push_back(make_var("f", rhs));
-    int i = 0;
-    for (auto a : node->args) {
-        auto arg_type = r->resolve(a);
-        res->params.push_back(Param("p" + std::to_string(i), arg_type.type));
-        i++;
-    }
-    body->list.push_back(makeRet(r->unit, makeFa("f", "buf")));
     return res;
 }*/
 
@@ -1781,8 +1759,9 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             return RType(Type("void"));
         }
         throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
-    } else if (mc->name == "format") {
-        throw std::runtime_error("format todo");
+    } else if (is_format(mc)) {
+        generate_format(mc, this);
+        return RType(Type("String"));
     }
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);

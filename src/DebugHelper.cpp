@@ -18,14 +18,11 @@ void Compiler::loc(Node *e) {
         Builder->SetCurrentDebugLocation(nullptr);
         return;
     }
-    if (e->line == 0) {
-        auto expr = dynamic_cast<Expression *>(e);
-        if (expr)
-            error(std::string("line 0, ") + expr->print());
-        else
-            error(std::string("line 0, ") + typeid(*e).name());
+    if (e->line != 0) {
+        loc(e->line, 0);
+        return;
     }
-    loc(e->line, 0);
+    error(std::string("loc line 0, ") + e->print());
 }
 
 void Compiler::loc(int line, int pos) {
@@ -44,7 +41,7 @@ void Compiler::dbg_prm(Param &p, const Type &type, int idx) {
     auto sp = di.sp;
     auto dt = map_di(type);
     auto v = DBuilder->createParameterVariable(sp, p.name, idx, di.file, p.line, dt, true);
-    auto val = NamedValues[p.name];
+    auto val = NamedValues.at(p.name);
     auto lc = llvm::DILocation::get(sp->getContext(), p.line, p.pos, sp);
     DBuilder->insertDeclare(val, v, DBuilder->createExpression(), lc, Builder->GetInsertBlock());
 }
@@ -53,7 +50,7 @@ void Compiler::dbg_var(const std::string &name, int line, int pos, const Type &t
     if (!Config::debug) return;
     auto sp = di.sp;
     auto v = DBuilder->createAutoVariable(sp, name, di.file, line, map_di(type), true);
-    auto val = NamedValues[name];
+    auto val = NamedValues.at(name);
     auto lc = llvm::DILocation::get(sp->getContext(), line, pos, sp);
     auto e = DBuilder->createExpression();
     DBuilder->insertDeclare(val, v, e, lc, Builder->GetInsertBlock());
@@ -93,9 +90,6 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
         spflags |= llvm::DISubprogram::SPFlagMainSubprogram;
     } else {
         linkage_name = mangle(m);
-    }
-    if (linkage_name == "List<Type>::drop_List<Type>*") {
-        int aa = 555;
     }
     llvm::DIScope *scope = file;
     if (!m->parent.is_none()) {

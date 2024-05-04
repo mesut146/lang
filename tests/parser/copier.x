@@ -68,7 +68,9 @@ impl AstCopier{
             let res = self.visit_list(variants);
             return Decl::Enum{.base, res};
         }
-        panic("visit decl %s*n", Fmt::str(node).cstr());
+        Drop::drop(base);
+        let msg = format("visit decl {}\n", node);
+        panic("{}", msg.str());
     }
 
     func visit(self, node: FieldDecl*): FieldDecl{
@@ -213,7 +215,8 @@ impl AstCopier{
         if let Stmt::Assert(e*)=(node){
             return Stmt::Assert{self.visit(e)};
         }
-        panic("stmt %s", node.print().cstr());
+        let msg = format("stmt {}", node);
+        panic("{}", msg.str());
     }
 
     func visit(self, node: Expr*): Expr{
@@ -257,7 +260,8 @@ impl AstCopier{
         if let Expr::ArrAccess(aa*)=(node){
             return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_opt(&aa.idx2)}};
         }
-        panic("Expr %s", node.print().cstr());
+        let msg = format("Expr {}", node);
+        panic("{}", msg.str());
     }
 
     func visit(self, node: Entry*): Entry{

@@ -61,6 +61,11 @@ static bool is_std_parent_name(MethodCall *mc) {
     return mc->name == "parent_name" && mc->scope && mc->scope->print() == "std" && mc->is_static;
 }
 
+static bool is_format(MethodCall *mc) {
+    return mc->name == "format" && !mc->scope;
+}
+
+
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
     for (auto &fd : fields) {
@@ -193,11 +198,11 @@ static bool isStruct(const Type &t) {
     return !t.isPrim() && !t.isPointer();
 }
 
-class EnumPrm {
+/*class EnumPrm {
 public:
     FieldDecl *decl;
     std::string name;
-};
+};*/
 
 struct VarHolder {
     std::string name;
@@ -256,6 +261,16 @@ enum class MutKind {
     DEREF
 };
 
+struct FormatInfo {
+    SimpleName ret;
+    Block block;
+    MethodCall ret_mc;
+
+    FormatInfo(const SimpleName &ret) : ret(ret){};
+};
+
+void generate_format(MethodCall *mc, Resolver *r);
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
@@ -274,6 +289,7 @@ public:
     std::vector<BaseDecl *> usedTypes;
     std::vector<std::unique_ptr<Impl>> generated_impl;
     std::map<std::string, Method *> drop_methods;
+    std::map<int, FormatInfo> format_map;
     std::unordered_set<Method *> usedMethods;
     std::map<Method *, Method *> overrideMap;
     static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;

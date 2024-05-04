@@ -126,12 +126,6 @@ bool Compiler::doesAlloc(Expression *e) {
     return dynamic_cast<ArrayExpr *>(e);
 }
 
-bool isStrLit(Expression *e) {
-    auto l = dynamic_cast<Literal *>(e);
-    if (!l) return false;
-    return l->type == Literal::STR;
-}
-
 //llvm
 
 llvm::ConstantInt *Compiler::makeInt(int val, int bits) {
@@ -391,7 +385,9 @@ public:
     }
     void call(MethodCall *node) {
         //todo rvo
-        if (node->scope) node->scope->accept(this);
+        if (node->scope) {
+            node->scope->accept(this);
+        }
         for (auto a : node->args) {
             if (!node->scope && node->name == "print" && isStrLit(a)) {
                 continue;
@@ -402,6 +398,11 @@ public:
     std::any visitMethodCall(MethodCall *node) override {
         if (is_std_parent_name(node)) {
             return alloc(Type("str"), node);
+        }
+        if (is_format(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            return alloc(Type("String"), node);
         }
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;

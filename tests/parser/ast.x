@@ -300,7 +300,8 @@ impl Type{
   func unwrap_simple(*self): Simple{
     //todo self
     if let Type::Simple(simple) = (self){
-      return ptr::deref(simple);
+      //return ptr::deref(simple);
+      return simple;
     }
     panic("as_simple");
   }

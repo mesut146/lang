@@ -198,14 +198,15 @@ impl Compiler{
     }
     self.compiled.clear();
     cmd.append(args);
-    if(system(cmd.cstr().ptr()) == 0){
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
       //run if linked
       if(system(name.ptr()) != 0){
-        print("%s\n", cmd.cstr());
+        print("%s\n", cmd_s.ptr());
         panic("error while running %s", name.ptr());
       }
     }else{
-      panic("link failed '%s'", cmd.cstr().ptr());
+      panic("link failed '%s'", cmd_s.ptr());
     }
   }
 
@@ -252,9 +253,10 @@ impl Compiler{
     
     let name = getName(path0.get());
     let llvm_file = Fmt::format("{}-bt.ll", trimExtenstion(name));
-    emit_llvm(llvm_file.cstr().ptr());
+    let llvm_file_cstr = llvm_file.cstr();
+    emit_llvm(llvm_file_cstr.ptr());
     if(self.config.verbose){
-      print("writing %s\n", llvm_file.cstr().ptr());
+      print("writing %s\n", llvm_file_cstr.ptr());
     }
     self.compiled.add(outFile.clone());
     let outFile_cstr = CStr::new(outFile.clone());
@@ -834,7 +836,7 @@ impl Compiler{
     }
     let bb = GetInsertBlock();
     let cur = gep_arr(arr_ty, ptr, 0, 0);
-    let end = gep_arr(arr_ty, ptr, 0, sz.unwrap());
+    let end = gep_arr(arr_ty, ptr, 0, *sz.get());
     //create cons and memcpy
     let condbb = create_bb();
     let setbb = create_bb();
