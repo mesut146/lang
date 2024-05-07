@@ -1293,7 +1293,7 @@ void callPrint(MethodCall *mc, Compiler *c) {
     for (auto a : mc->args) {
         if (isStrLit(a)) {
             auto l = dynamic_cast<Literal *>(a);
-            auto str = c->Builder->CreateGlobalStringPtr(l->val.substr(1, l->val.size() - 2));
+            auto str = c->Builder->CreateGlobalStringPtr(l->val);
             args.push_back(str);
             continue;
         }
@@ -1324,24 +1324,57 @@ void callPrint(MethodCall *mc, Compiler *c) {
     c->Builder->CreateCall(c->fflush_proto, args2);
 }
 
+void callPrintf(MethodCall *mc, Compiler *c) {
+    std::vector<llvm::Value *> args;
+    for (auto a : mc->args) {
+        if (isStrLit(a)) {
+            auto l = dynamic_cast<Literal *>(a);
+            auto str = c->Builder->CreateGlobalStringPtr(l->val);
+            args.push_back(str);
+            continue;
+        }
+        auto arg_type = c->resolv->getType(a);
+        if (arg_type.print() == "i8*" || arg_type.print() == "u8*") {
+            auto src = c->get_obj_ptr(a);
+            args.push_back(src);
+            continue;
+        }
+        if (arg_type.isPrim()) {
+            auto src = c->loadPtr(a);
+            args.push_back(src);
+        } else {
+            c->resolv->err(mc, "internal error");
+        }
+    }
+    c->Builder->CreateCall(c->printf_proto, args);
+    //flush
+    std::vector<llvm::Value *> args2;
+    args2.push_back(c->load(c->stdout_ptr));
+    c->Builder->CreateCall(c->fflush_proto, args2);
+}
+
+void call_exit(int code, Compiler *c) {
+    std::vector<llvm::Value *> exit_args = {c->makeInt(code)};
+    c->Builder->CreateCall(c->exit_proto, exit_args);
+    c->Builder->CreateUnreachable();
+}
+
 std::any callPanic(MethodCall *mc, Compiler *c) {
-    std::string message = "\"panic ";
+    std::string message = "panic ";
     message += c->curMethod->path + ":" + std::to_string(mc->line);
     message += " " + printMethod(c->curMethod);
     if (!mc->args.empty()) {
         message += "\n";
-        auto val = dynamic_cast<Literal *>(mc->args[0])->val;
-        message += val.substr(1, val.size() - 2);
+        auto &val = dynamic_cast<Literal *>(mc->args[0])->val;
+        message += val;
     }
-    message.append("\n\"");
+    message.append("\n");
     MethodCall mc2;
     mc2.args.push_back(new Literal(Literal::STR, message));
     mc2.args.insert(mc2.args.end(), mc->args.begin() + 1, mc->args.end());
     callPrint(&mc2, c);
-    //call exit
-    std::vector<llvm::Value *> exit_args = {c->makeInt(1)};
-    c->Builder->CreateCall(c->exit_proto, exit_args);
-    c->Builder->CreateUnreachable();
+    //call exit(1)
+    call_exit(1, c);
     return (llvm::Value *) c->Builder->getVoidTy();
 }
 
@@ -1420,24 +1453,37 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto src = get_obj_ptr(mc->scope.get());
         return src;
     }
-    if (mc->name == "print" && !mc->scope) {
-        callPrint(mc, this);
-        return nullptr;
-    } else if (mc->name == "malloc" && !mc->scope) {
+    if (is_printf(mc)) {
+        callPrintf(mc, this);
+        return (llvm::Value *) Builder->getVoidTy();
+    }
+    if (mc->name == "malloc" && !mc->scope) {
         auto size = cast(mc->args[0], Type("i64"));
         if (!mc->typeArgs.empty()) {
             int typeSize = getSize2(mc->typeArgs[0]) / 8;
             size = Builder->CreateNSWMul(size, makeInt(typeSize, 64));
         }
         return callMalloc(size, this);
-    } else if (mc->name == "panic" && !mc->scope) {
-        return callPanic(mc, this);
-    } else if (is_format(mc)) {
+    }
+    if (is_format(mc)) {
         auto &info = resolv->format_map.at(mc->id);
         visitBlock(&info.block);
         auto ptr = getAlloc(mc);
-        call(&info.ret_mc, ptr);
+        call(&info.unwrap_mc, ptr);
         return ptr;
+    }
+    if (is_print(mc)) {
+        auto &info = resolv->format_map.at(mc->id);
+        visitBlock(&info.block);
+        //call(&info.print_mc, nullptr);
+        return (llvm::Value *) Builder->getVoidTy();
+    }
+    if (is_panic(mc)) {
+        auto &info = resolv->format_map.at(mc->id);
+        visitBlock(&info.block);
+        //call(&info.print_mc, nullptr);
+        call_exit(1, this);
+        return (llvm::Value *) Builder->getVoidTy();
     }
     if (is_drop_call(mc)) {
         auto argt = resolv->resolve(mc->args.at(0));
@@ -1466,6 +1512,9 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
+    if (target == nullptr) {
+        resolv->err(mc, "internal error, method not resolved");
+    }
     if (isRvo(target)) {
         auto ptr = getAlloc(mc);
         curOwner.addPtr(mc, ptr);
@@ -1576,10 +1625,6 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     return res;
 }
 
-std::string trim_quotes(const std::string &str) {
-    return str.substr(1, str.size() - 2);
-}
-
 void Compiler::strLit(llvm::Value *ptr, const std::string &str) {
     auto src = Builder->CreateGlobalStringPtr(str);
     auto slice_ptr = gep2(ptr, 0, stringType);
@@ -1596,11 +1641,10 @@ std::any Compiler::visitLiteral(Literal *node) {
     loc(node);
     if (node->type == Literal::STR) {
         auto ptr = getAlloc(node);
-        strLit(ptr, trim_quotes(node->val));
+        strLit(ptr, node->val);
         return (llvm::Value *) ptr;
     } else if (node->type == Literal::CHAR) {
-        auto trimmed = node->val.substr(1, node->val.size() - 2);
-        auto chr = trimmed[0];
+        auto chr = node->val[0];
         return (llvm::Value *) llvm::ConstantInt::get(getInt(32), chr);
     } else if (node->type == Literal::INT) {
         auto bits = 32;
@@ -1991,7 +2035,7 @@ void Compiler::child(Expression *e, llvm::Value *ptr) {
     }
     auto lit = dynamic_cast<Literal *>(e);
     if (lit) {
-        strLit(ptr, trim_quotes(lit->val));
+        strLit(ptr, lit->val);
         return;
     }
     error("child: " + e->print());

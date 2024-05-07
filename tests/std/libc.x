@@ -50,6 +50,7 @@ func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }
 
 extern{
+  //func printf(fmt: i8*);
   //func exit(code: i32);
   func free(ptr: i8*);
   //func malloc(size: i64): i8*;

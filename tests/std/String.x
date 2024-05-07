@@ -9,12 +9,15 @@ struct String{
 impl String{
     func dump(self){
       let i = 0;
-      print("String{len: %d, \"", self.len());
-      while (i < self.len()){
-        print("%c", *self.arr.get_ptr(i));
-        ++i;
-      }
+      let f = Fmt::new();
+      Debug::debug(self.len(), &f);
+      print("String{len: {}, \"", self.len());
+      self.print();
       print("\"}\n");
+    }
+
+    func print(self){
+      printf("%.*s", self.len(), self.ptr() as i8*);
     }
 
     func new(): String{

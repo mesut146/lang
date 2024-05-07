@@ -1627,15 +1627,20 @@ std::any Resolver::visitArrayAccess(ArrayAccess *node) {
     throw std::runtime_error("cant index: " + node->print());
 }
 
-/*Ptr<VarDecl> make_var(std::string name, Expression *rhs) {
-    auto res = std::make_unique<VarDecl>();
-    res->decl = new VarDeclExpr;
-    Fragment f;
-    f.name = name;
-    f.rhs.reset(rhs);
-    res->decl->list.push_back(std::move(f));
-    return res;
-}*/
+void validate_printf(MethodCall *mc, Resolver *r) {
+    //check fmt literal
+    auto fmt = mc->args.at(0);
+    if (!isStrLit(fmt)) {
+        r->err(mc, "format string is not a string literal");
+    }
+    //check rest
+    for (int i = 1; i < mc->args.size(); ++i) {
+        auto arg = r->getType(mc->args.at(i));
+        if (!(arg.isPrim() || arg.print() == "i8*" || arg.print() == "u8*")) {
+            r->err(mc, "format arg is invalid");
+        }
+    }
+}
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
     if (is_std_parent_name(mc)) {
@@ -1732,6 +1737,28 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         auto arr_type = getType(mc->scope.get()).unwrap();
         return RType(Type(Type::Pointer, *arr_type.scope.get()));
     }
+    if (mc->name == "malloc") {
+        for (auto arg : mc->args) {
+            resolve(arg);
+        }
+        Type in("i8");
+        if (!mc->typeArgs.empty()) {
+            in = getType(mc->typeArgs[0]);
+        }
+        return RType(Type(Type::Pointer, in));
+    } else if (is_format(mc)) {
+        generate_format(mc, this);
+        return RType(Type("String"));
+    } else if (is_printf(mc)) {
+        validate_printf(mc, this);
+        return RType(Type("void"));
+    } else if (is_print(mc)) {
+        generate_format(mc, this);
+        return RType(Type("void"));
+    } else if (is_panic(mc)) {
+        generate_format(mc, this);
+        return RType(Type("void"));
+    }
     auto sig = Signature::make(mc, this);
     if (mc->scope) {
         //rvalue
@@ -1739,29 +1766,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             err(mc, "method scope is rvalue");
         }
         MethodResolver mr(this);
-        auto res = mr.handleCallResult(sig);
-        return res;
-    }
-    if (mc->name == "print") {
-        return makeSimple("void");
-    } else if (mc->name == "malloc") {
-        Type in("i8");
-        if (!mc->typeArgs.empty()) {
-            in = getType(mc->typeArgs[0]);
-        }
-        return RType(Type(Type::Pointer, in));
-    } else if (mc->name == "panic") {
-        if (mc->args.empty()) {
-            return RType(Type("void"));
-        }
-        auto lit = dynamic_cast<Literal *>(mc->args[0]);
-        if (lit && lit->type == Literal::STR) {
-            return RType(Type("void"));
-        }
-        throw std::runtime_error("invalid panic argument: " + mc->args[0]->print());
-    } else if (is_format(mc)) {
-        generate_format(mc, this);
-        return RType(Type("String"));
+        return mr.handleCallResult(sig);
     }
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);

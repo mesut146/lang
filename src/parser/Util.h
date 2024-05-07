@@ -78,3 +78,8 @@ std::string format(const std::string &format, Args... args) {
     std::snprintf(buf.get(), size, format.c_str(), args...);
     return std::string(buf.get(), buf.get() + size - 1);// We don't want the '\0' inside
 }
+
+
+std::string replace(const std::string &str, const std::string &s1, const std::string &s2);
+
+std::string trim_quotes(const std::string &s);

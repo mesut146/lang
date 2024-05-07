@@ -15,7 +15,9 @@ func prim_size(s: str): Option<u32>{
 }
 
 func prim_size(s: String): Option<u32>{
-  return prim_size(s.str());
+  let res = prim_size(s.str());
+  Drop::drop(s);
+  return res;
 }
 
 struct Node{
@@ -180,7 +182,15 @@ impl Parent{
     }
     panic("as_impl");
   }
-
+  func get_type(self): Type*{
+    if let Parent::Trait(type*)=(self){
+      return type;
+    }
+    if let Parent::Impl(info*)=(self){
+      return &info.type;
+    }
+    panic("get_type");
+  }
   func clone(self): Parent{
     if let Parent::None=(self){
       return Parent::None;

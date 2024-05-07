@@ -16,6 +16,10 @@ impl str{
       }
       print("\"}\n");
     }
+
+    func print(self){
+      printf("%.*s", self.len(), self.cptr());
+    }
     
     func ptr(self): u8*{
        return &self.buf[0];

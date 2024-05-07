@@ -59,3 +59,20 @@ void printIdent(std::string &&str, std::string &buf) {
     std::string line = str.substr(start, end - start);
     buf.append("    ").append(line).append("\n");
 }
+
+std::string replace(const std::string &str, const std::string &s1, const std::string &s2) {
+    std::string res = str;
+    size_t pos = 0;
+    while ((pos = res.find(s1, pos)) != std::string::npos) {
+        res.replace(pos, s1.length(), s2);
+        pos += s2.length();
+    }
+    return res;
+}
+
+std::string trim_quotes(const std::string &s) {
+    if (s.at(0) == '\"' || s.at(0) == '\'') {
+        return s.substr(1, s.size() - 2);
+    }
+    return s;
+}

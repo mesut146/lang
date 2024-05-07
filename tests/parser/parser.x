@@ -123,7 +123,7 @@ impl Parser{
         }else if(self.is(TokenType::TRAIT)){
           unit.items.add(Item::Trait{self.parse_trait()});
         }else if(self.is(TokenType::FUNC)){
-          unit.items.add(Item::Method{self.parse_method(Option<Type>::None, Parent::None)});
+          unit.items.add(Item::Method{self.parse_method(Parent::None)});
         }else if(self.is(TokenType::TYPE)){
           self.pop();
           let name = self.name();
@@ -133,7 +133,7 @@ impl Parser{
           unit.items.add(Item::Type{name: name, rhs: rhs});
         }else if(self.is(TokenType::EXTERN)){
           self.pop();
-          let list = self.parse_methods(Option<Type>::None, Parent::Extern);
+          let list = self.parse_methods(Parent::Extern);
           unit.items.add(Item::Extern{methods: list});
         }else if(self.is(TokenType::STATIC)){
         	self.pop();
@@ -161,7 +161,7 @@ impl Parser{
       self.consume(TokenType::LBRACE);
       while (!self.is(TokenType::RBRACE)) {
           let parent = Parent::Trait{type: type.clone()};
-          res.methods.add(self.parse_method(Option::new(type), parent));
+          res.methods.add(self.parse_method(parent));
       }
       self.consume(TokenType::RBRACE);
       return res;
@@ -189,31 +189,28 @@ impl Parser{
         if(self.is(TokenType::FOR)){
             self.pop();
             let target = self.parse_type();
-            let op = Option::new(target.clone());
             let info = ImplInfo{type_params, Option::new(t1), target};
             let parent = Parent::Impl{info.clone()};
-            return Impl{info, self.parse_methods(op, parent)};
+            return Impl{info, self.parse_methods(parent)};
         }else{
-          let op = Option::new(t1.clone());
           let info = ImplInfo{type_params, Option<Type>::None, t1};
           let parent = Parent::Impl{info.clone()};
-          return Impl{info, self.parse_methods(op, parent)};
+          return Impl{info, self.parse_methods(parent)};
         }
-        //panic("parse_impl");
     }
     
-    func parse_methods(self, imp: Option<Type>, parent: Parent): List<Method>{
+    func parse_methods(self, parent: Parent): List<Method>{
         let arr = List<Method>::new();
         self.consume(TokenType::LBRACE);
         while(!self.is(TokenType::RBRACE)){
-            arr.add(self.parse_method(imp, parent.clone()));
+            arr.add(self.parse_method(parent.clone()));
         }
         self.consume(TokenType::RBRACE);
         Drop::drop(parent);
         return arr;
     }
     
-    func parse_method(self, imp: Option<Type>, parent: Parent): Method{
+    func parse_method(self, parent: Parent): Method{
       if(self.is(TokenType::VIRTUAL)){
         self.pop();
       }
@@ -245,7 +242,10 @@ impl Parser{
             is_deref = true;
           }
           let self_name = self.name();
-          let self_ty = imp.unwrap().toPtr();
+          let self_ty = parent.get_type().clone();
+          if(!is_deref){
+            self_ty = self_ty.toPtr();
+          }
           selfp = Option::new(Param{.id, self_name, self_ty, true, is_deref});
         }
         while (self.is(TokenType::COMMA)) {
@@ -268,7 +268,6 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      Drop::drop(imp);
       let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.get_heap()};
       return res;
     }

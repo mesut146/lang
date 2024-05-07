@@ -271,9 +271,33 @@ void generate_format(MethodCall *mc, Resolver *r) {
     if (!isStrLit(fmt)) {
         r->err(mc, "format arg not str literal");
     }
-    FormatInfo info(SimpleName("_f"));
-    info.ret.loc(mc->line);
-    Block block;
+    FormatInfo info;
+    auto &block = info.block;
+    if (mc->args.size() == 1 && (is_print(mc) || is_panic(mc))) {
+        //optimized print, no heap alloc, no fmt
+        //"..".print(), exit(1) will be called by compiler
+        auto format_specs = {"%s", "%d", "%c", "%l", "%f"};
+        for (auto fs : format_specs) {
+            if (fmt_str.find(fs) != std::string::npos) {
+                r->err(mc, "invalid format specifier " + std::string(fs));
+            }
+        }
+        auto print_mc = new MethodCall;
+        print_mc->loc(mc->line);
+        print_mc->name = "print";
+        if (is_panic(mc)) {
+            print_mc->scope.reset(make_panic_messsage(fmt_str, mc->line, r->curMethod));
+            print_mc->scope->loc(mc->line);
+        } else {
+            print_mc->scope.reset(fmt);
+        }
+        auto stmt = std::make_unique<ExprStmt>(print_mc);
+        stmt->loc(mc->line);
+        block.list.push_back(std::move(stmt));
+        block.accept(r);
+        r->format_map.insert({mc->id, std::move(info)});
+        return;
+    }
     //let f = Fmt::new();
     auto vd = std::make_unique<VarDecl>();
     vd->loc(mc->line);
@@ -297,20 +321,24 @@ void generate_format(MethodCall *mc, Resolver *r) {
     int idx = 1;
     while (i < fmt_str.size()) {
         int pos = fmt_str.find("{}", i);
-        if (pos > i) {
-            auto sub = fmt_str.substr(i, pos - i);
+        if (pos > i || pos == std::string::npos) {
+            std::string sub;
+            if (pos == std::string::npos) {
+                sub = fmt_str.substr(i);
+            } else {
+                sub = fmt_str.substr(i, pos - i);
+            }
             auto sub_mc = new MethodCall;
             sub_mc->loc(mc->line);
             sub_mc->scope.reset(new SimpleName("_f"));
             sub_mc->scope->loc(mc->line);
             sub_mc->name = "print";
             sub_mc->args.push_back((new Literal(Literal::STR, sub))->loc(mc->line));
-            //r->resolve(sub_mc);
             auto sub_stmt = std::make_unique<ExprStmt>(sub_mc);
-            sub_stmt->loc(mc->line),
+            sub_stmt->loc(mc->line);
             block.list.push_back(std::move(sub_stmt));
-            i = pos + 2;
         }
+        i = pos + 2;
         if (pos == std::string::npos) {
             break;
         }
@@ -324,23 +352,73 @@ void generate_format(MethodCall *mc, Resolver *r) {
         auto ref = new RefExpr(std::make_unique<SimpleName>(f));
         ref->loc(mc->line);
         arg_debug_mc->args.push_back(ref);
-        /*auto mc_rt = r->resolve(arg_debug_mc);
-        if (!mc_rt.targetMethod) {
-            r->err(arg_debug_mc, "no debug method");
-        }*/
-        //arg_debug_mc->scope.release();
         auto debug_stmt = std::make_unique<ExprStmt>(arg_debug_mc);
         debug_stmt->loc(mc->line);
         block.list.push_back(std::move(debug_stmt));
     }
-    info.ret_mc.loc(mc->line);
-    info.ret_mc.scope.reset(new SimpleName("_f"));
-    info.ret_mc.scope->loc(mc->line);
-    info.ret_mc.name = "unwrap";
-    block.accept(r);
-    r->resolve(&info.ret_mc);
-    print(block.print());
-    print(info.ret_mc.print());
-    info.block = std::move(block);
+    if (is_format(mc)) {
+        block.accept(r);
+        info.unwrap_mc.loc(mc->line);
+        info.unwrap_mc.scope.reset(new SimpleName("_f"));
+        info.unwrap_mc.scope->loc(mc->line);
+        info.unwrap_mc.name = "unwrap";
+        r->resolve(&info.unwrap_mc);
+    } else if (is_print(mc)) {
+        //f.buf.print();
+        auto print_mc = new MethodCall;
+        print_mc->loc(mc->line);
+        print_mc->name = "print";
+        auto scope = new FieldAccess;
+        scope->loc(mc->line);
+        scope->name = "buf";
+        scope->scope = new SimpleName("_f");
+        scope->scope->loc(mc->line);
+        print_mc->scope.reset(scope);
+        auto stmt = std::make_unique<ExprStmt>(print_mc);
+        stmt->loc(mc->line);
+        block.list.push_back(std::move(stmt));
+        block.accept(r);
+    } else if (is_panic(mc)) {
+        //"panic...\n".print();
+        auto panic_start = make_panic_messsage({}, mc->line, r->curMethod);
+        panic_start->loc(mc->line);
+        auto start_mc = new MethodCall;
+        start_mc->loc(mc->line);
+        start_mc->name = "print";
+        start_mc->scope.reset(panic_start);
+        auto start_stmt = std::make_unique<ExprStmt>(start_mc);
+        start_stmt->loc(mc->line);
+        block.list.push_back(std::move(start_stmt));
+        //f.buf.print()
+        auto print_mc = new MethodCall;
+        print_mc->loc(mc->line);
+        print_mc->name = "print";
+        auto scope = new FieldAccess;
+        scope->loc(mc->line);
+        scope->name = "buf";
+        scope->scope = new SimpleName("_f");
+        scope->scope->loc(mc->line);
+        print_mc->scope.reset(scope);
+        print_mc->scope->loc(mc->line);
+        auto stmt = std::make_unique<ExprStmt>(print_mc);
+        stmt->loc(mc->line);
+        block.list.push_back(std::move(stmt));
+        print(block.print());
+        block.accept(r);
+    } else {
+        //todo
+    }
     r->format_map.insert({mc->id, std::move(info)});
+}
+
+Literal *make_panic_messsage(const std::optional<std::string> &s, int line, Method *method) {
+    std::string message = "panic ";
+    message += method->path + ":" + std::to_string(line);
+    message += " " + printMethod(method);
+    if (s.has_value()) {
+        message += "\n";
+        message += s.value();
+    }
+    message.append("\n");
+    return new Literal(Literal::STR, message);
 }

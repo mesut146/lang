@@ -64,7 +64,17 @@ static bool is_std_parent_name(MethodCall *mc) {
 static bool is_format(MethodCall *mc) {
     return mc->name == "format" && !mc->scope;
 }
+static bool is_printf(MethodCall *mc) {
+    return mc->name == "printf" && !mc->scope;
+}
+static bool is_print(MethodCall *mc) {
+    return mc->name == "print" && !mc->scope;
+}
+static bool is_panic(MethodCall *mc) {
+    return mc->name == "panic" && !mc->scope;
+}
 
+Literal *make_panic_messsage(const std::optional<std::string> &s, int line, Method *method);
 
 static int fieldIndex(std::vector<FieldDecl> &fields, const std::string &name, const Type &type) {
     int i = 0;
@@ -262,11 +272,9 @@ enum class MutKind {
 };
 
 struct FormatInfo {
-    SimpleName ret;
     Block block;
-    MethodCall ret_mc;
-
-    FormatInfo(const SimpleName &ret) : ret(ret){};
+    MethodCall unwrap_mc;
+    //MethodCall print_mc;
 };
 
 void generate_format(MethodCall *mc, Resolver *r);

@@ -404,6 +404,16 @@ public:
             info.block.accept(this);
             return alloc(Type("String"), node);
         }
+        if (is_print(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            return {};
+        }
+        if (is_panic(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            return {};
+        }
         auto m = compiler->resolv->resolve(node).targetMethod;
         llvm::Value *ptr = nullptr;
         if (m && compiler->isRvo(m)) {
@@ -411,9 +421,6 @@ public:
         }
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
-            if (!node->scope && (node->name == "print" || node->name == "panic") && isStrLit(a)) {
-                continue;
-            }
             a->accept(this);
         }
         return ptr;

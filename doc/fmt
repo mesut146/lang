@@ -1,22 +1,42 @@
-print("{} asd", args...)
-
-
-Fmt::format2("{} {}", ..args): String{
- let f = Fmt::new();
- for arg in args{
-  Debug::debug(arg, &f)
- }
- return f.buf;
-}
-
-
 let s = format("pre{}mid{}end", ...)
 {
-let f = Fmt::new();
-f.print("pre");
-a1.debug(f);
-f.print("mid");
-a2.debug(f);
-f.print("end");
-let s = f.unwrap();
+    let f = Fmt::new();
+    f.print("pre");
+    a1.debug(f);
+    f.print("mid");
+    a2.debug(f);
+    f.print("end");
+    let s = f.unwrap();
+}
+
+//print single, no heap alloc
+print("hello\n");
+{
+    "hello\n".print()
+}
+
+//print formatted, must heap alloc bc shared fmt
+print("pre{}mid{}end")
+{
+    let f = Fmt::new();
+    //same as format macro
+    f.buf.print();//prints and flush
+    Drop::drop(f);
+}
+
+//panic single, no heap alloc
+panic("err msg\n");
+{
+    "err msg\n".print()
+    exit(1);
+}
+
+panic("", ...args)
+{
+    let f = Fmt::new();
+    //same as format macro
+    "panic...\n".print();
+    f.buf.print();
+    Drop::drop(f);
+    exit(1);
 }

@@ -1,7 +1,7 @@
 #include "Lexer.h"
 #include <map>
-#include <vector>
 #include <optional>
+#include <vector>
 
 TokenType kw(std::string &s) {
     if (s == "assert") return ASSERT_KW;
@@ -192,25 +192,22 @@ char checkEscape(char c) {
     throw std::runtime_error(std::string("invalid escape: \\") + c);
 }
 
-Token Lexer::quoted(char c1) {
-    char c = peek();
+Token Lexer::quoted() {
+    char start_ch = read();
     std::string s;
-    s.append(1, c);
-    pos++;
     while (pos < buf.size()) {
-        c = read();
+        char c = read();
         if (c == '\\') {
             auto c2 = checkEscape(buf[pos]);
             s.append(1, c2);
             pos++;
-        } else if (c == c1) {
-            s.append(1, c);
-            return Token(c1 == '"' ? STRING_LIT : CHAR_LIT, s);
+        } else if (c == start_ch) {
+            return Token(start_ch == '"' ? STRING_LIT : CHAR_LIT, s);
         } else {
             s.append(1, c);
         }
     }
-    throw std::runtime_error("unterminated char literal " + s+" line: "+std::to_string(line));
+    throw std::runtime_error("unterminated char literal " + s + " line: " + std::to_string(line));
 }
 
 Token Lexer::next() {
@@ -274,7 +271,7 @@ Token Lexer::next() {
             token = readOp();
         }
     } else if (c == '\'' || c == '"') {
-        token = quoted(c);
+        token = quoted();
     } else if (ops.find(std::string(1, c)) != ops.end()) {
         token = readOp();
     } else {

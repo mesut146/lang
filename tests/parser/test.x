@@ -63,7 +63,7 @@ func bootstrap(){
     let file = arr[i];
     cmp.compile(CStr::new(file));
     if(i == 0){
-      break;
+      break;//todo
     }
   }
   //cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");

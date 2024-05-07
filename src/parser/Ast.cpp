@@ -136,13 +136,14 @@ std::string SimpleName::print() const {
 
 std::string Literal::print() const {
     std::string s;
+    auto replaced = replace(val, "\n", "\\n");
     if (type == STR) {
         s.append("\"");
-        s.append(val);
+        s.append(replace(replaced, "\"", "\\\""));
         s.append("\"");
     } else if (type == CHAR) {
         s.append("\'");
-        s.append(val);
+        s.append(replaced);
         s.append("\'");
     } else {
         s.append(val);

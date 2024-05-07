@@ -47,7 +47,7 @@ public:
     Token readIdent();
     Token lineComment();
     Token readOp();
-    Token quoted(char c1);
+    Token quoted();
 
     std::map<std::string, TokenType> ops;
 
