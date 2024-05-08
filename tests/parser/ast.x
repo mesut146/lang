@@ -133,7 +133,7 @@ impl Decl{
     if let Decl::Enum(variants*)=(self){
       return variants;
     }
-    panic("get_variants %s", CStr::new(self.type.print()).ptr());
+    panic("get_variants {}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
     if let Decl::Struct(fields*)=(self){
@@ -295,7 +295,7 @@ impl Type{
     if let Type::Simple(smp*)=(self){
       return &smp.name;
     }
-    panic("cant name() %s", CStr::new(self.print()).ptr());
+    panic("cant Type::name() {}", self);
   }
 
   func is_simple(self): bool{
@@ -339,7 +339,7 @@ impl Type{
     if let Type::Simple(smp*) = (self){
       return &smp.args;
     }
-    panic("get_args %s", CStr::new(self.print()).ptr());
+    panic("get_args {}", self);
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
@@ -366,7 +366,7 @@ impl Type{
     if let Type::Slice(bx*) = (self){
       return bx.get();
     }
-    panic("elem %s", CStr::new(self.print()).ptr());
+    panic("elem {}", self);
   }
 
   //get plain(generic)
@@ -378,7 +378,7 @@ impl Type{
         return Type::new(smp.name.clone());
       }
     }
-    panic("erase %s", CStr::new(self.print()).ptr());
+    panic("erase {}", self);
   }
   
   func print(self): String{

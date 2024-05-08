@@ -79,7 +79,7 @@ impl Lexer{
     if (c == '"') return '"';
     if (c == '\'') return '\'';
     if (c == '0') return '\0';
-    panic("invalid escape: %c", c);
+    panic("invalid escape: {}", c);
   }
   
   func make_ops(): Map<str, TokenType>{
@@ -184,7 +184,7 @@ impl Lexer{
         }
     }
     //never
-    panic("readOp() failed with buffer: %c", self.peek());
+    panic("readOp() failed with buffer: {}", self.peek());
 }
 
   func skip_ws(self){
@@ -238,7 +238,7 @@ impl Lexer{
         }
       }
     }            
-    panic("unclosed block comment at line %d" , self.line);
+    panic("unclosed block comment at line {}" , self.line);
   }
   
   func next0(self): Token{
@@ -299,7 +299,7 @@ impl Lexer{
     if(self.ops.get_ptr(&oss).is_some()){
       return self.read_op();
     }
-    panic("in file %s\nunexpected char: %c(%d) at %d" ,self.path.ptr(),  c, c, start);
+    panic("in file {}\nunexpected char: {}({}) at {}", self.path, c, c, start);
   }
   
   func read_ident(self): Token {

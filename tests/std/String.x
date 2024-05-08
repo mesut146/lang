@@ -8,9 +8,6 @@ struct String{
 
 impl String{
     func dump(self){
-      let i = 0;
-      let f = Fmt::new();
-      Debug::debug(self.len(), &f);
       print("String{len: {}, \"", self.len());
       self.print();
       print("\"}\n");
@@ -161,7 +158,6 @@ impl String{
           break;
         }else{
           arr.add(self.substr(last, i).str());
-          //print("s = %s\n", arr.last().str().cstr());
           last = i + sep.len();
         }
       }
@@ -197,32 +193,16 @@ impl Eq for String{
 
 impl Debug for i32{
   func debug(self, f: Fmt*){
-    f.print(self.str().str());
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
   }
-  
-  func str(self): String{
-    let x = *self;
-    let len = self.str_size();
-    let list = List<u8>::new(len + 1);
-    list.set(len, 0u8);//null terminate
-    list.count = len;
-    for(let i = len - 1;i >= 0;--i){
-      let c = x % 10;
-      list.set(i, (c + ('0' as i32)) as u8);
-      x = x / 10;
-    }
-    return String{list};
-  }
-  
-  func str_size(self): i32{
-    if(*self == 0) return 1;
-    let x = *self;
-    let res = 0;
-    while(x > 0){
-      x /= 10;
-      res+=1;
-    }
-    return res;
+}
+impl Debug for i64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
   }
 }
 
@@ -234,10 +214,13 @@ impl i32{
   func print(x: i32): String{
     return x.str();
   }
+  func str(self): String{
+    return i64::print(*self as i64);
+  }
 }
 impl i64{
-  func print(x: i64): String{
-    return x.str();
+  func str(self): String{
+    return i64::print(*self);
   }
   func parse(s: str): i64{
     let x: i64 = 0;
@@ -270,9 +253,8 @@ impl i64{
     }
     return x;
   }
-  func str(self): String{
-    let x = *self;
-    let len = self.str_size();
+  func print(x: i64): String{
+    let len = i64::str_size(x);
     let list = List<u8>::new(len + 1);
     list.set(len, 0u8);//null terminate
     list.count = len;
@@ -284,9 +266,8 @@ impl i64{
     return String{list};
   }
   
-  func str_size(self): i32{
-    if(*self == 0) return 1;
-    let x = *self;
+  func str_size(x: i64): i32{
+    if(x == 0) return 1;
     let res = 0;
     while(x > 0){
       x /= 10;
@@ -361,9 +342,18 @@ impl CStr{
 
 impl Drop for CStr{
   func drop(*self){
-    //print("CStr::drop %s\n", self.ptr());
     if let CStr::Heap(v)=(self){
       Drop::drop(v);
+    }
+  }
+}
+
+impl Debug for CStr{
+  func debug(self, f: Fmt*){
+    if let CStr::Lit(v)=(self){
+      v.debug(f);
+    }else if let CStr::Heap(v*)=(self){
+      v.debug(f);
     }
   }
 }

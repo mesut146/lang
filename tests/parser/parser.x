@@ -32,7 +32,6 @@ impl Parser{
             continue;
         self.tokens.add(t);
       }
-      //print("tokens %d %s\n", self.tokens.len(), self.lexer.path.cstr());
     }
     
     func has(self): bool{
@@ -73,13 +72,13 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t = self.pop();
       if(t.type is tt) return t;
-      print("%s:%d\n", self.lexer.path.ptr(), t.line);
+      print("{}:{}\n", self.lexer.path, t.line);
       let tok_str = t.print();
       let tt_str = Fmt::str(&tt);
       let msg = Fmt::format("unexpected token {} was expecting {}", tok_str.str(), tt_str.str());
       Drop::drop(tok_str);
       Drop::drop(tt_str);
-      panic("%s", msg.str());
+      panic("{}", msg.str());
     }
     
     func parse_unit(self): Unit{
@@ -105,7 +104,7 @@ impl Parser{
           }else if(name.value.eq("drop")){
             attr.add(name.value.clone());
           }else{
-            panic("invalid attr %s", CStr::new(name.value.clone()).ptr());
+            panic("invalid attr {}", name.value);
           }
         }
         if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
@@ -148,7 +147,7 @@ impl Parser{
             self.consume(TokenType::SEMI);
             unit.globals.add(Global{name, type, rhs});
         }else{
-          panic("invalid top level decl: %s", CStr::new(self.peek().print()).ptr());
+          panic("invalid top level decl: {}", self.peek().print());
         }
       }
       return unit;
@@ -566,7 +565,6 @@ impl Parser{
         self.consume(TokenType::SEMI);
         return Stmt::Expr{e};
       }
-      //panic("invalid stmt %s", CStr::new(self.peek().print()).ptr());
     }
     
     func parse_frag(self): Fragment{
@@ -661,7 +659,7 @@ impl Parser{
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
       kind = LitKind::BOOL;
     }else{
-      panic("invalid literal %s", CStr::new(self.peek().print()).ptr());
+      panic("invalid literal {}", self.peek().print());
     }
     let arr = Lexer::get_suffix();
     let val = self.popv();
@@ -684,7 +682,7 @@ impl Parser{
     if(isName(self.peek())){
       return self.popv();
     }
-    panic("expected name got %s", CStr::new(self.peek().print()).ptr());
+    panic("expected name got {}", self.peek().print());
   }
   
   func isObj(self): bool{
@@ -796,7 +794,7 @@ impl Parser{
       let e = self.prim2();
       return Expr::Unary{.n,op, Box::new(e)};
     }else{
-      panic("invalid expr %s", CStr::new(self.peek().print()).ptr());
+      panic("invalid expr {}", self.peek().print());
     }
   }
   
@@ -809,7 +807,7 @@ impl Parser{
         ty = Option::new(Type::new(nm));
       }else if let Expr::Type(t)=(e){
         ty = Option::new(t);
-      }else panic("was expecting name got %s", CStr::new(Fmt::str(&e)).ptr());
+      }else panic("was expecting name got {}", e);
       let args = List<Entry>::new();
       self.consume(TokenType::LBRACE);
       if(!self.is(TokenType::RBRACE)){
@@ -898,7 +896,6 @@ impl Parser{
     if(tt is TokenType::STAR) return 10;
     if(tt is TokenType::DIV) return 10;
     if(tt is TokenType::PERCENT) return 10;
-    //panic("is op %s", Fmt::str(tt).cstr());
     return -1;
   }
   

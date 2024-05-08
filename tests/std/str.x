@@ -7,15 +7,15 @@ struct str{
 }
 
 impl str{
-    func dump(self){
-      let i = 0;
-      print("str{len: %d, \"", self.len());
-      while (i < self.len()){
-        print("%c", self.buf[i]);
-        ++i;
-      }
-      print("\"}\n");
-    }
+    // func dump(self){
+    //   let i = 0;
+    //   print("str{len: %d, \"", self.len());
+    //   while (i < self.len()){
+    //     print("{}", self.buf[i]);
+    //     ++i;
+    //   }
+    //   print("\"}\n");
+    // }
 
     func print(self){
       printf("%.*s", self.len(), self.cptr());

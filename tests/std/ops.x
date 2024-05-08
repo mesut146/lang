@@ -179,6 +179,12 @@ impl Debug for str{
   }
 }
 
+impl Debug for i8{
+  func debug(self, f: Fmt*){
+    f.print(*self);
+  }
+}
+
 impl Debug for u8{
   func debug(self, f: Fmt*){
     f.print(*self);

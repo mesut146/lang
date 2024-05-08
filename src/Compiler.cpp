@@ -1524,7 +1524,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
 }
 
-llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
+llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *sret) {
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     auto mangled = mangle(target);
@@ -1540,30 +1540,41 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
         resolv->err(mc, "proto not found");
     }
     std::vector<llvm::Value *> args;
-    int paramIdx = 0;
-    if (ptr) {
-        args.push_back(ptr);
+    if (sret) {
+        args.push_back(sret);
     }
+    int paramIdx = 0;
+    int argIdx = 0;
     llvm::Value *obj = nullptr;
-    if (target->self && !mc->is_static) {
+    if (target->self) {
+        auto rval = RvalueHelper::need_alloc(mc, target, resolv.get());
         //add this object
-        obj = get_obj_ptr(mc->scope.get());
+        auto val = get_obj_ptr(rval.scope);
+        if (rval.rvalue) {
+            obj = getAlloc(rval.scope);
+            Builder->CreateStore(val, obj);
+        } else {
+            obj = val;
+        }
         args.push_back(obj);
-        paramIdx++;
+        if (mc->is_static) {
+            argIdx++;
+        }
+        //paramIdx++;
         if (target->self->is_deref) {
             curOwner.doMoveCall(mc->scope.get());
         }
     }
     std::vector<Param *> params;
-    if (target->self) {
+    /*if (target->self) {
         params.push_back(&target->self.value());
-    }
+    }*/
     for (auto &p : target->params) {
         params.push_back(&p);
     }
     //print(mc->print());
-    for (int i = 0, e = mc->args.size(); i != e; ++i) {
-        auto a = mc->args[i];
+    for (; argIdx < mc->args.size(); argIdx++) {
+        auto a = mc->args[argIdx];
         auto &pt = *params[paramIdx]->type;
         auto at = resolv->getType(a);
         llvm::Value *av;
@@ -1619,7 +1630,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *ptr) {
     } else {
         res = (llvm::Value *) Builder->CreateCall(f, args);
     }
-    if (ptr) {
+    if (sret) {
         return args[0];
     }
     return res;
@@ -1681,7 +1692,7 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
     for (auto &f : node->list) {
         auto rhs = f.rhs.get();
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
-        NamedValues[f.name] = varAlloc[getId(f.name)];
+        NamedValues[f.name] = getAlloc(&f);
         loc(&f);
         curOwner.check(rhs);
         auto ptr = NamedValues[f.name];
@@ -2203,7 +2214,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             auto &fd = fields[i];
             auto &arg = node->args[i];
             auto field_ptr = gep2(dataPtr, i, var_ty);
-            auto alloc_ptr = varAlloc[getId(arg.name)];
+            auto alloc_ptr = getAlloc(&arg);
             NamedValues[arg.name] = alloc_ptr;
             if (arg.ptr) {
                 Builder->CreateStore(field_ptr, alloc_ptr);

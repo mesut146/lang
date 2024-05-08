@@ -2,6 +2,8 @@
 #include "TypeUtils.h"
 #include "parser/Ast.h"
 
+bool print_block = false;
+
 //Debug::debug(e, f)
 Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, bool use_ref, const std::string &fmt) {
     auto mc = new MethodCall;
@@ -271,17 +273,17 @@ void generate_format(MethodCall *mc, Resolver *r) {
     if (!isStrLit(fmt)) {
         r->err(mc, "format arg not str literal");
     }
+    auto format_specs = {"%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"};
+    for (auto fs : format_specs) {
+        if (fmt_str.find(fs) != std::string::npos) {
+            r->err(mc, "invalid format specifier " + std::string(fs));
+        }
+    }
     FormatInfo info;
     auto &block = info.block;
     if (mc->args.size() == 1 && (is_print(mc) || is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
         //"..".print(), exit(1) will be called by compiler
-        auto format_specs = {"%s", "%d", "%c", "%l", "%f"};
-        for (auto fs : format_specs) {
-            if (fmt_str.find(fs) != std::string::npos) {
-                r->err(mc, "invalid format specifier " + std::string(fs));
-            }
-        }
         auto print_mc = new MethodCall;
         print_mc->loc(mc->line);
         print_mc->name = "print";
@@ -303,7 +305,8 @@ void generate_format(MethodCall *mc, Resolver *r) {
     vd->loc(mc->line);
     Fragment frag;
     frag.loc(mc->line);
-    frag.name = "_f";
+    auto var_name = "_f" + std::to_string(mc->id);
+    frag.name = var_name;
     frag.type = Type("Fmt");
     auto rhs = new MethodCall;
     rhs->loc(mc->line);
@@ -315,7 +318,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
     vd->decl = new VarDeclExpr;
     vd->decl->list.push_back(std::move(frag));
     block.list.push_back(std::move(vd));
-    SimpleName f("_f");
+    SimpleName f(var_name);
     f.loc(mc->line);
     int i = 0;
     int idx = 1;
@@ -330,7 +333,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
             }
             auto sub_mc = new MethodCall;
             sub_mc->loc(mc->line);
-            sub_mc->scope.reset(new SimpleName("_f"));
+            sub_mc->scope.reset(new SimpleName(var_name));
             sub_mc->scope->loc(mc->line);
             sub_mc->name = "print";
             sub_mc->args.push_back((new Literal(Literal::STR, sub))->loc(mc->line));
@@ -359,7 +362,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
     if (is_format(mc)) {
         block.accept(r);
         info.unwrap_mc.loc(mc->line);
-        info.unwrap_mc.scope.reset(new SimpleName("_f"));
+        info.unwrap_mc.scope.reset(new SimpleName(var_name));
         info.unwrap_mc.scope->loc(mc->line);
         info.unwrap_mc.name = "unwrap";
         r->resolve(&info.unwrap_mc);
@@ -371,7 +374,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
         auto scope = new FieldAccess;
         scope->loc(mc->line);
         scope->name = "buf";
-        scope->scope = new SimpleName("_f");
+        scope->scope = new SimpleName(var_name);
         scope->scope->loc(mc->line);
         print_mc->scope.reset(scope);
         auto stmt = std::make_unique<ExprStmt>(print_mc);
@@ -396,14 +399,16 @@ void generate_format(MethodCall *mc, Resolver *r) {
         auto scope = new FieldAccess;
         scope->loc(mc->line);
         scope->name = "buf";
-        scope->scope = new SimpleName("_f");
+        scope->scope = new SimpleName(var_name);
         scope->scope->loc(mc->line);
         print_mc->scope.reset(scope);
         print_mc->scope->loc(mc->line);
         auto stmt = std::make_unique<ExprStmt>(print_mc);
         stmt->loc(mc->line);
         block.list.push_back(std::move(stmt));
-        print(block.print());
+        if (print_block) {
+            print(block.print());
+        }
         block.accept(r);
     } else {
         //todo

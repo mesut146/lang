@@ -6,6 +6,7 @@ int VarScope::last_id = 0;
 
 bool verbose = false;
 bool enabled = false;
+bool print_drop_info = false;
 
 std::string print_type(const ScopeId &type) {
     if (type == ScopeId::MAIN) {
@@ -522,12 +523,14 @@ void Ownership::call_drop_force(Type &type, llvm::Value *ptr) {
 }
 
 void drop_info(Variable &v, const std::string &msg) {
+    if (!print_drop_info) return;
     print("drop var " + v.name + ":" + v.type.print() + " line: " + std::to_string(v.line) + " " + msg);
     if (v.name == "sig_res" && v.line == 687) {
         int xx = 5;
     }
 }
 void drop_info(Expression *expr) {
+    if (!print_drop_info) return;
     print("drop " + expr->print() + " line: " + std::to_string(expr->line));
     if (expr->print() == "res.parent" && expr->line == 725) {
         int xx = 5;

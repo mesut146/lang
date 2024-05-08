@@ -69,7 +69,7 @@ impl Protos{
     print("dump classmap\n");
     for(let i=0;i<self.classMap.len();++i){
       let e = self.classMap.get_idx(i).unwrap();
-      print("%s\n", e.a.clone().cstr().ptr());
+      print("{}\n", e.a);
     }
   }
   func libc(self, nm: str): Function*{
@@ -202,24 +202,24 @@ impl Compiler{
     if(system(cmd_s.ptr()) == 0){
       //run if linked
       if(system(name.ptr()) != 0){
-        print("%s\n", cmd_s.ptr());
-        panic("error while running %s", name.ptr());
+        print("{}\n", cmd_s);
+        panic("error while running {}", name);
       }
     }else{
-      panic("link failed '%s'", cmd_s.ptr());
+      panic("link failed '{}'", cmd_s);
     }
   }
 
   func compile(self, path0: CStr): String{
-    //print("compile %s\n", path0.cstr());
+    //print("compile {}\n", path0);
     let path = Path::new(path0.get_heap());
     let outFile: String = get_out_file(path0.get());
     let ext = path.ext();
     if (!ext.eq("x")) {
-      panic("invalid extension %s", ext.cstr());
+      panic("invalid extension {}", ext);
     }
     if(self.config.verbose){
-      print("compiling %s\n", path0.ptr());
+      print("compiling {}\n", path0);
     }
     //let r = Resolver::new(path0.str(), &self.ctx);
     //self.resolver = &r;
@@ -256,13 +256,13 @@ impl Compiler{
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     if(self.config.verbose){
-      print("writing %s\n", llvm_file_cstr.ptr());
+      print("writing {}\n", llvm_file_cstr);
     }
     self.compiled.add(outFile.clone());
     let outFile_cstr = CStr::new(outFile.clone());
     emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
     if(self.config.verbose){
-      print("writing %s\n", outFile_cstr.ptr());
+      print("writing {}\n", outFile_cstr);
     }
     Drop::drop(outFile_cstr);
     Drop::drop(path0);
@@ -326,7 +326,7 @@ impl Compiler{
   }
 
   func genCode(self, m: Method*){
-    //print("gen %s\n", m.name.cstr());
+    //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
@@ -499,7 +499,7 @@ impl Compiler{
       CreateBr(*self.loopNext.last());
     }
     else{
-      panic("visit %s", node.print().cstr());
+      panic("visit {}", node);
     }
     return;
   }
@@ -757,7 +757,7 @@ impl Compiler{
     if let Expr::As(lhs*, rhs*)=(node){
       return self.visit_as(lhs.get(), rhs);
     }
-    panic("expr %s", node.print().cstr());
+    panic("expr {}", node);
   }
 
   func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
@@ -942,7 +942,7 @@ impl Compiler{
     if(op.eq("~")){
       return CreateXor(val, makeInt(-1, bits));
     }
-    panic("unary %s", CStr::new(op.clone()).ptr());
+    panic("unary {}", op);
   }
 
   func visit_call(self, expr: Expr*, mc: Call*): Value*{
@@ -1037,10 +1037,9 @@ impl Compiler{
   }
 
   func visit_call2(self, expr: Expr*, mc: Call*): Value*{
-    //print("mc %s\n", expr.print().cstr());
     let rt = self.resolver.visit(expr);
     if(rt.method.is_none()){
-      panic("mc %s", expr.print().cstr());
+      panic("mc {}", expr);
     }
     let type = &rt.type;
     let ptr = Option<Value*>::new();
@@ -1116,7 +1115,7 @@ impl Compiler{
         //val = CreateLoad(self.mapType(&arg_type), val);
         args_push(args, val);
       }else{
-        panic("print %s", arg_type.print().cstr().ptr());
+        panic("print {}", arg_type);
       }
     }
     let printf_proto = self.protos.get().libc("printf");
@@ -1241,7 +1240,7 @@ impl Compiler{
       CreateStore(tmp, lv);
       return lv;
     }
-    panic("infix '%s'\n", op.clone().cstr().ptr());
+    panic("infix '{}'\n", op);
   }
 
   func is_logic(expr: Expr*): bool{
@@ -1312,7 +1311,6 @@ impl Compiler{
       }
     }
     let lhs = self.visit(l);
-    //print("assign %s\n", l.print().cstr());
     self.setField(r, &type, lhs);
     return lhs;
   }
@@ -1330,8 +1328,6 @@ impl Compiler{
         }
         let val = i64::parse(s.str());
         let res = makeInt(val, bits);
-        //print("lit %s=%d bits=%d s=%s\n", expr.print().cstr(), val, bits, s.cstr());
-        //Value_dump(res);
         return res;
     }
     if(node.val.eq("true")) return getTrue();
@@ -1356,7 +1352,7 @@ impl Compiler{
       let trimmed = node.val.get(1);
       return makeInt(trimmed, 32);
     }
-    panic("lit %s", node.val.clone().cstr().ptr());
+    panic("lit {}", node.val);
   }
 
   func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
@@ -1377,7 +1373,6 @@ impl Compiler{
       if(decl.base.is_some() && decl is Decl::Struct) ++prm_idx;
       //Value_dump(ptr);
       //Type_dump(ty);
-      //print("idx=%d\n", prm_idx);
       let field_target_ptr = self.gep2(ptr, prm_idx, ty);
       self.setField(&arg.expr, &fd.type, field_target_ptr);
     }

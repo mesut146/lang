@@ -65,6 +65,37 @@ struct Cache {
     }
 };
 
+struct RvalueHelper {
+    bool rvalue;
+    Expression *scope;
+    Type scope_type;
+
+    static bool is_rvalue(Expression *e) {
+        return dynamic_cast<MethodCall *>(e) || dynamic_cast<Literal *>(e);
+    }
+
+    static RvalueHelper need_alloc(MethodCall *mc, Method *method, Resolver *r) {
+        auto res = RvalueHelper{};
+        if (!method->self) {
+            return res;
+        }
+        Expression *scp;
+        if (mc->is_static) {
+            scp = mc->args.at(0);
+        } else {
+            scp = mc->scope.get();
+        }
+        res.scope = scp;
+        if (method->self->type->isPointer()) {
+            auto scope_type = r->resolve(scp);
+            if (scope_type.type.isPrim() && is_rvalue(scp)) {
+                res.rvalue = true;
+                res.scope_type = scope_type.type;
+            }
+        }
+        return res;
+    }
+};
 
 struct Compiler : public Visitor {
 public:
@@ -93,7 +124,6 @@ public:
     std::unique_ptr<llvm::Module> mod;
     std::map<int, llvm::Value *> allocMap2;
     std::map<std::string, llvm::Value *> NamedValues;
-    std::map<std::string, llvm::Value *> varAlloc;
     std::map<std::string, llvm::Type *> classMap;
     std::map<std::string, llvm::Function *> funcMap;
     llvm::Function *printf_proto = nullptr;
@@ -191,26 +221,15 @@ public:
         auto ty = mapType(type);
         return gep2(ptr, idx, ty);
     }
-    llvm::Value *getAlloc(Expression *e) {
+    llvm::Value *getAlloc(Node *e) {
         if (e->id == -1) {
             resolv->err(e, "alloc no id");
         }
-        return allocMap2[e->id];
-    }
-
-    std::string getId(const std::string &name) {
-        return name + "#" + std::to_string(resolv->max_scope);
-    }
-
-    /*llvm::Value *getVar(const std::string &name) {
-        auto id = getId(name);
-        auto it = NamedValues.find(id);
-        if (it == NamedValues.end()) error("get var " + name);
-        return it->second;
-    }*/
-    void addVar(const std::string &name, llvm::Value *ptr) {
-        auto id = getId(name);
-        NamedValues[id] = ptr;
+        auto res = allocMap2.at(e->id);
+        if (!res) {
+            resolv->err(e, "getAlloc not found: " + e->print());
+        }
+        return res;
     }
 
     llvm::Function *make_printf();

@@ -236,12 +236,11 @@ func dumpp(r: Resolver*){
 
 impl Resolver{
   func new(path: CStr, ctx: Context*): Resolver{
-    print("Resolver::new %s\n", path.ptr());
+    print("Resolver::new {}\n", path);
     let parser = Parser::new(path);
     let unit = parser.parse_unit();
     Drop::drop(parser);
-    //let str = Fmt::str(&unit);
-    //print("unit=%s\n", str.cstr());
+    //print("unit={}\n", unit);
     
     let map = Map<String, RType>::new();
     let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: map,
@@ -267,7 +266,7 @@ impl Resolver{
     for(let i=0;i<self.scopes.len();++i){
       let s = self.scopes.get_ptr(i);
       if(s.find(&name).is_some()){
-        panic("variable %s already exists\n", name.cstr());
+        panic("variable {} already exists\n", name);
       }
     }
     let scope = self.scopes.last();
@@ -280,7 +279,7 @@ impl Resolver{
   }
 
   func getPath(self, is: ImportStmt*): String {
-    return Fmt::format("{}/{}.x", self.ctx.root.str(), join(&is.list, "/").str());
+    return format("{}/{}.x", self.ctx.root, join(&is.list, "/"));
   }
 
   func get_relative_root(path: str, root: str): str{
@@ -297,7 +296,7 @@ impl Resolver{
     for (let i = 0;i < self.ctx.prelude.len();++i) {
       let pre = self.ctx.prelude.get_ptr(i);
       //skip self unit being prelude
-      let path = Fmt::format("std/{}.x", pre.str());
+      let path = format("std/{}.x", pre);
       if (cur.eq(path.str())) continue;
       let is = ImportStmt::new();
       is.list.add("std".str());
@@ -328,8 +327,7 @@ impl Resolver{
   
   func resolve_all(self){
     if(self.is_resolved) return;
-    print("resolve_all %s\n", self.unit.path.clone().cstr().ptr());
-    //print("unit=%s\n", Fmt::str(&self.unit).cstr().ptr());
+    print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
     self.init();
     self.init_globals();
@@ -355,8 +353,8 @@ impl Resolver{
             //todo check
             let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
             if (err_opt.is_some()) {
-                let msg = Fmt::format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name.str(),type.print().str(),rhs.type.print().str(), err_opt.get().str());
-                self.err(msg.str());
+                let msg = format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name, type,rhs.type, err_opt.get());
+                self.err(msg);
             }
         }
         self.addScope(g.name.clone(), rhs.type.clone(), false);
@@ -365,23 +363,22 @@ impl Resolver{
 
   func dump(self){
     print("---dump---");
-    print("%d types\n", self.typeMap.len());
+    print("{} types\n", self.typeMap.len());
     for(let i = 0;i < self.typeMap.len();++i){
       let pair = self.typeMap.get_idx(i).unwrap();
-      print("%s -> %s\n", pair.a.clone().cstr().ptr(), Fmt::str(&pair.b.type).cstr().ptr());
+      print("{} -> {}\n", pair.a, pair.b.type);
     }
-    print("scope count %d\n", self.scopes.len());
+    print("scope count {}\n", self.scopes.len());
     for(let i = 0;i < self.scopes.len();++i){
       let scope = self.scopes.get_ptr(i);
       for(let j = 0;j < scope.list.len();++j){
         let vh = scope.list.get_ptr(j);
-        print("%s:%s\n", vh.name.clone().cstr(), vh.type.print().cstr().ptr());
+        print("{}:{}\n", vh.name, vh.type);
       }
     }
   }
 
   func addType(self, name: String, res: RType){
-    //print("addType %s->%s\n", name.cstr(), res.type.print().cstr());
     self.typeMap.add(name, res);
   }
   func addType(self, name: String*, res: RType){
@@ -431,20 +428,33 @@ impl Resolver{
 
   func err(self, msg: String){
     self.err(msg.str());
+    Drop::drop(msg);
   }
   func err(self, msg: str){
     if(self.curMethod.is_some()){
-      print(printMethod(self.curMethod.unwrap()).cstr());
+      let str: String = printMethod(self.curMethod.unwrap());
+      print("{}", str);
+      Drop::drop(str);
     }
-    panic("%s", msg.cstr());
+    panic("{}", msg);
   }
   func err(self, node: Expr*, msg: str){
-    let str = Fmt::format("{}:{}\n{} {}", self.unit.path.str(), i32::print(node.line).str(),msg, node.print().str());
-    self.err(str.str());
+    let str = format("{}:{}\n{} {}", self.unit.path,node.line, msg, node);
+    Drop::drop(msg);
+    self.err(str);
+  }
+  func err(self, node: Expr*, msg: String){
+    let str = format("{}:{}\n{} {}", self.unit.path,node.line, msg, node);
+    self.err(str);
   }
   func err(self, node: Stmt*, msg: str){
-    let str = Fmt::format("{}\n{} {}", self.unit.path.str(), msg, node.print().str());
-    self.err(str.str());
+    let str = format("{}\n{} {}", self.unit.path, msg, node);
+    self.err(str);
+  }
+  func err(self, node: Stmt*, msg: String){
+    let str = format("{}\n{} {}", self.unit.path, msg, node);
+    Drop::drop(msg);
+    self.err(str);
   }
 
   func getType(self, e: Type*): Type{
@@ -496,7 +506,6 @@ impl Resolver{
         return true;
     }
     let bd = rt.targetDecl.unwrap();
-    //print("bd %s\n", Fmt::str(bd).cstr());
     if (bd.base.is_some()) {
       if(self.is_cyclic(bd.base.get(), target)){
         return true;
@@ -533,7 +542,7 @@ impl Resolver{
       let fd = fields.get_ptr(i);
       self.visit(&fd.type);
       if(self.is_cyclic(&fd.type, &node.type)){
-        self.err(Fmt::format("cyclic type {}", node.type.print().str()).str());
+        self.err(format("cyclic type {}", node.type));
       }
     }
   }
@@ -562,7 +571,6 @@ impl Resolver{
         if(!m.type_params.empty()) continue;
         self.visit(m);
         let mangled = mangle2(m, &imp.info.type);
-        //print("impl %s\n", mangled.cstr());
         let idx = required.indexOf(&mangled);
         if(idx != -1){
           required.remove(idx);
@@ -593,7 +601,6 @@ impl Resolver{
   }
 
   func visit(self, node: Method*){
-    //print("visiting %s\n", printMethod(node).cstr());
     if(node.is_generic){
       return;
     }
@@ -631,7 +638,6 @@ impl Resolver{
         return;
       }
     }
-    //print("addUsed %s\n", decl.type.print().cstr());
     self.used_types.add(decl);
     if(decl.base.is_some()){
       self.visit(decl.base.get());
@@ -661,7 +667,6 @@ impl Resolver{
       let prev = self.used_methods.get(i);
       if(mangle(prev).eq(mng.str())) return;
     }
-    //print("used %s\n", mng.cstr());
     self.used_methods.add(m);
   }
   
@@ -721,7 +726,7 @@ impl Resolver{
       let scope = self.visit(simple.scope.get());
       let decl = scope.targetDecl.unwrap();
       if (!(decl is Decl::Enum)) {
-          panic("type scope is not enum: %s", str.cstr());
+          panic("type scope is not enum: {}", str);
       }
       //enum variant creation
       
@@ -778,14 +783,12 @@ impl Resolver{
     if (node.get_args().len() != target.type.get_args().len()) {
       self.err(&expr, "type arguments size not matched");
     }
-    //print("target %s\n", Fmt::str(target).cstr());
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);
     self.generated_decl.add(decl0);
     let decl = self.generated_decl.last();
     self.addUsed(decl);
-    //print("generated %s\n%s\n", decl.type.print().cstr(), self.unit.path.cstr());
     let smp = Simple::new(node.name().clone());
     let args = node.get_args();
     for (let i=0;i < args.len();++i) {
@@ -850,7 +853,7 @@ impl Resolver{
         return i;
       }
     }
-    panic("unknown variant %s::%s", decl.type.print().cstr().ptr(), name.clone().cstr().ptr());
+    panic("unknown variant {}::{}", decl.type, name);
   }
 
   func getTypeCached(self, str: String*): RType{
@@ -858,7 +861,7 @@ impl Resolver{
     if(res.is_some()){
       return res.unwrap().clone();
     }
-    panic("not cached %s", str.clone().cstr().ptr());
+    panic("not cached {}", str);
   }
 
   
@@ -884,16 +887,16 @@ impl Resolver{
             break;
         }
     }
-    let msg = Fmt::format("invalid field {} of {}", name.str(),type.print().str()); 
-    self.err(node, msg.str());
+    let msg = format("invalid field {} of {}", name, type); 
+    self.err(node, msg);
     panic("");
   }
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
     if (scp.targetDecl.is_none()) {
-      let msg=Fmt::format("invalid field {} of {}", name.str(),scp.type.print().str()); 
-      self.err(node, msg.str());
+      let msg = format("invalid field {} of {}", name, scp.type); 
+      self.err(node, msg);
     }
     let decl = scp.targetDecl.unwrap();
     let pair = self.findField(node, name, decl, &scp.type);
@@ -908,7 +911,7 @@ impl Resolver{
         return i;
       }
     }
-    panic("unknown field %s.%s", type.print().cstr(), name.cstr());
+    panic("unknown field {}.{}", type, name);
   }
   
   func visit_obj(self, node: Expr*, type0: Type*, args: List<Entry>*): RType{
@@ -929,7 +932,6 @@ impl Resolver{
     if (hasNamed && hasNonNamed) {
         self.err(node, "obj creation can't have mixed values");
     }
-    //print("obj %s\n", node.print().cstr());
     let res = self.visit(type0);
     let decl = res.targetDecl.unwrap();
     if (decl.base.is_some() && base.is_none()) {
@@ -941,8 +943,8 @@ impl Resolver{
     if (base.is_some()) {
         let base_ty = &self.visit(base.unwrap()).type;
         if (!base_ty.print().eq(decl.base.get().print().str())){
-            let msg = Fmt::format("invalid base class type: {} expecting {}", base_ty.print().str(), decl.base.get().print().str());
-            self.err(node, msg.str());
+            let msg = format("invalid base class type: {} expecting {}", base_ty, decl.base.get());
+            self.err(node, msg);
         }
     }
     let fields0 = Option<List<FieldDecl>*>::new();
@@ -992,7 +994,7 @@ impl Resolver{
         let pt = self.getType(&prm.type);
         let arg = self.visit(&e.expr);
         if (MethodResolver::is_compatible(&arg.type, &pt).is_some()) {
-            let f = Fmt::format("field type is imcompatiple {}\n expected: {} got: {}", e.expr.print().str(), pt.print().str(), arg.type.print().str());
+            let f = format("field type is imcompatiple {}\n expected: {} got: {}", e.expr, pt, arg.type);
             self.err(node, f.str());
         }
     }
@@ -1000,8 +1002,8 @@ impl Resolver{
     for (let i=0;i<fields.len();++i) {
         let fd=fields.get_ptr(i);
         if (!names.contains(&fd.name)) {
-            let msg=Fmt::format("field not set: {}", fd.name.str());
-            self.err(node, msg.str());
+            let msg = format("field not set: {}", fd.name);
+            self.err(node, msg);
         }
     }
     return res;
@@ -1030,7 +1032,7 @@ impl Resolver{
     for (let i = 0;i < inferMap.len();++i) {
         let p = inferMap.get_idx(i).unwrap(); 
         if (p.b.is_none()) {
-            self.err(node, Fmt::format("can't infer type parameter: {}", p.a.str()).str());
+            self.err(node, format("can't infer type parameter: {}", p.a));
         }
         res.args.add(p.b.unwrap());
     }
@@ -1073,9 +1075,8 @@ impl Resolver{
   func visit_assign(self, node: Expr*, op: String*, lhs: Expr*, rhs: Expr*): RType{
     let t1 = self.visit(lhs);
     let t2 = self.visit(rhs);
-    let rhs_type = t2.type.print();
     if (MethodResolver::is_compatible(&t2.type, &t1.type).is_some()) {
-      let msg = Fmt::format("cannot assign %s=%s", t1.type.print().str(), rhs_type.str());
+      let msg = format("cannot assign {}={}", t1.type, t2.type);
       self.err(node, msg.str());
     }
     return t1;
@@ -1101,16 +1102,15 @@ impl Resolver{
     }
     else if(op.eq("&&") || op.eq("||")){
       if (!lt.type.print().eq("bool")) {
-        panic("infix lhs is not boolean: %s", lhs.print().cstr());
+        panic("infix lhs is not boolean: {}", lhs);
       }
       if (!rt.type.print().eq("bool")) {
-        panic("infix rhs is not boolean: %s", rhs.print().cstr());
+        panic("infix rhs is not boolean: {}", rhs);
       }        
       return RType::new("bool");
     }else{
       return RType::new(infix_result(lt.type.print().str(), rt.type.print().str()));
     }
-    //panic("%s\n", node.print().cstr());
   }
 
   func visit_ref(self, e: Expr*): RType{
@@ -1119,13 +1119,13 @@ impl Resolver{
       res.type = res.type.clone().toPtr();
       return res;
     }
-    panic("ref expr is not supported: %s", e.print().cstr());
+    panic("ref expr is not supported: {}", e);
   }
 
   func visit_deref(self, node: Expr*, e: Expr*): RType{
     let inner = self.visit(e);
     if(!inner.type.is_pointer()){
-      self.err(Fmt::format("deref expr is not pointer: {} -> {}", node.print().str(), inner.type.print().str()));
+      self.err(format("deref expr is not pointer: {} -> {}", node, inner.type));
     }
     inner.type = inner.type.unwrap_ptr().clone();
     return inner;
@@ -1242,7 +1242,7 @@ impl Resolver{
             return RType::new("void");
           }
         }
-        self.err(Fmt::format("invalid panic argument: {}", arg.print().str()));
+        self.err(format("invalid panic argument: {}", arg));
       }
       return RType::new("void");
     }
@@ -1318,8 +1318,8 @@ impl Resolver{
         let cmp = MethodResolver::is_compatible(&cur.type, &elemType);
         if (cmp.is_some()) {
             let cur_type = cur.type.print();
-            print("%s", cmp.get().clone().cstr().ptr());
-            let msg = Fmt::format("array element type mismatch, expecting: {} got: {}", elemType.print().str(), cur_type.str());
+            print("{}", cmp.get());
+            let msg = format("array element type mismatch, expecting: {} got: {}", elemType, cur_type);
             self.err(node, msg.str());
         }
     }
@@ -1357,14 +1357,14 @@ impl Resolver{
     let rt = self.visit(lhs);
     let decl1_opt = &rt.targetDecl;
     if (decl1_opt.is_none() || !(*decl1_opt.get() is Decl::Enum)) {
-        self.err(node, Fmt::format("lhs of is expr is not enum: {}", rt.type.print().str()).str());
+        self.err(node, format("lhs of is expr is not enum: {}", rt.type));
     }
     let decl1 = *decl1_opt.get();
     let rt2 = self.visit(rhs);
     let decl2_opt = &rt2.targetDecl;
     let decl2 = *decl2_opt.get();
     if (!decl1.type.print().eq(decl2.type.print().str())) {
-        self.err(node, Fmt::format("rhs is not same type with lhs {}", decl2.type.print().str()).str());
+        self.err(node, format("rhs is not same type with lhs {}", decl2.type));
     }
     if let Expr::Type(ty*) = (rhs){
         findVariant(decl1, ty.name());
@@ -1405,10 +1405,8 @@ impl Resolver{
     let id = node.id;
     if(id == -1) panic("id");
     if(self.cache.contains(&node.id)){
-      //print("cached %d, %s\n", node.id, node.print().cstr());
       return self.cache.get_ptr(&node.id).unwrap().clone();
     }
-    //print("visit %d, %s\n", node.id, node.print().cstr());
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());
     return res.clone();
@@ -1435,7 +1433,7 @@ impl Resolver{
         }
       }
       self.dump();
-      self.err(node, Fmt::format("unknown identifier: {}", name.str()).str());
+      self.err(node, format("unknown identifier: {}", name));
     }else if let Expr::Unary(op*, ebox*) = (node){
       return self.visit_unary(node, op, ebox.get());
     }else if let Expr::Par(expr*) = (node){
@@ -1453,7 +1451,7 @@ impl Resolver{
     }else if let Expr::Is(lhs*, rhs*) = (node){
       return self.visit_is(node, lhs.get(), rhs.get());
     }
-    panic("visit expr '%s'", node.print().cstr());
+    panic("visit expr '{}'", node);
   }
 }
 
@@ -1468,7 +1466,7 @@ func infix_result(l: str, r: str): str{
       return op;
     }
   }
-  panic("infix_result: %s, %s", l.cstr(), r.cstr());
+  panic("infix_result: {}, {}", l, r);
 }
 
 //statements-------------------------------------
@@ -1495,7 +1493,7 @@ impl Resolver{
       return;
     }else if let Stmt::Assert(e*) = (node){
       if(!self.is_condition(e)){
-        panic("assert expr is not bool: %s", e.print().cstr());
+        panic("assert expr is not bool: {}", e);
       }
       return;
     }else if let Stmt::For(f*) = (node){
@@ -1537,7 +1535,7 @@ impl Resolver{
       }
       return;
     }
-    panic("visit stmt %s", node.print().cstr());
+    panic("visit stmt {}", node);
   }
   
   func visit_while(self, node: Stmt*, e: Expr*, b: Block*){
@@ -1569,22 +1567,22 @@ impl Resolver{
     //check lhs
     let rt = self.visit(&is.ty);
     if (rt.targetDecl.is_none() || !rt.targetDecl.unwrap().is_enum()) {
-        let msg = Fmt::format("if let type is not enum: {}", is.ty.print().str());
-        self.err(node, msg.str());
+        let msg = format("if let type is not enum: {}", is.ty);
+        self.err(node, msg);
     }
     //check rhs
     let rhs = self.visit(&is.rhs);
     if (rhs.targetDecl.is_none() || !rhs.targetDecl.unwrap().is_enum()) {
-      let msg = Fmt::format("if let rhs is not enum: {}", rhs.type.print().str());
-      self.err(node, msg.str());
+      let msg = format("if let rhs is not enum: {}", rhs.type);
+      self.err(node, msg);
     }
     //match variant
     let decl = rt.targetDecl.unwrap();
     let index = Resolver::findVariant(decl, is.ty.name());
     let variant = decl.get_variants().get_ptr(index);
     if (variant.fields.len() != is.args.len()) {
-        let msg = Fmt::format("if let args size mismatch got:{} expected: {}", i64::print(is.args.len()).str(), i64::print(variant.fields.len()).str());
-        self.err(node, msg.str());
+        let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
+        self.err(node, msg);
     }
     //init arg variables
     self.newScope();

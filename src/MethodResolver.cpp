@@ -15,10 +15,10 @@ std::string Signature::print() {
     if (mc) {
         s += mc->name;
         s += "(";
-        if (real_scope.has_value()) {
-            s += real_scope.value().type.print();
-            i++;
-        }
+        // if (real_scope.has_value()) {
+        //     s += real_scope.value().type.print();
+        //     i++;
+        // }
     } else {
         s += m->name;
         s += "(";
@@ -41,6 +41,9 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     res.mc = mc;
     res.r = r;
     bool is_trait = false;
+    if (mc->print() == "Debug::debug(self.len(), &f)") {
+        int a = 55;
+    }
     if (mc->scope) {
         auto scp = r->resolve(mc->scope.get());
         is_trait = scp.trait != nullptr;
@@ -61,7 +64,6 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
             res.args.push_back(res.real_scope->type);
         }
     }
-    int i = 0;
     for (auto a : mc->args) {
         //cast to pointer
         auto type = r->getType(a);
@@ -72,7 +74,6 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
             }
         }*/
         res.args.push_back(type);
-        i++;
     }
     return res;
 }

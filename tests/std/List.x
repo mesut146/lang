@@ -12,7 +12,7 @@ struct List<T>{
 func get_malloc<T>(size: i64): T*{
   let ptr = malloc<T>(size);
   if(ptr as u64 == 0){
-    panic("malloc returned null for size: %lld", size);
+    panic("malloc returned null for size: {}", size);
   }
   return ptr;
 }
@@ -51,7 +51,7 @@ impl<T> List<T>{
     if(pos >= 0 && pos < self.count){
       return;
     }
-    panic("index out of bounds %d", pos);
+    panic("index out of bounds {}", pos);
   }
   
   func remove(self, pos: i64){
@@ -105,14 +105,14 @@ impl<T> List<T>{
   
   func get_ptr(self, pos: i64): T*{
     if(pos >= self.count) {
-      panic("index %d out of bounds %d", pos, self.count);
+      panic("index {} out of bounds {}", pos, self.count);
     }
     return ptr::get(self.ptr, pos);
   }
 
   /*func get_ptr_write(self, pos: i64): T*{
     if(pos >= self.cap) {
-      panic("index %d out of bounds %d", pos, self.count);
+      panic("index {} out of bounds {}", pos, self.count);
     }
     return ptr::get(self.ptr, pos);
   }*/
@@ -217,7 +217,6 @@ impl<T> Clone for List<T>{
 
 impl<T> Drop for List<T>{
   func drop(*self){
-    //print("drop list %d\n", self.len());
     self.drop_elems();
     free(self.ptr as i8*);
   }

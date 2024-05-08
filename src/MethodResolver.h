@@ -26,8 +26,6 @@ struct Signature {
 
 using SigResult = std::variant<std::string, bool>;
 
-//using std::vector<std::string> Names;
-
 struct CompareResult {
     std::string err;
     bool has_err = false;

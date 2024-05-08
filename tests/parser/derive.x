@@ -1,5 +1,6 @@
 import parser/ast
 import parser/utils
+import parser/printer
 import std/libc
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
@@ -56,7 +57,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Drop")){
         return generate_drop(decl, unit);
     }
-    panic("generate_derive decl: %s der: '%s'", decl.type.print().cstr().ptr(), der.cstr().ptr());
+    panic("generate_derive decl: {} der: '{}'", decl.type, der);
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{

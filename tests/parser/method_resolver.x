@@ -219,7 +219,6 @@ impl MethodResolver{
             if let Item::Impl(imp*) = (item){
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
-                  //print("get_impl add %p %s\n", imp, Fmt::str(imp).cstr().ptr());
                   list.add(imp);
                 }else if(imp.info.trait_name.is_some()){
                   let tr = imp.info.trait_name.get().name();
@@ -260,14 +259,12 @@ impl MethodResolver{
         if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
             let tmp = self.get_impl(actual);
-            //print("trait %s\n", sig.print().cstr());
             imp_list.add(&tmp);
             Drop::drop(tmp);
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let imp = *imp_list.get_ptr(i);
-            //print("impl found\n%s\n", Fmt::str(&imp.info.type).cstr());
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       
                 if(!m.name.eq(&sig.name)) continue;
@@ -300,7 +297,6 @@ impl MethodResolver{
           let ims: List<ImportStmt> = self.r.get_imports();
           for (let i = 0;i < ims.len();++i) {
             let is = ims.get_ptr(i);
-            //print("is=%s\n", "/".join(&is.list).cstr());
             let resolver = self.r.ctx.get_resolver(is);
             resolver.init();
             let mr = MethodResolver::new(resolver);
@@ -314,10 +310,8 @@ impl MethodResolver{
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
-        //print("mc=%s\n", mc.print().cstr());
         let list = self.collect(sig);
         if(list.empty()){
-            //let msg = Fmt::format("no such method {}", sig.print().str());
             let msg = format("no such method {}", sig);
             self.r.err(expr, msg.str());
             Drop::drop(msg);
@@ -678,18 +672,18 @@ impl MethodResolver{
                 let it: Option<Type>* = opt.unwrap();
                 if (it.is_none()) {//not set yet
                     typeMap.add(prm.name().clone(), Option::new(arg.clone()));
-                    //print("inferred %s as %s\n", prm.print().cstr(), arg.print().cstr());
+                    //print("inferred {} as {}\n", prm.print().cstr(), arg.print().cstr());
                     //for(let i=0;i<typeMap.size();++i){
                         //let p=typeMap.get_idx(i).unwrap();
-                        //print("map %s -> %s\n", p.a.cstr(), Fmt::str(&p.b).cstr());
+                        //print("map {} -> {}\n", p.a.cstr(), Fmt::str(&p.b).cstr());
                     //}
                 } else {//already set
-                    let m: Option<String> = MethodResolver::is_compatible(arg, it.get());
-                    if (m.is_some()) {
-                        print("%s\n", CStr::new(m.unwrap()).ptr());
-                        panic("type infer failed: %s vs %s\n", CStr::new(it.get().print()).ptr(), CStr::new(arg.print()).ptr());
+                    let cmp: Option<String> = MethodResolver::is_compatible(arg, it.get());
+                    if (cmp.is_some()) {
+                        print("{}\n", cmp.get());
+                        panic("type infer failed: {} vs {}\n", it.get().print(), arg.print());
                     }
-                    Drop::drop(m);
+                    Drop::drop(cmp);
                 }
             }
         } else {
@@ -701,7 +695,7 @@ impl MethodResolver{
                 let msg = Fmt::format("type arg size mismatch, {} = {}", arg_s.str(), prm_s.str());
                 Drop::drop(arg_s);
                 Drop::drop(prm_s);
-                panic("%s", CStr::new(msg).ptr());
+                panic("{}", msg);
             }
             if (!arg.name().eq(prm.name())) panic("cant infer");
             for (let i = 0; i < ta1.size(); ++i) {
@@ -713,8 +707,6 @@ impl MethodResolver{
     }
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method*{
-        //print("gen %s\n", sig.print().cstr());
-        //print("gen m %s\n", mangle(m).cstr());
         for (let i = 0;i < self.r.generated_methods.len();++i) {
             let gm = self.r.generated_methods.get_ptr(i);
             if(!m.name.eq(gm.name.str())) continue;
@@ -726,7 +718,6 @@ impl MethodResolver{
                 return gm;
             }else{
                 Drop::drop(sig_res);
-                //print("no use %s\n", sig_res.get_err().cstr());
             }
         }
         let copier = AstCopier::new(map, &self.r.unit);
@@ -734,7 +725,6 @@ impl MethodResolver{
         res2.is_generic = false;
         self.r.generated_methods.add(res2);
         let res: Method* = self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
-        //print("add gen %s\n", mangle(res).cstr());
         if(!(m.parent is Parent::Impl)){
             return res;
         }
@@ -773,7 +763,7 @@ func kind(type: Type*): i32{
     if(type is Type::Pointer) return 0;
     if(type is Type::Array) return 1;
     if(type is Type::Slice) return 2;
-    panic("%s\n", CStr::new(type.print()).ptr());
+    panic("{}\n", type);
 }
 
 func get_type_params(m: Method*): List<Type>{

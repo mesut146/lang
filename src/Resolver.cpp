@@ -141,6 +141,7 @@ int Resolver::findVariant(EnumDecl *decl, const std::string &name) {
 void Scope::add(const VarHolder &f) {
     for (auto &prev : list) {
         if (prev.name == f.name) {
+            //print("in " + std::to_string(prev.line));
             throw std::runtime_error("variable " + f.name + " already declared in the same scope");
         }
     }
@@ -244,6 +245,9 @@ void Resolver::dropScope() {
 }
 
 void Resolver::addScope(std::string &name, const Type &type, bool prm, int line, int id) {
+    if (scopes.empty()) {
+        throw std::runtime_error("no scope for " + name + " line: " + std::to_string(line));
+    }
     for (auto &scope : this->scopes) {
         if (scope.find(name)) {
             print("in " + unit->path + ":" + std::to_string(line));
@@ -251,20 +255,6 @@ void Resolver::addScope(std::string &name, const Type &type, bool prm, int line,
         }
     }
     scopes.back().add(VarHolder(name, type, prm, id));
-}
-
-void dump(Resolver *r) {
-    /*for (auto &[k, v] : r->cache) {
-        print(k);
-        for (auto &[k2, v2] : v) {
-            print(k2 + "=" + v2.type.print());
-        }
-        print("");
-    }*/
-}
-
-void dump(Method *node) {
-    print(node->print());
 }
 
 void Resolver::resolveAll() {
@@ -1760,14 +1750,6 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         return RType(Type("void"));
     }
     auto sig = Signature::make(mc, this);
-    if (mc->scope) {
-        //rvalue
-        if (dynamic_cast<MethodCall *>(mc->scope.get()) && getType(mc->scope.get()).isPrim()) {
-            err(mc, "method scope is rvalue");
-        }
-        MethodResolver mr(this);
-        return mr.handleCallResult(sig);
-    }
     MethodResolver mr(this);
     auto res = mr.handleCallResult(sig);
     //cache[id] = res;

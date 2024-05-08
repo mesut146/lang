@@ -340,17 +340,19 @@ public:
 
     AllocCollector(Compiler *c) : compiler(c) {}
 
-    template<class T>
-    llvm::Value *alloc(llvm::Type *type, T *e) {
-        if (e->id == -1) {
-            throw std::runtime_error("id -1 for " + e->print());
+    void set_alloc(Node *node, llvm::Value *ptr) {
+        if (node->id == -1) {
+            throw std::runtime_error("id -1 for " + node->print());
         }
+        compiler->allocMap2[node->id] = ptr;
+    }
+
+    llvm::Value *alloc(llvm::Type *type, Node *e) {
         auto ptr = compiler->Builder->CreateAlloca(type);
-        compiler->allocMap2[e->id] = ptr;
+        set_alloc(e, ptr);
         return ptr;
     }
-    template<class T>
-    llvm::Value *alloc(const Type &type, T *e) {
+    llvm::Value *alloc(const Type &type, Node *e) {
         return alloc(compiler->mapType(type), e);
     }
     std::any visitVarDecl(VarDecl *node) override {
@@ -366,20 +368,13 @@ public:
                 //auto alloc
                 auto rhs2 = f.rhs->accept(this);
                 ptr = std::any_cast<llvm::Value *>(rhs2);
+                set_alloc(&f, ptr);
             } else {
-                //prim_size(s).unwrap() as i32;
                 //manual alloc, prims, struct copy
                 ptr = alloc(type.type, &f);
                 f.rhs->accept(this);
-                // if (dynamic_cast<MethodCall *>(rhs)//args
-                //     || dynamic_cast<FieldAccess *>(rhs) /*scope*/) {
-                //     //todo not just this
-                //     f.rhs->accept(this);
-                // }
             }
             ptr->setName(f.name);
-            auto id = compiler->getId(f.name);
-            compiler->varAlloc[id] = ptr;
         }
         return {};
     }
@@ -395,6 +390,7 @@ public:
             a->accept(this);
         }
     }
+
     std::any visitMethodCall(MethodCall *node) override {
         if (is_std_parent_name(node)) {
             return alloc(Type("str"), node);
@@ -418,6 +414,13 @@ public:
         llvm::Value *ptr = nullptr;
         if (m && compiler->isRvo(m)) {
             ptr = alloc(m->type, node);
+        }
+        //do need coercion to ptr, rvalue to local conv
+        if (m) {
+            auto rval = RvalueHelper::need_alloc(node, m, compiler->resolv.get());
+            if (rval.rvalue) {
+                alloc(rval.scope_type, rval.scope);
+            }
         }
         if (node->scope) node->scope->accept(this);
         for (auto a : node->args) {
@@ -623,8 +626,6 @@ public:
             }
             auto ptr = alloc(type, node);
             ptr->setName(arg.name);
-            auto id = compiler->getId(arg.name);
-            compiler->varAlloc[id] = ptr;
             i++;
         }
         node->thenStmt->accept(this);

@@ -6,6 +6,7 @@ import parser/resolver
 import parser/method_resolver
 import parser/utils
 import parser/debug_helper
+import parser/printer
 import std/map
 import std/libc
 
@@ -109,7 +110,7 @@ impl AllocHelper{
       self.visit(e);
       return;
     }
-    panic("alloc %s\n", node.print().cstr());
+    panic("alloc {}\n", node);
   }
   func visit_ret(self, stmt: Stmt*, expr: Expr*){
     self.visit(expr);
@@ -229,7 +230,7 @@ impl AllocHelper{
       }
       return res;
     }
-    panic("alloc %s\n", node.print().cstr());
+    panic("alloc {}\n", node);
   }
 
   func child(self, node: Expr*){

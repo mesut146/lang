@@ -137,14 +137,7 @@ impl Token{
     }
 
     func print(self): String {
-        let s = String::new("Token{type: ");
-        s.append(Fmt::str(&self.type).str());
-        s.append(", line: ");
-        s.append(self.line.str().str());
-        s.append(", value: ");
-        s.append(&self.value);
-        s.append("}");
-        return s;
+        return Fmt::str(self);
     }
 }
 
@@ -152,10 +145,13 @@ impl Debug for Token{
     func debug(self, f: Fmt*){
         f.print("Token{");
         f.print("line: ");
-        f.print(self.line.str().str());
+        self.line.debug(f);
         f.print(", ");
         f.print("value: ");
         f.print(&self.value);
+        f.print(", ");
+        f.print("type: ");
+        self.type.debug(f);
         f.print("}");
     }
 }
