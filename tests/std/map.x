@@ -39,18 +39,20 @@ impl<K, V> Map<K, V>{
   func len(self): i64{ return self.arr.len(); }
   func empty(self): bool{ return self.arr.empty(); }
   
-  func add(self, k: K, v: V){
+  func add(self, k: K, v: V): Pair<K, V>*{
     let i = self.indexOf(&k);
     //doesnt exist, add last
     if(i == -1_i64){
       let p = Pair{k, v};
       self.arr.add(p);
+      return self.arr.last();
     }
     else{
       //already exist, change old
       let p = self.arr.get_ptr(i);
-      //p.b.drop();
+      Drop::drop(p.b);
       p.b = v;
+      return p;
     }
   }
 

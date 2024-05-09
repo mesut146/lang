@@ -7,15 +7,6 @@ struct str{
 }
 
 impl str{
-    // func dump(self){
-    //   let i = 0;
-    //   print("str{len: %d, \"", self.len());
-    //   while (i < self.len()){
-    //     print("{}", self.buf[i]);
-    //     ++i;
-    //   }
-    //   print("\"}\n");
-    // }
 
     func print(self){
       printf("%.*s", self.len(), self.cptr());
@@ -44,7 +35,7 @@ impl str{
     }
 
     func check(self, pos: i32){
-      if(pos < 0 || pos >= self.len()) panic("str::check %s of idx %d", self.cstr().ptr(), pos);
+      if(pos < 0 || pos >= self.len()) panic("str::check {} of idx {}", self, pos);
     }
 
     func starts_with(self, s: str): bool{
@@ -66,8 +57,7 @@ impl str{
       for(let i = 0;i < arr.len();++i){
         if(arr[i] == c) return;
       }
-      print("str::is_valid (%d)='%c'\n", c, c);
-      panic("");
+      panic("str::is_valid ({})='{}'\n", c as i32, c);
     }
 
     func check_all(self){
@@ -77,7 +67,7 @@ impl str{
     }
 
     func indexOf(self, s: str, off: i32): i32{
-      if(off < 0) panic("indexof off=%d", off);
+      if(off < 0) panic("str::indexof off<0, {}", off);
       //if(off == self.len()) return -1;
       //self.check(off);
       let i = off;
@@ -85,7 +75,6 @@ impl str{
         //check first char
         is_valid(self.buf[i]);
         is_valid(s.buf[0]);
-        //print("iof %c(%d) %c(%d)\n", self.buf[i], self.buf[i], s.buf[0], s.buf[0]);
         if(self.buf[i] != s.buf[0]){
           ++i;
           continue;
@@ -131,8 +120,8 @@ impl str{
     }
 
     func substr(self, start: i32, end: i32): str{
-      if(start > self.len()) panic("start index out of bounds %d of %d", start, self.len());
-      if(end > self.len()) panic("end index out of bounds %d of %d", end, self.len());
+      if(start > self.len()) panic("start index out of bounds {} of {}", start, self.len());
+      if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
       if(start == end){
         let arr = [0u8];
         return str{arr[0..0]};

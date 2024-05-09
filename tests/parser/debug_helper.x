@@ -4,6 +4,7 @@ import parser/compiler
 import parser/compiler_helper
 import parser/resolver
 import parser/utils
+import parser/printer
 import std/map
 import std/libc
 
@@ -107,7 +108,7 @@ impl DebugInfo{
 
     func make_variant_type(self, c: Compiler*, decl: Decl*, idx: i32, var_part: DICompositeType*, file: DIFile*, enum_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
       let ev = decl.get_variants().get_ptr(idx);
-      let name: String = Fmt::format("{}::{}", decl.type.print().str(), ev.name.str());
+      let name: String = format("{}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
       let elems = Metadata_vector_new();
       //empty ty
@@ -240,6 +241,6 @@ impl DebugInfo{
         Metadata_vector_push(elems, len_mem as Metadata*);
         return createStructType(self.cu as DIScope*, name.cstr().ptr(), self.file, line, size, elems) as DIType*;
       }
-      panic("map di %s\n", name.cstr());
+      panic("map di {}\n", name);
     }
 }

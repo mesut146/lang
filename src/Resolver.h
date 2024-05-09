@@ -205,7 +205,7 @@ static void print(const std::string &msg) {
 }
 
 static bool isStruct(const Type &t) {
-    return !t.isPrim() && !t.isPointer();
+    return !t.isVoid() && !t.isPrim() && !t.isPointer();
 }
 
 /*class EnumPrm {

@@ -182,7 +182,8 @@ impl Compiler{
   }
 
   func link_run(self, name0: str, args: str){
-    name0 = Fmt::format("./{}", name0).str();
+    let name_pre = format("./{}", name0);
+    name0 = name_pre.str();
     let name: CStr = name0.cstr();
     if(exist(name0)){
       remove(name.ptr());
@@ -191,6 +192,7 @@ impl Compiler{
     cmd.append("-o ");
     cmd.append(name0);
     cmd.append(" ");
+    Drop::drop(name_pre);
     for(let i = 0;i < self.compiled.len();++i){
       let file = self.compiled.get_ptr(i);
       cmd.append(file.str());
@@ -231,18 +233,18 @@ impl Compiler{
           return outFile;
       }
     }
-    //self.resolver.resolve_all();
-    if(true){
-      //r.unit.drop();
-      return outFile;
-    }
+    self.resolver.resolve_all();
+    // if(true){
+    //   //r.unit.drop();
+    //   return outFile;
+    // }
     self.llvm.initModule(&path0);
     self.createProtos();
     //init_globals(this);
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
-      let m = methods.get(i);
+      let m = *methods.get_ptr(i);
       self.genCode(m);
     }
     //generic methods from resolver
@@ -252,7 +254,7 @@ impl Compiler{
     }
     
     let name = getName(path0.get());
-    let llvm_file = Fmt::format("{}-bt.ll", trimExtenstion(name));
+    let llvm_file = format("{}-bt.ll", trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     if(self.config.verbose){
@@ -281,37 +283,37 @@ impl Compiler{
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
     for (let i = 0;i < self.resolver.used_types.len();++i) {
-      let decl = self.resolver.used_types.get(i);
+      let decl = *self.resolver.used_types.get_ptr(i);
       if (decl.is_generic) continue;
       list.add(decl);
     }
     sort(&list, self.resolver);
     //first create just protos to fill later
     for(let i=0;i<list.len();++i){
-      let decl = list.get(i);
+      let decl = *list.get_ptr(i);
       let st = make_decl_proto(decl);
       p.classMap.add(decl.type.print(), st as llvm_Type*);
     }
     //fill with elems
     for(let i=0;i<list.len();++i){
-      let decl = list.get(i);
+      let decl = *list.get_ptr(i);
       self.make_decl(decl, p.get(decl) as StructType*);
     }
     //di proto
     for(let i=0;i<list.len();++i){
-      let decl = list.get(i);
+      let decl = *list.get_ptr(i);
       self.llvm.di.get().map_di_proto(decl, self);
     }
     //di fill
     for(let i=0;i<list.len();++i){
-      let decl = list.get(i);
+      let decl = *list.get_ptr(i);
       self.llvm.di.get().map_di_fill(decl, self);
     }
     
     //methods
     let methods = getMethods(self.unit());
     for (let i=0;i<methods.len();++i) {
-      let m = methods.get(i);
+      let m = *methods.get_ptr(i);
       self.make_proto(m);
     }
     //generic methods from resolver
@@ -320,7 +322,7 @@ impl Compiler{
         self.make_proto(m);
     }
     for (let i = 0;i < self.resolver.used_methods.len();++i) {
-        let m = self.resolver.used_methods.get(i);
+        let m = *self.resolver.used_methods.get_ptr(i);
         self.make_proto(m);
     }
   }
@@ -640,8 +642,9 @@ impl Compiler{
   }
   func visit_assert(self, expr: Expr*){
     let m = self.curMethod.unwrap();
-    let msg = Fmt::format("{}:{} in {}\nassertion {} failed\n", m.path.str(), i32::print(expr.line).str(), m.name.str(), expr.print().str());
-    let ptr = CreateGlobalStringPtr(msg.cstr().ptr());
+    let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
+    let ptr = CreateGlobalStringPtr(msg.ptr());
+    Drop::drop(msg);
     let then = create_bb2(self.cur_func());
     let next = create_bb();
     let cond = self.branch(expr);

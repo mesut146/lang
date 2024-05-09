@@ -236,7 +236,7 @@ impl MethodResolver{
     func collect_static(self, sig: Signature*, list: List<Signature>*){
       let name = &sig.name;
       for (let i = 0;i < self.r.unit.items.len();++i) {
-        let item = self.r.unit.items.get_ptr(i);
+        let item: Item* = self.r.unit.items.get_ptr(i);
         if let Item::Method(m*)=(item){
             if (m.name.eq(name)) {
                 list.add(Signature::new(m));
@@ -259,8 +259,7 @@ impl MethodResolver{
         if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
             let tmp = self.get_impl(actual);
-            imp_list.add(&tmp);
-            Drop::drop(tmp);
+            imp_list.add(tmp);
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
@@ -335,21 +334,21 @@ impl MethodResolver{
             }
         }
         if(real.empty()){
-            let msg = Fmt::format("method {} not found from candidates", mc.print().str());
-            for(let i=0;i < errors.len();++i){
-                let err = errors.get_ptr(i);
-                msg.append("\n");
-                msg.append(err.a.print().str());
-                msg.append(" ");
-                msg.append(err.b.str());
+            let f = Fmt::new(format("method {} not found from candidates", mc));
+            for(let i = 0;i < errors.len();++i){
+                let err: Pair<Signature*, String>* = errors.get_ptr(i);
+                f.print("\n");
+                f.print(err.a);
+                f.print(" ");
+                f.print(&err.b);
             }
             Drop::drop(list);
             Drop::drop(real);
             Drop::drop(errors);
-            self.r.err(expr, msg.str());
+            self.r.err(expr, f.unwrap());
         }
         if (real.size() > 1 && exact.is_none()) {
-            let msg = Fmt::format("method {} has {} candidates\n", mc.print().str(), i64::print(real.size()).str());
+            let msg = format("method {} has {} candidates\n", mc, real.size());
             for(let i=0;i < real.len();++i){
                 let err = *real.get_ptr(i);
                 msg.append("\n");
@@ -358,9 +357,9 @@ impl MethodResolver{
             Drop::drop(list);
             Drop::drop(real);
             Drop::drop(errors);
-            self.r.err(expr, msg.str());
+            self.r.err(expr, msg);
         }
-        let sig2 = real.get(0);
+        let sig2 = *real.get_ptr(0);
         if(exact.is_some()){
             sig2 = exact.unwrap();
         }
@@ -408,10 +407,6 @@ impl MethodResolver{
                 }
             }
         }
-        Drop::drop(type_params);
-        Drop::drop(list);
-        Drop::drop(real);
-        Drop::drop(errors);
         //infer from args
         for (let i = 0; i < sig.args.size(); ++i) {
             let arg_type = sig.args.get_ptr(i);
@@ -422,8 +417,12 @@ impl MethodResolver{
         for (let i = 0;i < typeMap.len();++i) {
             let pair = typeMap.get_idx(i).unwrap();
             if (pair.b.is_none()) {
-                let msg = Fmt::format("can't infer type parameter: {}", pair.a.str());
-                self.r.err(expr, msg.str());
+                let msg = format("can't infer type parameter: {}", pair.a);
+                Drop::drop(type_params);
+                Drop::drop(list);
+                Drop::drop(real);
+                Drop::drop(errors);
+                self.r.err(expr, msg);
             }
             tmap.add(pair.a.clone(), pair.b.get().clone());
         }
@@ -433,6 +432,10 @@ impl MethodResolver{
         target = target2;
         let res = self.r.visit(&target.type);
         res.method = Option::new(target);
+        Drop::drop(type_params);
+        Drop::drop(list);
+        Drop::drop(real);
+        Drop::drop(errors);
         return res;
     }
 
@@ -453,7 +456,7 @@ impl MethodResolver{
                     let ta1 = mc_targs.get_ptr(i).print();
                     let ta2 = m.type_params.get_ptr(i).print();
                     if (!ta1.eq(&ta2)) {
-                        let err = Fmt::format("type arg {} not compatible with {}", ta1.str(), ta2.str());
+                        let err = format("type arg {} not compatible with {}", ta1, ta2);
                         Drop::drop(ta1);
                         Drop::drop(ta2);
                         return SigResult::Err{err};
@@ -489,10 +492,10 @@ impl MethodResolver{
             }
             else if (!real_scope.name().eq(ty.name())) {
                 let real_scope_str =  real_scope.print();
-                return SigResult::Err{Fmt::format("not same impl {} vs {}", real_scope_str.str(), ty_str.str())};
+                return SigResult::Err{format("not same impl {} vs {}", real_scope_str, ty_str)};
             }
         } else if (!scope.name().eq(ty.name().str())) {
-            return SigResult::Err{Fmt::format("not same impl {} vs {}", scope_str.str(), ty_str.str())};
+            return SigResult::Err{format("not same impl {} vs {}", scope_str, ty_str)};
             //return self.check_args(sig, sig2);
         } else{
         }
@@ -537,15 +540,15 @@ impl MethodResolver{
             }
             let cmp: Option<String> = MethodResolver::is_compatible(t1, t2, &typeParams);
             if (cmp.is_some()) {
-                let res = SigResult::Err{Fmt::format("arg type {} is not compatible with param {}", t1_str.str(), t2_str.str())};
+                let res = SigResult::Err{format("arg type {} is not compatible with param {}", t1_str.str(), t2_str.str())};
                 Drop::drop(t1_str);
                 Drop::drop(t2_str);
                 Drop::drop(typeParams);
                 Drop::drop(cmp);
                 return res;
             }
-            Drop::drop(t2_str);
             Drop::drop(t1_str);
+            Drop::drop(t2_str);
             Drop::drop(cmp);
         }
         Drop::drop(typeParams);
@@ -601,14 +604,14 @@ impl MethodResolver{
             let v: String* = arg_val.get();
             if (v.get(0) == '-') {
                 if (isUnsigned(target)) {
-                    return Option::new(Fmt::format("{} is signed but {} is unsigned", v.str(), target_str.str()));
+                    return Option::new(format("{} is signed but {} is unsigned", v.str(), target_str.str()));
                 }
                 //check range
             } else {
                 if (max_for(target) >= i64::parse(v.str())) {
                     return Option<String>::None;
                 } else {
-                    return Option::new(Fmt::format("{} can't fit into {}" ,v.str(), target_str.str()));
+                    return Option::new(format("{} can't fit into {}" ,v.str(), target_str.str()));
                 }
             }
         }
@@ -692,7 +695,7 @@ impl MethodResolver{
             if (ta1.size() != ta2.size()) {
                 let arg_s = arg.print();
                 let prm_s = prm.print();
-                let msg = Fmt::format("type arg size mismatch, {} = {}", arg_s.str(), prm_s.str());
+                let msg = format("type arg size mismatch, {} = {}", arg_s.str(), prm_s.str());
                 Drop::drop(arg_s);
                 Drop::drop(prm_s);
                 panic("{}", msg);
@@ -775,6 +778,6 @@ func get_type_params(m: Method*): List<Type>{
         Drop::drop(res);
         res = info.type_params.clone();
     }
-    res.add(&m.type_params);
+    res.add(m.type_params.clone());
     return res;
 }

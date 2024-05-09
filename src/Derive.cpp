@@ -116,6 +116,7 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
     int line = unit->lastLine;
     Method m(unit->path);
     m.name = "drop";
+    //*self
     Param slf("self", clone(bd->type));
     slf.loc(line);
     slf.is_deref = true;
@@ -123,6 +124,24 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
     m.type = Type("void");
     auto bl = new Block;
     m.body.reset(bl);
+
+    if (bd->base.has_value()) {
+        auto &base_ty = bd->base.value();
+        if (need_drop(base_ty)) {
+            //Drop::drop(ptr::deref(self as <Base>*));
+            auto deref_call = new MethodCall;
+            deref_call->loc(line);
+            deref_call->is_static = true;
+            deref_call->scope.reset(new Type("ptr"));
+            deref_call->name = "deref";
+            auto as = new AsExpr;
+            as->loc(line);
+            as->expr = (new SimpleName("self"))->loc(line);
+            as->type = base_ty.toPtr();
+            deref_call->args.push_back(as);
+            bl->list.push_back(newDrop2(deref_call, unit.get()));
+        }
+    }
 
     if (bd->isEnum()) {
         auto ed = (EnumDecl *) bd;
@@ -264,6 +283,20 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     return imp;
 }
 
+std::unique_ptr<ExprStmt> make_drop(const std::string &name, int line) {
+    //Drop::drop(f);
+    auto drop_mc = new MethodCall;
+    drop_mc->loc(line);
+    drop_mc->is_static = true;
+    drop_mc->name = "drop";
+    drop_mc->scope.reset(new Type("Drop"));
+    drop_mc->scope->loc(line);
+    drop_mc->args.push_back((new SimpleName(name))->loc(line));
+    auto drop_stmt = std::make_unique<ExprStmt>(drop_mc);
+    drop_stmt->loc(line);
+    return drop_stmt;
+}
+
 void generate_format(MethodCall *mc, Resolver *r) {
     if (mc->args.empty()) {
         r->err(mc, "format no arg");
@@ -380,6 +413,8 @@ void generate_format(MethodCall *mc, Resolver *r) {
         auto stmt = std::make_unique<ExprStmt>(print_mc);
         stmt->loc(mc->line);
         block.list.push_back(std::move(stmt));
+        //Drop::drop(f);
+        block.list.push_back(make_drop(var_name, mc->line));
         block.accept(r);
     } else if (is_panic(mc)) {
         //"panic...\n".print();
@@ -403,9 +438,11 @@ void generate_format(MethodCall *mc, Resolver *r) {
         scope->scope->loc(mc->line);
         print_mc->scope.reset(scope);
         print_mc->scope->loc(mc->line);
-        auto stmt = std::make_unique<ExprStmt>(print_mc);
-        stmt->loc(mc->line);
-        block.list.push_back(std::move(stmt));
+        auto print_stmt = std::make_unique<ExprStmt>(print_mc);
+        print_stmt->loc(mc->line);
+        block.list.push_back(std::move(print_stmt));
+        //Drop::drop(f);
+        block.list.push_back(make_drop(var_name, mc->line));
         if (print_block) {
             print(block.print());
         }

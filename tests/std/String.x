@@ -70,7 +70,7 @@ impl String{
     }
     
     func get(self, i: i64): i8{
-         return self.arr.get(i);
+         return *self.arr.get_ptr(i);
     }
 
     func str(self): str{

@@ -4,6 +4,7 @@ import parser/resolver
 import parser/compiler
 import parser/debug_helper
 import parser/utils
+import parser/printer
 import std/map
 import std/libc
 
@@ -66,9 +67,9 @@ func getTypes(unit: Unit*, list: List<Decl*>*){
 func sort(list: List<Decl*>*, r: Resolver*){
   for (let i = 0; i < list.len(); ++i) {
     //find min that belongs to i'th index
-    let min = list.get(i);
+    let min = *list.get_ptr(i);
     for (let j = i + 1; j < list.len(); ++j) {
-      let cur = list.get(j);
+      let cur = *list.get_ptr(j);
       if (r.is_cyclic(&min.type, &cur.type)) {
         //print("swap " + min->type.print() + " and " + cur->type.print());
         min = cur;
@@ -79,8 +80,8 @@ func sort(list: List<Decl*>*, r: Resolver*){
 }
 
 func swap(list: List<Decl*>*, i: i32, j: i32){
-  let a = list.get(i);
-  let b = list.get(j);
+  let a = *list.get_ptr(i);
+  let b = *list.get_ptr(j);
   list.set(j, a);
   list.set(i, b);
 }
@@ -107,7 +108,6 @@ func getMethods(unit: Unit*): List<Method*>{
 }
 
 func make_decl_proto(decl: Decl*): StructType*{
-  //print("make_decl_proto %s\n", decl.type.print().cstr());
   return make_struct_ty(decl.type.print().cstr().ptr());
 }
 
@@ -118,7 +118,6 @@ impl Compiler{
     let rt = r.visit(type);
     type = &rt.type;
     let s = type.print();
-    //print("mapType %s\n", s.cstr());
     if(type.is_void()) return getVoidTy();
     let prim_size = prim_size(s.str());
     if(prim_size.is_some()){
@@ -137,13 +136,12 @@ impl Compiler{
     }
     if(!p.classMap.contains(&s)){
       p.dump();
-      panic("mapType %s\n", s.cstr());
+      panic("mapType {}\n", s);
     }
     return p.get(&s);
   }
 
   func make_decl(self, decl: Decl*, st: StructType*){
-    //print("make_decl %s\n", decl.type.print().cstr());
     let elems = make_vec();
     if(decl.base.is_some()){
       vec_push(elems, self.mapType(decl.base.get()));
@@ -153,7 +151,7 @@ impl Compiler{
       let max = 0;
       for(let i=0;i < variants.len();++i){
         let ev = variants.get_ptr(i);
-        let name = Fmt::format("{}::{}",decl.type.print().str(), ev.name.str());
+        let name = format("{}::{}",decl.type, ev.name.str());
         let var_ty = self.make_variant_type(ev, decl, &name);
         self.protos.get().classMap.add(name, var_ty as llvm_Type*);
         let sz = getSizeInBits(var_ty);
@@ -229,7 +227,7 @@ impl Compiler{
       arg_attr(arg, &sret);
     }
     if(self.protos.get().funcMap.contains(&mangled)){
-      panic("already proto %s\n", mangled.clone().cstr().ptr());
+      panic("already proto {}\n", mangled);
     }
     self.protos.get().funcMap.add(mangled, f);
   }
@@ -251,7 +249,7 @@ impl Compiler{
       let decl = rt.targetDecl.unwrap();
       return self.getSize(decl);
     }
-    panic("getSize %s", type.print().cstr());
+    panic("getSize {}", type);
   }
 
   func getSize(self, decl: Decl*): i64{
@@ -334,7 +332,7 @@ impl Compiler{
       }
       return val;
     }
-    panic("get_obj_ptr %s", node.print().cstr());
+    panic("get_obj_ptr {}", node);
   }
 
   func getTag(self, expr: Expr*): Value*{
@@ -347,8 +345,10 @@ impl Compiler{
   }
 
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
-    let name = Fmt::format("{}::{}", decl.type.print().str(), variant.name.str());
-    return *self.protos.get().classMap.get_ptr(&name).unwrap();
+    let name = format("{}::{}", decl.type, variant.name.str());
+    let res = *self.protos.get().classMap.get_ptr(&name).unwrap();
+    Drop::drop(name);
+    return res;
   }
 }
 

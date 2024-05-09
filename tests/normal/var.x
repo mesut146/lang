@@ -5,10 +5,11 @@ func ptr(){
 }
 
 func main(){
-  let a: i32 = 5;
-  assert a == 5;
-  a = 6;
-  assert a == 6;
+  //normal
+  let a: i32 = 10;
+  assert a == 10;
+  a = 20;
+  assert a == 20;
   ptr();
   print("varTest done\n");
 }

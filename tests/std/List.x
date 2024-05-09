@@ -56,6 +56,8 @@ impl<T> List<T>{
   
   func remove(self, pos: i64){
     self.check(pos);
+    let elem = self.get_internal(pos);
+    Drop::drop(elem);
     //shift rhs of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
       let lhs = ptr::get(self.ptr, i);
@@ -65,7 +67,8 @@ impl<T> List<T>{
   }
 
   func pop_back(self){
-    self.remove(self.len() - 1);
+    let idx = self.len() - 1;
+    self.remove(idx);
   }
 
   func add(self, e: T){
@@ -78,12 +81,15 @@ impl<T> List<T>{
     ++self.count;
   }
 
-  func add(self, list: List<T>*){
+  func add(self, list: List<T>){
     let i = 0;
     while(i < list.count){
-        self.add(list.get(i));
+        self.add(list.get_internal(i));
         ++i;
     }
+    //elems alive, just free main mem
+    free(list.ptr as i8*);
+    std::no_drop(list);
   }
 
   func add(self, sl: [T]){
@@ -99,7 +105,7 @@ impl<T> List<T>{
       ptr::copy(self.ptr, pos, val);
   }
 
-  func get(self, pos: i64): T{
+  func get_internal(self, pos: i64): T{
     return ptr::deref(self.get_ptr(pos));
   }
   
@@ -183,25 +189,25 @@ impl<T> Debug for List<T>{
   }
 }
 
-struct ListIter<T>{
-  list: List<T>*;
-  pos: i32;
-}
+// struct ListIter<T>{
+//   list: List<T>*;
+//   pos: i32;
+// }
 
-impl<T> Iterator<T> for ListIter<T>{
-  func has(self): bool{
-    return self.pos < self.list.len();
-  }
+// impl<T> Iterator<T> for ListIter<T>{
+//   func has(self): bool{
+//     return self.pos < self.list.len();
+//   }
 
-  func next(self): Option<T>{
-    if(self.has()){
-      let p = self.pos;
-      self.pos+=1;
-      return Option<T>::Some{self.list.get(p)};
-    }
-    return Option<T>::None;
-  }
-}
+//   func next(self): Option<T>{
+//     if(self.has()){
+//       let p = self.pos;
+//       self.pos+=1;
+//       return Option<T>::Some{self.list.get(p)};
+//     }
+//     return Option<T>::None;
+//   }
+// }
 
 impl<T> Clone for List<T>{
   func clone(self): List<T>{
@@ -223,7 +229,7 @@ impl<T> Drop for List<T>{
 
   func drop_elems(self){
     for(let i = 0;i < self.len();++i){
-      let ep = self.get(i);
+      let ep = self.get_internal(i);
       Drop::drop(ep);
     }
   }

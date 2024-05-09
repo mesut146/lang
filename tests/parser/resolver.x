@@ -11,11 +11,23 @@ import parser/derive
 import std/map
 import std/libc
 
+func verbose(): bool{
+  return false;
+}
 
 struct Context{
   map: Map<String, Resolver>;
   root: String;
   prelude: List<String>;
+}
+
+impl Drop for Context{
+  func drop(*self){
+    print("Context::drop\n");
+    self.map.drop();
+    self.root.drop();
+    self.prelude.drop();
+  }
 }
 
 struct Scope{
@@ -44,6 +56,19 @@ struct Resolver{
   inLoop: i32;
   used_types: List<Decl*>;
   generated_decl: List<Decl>;
+}
+impl Drop for Resolver{
+  func drop(*self){
+    print("Resolver::drop {}\n", &self.unit.path);
+    self.unit.drop();
+    self.typeMap.drop();
+    self.cache.drop();
+    self.scopes.drop();
+    self.used_methods.drop();
+    self.generated_methods.drop();
+    self.used_types.drop();
+    self.generated_decl.drop();
+  }
 }
 
 struct Config{
@@ -94,8 +119,8 @@ impl Debug for RType{
 
 impl Context{
   func new(src_dir: String): Context{
-    let pre = List<String>::new(6);
     let arr = ["Box", "List", "str", "String", "Option", "ops"];
+    let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
@@ -112,7 +137,9 @@ impl Context{
   }
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
-    return self.create_resolver(&path2);
+    let res = self.create_resolver(&path2);
+    Drop::drop(path2);
+    return res;
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = String::new(self.root.str());
@@ -130,39 +157,42 @@ impl Context{
 }
 
 func printMethod(m: Method*): String{
-  let s = String::new();
+  let s = Fmt::new();
   if let Parent::Impl(info*)=(&m.parent){
-    s.append(info.type.print().str());
-    s.append("::");
+    s.print(&info.type);
+    s.print("::");
   }else if let Parent::Trait(type*)=(&m.parent){
-    s.append(type.print().str());
-    s.append("::");
+    s.print(type);
+    s.print("::");
   }
-  s.append(&m.name);
-  s.append("()");
-  return s;
+  s.print(&m.name);
+  s.print("()");
+  return s.unwrap();
 }
 
 //trait method signature for type
 func mangle2(m: Method*, type: Type*): String{
-  let s = String::new();
-  s.append(&m.name);
-  s.append("(");
+  let s = Fmt::new();
+  s.print(&m.name);
+  s.print("(");
   if(m.self.is_some()){
-    s.append("_");
-    s.append(type.print().str());
-    s.append("*");
+    s.print("_");
+    s.print(type);
+    s.print("*");
   }
   let map = Map<String, Type>::new();
   map.add("Self".str(), type.clone());
   let copier = AstCopier::new(&map);
   for(let i = 0;i < m.params.len();++i){
-    s.append("_");
+    s.print("_");
     let prm_type = &m.params.get_ptr(i).type;
-    s.append(copier.visit(prm_type).print().str());
+    let mapped: Type = copier.visit(prm_type);
+    s.print(&mapped);
+    Drop::drop(mapped);
   }
-  s.append(")");
-  return s;
+  Drop::drop(map);
+  s.print(")");
+  return s.unwrap();
 }
 
 impl Scope{
@@ -211,21 +241,27 @@ func join(list: List<String>*, sep: str): String{
   return s;
 }
 
-func contains(list: List<String>*, s: String*): bool{
-  for(let i = 0;i < list.len();++i){
-    if(list.get_ptr(i).eq(s)){
-      return true;
-    }
-  }
-  return false;
-}
+// func contains(list: List<String>*, s: String*): bool{
+//   for(let i = 0;i < list.len();++i){
+//     if(list.get_ptr(i).eq(s)){
+//       return true;
+//     }
+//   }
+//   return false;
+// }
 
 func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
   for (let i = 0;i < arr.len();++i) {
       let i1 = arr.get_ptr(i);
-      let s1 = join(&i1.list, "/");
-      let s2 = join(&is.list, "/");
-      if (s1.eq(&s2)) return true;
+      let s1: String = join(&i1.list, "/");
+      let s2: String = join(&is.list, "/");
+      if (s1.eq(&s2)) {
+          Drop::drop(s1);
+          Drop::drop(s2);
+          return true;
+      }
+      Drop::drop(s1);
+      Drop::drop(s2);
   }
   return false;
 }
@@ -242,8 +278,7 @@ impl Resolver{
     Drop::drop(parser);
     //print("unit={}\n", unit);
     
-    let map = Map<String, RType>::new();
-    let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: map,
+    let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: Map<String, RType>::new(),
       cache: Map<i32, RType>::new(),
       curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
       used_methods: List<Method*>::new(10),
@@ -333,7 +368,9 @@ impl Resolver{
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get_ptr(i);
+      //print("visit item i={}/{}\n", i + 1, self.unit.items.len());
       self.visit(item);
+      //print("visit item after i={}/{}\n", i + 1, self.unit.items.len());
     }
     //todo these would generate more methods, whose are not visited
     for(let i=0;i<self.generated_methods.len();++i){
@@ -386,6 +423,9 @@ impl Resolver{
   }
   
   func init(self){
+    if(verbose()){
+      print("resolver::init {}\n", &self.unit.path);
+    }
     if(self.is_init) return;
     self.is_init = true;
 
@@ -413,17 +453,14 @@ impl Resolver{
       let it = self.unit.items.get_ptr(i);
       if let Item::Decl(decl*) = (it){
         //derive
-        for(let j = 0;j < decl.derives.len();++i){
+        for(let j = 0;j < decl.derives.len();++j){
           let der: Type* = decl.derives.get_ptr(j);
           let imp = generate_derive(decl, &self.unit, der.print().str());
           newItems.add(Item::Impl{imp});
         }
       }
     }
-    for(let i = 0;i < newItems.len();++i){
-      let it = newItems.get(i);
-      self.unit.items.add(it);
-    }
+    self.unit.items.add(newItems);
   }
 
   func err(self, msg: String){
@@ -436,7 +473,7 @@ impl Resolver{
       print("{}", str);
       Drop::drop(str);
     }
-    panic("{}", msg);
+    panic("{}\n", msg);
   }
   func err(self, node: Expr*, msg: str){
     let str = format("{}:{}\n{} {}", self.unit.path,node.line, msg, node);
@@ -633,7 +670,7 @@ impl Resolver{
 
   func addUsed(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
-      let used = self.used_types.get(i);
+      let used = *self.used_types.get_ptr(i);
       if(used.type.print().eq(decl.type.print().str())){
         return;
       }
@@ -664,7 +701,7 @@ impl Resolver{
   func addUsed(self, m: Method*){
     let mng = mangle(m);
     for(let i=0;i<self.used_methods.len();++i){
-      let prev = self.used_methods.get(i);
+      let prev = *self.used_methods.get_ptr(i);
       if(mangle(prev).eq(mng.str())) return;
     }
     self.used_methods.add(m);
@@ -1180,8 +1217,30 @@ impl Resolver{
   func std_is_ptr(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("is_ptr");
   }
+  func is_printf(mc: Call*): bool{
+    return mc.name.eq("printf") && mc.scope.is_none();
+  }
+
+  func validate_printf(self, node: Expr*, mc: Call*){
+    //check fmt literal
+    let fmt: Expr* = mc.args.get_ptr(0);
+    if (is_str_lit(fmt).is_none()) {
+        self.err(node, "format string is not a string literal");
+    }
+    //check rest
+    for (let i = 1; i < mc.args.len(); ++i) {
+        let arg = self.getType(mc.args.get_ptr(i));
+        if (!(arg.is_prim() || arg.eq("i8*") || arg.eq("u8*"))) {
+            self.err(node, "format arg is invalid");
+        }
+    }
+  }
 
   func visit(self, node: Expr*, call: Call*): RType{
+    if(is_printf(call)){
+      self.validate_printf(node, call);
+      return RType::new("void");
+    }
     if(std_size(call)){
       if(!call.args.empty()){
         self.visit(call.args.get_ptr(0));
@@ -1253,18 +1312,6 @@ impl Resolver{
         let arg = self.visit(call.type_args.get_ptr(0));
         return RType::new(arg.type.clone().toPtr());
       }
-    }
-    if (call.name.eq("panic")) {
-        if (call.args.empty()) {
-            return RType::new("void");
-        }
-        let arg = call.args.get_ptr(0);
-        if let Expr::Lit(lit*)=(arg){
-          if(lit.kind is LitKind::STR){
-            return RType::new("void");
-          }
-        }
-        self.err(node, "invalid panic argument: ");
     }
     let mr = MethodResolver::new(self);
     return mr.handle(node, &sig);
@@ -1433,7 +1480,7 @@ impl Resolver{
         }
       }
       self.dump();
-      self.err(node, format("unknown identifier: {}", name));
+      self.err(node, "unknown identifier");
     }else if let Expr::Unary(op*, ebox*) = (node){
       return self.visit_unary(node, op, ebox.get());
     }else if let Expr::Par(expr*) = (node){
@@ -1472,6 +1519,9 @@ func infix_result(l: str, r: str): str{
 //statements-------------------------------------
 impl Resolver{
   func visit(self, node: Stmt*){
+    if(verbose()){
+      print("visit stmt {}\n", node);
+    }
     if let Stmt::Expr(e*) = (node){
       self.visit(e);
       return;

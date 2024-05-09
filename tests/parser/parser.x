@@ -70,15 +70,9 @@ impl Parser{
     }
     
     func consume(self, tt: TokenType): Token*{
-      let t = self.pop();
+      let t: Token* = self.pop();
       if(t.type is tt) return t;
-      print("{}:{}\n", self.lexer.path, t.line);
-      let tok_str = t.print();
-      let tt_str = Fmt::str(&tt);
-      let msg = Fmt::format("unexpected token {} was expecting {}", tok_str.str(), tt_str.str());
-      Drop::drop(tok_str);
-      Drop::drop(tt_str);
-      panic("{}", msg.str());
+      panic("{}:{}\nunexpected token {} was expecting {}", self.lexer.path, t.line, t, &tt);
     }
     
     func parse_unit(self): Unit{
@@ -147,7 +141,7 @@ impl Parser{
             self.consume(TokenType::SEMI);
             unit.globals.add(Global{name, type, rhs});
         }else{
-          panic("invalid top level decl: {}", self.peek().print());
+          panic("invalid top level decl: {}", self.peek());
         }
       }
       return unit;
@@ -162,6 +156,7 @@ impl Parser{
           let parent = Parent::Trait{type: type.clone()};
           res.methods.add(self.parse_method(parent));
       }
+      Drop::drop(type);
       self.consume(TokenType::RBRACE);
       return res;
     }
@@ -659,7 +654,7 @@ impl Parser{
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
       kind = LitKind::BOOL;
     }else{
-      panic("invalid literal {}", self.peek().print());
+      panic("invalid literal {}", self.peek());
     }
     let arr = Lexer::get_suffix();
     let val = self.popv();
@@ -682,7 +677,7 @@ impl Parser{
     if(isName(self.peek())){
       return self.popv();
     }
-    panic("expected name got {}", self.peek().print());
+    panic("expected name got {}", self.peek());
   }
   
   func isObj(self): bool{
@@ -794,20 +789,22 @@ impl Parser{
       let e = self.prim2();
       return Expr::Unary{.n,op, Box::new(e)};
     }else{
-      panic("invalid expr {}", self.peek().print());
+      panic("invalid expr {}", self.peek());
     }
   }
   
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
   func prim2(self): Expr{
-    let e = self.prim();
+    let res: Expr = self.prim();
     if(self.is(TokenType::LBRACE)){
       let ty = Option<Type>::None; 
-      if let Expr::Name(nm)=(e){
+      if let Expr::Name(nm)=(res){
         ty = Option::new(Type::new(nm));
-      }else if let Expr::Type(t)=(e){
+      }else if let Expr::Type(t)=(res){
         ty = Option::new(t);
-      }else panic("was expecting name got {}", e);
+      }else{
+        panic("was expecting name got {}", &res);
+      }
       let args = List<Entry>::new();
       self.consume(TokenType::LBRACE);
       if(!self.is(TokenType::RBRACE)){
@@ -819,17 +816,17 @@ impl Parser{
       }
       self.consume(TokenType::RBRACE);
       let n = self.node();
-      e = Expr::Obj{.n,ty.unwrap(), args};
+      res = Expr::Obj{.n,ty.unwrap(), args};
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
       if(self.is(TokenType::DOT)){
         self.pop();
         let nm = self.name();
         if(self.is(TokenType::LPAREN)){
-          e = self.call(e, nm, false);
+          res = self.call(res, nm, false);
         }else{
           let n = self.node();
-          e = Expr::Access{.n,Box::new(e), nm}; 
+          res = Expr::Access{.n, Box::new(res), nm}; 
         }
       }else{
           self.pop();
@@ -841,10 +838,10 @@ impl Parser{
           }
           self.consume(TokenType::RBRACKET);
           let n = self.node();
-          e = Expr::ArrAccess{.n,ArrAccess{Box::new(e), Box::new(idx), idx2}}; 
+          res = Expr::ArrAccess{.n,ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
       }
     }
-    return e; 
+    return res; 
   }
   
   func as_is(self): Expr{
@@ -948,10 +945,12 @@ impl Parser{
 func dump(e: Expr*){
   let f = Fmt::new();
   e.debug(&f);
-  f.buf.dump();
+  f.buf.print();
+  Drop::drop(f);
 }
 func dump(e: Stmt*){
   let f = Fmt::new();
   e.debug(&f);
-  f.buf.dump();
+  f.buf.print();
+  Drop::drop(f);
 }

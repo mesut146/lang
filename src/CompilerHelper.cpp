@@ -342,7 +342,13 @@ public:
 
     void set_alloc(Node *node, llvm::Value *ptr) {
         if (node->id == -1) {
-            throw std::runtime_error("id -1 for " + node->print());
+            throw std::runtime_error("set_alloc() id -1 for " + node->print());
+        }
+        if (ptr == nullptr) {
+            throw std::runtime_error("set_alloc() null ptr for " + node->print());
+        }
+        if (compiler->allocMap2.contains(node->id)) {
+            throw std::runtime_error("set_alloc() double alloc for " + node->print());
         }
         compiler->allocMap2[node->id] = ptr;
     }
@@ -379,14 +385,33 @@ public:
         return {};
     }
     void call(MethodCall *node) {
+        if (is_std_parent_name(node)) {
+            alloc(Type("str"), node);
+            return;
+        }
+        if (is_format(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            //todo uncomment below
+            //info.unwrap_mc.accept(this);
+            alloc(Type("String"), node);
+            return;
+        }
+        if (is_print(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            return;
+        }
+        if (is_panic(node)) {
+            auto &info = compiler->resolv->format_map.at(node->id);
+            info.block.accept(this);
+            return;
+        }
         //todo rvo
         if (node->scope) {
             node->scope->accept(this);
         }
         for (auto a : node->args) {
-            if (!node->scope && node->name == "print" && isStrLit(a)) {
-                continue;
-            }
             a->accept(this);
         }
     }
@@ -398,6 +423,8 @@ public:
         if (is_format(node)) {
             auto &info = compiler->resolv->format_map.at(node->id);
             info.block.accept(this);
+            //todo uncomment below
+            //info.unwrap_mc.accept(this);
             return alloc(Type("String"), node);
         }
         if (is_print(node)) {
@@ -624,7 +651,7 @@ public:
             if (arg.ptr) {
                 type = Type(Type::Pointer, type);
             }
-            auto ptr = alloc(type, node);
+            auto ptr = alloc(type, &arg);
             ptr->setName(arg.name);
             i++;
         }

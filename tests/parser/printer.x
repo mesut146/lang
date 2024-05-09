@@ -12,7 +12,7 @@ func body(node: Stmt*, f: Fmt*){
   let lines: List<str> = s.str().split("\n");
   for(let j = 0;j < lines.len();++j){
     f.print("  ");
-    f.print(lines.get(j));
+    f.print(lines.get_ptr(j));
     f.print("\n");
   }
   Drop::drop(s);
@@ -85,7 +85,7 @@ impl Debug for Impl{
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
         f.print("  ");
-        f.print(lines.get(j));
+        f.print(lines.get_ptr(j));
         f.print("\n");
       }
       Drop::drop(ms);
@@ -267,7 +267,6 @@ impl Debug for Stmt{
      is.then.get().debug(f);
      if(is.els.is_some()){
        f.print("\nelse ");
-       //is.els.get().get().debug(f);
        let els = is.els.get();
        els.get().debug(f);
      }

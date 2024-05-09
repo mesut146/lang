@@ -16,6 +16,7 @@ impl<T> Option<T>{
     if let Option<T>::Some(val) = (self){
       return val;
     }
+    std::no_drop(self);
     panic("unwrap on None");
   }
 

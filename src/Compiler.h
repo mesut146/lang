@@ -71,7 +71,7 @@ struct RvalueHelper {
     Type scope_type;
 
     static bool is_rvalue(Expression *e) {
-        return dynamic_cast<MethodCall *>(e) || dynamic_cast<Literal *>(e);
+        return dynamic_cast<MethodCall *>(e) || dynamic_cast<Literal *>(e) || dynamic_cast<AsExpr *>(e) || dynamic_cast<Infix *>(e);
     }
 
     static RvalueHelper need_alloc(MethodCall *mc, Method *method, Resolver *r) {
@@ -223,11 +223,14 @@ public:
     }
     llvm::Value *getAlloc(Node *e) {
         if (e->id == -1) {
-            resolv->err(e, "alloc no id");
+            resolv->err(e, "getAlloc no id: " + e->print());
         }
-        auto res = allocMap2.at(e->id);
+        if (!allocMap2.contains(e->id)) {
+            resolv->err(e, "getAlloc not contain: " + e->print());
+        }
+        auto res = allocMap2[e->id];
         if (!res) {
-            resolv->err(e, "getAlloc not found: " + e->print());
+            resolv->err(e, "getAlloc nullptr: " + e->print());
         }
         return res;
     }

@@ -46,6 +46,7 @@ func compiler_test(){
   let cmp = Compiler::new(ctx);
   compile_dir(&cmp, CStr::new("../tests/normal"), true);
   //compile_dir(&cmp, "../tests/src/std", false);
+  cmp.drop();
 }
 
 func bootstrap(){

@@ -1692,10 +1692,10 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
     for (auto &f : node->list) {
         auto rhs = f.rhs.get();
         auto type = f.type ? resolv->getType(*f.type) : resolv->getType(rhs);
-        NamedValues[f.name] = getAlloc(&f);
+        auto ptr = getAlloc(&f);
+        NamedValues[f.name] = ptr;
         loc(&f);
         curOwner.check(rhs);
-        auto ptr = NamedValues[f.name];
         if (!isStruct(type)) {
             auto val = cast(rhs, type);
             Builder->CreateStore(val, ptr);
@@ -1851,6 +1851,11 @@ std::any Compiler::visitType(Type *node) {
 }
 
 llvm::Value *Compiler::get_obj_ptr(Expression *e) {
+    auto infix = dynamic_cast<Infix *>(e);
+    if(infix){
+        auto val = gen(infix);
+        return val;
+    }
     auto pe = dynamic_cast<ParExpr *>(e);
     if (pe) {
         e = pe->expr;

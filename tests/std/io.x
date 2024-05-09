@@ -3,7 +3,7 @@ import std/libc
 func open_checked(path: CStr*, mode: CStr*): FILE*{
   let f = fopen(path.ptr(), mode.ptr());
   if(!is_valid(f)){
-    panic("no such file %s", path.ptr());
+    panic("no such file {}", path);
   }
   return f;
 }
@@ -11,6 +11,7 @@ func open_checked(path: CStr*, mode: CStr*): FILE*{
 func read_bytes(path: CStr*): List<u8>{
   let mode = CStr::new("r");
   let f = open_checked(path, &mode);
+  Drop::drop(mode);
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   fseek(f, 0, SEEK_SET());
@@ -28,6 +29,7 @@ func read_bytes(path: CStr*): List<u8>{
 func read_bytes_i8(path: CStr*): List<i8>{
   let mode = CStr::new("r");
   let f = open_checked(path, &mode);
+  Drop::drop(mode);
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   fseek(f, 0, SEEK_SET());
@@ -50,22 +52,19 @@ func read_string(path: CStr*): String{
 func write_bytes(data: [u8], path: CStr*){
   let mode = CStr::new("w");
   let f = open_checked(path, &mode);
-  let c = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
-  print("wrote %d of %lld\n", c, data.len());
+  let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
+  print("wrote {} of {}\n", cnt, data.len());
   fclose(f);
-}
-
-func dump_arr(arr: [i8; 256], len: i32){
-  for(let i = 0;i < len;++i){
-    print("%c", arr[i]);
+  Drop::drop(mode);
+  if(cnt != data.len()){
+    panic("didn!t write all");
   }
-  print("\n");
 }
 
 /*func list(path: CStr*): List<String>{
   let list = List<String>::new(128);
   let dp = opendir(path.ptr());
-  if(dp as u64 == 0) panic("no such dir %s", path.ptr());
+  if(dp as u64 == 0) panic("no such dir {}", path);
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
@@ -77,9 +76,11 @@ func dump_arr(arr: [i8; 256], len: i32){
 }*/
 
 func listc(path: CStr*): List<CStr>{
-  let list = List<CStr>::new(10);
+  let list = List<CStr>::new();
   let dp = opendir(path.ptr());
-  if(dp as u64 == 0) panic("no such dir %s", path.ptr());
+  if(dp as u64 == 0){
+    panic("no such dir {}", path);
+  }
   while(true){
     let ep = readdir(dp);
     if(ep as u64 == 0) break;
@@ -91,20 +92,26 @@ func listc(path: CStr*): List<CStr>{
 }
 
 func is_dir(path: str): bool{
-  let dp = opendir(path.cstr().ptr());
+  let path_c = CStr::from_slice(path);
+  let dp = opendir(path_c.ptr());
   if(dp as u64 != 0){
     closedir(dp);
+    Drop::drop(path_c);
     return true;
   }
+  Drop::drop(path_c);
   return false;
 }
 
 func is_file(path: str): bool{
-  let fp = fopen(path.cstr().ptr(), "r".cptr());
+  let path_c = CStr::from_slice(path);
+  let fp = fopen(path_c.ptr(), "r".cptr());
   if(fp as u64 != 0){
     fclose(fp);
+    Drop::drop(path_c);
     return true;
   }
+  Drop::drop(path_c);
   return false;
 }
 
@@ -120,7 +127,7 @@ func resolve(path: CStr*): CStr{
   let buf = [0i8; 256];
   let ptr = realpath(path.ptr(), &buf[0] as i8*);
   if(ptr as u64 == 0){
-    panic("resolving path is null '%s'\n", path.ptr());
+    panic("resolving path is null '{}'\n", path);
   }
   let len = strlen(buf[0..256]);
   let slice = buf[0..len + 1];

@@ -75,24 +75,12 @@ struct Fmt{
   buf: String;
 }
 
-impl Debug for [i32]{
-  func debug(self, f: Fmt*){
-    f.print("[");
-    for(let i = 0;i < self.len();++i){
-      if(i > 0) {
-        print(", ");
-      }
-      Debug::debug(&i, f);
-      f.print("=");
-      Debug::debug(&self[i], f);
-    }
-    f.print("]\n");
-  }
-}
-
 impl Fmt{
   func new(): Fmt{
     return Fmt{String::new()};
+  }
+  func new(s: String): Fmt{
+    return Fmt{s};
   }
   func unwrap(*self): String{
     return self.buf;
@@ -103,8 +91,11 @@ impl Fmt{
   func print(self, s: str){
     self.buf.append(s); 
   }
-  func print(self, s: String*){
-    self.buf.append(s); 
+  // func print(self, s: String*){
+  //   self.buf.append(s); 
+  // }
+  func print<T>(self, node: T*){
+    Debug::debug(node, self);
   }
   
   func str<T>(node: T*): String{
@@ -118,7 +109,7 @@ impl Fmt{
     return Fmt::str(&node);
   }
 
-  func format(s: str, args: List<str>*): String{
+  /*func format(s: str, args: List<str>*): String{
     let res = String::new();
     let i = 0;
     let arg_idx = 0;
@@ -160,6 +151,21 @@ impl Fmt{
     args.add(a3);
     args.add(a4);
     return Fmt::format(s, &args);
+  }*/
+}
+
+impl Debug for [i32]{
+  func debug(self, f: Fmt*){
+    f.print("[");
+    for(let i = 0;i < self.len();++i){
+      if(i > 0) {
+        f.print(", ");
+      }
+      Debug::debug(&i, f);
+      f.print("=");
+      Debug::debug(&self[i], f);
+    }
+    f.print("]\n");
   }
 }
 

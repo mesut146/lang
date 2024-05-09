@@ -46,7 +46,7 @@ func newPrint(unit: Unit*, scope: str, lit: str): Stmt{
     let id2 = unit.node(0);
     let id3 = unit.node(0);
     call.scope = Option::new(Box::new(Expr::Name{.id, scope.str()}));
-    call.args.add(Expr::Lit{.id2, Literal{LitKind::STR, Fmt::format("\"{}\"", lit), Option<Type>::new()}});
+    call.args.add(Expr::Lit{.id2, Literal{LitKind::STR, format("\"{}\"", lit), Option<Type>::new()}});
     return Stmt::Expr{Expr::Call{.id3, call}};
 }
 

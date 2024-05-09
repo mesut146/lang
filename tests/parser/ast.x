@@ -308,26 +308,36 @@ impl Type{
     panic("as_simple");
   }
   func unwrap_simple(*self): Simple{
-    //todo self
     if let Type::Simple(simple) = (self){
-      //return ptr::deref(simple);
       return simple;
     }
+    Drop::drop(self);
     panic("as_simple");
   }
 
   func is_void(self): bool{
-    return self.print().eq("void");
+    let str = self.print();
+    let res = str.eq("void");
+    Drop::drop(str);
+    return res;
   }
   func is_prim(self): bool{
     return prim_size(self.print()).is_some();
   }
   func is_unsigned(self): bool{
     let str = self.print();
-    return str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
+    let res = str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
+    Drop::drop(str);
+    return res;
   }
   func is_str(self): bool{
     return self.print().eq("str");
+  }
+  func eq(self, s: str): bool{
+    let tmp = self.print();
+    let res = tmp.eq(s);
+    Drop::drop(tmp);
+    return res;
   }
   func is_generic(self): bool{
     if let Type::Simple(smp*) = (self){
