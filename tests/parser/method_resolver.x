@@ -12,6 +12,7 @@ struct Signature{
     name: String;
     args: List<Type>;
     scope: Option<RType>;
+    real_scope: Option<RType>;
     ret: Type;
     r: Option<Resolver*>;
 }
@@ -27,16 +28,12 @@ impl SigResult{
         if let SigResult::Err(s*)=(self){
             return s.str();
         }
-        panic("SigResult::get");
+        panic("SigResult::get_err");
     }
 }
 
 struct MethodResolver{
     r: Resolver*;
-}
-
-func is_static(mc: Call*): bool{
-    return mc.scope.get().get() is Expr::Type;
 }
 
 impl Signature{
@@ -46,12 +43,14 @@ impl Signature{
                             name: mc.name.clone(),
                             args: List<Type>::new(),
                             scope: Option<RType>::None,
+                            real_scope: Option<RType>::None,
                             ret: Type::new("void"),
                             r: Option::new(r)};
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let scp: RType = r.visit(mc.scope.get().get());
             is_trait = scp.trait.is_some();
+            res.real_scope = Option::new(scp.clone());
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
                 let trg = scp.targetDecl.unwrap();
@@ -69,8 +68,8 @@ impl Signature{
             } else {
                 res.scope = Option::new(scp);
             }
-            if (!is_static(mc)) {
-                res.args.add(makeSelf(&res.scope.get().type));
+            if (!mc.is_static) {
+                res.args.add(res.real_scope.get().type.clone());
             }
         }
         for(let i = 0;i < mc.args.len();++i){
@@ -78,9 +77,6 @@ impl Signature{
             let argt: RType = r.visit(arg);
             let type = argt.type.clone();
             Drop::drop(argt);
-            if(i == 0 && mc.scope.is_some() && is_trait && is_struct(&type)){
-                type = type.toPtr();
-            }
             res.args.add(type);
         }
         return res;
@@ -121,6 +117,7 @@ impl Signature{
             name: m.name.clone(),
             args: List<Type>::new(),
             scope: Option<RType>::None,
+            real_scope: Option<RType>::None,
             ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None};
         if let Parent::Impl(info*) = (&m.parent){
@@ -255,15 +252,17 @@ impl MethodResolver{
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, imports: bool){
         //let scope_type = sig.scope.get().type.unwrap_ptr();
         //let type_plain = scope_type;
-        let imp_list: List<Impl*> = self.get_impl(scope_type);
+        let imp_list = List<Impl*>::new();
+        Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
-            let tmp = self.get_impl(actual);
-            imp_list.add(tmp);
+            imp_list = self.get_impl(actual);
+        }else{
+            imp_list = self.get_impl(scope_type);
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
-            let imp = *imp_list.get_ptr(i);
+            let imp: Impl* = *imp_list.get_ptr(i);
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       
                 if(!m.name.eq(&sig.name)) continue;
@@ -526,19 +525,33 @@ impl MethodResolver{
         if (sig2.m.unwrap().self.is_some() && !sig.mc.unwrap().scope.is_some()) {
             return SigResult::Err{"member method called without scope".str()};
         }
-        if (sig.args.size() != sig2.args.size()) return SigResult::Err{"arg size mismatched".str()};
+        if (sig.args.len() != sig2.args.len()){
+            return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), sig2.args.len())};
+        }
         let typeParams = get_type_params(sig2.m.unwrap());
         let all_exact = true;
-        for (let i = 0; i < sig.args.size(); ++i) {
-            let t1 = sig.args.get_ptr(i);
-            let t2 = sig2.args.get_ptr(i);
+        for (let i = 0; i < sig.args.len(); ++i) {
+            let t1: Type = sig.args.get_ptr(i).clone();
+            let t2: Type* = sig2.args.get_ptr(i);
             //todo if base method, skip self
+            if(i == 0 && (*sig2.m.get()).self.is_some()){
+                if (t2.is_pointer()) {
+                    if (!t1.is_pointer()) {
+                        //coerce to ptr
+                        t1 = t1.toPtr();
+                    }
+                } else {
+                    if (t1.is_pointer()) {
+                        return SigResult::Err{format("can't convert borrowed self to *self, {} vs {}", &t1, t2)};
+                    }
+                }
+            }
             let t1_str = t1.print();
             let t2_str = t2.print();
             if (!t1_str.eq(&t2_str)) {
                 all_exact = false;
             }
-            let cmp: Option<String> = MethodResolver::is_compatible(t1, t2, &typeParams);
+            let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
                 let res = SigResult::Err{format("arg type {} is not compatible with param {}", t1_str.str(), t2_str.str())};
                 Drop::drop(t1_str);
@@ -556,6 +569,13 @@ impl MethodResolver{
             return SigResult::Exact;
         }
         return SigResult::Compatible;
+    }
+
+    func is_compatible(arg: Type*, arg_val: Option<String>*, target: Type*): Option<String>{
+        let typeParams = List<Type>::new();
+        let res = is_compatible(arg, arg_val, target, &typeParams);
+        Drop::drop(typeParams);
+        return res;
     }
 
     func is_compatible(arg: Type*, arg_val: Option<String>*, target: Type*, typeParams: List<Type>*): Option<String>{
@@ -611,7 +631,7 @@ impl MethodResolver{
                 if (max_for(target) >= i64::parse(v.str())) {
                     return Option<String>::None;
                 } else {
-                    return Option::new(format("{} can't fit into {}" ,v.str(), target_str.str()));
+                    return Option::new(format("{} can't fit into {}", v.str(), target_str.str()));
                 }
             }
         }
@@ -623,7 +643,7 @@ impl MethodResolver{
             return Option<String>::None;
         }
         else {
-            return Option::new("arg can't fit into target".str());
+            return Option::new(format("{} can't fit into {}", arg, target_str.str()));
         }
     }
 

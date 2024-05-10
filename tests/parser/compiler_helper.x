@@ -200,6 +200,9 @@ impl Compiler{
     }
     if(m.self.is_some()){
       let self_ty = self.mapType(&m.self.get().type);
+      if(is_struct(&m.self.get().type)){
+        self_ty = getPointerTo(self_ty);
+      }
       vec_push(args, self_ty);
     }
     for(let i=0;i<m.params.len();++i){

@@ -313,8 +313,10 @@ impl Compiler{
     //methods
     let methods = getMethods(self.unit());
     for (let i=0;i<methods.len();++i) {
-      let m = *methods.get_ptr(i);
+      let m = methods.get(i);
+      print("make_proto {}\n", i);
       self.make_proto(m);
+      print("make_proto2 {}\n", printMethod(m));
     }
     //generic methods from resolver
     for (let i = 0;i < self.resolver.generated_methods.len();++i) {
@@ -322,7 +324,7 @@ impl Compiler{
         self.make_proto(m);
     }
     for (let i = 0;i < self.resolver.used_methods.len();++i) {
-        let m = *self.resolver.used_methods.get_ptr(i);
+        let m = self.resolver.used_methods.get(i);
         self.make_proto(m);
     }
   }
@@ -967,6 +969,10 @@ impl Compiler{
       }
       return getFalse();
     }
+    if(Resolver::is_printf(mc)){
+      self.call_printf(mc);
+      return getVoid();
+    }
     if(mc.name.eq("print") && mc.scope.is_none()){
       return self.visit_print(mc);
     }
@@ -1130,6 +1136,40 @@ impl Compiler{
     args_push(args2, CreateLoad(getPtr(), stdout_ptr));
     CreateCall(fflush_proto, args2);
     return res;
+  }
+
+  func call_printf(self, mc: Call*){
+    let args = make_args();
+    for(let i = 0;i < mc.args.len();++i){
+      let arg: Expr* = mc.args.get_ptr(i);
+      let lit = is_str_lit(arg);
+      if(lit.is_some()){
+        let val: str = lit.unwrap().str();
+        let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
+        args_push(args, ptr);
+        continue;
+      }
+      let arg_type = self.getType(arg);
+      if(arg_type.eq("i8*") || arg_type.eq("u8*")){
+        let val = self.get_obj_ptr(arg);
+        args_push(args, val);
+        continue;
+      }
+      if(arg_type.is_prim()){
+        let val = self.loadPrim(arg);
+        args_push(args, val);
+      }else{
+        panic("compiler err printf arg {}", arg_type);
+      }
+    }
+    let printf_proto = self.protos.get().libc("printf");
+    let res = CreateCall(printf_proto, args);
+    //flush
+    let fflush_proto = self.protos.get().libc("fflush");
+    let args2 = make_args();
+    let stdout_ptr = self.protos.get().stdout_ptr;
+    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+    CreateCall(fflush_proto, args2);
   }
   
   func call_printf(self, s: str){

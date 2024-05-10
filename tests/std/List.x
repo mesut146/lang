@@ -116,6 +116,13 @@ impl<T> List<T>{
     return ptr::get(self.ptr, pos);
   }
 
+  func get(self, pos: i64): T{
+    if(!std::is_ptr<T>()){
+      panic("can't get non ptr");
+    }
+    return *(self.get_ptr(pos));
+  }
+
   /*func get_ptr_write(self, pos: i64): T*{
     if(pos >= self.cap) {
       panic("index {} out of bounds {}", pos, self.count);

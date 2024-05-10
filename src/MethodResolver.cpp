@@ -41,9 +41,6 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
     res.mc = mc;
     res.r = r;
     bool is_trait = false;
-    if (mc->print() == "Debug::debug(self.len(), &f)") {
-        int a = 55;
-    }
     if (mc->scope) {
         auto scp = r->resolve(mc->scope.get());
         is_trait = scp.trait != nullptr;
@@ -65,14 +62,7 @@ Signature Signature::make(MethodCall *mc, Resolver *r) {
         }
     }
     for (auto a : mc->args) {
-        //cast to pointer
         auto type = r->getType(a);
-        //A::get(&a)
-        /*if (i == 0 && mc->scope && is_trait && isStruct(type)) {
-            if (mc->name != "drop") {//delete this shit
-                type = Type(Type::Pointer, type);
-            }
-        }*/
         res.args.push_back(type);
     }
     return res;

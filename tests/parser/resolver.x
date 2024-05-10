@@ -470,7 +470,7 @@ impl Resolver{
   func err(self, msg: str){
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
-      print("{}", str);
+      print("{}\n", str);
       Drop::drop(str);
     }
     panic("{}\n", msg);
@@ -1361,12 +1361,11 @@ impl Resolver{
     }
     let elemType = self.getType(list.get_ptr(0));
     for (let i = 1; i < list.len(); ++i) {
-        let cur = self.visit(list.get_ptr(i));
-        let cmp = MethodResolver::is_compatible(&cur.type, &elemType);
+        let elem = list.get_ptr(i);
+        let cur = self.visit(elem);
+        let cmp = MethodResolver::is_compatible(&cur.type, &cur.value, &elemType);
         if (cmp.is_some()) {
-            let cur_type = cur.type.print();
-            print("{}", cmp.get());
-            let msg = format("array element type mismatch, expecting: {} got: {}", elemType, cur_type);
+            let msg = format("{}\narray element type mismatch, expecting: {} got: {}({})", cmp.get(), elemType, &cur.type, elem);
             self.err(node, msg.str());
         }
     }
