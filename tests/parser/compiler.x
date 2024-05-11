@@ -971,7 +971,7 @@ impl Compiler{
     }
     if(Resolver::is_printf(mc)){
       self.call_printf(mc);
-      return getVoid();
+      return getVoidTy() as Value*;
     }
     if(mc.name.eq("print") && mc.scope.is_none()){
       return self.visit_print(mc);
@@ -1062,20 +1062,24 @@ impl Compiler{
       args_push(args, ptr.unwrap());
     }
     let paramIdx = 0;
-    let i = 0;
+    let argIdx = 0;
     if(target.self.is_some()){
-      if(mc.is_static){
-        let scp = self.get_obj_ptr(mc.args.get_ptr(0));
-        args_push(args, scp);
-        ++i;
+      let rval = RvalueHelper::need_alloc(mc, target, self.resolver);
+      let scp_val = self.get_obj_ptr(*rval.scope.get());
+      if(rval.rvalue){
+        let rv_ptr = self.get_alloc(*rval.scope.get());
+        CreateStore(scp_val, rv_ptr);
+        args_push(args, rv_ptr);
       }else{
-        let scp = self.get_obj_ptr(mc.scope.get().get());
-        args_push(args, scp);
+        args_push(args, scp_val);
+      }
+      if(mc.is_static){
+        ++argIdx;
       }
       //++paramIdx;
     }
-    for(;i < mc.args.len();++i){
-      let arg = mc.args.get_ptr(i);
+    for(;argIdx < mc.args.len();++argIdx){
+      let arg = mc.args.get_ptr(argIdx);
       let at = self.getType(arg);
       if (at.is_pointer()) {
         args_push(args, self.get_obj_ptr(arg));

@@ -179,6 +179,13 @@ impl AllocHelper{
     }
     if let Expr::Call(call*)=(node){
       let rt = self.c.resolver.visit(node);
+      if(rt.method.is_some()){
+        let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.resolver);
+        if (rval.rvalue) {
+            self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
+        }
+        Drop::drop(rval);
+      }
       if(rt.method.is_some() && is_struct(&rt.type)){
         //non-internal method
         res = Option::new(self.alloc_ty(&rt.type, node));

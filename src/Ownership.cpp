@@ -6,7 +6,7 @@ int VarScope::last_id = 0;
 
 bool verbose = false;
 bool enabled = false;
-bool print_drop_info = true;
+bool print_drop_info = false;
 
 std::string print_type(const ScopeId &type) {
     if (type == ScopeId::MAIN) {

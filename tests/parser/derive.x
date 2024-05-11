@@ -30,13 +30,36 @@ func newCall(unit: Unit*, scope: str, name: str, arg: Option<Expr>): Stmt{
     return Stmt::Expr{Expr::Call{.id2, call}};
 }
 
-//scope.debug()
-func newCall(unit: Unit*, scope: str, name: str): Stmt{
+//scope.name(arg)
+func newCall(unit: Unit*, scope: Expr, name: str, arg: Expr): Stmt{
     let call = Call::new(name.str());
     let id = unit.node(0);
     let id2 = unit.node(0);
-    call.scope = Option::new(Box::new(Expr::Name{.id, scope.str()}));
+    call.scope = Option::new(Box::new(scope));
+    call.args.add(arg);
     return Stmt::Expr{Expr::Call{.id2, call}};
+}
+
+//scope.name()
+func newCall(unit: Unit*, scope: Expr, name: str): Stmt{
+    let call = Call::new(name.str());
+    let id = unit.node(0);
+    let id2 = unit.node(0);
+    call.scope = Option::new(Box::new(scope));
+    return Stmt::Expr{Expr::Call{.id2, call}};
+}
+
+//scope.name()
+func newCall(unit: Unit*, scope: str, name: str): Stmt{
+    let id = unit.node(0);
+    return newCall(unit, Expr::Name{.id, scope.str()}, name);
+}
+
+func newFa(unit: Unit*, scope: str, name: str): Expr{
+    let id = unit.node(0);
+    let id2 = unit.node(0);
+    let scope_expr = Expr::Name{.id, scope.str()};
+    return Expr::Access{.id2, Box::new(scope_expr), name.str()};
 }
 
 //scope.print("{lit}")
@@ -57,15 +80,11 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Drop")){
         return generate_drop(decl, unit);
     }
+    //todo clone
     panic("generate_derive decl: {} der: '{}'", decl.type, der);
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
-    let imp = make_impl(decl, "Drop");
-    let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
-    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone().toPtr(), true, true});
-    m.parent = Parent::Impl{make_info(decl, "Drop")};
-    m.path = unit.path.clone();
     let body = Block::new();
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
@@ -97,7 +116,12 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             body.list.add(newCall(unit, fd.name.str(), "drop"));
         }
     }
+    let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
+    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone().toPtr(), true, true});
+    m.parent = Parent::Impl{make_info(decl, "Drop")};
+    m.path = unit.path.clone();
     m.body = Option::new(body);
+    let imp = make_impl(decl, "Drop");
     imp.methods.add(m);
     return imp;
 }
@@ -148,8 +172,9 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             if(i > 0){
                 body.list.add(newPrint(unit, "f", ", "));
             }
-            //{fd.name}.debug();
-            body.list.add(newCall(unit, fd.name.str(), "debug"));
+            //self.{fd.name}.debug(f);
+            let arg = Expr::Name{.unit.node(0), "f".str()};
+            body.list.add(newCall(unit, newFa(unit, "self", fd.name.str()), "debug", arg));
         }
         body.list.add(newPrint(unit, "f", "}"));
     }

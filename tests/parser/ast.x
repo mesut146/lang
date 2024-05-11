@@ -88,12 +88,19 @@ enum Item{
   Extern(methods: List<Method>)
 }
 
+impl Item{
+  func as_impl(self): Impl*{
+    if let Item::Impl(imp*)=(self){
+      return imp;
+    }
+    panic("Item::as_impl()");
+  }
+}
 
 struct Impl{
   info: ImplInfo;
   methods: List<Method>;
 }
-
 
 struct ImplInfo{
   type_params: List<Type>;
@@ -110,7 +117,6 @@ impl ImplInfo{
   }
 }
 
-
 struct BaseDecl{
   line: i32;
   path: String;
@@ -122,13 +128,27 @@ struct BaseDecl{
   attr: List<String>;
 }
 
-
 enum Decl: BaseDecl{
   Struct(fields: List<FieldDecl>),
   Enum(variants: List<Variant>)
 }
 
 impl Decl{
+  func is_drop(self): bool{
+    for(let i = 0;i < self.attr.len();++i){
+      let at = self.attr.get_ptr(i);
+      if(at.eq("drop")){
+        return true;
+      }
+    }
+    return false;
+  }
+  func is_struct(self): bool{
+    return self is Decl::Struct;
+  }
+  func is_enum(self): bool{
+    return self is Decl::Enum;
+  }
   func get_variants(self): List<Variant>*{
     if let Decl::Enum(variants*)=(self){
       return variants;
@@ -140,9 +160,6 @@ impl Decl{
       return fields;
     }
     panic("get_fields");
-  }
-  func is_enum(self): bool{
-    return self is Decl::Enum;
   }
 }
 

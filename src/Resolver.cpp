@@ -346,7 +346,6 @@ bool is_drop_impl(BaseDecl *bd, Impl *imp) {
             //different impl of type param
             return false;
         }
-        return bd->type.name == bd->type.name;
     } else {                           //full type
         if (imp->type_params.empty()) {//full impl
             return bd->type.print() == imp->type.print();
@@ -354,7 +353,6 @@ bool is_drop_impl(BaseDecl *bd, Impl *imp) {
             return bd->type.name == imp->type.name;
         }
     }
-
     return false;
 }
 

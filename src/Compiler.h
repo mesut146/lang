@@ -76,6 +76,7 @@ struct RvalueHelper {
 
     static RvalueHelper need_alloc(MethodCall *mc, Method *method, Resolver *r) {
         auto res = RvalueHelper{};
+        res.rvalue = false;
         if (!method->self) {
             return res;
         }

@@ -208,20 +208,24 @@ impl MethodResolver{
       return type.print();
     }
     
-    func get_impl(self, type: Type*): List<Impl*>{
+    func get_impl(self, type: Type*, tr: Option<Type*>): List<Impl*>{
         let list = List<Impl*>::new();
         let erased: String = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
-            let item = self.r.unit.items.get_ptr(i);
+            let item: Item* = self.r.unit.items.get_ptr(i);
             if let Item::Impl(imp*) = (item){
+                if(tr.is_some()){
+                    if(imp.info.trait_name.is_none()){
+                        continue;
+                    }
+                    let tr_str = (*tr.get()).print();
+                    if(!imp.info.trait_name.get().eq(tr_str.str())){
+                        continue;
+                    }
+                }
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
                   list.add(imp);
-                }else if(imp.info.trait_name.is_some()){
-                  let tr = imp.info.trait_name.get().name();
-                  if(tr.eq(&erased)){
-                    list.add(imp);
-                  }
                 }
                 Drop::drop(imp_erased);
             }
@@ -256,9 +260,9 @@ impl MethodResolver{
         Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
-            imp_list = self.get_impl(actual);
+            imp_list = self.get_impl(actual, Option::new(&sig.scope.get().type));
         }else{
-            imp_list = self.get_impl(scope_type);
+            imp_list = self.get_impl(scope_type, Option<Type*>::new());
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
@@ -308,6 +312,9 @@ impl MethodResolver{
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
+        if(mc.print().eq("Drop::drop(f)")){
+            let x = 10;
+        }
         let list = self.collect(sig);
         if(list.empty()){
             let msg = format("no such method {}", sig);
@@ -751,7 +758,7 @@ impl MethodResolver{
         if(!(m.parent is Parent::Impl)){
             return res;
         }
-        let imp: ImplInfo* = get_impl_info(m);
+        let imp: ImplInfo* = m.parent.as_impl();
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().trait.is_some()){
             Drop::drop(st);
@@ -772,13 +779,6 @@ impl MethodResolver{
         Drop::drop(res.parent);
         res.parent = Parent::Impl{ImplInfo::new(st.into())};
         return res;
-    }
-
-    func get_impl_info(m: Method*): ImplInfo*{
-        if let Parent::Impl(info*) = (&m.parent){
-            return info;
-        }
-        panic("get_impl_info");
     }
 }
 

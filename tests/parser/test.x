@@ -44,8 +44,8 @@ func compiler_test(){
   let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, CStr::new("../tests/normal"), true);
-  //compile_dir(&cmp, "../tests/src/std", false);
+  //compile_dir(&cmp, CStr::new("../tests/normal"), true);
+  compile_dir(&cmp, CStr::new("../tests/std_test"), false);
   cmp.drop();
 }
 

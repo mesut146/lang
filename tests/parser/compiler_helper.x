@@ -8,6 +8,132 @@ import parser/printer
 import std/map
 import std/libc
 
+struct RvalueHelper {
+  rvalue: bool;
+  scope: Option<Expr*>;
+  scope_type: Option<Type>;
+}
+
+impl RvalueHelper{
+    func is_rvalue(e: Expr*): bool{
+        return e is Expr::Call || e is Expr::Lit || e is Expr::As || e is Expr::Infix;
+    }
+
+    func get_scope(mc: Call*): Expr*{
+      if (mc.is_static) {
+        return mc.args.get_ptr(0);
+      } else {
+        return mc.scope.get().get();
+      }
+    }
+
+    func need_alloc(mc: Call*, method: Method*, r: Resolver*): RvalueHelper{
+       if(method.self.is_none()){
+         return RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
+       }
+       let res = RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
+       let scp = get_scope(mc);
+       res.scope = Option::new(scp);
+       if(method.self.get().type.is_pointer()){
+         let scope_type = r.visit(scp);
+         if (scope_type.type.is_prim() && is_rvalue(scp)) {
+            res.rvalue = true;
+            res.scope_type = Option::new(scope_type.type.clone());
+         }
+       }
+       return res;
+    }
+}
+
+struct DropHelper {
+  r: Resolver*;
+}
+
+impl DropHelper{
+  func is_drop_type(self, type: Type*): bool{
+    let rt = self.r.visit(type);
+    return self.is_drop_type(&rt);
+  }
+  func is_drop_type(self, rt: RType*): bool{
+    let type = &rt.type;
+    if (type.is_str() || type.is_slice()) return false;
+    if (!is_struct(type)) return false;
+    if (type.is_array()) {
+        let elem = type.elem();
+        return self.is_drop_type(elem);
+    }
+    return self.is_drop(*rt.targetDecl.get());
+  }
+  func is_drop(self, decl: Decl*): bool{
+    if(decl.is_drop()) return true;
+    if(decl.is_struct()){
+      let fields = decl.get_fields();
+      for(let i = 0;i < fields.len();++i){
+        let fd = fields.get_ptr(i);
+        if(self.is_drop_type(&fd.type)){
+          return true;
+        }
+      }
+    }else{
+      let vars = decl.get_variants();
+      for(let i = 0;i < vars.len();++i){
+        let variant = vars.get_ptr(i);
+        let fields = &variant.fields;
+        for(let j = 0;j < fields.len();++j){
+          let fd = fields.get_ptr(j);
+          if(self.is_drop_type(&fd.type)){
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  func is_drop_impl(decl: Decl*, imp: Impl*): bool{
+    let info = &imp.info;
+    if (info.trait_name.is_none() || !info.trait_name.get().eq("Drop")) return false;
+    if (decl.is_generic) {
+        if (!info.type_params.empty()) {//generic impl
+          return decl.type.name().eq(info.type.name());
+        } else {//full impl
+          //different impl of type param
+          return false;
+        }
+    } else {                           //full type
+        if (info.type_params.empty()) {//full impl
+          let info_str = info.type.print();
+          return decl.type.print().eq(&info_str);
+        } else {//generic impl
+          return decl.type.name().eq(info.type.name());
+        }
+    }
+}
+  func has_drop_impl(decl: Decl*, r: Resolver*): bool{
+    if (decl.path.eq(&r.unit.path)) {
+        //need own resolver
+        r = r.ctx.create_resolver(&decl.path);
+        r.init();
+    }
+    for (let i = 0;i < r.unit.items.len();++i) {
+      let it: Item* = r.unit.items.get_ptr(i);
+      if(!(it is Item::Impl)){
+        continue;
+      }
+      let imp: Impl* = it.as_impl();
+      if (is_drop_impl(decl, imp)) {
+        return true;
+      }
+      for (let j = 0;j < r.generated_impl.len();++j) {
+        let gen_imp: Impl* = r.generated_impl.get_ptr(j);
+        if (is_drop_impl(decl, gen_imp)) {
+            return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
 func make_slice_type(): StructType*{
     let elems = make_vec();
     vec_push(elems, getPointerTo(getInt(8)));

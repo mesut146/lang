@@ -3,7 +3,7 @@ import parser/lexer
 import parser/ast
 import parser/printer
 import parser/method_resolver
-import parser/method_resolver
+import parser/compiler_helper
 import parser/utils
 import parser/token
 import parser/copier
@@ -56,6 +56,7 @@ struct Resolver{
   inLoop: i32;
   used_types: List<Decl*>;
   generated_decl: List<Decl>;
+  generated_impl: List<Impl>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -68,6 +69,7 @@ impl Drop for Resolver{
     self.generated_methods.drop();
     self.used_types.drop();
     self.generated_decl.drop();
+    self.generated_impl.drop();
   }
 }
 
@@ -132,8 +134,8 @@ impl Context{
       return res.unwrap();
     }
     let r = Resolver::new(CStr::new(path.clone()), self);
-    self.map.add(path.clone(), r);
-    return self.map.get_ptr(path).unwrap();
+    let pair = self.map.add(path.clone(), r);
+    return &pair.b;
   }
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
@@ -241,15 +243,6 @@ func join(list: List<String>*, sep: str): String{
   return s;
 }
 
-// func contains(list: List<String>*, s: String*): bool{
-//   for(let i = 0;i < list.len();++i){
-//     if(list.get_ptr(i).eq(s)){
-//       return true;
-//     }
-//   }
-//   return false;
-// }
-
 func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
   for (let i = 0;i < arr.len();++i) {
       let i1 = arr.get_ptr(i);
@@ -285,7 +278,8 @@ impl Resolver{
       generated_methods: List<Method>::new(10),
       inLoop: 0,
       used_types: List<Decl*>::new(),
-      generated_decl: List<Decl>::new(10)};
+      generated_decl: List<Decl>::new(10),
+      generated_impl: List<Impl>::new()};
     return res;
   }
 
@@ -400,11 +394,11 @@ impl Resolver{
 
   func dump(self){
     print("---dump---");
-    print("{} types\n", self.typeMap.len());
-    for(let i = 0;i < self.typeMap.len();++i){
-      let pair = self.typeMap.get_idx(i).unwrap();
-      print("{} -> {}\n", pair.a, pair.b.type);
-    }
+    // print("{} types\n", self.typeMap.len());
+    // for(let i = 0;i < self.typeMap.len();++i){
+    //   let pair = self.typeMap.get_idx(i).unwrap();
+    //   print("{} -> {}\n", pair.a, pair.b.type);
+    // }
     print("scope count {}\n", self.scopes.len());
     for(let i = 0;i < self.scopes.len();++i){
       let scope = self.scopes.get_ptr(i);
@@ -452,15 +446,27 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       if let Item::Decl(decl*) = (it){
-        //derive
-        for(let j = 0;j < decl.derives.len();++j){
-          let der: Type* = decl.derives.get_ptr(j);
-          let imp = generate_derive(decl, &self.unit, der.print().str());
-          newItems.add(Item::Impl{imp});
-        }
+        self.handle_derive(decl, &newItems);
       }
     }
     self.unit.items.add(newItems);
+  }
+  func handle_derive(self, decl: Decl*, newItems: List<Item>*){
+    //derive
+    for(let j = 0;j < decl.derives.len();++j){
+      let der: Type* = decl.derives.get_ptr(j);
+      let der_str = der.print();
+      if(der_str.eq("Drop")){
+        self.err("drop is auto impl");
+      }
+      let imp = generate_derive(decl, &self.unit, der_str.str());
+      newItems.add(Item::Impl{imp});
+    }
+    let helper = DropHelper{self};
+    //improve decl.is_generic, this way all generic types derives drop but dont need to
+    if (!DropHelper::has_drop_impl(decl, self) && (decl.is_generic || helper.is_drop(decl))) {
+      newItems.add(Item::Impl{generate_derive(decl, &self.unit, "Drop")});
+    }
   }
 
   func err(self, msg: String){
@@ -1447,6 +1453,22 @@ impl Resolver{
     panic("lit");
   }
 
+  func visit_name(self, node: Expr*, name: String*): RType{
+    for(let i = self.scopes.len() - 1;i >= 0;--i){
+      let scope = self.scopes.get_ptr(i);
+      let vh = scope.find(name);
+      if(vh.is_some()){
+        let vh2 = vh.unwrap();
+        let res = self.visit(&vh2.type);
+        res.vh = Option::new(vh2);
+        return res;
+      }
+    }
+    self.dump();
+    self.err(node, "unknown identifier");
+    panic("");
+  }
+
   func visit(self, node: Expr*): RType{
     let id = node.id;
     if(id == -1) panic("id");
@@ -1468,18 +1490,7 @@ impl Resolver{
     }else if let Expr::Call(call*) = (node){
       return self.visit(node, call);
     }else if let Expr::Name(name*) = (node){
-      for(let i = self.scopes.len() - 1;i >= 0;--i){
-        let scope = self.scopes.get_ptr(i);
-        let vh = scope.find(name);
-        if(vh.is_some()){
-          let vh2 = vh.unwrap();
-          let res = self.visit(&vh2.type);
-          res.vh = Option::new(vh2);
-          return res;
-        }
-      }
-      self.dump();
-      self.err(node, "unknown identifier");
+      return self.visit_name(node, name);
     }else if let Expr::Unary(op*, ebox*) = (node){
       return self.visit_unary(node, op, ebox.get());
     }else if let Expr::Par(expr*) = (node){
