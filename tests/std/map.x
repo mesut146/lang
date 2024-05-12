@@ -29,7 +29,7 @@ struct Map<K, V>{
 
 impl<K, V> Map<K, V>{
   func new(): Map<K, V>{
-    return Map<K, V>{List<Pair<K, V>>::new(100)};
+    return Map<K, V>{List<Pair<K, V>>::new()};
   }
   
   func new(cap: i64): Map<K, V>{
@@ -37,47 +37,35 @@ impl<K, V> Map<K, V>{
   }
   
   func len(self): i64{ return self.arr.len(); }
+
   func empty(self): bool{ return self.arr.empty(); }
   
   func add(self, k: K, v: V): Pair<K, V>*{
-    let i = self.indexOf(&k);
+    let opt = self.get_pair(&k);
     //doesnt exist, add last
-    if(i == -1_i64){
-      let p = Pair{k, v};
-      self.arr.add(p);
-      return self.arr.last();
+    if(opt.is_none()){
+      let res = self.arr.add(Pair{k, v});
+      return res;
     }
-    else{
-      //already exist, change old
-      let p = self.arr.get_ptr(i);
-      Drop::drop(p.b);
-      p.b = v;
-      return p;
-    }
+    //already exist, change old
+    let pair = opt.unwrap();
+    Drop::drop(pair.b);
+    pair.b = v;
+    return pair;
   }
 
   func contains(self, k: K*): bool{
     return self.indexOf(k) != -1;
   }
   
-  func get(self, k: K): Option<V*>{
+  /*func get(self, k: K): Option<V*>{
     return self.get_ptr(&k);
-  }
-  /*func get_p(self, k: K*): Option<V>{
-    for(let i = 0;i < self.arr.len();i += 1){
-      let ptr =  self.arr.get_ptr(i);
-      if(Eq::eq(&e.a, k)){
-        return Option<V>::Some{pr.b};
-      }
-    }
-    return Option<V>::None;
   }*/
+
   func get_ptr(self, k: K*): Option<V*>{
-    for(let i = 0;i < self.arr.len();i += 1){
-      let e =  self.arr.get_ptr(i);
-      if(Eq::eq(&e.a, k)){
-        return Option<V*>::Some{&e.b};
-      }
+    let opt = self.get_pair(k);
+    if(opt.is_some()){
+      return Option<V*>::Some{&opt.unwrap().b};
     }
     return Option<V*>::None;
   }  
@@ -90,7 +78,16 @@ impl<K, V> Map<K, V>{
     }
     return -1 as i64;
   }
-  func get_idx(self, idx: i32): Option<Pair<K, V>*>{
+  func get_pair(self, k: K*): Option<Pair<K, V>*>{
+    for(let i = 0;i < self.arr.len();++i){
+      let pr =  self.arr.get_ptr(i);
+      if(Eq::eq(&pr.a, k)){
+        return Option::new(pr);
+      }
+    }
+    return Option<Pair<K, V>*>::None;
+  }
+  func get_pair_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){
       return Option::new(self.arr.get_ptr(idx));
     }

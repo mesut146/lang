@@ -111,8 +111,9 @@ impl DropHelper{
   func has_drop_impl(decl: Decl*, r: Resolver*): bool{
     if (decl.path.eq(&r.unit.path)) {
         //need own resolver
-        r = r.ctx.create_resolver(&decl.path);
-        r.init();
+        let r2 = r.ctx.create_resolver(&decl.path);
+        r2.init();
+        r = r2;
     }
     for (let i = 0;i < r.unit.items.len();++i) {
       let it: Item* = r.unit.items.get_ptr(i);
@@ -240,10 +241,13 @@ func make_decl_proto(decl: Decl*): StructType*{
 impl Compiler{
   func mapType(self, type: Type*): llvm_Type*{
     let p = self.protos.get();
-    let r = self.resolver;
+    let r = self.get_resolver();
     let rt = r.visit(type);
     type = &rt.type;
     let s = type.print();
+    if(s.eq("str")){
+      return p.std("str") as llvm_Type*;
+    }
     if(type.is_void()) return getVoidTy();
     let prim_size = prim_size(s.str());
     if(prim_size.is_some()){
@@ -373,7 +377,7 @@ impl Compiler{
       let st = self.protos.get().std("slice");
       return getSizeInBits(st);
     }
-    let rt = self.resolver.visit(type);
+    let rt = self.get_resolver().visit(type);
     if(rt.targetDecl.is_some()){
       let decl = rt.targetDecl.unwrap();
       return self.getSize(decl);
@@ -392,7 +396,7 @@ impl Compiler{
     let src = getPrimitiveSizeInBits(val_ty);
     let trg = self.getSize(type);
     let trg_ty = getInt(trg as i32);
-    let src_type = &self.resolver.visit(expr).type;
+    let src_type = &self.get_resolver().visit(expr).type;
     if(src < trg){
       if(isUnsigned(src_type)){
         return CreateZExt(val, trg_ty);
@@ -465,7 +469,7 @@ impl Compiler{
   }
 
   func getTag(self, expr: Expr*): Value*{
-    let rt = self.resolver.visit(expr);
+    let rt = self.get_resolver().visit(expr);
     let tag_idx = get_tag_index(rt.targetDecl.unwrap());
     let tag = self.get_obj_ptr(expr);
     let mapped = self.mapType(rt.type.unwrap_ptr());

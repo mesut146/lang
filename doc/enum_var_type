@@ -1,0 +1,36 @@
+struct G{}
+
+struct F: G{
+ a: i32;
+}
+
+//tag+base+fields
+enum E: F{
+  A(a: i32, b: str)
+  B(a: E::A, b: i32)
+}
+
+impl E{
+    func in_enum(self){}
+}
+
+impl E::A{
+  func in_var(self): i32{
+    return self.a;
+  }
+}
+
+let a = E::A{.F::new(), a: 10, b: "test"}; //a: E::A
+a.in_enum();
+a.in_var();
+
+let a: E = E::A{.F::new(), a: 10, b: "test"}; //a: E, casted to general
+a.in_enum();
+a.in_var(); //not possible
+
+let a = E::A{.F::new(), a: 10, b: "test"} as E; //a: E, manual cast
+a.in_enum();
+a.in_var(); //not possible
+
+E::in_enum(E::A{.F::new(), a: 10, b: "test"});//casted to general
+E::A::in_var(E::A{.F::new(), a: 10, b: "test"}); //no cast, as is

@@ -143,17 +143,18 @@ impl Context{
     Drop::drop(path2);
     return res;
   }
-  func get_resolver(self, is: ImportStmt*): Resolver*{
-    let path = String::new(self.root.str());
-    path.append("/");
+  func get_path(self, is: ImportStmt*): String{
+    let path = self.root.clone();
     for(let i = 0;i < is.list.len();++i){
-      let part = is.list.get_ptr(i);
-      if(i > 0){
-        path.append("/");
-      }
+      let part: String* = is.list.get_ptr(i);
+      path.append("/");
       path.append(part.str());
     }
     path.append(".x");
+    return path;
+  }
+  func get_resolver(self, is: ImportStmt*): Resolver*{
+    let path = self.get_path(is);
     return self.create_resolver(&path);
   }
 }
@@ -622,7 +623,7 @@ impl Resolver{
       if(!required.empty()){
         let msg = String::new();
         for(let i = 0;i < required.len();++i){
-          let p = required.get_idx(i).unwrap();
+          let p = required.get_pair_idx(i).unwrap();
           msg.append("method ");
           msg.append(p.a.str());
           msg.append(" ");
@@ -1073,7 +1074,7 @@ impl Resolver{
     }
     let res = Simple::new(type.name().clone());
     for (let i = 0;i < inferMap.len();++i) {
-        let p = inferMap.get_idx(i).unwrap(); 
+        let p = inferMap.get_pair_idx(i).unwrap(); 
         if (p.b.is_none()) {
             self.err(node, format("can't infer type parameter: {}", p.a));
         }
@@ -1144,10 +1145,10 @@ impl Resolver{
       return RType::new("bool");
     }
     else if(op.eq("&&") || op.eq("||")){
-      if (!lt.type.print().eq("bool")) {
+      if (!lt.type.eq("bool")) {
         panic("infix lhs is not boolean: {}", lhs);
       }
-      if (!rt.type.print().eq("bool")) {
+      if (!rt.type.eq("bool")) {
         panic("infix rhs is not boolean: {}", rhs);
       }        
       return RType::new("bool");
@@ -1157,12 +1158,13 @@ impl Resolver{
   }
 
   func visit_ref(self, e: Expr*): RType{
-    if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess){
+    if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess || e is Expr::Lit){
       let res = self.visit(e);
       res.type = res.type.clone().toPtr();
       return res;
     }
-    panic("ref expr is not supported: {}", e);
+    self.err(e, "ref expr is not supported");
+    panic("");
   }
 
   func visit_deref(self, node: Expr*, e: Expr*): RType{

@@ -14,7 +14,7 @@ import std/libc
 struct Compiler{
   ctx: Context;
   config: Config;
-  resolver: Resolver*;
+  resolver: Option<Resolver*>;
   main_file: Option<String>;
   llvm: llvm_holder;
   compiled: List<String>;
@@ -26,6 +26,16 @@ struct Compiler{
   loopNext: List<BasicBlock*>;
 }
 
+struct llvm_holder{
+  target_machine: TargetMachine*;
+  target_triple: CStr;
+  di: Option<DebugInfo>;
+}
+
+struct Config{
+  verbose: bool;
+  single_mode: bool;
+}
 
 struct Protos{
   classMap: Map<String, llvm_Type*>;
@@ -68,7 +78,7 @@ impl Protos{
   func dump(self){
     print("dump classmap\n");
     for(let i=0;i<self.classMap.len();++i){
-      let e = self.classMap.get_idx(i).unwrap();
+      let e = self.classMap.get_pair_idx(i).unwrap();
       print("{}\n", e.a);
     }
   }
@@ -85,26 +95,6 @@ impl Protos{
     let id = mangle(m);
     return *self.funcMap.get_ptr(&id).unwrap();
   }
-}
-
-
-struct llvm_holder{
-  target_machine: TargetMachine*;
-  target_triple: CStr;
-  di: Option<DebugInfo>;
-}
-
-
-struct Config{
-  verbose: bool;
-  single_mode: bool;
-}
-
-func dummy_resolver(ctx: Context*): Resolver*{
-  let path: String = "../tests/std/str.x".str();
-  let res = ctx.create_resolver(&path);
-  Drop::drop(path);
-  return res;
 }
 
 func has_main(unit: Unit*): bool{
@@ -164,9 +154,10 @@ impl llvm_holder{
 impl Compiler{
   func new(ctx: Context): Compiler{
     let vm = llvm_holder::new();
-    let dummy = dummy_resolver(&ctx);
-    return Compiler{ctx: ctx, config: Config{verbose: true, single_mode: true},
-     resolver: dummy, main_file: Option<String>::new(),
+    return Compiler{ctx: ctx,
+     config: Config{verbose: true, single_mode: true},
+     resolver: Option<Resolver*>::None,
+     main_file: Option<String>::new(),
      llvm: vm,
      compiled: List<String>::new(),
      protos: Option<Protos>::new(),
@@ -177,8 +168,12 @@ impl Compiler{
      loopNext: List<BasicBlock*>::new()};
   }
 
+  func get_resolver(self): Resolver*{
+    return *self.resolver.get();
+  }
+
   func unit(self): Unit*{
-    return &self.resolver.unit;
+    return &self.get_resolver().unit;
   }
 
   func link_run(self, name0: str, args: str){
@@ -223,9 +218,7 @@ impl Compiler{
     if(self.config.verbose){
       print("compiling {}\n", path0);
     }
-    //let r = Resolver::new(path0.str(), &self.ctx);
-    //self.resolver = &r;
-    self.resolver = self.ctx.create_resolver(&path.path);//Resolver*
+    self.resolver = Option::new(self.ctx.create_resolver(&path.path));//Resolver*
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.get_heap());
       if (!self.config.single_mode) {//compile last
@@ -233,7 +226,7 @@ impl Compiler{
           return outFile;
       }
     }
-    self.resolver.resolve_all();
+    self.get_resolver().resolve_all();
     // if(true){
     //   //r.unit.drop();
     //   return outFile;
@@ -248,8 +241,8 @@ impl Compiler{
       self.genCode(m);
     }
     //generic methods from resolver
-    for (let i=0;i<self.resolver.generated_methods.len();++i) {
-        let m = self.resolver.generated_methods.get_ptr(i);
+    for (let i=0;i<self.get_resolver().generated_methods.len();++i) {
+        let m = self.get_resolver().generated_methods.get_ptr(i);
         self.genCode(m);
     }
     
@@ -282,12 +275,12 @@ impl Compiler{
     let p = self.protos.get();
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
-    for (let i = 0;i < self.resolver.used_types.len();++i) {
-      let decl = *self.resolver.used_types.get_ptr(i);
+    for (let i = 0;i < self.get_resolver().used_types.len();++i) {
+      let decl = *self.get_resolver().used_types.get_ptr(i);
       if (decl.is_generic) continue;
       list.add(decl);
     }
-    sort(&list, self.resolver);
+    sort(&list, self.get_resolver());
     //first create just protos to fill later
     for(let i=0;i<list.len();++i){
       let decl = *list.get_ptr(i);
@@ -314,17 +307,15 @@ impl Compiler{
     let methods = getMethods(self.unit());
     for (let i=0;i<methods.len();++i) {
       let m = methods.get(i);
-      print("make_proto {}\n", i);
       self.make_proto(m);
-      print("make_proto2 {}\n", printMethod(m));
     }
     //generic methods from resolver
-    for (let i = 0;i < self.resolver.generated_methods.len();++i) {
-        let m = self.resolver.generated_methods.get_ptr(i);
+    for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
+        let m = self.get_resolver().generated_methods.get_ptr(i);
         self.make_proto(m);
     }
-    for (let i = 0;i < self.resolver.used_methods.len();++i) {
-        let m = self.resolver.used_methods.get(i);
+    for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
+        let m = self.get_resolver().used_methods.get(i);
         self.make_proto(m);
     }
   }
@@ -423,11 +414,11 @@ impl Compiler{
   }
   
   func get_alloc(self, e: Expr*): Value*{
-    let ptr = self.allocMap.get(e.id);
+    let ptr = self.allocMap.get_ptr(&e.id);
     return *ptr.unwrap();
   }
   func get_alloc(self, id: i32): Value*{
-    let ptr = self.allocMap.get(id);
+    let ptr = self.allocMap.get_ptr(&id);
     return *ptr.unwrap();
   }
   
@@ -453,7 +444,7 @@ impl Compiler{
   }
 
   func getType(self, e: Expr*): Type{
-    let rt = self.resolver.visit(e);
+    let rt = self.get_resolver().visit(e);
     return rt.type.clone();
   }
  
@@ -526,7 +517,7 @@ impl Compiler{
   }
 
   func visit_iflet(self, node: IfLet*){
-    let rt = self.resolver.visit(&node.ty);
+    let rt = self.get_resolver().visit(&node.ty);
     let decl = rt.targetDecl.unwrap();
     let rhs = self.get_obj_ptr(&node.rhs);
     let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
@@ -664,12 +655,12 @@ impl Compiler{
     for(let i=0;i<node.list.len();++i){
       let f = node.list.get_ptr(i);
       let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
-      if(doesAlloc(&f.rhs, self.resolver)){
+      if(doesAlloc(&f.rhs, self.get_resolver())){
         //self allocated
         self.visit(&f.rhs);
         continue;
       }
-      let type = &self.resolver.visit(f).type;
+      let type = &self.get_resolver().visit(f).type;
       if(is_struct(type)){
         let val = self.visit(&f.rhs);
         if(Value_isPointerTy(val)){
@@ -694,7 +685,7 @@ impl Compiler{
   }
   func visit_ret(self, expr: Expr*){
     let type = &self.curMethod.unwrap().type;
-    type = &self.resolver.visit(type).type;
+    type = &self.get_resolver().visit(type).type;
     if(type.is_pointer()){
       let val = self.get_obj_ptr(expr);
       CreateRet(val);
@@ -767,7 +758,7 @@ impl Compiler{
 
   func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
     let lhs_type = self.getType(lhs);
-    let rhs_type = &self.resolver.visit(rhs).type;
+    let rhs_type = &self.get_resolver().visit(rhs).type;
     //ptr to int
     if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
       let val = self.get_obj_ptr(lhs);
@@ -783,7 +774,7 @@ impl Compiler{
     let tag1 = self.getTag(lhs);
     let op = get_comp_op("==".ptr());
     if let Expr::Type(rhs_ty*)=(rhs){
-      let decl = self.resolver.visit(rhs_ty).targetDecl.unwrap();
+      let decl = self.get_resolver().visit(rhs_ty).targetDecl.unwrap();
       let index = Resolver::findVariant(decl, rhs_ty.name());
       let tag2 = makeInt(index, ENUM_TAG_BITS());
       return CreateCmp(op, tag1, tag2);
@@ -794,7 +785,7 @@ impl Compiler{
 
   func simple_enum(self, node: Expr*, type: Type*): Value*{
     let smp = type.as_simple();
-    let decl = self.resolver.visit(smp.scope.get()).targetDecl.unwrap();
+    let decl = self.get_resolver().visit(smp.scope.get()).targetDecl.unwrap();
     let index = Resolver::findVariant(decl, &smp.name);
     let ptr = self.get_alloc(node);
     let decl_ty = self.mapType(&decl.type);
@@ -805,9 +796,9 @@ impl Compiler{
 
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
     let scope_ptr = self.get_obj_ptr(scope);
-    let rt = self.resolver.visit(scope);
+    let rt = self.get_resolver().visit(scope);
     let decl = rt.targetDecl.unwrap();
-    let pair = self.resolver.findField(node, name, decl, &decl.type);
+    let pair = self.get_resolver().findField(node, name, decl, &decl.type);
     let index = pair.b;
     if(decl is Decl::Enum){
       //enum base
@@ -836,7 +827,7 @@ impl Compiler{
     let elem = list.get_ptr(0);
     let elem_ptr = Option<Value*>::new();
     let elem_ty = self.mapType(&elem_type);
-    if (doesAlloc(elem, self.resolver)) {
+    if (doesAlloc(elem, self.get_resolver())) {
         elem_ptr = Option::new(self.visit(elem));
     }
     let bb = GetInsertBlock();
@@ -998,7 +989,7 @@ impl Compiler{
       let idx = self.loadPrim(mc.args.get_ptr(1));
       return gep_ptr(self.mapType(elem_type), src, idx);
     }
-    if(self.resolver.is_array_get_len(mc)){
+    if(self.get_resolver().is_array_get_len(mc)){
       let arr_type = self.getType(mc.scope.get().get()).unwrap_ptr();
       if let Type::Array(elem*, sz)=(arr_type){
         return makeInt(sz, 64);
@@ -1006,16 +997,16 @@ impl Compiler{
       panic("");
     }
     //arr.ptr()
-    if(self.resolver.is_array_get_ptr(mc)){
+    if(self.get_resolver().is_array_get_ptr(mc)){
       return self.get_obj_ptr(mc.scope.get().get());
     }
-    if(self.resolver.is_slice_get_len(mc)){
+    if(self.get_resolver().is_slice_get_len(mc)){
       let sl = self.get_obj_ptr(mc.scope.get().get());
       let sliceType=self.protos.get().std("slice") as llvm_Type*;
       let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
       return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
     }
-    if(self.resolver.is_slice_get_ptr(mc)){
+    if(self.get_resolver().is_slice_get_ptr(mc)){
       let sl = self.get_obj_ptr(mc.scope.get().get());
       let sliceType=self.protos.get().std("slice") as llvm_Type*;
       let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
@@ -1046,7 +1037,7 @@ impl Compiler{
   }
 
   func visit_call2(self, expr: Expr*, mc: Call*): Value*{
-    let rt = self.resolver.visit(expr);
+    let rt = self.get_resolver().visit(expr);
     if(rt.method.is_none()){
       panic("mc {}", expr);
     }
@@ -1064,7 +1055,7 @@ impl Compiler{
     let paramIdx = 0;
     let argIdx = 0;
     if(target.self.is_some()){
-      let rval = RvalueHelper::need_alloc(mc, target, self.resolver);
+      let rval = RvalueHelper::need_alloc(mc, target, self.get_resolver());
       let scp_val = self.get_obj_ptr(*rval.scope.get());
       if(rval.rvalue){
         let rv_ptr = self.get_alloc(*rval.scope.get());
@@ -1094,7 +1085,7 @@ impl Compiler{
         }
       } else {
         let prm = target.params.get_ptr(paramIdx);
-        let pt = &self.resolver.visit(&prm.type).type;
+        let pt = &self.get_resolver().visit(&prm.type).type;
         args_push(args, self.cast(arg, pt));
       }
       ++paramIdx;
@@ -1200,7 +1191,7 @@ impl Compiler{
   }
 
   func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
-    let type = &self.resolver.visit(l).type;
+    let type = &self.get_resolver().visit(l).type;
     if(is_comp(op.str())){
       //todo remove redundant cast
       let lv = self.cast(l, type);
@@ -1352,7 +1343,7 @@ impl Compiler{
     if let Expr::Unary(op*,l2*)=(l){
       if(op.eq("*")){
         let lhs = self.get_obj_ptr(l2.get());
-        //let rt = self.resolver.visit(l);
+        //let rt = self.get_resolver().visit(l);
         self.setField(r, &type, lhs);
         return lhs;
       }
@@ -1427,7 +1418,7 @@ impl Compiler{
   
   func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
       let ptr = self.get_alloc(node);
-      let rt = self.resolver.visit(node);
+      let rt = self.get_resolver().visit(node);
       let ty = self.mapType(&rt.type);
       let decl = rt.targetDecl.unwrap();
       for(let i=0;i<args.len();++i){

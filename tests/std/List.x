@@ -71,14 +71,12 @@ impl<T> List<T>{
     self.remove(idx);
   }
 
-  func add(self, e: T){
+  func add(self, e: T): T*{
     self.expand();
-    let trg = ptr::get(self.ptr, self.count);
-    //*ptr::get(self.ptr, self.count) = e;
     ptr::copy(self.ptr, self.count, e);
-    //memcpy(trg as i8*, &e as i8*, std::size<T>());
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
+    return ptr::get(self.ptr, self.count - 1);
   }
 
   func add(self, list: List<T>){

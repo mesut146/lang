@@ -39,13 +39,16 @@ func compile(cmp: Compiler*, file: str){
     cmp.link_run(noext,"");
 }
 
-func compiler_test(){
+func compiler_test(std_test: bool){
   print("compiler_test\n");
   let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
-  //compile_dir(&cmp, CStr::new("../tests/normal"), true);
-  compile_dir(&cmp, CStr::new("../tests/std_test"), false);
+  if(std_test){
+    compile_dir(&cmp, CStr::new("../tests/std_test"), false);
+  }else{
+    compile_dir(&cmp, CStr::new("../tests/normal"), true);
+  }
   cmp.drop();
 }
 
@@ -79,7 +82,10 @@ func main(argc: i32, args: i8**){
   }
   let a1 = get_arg(args, 1);
   if(a1.eq("test")){
-    compiler_test();
+    compiler_test(false);
+  }
+  if(a1.eq("test2")){
+    compiler_test(true);
   }
   else if(a1.eq("c")){
     let path = get_arg(args, 2);

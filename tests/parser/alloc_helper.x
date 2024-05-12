@@ -77,7 +77,7 @@ impl AllocHelper{
     if let Stmt::IfLet(is*)=(node){
       for(let i=0;i<is.args.len();++i){
         let arg = is.args.get_ptr(i);
-        let ty = self.c.resolver.cache.get(arg.id);
+        let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
         let arg_cloned = arg.name.clone();
         Value_setName(arg_ptr, arg_cloned.clone().cstr().ptr());
@@ -118,10 +118,10 @@ impl AllocHelper{
   func visit(self, node: VarExpr*){
     for(let i=0;i<node.list.len();++i){
       let f = node.list.get_ptr(i);
-      let ty = self.c.resolver.visit(f);
+      let ty = self.c.get_resolver().visit(f);
       let rhs: Option<Value*> = self.visit(&f.rhs);
       let name: String = f.name.clone();
-      if(!doesAlloc(&f.rhs, self.c.resolver)){
+      if(!doesAlloc(&f.rhs, self.c.get_resolver())){
         let ptr = self.alloc_ty(&ty.type, f);
         Value_setName(ptr, name.clone().cstr().ptr());
         self.c.NamedValues.add(name, ptr);
@@ -178,9 +178,9 @@ impl AllocHelper{
       return res;
     }
     if let Expr::Call(call*)=(node){
-      let rt = self.c.resolver.visit(node);
+      let rt = self.c.get_resolver().visit(node);
       if(rt.method.is_some()){
-        let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.resolver);
+        let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.get_resolver());
         if (rval.rvalue) {
             self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
         }
@@ -203,7 +203,7 @@ impl AllocHelper{
     }
     if let Expr::Obj(type*, args*)=(node){
       //get full type
-      let rt = self.c.resolver.visit(node);
+      let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
       for(let i=0;i<args.len();++i){
         let arg = args.get_ptr(i);
@@ -224,7 +224,7 @@ impl AllocHelper{
       return self.visit(e.get());
     }
     if let Expr::Array(list*,sz*)=(node){
-      let rt = self.c.resolver.visit(node);
+      let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
       if(sz.is_some()){
         let elem = list.get_ptr(0);

@@ -421,7 +421,7 @@ impl MethodResolver{
         }
         let tmap = Map<String, Type>::new();
         for (let i = 0;i < typeMap.len();++i) {
-            let pair = typeMap.get_idx(i).unwrap();
+            let pair = typeMap.get_pair_idx(i).unwrap();
             if (pair.b.is_none()) {
                 let msg = format("can't infer type parameter: {}", pair.a);
                 Drop::drop(type_params);
