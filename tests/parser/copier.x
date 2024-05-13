@@ -16,6 +16,13 @@ impl AstCopier{
         return AstCopier{map: map, unit: Option<Unit*>::None};
     }
 
+    func clone<T>(node: T*): T{
+        let map = Map<String, Type>::new();
+        let copier = AstCopier::new(&map);
+        Drop::drop(map);
+        return copier.visit(node);
+    }
+
     func visit_list<E>(self, list: List<E>*): List<E>{
         let res = List<E>::new();
         for(let i = 0;i < list.size();++i){
@@ -26,15 +33,21 @@ impl AstCopier{
     }
 
     func visit_opt<E>(self, opt: Option<E>*): Option<E>{
-        let res = Option<E>::new();
         if(opt.is_some()){
-            res = Option<E>::new(self.visit(opt.get()));
+            return Option<E>::new(self.visit(opt.get()));
         }
-        return res;
+        return Option<E>::new();
     }
 
     func visit_box<E>(self, box: Box<E>*): Box<E>{
         return Box::new(self.visit(box.get()));
+    }
+
+    func visit_ptr<E>(self, opt: Ptr<E>*): Option<E>{
+        if(opt.is_some()){
+            return Ptr<E>::new(self.visit(opt.get()));
+        }
+        return Ptr<E>::new();
     }
     
     func visit<E>(self, box: Box<E>*): Box<E>{
@@ -225,7 +238,7 @@ impl AstCopier{
             return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}};
         }
         if let Expr::Name(name*)=(node){
-            return Expr::Name{.id,name.clone()};
+            return Expr::Name{.id, name.clone()};
         }
         if let Expr::Call(mc*)=(node){
             return Expr::Call{.id,self.visit(mc)};
@@ -237,13 +250,13 @@ impl AstCopier{
             return Expr::Type{.id,self.visit(type)};
         }
         if let Expr::Unary(op*, e*)=(node){
-            return Expr::Unary{.id,op.clone(), self.visit_box(e)};
+            return Expr::Unary{.id, op.clone(), self.visit_box(e)};
         }
         if let Expr::Infix(op*, l*, r*)=(node){
-            return Expr::Infix{.id,op.clone(), self.visit_box(l), self.visit_box(r)};
+            return Expr::Infix{.id, op.clone(), self.visit_box(l), self.visit_box(r)};
         }
         if let Expr::Access(scope*, name*)=(node){
-            return Expr::Access{.id,self.visit_box(scope), name.clone()};
+            return Expr::Access{.id, self.visit_box(scope), name.clone()};
         }
         if let Expr::Obj(type*, args*)=(node){
             return Expr::Obj{.id,self.visit(type), self.visit_list(args)};
@@ -269,7 +282,7 @@ impl AstCopier{
     }
     
     func visit(self, node: Call*): Call{
-      return Call{scope: self.visit_opt(&node.scope), name: node.name.clone(),
+      return Call{scope: self.visit_ptr(&node.scope), name: node.name.clone(),
         type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
     }
 }

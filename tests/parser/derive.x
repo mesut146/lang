@@ -1,7 +1,10 @@
 import parser/ast
 import parser/utils
 import parser/printer
+import parser/resolver
+import parser/copier
 import std/libc
+import std/map
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
@@ -23,7 +26,7 @@ func newCall(unit: Unit*, scope: str, name: str, arg: Option<Expr>): Stmt{
     let call = Call::new(name.str());
     let id = unit.node(0);
     let id2 = unit.node(0);
-    call.scope = Option::new(Box::new(Expr::Name{.id, scope.str()}));
+    call.scope = Ptr::new(Expr::Name{.id, scope.str()});
     if(arg.is_some()){
         call.args.add(arg.unwrap());
     }
@@ -35,7 +38,7 @@ func newCall(unit: Unit*, scope: Expr, name: str, arg: Expr): Stmt{
     let call = Call::new(name.str());
     let id = unit.node(0);
     let id2 = unit.node(0);
-    call.scope = Option::new(Box::new(scope));
+    call.scope = Ptr::new(scope);
     call.args.add(arg);
     return Stmt::Expr{Expr::Call{.id2, call}};
 }
@@ -45,7 +48,7 @@ func newCall(unit: Unit*, scope: Expr, name: str): Stmt{
     let call = Call::new(name.str());
     let id = unit.node(0);
     let id2 = unit.node(0);
-    call.scope = Option::new(Box::new(scope));
+    call.scope = Ptr::new(scope);
     return Stmt::Expr{Expr::Call{.id2, call}};
 }
 
@@ -68,7 +71,7 @@ func newPrint(unit: Unit*, scope: str, lit: str): Stmt{
     let id = unit.node(0);
     let id2 = unit.node(0);
     let id3 = unit.node(0);
-    call.scope = Option::new(Box::new(Expr::Name{.id, scope.str()}));
+    call.scope = Ptr::new(Expr::Name{.id, scope.str()});
     call.args.add(Expr::Lit{.id2, Literal{LitKind::STR, format("\"{}\"", lit), Option<Type>::new()}});
     return Stmt::Expr{Expr::Call{.id3, call}};
 }
@@ -183,3 +186,50 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     return imp;
 }
 
+func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
+    if (mc.args.empty()) {
+        r.err(node, "format no arg");
+    }
+    let fmt: Expr* = mc.args.get_ptr(0);
+    let lit_opt = is_str_lit(fmt);
+    if (lit_opt.is_none()) {
+        r.err(node, "format arg not str literal");
+    }
+    let fmt_str: String* = lit_opt.unwrap();
+    let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
+    for (let i = 0;i < format_specs.len();++i) {
+        let fs = format_specs[i];
+        if (fmt_str.str().contains(fs)) {
+            r.err(node, format("invalid format specifier: {}", fs));
+        }
+    }
+    let block = Block::new();
+    let line = node.line;
+    if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
+        //optimized print, no heap alloc, no fmt
+        //"..".print(), exit(1) will be called by compiler
+        let print_mc = Call::new("print".str());
+        if (Resolver::is_panic(mc)) {
+            //print_mc.scope = Ptr::new(make_panic_messsage(fmt_str, mc->line, r->curMethod));
+        } else {
+            print_mc.scope = Ptr::new(AstCopier::clone(fmt));
+        }
+        let id = r.unit.node(line);
+        block.list.add(Stmt::Expr{Expr::Call{.id, print_mc}});
+        //block.accept(r);
+        //r->format_map.insert({mc->id, std::move(info)});
+        return;
+    }
+}
+
+func make_panic_messsage(line: i32, method: Method*): Expr {
+    std::string message = "panic ";
+    message += method->path + ":" + std::to_string(line);
+    message += " " + printMethod(method);
+    if (s.has_value()) {
+        message += "\n";
+        message += s.value();
+    }
+    message.append("\n");
+    return Expr::Lit{Literal(Literal::STR, message)};
+}

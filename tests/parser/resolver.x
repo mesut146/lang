@@ -41,6 +41,11 @@ struct VarHolder{
   prm: bool;
 }
 
+struct FormatInfo {
+  block: Block;
+  unwrap_mc: Call;
+}
+
 struct Resolver{
   unit: Unit;
   is_resolved: bool;
@@ -663,8 +668,8 @@ impl Resolver{
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
-      //todo check unreachable
-      if (!node.type.is_void() && !isReturnLast(node.body.get())) {
+      let exit = Exit::get_exit_type(node.body.get());
+      if (!node.type.is_void() && !exit.is_exit()) {
         let msg = String::new("non void function ");
         msg.append(printMethod(self.curMethod.unwrap()).str());
         msg.append(" must return a value");
@@ -1180,7 +1185,7 @@ impl Resolver{
     if (mc.scope.is_none() || !mc.name.eq(name) || !mc.args.empty()) {
       return false;
     }
-    let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+    let scope = self.getType(mc.scope.get()).unwrap_ptr();
     return TypeKind::new(scope) is kind;
   }
   
@@ -1188,14 +1193,14 @@ impl Resolver{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+        let scope = self.getType(mc.scope.get()).unwrap_ptr();
         return scope.is_slice();
    }
    func is_slice_get_len(self, mc: Call*): bool{
         if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+        let scope = self.getType(mc.scope.get()).unwrap_ptr();
         return scope.is_slice();
   }
   //x.ptr()
@@ -1203,7 +1208,7 @@ impl Resolver{
         if (!mc.scope.is_some() || !mc.name.eq("ptr") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+        let scope = self.getType(mc.scope.get()).unwrap_ptr();
         return scope.is_array();
    }
    //x.len()
@@ -1211,22 +1216,39 @@ impl Resolver{
         if (!mc.scope.is_some() || !mc.name.eq("len") || !mc.args.empty()) {
             return false;
         }
-        let scope = self.getType(mc.scope.get().get()).unwrap_ptr();
+        let scope = self.getType(mc.scope.get()).unwrap_ptr();
         return scope.is_array();
   }
   
   func is_ptr_get(mc: Call*): bool{
-    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("ptr") && mc.name.eq("get");
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("get");
   }
-
+  func is_ptr_copy(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("copy");
+  }
+  func is_ptr_deref(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("deref");
+  }
   func std_size(mc: Call*): bool{
-    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("size");
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("std") && mc.name.eq("size");
   }
   func std_is_ptr(mc: Call*): bool{
-    return mc.is_static && mc.scope.is_some() && mc.scope.get().get().print().eq("std") && mc.name.eq("is_ptr");
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("std") && mc.name.eq("is_ptr");
+  }
+  func is_std_no_drop(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("std") && mc.name.eq("no_drop");
+  }
+  func is_print(mc: Call*): bool{
+    return mc.name.eq("print") && mc.scope.is_none();
   }
   func is_printf(mc: Call*): bool{
     return mc.name.eq("printf") && mc.scope.is_none();
+  }
+  func is_format(mc: Call*): bool{
+    return mc.name.eq("format") && mc.scope.is_none();
+  }
+  func is_panic(mc: Call*): bool{
+    return mc.name.eq("panic") && mc.scope.is_none();
   }
 
   func validate_printf(self, node: Expr*, mc: Call*){
@@ -1276,21 +1298,53 @@ impl Resolver{
           self.err(node, "ptr access index is not integer");
       }
     }
+    if(is_ptr_copy(call)){
+      if (call.args.len() != 3) {
+        self.err(node, "ptr::copy() must have 3 args");
+      }
+      //ptr::copy(src_ptr, src_idx, elem)
+      let ptr_type = self.getType(call.args.get_ptr(0));
+      let idx_type = self.getType(call.args.get_ptr(1));
+      let elem_type = self.getType(call.args.get_ptr(2));
+      if (!ptr_type.is_pointer()) {
+          self.err(node, "ptr arg is not ptr ");
+      }
+      if (!idx_type.eq("i32") && !idx_type.eq("i64") && !idx_type.eq("u32") && !idx_type.eq("u64") && !idx_type.eq("i8") && !idx_type.eq("i16")) {
+        self.err(node, "ptr access index is not integer");
+      }
+      let ptr_str = ptr_type.unwrap_ptr().print();
+      if (!elem_type.print().eq(&ptr_str)) {
+        self.err(node, "ptr elem type dont match val type");
+      }
+      return RType::new("void");
+    }
+    if(is_ptr_deref(call)){
+        //unsafe deref
+        let rt = self.getType(call.args.get_ptr(0));
+        if (!rt.is_pointer()) {
+            self.err(node, "ptr arg is not ptr ");
+        }
+        return self.visit(rt.unwrap_ptr());
+    }
+    if(is_std_no_drop(call)){
+      let rt = self.visit(call.args.get_ptr(0));
+      return RType::new("void");
+    }
     if (self.is_slice_get_ptr(call)) {
-        let elem = self.getType(call.scope.get().get()).elem();
+        let elem = self.getType(call.scope.get()).elem();
         return RType::new(elem.clone().toPtr());
     }
     if (self.is_slice_get_len(call)) {
-        self.visit(call.scope.get().get());
+        self.visit(call.scope.get());
         let type = as_type(SLICE_LEN_BITS());
         return RType::new(type);
     }
     if(self.is_array_get_len(call)){
-      self.visit(call.scope.get().get());
+      self.visit(call.scope.get());
       return RType::new("i64");
     }
     if(self.is_array_get_ptr(call)){
-      let arr_type = self.getType(call.scope.get().get()).unwrap_ptr();
+      let arr_type = self.getType(call.scope.get()).unwrap_ptr();
       return RType::new(arr_type.elem().clone().toPtr());
     }
     let sig = Signature::new(call, self);

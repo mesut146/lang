@@ -423,15 +423,8 @@ impl Type{
 
 impl Clone for Type{
   func clone(self): Type{
-    return clone(self);
+    return AstCopier::clone(self);
   }
-}
-
-func clone<T>(node: T*): T{
-  let map = Map<String, Type>::new();
-  let copier = AstCopier::new(&map);
-  Drop::drop(map);
-  return copier.visit(node);
 }
 
 struct ArgBind: Node{
@@ -547,7 +540,7 @@ impl Expr{
 }
 
 struct Call{
-  scope: Option<Box<Expr>>;
+  scope: Ptr<Expr>;
   name: String;
   type_args: List<Type>;
   args: List<Expr>;
@@ -559,7 +552,7 @@ impl Call{
     return Fmt::str(self);
   }
   func new(name: String): Call{
-    return Call{scope: Option<Box<Expr>>::new(), name: name, type_args: List<Type>::new(), args: List<Expr>::new(), is_static: false};
+    return Call{scope: Ptr<Expr>::new(), name: name, type_args: List<Type>::new(), args: List<Expr>::new(), is_static: false};
   }
 }
 

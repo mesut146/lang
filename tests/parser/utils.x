@@ -182,25 +182,6 @@ func mangle(m: Method*): String{
   return s;
 }
 
-func isReturnLast(b: Block*): bool{
-    if(b.list.empty()) return false;
-    let last = b.list.last();
-    return isReturnLast(last);
-  }
-  
-func isReturnLast(stmt: Stmt*): bool{
-    if let Stmt::Block(b*)=(stmt){
-        return isReturnLast(b);
-    }
-    if let Stmt::Expr(expr*)=(stmt){
-        if let Expr::Call(mc*)=(expr){
-        return mc.name.eq("panic");
-        }
-        return false;
-    }
-    return stmt is Stmt::Ret || stmt is Stmt::Continue || stmt is Stmt::Break;
-}
-
 func is_comp(s: str): bool{
     return s.eq("==") || s.eq("!=") || s.eq("<") || s.eq(">") || s.eq("<=") || s.eq(">=");
 }
@@ -219,4 +200,76 @@ func is_deref(expr: Expr*): Option<Expr*>{
         if(op.eq("*")) return Option::new(e.get());
     }
     return Option<Expr*>::new();
+}
+
+enum ExitType {
+    NONE,
+    RETURN,
+    PANIC,
+    BREAK,
+    CONTINE
+}
+
+struct Exit {
+    kind: ExitType;
+    if_kind: Ptr<Exit>;
+    else_kind: Ptr<Exit>;
+}
+
+impl Exit{
+    func new(kind: ExitType): Exit{
+        return Exit{kind: kind, if_kind: Ptr<Exit>::new(), else_kind: Ptr<Exit>::new()};
+    }
+    func is_return(self): bool{
+        if (self.kind is ExitType::RETURN) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_return() && self.else_kind.get().is_return();
+        return false;
+    }
+    func is_panic(self): bool{
+        if (self.kind is ExitType::PANIC) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_panic() && self.else_kind.get().is_panic();
+        return false;
+    }
+    func is_exit(self): bool{
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit() && self.else_kind.get().is_exit();
+        return false;
+    }
+
+    func is_jump(self): bool{
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
+        return false;
+    }
+    func get_exit_type(block: Block*): Exit{
+        let last = block.list.last();
+        return get_exit_type(last);
+    }
+
+    func get_exit_type(stmt: Stmt*): Exit{
+        if(stmt is Stmt::Ret) return Exit::new(ExitType::RETURN);
+        if(stmt is Stmt::Break) return Exit::new(ExitType::BREAK);
+        if(stmt is Stmt::Continue) return Exit::new(ExitType::CONTINE);
+        if let Stmt::Expr(expr*)=(stmt){
+            if let Expr::Call(call*)=(expr){
+                if(call.name.eq("panic")){
+                    return Exit::new(ExitType::PANIC);
+                }
+            }
+            return Exit::new(ExitType::NONE);
+        }
+        if let Stmt::Block(block*)=(stmt){
+            let last = block.list.last();
+            return get_exit_type(last);
+        }
+        if let Stmt::If(is*)=(stmt){
+            let res = Exit::new(ExitType::NONE);
+            res.if_kind = Ptr::new(get_exit_type(is.then.get()));
+            if(is.els.is_some()){
+                res.else_kind = Ptr::new(get_exit_type(is.els.get().get()));
+            }
+            return res;
+        }
+        return Exit::new(ExitType::NONE);
+    }
 }

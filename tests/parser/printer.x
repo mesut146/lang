@@ -429,7 +429,7 @@ impl Debug for Call{
   func debug(self, f: Fmt*){
     if(self.scope.is_some()){
       //scope: Option<Box<Expr>>
-      let scp: Expr* = self.scope.get().get();
+      let scp: Expr* = self.scope.get();
       if let Expr::Type(t*)=(scp){
         t.debug(f);
         f.print("::");

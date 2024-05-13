@@ -930,15 +930,15 @@ impl Parser{
   }
   func newCall(self, name: String, g: List<Type>, args: List<Expr>): Expr{
     let n = self.node();
-    return Expr::Call{.n,Call{Option<Box<Expr>>::None, name, g, args, false}};
+    return Expr::Call{.n,Call{Ptr<Expr>::new(), name, g, args, false}};
   }
   func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool): Expr{
     let n = self.node();
-    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, List<Type>::new(), args, is_static}};
+    return Expr::Call{.n,Call{Ptr::new(scp), name, List<Type>::new(), args, is_static}};
   }
   func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool, ta: List<Type>): Expr{
     let n = self.node();
-    return Expr::Call{.n,Call{Option::new(Box::new(scp)), name, ta, args, is_static}};
+    return Expr::Call{.n,Call{Ptr::new(scp), name, ta, args, is_static}};
   }
 }
 

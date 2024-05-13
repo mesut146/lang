@@ -338,11 +338,11 @@ impl Compiler{
     //todo call globals
 
     self.visit(m.body.get());
-
-    if(m.type.is_void()){
+    let exit = Exit::get_exit_type(m.body.get());
+    if(!exit.is_exit() && m.type.is_void()){
       if(is_main(m)){
         CreateRet(makeInt(0, 32));
-      }else if(!isReturnLast(m.body.get())){
+      }else{
         CreateRetVoid();
       }
     }
@@ -562,14 +562,16 @@ impl Compiler{
         }
     }
     self.visit(node.then.get());
-    if (!isReturnLast(node.then.get())) {
+    let exit_then = Exit::get_exit_type(node.then.get());
+    if (!exit_then.is_exit()) {
       CreateBr(next);
     }
     if (node.els.is_some()) {
         self.set_and_insert(elsebb.unwrap());
         self.visit(node.els.get().get());
-        if (!isReturnLast(node.els.get().get())) {
-            CreateBr(next);
+        let exit_else = Exit::get_exit_type(node.els.get().get());
+        if (!exit_else.is_exit()) {
+          CreateBr(next);
         }
     }
     self.set_and_insert(next);
@@ -621,13 +623,15 @@ impl Compiler{
     }
     SetInsertPoint(then);
     self.visit(node.then.get());
-    if(!isReturnLast(node.then.get())){
+    let exit_then = Exit::get_exit_type(node.then.get());
+    if(!exit_then.is_exit()){
       CreateBr(next);
     }
     if(node.els.is_some()){
       self.set_and_insert(elsebb.unwrap());
       self.visit(node.els.get().get());
-      if(!isReturnLast(node.els.get().get())){
+      let exit_else = Exit::get_exit_type(node.els.get().get());
+      if(!exit_else.is_exit()){
         CreateBr(next);
       }
     }
@@ -990,7 +994,7 @@ impl Compiler{
       return gep_ptr(self.mapType(elem_type), src, idx);
     }
     if(self.get_resolver().is_array_get_len(mc)){
-      let arr_type = self.getType(mc.scope.get().get()).unwrap_ptr();
+      let arr_type = self.getType(mc.scope.get()).unwrap_ptr();
       if let Type::Array(elem*, sz)=(arr_type){
         return makeInt(sz, 64);
       }
@@ -998,16 +1002,16 @@ impl Compiler{
     }
     //arr.ptr()
     if(self.get_resolver().is_array_get_ptr(mc)){
-      return self.get_obj_ptr(mc.scope.get().get());
+      return self.get_obj_ptr(mc.scope.get());
     }
     if(self.get_resolver().is_slice_get_len(mc)){
-      let sl = self.get_obj_ptr(mc.scope.get().get());
+      let sl = self.get_obj_ptr(mc.scope.get());
       let sliceType=self.protos.get().std("slice") as llvm_Type*;
       let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
       return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
     }
     if(self.get_resolver().is_slice_get_ptr(mc)){
-      let sl = self.get_obj_ptr(mc.scope.get().get());
+      let sl = self.get_obj_ptr(mc.scope.get());
       let sliceType=self.protos.get().std("slice") as llvm_Type*;
       let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
       return CreateLoad(getPtr(), ptr);

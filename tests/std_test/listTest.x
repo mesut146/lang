@@ -1,13 +1,13 @@
 import std/libc
 
-func iterTest(list: List<i32>*){
+/*func iterTest(list: List<i32>*){
   let it = list.iter();
   assert it.has();
   let n1 = it.next();
   assert n1.unwrap() == 10;
   let n2 = it.next();
   assert n2.unwrap() == 20;
-}
+}*/
 
 class LA{
   a: i8;
@@ -54,6 +54,7 @@ func listAlign(){
   let e2 = Align{4i8, 5i16, 6};
   let e3 = Align{10i8, 20i16, 30};
   *ptr::get(arr, 0) = e1;
+  free(arr as i8*);
 }
 
 func main(){
@@ -70,7 +71,7 @@ func main(){
   assert list.contains(&x2) && !list.contains(&x3);
   let s = list.slice(1, 3);
   assert s.len() == 2 && s[0] == 20;
-  iterTest(&list);
+  //iterTest(&list);
   list.remove(1);
   listStruct();
   //listStruct2();

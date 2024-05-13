@@ -89,15 +89,11 @@ func main(argc: i32, args: i8**){
   }
   else if(a1.eq("c")){
     let path = get_arg(args, 2);
+    let ctx = Context::new(root().str());
+    let cmp = Compiler::new(ctx);
     if(is_dir(path)){
-      let root = "../tests/src";
-      let ctx = Context::new(root.str());
-      let cmp = Compiler::new(ctx);
       compile_dir(&cmp, CStr::new(path), true);
     }else{
-      let root = "../tests/src";
-      let ctx = Context::new(root.str());
-      let cmp = Compiler::new(ctx);
       cmp.compile(CStr::new(path));
     }
   }

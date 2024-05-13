@@ -48,7 +48,7 @@ impl Signature{
                             r: Option::new(r)};
         let is_trait = false;                            
         if(mc.scope.is_some()){
-            let scp: RType = r.visit(mc.scope.get().get());
+            let scp: RType = r.visit(mc.scope.get());
             is_trait = scp.trait.is_some();
             res.real_scope = Option::new(scp.clone());
             //we need this to handle cases like Option::new(...)
@@ -395,7 +395,7 @@ impl MethodResolver{
             //is static & have type args
             let scope = &sig.scope.get().type;
             let scope_args = scope.get_args();
-            if let Expr::Type(scp*)=(mc.scope.get().get()){
+            if let Expr::Type(scp*)=(mc.scope.get()){
               scope = scp;
               scope_args=scp.get_args();
             }

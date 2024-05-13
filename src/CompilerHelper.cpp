@@ -685,11 +685,6 @@ bool Exit::is_return() {
     if (if_kind && else_kind) return if_kind->is_return() && else_kind->is_return();
     return false;
 }
-bool Exit::is_jump() {
-    if (kind == ExitType::RETURN || kind == ExitType::CONTINE || kind == ExitType::BREAK || kind == ExitType::PANIC) return true;
-    if (if_kind && else_kind) return if_kind->is_jump() && else_kind->is_jump();
-    return false;
-}
 bool Exit::is_panic() {
     if (kind == ExitType::PANIC) return true;
     if (if_kind && else_kind) return if_kind->is_panic() && else_kind->is_panic();
@@ -700,12 +695,14 @@ bool Exit::is_exit() {
     if (if_kind && else_kind) return if_kind->is_exit() && else_kind->is_exit();
     return false;
 }
+bool Exit::is_jump() {
+    if (kind == ExitType::RETURN || kind == ExitType::CONTINE || kind == ExitType::BREAK || kind == ExitType::PANIC) return true;
+    if (if_kind && else_kind) return if_kind->is_jump() && else_kind->is_jump();
+    return false;
+}
 
 
 Exit Exit::get_exit_type(Statement *stmt) {
-    if (stmt->line == 106) {
-        int x = 10;
-    }
     if (dynamic_cast<ReturnStmt *>(stmt)) return ExitType::RETURN;
     if (dynamic_cast<BreakStmt *>(stmt)) return ExitType::BREAK;
     if (dynamic_cast<ContinueStmt *>(stmt)) return ExitType::CONTINE;

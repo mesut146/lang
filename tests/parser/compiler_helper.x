@@ -23,7 +23,7 @@ impl RvalueHelper{
       if (mc.is_static) {
         return mc.args.get_ptr(0);
       } else {
-        return mc.scope.get().get();
+        return mc.scope.get();
       }
     }
 

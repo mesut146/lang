@@ -65,10 +65,13 @@ impl<T> Ptr<T>{
   func is_some(self): bool{
     return self.val.is_some();
   }
+  func is_none(self): bool{
+    return self.val.is_none();
+  }
   func get(self): T*{
     return self.val.get().get();
   }
-  func unwrap(self): T{
+  func unwrap(*self): T{
     return self.val.unwrap().unwrap();
   }
 }

@@ -191,7 +191,7 @@ impl AllocHelper{
         res = Option::new(self.alloc_ty(&rt.type, node));
       }
       if(call.scope.is_some()){
-        self.visit(call.scope.get().get());
+        self.visit(call.scope.get());
       }
       let print_panic = call.scope.is_none() && (call.name.eq("print") || call.name.eq("panic"));
       for(let i=0;i<call.args.len();++i){

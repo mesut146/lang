@@ -1320,7 +1320,7 @@ std::any Resolver::visitRefExpr(RefExpr *node) {
     auto e = node->expr.get();
     //todo field access
     if (!iof<SimpleName *>(e) && !iof<ArrayAccess *>(e) && !iof<FieldAccess *>(e)) {
-        error("ref expr is not supported: " + node->expr->print());
+        err(node, "ref expr is not supported");
     }
     auto inner = resolve(node->expr.get()).clone();
     inner.type = Type(Type::Pointer, inner.type);
