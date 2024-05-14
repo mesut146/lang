@@ -11,6 +11,9 @@ impl str{
     func print(self){
       printf("%.*s", self.len(), self.cptr());
     }
+    func println(self){
+      printf("%.*s\n", self.len(), self.cptr());
+    }
     
     func ptr(self): u8*{
        return &self.buf[0];
@@ -35,7 +38,9 @@ impl str{
     }
 
     func check(self, pos: i32){
-      if(pos < 0 || pos >= self.len()) panic("str::check {} of idx {}", self, pos);
+      if(pos < 0 || pos >= self.len()) {
+        panic("str::check {} of idx {}", self, pos);
+      }
     }
 
     func starts_with(self, s: str): bool{
@@ -61,7 +66,7 @@ impl str{
     }
 
     func check_all(self){
-      for(let i=0;i<self.len();++i){
+      for(let i = 0;i < self.len();++i){
         is_valid(self.buf[i]);
       }
     }

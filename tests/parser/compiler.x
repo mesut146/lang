@@ -176,6 +176,30 @@ impl Compiler{
     return &self.get_resolver().unit;
   }
 
+  func build_library(self, name: str, is_shared: bool){
+    let cmd = "".str();
+    if(is_shared){
+      cmd.append("clang-16 -shared -o ");
+    }else{
+      cmd.append("ar rcs ");
+    }
+    cmd.append(name);
+    cmd.append(" ");
+    for(let i = 0;i < self.compiled.len();++i){
+      let file = self.compiled.get_ptr(i);
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+    self.compiled.clear();
+
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      print("build library {}", name);
+    }else{
+      panic("link failed '{}'", cmd_s.get());
+    }
+  }
+
   func link_run(self, name0: str, args: str){
     let name_pre = format("./{}", name0);
     name0 = name_pre.str();
@@ -298,14 +322,14 @@ impl Compiler{
       self.llvm.di.get().map_di_proto(decl, self);
     }
     //di fill
-    for(let i=0;i<list.len();++i){
+    for(let i = 0;i<list.len();++i){
       let decl = *list.get_ptr(i);
       self.llvm.di.get().map_di_fill(decl, self);
     }
     
     //methods
-    let methods = getMethods(self.unit());
-    for (let i=0;i<methods.len();++i) {
+    let methods: List<Method*> = getMethods(self.unit());
+    for (let i = 0;i < methods.len();++i) {
       let m = methods.get(i);
       self.make_proto(m);
     }
@@ -415,6 +439,9 @@ impl Compiler{
   
   func get_alloc(self, e: Expr*): Value*{
     let ptr = self.allocMap.get_ptr(&e.id);
+    if(ptr.is_none()){
+      self.get_resolver().err(e, "get_alloc() not set");
+    }
     return *ptr.unwrap();
   }
   func get_alloc(self, id: i32): Value*{
@@ -500,9 +527,12 @@ impl Compiler{
   }
   
   func visit_while(self, c: Expr*, body: Block*){
-    let then = create_bb();
-    let condbb = create_bb2(self.cur_func());
-    let next = create_bb();
+    let cond_name = format("while_cond_{}", c.line);
+    let then_name = format("while_then_{}", c.line);
+    let next_name = format("while_next_{}", c.line);
+    let then = create_bb_named(CStr::new(then_name).ptr());
+    let condbb = create_bb2_named(self.cur_func(), CStr::new(cond_name).ptr());
+    let next = create_bb_named(CStr::new(next_name).ptr());
     CreateBr(condbb);
     SetInsertPoint(condbb);
     CreateCondBr(self.branch(c), then, next);
@@ -525,11 +555,14 @@ impl Compiler{
     let index = Resolver::findVariant(decl, node.ty.name());
     let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
 
-    let then = create_bb2(self.cur_func());
-    let next = create_bb();
+    let then_name = format("iflet_then_{}", node.rhs.line);
+    let next_name = format("iflet_next_{}", node.rhs.line);
+    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
+    let next = create_bb_named(CStr::new(next_name).ptr());
     let elsebb = Option<BasicBlock*>::new();
     if(node.els.is_some()){
-      elsebb = Option<BasicBlock*>::new(create_bb());
+      let else_name = format("iflet_else_{}", node.rhs.line);
+      elsebb = Option<BasicBlock*>::new(create_bb_named(CStr::new(else_name).ptr()));
       CreateCondBr(self.branch(cmp), then, elsebb.unwrap());
     }else{
       CreateCondBr(self.branch(cmp), then, next);
@@ -563,14 +596,14 @@ impl Compiler{
     }
     self.visit(node.then.get());
     let exit_then = Exit::get_exit_type(node.then.get());
-    if (!exit_then.is_exit()) {
+    if (!exit_then.is_jump()) {
       CreateBr(next);
     }
     if (node.els.is_some()) {
         self.set_and_insert(elsebb.unwrap());
         self.visit(node.els.get().get());
         let exit_else = Exit::get_exit_type(node.els.get().get());
-        if (!exit_else.is_exit()) {
+        if (!exit_else.is_jump()) {
           CreateBr(next);
         }
     }
@@ -582,10 +615,15 @@ impl Compiler{
       self.visit(node.v.get());
     }
     let f = self.cur_func();
-    let then = create_bb();
-    let condbb = create_bb2(f);
-    let updatebb = create_bb2(f);
-    let next = create_bb();
+    let line = 1;
+    let then_name = format("for_then_{}", line);
+    let cond_name = format("for_cond_{}", line);
+    let update_name = format("for_update_{}", line);
+    let next_name = format("for_next_{}", line);
+    let then = create_bb_named(CStr::new(then_name).ptr());
+    let condbb = create_bb2_named(f, CStr::new(cond_name).ptr());
+    let updatebb = create_bb2_named(f, CStr::new(update_name).ptr());
+    let next = create_bb_named(CStr::new(next_name).ptr());
 
     CreateBr(condbb);
     SetInsertPoint(condbb);
@@ -612,11 +650,15 @@ impl Compiler{
 
   func visit_if(self, node: IfStmt*){
     let cond = self.branch(&node.e);
-    let then = create_bb2(self.cur_func());
+    let line = node.e.line;
+    let then_name = format("if_then_{}", line);
+    let next_name = format("if_next_{}", line);
+    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
     let elsebb = Option<BasicBlock*>::new();
-    let next = create_bb();
+    let next = create_bb_named(CStr::new(next_name).ptr());
     if(node.els.is_some()){
-      elsebb = Option::new(create_bb());
+      let else_name = format("if_else_{}", line);
+      elsebb = Option::new(create_bb_named(CStr::new(else_name).ptr()));
       CreateCondBr(cond, then, elsebb.unwrap());
     }else{
       CreateCondBr(cond, then, next);
@@ -624,14 +666,14 @@ impl Compiler{
     SetInsertPoint(then);
     self.visit(node.then.get());
     let exit_then = Exit::get_exit_type(node.then.get());
-    if(!exit_then.is_exit()){
+    if(!exit_then.is_jump()){
       CreateBr(next);
     }
     if(node.els.is_some()){
       self.set_and_insert(elsebb.unwrap());
       self.visit(node.els.get().get());
       let exit_else = Exit::get_exit_type(node.els.get().get());
-      if(!exit_else.is_exit()){
+      if(!exit_else.is_jump()){
         CreateBr(next);
       }
     }
@@ -642,8 +684,10 @@ impl Compiler{
     let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
     let ptr = CreateGlobalStringPtr(msg.ptr());
     Drop::drop(msg);
-    let then = create_bb2(self.cur_func());
-    let next = create_bb();
+    let then_name = format("assert_then_{}", expr.line);
+    let next_name = format("assert_next_{}", expr.line);
+    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
+    let next = create_bb_named(CStr::new(next_name).ptr());
     let cond = self.branch(expr);
     CreateCondBr(cond, next, then);
     SetInsertPoint(then);
@@ -968,8 +1012,11 @@ impl Compiler{
       self.call_printf(mc);
       return getVoidTy() as Value*;
     }
-    if(mc.name.eq("print") && mc.scope.is_none()){
-      return self.visit_print(mc);
+    if(Resolver::is_print(mc)){
+      let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+      self.visit(&info.block);
+      //call(&info.print_mc, nullptr);
+      return getVoidTy() as Value*;
     }
     if(mc.name.eq("panic") && mc.scope.is_none()){
       self.visit_panic(expr, mc);

@@ -615,6 +615,10 @@ public:
     }
 
     std::any visitRefExpr(RefExpr *node) override {
+        if (RvalueHelper::is_rvalue(node->expr.get())) {
+            auto type = compiler->resolv->getType(node->expr.get());
+            alloc(type, node);
+        }
         node->expr->accept(this);
         return {};
     }

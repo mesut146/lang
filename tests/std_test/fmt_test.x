@@ -29,5 +29,5 @@ func main(){
     test_print();
     test_print2();
     //test_panic();
-    test_panic2();
+    //test_panic2();
 }

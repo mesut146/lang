@@ -66,7 +66,7 @@ MethodCall *newStr(std::shared_ptr<Unit> &unit, const std::string &name) {
     mc->scope.reset(new Type("String"));
     mc->name = "new";
     if (!name.empty()) {
-        auto lit = new Literal(Literal::STR, "\"" + name + "\"");
+        auto lit = new Literal(Literal::STR, name);
         lit->line = unit->lastLine;
         mc->args.push_back(lit);
     }
@@ -88,7 +88,7 @@ Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, co
     mc->loc(unit->lastLine);
     mc->scope.reset((new SimpleName(scope))->loc(0));
     mc->name = "print";
-    auto lit = new Literal(Literal::STR, "\"" + str + "\"");
+    auto lit = new Literal(Literal::STR, str);
     lit->loc(unit->lastLine);
     mc->args.push_back(lit);
     auto res = std::make_unique<ExprStmt>(mc);
@@ -234,7 +234,9 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
             bool is_ptr = true;
             for (auto &fd : ev.fields) {
                 //todo make this ptr
-                ifs->args.push_back(ArgBind(fd.name, is_ptr));
+                auto arg = ArgBind(fd.name, is_ptr);
+                arg.loc(line);
+                ifs->args.push_back(arg);
             }
             ifs->rhs.reset((new SimpleName("self"))->loc(0));
             auto then = new Block;
@@ -316,6 +318,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
     auto &block = info.block;
     if (mc->args.size() == 1 && (is_print(mc) || is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
+        //printf("%.*s", len, ptr: i8*);
         //"..".print(), exit(1) will be called by compiler
         auto print_mc = new MethodCall;
         print_mc->loc(mc->line);
@@ -347,7 +350,6 @@ void generate_format(MethodCall *mc, Resolver *r) {
     rhs->scope.reset(new Type("Fmt"));
     rhs->name = "new";
     frag.rhs.reset(rhs);
-    //r->addScope(frag.name, frag.type.value(), false, frag.line, frag.id);
     vd->decl = new VarDeclExpr;
     vd->decl->list.push_back(std::move(frag));
     block.list.push_back(std::move(vd));
@@ -417,7 +419,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
         block.list.push_back(make_drop(var_name, mc->line));
         block.accept(r);
     } else if (is_panic(mc)) {
-        //"panic...\n".print();
+        //"panic...".println();
         auto panic_start = make_panic_messsage({}, mc->line, r->curMethod);
         panic_start->loc(mc->line);
         auto start_mc = new MethodCall;
@@ -430,7 +432,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
         //f.buf.print()
         auto print_mc = new MethodCall;
         print_mc->loc(mc->line);
-        print_mc->name = "print";
+        print_mc->name = "println";
         auto scope = new FieldAccess;
         scope->loc(mc->line);
         scope->name = "buf";

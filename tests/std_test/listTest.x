@@ -33,10 +33,10 @@ func listStruct2(){
   let list = List<LB>::new();
   list.add(LB{"foo", 10});
   list.add(LB{"bar", 20});
-  let v1 = list.get(0);
-  let v2 = list.get(1);
-  print("v1.b=%d\n", v1.b);
-  print("v2.b=%d\n", v2.b);
+  let v1 = list.get_ptr(0);
+  let v2 = list.get_ptr(1);
+  print("v1.b={}\n", v1.b);
+  print("v2.b={}\n", v2.b);
   assert v1.b == 10;
   assert v2.b == 20;
 }
@@ -57,15 +57,41 @@ func listAlign(){
   free(arr as i8*);
 }
 
+func listptr(){
+  let a = 10;
+  let b = 20;
+  let list = List<i32*>::new(2);
+  list.add(&a);
+  list.add(&b);
+  assert **list.get_ptr(0) == 10;
+  let a2 = *list.get_ptr(0);
+  assert *a2 == 10;
+
+  assert *list.get(1) == 20;
+}
+
+func listptr_struct(){
+  let a = LA{5i8, 10};
+  let b = LA{20i8, 30};
+  let list = List<LA*>::new(2);
+  list.add(&a);
+  list.add(&b);
+
+  assert (*list.get_ptr(0)).b == 10;
+  let a2 = *list.get_ptr(0);
+  assert a2.a == 5;
+  assert a2.b == 10;
+}
+
 func main(){
   let list = List<i32>::new(2);
   list.add(10);
   list.add(20);
   list.add(30);//trigger expand
-  assert list.get(0) == 10;
-  assert list.get(1) == 20;
-  assert list.get(2) == 30;
-  //list.get(3); //will panic
+  assert *list.get_ptr(0) == 10;
+  assert *list.get_ptr(1) == 20;
+  assert *list.get_ptr(2) == 30;
+  //list.get_ptr(3); //will panic
   let x1 = 20, x2 = 30, x3 = 40;
   assert list.indexOf(&x1) == 1;
   assert list.contains(&x2) && !list.contains(&x3);
@@ -76,5 +102,7 @@ func main(){
   listStruct();
   //listStruct2();
   listAlign();
+  listptr();
+  listptr_struct();
   print("listTest done\n");
 }

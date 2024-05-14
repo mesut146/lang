@@ -196,6 +196,11 @@ impl Debug for u8{
     f.print(*self);
   }
 }
+impl Debug for u64{
+  func debug(self, f: Fmt*){
+    i64::debug(*self as i64, f);
+  }
+}
 
 trait Hash{
   func hash(self): i64;

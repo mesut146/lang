@@ -16,6 +16,12 @@ impl AstCopier{
         return AstCopier{map: map, unit: Option<Unit*>::None};
     }
 
+    func clone<T>(node: T*, unit: Unit*): T{
+        let map = Map<String, Type>::new();
+        let copier = AstCopier::new(&map, unit);
+        Drop::drop(map);
+        return copier.visit(node);
+    }
     func clone<T>(node: T*): T{
         let map = Map<String, Type>::new();
         let copier = AstCopier::new(&map);

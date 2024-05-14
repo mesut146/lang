@@ -18,6 +18,7 @@ enum E{
 
 func main(){
     let a = A{a: 1, b: 2};
+    print("{}\n", &a);
     assert Fmt::str(&a).eq("A{a: 1, b: 2}");
 
     let b = B{a: a, b: 3};

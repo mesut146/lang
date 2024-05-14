@@ -385,10 +385,7 @@ RefExpr *parseRef(Parser *p) {
     int line = p->first()->line;
     p->consume(AND);
     auto expr = parseLhs(p);
-    if (dynamic_cast<SimpleName *>(expr) || dynamic_cast<FieldAccess *>(expr) || dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<MethodCall *>(expr) || dynamic_cast<ObjExpr *>(expr)) {
-        return loc(new RefExpr(std::unique_ptr<Expression>(expr)), line);
-    }
-    throw std::runtime_error("cannot take reference of " + expr->print());
+    return loc(new RefExpr(std::unique_ptr<Expression>(expr)), line);
 }
 
 DerefExpr *parseDeref(Parser *p) {

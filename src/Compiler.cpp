@@ -1715,12 +1715,13 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
 }
 
 std::any Compiler::visitRefExpr(RefExpr *node) {
-    auto inner = gen(node->expr);
-    //todo rvalue
-    auto mc = dynamic_cast<MethodCall *>(node->expr.get());
-    if (mc) {
-        throw std::runtime_error("visitRefExpr mc" + node->print());
+    if (RvalueHelper::is_rvalue(node->expr.get())) {
+        auto allc = getAlloc(node);
+        auto val = loadPtr(node->expr.get());
+        Builder->CreateStore(val, allc);
+        return allc;
     }
+    auto inner = gen(node->expr);
     return inner;
 }
 
@@ -1852,7 +1853,7 @@ std::any Compiler::visitType(Type *node) {
 
 llvm::Value *Compiler::get_obj_ptr(Expression *e) {
     auto infix = dynamic_cast<Infix *>(e);
-    if(infix){
+    if (infix) {
         auto val = gen(infix);
         return val;
     }

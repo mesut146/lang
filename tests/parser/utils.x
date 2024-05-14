@@ -235,13 +235,15 @@ impl Exit{
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit() && self.else_kind.get().is_exit();
         return false;
     }
-
     func is_jump(self): bool{
         if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
         return false;
     }
     func get_exit_type(block: Block*): Exit{
+        if(block.list.empty()){
+            return Exit::new(ExitType::NONE);
+        }
         let last = block.list.last();
         return get_exit_type(last);
     }

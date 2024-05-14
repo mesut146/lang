@@ -15,7 +15,19 @@ func root(): str{
   return "../tests";
 }
 
+func build_std(){
+  let root = root();
+  let ctx = Context::new(root.str());
+  let cmp = Compiler::new(ctx);
+  compile_dir(&cmp, CStr::new("../tests/std"), false);
+  cmp.build_library("std.a", false);
+}
+
 func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
+  compile_dir(cmp, dir, link, "");
+}
+
+func compile_dir(cmp: Compiler*, dir: CStr, link: bool, args: str){
   let list = listc(&dir);
   print("compile_dir '{}' -> {} elems\n", dir, list.len());
   for(let i = 0;i < list.len();++i){
@@ -28,7 +40,7 @@ func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
     if(is_dir(file.str())) continue;
     cmp.compile(file.cstr());
     if(link){
-      cmp.link_run(name.substr(0, name.len() as i32 - 2),"");
+      cmp.link_run(name.substr(0, name.len() as i32 - 2), args);
     }
   }
 }
@@ -44,10 +56,11 @@ func compiler_test(std_test: bool){
   let root = root();
   let ctx = Context::new(root.str());
   let cmp = Compiler::new(ctx);
+  build_std();
   if(std_test){
-    compile_dir(&cmp, CStr::new("../tests/std_test"), false);
+    compile_dir(&cmp, CStr::new("../tests/std_test"), false, "std.a");
   }else{
-    compile_dir(&cmp, CStr::new("../tests/normal"), true);
+    compile_dir(&cmp, CStr::new("../tests/normal"), true, "std.a");
   }
   cmp.drop();
 }
@@ -83,9 +96,13 @@ func main(argc: i32, args: i8**){
   let a1 = get_arg(args, 1);
   if(a1.eq("test")){
     compiler_test(false);
+    return;
   }
-  if(a1.eq("test2")){
+  else if(a1.eq("test2")){
     compiler_test(true);
+    return;
+  }else if(a1.eq("std")){
+    build_std();
   }
   else if(a1.eq("c")){
     let path = get_arg(args, 2);

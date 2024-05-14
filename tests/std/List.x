@@ -107,15 +107,14 @@ impl<T> List<T>{
   }
   
   func get_ptr(self, pos: i64): T*{
-    if(pos >= self.count) {
-      panic("index {} out of bounds {}", pos, self.count);
-    }
+    self.check(pos);
     return ptr::get(self.ptr, pos);
   }
 
   func get(self, pos: i64): T{
+    //todo copy types safe to call this
     if(!std::is_ptr<T>()){
-      panic("can't get non ptr");
+      panic("List::get() non ptr");
     }
     return *(self.get_ptr(pos));
   }

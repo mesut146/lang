@@ -44,11 +44,13 @@ struct Unit{
   last_id: i32;
 }
 impl Unit{
-  func new(path: str): Unit{
-    return Unit{path: path.str(), last_line: 0,
+  func new(path: String): Unit{
+    return Unit{path: path,
+                last_line: 0,
                 imports: List<ImportStmt>::new(),
                 items: List<Item>::new(),
-                globals: List<Global>::new(), last_id: -1};
+                globals: List<Global>::new(),
+                last_id: -1};
   }
 
   func node(self, line: i32): Node{

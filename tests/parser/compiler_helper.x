@@ -222,15 +222,16 @@ func getMethods(unit: Unit*): List<Method*>{
         list.add(m);
     }else if let Item::Impl(imp*)=(item){
       if(!imp.info.type_params.empty()) continue;
-      for(let j=0;j<imp.methods.len();++j){
+      for(let j = 0;j < imp.methods.len();++j){
         list.add(imp.methods.get_ptr(j));
       }
     }else if let Item::Extern(methods*)=(item){
-      for(let j=0;j<methods.len();++j){
+      for(let j = 0;j < methods.len();++j){
         list.add(methods.get_ptr(j));
       }
     }
   }
+  //broken after expand, ptr
   return list;
 }
 

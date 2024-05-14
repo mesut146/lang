@@ -7,5 +7,5 @@ func main(){
   arr.add(20);
   arr.add(30);
   let a = arr.get_ptr(0);
-  print("a = %d\n", *a);
+  print("a = {}\n", a);
 }

@@ -169,10 +169,10 @@ public:
 
     bool doesAlloc(Expression *e);
     llvm::Value *get_obj_ptr(Expression *e);
-    bool need_alloc(const std::string &name, const Type &type);
-    bool need_alloc(const Param &p) {
+    //bool need_alloc(const std::string &name, const Type &type);
+    /*bool need_alloc(const Param &p) {
         return need_alloc(p.name, *p.type);
-    }
+    }*/
 
     bool isRvo(Method *m) {
         return !m->type.isVoid() && isStruct(m->type);

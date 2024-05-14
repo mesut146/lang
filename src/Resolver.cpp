@@ -1319,7 +1319,7 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
 std::any Resolver::visitRefExpr(RefExpr *node) {
     auto e = node->expr.get();
     //todo field access
-    if (!iof<SimpleName *>(e) && !iof<ArrayAccess *>(e) && !iof<FieldAccess *>(e)) {
+    if (!iof<SimpleName *>(e) && !iof<ArrayAccess *>(e) && !iof<FieldAccess *>(e) && !iof<Literal *>(e)) {
         err(node, "ref expr is not supported");
     }
     auto inner = resolve(node->expr.get()).clone();

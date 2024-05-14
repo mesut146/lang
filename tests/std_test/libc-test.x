@@ -15,7 +15,7 @@ func read_test(){
 
 func seek_test(f: FILE*){
   fseek(f, 0, SEEK_END());
-  print("tell=%d\n", ftell(f));
+  print("tell={}\n", ftell(f));
 }
 
 func write_test(){
@@ -27,16 +27,16 @@ func write_test(){
 func list_test(){
   let dir: CStr = CStr::new(".");
   let arr: List<CStr> = listc(&dir);
-  print("%d files in '%s'\n", arr.len(), dir.ptr());
+  print("{} files in '{}'\n", arr.len(), dir.ptr());
   /*for(let i = 0;i < arr.len();++i){
     let file = arr.get_ptr(i);
-    print("%s\n", file.ptr());
+    print("{}\n", file.ptr());
   }*/
 }
 
 func main(){
   let cur = CStr::new(".");
-  print("pwd = %s\n", resolve(&cur).ptr());
+  print("pwd = {}\n", resolve(&cur).ptr());
   write_test();
   read_test();
   list_test();

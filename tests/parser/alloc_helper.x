@@ -131,6 +131,41 @@ impl AllocHelper{
       }
     }
   }
+
+  func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
+    if(Resolver::is_print(call) || Resolver::is_panic(call)){
+      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      self.visit(&info.block);
+      return Option<Value*>::new();
+    }
+    if(Resolver::is_format(call)){
+      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      self.visit(&info.block);
+      let str_ty = Type::new("String");
+      return Option::new(self.alloc_ty(&str_ty, node));
+    }
+    let rt = self.c.get_resolver().visit(node);
+    if(rt.method.is_some()){
+      let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.get_resolver());
+      if (rval.rvalue) {
+          self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
+      }
+      Drop::drop(rval);
+    }
+    let res = Option<Value*>::new();
+    if(rt.method.is_some() && is_struct(&rt.type)){
+      //non-internal method
+      res = Option::new(self.alloc_ty(&rt.type, node));
+    }
+    if(call.scope.is_some()){
+      self.visit(call.scope.get());
+    }
+    for(let i=0;i<call.args.len();++i){
+      let arg = call.args.get_ptr(i);
+      self.visit(arg);
+    }
+    return res;
+  }
   
   func visit(self, node: Expr*): Option<Value*>{
     let res = Option<Value*>::new();
@@ -178,28 +213,7 @@ impl AllocHelper{
       return res;
     }
     if let Expr::Call(call*)=(node){
-      let rt = self.c.get_resolver().visit(node);
-      if(rt.method.is_some()){
-        let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.get_resolver());
-        if (rval.rvalue) {
-            self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
-        }
-        Drop::drop(rval);
-      }
-      if(rt.method.is_some() && is_struct(&rt.type)){
-        //non-internal method
-        res = Option::new(self.alloc_ty(&rt.type, node));
-      }
-      if(call.scope.is_some()){
-        self.visit(call.scope.get());
-      }
-      let print_panic = call.scope.is_none() && (call.name.eq("print") || call.name.eq("panic"));
-      for(let i=0;i<call.args.len();++i){
-        let arg = call.args.get_ptr(i);
-        if(print_panic && is_str_lit(arg).is_some()) continue;//already cstr, no need to alloc
-        self.visit(arg);
-      }
-      return res;
+      return self.visit_call(node, call);
     }
     if let Expr::Obj(type*, args*)=(node){
       //get full type

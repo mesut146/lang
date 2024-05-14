@@ -49,6 +49,13 @@ func read_string(path: CStr*): String{
   return String::new(data);
 }
 
+func read_string(path: String): String{
+  let path_c = CStr::new(path);
+  let data: List<u8> = read_bytes(&path_c);
+  Drop::drop(path_c);
+  return String::new(data);
+}
+
 func write_bytes(data: [u8], path: CStr*){
   let mode = CStr::new("w");
   let f = open_checked(path, &mode);

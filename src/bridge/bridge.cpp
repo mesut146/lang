@@ -392,8 +392,16 @@ llvm::BasicBlock *create_bb2(llvm::Function *func) {
     return llvm::BasicBlock::Create(*ctx, "", func);
 }
 
+llvm::BasicBlock *create_bb2_named(llvm::Function *func, const char* name) {
+    return llvm::BasicBlock::Create(*ctx, name, func);
+}
+
 llvm::BasicBlock *create_bb() {
     return llvm::BasicBlock::Create(*ctx, "");
+}
+
+llvm::BasicBlock *create_bb_named(const char* name) {
+    return llvm::BasicBlock::Create(*ctx, name);
 }
 
 void SetInsertPoint(llvm::BasicBlock *bb) {

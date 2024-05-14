@@ -26,7 +26,7 @@ func main(){
   m3.add(5, En::A);
   m3.add(7, En::B{77});
   assert m3.get_ptr(&5).unwrap() is En::A;
-  assert m3.geget_ptrt(&7).unwrap() is En::B;
+  assert m3.get_ptr(&7).unwrap() is En::B;
   
   print("map_test done\n");
 }

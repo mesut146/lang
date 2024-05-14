@@ -116,7 +116,9 @@ extern{
     func make_stdout(): Value*;
     
     func create_bb(): BasicBlock*;
+    func create_bb_named(name: i8*): BasicBlock*;
     func create_bb2(f: Function*): BasicBlock*;
+    func create_bb2_named(f: Function*, name: i8*): BasicBlock*;
     func SetInsertPoint(bb: BasicBlock*);
     func GetInsertBlock(): BasicBlock*;
     func func_insert(f: Function*, bb: BasicBlock*);

@@ -28,5 +28,5 @@ func main(){
     6.prim();
     get_prim().prim();
     struct_test();
-    printf("rvalue test done\n");
+    print("rvalue test done\n");
 }

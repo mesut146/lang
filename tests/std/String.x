@@ -16,6 +16,9 @@ impl String{
     func print(self){
       printf("%.*s", self.len(), self.ptr() as i8*);
     }
+    func println(self){
+      printf("%.*s\n", self.len(), self.ptr() as i8*);
+    }
 
     func new(): String{
         return String{arr: List<u8>::new()};

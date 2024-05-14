@@ -6,7 +6,7 @@ import std/map
 import std/libc
 
 class Parser{
-  lexer: Lexer;
+  path: String;
   tokens: List<Token>;
   pos: i32;
   is_marked: bool;
@@ -15,24 +15,30 @@ class Parser{
 }
 
 impl Parser{
-  
-  func new(path: CStr): Parser{
-    let lexer = Lexer::new(path);
-    let res = Parser{lexer, List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
-    res.fill();
+  func from_path(path: String): Parser{
+    let res = Parser{path.clone(), List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
+    let lexer = Lexer::from_path(path);
+    res.fill(lexer);
+    return res;
+  }
+  func from_string(buf: String): Parser{
+    let lexer = Lexer::from_string("<buf>".str(), buf.clone());
+    let res = Parser{lexer.path.clone(), List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
+    res.fill(lexer);
     return res;
   }
   
-  func fill(self) {
+  func fill(self, lexer: Lexer) {
     while (true) {
-        let t = self.lexer.next();
+        let t = lexer.next();
         if (t.is(TokenType::EOF_))
             break;
         if (t.is(TokenType::COMMENT))
             continue;
         self.tokens.add(t);
-      }
     }
+    Drop::drop(lexer);
+  }
     
     func has(self): bool{
       return self.pos < self.tokens.len();
@@ -72,11 +78,11 @@ impl Parser{
     func consume(self, tt: TokenType): Token*{
       let t: Token* = self.pop();
       if(t.type is tt) return t;
-      panic("{}:{}\nunexpected token {} was expecting {}", self.lexer.path, t.line, t, &tt);
+      panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
     }
     
     func parse_unit(self): Unit{
-      let unit = Unit::new(self.lexer.path.get());
+      let unit = Unit::new(self.path.clone());
       self.unit = Option::new(&unit);
       while(self.has() && self.is(TokenType::IMPORT)){
         unit.imports.add(self.parse_import());
@@ -262,7 +268,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.lexer.path.get_heap()};
+      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.path.clone()};
       return res;
     }
     
@@ -299,7 +305,7 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      let path = self.lexer.path.get_heap();
+      let path = self.path.clone();
       return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, fields: fields};
     }
     
@@ -333,7 +339,7 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      let path = self.lexer.path.get_heap();
+      let path = self.path.clone();
       return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, variants: variants};
     }
     

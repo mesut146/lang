@@ -3,6 +3,9 @@ import parser/utils
 import parser/printer
 import parser/resolver
 import parser/copier
+import parser/parser
+import parser/lexer
+import parser/token
 import std/libc
 import std/map
 
@@ -203,33 +206,43 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             r.err(node, format("invalid format specifier: {}", fs));
         }
     }
-    let block = Block::new();
     let line = node.line;
+    let info = FormatInfo{block: Block::new(), unwrap_mc: Call::new("unwrap".str())};
+    let block = &info.block;
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
         //"..".print(), exit(1) will be called by compiler
         let print_mc = Call::new("print".str());
         if (Resolver::is_panic(mc)) {
-            //print_mc.scope = Ptr::new(make_panic_messsage(fmt_str, mc->line, r->curMethod));
+            print_mc.scope = Ptr::new(make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str.str()), &r.unit));
         } else {
-            print_mc.scope = Ptr::new(AstCopier::clone(fmt));
+            print_mc.scope = Ptr::new(AstCopier::clone(fmt, &r.unit));
         }
         let id = r.unit.node(line);
         block.list.add(Stmt::Expr{Expr::Call{.id, print_mc}});
-        //block.accept(r);
-        //r->format_map.insert({mc->id, std::move(info)});
+        r.visit(block);
+        r.format_map.add(node.id, info);
         return;
     }
+    //let f = Fmt::new();
+    let parser = Parser::from_string("let f = Fmt::new();".str());
+    let var_stmt = parser.parse_stmt();
+    print("var_stmt: {}\n", &var_stmt);
+    r.err(node, "generate_format");
 }
 
-func make_panic_messsage(line: i32, method: Method*): Expr {
-    std::string message = "panic ";
-    message += method->path + ":" + std::to_string(line);
-    message += " " + printMethod(method);
-    if (s.has_value()) {
-        message += "\n";
-        message += s.value();
+func make_panic_messsage(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
+    let message = Fmt::new("panic ".str());
+    message.print(&method.path);
+    message.print(":");
+    message.print(&line);
+    message.print(" ");
+    message.print(printMethod(method).str());
+    if (s.is_some()) {
+        message.print("\n");
+        message.print(s.get());
     }
-    message.append("\n");
-    return Expr::Lit{Literal(Literal::STR, message)};
+    message.print("\n");
+    let id = unit.node(line);
+    return Expr::Lit{.id, Literal{LitKind::STR, message.unwrap(), Option<Type>::new()}};
 }

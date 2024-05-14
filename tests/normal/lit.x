@@ -23,7 +23,7 @@ func main(){
 }
 
 func test(u: u64){
-  print("u=%d\n", u);
+  print("u={}\n", u);
 }
 
 func underflow_u8(){

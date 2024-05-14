@@ -62,6 +62,7 @@ struct Resolver{
   used_types: List<Decl*>;
   generated_decl: List<Decl>;
   generated_impl: List<Impl>;
+  format_map: Map<i32, FormatInfo>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -138,7 +139,7 @@ impl Context{
     if(res.is_some()){
       return res.unwrap();
     }
-    let r = Resolver::new(CStr::new(path.clone()), self);
+    let r = Resolver::new(path.clone(), self);
     let pair = self.map.add(path.clone(), r);
     return &pair.b;
   }
@@ -270,22 +271,29 @@ func dumpp(r: Resolver*){
 }
 
 impl Resolver{
-  func new(path: CStr, ctx: Context*): Resolver{
-    print("Resolver::new {}\n", path);
-    let parser = Parser::new(path);
+  func new(path: String, ctx: Context*): Resolver{
+    print("Resolver::new {}\n", &path);
+    let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
     Drop::drop(parser);
     //print("unit={}\n", unit);
     
-    let res = Resolver{unit: unit, is_resolved: false, is_init: false, typeMap: Map<String, RType>::new(),
+    let res = Resolver{unit: unit,
+      is_resolved: false,
+      is_init: false,
+      typeMap: Map<String, RType>::new(),
       cache: Map<i32, RType>::new(),
-      curMethod: Option<Method*>::None, curImpl: Option<Impl*>::None, scopes: List<Scope>::new(), ctx: ctx,
-      used_methods: List<Method*>::new(10),
-      generated_methods: List<Method>::new(10),
+      curMethod: Option<Method*>::None,
+      curImpl: Option<Impl*>::None,
+      scopes: List<Scope>::new(),
+      ctx: ctx,
+      used_methods: List<Method*>::new(),
+      generated_methods: List<Method>::new(),
       inLoop: 0,
       used_types: List<Decl*>::new(),
-      generated_decl: List<Decl>::new(10),
-      generated_impl: List<Impl>::new()};
+      generated_decl: List<Decl>::new(),
+      generated_impl: List<Impl>::new(),
+      format_map: Map<i32, FormatInfo>::new()};
     return res;
   }
 
@@ -712,7 +720,7 @@ impl Resolver{
   
   func addUsed(self, m: Method*){
     let mng = mangle(m);
-    for(let i=0;i<self.used_methods.len();++i){
+    for(let i = 0;i < self.used_methods.len();++i){
       let prev = *self.used_methods.get_ptr(i);
       if(mangle(prev).eq(mng.str())) return;
     }
@@ -1271,6 +1279,14 @@ impl Resolver{
       self.validate_printf(node, call);
       return RType::new("void");
     }
+    if(is_print(call) || is_panic(call)){
+      generate_format(node, call, self);
+      return RType::new("void");
+    }
+    if(is_format(call)){
+      generate_format(node, call, self);
+      return RType::new("String");
+    }
     if(std_size(call)){
       if(!call.args.empty()){
         self.visit(call.args.get_ptr(0));
@@ -1351,21 +1367,6 @@ impl Resolver{
     if(call.scope.is_some()){
       let mr = MethodResolver::new(self);
       return mr.handle(node, &sig);
-    }
-    if(call.name.eq("print")){
-      return RType::new("void");
-    }
-    if(call.name.eq("panic")){
-      if(!call.args.empty()){
-        let arg = call.args.get_ptr(0);
-        if let Expr::Lit(lit*) = (arg){
-          if(lit.kind is LitKind::STR){
-            return RType::new("void");
-          }
-        }
-        self.err(format("invalid panic argument: {}", arg));
-      }
-      return RType::new("void");
     }
     if(call.name.eq("malloc")){
       if(call.type_args.empty()){

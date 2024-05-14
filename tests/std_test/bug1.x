@@ -11,7 +11,7 @@ func resolve1(path: str){
     let path_c = path.ptr() as i8*;
     let ptr = realpath(path_c, buf.ptr());
     if(is_null(ptr)){
-      panic("resolving path is null '%s'\n", path_c);
+      panic("resolving path is null '{}'\n", path);
     }
     let len = strlen(buf[0..buf.len()]);
     //let len = 1;

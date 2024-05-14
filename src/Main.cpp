@@ -80,7 +80,7 @@ void clean() {
     }
 }
 
-void compileTest() {
+void compileTest(bool std_test) {
     clean();
     delete_cache();
 
@@ -88,19 +88,22 @@ void compileTest() {
     c.srcDir = Config::root;
     c.outDir = "../out";
     c.init();
-    std::function<void(const std::string &)> f = [&](const std::string &file) {
-        c.compile(file);
-        c.link_run("", "");
-    };
-    list_dir(Config::root + "/normal", f);
-
-    //std tests
     build_std();
-    std::function<void(const std::string &)> f2 = [&](const std::string &file) {
-        c.compile(file);
-        c.link_run("", "std.a");
-    };
-    list_dir(Config::root + "/std_test", f2);
+
+    if (std_test) {
+        //std tests
+        std::function<void(const std::string &)> f2 = [&](const std::string &file) {
+            c.compile(file);
+            c.link_run("", "std.a");
+        };
+        list_dir(Config::root + "/std_test", f2);
+    } else {
+        std::function<void(const std::string &)> f = [&](const std::string &file) {
+            c.compile(file);
+            c.link_run("", "std.a");
+        };
+        list_dir(Config::root + "/normal", f);
+    }
 }
 
 void bootstrap() {
@@ -123,7 +126,6 @@ void bootstrap() {
         list_dir(Config::root + "/std", f);
         c.link_run(bin_name, "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
     }
-
 }
 
 void ownership() {
@@ -163,7 +165,6 @@ int main(int argc, char **args) {
         }
         //no arg
         if (argc == 0) {
-            //compileTest();
             bootstrap();
             return 0;
         }
@@ -172,7 +173,9 @@ int main(int argc, char **args) {
         if (arg == "help") {
             usage();
         } else if (arg == "test") {
-            compileTest();
+            compileTest(false);
+        } else if (arg == "test2") {
+            compileTest(true);
         } else if (arg == "std") {
             build_std();
         } else if (arg == "own") {
