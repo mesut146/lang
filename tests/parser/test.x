@@ -89,6 +89,7 @@ func bootstrap(){
 
 func main(argc: i32, args: i8**){
   print("##########running##########\n");
+  print_unit = true;
   if(argc == 1){
     bootstrap();
     return;

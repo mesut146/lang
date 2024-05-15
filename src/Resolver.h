@@ -367,7 +367,7 @@ public:
     void addType(const std::string &name, const RType &rt);
     //std::string getId(Expression *e);
     BaseDecl *getDecl(const Type &type);
-    std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl, const Type &type);
+    std::pair<StructDecl *, int> findField(const std::string &name, BaseDecl *decl);
     void addUsed(BaseDecl *bd);
 
     bool is_slice_get_ptr(MethodCall *mc) {

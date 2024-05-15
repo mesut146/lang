@@ -1214,9 +1214,9 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
     return {};
 }
 
-std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDecl *decl, const Type &type) {
+std::pair<StructDecl *, int> Resolver::findField(const std::string &name, BaseDecl *decl) {
     auto cur = decl;
-    while (cur && true) {
+    while (cur) {
         if (cur->isClass()) {
             auto sd = (StructDecl *) cur;
             int idx = 0;
@@ -1246,7 +1246,7 @@ std::any Resolver::visitFieldAccess(FieldAccess *node) {
     if (!decl) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
     }
-    auto [sd, idx] = findField(node->name, decl, scp.type);
+    auto [sd, idx] = findField(node->name, decl);
     if (idx == -1) {
         err(node, "invalid field " + node->name + " of " + scp.type.print());
     }
@@ -1548,7 +1548,7 @@ std::any Resolver::visitObjExpr(ObjExpr *node) {
     int fcnt = fields->size();
     if (base) fcnt++;
     if (fcnt != node->entries.size()) {
-        //error(node, "incorrect number of arguments passed to object creation");
+        err(node, "incorrect number of arguments passed to object creation");
     }
     int field_idx = 0;
     std::unordered_set<std::string> names;

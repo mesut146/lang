@@ -41,6 +41,16 @@ struct VarHolder{
   prm: bool;
 }
 
+impl Clone for VarHolder{
+  func clone(self): VarHolder{
+    return VarHolder{
+      name: self.name.clone(),
+      type: self.type.clone(),
+      prm: self.prm
+    };
+  }
+}
+
 struct FormatInfo {
   block: Block;
   unwrap_mc: Call;
@@ -89,7 +99,8 @@ struct RType{
   method: Option<Method*>;
   value: Option<String>;
   targetDecl: Option<Decl*>;
-  vh: Option<VarHolder*>;
+  vh: Option<VarHolder>;
+  //path: String;
 }
 
 enum TypeKind{
@@ -229,7 +240,7 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder*>::None};
+    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder>::None};
   }
   func clone(self): RType{
     return RType{type: self.type.clone(),
@@ -237,7 +248,7 @@ impl RType{
       method: self.method,
       value: self.value.clone(),
       targetDecl: self.targetDecl,
-      vh: self.vh};
+      vh: self.vh.clone()};
   }
 }
 
@@ -270,13 +281,17 @@ func dumpp(r: Resolver*){
   r.dump();
 }
 
+static print_unit: bool = false;
+
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
     print("Resolver::new {}\n", &path);
     let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
     Drop::drop(parser);
-    //print("unit={}\n", unit);
+    if(print_unit){
+      print("unit={}\n", unit);
+    }
     
     let res = Resolver{unit: unit,
       is_resolved: false,
@@ -1517,7 +1532,7 @@ impl Resolver{
       if(vh.is_some()){
         let vh2 = vh.unwrap();
         let res = self.visit(&vh2.type);
-        res.vh = Option::new(vh2);
+        res.vh = Option::new(vh2.clone());
         return res;
       }
     }

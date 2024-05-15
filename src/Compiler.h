@@ -23,20 +23,17 @@ void sort(std::vector<BaseDecl *> &list, Resolver *r);
 
 std::string get_out_file(const std::string &path);
 
-constexpr int STRUCT_BASE_INDEX = 0;
 constexpr int VPTR_INDEX = -1;//end
 constexpr int ENUM_TAG_BITS = 64;
-constexpr int ENUM_BASE_INDEX = 0;
-constexpr int ENUM_TAG_INDEX = 1;
-constexpr int ENUM_DATA_INDEX = 2;
 constexpr int SLICE_PTR_INDEX = 0;
 constexpr int SLICE_LEN_INDEX = 1;
 
 struct Layout {
     static void set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields);
-    static void set_elems_enum(llvm::StructType *st, llvm::Type *base, llvm::Type *tag, llvm::ArrayType *data);
+    static void set_elems_enum(llvm::StructType *st, llvm::Type *tag, llvm::ArrayType *data);
     static int get_tag_index(BaseDecl *decl);
     static int get_data_index(BaseDecl *decl);
+    static int get_base_index(BaseDecl *decl);
 };
 
 struct DebugInfo {

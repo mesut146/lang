@@ -671,14 +671,17 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
         return ty;
     }
     //fill body
-    auto *r = resolv.get();
+    auto r = resolv.get();
 
     auto ty = (llvm::StructType *) classMap.at(mangled);
     if (bd->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(bd);
-        int max = 0;
+        int max_var = 0;
         for (auto &ev : ed->variants) {
             std::vector<llvm::Type *> var_elems;
+            if (bd->base) {
+                var_elems.push_back(mapType(bd->base.value()));
+            }
             for (auto &field : ev.fields) {
                 var_elems.push_back(mapType(&field.type));
             }
@@ -686,24 +689,19 @@ llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
             auto var_ty = llvm::StructType::create(ctx(), var_elems, var_mangled);
             classMap[var_mangled] = var_ty;
             auto var_size = mod->getDataLayout().getStructLayout(var_ty)->getSizeInBits();
-            if (var_size > max) {
-                max = var_size;
+            if (var_size > max_var) {
+                max_var = var_size;
             }
         }
-        auto sz = max / 8;
-        auto tag = getInt(ENUM_TAG_BITS);
-        auto data = llvm::ArrayType::get(getInt(8), sz);
-        if (bd->base) {
-            auto base_ty = mapType(bd->base.value(), resolv.get());
-            Layout::set_elems_enum(ty, base_ty, tag, data);
-        } else {
-            Layout::set_elems_enum(ty, nullptr, tag, data);
-        }
+        auto data_size = max_var / 8;
+        auto tag_type = getInt(ENUM_TAG_BITS);
+        auto data_type = llvm::ArrayType::get(getInt(8), data_size);
+        Layout::set_elems_enum(ty, tag_type, data_type);
     } else {
         auto td = dynamic_cast<StructDecl *>(bd);
         std::vector<llvm::Type *> elems;
         for (auto &field : td->fields) {
-            elems.push_back(mapType(&field.type, r));
+            elems.push_back(mapType(&field.type, resolv.get()));
         }
         //vtable ptr
         if (!getVirtual(td, unit.get()).empty()) {
@@ -1753,7 +1751,7 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
     //set base
     for (auto arg : node->entries) {
         if (arg.isBase) {
-            auto base_index = tt.targetDecl->isClass() ? STRUCT_BASE_INDEX : ENUM_BASE_INDEX;
+            auto base_index = Layout::get_base_index(tt.targetDecl);
             auto base_ptr = gep2(ptr, base_index, ty);
             auto val = dynamic_cast<ObjExpr *>(arg.value);
             if (val) {
@@ -1833,7 +1831,7 @@ void Compiler::setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &ent
             field = &fields[field_idx];
             ++field_idx;
         }
-        if (decl->base && decl->isClass()) real_idx++;
+        if (decl->base) real_idx++;
         auto field_target_ptr = gep2(ptr, real_idx, ty);
         setField(e.value, field->type, field_target_ptr);
         curOwner.moveToField(e.value);
@@ -1876,21 +1874,13 @@ llvm::Value *Compiler::get_obj_ptr(Expression *e) {
         auto rt = resolv->resolve(e);
         if (rt.type.isPointer()) {
             //auto deref
-            if (rt.vh->prm) {
-                //always alloca
-                return load(val, getPtr());
-            } else {
-                //local ptr
-                return load(val, getPtr());
-            }
+            //always alloca
+            //local ptr
+            return load(val, getPtr());
         } else {
-            if (rt.vh->prm) {
-                //mut or not has no effect
-                return val;
-            } else {
-                //local
-                return val;
-            }
+            //mut or not has no effect
+            //local
+            return val;
         }
         //return val;
     }
@@ -1917,11 +1907,17 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     auto rt = resolv->resolve(node->scope);
     auto scope = get_obj_ptr(node->scope);
     auto decl = rt.targetDecl;
-    auto [sd, index] = resolv->findField(node->name, decl, rt.type);
+    auto [sd, index] = resolv->findField(node->name, decl);
     if (index == -1) {
         resolv->err(node, "internal error");
     }
     auto sd_ty = mapType(sd->type);
+    if (decl->isEnum()) {
+        //base field, skip tag
+        scope = gep2(scope, Layout::get_base_index(decl), decl->type);
+        //index++;
+    } else {
+    }
     if (sd->base) index++;
     return gep2(scope, index, sd_ty);
 }
@@ -2219,7 +2215,8 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             //regular var decl
             auto &fd = fields[i];
             auto &arg = node->args[i];
-            auto field_ptr = gep2(dataPtr, i, var_ty);
+            int real_idx = i + (decl->base ? 1 : 0);
+            auto field_ptr = gep2(dataPtr, real_idx, var_ty);
             auto alloc_ptr = getAlloc(&arg);
             NamedValues[arg.name] = alloc_ptr;
             if (arg.ptr) {

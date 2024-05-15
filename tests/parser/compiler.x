@@ -306,13 +306,13 @@ impl Compiler{
     }
     sort(&list, self.get_resolver());
     //first create just protos to fill later
-    for(let i=0;i<list.len();++i){
+    for(let i = 0;i < list.len();++i){
       let decl = *list.get_ptr(i);
       let st = make_decl_proto(decl);
       p.classMap.add(decl.type.print(), st as llvm_Type*);
     }
     //fill with elems
-    for(let i=0;i<list.len();++i){
+    for(let i = 0;i < list.len();++i){
       let decl = *list.get_ptr(i);
       self.make_decl(decl, p.get(decl) as StructType*);
     }

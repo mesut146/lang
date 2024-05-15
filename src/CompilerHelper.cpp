@@ -150,59 +150,33 @@ void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
 
 void Layout::set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields) {
     if (base) {
-        if (STRUCT_BASE_INDEX == 0) {
-            fields.insert(fields.begin(), base);
-        } else if (STRUCT_BASE_INDEX == -1) {
-            fields.insert(fields.end(), base);
-        } else {
-            error("no valid base index");
-        }
+        fields.insert(fields.begin(), base);
     }
     st->setBody(fields);
-    //st->dump();
 }
 
-void Layout::set_elems_enum(llvm::StructType *st, llvm::Type *base, llvm::Type *tag, llvm::ArrayType *data) {
+void Layout::set_elems_enum(llvm::StructType *st, llvm::Type *tag, llvm::ArrayType *data) {
+    //tag, {base, ...data}
     std::vector<llvm::Type *> elems;
-    if (base) {
-        if (ENUM_BASE_INDEX == 0) {
-            elems.push_back(base);
-        } else {
-            error("no valid base index");
-        }
-    }
-    if (ENUM_TAG_INDEX < ENUM_DATA_INDEX) {
-        elems.push_back(tag);
-        elems.push_back(data);
-    } else {
-        elems.push_back(data);
-        elems.push_back(tag);
-    }
+    elems.push_back(tag);
+    elems.push_back(data);
     st->setBody(elems);
 }
 
-int Layout::get_tag_index(BaseDecl *decl) {
-    if (decl->base) {
-        return ENUM_TAG_INDEX;
-    } else if (ENUM_BASE_INDEX < ENUM_TAG_INDEX) {
-        //shift left
-        return ENUM_TAG_INDEX - 1;
-    } else {
-        //base right, doesnt matter
-        return ENUM_TAG_INDEX;
+int Layout::get_base_index(BaseDecl *decl) {
+    if (decl->isEnum()) {
+        //tag data
+        return 1;
     }
+    return 0;
+}
+
+int Layout::get_tag_index(BaseDecl *decl) {
+    return 0;
 }
 
 int Layout::get_data_index(BaseDecl *decl) {
-    if (decl->base) {
-        return ENUM_DATA_INDEX;
-    } else if (ENUM_BASE_INDEX < ENUM_DATA_INDEX) {
-        //shift left
-        return ENUM_DATA_INDEX - 1;
-    } else {
-        //base right, doesnt matter
-        return ENUM_DATA_INDEX;
-    }
+    return 1;
 }
 
 void Compiler::setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl) {
@@ -243,11 +217,6 @@ llvm::Function *Compiler::make_malloc() {
     auto ft = llvm::FunctionType::get(ret, getInt(64), false);
     auto f = llvm::Function::Create(ft, llvm::GlobalValue::ExternalLinkage, "malloc", *mod);
     f->setCallingConv(llvm::CallingConv::C);
-    /*llvm::AttributeList attr;
-    llvm::AttrBuilder builder(ctx());
-    //builder.addAlignmentAttr(16);
-    attr = attr.addFnAttributes(ctx(), builder);
-    f->setAttributes(attr);*/
     return f;
 }
 

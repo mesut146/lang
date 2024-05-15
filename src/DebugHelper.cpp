@@ -104,15 +104,21 @@ void Compiler::dbg_func(Method *m, llvm::Function *f) {
     loc(nullptr);
 }
 
-llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler *c, llvm::DICompositeType *var_part, llvm::DIFile *file, int size, int idx, llvm::DICompositeType *scope, int var_off) {
+llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler *c, llvm::DICompositeType *var_part, llvm::DIFile *file, int idx, llvm::DICompositeType *scope, int var_off, llvm::DIType *base_ty) {
     auto name = ed->type.print() + "::" + evar.name;
     auto var_type = (llvm::StructType *) c->classMap[name];
+    auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
     std::vector<llvm::Metadata *> elems;
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems));
-    //auto var_size = c->mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
-    auto st = c->DBuilder->createStructType(scope, name, file, ed->line, size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    auto st = c->DBuilder->createStructType(scope, name, file, ed->line, var_size, 0, llvm::DINode::FlagZero, nullptr, arr);
     auto sl = c->mod->getDataLayout().getStructLayout(var_type);
     int i = 0;
+    if (ed->base.has_value()) {
+        //auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
+        auto mt = c->DBuilder->createMemberType(st, "super", file, ed->line, base_ty->getSizeInBits(), 0, 0, llvm::DINode::FlagZero, base_ty);
+        elems.push_back(mt);
+        i++;
+    }
     for (auto &fd : evar.fields) {
         auto fdd = c->map_di(fd.type);
         auto off = sl->getElementOffsetInBits(i);
@@ -122,7 +128,7 @@ llvm::DIDerivedType *make_variant_type(EnumDecl *ed, EnumVariant &evar, Compiler
     }
     st->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(c->ctx(), elems)));
     int align = 0;
-    return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, size, align, var_off, c->makeInt(idx), llvm::DINode::FlagZero, st);
+    return c->DBuilder->createVariantMemberType(var_part, evar.name, file, ed->line, var_size, align, var_off, c->makeInt(idx), llvm::DINode::FlagZero, st);
 }
 
 llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
@@ -131,9 +137,10 @@ llvm::DIType *Compiler::map_di_proto(BaseDecl *decl) {
     auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems));
     auto st_size = getSize2(decl);
     auto file = DBuilder->createFile(decl->path, di.cu->getDirectory());
-
-    auto st = DBuilder->createStructType(di.cu, name, file, decl->line, st_size, 0, llvm::DINode::FlagZero, nullptr, arr);
+    int align = 0;
+    auto st = DBuilder->createStructType(di.cu, name, file, decl->line, st_size, align, llvm::DINode::FlagZero, nullptr, arr);
     di.incomplete_types[name] = st;
+    //todo variants here
     return st;
 }
 
@@ -145,47 +152,44 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
     std::vector<llvm::Metadata *> elems;
 
     llvm::DIType *base_ty = nullptr;
-
     if (decl->base.has_value()) {
         base_ty = map_di(decl->base.value());
-        //auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
-        auto mt = DBuilder->createMemberType(st, "super", file, decl->line, base_ty->getSizeInBits(), 0, 0, llvm::DINode::FlagZero, base_ty);
-        elems.push_back(mt);
     }
 
     auto st1 = (llvm::StructType *) mapType(decl->type);
     auto sl = mod->getDataLayout().getStructLayout(st1);
 
     if (decl->isEnum()) {
-        //todo order
+        //tag, {base, ...fields}
         auto ed = (EnumDecl *) decl;
-        auto enum_size = getSize2(ed);
-        if (base_ty) {
-            enum_size -= base_ty->getSizeInBits();
-        }
-        int var_idx = decl->base.has_value() ? 2 : 1;
+        //create variant part
         int tag_off = 0;
-        int var_off = sl->getElementOffsetInBits(var_idx);
-        if (decl->base.has_value()) {
-            tag_off = sl->getElementOffsetInBits(1);
-        }
-        std::vector<llvm::Metadata *> elems2;
         auto tag = DBuilder->createBasicType("tag", ENUM_TAG_BITS, llvm::dwarf::DW_ATE_signed);
         auto disc = DBuilder->createMemberType(nullptr, "", file, ed->line, ENUM_TAG_BITS, 0, tag_off, llvm::DINode::FlagArtificial, tag);
-        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2));
-        auto var_part = DBuilder->createVariantPart(st, "", file, decl->line, enum_size, 0, llvm::DINode::FlagZero, disc, arr);
+        std::vector<llvm::Metadata *> var_elems;
+        auto arr = llvm::DINodeArray(llvm::MDTuple::get(ctx(), var_elems));
+        int data_size = getSize2(decl) - ENUM_TAG_BITS;
+        auto var_part = DBuilder->createVariantPart(st, "", file, decl->line, data_size, 0, llvm::DINode::FlagZero, disc, arr);
+        //fill variant part
         int idx = 0;
+        int var_off = sl->getElementOffsetInBits(Layout::get_data_index(decl));
         for (auto &evar : ed->variants) {
-            auto var_type = make_variant_type(ed, evar, this, var_part, file, enum_size, idx, st, var_off);
-            elems2.push_back(var_type);
+            auto var_name = decl->type.print() + "::" + evar.name;
+            auto var_type = (llvm::StructType *) classMap.at(var_name);
+            auto var_size = mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
+            auto var_type_di = make_variant_type(ed, evar, this, var_part, file, idx, st, var_off, base_ty);
+            var_elems.push_back(var_type_di);
             ++idx;
         }
-        var_part->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(ctx(), elems2)));
+        var_part->replaceElements(llvm::DINodeArray(llvm::MDTuple::get(ctx(), var_elems)));
         elems.push_back(var_part);
     } else {
         auto sd = (StructDecl *) decl;
         int idx = 0;
         if (decl->base.has_value()) {
+            //auto in = DBuilder->createInheritance(st, base_ty, 0, 0, llvm::DINode::FlagZero);
+            auto mt = DBuilder->createMemberType(st, "super", file, decl->line, base_ty->getSizeInBits(), 0, 0, llvm::DINode::FlagZero, base_ty);
+            elems.push_back(mt);
             idx++;
         }
         for (auto &fd : sd->fields) {

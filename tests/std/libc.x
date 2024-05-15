@@ -1,6 +1,12 @@
-class c_void{}
-class FILE{}
-class DIR{}
+//type char = i8
+//type int i32
+type ino_t = u64;
+type off_t = u64;
+
+struct c_void{}
+struct FILE{}
+struct DIR{}
+
 struct dirent {
     d_ino: ino_t          ;       /* inode number */
     d_off: off_t          ;       /* offset to the next dirent */
@@ -38,13 +44,6 @@ func strlen(arr: i8*, max: i32): i32{
 func is_null<T>(ptr: T*): bool{
   return ptr as u64 == 0;
 }
-
-//type char = i8
-//type int i32
-type ino_t = u64;
-type off_t = u64;
-
-//const stdout = 0
 
 func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }

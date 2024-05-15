@@ -214,7 +214,7 @@ func swap(list: List<Decl*>*, i: i32, j: i32){
 }
 
 func getMethods(unit: Unit*): List<Method*>{
-  let list = List<Method*>::new();
+  let list = List<Method*>::new(100);
   for (let i = 0;i < unit.items.len();++i) {
     let item = unit.items.get_ptr(i);
     if let Item::Method(m*)=(item){

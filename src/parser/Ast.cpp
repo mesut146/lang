@@ -42,6 +42,10 @@ std::string EnumDecl::print() const {
     std::string s;
     s.append("enum ");
     s.append(type.print());
+    if (base) {
+        s.append(": ");
+        s.append(base->print());
+    }
     s.append("{\n");
     s.append(join(variants, ",\n", "  "));
     s.append(";\n}");
@@ -63,6 +67,10 @@ std::string StructDecl::print() const {
     std::string s;
     s.append("struct ");
     s.append(type.print());
+    if (base) {
+        s.append(": ");
+        s.append(base->print());
+    }
     s.append("{\n");
     for (int i = 0; i < fields.size(); i++) {
         s.append("  ").append(fields[i].print()).append(";");
