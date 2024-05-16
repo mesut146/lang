@@ -294,7 +294,7 @@ impl Lexer{
                 s.append(c);
             }
         }
-        panic("unterminated string literal");
+        self.err("unterminated string literal");
     }
     let os = String::new();
     os.append(c);
@@ -303,6 +303,11 @@ impl Lexer{
       return self.read_op();
     }
     panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
+  }
+
+  func err(self, msg: str){
+    print("in file {}:{}\n", &self.path, self.line);
+    panic("{}", msg);
   }
   
   func read_ident(self): Token {

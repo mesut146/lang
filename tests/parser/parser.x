@@ -877,7 +877,8 @@ impl Parser{
       }
       let r = self.expr_level(prec + 1);
       let n = self.node();
-      e = Expr::Infix{.n, op, Box::new(e), Box::new(r)};
+      let tmp = Expr::Infix{.n, op, Box::new(e), Box::new(r)};
+      e = tmp;
     }
     return e;
   }

@@ -1,8 +1,3 @@
-import std/String
-import std/str
-import std/List
-import std/ops
-
 #derive(Debug)
 enum TokenType {
     EOF_,

@@ -23,7 +23,6 @@ void sort(std::vector<BaseDecl *> &list, Resolver *r);
 
 std::string get_out_file(const std::string &path);
 
-constexpr int VPTR_INDEX = -1;//end
 constexpr int ENUM_TAG_BITS = 64;
 constexpr int SLICE_PTR_INDEX = 0;
 constexpr int SLICE_LEN_INDEX = 1;
@@ -50,7 +49,7 @@ struct Cache {
 
     void read_cache();
     void write_cache();
-    bool need_compile(const fs::path &p);
+    bool need_compile(const fs::path &p, const std::string &out);
     void update(const fs::path &p) {
         if (!Config::use_cache) return;
         map[p.string()] = get_time(p);
@@ -59,6 +58,12 @@ struct Cache {
     std::string get_time(const fs::path &p) {
         auto time = fs::last_write_time(p).time_since_epoch() / std::chrono::milliseconds(1);
         return std::to_string(time);
+    }
+
+    static void delete_cache() {
+        if (fs::exists(Cache::CACHE_FILE)) {
+            fs::remove(Cache::CACHE_FILE);
+        }
     }
 };
 
@@ -95,20 +100,32 @@ struct RvalueHelper {
     }
 };
 
+struct DirCompiler {
+    std::vector<std::string> compiled;
+    std::optional<std::string> main_file;
+    bool skip_main = true;
+    Cache cache;
+    std::string out_dir = ".";
+    std::string binary_path;
+    static std::vector<std::string> global_protos;
+
+    void compile_single(const std::string &file, const std::string &root);
+    void compile(const std::string &file, const std::string &root);
+    void compileAll(const std::string &srcDir, const std::string &root);
+    void link_run(const std::string &name0, const std::string &args);
+    void link(const std::string &name0, const std::string &args);
+    void build_library(const std::string &name, bool shared);
+    void run();
+};
+
 struct Compiler : public Visitor {
 public:
-    std::string srcDir;
-    std::string outDir;
-    std::vector<std::string> compiled;
+    Context context;
     std::shared_ptr<Unit> unit;
     llvm::Function *func = nullptr;
     Method *curMethod = nullptr;
     Ownership curOwner;
-    std::optional<std::string> main_file;
-    bool single_mode = true;
     std::map<std::string, llvm::Value *> globals;
-    static std::vector<std::string> global_protos;
-    Cache cache2;
     std::shared_ptr<Resolver> resolv;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::BasicBlock *> loopNext;
@@ -117,9 +134,9 @@ public:
     llvm::TargetMachine *TargetMachine = nullptr;
     std::unique_ptr<llvm::IRBuilder<>> Builder;
     std::unique_ptr<llvm::DIBuilder> DBuilder;
-    DebugInfo di;
     std::unique_ptr<llvm::LLVMContext> ctxp;
     std::unique_ptr<llvm::Module> mod;
+    DebugInfo di;
     std::map<int, llvm::Value *> allocMap2;
     std::map<std::string, llvm::Value *> NamedValues;
     std::map<std::string, llvm::Type *> classMap;
@@ -131,25 +148,20 @@ public:
     llvm::Function *mallocf = nullptr;
     llvm::StructType *sliceType = nullptr;
     llvm::StructType *stringType = nullptr;
-    std::vector<Method *> virtuals;
-    std::map<std::string, llvm::Constant *> vtables;
-    std::map<Method *, int> virtualIndex;
 
-    void set_and_insert(llvm::BasicBlock *bb);
+    explicit Compiler(const Context &context) : context(context) {}
 
-    void init();
-    void emit(std::string &Filename);
-    void compileAll();
-    std::optional<std::string> compile(const std::string &path);
-    void link_run(const std::string &name, const std::string &args);
-    void build_library(const std::string &name, bool shared);
+    void init_llvm();
+    void initModule(const std::string &path);
+    void emit_object(std::string &Filename);
+    std::optional<std::string> compile(const std::string &path, DirCompiler &dc);
     void createProtos();
     void genCode(std::unique_ptr<Method> &m);
     void genCode(Method *m);
     void cleanup();
-    void make_vtables();
     llvm::LLVMContext &ctx() { return *ctxp; };
 
+    void set_and_insert(llvm::BasicBlock *bb);
     int getSize2(const Type *type);
     int getSize2(const Type &type) { return getSize2(&type); }
     int getSize2(BaseDecl *decl);
@@ -166,10 +178,6 @@ public:
 
     bool doesAlloc(Expression *e);
     llvm::Value *get_obj_ptr(Expression *e);
-    //bool need_alloc(const std::string &name, const Type &type);
-    /*bool need_alloc(const Param &p) {
-        return need_alloc(p.name, *p.type);
-    }*/
 
     bool isRvo(Method *m) {
         return !m->type.isVoid() && isStruct(m->type);
@@ -286,7 +294,9 @@ public:
     void loc(int line, int pos);
     void make_proto(std::unique_ptr<Method> &m);
     llvm::Function *make_proto(Method *m);
-    llvm::Type *makeDecl(BaseDecl *bd);
+    void make_decl_protos();
+    llvm::Type *make_decl_proto(BaseDecl *decl);
+    llvm::Type *fill_decl_proto(BaseDecl *decl);
     void allocParams(Method *m);
     void makeLocals(Statement *st);
 

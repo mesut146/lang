@@ -15,29 +15,6 @@ bool Config::use_cache = true;
 
 std::string Config::root = "../tests";
 
-void delete_cache() {
-    if (fs::exists(Cache::CACHE_FILE)) {
-        fs::remove(Cache::CACHE_FILE);
-    }
-}
-
-void compile(const std::string &path) {
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
-    if (std::filesystem::is_directory(path)) {
-        for (const auto &e : std::filesystem::recursive_directory_iterator(path)) {
-            if (e.is_directory()) continue;
-            if (e.path().extension() != "x") continue;
-            c.compile(e.path().string());
-        }
-    } else {
-        c.compile(path);
-    }
-    c.link_run("", "");
-}
-
 void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
     for (const auto &e : std::filesystem::directory_iterator(path)) {
         if (e.is_directory()) continue;
@@ -46,28 +23,17 @@ void list_dir(const std::string &path, std::function<void(const std::string &)> 
     }
 }
 
-void build_std() {
-    //delete_cache();
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
-    std::function<void(const std::string &)> f = [&](const std::string &file) {
-        c.compile(file);
-    };
-    list_dir(Config::root + "/std", f);
-    c.build_library("std.a", false);
+DirCompiler get_compiler() {
+    DirCompiler dc;
+    dc.out_dir = "./out";
+    return dc;
 }
 
-void compile(std::initializer_list<std::string> list) {
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
-    for (auto &file : list) {
-        c.compile(file);
-    }
-    c.link_run("", "");
+void build_std() {
+    Config::use_cache = true;
+    DirCompiler dc = get_compiler();
+    dc.compileAll(Config::root + "/std", Config::root);
+    dc.build_library("std.a", false);
 }
 
 void clean() {
@@ -82,25 +48,22 @@ void clean() {
 
 void compileTest(bool std_test) {
     clean();
-    delete_cache();
-
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
+    //Cache::delete_cache();
     build_std();
 
     if (std_test) {
         //std tests
         std::function<void(const std::string &)> f2 = [&](const std::string &file) {
-            c.compile(file);
-            c.link_run("", "std.a");
+            DirCompiler dc = get_compiler();
+            dc.compile_single(file, Config::root);
+            dc.link_run("", dc.out_dir + "/std.a");
         };
         list_dir(Config::root + "/std_test", f2);
     } else {
         std::function<void(const std::string &)> f = [&](const std::string &file) {
-            c.compile(file);
-            c.link_run("", "std.a");
+            DirCompiler dc = get_compiler();
+            dc.compile_single(file, Config::root);
+            dc.link_run("", dc.out_dir + "/std.a");
         };
         list_dir(Config::root + "/normal", f);
     }
@@ -108,24 +71,22 @@ void compileTest(bool std_test) {
 
 void bootstrap() {
     //clean();
-    Compiler c;
-    c.srcDir = Config::root;
-    c.outDir = "../out";
-    c.init();
-    std::function<void(const std::string &)> f = [&](const std::string &file) {
-        c.compile(file);
-    };
-    list_dir(Config::root + "/parser", f);
-    auto bin_name = "x";
-
+    DirCompiler dc = get_compiler();
+    std::string bin_name = "x";
     bool std_static = false;
     if (std_static) {
         build_std();
-        c.link_run(bin_name, "std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+        dc.compileAll(Config::root + "/parser", Config::root);
+        dc.link(bin_name, dc.out_dir + "/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
     } else {
-        list_dir(Config::root + "/std", f);
-        c.link_run(bin_name, "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+        dc.compileAll(Config::root + "/std", Config::root);
+        dc.compileAll(Config::root + "/parser", Config::root);
+        dc.link(bin_name, "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
     }
+    auto from = dc.out_dir + "/" + bin_name;
+    auto to = "./" + bin_name;
+    fs::copy_file(from, to, fs::copy_options::overwrite_existing);
+    dc.run();
 }
 
 void ownership() {
@@ -134,15 +95,12 @@ void ownership() {
     Config::use_cache = false;
     std::function<void(const std::string &)> f = [&](const std::string &file) {
         if (!file.ends_with("common.x")) {
-            Compiler c;
-            c.srcDir = Config::root;
-            c.outDir = "../out";
-            c.init();
-            c.compile(common);
-            c.compile(file);
+            DirCompiler dc = get_compiler();
+            dc.compile(common, Config::root);
+            dc.compile(file, Config::root);
             auto name = std::filesystem::path(file).filename().string() + ".bin";
             print("##running " + name);
-            c.link_run(name, "");
+            dc.link_run(name, "");
         }
     };
     list_dir(path, f);
@@ -159,7 +117,7 @@ int main(int argc, char **args) {
         int i = 1;
         if (argc > 0 && std::string(args[i]) == "-nc") {
             Config::use_cache = false;
-            delete_cache();
+            Cache::delete_cache();
             ++i;
             argc--;
         }
@@ -189,36 +147,23 @@ int main(int argc, char **args) {
                 path = std::string(args[i]);
                 i++;
             }
-            Compiler c;
-            c.srcDir = Config::root;
-            //single file in dir
+            DirCompiler dc = get_compiler();
             if (std::filesystem::is_directory(path)) {
-                //c.srcDir = path;
-                if (i <= argc) {
-                    auto file = path + "/" + std::string(args[i]);
-                    i++;
-                    c.init();
-                    c.compile(file);
-                } else {
-                    c.compileAll();
-                }
+                dc.compileAll(path, Config::root);
             } else {
                 Config::use_cache = false;
-                c.init();
-                c.compile(path);
+                dc.compile(path, Config::root);
+                //more files
                 for (; i <= argc;) {
                     auto path2 = args[i];
+                    dc.compile(path2, Config::root);
                     ++i;
-                    c.compile(path2);
                 }
                 if (use_std) {
-                    std::function<void(const std::string &)> f = [&](const std::string &file) {
-                        c.compile(file);
-                    };
-                    list_dir(Config::root + "/std", f);
+                    dc.compileAll(Config::root + "/std", Config::root);
                 }
-                if (c.main_file.has_value()) {
-                    c.link_run("", "");
+                if (dc.main_file.has_value()) {
+                    dc.link_run("", "");
                 }
             }
         } else {

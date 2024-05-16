@@ -109,11 +109,10 @@ func has_main(unit: Unit*): bool{
   return false;
 }
 
-func get_out_file(path: str): String{
+func get_out_file(path: str, c: Compiler*): String{
   let name = getName(path);
-  let noext = trimExtenstion(name).str();
-  noext.append("-bt.o");
-  return noext;
+  let res = format("{}/{}-bt.o", c.ctx.out_dir, trimExtenstion(name).str());
+  return res;
 }
 
 func trimExtenstion(name: str): str{
@@ -201,6 +200,20 @@ impl Compiler{
   }
 
   func link_run(self, name0: str, args: str){
+    self.link(name0, args);
+    self.run(name0, args);
+  }
+
+  func run(self, name0: str, args: str){
+    let name_pre = format("./{}", name0);
+    name0 = name_pre.str();
+    let name: CStr = name0.cstr();
+    if(system(name.ptr()) != 0){
+      panic("error while running {}", name);
+    }
+  }
+
+  func link(self, name0: str, args: str){
     let name_pre = format("./{}", name0);
     name0 = name_pre.str();
     let name: CStr = name0.cstr();
@@ -222,10 +235,6 @@ impl Compiler{
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
       //run if linked
-      if(system(name.ptr()) != 0){
-        print("{}\n", cmd_s);
-        panic("error while running {}", name);
-      }
     }else{
       panic("link failed '{}'", cmd_s);
     }
@@ -234,7 +243,7 @@ impl Compiler{
   func compile(self, path0: CStr): String{
     //print("compile {}\n", path0);
     let path = Path::new(path0.get_heap());
-    let outFile: String = get_out_file(path0.get());
+    let outFile: String = get_out_file(path0.get(), self);
     let ext = path.ext();
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
@@ -271,7 +280,7 @@ impl Compiler{
     }
     
     let name = getName(path0.get());
-    let llvm_file = format("{}-bt.ll", trimExtenstion(name));
+    let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     if(self.config.verbose){
@@ -1472,12 +1481,13 @@ impl Compiler{
       let rt = self.get_resolver().visit(node);
       let ty = self.mapType(&rt.type);
       let decl = rt.targetDecl.unwrap();
-      for(let i=0;i<args.len();++i){
+      for(let i = 0;i < args.len();++i){
         let arg = args.get_ptr(i);
         if(!arg.isBase) continue;
         let base_ptr = self.gep2(ptr, 0, ty);
         let val_ptr = self.visit(&arg.expr);
-        self.copy(base_ptr, val_ptr, &rt.type);
+        let base_rt = self.get_resolver().visit(&arg.expr);
+        self.copy(base_ptr, val_ptr, &base_rt.type);
       }
       if let Decl::Struct(fields*)=(decl){
         let field_idx = 0;

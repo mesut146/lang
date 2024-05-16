@@ -140,7 +140,7 @@ Method *findDrop(Compiler *c, const Type &type) {
         return m;
     }
     for (auto &is : c->resolv->get_imports()) {
-        auto r2 = c->resolv->getResolver(is, c->resolv->root);
+        auto r2 = c->resolv->context->getResolver(is);
         auto m2 = findDrop(r2->unit.get(), type, c);
         if (m2) {
             return m2;

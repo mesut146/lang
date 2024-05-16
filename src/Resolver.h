@@ -279,18 +279,32 @@ struct FormatInfo {
 
 void generate_format(MethodCall *mc, Resolver *r);
 
+struct Context {
+    std::string root;
+    std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
+    static std::vector<std::string> prelude;
+
+    explicit Context(const std::string &root) : root(root) {}
+
+    std::string getPath(ImportStmt &is) {
+        return root + "/" + join(is.list, "/") + ".x";
+    }
+
+    std::shared_ptr<Resolver> getResolver(const std::string &path);
+    std::shared_ptr<Resolver> getResolver(const ImportStmt &is);
+
+    void init_prelude();
+};
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
     std::unordered_map<int, RType> cache;
     std::unordered_map<std::string, RType> typeMap;
     std::vector<Scope> scopes;
-    int max_scope;
-    std::unordered_map<std::string, MutKind> mut_params;
     Impl *curImpl = nullptr;
     Method *curMethod = nullptr;
     std::vector<Method *> generatedMethods;
-    //std::map<int, std::unique_ptr<Method>> format_methods;
     int inLoop = 0;
     bool isResolved = false;
     bool is_init = false;
@@ -299,30 +313,16 @@ public:
     std::map<std::string, Method *> drop_methods;
     std::map<int, FormatInfo> format_map;
     std::unordered_set<Method *> usedMethods;
-    std::map<Method *, Method *> overrideMap;
-    static std::unordered_map<std::string, std::shared_ptr<Resolver>> resolverMap;
-    static std::vector<std::string> prelude;
-    std::string root;
+    Context *context;
 
-    explicit Resolver(std::shared_ptr<Unit> unit, const std::string &root);
+    explicit Resolver(std::shared_ptr<Unit> unit, Context *ctx) : unit(unit), context(ctx) {}
     ~Resolver() = default;
-
-    static std::shared_ptr<Resolver> getResolver(const std::string &path, const std::string &root);
-    static std::shared_ptr<Resolver> getResolver(ImportStmt &is, const std::string &root);
-
-    static void init_prelude();
-
-    std::string getPath(ImportStmt &is) {
-        return root + "/" + join(is.list, "/") + ".x";
-    }
 
     void err(Node *e, const std::string &msg);
     void err(const std::string &msg);
 
     static int findVariant(EnumDecl *decl, const std::string &name);
 
-    Method *isOverride(Method *method);
-    static bool do_override(Method *m1, Method *m2);
     bool isCyclic(const Type &type, BaseDecl *target);
     bool is_base_of(const Type &base, BaseDecl *d);
     Type inferStruct(ObjExpr *node, bool hasNamed, const std::vector<Type> &typeArgs, std::vector<FieldDecl> &fields, const Type &type);

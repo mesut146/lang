@@ -130,6 +130,27 @@ func exist(path: str): bool{
   return is_file(path) || is_dir(path);
 }
 
+func create_file(path: str){
+  let path_c = CStr::from_slice(path);
+  let fp = fopen(path_c.ptr(), "w".cptr());
+  if(fp as u64 != 0){
+    fclose(fp);
+  }
+  Drop::drop(path_c);
+}
+
+func create_dir(path: str){
+  if(exist(path)){
+    return;
+  }
+  let path_c = CStr::from_slice(path);
+  let rc = mkdir(path_c.ptr(), /*0777*/ /*511*/ 511);
+  if(rc != 0){
+    print("code='{}'\n", rc);
+    panic("failed to create dir {}, code={}", path, &rc);
+  }
+}
+
 func resolve(path: CStr*): CStr{
   let buf = [0i8; 256];
   let ptr = realpath(path.ptr(), &buf[0] as i8*);
@@ -141,7 +162,6 @@ func resolve(path: CStr*): CStr{
   return CStr::new(slice);
 }
 
-#derive(Drop)
 struct Path{
   path: String;
 }

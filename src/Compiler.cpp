@@ -27,8 +27,6 @@
 
 namespace fs = std::filesystem;
 
-std::vector<std::string> Compiler::global_protos;
-
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -61,110 +59,8 @@ std::string read_file(const std::string &path) {
 }
 
 
-void Compiler::init() {
-    TargetTriple = llvm::sys::getDefaultTargetTriple();
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllAsmParsers();
-    llvm::InitializeAllAsmPrinters();
-
-    std::string Error;
-    //llvm::TargetRegistry::printRegisteredTargetsForVersion(llvm::outs());
-    auto Target = llvm::TargetRegistry::lookupTarget(TargetTriple, Error);
-
-    if (!Target) {
-        throw std::runtime_error(Error);
-    }
-    auto CPU = "generic";
-    auto Features = "";
-
-    llvm::TargetOptions opt;
-    auto RM = std::optional<llvm::Reloc::Model>(llvm::Reloc::Model::PIC_);
-    TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
-    Resolver::init_prelude();
-
-    //llvm::sys::PrintStackTraceOnErrorSignal("lang");
-    cache2.read_cache();
-    Compiler::global_protos.clear();
-}
-
-void Compiler::compileAll() {
-    single_mode = false;
-    init();
-    for (const auto &e : fs::recursive_directory_iterator(srcDir)) {
-        if (e.is_directory()) continue;
-        compile(e.path().string());
-    }
-    //compile main file last so that we collect all globals
-    if (main_file.has_value()) {
-        compile(main_file.value());
-    }
-
-    link_run("", "");
-    /*for (auto &[k, v] : Resolver::resolverMap) {
-        //v.reset();
-        //v->unit.reset();
-    }*/
-}
-
-void Compiler::link_run(const std::string &name0, const std::string &args) {
-    auto name = name0;
-    if (name0.empty()) {
-        name = "a.out";
-    }
-    if (fs::exists(name)) {
-        system(("rm " + name).c_str());
-    }
-    std::string cmd = "clang-16 -no-pie ";
-    cmd.append("-o ").append(name).append(" ");
-    for (auto &obj : compiled) {
-        cmd.append(obj);
-        cmd.append(" ");
-    }
-    compiled.clear();
-    cmd.append(args);
-    if (system(cmd.c_str()) == 0) {
-        auto code = system(("./" + name).c_str());
-        if (code != 0) {
-            print("code = " + std::to_string(code));
-            exit(1);
-        }
-    } else {
-        print(cmd + "\n");
-        throw std::runtime_error("link failed");
-    }
-}
-
-void Compiler::build_library(const std::string &name, bool shared) {
-    std::string cmd = "";
-    if (shared) {
-        cmd += "clang-16 ";
-        cmd += "-shared -o ";
-        cmd += name;
-    } else {
-        cmd += "ar rcs ";
-        cmd += name;
-    }
-    cmd += " ";
-    for (auto &obj : compiled) {
-        cmd.append(obj);
-        cmd.append(" ");
-    }
-    compiled.clear();
-    if (system(cmd.c_str()) == 0) {
-        print("build library " + name);
-    } else {
-        print(cmd + "\n");
-        throw std::runtime_error("link failed");
-    }
-}
-
-void Compiler::emit(std::string &Filename) {
+void Compiler::emit_object(std::string &Filename) {
     if (Config::debug) DBuilder->finalize();
-
-    mod->setDataLayout(TargetMachine->createDataLayout());
-    mod->setTargetTriple(TargetTriple);
 
     std::error_code EC;
     llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
@@ -190,22 +86,23 @@ void Compiler::emit(std::string &Filename) {
     }
 }
 
-void initModule(const std::string &path, Compiler *c) {
+void Compiler::initModule(const std::string &path) {
     auto name = getName(path);
-    if (!c->ctxp) {
-        c->ctxp = std::make_unique<llvm::LLVMContext>();
+    if (ctxp) {
+        throw std::runtime_error("ctx already set");
     }
-    c->mod = std::make_unique<llvm::Module>(name, c->ctx());
-    c->mod->setTargetTriple(c->TargetTriple);
-    c->mod->setDataLayout(c->TargetMachine->createDataLayout());
-    c->Builder = std::make_unique<llvm::IRBuilder<>>(c->ctx());
-    c->init_dbg(path);
-    /*c->mod->addModuleFlag(llvm::Module::Warning, "branch-target-enforcement", (uint32_t) 0);
-    c->mod->addModuleFlag(llvm::Module::Warning, "sign-return-address", (uint32_t) 0);
-    c->mod->addModuleFlag(llvm::Module::Warning, "sign-return-address-all", (uint32_t) 0);
-    c->mod->addModuleFlag(llvm::Module::Warning, "sign-return-address-with-bkey", (uint32_t) 0);
-    c->mod->addModuleFlag(llvm::Module::Warning, "uwtable", (uint32_t) 0);
-    c->mod->addModuleFlag(llvm::Module::Warning, "frame-pointer", (uint32_t) 0);*/
+    if (mod) {
+        throw std::runtime_error("mod already set");
+    }
+    if (Builder) {
+        throw std::runtime_error("Builder already set");
+    }
+    ctxp = std::make_unique<llvm::LLVMContext>();
+    mod = std::make_unique<llvm::Module>(name, ctx());
+    mod->setTargetTriple(TargetTriple);
+    mod->setDataLayout(TargetMachine->createDataLayout());
+    Builder = std::make_unique<llvm::IRBuilder<>>(ctx());
+    init_dbg(path);
 }
 
 void copy_file(const std::string &path, const std::string &outDir, const std::string &name) {
@@ -280,7 +177,7 @@ void dbg_glob(Compiler *c, Global &g, const Type &type) {
 
 void init_globals(Compiler *c) {
     for (auto &is : c->resolv->get_imports()) {
-        auto res = Resolver::getResolver(is, c->resolv->root);
+        auto res = c->resolv->context->getResolver(is);
         for (auto &g : res->unit->globals) {
             //auto type = c->resolv->getType(g.expr.get());
             auto type = res->getType(g.expr.get());
@@ -298,7 +195,7 @@ void init_globals(Compiler *c) {
     }
     auto staticf = make_init_proto(c->unit->path, c);
     std::string mangled = staticf->getName().str();
-    Compiler::global_protos.push_back(c->unit->path);
+    DirCompiler::global_protos.push_back(c->unit->path);
     Method m(c->unit->path);
     m.type = Type("void");
     m.name = mangled;
@@ -353,11 +250,12 @@ bool has_main(Unit *unit) {
     return false;
 }
 
-std::optional<std::string> Compiler::compile(const std::string &path) {
+std::optional<std::string> Compiler::compile(const std::string &path, DirCompiler &dc) {
+    init_llvm();
     fs::path p(path);
-    auto outFile = get_out_file(path);
-    if (!cache2.need_compile(path)) {
-        compiled.push_back(outFile);
+    auto outFile = dc.out_dir + "/" + get_out_file(path);
+    if (!dc.cache.need_compile(path, outFile)) {
+        dc.compiled.push_back(outFile);
         return outFile;
     }
     auto ext = p.extension().string();
@@ -367,18 +265,20 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
     if (Config::verbose) {
         std::cout << "compiling " << path << std::endl;
     }
-    resolv = Resolver::getResolver(path, srcDir);
+    resolv = context.getResolver(path);
+    context.init_prelude();
     curOwner.init(this);
     unit = resolv->unit;
     if (has_main(unit.get())) {
-        main_file = path;
-        if (!single_mode) {//compile last
+        dc.main_file = path;
+        if (dc.skip_main) {//compile last
             return outFile;
         }
     }
     resolv->resolveAll();
 
-    initModule(path, this);
+    initModule(path);
+
     createProtos();
     init_globals(this);
 
@@ -389,42 +289,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
         auto m = resolv->generatedMethods.at(i);
         genCode(m);
     }
-    int lastpos = unit->items.size();
-    // for (auto &imp : curOwner.drop_impls) {
-    //     auto m = &imp->methods.at(0);
-    //     AstCopier cp;
-    //     auto item = std::make_unique<Impl>(imp->type);
-    //     auto res = std::any_cast<Method *>(cp.visitMethod(m));
-    //     res->parent = m->parent;
-    //     item->methods.push_back(std::move(*res));
-    //     unit->items.push_back(std::move(item));
-    // }
-    // for (int i = lastpos; i < unit->items.size(); ++i) {
-    //     auto it = unit->items[i].get();
-    //     auto imp = dynamic_cast<Impl *>(it);
-    //     auto m = &imp->methods.at(0);
-    //     print("resolve drop_impl " + imp->type.print() + " => " + mangle(m));
-    //     imp->accept(resolv.get());
-    // }
-    // for (int i = lastpos; i < unit->items.size(); ++i) {
-    //     auto it = unit->items[i].get();
-    //     auto imp = dynamic_cast<Impl *>(it);
-    //     auto m = &imp->methods.at(0);
-    //     print("make_proto " + imp->type.print());
-    //     make_proto(m);
-    // }
-    // for (int i = lastpos; i < unit->items.size(); ++i) {
-    //     auto it = unit->items[i].get();
-    //     auto imp = dynamic_cast<Impl *>(it);
-    //     auto m = &imp->methods.at(0);
-    //     print("genCode drop_impl " + imp->type.print() + " => " + mangle(m));
-    //     genCode(m);
-    // }
 
     //emit llvm
     auto name = getName(path);
     auto noext = trimExtenstion(name);
-    auto llvm_file = noext + ".ll";
+    auto llvm_file = dc.out_dir + "/" + noext + ".ll";
     std::error_code ec;
     llvm::raw_fd_ostream fd(llvm_file, ec);
     mod->print(fd, nullptr);
@@ -436,11 +305,11 @@ std::optional<std::string> Compiler::compile(const std::string &path) {
 
     //todo fullpath
 
-    emit(outFile);
+    emit_object(outFile);
     cleanup();
-    compiled.push_back(outFile);
-    cache2.update(p);
-    cache2.write_cache();
+    dc.compiled.push_back(outFile);
+    dc.cache.update(p);
+    dc.cache.write_cache();
     return outFile;
 }
 
@@ -457,9 +326,6 @@ void Compiler::cleanup() {
     //ctxp.reset();
     //mod.reset();
     //Builder.reset();
-    virtuals.clear();
-    vtables.clear();
-    virtualIndex.clear();
     globals.clear();
     //delete staticf;
 }
@@ -632,23 +498,7 @@ llvm::Function *Compiler::make_proto(Method *m) {
     }
     funcMap[mangled] = f;
     resolv->curMethod = nullptr;
-    if (m->isVirtual) virtuals.push_back(m);
     return f;
-}
-
-std::vector<Method *> getVirtual(StructDecl *decl, Unit *unit) {
-    std::vector<Method *> arr;
-    for (auto &item : unit->items) {
-        if (!item->isImpl()) continue;
-        auto imp = (Impl *) item.get();
-        if (imp->type.name != decl->type.name) continue;
-        for (auto &m : imp->methods) {
-            if (m.isVirtual) {
-                arr.push_back(&m);
-            }
-        }
-    }
-    return arr;
 }
 
 llvm::Type *get_variant_type(const Type &type, Compiler *c) {
@@ -659,64 +509,6 @@ llvm::Type *get_variant_type(const Type &type, Compiler *c) {
     throw std::runtime_error("get_variant_type " + type.print());
 }
 
-llvm::Type *Compiler::makeDecl(BaseDecl *bd) {
-    //print("makeDecl " + bd->type.print());
-    if (bd->isGeneric) {
-        return nullptr;
-    }
-    auto mangled = bd->type.print();
-    if (!classMap.contains(mangled)) {
-        auto ty = llvm::StructType::create(ctx(), mangled);
-        classMap[mangled] = ty;
-        return ty;
-    }
-    //fill body
-    auto r = resolv.get();
-
-    auto ty = (llvm::StructType *) classMap.at(mangled);
-    if (bd->isEnum()) {
-        auto ed = dynamic_cast<EnumDecl *>(bd);
-        int max_var = 0;
-        for (auto &ev : ed->variants) {
-            std::vector<llvm::Type *> var_elems;
-            if (bd->base) {
-                var_elems.push_back(mapType(bd->base.value()));
-            }
-            for (auto &field : ev.fields) {
-                var_elems.push_back(mapType(&field.type));
-            }
-            auto var_mangled = mangled + "::" + ev.name;
-            auto var_ty = llvm::StructType::create(ctx(), var_elems, var_mangled);
-            classMap[var_mangled] = var_ty;
-            auto var_size = mod->getDataLayout().getStructLayout(var_ty)->getSizeInBits();
-            if (var_size > max_var) {
-                max_var = var_size;
-            }
-        }
-        auto data_size = max_var / 8;
-        auto tag_type = getInt(ENUM_TAG_BITS);
-        auto data_type = llvm::ArrayType::get(getInt(8), data_size);
-        Layout::set_elems_enum(ty, tag_type, data_type);
-    } else {
-        auto td = dynamic_cast<StructDecl *>(bd);
-        std::vector<llvm::Type *> elems;
-        for (auto &field : td->fields) {
-            elems.push_back(mapType(&field.type, resolv.get()));
-        }
-        //vtable ptr
-        if (!getVirtual(td, unit.get()).empty()) {
-            elems.push_back(getInt(8)->getPointerTo()->getPointerTo());
-        }
-        if (bd->base) {
-            auto base_ty = mapType(bd->base.value(), resolv.get());
-            Layout::set_elems_struct(ty, base_ty, elems);
-        } else {
-            Layout::set_elems_struct(ty, nullptr, elems);
-        }
-    }
-    return ty;
-}
-
 void Compiler::createProtos() {
     if (!sliceType) {
         sliceType = make_slice_type();
@@ -724,33 +516,7 @@ void Compiler::createProtos() {
     if (!stringType) {
         stringType = make_string_type();
     }
-    std::vector<BaseDecl *> list;
-    for (auto bd : getTypes(unit.get())) {
-        if (bd->isGeneric) continue;
-        list.push_back(bd);
-        //print("local "+bd->type.print());
-    }
-    for (auto bd : resolv->usedTypes) {
-        if (bd->isGeneric) {
-            //error("gen");
-            continue;
-        }
-        list.push_back(bd);
-        //print("used "+bd->type.print());
-    }
-    sort(list, resolv.get());
-    for (auto bd : list) {
-        makeDecl(bd);
-    }
-    for (auto bd : list) {
-        makeDecl(bd);
-    }
-    for (auto bd : list) {
-        map_di_proto(bd);
-    }
-    for (auto bd : list) {
-        map_di_fill(bd);
-    }
+    make_decl_protos();
     //methods
     for (auto m : getMethods(unit.get())) {
         make_proto(m);
@@ -767,80 +533,10 @@ void Compiler::createProtos() {
     fflush_proto = make_fflush();
     exit_proto = make_exit();
     mallocf = make_malloc();
-    make_vtables();
     stdout_ptr = new llvm::GlobalVariable(*mod, getPtr(), false, llvm::GlobalValue::ExternalLinkage, nullptr, "stdout");
     stdout_ptr->addAttribute("global");
 }
 
-int find_idx(std::vector<Method *> &vt, Method *m) {
-    for (int i = 0; i < vt.size(); i++) {
-        if (Resolver::do_override(m, vt[i])) return i;
-    }
-    throw std::runtime_error("internal error");
-}
-
-void Compiler::make_vtables() {
-    std::map<std::string, std::vector<Method *>> map;
-    for (auto m : virtuals) {
-        auto p = m->self->type->unwrap().print();
-        map[p].push_back(m);
-        virtualIndex[m] = map[p].size() - 1;
-    }
-    //override
-    std::vector<std::string> done;
-    for (auto [df, basef] : resolv->overrideMap) {
-        auto base = basef->self->type->unwrap().print();
-        auto key = df->self->type->unwrap().print() + "." + base;
-        if (std::find(done.begin(), done.end(), key) != done.end()) {
-            continue;
-        }
-        done.push_back(key);
-        auto &vt = map[base];
-        auto dvt = vt;
-        //now update base vt by overrides
-        dvt[find_idx(vt, df)] = df;
-        //other bases can override other methods of base
-        auto decl = resolv->resolve(&*df->self->type).targetDecl;
-        std::map<Method *, Type> mrm;
-        mrm[basef] = *df->self->type;
-        while (decl->base && decl->base->print() != base) {
-            for (auto [k2, v2] : resolv->overrideMap) {
-                //check we override same vt
-                if (v2->self->type->print() != base) continue;
-                //prevent my upper overriding base bc we care below us
-                if (Resolver::do_override(k2, basef)) continue;
-                //if(k2->self->type->print() != decl->base->print()) continue;
-                //keep outermost
-                auto it = mrm.find(v2);
-                if (it != mrm.end()) {
-                    //already overrode, keep outermost
-                    auto dcl = resolv->resolve(it->second).targetDecl;
-                    if (resolv->is_base_of(*k2->self->type, dcl)) {
-                        continue;
-                    }
-                }
-                dvt[find_idx(vt, k2)] = k2;
-                mrm[v2] = k2->self->type->unwrap();
-            }
-            decl = resolv->resolve(*decl->base).targetDecl;
-        }
-        map[key] = dvt;
-    }
-    for (auto &[k, v] : map) {
-        auto i8p = getInt(8)->getPointerTo();
-        auto arrt = llvm::ArrayType::get(i8p, 1);
-        auto linkage = llvm::GlobalValue::ExternalLinkage;
-        std::vector<llvm::Constant *> arr;
-        for (auto m : v) {
-            auto f = funcMap.at(mangle(m));
-            auto fcast = llvm::ConstantExpr::getCast(llvm::Instruction::BitCast, f, i8p);
-            arr.push_back(fcast);
-        }
-        auto init = llvm::ConstantArray::get(arrt, arr);
-        auto vt = new llvm::GlobalVariable(*mod, arrt, true, linkage, init, k + ".vt");
-        vtables[k] = vt;
-    }
-}
 
 void Compiler::allocParams(Method *m) {
     //alloc
@@ -939,7 +635,7 @@ void Compiler::genCode(Method *m) {
     makeLocals(m->body.get());
     storeParams(curMethod, this);
     if (is_main(m)) {
-        for (auto &init_proto_path : Compiler::global_protos) {
+        for (auto &init_proto_path : DirCompiler::global_protos) {
             loc(0, 0);
             auto init_proto = mod->getFunction(mangle_static(init_proto_path));
             if (!init_proto) {
@@ -949,7 +645,6 @@ void Compiler::genCode(Method *m) {
             Builder->CreateCall(init_proto, args2);
         }
     }
-    resolv->max_scope = 0;
     resolv->newScope();
     m->body->accept(this);
     auto exit = Exit::get_exit_type(m->body.get());
@@ -1594,40 +1289,7 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *sret) {
             curOwner.doMoveCall(a);
         }
     }
-
-    //virtual logic
-    llvm::Value *res;
-    auto it = resolv->overrideMap.find(target);
-    Method *base = nullptr;
-    if (it != resolv->overrideMap.end()) base = it->second;
-    if (target->isVirtual || base) {
-        auto scp = resolv->resolve(mc->scope.get());
-        if (scp.type.isPointer()) {
-            scp.type = *scp.type.scope.get();
-        }
-        int index;
-        if (target->isVirtual) {
-            index = virtualIndex[target];
-        } else {
-            index = virtualIndex[base];
-        }
-        if (target->isVirtual) {
-            scp = resolv->resolve(*target->self->type);
-        } else {
-            scp = resolv->resolve(*base->self->type);
-        }
-        auto decl = (StructDecl *) scp.targetDecl;
-        int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-        auto vt = gep2(obj, vt_index, decl->type);
-        vt = load(vt);
-        auto ft = f->getType();
-        auto real = llvm::ArrayType::get(ft, 1);
-        auto fptr = load(gep(vt, 0, index, real));
-        auto ff = f->getFunctionType();
-        res = (llvm::Value *) Builder->CreateCall(ff, fptr, args);
-    } else {
-        res = (llvm::Value *) Builder->CreateCall(f, args);
-    }
+    auto res = (llvm::Value *) Builder->CreateCall(f, args);
     if (sret) {
         return args[0];
     }
@@ -1754,12 +1416,13 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
             auto base_index = Layout::get_base_index(tt.targetDecl);
             auto base_ptr = gep2(ptr, base_index, ty);
             auto val = dynamic_cast<ObjExpr *>(arg.value);
+            auto base_rt = resolv->resolve(arg.value);
             if (val) {
                 auto key = tt.targetDecl->type.print();
-                object(val, base_ptr, resolv->resolve(arg.value), derived ? derived : &key);
+                object(val, base_ptr, base_rt, derived ? derived : &key);
             } else {
                 auto val_ptr = gen(arg.value);
-                copy(base_ptr, val_ptr, tt.type);
+                copy(base_ptr, val_ptr, base_rt.type);
                 //setField(arg.value, resolv->getType(arg.value), base_ptr);
             }
             break;
@@ -1778,20 +1441,6 @@ void Compiler::object(ObjExpr *node, llvm::Value *ptr, const RType &tt, std::str
     } else {
         //class
         auto decl = dynamic_cast<StructDecl *>(tt.targetDecl);
-        if (!getVirtual(decl, unit.get()).empty()) {
-            //set vtable
-            auto vt = vtables[decl->type.print()];
-            //use modified vtable of derived
-            if (derived) {
-                auto it = vtables.find(*derived + "." + decl->type.print());
-                if (it != vtables.end()) {
-                    vt = it->second;
-                }
-            }
-            int vt_index = decl->fields.size() + (decl->base ? 1 : 0);
-            auto vt_target = gep2(ptr, vt_index, ty);
-            Builder->CreateStore(vt, vt_target);
-        }
         int field_idx = 0;
         for (int i = 0; i < node->entries.size(); i++) {
             auto &e = node->entries[i];
@@ -1945,18 +1594,26 @@ std::any Compiler::visitIsExpr(IsExpr *node) {
 }
 
 std::any Compiler::visitAsExpr(AsExpr *node) {
-    auto lhs = resolv->getType(node->expr);
-    auto ty = resolv->getType(&node->type);
+    auto lhs = resolv->resolve(node->expr);
+    auto rhs = resolv->resolve(&node->type);
     //ptr to int
-    if (lhs.isPointer() && ty.print() == "u64") {
+    if (lhs.type.isPointer() && rhs.type.print() == "u64") {
         auto val = get_obj_ptr(node->expr);
-        return Builder->CreatePtrToInt(val, mapType(ty));
+        return Builder->CreatePtrToInt(val, mapType(rhs.type));
     }
-    if (ty.isPrim()) {
+    //prim to prim
+    if (rhs.type.isPrim()) {
         auto val = loadPtr(node->expr);
-        return extend(val, lhs, ty, this);
+        return extend(val, lhs.type, rhs.type, this);
     }
-    return get_obj_ptr(node->expr);
+    auto val = get_obj_ptr(node->expr);
+    //struct to base
+    if (lhs.targetDecl && lhs.targetDecl->isEnum() && rhs.targetDecl) {
+        auto index = Layout::get_base_index(lhs.targetDecl);
+        val = gep2(val, index, lhs.type.unwrap());
+        return val;
+    }
+    return val;
 }
 
 std::any Compiler::slice(ArrayAccess *node, llvm::Value *sp, const Type &arrty) {
@@ -2321,18 +1978,14 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     set_and_insert(then);
     loops.push_back(updatebb);
     loopNext.push_back(next);
-    int backup = resolv->max_scope;
     node->body->accept(this);
     curOwner.endScope(*then_scope);
     curOwner.setScope(cur_scope);
-    int backup2 = resolv->max_scope;
-    resolv->max_scope = backup;
     Builder->CreateBr(updatebb);
     Builder->SetInsertPoint(updatebb);
     for (auto &u : node->updaters) {
         u->accept(this);
     }
-    resolv->max_scope = backup2;
     loops.pop_back();
     loopNext.pop_back();
     Builder->CreateBr(condbb);

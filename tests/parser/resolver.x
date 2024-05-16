@@ -19,6 +19,7 @@ struct Context{
   map: Map<String, Resolver>;
   root: String;
   prelude: List<String>;
+  out_dir: String;
 }
 
 impl Drop for Context{
@@ -27,6 +28,7 @@ impl Drop for Context{
     self.map.drop();
     self.root.drop();
     self.prelude.drop();
+    self.out_dir.drop();
   }
 }
 
@@ -137,13 +139,13 @@ impl Debug for RType{
 }
 
 impl Context{
-  func new(src_dir: String): Context{
-    let arr = ["Box", "List", "str", "String", "Option", "ops"];
+  func new(src_dir: String, out_dir: String): Context{
+    let arr = ["box", "list", "str", "string", "option", "ops"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
-    return Context{map: Map<String, Resolver>::new(), root: src_dir, prelude: pre};
+    return Context{map: Map<String, Resolver>::new(), root: src_dir, prelude: pre, out_dir: out_dir};
   }
   func create_resolver(self, path: String*): Resolver*{
     let res = self.map.get_ptr(path);
@@ -290,6 +292,7 @@ impl Resolver{
     let unit = parser.parse_unit();
     Drop::drop(parser);
     if(print_unit){
+      print("print_unit\n");
       print("unit={}\n", unit);
     }
     

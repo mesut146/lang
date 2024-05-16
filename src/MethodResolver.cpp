@@ -100,7 +100,7 @@ std::vector<Signature> MethodResolver::collect(Signature &sig) {
     } else {
         findMethod(mc->name, list);
         for (auto &is : r->get_imports()) {
-            auto resolver = Resolver::getResolver(is, r->root);
+            auto resolver = r->context->getResolver(is);
             resolver->init();
             MethodResolver mr(resolver.get());
             mr.findMethod(mc->name, list);
@@ -216,7 +216,7 @@ void MethodResolver::getMethods(Signature &sig, std::vector<Signature> &list, bo
     }
     if (imports) {
         for (auto &is : r->get_imports()) {
-            auto resolver = Resolver::getResolver(is, r->root);
+            auto resolver = r->context->getResolver(is);
             resolver->init();
             MethodResolver mr(resolver.get());
             mr.getMethods(sig, list, false);

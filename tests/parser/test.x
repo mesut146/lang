@@ -15,9 +15,15 @@ func root(): str{
   return "../tests";
 }
 
+func make_context(): Context{
+  let out_dir = "./bt_out";
+  create_dir(out_dir);
+  return Context::new(root().str(), out_dir.str());
+}
+
 func build_std(){
   let root = root();
-  let ctx = Context::new(root.str());
+  let ctx = make_context();
   let cmp = Compiler::new(ctx);
   compile_dir(&cmp, CStr::new("../tests/std"), false);
   cmp.build_library("std.a", false);
@@ -54,7 +60,7 @@ func compile(cmp: Compiler*, file: str){
 func compiler_test(std_test: bool){
   print("compiler_test\n");
   let root = root();
-  let ctx = Context::new(root.str());
+  let ctx = make_context();
   let cmp = Compiler::new(ctx);
   build_std();
   if(std_test){
@@ -68,10 +74,10 @@ func compiler_test(std_test: bool){
 func bootstrap(){
   print("test::bootstrap\n");
   let root: str = root();
-  let ctx = Context::new(root.str());
+  let ctx: Context = make_context();
   let cmp = Compiler::new(ctx);
   //compile_dir(&cmp, CStr::new("../tests/parser"), false);
-  let arr = ["../tests/std/String.x",
+  let arr = ["../tests/std/string.x",
             "../tests/std/str.x",
             "../tests/std/ops.x",
             "../tests/std/libc.x",
@@ -89,7 +95,7 @@ func bootstrap(){
 
 func main(argc: i32, args: i8**){
   print("##########running##########\n");
-  print_unit = true;
+  print_unit = false;
   if(argc == 1){
     bootstrap();
     return;
@@ -107,7 +113,7 @@ func main(argc: i32, args: i8**){
   }
   else if(a1.eq("c")){
     let path = get_arg(args, 2);
-    let ctx = Context::new(root().str());
+    let ctx = make_context();
     let cmp = Compiler::new(ctx);
     if(is_dir(path)){
       compile_dir(&cmp, CStr::new(path), true);

@@ -14,3 +14,6 @@ impl E{
     let a = get();//this will resolve to E::A instead of A
   }
 }
+
+
+//%Expr.162 = type { i64, [128 x i8] }, size incorrect

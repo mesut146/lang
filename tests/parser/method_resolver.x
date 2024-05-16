@@ -53,7 +53,7 @@ impl Signature{
             res.real_scope = Option::new(scp.clone());
             //we need this to handle cases like Option::new(...)
             if (scp.targetDecl.is_some()) {
-                let trg = scp.targetDecl.unwrap();
+                let trg: Decl* = scp.targetDecl.unwrap();
                 let bd = trg as BaseDecl*;
                 let p = &bd.path;
                 if(!trg.is_generic && !trg.path.eq(&r.unit.path)){

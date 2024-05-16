@@ -43,7 +43,7 @@ impl<T> Clone for Box<T>{
 
 impl<T> Drop for Box<T>{
   func drop(*self){
-    Drop::drop(self.val);
+    Drop::drop(self.unwrap());
     free(self.val as i8*);
   }
 }

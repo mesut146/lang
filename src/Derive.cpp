@@ -366,6 +366,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
             } else {
                 sub = fmt_str.substr(i, pos - i);
             }
+            //f.print("<sub>");
             auto sub_mc = new MethodCall;
             sub_mc->loc(mc->line);
             sub_mc->scope.reset(new SimpleName(var_name));

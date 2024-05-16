@@ -192,4 +192,23 @@ impl str{
       return res;
     }
 
+    func replace(self, s1: str, s2: str): String{
+      let res = String::new();
+      let last = 0;
+      //"abcdbce" "bc" "x"
+      //"axdxe"
+      while(true){
+        let i = self.indexOf(s1, last);
+        if(i != -1){
+          res.append(self.str().substr(last, i));
+          res.append(s2);
+          last = i + s1.len();
+        }else{
+          res.append(self.str().substr(last));
+          break;
+        }
+      }
+      return res;
+    }
+
 }

@@ -54,27 +54,29 @@ RType binCast(const std::string &t1, const std::string &t2) {
 }
 
 
-std::shared_ptr<Resolver> Resolver::getResolver(const std::string &path, const std::string &root) {
+std::shared_ptr<Resolver> Context::getResolver(const std::string &path) {
     auto it = resolverMap.find(path);
     if (it != resolverMap.end()) return it->second;
     Lexer lexer(path);
     Parser parser(lexer);
     auto unit = parser.parseUnit();
-    auto resolver = std::make_shared<Resolver>(unit, root);
+    auto resolver = std::make_shared<Resolver>(unit, this);
     resolverMap[path] = resolver;
     return resolver;
 }
 
-std::shared_ptr<Resolver> Resolver::getResolver(ImportStmt &is, const std::string &root) {
-    return Resolver::getResolver(root + "/" + join(is.list, "/") + ".x", root);
+std::shared_ptr<Resolver> Context::getResolver(const ImportStmt &is) {
+    auto path = root + "/" + join(is.list, "/") + ".x";
+    return getResolver(path);
 }
 
-// void printLine(Resolver *r, Node *n) {
-//     std::cout << r->unit->path << ":" << n->line << std::endl;
-//     if (r->curMethod) {
-//         std::cout << "in " + printMethod(r->curMethod) << std::endl;
-//     }
-// }
+std::vector<std::string> Context::prelude = {"box", "list", "str", "string", "option", "ops", "libc"};
+
+void Context::init_prelude() {
+    for (auto &pre : prelude) {
+        getResolver(root + "/std/" + pre + ".x");
+    }
+}
 
 void Resolver::err(Node *e, const std::string &msg) {
     std::string s;
@@ -159,26 +161,6 @@ VarHolder *Scope::find(const std::string &name) {
     return nullptr;
 }
 
-// std::string Resolver::getId(Expression *e) {
-//     auto res = e->accept(&idgen);
-//     if (res.has_value()) {
-//         return std::any_cast<std::string>(res);
-//     }
-//     throw std::runtime_error("id: " + e->print());
-// }
-
-std::unordered_map<std::string, std::shared_ptr<Resolver>> Resolver::resolverMap;
-std::vector<std::string> Resolver::prelude = {"Box", "List", "str", "String", "Option", "ops", "libc"};
-
-Resolver::Resolver(std::shared_ptr<Unit> unit, const std::string &root) : unit(unit), root(root) {
-}
-
-void Resolver::init_prelude() {
-    for (auto &pre : prelude) {
-        getResolver(Config::root + "/std/" + pre + ".x", Config::root);
-    }
-}
-
 bool has(std::vector<ImportStmt> &arr, ImportStmt &is) {
     for (auto &i : arr) {
         auto s1 = join(i.list, "/");
@@ -207,8 +189,8 @@ std::string get_relative_root(const std::string &path, const std::string &root) 
 
 std::vector<ImportStmt> Resolver::get_imports() {
     std::vector<ImportStmt> imports;
-    auto cur = get_relative_root(unit->path, root);
-    for (auto &pre : prelude) {
+    auto cur = get_relative_root(unit->path, context->root);
+    for (auto &pre : Context::prelude) {
         //skip self unit being prelude
         if (cur == "std/" + pre + ".x") continue;
         ImportStmt is;
@@ -223,11 +205,11 @@ std::vector<ImportStmt> Resolver::get_imports() {
         }
     }
     if (curMethod && !curMethod->typeArgs.empty()) {
-        auto r = getResolver(curMethod->path, root);
+        auto r = context->getResolver(curMethod->path);
         for (auto &is : r->unit->imports) {
             if (has(imports, is)) continue;
             //skip self being cycle
-            if (unit->path == getPath(is)) continue;
+            if (unit->path == context->getPath(is)) continue;
             imports.push_back(is);
         }
     }
@@ -236,7 +218,6 @@ std::vector<ImportStmt> Resolver::get_imports() {
 
 void Resolver::newScope() {
     scopes.push_back(Scope{});
-    max_scope++;
 }
 
 void Resolver::dropScope() {
@@ -360,7 +341,7 @@ bool is_drop_impl(BaseDecl *bd, Impl *imp) {
 bool has_drop_impl(BaseDecl *bd, Resolver *r) {
     if (bd->path != r->unit->path) {
         //need own resolver
-        r = r->getResolver(bd->path, r->root).get();
+        r = r->context->getResolver(bd->path).get();
         r->init();
     }
     for (auto &it : r->unit->items) {
@@ -627,38 +608,6 @@ std::any Resolver::visitFieldDecl(FieldDecl *node) {
     return res;
 }
 
-bool Resolver::do_override(Method *m1, Method *m2) {
-    if (m1->name != m2->name || !m2->isVirtual || !m2->self || !m1->self || m1->params.size() != m2->params.size()) {
-        return false;
-    }
-    for (int i = 1; i < m1->params.size(); i++) {
-        if (m1->params[i].type->print() != m2->params[i].type->print()) {
-            return false;
-        }
-    }
-    return true;
-}
-
-//find base method that we override
-Method *Resolver::isOverride(Method *method) {
-    if (!method->self) return nullptr;
-    auto cur = *method->self->type;
-    while (true) {
-        auto decl = resolve(cur).targetDecl;
-        if (!decl || !decl->base) return nullptr;
-        auto base = *decl->base;
-        for (auto &item : unit->items) {//todo not just this unit
-            if (!item->isImpl()) continue;
-            auto imp = (Impl *) item.get();
-            if (imp->type.name != base.name) continue;
-            for (auto &m : imp->methods) {
-                if (do_override(method, &m)) return &m;
-            }
-        }
-        cur = base;
-    }
-    return nullptr;
-}
 
 std::any Resolver::visitMethod(Method *m) {
     if (m->isGeneric) {
@@ -675,15 +624,8 @@ std::any Resolver::visitMethod(Method *m) {
     if (m->isVirtual && !m->self) {
         err(m, "virtual method must have self parameter");
     }
-    //todo check if both virtual and override
-    auto orr = isOverride(m);
-    if (orr) {
-        //print(printMethod(m) + " overrides " + printMethod(orr));
-        overrideMap[m] = orr;
-    }
     auto res = resolve(m->type).clone();
     res.targetMethod = m;
-    max_scope = 0;
     newScope();
     if (m->self) {
         if (!m->self->type) err(m, "self type is not set");
@@ -862,7 +804,7 @@ std::any Resolver::visitType(Type *type) {
     }
     if (!target) {
         for (auto &is : get_imports()) {
-            auto resolver = getResolver(is, root);
+            auto resolver = context->getResolver(is);
             resolver->init();
             //try full type
             if (type->typeArgs.empty()) {
@@ -932,7 +874,7 @@ bool is_same_impl(Impl *a, Impl *b) {
 
 //find generated or user provided drop method
 Method *find_drop_method(BaseDecl *bd, Resolver *r0) {
-    auto r = r0->getResolver(bd->path, r0->root);
+    auto r = r0->context->getResolver(bd->path);
     r->init();
     for (auto &it : r->unit->items) {
         if (!it->isImpl()) continue;
@@ -1015,38 +957,6 @@ SimpleName *find_base(Expression *e) {
     auto de = dynamic_cast<DerefExpr *>(e);
     if (de) return find_base(de->expr.get());
     throw std::runtime_error("todo is_param: " + e->print());
-}
-
-void handleMut(Resolver *r, MutKind kind, const std::string &name) {
-    auto id = prm_id(*r->curMethod, name);
-    r->mut_params[id] = kind;
-}
-
-void does_alloc(Expression *e, Resolver *r) {
-    //todo func call can mutate too
-    auto sn = dynamic_cast<SimpleName *>(e);
-    if (sn) {
-        auto rt = r->resolve(sn);
-        if (rt.vh->prm) {
-            handleMut(r, MutKind::WHOLE, sn->name);
-        }
-        return;
-    }
-    auto de = dynamic_cast<DerefExpr *>(e);
-    if (de) {
-        auto sn2 = dynamic_cast<SimpleName *>(de->expr.get());
-        if (!sn2) return;
-        auto rt = r->resolve(sn2);
-        if (rt.vh->prm) {
-            handleMut(r, MutKind::DEREF, sn2->name);
-        }
-        return;
-    }
-    sn = find_base(e);
-    auto rt = r->resolve(sn);
-    if (rt.vh->prm) {
-        handleMut(r, MutKind::FIELD, sn->name);
-    }
 }
 
 bool has_pointer(const Type &ty, Resolver *r) {
@@ -1194,6 +1104,7 @@ std::any Resolver::visitUnary(Unary *node) {
 }
 
 std::any Resolver::visitSimpleName(SimpleName *node) {
+    //locals
     for (int i = scopes.size() - 1; i >= 0; i--) {
         auto vh = scopes[i].find(node->name);
         if (vh) {
@@ -1202,8 +1113,9 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
             return res;
         }
     }
+    //external globals
     for (auto &is : get_imports()) {
-        auto res = getResolver(is, root);
+        auto res = context->getResolver(is);
         for (auto &glob : res->unit->globals) {
             if (glob.name == node->name) {
                 return resolve(glob.expr);
@@ -1295,11 +1207,20 @@ bool Resolver::is_base_of(const Type &base, BaseDecl *d) {
 std::any Resolver::visitAsExpr(AsExpr *node) {
     auto left = resolve(node->expr);
     auto right = resolve(node->type);
-    //prim->prim
-    if (left.type.isPrim() && right.type.isPrim()) {
-        return right;
+    //primt to prim
+    if (left.type.isPrim()) {
+        if (right.type.isPrim()) {
+            return right;
+        }
+        if (right.type.isPointer()) {
+            return right;
+        }
     }
-    //derived->base
+    //ptr to u64
+    if (left.type.isPointer() && right.type.print() == "u64") {
+        return makeSimple("u64");
+    }
+    //derived to base
     if (left.targetDecl && left.targetDecl->base) {
         auto cur = left.targetDecl;
         while (cur && cur->base) {
@@ -1309,9 +1230,6 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
     }
     if (right.type.isPointer()) {
         return right;
-    }
-    if (left.type.isPointer() && right.type.print() == "u64") {
-        return makeSimple("u64");
     }
     throw std::runtime_error("invalid as expr " + node->print());
 }
@@ -1423,7 +1341,7 @@ std::any Resolver::visitIfStmt(IfStmt *node) {
 std::any Resolver::visitReturnStmt(ReturnStmt *node) {
     if (node->expr) {
         if (curMethod->type.isVoid()) {
-            error("void method returns expr");
+            err(node, "void method returns expr");
         }
         auto type = resolve(node->expr.get());
         auto mtype = getType(curMethod->type);
@@ -1434,7 +1352,7 @@ std::any Resolver::visitReturnStmt(ReturnStmt *node) {
         //curOwner->doMoveReturn(node->expr.get());
     } else {
         if (!curMethod->type.isVoid()) {
-            error("non-void method returns void");
+            err(node, "non-void method returns void");
         }
     }
     return nullptr;

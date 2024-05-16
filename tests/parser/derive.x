@@ -118,8 +118,11 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         for(let i=0;i<fields.len();++i){
             let fd = fields.get_ptr(i);
             if(!is_struct(&fd.type)) continue;
-            //{fd.name}.drop();
-            body.list.add(newCall(unit, fd.name.str(), "drop"));
+            //self.{fd.name}.drop();
+            let input = format("self.{}.drop();", &fd.name);
+            let drop_stmt = parse_stmt(input, unit);
+            print("drop_stmt: {}\n", &drop_stmt);
+            body.list.add(drop_stmt);
         }
     }
     let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
@@ -189,6 +192,14 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     return imp;
 }
 
+func parse_stmt(input: String, unit: Unit*): Stmt{
+    let parser = Parser::from_string(input);
+    parser.unit = Option::new(unit);
+    let res = parser.parse_stmt();
+    Drop::drop(parser);
+    return res;
+}
+
 func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
@@ -198,11 +209,11 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     if (lit_opt.is_none()) {
         r.err(node, "format arg not str literal");
     }
-    let fmt_str: String* = lit_opt.unwrap();
+    let fmt_str: str = lit_opt.unwrap().str();
     let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
     for (let i = 0;i < format_specs.len();++i) {
         let fs = format_specs[i];
-        if (fmt_str.str().contains(fs)) {
+        if (fmt_str.contains(fs)) {
             r.err(node, format("invalid format specifier: {}", fs));
         }
     }
@@ -214,7 +225,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //"..".print(), exit(1) will be called by compiler
         let print_mc = Call::new("print".str());
         if (Resolver::is_panic(mc)) {
-            print_mc.scope = Ptr::new(make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str.str()), &r.unit));
+            print_mc.scope = Ptr::new(make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str), &r.unit));
         } else {
             print_mc.scope = Ptr::new(AstCopier::clone(fmt, &r.unit));
         }
@@ -224,11 +235,46 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.format_map.add(node.id, info);
         return;
     }
+    let var_name = format("f_{}", node.id);
     //let f = Fmt::new();
-    let parser = Parser::from_string("let f = Fmt::new();".str());
-    let var_stmt = parser.parse_stmt();
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit);
     print("var_stmt: {}\n", &var_stmt);
+    block.list.add(var_stmt);
+    let pos = 0;
+    let arg_idx = 0;
+    while(pos < fmt_str.len()){
+        let br_pos = fmt_str.indexOf("{}", pos);
+        if(br_pos == -1 || br_pos > pos){
+            let sub = "";
+            if(br_pos == -1){
+                sub = fmt_str.substr(pos);
+            }else{
+                sub = fmt_str.substr(pos, br_pos);
+            }
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print({});", &var_name, sub2), &r.unit);
+            print("st: {}\n", &st);
+            block.list.add(st);
+            break;
+        }else{
+
+        }
+    }
+    r.format_map.add(node.id, info);
     r.err(node, "generate_format");
+}
+
+//replace non escaped quotes into escaped ones
+func normalize_quotes(s: str): String{
+    let res = String::new();
+    for(let i = 0;i < s.len();++i){
+        let c = s.get(i);
+        if(c == "\"" || c == "\\"){
+            res.add('\\');
+        }
+        res.add(c);
+    }
+    return res;
 }
 
 func make_panic_messsage(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {

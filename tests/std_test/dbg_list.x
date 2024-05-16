@@ -1,6 +1,3 @@
-import std/List
-import std/libc
-
 func main(){
   let arr = List<i32>::new();
   arr.add(10);
