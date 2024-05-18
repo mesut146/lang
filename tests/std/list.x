@@ -12,7 +12,7 @@ struct List<T>{
 func get_malloc<T>(size: i64): T*{
   let ptr = malloc<T>(size);
   if(ptr as u64 == 0){
-    panic("malloc returned null for size: {}", size);
+    panic("malloc returned null");
   }
   return ptr;
 }
@@ -37,7 +37,8 @@ impl<T> List<T>{
     }
     let tmp = get_malloc<T>(self.cap + 10);
     for(let i = 0;i < self.count;++i){
-      let old = ptr::deref(ptr::get(self.ptr, i));
+      let shifted: T* = ptr::get(self.ptr, i);
+      let old: T = ptr::deref(shifted);
       ptr::copy(tmp, i, old);
       std::no_drop(old);
     }

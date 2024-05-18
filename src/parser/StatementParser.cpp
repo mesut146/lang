@@ -125,33 +125,6 @@ std::unique_ptr<Statement> Parser::parseStmt() {
     return res;
 }
 std::unique_ptr<Statement> Parser::parseStmt2() {
-    if (is(MATCH)) {
-        auto ret = std::make_unique<Match>();
-        pop();
-        consume(LPAREN);
-        ret->expr.reset(parseExpr());
-        consume(RPAREN);
-        consume(LBRACE);
-        while (!is(RBRACE)) {
-            MatchArm arm;
-            arm.type = parseType();
-            if (is(LPAREN)) {
-                consume(LPAREN);
-                arm.args.push_back(pop().value);
-                while (is(COMMA)) {
-                    pop();
-                    arm.args.push_back(pop().value);
-                }
-                consume(RPAREN);
-            }
-            consume(ARROW);
-            arm.rhs = parseStmt();
-            ret->arms.push_back(std::move(arm));
-            if (is(COMMA)) pop();
-        }
-        consume(RBRACE);
-        return ret;
-    }
     if (is(ASSERT_KW)) {
         consume(ASSERT_KW);
         auto expr = parseExpr();

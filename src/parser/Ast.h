@@ -383,24 +383,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class MatchArm {
-public:
-    std::optional<Type> type;
-    std::vector<std::string> args;
-    Ptr<Statement> rhs;
-
-    bool us() const { return !type.has_value(); }
-};
-
-class Match : public Statement {
-public:
-    Ptr<Expression> expr;
-    std::vector<MatchArm> arms;
-
-    std::string print() const override { return "match"; };
-    std::any accept(Visitor *v) override { return {}; };
-};
-
 class SimpleName : public Expression {
 public:
     std::string name;

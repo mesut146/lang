@@ -360,7 +360,7 @@ bool isVar(Expression *e) {
 //load if alloca
 llvm::Value *Compiler::loadPtr(Expression *e) {
     auto val = gen(e);
-    if (!isVar(e)) return val;
+    //if (!isVar(e)) return val;
     if (!val->getType()->isPointerTy()) {
         return val;
     }
@@ -384,21 +384,39 @@ llvm::Value *extend(llvm::Value *val, const Type &srcType, const Type &trgType, 
 }
 
 llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
-    auto val = loadPtr(expr);
     if (trgType.isPrim()) {
+        auto val = get_obj_ptr(expr);
+        if(val->getType()->isPointerTy()){
+            val = load(val, trgType);
+        }
         return extend(val, resolv->getType(expr), trgType, this);
     }
-    return val;
+    return gen(expr);
 }
 
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Expression *lhs) {
-    auto de = dynamic_cast<DerefExpr *>(expr);
-    if (de && isStruct(type)) {
+    // auto de = dynamic_cast<DerefExpr *>(expr);
+    // if (de /*&& isStruct(type)*/) {
+    //     if (isStruct(type)) {
+    //         auto val = get_obj_ptr(de->expr.get());
+    //         curOwner.beginAssign(lhs, ptr);
+    //         copy(ptr, val, type);
+    //     } else {
+    //         //prim, ptr
+    //         curOwner.beginAssign(lhs, ptr);
+    //         auto val = cast(expr, type);
+    //         Builder->CreateStore(val, ptr);
+    //     }
+
+    //     return;
+    // }
+    /*auto mc = dynamic_cast<MethodCall *>(expr);
+    if (mc && is_ptr_deref(mc)) {
         auto val = get_obj_ptr(de->expr.get());
         curOwner.beginAssign(lhs, ptr);
         copy(ptr, val, type);
         return;
-    }
+    }*/
     if (isRvo(expr)) {
         auto val = gen(expr);
         //curOwner.drop(expr, ptr);
@@ -406,7 +424,7 @@ void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Ex
         copy(ptr, val, type);
         return;
     }
-    //dynamic_cast<MethodCall *>(expr)
+    //
     if (doesAlloc(expr)) {
         child(expr, ptr);
     } else if (isStruct(type)) {//todo mc
@@ -824,6 +842,9 @@ std::any Compiler::visitInfix(Infix *node) {
     auto lt = resolv->resolve(node->left);
     auto t1 = lt.type.print();
     auto t2 = resolv->getType(node->right).print();
+    if (node->print() == "*ptr::get(arr, i) == 0") {
+        int aa = 555;
+    }
     auto t3 = t1 == "bool" ? Type("i1") : binCast(t1, t2).type;
     auto l = cast(node->left, t3);
     auto r = cast(node->right, t3);
@@ -1120,12 +1141,12 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return (llvm::Value *) Builder->getVoidTy();
     }
     if (is_ptr_deref(mc)) {
-        auto src_ptr = get_obj_ptr(mc->args[0]);
+        auto arg_ptr = get_obj_ptr(mc->args[0]);
         auto rt = resolv->getType(mc);
         if (rt.isPrim()) {
-            return load(src_ptr, mapType(rt));
+            return load(arg_ptr, mapType(rt));
         }
-        return src_ptr;
+        return arg_ptr;
     }
     if (resolv->is_slice_get_ptr(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();
@@ -1386,6 +1407,7 @@ std::any Compiler::visitRefExpr(RefExpr *node) {
 }
 
 std::any Compiler::visitDerefExpr(DerefExpr *node) {
+    return gen(node->expr.get());
     auto type = resolv->getType(node);
     auto val = get_obj_ptr(node->expr.get());
     if (type.isPrim() || type.isPointer()) {
@@ -1496,60 +1518,6 @@ std::any Compiler::visitType(Type *node) {
     curOwner.addPtr(node, ptr);
     simpleVariant(*node, ptr);
     return ptr;
-}
-
-llvm::Value *Compiler::get_obj_ptr(Expression *e) {
-    auto infix = dynamic_cast<Infix *>(e);
-    if (infix) {
-        auto val = gen(infix);
-        return val;
-    }
-    auto pe = dynamic_cast<ParExpr *>(e);
-    if (pe) {
-        e = pe->expr;
-    }
-    auto de = dynamic_cast<DerefExpr *>(e);
-    if (de) {
-        auto val = gen(de);
-        return val;
-    }
-    auto val = gen(e);
-    if (dynamic_cast<ObjExpr *>(e)) {
-        return val;
-    }
-    auto sn = dynamic_cast<SimpleName *>(e);
-    if (sn) {
-        //local, localptr, prm, prm ptr, mut prm
-        auto rt = resolv->resolve(e);
-        if (rt.type.isPointer()) {
-            //auto deref
-            //always alloca
-            //local ptr
-            return load(val, getPtr());
-        } else {
-            //mut or not has no effect
-            //local
-            return val;
-        }
-        //return val;
-    }
-    if (dynamic_cast<MethodCall *>(e)) {
-        return val;
-    }
-    if (dynamic_cast<ArrayAccess *>(e) || dynamic_cast<FieldAccess *>(e)) {
-        auto rt = resolv->resolve(e);
-        if (rt.type.isPointer()) {
-            //deref gep
-            return load(val, getPtr());
-        } else {
-            return val;
-        }
-    }
-    if (dynamic_cast<RefExpr *>(e) || dynamic_cast<Literal *>(e) || dynamic_cast<Unary *>(e) || dynamic_cast<AsExpr *>(e)) {
-        return val;
-    }
-
-    throw std::runtime_error("get_obj_ptr " + e->print());
 }
 
 std::any Compiler::visitFieldAccess(FieldAccess *node) {

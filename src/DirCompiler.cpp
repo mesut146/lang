@@ -108,6 +108,7 @@ void DirCompiler::link(const std::string &name0, const std::string &args) {
 void DirCompiler::run() {
     auto code = system(binary_path.c_str());
     if (code != 0) {
+        print(binary_path);
         print("run failed code = " + std::to_string(code));
         exit(1);
     }

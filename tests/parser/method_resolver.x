@@ -529,19 +529,19 @@ impl MethodResolver{
     }
 
     func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
-        if (sig2.m.unwrap().self.is_some() && !sig.mc.unwrap().scope.is_some()) {
+        let method = *sig2.m.get();
+        if (method.self.is_some() && !sig.mc.unwrap().scope.is_some()) {
             return SigResult::Err{"member method called without scope".str()};
         }
         if (sig.args.len() != sig2.args.len()){
             return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), sig2.args.len())};
         }
-        let typeParams = get_type_params(sig2.m.unwrap());
+        let typeParams = get_type_params(method);
         let all_exact = true;
         for (let i = 0; i < sig.args.len(); ++i) {
             let t1: Type = sig.args.get_ptr(i).clone();
             let t2: Type* = sig2.args.get_ptr(i);
-            //todo if base method, skip self
-            if(i == 0 && (*sig2.m.get()).self.is_some()){
+            if(i == 0 && method.self.is_some()){
                 if (t2.is_pointer()) {
                     if (!t1.is_pointer()) {
                         //coerce to ptr
@@ -611,7 +611,9 @@ impl MethodResolver{
             if (arg_str.eq(target_str)) {
                 return Option<String>::None;
             }
-            if (kind(arg) != kind(target)) {
+            let lhs_kind = TypeKind::new(arg);
+            let rhs_kind = TypeKind::new(target);
+            if (!(lhs_kind is rhs_kind)) {
                 return Option::new("internal error in is_compatible".str());
             }
             if (hasGeneric(target, typeParams)) {
@@ -780,13 +782,6 @@ impl MethodResolver{
         res.parent = Parent::Impl{ImplInfo::new(st.into())};
         return res;
     }
-}
-
-func kind(type: Type*): i32{
-    if(type is Type::Pointer) return 0;
-    if(type is Type::Array) return 1;
-    if(type is Type::Slice) return 2;
-    panic("{}\n", type);
 }
 
 func get_type_params(m: Method*): List<Type>{

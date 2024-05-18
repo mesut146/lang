@@ -95,6 +95,61 @@ struct Config{
   optimize_enum: bool;
 }
 
+#derive(Debug)
+enum RtKind{
+  Method,//free method in items, or impl
+  MethodGen,//generic method in resolver
+  Decl,//decl in items
+  DeclGen,//generic decl in resolver
+  Trait,//trait in items
+  None//prim
+}
+impl RtKind{
+  func is_method(self): bool{
+    return self is RtKind::Method || self is RtKind::MethodGen;
+  }
+  func is_decl(self): bool{
+    return self is RtKind::Decl || self is RtKind::DeclGen;
+  }
+  func is_trait(self): bool{
+    return self is RtKind::Trait;
+  }
+}
+
+#derive(Debug)
+struct Desc{
+  kind: RtKind;
+  path: String;
+  idx: i32;
+  idx2: i32;
+}
+impl Desc{
+  func new(): Desc{
+    return Desc{
+      kind: RtKind::None,
+      path: "".str(),
+      idx: 0,
+      idx2: 0
+    };
+  }
+  func new(kind: RtKind, path: String): Desc{
+    return Desc{
+      kind: kind,
+      path: path,
+      idx: 0,
+      idx2: 0
+    };
+  }
+  func clone(self): Desc{
+    return Desc{
+      kind: self.kind,
+      path: self.path.clone(),
+      idx: self.idx,
+      idx2: self.idx2
+    };
+  }
+}
+
 struct RType{
   type: Type;
   trait: Option<Trait*>;
@@ -102,7 +157,7 @@ struct RType{
   value: Option<String>;
   targetDecl: Option<Decl*>;
   vh: Option<VarHolder>;
-  //path: String;
+  desc: Desc;
 }
 
 enum TypeKind{
@@ -242,7 +297,7 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder>::None};
+    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<Decl*>::None, Option<VarHolder>::None, Desc::new()};
   }
   func clone(self): RType{
     return RType{type: self.type.clone(),
@@ -250,7 +305,9 @@ impl RType{
       method: self.method,
       value: self.value.clone(),
       targetDecl: self.targetDecl,
-      vh: self.vh.clone()};
+      vh: self.vh.clone(),
+      desc: self.desc.clone()
+    };
   }
 }
 
@@ -461,10 +518,12 @@ impl Resolver{
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type.clone());
         res.targetDecl = Option::new(decl);
+        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i, 0};
         self.addType(decl.type.name().clone(), res);
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type.clone());
         res.trait = Option::new(tr);
+        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i, 0};
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
@@ -539,6 +598,21 @@ impl Resolver{
   func getType(self, e: Expr*): Type{
     let rt = self.visit(e);
     return rt.type.clone();
+  }
+  func get_decl(self, ty:Type*): Option<Decl*>{
+    let rt = self.visit(ty);
+    return self.get_decl(&rt);
+  }
+  func get_decl(self, rt: RType*): Option<Decl*>{
+    if(rt.desc.kind is RtKind::Decl){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get_ptr(rt.desc.idx);
+      if let Item::Decl(decl*) = (item){
+        return Option::new(decl);
+      }
+    }
+    panic("get_decl() {}={}", rt.type, rt.desc);
   }
 
   func visit(self, node: Item*){
@@ -743,6 +817,8 @@ impl Resolver{
       if(mangle(prev).eq(mng.str())) return;
     }
     self.used_methods.add(m);
+    let last = *self.used_methods.last();
+    Fmt::str(last);
   }
   
   func visit(self, node: FieldDecl*): RType{
@@ -944,10 +1020,10 @@ impl Resolver{
     let cur = decl;
     while (true) {
         if (cur is Decl::Struct) {
-            let fields=cur.get_fields();
+            let fields = cur.get_fields();
             let idx = 0;
-            for (let i=0;i<fields.len();++i) {
-                let fd=fields.get_ptr(i);
+            for (let i = 0; i < fields.len();++i) {
+                let fd = fields.get_ptr(i);
                 if (fd.name.eq(name)) {
                     return Pair::new(cur, idx);
                 }
@@ -955,7 +1031,7 @@ impl Resolver{
             }
         }
         if (cur.base.is_some()) {
-            let base = self.visit(cur.base.get()).targetDecl;
+            let base = self.get_decl(cur.base.get());
             if(base.is_none()) break;
             cur = base.unwrap();
         } else {
@@ -973,7 +1049,7 @@ impl Resolver{
       let msg = format("invalid field {} of {}", name, scp.type); 
       self.err(node, msg);
     }
-    let decl = scp.targetDecl.unwrap();
+    let decl = self.get_decl(&scp).unwrap();
     let pair = self.findField(node, name, decl, &scp.type);
     let fd = pair.a.get_fields().get_ptr(pair.b);
     return self.visit(fd);
@@ -1293,6 +1369,9 @@ impl Resolver{
   }
 
   func visit(self, node: Expr*, call: Call*): RType{
+    if(call.print().eq("f.print(\"true\")")){
+      let a = 10;
+    }
     if(is_printf(call)){
       self.validate_printf(node, call);
       return RType::new("void");

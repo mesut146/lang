@@ -261,15 +261,9 @@ public:
     std::any visitType(Type *type) override;
 };
 
-static std::string prm_id(const Method &m, const std::string &p) {
+/*static std::string prm_id(const Method &m, const std::string &p) {
     return mangle(&m) + "." + p;
-}
-
-enum class MutKind {
-    WHOLE,
-    FIELD,
-    DEREF
-};
+}*/
 
 struct FormatInfo {
     Block block;

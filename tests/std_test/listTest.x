@@ -57,17 +57,38 @@ func listAlign(){
   free(arr as i8*);
 }
 
+func check_list(list: List<i32*>*, idx: i32, val: i32){
+  let a2 = *list.get_ptr(idx);
+  assert *a2 == val;
+
+  assert **list.get_ptr(idx) == val;
+}
+
 func listptr(){
   let a = 10;
   let b = 20;
   let list = List<i32*>::new(2);
   list.add(&a);
   list.add(&b);
-  assert **list.get_ptr(0) == 10;
-  let a2 = *list.get_ptr(0);
-  assert *a2 == 10;
+  check_list(&list, 0, 10);
+  check_list(&list, 1, 20);
+  //expand
+  let c = 30;
+  list.add(&c);
+  check_list(&list, 0, 10);
+  check_list(&list, 1, 20);
+  check_list(&list, 2, 30);
 
   assert *list.get(1) == 20;
+}
+
+func check_list(list: List<LA*>*, idx: i32, a: i8, b: i32){
+  let a2 = *list.get_ptr(idx);
+  assert a2.a == a;
+  assert a2.b == b;
+
+  assert (*list.get_ptr(idx)).a == a;
+  assert (*list.get_ptr(idx)).b == b;
 }
 
 func listptr_struct(){
@@ -77,10 +98,15 @@ func listptr_struct(){
   list.add(&a);
   list.add(&b);
 
-  assert (*list.get_ptr(0)).b == 10;
-  let a2 = *list.get_ptr(0);
-  assert a2.a == 5;
-  assert a2.b == 10;
+  check_list(&list, 0, 5i8, 10);
+  check_list(&list, 1, 20i8, 30);
+
+  //expand
+  let c = LA{40i8, 50};
+  list.add(&c);
+  check_list(&list, 0, 5i8, 10);
+  check_list(&list, 1, 20i8, 30);
+  check_list(&list, 2, 40i8, 50);
 }
 
 func main(){

@@ -62,6 +62,11 @@ impl Lexer{
   func str(self, a: i32, b: i32): str{
     return self.buf.str().substr(a, b);
   }
+
+  func err(self, msg: str){
+    print("in file {}:{}\n", &self.path, self.line);
+    panic("{}", msg);
+  }
   
   func line_comment(self): Token{
     let start = self.pos;
@@ -195,11 +200,11 @@ impl Lexer{
    while(c ==' ' || c == '\r' || c == '\n' || c == '\t'){
       self.pos += 1;
       if(c == '\n'){
-        self.line+=1;
+        self.line += 1;
       }else if(c == '\r'){
         self.line+=1;
         if (self.has() && self.peek() == '\n') {
-          self.pos+=1;
+          self.pos += 1;
         }
       }
       if(!self.has()) break;
@@ -243,6 +248,33 @@ impl Lexer{
     }            
     panic("unclosed block comment at line {}" , self.line);
   }
+
+  func read_string(self): Token{
+    let c = self.peek();
+    let open = c;
+    let kind = TokenType::STRING_LIT;
+    if(c == '\''){
+      kind = TokenType::CHAR_LIT;
+    }
+    let str = String::new();
+    //s.append(c);
+    self.pos += 1;
+    while (self.pos < self.buf.len()) {
+        c = self.read();
+        if (c == '\\') {
+            //s.append("\\");
+            str.append(checkEscape(self.peek()) as i8);
+            self.pos += 1;
+        } else if (c == open) {
+            //s.append(c);
+            return Token::new(kind, str);
+        } else {
+          str.append(c);
+        }
+    }
+    self.err("unterminated string literal");
+    panic("");
+  }
   
   func next0(self): Token{
     if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
@@ -275,26 +307,7 @@ impl Lexer{
         }
     }
     if (c == '\'' || c == '"') {
-        let open = c;
-        let type = TokenType::STRING_LIT;
-        if(c == '\'') type = TokenType::CHAR_LIT;
-        let s = String::new();
-        s.append(c);
-        self.pos += 1;
-        while (self.pos < self.buf.len()) {
-            c = self.read();
-            if (c == '\\') {
-                //s.append("\\");
-                s.append(checkEscape(self.peek()) as i8);
-                self.pos += 1;
-            } else if (c == open) {
-                s.append(c);
-                return Token::new(type, s);
-            } else {
-                s.append(c);
-            }
-        }
-        self.err("unterminated string literal");
+        return self.read_string();
     }
     let os = String::new();
     os.append(c);
@@ -303,11 +316,6 @@ impl Lexer{
       return self.read_op();
     }
     panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
-  }
-
-  func err(self, msg: str){
-    print("in file {}:{}\n", &self.path, self.line);
-    panic("{}", msg);
   }
   
   func read_ident(self): Token {

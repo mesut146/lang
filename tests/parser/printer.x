@@ -350,17 +350,34 @@ impl Debug for Fragment{
   }
 }
 
+impl Debug for Literal{
+  func debug(self, f: Fmt*){
+    let replaced = self.val.replace("\n", "\\n");
+    replaced = replaced.replace("\"", "\\\"");
+    if(self.kind is LitKind::STR){
+      f.print("\"");
+    }else if(self.kind is LitKind::CHAR){
+      f.print("'");
+    }
+    f.print(&replaced);
+    if(self.kind is LitKind::STR){
+      f.print("\"");
+    }else if(self.kind is LitKind::CHAR){
+      f.print("'");
+    }
+    if(self.suffix.is_some()){
+      f.print("_");
+      self.suffix.get().debug(f);
+    }
+    Drop::drop(replaced);
+  }
+}
+
 //expr---------------------------------
 impl Debug for Expr{
   func debug(self, f: Fmt*){
     if let Expr::Lit(lit*)=(self){
-      let replaced = lit.val.replace("\n", "\\n");
-      f.print(&replaced);
-      if(lit.suffix.is_some()){
-        f.print("_");
-        lit.suffix.get().debug(f);
-      }
-      Drop::drop(replaced);
+      lit.debug(f);
     }
     else if let Expr::Name(v*)=(self){
       f.print(v.str());

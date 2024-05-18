@@ -121,7 +121,6 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             //self.{fd.name}.drop();
             let input = format("self.{}.drop();", &fd.name);
             let drop_stmt = parse_stmt(input, unit);
-            print("drop_stmt: {}\n", &drop_stmt);
             body.list.add(drop_stmt);
         }
     }
@@ -238,10 +237,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     let var_name = format("f_{}", node.id);
     //let f = Fmt::new();
     let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit);
-    print("var_stmt: {}\n", &var_stmt);
     block.list.add(var_stmt);
     let pos = 0;
-    let arg_idx = 0;
+    let arg_idx = 1;
     while(pos < fmt_str.len()){
         let br_pos = fmt_str.indexOf("{}", pos);
         if(br_pos == -1 || br_pos > pos){
@@ -252,13 +250,30 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
                 sub = fmt_str.substr(pos, br_pos);
             }
             let sub2 = normalize_quotes(sub);
-            let st = parse_stmt(format("{}.print({});", &var_name, sub2), &r.unit);
-            print("st: {}\n", &st);
+            let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit);
             block.list.add(st);
-            break;
-        }else{
-
+            if(br_pos == -1){
+                break;
+            }
         }
+        pos = br_pos + 2;
+        let arg = mc.args.get_ptr(arg_idx);
+        ++arg_idx;
+        //<arg>.debug(&f);
+        let dbg_st = parse_stmt(format("{}.debug(&{});", arg, &var_name), &r.unit);
+        block.list.add(dbg_st);
+    }
+    if(Resolver::is_print(mc)){
+        //f.buf.print();
+        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
+        block.list.add(print_st);
+        //Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
+        block.list.add(drop_st);
+        print("block={}\n", block);
+        r.visit(block);
+        r.format_map.add(node.id, info);
+        return;
     }
     r.format_map.add(node.id, info);
     r.err(node, "generate_format");
@@ -269,10 +284,16 @@ func normalize_quotes(s: str): String{
     let res = String::new();
     for(let i = 0;i < s.len();++i){
         let c = s.get(i);
-        if(c == "\"" || c == "\\"){
-            res.add('\\');
+        if(c == '\\'){
+            res.append(c);
+            res.append(s.get(i + 1));
+            i += 1;
+            continue;
         }
-        res.add(c);
+        if(c == '\"' || c == '\\'){
+            res.append('\\' as i8);
+        }
+        res.append(c);
     }
     return res;
 }

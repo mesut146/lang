@@ -127,11 +127,11 @@ impl str{
     func substr(self, start: i32, end: i32): str{
       if(start > self.len()) panic("start index out of bounds {} of {}", start, self.len());
       if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
+      assert start <= end;
       if(start == end){
         let arr = [0u8];
         return str{arr[0..0]};
       }
-      assert start < end;
       return str{self.buf[start..end]};
     }
     
@@ -149,7 +149,7 @@ impl str{
     func cmp(self, s: str): i32{
       if(self.real_len() < s.real_len()) return -1;
       if(self.real_len() > s.real_len()) return 1;
-      for(let i=0;i < self.real_len();++i){
+      for(let i = 0;i < self.real_len();++i){
         if(self.get(i) < s.get(i)) return -1;
         if(self.get(i) > s.get(i)) return 1;
       }

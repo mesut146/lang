@@ -105,52 +105,8 @@ impl Fmt{
     Drop::drop(f);
     return res;
   }
-  func str2<T>(node: T): String{
+  /*func str2<T>(node: T): String{
     return Fmt::str(&node);
-  }
-
-  /*func format(s: str, args: List<str>*): String{
-    let res = String::new();
-    let i = 0;
-    let arg_idx = 0;
-    while(i < s.len()){
-      let j = s.indexOf("{}", i);
-      if(j == -1){
-        res.append(s.substr(i));
-        break;
-      }
-      res.append(s.substr(i, j));
-      res.append(args.get(arg_idx));
-      i = j + 2;
-      ++arg_idx;
-    }
-    return res;
-  }
-  func format(s: str, a1: str): String{
-    let args = List<str>::new();
-    args.add(a1);
-    return Fmt::format(s, &args);
-  }
-  func format(s: str, a1: str, a2: str): String{
-    let args = List<str>::new();
-    args.add(a1);
-    args.add(a2);
-    return Fmt::format(s, &args);
-  }
-  func format(s: str, a1: str, a2: str, a3: str): String{
-    let args = List<str>::new();
-    args.add(a1);
-    args.add(a2);
-    args.add(a3);
-    return Fmt::format(s, &args);
-  }
-  func format(s: str, a1: str, a2: str, a3: str, a4: str): String{
-    let args = List<str>::new();
-    args.add(a1);
-    args.add(a2);
-    args.add(a3);
-    args.add(a4);
-    return Fmt::format(s, &args);
   }*/
 }
 

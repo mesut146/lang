@@ -1027,7 +1027,7 @@ impl Compiler{
       //call(&info.print_mc, nullptr);
       return getVoidTy() as Value*;
     }
-    if(mc.name.eq("panic") && mc.scope.is_none()){
+    if(Resolver::is_panic(mc)){
       self.visit_panic(expr, mc);
       return getTrue();
     }
@@ -1162,7 +1162,6 @@ impl Compiler{
       let lit = is_str_lit(arg);
       if(lit.is_some()){
         let val: str = lit.unwrap().str();
-        val = val.substr(1, val.len() - 1);//trim quotes
         let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
         args_push(args, ptr);
         continue;
@@ -1428,12 +1427,13 @@ impl Compiler{
         let res = makeInt(val, bits);
         return res;
     }
-    if(node.val.eq("true")) return getTrue();
-    if(node.val.eq("false")) return getFalse();
+    if(node.kind is LitKind::BOOL){
+      if(node.val.eq("true")) return getTrue();
+      return getFalse();
+    }
     if(node.kind is LitKind::STR){
       let trg_ptr = self.get_alloc(expr);
-      let trimmed = node.val.substr(1, (node.val.len() as i32) - 1);//quote
-      let src = CreateGlobalStringPtr(trimmed.cstr().ptr());
+      let src = CreateGlobalStringPtr(node.val.clone().cstr().ptr());
       let stringType = self.protos.get().std("str") as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
       let slice_ptr = self.gep2(trg_ptr, 0, stringType);
@@ -1442,12 +1442,13 @@ impl Compiler{
       //set ptr
       CreateStore(src, data_target);
       //set len
-      let len = makeInt(trimmed.len(), SLICE_LEN_BITS());
+      let len = makeInt(node.val.len(), SLICE_LEN_BITS());
       CreateStore(len, len_target);
       return trg_ptr;
     }
     if(node.kind is LitKind::CHAR){
-      let trimmed = node.val.get(1);
+      assert node.val.len() == 1;
+      let trimmed = node.val.get(0);
       return makeInt(trimmed, 32);
     }
     panic("lit {}", node.val);

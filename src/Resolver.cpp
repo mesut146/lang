@@ -1040,10 +1040,10 @@ std::any Resolver::visitInfix(Infix *node) {
     auto rt1 = resolve(node->left);
     auto rt2 = resolve(node->right);
     if (rt1.type.isVoid() || rt2.type.isVoid()) {
-        error("operation on void type");
+        err(node, "operation on void type");
     }
     if (rt1.type.isString() || rt2.type.isString()) {
-        error("string op not supported yet");
+        err(node, "string op not supported yet");
     }
     if (rt1.targetDecl && node->op == "==") {
         if (rt1.type.print() == rt2.type.print())
@@ -1063,10 +1063,10 @@ std::any Resolver::visitInfix(Infix *node) {
         return makeSimple("bool");
     } else if (node->op == "&&" || node->op == "||") {
         if (rt1.type.print() != "bool") {
-            error("infix lhs is not boolean: " + node->left->print());
+            err(node, "infix lhs is not boolean: " + rt2.type.print());
         }
         if (rt2.type.print() != "bool") {
-            error("infix rhs is not boolean: " + node->right->print());
+            err(node, "infix rhs is not boolean: " + rt2.type.print());
         }
         return makeSimple("bool");
     } else {
@@ -1084,15 +1084,15 @@ std::any Resolver::visitUnary(Unary *node) {
     auto res = resolve(node->expr);
     if (node->op == "!") {
         if (res.type.print() != "bool") {
-            error("unary on non boolean: " + node->print());
+            err(node, "unary on non boolean");
         }
     } else {
         if (res.type.print() == "bool" || !res.type.isPrim()) {
-            error("unary on non interal: " + node->print());
+            err(node, "unary on non interal");
         }
         if (node->op == "--" || node->op == "++") {
             if (!iof<SimpleName *>(node->expr) && !iof<FieldAccess *>(node->expr)) {
-                error("prefix on non variable: " + node->print());
+                err(node, "prefix on non variable");
             }
         }
     }
@@ -1302,7 +1302,7 @@ std::any Resolver::visitParExpr(ParExpr *node) {
 
 std::any Resolver::visitExprStmt(ExprStmt *node) {
     if (!iof<MethodCall *>(node->expr) && !iof<Assign *>(node->expr) && !iof<Unary *>(node->expr)) {
-        error("invalid expr statement: " + node->print());
+        err(node, "invalid expr statement");
     }
     resolve(node->expr);
     return nullptr;
@@ -1595,13 +1595,13 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
         if (mc->args.size() != 2) {
             err(mc, "ptr access must have 2 args");
         }
-        auto arg = getType(mc->args[0]);
-        if (!arg.isPointer()) {
+        auto arg_rt = resolve(mc->args[0]);
+        if (!arg_rt.type.isPointer()) {
             err(mc, "ptr arg is not ptr ");
         }
         auto idx = getType(mc->args[1]).print();
         if (idx == "i32" || idx == "i64" || idx == "u32" || idx == "u64" || idx == "i8" || idx == "i16") {
-            return resolve(arg);
+            return arg_rt;
         } else {
             err(mc, "ptr access index is not integer");
         }

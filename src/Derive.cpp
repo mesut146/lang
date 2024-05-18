@@ -383,6 +383,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
         }
         auto arg = mc->args.at(idx);
         ++idx;
+        //<arg>.debug(&f);
         auto arg_debug_mc = new MethodCall;
         arg_debug_mc->loc(mc->line);
         arg_debug_mc->name = "debug";

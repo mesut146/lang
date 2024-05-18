@@ -452,3 +452,59 @@ llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
     }
     return ty;
 }
+
+llvm::Value *Compiler::get_obj_ptr(Expression *e) {
+    auto pe = dynamic_cast<ParExpr *>(e);
+    if (pe) {
+        return get_obj_ptr(pe->expr);
+    }
+    auto val = gen(e);
+    auto infix = dynamic_cast<Infix *>(e);
+    if (infix) {
+        return val;
+    }
+    auto de = dynamic_cast<DerefExpr *>(e);
+    if (de) {
+        //resolv->err(e, "deref");
+        return val;
+    }
+    if (dynamic_cast<ObjExpr *>(e)) {
+        return val;
+    }
+    auto sn = dynamic_cast<SimpleName *>(e);
+    if (sn) {
+        //local, localptr, prm, prm ptr, mut prm
+        auto rt = resolv->resolve(e);
+        if (rt.type.isPointer()) {
+            //auto deref
+            //always alloca
+            //local ptr
+            return load(val, getPtr());
+        } else {
+            //mut or not has no effect
+            //local
+            return val;
+        }
+        //return val;
+    }
+    auto mc = dynamic_cast<MethodCall *>(e);
+    if (mc) {
+        if (is_ptr_deref(mc)) {
+        }
+        return val;
+    }
+    if (dynamic_cast<ArrayAccess *>(e) || dynamic_cast<FieldAccess *>(e)) {
+        auto rt = resolv->resolve(e);
+        if (rt.type.isPointer()) {
+            //deref gep
+            return load(val, getPtr());
+        } else {
+            return val;
+        }
+    }
+    if (dynamic_cast<RefExpr *>(e) || dynamic_cast<Literal *>(e) || dynamic_cast<Unary *>(e) || dynamic_cast<AsExpr *>(e)) {
+        return val;
+    }
+
+    throw std::runtime_error("get_obj_ptr " + e->print());
+}
