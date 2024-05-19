@@ -169,12 +169,24 @@ public:
     void setField(Expression *expr, const Type &type, llvm::Value *entPtr, Expression *lhs = nullptr);
     void setFields(std::vector<FieldDecl> &fields, std::vector<Entry> &entries, BaseDecl *decl, llvm::Type *ty, llvm::Value *ptr);
     llvm::Value *branch(llvm::Value *val);
+    llvm::Value *branch(Expression *expr);
+    llvm::Value *load_prim(Expression *expr);
     llvm::ConstantInt *makeInt(int val);
     llvm::ConstantInt *makeInt(int val, int bits);
     llvm::Type *getInt(int bit);
     void setOrdinal(int index, llvm::Value *ptr, BaseDecl *decl);
     void simpleVariant(const Type &n, llvm::Value *ptr);
     llvm::Value *getTag(Expression *expr);
+
+    llvm::Value *add_comment(llvm::Value *val, const std::string &msg) {
+        auto ins = llvm::cast<llvm::Instruction>(val);
+        if (ins) {
+            //add comment
+            auto N = llvm::MDNode::get(ctx(), llvm::MDString::get(ctx(), ""));
+            ins->setMetadata(msg, N);
+        }
+        return val;
+    }
 
     bool doesAlloc(Expression *e);
     llvm::Value *get_obj_ptr(Expression *e);

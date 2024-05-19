@@ -19,7 +19,7 @@ struct dirent {
 impl dirent{
   func len(self): i32{
     for(let i = 0;i < 256;++i){
-      if(self.d_name[i]==0) return i;
+      if(self.d_name[i] == 0) return i;
     }
     panic("no eof");
   }

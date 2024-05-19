@@ -358,15 +358,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-class Ns : public Item {
-public:
-    std::vector<Ptr<Item>> items;
-
-    bool isNs() override { return true; }
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
-
 
 class Statement : public Node {
 public:

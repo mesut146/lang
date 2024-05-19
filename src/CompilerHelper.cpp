@@ -508,3 +508,104 @@ llvm::Value *Compiler::get_obj_ptr(Expression *e) {
 
     throw std::runtime_error("get_obj_ptr " + e->print());
 }
+
+llvm::Value *extend(llvm::Value *val, const Type &srcType, const Type &trgType, Compiler *c) {
+    auto src = val->getType()->getPrimitiveSizeInBits();
+    int bits = c->getSize2(trgType);
+    if (src < bits) {
+        if (isUnsigned(srcType)) {
+            return c->Builder->CreateZExt(val, c->getInt(bits));
+        }
+        return c->Builder->CreateSExt(val, c->getInt(bits));
+    } else if (src > bits) {
+        return c->Builder->CreateTrunc(val, c->getInt(bits));
+    }
+    return val;
+}
+
+llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
+    if (!trgType.isPrim()) {
+        return gen(expr);
+    }
+    auto val = load_prim(expr);
+    return extend(val, resolv->getType(expr), trgType, this);
+    // if (trgType.isPrim()) {
+    //     auto val = get_obj_ptr(expr);
+    //     if (val->getType()->isPointerTy()) {
+    //         val = load(val, trgType);
+    //     }
+    //     return extend(val, resolv->getType(expr), trgType, this);
+    // }
+    // return gen(expr);
+}
+//load if alloca
+llvm::Value *Compiler::loadPtr(Expression *e) {
+    auto val = gen(e);
+    //if (!isVar(e)) return val;
+    if (!val->getType()->isPointerTy()) {
+        return val;
+    }
+    //local, fa, aa
+    auto rt = resolv->resolve(e);
+    return load(val, rt.type);
+}
+
+llvm::Value *Compiler::branch(llvm::Value *val) {
+    auto ty = llvm::cast<llvm::IntegerType>(val->getType());
+    if (!ty) return val;
+    auto w = ty->getBitWidth();
+    if (w == 1) return val;
+    return Builder->CreateTrunc(val, getInt(1));
+}
+
+llvm::Value *Compiler::load(llvm::Value *val) {
+    auto ty = val->getType();
+    return Builder->CreateLoad(ty, val);
+}
+llvm::Value *Compiler::load(llvm::Value *val, const Type &type) {
+    auto ty = mapType(type);
+    return Builder->CreateLoad(ty, val);
+}
+
+bool isVar(Expression *e) {
+    auto de = dynamic_cast<DerefExpr *>(e);
+    if (de) {
+        return isVar(de->expr.get());
+    }
+    return dynamic_cast<SimpleName *>(e) ||
+           dynamic_cast<FieldAccess *>(e) ||
+           dynamic_cast<ArrayAccess *>(e);
+}
+
+llvm::Value *Compiler::branch(Expression *expr) {
+    auto val = load_prim(expr);
+    return Builder->CreateTrunc(val, getInt(1));
+}
+
+llvm::Value *Compiler::load_prim(Expression *expr) {
+    if (dynamic_cast<Infix *>(expr) || dynamic_cast<Unary *>(expr) || dynamic_cast<Literal *>(expr) || dynamic_cast<AsExpr *>(expr) || dynamic_cast<IsExpr *>(expr)) {
+        return gen(expr);
+    }
+    auto de = dynamic_cast<DerefExpr *>(expr);
+    if (de) {
+        return gen(expr);
+    }
+    if (dynamic_cast<MethodCall *>(expr)) {
+        return gen(expr);
+    }
+    if (dynamic_cast<SimpleName *>(expr)) {
+        auto val = gen(expr);
+        auto type = resolv->getType(expr);
+        return load(val, type);
+    }
+    if (dynamic_cast<ArrayAccess *>(expr) || dynamic_cast<FieldAccess *>(expr)) {
+        auto val = gen(expr);
+        auto type = resolv->getType(expr);
+        return load(val, type);
+    }
+    auto pe = dynamic_cast<ParExpr *>(expr);
+    if (pe) {
+        return load_prim(pe->expr);
+    }
+    resolv->err(expr, "load_prim");
+}

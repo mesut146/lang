@@ -27,6 +27,11 @@
 
 namespace fs = std::filesystem;
 
+void dumpv(llvm::Value *val) {
+    val->dump();
+    val->getType()->dump();
+}
+
 std::string getName(const std::string &path) {
     auto i = path.rfind('/');
     return path.substr(i + 1);
@@ -330,70 +335,6 @@ void Compiler::cleanup() {
     //delete staticf;
 }
 
-llvm::Value *Compiler::branch(llvm::Value *val) {
-    auto ty = llvm::cast<llvm::IntegerType>(val->getType());
-    if (!ty) return val;
-    auto w = ty->getBitWidth();
-    if (w == 1) return val;
-    return Builder->CreateTrunc(val, getInt(1));
-}
-
-llvm::Value *Compiler::load(llvm::Value *val) {
-    auto ty = val->getType();
-    return Builder->CreateLoad(ty, val);
-}
-llvm::Value *Compiler::load(llvm::Value *val, const Type &type) {
-    auto ty = mapType(type);
-    return Builder->CreateLoad(ty, val);
-}
-
-bool isVar(Expression *e) {
-    auto de = dynamic_cast<DerefExpr *>(e);
-    if (de) {
-        return isVar(de->expr.get());
-    }
-    return dynamic_cast<SimpleName *>(e) ||
-           dynamic_cast<FieldAccess *>(e) ||
-           dynamic_cast<ArrayAccess *>(e);
-}
-
-//load if alloca
-llvm::Value *Compiler::loadPtr(Expression *e) {
-    auto val = gen(e);
-    //if (!isVar(e)) return val;
-    if (!val->getType()->isPointerTy()) {
-        return val;
-    }
-    //local, fa, aa
-    auto rt = resolv->resolve(e);
-    return load(val, rt.type);
-}
-
-llvm::Value *extend(llvm::Value *val, const Type &srcType, const Type &trgType, Compiler *c) {
-    auto src = val->getType()->getPrimitiveSizeInBits();
-    int bits = c->getSize2(trgType);
-    if (src < bits) {
-        if (isUnsigned(srcType)) {
-            return c->Builder->CreateZExt(val, c->getInt(bits));
-        }
-        return c->Builder->CreateSExt(val, c->getInt(bits));
-    } else if (src > bits) {
-        return c->Builder->CreateTrunc(val, c->getInt(bits));
-    }
-    return val;
-}
-
-llvm::Value *Compiler::cast(Expression *expr, const Type &trgType) {
-    if (trgType.isPrim()) {
-        auto val = get_obj_ptr(expr);
-        if(val->getType()->isPointerTy()){
-            val = load(val, trgType);
-        }
-        return extend(val, resolv->getType(expr), trgType, this);
-    }
-    return gen(expr);
-}
-
 void Compiler::setField(Expression *expr, const Type &type, llvm::Value *ptr, Expression *lhs) {
     // auto de = dynamic_cast<DerefExpr *>(expr);
     // if (de /*&& isStruct(type)*/) {
@@ -694,6 +635,9 @@ void Compiler::genCode(Method *m) {
 
 
 llvm::Value *Compiler::gen(Expression *expr) {
+    if (expr->print() == "*ptr::get(arr, i) == 0") {
+        int aa = 55;
+    }
     auto val = expr->accept(this);
     auto res = std::any_cast<llvm::Value *>(val);
     if (!res) error("val null " + expr->print() + " " + val.type().name());
@@ -842,10 +786,11 @@ std::any Compiler::visitInfix(Infix *node) {
     auto lt = resolv->resolve(node->left);
     auto t1 = lt.type.print();
     auto t2 = resolv->getType(node->right).print();
-    if (node->print() == "*ptr::get(arr, i) == 0") {
+    if (node->print() == "inElse == false") {
         int aa = 555;
     }
-    auto t3 = t1 == "bool" ? Type("i1") : binCast(t1, t2).type;
+    //auto t3 = t1 == "bool" ? Type("i1") : binCast(t1, t2).type;
+    auto t3 = t1 == "bool" ? Type("bool") : binCast(t1, t2).type;
     auto l = cast(node->left, t3);
     auto r = cast(node->right, t3);
     if (isComp(op)) {
@@ -1038,6 +983,18 @@ void callPrint(MethodCall *mc, Compiler *c) {
     c->Builder->CreateCall(c->fflush_proto, args2);
 }
 
+void printf_simple(MethodCall *mc, Compiler *c) {
+    std::vector<llvm::Value *> args;
+    auto lit = dynamic_cast<Literal *>(mc->args.at(0));
+    auto str_ptr = c->Builder->CreateGlobalStringPtr(lit->val);
+    args.push_back(str_ptr);
+    c->Builder->CreateCall(c->printf_proto, args);
+    //flush
+    std::vector<llvm::Value *> args2;
+    args2.push_back(c->load(c->stdout_ptr));
+    c->Builder->CreateCall(c->fflush_proto, args2);
+}
+
 void callPrintf(MethodCall *mc, Compiler *c) {
     std::vector<llvm::Value *> args;
     for (auto a : mc->args) {
@@ -1187,6 +1144,11 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return ptr;
     }
     if (is_print(mc)) {
+        if (mc->args.size() == 1) {
+            //simple print, use printf
+            printf_simple(mc, this);
+            return (llvm::Value *) Builder->getVoidTy();
+        }
         auto &info = resolv->format_map.at(mc->id);
         visitBlock(&info.block);
         //call(&info.print_mc, nullptr);
@@ -1407,7 +1369,6 @@ std::any Compiler::visitRefExpr(RefExpr *node) {
 }
 
 std::any Compiler::visitDerefExpr(DerefExpr *node) {
-    return gen(node->expr.get());
     auto type = resolv->getType(node);
     auto val = get_obj_ptr(node->expr.get());
     if (type.isPrim() || type.isPointer()) {
@@ -1571,8 +1532,9 @@ std::any Compiler::visitAsExpr(AsExpr *node) {
     }
     //prim to prim
     if (rhs.type.isPrim()) {
-        auto val = loadPtr(node->expr);
-        return extend(val, lhs.type, rhs.type, this);
+        return cast(node->expr, rhs.type);
+        /*auto val = loadPtr(node->expr);
+        return extend(val, lhs.type, rhs.type, this);*/
     }
     auto val = get_obj_ptr(node->expr);
     //struct to base
@@ -1620,12 +1582,17 @@ std::any Compiler::visitArrayAccess(ArrayAccess *node) {
         return sp;
     }
     auto src = get_obj_ptr(node->array);
+    if (dynamic_cast<FieldAccess *>(node->array)) {
+        //src = add_comment(load(src), "deref_extra");
+    }
     type = type.unwrap();
     if (type.isArray()) {
         //regular array access
         auto i1 = makeInt(0, 64);
         auto i2 = cast(node->index, Type("i64"));
-        return gep(src, i1, i2, mapType(type));
+        auto res = gep(src, i1, i2, mapType(type));
+        add_comment(res, "arr_shift");
+        return res;
     }
     //slice access
     auto elem = type.scope.get();
@@ -1727,10 +1694,9 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
 std::any Compiler::visitAssertStmt(AssertStmt *node) {
     loc(node);
     auto str = node->expr->print();
-    auto cond = loadPtr(node->expr.get());
     auto then = llvm::BasicBlock::Create(ctx(), "assert_body_" + std::to_string(node->line));
     auto next = llvm::BasicBlock::Create(ctx(), "assert_next_" + std::to_string(node->line));
-    Builder->CreateCondBr(branch(cond), next, then);
+    Builder->CreateCondBr(branch(node->expr.get()), next, then);
     set_and_insert(then);
     //print error and exit
     auto msg = curMethod->path;
@@ -1748,7 +1714,7 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
 }
 
 std::any Compiler::visitIfStmt(IfStmt *node) {
-    auto cond = branch(loadPtr(node->expr));
+    auto cond = branch(node->expr.get());
     auto then = llvm::BasicBlock::Create(ctx(), "if_then_" + std::to_string(node->line));
     auto elsebb = llvm::BasicBlock::Create(ctx(), "if_else_" + std::to_string(node->line));
     auto next = llvm::BasicBlock::Create(ctx(), "if_next_" + std::to_string(node->line));
