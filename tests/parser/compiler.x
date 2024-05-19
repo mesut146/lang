@@ -309,7 +309,8 @@ impl Compiler{
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
     for (let i = 0;i < self.get_resolver().used_types.len();++i) {
-      let decl = *self.get_resolver().used_types.get_ptr(i);
+      let rt = self.get_resolver().used_types.get_ptr(i);
+      let decl = self.get_resolver().get_decl(rt).unwrap();
       if (decl.is_generic) continue;
       list.add(decl);
     }

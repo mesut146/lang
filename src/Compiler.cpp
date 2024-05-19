@@ -1085,7 +1085,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         auto elem_type = resolv->getType(mc).unwrap();
         auto src = get_obj_ptr(mc->args[0]);
         auto idx = loadPtr(mc->args[1]);
-        return gep(src, idx, mapType(elem_type));
+        return add_comment(gep(src, idx, mapType(elem_type)), "ptr::get");
     }
     if (is_ptr_copy(mc)) {
         //ptr::copy(src_ptr, src_idx, elem)
@@ -1100,7 +1100,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     if (is_ptr_deref(mc)) {
         auto arg_ptr = get_obj_ptr(mc->args[0]);
         auto rt = resolv->getType(mc);
-        if (rt.isPrim()) {
+        if (!isStruct(rt)) {
             return load(arg_ptr, mapType(rt));
         }
         return arg_ptr;
@@ -1497,7 +1497,7 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     } else {
     }
     if (sd->base) index++;
-    return gep2(scope, index, sd_ty);
+    return add_comment(gep2(scope, index, sd_ty), node->print());
 }
 
 llvm::Value *Compiler::getTag(Expression *expr) {

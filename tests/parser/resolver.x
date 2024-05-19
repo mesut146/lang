@@ -71,7 +71,7 @@ struct Resolver{
   used_methods: List<Method*>;
   generated_methods: List<Method>;
   inLoop: i32;
-  used_types: List<Decl*>;
+  used_types: List<RType>;
   generated_decl: List<Decl>;
   generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
@@ -365,7 +365,7 @@ impl Resolver{
       used_methods: List<Method*>::new(),
       generated_methods: List<Method>::new(),
       inLoop: 0,
-      used_types: List<Decl*>::new(),
+      used_types: List<RType>::new(),
       generated_decl: List<Decl>::new(),
       generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new()};
@@ -780,14 +780,15 @@ impl Resolver{
     self.curMethod = Option<Method*>::None;
   }
 
-  func addUsed(self, decl: Decl*){
+  func add_used_decl(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
-      let used = *self.used_types.get_ptr(i);
+      let used: RType* = self.used_types.get_ptr(i);
       if(used.type.print().eq(decl.type.print().str())){
         return;
       }
     }
-    self.used_types.add(decl);
+    let rt = self.visit(&decl.type);
+    self.used_types.add(rt);
     if(decl.base.is_some()){
       self.visit(decl.base.get());
     }
@@ -937,18 +938,26 @@ impl Resolver{
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);
-    self.generated_decl.add(decl0);
-    let decl = self.generated_decl.last();
-    self.addUsed(decl);
+    let decl = self.add_generated(decl0);
+    self.add_used_decl(decl);//fields may be foreign
     let smp = Simple::new(node.name().clone());
     let args = node.get_args();
-    for (let i=0;i < args.len();++i) {
+    for (let i = 0;i < args.len();++i) {
         let ta =  args.get_ptr(i);
         smp.args.add(ta.clone());
     }
     let res = RType::new(smp.into());
     res.targetDecl = Option::new(decl);
     self.addType(str, res.clone());
+    return res;
+  }
+
+  func add_generated(self, decl: Decl): Decl*{
+    let res = self.generated_decl.add(decl);
+    let rt = RType::new(res.type.clone());
+    let idx = self.generated_decl.len() - 1;
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, 0};
+    self.addType(res.type.print(), rt);
     return res;
   }
 
@@ -978,7 +987,7 @@ impl Resolver{
           self.addType(str.clone(), res.clone());
           if (res.targetDecl.is_some()) {
               if (!res.targetDecl.unwrap().is_generic) {
-                  self.addUsed(res.targetDecl.unwrap());
+                  self.add_used_decl(res.targetDecl.unwrap());
               }
           }
           //todo trait
