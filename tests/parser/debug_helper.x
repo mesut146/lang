@@ -189,7 +189,7 @@ impl DebugInfo{
     }
 
     func map_di(self, type: Type*, c: Compiler*): DIType*{
-      let rt = c.get_resolver().visit(type);
+      let rt = c.get_resolver().visit_type(type);
       type = &rt.type;
       let name: String = type.print();
       if(self.types.contains(&name)){

@@ -51,7 +51,7 @@ struct DropHelper {
 
 impl DropHelper{
   func is_drop_type(self, type: Type*): bool{
-    let rt = self.r.visit(type);
+    let rt = self.r.visit_type(type);
     return self.is_drop_type(&rt);
   }
   func is_drop_type(self, rt: RType*): bool{
@@ -243,7 +243,7 @@ impl Compiler{
   func mapType(self, type: Type*): llvm_Type*{
     let p = self.protos.get();
     let r = self.get_resolver();
-    let rt = r.visit(type);
+    let rt = r.visit_type(type);
     type = &rt.type;
     let s = type.print();
     if(s.eq("str")){
@@ -378,7 +378,7 @@ impl Compiler{
       let st = self.protos.get().std("slice");
       return getSizeInBits(st);
     }
-    let rt = self.get_resolver().visit(type);
+    let rt = self.get_resolver().visit_type(type);
     if(rt.targetDecl.is_some()){
       let decl = rt.targetDecl.unwrap();
       return self.getSize(decl);

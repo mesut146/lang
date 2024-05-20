@@ -499,6 +499,9 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
+    if(name.eq("List<u8>")){
+      let a = 10;
+    }
     self.typeMap.add(name, res);
   }
   func addType(self, name: String*, res: RType){
@@ -528,7 +531,7 @@ impl Resolver{
       }else if let Item::Impl(imp*)=(it){
         //pass
       }else if let Item::Type(name*, rhs*) = (it){
-        let res = self.visit(rhs);
+        let res = self.visit_type(rhs);
         self.addType(name, res);
       }
     }
@@ -592,7 +595,7 @@ impl Resolver{
   }
 
   func getType(self, e: Type*): Type{
-    let rt = self.visit(e);
+    let rt = self.visit_type(e);
     return rt.type.clone();
   }
   func getType(self, e: Expr*): Type{
@@ -600,7 +603,7 @@ impl Resolver{
     return rt.type.clone();
   }
   func get_decl(self, ty:Type*): Option<Decl*>{
-    let rt = self.visit(ty);
+    let rt = self.visit_type(ty);
     return self.get_decl(&rt);
   }
   func get_decl(self, rt: RType*): Option<Decl*>{
@@ -643,7 +646,7 @@ impl Resolver{
   }
 
   func is_cyclic(self, type0: Type*, target: Type*): bool{
-    let rt = self.visit(type0); 
+    let rt = self.visit_type(type0); 
     let type = &rt.type;
     if (type.is_pointer()) return false;
     if (type.is_array()) {
@@ -685,11 +688,11 @@ impl Resolver{
     if(node.is_generic) return;
     node.is_resolved = true;
     if(node.base.is_some()){
-      self.visit(node.base.get());
+      self.visit_type(node.base.get());
     }
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get_ptr(i);
-      self.visit(&fd.type);
+      self.visit_type(&fd.type);
       if(self.is_cyclic(&fd.type, &node.type)){
         self.err(format("cyclic type {}", node.type));
       }
@@ -706,7 +709,7 @@ impl Resolver{
     if(imp.info.trait_name.is_some()){
       //todo
       let required = Map<String, Method*>::new();
-      let trait_rt = self.visit(imp.info.trait_name.get());
+      let trait_rt = self.visit_type(imp.info.trait_name.get());
       let trait_decl = trait_rt.trait.unwrap();
       for(let i = 0;i < trait_decl.methods.len();++i){
         let m = trait_decl.methods.get_ptr(i);
@@ -754,16 +757,16 @@ impl Resolver{
       return;
     }
     self.curMethod = Option::new(node);
-    let res = self.visit(&node.type);
+    let res = self.visit_type(&node.type);
     res.method = Option<Method*>::new(node);
     self.newScope();
     if(node.self.is_some()){
-      self.visit(&node.self.get().type);
+      self.visit_type(&node.self.get().type);
       self.addScope(node.self.get().name.clone(), node.self.get().type.clone(), true);
     }
     for(let i = 0;i<node.params.len();++i){
       let prm = node.params.get_ptr(i);
-      self.visit(&prm.type);
+      self.visit_type(&prm.type);
       self.addScope(prm.name.clone(), prm.type.clone(), true);
     }
     if(node.body.is_some()){
@@ -787,16 +790,16 @@ impl Resolver{
         return;
       }
     }
-    let rt = self.visit(&decl.type);
+    let rt = self.visit_type(&decl.type);
     self.used_types.add(rt);
     if(decl.base.is_some()){
-      self.visit(decl.base.get());
+      self.visit_type(decl.base.get());
     }
     if(decl is Decl::Struct){
       let fields = decl.get_fields();
       for(let i = 0;i < fields.len();++i){
         let fd = fields.get_ptr(i);
-        self.visit(&fd.type);
+        self.visit_type(&fd.type);
       }
     }else{
       let variants = decl.get_variants();
@@ -804,7 +807,7 @@ impl Resolver{
         let ev = variants.get_ptr(i);
         for(let j = 0;j < ev.fields.len();++j){
           let f = ev.fields.get_ptr(j);
-          self.visit(&f.type);
+          self.visit_type(&f.type);
         }
       }
     }
@@ -823,7 +826,7 @@ impl Resolver{
   }
   
   func visit(self, node: FieldDecl*): RType{
-    return self.visit(&node.type);
+    return self.visit_type(&node.type);
   }
 }
 
@@ -839,10 +842,13 @@ impl Resolver{
     if(op.is_none()) return Option<Decl*>::new();
     return Option<Decl*>::new(*op.get());
   }
-
-  func visit(self, node: Type*): RType{
-    let id = Node::new(-1);
+  func visit_type(self, node: Type*): RType{
+    let id = Node::new(0);
     let expr = Expr::Type{.id, node.clone()};
+    return self.visit_type(&expr, node);
+  }
+
+  func visit_type(self, expr: Expr*, node: Type*): RType{
     let str = node.print();
     let cached = self.typeMap.get_ptr(&str);
     if(cached.is_some()){
@@ -855,27 +861,27 @@ impl Resolver{
     }
     if(node.is_pointer()){
       let inner = node.unwrap_ptr();
-      let res = self.visit(inner);
+      let res = self.visit_type(inner);
       let ptr = res.type.clone().toPtr();
       res.type = ptr;
       return res;
     }
     if(node.is_slice()){
       let inner = node.elem();
-      let elem = self.visit(inner);
+      let elem = self.visit_type(inner);
       return RType::new(Type::Slice{Box::new(elem.type.clone())});      
     }
     if let Type::Array(inner*, size) = (node){
-      let elem = self.visit(inner.get());
+      let elem = self.visit_type(inner.get());
       return RType::new(Type::Array{Box::new(elem.type.clone()), size});      
     }
     if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
       let imp = self.curMethod.unwrap().parent.as_impl();
-      return self.visit(&imp.type);
+      return self.visit_type(&imp.type);
     }
     let simple = node.as_simple();
     if (simple.scope.is_some()) {
-      let scope = self.visit(simple.scope.get());
+      let scope = self.visit_type(simple.scope.get());
       let decl = scope.targetDecl.unwrap();
       if (!(decl is Decl::Enum)) {
           panic("type scope is not enum: {}", str);
@@ -892,7 +898,7 @@ impl Resolver{
     let targs = node.get_args();
     if (!targs.empty()) {
       for (let i = 0; i < targs.len();++i) {
-          self.visit(targs.get_ptr(i));
+          self.visit_type(targs.get_ptr(i));
       }
       //we looking for generic type
       let name = node.name();
@@ -920,7 +926,7 @@ impl Resolver{
         }
       }
       else{
-        self.err(&expr, "couldn't find type");
+        self.err(expr, "couldn't find type");
       }
     }
     let target = target0.unwrap();
@@ -933,7 +939,7 @@ impl Resolver{
         return res;
     }
     if (node.get_args().len() != target.type.get_args().len()) {
-      self.err(&expr, "type arguments size not matched");
+      self.err(expr, "type arguments size not matched");
     }
     let map = make_type_map(node.as_simple(), target);
     let copier = AstCopier::new(&map);
@@ -1092,7 +1098,7 @@ impl Resolver{
     if (hasNamed && hasNonNamed) {
         self.err(node, "obj creation can't have mixed values");
     }
-    let res = self.visit(type0);
+    let res = self.visit_type(type0);
     let decl = res.targetDecl.unwrap();
     if (decl.base.is_some() && base.is_none()) {
         self.err(node, "base class is not initialized");
@@ -1121,7 +1127,7 @@ impl Resolver{
         if (decl.is_generic) {
             //infer
             let inferred = self.inferStruct(node, &decl.type, hasNamed, f, args);
-            res = self.visit(&inferred);
+            res = self.visit_type(&inferred);
             //let map = get_type_map(&inferred, decl);
             //let copier = AstCopier::new(&map);
             let gen_decl = res.targetDecl.unwrap();
@@ -1377,8 +1383,8 @@ impl Resolver{
     }
   }
 
-  func visit(self, node: Expr*, call: Call*): RType{
-    if(call.print().eq("f.print(\"true\")")){
+  func visit_call(self, node: Expr*, call: Call*): RType{
+    if(call.print().eq("List<u8>::new()")){
       let a = 10;
     }
     if(is_printf(call)){
@@ -1397,12 +1403,12 @@ impl Resolver{
       if(!call.args.empty()){
         self.visit(call.args.get_ptr(0));
       }else{
-        self.visit(call.type_args.get_ptr(0));
+        self.visit_type(call.type_args.get_ptr(0));
       }
       return RType::new("i64");
     }
     if(std_is_ptr(call)){
-      self.visit(call.type_args.get_ptr(0));
+      self.visit_type(call.type_args.get_ptr(0));
       return RType::new("bool");
     }
     if(is_ptr_get(call)){
@@ -1415,7 +1421,7 @@ impl Resolver{
       }
       let idx = self.getType(call.args.get_ptr(1)).print();
       if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
-          return self.visit(&arg);
+          return self.visit_type(&arg);
       } else {
           self.err(node, "ptr access index is not integer");
       }
@@ -1446,7 +1452,7 @@ impl Resolver{
         if (!rt.is_pointer()) {
             self.err(node, "ptr arg is not ptr ");
         }
-        return self.visit(rt.unwrap_ptr());
+        return self.visit_type(rt.unwrap_ptr());
     }
     if(is_std_no_drop(call)){
       let rt = self.visit(call.args.get_ptr(0));
@@ -1478,7 +1484,7 @@ impl Resolver{
       if(call.type_args.empty()){
         return RType::new(Type::new("i8").toPtr());
       }else{
-        let arg = self.visit(call.type_args.get_ptr(0));
+        let arg = self.visit_type(call.type_args.get_ptr(0));
         return RType::new(arg.type.clone().toPtr());
       }
     }
@@ -1515,7 +1521,7 @@ impl Resolver{
         arr = self.getType(arr.elem());
     }
     if (arr.is_array() || arr.is_slice()) {
-        return self.visit(arr.elem());
+        return self.visit_type(arr.elem());
     }
     self.err(node, "cant index: ");
     panic("");
@@ -1543,7 +1549,7 @@ impl Resolver{
   
   func visit_as(self, node: Expr*, lhs: Expr*, type: Type*): RType{
     let left = self.visit(lhs);
-    let right = self.visit(type);
+    let right = self.visit_type(type);
     //prim->prim
     if (left.type.is_prim() && right.type.is_prim()) {
         return right;
@@ -1555,7 +1561,7 @@ impl Resolver{
             let bs = cur.unwrap().base.get().print();
             bs.append("*");
             if (bs.eq(right.type.print().str())) return right;
-            cur = clone_op(&self.visit(cur.unwrap().base.get()).targetDecl);
+            cur = clone_op(&self.visit_type(cur.unwrap().base.get()).targetDecl);
         }
     }
     if (right.type.is_pointer()) {
@@ -1594,7 +1600,7 @@ impl Resolver{
       if(i64::parse(value.str()) > max_for(lit.suffix.get())){
         self.err("literal out of range");
       }
-      return self.visit(lit.suffix.get());
+      return self.visit_type(lit.suffix.get());
     }
     if(kind is LitKind::INT){
       let res = RType::new("i32");
@@ -1622,7 +1628,7 @@ impl Resolver{
       let vh = scope.find(name);
       if(vh.is_some()){
         let vh2 = vh.unwrap();
-        let res = self.visit(&vh2.type);
+        let res = self.visit_type(&vh2.type);
         res.vh = Option::new(vh2.clone());
         return res;
       }
@@ -1647,11 +1653,11 @@ impl Resolver{
     if let Expr::Lit(lit*)=(node){
       return self.visit_lit(lit);
     }else if let Expr::Type(type*) = (node){
-      return self.visit(type);
+      return self.visit_type(node, type);
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){
-      return self.visit(node, call);
+      return self.visit_call(node, call);
     }else if let Expr::Name(name*) = (node){
       return self.visit_name(node, name);
     }else if let Expr::Unary(op*, ebox*) = (node){
@@ -1788,7 +1794,7 @@ impl Resolver{
 
   func visit(self, node: Stmt*, is: IfLet*){
     //check lhs
-    let rt = self.visit(&is.ty);
+    let rt = self.visit_type(&is.ty);
     if (rt.targetDecl.is_none() || !rt.targetDecl.unwrap().is_enum()) {
         let msg = format("if let type is not enum: {}", is.ty);
         self.err(node, msg);
@@ -1852,7 +1858,7 @@ impl Resolver{
     if(node.type.is_none()){
       return rhs.clone();
     }
-    let type = self.visit(node.type.get());
+    let type = self.visit_type(node.type.get());
     return type;
   }
 }

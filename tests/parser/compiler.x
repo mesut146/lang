@@ -557,7 +557,7 @@ impl Compiler{
   }
 
   func visit_iflet(self, node: IfLet*){
-    let rt = self.get_resolver().visit(&node.ty);
+    let rt = self.get_resolver().visit_type(&node.ty);
     let decl = rt.targetDecl.unwrap();
     let rhs = self.get_obj_ptr(&node.rhs);
     let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
@@ -743,7 +743,7 @@ impl Compiler{
   }
   func visit_ret(self, expr: Expr*){
     let type = &self.curMethod.unwrap().type;
-    type = &self.get_resolver().visit(type).type;
+    type = &self.get_resolver().visit_type(type).type;
     if(type.is_pointer()){
       let val = self.get_obj_ptr(expr);
       CreateRet(val);
@@ -816,7 +816,7 @@ impl Compiler{
 
   func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
     let lhs_type = self.getType(lhs);
-    let rhs_type = &self.get_resolver().visit(rhs).type;
+    let rhs_type = &self.get_resolver().visit_type(rhs).type;
     //ptr to int
     if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
       let val = self.get_obj_ptr(lhs);
@@ -832,7 +832,7 @@ impl Compiler{
     let tag1 = self.getTag(lhs);
     let op = get_comp_op("==".ptr());
     if let Expr::Type(rhs_ty*)=(rhs){
-      let decl = self.get_resolver().visit(rhs_ty).targetDecl.unwrap();
+      let decl = self.get_resolver().visit_type(rhs_ty).targetDecl.unwrap();
       let index = Resolver::findVariant(decl, rhs_ty.name());
       let tag2 = makeInt(index, ENUM_TAG_BITS());
       return CreateCmp(op, tag1, tag2);
@@ -843,7 +843,7 @@ impl Compiler{
 
   func simple_enum(self, node: Expr*, type: Type*): Value*{
     let smp = type.as_simple();
-    let decl = self.get_resolver().visit(smp.scope.get()).targetDecl.unwrap();
+    let decl = self.get_resolver().visit_type(smp.scope.get()).targetDecl.unwrap();
     let index = Resolver::findVariant(decl, &smp.name);
     let ptr = self.get_alloc(node);
     let decl_ty = self.mapType(&decl.type);
@@ -1146,7 +1146,7 @@ impl Compiler{
         }
       } else {
         let prm = target.params.get_ptr(paramIdx);
-        let pt = &self.get_resolver().visit(&prm.type).type;
+        let pt = &self.get_resolver().visit_type(&prm.type).type;
         args_push(args, self.cast(arg, pt));
       }
       ++paramIdx;

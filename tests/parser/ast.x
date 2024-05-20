@@ -563,3 +563,7 @@ struct Entry{
   expr: Expr;
   isBase: bool;
 }
+
+func print5(e: Expr*){
+  print("{}\n", e);
+}

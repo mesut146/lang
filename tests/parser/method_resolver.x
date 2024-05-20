@@ -48,6 +48,11 @@ impl Signature{
                             r: Option::new(r)};
         let is_trait = false;                            
         if(mc.scope.is_some()){
+            let str = mc.print();
+            print("{}\n", str);
+            if(str.eq("List<u8>::new()")){
+                let x = 10;
+            }
             let scp: RType = r.visit(mc.scope.get());
             is_trait = scp.trait.is_some();
             res.real_scope = Option::new(scp.clone());
@@ -61,7 +66,7 @@ impl Signature{
             Drop::drop(res.scope);
             if (scp.type.is_pointer()) {
                 let inner = scp.type.unwrap_ptr();
-                res.scope = Option::new(r.visit(inner));
+                res.scope = Option::new(r.visit_type(inner));
                 Drop::drop(scp);
             } else {
                 res.scope = Option::new(scp);
@@ -84,7 +89,7 @@ impl Signature{
         let map = Map<String, Type>::new();
         if(!type.is_simple()) return map;
         let type_plain: Type = type.erase();
-        let decl_rt = sig.r.unwrap().visit(&type_plain);
+        let decl_rt = sig.r.unwrap().visit_type(&type_plain);
         let decl_opt = decl_rt.targetDecl;
         Drop::drop(type_plain);
         Drop::drop(decl_rt);
@@ -373,7 +378,7 @@ impl MethodResolver{
                 self.r.addUsed(target);
             }
             //let res = self.r.visit(&sig2.ret);
-            let res = self.r.visit(&target.type);
+            let res = self.r.visit_type(&target.type);
             res.method = Option::new(target);
             Drop::drop(list);
             Drop::drop(real);
@@ -434,7 +439,7 @@ impl MethodResolver{
         Drop::drop(tmap);
         Drop::drop(typeMap);
         target = target2;
-        let res = self.r.visit(&target.type);
+        let res = self.r.visit_type(&target.type);
         res.method = Option::new(target);
         Drop::drop(type_params);
         Drop::drop(list);

@@ -1339,7 +1339,10 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
         NamedValues[f.name] = ptr;
         loc(&f);
         curOwner.check(rhs);
-        if (!isStruct(type)) {
+        if (type.isPointer()) {
+            auto val = get_obj_ptr(rhs);
+            Builder->CreateStore(val, ptr);
+        } else if (!isStruct(type)) {
             auto val = cast(rhs, type);
             Builder->CreateStore(val, ptr);
         } else if (doesAlloc(rhs)) {

@@ -17,8 +17,16 @@ func deref_struct(){
     assert a2.b == 300;
 }
 
+func prm(num: i32*, val: i32){
+    assert *num == val;
+    let loc: i32* = num;
+    assert *loc == val;
+}
+
 func main(){
     deref_prim();
     deref_struct();
+    let a = 10;
+    prm(&a, 10);
     print("ptr_test done\n");
 }
