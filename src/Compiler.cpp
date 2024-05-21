@@ -983,16 +983,38 @@ void callPrint(MethodCall *mc, Compiler *c) {
     c->Builder->CreateCall(c->fflush_proto, args2);
 }
 
-void printf_simple(MethodCall *mc, Compiler *c) {
+void print_simple(const std::string &str, Compiler *c) {
     std::vector<llvm::Value *> args;
-    auto lit = dynamic_cast<Literal *>(mc->args.at(0));
-    auto str_ptr = c->Builder->CreateGlobalStringPtr(lit->val);
+    auto str_ptr = c->Builder->CreateGlobalStringPtr(str);
     args.push_back(str_ptr);
     c->Builder->CreateCall(c->printf_proto, args);
     //flush
     std::vector<llvm::Value *> args2;
     args2.push_back(c->load(c->stdout_ptr));
     c->Builder->CreateCall(c->fflush_proto, args2);
+}
+std::string panic_message(Compiler *c, int line, std::optional<std::string> msg) {
+    std::string message = "panic ";
+    message += c->curMethod->path + ":" + std::to_string(line);
+    message += " " + printMethod(c->curMethod);
+    if (msg.has_value()) {
+        message += "\n";
+        message += msg.value();
+    }
+    message.append("\n");
+    return message;
+}
+void call_exit(int code, Compiler *c) {
+    std::vector<llvm::Value *> exit_args = {c->makeInt(code)};
+    c->Builder->CreateCall(c->exit_proto, exit_args);
+    c->Builder->CreateUnreachable();
+}
+void panic_simple(MethodCall *mc, Compiler *c) {
+    auto lit = dynamic_cast<Literal *>(mc->args.at(0));
+    auto msg = panic_message(c, mc->line, lit->val);
+    print_simple(msg, c);
+    //exit
+    call_exit(-1, c);
 }
 
 void callPrintf(MethodCall *mc, Compiler *c) {
@@ -1022,31 +1044,6 @@ void callPrintf(MethodCall *mc, Compiler *c) {
     std::vector<llvm::Value *> args2;
     args2.push_back(c->load(c->stdout_ptr));
     c->Builder->CreateCall(c->fflush_proto, args2);
-}
-
-void call_exit(int code, Compiler *c) {
-    std::vector<llvm::Value *> exit_args = {c->makeInt(code)};
-    c->Builder->CreateCall(c->exit_proto, exit_args);
-    c->Builder->CreateUnreachable();
-}
-
-std::any callPanic(MethodCall *mc, Compiler *c) {
-    std::string message = "panic ";
-    message += c->curMethod->path + ":" + std::to_string(mc->line);
-    message += " " + printMethod(c->curMethod);
-    if (!mc->args.empty()) {
-        message += "\n";
-        auto &val = dynamic_cast<Literal *>(mc->args[0])->val;
-        message += val;
-    }
-    message.append("\n");
-    MethodCall mc2;
-    mc2.args.push_back(new Literal(Literal::STR, message));
-    mc2.args.insert(mc2.args.end(), mc->args.begin() + 1, mc->args.end());
-    callPrint(&mc2, c);
-    //call exit(1)
-    call_exit(1, c);
-    return (llvm::Value *) c->Builder->getVoidTy();
 }
 
 std::any Compiler::visitMethodCall(MethodCall *mc) {
@@ -1146,7 +1143,8 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     if (is_print(mc)) {
         if (mc->args.size() == 1) {
             //simple print, use printf
-            printf_simple(mc, this);
+            auto lit = dynamic_cast<Literal *>(mc->args[0]);
+            print_simple(lit->val, this);
             return (llvm::Value *) Builder->getVoidTy();
         }
         auto &info = resolv->format_map.at(mc->id);
@@ -1155,6 +1153,11 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return (llvm::Value *) Builder->getVoidTy();
     }
     if (is_panic(mc)) {
+        if (mc->args.size() == 1) {
+            //simple panic, use printf
+            panic_simple(mc, this);
+            return (llvm::Value *) Builder->getVoidTy();
+        }
         auto &info = resolv->format_map.at(mc->id);
         visitBlock(&info.block);
         //call(&info.print_mc, nullptr);

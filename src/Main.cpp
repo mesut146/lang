@@ -46,24 +46,31 @@ void clean() {
     }
 }
 
+std::string get_bin_name(const std::string &file) {
+    auto pos = file.find_last_of('/');
+    auto xpos = file.find_last_of(".x");
+    int len = xpos - pos - 2;
+    return file.substr(pos + 1, len) + ".bin";
+}
+
 void compileTest(bool std_test) {
     clean();
     //Cache::delete_cache();
-    build_std();
-
     if (std_test) {
+        build_std();
         //std tests
         std::function<void(const std::string &)> f2 = [&](const std::string &file) {
             DirCompiler dc = get_compiler();
             dc.compile_single(file, Config::root);
-            dc.link_run("", dc.out_dir + "/std.a");
+            dc.link_run(get_bin_name(file), dc.out_dir + "/std.a");
         };
         list_dir(Config::root + "/std_test", f2);
     } else {
         std::function<void(const std::string &)> f = [&](const std::string &file) {
             DirCompiler dc = get_compiler();
             dc.compile_single(file, Config::root);
-            dc.link_run("", dc.out_dir + "/std.a");
+            //dc.link_run(get_bin_name(file), dc.out_dir + "/std.a");
+            dc.link_run(get_bin_name(file), "");
         };
         list_dir(Config::root + "/normal", f);
     }

@@ -62,7 +62,8 @@ impl DropHelper{
         let elem = type.elem();
         return self.is_drop_type(elem);
     }
-    return self.is_drop(*rt.targetDecl.get());
+    let decl = self.r.get_decl(rt).unwrap();
+    return self.is_drop(decl);
   }
   func is_drop(self, decl: Decl*): bool{
     if(decl.is_drop()) return true;
@@ -379,8 +380,8 @@ impl Compiler{
       return getSizeInBits(st);
     }
     let rt = self.get_resolver().visit_type(type);
-    if(rt.targetDecl.is_some()){
-      let decl = rt.targetDecl.unwrap();
+    if(rt.is_decl()){
+      let decl = self.get_resolver().get_decl(&rt).unwrap();
       return self.getSize(decl);
     }
     panic("getSize {}", type);
@@ -471,7 +472,8 @@ impl Compiler{
 
   func getTag(self, expr: Expr*): Value*{
     let rt = self.get_resolver().visit(expr);
-    let tag_idx = get_tag_index(rt.targetDecl.unwrap());
+    let decl = self.get_resolver().get_decl(&rt).unwrap();
+    let tag_idx = get_tag_index(decl);
     let tag = self.get_obj_ptr(expr);
     let mapped = self.mapType(rt.type.unwrap_ptr());
     tag = self.gep2(tag, tag_idx, mapped);

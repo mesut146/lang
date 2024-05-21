@@ -54,10 +54,10 @@ impl Signature{
                 let x = 10;
             }
             let scp: RType = r.visit(mc.scope.get());
-            is_trait = scp.trait.is_some();
             res.real_scope = Option::new(scp.clone());
+            is_trait = scp.trait.is_some();
             //we need this to handle cases like Option::new(...)
-            if (scp.targetDecl.is_some()) {
+            if (scp.is_decl()) {
                 let trg: Decl* = r.get_decl(&scp).unwrap();
                 if(!trg.is_generic && !trg.path.eq(&r.unit.path)){
                     r.add_used_decl(trg);
@@ -90,7 +90,7 @@ impl Signature{
         if(!type.is_simple()) return map;
         let type_plain: Type = type.erase();
         let decl_rt = sig.r.unwrap().visit_type(&type_plain);
-        let decl_opt = decl_rt.targetDecl;
+        let decl_opt = sig.r.unwrap().get_decl(&decl_rt);
         Drop::drop(type_plain);
         Drop::drop(decl_rt);
         
@@ -515,7 +515,8 @@ impl MethodResolver{
         if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
             //generated method impl
             //check they belong same impl
-            if(!sig.scope.get().targetDecl.unwrap().is_generic){
+            let decl = self.r.get_decl(sig.scope.get()).unwrap();
+            if(!decl.is_generic){
                 let scope_args = scope.get_args();
                 for (let i = 0; i < scope_args.size(); ++i) {
                     let tp_str = ty.get_args().get_ptr(i).print();

@@ -15,19 +15,22 @@ func bool_test(){
 }
 
 impl A{
-  func f1(self){
+  func f1(self): i32{
     let a = self.a + 1;
+    return a;
   }
 }
 
-func test(a: A*){
+func test(a: A*): i32{
     let b = a;
     let res = a.a + 1;
+    return res;
 }
 
-func test2(a: A){
+func test2(a: A): i32{
   let b = a.a + 2;
   assert b == 52;
+  return b;
 }
 
 func main(){

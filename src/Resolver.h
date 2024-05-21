@@ -165,9 +165,10 @@ static std::string printMethod(const Method *m) {
 
 static std::string mangleType(const Type &type) {
     auto s = type.print();
-    /*s = std::regex_replace(s, std::regex("\\*"), "P");
+    s = std::regex_replace(s, std::regex("\\*"), "P");
     s = std::regex_replace(s, std::regex("<"), "$LT");
-    s = std::regex_replace(s, std::regex(">"), "$GT");*/
+    s = std::regex_replace(s, std::regex(">"), "$GT");
+    s = std::regex_replace(s, std::regex("::"), "__");
     return s;
 }
 
@@ -178,7 +179,8 @@ static std::string mangle(const Method *m) {
     std::string s;
     if (p.has_value()) {
         s += mangleType(p.value());
-        s += "::";
+        //s += "::";
+        s += "__";
     }
     s += m->name;
     if (!m->typeArgs.empty()) {
@@ -207,12 +209,6 @@ static void print(const std::string &msg) {
 static bool isStruct(const Type &t) {
     return !t.isVoid() && !t.isPrim() && !t.isPointer();
 }
-
-/*class EnumPrm {
-public:
-    FieldDecl *decl;
-    std::string name;
-};*/
 
 struct VarHolder {
     std::string name;

@@ -22,10 +22,6 @@ func main(){
   print("literalTest done\n");
 }
 
-func test(u: u64){
-  print("u={}\n", u);
-}
-
 func underflow_u8(){
   //let neg = -1;
   //let neg = 255;

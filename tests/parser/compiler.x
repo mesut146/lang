@@ -558,7 +558,7 @@ impl Compiler{
 
   func visit_iflet(self, node: IfLet*){
     let rt = self.get_resolver().visit_type(&node.ty);
-    let decl = rt.targetDecl.unwrap();
+    let decl = self.get_resolver().get_decl(&rt).unwrap();
     let rhs = self.get_obj_ptr(&node.rhs);
     let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
     let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
@@ -832,7 +832,7 @@ impl Compiler{
     let tag1 = self.getTag(lhs);
     let op = get_comp_op("==".ptr());
     if let Expr::Type(rhs_ty*)=(rhs){
-      let decl = self.get_resolver().visit_type(rhs_ty).targetDecl.unwrap();
+      let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
       let index = Resolver::findVariant(decl, rhs_ty.name());
       let tag2 = makeInt(index, ENUM_TAG_BITS());
       return CreateCmp(op, tag1, tag2);
@@ -843,7 +843,7 @@ impl Compiler{
 
   func simple_enum(self, node: Expr*, type: Type*): Value*{
     let smp = type.as_simple();
-    let decl = self.get_resolver().visit_type(smp.scope.get()).targetDecl.unwrap();
+    let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
     let index = Resolver::findVariant(decl, &smp.name);
     let ptr = self.get_alloc(node);
     let decl_ty = self.mapType(&decl.type);
@@ -854,8 +854,8 @@ impl Compiler{
 
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
     let scope_ptr = self.get_obj_ptr(scope);
-    let rt = self.get_resolver().visit(scope);
-    let decl = rt.targetDecl.unwrap();
+    let scope_rt = self.getType(scope);
+    let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
     let pair = self.get_resolver().findField(node, name, decl, &decl.type);
     let index = pair.b;
     if(decl is Decl::Enum){
@@ -1482,7 +1482,7 @@ impl Compiler{
       let ptr = self.get_alloc(node);
       let rt = self.get_resolver().visit(node);
       let ty = self.mapType(&rt.type);
-      let decl = rt.targetDecl.unwrap();
+      let decl = self.get_resolver().get_decl(&rt).unwrap();
       for(let i = 0;i < args.len();++i){
         let arg = args.get_ptr(i);
         if(!arg.isBase) continue;
