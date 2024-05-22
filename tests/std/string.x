@@ -261,7 +261,14 @@ impl i64{
     let list = List<u8>::new(len + 1);
     list.set(len, 0u8);//null terminate
     list.count = len;
-    for(let i = len - 1;i >= 0;--i){
+    let end_idx = len - 1;
+    let start_idx = 0;
+    if(x < 0){
+      x = -x;
+      list.set(0, '-' as u8);
+      ++start_idx;
+    }
+    for(let i = end_idx;i >= start_idx;--i){
       let c = x % 10;
       list.set(i, (c + ('0' as i32)) as u8);
       x = x / 10;
@@ -272,6 +279,10 @@ impl i64{
   func str_size(x: i64): i32{
     if(x == 0) return 1;
     let res = 0;
+    if(x < 0){
+      x = -x;
+      res += 1;
+    }
     while(x > 0){
       x /= 10;
       res += 1;

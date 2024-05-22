@@ -49,10 +49,10 @@ impl Signature{
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let str = mc.print();
-            print("{}\n", str);
-            if(str.eq("List<u8>::new()")){
+            //print("{}\n", str);
+            /*if(str.eq("List<u8>::new()")){
                 let x = 10;
-            }
+            }*/
             let scp: RType = r.visit(mc.scope.get());
             res.real_scope = Option::new(scp.clone());
             is_trait = scp.trait.is_some();

@@ -46,6 +46,10 @@ impl<T> List<T>{
     self.ptr = tmp;
     self.cap = self.cap + 10;
   }
+
+  func in_index(self, pos: i64): bool{
+    return pos >= 0 && pos < self.count;
+  }
   
   func check(self, pos: i64){
     if(pos >= 0 && pos < self.count){

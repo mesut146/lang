@@ -132,16 +132,8 @@ impl Desc{
     return Desc{
       kind: RtKind::None,
       path: "".str(),
-      idx: 0,
-      idx2: 0
-    };
-  }
-  func new(kind: RtKind, path: String): Desc{
-    return Desc{
-      kind: kind,
-      path: path,
-      idx: 0,
-      idx2: 0
+      idx: -1,
+      idx2: -1
     };
   }
   func clone(self): Desc{
@@ -519,12 +511,12 @@ impl Resolver{
       //Fmt::str(it).dump();
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type.clone());
-        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i, 0};
+        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i, -1};
         self.addType(decl.type.name().clone(), res);
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type.clone());
         res.trait = Option::new(tr);
-        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i, 0};
+        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i, -1};
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
@@ -606,6 +598,9 @@ impl Resolver{
     return self.get_decl(&rt);
   }
   func get_decl(self, rt: RType*): Option<Decl*>{
+    if(rt.desc.kind is RtKind::Trait){
+      return Option<Decl*>::new();
+    }
     if(rt.desc.kind is RtKind::Decl){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
@@ -614,7 +609,31 @@ impl Resolver{
         return Option::new(decl);
       }
     }
+    if(rt.desc.kind is RtKind::DeclGen){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      if(resolver.generated_decl.in_index(rt.desc.idx)){
+        let decl = resolver.generated_decl.get_ptr(rt.desc.idx);
+        if(!decl.type.eq(rt.type.unwrap_ptr().print().str())){
+          panic("get_decl err {}={}", rt.type, rt.desc);
+        }
+        return Option::new(decl);
+      }
+    }
+    if(rt.desc.kind is RtKind::None){
+      return Option<Decl*>::new();
+    }
     panic("get_decl() {}={}", rt.type, rt.desc);
+  }
+  func get_trait(self, rt: RType*): Option<Trait*>{
+    if(rt.desc.kind is RtKind::Trait){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get_ptr(rt.desc.idx);
+      if let Item::Trait(tr*) = (item){
+        return Option::new(tr);
+      }
+    }
+    panic("get_trait {}={}", rt.type, rt.desc);
   }
 
   func visit(self, node: Item*){
@@ -645,6 +664,7 @@ impl Resolver{
   }
 
   func is_cyclic(self, type0: Type*, target: Type*): bool{
+    print("is_cyclic {} -> {}\n", type0, target);
     let rt = self.visit_type(type0); 
     let type = &rt.type;
     if (type.is_pointer()) return false;
@@ -709,7 +729,7 @@ impl Resolver{
       //todo
       let required = Map<String, Method*>::new();
       let trait_rt = self.visit_type(imp.info.trait_name.get());
-      let trait_decl = trait_rt.trait.unwrap();
+      let trait_decl = self.get_trait(&trait_rt).unwrap();
       for(let i = 0;i < trait_decl.methods.len();++i){
         let m = trait_decl.methods.get_ptr(i);
         if(m.body.is_none()){
@@ -892,58 +912,45 @@ impl Resolver{
       self.addType(str, res.clone());
       return res;
     }
-    return self.visit_type2(expr, simple, str);
+    let res = self.visit_type2(expr, simple, str);
+    //print("visit_type2 {} -> {}\n", node, res.desc);
+    return res;
+  }
+
+  func find_type(self, expr: Expr*, simple: Simple*): RType{
+    let name = &simple.name;
+    if (self.typeMap.contains(name)) {
+      let rt: RType* = self.typeMap.get_ptr(name).unwrap();
+      return rt.clone();
+    }
+    let imp_result: Option<RType> = self.find_imports(simple, name);
+    if(imp_result.is_none()){
+      self.err(expr, "couldn't find type");
+    }
+    let tmp: RType = imp_result.unwrap();
+    return tmp;
   }
 
   func visit_type2(self, expr: Expr*, simple: Simple*, str: String): RType{
-    //local generic or foreign
-    let target0 = Option<Decl*>::new();
-    let target_rt = Option<RType*>::new();
-    let targs = &simple.args;
-    if (!targs.empty()) {
-      //looking for generic type
-      for (let i = 0; i < targs.len();++i) {
-          self.visit_type(targs.get_ptr(i));
-      }
-      let name = &simple.name;
-      if (self.typeMap.contains(name)) {
-          //local generic
-          let rt: RType* = self.typeMap.get_ptr(name).unwrap();
-          target0 = self.get_decl(rt);
-          target_rt = Option::new(rt);
-      } else {
-          //generic from imports
-      }
+    if(str.eq("List<u8>")){
+      let aa = 10;
     }
-    if(target0.is_none()){
-      let imp_result = self.find_imports(simple, &str);
-      if(imp_result.is_some()){
-        let tmp: RType = imp_result.unwrap();
-        tmp.desc.path = self.unit.path.clone();
-        if(tmp.trait.is_some()){
-          return tmp;
-        }
-        else if(tmp.is_decl()){
-          target0 = self.get_decl(&tmp);
-          target_rt = Option::new(&tmp);
-          if(!target0.unwrap().is_generic){
-            return tmp;
-          }
-        }else{
-          //type alias from imports
-          return tmp;
-        }
-      }
-      else{
-        self.err(expr, "couldn't find type");
-      }
+    let target_rt: RType = self.find_type(expr, simple);
+    if(!target_rt.is_decl()){
+      //add used
+      return target_rt;
     }
-    let target: Decl* = target0.unwrap();
+    if (!simple.args.empty()) {
+      //local gen or foreign gen, place targs, gen decl, return
+    }else{
+      //local gen root, foreign gen root, foreign alias; find & return
+    }
+    let target: Decl* = self.get_decl(&target_rt).unwrap();
     //generic
     if (simple.args.empty() || !target.is_generic) {
         //inferred later
         let res = RType::new(target.type.clone());
-        res.desc = target_rt.unwrap().desc.clone();
+        res.desc = target_rt.desc.clone();
         self.addType(str, res.clone());
         return res;
     }
@@ -953,17 +960,20 @@ impl Resolver{
     let map = make_type_map(simple, target);
     let copier = AstCopier::new(&map);
     let decl0 = copier.visit(target);
-    let decl = self.add_generated(decl0);
+    let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
-    let smp = Simple::new(simple.name.clone());
+    let res = self.getTypeCached(&str);
+    /*let smp = Simple::new(simple.name.clone());
     let args = &simple.args;
     for (let i = 0;i < args.len();++i) {
         let ta =  args.get_ptr(i);
         smp.args.add(ta.clone());
     }
     let res = RType::new(smp.into());
-    res.desc = target_rt.unwrap().desc.clone();
-    self.addType(str, res.clone());
+    res.desc = target_rt.desc.clone();
+    res.desc.kind = RtKind::DeclGen;
+    res.desc.path = self.unit.path.clone();
+    self.addType(str, res.clone());*/
     return res;
   }
 
@@ -971,11 +981,12 @@ impl Resolver{
     let res = self.generated_decl.add(decl);
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
-    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, 0};
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, -1};
+    print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
     return res;
   }
-
+  //A<T1, T2>=A<B, C> -> (T1: B), (T2: C) 
   func make_type_map(type: Simple*, decl: Decl*): Map<String, Type>{
     let map = Map<String, Type>::new();
     let params = decl.type.get_args();
@@ -992,13 +1003,22 @@ impl Resolver{
     if(str.eq("List<u8>")){
       let aa = 10;
     }
+    // let decl = self.get_decl(&res).unwrap();
+    // if (!decl.is_generic) {
+    //     self.add_used_decl(decl);
+    // }
     let arr = self.get_imports();
     for (let i = 0;i < arr.len();++i) {
       let is = arr.get_ptr(i);
       let resolver = self.ctx.get_resolver(is);
       resolver.init();
+      let cached = resolver.typeMap.get_ptr(&type.name);
+      if (cached.is_some()) {
+        let res = cached.unwrap().clone();
+        return Option::new(res);
+      }
       //try full type
-      let cached = resolver.typeMap.get_ptr(str);
+      /*let cached = resolver.typeMap.get_ptr(str);
       if (cached.is_some()) {
           let res = cached.unwrap().clone();
           res.desc.path = self.unit.path.clone();
@@ -1021,7 +1041,7 @@ impl Resolver{
             res.desc.path = self.unit.path.clone();
             return Option::new(res);
           }
-      }
+      }*/
     }
     return Option<RType>::None;
   }

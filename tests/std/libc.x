@@ -3,16 +3,15 @@
 type ino_t = u64;
 type off_t = u64;
 
-struct c_void{}
-struct FILE{}
-struct DIR{}
+struct c_void;
+struct FILE;
+struct DIR;
 
 struct dirent {
-    d_ino: ino_t          ;       /* inode number */
-    d_off: off_t          ;       /* offset to the next dirent */
+    d_ino: ino_t;      /* inode number */
+    d_off: off_t;      /* offset to the next dirent */
     d_reclen: u16 ;    /* length of this record */
-    d_type: u8  ;      /* type of file; not supported
-                                   by all file system types */
+    d_type: u8;        /* type of file; not supported by all file system types */
     d_name: [u8; 256]; /* filename */
 }
 

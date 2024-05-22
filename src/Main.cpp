@@ -54,7 +54,7 @@ std::string get_bin_name(const std::string &file) {
 }
 
 void compileTest(bool std_test) {
-    clean();
+    //clean();
     //Cache::delete_cache();
     if (std_test) {
         build_std();
