@@ -186,14 +186,16 @@ trait Drop{
   func drop(*self);
 }
 
+impl Drop for u8{
+  func drop(*self){
+  }
+}
 impl Drop for i32{
   func drop(*self){
-    
   }
 }
 impl Drop for i64{
   func drop(*self){
-    
   }
 }
 impl Drop for str{

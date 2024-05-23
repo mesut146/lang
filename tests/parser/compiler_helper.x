@@ -28,7 +28,7 @@ impl RvalueHelper{
     }
 
     func need_alloc(mc: Call*, method: Method*, r: Resolver*): RvalueHelper{
-       if(method.self.is_none()){
+       if(method.self.is_none() || (mc.is_static && mc.args.empty())){
          return RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
        }
        let res = RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
@@ -504,9 +504,10 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     return true;
   }
   if let Expr::Call(call*)=(e){
-    let target = r.visit(e).method;
-    if(target.is_some()){
-      return is_struct(&target.unwrap().type);
+    let rt = r.visit(e);
+    if(rt.is_method()){
+      let target = r.get_method(&rt).unwrap();
+      return is_struct(&target.type);
     }
     return false;
   }

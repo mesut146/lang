@@ -1,4 +1,6 @@
 import parser/ast
+import parser/copier
+import parser/printer
 import std/map
 import std/libc
 
@@ -154,33 +156,84 @@ func mangleType(type: Type*): String{
 
 func mangle(m: Method*): String{
   if(is_main(m)) return m.name.clone();
-  let s = String::new();
-  if let Parent::Impl(info*)=(&m.parent){
-    s.append(info.type.print().str());
-    s.append("::");
-  }else if let Parent::Trait(ty*)=(&m.parent){
-    s.append(ty.print().str());
-    s.append("::");
-  }else if let Parent::Extern=(&m.parent){
+  let s = Fmt::new();
+  if let Parent::Impl(info*) = (&m.parent){
+    s.print(&info.type);
+    s.print("::");
+  }else if let Parent::Trait(ty*) = (&m.parent){
+    s.print(ty);
+    s.print("::");
+  }else if let Parent::Extern = (&m.parent){
     return m.name.clone();
   }
-  s.append(m.name.str());
-  for(let i=0;i<m.type_params.len();++i){
+  s.print(&m.name);
+  for(let i = 0;i < m.type_params.len();++i){
     let tp = m.type_params.get_ptr(i);
-    s.append("_");
-    s.append(tp.print().str());
+    s.print("_");
+    s.print(tp);
   }
   if(m.self.is_some()){
-    s.append("_");
-    s.append(mangleType(&m.self.get().type).str());
+    s.print("_");
+    s.print(mangleType(&m.self.get().type).str());
   }
-  for(let i=0;i<m.params.len();++i){
+  for(let i = 0;i < m.params.len();++i){
     let prm = m.params.get_ptr(i);
-    s.append("_");
-    s.append(mangleType(&prm.type).str());
+    s.print("_");
+    s.print(mangleType(&prm.type).str());
   }
-  return s;
+  return s.unwrap();
 }
+func printMethod(m: Method*): String{
+    let s = Fmt::new();
+    if let Parent::Impl(info*)=(&m.parent){
+      s.print(&info.type);
+      s.print("::");
+    }else if let Parent::Trait(type*)=(&m.parent){
+      s.print(type);
+      s.print("::");
+    }
+    s.print(&m.name);
+    s.print("(");
+    if(m.self.is_some()){
+        //s.print(&m.self.get().type);
+        if(m.self.get().is_deref){
+            s.print("*");
+        }
+        s.print("self");
+    }
+    for(let i = 0;i < m.params.len();++i){
+        let prm = m.params.get_ptr(i);
+        if(i > 0 || m.self.is_some()) s.print(", ");
+        s.print(&prm.type);
+    }
+    s.print(")");
+    return s.unwrap();
+  }
+  
+  //trait method signature for type
+  func mangle2(m: Method*, type: Type*): String{
+    let s = Fmt::new();
+    s.print(&m.name);
+    s.print("(");
+    if(m.self.is_some()){
+      s.print("_");
+      s.print(type);
+      s.print("*");
+    }
+    let map = Map<String, Type>::new();
+    map.add("Self".str(), type.clone());
+    let copier = AstCopier::new(&map);
+    for(let i = 0;i < m.params.len();++i){
+      s.print("_");
+      let prm_type = &m.params.get_ptr(i).type;
+      let mapped: Type = copier.visit(prm_type);
+      s.print(&mapped);
+      Drop::drop(mapped);
+    }
+    Drop::drop(map);
+    s.print(")");
+    return s.unwrap();
+  }
 
 func is_comp(s: str): bool{
     return s.eq("==") || s.eq("!=") || s.eq("<") || s.eq(">") || s.eq("<=") || s.eq(">=");

@@ -15,6 +15,7 @@ struct Signature{
     real_scope: Option<RType>;
     ret: Type;
     r: Option<Resolver*>;
+    desc: Desc;
 }
 
 enum SigResult{
@@ -39,13 +40,14 @@ struct MethodResolver{
 impl Signature{
     func new(mc: Call*, r: Resolver*): Signature{
         let res = Signature{mc: Option::new(mc),
-                            m: Option<Method*>::None,
-                            name: mc.name.clone(),
-                            args: List<Type>::new(),
-                            scope: Option<RType>::None,
-                            real_scope: Option<RType>::None,
-                            ret: Type::new("void"),
-                            r: Option::new(r)};
+                    m: Option<Method*>::None,
+                    name: mc.name.clone(),
+                    args: List<Type>::new(),
+                    scope: Option<RType>::None,
+                    real_scope: Option<RType>::None,
+                    ret: Type::new("void"),
+                    r: Option::new(r),
+                    desc: Desc::new()};
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let str = mc.print();
@@ -108,13 +110,13 @@ impl Signature{
         }
         return map;
     }
-    func new(m: Method*): Signature{
+    func new(m: Method*, desc: Desc): Signature{
         let map = Map<String, Type>::new();
-        let res = Signature::new(m, &map);
+        let res = Signature::new(m, &map, desc);
         Drop::drop(map);
         return res;
     }
-    func new(m: Method*, map: Map<String, Type>*): Signature{
+    func new(m: Method*, map: Map<String, Type>*, desc: Desc): Signature{
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
             name: m.name.clone(),
@@ -122,7 +124,8 @@ impl Signature{
             scope: Option<RType>::None,
             real_scope: Option<RType>::None,
             ret: replace_self(&m.type, m),
-            r: Option<Resolver*>::None};
+            r: Option<Resolver*>::None,
+            desc: desc};
         if let Parent::Impl(info*) = (&m.parent){
             let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);
@@ -211,8 +214,8 @@ impl MethodResolver{
       return type.print();
     }
     
-    func get_impl(self, type: Type*, tr: Option<Type*>): List<Impl*>{
-        let list = List<Impl*>::new();
+    func get_impl(self, type: Type*, tr: Option<Type*>): List<Pair<Impl*, i32>>{
+        let list = List<Pair<Impl*, i32>>::new();
         let erased: String = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item: Item* = self.r.unit.items.get_ptr(i);
@@ -228,7 +231,7 @@ impl MethodResolver{
                 }
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
-                  list.add(imp);
+                  list.add(Pair::new(imp, i));
                 }
                 Drop::drop(imp_erased);
             }
@@ -243,13 +246,19 @@ impl MethodResolver{
         let item: Item* = self.r.unit.items.get_ptr(i);
         if let Item::Method(m*)=(item){
             if (m.name.eq(name)) {
-                list.add(Signature::new(m));
+                let desc = Desc{kind: RtKind::Method,
+                    path: m.path.clone(),
+                    idx: i};
+                list.add(Signature::new(m, desc));
             }
         } else if let Item::Extern(arr*)=(item){
-            for (let j=0;j<arr.len();++j) {
-                let m=arr.get_ptr(j);
+            for (let j = 0;j < arr.len();++j) {
+                let m = arr.get_ptr(j);
                 if (m.name.eq(name)) {
-                    list.add(Signature::new(m));
+                    let desc = Desc{kind: RtKind::MethodExtern{j},
+                        path: m.path.clone(),
+                        idx: i};
+                    list.add(Signature::new(m, desc));
                 }
             }
         }
@@ -259,7 +268,7 @@ impl MethodResolver{
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, imports: bool){
         //let scope_type = sig.scope.get().type.unwrap_ptr();
         //let type_plain = scope_type;
-        let imp_list = List<Impl*>::new();
+        let imp_list = List<Pair<Impl*, i32>>::new();
         Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
@@ -269,24 +278,28 @@ impl MethodResolver{
         }
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
-            let imp: Impl* = *imp_list.get_ptr(i);
+            let pair: Pair<Impl*, i32>* = imp_list.get_ptr(i);
+            let imp: Impl* = pair.a;
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       
                 if(!m.name.eq(&sig.name)) continue;
+                let desc = Desc{kind: RtKind::MethodImpl{j},
+                    path: m.path.clone(),
+                    idx: pair.b};
                 if(!scope_type.is_simple()){
-                  list.add(Signature::new(m));
+                  list.add(Signature::new(m, desc));
                   continue;
                 }
                 let scp_args = scope_type.get_args();
                 if(scp_args.empty()){
-                  list.add(Signature::new(m, &map));
+                  list.add(Signature::new(m, &map, desc));
                 }else{
                   let typeMap = Map<String, Type>::new();
                   for(let k = 0;k < m.type_params.len();++k){
                     let ta = m.type_params.get_ptr(k);
                     typeMap.add(ta.name().clone(), scp_args.get_ptr(k).clone());
                   }
-                  let sig2 = Signature::new(m, &map);
+                  let sig2 = Signature::new(m, &map, desc);
                   for (let k = 0;k < sig2.args.len();++k) {
                     let arg = sig2.args.get_ptr(k);
                     let ac = AstCopier::new(&typeMap);
@@ -372,14 +385,14 @@ impl MethodResolver{
         if(exact.is_some()){
             sig2 = exact.unwrap();
         }
-        let target = sig2.m.unwrap();
+        let target: Method* = sig2.m.unwrap();
         if (!target.is_generic) {
             if (!target.path.eq(&self.r.unit.path)) {
                 self.r.addUsed(target);
             }
             //let res = self.r.visit(&sig2.ret);
             let res = self.r.visit_type(&target.type);
-            res.method = Option::new(target);
+            res.desc = sig2.desc.clone();
             Drop::drop(list);
             Drop::drop(real);
             Drop::drop(errors);
@@ -435,12 +448,11 @@ impl MethodResolver{
             }
             tmap.add(pair.a.clone(), pair.b.get().clone());
         }
-        let target2 = self.generateMethod(&tmap, target, sig);
+        let gen_pair: Pair<Method*, Desc> = self.generateMethod(&tmap, target, sig);
         Drop::drop(tmap);
         Drop::drop(typeMap);
-        target = target2;
-        let res = self.r.visit_type(&target.type);
-        res.method = Option::new(target);
+        let res = self.r.visit_type(&gen_pair.a.type);
+        res.desc = gen_pair.b;
         Drop::drop(type_params);
         Drop::drop(list);
         Drop::drop(real);
@@ -742,27 +754,35 @@ impl MethodResolver{
         }
     }
 
-    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Method*{
+    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
         for (let i = 0;i < self.r.generated_methods.len();++i) {
             let gm = self.r.generated_methods.get_ptr(i);
             if(!m.name.eq(gm.name.str())) continue;
-            let sig2 = Signature::new(gm);
+            let sig2 = Signature::new(gm, Desc::new());
             let sig_res: SigResult = self.is_same(sig, &sig2);
+            let is_err = sig_res is SigResult::Err;
             Drop::drop(sig2);
-            if(!(sig_res is SigResult::Err)){
-                Drop::drop(sig_res);
-                return gm;
-            }else{
-                Drop::drop(sig_res);
+            Drop::drop(sig_res);
+            if(!is_err){
+                let desc = Desc{
+                    kind: RtKind::MethodGen,
+                    path: self.r.unit.path.clone(),
+                    idx: i
+                };
+                return Pair::new(gm, desc);
             }
         }
         let copier = AstCopier::new(map, &self.r.unit);
-        let res2 = copier.visit(m);
+        let res2: Method = copier.visit(m);
         res2.is_generic = false;
-        self.r.generated_methods.add(res2);
-        let res: Method* = self.r.generated_methods.get_ptr(self.r.generated_methods.len() - 1);
+        let res: Method* = self.r.generated_methods.add(res2);
+        let desc = Desc{
+            kind: RtKind::MethodGen,
+            path: self.r.unit.path.clone(),
+            idx: self.r.generated_methods.len() as i32 - 1
+        };
         if(!(m.parent is Parent::Impl)){
-            return res;
+            return Pair::new(res, desc);
         }
         let imp: ImplInfo* = m.parent.as_impl();
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
@@ -784,7 +804,7 @@ impl MethodResolver{
         }
         Drop::drop(res.parent);
         res.parent = Parent::Impl{ImplInfo::new(st.into())};
-        return res;
+        return Pair::new(res, desc);
     }
 }
 

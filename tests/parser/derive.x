@@ -221,15 +221,14 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     let block = &info.block;
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
-        //"..".print(), exit(1) will be called by compiler
-        let print_mc = Call::new("print".str());
+        //printf(".."), exit(1) will be called by compiler
+        let msg = fmt_str;
         if (Resolver::is_panic(mc)) {
-            print_mc.scope = Ptr::new(make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str), &r.unit));
-        } else {
-            print_mc.scope = Ptr::new(AstCopier::clone(fmt, &r.unit));
-        }
-        let id = r.unit.node(line);
-        block.list.add(Stmt::Expr{Expr::Call{.id, print_mc}});
+            msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str)).str();
+        } 
+        msg = normalize_quotes(msg).str();
+        let st = parse_stmt(format("printf(\"{}\");", msg), &r.unit);
+        block.list.add(st);
         r.visit(block);
         r.format_map.add(node.id, info);
         return;
@@ -270,7 +269,22 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
         block.list.add(drop_st);
-        print("block={}\n", block);
+        //print("block={}\n", block);
+        r.visit(block);
+        r.format_map.add(node.id, info);
+        return;
+    }else if(Resolver::is_panic(mc)){
+        //"<method:line>".print();
+        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
+        let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit);
+        block.list.add(pos_info_st);
+        //f.buf.print();
+        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
+        block.list.add(print_st);
+        //Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
+        block.list.add(drop_st);
+        //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);
         return;
@@ -298,7 +312,7 @@ func normalize_quotes(s: str): String{
     return res;
 }
 
-func make_panic_messsage(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
+func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
     let message = Fmt::new("panic ".str());
     message.print(&method.path);
     message.print(":");
@@ -312,4 +326,19 @@ func make_panic_messsage(line: i32, method: Method*, s: Option<str>, unit: Unit*
     message.print("\n");
     let id = unit.node(line);
     return Expr::Lit{.id, Literal{LitKind::STR, message.unwrap(), Option<Type>::new()}};
+}
+
+func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
+    let message = Fmt::new("panic ".str());
+    message.print(&method.path);
+    message.print(":");
+    message.print(&line);
+    message.print(" ");
+    message.print(printMethod(method).str());
+    if (s.is_some()) {
+        message.print("\n");
+        message.print(s.get());
+    }
+    message.print("\n");
+    return message.unwrap();
 }

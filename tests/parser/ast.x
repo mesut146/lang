@@ -109,7 +109,6 @@ struct ImplInfo{
   trait_name: Option<Type>;
   type: Type;
 }
-
 impl ImplInfo{
   func new(type: Type): ImplInfo{
     return ImplInfo{List<Type>::new(), Option<Type>::None, type};
@@ -183,7 +182,7 @@ struct Trait{
   methods: List<Method>;
 }
 
-
+#derive(Debug)
 enum Parent{
   None,
   Impl(info: ImplInfo),
@@ -194,6 +193,9 @@ enum Parent{
 impl Parent{
   func is_none(self): bool{
     return self is Parent::None;
+  }
+  func is_impl(self): bool{
+    return self is Parent::Impl;
   }
   func as_impl(self): ImplInfo*{
     if let Parent::Impl(info*)=(self){
@@ -227,7 +229,6 @@ impl Parent{
   }
 }
 
-
 struct Method: Node{
   type_params: List<Type>;
   name: String;
@@ -239,7 +240,6 @@ struct Method: Node{
   parent: Parent;
   path: String;
 }
-
 
 struct Param: Node{
   name: String;

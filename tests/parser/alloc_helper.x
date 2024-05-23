@@ -145,15 +145,16 @@ impl AllocHelper{
       return Option::new(self.alloc_ty(&str_ty, node));
     }
     let rt = self.c.get_resolver().visit(node);
-    if(rt.method.is_some()){
-      let rval = RvalueHelper::need_alloc(call, *rt.method.get(), self.c.get_resolver());
+    if(rt.is_method()){
+      let rt_method = self.c.get_resolver().get_method(&rt);
+      let rval = RvalueHelper::need_alloc(call, rt_method.unwrap(), self.c.get_resolver());
       if (rval.rvalue) {
           self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
       }
       Drop::drop(rval);
     }
     let res = Option<Value*>::new();
-    if(rt.method.is_some() && is_struct(&rt.type)){
+    if(rt.is_method() && is_struct(&rt.type)){
       //non-internal method
       res = Option::new(self.alloc_ty(&rt.type, node));
     }

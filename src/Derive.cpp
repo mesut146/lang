@@ -421,7 +421,7 @@ void generate_format(MethodCall *mc, Resolver *r) {
         block.list.push_back(make_drop(var_name, mc->line));
         block.accept(r);
     } else if (is_panic(mc)) {
-        //"panic...".println();
+        //"panic msg".println();
         auto panic_start = make_panic_messsage({}, mc->line, r->curMethod);
         panic_start->loc(mc->line);
         auto start_mc = new MethodCall;

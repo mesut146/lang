@@ -227,7 +227,7 @@ impl Debug for Type{
       f.print("[");
       box.get().debug(f);
       f.print("]");
-    }else panic("Type::debug");
+    }else panic("Type::debug() corrupt");
   }
 }
 

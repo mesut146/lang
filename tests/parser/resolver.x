@@ -102,15 +102,17 @@ struct Config{
 #derive(Debug)
 enum RtKind{
   None,//prim, ptr
-  Method,//free method in items, or impl
+  Method,//free method in items
+  MethodImpl(idx2: i32),//impl method
   MethodGen,//generic method in resolver
+  MethodExtern(idx2: i32),
   Decl,//decl in items
   DeclGen,//generic decl in resolver
   Trait//trait in items
 }
 impl RtKind{
   func is_method(self): bool{
-    return self is RtKind::Method || self is RtKind::MethodGen;
+    return self is RtKind::Method || self is RtKind::MethodImpl || self is RtKind::MethodGen || self is RtKind::MethodExtern;
   }
   func is_decl(self): bool{
     return self is RtKind::Decl || self is RtKind::DeclGen;
@@ -125,31 +127,46 @@ struct Desc{
   kind: RtKind;
   path: String;
   idx: i32;
-  idx2: i32;
 }
 impl Desc{
   func new(): Desc{
     return Desc{
       kind: RtKind::None,
       path: "".str(),
-      idx: -1,
-      idx2: -1
+      idx: -1
     };
   }
   func clone(self): Desc{
     return Desc{
       kind: self.kind,
       path: self.path.clone(),
-      idx: self.idx,
-      idx2: self.idx2
+      idx: self.idx
     };
+  }
+  func new_method(method: Method*, r: Resolver*): Desc{
+    let parent = &method.parent;
+    if(parent.is_impl()){
+      //non generic
+      let imp: ImplInfo* = parent.as_impl();
+      let resolver = r.ctx.create_resolver(&method.path);
+      let unit = &resolver.unit;
+      for(let i = 0;i < unit.items.len();++i){
+        let item = unit.items.get_ptr(i);
+      }
+      
+    }
+    panic("new_method {} {}:{} {}", printMethod(method), method.path, method.line, method.parent);
+    /*return Desc{
+      kind: RtKind::Method,
+      path: "".str(),
+      idx: -1,
+    };*/
   }
 }
 
 struct RType{
   type: Type;
   trait: Option<Trait*>;
-  method: Option<Method*>;
   value: Option<String>;
   vh: Option<VarHolder>;
   desc: Desc;
@@ -159,12 +176,11 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<Method*>::None, Option<String>::None, Option<VarHolder>::None, Desc::new()};
+    return RType{typ, Option<Trait*>::None, Option<String>::None, Option<VarHolder>::None, Desc::new()};
   }
   func clone(self): RType{
     return RType{type: self.type.clone(),
       trait: self.trait,
-      method: self.method,
       value: self.value.clone(),
       vh: self.vh.clone(),
       desc: self.desc.clone()
@@ -172,6 +188,12 @@ impl RType{
   }
   func is_decl(self): bool{
     return self.desc.kind.is_decl();
+  }
+  func is_trait(self): bool{
+    return self.desc.kind.is_trait();
+  }
+  func is_method(self): bool{
+    return self.desc.kind.is_method();
   }
 }
 
@@ -246,45 +268,6 @@ impl Context{
     let path = self.get_path(is);
     return self.create_resolver(&path);
   }
-}
-
-func printMethod(m: Method*): String{
-  let s = Fmt::new();
-  if let Parent::Impl(info*)=(&m.parent){
-    s.print(&info.type);
-    s.print("::");
-  }else if let Parent::Trait(type*)=(&m.parent){
-    s.print(type);
-    s.print("::");
-  }
-  s.print(&m.name);
-  s.print("()");
-  return s.unwrap();
-}
-
-//trait method signature for type
-func mangle2(m: Method*, type: Type*): String{
-  let s = Fmt::new();
-  s.print(&m.name);
-  s.print("(");
-  if(m.self.is_some()){
-    s.print("_");
-    s.print(type);
-    s.print("*");
-  }
-  let map = Map<String, Type>::new();
-  map.add("Self".str(), type.clone());
-  let copier = AstCopier::new(&map);
-  for(let i = 0;i < m.params.len();++i){
-    s.print("_");
-    let prm_type = &m.params.get_ptr(i).type;
-    let mapped: Type = copier.visit(prm_type);
-    s.print(&mapped);
-    Drop::drop(mapped);
-  }
-  Drop::drop(map);
-  s.print(")");
-  return s.unwrap();
 }
 
 impl Scope{
@@ -447,16 +430,20 @@ impl Resolver{
       //print("visit item after i={}/{}\n", i + 1, self.unit.items.len());
     }
     //todo these would generate more methods, whose are not visited
-    for(let i=0;i<self.generated_methods.len();++i){
-      let gm = self.generated_methods.get_ptr(i);
+    let glen = self.generated_methods.len();
+    for(let j = 0;j < self.generated_methods.len();++j){
+      let gm = self.generated_methods.get_ptr(j);
+      //print("j={}/{} {}\n", j, self.generated_methods.len(), printMethod(gm));
       self.visit(gm);
     }
+    //print("glen={} len={}\n", glen, self.generated_methods.len());
+    //assert self.generated_methods.len() == glen;
     //self.dump();
   }
   
   func init_globals(self){
     self.newScope();//globals
-    for (let i=0;i<self.unit.globals.len();++i) {
+    for (let i = 0;i < self.unit.globals.len();++i) {
         let g = self.unit.globals.get_ptr(i);
         let rhs: RType = self.visit(&g.expr);
         if (g.type.is_some()) {
@@ -472,16 +459,20 @@ impl Resolver{
     }
   }
 
+  func dump_types(self){
+    print("{} types\n", self.typeMap.len());
+    for(let i = 0;i < self.typeMap.len();++i){
+      let pair = self.typeMap.get_pair_idx(i).unwrap();
+      print("{} -> {}\n", pair.a, pair.b.type);
+    }
+  }
+
   func dump(self){
-    print("---dump---");
-    // print("{} types\n", self.typeMap.len());
-    // for(let i = 0;i < self.typeMap.len();++i){
-    //   let pair = self.typeMap.get_idx(i).unwrap();
-    //   print("{} -> {}\n", pair.a, pair.b.type);
-    // }
+    //print("---dump---");
     print("scope count {}\n", self.scopes.len());
     for(let i = 0;i < self.scopes.len();++i){
       let scope = self.scopes.get_ptr(i);
+      print("scope {} has {} vars\n", i + 1, scope.list.len());
       for(let j = 0;j < scope.list.len();++j){
         let vh = scope.list.get_ptr(j);
         print("{}:{}\n", vh.name, vh.type);
@@ -511,12 +502,12 @@ impl Resolver{
       //Fmt::str(it).dump();
       if let Item::Decl(decl*)=(it){
         let res = RType::new(decl.type.clone());
-        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i, -1};
+        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
         self.addType(decl.type.name().clone(), res);
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type.clone());
         res.trait = Option::new(tr);
-        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i, -1};
+        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
         //pass
@@ -553,10 +544,6 @@ impl Resolver{
     }
   }
 
-  func err(self, msg: String){
-    self.err(msg.str());
-    Drop::drop(msg);
-  }
   func err(self, msg: str){
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
@@ -565,23 +552,29 @@ impl Resolver{
     }
     panic("{}\n", msg);
   }
-  func err(self, node: Expr*, msg: str){
-    let str = format("{}:{}\n{} {}", self.unit.path,node.line, msg, node);
+  func err(self, msg: String){
+    self.err(msg.str());
     Drop::drop(msg);
-    self.err(str);
+  }
+  func err(self, node: Expr*, msg: str){
+    let path = &self.unit.path;
+    if(self.curMethod.is_some()){
+      path = &self.curMethod.unwrap().path;
+    }
+    let str = format("{}:{}\n{} {}", path, node.line, msg, node);
+    //self.err(str);
+    panic("{}\n", str);
   }
   func err(self, node: Expr*, msg: String){
-    let str = format("{}:{}\n{} {}", self.unit.path,node.line, msg, node);
-    self.err(str);
+    self.err(node, msg.str());
+    Drop::drop(msg);
   }
   func err(self, node: Stmt*, msg: str){
     let str = format("{}\n{} {}", self.unit.path, msg, node);
     self.err(str);
   }
   func err(self, node: Stmt*, msg: String){
-    let str = format("{}\n{} {}", self.unit.path, msg, node);
-    Drop::drop(msg);
-    self.err(str);
+    self.err(node, msg.str());
   }
 
   func getType(self, e: Type*): Type{
@@ -619,7 +612,7 @@ impl Resolver{
         return Option::new(decl);
       }
     }
-    if(rt.desc.kind is RtKind::None){
+    if(rt.desc.kind is RtKind::None || rt.desc.kind is RtKind::MethodImpl || rt.desc.kind is RtKind::MethodGen){
       return Option<Decl*>::new();
     }
     panic("get_decl() {}={}", rt.type, rt.desc);
@@ -634,6 +627,40 @@ impl Resolver{
       }
     }
     panic("get_trait {}={}", rt.type, rt.desc);
+  }
+  func get_method(self, rt: RType*): Option<Method*>{
+    if(rt.desc.kind is RtKind::Method){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get_ptr(rt.desc.idx);
+      if let Item::Method(m*) = (item){
+        return Option::new(m);
+      }
+    }
+    if let RtKind::MethodImpl(idx2) = (rt.desc.kind){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get_ptr(rt.desc.idx);
+      if let Item::Impl(imp*) = (item){
+        let m = imp.methods.get_ptr(idx2);
+        return Option::new(m);
+      }
+    }
+    if let RtKind::MethodGen = (rt.desc.kind){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let m = resolver.generated_methods.get_ptr(rt.desc.idx);
+      return Option::new(m);
+    }
+    if let RtKind::MethodExtern(idx2) = (rt.desc.kind){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get_ptr(rt.desc.idx);
+      if let Item::Extern(methods*) = (item){
+        let m = methods.get_ptr(idx2);
+        return Option::new(m);
+      }
+    }
+    panic("get_method {}={}", rt.type, rt.desc);
   }
 
   func visit(self, node: Item*){
@@ -664,7 +691,7 @@ impl Resolver{
   }
 
   func is_cyclic(self, type0: Type*, target: Type*): bool{
-    print("is_cyclic {} -> {}\n", type0, target);
+    //print("is_cyclic {} -> {}\n", type0, target);
     let rt = self.visit_type(type0); 
     let type = &rt.type;
     if (type.is_pointer()) return false;
@@ -777,7 +804,7 @@ impl Resolver{
     }
     self.curMethod = Option::new(node);
     let res = self.visit_type(&node.type);
-    res.method = Option<Method*>::new(node);
+    //res.desc = Desc::new_method(node, self);
     self.newScope();
     if(node.self.is_some()){
       self.visit_type(&node.self.get().type);
@@ -793,7 +820,7 @@ impl Resolver{
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
         let msg = String::new("non void function ");
-        msg.append(printMethod(self.curMethod.unwrap()).str());
+        msg.append(printMethod(node).str());
         msg.append(" must return a value");
         self.err(msg.str());
       }
@@ -981,8 +1008,8 @@ impl Resolver{
     let res = self.generated_decl.add(decl);
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
-    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, -1};
-    print("add_generated {}={}\n", res.type, rt.desc);
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32};
+    //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
     return res;
   }
@@ -1094,6 +1121,7 @@ impl Resolver{
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
+    scp = self.visit_type(&scp.type);
     if (!scp.is_decl()) {
       let msg = format("invalid field {} of {}", name, scp.type); 
       self.err(node, msg);
@@ -1365,6 +1393,9 @@ impl Resolver{
         return scope.is_array();
   }
   
+  func is_drop_call(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("Drop") && mc.name.eq("drop");
+  }
   func is_ptr_get(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("get");
   }
@@ -1666,14 +1697,24 @@ impl Resolver{
     panic("");
   }
 
+  func visit_cached(self, node: Expr*): RType{
+    let id = node.id;
+    if(id == -1) panic("id=-1");
+    if(self.cache.contains(&node.id)){
+      return self.cache.get_ptr(&node.id).unwrap().clone();
+    }
+    panic("not cached id={} line: {} {}", id, node.line, node);
+  }
+
   func visit(self, node: Expr*): RType{
     let id = node.id;
-    if(id == -1) panic("id");
+    if(id == -1) panic("id=-1");
     if(self.cache.contains(&node.id)){
       return self.cache.get_ptr(&node.id).unwrap().clone();
     }
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());
+    //print("cached id={} line: {} {}\n", id, node.line, node);
     return res.clone();
   }
   

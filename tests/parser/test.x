@@ -62,11 +62,11 @@ func compiler_test(std_test: bool){
   let root = root();
   let ctx = make_context();
   let cmp = Compiler::new(ctx);
-  build_std();
   if(std_test){
+    build_std();
     compile_dir(&cmp, CStr::new("../tests/std_test"), false, "std.a");
   }else{
-    compile_dir(&cmp, CStr::new("../tests/normal"), true, "std.a");
+    compile_dir(&cmp, CStr::new("../tests/normal"), true, "");
   }
   cmp.drop();
 }

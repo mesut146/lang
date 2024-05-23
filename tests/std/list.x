@@ -55,7 +55,7 @@ impl<T> List<T>{
     if(pos >= 0 && pos < self.count){
       return;
     }
-    panic("index out of bounds {}", pos);
+    panic("index {} out of bounds ({}, {})", pos, 0, self.count);
   }
   
   func remove(self, pos: i64){
@@ -80,7 +80,7 @@ impl<T> List<T>{
     ptr::copy(self.ptr, self.count, e);
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
-    return ptr::get(self.ptr, self.count - 1);
+    return self.get_ptr(self.count - 1);
   }
 
   func add(self, list: List<T>){

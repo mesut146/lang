@@ -260,10 +260,6 @@ impl Compiler{
       }
     }
     self.get_resolver().resolve_all();
-    // if(true){
-    //   //r.unit.drop();
-    //   return outFile;
-    // }
     self.llvm.initModule(&path0);
     self.createProtos();
     //init_globals(this);
@@ -274,7 +270,7 @@ impl Compiler{
       self.genCode(m);
     }
     //generic methods from resolver
-    for (let i=0;i<self.get_resolver().generated_methods.len();++i) {
+    for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
         let m = self.get_resolver().generated_methods.get_ptr(i);
         self.genCode(m);
     }
@@ -481,7 +477,7 @@ impl Compiler{
   }
 
   func getType(self, e: Expr*): Type{
-    let rt = self.get_resolver().visit(e);
+    let rt = self.get_resolver().visit_cached(e);
     return rt.type.clone();
   }
  
@@ -1000,6 +996,16 @@ impl Compiler{
   }
 
   func visit_call(self, expr: Expr*, mc: Call*): Value*{
+    if(Resolver::is_drop_call(mc)){
+      let argt = self.getType(mc.args.get_ptr(0));
+      if(argt.is_pointer() || argt.is_prim()){
+        return getVoidTy() as Value*;
+      }
+    }
+    if(Resolver::is_std_no_drop(mc)){
+      let arg = mc.args.get_ptr(0);
+      return getVoidTy() as Value*;
+    }
     if(Resolver::std_size(mc)){
       if(!mc.args.empty()){
         let ty = self.getType(mc.args.get_ptr(0));
@@ -1025,12 +1031,13 @@ impl Compiler{
     if(Resolver::is_print(mc)){
       let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
       self.visit(&info.block);
-      //call(&info.print_mc, nullptr);
       return getVoidTy() as Value*;
     }
     if(Resolver::is_panic(mc)){
-      self.visit_panic(expr, mc);
-      return getTrue();
+      let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+      self.visit(&info.block);
+      self.call_exit(1);
+      return getVoidTy() as Value*;
     }
     if(mc.name.eq("malloc") && mc.scope.is_none()){
       let i64_ty = Type::new("i64");
@@ -1044,11 +1051,30 @@ impl Compiler{
       args_push(args, size);
       return CreateCall(proto, args);
     }
+    if(Resolver::is_ptr_deref(mc)){
+      let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
+      let type = self.getType(expr);
+      if (!is_struct(&type)) {
+          return CreateLoad(self.mapType(&type), arg_ptr);
+      }
+      return arg_ptr;
+    }
     if(Resolver::is_ptr_get(mc)){
       let elem_type = self.getType(expr).unwrap_ptr();
       let src = self.get_obj_ptr(mc.args.get_ptr(0));
       let idx = self.loadPrim(mc.args.get_ptr(1));
       return gep_ptr(self.mapType(elem_type), src, idx);
+    }
+    if(Resolver::is_ptr_copy(mc)){
+      //ptr::copy(src_ptr, src_idx, elem)
+      let src_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
+      let i64_ty = Type::new("i64");
+      let idx = self.cast(mc.args.get_ptr(1), &i64_ty);
+      let val = self.visit(mc.args.get_ptr(2));
+      let elem_type: Type = self.getType(mc.args.get_ptr(2));
+      let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
+      self.copy(trg_ptr, val, &elem_type);
+      return getVoidTy() as Value*;
     }
     if(self.get_resolver().is_array_get_len(mc)){
       let arr_type = self.getType(mc.scope.get()).unwrap_ptr();
@@ -1076,6 +1102,10 @@ impl Compiler{
     return self.visit_call2(expr, mc);
   }
 
+  func panic_simple(self, mc: Call*){
+    
+  }
+
   func visit_panic(self, node: Expr*, mc: Call*){
     let msg = String::new("panic");
     msg.append("\n");
@@ -1099,15 +1129,15 @@ impl Compiler{
 
   func visit_call2(self, expr: Expr*, mc: Call*): Value*{
     let rt = self.get_resolver().visit(expr);
-    if(rt.method.is_none()){
-      panic("mc {}", expr);
+    if(!rt.is_method()){
+      panic("mc no method {} {}", expr, rt.desc);
     }
     let type = &rt.type;
     let ptr = Option<Value*>::new();
     if(is_struct(type)){
       ptr = Option::new(self.get_alloc(expr));
     }
-    let target = rt.method.unwrap();
+    let target = self.get_resolver().get_method(&rt).unwrap();
     let proto = self.protos.get().get_func(target);
     let args = make_args();
     if(ptr.is_some()){
