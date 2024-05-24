@@ -7,13 +7,14 @@ import parser/bridge
 import parser/compiler_helper
 import parser/alloc_helper
 import parser/debug_helper
+import parser/stmt_emitter
+import parser/expr_emitter
 import std/map
 import std/io
 import std/libc
 
 struct Compiler{
   ctx: Context;
-  config: Config;
   resolver: Option<Resolver*>;
   main_file: Option<String>;
   llvm: llvm_holder;
@@ -30,11 +31,6 @@ struct llvm_holder{
   target_machine: TargetMachine*;
   target_triple: CStr;
   di: Option<DebugInfo>;
-}
-
-struct Config{
-  verbose: bool;
-  single_mode: bool;
 }
 
 struct Protos{
@@ -154,7 +150,6 @@ impl Compiler{
   func new(ctx: Context): Compiler{
     let vm = llvm_holder::new();
     return Compiler{ctx: ctx,
-     config: Config{verbose: true, single_mode: true},
      resolver: Option<Resolver*>::None,
      main_file: Option<String>::new(),
      llvm: vm,
@@ -205,29 +200,30 @@ impl Compiler{
   }
 
   func run(self, name0: str, args: str){
-    let name_pre = format("./{}", name0);
-    name0 = name_pre.str();
-    let name: CStr = name0.cstr();
-    if(system(name.ptr()) != 0){
-      panic("error while running {}", name);
+    let path = format("{}/{}", self.ctx.out_dir, name0);
+    let path_c: CStr = path.cstr();
+    if(system(path_c.ptr()) != 0){
+      panic("error while running {}", path_c);
     }
   }
 
   func link(self, name0: str, args: str){
-    let name_pre = format("./{}", name0);
-    name0 = name_pre.str();
-    let name: CStr = name0.cstr();
+    //let name_pre = format("./{}", name0);
+    //name0 = name_pre.str();
+    //Drop::drop(name_pre);
     if(exist(name0)){
-      remove(name.ptr());
+      let name_c: CStr = name0.cstr();
+      remove(name_c.ptr());
     }
+    let path = format("{}/{}", self.ctx.out_dir, name0);
+    create_dir(self.ctx.out_dir.str());
     let cmd = "clang-16 ".str();
     cmd.append("-o ");
-    cmd.append(name0);
+    cmd.append(&path);
     cmd.append(" ");
-    Drop::drop(name_pre);
     for(let i = 0;i < self.compiled.len();++i){
-      let file = self.compiled.get_ptr(i);
-      cmd.append(file.str());
+      let obj_file = self.compiled.get_ptr(i);
+      cmd.append(obj_file.str());
       cmd.append(" ");
     }
     self.compiled.clear();
@@ -248,13 +244,13 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
     }
-    if(self.config.verbose){
+    if(self.ctx.verbose){
       print("compiling {}\n", path0);
     }
     self.resolver = Option::new(self.ctx.create_resolver(&path.path));//Resolver*
     if (has_main(self.unit())) {
       self.main_file = Option::new(path0.get_heap());
-      if (!self.config.single_mode) {//compile last
+      if (!self.ctx.single_mode) {//compile last
           print("skip main file\n");
           return outFile;
       }
@@ -271,7 +267,7 @@ impl Compiler{
     }
     //generic methods from resolver
     for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
-        let m = self.get_resolver().generated_methods.get_ptr(i);
+        let m = self.get_resolver().generated_methods.get_ptr(i).get();
         self.genCode(m);
     }
     
@@ -279,13 +275,13 @@ impl Compiler{
     let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
-    if(self.config.verbose){
+    if(self.ctx.verbose){
       print("writing {}\n", llvm_file_cstr);
     }
     self.compiled.add(outFile.clone());
     let outFile_cstr = CStr::new(outFile.clone());
     emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
-    if(self.config.verbose){
+    if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
     }
     Drop::drop(outFile_cstr);
@@ -341,7 +337,7 @@ impl Compiler{
     }
     //generic methods from resolver
     for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
-        let m = self.get_resolver().generated_methods.get_ptr(i);
+        let m = self.get_resolver().generated_methods.get_ptr(i).get();
         self.make_proto(m);
     }
     for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
@@ -367,7 +363,7 @@ impl Compiler{
     self.storeParams(m,f);
     //todo call globals
 
-    self.visit(m.body.get());
+    self.visit_block(m.body.get());
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit() && m.type.is_void()){
       if(is_main(m)){
@@ -434,7 +430,7 @@ impl Compiler{
       ++argIdx;
       ++argNo;
     }
-    for(let i=0;i<m.params.len();++i){
+    for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get_ptr(i);
       self.store_prm(prm, f, argIdx);
       self.llvm.di.get().dbg_prm(prm, argNo, self);
@@ -463,14 +459,6 @@ impl Compiler{
     return self.protos.get().cur.unwrap();
   }
 
-  func call_exit(self, code: i32){
-    let args = make_args();
-    args_push(args, makeInt(code, 32));
-    let exit_proto = self.protos.get().libc("exit");
-    CreateCall(exit_proto, args);
-    CreateUnreachable();
-  }
-
   func set_and_insert(self, bb: BasicBlock*){
     SetInsertPoint(bb);
     func_insert(self.cur_func(), bb);
@@ -481,1077 +469,8 @@ impl Compiler{
     return rt.type.clone();
   }
  
-}
+}//Compiler
 
-//stmt
-impl Compiler{
-  func visit(self, node: Stmt*){
-    if let Stmt::Ret(e*)=(node){
-      if(e.is_none()){
-        if(is_main(self.curMethod.unwrap())){
-          CreateRet(makeInt(0, 32));
-        }else{
-          CreateRetVoid();
-        }
-      }else{
-        self.visit_ret(e.get());
-      }
-    }
-    else if let Stmt::Var(ve*)=(node){
-      self.visit(ve);
-    }else if let Stmt::Assert(e*)=(node){
-      self.visit_assert(e);
-    }
-    else if let Stmt::Expr(e*)=(node){
-      self.visit(e);
-    }
-    else if let Stmt::If(is*)=(node){
-      self.visit_if(is);
-    }
-    else if let Stmt::IfLet(is*)=(node){
-      self.visit_iflet(is);
-    }
-    else if let Stmt::Block(b*)=(node){
-      self.visit(b);
-    }
-    else if let Stmt::For(fs*)=(node){
-      self.visit_for(fs);
-    }
-    else if let Stmt::While(cnd*, body*)=(node){
-      self.visit_while(cnd, body);
-    }
-    else if(node is Stmt::Continue){
-      CreateBr(*self.loops.last());
-    }
-    else if(node is Stmt::Break){
-      CreateBr(*self.loopNext.last());
-    }
-    else{
-      panic("visit {}", node);
-    }
-    return;
-  }
-  
-  func visit_while(self, c: Expr*, body: Block*){
-    let cond_name = format("while_cond_{}", c.line);
-    let then_name = format("while_then_{}", c.line);
-    let next_name = format("while_next_{}", c.line);
-    let then = create_bb_named(CStr::new(then_name).ptr());
-    let condbb = create_bb2_named(self.cur_func(), CStr::new(cond_name).ptr());
-    let next = create_bb_named(CStr::new(next_name).ptr());
-    CreateBr(condbb);
-    SetInsertPoint(condbb);
-    CreateCondBr(self.branch(c), then, next);
-    self.set_and_insert(then);
-    self.loops.add(condbb);
-    self.loopNext.add(next);
-    self.visit(body);
-    self.loops.pop_back();
-    self.loopNext.pop_back();
-    CreateBr(condbb);
-    self.set_and_insert(next);
-  }
+struct DirCompiler{
 
-  func visit_iflet(self, node: IfLet*){
-    let rt = self.get_resolver().visit_type(&node.ty);
-    let decl = self.get_resolver().get_decl(&rt).unwrap();
-    let rhs = self.get_obj_ptr(&node.rhs);
-    let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
-    let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
-    let index = Resolver::findVariant(decl, node.ty.name());
-    let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
-
-    let then_name = format("iflet_then_{}", node.rhs.line);
-    let next_name = format("iflet_next_{}", node.rhs.line);
-    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-    let next = create_bb_named(CStr::new(next_name).ptr());
-    let elsebb = Option<BasicBlock*>::new();
-    if(node.els.is_some()){
-      let else_name = format("iflet_else_{}", node.rhs.line);
-      elsebb = Option<BasicBlock*>::new(create_bb_named(CStr::new(else_name).ptr()));
-      CreateCondBr(self.branch(cmp), then, elsebb.unwrap());
-    }else{
-      CreateCondBr(self.branch(cmp), then, next);
-    }
-    SetInsertPoint(then);
-    let variant = decl.get_variants().get_ptr(index);
-    if(!variant.fields.empty()){
-        //declare vars
-        let params = &variant.fields;
-        let data_index = get_data_index(decl);
-        let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
-        let var_ty = self.get_variant_ty(decl, variant);
-        for (let i = 0; i < params.size(); ++i) {
-            //regular var decl
-            let prm = params.get_ptr(i);
-            let arg = node.args.get_ptr(i);
-            let field_ptr = self.gep2(dataPtr, i, var_ty);
-            let alloc_ptr = self.get_alloc(arg.id);
-            self.NamedValues.add(arg.name.clone(), alloc_ptr);
-            if (arg.is_ptr) {
-                CreateStore(field_ptr, alloc_ptr);
-            } else {
-                if (prm.type.is_prim() || prm.type.is_pointer()) {
-                    let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
-                    CreateStore(field_val, alloc_ptr);
-                } else {
-                    self.copy(alloc_ptr, field_ptr, &prm.type);
-                }
-            }
-        }
-    }
-    self.visit(node.then.get());
-    let exit_then = Exit::get_exit_type(node.then.get());
-    if (!exit_then.is_jump()) {
-      CreateBr(next);
-    }
-    if (node.els.is_some()) {
-        self.set_and_insert(elsebb.unwrap());
-        self.visit(node.els.get().get());
-        let exit_else = Exit::get_exit_type(node.els.get().get());
-        if (!exit_else.is_jump()) {
-          CreateBr(next);
-        }
-    }
-    self.set_and_insert(next);
-  }
-
-  func visit_for(self, node: ForStmt*){
-    if(node.v.is_some()){
-      self.visit(node.v.get());
-    }
-    let f = self.cur_func();
-    let line = 1;
-    let then_name = format("for_then_{}", line);
-    let cond_name = format("for_cond_{}", line);
-    let update_name = format("for_update_{}", line);
-    let next_name = format("for_next_{}", line);
-    let then = create_bb_named(CStr::new(then_name).ptr());
-    let condbb = create_bb2_named(f, CStr::new(cond_name).ptr());
-    let updatebb = create_bb2_named(f, CStr::new(update_name).ptr());
-    let next = create_bb_named(CStr::new(next_name).ptr());
-
-    CreateBr(condbb);
-    SetInsertPoint(condbb);
-    if (node.e.is_some()) {
-      CreateCondBr(self.branch(node.e.get()), then, next);
-    } else {
-      CreateBr(then);
-    }
-    self.set_and_insert(then);
-    self.loops.add(updatebb);
-    self.loopNext.add(next);
-    self.visit(node.body.get());
-    CreateBr(updatebb);
-    SetInsertPoint(updatebb);
-    for (let i=0;i<node.u.len();++i) {
-      let u = node.u.get_ptr(i);
-      self.visit(u);
-    }
-    self.loops.pop_back();
-    self.loopNext.pop_back();
-    CreateBr(condbb);
-    self.set_and_insert(next);
-  }
-
-  func visit_if(self, node: IfStmt*){
-    let cond = self.branch(&node.e);
-    let line = node.e.line;
-    let then_name = format("if_then_{}", line);
-    let next_name = format("if_next_{}", line);
-    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-    let elsebb = Option<BasicBlock*>::new();
-    let next = create_bb_named(CStr::new(next_name).ptr());
-    if(node.els.is_some()){
-      let else_name = format("if_else_{}", line);
-      elsebb = Option::new(create_bb_named(CStr::new(else_name).ptr()));
-      CreateCondBr(cond, then, elsebb.unwrap());
-    }else{
-      CreateCondBr(cond, then, next);
-    }
-    SetInsertPoint(then);
-    self.visit(node.then.get());
-    let exit_then = Exit::get_exit_type(node.then.get());
-    if(!exit_then.is_jump()){
-      CreateBr(next);
-    }
-    if(node.els.is_some()){
-      self.set_and_insert(elsebb.unwrap());
-      self.visit(node.els.get().get());
-      let exit_else = Exit::get_exit_type(node.els.get().get());
-      if(!exit_else.is_jump()){
-        CreateBr(next);
-      }
-    }
-    self.set_and_insert(next);
-  }
-  func visit_assert(self, expr: Expr*){
-    let m = self.curMethod.unwrap();
-    let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
-    let ptr = CreateGlobalStringPtr(msg.ptr());
-    Drop::drop(msg);
-    let then_name = format("assert_then_{}", expr.line);
-    let next_name = format("assert_next_{}", expr.line);
-    let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-    let next = create_bb_named(CStr::new(next_name).ptr());
-    let cond = self.branch(expr);
-    CreateCondBr(cond, next, then);
-    SetInsertPoint(then);
-    //print error and exit
-    let pr_args = make_args();
-    args_push(pr_args, ptr);
-    let printf_proto = self.protos.get().libc("printf");
-    CreateCall(printf_proto, pr_args);
-    self.call_exit(1);
-    self.set_and_insert(next);
-  }
-  func visit(self, node: VarExpr*){
-    for(let i=0;i<node.list.len();++i){
-      let f = node.list.get_ptr(i);
-      let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
-      if(doesAlloc(&f.rhs, self.get_resolver())){
-        //self allocated
-        self.visit(&f.rhs);
-        continue;
-      }
-      let type = &self.get_resolver().visit(f).type;
-      if(is_struct(type)){
-        let val = self.visit(&f.rhs);
-        if(Value_isPointerTy(val)){
-          self.copy(ptr, val, type);
-        }else{
-          CreateStore(val, ptr);
-        }
-      }else if(type.is_pointer()){
-        let val = self.visit(&f.rhs);
-        CreateStore(val, ptr);
-      } else{
-        let val = self.cast(&f.rhs, type);
-        CreateStore(val, ptr);
-      }
-    }
-  }
-  func visit(self, node: Block*){
-    for(let i=0;i<node.list.len();++i){
-      let st = node.list.get_ptr(i);
-      self.visit(st);
-    }
-  }
-  func visit_ret(self, expr: Expr*){
-    let type = &self.curMethod.unwrap().type;
-    type = &self.get_resolver().visit_type(type).type;
-    if(type.is_pointer()){
-      let val = self.get_obj_ptr(expr);
-      CreateRet(val);
-      return;
-    }
-    if(!is_struct(type)){
-      let val = self.cast(expr, type);
-      CreateRet(val);
-      return;
-    }
-    let ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
-    let val = self.visit(expr);
-    self.copy(ptr, val, type);
-    CreateRetVoid();
-  }
-}
-
-//----------------------------------------------------------
-//expr------------------------------------------------------
-impl Compiler{
-  func visit(self, node: Expr*): Value*{
-    self.llvm.di.get().loc(node.line, node.pos);
-    if let Expr::Par(e*)=(node){
-      return self.visit(e.get());
-    }
-    if let Expr::Obj(type*,args*)=(node){
-      return self.visit_obj(node, type, args);
-    }
-    if let Expr::Lit(lit*)=(node){
-      return self.visit_lit(node, lit);
-    }
-    if let Expr::Infix(op*, l*, r*)=(node){
-      return self.visit_infix(op, l.get(), r.get());
-    }
-    if let Expr::Name(name*)=(node){
-      return *self.NamedValues.get_ptr(name).unwrap();
-    }
-    if let Expr::Unary(op*, e*)=(node){
-      if(op.eq("&")){
-        return self.visit(e.get());
-      }
-      if(op.eq("*")){
-        return self.visit_deref(node, e.get());
-      }
-      return self.visit_unary(op, e.get());
-    }
-    if let Expr::Call(mc*)=(node){
-      return self.visit_call(node, mc);
-    }
-    if let Expr::ArrAccess(aa*)=(node){
-      return self.visit_aa(node, aa);
-    }
-    if let Expr::Array(list*, sz*)=(node){
-      return self.visit_array(node, list, sz);
-    }
-    if let Expr::Access(scope*, name*)=(node){
-      return self.visit_access(node, scope.get(), name);
-    }
-    if let Expr::Type(type*)=(node){
-      return self.simple_enum(node ,type);
-    }
-    if let Expr::Is(lhs*, rhs*)=(node){
-      return self.visit_is(lhs.get(), rhs.get());
-    }
-    if let Expr::As(lhs*, rhs*)=(node){
-      return self.visit_as(lhs.get(), rhs);
-    }
-    panic("expr {}", node);
-  }
-
-  func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
-    let lhs_type = self.getType(lhs);
-    let rhs_type = &self.get_resolver().visit_type(rhs).type;
-    //ptr to int
-    if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
-      let val = self.get_obj_ptr(lhs);
-        return CreatePtrToInt(val, self.mapType(rhs_type));
-    }
-    if (lhs_type.is_prim()) {
-      return self.cast(lhs, rhs_type);
-    }
-    return self.get_obj_ptr(lhs);
-  }
-
-  func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
-    let tag1 = self.getTag(lhs);
-    let op = get_comp_op("==".ptr());
-    if let Expr::Type(rhs_ty*)=(rhs){
-      let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
-      let index = Resolver::findVariant(decl, rhs_ty.name());
-      let tag2 = makeInt(index, ENUM_TAG_BITS());
-      return CreateCmp(op, tag1, tag2);
-    }
-    let tag2 = self.getTag(rhs);
-    return CreateCmp(op, tag1, tag2);
-  }
-
-  func simple_enum(self, node: Expr*, type: Type*): Value*{
-    let smp = type.as_simple();
-    let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
-    let index = Resolver::findVariant(decl, &smp.name);
-    let ptr = self.get_alloc(node);
-    let decl_ty = self.mapType(&decl.type);
-    let tag_ptr = self.gep2(ptr, get_tag_index(decl),decl_ty);
-    CreateStore(makeInt(index, ENUM_TAG_BITS()), tag_ptr);
-    return ptr;
-  }
-
-  func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
-    let scope_ptr = self.get_obj_ptr(scope);
-    let scope_rt = self.getType(scope);
-    let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
-    let pair = self.get_resolver().findField(node, name, decl, &decl.type);
-    let index = pair.b;
-    if(decl is Decl::Enum){
-      //enum base
-      //todo more depth
-      //scope_ptr = self.gep2(scope_ptr, 1, self.mapType(&decl.type));
-    }
-    if (pair.a.base.is_some()) ++index;
-    let sd_ty = self.mapType(&pair.a.type);
-    return self.gep2(scope_ptr, index, sd_ty);
-  }
-
-  func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
-    let ptr = self.get_alloc(node);
-    let arrt = self.getType(node);
-    let elem_type = self.getType(list.get_ptr(0));
-    let arr_ty = self.mapType(&arrt);
-    if(sz.is_none()){
-      for(let i = 0;i<list.len();++i){
-        let e = list.get_ptr(i);
-        let elem_target = gep_arr(arr_ty, ptr, 0, i);
-        let et = self.getType(e);
-        self.setField(e, &et, elem_target);
-      }
-      return ptr;
-    }
-    let elem = list.get_ptr(0);
-    let elem_ptr = Option<Value*>::new();
-    let elem_ty = self.mapType(&elem_type);
-    if (doesAlloc(elem, self.get_resolver())) {
-        elem_ptr = Option::new(self.visit(elem));
-    }
-    let bb = GetInsertBlock();
-    let cur = gep_arr(arr_ty, ptr, 0, 0);
-    let end = gep_arr(arr_ty, ptr, 0, *sz.get());
-    //create cons and memcpy
-    let condbb = create_bb();
-    let setbb = create_bb();
-    let nextbb = create_bb();
-    CreateBr(condbb);
-    self.set_and_insert(condbb);
-    let phi_ty = getPointerTo(elem_ty);
-    let phi = CreatePHI(phi_ty, 2);
-    phi_addIncoming(phi, cur, bb);
-    let ne = CreateCmp(get_comp_op("!=".ptr()), phi as Value*, end);
-    CreateCondBr(ne, setbb, nextbb);
-    self.set_and_insert(setbb);
-    if (elem_ptr.is_some()) {
-        self.copy(phi as Value*, elem_ptr.unwrap(), &elem_type);
-    } else {
-        self.setField(elem, &elem_type, phi as Value*);
-    }
-    let step = gep_ptr(elem_ty, phi as Value*, makeInt(1, 64));
-    phi_addIncoming(phi, step, setbb);
-    CreateBr(condbb);
-    self.set_and_insert(nextbb);
-    return ptr;
-  }
-
-  func visit_aa(self, expr: Expr*, node: ArrAccess*): Value*{
-    let type = self.getType(node.arr.get());
-    if(node.idx2.is_some()){
-      return self.visit_slice(expr, node);
-    }
-    let i64t = Type::new("i64");
-    let ty = type.unwrap_ptr();
-    let src = self.get_obj_ptr(node.arr.get());
-    if(ty.is_array()){
-        //regular array access
-        let i1 = makeInt(0, 64);
-        let i2 = self.cast(node.idx.get(), &i64t);
-        return gep_arr(self.mapType(ty), src, i1, i2);
-    }
-    
-    //slice access
-    let elem = ty.elem();
-    let elemty = self.mapType(elem);
-    //read array ptr
-    let sliceType = self.protos.get().std("slice") as llvm_Type*;
-    let arr = self.gep2(src, SLICE_PTR_INDEX(), sliceType);
-    arr = CreateLoad(getPtr(), arr);
-    let index = self.cast(node.idx.get(), &i64t);
-    return gep_ptr(elemty, arr, index);
-  }
-  func visit_slice(self,expr: Expr*, node: ArrAccess*): Value*{
-    let ptr = self.get_alloc(expr);
-    let arr = self.visit(node.arr.get());
-    let arr_ty = self.getType(node.arr.get());
-    if(arr_ty.is_slice()){
-      arr = CreateLoad(getPtr(), arr);
-    }
-    let elem_ty = arr_ty.elem();
-    let i32_ty = Type::new("i32");
-    let val_start = self.cast(node.idx.get(), &i32_ty);
-
-    let ptr_ty = self.mapType(elem_ty);
-    //shift by start
-    arr = gep_ptr(ptr_ty, arr, val_start);
-
-    let sliceType = self.protos.get().std("slice");
-
-    let trg_ptr = self.gep2(ptr, 0, sliceType as llvm_Type*);
-    let trg_len = self.gep2(ptr, 1, sliceType as llvm_Type*);
-    //store ptr
-    CreateStore(arr, trg_ptr);
-    //set len
-    let val_end = self.cast(node.idx2.get().get(), &i32_ty);
-    let len = CreateSub(val_end, val_start);
-    len = CreateSExt(len, getInt(SLICE_LEN_BITS()));
-    CreateStore(len, trg_len);
-    return ptr;
-  }
-
-  func visit_unary(self, op: String*, e: Expr*): Value*{
-    let val = self.loadPrim(e);
-    if(op.eq("+")) return val;
-    if(op.eq("!")){
-      val = CreateTrunc(val, getInt(1));
-      val = CreateXor(val, getTrue());
-      return CreateZExt(val, getInt(8));
-    }
-    let bits = getPrimitiveSizeInBits2(val);
-    if(op.eq("-")){
-      return CreateNSWSub(makeInt(0, bits), val);
-    }
-    if(op.eq("++")){
-      let v = self.visit(e);//var without load
-      let res = CreateNSWAdd(val, makeInt(1, bits));
-      CreateStore(res, v);
-      return res;
-    }
-    if(op.eq("--")){
-      let v = self.visit(e);//var without load
-      let res = CreateNSWSub(val, makeInt(1, bits));
-      CreateStore(res, v);
-      return res;
-    }
-    if(op.eq("~")){
-      return CreateXor(val, makeInt(-1, bits));
-    }
-    panic("unary {}", op);
-  }
-
-  func visit_call(self, expr: Expr*, mc: Call*): Value*{
-    if(Resolver::is_drop_call(mc)){
-      let argt = self.getType(mc.args.get_ptr(0));
-      if(argt.is_pointer() || argt.is_prim()){
-        return getVoidTy() as Value*;
-      }
-    }
-    if(Resolver::is_std_no_drop(mc)){
-      let arg = mc.args.get_ptr(0);
-      return getVoidTy() as Value*;
-    }
-    if(Resolver::std_size(mc)){
-      if(!mc.args.empty()){
-        let ty = self.getType(mc.args.get_ptr(0));
-        let sz = self.getSize(&ty);
-        return makeInt(sz, 32);
-      }else{
-        let ty = mc.type_args.get_ptr(0);
-        let sz = self.getSize(ty);
-        return makeInt(sz, 32);
-      }
-    }    
-    if(Resolver::std_is_ptr(mc)){
-      let ty = mc.type_args.get_ptr(0);
-      if(ty.is_pointer()){
-        return getTrue();
-      }
-      return getFalse();
-    }
-    if(Resolver::is_printf(mc)){
-      self.call_printf(mc);
-      return getVoidTy() as Value*;
-    }
-    if(Resolver::is_print(mc)){
-      let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
-      self.visit(&info.block);
-      return getVoidTy() as Value*;
-    }
-    if(Resolver::is_panic(mc)){
-      let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
-      self.visit(&info.block);
-      self.call_exit(1);
-      return getVoidTy() as Value*;
-    }
-    if(mc.name.eq("malloc") && mc.scope.is_none()){
-      let i64_ty = Type::new("i64");
-      let size = self.cast(mc.args.get_ptr(0), &i64_ty);
-      if (!mc.type_args.empty()) {
-          let typeSize = self.getSize(mc.type_args.get_ptr(0)) / 8;
-          size = CreateNSWMul(size, makeInt(typeSize, 64));
-      }
-      let proto = self.protos.get().libc("malloc");
-      let args = make_args();
-      args_push(args, size);
-      return CreateCall(proto, args);
-    }
-    if(Resolver::is_ptr_deref(mc)){
-      let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
-      let type = self.getType(expr);
-      if (!is_struct(&type)) {
-          return CreateLoad(self.mapType(&type), arg_ptr);
-      }
-      return arg_ptr;
-    }
-    if(Resolver::is_ptr_get(mc)){
-      let elem_type = self.getType(expr).unwrap_ptr();
-      let src = self.get_obj_ptr(mc.args.get_ptr(0));
-      let idx = self.loadPrim(mc.args.get_ptr(1));
-      return gep_ptr(self.mapType(elem_type), src, idx);
-    }
-    if(Resolver::is_ptr_copy(mc)){
-      //ptr::copy(src_ptr, src_idx, elem)
-      let src_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
-      let i64_ty = Type::new("i64");
-      let idx = self.cast(mc.args.get_ptr(1), &i64_ty);
-      let val = self.visit(mc.args.get_ptr(2));
-      let elem_type: Type = self.getType(mc.args.get_ptr(2));
-      let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
-      self.copy(trg_ptr, val, &elem_type);
-      return getVoidTy() as Value*;
-    }
-    if(self.get_resolver().is_array_get_len(mc)){
-      let arr_type = self.getType(mc.scope.get()).unwrap_ptr();
-      if let Type::Array(elem*, sz)=(arr_type){
-        return makeInt(sz, 64);
-      }
-      panic("");
-    }
-    //arr.ptr()
-    if(self.get_resolver().is_array_get_ptr(mc)){
-      return self.get_obj_ptr(mc.scope.get());
-    }
-    if(self.get_resolver().is_slice_get_len(mc)){
-      let sl = self.get_obj_ptr(mc.scope.get());
-      let sliceType=self.protos.get().std("slice") as llvm_Type*;
-      let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
-      return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
-    }
-    if(self.get_resolver().is_slice_get_ptr(mc)){
-      let sl = self.get_obj_ptr(mc.scope.get());
-      let sliceType=self.protos.get().std("slice") as llvm_Type*;
-      let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
-      return CreateLoad(getPtr(), ptr);
-    }
-    return self.visit_call2(expr, mc);
-  }
-
-  func panic_simple(self, mc: Call*){
-    
-  }
-
-  func visit_panic(self, node: Expr*, mc: Call*){
-    let msg = String::new("panic");
-    msg.append("\n");
-    msg.append(self.curMethod.unwrap().path.str());
-    msg.append(":");
-    msg.append(i32::print(node.line).str());
-    msg.append("\n in function ");
-    msg.append(printMethod(self.curMethod.unwrap()).str());
-    msg.append("\n");
-    
-    self.call_printf(msg.str());
-    //printf
-    let pr_mc = Call::new("print".str());
-    //let id = node as Node*;
-    //pr_mc.args.add(Expr::Lit{.*id, Literal{LitKind::STR, msg, Option<Type>::new()}});
-    self.visit_print(mc);
-    self.call_printf("\n");
-    //exit
-    self.call_exit(1);
-  }
-
-  func visit_call2(self, expr: Expr*, mc: Call*): Value*{
-    let rt = self.get_resolver().visit(expr);
-    if(!rt.is_method()){
-      panic("mc no method {} {}", expr, rt.desc);
-    }
-    let type = &rt.type;
-    let ptr = Option<Value*>::new();
-    if(is_struct(type)){
-      ptr = Option::new(self.get_alloc(expr));
-    }
-    let target = self.get_resolver().get_method(&rt).unwrap();
-    let proto = self.protos.get().get_func(target);
-    let args = make_args();
-    if(ptr.is_some()){
-      args_push(args, ptr.unwrap());
-    }
-    let paramIdx = 0;
-    let argIdx = 0;
-    if(target.self.is_some()){
-      let rval = RvalueHelper::need_alloc(mc, target, self.get_resolver());
-      let scp_val = self.get_obj_ptr(*rval.scope.get());
-      if(rval.rvalue){
-        let rv_ptr = self.get_alloc(*rval.scope.get());
-        CreateStore(scp_val, rv_ptr);
-        args_push(args, rv_ptr);
-      }else{
-        args_push(args, scp_val);
-      }
-      if(mc.is_static){
-        ++argIdx;
-      }
-      //++paramIdx;
-    }
-    for(;argIdx < mc.args.len();++argIdx){
-      let arg = mc.args.get_ptr(argIdx);
-      let at = self.getType(arg);
-      if (at.is_pointer()) {
-        args_push(args, self.get_obj_ptr(arg));
-      }
-      else if (is_struct(&at)) {
-        let de = is_deref(arg);
-        if (de.is_some()) {
-          args_push(args, self.get_obj_ptr(de.unwrap()));
-        }
-        else {
-          args_push(args, self.visit(arg));
-        }
-      } else {
-        let prm = target.params.get_ptr(paramIdx);
-        let pt = &self.get_resolver().visit_type(&prm.type).type;
-        args_push(args, self.cast(arg, pt));
-      }
-      ++paramIdx;
-    }
-    let res = CreateCall(proto, args);
-    if(ptr.is_some()) return ptr.unwrap();
-    return res;
-  }
-
-  func visit_print(self, mc: Call*): Value*{
-    let args = make_args();
-    for(let i = 0;i < mc.args.len();++i){
-      let arg: Expr* = mc.args.get_ptr(i);
-      let lit = is_str_lit(arg);
-      if(lit.is_some()){
-        let val: str = lit.unwrap().str();
-        let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
-        args_push(args, ptr);
-        continue;
-      }
-      let arg_type = self.getType(arg);
-      if(arg_type.print().eq("i8*") || arg_type.print().eq("u8*")){
-        let val = self.get_obj_ptr(arg);
-        args_push(args, val);
-      }
-      else if(arg_type.is_str()){
-        panic("print str");
-      }else if(arg_type.is_prim()){
-        let val = self.loadPrim(arg);
-        //val = CreateLoad(self.mapType(&arg_type), val);
-        args_push(args, val);
-      }else{
-        panic("print {}", arg_type);
-      }
-    }
-    let printf_proto = self.protos.get().libc("printf");
-    let res = CreateCall(printf_proto, args);
-    //flush
-    let fflush_proto = self.protos.get().libc("fflush");
-    let args2 = make_args();
-    let stdout_ptr = self.protos.get().stdout_ptr;
-    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
-    CreateCall(fflush_proto, args2);
-    return res;
-  }
-
-  func call_printf(self, mc: Call*){
-    let args = make_args();
-    for(let i = 0;i < mc.args.len();++i){
-      let arg: Expr* = mc.args.get_ptr(i);
-      let lit = is_str_lit(arg);
-      if(lit.is_some()){
-        let val: str = lit.unwrap().str();
-        let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
-        args_push(args, ptr);
-        continue;
-      }
-      let arg_type = self.getType(arg);
-      if(arg_type.eq("i8*") || arg_type.eq("u8*")){
-        let val = self.get_obj_ptr(arg);
-        args_push(args, val);
-        continue;
-      }
-      if(arg_type.is_prim()){
-        let val = self.loadPrim(arg);
-        args_push(args, val);
-      }else{
-        panic("compiler err printf arg {}", arg_type);
-      }
-    }
-    let printf_proto = self.protos.get().libc("printf");
-    let res = CreateCall(printf_proto, args);
-    //flush
-    let fflush_proto = self.protos.get().libc("fflush");
-    let args2 = make_args();
-    let stdout_ptr = self.protos.get().stdout_ptr;
-    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
-    CreateCall(fflush_proto, args2);
-  }
-  
-  func call_printf(self, s: str){
-    let args = make_args();
-    let val = CreateGlobalStringPtr(s.cstr().ptr());
-    args_push(args, val);
-    let printf_proto = self.protos.get().libc("printf");
-    let res = CreateCall(printf_proto, args);
-    //flush
-    let fflush_proto = self.protos.get().libc("fflush");
-    let args2 = make_args();
-    let stdout_ptr = self.protos.get().stdout_ptr;
-    args_push(args2, CreateLoad(getPtr(), stdout_ptr));
-    CreateCall(fflush_proto, args2);
-  }
-
-  func visit_deref(self, node: Expr*, e: Expr*): Value*{
-    let type = self.getType(node);
-    let val = self.get_obj_ptr(e);
-    if (type.is_prim() || type.is_pointer()) {
-        return self.load(val, &type);
-    }
-    return val;
-  }
-
-  func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
-    let type = &self.get_resolver().visit(l).type;
-    if(is_comp(op.str())){
-      //todo remove redundant cast
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateCmp(get_comp_op(op.clone().cstr().ptr()), lv, rv);
-    }
-    if(op.eq("&&") || op.eq("||")){
-      return self.andOr(op, l, r).a;
-    }
-    if(op.eq("=")){
-      return self.visit_assign(l, r);
-    }
-    if(op.eq("+")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateNSWAdd(lv, rv);
-    }
-    if(op.eq("-")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateNSWSub(lv, rv);
-    }
-    if(op.eq("*")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateNSWMul(lv, rv);
-    }
-    if(op.eq("/")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateSDiv(lv, rv);
-    }
-    if(op.eq("%")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateSRem(lv, rv);
-    }
-    if(op.eq("&")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateAnd(lv, rv);
-    }
-    if(op.eq("|")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateOr(lv, rv);
-    }
-    if(op.eq("^")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateXor(lv, rv);
-    }
-    if(op.eq("<<")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateShl(lv, rv);
-    }
-    if(op.eq(">>")){
-      let lv = self.cast(l, type);
-      let rv = self.cast(r, type);
-      return CreateAShr(lv, rv);
-    }
-    if(op.eq("+=")){
-      let lv = self.visit(l);
-      let lval = self.loadPrim(l);
-      let rval = self.cast(r, type);
-      let tmp = CreateNSWAdd(lval, rval);
-      CreateStore(tmp, lv);
-      return lv;
-    }
-    if(op.eq("-=")){
-      let lv = self.visit(l);
-      let lval = self.loadPrim(l);
-      let rval = self.cast(r, type);
-      let tmp = CreateNSWSub(lval, rval);
-      CreateStore(tmp, lv);
-      return lv;
-    }
-    if(op.eq("/=")){
-      let lv = self.visit(l);
-      let lval = self.loadPrim(l);
-      let rval = self.cast(r, type);
-      let tmp = CreateSDiv(lval, rval);
-      CreateStore(tmp, lv);
-      return lv;
-    }
-    panic("infix '{}'\n", op);
-  }
-
-  func is_logic(expr: Expr*): bool{
-    if let Expr::Par(e*)=(expr){
-      return is_logic(e.get());
-    }
-    if let Expr::Infix(op*, l*, r*)=(expr){
-      if(op.eq("&&") || op.eq("||")){
-        return true;
-      }
-    }
-    return false;
-  }
-
-  func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<Value*, BasicBlock*>{
-    let isand = true;
-    if(op.eq("||")) isand = false;
-
-    let lval = self.branch(l);//must be eval first
-    let bb = GetInsertBlock();
-    let then = create_bb2(self.cur_func());
-    let next = create_bb();
-    if (isand) {
-      CreateCondBr(lval, then, next);
-    } else {
-      CreateCondBr(lval, next, then);
-    }
-    SetInsertPoint(then);
-    let rv = Option<Value*>::new();
-    if(is_logic(r)){
-      let r_inner = r;
-      if let Expr::Par(e*)=(r){
-        r_inner = e.get();
-      }
-      if let Expr::Infix(op2*,l2*,r2*)=(r_inner){
-        let pair = self.andOr(op2, l2.get(), r2.get());
-        then = pair.b;
-        rv = Option::new(pair.a);
-      }else{
-        panic("");
-      }
-    }else{
-      rv = Option::new(self.loadPrim(r));
-    }
-    let rbit = CreateZExt(rv.unwrap(), getInt(8));
-    CreateBr(next);
-    self.set_and_insert(next);
-    let phi = CreatePHI(getInt(8), 2);
-    let i8val = 0;
-    if(!isand){
-      i8val = 1;
-    }
-    phi_addIncoming(phi, makeInt(i8val, 8), bb);
-    phi_addIncoming(phi, rbit, then);
-    return Pair::new(CreateZExt(phi as Value*, getInt(8)), next);
-  }
-
-  func visit_assign(self, l: Expr*, r: Expr*): Value*{
-    if(l is Expr::Infix) panic("assign lhs");
-    //let lhs = Option<Value*>::new();
-    let type = self.getType(l);
-    if let Expr::Unary(op*,l2*)=(l){
-      if(op.eq("*")){
-        let lhs = self.get_obj_ptr(l2.get());
-        //let rt = self.get_resolver().visit(l);
-        self.setField(r, &type, lhs);
-        return lhs;
-      }
-    }
-    let lhs = self.visit(l);
-    self.setField(r, &type, lhs);
-    return lhs;
-  }
-  
-  func visit_lit(self, expr: Expr*, node: Literal*): Value*{
-    if(node.kind is LitKind::INT){
-        let bits = 32;
-        if (node.suffix.is_some()) {
-            bits = self.getSize(node.suffix.get()) as i32;
-        }
-        let s = node.val.clone().replace("_", "");
-        if (node.val.str().starts_with("0x")){
-          let val = i64::parse_hex(s.str());
-          return makeInt(val, bits);
-        }
-        let val = i64::parse(s.str());
-        let res = makeInt(val, bits);
-        return res;
-    }
-    if(node.kind is LitKind::BOOL){
-      if(node.val.eq("true")) return getTrue();
-      return getFalse();
-    }
-    if(node.kind is LitKind::STR){
-      let trg_ptr = self.get_alloc(expr);
-      let src = CreateGlobalStringPtr(node.val.clone().cstr().ptr());
-      let stringType = self.protos.get().std("str") as llvm_Type*;
-      let sliceType = self.protos.get().std("slice") as llvm_Type*;
-      let slice_ptr = self.gep2(trg_ptr, 0, stringType);
-      let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
-      let len_target = self.gep2(slice_ptr, SLICE_LEN_INDEX(), sliceType);
-      //set ptr
-      CreateStore(src, data_target);
-      //set len
-      let len = makeInt(node.val.len(), SLICE_LEN_BITS());
-      CreateStore(len, len_target);
-      return trg_ptr;
-    }
-    if(node.kind is LitKind::CHAR){
-      assert node.val.len() == 1;
-      let trimmed = node.val.get(0);
-      return makeInt(trimmed, 32);
-    }
-    panic("lit {}", node.val);
-  }
-
-  func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
-    let field_idx = 0;
-    for(let i=0;i<args.len();++i){
-      let arg = args.get_ptr(i);
-      if(arg.isBase){
-        continue;
-      }
-      let prm_idx = 0;
-      if(arg.name.is_some()){
-        prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &decl.type);
-      }else{
-        prm_idx = field_idx;
-        ++field_idx;
-      }
-      let fd = fields.get_ptr(prm_idx);
-      if(decl.base.is_some() && decl is Decl::Struct) ++prm_idx;
-      //Value_dump(ptr);
-      //Type_dump(ty);
-      let field_target_ptr = self.gep2(ptr, prm_idx, ty);
-      self.setField(&arg.expr, &fd.type, field_target_ptr);
-    }
-  }
-  
-  func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
-      let ptr = self.get_alloc(node);
-      let rt = self.get_resolver().visit(node);
-      let ty = self.mapType(&rt.type);
-      let decl = self.get_resolver().get_decl(&rt).unwrap();
-      for(let i = 0;i < args.len();++i){
-        let arg = args.get_ptr(i);
-        if(!arg.isBase) continue;
-        let base_ptr = self.gep2(ptr, 0, ty);
-        let val_ptr = self.visit(&arg.expr);
-        let base_rt = self.get_resolver().visit(&arg.expr);
-        self.copy(base_ptr, val_ptr, &base_rt.type);
-      }
-      if let Decl::Struct(fields*)=(decl){
-        let field_idx = 0;
-        for(let i=0;i<args.len();++i){
-          let arg = args.get_ptr(i);
-          if(arg.isBase){
-            continue;
-          }
-          let prm_idx = 0;
-          if(arg.name.is_some()){
-            prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &rt.type);
-          }else{
-            prm_idx = field_idx;
-            ++field_idx;
-          }
-          let fd = fields.get_ptr(prm_idx);
-          if(decl.base.is_some()) ++prm_idx;
-          let field_target_ptr = self.gep2(ptr, prm_idx, ty);
-          self.setField(&arg.expr, &fd.type, field_target_ptr);
-        }
-      }else{
-        let variant_index = Resolver::findVariant(decl, type.name());
-        let variant = decl.get_variants().get_ptr(variant_index);
-        //set tag
-        let tag_ptr = self.gep2(ptr, get_tag_index(decl), ty);
-        let tag_val = makeInt(variant_index, ENUM_TAG_BITS());
-        CreateStore(tag_val, tag_ptr);
-        //set data
-        let data_ptr = self.gep2(ptr, get_data_index(decl), ty);
-        let var_ty = self.get_variant_ty(decl, variant);
-        self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
-      }
-      return ptr;
-  }
 }

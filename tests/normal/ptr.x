@@ -17,10 +17,10 @@ func deref_struct(){
     assert a2.b == 300;
 }
 
-func prm(num: i32*, val: i32){
-    assert *num == val;
-    let loc: i32* = num;
-    assert *loc == val;
+func prm(ptr: i32*, val: i32){
+    assert *ptr == val;
+    let local: i32* = ptr;
+    assert *local == val;
 }
 
 func main(){

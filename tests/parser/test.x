@@ -33,20 +33,24 @@ func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
   compile_dir(cmp, dir, link, "");
 }
 
+func bin_name(name: str): String{
+  return format("{}.bin", name.substr(0, name.len() as i32 - 2));
+}
+
 func compile_dir(cmp: Compiler*, dir: CStr, link: bool, args: str){
   let list = listc(&dir);
   print("compile_dir '{}' -> {} elems\n", dir, list.len());
   for(let i = 0;i < list.len();++i){
     let name_c: CStr* = list.get_ptr(i);
-    let name = name_c.get(); 
+    let name: str = name_c.get(); 
     if(!name.ends_with(".x")) continue;
-    let file = dir.get_heap();
+    let file: String = dir.get_heap();
     file.append("/");
     file.append(name);
     if(is_dir(file.str())) continue;
     cmp.compile(file.cstr());
     if(link){
-      cmp.link_run(name.substr(0, name.len() as i32 - 2), args);
+      cmp.link_run(bin_name(name).str(), args);
     }
   }
 }

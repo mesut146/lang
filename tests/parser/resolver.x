@@ -11,7 +11,7 @@ import parser/derive
 import std/map
 import std/libc
 
-func verbose(): bool{
+func verbose_stmt(): bool{
   return false;
 }
 
@@ -20,6 +20,23 @@ struct Context{
   root: String;
   prelude: List<String>;
   out_dir: String;
+  verbose: bool;
+  single_mode: bool;
+}
+impl Context{
+  func new(src_dir: String, out_dir: String): Context{
+    let arr = ["box", "list", "str", "string", "option", "ops"];
+    let pre = List<String>::new(arr.len());
+    for(let i = 0;i < arr.len();++i){
+      pre.add(arr[i].str());
+    }
+    return Context{map: Map<String, Resolver>::new(),
+       root: src_dir,
+       prelude: pre,
+       out_dir: out_dir,
+       verbose: true,
+       single_mode: true};
+  }
 }
 
 impl Drop for Context{
@@ -73,10 +90,10 @@ struct Resolver{
   scopes: List<Scope>;
   ctx: Context*;
   used_methods: List<Method*>;
-  generated_methods: List<Method>;
+  generated_methods: List<Box<Method>>;
   inLoop: i32;
   used_types: List<RType>;
-  generated_decl: List<Decl>;
+  generated_decl: List<Box<Decl>>;
   generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
 }
@@ -93,10 +110,6 @@ impl Drop for Resolver{
     self.generated_decl.drop();
     self.generated_impl.drop();
   }
-}
-
-struct Config{
-  optimize_enum: bool;
 }
 
 #derive(Debug)
@@ -231,14 +244,6 @@ impl Debug for RType{
 }
 
 impl Context{
-  func new(src_dir: String, out_dir: String): Context{
-    let arr = ["box", "list", "str", "string", "option", "ops"];
-    let pre = List<String>::new(arr.len());
-    for(let i = 0;i < arr.len();++i){
-      pre.add(arr[i].str());
-    }
-    return Context{map: Map<String, Resolver>::new(), root: src_dir, prelude: pre, out_dir: out_dir};
-  }
   func create_resolver(self, path: String*): Resolver*{
     let res = self.map.get_ptr(path);
     if(res.is_some()){
@@ -337,10 +342,10 @@ impl Resolver{
       scopes: List<Scope>::new(),
       ctx: ctx,
       used_methods: List<Method*>::new(),
-      generated_methods: List<Method>::new(),
+      generated_methods: List<Box<Method>>::new(),
       inLoop: 0,
       used_types: List<RType>::new(),
-      generated_decl: List<Decl>::new(),
+      generated_decl: List<Box<Decl>>::new(),
       generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new()};
     return res;
@@ -426,18 +431,16 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get_ptr(i);
       //print("visit item i={}/{}\n", i + 1, self.unit.items.len());
-      self.visit(item);
+      self.visit_item(item);
       //print("visit item after i={}/{}\n", i + 1, self.unit.items.len());
     }
     //todo these would generate more methods, whose are not visited
-    let glen = self.generated_methods.len();
     for(let j = 0;j < self.generated_methods.len();++j){
-      let gm = self.generated_methods.get_ptr(j);
+      let gm = self.generated_methods.get_ptr(j).get();
       //print("j={}/{} {}\n", j, self.generated_methods.len(), printMethod(gm));
-      self.visit(gm);
+      //print("{}\n", gm);
+      self.visit_method(gm);
     }
-    //print("glen={} len={}\n", glen, self.generated_methods.len());
-    //assert self.generated_methods.len() == glen;
     //self.dump();
   }
   
@@ -491,10 +494,10 @@ impl Resolver{
   }
   
   func init(self){
-    if(verbose()){
+    if(self.is_init) return;
+    if(self.ctx.verbose){
       print("resolver::init {}\n", &self.unit.path);
     }
-    if(self.is_init) return;
     self.is_init = true;
 
     for(let i = 0;i < self.unit.items.len();++i){
@@ -591,6 +594,9 @@ impl Resolver{
     return self.get_decl(&rt);
   }
   func get_decl(self, rt: RType*): Option<Decl*>{
+    if(rt.type.is_pointer()){
+      return self.get_decl(rt.type.unwrap_ptr());
+    }
     if(rt.desc.kind is RtKind::Trait){
       return Option<Decl*>::new();
     }
@@ -605,7 +611,7 @@ impl Resolver{
     if(rt.desc.kind is RtKind::DeclGen){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       if(resolver.generated_decl.in_index(rt.desc.idx)){
-        let decl = resolver.generated_decl.get_ptr(rt.desc.idx);
+        let decl = resolver.generated_decl.get_ptr(rt.desc.idx).get();
         if(!decl.type.eq(rt.type.unwrap_ptr().print().str())){
           panic("get_decl err {}={}", rt.type, rt.desc);
         }
@@ -649,7 +655,7 @@ impl Resolver{
     if let RtKind::MethodGen = (rt.desc.kind){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let m = resolver.generated_methods.get_ptr(rt.desc.idx);
-      return Option::new(m);
+      return Option::new(m.get());
     }
     if let RtKind::MethodExtern(idx2) = (rt.desc.kind){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
@@ -663,25 +669,25 @@ impl Resolver{
     panic("get_method {}={}", rt.type, rt.desc);
   }
 
-  func visit(self, node: Item*){
+  func visit_item(self, node: Item*){
     if let Item::Method(m*) = (node){
-      self.visit(m);
+      self.visit_method(m);
     }else if let Item::Type(name, rhs) = (node){
       //pass
     }else if let Item::Impl(imp*) = (node){
-      self.visit(imp);
+      self.visit_impl(imp);
     }else if let Item::Decl(decl*) = (node){
       if let Decl::Struct(fields*) = (decl){
-        self.visit(decl, fields);
+        self.visit_decl(decl, fields);
       }else if let Decl::Enum(variants*) = (decl){
         //self.visit(decl, variants);
       }
     }else if let Item::Trait(tr*) = (node){
     }else if let Item::Extern(methods*) = (node){
-      for(let i=0;i<methods.len();++i){
-        let m=methods.get_ptr(i);
+      for(let i = 0;i < methods.len();++i){
+        let m = methods.get_ptr(i);
         if(m.is_generic) continue;
-        self.visit(m);
+        self.visit_method(m);
       }
     }
     else{
@@ -730,7 +736,7 @@ impl Resolver{
     return false;
   }
 
-  func visit(self, node: Decl*, fields: List<FieldDecl>*){
+  func visit_decl(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
     node.is_resolved = true;
     if(node.base.is_some()){
@@ -745,7 +751,7 @@ impl Resolver{
     }
   }
 
-  func visit(self, imp: Impl*){
+  func visit_impl(self, imp: Impl*){
     if(!imp.info.type_params.empty()){
       //generic
       return;
@@ -767,7 +773,7 @@ impl Resolver{
       for(let i = 0;i < imp.methods.len();++i){
         let m = imp.methods.get_ptr(i);
         if(!m.type_params.empty()) continue;
-        self.visit(m);
+        self.visit_method(m);
         let mangled = mangle2(m, &imp.info.type);
         let idx = required.indexOf(&mangled);
         if(idx != -1){
@@ -792,13 +798,13 @@ impl Resolver{
       for(let i = 0;i < imp.methods.len();++i){
         let m = imp.methods.get_ptr(i);
         if(!m.type_params.empty()) continue;
-        self.visit(m);
+        self.visit_method(m);
       }
     }
     self.curImpl = Option<Impl*>::None;
   }
 
-  func visit(self, node: Method*){
+  func visit_method(self, node: Method*){
     if(node.is_generic){
       return;
     }
@@ -807,10 +813,11 @@ impl Resolver{
     //res.desc = Desc::new_method(node, self);
     self.newScope();
     if(node.self.is_some()){
-      self.visit_type(&node.self.get().type);
-      self.addScope(node.self.get().name.clone(), node.self.get().type.clone(), true);
+      let self_prm: Param* = node.self.get();
+      self.visit_type(&self_prm.type);
+      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true);
     }
-    for(let i = 0;i<node.params.len();++i){
+    for(let i = 0;i < node.params.len();++i){
       let prm = node.params.get_ptr(i);
       self.visit_type(&prm.type);
       self.addScope(prm.name.clone(), prm.type.clone(), true);
@@ -836,6 +843,7 @@ impl Resolver{
         return;
       }
     }
+    print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
     self.used_types.add(rt);
     if(decl.base.is_some()){
@@ -1005,7 +1013,7 @@ impl Resolver{
   }
 
   func add_generated(self, decl: Decl): Decl*{
-    let res = self.generated_decl.add(decl);
+    let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
     rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32};
@@ -1030,10 +1038,6 @@ impl Resolver{
     if(str.eq("List<u8>")){
       let aa = 10;
     }
-    // let decl = self.get_decl(&res).unwrap();
-    // if (!decl.is_generic) {
-    //     self.add_used_decl(decl);
-    // }
     let arr = self.get_imports();
     for (let i = 0;i < arr.len();++i) {
       let is = arr.get_ptr(i);
@@ -1041,7 +1045,12 @@ impl Resolver{
       resolver.init();
       let cached = resolver.typeMap.get_ptr(&type.name);
       if (cached.is_some()) {
-        let res = cached.unwrap().clone();
+        let res: RType = cached.unwrap().clone();
+        let decl = self.get_decl(&res);
+        if (decl.is_some() && !decl.unwrap().is_generic) {
+          self.addType(str.clone(), res.clone());
+          self.add_used_decl(decl.unwrap());
+        }
         return Option::new(res);
       }
       //try full type
@@ -1263,7 +1272,7 @@ impl Resolver{
   
   func visit_unary(self, node: Expr*, op: String*, e: Expr*): RType{
     if(op.eq("&")){
-      return self.visit_ref(e);
+      return self.visit_ref(node, e);
     }
     if(op.eq("*")){
       return self.visit_deref(node, e);
@@ -1335,13 +1344,13 @@ impl Resolver{
     }
   }
 
-  func visit_ref(self, e: Expr*): RType{
+  func visit_ref(self, node: Expr*, e: Expr*): RType{
     if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess || e is Expr::Lit){
       let res = self.visit(e);
       res.type = res.type.clone().toPtr();
       return res;
     }
-    self.err(e, "ref expr is not supported");
+    self.err(node, "ref expr is not supported");
     panic("");
   }
 
@@ -1443,8 +1452,14 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
-    if(call.print().eq("List<u8>::new()")){
+    if(call.print().eq("Drop::drop(pair.b)")){
       let a = 10;
+    }
+    if(is_drop_call(call)){
+      let argt = self.getType(call.args.get_ptr(0));
+      if(argt.is_pointer()){
+        return RType::new("void");
+      }
     }
     if(is_printf(call)){
       self.validate_printf(node, call);
@@ -1767,7 +1782,7 @@ func infix_result(l: str, r: str): str{
 //statements-------------------------------------
 impl Resolver{
   func visit(self, node: Stmt*){
-    if(verbose()){
+    if(verbose_stmt()){
       print("visit stmt {}\n", node);
     }
     if let Stmt::Expr(e*) = (node){

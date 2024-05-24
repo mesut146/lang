@@ -527,7 +527,7 @@ impl MethodResolver{
         if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
             //generated method impl
             //check they belong same impl
-            let decl = self.r.get_decl(sig.scope.get()).unwrap();
+            let decl = self.r.get_decl(&sig.scope.get().type).unwrap();
             if(!decl.is_generic){
                 let scope_args = scope.get_args();
                 for (let i = 0; i < scope_args.size(); ++i) {
@@ -577,6 +577,9 @@ impl MethodResolver{
             let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
                 let res = SigResult::Err{format("arg type {} is not compatible with param {}", t1_str.str(), t2_str.str())};
+                if(res.get_err().eq("arg type Pair<i32, i32>* is not compatible with param Pair<T, U>*")){
+                    let aa = 10;
+                }
                 Drop::drop(t1_str);
                 Drop::drop(t2_str);
                 Drop::drop(typeParams);
@@ -756,7 +759,7 @@ impl MethodResolver{
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
         for (let i = 0;i < self.r.generated_methods.len();++i) {
-            let gm = self.r.generated_methods.get_ptr(i);
+            let gm = self.r.generated_methods.get_ptr(i).get();
             if(!m.name.eq(gm.name.str())) continue;
             let sig2 = Signature::new(gm, Desc::new());
             let sig_res: SigResult = self.is_same(sig, &sig2);
@@ -775,7 +778,7 @@ impl MethodResolver{
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
-        let res: Method* = self.r.generated_methods.add(res2);
+        let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{
             kind: RtKind::MethodGen,
             path: self.r.unit.path.clone(),

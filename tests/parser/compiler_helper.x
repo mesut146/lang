@@ -5,6 +5,7 @@ import parser/compiler
 import parser/debug_helper
 import parser/utils
 import parser/printer
+import parser/expr_emitter
 import std/map
 import std/libc
 
@@ -16,7 +17,10 @@ struct RvalueHelper {
 
 impl RvalueHelper{
     func is_rvalue(e: Expr*): bool{
-        return e is Expr::Call || e is Expr::Lit || e is Expr::As || e is Expr::Infix;
+      if let Expr::Par(inner*) = (e){
+        return is_rvalue(inner.get());
+      }
+      return e is Expr::Call || e is Expr::Lit || e is Expr::As || e is Expr::Infix;
     }
 
     func get_scope(mc: Call*): Expr*{
@@ -28,10 +32,10 @@ impl RvalueHelper{
     }
 
     func need_alloc(mc: Call*, method: Method*, r: Resolver*): RvalueHelper{
+      let res = RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
        if(method.self.is_none() || (mc.is_static && mc.args.empty())){
-         return RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
+         return res;
        }
-       let res = RvalueHelper{false, Option<Expr*>::new(), Option<Type>::new()};
        let scp = get_scope(mc);
        res.scope = Option::new(scp);
        if(method.self.get().type.is_pointer()){
@@ -283,7 +287,7 @@ impl Compiler{
       let max = 0;
       for(let i=0;i < variants.len();++i){
         let ev = variants.get_ptr(i);
-        let name = format("{}::{}",decl.type, ev.name.str());
+        let name = format("{}::{}", decl.type, ev.name.str());
         let var_ty = self.make_variant_type(ev, decl, &name);
         self.protos.get().classMap.add(name, var_ty as llvm_Type*);
         let sz = getSizeInBits(var_ty);

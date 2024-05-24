@@ -115,7 +115,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         }
     }else{
         let fields = decl.get_fields();
-        for(let i=0;i<fields.len();++i){
+        for(let i = 0;i < fields.len();++i){
             let fd = fields.get_ptr(i);
             if(!is_struct(&fd.type)) continue;
             //self.{fd.name}.drop();
@@ -259,7 +259,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let arg = mc.args.get_ptr(arg_idx);
         ++arg_idx;
         //<arg>.debug(&f);
-        let dbg_st = parse_stmt(format("{}.debug(&{});", arg, &var_name), &r.unit);
+        let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit);
         block.list.add(dbg_st);
     }
     if(Resolver::is_print(mc)){
