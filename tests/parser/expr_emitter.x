@@ -82,13 +82,13 @@ impl Compiler{
   
     func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
       let lhs_type = self.getType(lhs);
-      let rhs_type = &self.get_resolver().visit_type(rhs).type;
       //ptr to int
-      if (lhs_type.is_pointer() && lhs_type.print().eq("u64")) {
+      if (lhs_type.is_pointer() && rhs.print().eq("u64")) {
         let val = self.get_obj_ptr(lhs);
-          return CreatePtrToInt(val, self.mapType(rhs_type));
+          return CreatePtrToInt(val, self.mapType(rhs));
       }
       if (lhs_type.is_prim()) {
+        let rhs_type = &self.get_resolver().visit_type(rhs).type;
         return self.cast(lhs, rhs_type);
       }
       return self.get_obj_ptr(lhs);
@@ -271,6 +271,10 @@ impl Compiler{
         if(argt.is_pointer() || argt.is_prim()){
           return getVoidTy() as Value*;
         }
+        let helper = DropHelper{self.get_resolver()};
+        if(!helper.is_drop_type(&argt)){
+          return getVoidTy() as Value*;
+        }
       }
       if(Resolver::is_std_no_drop(mc)){
         let arg = mc.args.get_ptr(0);
@@ -308,6 +312,13 @@ impl Compiler{
         self.visit_block(&info.block);
         self.call_exit(1);
         return getVoidTy() as Value*;
+      }
+      if(Resolver::is_format(mc)){
+        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        self.visit_block(&info.block);
+        return self.visit(info.unwrap_mc.get());
+        /*let ptr = self.get_alloc(expr);
+        return ptr;*/
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");

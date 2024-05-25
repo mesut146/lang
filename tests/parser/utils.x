@@ -9,6 +9,18 @@ func SLICE_LEN_INDEX(): i32{ return 1; }
 func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
 
+func get_filename(path: str): str{
+    let idx = path.lastIndexOf("/");
+    if(idx == -1){
+        return path;
+    }
+    return path.substr(idx + 1);
+}
+
+func bin_name(path: str): String{
+    let name = get_filename(path);
+    return format("{}.bin", name.substr(0, name.len() as i32 - 2));
+}
 
 func as_type(bits: i32): Type{
   if(bits == 64){

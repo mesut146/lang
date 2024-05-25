@@ -91,9 +91,6 @@ impl Fmt{
   func print(self, s: str){
     self.buf.append(s); 
   }
-  // func print(self, s: String*){
-  //   self.buf.append(s); 
-  // }
   func print<T>(self, node: T*){
     Debug::debug(node, self);
   }
@@ -105,9 +102,6 @@ impl Fmt{
     Drop::drop(f);
     return res;
   }
-  /*func str2<T>(node: T): String{
-    return Fmt::str(&node);
-  }*/
 }
 
 impl Debug for [i32]{
@@ -190,6 +184,26 @@ impl Drop for u8{
   func drop(*self){
   }
 }
+impl Drop for u16{
+  func drop(*self){
+  }
+}
+impl Drop for u32{
+  func drop(*self){
+  }
+}
+impl Drop for u64{
+  func drop(*self){
+  }
+}
+impl Drop for i8{
+  func drop(*self){
+  }
+}
+impl Drop for i16{
+  func drop(*self){
+  }
+}
 impl Drop for i32{
   func drop(*self){
   }
@@ -201,5 +215,118 @@ impl Drop for i64{
 impl Drop for str{
   func drop(*self){
     
+  }
+}
+
+//prims
+impl Debug for i32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Debug for i64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+
+impl i32{
+  func parse(s: str): i32{
+    let x = i64::parse(s);
+    return x as i32;
+  }
+  func print(x: i32): String{
+    return x.str();
+  }
+  func str(self): String{
+    return i64::print(*self as i64);
+  }
+}
+impl i64{
+  func str(self): String{
+    return i64::print(*self);
+  }
+  func parse(s: str): i64{
+    let x: i64 = 0;
+    let neg = false;
+    let pos = 0;
+    if(s.get(0) as u32 == '-'){
+      ++pos;
+      neg = true;
+    }
+    while(pos < s.len()){
+      x = 10 * x + (s.get(pos) as i64 - ('0' as i64));
+      ++pos;
+    }
+    if(neg){
+      return -x;
+    }
+    return x;  
+  }
+  func parse_hex(s: str): i64{
+    let x = 0_i64;
+    let pos = 2;
+    while(pos<s.len()){
+      let ch = s.get(pos) as i32;
+      let y = 0;
+      if(ch>='0'&&ch<='9') y = ch - ('0' as i32);
+      else if(ch>='a'&&ch<='z') y=ch-('a' as i32)+10;
+      else y = ch-'A'+10;
+      x = 16*x+y;
+      ++pos;
+    }
+    return x;
+  }
+  func print(x: i64): String{
+    let len = i64::str_size(x);
+    let list = List<u8>::new(len + 1);
+    list.set(len, 0u8);//null terminate
+    list.count = len;
+    let end_idx = len - 1;
+    let start_idx = 0;
+    if(x < 0){
+      x = -x;
+      list.set(0, '-' as u8);
+      ++start_idx;
+    }
+    for(let i = end_idx;i >= start_idx;--i){
+      let c = x % 10;
+      list.set(i, (c + ('0' as i32)) as u8);
+      x = x / 10;
+    }
+    return String{list};
+  }
+  
+  func str_size(x: i64): i32{
+    if(x == 0) return 1;
+    let res = 0;
+    if(x < 0){
+      x = -x;
+      res += 1;
+    }
+    while(x > 0){
+      x /= 10;
+      res += 1;
+    }
+    return res;
+  }
+}
+trait Compare{
+  //-1, 0, 1
+  func compare(self, other: Self*): i32;
+}
+impl Compare for i32{
+  func compare(self, other: i32*): i32{
+    if(*self < *other){
+      return -1;
+    }
+    if(*self > *other){
+      return 1;
+    }
+    return 0;
   }
 }

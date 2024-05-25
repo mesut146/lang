@@ -50,6 +50,7 @@ extern{
     func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
+    func destroy_ctx();
     func emit_llvm(out: i8*);
     func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
 
@@ -66,6 +67,7 @@ extern{
     func setSubprogram(f: Function*, sp: DISubprogram*);
     func finalizeSubprogram(sp: DISubprogram*);
     func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool): DILocalVariable*;
+    func createAutoVariable(scope :DIScope*, name: i8*, file: DIFile *, line: i32, ty: DIType*): DILocalVariable*;
     func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
     func createExpression(): DIExpression*;
     func insertDeclare(value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);

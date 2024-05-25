@@ -67,9 +67,9 @@ impl DropHelper{
         return self.is_drop_type(elem);
     }
     let decl = self.r.get_decl(rt).unwrap();
-    return self.is_drop(decl);
+    return self.is_drop_decl(decl);
   }
-  func is_drop(self, decl: Decl*): bool{
+  func is_drop_decl(self, decl: Decl*): bool{
     if(decl.is_drop()) return true;
     if(decl.is_struct()){
       let fields = decl.get_fields();

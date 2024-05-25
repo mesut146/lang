@@ -36,7 +36,7 @@ impl DebugInfo{
              sp: Option<DISubprogram*>::new(),
              types: Map<String, DIType*>::new(),
              incomplete_types: Map<String, DICompositeType*>::new(),
-             debug: false};
+             debug: true};
     }
     
     func finalize(self){
@@ -94,6 +94,16 @@ impl DebugInfo{
         let val = *c.NamedValues.get_ptr(&p.name).unwrap();
         let lc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+    }
+
+    func dbg_var(self, name: String*, type: Type*, line: i32, c: Compiler*) {
+      if (!self.debug) return;
+      let dt = self.map_di(type, c);
+      let scope = self.sp.unwrap() as DIScope*;
+      let v = createAutoVariable(scope, name.clone().cstr().ptr(), self.file, line, dt);
+      let val = *c.NamedValues.get_ptr(name).unwrap();
+      let lc = DILocation_get(scope, line, 0);
+      insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
     }
 
     func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{

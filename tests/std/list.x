@@ -9,21 +9,22 @@ struct List<T>{
   cap: i64;
 }
 
-func get_malloc<T>(size: i64): T*{
-  let ptr = malloc<T>(size);
-  if(ptr as u64 == 0){
-    panic("malloc returned null");
-  }
-  return ptr;
-}
-
 impl<T> List<T>{
   func new(): List<T>{
     return List<T>::new(10);
   }
 
+  func get_malloc(size: i64): T*{
+    let ptr = malloc<T>(size);
+    if(ptr as u64 == 0){
+      printf("size=%lld\n", size);
+      panic("malloc returned null");
+    }
+    return ptr;
+  }
+
   func new(cap: i64): List<T>{
-    let ptr = get_malloc<T>(cap);
+    let ptr = List<T>::get_malloc(cap);
     return List<T>{ptr: ptr, count: 0, cap: cap};
   }
 
@@ -35,7 +36,7 @@ impl<T> List<T>{
     if(self.count < self.cap){
       return;
     }
-    let tmp = get_malloc<T>(self.cap + 10);
+    let tmp = List<T>::get_malloc(self.cap + 10);
     for(let i = 0;i < self.count;++i){
       //let shifted: T* = self.get_ptr(i);
       let old: T = ptr::deref(self.get_ptr(i));
@@ -83,7 +84,7 @@ impl<T> List<T>{
     return self.get_ptr(self.count - 1);
   }
 
-  func add(self, list: List<T>){
+  func add_list(self, list: List<T>){
     let i = 0;
     while(i < list.count){
         self.add(list.get_internal(i));
@@ -94,7 +95,7 @@ impl<T> List<T>{
     std::no_drop(list);
   }
 
-  func add(self, sl: [T]){
+  func add_slice(self, sl: [T]){
     let i = 0;
     while(i < sl.len()){
         self.add(sl[i]);
@@ -105,6 +106,7 @@ impl<T> List<T>{
   func set(self, pos: i64, val: T){
       //*self.get_ptr_write(pos) = val;
       ptr::copy(self.ptr, pos, val);
+      std::no_drop(val);
   }
 
   func get_internal(self, pos: i64): T{
@@ -182,6 +184,24 @@ impl<T> List<T>{
   }
   func last(self, off: i64): T*{
     return self.get_ptr(self.count - 1 - off);
+  }
+
+  func sort(self){
+    //bubble sort for now
+    for(let i = 0;i < self.len();++i){
+      for(let j = 0;j < self.len() - 1;++j){
+        let a1 = self.get_ptr(j);
+        let a2 = self.get_ptr(j + 1);
+        let cmp = Compare::compare(a1, a2);
+        //a1 > a2
+        if(cmp == 1){
+          let tmp = self.get_internal(j);
+          let tmp2 = self.get_internal(j + 1);
+          self.set(j, tmp2);
+          self.set(j + 1, tmp);
+        }
+      }
+    }
   }
   
 }

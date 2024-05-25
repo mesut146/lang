@@ -7,6 +7,7 @@ import parser/resolver
 import parser/compiler
 import parser/debug_helper
 import parser/bridge
+import parser/utils
 import std/map
 import std/io
 import std/libc
@@ -14,27 +15,22 @@ import std/libc
 func root(): str{
   return "../tests";
 }
+func get_out(): str{
+  return "./bt_out";
+}
 
 func make_context(): Context{
-  let out_dir = "./bt_out";
+  let out_dir = get_out();
   create_dir(out_dir);
   return Context::new(root().str(), out_dir.str());
 }
 
 func build_std(){
-  let root = root();
-  let ctx = make_context();
-  let cmp = Compiler::new(ctx);
-  compile_dir(&cmp, CStr::new("../tests/std"), false);
-  cmp.build_library("std.a", false);
+  Compiler::compile_dir("../tests/std", get_out(), root(), "", LinkType::Static{"std.a"});
 }
 
 func compile_dir(cmp: Compiler*, dir: CStr, link: bool){
   compile_dir(cmp, dir, link, "");
-}
-
-func bin_name(name: str): String{
-  return format("{}.bin", name.substr(0, name.len() as i32 - 2));
 }
 
 func compile_dir(cmp: Compiler*, dir: CStr, link: bool, args: str){
@@ -54,6 +50,20 @@ func compile_dir(cmp: Compiler*, dir: CStr, link: bool, args: str){
     }
   }
 }
+func compile_dir2(dir: CStr, args: str){
+  let list = listc(&dir);
+  print("compile_dir '{}' -> {} elems\n", dir, list.len());
+  for(let i = 0;i < list.len();++i){
+    let name_c: CStr* = list.get_ptr(i);
+    let name: str = name_c.get(); 
+    if(!name.ends_with(".x")) continue;
+    let file: String = dir.get_heap();
+    file.append("/");
+    file.append(name);
+    if(is_dir(file.str())) continue;
+    Compiler::compile_single(root().str(), get_out().str(), file.str(), args);
+  }
+}
 
 func compile(cmp: Compiler*, file: str){
     cmp.compile(file.str().cstr());
@@ -63,16 +73,12 @@ func compile(cmp: Compiler*, file: str){
 
 func compiler_test(std_test: bool){
   print("compiler_test\n");
-  let root = root();
-  let ctx = make_context();
-  let cmp = Compiler::new(ctx);
   if(std_test){
     build_std();
-    compile_dir(&cmp, CStr::new("../tests/std_test"), false, "std.a");
+    compile_dir2(CStr::new("../tests/std_test"), format("{}/std.a", get_out()).str());
   }else{
-    compile_dir(&cmp, CStr::new("../tests/normal"), true, "");
+    compile_dir2(CStr::new("../tests/normal"), "");
   }
-  cmp.drop();
 }
 
 func bootstrap(){

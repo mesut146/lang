@@ -52,9 +52,9 @@ impl Signature{
         if(mc.scope.is_some()){
             let str = mc.print();
             //print("{}\n", str);
-            /*if(str.eq("List<u8>::new()")){
+            if(str.eq("Option::new(pr)")){
                 let x = 10;
-            }*/
+            }
             let scp: RType = r.visit(mc.scope.get());
             res.real_scope = Option::new(scp.clone());
             is_trait = scp.trait.is_some();
@@ -117,6 +117,9 @@ impl Signature{
         return res;
     }
     func new(m: Method*, map: Map<String, Type>*, desc: Desc): Signature{
+        if(printMethod(m).eq("Pair<T, U>::drop(*self)")){
+            let aa = 10;
+        }
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
             name: m.name.clone(),
@@ -356,13 +359,13 @@ impl MethodResolver{
             }
         }
         if(real.empty()){
-            let f = Fmt::new(format("method {} not found from candidates", mc));
+            let f = Fmt::new(format("method {} not found from candidates\n", mc));
             for(let i = 0;i < errors.len();++i){
                 let err: Pair<Signature*, String>* = errors.get_ptr(i);
-                f.print("\n");
                 f.print(err.a);
                 f.print(" ");
                 f.print(&err.b);
+                f.print("\n");
             }
             Drop::drop(list);
             Drop::drop(real);
@@ -527,7 +530,12 @@ impl MethodResolver{
         if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
             //generated method impl
             //check they belong same impl
-            let decl = self.r.get_decl(&sig.scope.get().type).unwrap();
+            let scp_rt = sig.scope.get();
+            if(sig.scope.get().is_method()){
+                let tmp = self.r.visit_type(&scp_rt.type);
+                scp_rt = &tmp;
+            }
+            let decl = self.r.get_decl(scp_rt).unwrap();
             if(!decl.is_generic){
                 let scope_args = scope.get_args();
                 for (let i = 0; i < scope_args.size(); ++i) {
@@ -554,6 +562,9 @@ impl MethodResolver{
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
+        if(sig.mc.unwrap().print().eq("Drop::drop(pair.b)")){
+            let aa = 10;
+        }
         for (let i = 0; i < sig.args.len(); ++i) {
             let t1: Type = sig.args.get_ptr(i).clone();
             let t2: Type* = sig2.args.get_ptr(i);
@@ -576,8 +587,8 @@ impl MethodResolver{
             }
             let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
-                let res = SigResult::Err{format("arg type {} is not compatible with param {}", t1_str.str(), t2_str.str())};
-                if(res.get_err().eq("arg type Pair<i32, i32>* is not compatible with param Pair<T, U>*")){
+                let res = SigResult::Err{format("arg is not compatible with param {} vs {}", t1_str.str(), t2_str.str())};
+                if(res.get_err().eq("arg is not compatible with param Pair<i32, i32> vs Pair<T, U>")){
                     let aa = 10;
                 }
                 Drop::drop(t1_str);
@@ -812,6 +823,9 @@ impl MethodResolver{
 }
 
 func get_type_params(m: Method*): List<Type>{
+    if(printMethod(m).eq("Pair<T, U>::drop(*self)")){
+        let a = 10;
+    }
     let res = List<Type>::new();
     if (!m.is_generic) {
         return res;
@@ -820,6 +834,6 @@ func get_type_params(m: Method*): List<Type>{
         Drop::drop(res);
         res = info.type_params.clone();
     }
-    res.add(m.type_params.clone());
+    res.add_list(m.type_params.clone());
     return res;
 }

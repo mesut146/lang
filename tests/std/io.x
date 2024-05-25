@@ -20,7 +20,7 @@ func read_bytes(path: CStr*): List<u8>{
   while(true){
       let rcnt = fread(&buf[0], 1, 1024, f);
       if(rcnt <= 0){ break; }
-      res.add(buf[0..rcnt]);
+      res.add_slice(buf[0..rcnt]);
   }
   fclose(f);
   return res;
@@ -38,7 +38,7 @@ func read_bytes_i8(path: CStr*): List<i8>{
   while(true){
       let rcnt = fread(&buf[0], 1, 1024, f);
       if(rcnt <= 0){ break; }
-      res.add(buf[0..rcnt]);
+      res.add_slice(buf[0..rcnt]);
   }
   fclose(f);
   return res;
@@ -68,9 +68,11 @@ func write_bytes(data: [u8], path: CStr*){
   }
 }
 
-/*func list(path: CStr*): List<String>{
+func list(path: str): List<String>{
   let list = List<String>::new(128);
-  let dp = opendir(path.ptr());
+  let path_c = CStr::from_slice(path);
+  let dp = opendir(path_c.ptr());
+  path_c.drop();
   if(dp as u64 == 0) panic("no such dir {}", path);
   while(true){
     let ep = readdir(dp);
@@ -80,7 +82,7 @@ func write_bytes(data: [u8], path: CStr*){
   }
   closedir(dp);
   return list;
-}*/
+}
 
 func listc(path: CStr*): List<CStr>{
   let list = List<CStr>::new();

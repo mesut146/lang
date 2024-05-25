@@ -15,7 +15,7 @@ func resolve1(path: str){
     }
     let len = strlen(buf[0..buf.len()]);
     //let len = 1;
-    get_malloc<i8>(buf[0..len].len());
+    List<i8>::get_malloc(buf[0..len].len());
     //let a = buf[0..1];
     //String_new(buf[0..len]);
 }

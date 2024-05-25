@@ -255,6 +255,7 @@ impl Compiler{
           let val = self.cast(&f.rhs, type);
           CreateStore(val, ptr);
         }
+        self.llvm.di.get().dbg_var(&f.name, type, f.line, self);
       }
     }
     func visit_block(self, node: Block*){

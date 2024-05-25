@@ -210,5 +210,27 @@ impl str{
       }
       return res;
     }
+}
 
+impl Compare for str{
+  //compare alphabeticly
+  func compare(self, other: str*): i32{
+    let len1 = self.len();
+    let len2 = other.len();
+    let min_len = len1;
+    if(len2 < len1){
+      min_len = len2;
+    }
+    for(let i = 0;i < min_len;++i){
+      let c1 = self.get(i);
+      let c2 = other.get(i);
+      if(c1 < c2){
+        return -1;
+      }
+      if(c1 > c2){
+        return 1;
+      }
+    }
+    return Compare::compare(&len1, &len2);
+  }
 }

@@ -24,61 +24,6 @@ func make_impl(decl: Decl*, trait_name: str): Impl{
     return Impl{info: info, methods: List<Method>::new()};
 }
 
-//scope.name(arg)
-func newCall(unit: Unit*, scope: str, name: str, arg: Option<Expr>): Stmt{
-    let call = Call::new(name.str());
-    let id = unit.node(0);
-    let id2 = unit.node(0);
-    call.scope = Ptr::new(Expr::Name{.id, scope.str()});
-    if(arg.is_some()){
-        call.args.add(arg.unwrap());
-    }
-    return Stmt::Expr{Expr::Call{.id2, call}};
-}
-
-//scope.name(arg)
-func newCall(unit: Unit*, scope: Expr, name: str, arg: Expr): Stmt{
-    let call = Call::new(name.str());
-    let id = unit.node(0);
-    let id2 = unit.node(0);
-    call.scope = Ptr::new(scope);
-    call.args.add(arg);
-    return Stmt::Expr{Expr::Call{.id2, call}};
-}
-
-//scope.name()
-func newCall(unit: Unit*, scope: Expr, name: str): Stmt{
-    let call = Call::new(name.str());
-    let id = unit.node(0);
-    let id2 = unit.node(0);
-    call.scope = Ptr::new(scope);
-    return Stmt::Expr{Expr::Call{.id2, call}};
-}
-
-//scope.name()
-func newCall(unit: Unit*, scope: str, name: str): Stmt{
-    let id = unit.node(0);
-    return newCall(unit, Expr::Name{.id, scope.str()}, name);
-}
-
-func newFa(unit: Unit*, scope: str, name: str): Expr{
-    let id = unit.node(0);
-    let id2 = unit.node(0);
-    let scope_expr = Expr::Name{.id, scope.str()};
-    return Expr::Access{.id2, Box::new(scope_expr), name.str()};
-}
-
-//scope.print("{lit}")
-func newPrint(unit: Unit*, scope: str, lit: str): Stmt{
-    let call = Call::new("print".str());
-    let id = unit.node(0);
-    let id2 = unit.node(0);
-    let id3 = unit.node(0);
-    call.scope = Ptr::new(Expr::Name{.id, scope.str()});
-    call.args.add(Expr::Lit{.id2, Literal{LitKind::STR, format("\"{}\"", lit), Option<Type>::new()}});
-    return Stmt::Expr{Expr::Call{.id3, call}};
-}
-
 func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Debug")){
         return generate_debug(decl, unit);
@@ -100,8 +45,9 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
 
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
-                //{fd.name}.drop()
-                then.list.add(newCall(unit, fd.name.str(), "drop"));
+                //Drop::drop({fd.name})
+                let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit);
+                then.list.add(drop_stmt);
             }
 
             let self_id = unit.node(0);
@@ -119,13 +65,13 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             let fd = fields.get_ptr(i);
             if(!is_struct(&fd.type)) continue;
             //self.{fd.name}.drop();
-            let input = format("self.{}.drop();", &fd.name);
-            let drop_stmt = parse_stmt(input, unit);
+            let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit);
             body.list.add(drop_stmt);
         }
     }
     let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
-    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone().toPtr(), true, true});
+    m.is_generic = decl.is_generic;
+    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone(), true, true});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
     m.path = unit.path.clone();
     m.body = Option::new(body);
@@ -149,17 +95,16 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new();
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(newPrint(unit, "f", vt.print().str()));
-            then.list.add(newPrint(unit, "f", "{"));
+            then.list.add(parse_stmt(format("f.print(\"{}{\");", vt), unit));
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 if(j > 0){
-                    then.list.add(newPrint(unit, "f", ", "));
+                    then.list.add(parse_stmt(format("f.print(\", \");"), unit));
                 }
                 //f.print(fd.name)
-                then.list.add(newPrint(unit, "f", fd.name.str()));
+                then.list.add(parse_stmt(format("f.print(\"{}\");", fd.name), unit));
             }
-            then.list.add(newPrint(unit, "f", "}"));
+            then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
 
             let self_id = unit.node(0);
             let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{then}), Option<Box<Stmt>>::new()};
@@ -171,23 +116,22 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             body.list.add(Stmt::IfLet{is});
         }
     }else{
-        //f.print(decl.type.print())
-        body.list.add(newPrint(unit, "f", decl.type.print().str()));
-        body.list.add(newPrint(unit, "f", "{"));
+        //f.print(<decl.type.print()>)
+        body.list.add(parse_stmt(format("f.print(\"{}{\");", decl.type), unit));
         let fields = decl.get_fields();
-        for(let i=0;i<fields.len();++i){
+        for(let i = 0;i < fields.len();++i){
             let fd = fields.get_ptr(i);
             if(i > 0){
-                body.list.add(newPrint(unit, "f", ", "));
+                body.list.add(parse_stmt(format("f.print(\", \");"), unit));
             }
             //self.{fd.name}.debug(f);
-            let arg = Expr::Name{.unit.node(0), "f".str()};
-            body.list.add(newCall(unit, newFa(unit, "self", fd.name.str()), "debug", arg));
+            body.list.add(parse_stmt(format("Debug::debug(self.{}, f);", fd.name), unit));
         }
-        body.list.add(newPrint(unit, "f", "}"));
+        body.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
     }
     m.body = Option::new(body);
     imp.methods.add(m);
+    print("{}\n", imp);
     return imp;
 }
 
@@ -195,6 +139,13 @@ func parse_stmt(input: String, unit: Unit*): Stmt{
     let parser = Parser::from_string(input);
     parser.unit = Option::new(unit);
     let res = parser.parse_stmt();
+    Drop::drop(parser);
+    return res;
+}
+func parse_expr(input: String, unit: Unit*): Expr{
+    let parser = Parser::from_string(input);
+    parser.unit = Option::new(unit);
+    let res = parser.parse_expr();
     Drop::drop(parser);
     return res;
 }
@@ -217,8 +168,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         }
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(), unwrap_mc: Call::new("unwrap".str())};
+    let info = FormatInfo{block: Block::new(), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
+    //print("gen {} id={} {}\n", node, node.id, r.unit.path);
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
         //printf(".."), exit(1) will be called by compiler
@@ -288,8 +240,15 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.visit(block);
         r.format_map.add(node.id, info);
         return;
+    }else if(Resolver::is_format(mc)){
+        //f.unwrap()
+        let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit);
+        info.unwrap_mc = Option::new(unwrap_mc);
+        r.visit(block);
+        r.visit(info.unwrap_mc.get());
+        r.format_map.add(node.id, info);
+        return;
     }
-    r.format_map.add(node.id, info);
     r.err(node, "generate_format");
 }
 

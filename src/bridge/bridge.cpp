@@ -119,6 +119,25 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine, char *tri
     dest.close();
 }
 
+void destroy_ctx() {
+    if (mod != nullptr) {
+        delete mod;
+        mod = nullptr;
+    }
+    if (Builder != nullptr) {
+        delete Builder;
+        Builder = nullptr;
+    }
+    if (DBuilder != nullptr) {
+        delete DBuilder;
+        DBuilder = nullptr;
+    }
+    if (ctx != nullptr) {
+        delete ctx;
+        ctx = nullptr;
+    }
+}
+
 llvm::LLVMContext *make_ctx() {
     if (ctx != nullptr) {
         //delete ctx;
@@ -131,6 +150,7 @@ llvm::LLVMContext *make_ctx() {
 llvm::Module *make_module(char *name, llvm::TargetMachine *TargetMachine, char *triple) {
     if (mod != nullptr) {
         delete mod;
+        mod = nullptr;
     }
     // std::string TargetTriple(triple);
     mod = new llvm::Module(name, *ctx);
@@ -142,6 +162,7 @@ llvm::Module *make_module(char *name, llvm::TargetMachine *TargetMachine, char *
 llvm::IRBuilder<> *make_builder() {
     if (Builder != nullptr) {
         delete Builder;
+        Builder = nullptr;
     }
     Builder = new llvm::IRBuilder<>(*ctx);
     return Builder;
@@ -150,6 +171,7 @@ llvm::IRBuilder<> *make_builder() {
 void init_dbg() {
     if (DBuilder != nullptr) {
         delete DBuilder;
+        DBuilder = nullptr;
     }
     DBuilder = new llvm::DIBuilder(*mod);
     mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 4);
@@ -200,6 +222,10 @@ void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
 
 llvm::DILocalVariable *createParameterVariable(llvm::DIScope *scope, char *name, int idx, llvm::DIFile *file, int line, llvm::DIType *type, bool preserve) {
     return DBuilder->createParameterVariable(scope, name, idx, file, line, type, preserve);
+}
+
+llvm::DILocalVariable* createAutoVariable(llvm::DIScope *scope, char* name, llvm::DIFile *file, int line, llvm::DIType* ty){
+    return DBuilder->createAutoVariable(scope, name, file, line, ty);
 }
 
 llvm::DIExpression *createExpression() {
@@ -392,7 +418,7 @@ llvm::BasicBlock *create_bb2(llvm::Function *func) {
     return llvm::BasicBlock::Create(*ctx, "", func);
 }
 
-llvm::BasicBlock *create_bb2_named(llvm::Function *func, const char* name) {
+llvm::BasicBlock *create_bb2_named(llvm::Function *func, const char *name) {
     return llvm::BasicBlock::Create(*ctx, name, func);
 }
 
@@ -400,7 +426,7 @@ llvm::BasicBlock *create_bb() {
     return llvm::BasicBlock::Create(*ctx, "");
 }
 
-llvm::BasicBlock *create_bb_named(const char* name) {
+llvm::BasicBlock *create_bb_named(const char *name) {
     return llvm::BasicBlock::Create(*ctx, name);
 }
 

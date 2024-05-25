@@ -41,7 +41,7 @@ impl Context{
 
 impl Drop for Context{
   func drop(*self){
-    print("Context::drop\n");
+    //print("Context::drop\n");
     self.map.drop();
     self.root.drop();
     self.prelude.drop();
@@ -76,7 +76,7 @@ impl Clone for VarHolder{
 
 struct FormatInfo {
   block: Block;
-  unwrap_mc: Call;
+  unwrap_mc: Option<Expr>;
 }
 
 struct Resolver{
@@ -99,7 +99,7 @@ struct Resolver{
 }
 impl Drop for Resolver{
   func drop(*self){
-    print("Resolver::drop {}\n", &self.unit.path);
+    //print("Resolver::drop {}\n", &self.unit.path);
     self.unit.drop();
     self.typeMap.drop();
     self.cache.drop();
@@ -323,7 +323,7 @@ static print_unit: bool = false;
 
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
-    print("Resolver::new {}\n", &path);
+    //print("Resolver::new {}\n", &path);
     let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
     Drop::drop(parser);
@@ -424,7 +424,7 @@ impl Resolver{
   
   func resolve_all(self){
     if(self.is_resolved) return;
-    print("resolve_all {}\n", self.unit.path);
+    //print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
     self.init();
     self.init_globals();
@@ -496,7 +496,7 @@ impl Resolver{
   func init(self){
     if(self.is_init) return;
     if(self.ctx.verbose){
-      print("resolver::init {}\n", &self.unit.path);
+      //print("Resolver::init {}\n", &self.unit.path);
     }
     self.is_init = true;
 
@@ -527,9 +527,12 @@ impl Resolver{
         self.handle_derive(decl, &newItems);
       }
     }
-    self.unit.items.add(newItems);
+    self.unit.items.add_list(newItems);
   }
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
+    if(decl.type.eq("En")){
+      let aa = 10;
+    }
     //derive
     for(let j = 0;j < decl.derives.len();++j){
       let der: Type* = decl.derives.get_ptr(j);
@@ -542,8 +545,10 @@ impl Resolver{
     }
     let helper = DropHelper{self};
     //improve decl.is_generic, this way all generic types derives drop but dont need to
-    if (!DropHelper::has_drop_impl(decl, self) && (decl.is_generic || helper.is_drop(decl))) {
-      newItems.add(Item::Impl{generate_derive(decl, &self.unit, "Drop")});
+    if (!DropHelper::has_drop_impl(decl, self)) {
+      if(decl.is_generic || helper.is_drop_decl(decl)){
+        newItems.add(Item::Impl{generate_derive(decl, &self.unit, "Drop")});
+      }
     }
   }
 
@@ -843,7 +848,7 @@ impl Resolver{
         return;
       }
     }
-    print("add_used_decl {}\n", decl.type);
+    //print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
     self.used_types.add(rt);
     if(decl.base.is_some()){
@@ -1456,10 +1461,17 @@ impl Resolver{
       let a = 10;
     }
     if(is_drop_call(call)){
-      let argt = self.getType(call.args.get_ptr(0));
-      if(argt.is_pointer()){
+      let argt = self.visit(call.args.get_ptr(0));
+      if(argt.type.is_pointer() || argt.type.is_prim()){
         return RType::new("void");
       }
+      //let decl = self.get_decl(&argt);
+      let helper = DropHelper{self};
+      //if (!DropHelper::has_drop_impl(decl, self)) {
+        if(!helper.is_drop_type(&argt)){
+          return RType::new("void");
+        }
+      //}
     }
     if(is_printf(call)){
       self.validate_printf(node, call);

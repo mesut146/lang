@@ -26,11 +26,31 @@ struct Compiler{
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
 }
+impl Drop for Compiler{
+  func drop(*self){
+    Drop::drop(self.ctx);
+    Drop::drop(self.main_file);
+    Drop::drop(self.llvm);
+    Drop::drop(self.compiled);
+    Drop::drop(self.protos);
+    Drop::drop(self.NamedValues);
+    Drop::drop(self.allocMap);
+    Drop::drop(self.loops);
+    Drop::drop(self.loopNext);
+  }
+}
 
 struct llvm_holder{
   target_machine: TargetMachine*;
   target_triple: CStr;
   di: Option<DebugInfo>;
+}
+impl Drop for llvm_holder{
+  func drop(*self){
+    Drop::drop(self.target_triple);
+    Drop::drop(self.di);
+    destroy_ctx();
+  }
 }
 
 struct Protos{
@@ -96,7 +116,7 @@ impl Protos{
 func has_main(unit: Unit*): bool{
   for (let i=0;i<unit.items.len();++i) {
     let it = unit.items.get_ptr(i);
-    if let Item::Method(m*)=(it){
+    if let Item::Method(m*) = (it){
       if(is_main(m)){
         return true;
       }
@@ -188,7 +208,31 @@ impl Compiler{
 
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
-      print("build library {}", name);
+      print("build library {}\n", name);
+    }else{
+      panic("link failed '{}'", cmd_s.get());
+    }
+  }
+  func build_library2(compiled: List<String>*, name: str, out_dir: str, is_shared: bool){
+    let cmd = "".str();
+    if(is_shared){
+      cmd.append("clang-16 -shared -o ");
+    }else{
+      cmd.append("ar rcs ");
+    }
+    cmd.append(out_dir);
+    cmd.append("/");
+    cmd.append(name);
+    cmd.append(" ");
+    for(let i = 0;i < compiled.len();++i){
+      let file = compiled.get_ptr(i);
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      print("build library {}/{}\n", out_dir, name);
     }else{
       panic("link failed '{}'", cmd_s.get());
     }
@@ -468,9 +512,39 @@ impl Compiler{
     let rt = self.get_resolver().visit_cached(e);
     return rt.type.clone();
   }
+
+  func compile_single(src_dir: String, out_dir: String, file: str, args: str){
+    let ctx = Context::new(src_dir, out_dir);
+    let cmp = Compiler::new(ctx);
+    cmp.compile(file.cstr());
+    cmp.link_run(bin_name(file).str(), args);
+    Drop::drop(cmp);
+  }
+
+  func compile_dir(src_dir: str, out_dir: str, root: str, args: str, lt: LinkType){
+    let list: List<String> = list(src_dir);
+    let compiled = List<String>::new();
+    for(let i = 0;i < list.len();++i){
+      let name = list.get_ptr(i).str();
+      if(!name.ends_with(".x")) continue;
+      let file: String = format("{}/{}", src_dir, name);
+      if(is_dir(file.str())) continue;
+      let ctx = Context::new(root.str(), out_dir.str());
+      let cmp = Compiler::new(ctx);
+      let obj = cmp.compile(file.cstr());
+      Drop::drop(cmp);
+      compiled.add(obj);
+    }
+    if let LinkType::Static(lib_name) = (&lt){
+      Compiler::build_library2(&compiled, lib_name, out_dir, false);
+    }else{
+      panic("compile_dir");
+    }
+  }
  
 }//Compiler
 
-struct DirCompiler{
-
+enum LinkType{
+  Static(name: str),
+  Dynamic
 }

@@ -134,6 +134,12 @@ impl AllocHelper{
 
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     if(Resolver::is_print(call) || Resolver::is_panic(call)){
+      if(call.args.len() == 1){
+        //simple, no alloc
+      }
+      if(node.print().eq("print(\"condTest done\\n\")")){
+        let aa = 10;
+      }
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
       self.visit(&info.block);
       return Option<Value*>::new();
@@ -142,7 +148,7 @@ impl AllocHelper{
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
       self.visit(&info.block);
       let str_ty = Type::new("String");
-      return Option::new(self.alloc_ty(&str_ty, node));
+      return Option::new(self.alloc_ty(&str_ty, info.unwrap_mc.get()));
     }
     let rt = self.c.get_resolver().visit(node);
     if(rt.is_method()){
@@ -194,6 +200,12 @@ impl AllocHelper{
     }
     if let Expr::Unary(op*, e*)=(node){
       self.visit(e.get());
+      if(op.eq("&")){
+        if(RvalueHelper::is_rvalue(e.get())){
+          let ty = self.c.get_resolver().getType(e.get());
+          self.alloc_ty(&ty, node);
+        }
+      }
       return res;
     }
     if let Expr::ArrAccess(aa*)=(node){
