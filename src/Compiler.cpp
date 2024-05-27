@@ -198,6 +198,7 @@ void init_globals(Compiler *c) {
     if (c->unit->globals.empty()) {
         return;
     }
+    //init rhs of globals
     auto staticf = make_init_proto(c->unit->path, c);
     std::string mangled = staticf->getName().str();
     DirCompiler::global_protos.push_back(c->unit->path);
@@ -220,7 +221,7 @@ void init_globals(Compiler *c) {
         auto glob_di = c->DBuilder->createGlobalVariableExpression(c->di.cu, g.name, g.name, nullptr, g.line, c->map_di(type), false, true, nullptr);
         gv->addDebugInfo(glob_di);
 
-        c->loc(0, 0);
+        c->loc(c->unit->lastLine, 0);
         if (rt.targetMethod && isStruct(type)) {
             auto mc = dynamic_cast<MethodCall *>(g.expr.get());
             c->call(mc, gv);
@@ -595,7 +596,7 @@ void Compiler::genCode(Method *m) {
     storeParams(curMethod, this);
     if (is_main(m)) {
         for (auto &init_proto_path : DirCompiler::global_protos) {
-            loc(0, 0);
+            loc(m->line, 0);
             auto init_proto = mod->getFunction(mangle_static(init_proto_path));
             if (!init_proto) {
                 init_proto = make_init_proto(init_proto_path, this);
@@ -1166,28 +1167,24 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
     if (is_drop_call(mc)) {
         auto argt = resolv->resolve(mc->args.at(0));
-        if (argt.type.print().ends_with("**")) {
-            //dont drop
-            return (llvm::Value *) Builder->getVoidTy();
-        }
-        if (argt.type.print().ends_with("*")) {
+        if (argt.type.isPointer()) {
             //dont drop
             return (llvm::Value *) Builder->getVoidTy();
         }
         DropHelper helper(resolv.get());
-        if (helper.isDropType(argt)) {
-            auto arg = mc->args.at(0);
-            auto ptr = gen(arg);
-            curOwner.call_drop_force(argt.type, ptr);
-            //todo bc of partial drop we have to comment below
-            if (dynamic_cast<SimpleName *>(arg)) {
-                //todo f.access
-                curOwner.doMoveCall(arg);
-            } else {
-                curOwner.doMoveCall(arg);
-            }
+        if (!helper.isDropType(argt)) {
+            return (llvm::Value *) Builder->getVoidTy();
         }
-        return (llvm::Value *) Builder->getVoidTy();
+        /*auto arg = mc->args.at(0);
+        auto ptr = gen(arg);
+        curOwner.call_drop_force(argt.type, ptr);
+        //todo bc of partial drop we have to comment below
+        if (dynamic_cast<SimpleName *>(arg)) {
+            //todo f.access
+            curOwner.doMoveCall(arg);
+        } else {
+            curOwner.doMoveCall(arg);
+        }*/
     }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;

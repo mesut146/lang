@@ -142,8 +142,8 @@ func getName(path: str): str{
 }
 
 impl llvm_holder{
-  func initModule(self, path: CStr*){
-    let name = getName(path.get());
+  func initModule(self, path: str){
+    let name = getName(path);
     make_ctx();
     make_module(name.str().cstr().ptr(), self.target_machine, self.target_triple.ptr());
     make_builder();
@@ -190,117 +190,26 @@ impl Compiler{
     return &self.get_resolver().unit;
   }
 
-  func build_library(self, name: str, is_shared: bool){
-    let cmd = "".str();
-    if(is_shared){
-      cmd.append("clang-16 -shared -o ");
-    }else{
-      cmd.append("ar rcs ");
-    }
-    cmd.append(name);
-    cmd.append(" ");
-    for(let i = 0;i < self.compiled.len();++i){
-      let file = self.compiled.get_ptr(i);
-      cmd.append(file.str());
-      cmd.append(" ");
-    }
-    self.compiled.clear();
-
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      print("build library {}\n", name);
-    }else{
-      panic("link failed '{}'", cmd_s.get());
-    }
-  }
-  func build_library2(compiled: List<String>*, name: str, out_dir: str, is_shared: bool){
-    let cmd = "".str();
-    if(is_shared){
-      cmd.append("clang-16 -shared -o ");
-    }else{
-      cmd.append("ar rcs ");
-    }
-    cmd.append(out_dir);
-    cmd.append("/");
-    cmd.append(name);
-    cmd.append(" ");
-    for(let i = 0;i < compiled.len();++i){
-      let file = compiled.get_ptr(i);
-      cmd.append(file.str());
-      cmd.append(" ");
-    }
-
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      print("build library {}/{}\n", out_dir, name);
-    }else{
-      panic("link failed '{}'", cmd_s.get());
-    }
-  }
-
-  func link_run(self, name0: str, args: str){
-    self.link(name0, args);
-    self.run(name0, args);
-  }
-
-  func run(self, name0: str, args: str){
-    let path = format("{}/{}", self.ctx.out_dir, name0);
-    let path_c: CStr = path.cstr();
-    if(system(path_c.ptr()) != 0){
-      panic("error while running {}", path_c);
-    }
-  }
-
-  func link(self, name0: str, args: str){
-    //let name_pre = format("./{}", name0);
-    //name0 = name_pre.str();
-    //Drop::drop(name_pre);
-    if(exist(name0)){
-      let name_c: CStr = name0.cstr();
-      remove(name_c.ptr());
-    }
-    let path = format("{}/{}", self.ctx.out_dir, name0);
-    create_dir(self.ctx.out_dir.str());
-    let cmd = "clang-16 ".str();
-    cmd.append("-o ");
-    cmd.append(&path);
-    cmd.append(" ");
-    for(let i = 0;i < self.compiled.len();++i){
-      let obj_file = self.compiled.get_ptr(i);
-      cmd.append(obj_file.str());
-      cmd.append(" ");
-    }
-    self.compiled.clear();
-    cmd.append(args);
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      //run if linked
-    }else{
-      panic("link failed '{}'", cmd_s);
-    }
-  }
-
-  func compile(self, path0: CStr): String{
-    //print("compile {}\n", path0);
-    let path = Path::new(path0.get_heap());
-    let outFile: String = get_out_file(path0.get(), self);
-    let ext = path.ext();
+  func compile(self, path: str): String{
+    //print("compile {}\n", path);
+    let outFile: String = get_out_file(path, self);
+    let ext = Path::new(path).ext();
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
     }
     if(self.ctx.verbose){
-      print("compiling {}\n", path0);
+      print("compiling {}\n", path);
     }
-    self.resolver = Option::new(self.ctx.create_resolver(&path.path));//Resolver*
+    self.resolver = Option::new(self.ctx.create_resolver(path));//Resolver*
     if (has_main(self.unit())) {
-      self.main_file = Option::new(path0.get_heap());
+      self.main_file = Option::new(path.str());
       if (!self.ctx.single_mode) {//compile last
           print("skip main file\n");
           return outFile;
       }
     }
     self.get_resolver().resolve_all();
-    self.llvm.initModule(&path0);
+    self.llvm.initModule(path);
     self.createProtos();
     //init_globals(this);
     
@@ -315,7 +224,7 @@ impl Compiler{
         self.genCode(m);
     }
     
-    let name = getName(path0.get());
+    let name = getName(path);
     let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
@@ -329,7 +238,6 @@ impl Compiler{
       print("writing {}\n", outFile_cstr);
     }
     Drop::drop(outFile_cstr);
-    Drop::drop(path0);
     self.cleanup();
     return outFile;
   }
@@ -513,11 +421,73 @@ impl Compiler{
     return rt.type.clone();
   }
 
-  func compile_single(src_dir: String, out_dir: String, file: str, args: str){
-    let ctx = Context::new(src_dir, out_dir);
+  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
+    create_dir(out_dir);
+    let cmd = "".str();
+    if(is_shared){
+      cmd.append("clang-16 -shared -o ");
+    }else{
+      cmd.append("ar rcs ");
+    }
+    let path = format("{}/{}", out_dir, name);
+    cmd.append(&path);
+    cmd.append(" ");
+    for(let i = 0;i < compiled.len();++i){
+      let file = compiled.get_ptr(i);
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      print("build library {}\n", path);
+    }else{
+      panic("link failed '{}'", cmd_s.get());
+    }
+    return path;
+  }
+
+  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
+    if(exist(name)){
+      let name_c: CStr = name.cstr();
+      remove(name_c.ptr());
+    }
+    let path = format("{}/{}", out_dir, name);
+    create_dir(out_dir);
+    let cmd = "clang-16 ".str();
+    cmd.append("-o ");
+    cmd.append(&path);
+    cmd.append(" ");
+    for(let i = 0;i < compiled.len();++i){
+      let obj_file = compiled.get_ptr(i);
+      cmd.append(obj_file.str());
+      cmd.append(" ");
+    }
+    cmd.append(args);
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      //run if linked
+    }else{
+      panic("link failed '{}'", cmd_s);
+    }
+    return path;
+  }
+
+  func run(path: String){
+    let path_c: CStr = path.cstr();
+    if(system(path_c.ptr()) != 0){
+      panic("error while running {}", path_c);
+    }
+  }
+
+  func compile_single(src_dir: str, out_dir: str, file: str, args: str){
+    let ctx = Context::new(src_dir.str(), out_dir.str());
     let cmp = Compiler::new(ctx);
-    cmp.compile(file.cstr());
-    cmp.link_run(bin_name(file).str(), args);
+    let compiled = List<String>::new();
+    let obj = cmp.compile(file);
+    compiled.add(obj);
+    let path = link(&compiled, out_dir, bin_name(file).str(), args);
+    run(path);
     Drop::drop(cmp);
   }
 
@@ -531,12 +501,16 @@ impl Compiler{
       if(is_dir(file.str())) continue;
       let ctx = Context::new(root.str(), out_dir.str());
       let cmp = Compiler::new(ctx);
-      let obj = cmp.compile(file.cstr());
+      let obj = cmp.compile(file.str());
       Drop::drop(cmp);
       compiled.add(obj);
     }
-    if let LinkType::Static(lib_name) = (&lt){
-      Compiler::build_library2(&compiled, lib_name, out_dir, false);
+    if let LinkType::Binary(bin_name) = (&lt){
+      let path = link(&compiled, out_dir, bin_name, args);
+      Compiler::run(path);
+    }
+    else if let LinkType::Static(lib_name) = (&lt){
+      Compiler::build_library(&compiled, lib_name, out_dir, false);
     }else{
       panic("compile_dir");
     }
@@ -545,6 +519,7 @@ impl Compiler{
 }//Compiler
 
 enum LinkType{
+  Binary(name: str),
   Static(name: str),
   Dynamic
 }

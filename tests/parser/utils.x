@@ -157,7 +157,7 @@ func is_struct(type: Type*): bool{
 }
 
 func is_main(m: Method*): bool{
-  return m.name.eq("main") && (m.params.empty() || m.params.len()==2);
+  return m.name.eq("main") && (m.params.empty() || m.params.len() == 2);
 }
 
 func mangleType(type: Type*): String{

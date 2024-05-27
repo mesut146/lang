@@ -1565,7 +1565,7 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
     }
     if (is_drop_call(mc)) {
         auto arg = resolve(mc->args.at(0));
-        if (arg.type.isPointer() && arg.type.scope && arg.type.scope->isPointer()) {
+        if (arg.type.isPointer()) {
             return RType(Type("void"));
         }
         DropHelper helper(this);

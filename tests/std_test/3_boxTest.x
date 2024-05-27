@@ -34,5 +34,5 @@ func main(){
   assert cp.get().a == 7;
   
   let b3 = LinkedList::B{Box::new(LinkedList::A{11})};
-  print("boxText done\n");
+  print("box_text done\n");
 }

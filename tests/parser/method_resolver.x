@@ -247,14 +247,14 @@ impl MethodResolver{
       let name = &sig.name;
       for (let i = 0;i < self.r.unit.items.len();++i) {
         let item: Item* = self.r.unit.items.get_ptr(i);
-        if let Item::Method(m*)=(item){
+        if let Item::Method(m*) = (item){
             if (m.name.eq(name)) {
                 let desc = Desc{kind: RtKind::Method,
                     path: m.path.clone(),
                     idx: i};
                 list.add(Signature::new(m, desc));
             }
-        } else if let Item::Extern(arr*)=(item){
+        } else if let Item::Extern(arr*) = (item){
             for (let j = 0;j < arr.len();++j) {
                 let m = arr.get_ptr(j);
                 if (m.name.eq(name)) {
@@ -331,7 +331,7 @@ impl MethodResolver{
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
-        if(mc.print().eq("Drop::drop(f)")){
+        if(mc.print().eq("free(self.ptr as i8*)") && expr.id == 511){
             let x = 10;
         }
         let list = self.collect(sig);
@@ -535,18 +535,20 @@ impl MethodResolver{
                 let tmp = self.r.visit_type(&scp_rt.type);
                 scp_rt = &tmp;
             }
-            let decl = self.r.get_decl(scp_rt).unwrap();
-            if(!decl.is_generic){
-                let scope_args = scope.get_args();
-                for (let i = 0; i < scope_args.size(); ++i) {
-                    let tp_str = ty.get_args().get_ptr(i).print();
-                    let scope_args_str = scope_args.get_ptr(i).print();
-                    if (!scope_args_str.eq(&tp_str)){
-                        return SigResult::Err{"not same impl".str()};
+            else if(sig.scope.get().is_trait()){
+            }else{
+                let decl = self.r.get_decl(scp_rt).unwrap();
+                if(!decl.is_generic){
+                    let scope_args = scope.get_args();
+                    for (let i = 0; i < scope_args.size(); ++i) {
+                        let tp_str = ty.get_args().get_ptr(i).print();
+                        let scope_args_str = scope_args.get_ptr(i).print();
+                        if (!scope_args_str.eq(&tp_str)){
+                            return SigResult::Err{"not same impl".str()};
+                        }
                     }
                 }
             }
-
         }
         //check if args are compatible with non generic params
         return self.check_args(sig, sig2);

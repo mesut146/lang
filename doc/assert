@@ -1,0 +1,5 @@
+assert(x: bool);
+assert(x: bool, msg: str);
+
+assert_eq(x: T, y: T);
+assert_eq(x: T, y: T, msg: str);

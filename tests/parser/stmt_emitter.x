@@ -235,12 +235,13 @@ impl Compiler{
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get_ptr(i);
         let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
+        let type = &self.get_resolver().visit(f).type;
         if(doesAlloc(&f.rhs, self.get_resolver())){
           //self allocated
           self.visit(&f.rhs);
+          self.llvm.di.get().dbg_var(&f.name, type, f.line, self);
           continue;
         }
-        let type = &self.get_resolver().visit(f).type;
         if(is_struct(type)){
           let val = self.visit(&f.rhs);
           if(Value_isPointerTy(val)){

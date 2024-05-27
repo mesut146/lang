@@ -37,12 +37,6 @@ impl str{
       return self.buf[i];
     }
 
-    func check(self, pos: i32){
-      if(pos < 0 || pos >= self.len()) {
-        panic("str::check {} of idx {}", self, pos);
-      }
-    }
-
     func starts_with(self, s: str): bool{
       return self.indexOf(s, 0) == 0;
     }
@@ -73,6 +67,7 @@ impl str{
 
     func indexOf(self, s: str, off: i32): i32{
       if(off < 0) panic("str::indexof off<0, {}", off);
+      if((s.len() - off) > self.len()) return -1;
       //if(off == self.len()) return -1;
       //self.check(off);
       let i = off;
@@ -124,14 +119,22 @@ impl str{
       return self.substr(start, self.len());
     }
 
-    func substr(self, start: i32, end: i32): str{
-      if(start > self.len()) panic("start index out of bounds {} of {}", start, self.len());
-      if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
-      assert start <= end;
-      if(start == end){
-        let arr = [0u8];
-        return str{arr[0..0]};
+    func in_index(self, pos: i64): bool{
+      return pos >= 0 && pos < self.len();
+    }
+    
+    func check(self, pos: i64){
+      if(pos >= 0 && pos < self.len()){
+        return;
       }
+      panic("index {} out of bounds ({}, {})", pos, 0, self.len());
+    }
+
+    //start >= 0 & end < len(), exclusive 
+    func substr(self, start: i32, end: i32): str{
+      if(start < 0) panic("start index out of bounds {}", start);
+      if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
+      if(start >= end) panic("range is invalid {}, {}", start, end);
       return str{self.buf[start..end]};
     }
     

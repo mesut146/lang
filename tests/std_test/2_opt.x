@@ -11,5 +11,5 @@ func main(){
   let o3 = Option::new(&num);
   assert *o3.unwrap() == 111;
 
-  print("optionalTest done\n");
+  print("optional_test done\n");
 }

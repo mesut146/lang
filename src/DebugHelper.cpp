@@ -14,19 +14,21 @@ void Compiler::init_dbg(const std::string &path) {
 
 void Compiler::loc(Node *e) {
     if (!Config::debug) return;
-    if (!e) {
+    if (e == nullptr) {
         Builder->SetCurrentDebugLocation(nullptr);
         return;
     }
-    if (e->line != 0) {
-        loc(e->line, 0);
-        return;
+    if (e->line == 0) {
+        error(std::string("loc line 0, ") + e->print());
     }
-    error(std::string("loc line 0, ") + e->print());
+    loc(e->line, 0);
 }
 
 void Compiler::loc(int line, int pos) {
     if (!Config::debug) return;
+    if (line == 0) {
+        throw std::runtime_error("dbg loc line 0");
+    }
     llvm::DIScope *scope;
     if (di.sp) {
         scope = di.sp;

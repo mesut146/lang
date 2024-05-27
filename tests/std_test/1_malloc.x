@@ -4,7 +4,7 @@ func main(){
    *ptr::get(arr, 1) = 5;
    assert *ptr::get(arr, 0) == 3 && *ptr::get(arr, 1) == 5;
    mallocTest2();
-   print("mallocTest done\n");
+   print("malloc_test done\n");
 }
 
 class Big{

@@ -136,11 +136,15 @@ impl String{
       while(true){
         let i = self.find(s1, last);
         if(i.is_some()){
-          res.append(self.str().substr(last, i.unwrap()));
+          if(last < i.unwrap()){
+            res.append(self.str().substr(last, i.unwrap()));
+          }
           res.append(s2);
           last = i.unwrap() + s1.len();
         }else{
-          res.append(self.str().substr(last));
+          if(last < self.len()){
+            res.append(self.str().substr(last));
+          }
           break;
         }
       }
@@ -221,9 +225,9 @@ enum CStr{
 }
 
 impl CStr{
-  func new(s: str): CStr{
+  /*func new(s: str): CStr{
     return CStr::Lit{s};
-  }
+  }*/
   func new(s: String): CStr{
     if(!s.empty()){
       let last = *s.arr.last();

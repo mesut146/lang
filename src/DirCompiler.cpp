@@ -103,6 +103,7 @@ void DirCompiler::link(const std::string &name0, const std::string &args) {
         print(cmd + "\n");
         throw std::runtime_error("link failed");
     }
+    print("writing " + binary_path);
 }
 
 void DirCompiler::run() {

@@ -268,32 +268,48 @@ impl i64{
     return x;  
   }
   func parse_hex(s: str): i64{
+    let neg = false;
+    let len = s.len();
+    let pos = 0;
+    if(s.get(0) as u32 == '-'){
+      ++pos;
+      neg = true;
+      --len;
+    }
+    if(len <= 2){
+      panic("hex is too short {}", s);
+    }
+    if(s.get(pos) != '0' || s.get(pos + 1) != 'x'){
+      panic("invalid hex {}", s);
+    }
     let x = 0_i64;
-    let pos = 2;
-    while(pos<s.len()){
+    pos += 2;
+    while(pos < s.len()){
       let ch = s.get(pos) as i32;
       let y = 0;
-      if(ch>='0'&&ch<='9') y = ch - ('0' as i32);
-      else if(ch>='a'&&ch<='z') y=ch-('a' as i32)+10;
-      else y = ch-'A'+10;
-      x = 16*x+y;
+      if(ch >= '0' && ch <= '9') y = ch - ('0' as i32);
+      else if(ch >= 'a' && ch <= 'f') y = ch - ('a' as i32) + 10;
+      else if(ch >= 'A' && ch <= 'F') y = ch - ('A' as i32) + 10;
+      else panic("invalid hex char: {}({}) in {}", ch as i8, ch, s);
+      x = 16 * x + y;
       ++pos;
+    }
+    if(neg){
+      return -x;
     }
     return x;
   }
   func print(x: i64): String{
-    let len = i64::str_size(x);
-    let list = List<u8>::new(len + 1);
-    list.set(len, 0u8);//null terminate
+    let len = i64::str_size(x, 10);
+    let list = List<u8>::new(len);
     list.count = len;
-    let end_idx = len - 1;
     let start_idx = 0;
     if(x < 0){
       x = -x;
       list.set(0, '-' as u8);
       ++start_idx;
     }
-    for(let i = end_idx;i >= start_idx;--i){
+    for(let i = len - 1;i >= start_idx;--i){
       let c = x % 10;
       list.set(i, (c + ('0' as i32)) as u8);
       x = x / 10;
@@ -301,7 +317,7 @@ impl i64{
     return String{list};
   }
   
-  func str_size(x: i64): i32{
+  func str_size(x: i64, base: i32): i32{
     if(x == 0) return 1;
     let res = 0;
     if(x < 0){
@@ -309,10 +325,34 @@ impl i64{
       res += 1;
     }
     while(x > 0){
-      x /= 10;
+      x /= base;
       res += 1;
     }
     return res;
+  }
+
+  func print_hex(x: i64): String{
+    let len = i64::str_size(x, 16) + 2;
+    let list = List<u8>::new(len);
+    list.count = len;
+    let start_idx = 0;
+    if(x < 0){
+      x = -x;
+      list.set(0, '-' as u8);
+      ++start_idx;
+    }
+    list.set(start_idx, '0' as u8);
+    ++start_idx;
+    list.set(start_idx, 'x' as u8);
+    ++start_idx;
+    let digits: str = "0123456789abcdef";
+    for(let i = len - 1;i >= start_idx;--i){
+      let rem = x % 16;
+      let c = digits.get(rem as i32);
+      list.set(i, c);
+      x = x / 16;
+    }
+    return String{list};
   }
 }
 trait Compare{

@@ -1,17 +1,19 @@
 import std/libc
 
-func open_checked(path: CStr*, mode: CStr*): FILE*{
-  let f = fopen(path.ptr(), mode.ptr());
+func open_checked(path: str, mode: str): FILE*{
+  let path_c = CStr::from_slice(path);
+  let mode_c = CStr::from_slice(mode);
+  let f = fopen(path_c.ptr(), mode_c.ptr());
+  path_c.drop();
+  mode_c.drop();
   if(!is_valid(f)){
     panic("no such file {}", path);
   }
   return f;
 }
 
-func read_bytes(path: CStr*): List<u8>{
-  let mode = CStr::new("r");
-  let f = open_checked(path, &mode);
-  Drop::drop(mode);
+func read_bytes(path: str): List<u8>{
+  let f = open_checked(path, "r");
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   fseek(f, 0, SEEK_SET());
@@ -26,10 +28,8 @@ func read_bytes(path: CStr*): List<u8>{
   return res;
 }
 
-func read_bytes_i8(path: CStr*): List<i8>{
-  let mode = CStr::new("r");
-  let f = open_checked(path, &mode);
-  Drop::drop(mode);
+func read_bytes_i8(path: str): List<i8>{
+  let f = open_checked(path, "r");
   fseek(f, 0, SEEK_END());
   let size = ftell(f);
   fseek(f, 0, SEEK_SET());
@@ -44,27 +44,18 @@ func read_bytes_i8(path: CStr*): List<i8>{
   return res;
 }
 
-func read_string(path: CStr*): String{
+func read_string(path: str): String{
   let data: List<u8> = read_bytes(path);
   return String::new(data);
 }
 
-func read_string(path: String): String{
-  let path_c = CStr::new(path);
-  let data: List<u8> = read_bytes(&path_c);
-  Drop::drop(path_c);
-  return String::new(data);
-}
-
-func write_bytes(data: [u8], path: CStr*){
-  let mode = CStr::new("w");
-  let f = open_checked(path, &mode);
+func write_bytes(data: [u8], path: str){
+  let f = open_checked(path, "w");
   let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
   print("wrote {} of {}\n", cnt, data.len());
   fclose(f);
-  Drop::drop(mode);
   if(cnt != data.len()){
-    panic("didn!t write all");
+    panic("didn't write all");
   }
 }
 
@@ -79,22 +70,6 @@ func list(path: str): List<String>{
     if(ep as u64 == 0) break;
     let entry = str::new(ep.d_name[0..ep.len()]);
     list.add(entry.str());
-  }
-  closedir(dp);
-  return list;
-}
-
-func listc(path: CStr*): List<CStr>{
-  let list = List<CStr>::new();
-  let dp = opendir(path.ptr());
-  if(dp as u64 == 0){
-    panic("no such dir {}", path);
-  }
-  while(true){
-    let ep = readdir(dp);
-    if(ep as u64 == 0) break;
-    let name: [u8] = ep.d_name[0..ep.len() + 1];//+1 for \0
-    list.add(CStr::new(name));
   }
   closedir(dp);
   return list;
@@ -147,21 +122,24 @@ func create_dir(path: str){
   }
   let path_c = CStr::from_slice(path);
   let rc = mkdir(path_c.ptr(), /*0777*/ /*511*/ 511);
+  Drop::drop(path_c);
   if(rc != 0){
     print("code='{}'\n", rc);
     panic("failed to create dir {}, code={}", path, &rc);
   }
 }
 
-func resolve(path: CStr*): CStr{
+func resolve(path: str): String{
   let buf = [0i8; 256];
-  let ptr = realpath(path.ptr(), &buf[0] as i8*);
+  let path_c = CStr::from_slice(path);
+  let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
+  Drop::drop(path_c);
   if(ptr as u64 == 0){
     panic("resolving path is null '{}'\n", path);
   }
   let len = strlen(buf[0..256]);
-  let slice = buf[0..len + 1];
-  return CStr::new(slice);
+  let slice = buf[0..len];
+  return String::new(slice);
 }
 
 struct Path{
@@ -171,6 +149,9 @@ struct Path{
 impl Path{
   func new(path: String): Path{
     return Path{path: path};
+  }
+  func new(path: str): Path{
+    return Path{path: path.str()};
   }
   func ext(self): str{
     let i = self.path.str().lastIndexOf(".");

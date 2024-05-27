@@ -212,6 +212,8 @@ impl Compiler{
       let arr_ty = self.getType(node.arr.get());
       if(arr_ty.is_slice()){
         arr = CreateLoad(getPtr(), arr);
+      }else if(arr_ty.is_pointer()){
+        arr = CreateLoad(getPtr(), arr);
       }
       let elem_ty = arr_ty.elem();
       let i32_ty = Type::new("i32");

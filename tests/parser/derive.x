@@ -131,7 +131,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     }
     m.body = Option::new(body);
     imp.methods.add(m);
-    print("{}\n", imp);
+    //print("{}\n", imp);
     return imp;
 }
 

@@ -28,9 +28,10 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(path: CStr*, debug: bool): DebugInfo{
+    func new(path: str, debug: bool): DebugInfo{
         init_dbg();
-        let file = createFile(path.ptr(), ".".ptr());
+        let path_c = CStr::from_slice(path);
+        let file = createFile(path_c.ptr(), CStr::from_slice(".").ptr());
         let cu = createCompileUnit(file);
         return DebugInfo{cu: cu, file: file,
              sp: Option<DISubprogram*>::new(),

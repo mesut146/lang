@@ -30,7 +30,7 @@ impl i8{
 
 impl Lexer{
   func from_path(path: String): Lexer{
-    let s = read_string(path.clone());
+    let s = read_string(path.str());
     return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
   }
   func from_string(path: String, buf: String): Lexer{
@@ -52,7 +52,7 @@ impl Lexer{
   }
   
   func has(self): bool{
-    return self.pos < self.buf.len();
+    return self.has(1);
   } 
 
   func has(self, cnt: i32): bool{
@@ -286,6 +286,9 @@ impl Lexer{
     if(c.is_letter() || c == '_'){
       return self.read_ident();
     }
+    if(self.path.eq("../tests/std_test/i64_test.x") && self.line == 37){
+      let aa = 10;
+    }
     if(c.is_digit()){
       return self.read_number();
     }
@@ -336,10 +339,13 @@ impl Lexer{
   
   //[0-9] ('_'? [0-9])* ('.' [0-9]+)? ('_' suffix)?
   func read_number(self):Token {
-    let dot = false;
     let start = self.pos;
-    if(self.peek() == '0' && self.peek(1) == 'x'){
-      self.pos+=2;
+    let off = 0;
+    if(self.peek() == '-'){
+      self.pos += 1;
+    }
+    if(self.peek(0) == '0' && self.peek(1) == 'x'){
+      self.pos += 2;
       while(true){
         let c = self.peek();
         if(!c.is_hex()) break;
@@ -358,6 +364,7 @@ impl Lexer{
         self.pos+=2;
       }else break;
     }
+    let dot = false;
     let c2 = self.peek(1);
     if(self.peek() == '.' && c2.is_digit()){
       dot = true;
@@ -369,7 +376,7 @@ impl Lexer{
       }
     }
     let mustSuffix = false;
-    if(self.peek()=='_'){
+    if(self.peek() == '_'){
       self.pos+=1;
       mustSuffix = true; 
     }
@@ -390,7 +397,7 @@ impl Lexer{
   }
 
   func get_suffix(): [str; 10]{
-    return ["i8", "i16", "i32", "i64","u8","u16","u32","u64", "f32", "f64"];
+    return ["i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
   }
   
 }

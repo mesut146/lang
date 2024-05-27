@@ -665,7 +665,7 @@ impl Parser{
     let arr = Lexer::get_suffix();
     let val = self.popv();
     let n = self.node();
-    for (let i=0;i<arr.len();++i) {
+    for (let i = 0;i < arr.len();++i) {
       let sf = arr[i];
       let pos = val.str().lastIndexOf(sf);
       let support_suffix = (kind is LitKind::INT || kind is LitKind::FLOAT || kind is LitKind::CHAR);
