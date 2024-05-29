@@ -7,6 +7,7 @@ import parser/debug_helper
 import parser/compiler_helper
 import parser/utils
 import parser/printer
+import parser/ownership
 import std/map
 
 //expr------------------------------------------------------
@@ -623,7 +624,7 @@ impl Compiler{
               bits = self.getSize(node.suffix.get()) as i32;
           }
           let s = node.val.clone().replace("_", "");
-          if (node.val.str().starts_with("0x")){
+          if (node.val.str().starts_with("0x") || node.val.str().starts_with("-0x")){
             let val = i64::parse_hex(s.str());
             return makeInt(val, bits);
           }

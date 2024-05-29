@@ -71,10 +71,13 @@ impl Lexer{
   func line_comment(self): Token{
     let start = self.pos;
     self.pos += 2;
-    let c = self.peek();
-    while (c != '\n' && c != '\0') {
+    while(self.has()){
+      let c = self.peek();
+      if (c != '\n' && c != '\0') {
         self.pos += 1;
-        c = self.peek();
+      }else{
+        break;
+      }
     }
     return Token::new(TokenType::COMMENT, self.str(start, self.pos));
   }

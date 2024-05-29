@@ -15,6 +15,9 @@ impl<T> List<T>{
   }
 
   func get_malloc(size: i64): T*{
+    /*if(size <= 0){
+      panic("invalid size {}", size);
+    }*/
     let ptr = malloc<T>(size);
     if(ptr as u64 == 0){
       printf("size=%lld\n", size);

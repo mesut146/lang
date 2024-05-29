@@ -7,6 +7,7 @@ import parser/debug_helper
 import parser/compiler_helper
 import parser/utils
 import parser/printer
+import parser/ownership
 import std/map
 
 //stmt
@@ -184,33 +185,31 @@ impl Compiler{
       let cond = self.branch(&node.e);
       let line = node.e.line;
       let then_name = format("if_then_{}", line);
+      let else_name = format("if_else_{}", line);
       let next_name = format("if_next_{}", line);
       let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-      let elsebb = Option<BasicBlock*>::new();
+      let elsebb = create_bb_named(CStr::new(else_name).ptr());
       let next = create_bb_named(CStr::new(next_name).ptr());
-      if(node.els.is_some()){
-        let else_name = format("if_else_{}", line);
-        elsebb = Option::new(create_bb_named(CStr::new(else_name).ptr()));
-        CreateCondBr(cond, then, elsebb.unwrap());
-      }else{
-        CreateCondBr(cond, then, next);
-      }
+      CreateCondBr(cond, then, elsebb);
       SetInsertPoint(then);
       self.visit(node.then.get());
       let exit_then = Exit::get_exit_type(node.then.get());
       if(!exit_then.is_jump()){
         CreateBr(next);
       }
+      self.set_and_insert(elsebb);
       if(node.els.is_some()){
-        self.set_and_insert(elsebb.unwrap());
         self.visit(node.els.get().get());
         let exit_else = Exit::get_exit_type(node.els.get().get());
         if(!exit_else.is_jump()){
           CreateBr(next);
         }
+      }else{
+        CreateBr(next);
       }
       self.set_and_insert(next);
     }
+
     func visit_assert(self, expr: Expr*){
       let m = self.curMethod.unwrap();
       let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
@@ -231,6 +230,7 @@ impl Compiler{
       self.call_exit(1);
       self.set_and_insert(next);
     }
+
     func visit_var(self, node: VarExpr*){
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get_ptr(i);

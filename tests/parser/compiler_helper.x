@@ -6,6 +6,7 @@ import parser/debug_helper
 import parser/utils
 import parser/printer
 import parser/expr_emitter
+import parser/ownership
 import std/map
 import std/libc
 

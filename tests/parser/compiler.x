@@ -200,7 +200,8 @@ impl Compiler{
     if(self.ctx.verbose){
       print("compiling {}\n", path);
     }
-    self.resolver = Option::new(self.ctx.create_resolver(path));//Resolver*
+    let resolv = self.ctx.create_resolver(path);
+    self.resolver = Option::new(resolv);//Resolver*
     if (has_main(self.unit())) {
       self.main_file = Option::new(path.str());
       if (!self.ctx.single_mode) {//compile last
@@ -412,8 +413,8 @@ impl Compiler{
   }
 
   func set_and_insert(self, bb: BasicBlock*){
-    SetInsertPoint(bb);
     func_insert(self.cur_func(), bb);
+    SetInsertPoint(bb);
   }
 
   func getType(self, e: Expr*): Type{
@@ -492,6 +493,7 @@ impl Compiler{
   }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, args: str, lt: LinkType){
+    create_dir(out_dir);
     let list: List<String> = list(src_dir);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
@@ -504,6 +506,9 @@ impl Compiler{
       let obj = cmp.compile(file.str());
       Drop::drop(cmp);
       compiled.add(obj);
+      if(name.eq("stmt_emitter.x")){
+        return;
+      }
     }
     if let LinkType::Binary(bin_name) = (&lt){
       let path = link(&compiled, out_dir, bin_name, args);

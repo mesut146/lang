@@ -137,8 +137,10 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
         return res;
     }
     let str = type.print();
-    if (map.contains(&str)) {
-        return map.get_ptr(&str).unwrap().clone();
+    let opt = map.get_ptr(&str);
+    Drop::drop(str);
+    if (opt.is_some()) {
+        return opt.unwrap().clone();
     }
     let smp = type.as_simple();
     let res = Simple::new(smp.name.clone());
@@ -326,6 +328,9 @@ impl Exit{
             return Exit::new(ExitType::NONE);
         }
         if let Stmt::Block(block*)=(stmt){
+            if(block.list.empty()){
+                return Exit::new(ExitType::NONE);
+            }
             let last = block.list.last();
             return get_exit_type(last);
         }

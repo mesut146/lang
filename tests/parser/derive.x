@@ -101,8 +101,10 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 if(j > 0){
                     then.list.add(parse_stmt(format("f.print(\", \");"), unit));
                 }
-                //f.print(fd.name)
-                then.list.add(parse_stmt(format("f.print(\"{}\");", fd.name), unit));
+                //f.print("fd.name: ")
+                then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
+                //{fd.name}.debug(f);
+                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit));
             }
             then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
 
@@ -124,6 +126,8 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             if(i > 0){
                 body.list.add(parse_stmt(format("f.print(\", \");"), unit));
             }
+            //f.print("<fd.name>: ");
+            body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
             //self.{fd.name}.debug(f);
             body.list.add(parse_stmt(format("Debug::debug(self.{}, f);", fd.name), unit));
         }

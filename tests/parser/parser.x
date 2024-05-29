@@ -9,21 +9,19 @@ class Parser{
   path: String;
   tokens: List<Token>;
   pos: i32;
-  is_marked: bool;
-  mark: i32;
   unit: Option<Unit*>;
 }
 
 impl Parser{
   func from_path(path: String): Parser{
-    let res = Parser{path.clone(), List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
+    let res = Parser{path.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
     let lexer = Lexer::from_path(path);
     res.fill(lexer);
     return res;
   }
   func from_string(buf: String): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf.clone());
-    let res = Parser{lexer.path.clone(), List<Token>::new(), 0, false, 0, Option<Unit*>::new()};
+    let res = Parser{lexer.path.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
     res.fill(lexer);
     return res;
   }
@@ -310,7 +308,7 @@ impl Parser{
     }
     
     func parse_field(self, semi: bool): FieldDecl{
-      let line=self.peek().line;
+      let line = self.peek().line;
       let name = self.popv();
       self.consume(TokenType::COLON);
       let type=self.parse_type();
@@ -582,7 +580,13 @@ impl Parser{
     }
 
     func node(self): Node{
-      return Node::new(++self.unit.unwrap().last_id, self.peek().line);
+      let line = 0;
+      if(self.has()){
+        line = self.peek().line;
+      }else{
+        line = self.tokens.last().line;
+      }
+      return Node::new(++self.unit.unwrap().last_id, line);
     }
 }
 
@@ -869,7 +873,7 @@ impl Parser{
   func expr_level(self, prec: i32): Expr{
     if(prec == 11) return self.as_is();
     let e = self.expr_level(prec + 1);
-    while(Parser::get_prec(&self.peek().type) == prec){
+    while(self.has() && Parser::get_prec(&self.peek().type) == prec){
       let op = self.popv();
       if(op.eq(">") && self.is(TokenType::GT)){
         self.pop();
@@ -941,7 +945,7 @@ impl Parser{
   }
   func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool): Expr{
     let n = self.node();
-    return Expr::Call{.n,Call{Ptr::new(scp), name, List<Type>::new(), args, is_static}};
+    return Expr::Call{.n, Call{Ptr::new(scp), name, List<Type>::new(), args, is_static}};
   }
   func newCall(self, scp: Expr, name: String, args: List<Expr>, is_static: bool, ta: List<Type>): Expr{
     let n = self.node();

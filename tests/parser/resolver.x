@@ -8,6 +8,7 @@ import parser/utils
 import parser/token
 import parser/copier
 import parser/derive
+import parser/ownership
 import std/map
 import std/libc
 
@@ -16,7 +17,7 @@ func verbose_stmt(): bool{
 }
 
 struct Context{
-  map: Map<String, Resolver>;
+  map: Map<String, Box<Resolver>>;
   root: String;
   prelude: List<String>;
   out_dir: String;
@@ -25,12 +26,12 @@ struct Context{
 }
 impl Context{
   func new(src_dir: String, out_dir: String): Context{
-    let arr = ["box", "list", "str", "string", "option", "ops"];
+    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
-    return Context{map: Map<String, Resolver>::new(),
+    return Context{map: Map<String, Box<Resolver>>::new(),
        root: src_dir,
        prelude: pre,
        out_dir: out_dir,
@@ -96,6 +97,7 @@ struct Resolver{
   generated_decl: List<Box<Decl>>;
   generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
+  own: Option<Own>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -109,6 +111,7 @@ impl Drop for Resolver{
     self.used_types.drop();
     self.generated_decl.drop();
     self.generated_impl.drop();
+    self.own.drop();
   }
 }
 
@@ -247,11 +250,11 @@ impl Context{
   func create_resolver(self, path: String*): Resolver*{
     let res = self.map.get_ptr(path);
     if(res.is_some()){
-      return res.unwrap();
+      return res.unwrap().get();
     }
     let r = Resolver::new(path.clone(), self);
-    let pair = self.map.add(path.clone(), r);
-    return &pair.b;
+    let pair = self.map.add(path.clone(), Box::new(r));
+    return pair.b.get();
   }
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
@@ -347,7 +350,8 @@ impl Resolver{
       used_types: List<RType>::new(),
       generated_decl: List<Box<Decl>>::new(),
       generated_impl: List<Impl>::new(),
-      format_map: Map<i32, FormatInfo>::new()};
+      format_map: Map<i32, FormatInfo>::new(),
+      own: Option<Own>::new()};
     return res;
   }
 
@@ -701,20 +705,20 @@ impl Resolver{
     }
   }
 
-  func is_cyclic(self, type0: Type*, target: Type*): bool{
+  func is_cyclic(self, type: Type*, target: Type*): bool{
     //print("is_cyclic {} -> {}\n", type0, target);
-    let rt = self.visit_type(type0); 
-    let type = &rt.type;
     if (type.is_pointer()) return false;
     if (type.is_array()) {
         return self.is_cyclic(type.elem(), target);
     }
     if (type.is_slice()) return false;
-    if (!is_struct(type)) return false;
-    if (type.print().eq(target.print().str())) {
+    if (type.eq(target.print().str())) {
         return true;
     }
+    let rt = self.visit_type(type);
+    if (!is_struct(&rt.type)) return false;
     let decl = self.get_decl(&rt).unwrap();
+    Drop::drop(rt);
     if (decl.base.is_some()) {
       if(self.is_cyclic(decl.base.get(), target)){
         return true;
@@ -814,6 +818,7 @@ impl Resolver{
       return;
     }
     self.curMethod = Option::new(node);
+    self.own = Option::new(Own::new(node));
     let res = self.visit_type(&node.type);
     //res.desc = Desc::new_method(node, self);
     self.newScope();
@@ -838,6 +843,8 @@ impl Resolver{
       }
     }
     self.dropScope();
+    self.own.drop();
+    self.own = Option<Own>::new();
     self.curMethod = Option<Method*>::None;
   }
 
@@ -904,18 +911,26 @@ impl Resolver{
   func visit_type(self, node: Type*): RType{
     let id = Node::new(0);
     let expr = Expr::Type{.id, node.clone()};
-    return self.visit_type(&expr, node);
+    let res = self.visit_type(&expr, node);
+    Drop::drop(expr);
+    return res;
   }
 
   func visit_type(self, expr: Expr*, node: Type*): RType{
     let str = node.print();
-    let cached = self.typeMap.get_ptr(&str);
+    let res = self.visit_type_str(expr, node, &str);
+    Drop::drop(str);
+    return res;
+  }
+
+  func visit_type_str(self, expr: Expr*, node: Type*, str: String*): RType{
+    let cached = self.typeMap.get_ptr(str);
     if(cached.is_some()){
       return cached.unwrap().clone();
     }
     if(node.is_prim() || node.is_void()){
       let res = RType::new(str.str());
-      self.addType(str, res.clone());
+      self.addType(str.clone(), res.clone());
       return res;
     }
     if(node.is_pointer()){
@@ -949,7 +964,7 @@ impl Resolver{
       findVariant(decl, &simple.name);
       let ds = decl.type.print();
       let res = self.getTypeCached(&ds);
-      self.addType(str, res.clone());
+      self.addType(str.clone(), res.clone());
       return res;
     }
     let res = self.visit_type2(expr, simple, str);
@@ -971,7 +986,7 @@ impl Resolver{
     return tmp;
   }
 
-  func visit_type2(self, expr: Expr*, simple: Simple*, str: String): RType{
+  func visit_type2(self, expr: Expr*, simple: Simple*, str: String*): RType{
     if(str.eq("List<u8>")){
       let aa = 10;
     }
@@ -991,7 +1006,7 @@ impl Resolver{
         //inferred later
         let res = RType::new(target.type.clone());
         res.desc = target_rt.desc.clone();
-        self.addType(str, res.clone());
+        self.addType(str.clone(), res.clone());
         return res;
     }
     if (simple.args.len() != target.type.get_args().len()) {
@@ -1002,7 +1017,7 @@ impl Resolver{
     let decl0 = copier.visit(target);
     let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
-    let res = self.getTypeCached(&str);
+    let res = self.getTypeCached(str);
     /*let smp = Simple::new(simple.name.clone());
     let args = &simple.args;
     for (let i = 0;i < args.len();++i) {
@@ -1013,7 +1028,7 @@ impl Resolver{
     res.desc = target_rt.desc.clone();
     res.desc.kind = RtKind::DeclGen;
     res.desc.path = self.unit.path.clone();
-    self.addType(str, res.clone());*/
+    self.addType(str.clone(), res.clone());*/
     return res;
   }
 
@@ -1084,6 +1099,7 @@ impl Resolver{
           }
       }*/
     }
+    arr.drop();
     return Option<RType>::None;
   }
   

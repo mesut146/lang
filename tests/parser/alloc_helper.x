@@ -167,7 +167,7 @@ impl AllocHelper{
     if(call.scope.is_some()){
       self.visit(call.scope.get());
     }
-    for(let i=0;i<call.args.len();++i){
+    for(let i = 0;i < call.args.len();++i){
       let arg = call.args.get_ptr(i);
       self.visit(arg);
     }
