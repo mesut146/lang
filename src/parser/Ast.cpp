@@ -153,9 +153,9 @@ std::string Literal::print() const {
     } else {
         s.append(val);
     }
-    if (suffix) {
+    /*if (suffix) {
         s.append(suffix->print());
-    }
+    }*/
     return s;
 }
 
@@ -398,15 +398,9 @@ std::string DoWhile::print() const {
     return "do" + body->print() + "\nwhile(" + expr->print() + ");";
 }
 
-std::string AssertStmt::print() const {
-    return "assert " + expr->print() + ";";
-}
 
 //accept------------------------------------
 
-std::any AssertStmt::accept(Visitor *v) {
-    return v->visitAssertStmt(this);
-}
 std::any BreakStmt::accept(Visitor *v) {
     return v->visitBreakStmt(this);
 }

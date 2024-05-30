@@ -18,11 +18,11 @@ func bug(){
 
 func lit(){
   let s1 = "hello world";
-  assert s1.len() == 11;
-  assert s1.get(1) == 'e';
-  assert s1.eq("hello world");
+  assert(s1.len() == 11);
+  assert(s1.get(1) == 'e');
+  assert(s1.eq("hello world"));
   //s1.buf[0] = 'H' as i8; //error mutate glob
-  assert s1.indexOf("ll", 0) == 2;
+  assert(s1.indexOf("ll", 0) == 2);
   let s2 = s1.substr(6, 11);
-  assert s2.eq("world");
+  assert(s2.eq("world"));
 }

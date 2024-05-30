@@ -300,10 +300,6 @@ impl Debug for Stmt{
       f.print("continue;");
     }else if let Stmt::Break = (self){
       f.print("break;");
-    }else if let Stmt::Assert(e*) = (self){
-      f.print("assert ");
-      e.debug(f);
-      f.print(";");
     }
     else{
       panic("Stmt::debug");
@@ -365,10 +361,10 @@ impl Debug for Literal{
     }else if(self.kind is LitKind::CHAR){
       f.print("'");
     }
-    if(self.suffix.is_some()){
+    /*if(self.suffix.is_some()){
       f.print("_");
       self.suffix.get().debug(f);
-    }
+    }*/
     Drop::drop(replaced);
   }
 }

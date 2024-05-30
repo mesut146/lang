@@ -145,13 +145,17 @@ func make_slice_type(): StructType*{
     let elems = make_vec();
     vec_push(elems, getPointerTo(getInt(8)));
     vec_push(elems, getInt(SLICE_LEN_BITS()));
-    return make_struct_ty2("__slice".ptr(), elems);
+    let res = make_struct_ty2("__slice".ptr(), elems);
+    //free(elems as i8*);
+    return res;
 }
 
 func make_string_type(sliceType: llvm_Type*): StructType*{
     let elems = make_vec();
     vec_push(elems, sliceType);
-    return make_struct_ty2("str".ptr(), elems);
+    let res = make_struct_ty2("str".ptr(), elems);
+    //free(elems as i8*);
+    return res;
 }
 
 func make_printf(): Function*{
@@ -160,6 +164,7 @@ func make_printf(): Function*{
     let ft = make_ft(getInt(32), args, true);
     let f = make_func(ft, ext(), "printf".ptr());
     setCallingConv(f);
+    //free(args as i8*);
     return f;
 }
 func make_fflush(): Function*{
@@ -168,14 +173,7 @@ func make_fflush(): Function*{
     let ft = make_ft(getInt(32), args, false);
     let f = make_func(ft, ext(), "fflush".ptr());
     setCallingConv(f);
-    return f;
-}
-func make_exit(): Function*{
-    let args = make_vec();
-    vec_push(args, getInt(32));
-    let ft = make_ft(getVoidTy(), args, false);
-    let f = make_func(ft, ext(), "exit".ptr());
-    setCallingConv(f);
+    //free(args as i8*);
     return f;
 }
 func make_malloc(): Function*{
@@ -184,6 +182,7 @@ func make_malloc(): Function*{
     let ft = make_ft(getPointerTo(getInt(8)), args, false);
     let f = make_func(ft, ext(), "malloc".ptr());
     setCallingConv(f);
+    //free(args as i8*);
     return f;
 }
 
@@ -307,6 +306,7 @@ impl Compiler{
       }
     }
     setBody(st, elems);
+    //free(elems as i8*);
     //Type_dump(st as llvm_Type*);
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*): StructType*{
@@ -316,7 +316,9 @@ impl Compiler{
       let ft = self.mapType(&fd.type);
       vec_push(elems, ft);
     }
-    return make_struct_ty2(name.clone().cstr().ptr(), elems);
+    let res = make_struct_ty2(name.clone().cstr().ptr(), elems);
+    //free(elems as i8*);
+    return res;
   }
 
   func make_proto(self, m: Method*){
@@ -345,7 +347,7 @@ impl Compiler{
       }
       vec_push(args, self_ty);
     }
-    for(let i=0;i<m.params.len();++i){
+    for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get_ptr(i);
       let pt = self.mapType(&prm.type);
       if(is_struct(&prm.type)){
@@ -373,6 +375,7 @@ impl Compiler{
       panic("already proto {}\n", mangled);
     }
     self.protos.get().funcMap.add(mangled, f);
+    free(args as i8*);
   }
 
   func getSize(self, type: Type*): i64{

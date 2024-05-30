@@ -467,8 +467,7 @@ enum Stmt{
     IfLet(e: IfLet),
     For(e: ForStmt),
     Continue,
-    Break,
-    Assert(e: Expr)
+    Break
 }
 
 impl Stmt{

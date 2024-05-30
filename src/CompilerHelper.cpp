@@ -313,13 +313,18 @@ bool Exit::is_panic() {
     if (if_kind && else_kind) return if_kind->is_panic() && else_kind->is_panic();
     return false;
 }
+bool Exit::is_exit_call() {
+    if (kind == ExitType::EXIT) return true;
+    if (if_kind && else_kind) return if_kind->is_exit_call() && else_kind->is_exit_call();
+    return false;
+}
 bool Exit::is_exit() {
-    if (kind == ExitType::PANIC || kind == ExitType::RETURN) return true;
+    if (kind == ExitType::PANIC || kind == ExitType::RETURN || kind == ExitType::EXIT) return true;
     if (if_kind && else_kind) return if_kind->is_exit() && else_kind->is_exit();
     return false;
 }
 bool Exit::is_jump() {
-    if (kind == ExitType::RETURN || kind == ExitType::CONTINE || kind == ExitType::BREAK || kind == ExitType::PANIC) return true;
+    if (kind == ExitType::RETURN || kind == ExitType::CONTINE || kind == ExitType::BREAK || kind == ExitType::PANIC || kind == ExitType::EXIT) return true;
     if (if_kind && else_kind) return if_kind->is_jump() && else_kind->is_jump();
     return false;
 }
@@ -334,6 +339,9 @@ Exit Exit::get_exit_type(Statement *stmt) {
         auto mc = dynamic_cast<MethodCall *>(expr->expr);
         if (mc && !mc->scope && mc->name == "panic") {
             return ExitType::PANIC;
+        }
+        if (mc && !mc->scope && mc->name == "exit") {
+            return ExitType::EXIT;
         }
         return ExitType::NONE;
     }
@@ -607,5 +615,6 @@ llvm::Value *Compiler::load_prim(Expression *expr) {
     if (pe) {
         return load_prim(pe->expr);
     }
+    //auto re = dynamic_cast<RefExpr *>(expr);
     resolv->err(expr, "load_prim");
 }

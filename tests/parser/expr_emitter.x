@@ -72,14 +72,6 @@ impl Compiler{
       let inner = self.visit(expr);
       return inner;
     }
-
-    func call_exit(self, code: i32){
-        let args = make_args();
-        args_push(args, makeInt(code, 32));
-        let exit_proto = self.protos.get().libc("exit");
-        CreateCall(exit_proto, args);
-        CreateUnreachable();
-      }
   
     func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
       let lhs_type = self.getType(lhs);
@@ -313,7 +305,6 @@ impl Compiler{
       if(Resolver::is_panic(mc)){
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
-        self.call_exit(1);
         return getVoidTy() as Value*;
       }
       if(Resolver::is_format(mc)){
@@ -322,6 +313,11 @@ impl Compiler{
         return self.visit(info.unwrap_mc.get());
         /*let ptr = self.get_alloc(expr);
         return ptr;*/
+      }
+      if(Resolver::is_assert(mc)){
+        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        self.visit_block(&info.block);
+        return getVoidTy() as Value*;
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
@@ -447,6 +443,9 @@ impl Compiler{
         ++paramIdx;
       }
       let res = CreateCall(proto, args);
+      if(mc.name.eq("exit") && mc.scope.is_none()){
+        CreateUnreachable();
+      }
       if(ptr.is_some()) return ptr.unwrap();
       return res;
     }
@@ -652,7 +651,7 @@ impl Compiler{
         return trg_ptr;
       }
       if(node.kind is LitKind::CHAR){
-        assert node.val.len() == 1;
+        assert(node.val.len() == 1);
         let trimmed = node.val.get(0);
         return makeInt(trimmed, 32);
       }

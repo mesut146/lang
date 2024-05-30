@@ -1,11 +1,11 @@
 func str_test(){
     let s1 = "asd";
     let s2 = "ase";
-    assert Compare::compare(&s1, &s2) == -1;
-    assert Compare::compare(&s2, &s1) == 1;
+    assert(Compare::compare(&s1, &s2) == -1);
+    assert(Compare::compare(&s2, &s1) == 1);
 
     let s3 = "asd";
-    assert Compare::compare(&s1, &s3) == 0;
+    assert(Compare::compare(&s1, &s3) == 0);
 }
 
 func list_i32(){
@@ -17,7 +17,7 @@ func list_i32(){
     list.sort();
     let str = Fmt::str(&list);
     print("list = {}\n", str);
-    assert str.eq("[5, 7, 10, 70]");
+    assert(str.eq("[5, 7, 10, 70]"));
 }
 func list_str(){
     let list = List<String>::new();
@@ -30,7 +30,7 @@ func list_str(){
     list.sort();
     let str = Fmt::str(&list);
     print("list = {}\n", str);
-    assert str.eq("[abb, abc, abd, bxx, cbd]");
+    assert(str.eq("[abb, abc, abd, bxx, cbd]"));
 }
 
 func main(){

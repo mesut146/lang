@@ -9,6 +9,7 @@ import parser/alloc_helper
 import parser/debug_helper
 import parser/stmt_emitter
 import parser/expr_emitter
+import parser/ownership
 import std/map
 import std/io
 import std/libc
@@ -79,7 +80,6 @@ impl Protos{
       self.std.add("slice", sliceType);
       self.std.add("str", make_string_type(sliceType as llvm_Type*));
       self.libc.add("printf", make_printf());
-      self.libc.add("exit", make_exit());
       self.libc.add("fflush", make_fflush());
       self.libc.add("malloc", make_malloc());
   }
@@ -127,7 +127,7 @@ func has_main(unit: Unit*): bool{
 
 func get_out_file(path: str, c: Compiler*): String{
   let name = getName(path);
-  let res = format("{}/{}-bt.o", c.ctx.out_dir, trimExtenstion(name).str());
+  let res = format("{}/{}-bt.o", c.ctx.out_dir, trimExtenstion(name));
   return res;
 }
 
@@ -145,7 +145,9 @@ impl llvm_holder{
   func initModule(self, path: str){
     let name = getName(path);
     make_ctx();
-    make_module(name.str().cstr().ptr(), self.target_machine, self.target_triple.ptr());
+    let name_c = name.str().cstr();
+    make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
+    name_c.drop();
     make_builder();
     self.di = Option::new(DebugInfo::new(path, true));
   }
@@ -191,9 +193,8 @@ impl Compiler{
   }
 
   func compile(self, path: str): String{
-    //print("compile {}\n", path);
     let outFile: String = get_out_file(path, self);
-    let ext = Path::new(path).ext();
+    let ext = Path::ext(path);
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
     }
@@ -224,6 +225,7 @@ impl Compiler{
         let m = self.get_resolver().generated_methods.get_ptr(i).get();
         self.genCode(m);
     }
+    methods.drop();
     
     let name = getName(path);
     let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
@@ -232,6 +234,7 @@ impl Compiler{
     if(self.ctx.verbose){
       print("writing {}\n", llvm_file_cstr);
     }
+    llvm_file_cstr.drop();
     self.compiled.add(outFile.clone());
     let outFile_cstr = CStr::new(outFile.clone());
     emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
@@ -281,6 +284,7 @@ impl Compiler{
       let decl = *list.get_ptr(i);
       self.llvm.di.get().map_di_fill(decl, self);
     }
+    list.drop();
     
     //methods
     let methods: List<Method*> = getMethods(self.unit());
@@ -288,6 +292,7 @@ impl Compiler{
       let m = methods.get(i);
       self.make_proto(m);
     }
+    methods.drop();
     //generic methods from resolver
     for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
         let m = self.get_resolver().generated_methods.get_ptr(i).get();
@@ -304,8 +309,8 @@ impl Compiler{
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
-    let id = mangle(m);
-    let f = self.protos.get().get_func(&id);
+    let mangled = mangle(m);
+    let f = self.protos.get().get_func(&mangled);
     self.protos.get().cur = Option::new(f);
     let bb = create_bb2(f);
     self.NamedValues.clear();
@@ -325,8 +330,10 @@ impl Compiler{
         CreateRetVoid();
       }
     }
+    exit.drop();
     self.llvm.di.get().finalize();
     verifyFunction(f);
+    mangled.drop();
   }
   
   func makeLocals(self, b: Block*){
@@ -351,7 +358,9 @@ impl Compiler{
   func alloc_prm(self, prm: Param*){
     let ty = self.mapType(&prm.type);
     let ptr = CreateAlloca(ty);
-    Value_setName(ptr, prm.name.clone().cstr().ptr());
+    let name_c = prm.name.clone().cstr();
+    Value_setName(ptr, name_c.ptr());
+    name_c.drop();
     self.NamedValues.add(prm.name.clone(), ptr);
   }
 
@@ -445,6 +454,7 @@ impl Compiler{
     }else{
       panic("link failed '{}'", cmd_s.get());
     }
+    cmd_s.drop();
     return path;
   }
 
@@ -452,6 +462,7 @@ impl Compiler{
     if(exist(name)){
       let name_c: CStr = name.cstr();
       remove(name_c.ptr());
+      name_c.drop();
     }
     let path = format("{}/{}", out_dir, name);
     create_dir(out_dir);
@@ -471,14 +482,17 @@ impl Compiler{
     }else{
       panic("link failed '{}'", cmd_s);
     }
+    cmd_s.drop();
     return path;
   }
 
   func run(path: String){
     let path_c: CStr = path.cstr();
-    if(system(path_c.ptr()) != 0){
-      panic("error while running {}", path_c);
+    let code = system(path_c.ptr());
+    if(code != 0){
+      panic("error while running {} code={}", path_c, code);
     }
+    path_c.drop();
   }
 
   func compile_single(src_dir: str, out_dir: str, file: str, args: str){
@@ -506,10 +520,14 @@ impl Compiler{
       let obj = cmp.compile(file.str());
       Drop::drop(cmp);
       compiled.add(obj);
-      if(name.eq("stmt_emitter.x")){
+      file.drop();
+      if(i == 0 /*name.eq("stmt_emitter.x")*/){
+        list.drop();
+        compiled.drop();
         return;
       }
     }
+    list.drop();
     if let LinkType::Binary(bin_name) = (&lt){
       let path = link(&compiled, out_dir, bin_name, args);
       Compiler::run(path);
@@ -519,6 +537,7 @@ impl Compiler{
     }else{
       panic("compile_dir");
     }
+    compiled.drop();
   }
  
 }//Compiler

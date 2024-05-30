@@ -144,7 +144,6 @@ public:
     llvm::Function *printf_proto = nullptr;
     llvm::Function *fflush_proto = nullptr;
     llvm::GlobalVariable *stdout_ptr = nullptr;
-    llvm::Function *exit_proto = nullptr;
     llvm::Function *mallocf = nullptr;
     llvm::StructType *sliceType = nullptr;
     llvm::StructType *stringType = nullptr;
@@ -346,7 +345,6 @@ public:
     std::any visitExprStmt(ExprStmt *node) override;
     std::any visitIfStmt(IfStmt *node) override;
     std::any visitIfLetStmt(IfLetStmt *node) override;
-    std::any visitAssertStmt(AssertStmt *node) override;
     std::any visitWhileStmt(WhileStmt *node) override;
     std::any visitForStmt(ForStmt *node) override;
     std::any visitContinueStmt(ContinueStmt *node) override;

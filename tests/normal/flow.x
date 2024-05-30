@@ -7,8 +7,8 @@ func ifTest(){
   }else{
     inElse = true;
   }
-  assert inIf;
-  assert inElse == false;
+  assert(inIf);
+  assert(inElse == false);
   
   print("ifTest done\n");
 }
@@ -22,8 +22,8 @@ func elseTest(){
   }else{
     inElse = true;
   }
-  assert inElse;
-  assert inIf == false;
+  assert(inElse);
+  assert(inIf == false);
   
   print("elseTest done\n");
 }
@@ -37,7 +37,7 @@ func whileTest(){
     }
     ++i;
   }
-  assert i == 10;
+  assert(i == 10);
   print("whileTest done\n");
 }
 
@@ -46,7 +46,7 @@ func forTest(){
     if(i % 2 == 0) {
       continue; 
     }
-    assert i %2 == 1;
+    assert(i %2 == 1);
   }
   print("forTest done\n");
 }
@@ -65,7 +65,7 @@ func prims(){
       ++cnt;
     }
   }
-  assert cnt == 26;
+  assert(cnt == 26);
   print("prims done\n");
 }
 

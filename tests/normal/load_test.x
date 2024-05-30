@@ -9,10 +9,10 @@ enum En{
 
 func main(){
     let a = get_load();
-    assert a.a == 10;
+    assert_eq(a.a, 10);
   
     let a2 = get_load2();
-    assert a2.a == 20;
+    assert_eq(a2.a, 20);
 
     print("load_test done\n");
 }

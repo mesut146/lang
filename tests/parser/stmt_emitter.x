@@ -26,8 +26,6 @@ impl Compiler{
       }
       else if let Stmt::Var(ve*)=(node){
         self.visit_var(ve);
-      }else if let Stmt::Assert(e*)=(node){
-        self.visit_assert(e);
       }
       else if let Stmt::Expr(e*)=(node){
         self.visit(e);
@@ -89,18 +87,13 @@ impl Compiler{
       let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
   
       let then_name = format("iflet_then_{}", node.rhs.line);
+      let else_name = format("iflet_else_{}", node.rhs.line);
       let next_name = format("iflet_next_{}", node.rhs.line);
-      let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
+      let then_bb = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
+      let elsebb = create_bb_named(CStr::new(else_name).ptr());
       let next = create_bb_named(CStr::new(next_name).ptr());
-      let elsebb = Option<BasicBlock*>::new();
-      if(node.els.is_some()){
-        let else_name = format("iflet_else_{}", node.rhs.line);
-        elsebb = Option<BasicBlock*>::new(create_bb_named(CStr::new(else_name).ptr()));
-        CreateCondBr(self.branch(cmp), then, elsebb.unwrap());
-      }else{
-        CreateCondBr(self.branch(cmp), then, next);
-      }
-      SetInsertPoint(then);
+      CreateCondBr(self.branch(cmp), then_bb, elsebb);
+      SetInsertPoint(then_bb);
       let variant = decl.get_variants().get_ptr(index);
       if(!variant.fields.empty()){
           //declare vars
@@ -132,13 +125,15 @@ impl Compiler{
       if (!exit_then.is_jump()) {
         CreateBr(next);
       }
+      self.set_and_insert(elsebb);
       if (node.els.is_some()) {
-          self.set_and_insert(elsebb.unwrap());
-          self.visit(node.els.get().get());
-          let exit_else = Exit::get_exit_type(node.els.get().get());
-          if (!exit_else.is_jump()) {
-            CreateBr(next);
-          }
+        self.visit(node.els.get().get());
+        let exit_else = Exit::get_exit_type(node.els.get().get());
+        if (!exit_else.is_jump()) {
+          CreateBr(next);
+        }
+      }else{
+        CreateBr(next);
       }
       self.set_and_insert(next);
     }
@@ -204,10 +199,15 @@ impl Compiler{
         if(!exit_else.is_jump()){
           CreateBr(next);
         }
+        if(!exit_then.is_jump() || !exit_else.is_jump()){
+          self.set_and_insert(next);
+        }
+        exit_else.drop();
       }else{
         CreateBr(next);
+        self.set_and_insert(next);
       }
-      self.set_and_insert(next);
+      exit_then.drop();
     }
 
     func visit_assert(self, expr: Expr*){
@@ -227,7 +227,7 @@ impl Compiler{
       args_push(pr_args, ptr);
       let printf_proto = self.protos.get().libc("printf");
       CreateCall(printf_proto, pr_args);
-      self.call_exit(1);
+      //self.call_exit(1);
       self.set_and_insert(next);
     }
 
@@ -235,17 +235,17 @@ impl Compiler{
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get_ptr(i);
         let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
-        let type = &self.get_resolver().visit(f).type;
+        let type = self.get_resolver().getType(f);
         if(doesAlloc(&f.rhs, self.get_resolver())){
           //self allocated
           self.visit(&f.rhs);
-          self.llvm.di.get().dbg_var(&f.name, type, f.line, self);
+          self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
           continue;
         }
-        if(is_struct(type)){
+        if(is_struct(&type)){
           let val = self.visit(&f.rhs);
           if(Value_isPointerTy(val)){
-            self.copy(ptr, val, type);
+            self.copy(ptr, val, &type);
           }else{
             CreateStore(val, ptr);
           }
@@ -253,10 +253,11 @@ impl Compiler{
           let val = self.get_obj_ptr(&f.rhs);
           CreateStore(val, ptr);
         } else{
-          let val = self.cast(&f.rhs, type);
+          let val = self.cast(&f.rhs, &type);
           CreateStore(val, ptr);
         }
-        self.llvm.di.get().dbg_var(&f.name, type, f.line, self);
+        self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
+        type.drop();
       }
     }
     func visit_block(self, node: Block*){

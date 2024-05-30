@@ -445,7 +445,9 @@ llvm::Function *Compiler::make_proto(Method *m) {
     int i = 0;
     if (rvo) {
         f->getArg(0)->setName("ret");
-        f->getArg(0)->addAttr(llvm::Attribute::StructRet);
+        auto atr = llvm::Attribute::get(ctx(), llvm::Attribute::StructRet, mapType(m->type));
+        f->getArg(0)->addAttr(atr);
+        //f->getArg(0)->addAttr(llvm::Attribute::StructRet);
         i++;
     }
     if (m->self) {
@@ -491,7 +493,6 @@ void Compiler::createProtos() {
 
     printf_proto = make_printf();
     fflush_proto = make_fflush();
-    exit_proto = make_exit();
     mallocf = make_malloc();
     stdout_ptr = new llvm::GlobalVariable(*mod, getPtr(), false, llvm::GlobalValue::ExternalLinkage, nullptr, "stdout");
     stdout_ptr->addAttribute("global");
@@ -627,9 +628,10 @@ void Compiler::genCode(Method *m) {
         DBuilder->finalizeSubprogram(di.sp);
         di.sp = nullptr;
     }
-    /*if (llvm::verifyFunction(*func, &llvm::outs())) {
+    if (llvm::verifyFunction(*func, &llvm::outs())) {
+        func->print(llvm::outs());
         error("func " + printMethod(m) + " has errors");
-    }*/
+    }
     func = nullptr;
     curMethod = nullptr;
 }
@@ -984,40 +986,6 @@ void callPrint(MethodCall *mc, Compiler *c) {
     c->Builder->CreateCall(c->fflush_proto, args2);
 }
 
-void print_simple(const std::string &str, Compiler *c) {
-    std::vector<llvm::Value *> args;
-    auto str_ptr = c->Builder->CreateGlobalStringPtr(str);
-    args.push_back(str_ptr);
-    c->Builder->CreateCall(c->printf_proto, args);
-    //flush
-    std::vector<llvm::Value *> args2;
-    args2.push_back(c->load(c->stdout_ptr));
-    c->Builder->CreateCall(c->fflush_proto, args2);
-}
-std::string panic_message(Compiler *c, int line, std::optional<std::string> msg) {
-    std::string message = "panic ";
-    message += c->curMethod->path + ":" + std::to_string(line);
-    message += " " + printMethod(c->curMethod);
-    if (msg.has_value()) {
-        message += "\n";
-        message += msg.value();
-    }
-    message.append("\n");
-    return message;
-}
-void call_exit(int code, Compiler *c) {
-    std::vector<llvm::Value *> exit_args = {c->makeInt(code)};
-    c->Builder->CreateCall(c->exit_proto, exit_args);
-    c->Builder->CreateUnreachable();
-}
-void panic_simple(MethodCall *mc, Compiler *c) {
-    auto lit = dynamic_cast<Literal *>(mc->args.at(0));
-    auto msg = panic_message(c, mc->line, lit->val);
-    print_simple(msg, c);
-    //exit
-    call_exit(-1, c);
-}
-
 void callPrintf(MethodCall *mc, Compiler *c) {
     std::vector<llvm::Value *> args;
     for (auto a : mc->args) {
@@ -1126,6 +1094,7 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         callPrintf(mc, this);
         return (llvm::Value *) Builder->getVoidTy();
     }
+
     if (mc->name == "malloc" && !mc->scope) {
         auto size = cast(mc->args[0], Type("i64"));
         if (!mc->typeArgs.empty()) {
@@ -1142,27 +1111,20 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         return ptr;
     }
     if (is_print(mc)) {
-        if (mc->args.size() == 1) {
-            //simple print, use printf
-            auto lit = dynamic_cast<Literal *>(mc->args[0]);
-            print_simple(lit->val, this);
-            return (llvm::Value *) Builder->getVoidTy();
-        }
         auto &info = resolv->format_map.at(mc->id);
         visitBlock(&info.block);
         //call(&info.print_mc, nullptr);
         return (llvm::Value *) Builder->getVoidTy();
     }
+    if (is_assert(mc)) {
+        auto &info = resolv->format_map.at(mc->id);
+        visitBlock(&info.block);
+        return (llvm::Value *) Builder->getVoidTy();
+    }
     if (is_panic(mc)) {
-        if (mc->args.size() == 1) {
-            //simple panic, use printf
-            panic_simple(mc, this);
-            return (llvm::Value *) Builder->getVoidTy();
-        }
         auto &info = resolv->format_map.at(mc->id);
         visitBlock(&info.block);
         //call(&info.print_mc, nullptr);
-        call_exit(1, this);
         return (llvm::Value *) Builder->getVoidTy();
     }
     if (is_drop_call(mc)) {
@@ -1200,7 +1162,34 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
     }
 }
 
+bool can_inline(MethodCall *mc, Compiler *c) {
+    if (mc->scope && mc->scope->print() == "Eq" && mc->name == "eq") {
+        auto argt = c->resolv->getType(mc->args.at(0));
+        if (argt.isPointer()) {
+            argt = *argt.scope.get();
+        }
+        if (argt.isPrim()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+llvm::Value *inline_mc(MethodCall *mc, Compiler *c) {
+    auto lhs_type = c->resolv->getType(mc->args.at(0));
+    auto rhs_type = c->resolv->getType(mc->args.at(1));
+    auto target_type = rhs_type.scope.get();
+    auto lhs = c->get_obj_ptr(mc->args.at(0));
+    auto rhs = c->get_obj_ptr(mc->args.at(1));
+    lhs = c->load(lhs, *target_type);
+    rhs = c->load(rhs, *target_type);
+    return c->Builder->CreateCmp(llvm::CmpInst::Predicate::ICMP_EQ, lhs, rhs);
+}
+
 llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *sret) {
+    if (can_inline(mc, this)) {
+        return inline_mc(mc, this);
+    }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;
     auto mangled = mangle(target);
@@ -1218,6 +1207,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *sret) {
     std::vector<llvm::Value *> args;
     if (sret) {
         args.push_back(sret);
+    }
+    if (mc->name == "eq" && mc->scope && mc->scope->print() == "Eq") {
+        int aa = 10;
     }
     int paramIdx = 0;
     int argIdx = 0;
@@ -1273,6 +1265,9 @@ llvm::Value *Compiler::call(MethodCall *mc, llvm::Value *sret) {
         }
     }
     auto res = (llvm::Value *) Builder->CreateCall(f, args);
+    if (mc->name == "exit" && !mc->scope) {
+        Builder->CreateUnreachable();
+    }
     if (sret) {
         return args[0];
     }
@@ -1361,6 +1356,10 @@ std::any Compiler::visitVarDeclExpr(VarDeclExpr *node) {
 }
 
 std::any Compiler::visitRefExpr(RefExpr *node) {
+    auto dyn = dynamic_cast<DerefExpr *>(node->expr.get());
+    if (dyn) {
+        return get_obj_ptr(dyn->expr.get());
+    }
     if (RvalueHelper::is_rvalue(node->expr.get())) {
         auto allc = getAlloc(node);
         auto val = loadPtr(node->expr.get());
@@ -1694,7 +1693,7 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     return ptr;
 }
 
-std::any Compiler::visitAssertStmt(AssertStmt *node) {
+/*std::any Compiler::visitAssertStmt(AssertStmt *node) {
     loc(node);
     auto str = node->expr->print();
     auto then = llvm::BasicBlock::Create(ctx(), "assert_body_" + std::to_string(node->line));
@@ -1709,12 +1708,9 @@ std::any Compiler::visitAssertStmt(AssertStmt *node) {
     msg += std::string("assertion ") + str + " failed in " + printMethod(curMethod) + "\n";
     std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
     Builder->CreateCall(printf_proto, pr_args, "");
-    std::vector<llvm::Value *> args = {makeInt(1)};
-    Builder->CreateCall(exit_proto, args);
-    Builder->CreateUnreachable();
     set_and_insert(next);
     return nullptr;
-}
+}*/
 
 std::any Compiler::visitIfStmt(IfStmt *node) {
     auto cond = branch(node->expr.get());

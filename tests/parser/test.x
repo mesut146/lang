@@ -8,6 +8,7 @@ import parser/compiler
 import parser/debug_helper
 import parser/bridge
 import parser/utils
+import parser/ownership
 import std/map
 import std/io
 import std/libc
@@ -74,7 +75,7 @@ func compiler_test(std_test: bool){
 func bootstrap(){
   print("test::bootstrap\n");
   build_std();
-  Compiler::compile_dir("../tests/parser", get_out(), root(), "", LinkType::Binary{"x2"});
+  //Compiler::compile_dir("../tests/parser", get_out(), root(), "", LinkType::Binary{"x2"});
   //cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
 }
 

@@ -3,6 +3,7 @@ import parser/ast
 import parser/printer
 import parser/utils
 import parser/copier
+import parser/ownership
 import std/map
 import std/libc
 

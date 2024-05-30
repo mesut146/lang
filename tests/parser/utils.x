@@ -274,7 +274,8 @@ enum ExitType {
     RETURN,
     PANIC,
     BREAK,
-    CONTINE
+    CONTINE,
+    EXIT
 }
 
 struct Exit {
@@ -298,12 +299,17 @@ impl Exit{
         return false;
     }
     func is_exit(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC) return true;
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXIT) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit() && self.else_kind.get().is_exit();
+        return false;
+    }    
+    func is_exit_call(self): bool{
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXIT) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit_call() && self.else_kind.get().is_exit_call();
         return false;
     }
     func is_jump(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE) return true;
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXIT) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
         return false;
     }
@@ -321,8 +327,11 @@ impl Exit{
         if(stmt is Stmt::Continue) return Exit::new(ExitType::CONTINE);
         if let Stmt::Expr(expr*)=(stmt){
             if let Expr::Call(call*)=(expr){
-                if(call.name.eq("panic")){
+                if(call.name.eq("panic") && call.scope.is_none()){
                     return Exit::new(ExitType::PANIC);
+                }
+                if(call.name.eq("exit") && call.scope.is_none()){
+                    return Exit::new(ExitType::EXIT);
                 }
             }
             return Exit::new(ExitType::NONE);

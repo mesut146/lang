@@ -7,6 +7,7 @@ import parser/method_resolver
 import parser/utils
 import parser/debug_helper
 import parser/printer
+import parser/ownership
 import std/map
 import std/libc
 
@@ -106,10 +107,6 @@ impl AllocHelper{
     if let Stmt::Continue=(node){
       return;
     }
-    if let Stmt::Assert(e*)=(node){
-      self.visit(e);
-      return;
-    }
     panic("alloc {}\n", node);
   }
   func visit_ret(self, stmt: Stmt*, expr: Expr*){
@@ -137,9 +134,11 @@ impl AllocHelper{
       if(call.args.len() == 1){
         //simple, no alloc
       }
-      if(node.print().eq("print(\"condTest done\\n\")")){
-        let aa = 10;
-      }
+      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      self.visit(&info.block);
+      return Option<Value*>::new();
+    }
+    if(Resolver::is_assert(call)){
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
       self.visit(&info.block);
       return Option<Value*>::new();

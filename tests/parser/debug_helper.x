@@ -5,6 +5,7 @@ import parser/compiler_helper
 import parser/resolver
 import parser/utils
 import parser/printer
+import parser/ownership
 import std/map
 import std/libc
 
@@ -31,8 +32,11 @@ impl DebugInfo{
     func new(path: str, debug: bool): DebugInfo{
         init_dbg();
         let path_c = CStr::from_slice(path);
-        let file = createFile(path_c.ptr(), CStr::from_slice(".").ptr());
+        let dir_c = CStr::from_slice(".");
+        let file = createFile(path_c.ptr(), dir_c.ptr());
         let cu = createCompileUnit(file);
+        path_c.drop();
+        dir_c.drop();
         return DebugInfo{cu: cu, file: file,
              sp: Option<DISubprogram*>::new(),
              types: Map<String, DIType*>::new(),

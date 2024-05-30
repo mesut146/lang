@@ -1237,9 +1237,9 @@ std::any Resolver::visitAsExpr(AsExpr *node) {
 std::any Resolver::visitRefExpr(RefExpr *node) {
     auto e = node->expr.get();
     //todo field access
-    if (!iof<SimpleName *>(e) && !iof<ArrayAccess *>(e) && !iof<FieldAccess *>(e) && !iof<Literal *>(e)) {
+    /*if (!iof<SimpleName *>(e) && !iof<ArrayAccess *>(e) && !iof<FieldAccess *>(e) && !iof<Literal *>(e)) {
         err(node, "ref expr is not supported");
-    }
+    }*/
     auto inner = resolve(node->expr.get()).clone();
     inner.type = Type(Type::Pointer, inner.type);
     return inner;
@@ -1247,13 +1247,6 @@ std::any Resolver::visitRefExpr(RefExpr *node) {
 
 std::any Resolver::visitDerefExpr(DerefExpr *node) {
     return visit_deref(node, this, true);
-}
-
-std::any Resolver::visitAssertStmt(AssertStmt *node) {
-    if (!isCondition(node->expr.get(), this)) {
-        err(node, "assert expr is not bool");
-    }
-    return nullptr;
 }
 
 std::any Resolver::visitIfLetStmt(IfLetStmt *node) {
@@ -1549,13 +1542,10 @@ void validate_printf(MethodCall *mc, Resolver *r) {
 }
 
 std::any Resolver::visitMethodCall(MethodCall *mc) {
-    // if (mc->scope && mc->scope->print() == "Fmt" && mc->name == "print") {
-    //     auto arg = resolve(mc->args.at(1));
-    //     if (arg.type.isPointer() && arg.type.scope->isPointer()) {
-    //         err(mc, "");
-    //     }
-    // }
-
+    if (is_assert(mc)) {
+        generate_assert(mc, this);
+        return RType(Type("void"));
+    }
     if (is_std_parent_name(mc)) {
         return RType(Type("str"));
     }

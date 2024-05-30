@@ -42,7 +42,6 @@ public:
     virtual std::any visitVarDeclExpr(VarDeclExpr *node) todo("VarDeclExpr");
     virtual std::any visitBlock(Block *node) todo("Block");
     virtual std::any visitExprStmt(ExprStmt *node) todo("ExprStmt");
-    virtual std::any visitAssertStmt(AssertStmt *node) todo("assert");
     virtual std::any visitReturnStmt(ReturnStmt *node) todo("Return");
     virtual std::any visitContinueStmt(ContinueStmt *node) todo("Continue");
     virtual std::any visitBreakStmt(BreakStmt *node) todo("BreakStmt");

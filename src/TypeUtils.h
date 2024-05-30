@@ -116,6 +116,7 @@ enum class ExitType {
     PANIC,
     BREAK,
     CONTINE,
+    EXIT
 };
 
 struct Exit {
@@ -144,8 +145,9 @@ struct Exit {
     bool is_jump();
 
     bool is_panic();
-    
+
     bool is_exit();
+    bool is_exit_call();
 
     static Exit get_exit_type(Statement *stmt);
 };

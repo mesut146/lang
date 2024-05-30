@@ -4,7 +4,7 @@ struct A{
 }
 
 func take(ptr: A*){
-    assert ptr.a == 10;
+    assert(ptr.a == 10);
 }
 
 func main(){

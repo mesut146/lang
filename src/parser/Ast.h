@@ -678,13 +678,3 @@ public:
     std::string print() const override;
     std::any accept(Visitor *v) override;
 };
-
-class AssertStmt : public Statement {
-public:
-    std::unique_ptr<Expression> expr;
-
-    explicit AssertStmt(Expression *expr) : expr(std::unique_ptr<Expression>(expr)) {}
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};

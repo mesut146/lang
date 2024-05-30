@@ -1,8 +1,8 @@
-class A{
+struct A{
   a: B;
 }
 
-class B{
+struct B{
   a: i32;
 }
 
@@ -12,6 +12,6 @@ func getA(): A{
 
 func main(){
   let a = getA().a;
-  assert a.a == 5;
+  assert(a.a == 5);
   print("allocTest done\n");
 }

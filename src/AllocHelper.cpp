@@ -93,7 +93,7 @@ public:
             //info.unwrap_mc.accept(this);
             return alloc(Type("String"), node);
         }
-        if (is_print(node)) {
+        if (is_print(node) || is_assert(node)) {
             auto &info = compiler->resolv->format_map.at(node->id);
             info.block.accept(this);
             return {};
@@ -269,10 +269,6 @@ public:
     std::any visitInfix(Infix *node) override {
         node->left->accept(this);
         node->right->accept(this);
-        return {};
-    }
-    std::any visitAssertStmt(AssertStmt *node) override {
-        node->expr->accept(this);
         return {};
     }
 

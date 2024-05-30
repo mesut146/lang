@@ -29,7 +29,7 @@ func test(a: A*): i32{
 
 func test2(a: A): i32{
   let b = a.a + 2;
-  assert b == 52;
+  assert(b == 52);
   return b;
 }
 

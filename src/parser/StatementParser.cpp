@@ -125,12 +125,6 @@ std::unique_ptr<Statement> Parser::parseStmt() {
     return res;
 }
 std::unique_ptr<Statement> Parser::parseStmt2() {
-    if (is(ASSERT_KW)) {
-        consume(ASSERT_KW);
-        auto expr = parseExpr();
-        consume(SEMI);
-        return std::make_unique<AssertStmt>(expr);
-    }
     if (is(IF_KW)) {
         if (is({IF_KW}, {LET})) {
             return parseIfLet(this);

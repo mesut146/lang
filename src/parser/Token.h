@@ -38,7 +38,6 @@ enum TokenType {
     IMPORT,
     EXTERN,
     AS,
-    ASSERT_KW,
     FROM,
     RETURN,
     BREAK,

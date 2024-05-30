@@ -8,9 +8,9 @@ func file_name(): str{
 func read_test(){
   let path = file_name();
   let buf = read_bytes(path);
-  assert buf.len() == 5;
+  assert(buf.len() == 5);
   let s = String::new(&buf);
-  assert s.eq("hello");
+  assert(s.eq("hello"));
 }
 
 func seek_test(f: FILE*){

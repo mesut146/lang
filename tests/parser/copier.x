@@ -231,9 +231,6 @@ impl AstCopier{
         if let Stmt::Break=(node){
             return Stmt::Break;
         }
-        if let Stmt::Assert(e*)=(node){
-            return Stmt::Assert{self.visit(e)};
-        }
         let msg = format("stmt {}", node);
         panic("{}", msg.str());
     }

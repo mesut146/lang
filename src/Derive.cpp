@@ -1,6 +1,7 @@
 #include "Resolver.h"
 #include "TypeUtils.h"
 #include "parser/Ast.h"
+#include "parser/Parser.h"
 
 bool print_block = false;
 
@@ -299,6 +300,83 @@ std::unique_ptr<ExprStmt> make_drop(const std::string &name, int line) {
     return drop_stmt;
 }
 
+std::unique_ptr<Statement> parse_stmt(const std::string &str) {
+    Lexer lexer(str, true);
+    Parser parser(lexer);
+    return parser.parseStmt();
+}
+
+//replace non escaped quotes into escaped ones
+std::string normalize_quotes(const std::string &s) {
+    std::string res;
+    for (int i = 0; i < s.size(); ++i) {
+        char c = s[i];
+        if (c == '\\') {
+            res.append(1, c);
+            res.append(1, s.at(i + 1));
+            i += 1;
+            continue;
+        }
+        if (c == '\"' || c == '\\') {
+            res.append(1, '\\');
+        }
+        res.append(1, c);
+    }
+    return res;
+}
+
+void generate_assert(MethodCall *mc, Resolver *r) {
+    FormatInfo info;
+    auto &block = info.block;
+    if (mc->name == "assert_eq") {
+        if (mc->args.size() != 2) {
+            r->err(mc, "assert_eq expects 2 arguments");
+        }
+        auto t1 = r->getType(mc->args.at(0));
+        auto t2 = r->getType(mc->args.at(1));
+        if (t1.print() != t2.print()) {
+            r->err(mc, "assert_eq args incompatible " + t1.print() + "," + t2.print());
+        }
+        auto a1_str = mc->args.at(0)->print();
+        auto a2_str = mc->args.at(1)->print();
+        if (!t1.isPointer()) {
+            a1_str = "&" + a1_str;
+        }
+        if (!t2.isPointer()) {
+            a2_str = "&" + a2_str;
+        }
+        auto st = parse_stmt(format("if(!Eq::eq(%s, %s)){printf(\"assertion failed\n\");exit(1);}", a1_str.c_str(), a2_str.c_str()));
+        //print(st->print());
+        block.list.push_back(std::move(st));
+    } else {
+        auto arg = mc->args.at(0);
+        if (r->getType(arg).print() != "bool") {
+            r->err(mc, "assert expr is not bool");
+        }
+        auto st = parse_stmt(format("if(!(%s)){printf(\"%s:%d\nassertion %s failed in %s\n\");exit(1);}", arg->print().c_str(), r->curMethod->path.c_str(), mc->line, normalize_quotes(arg->print()).c_str(), printMethod(r->curMethod).c_str()));
+        block.list.push_back(std::move(st));
+        //print(block.print());
+        //r->err(mc, "todo");
+    }
+    block.accept(r);
+    r->format_map.insert({mc->id, std::move(info)});
+}
+
+std::string make_panic_str(const std::optional<std::string> &s, int line, Method *method) {
+    std::string message = "panic ";
+    message += method->path + ":" + std::to_string(line);
+    message += " " + printMethod(method);
+    if (s.has_value()) {
+        message += "\n";
+        message += s.value();
+    }
+    message.append("\n");
+    return message;
+}
+Literal *make_panic_messsage(const std::optional<std::string> &s, int line, Method *method) {
+    return new Literal(Literal::STR, make_panic_str(s, line, method));
+}
+
 void generate_format(MethodCall *mc, Resolver *r) {
     if (mc->args.empty()) {
         r->err(mc, "format no arg");
@@ -318,20 +396,17 @@ void generate_format(MethodCall *mc, Resolver *r) {
     auto &block = info.block;
     if (mc->args.size() == 1 && (is_print(mc) || is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
-        //printf("%.*s", len, ptr: i8*);
-        //"..".print(), exit(1) will be called by compiler
-        auto print_mc = new MethodCall;
-        print_mc->loc(mc->line);
-        print_mc->name = "print";
+        //printf("..");
         if (is_panic(mc)) {
-            print_mc->scope.reset(make_panic_messsage(fmt_str, mc->line, r->curMethod));
-            print_mc->scope->loc(mc->line);
+            auto msg = make_panic_str(fmt_str, mc->line, r->curMethod);
+            auto stmt = parse_stmt(format("printf(\"%s\");", msg.c_str()));
+            block.list.push_back(std::move(stmt));
+            auto exit_st = parse_stmt("exit(1);");
+            block.list.push_back(std::move(exit_st));
         } else {
-            print_mc->scope.reset(fmt);
+            auto stmt = parse_stmt(format("printf(\"%s\");", normalize_quotes(fmt_str).c_str()));
+            block.list.push_back(std::move(stmt));
         }
-        auto stmt = std::make_unique<ExprStmt>(print_mc);
-        stmt->loc(mc->line);
-        block.list.push_back(std::move(stmt));
         block.accept(r);
         r->format_map.insert({mc->id, std::move(info)});
         return;
@@ -447,6 +522,14 @@ void generate_format(MethodCall *mc, Resolver *r) {
         block.list.push_back(std::move(print_stmt));
         //Drop::drop(f);
         block.list.push_back(make_drop(var_name, mc->line));
+        //exit(1);
+        auto exit_mc = new MethodCall;
+        exit_mc->loc(mc->line);
+        exit_mc->name = "exit";
+        exit_mc->args.push_back((new Literal(Literal::INT, "1"))->loc(mc->line));
+        auto exit_stmt = std::make_unique<ExprStmt>(exit_mc);
+        exit_stmt->loc(mc->line);
+        block.list.push_back(std::move(exit_stmt));
         if (print_block) {
             print(block.print());
         }
@@ -455,16 +538,4 @@ void generate_format(MethodCall *mc, Resolver *r) {
         //todo
     }
     r->format_map.insert({mc->id, std::move(info)});
-}
-
-Literal *make_panic_messsage(const std::optional<std::string> &s, int line, Method *method) {
-    std::string message = "panic ";
-    message += method->path + ":" + std::to_string(line);
-    message += " " + printMethod(method);
-    if (s.has_value()) {
-        message += "\n";
-        message += s.value();
-    }
-    message.append("\n");
-    return new Literal(Literal::STR, message);
 }

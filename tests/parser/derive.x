@@ -6,6 +6,7 @@ import parser/copier
 import parser/parser
 import parser/lexer
 import parser/token
+import parser/ownership
 import std/libc
 import std/map
 
@@ -177,14 +178,16 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     //print("gen {} id={} {}\n", node, node.id, r.unit.path);
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
-        //printf(".."), exit(1) will be called by compiler
-        let msg = fmt_str;
+        //printf("..")
         if (Resolver::is_panic(mc)) {
-            msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str)).str();
-        } 
-        msg = normalize_quotes(msg).str();
-        let st = parse_stmt(format("printf(\"{}\");", msg), &r.unit);
-        block.list.add(st);
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str)).str();
+            msg = normalize_quotes(msg).str();
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit));
+            block.list.add(parse_stmt(format("exit(1);"), &r.unit));
+        }else{
+            let msg = normalize_quotes(fmt_str).str();
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit));
+        }
         r.visit(block);
         r.format_map.add(node.id, info);
         return;
@@ -240,6 +243,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
         block.list.add(drop_st);
+        block.list.add(parse_stmt(format("exit(1);"), &r.unit));
         //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);
@@ -304,4 +308,21 @@ func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
     }
     message.print("\n");
     return message.unwrap();
+}
+
+func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
+    if(mc.args.len() != 1){
+        r.err(node, format("assert expects one element got: {}", mc.args.len()));
+    }
+    let arg = mc.args.get_ptr(0);
+    if(!r.is_condition(arg)){
+        r.err(node, format("assert expr is not bool: {}", node));
+    }
+    let line = node.line;
+    let info = FormatInfo{block: Block::new(), unwrap_mc: Option<Expr>::new()};
+    let block = &info.block;
+    //parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
+    block.list.add(parse_stmt(format("if(!({})){\nprintf(\"assert\");exit(1);\n}", arg), &r.unit));
+    r.visit(block);
+    r.format_map.add(node.id, info);
 }

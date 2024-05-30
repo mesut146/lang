@@ -3,7 +3,7 @@ import std/map
 import std/libc
 import std/io
 
-class Lexer{
+struct Lexer{
   path: String;
   buf: String;
   pos: i32;
@@ -63,9 +63,35 @@ impl Lexer{
     return self.buf.str().substr(a, b);
   }
 
+  func get_line(self, line: i32): str{
+    let cur_line = 1;
+    let pos = 0;
+    while(pos < self.buf.len()){
+      if(cur_line == line){
+        let end = self.buf.str().indexOf("\n", pos);
+        if(end == -1){
+          end = self.buf.len() as i32;
+        }
+        return self.buf.substr(pos, end);
+      }else{
+        let i = self.buf.str().indexOf("\n", pos);
+        if(i == -1){
+    
+        }else{
+          cur_line += 1;
+          pos = i + 1;
+        }
+      }
+    }
+    panic("not possible");
+  }
+
   func err(self, msg: str){
-    print("in file {}:{}\n", &self.path, self.line);
+    print("in file {}:{} `{}`\n", &self.path, self.line, self.get_line(self.line));
     panic("{}", msg);
+  }
+  func err(self, msg: String){
+    self.err(msg.str());
   }
   
   func line_comment(self): Token{
@@ -140,8 +166,6 @@ impl Lexer{
   }
   
   func kw(s: str): TokenType{
-    if(s.eq("assert")) return TokenType::ASSERT_KW;
-    if(s.eq("class")) return TokenType::CLASS;
     if(s.eq("struct")) return TokenType::STRUCT;
     if(s.eq("enum")) return TokenType::ENUM;
     if(s.eq("trait")) return TokenType::TRAIT;
@@ -319,8 +343,10 @@ impl Lexer{
     os.append(c);
     let oss = os.str();
     if(self.ops.get_ptr(&oss).is_some()){
+      os.drop();
       return self.read_op();
     }
+    os.drop();
     panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
   }
   
@@ -380,20 +406,20 @@ impl Lexer{
     }
     let mustSuffix = false;
     if(self.peek() == '_'){
-      self.pos+=1;
+      self.pos += 1;
       mustSuffix = true; 
     }
     let suffixes = get_suffix();
     let has = false;
-    for (let i =0;i < suffixes.len();++i) {
+    for (let i = 0;i < suffixes.len();++i) {
       let sf = suffixes[i];
-      if (self.str(self.pos, self.pos + sf.len()).eq(sf)) {
+      if (self.has(sf.len()) && self.str(self.pos, self.pos + sf.len()).eq(sf)) {
         self.pos += sf.len();
         has = true;
         break;
       }
     }
-    if(mustSuffix && !has) panic("expected literal suffix");
+    if(mustSuffix && !has) self.err(format("expected literal suffix got: {}", self.peek()));
     let type = TokenType::INTEGER_LIT;
     if(dot) type = TokenType::FLOAT_LIT;
     return Token::new(type, self.str(start, self.pos));

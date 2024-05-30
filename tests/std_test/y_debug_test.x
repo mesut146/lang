@@ -19,11 +19,11 @@ enum E{
 func main(){
     let a = A{a: 1, b: 2};
     print("{}\n", &a);
-    assert Fmt::str(&a).eq("A{a: 1, b: 2}");
+    assert(Fmt::str(&a).eq("A{a: 1, b: 2}"));
 
     let b = B{a: a, b: 3};
-    assert Fmt::str(&b).eq("B{a: A{a: 1, b: 2}, b: 3}");
+    assert(Fmt::str(&b).eq("B{a: A{a: 1, b: 2}, b: 3}"));
 
     let e = E::B{b};
-    assert Fmt::str(&e).eq("E::B{val: B{a: A{a: 1, b: 2}, b: 3}}");
+    assert(Fmt::str(&e).eq("E::B{val: B{a: A{a: 1, b: 2}, b: 3}}"));
 }

@@ -1,5 +1,15 @@
-assert(x: bool);
+assert(x: Expr: bool);
+{
+  if(!x){
+      printf("assertion %s failed\n", <msg>);
+  }
+}
 assert(x: bool, msg: str);
 
 assert_eq(x: T, y: T);
+{
+    if(!Eq::eq(a, y)){
+        printf("assertion %s failed\n", <msg>);
+    }
+}
 assert_eq(x: T, y: T, msg: str);

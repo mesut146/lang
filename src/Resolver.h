@@ -73,6 +73,9 @@ static bool is_print(MethodCall *mc) {
 static bool is_panic(MethodCall *mc) {
     return mc->name == "panic" && !mc->scope;
 }
+static bool is_assert(MethodCall *mc) {
+    return (mc->name == "assert" || mc->name == "assert_eq") && !mc->scope;
+}
 
 Literal *make_panic_messsage(const std::optional<std::string> &s, int line, Method *method);
 
@@ -286,6 +289,8 @@ struct Context {
     void init_prelude();
 };
 
+void generate_assert(MethodCall *mc, Resolver *r);
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
@@ -412,7 +417,6 @@ public:
     std::any visitIsExpr(IsExpr *as) override;
     std::any visitArrayAccess(ArrayAccess *node) override;
 
-    std::any visitAssertStmt(AssertStmt *as) override;
     std::any visitIfLetStmt(IfLetStmt *as) override;
     std::any visitIfStmt(IfStmt *as) override;
     std::any visitExprStmt(ExprStmt *as) override;

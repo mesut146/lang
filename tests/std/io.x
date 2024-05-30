@@ -154,13 +154,28 @@ impl Path{
     return Path{path: path.str()};
   }
   func ext(self): str{
-    let i = self.path.str().lastIndexOf(".");
-    return self.path.substr(i + 1);
+    return Path::ext(self.path.str());
+  }
+
+  func ext(path: str): str{
+    let name = Path::name(path);
+    let i = name.lastIndexOf(".");
+    if(i == -1){
+      return name;
+    }
+    return name.substr(i + 1);
   }
 
   func name(self): str{
-    let i = self.path.str().lastIndexOf("/");
-    return self.path.substr(i + 1);
+    return Path::name(self.path.str());
+  }
+
+  func name(path: str): str{
+    let i = path.lastIndexOf("/");
+    if(i == -1){
+      return path;
+    }
+    return path.substr(i + 1);
   }
 
   func noext(self): str{

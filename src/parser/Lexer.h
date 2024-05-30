@@ -9,7 +9,7 @@
 
 class Lexer {
 public:
-    const std::string &path;
+    std::string path;
     std::string buf;
     int pos = 0;
     int line = 1;
@@ -25,6 +25,9 @@ public:
         stream.close();
         init();
     }
+    explicit Lexer(const std::string &buf, bool is_buf) : path("<buf>"), buf(buf) {
+        init();
+    }
 
     char peek(int la = 0) {
         return buf[pos + la];
@@ -37,9 +40,9 @@ public:
     std::string str(int a, int b) const {
         return buf.substr(a, b - a);
     }
-    
-    void err(const std::string &msg){
-        throw std::runtime_error(path+":"+std::to_string(line)+"\n"+msg);
+
+    void err(const std::string &msg) {
+        throw std::runtime_error(path + ":" + std::to_string(line) + "\n" + msg);
     }
 
     Token next();

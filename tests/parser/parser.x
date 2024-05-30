@@ -5,7 +5,7 @@ import parser/printer
 import std/map
 import std/libc
 
-class Parser{
+struct Parser{
   path: String;
   tokens: List<Token>;
   pos: i32;
@@ -29,10 +29,14 @@ impl Parser{
   func fill(self, lexer: Lexer) {
     while (true) {
         let t = lexer.next();
-        if (t.is(TokenType::EOF_))
-            break;
-        if (t.is(TokenType::COMMENT))
-            continue;
+        if (t.is(TokenType::EOF_)){
+          t.drop();
+          break;
+        }
+        else if (t.is(TokenType::COMMENT)){
+          t.drop();
+          continue;
+        }
         self.tokens.add(t);
     }
     Drop::drop(lexer);
@@ -105,7 +109,7 @@ impl Parser{
             panic("invalid attr {}", name.value);
           }
         }
-        if(self.is(TokenType::CLASS) || self.is(TokenType::STRUCT)){
+        if(self.is(TokenType::STRUCT)){
           unit.items.add(Item::Decl{self.parse_struct(derives, attr)});
           continue;
         }else if(self.is(TokenType::ENUM)){
@@ -280,11 +284,7 @@ impl Parser{
     
     func parse_struct(self, derives: List<Type>, attr: List<String>): Decl{
       let line = self.peek().line;
-      if(self.is(TokenType::CLASS)){
-        self.consume(TokenType::CLASS);
-      }else{
-        self.consume(TokenType::STRUCT);
-      }
+      self.consume(TokenType::STRUCT);
       let type = self.parse_type();
       let is_generic = type.is_generic();
       //isgen
@@ -554,11 +554,6 @@ impl Parser{
         self.pop();
         self.consume(TokenType::SEMI);
         return Stmt::Break;
-      }else if(self.is(TokenType::ASSERT_KW)){
-        self.pop();
-        let e = self.parse_expr();
-        self.consume(TokenType::SEMI);
-        return Stmt::Assert{e};
       }else{
         let e = self.parse_expr();
         self.consume(TokenType::SEMI);
@@ -872,19 +867,19 @@ impl Parser{
   
   func expr_level(self, prec: i32): Expr{
     if(prec == 11) return self.as_is();
-    let e = self.expr_level(prec + 1);
+    let lhs = self.expr_level(prec + 1);
     while(self.has() && Parser::get_prec(&self.peek().type) == prec){
       let op = self.popv();
       if(op.eq(">") && self.is(TokenType::GT)){
         self.pop();
         op.append(">");
       }
-      let r = self.expr_level(prec + 1);
+      let rhs = self.expr_level(prec + 1);
       let n = self.node();
-      let tmp = Expr::Infix{.n, op, Box::new(e), Box::new(r)};
-      e = tmp;
+      let tmp = Expr::Infix{.n, op, Box::new(lhs), Box::new(rhs)};
+      lhs = tmp;
     }
-    return e;
+    return lhs;
   }
   
   func get_prec(tt: TokenType*): i32{

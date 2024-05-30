@@ -4,7 +4,6 @@
 #include <vector>
 
 TokenType kw(std::string &s) {
-    if (s == "assert") return ASSERT_KW;
     if (s == "class") return CLASS;
     if (s == "struct") return STRUCT;
     if (s == "enum") return ENUM;
@@ -112,7 +111,7 @@ Token Lexer::readNumber() {
                 pos += sf.length();
             }
         }
-        return Token(INTEGER_LIT, trim(str(start, pos)));
+        return Token(INTEGER_LIT, str(start, pos));
     }
     pos++;
     eatNum(*this);
@@ -121,8 +120,6 @@ Token Lexer::readNumber() {
         eatNum(*this);
         dot = true;
     }
-    auto res = trim(str(start, pos));
-    auto suf = pos;
     if (peek() == '_') {
         pos++;
     }
@@ -132,9 +129,7 @@ Token Lexer::readNumber() {
             break;
         }
     }
-    if (pos > suf) {
-        res += str(suf, pos);
-    }
+    auto res = str(start, pos);
     return Token(dot ? FLOAT_LIT : INTEGER_LIT, res);
 }
 

@@ -2,7 +2,6 @@
 enum TokenType {
     EOF_,
     IDENT,
-    CLASS,
     STRUCT,
     ENUM,
     TRAIT,
@@ -32,7 +31,6 @@ enum TokenType {
     IMPORT,
     EXTERN,
     AS,
-    ASSERT_KW,
     FROM,
     RETURN,
     BREAK,
@@ -99,7 +97,7 @@ enum TokenType {
     HASH
 }
 
-class Token {
+struct Token {
     value: String;
     type: TokenType;
     start: i32;

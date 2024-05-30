@@ -111,6 +111,7 @@ impl Drop for Resolver{
     self.used_types.drop();
     self.generated_decl.drop();
     self.generated_impl.drop();
+    self.format_map.drop();
     self.own.drop();
   }
 }
@@ -591,11 +592,21 @@ impl Resolver{
 
   func getType(self, e: Type*): Type{
     let rt = self.visit_type(e);
-    return rt.type.clone();
+    let res = rt.type.clone();
+    rt.drop();
+    return res;
   }
   func getType(self, e: Expr*): Type{
     let rt = self.visit(e);
-    return rt.type.clone();
+    let res = rt.type.clone();
+    rt.drop();
+    return res;
+  }
+  func getType(self, f: Fragment*): Type{
+    let rt = self.visit(f);
+    let res = rt.type.clone();
+    rt.drop();
+    return res;
   }
   
   func get_decl(self, ty: Type*): Option<Decl*>{
@@ -1455,6 +1466,9 @@ impl Resolver{
   }
   func is_panic(mc: Call*): bool{
     return mc.name.eq("panic") && mc.scope.is_none();
+  } 
+  func is_assert(mc: Call*): bool{
+    return mc.name.eq("assert") && mc.scope.is_none();
   }
 
   func validate_printf(self, node: Expr*, mc: Call*){
@@ -1495,6 +1509,10 @@ impl Resolver{
     }
     if(is_print(call) || is_panic(call)){
       generate_format(node, call, self);
+      return RType::new("void");
+    }
+    if(Resolver::is_assert(call)){
+      generate_assert(node, call, self);
       return RType::new("void");
     }
     if(is_format(call)){
@@ -1831,11 +1849,6 @@ impl Resolver{
       return;
     }else if let Stmt::Var(ve*) = (node){
       self.visit(ve);
-      return;
-    }else if let Stmt::Assert(e*) = (node){
-      if(!self.is_condition(e)){
-        panic("assert expr is not bool: {}", e);
-      }
       return;
     }else if let Stmt::For(f*) = (node){
       self.newScope();
