@@ -63,18 +63,18 @@ impl Lexer{
     return self.buf.str().substr(a, b);
   }
 
-  func get_line(self, line: i32): str{
+  func get_line(buf: str, line: i32): str{
     let cur_line = 1;
     let pos = 0;
-    while(pos < self.buf.len()){
+    while(pos < buf.len()){
       if(cur_line == line){
-        let end = self.buf.str().indexOf("\n", pos);
+        let end = buf.indexOf("\n", pos);
         if(end == -1){
-          end = self.buf.len() as i32;
+          end = buf.len() as i32;
         }
-        return self.buf.substr(pos, end);
+        return buf.substr(pos, end);
       }else{
-        let i = self.buf.str().indexOf("\n", pos);
+        let i = buf.indexOf("\n", pos);
         if(i == -1){
     
         }else{
@@ -87,7 +87,7 @@ impl Lexer{
   }
 
   func err(self, msg: str){
-    print("in file {}:{} `{}`\n", &self.path, self.line, self.get_line(self.line));
+    print("in file {}:{} `{}`\n", &self.path, self.line, get_line(self.buf.str(), self.line));
     panic("{}", msg);
   }
   func err(self, msg: String){

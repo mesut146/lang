@@ -15,12 +15,14 @@ bool Config::use_cache = true;
 
 std::string Config::root = "../tests";
 
-void list_dir(const std::string &path, std::function<void(const std::string &)> &f) {
-    for (const auto &e : std::filesystem::directory_iterator(path)) {
+std::vector<std::string> list_files(const std::string &dir) {
+    std::vector<std::string> res;
+    for (const auto &e : std::filesystem::directory_iterator(dir)) {
         if (e.is_directory()) continue;
         if (e.path().extension() != ".x") continue;
-        f(e.path().string());
+        res.push_back(e.path().string());
     }
+    return res;
 }
 
 DirCompiler get_compiler() {
@@ -59,28 +61,27 @@ void compileTest(bool std_test) {
     if (std_test) {
         build_std();
         //std tests
-        std::function<void(const std::string &)> f2 = [&](const std::string &file) {
+        Config::use_cache = false;
+        for (auto file : list_files(Config::root + "/std_test")) {
             DirCompiler dc = get_compiler();
             dc.compile_single(file, Config::root);
             dc.link_run(get_bin_name(file), dc.out_dir + "/std.a");
-        };
-        list_dir(Config::root + "/std_test", f2);
+        }
     } else {
-        std::function<void(const std::string &)> f = [&](const std::string &file) {
+        Config::use_cache = false;
+        for (auto file : list_files(Config::root + "/normal")) {
             DirCompiler dc = get_compiler();
             dc.compile_single(file, Config::root);
-            //dc.link_run(get_bin_name(file), dc.out_dir + "/std.a");
             dc.link_run(get_bin_name(file), "");
-        };
-        list_dir(Config::root + "/normal", f);
+        }
     }
 }
 
-void bootstrap() {
+void bootstrap(bool run) {
     //clean();
     DirCompiler dc = get_compiler();
     std::string bin_name = "x";
-    bool std_static = false;
+    bool std_static = true;
     if (std_static) {
         build_std();
         dc.compileAll(Config::root + "/parser", Config::root);
@@ -93,14 +94,16 @@ void bootstrap() {
     auto from = dc.out_dir + "/" + bin_name;
     auto to = "./" + bin_name;
     fs::copy_file(from, to, fs::copy_options::overwrite_existing);
-    dc.run();
+    if (run) {
+        dc.run();
+    }
 }
 
 void ownership() {
     auto common = Config::root + "/own/common.x";
     auto path = Config::root + "/own";
     Config::use_cache = false;
-    std::function<void(const std::string &)> f = [&](const std::string &file) {
+    for (auto &file : list_files(path)) {
         if (!file.ends_with("common.x")) {
             DirCompiler dc = get_compiler();
             dc.compile(common, Config::root);
@@ -110,7 +113,6 @@ void ownership() {
             dc.link_run(name, "");
         }
     };
-    list_dir(path, f);
 }
 
 
@@ -130,13 +132,15 @@ int main(int argc, char **args) {
         }
         //no arg
         if (argc == 0) {
-            bootstrap();
+            bootstrap(true);
             return 0;
         }
         auto arg = std::string(args[i]);
         ++i;
         if (arg == "help") {
             usage();
+        } else if (arg == "bt") {
+            bootstrap(false);
         } else if (arg == "test") {
             compileTest(false);
         } else if (arg == "test2") {

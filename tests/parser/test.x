@@ -9,6 +9,7 @@ import parser/debug_helper
 import parser/bridge
 import parser/utils
 import parser/ownership
+import parser/cache
 import std/map
 import std/io
 import std/libc
@@ -27,26 +28,10 @@ func make_context(): Context{
 }
 
 func build_std(){
-  Compiler::compile_dir("../tests/std", get_out(), root(), "", LinkType::Static{"std.a"});
+  use_cache = true;
+  Compiler::compile_dir("../tests/std", get_out(), root(), LinkType::Static{"std.a"});
 }
 
-/*func compile_dir(cmp: Compiler*, dir: str, link: bool, args: str){
-  let list = list(dir);
-  print("compile_dir '{}' -> {} elems\n", dir, list.len());
-  for(let i = 0;i < list.len();++i){
-    let name_c: String* = list.get_ptr(i);
-    let name: str = name_c.get(); 
-    if(!name.ends_with(".x")) continue;
-    let file: String = dir.str();
-    file.append("/");
-    file.append(name);
-    if(is_dir(file.str())) continue;
-    cmp.compile(file.cstr());
-    if(link){
-      cmp.link_run(bin_name(name).str(), args);
-    }
-  }
-}*/
 func compile_dir2(dir: str, args: str){
   let list: List<String> = list(dir);
   list.sort();
@@ -72,18 +57,17 @@ func compiler_test(std_test: bool){
   }
 }
 
-func bootstrap(){
+func bootstrap(run: bool){
   print("test::bootstrap\n");
   build_std();
-  //Compiler::compile_dir("../tests/parser", get_out(), root(), "", LinkType::Binary{"x2"});
-  //cmp.link_run("x", "libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++");
+  Compiler::compile_dir("../tests/parser", get_out(), root(), LinkType::Binary{"x2", "std.a", run});
 }
 
 func main(argc: i32, args: i8**){
   print("##########running##########\n");
   print_unit = false;
   if(argc == 1){
-    bootstrap();
+    bootstrap(true);
     return;
   }
   let a1 = get_arg(args, 1);
@@ -96,11 +80,13 @@ func main(argc: i32, args: i8**){
     return;
   }else if(a1.eq("std")){
     build_std();
+  }else if(a1.eq("bt")){
+    bootstrap(false);
   }
   else if(a1.eq("c")){
     let path = get_arg(args, 2);
     if(is_dir(path)){
-      Compiler::compile_dir(path, get_out(), root(), "", LinkType::Binary{bin_name(path).str()});
+      Compiler::compile_dir(path, get_out(), root(), LinkType::Binary{bin_name(path).str(), "", true});
     }else{
       Compiler::compile_single(root(), get_out(), path, "");
     }

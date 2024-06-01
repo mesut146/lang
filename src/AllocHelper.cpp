@@ -83,6 +83,10 @@ public:
     }
 
     std::any visitMethodCall(MethodCall *node) override {
+        if(Resolver::is_std_zeroed(node)){
+            auto ty = node->typeArgs.at(0);
+            return alloc(ty, node);
+        }
         if (is_std_parent_name(node)) {
             return alloc(Type("str"), node);
         }

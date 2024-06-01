@@ -7,6 +7,7 @@ import std/libc
 
 struct Parser{
   path: String;
+  buf: String;
   tokens: List<Token>;
   pos: i32;
   unit: Option<Unit*>;
@@ -14,14 +15,14 @@ struct Parser{
 
 impl Parser{
   func from_path(path: String): Parser{
-    let res = Parser{path.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
-    let lexer = Lexer::from_path(path);
+    let lexer = Lexer::from_path(path.clone());
+    let res = Parser{path, lexer.buf.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
     res.fill(lexer);
     return res;
   }
   func from_string(buf: String): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf.clone());
-    let res = Parser{lexer.path.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
+    let res = Parser{lexer.path.clone(), lexer.buf.clone(),  List<Token>::new(), 0, Option<Unit*>::new()};
     res.fill(lexer);
     return res;
   }
@@ -81,6 +82,15 @@ impl Parser{
       let t: Token* = self.pop();
       if(t.type is tt) return t;
       panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
+    }
+
+    func err(self, msg: str){
+      let line = self.peek().line;
+      print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
+      panic("{}", msg);
+    }
+    func err(self, msg: String){
+      self.err(msg.str());
     }
     
     func parse_unit(self): Unit{
@@ -670,8 +680,8 @@ impl Parser{
       let support_suffix = (kind is LitKind::INT || kind is LitKind::FLOAT || kind is LitKind::CHAR);
       if (pos != -1 && support_suffix) {
           //trim suffix
-          let trimmed = val.substr(0, (val.len() - sf.len()) as i32).str();
-          val = trimmed;
+          //let trimmed = val.substr(0, (val.len() - sf.len()) as i32).str();
+          //val = trimmed;
           return Expr::Lit{.n, Literal{kind, val, Option<Type>::new(Type::new(sf))}};
       }
     }

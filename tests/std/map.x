@@ -27,6 +27,19 @@ struct Map<K, V>{
   arr: List<Pair<K, V>>;
 }
 
+impl<K, V> Debug for Map<K, V>{
+  func debug(self, f: Fmt*){
+    f.print("{");
+    for(let i = 0;i < self.len();++i){
+      if(i > 0){
+        f.print(", ");
+      }
+      Debug::debug(self.arr.get_ptr(i), f);
+    }
+    f.print("}");
+  }
+}
+
 impl<K, V> Map<K, V>{
   func new(): Map<K, V>{
     return Map<K, V>{List<Pair<K, V>>::new()};

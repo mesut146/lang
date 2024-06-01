@@ -1,5 +1,5 @@
 //#derive(Debug)
-class BoxSt{
+struct BoxSt{
   a: i64;
   b: [i32; 10];
 }

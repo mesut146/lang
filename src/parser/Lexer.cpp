@@ -23,8 +23,6 @@ TokenType kw(std::string &s) {
     if (s == "i32") return I32;
     if (s == "f32") return F32;
     if (s == "f64") return F64;
-    if (s == "null")
-        return NULL_LIT;
     if (s == "import")
         return IMPORT;
     if (s == "as")

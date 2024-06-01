@@ -10,6 +10,7 @@ import parser/debug_helper
 import parser/stmt_emitter
 import parser/expr_emitter
 import parser/ownership
+import parser/cache
 import std/map
 import std/io
 import std/libc
@@ -22,6 +23,7 @@ struct Compiler{
   compiled: List<String>;
   protos: Option<Protos>;
   NamedValues: Map<String, Value*>;
+  globals: Map<String, Value*>;
   allocMap: Map<i32, Value*>;
   curMethod: Option<Method*>;
   loops: List<BasicBlock*>;
@@ -35,6 +37,7 @@ impl Drop for Compiler{
     Drop::drop(self.compiled);
     Drop::drop(self.protos);
     Drop::drop(self.NamedValues);
+    Drop::drop(self.globals);
     Drop::drop(self.allocMap);
     Drop::drop(self.loops);
     Drop::drop(self.loopNext);
@@ -178,6 +181,7 @@ impl Compiler{
      compiled: List<String>::new(),
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
+     globals: Map<String, Value*>::new(),
      allocMap: Map<i32, Value*>::new(),
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
@@ -192,8 +196,12 @@ impl Compiler{
     return &self.get_resolver().unit;
   }
 
-  func compile(self, path: str): String{
+  func compile(self, path: str, cache: Cache*): String{
     let outFile: String = get_out_file(path, self);
+    if(!cache.need_compile(path, outFile.str())){
+      self.compiled.add(outFile.clone());
+      return outFile;
+    }
     let ext = Path::ext(path);
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
@@ -213,7 +221,7 @@ impl Compiler{
     self.get_resolver().resolve_all();
     self.llvm.initModule(path);
     self.createProtos();
-    //init_globals(this);
+    self.init_globals();
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
@@ -243,11 +251,46 @@ impl Compiler{
     }
     Drop::drop(outFile_cstr);
     self.cleanup();
+    cache.update(path);
+    cache.write_cache();
     return outFile;
   }
 
   func cleanup(self){
     self.NamedValues.clear();
+  }
+
+  func init_globals(self){
+    let imports = self.get_resolver().get_imports();
+    for(let i = 0;i < imports.len();++i){
+      let is = imports.get_ptr(i);
+      let resolver = self.get_resolver().ctx.get_resolver(is);
+      for(let j = 0;j < resolver.unit.globals.len();++j){
+        let gl = resolver.unit.globals.get_ptr(j);
+        let type = self.get_resolver().getType(&gl.expr);
+        let ty = self.mapType(&type);
+        let init = ptr::null<Constant>();
+        let glob = make_global(gl.name.clone().cstr().ptr(), ty, init);
+        self.globals.add(gl.name.clone(), glob as Value*);
+      }
+    }
+    if(self.get_resolver().unit.globals.empty()){
+      return;
+    }
+    for(let j = 0;j < self.get_resolver().unit.globals.len();++j){
+      let gl = self.get_resolver().unit.globals.get_ptr(j);
+      let type = self.get_resolver().getType(&gl.expr);
+      let ty = self.mapType(&type);
+      let init = ptr::null<Constant>();
+      if(type.is_prim()){
+        let rhs_str = gl.expr.print();
+        init = makeInt(i64::parse(rhs_str.str()), self.getSize(&type) as i32) as Constant*;
+      }else{
+        panic("glob struct");
+      }
+      let glob = make_global(gl.name.clone().cstr().ptr(), ty, init);
+      self.globals.add(gl.name.clone(), glob as Value*);
+    }
   }
 
   //make all struct decl & method decl used by this module
@@ -499,15 +542,19 @@ impl Compiler{
     let ctx = Context::new(src_dir.str(), out_dir.str());
     let cmp = Compiler::new(ctx);
     let compiled = List<String>::new();
-    let obj = cmp.compile(file);
+    use_cache = false;
+    let cache = Cache::new(out_dir);
+    let obj = cmp.compile(file, &cache);
     compiled.add(obj);
     let path = link(&compiled, out_dir, bin_name(file).str(), args);
     run(path);
     Drop::drop(cmp);
   }
 
-  func compile_dir(src_dir: str, out_dir: str, root: str, args: str, lt: LinkType){
+  func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType){
     create_dir(out_dir);
+    let cache = Cache::new(out_dir);
+    cache.read_cache();
     let list: List<String> = list(src_dir);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
@@ -517,20 +564,22 @@ impl Compiler{
       if(is_dir(file.str())) continue;
       let ctx = Context::new(root.str(), out_dir.str());
       let cmp = Compiler::new(ctx);
-      let obj = cmp.compile(file.str());
+      let obj = cmp.compile(file.str(), &cache);
       Drop::drop(cmp);
       compiled.add(obj);
       file.drop();
-      if(i == 0 /*name.eq("stmt_emitter.x")*/){
-        list.drop();
-        compiled.drop();
-        return;
-      }
+      // if(i == 0 /*name.eq("stmt_emitter.x")*/){
+      //   list.drop();
+      //   compiled.drop();
+      //   return;
+      // }
     }
     list.drop();
-    if let LinkType::Binary(bin_name) = (&lt){
+    if let LinkType::Binary(bin_name, args, run) = (&lt){
       let path = link(&compiled, out_dir, bin_name, args);
-      Compiler::run(path);
+      if(run){
+        Compiler::run(path);
+      }
     }
     else if let LinkType::Static(lib_name) = (&lt){
       Compiler::build_library(&compiled, lib_name, out_dir, false);
@@ -543,7 +592,7 @@ impl Compiler{
 }//Compiler
 
 enum LinkType{
-  Binary(name: str),
+  Binary(name: str, args: str, run: bool),
   Static(name: str),
   Dynamic
 }

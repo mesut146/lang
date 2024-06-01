@@ -507,6 +507,19 @@ struct Literal{
   val: String;
   suffix: Option<Type>;
 }
+impl Literal{
+  func trim_suffix(self): str{
+    if(self.suffix.is_none()){
+      return self.val.str();
+    }
+    let suffix_str = self.suffix.get().print();
+    let res = self.val.substr(0, self.val.len() - suffix_str.len());
+    if(res.ends_with("_")){
+      res = res.substr(0, res.len() - 1);
+    }
+    return res;
+  }
+}
 
 enum LitKind{
   INT, STR, CHAR, BOOL, FLOAT

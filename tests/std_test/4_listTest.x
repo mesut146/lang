@@ -9,7 +9,7 @@ import std/libc
   assert(n2.unwrap() == 20);
 }*/
 
-class LA{
+struct LA{
   a: i8;
   b: i64;
 }
@@ -24,7 +24,7 @@ func listStruct(){
   assert(v2.a == 10 && v2.b == 20);
 }
 
-class LB{
+struct LB{
  a: str;
  b: i32;
 }
@@ -41,7 +41,7 @@ func listStruct2(){
   assert(v2.b == 20);
 }
 
-class Align{
+struct Align{
   a: i8;
   b: i16;
   c: i64;

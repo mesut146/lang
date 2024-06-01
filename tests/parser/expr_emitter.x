@@ -27,7 +27,11 @@ impl Compiler{
         return self.visit_infix(op, l.get(), r.get());
       }
       if let Expr::Name(name*)=(node){
-        return *self.NamedValues.get_ptr(name).unwrap();
+        let res = self.NamedValues.get_ptr(name);
+        if(res.is_none()){
+          self.get_resolver().err(node, format("internal err, no named value"));
+        }
+        return *res.unwrap();
       }
       if let Expr::Unary(op*, e*)=(node){
         if(op.eq("&")){
@@ -278,11 +282,11 @@ impl Compiler{
       if(Resolver::std_size(mc)){
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get_ptr(0));
-          let sz = self.getSize(&ty);
+          let sz = self.getSize(&ty) / 8;
           return makeInt(sz, 32);
         }else{
           let ty = mc.type_args.get_ptr(0);
-          let sz = self.getSize(ty);
+          let sz = self.getSize(ty) / 8;
           return makeInt(sz, 32);
         }
       }    
@@ -330,6 +334,9 @@ impl Compiler{
         let args = make_args();
         args_push(args, size);
         return CreateCall(proto, args);
+      }
+      if(Resolver::is_ptr_null(mc)){
+        panic("ptr null");
       }
       if(Resolver::is_ptr_deref(mc)){
         let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
@@ -622,14 +629,14 @@ impl Compiler{
           if (node.suffix.is_some()) {
               bits = self.getSize(node.suffix.get()) as i32;
           }
-          let s = node.val.clone().replace("_", "");
-          if (node.val.str().starts_with("0x") || node.val.str().starts_with("-0x")){
-            let val = i64::parse_hex(s.str());
+          let trimmed = node.trim_suffix();
+          let normal = trimmed.replace("_", "");
+          if (normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
+            let val: i64 = i64::parse_hex(normal.str());
             return makeInt(val, bits);
           }
-          let val = i64::parse(s.str());
-          let res = makeInt(val, bits);
-          return res;
+          let val: i64 = i64::parse(normal.str());
+          return makeInt(val, bits);
       }
       if(node.kind is LitKind::BOOL){
         if(node.val.eq("true")) return getTrue();

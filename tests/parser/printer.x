@@ -452,6 +452,11 @@ impl Debug for Call{
       }
     }
     f.print(&self.name);
+    if(!self.type_args.empty()){
+      f.print("<");
+      join(f, &self.type_args, ", ");
+      f.print(">");
+    }
     f.print("(");
     join(f, &self.args, ", ");
     f.print(")");

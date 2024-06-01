@@ -1446,6 +1446,9 @@ impl Resolver{
   func is_ptr_deref(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("deref");
   }
+  func is_ptr_null(mc: Call*): bool{
+    return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("ptr") && mc.name.eq("null");
+  }
   func std_size(mc: Call*): bool{
     return mc.is_static && mc.scope.is_some() && mc.scope.get().print().eq("std") && mc.name.eq("size");
   }
@@ -1530,6 +1533,14 @@ impl Resolver{
     if(std_is_ptr(call)){
       self.visit_type(call.type_args.get_ptr(0));
       return RType::new("bool");
+    }
+    if(is_ptr_null(call)){
+      if(call.type_args.len() != 1){
+        self.err(node, "ptr::null() expects one type arg");
+      }
+      let rt = self.visit_type(call.type_args.get_ptr(0));
+      rt.type = rt.type.toPtr();
+      return rt;
     }
     if(is_ptr_get(call)){
       if (call.args.len() != 2) {
@@ -1715,10 +1726,10 @@ impl Resolver{
 
   func visit_lit(self, lit: Literal*): RType{
     let kind = &lit.kind;
-    let value = lit.val.clone();
+    let value = lit.trim_suffix().str();
     if(lit.suffix.is_some()){
       if(i64::parse(value.str()) > max_for(lit.suffix.get())){
-        self.err("literal out of range");
+        self.err(format("literal out of range expected: {} got: {}", lit.suffix.get(), value));
       }
       return self.visit_type(lit.suffix.get());
     }

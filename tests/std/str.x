@@ -23,6 +23,10 @@ impl str{
       return &self.buf[0] as i8*;
     }
 
+    func slice(self): [u8]{
+      return self.buf;
+    }
+
     func len(self): i32{
       return self.buf.len() as i32;
     }
@@ -52,7 +56,7 @@ impl str{
       if(c >= '0' && c <= '9') return;
       if(c >= 'a' && c <= 'z') return;
       if(c >= 'A' && c <= 'Z') return;
-      let arr = ['"', '\'', '\n','\r','\t', ' ', '{', '}', '(',')','=','*','+','-','/',':',';','!','%',',','.','^','$','&','|','[',']','?','\\','_','<','>','~','#'];
+      let arr = ['"', '\'', '\n','\r','\t', ' ', '{', '}', '(',')','=','*','+','-','/',':',';','!','%',',','.','^','$','&','|','[',']','?','\\','_','<','>','~','#', '`'];
       for(let i = 0;i < arr.len();++i){
         if(arr[i] == c) return;
       }
@@ -63,6 +67,10 @@ impl str{
       for(let i = 0;i < self.len();++i){
         is_valid(self.buf[i]);
       }
+    }
+
+    func indexOf(self, s: str): i32{
+      return self.indexOf(s, 0);
     }
 
     func indexOf(self, s: str, off: i32): i32{
@@ -115,7 +123,7 @@ impl str{
       return self.indexOf(s, 0) != -1;
     }
 
-    func substr(self, start: i32): str{
+    func substr(self, start: i64): str{
       return self.substr(start, self.len());
     }
 
@@ -131,7 +139,7 @@ impl str{
     }
 
     //start >= 0 & end < len(), exclusive 
-    func substr(self, start: i32, end: i32): str{
+    func substr(self, start: i64, end: i64): str{
       if(start < 0) panic("start index out of bounds {}", start);
       if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
       if(start >= end) panic("range is invalid {}, {}", start, end);
@@ -173,7 +181,9 @@ impl str{
       while(true){
         let i = self.indexOf(sep, last);
         if(i == -1){
-          arr.add(self.substr(last));
+          if(last > self.len()){
+            arr.add(self.substr(last));
+          }
           break;
         }else{
           arr.add(self.substr(last, i));

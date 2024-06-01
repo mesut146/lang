@@ -17,6 +17,8 @@ struct AttrKind;
 struct Value;
 struct BasicBlock;
 struct PHINode;
+struct Constant;
+struct GlobalVariable;
 
 struct DICompileUnit;
 struct DIFile;
@@ -153,6 +155,7 @@ extern{
     func getFalse(): Value*;
     func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
+    func make_global(name: i8*, ty: llvm_Type*, init: Constant*): GlobalVariable*;
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;
@@ -165,6 +168,8 @@ extern{
     func CreateXor(l: Value*, r: Value*): Value*;
     func CreateShl(l: Value*, r: Value*): Value*;
     func CreateAShr(l: Value*, r: Value*): Value*;
+
+    func get_last_write_time(path: i8*): i64;
 }
 
 func getDefaultTargetTriple2(): CStr{

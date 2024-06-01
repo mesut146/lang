@@ -1,5 +1,15 @@
 import std/libc
 
+struct File;
+
+impl File{
+  func remove_file(path: str){
+    let path_c = CStr::from_slice(path);
+    remove(path_c.ptr());
+    path_c.drop();
+  }
+}
+
 func open_checked(path: str, mode: str): FILE*{
   let path_c = CStr::from_slice(path);
   let mode_c = CStr::from_slice(mode);
@@ -52,11 +62,13 @@ func read_string(path: str): String{
 func write_bytes(data: [u8], path: str){
   let f = open_checked(path, "w");
   let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
-  print("wrote {} of {}\n", cnt, data.len());
   fclose(f);
   if(cnt != data.len()){
     panic("didn't write all");
   }
+}
+func write_string(data: str, path: str){
+  write_bytes(data.slice(), path);
 }
 
 func list(path: str): List<String>{
@@ -66,7 +78,7 @@ func list(path: str): List<String>{
   path_c.drop();
   if(dp as u64 == 0) panic("no such dir {}", path);
   while(true){
-    let ep = readdir(dp);
+    let ep: dirent* = readdir(dp);
     if(ep as u64 == 0) break;
     let entry = str::new(ep.d_name[0..ep.len()]);
     list.add(entry.str());

@@ -181,6 +181,7 @@ void dbg_glob(Compiler *c, Global &g, const Type &type) {
 }
 
 void init_globals(Compiler *c) {
+    //imported globals
     for (auto &is : c->resolv->get_imports()) {
         auto res = c->resolv->context->getResolver(is);
         for (auto &g : res->unit->globals) {
@@ -1038,14 +1039,26 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         }
         return (llvm::Value *) Builder->getFalse();
     }
+    if (Resolver::is_std_zeroed(mc)) {
+        auto ty = resolv->getType(mc->typeArgs[0]);
+        auto ptr = getAlloc(mc);
+        auto sz = getSize2(ty);
+        Builder->CreateMemSet(ptr, makeInt(0, 8), sz, llvm::MaybeAlign(0));
+        return ptr;
+    }
     if (Resolver::is_std_size(mc)) {
         if (!mc->args.empty()) {
             auto ty = resolv->getType(mc->args[0]);
-            return (llvm::Value *) makeInt(getSize2(ty), 64);
+            return (llvm::Value *) makeInt(getSize2(ty) / 8, 64);
         } else {
             auto ty = resolv->getType(mc->typeArgs[0]);
-            return (llvm::Value *) makeInt(getSize2(ty), 64);
+            return (llvm::Value *) makeInt(getSize2(ty) / 8, 64);
         }
+    }
+    if (is_ptr_null(mc)) {
+        //return null
+        auto ty = mapType(mc->typeArgs.at(0));
+        return (llvm::Value *) llvm::Constant::getNullValue(ty);
     }
     if (is_ptr_get(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();

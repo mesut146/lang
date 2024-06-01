@@ -151,11 +151,11 @@ impl String{
       return res;
     }
     
-    func substr(self, start: i32): str{
+    func substr(self, start: i64): str{
       return self.substr(start, self.len() as i32);
     }
 
-    func substr(self, start: i32, end: i32): str{
+    func substr(self, start: i64, end: i64): str{
       return self.str().substr(start, end);
     }
     

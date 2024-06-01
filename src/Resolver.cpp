@@ -1563,6 +1563,14 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             return RType(Type("void"));
         }
     }
+    if (is_std_zeroed(mc)) {
+        if (mc->typeArgs.size() != 1) {
+            err(mc, "std::zeroed() requires one type argument");
+        }
+        auto ta = mc->typeArgs.at(0);
+        auto rt = resolve(ta);
+        return rt;
+    }
     if (is_std_size(mc)) {
         if (!mc->args.empty()) {
             resolve(mc->args[0]);
@@ -1614,6 +1622,14 @@ std::any Resolver::visitMethodCall(MethodCall *mc) {
             err(mc, "ptr elem type dont match val type");
         }
         return RType(Type("void"));
+    }
+    if (is_ptr_null(mc)) {
+        if (mc->typeArgs.size() != 1) {
+            err(mc, "std::is_ptr requires one type argument");
+        }
+        auto ta = mc->typeArgs.at(0);
+        auto ptr = ta.toPtr();
+        return resolve(ptr);
     }
     if (is_ptr_deref(mc)) {
         //unsafe deref

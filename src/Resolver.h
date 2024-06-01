@@ -48,6 +48,9 @@ static bool is_ptr_copy(MethodCall *mc) {
 static bool is_ptr_deref(MethodCall *mc) {
     return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "deref";
 }
+static bool is_ptr_null(MethodCall *mc) {
+    return mc->is_static && mc->scope && mc->scope->print() == "ptr" && mc->name == "null";
+}
 
 static bool is_drop_call(MethodCall *mc) {
     return mc->name == "drop" && mc->scope && mc->scope->print() == "Drop" && mc->is_static;
@@ -399,6 +402,10 @@ public:
     }
     static bool is_std_is_ptr(MethodCall *mc) {
         return mc->scope && mc->scope->print() == "std" && mc->name == "is_ptr";
+    }
+
+    static bool is_std_zeroed(MethodCall *mc) {
+        return mc->scope && mc->is_static && mc->scope->print() == "std" && mc->name == "zeroed";
     }
 
     std::any visitLiteral(Literal *lit) override;

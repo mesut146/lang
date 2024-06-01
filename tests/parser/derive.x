@@ -322,7 +322,8 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let info = FormatInfo{block: Block::new(), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
     //parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
-    block.list.add(parse_stmt(format("if(!({})){\nprintf(\"assert\");exit(1);\n}", arg), &r.unit));
+    let arg_norm = normalize_quotes(arg.print().str());
+    block.list.add(parse_stmt(format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, printMethod(r.curMethod.unwrap())), &r.unit));
     r.visit(block);
     r.format_map.add(node.id, info);
 }

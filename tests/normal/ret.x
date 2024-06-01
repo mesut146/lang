@@ -1,4 +1,4 @@
-class A{
+struct A{
     a: i32;
     b: [i32; 100];
 }

@@ -14,6 +14,7 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
+#include <filesystem>
 #include <iostream>
 #include <vector>
 
@@ -224,7 +225,7 @@ llvm::DILocalVariable *createParameterVariable(llvm::DIScope *scope, char *name,
     return DBuilder->createParameterVariable(scope, name, idx, file, line, type, preserve);
 }
 
-llvm::DILocalVariable* createAutoVariable(llvm::DIScope *scope, char* name, llvm::DIFile *file, int line, llvm::DIType* ty){
+llvm::DILocalVariable *createAutoVariable(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, llvm::DIType *ty) {
     return DBuilder->createAutoVariable(scope, name, file, line, ty);
 }
 
@@ -399,6 +400,12 @@ llvm::Type *getPtr() {
 llvm::GlobalVariable *make_stdout() {
     auto res = new llvm::GlobalVariable(*mod, getPtr(), false, llvm::GlobalValue::ExternalLinkage, nullptr, "stdout");
     res->addAttribute("global");
+    return res;
+}
+
+llvm::GlobalVariable *make_global(const char *name, llvm::Type *ty, llvm::Constant *init) {
+    auto res = new llvm::GlobalVariable(*mod, ty, false, llvm::GlobalValue::ExternalLinkage, init, name);
+    //res->addAttribute("global");
     return res;
 }
 
@@ -639,5 +646,10 @@ llvm::Value *getTrue() {
 }
 llvm::Value *getFalse() {
     return Builder->getFalse();
+}
+
+int64_t get_last_write_time(const char *path) {
+    auto time = std::filesystem::last_write_time(path).time_since_epoch() / std::chrono::milliseconds(1);
+    return time;
 }
 }

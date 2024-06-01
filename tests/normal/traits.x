@@ -1,7 +1,7 @@
-class A{
+struct A{
  a: i32;
 }
-class B{
+struct B{
   b: i64;
 }
 
