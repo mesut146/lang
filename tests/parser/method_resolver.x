@@ -14,7 +14,6 @@ struct Signature{
     args: List<Type>;
     scope: Option<RType>;
     real_scope: Option<RType>;
-    ret: Type;
     r: Option<Resolver*>;
     desc: Desc;
 }
@@ -46,19 +45,15 @@ impl Signature{
                     args: List<Type>::new(),
                     scope: Option<RType>::None,
                     real_scope: Option<RType>::None,
-                    ret: Type::new("void"),
                     r: Option::new(r),
                     desc: Desc::new()};
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let str = mc.print();
             //print("{}\n", str);
-            if(str.eq("Option::new(pr)")){
-                let x = 10;
-            }
             let scp: RType = r.visit(mc.scope.get());
             res.real_scope = Option::new(scp.clone());
-            is_trait = scp.trait.is_some();
+            is_trait = scp.is_trait();
             //we need this to handle cases like Option::new(...)
             if (scp.is_decl()) {
                 let trg: Decl* = r.get_decl(&scp).unwrap();
@@ -118,16 +113,12 @@ impl Signature{
         return res;
     }
     func new(m: Method*, map: Map<String, Type>*, desc: Desc): Signature{
-        if(printMethod(m).eq("Pair<T, U>::drop(*self)")){
-            let aa = 10;
-        }
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
             name: m.name.clone(),
             args: List<Type>::new(),
             scope: Option<RType>::None,
             real_scope: Option<RType>::None,
-            ret: replace_self(&m.type, m),
             r: Option<Resolver*>::None,
             desc: desc};
         if let Parent::Impl(info*) = (&m.parent){
@@ -274,7 +265,7 @@ impl MethodResolver{
         //let type_plain = scope_type;
         let imp_list = List<Pair<Impl*, i32>>::new();
         Drop::drop(imp_list);
-        if(sig.scope.is_some() && sig.scope.get().trait.is_some()){
+        if(sig.scope.is_some() && sig.scope.get().is_trait()){
             let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
             imp_list = self.get_impl(actual, Option::new(&sig.scope.get().type));
         }else{
@@ -394,9 +385,8 @@ impl MethodResolver{
             if (!target.path.eq(&self.r.unit.path)) {
                 self.r.addUsed(target);
             }
-            //let res = self.r.visit(&sig2.ret);
             let res = self.r.visit_type(&target.type);
-            res.desc = sig2.desc.clone();
+            res.method_desc = Option::new(sig2.desc.clone());
             Drop::drop(list);
             Drop::drop(real);
             Drop::drop(errors);
@@ -456,7 +446,7 @@ impl MethodResolver{
         Drop::drop(tmap);
         Drop::drop(typeMap);
         let res = self.r.visit_type(&gen_pair.a.type);
-        res.desc = gen_pair.b;
+        res.method_desc = Option::new(gen_pair.b);
         Drop::drop(type_params);
         Drop::drop(list);
         Drop::drop(real);
@@ -507,7 +497,7 @@ impl MethodResolver{
             return self.check_args(sig, sig2);
         }
 
-        if (sig.scope.get().trait.is_some()) {
+        if (sig.scope.get().is_trait()) {
             let real_scope = sig.args.get_ptr(0).unwrap_ptr();
             if(imp.trait_name.is_some()){
                 if(!imp.trait_name.get().name().eq(scope.name().str())){
@@ -556,8 +546,9 @@ impl MethodResolver{
     }
 
     func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
+        let mc = sig.mc.unwrap();
         let method = *sig2.m.get();
-        if (method.self.is_some() && !sig.mc.unwrap().scope.is_some()) {
+        if (method.self.is_some() && !mc.scope.is_some()) {
             return SigResult::Err{"member method called without scope".str()};
         }
         if (sig.args.len() != sig2.args.len()){
@@ -565,7 +556,7 @@ impl MethodResolver{
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
-        if(sig.mc.unwrap().print().eq("Drop::drop(pair.b)")){
+        if(mc.print().eq("Drop::drop(pair.b)")){
             let aa = 10;
         }
         for (let i = 0; i < sig.args.len(); ++i) {
@@ -590,7 +581,21 @@ impl MethodResolver{
             }
             let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
-                let res = SigResult::Err{format("arg is not compatible with param {} vs {}", t1_str.str(), t2_str.str())};
+                let arg = "";
+                if(method.self.is_some()){
+                    if(mc.is_static){
+                        arg = mc.args.get_ptr(i).print().str();
+                    }else{
+                        arg = mc.scope.get().print().str();
+                    }
+                }else{
+                    if(!mc.is_static && mc.scope.is_some()){
+                        arg = mc.scope.get().print().str();
+                    }else{
+                        arg = mc.args.get_ptr(i).print().str();
+                    }
+                }
+                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}", t1_str.str(), arg, t2_str.str())};
                 if(res.get_err().eq("arg is not compatible with param Pair<i32, i32> vs Pair<T, U>")){
                     let aa = 10;
                 }
@@ -803,7 +808,7 @@ impl MethodResolver{
         }
         let imp: ImplInfo* = m.parent.as_impl();
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
-        if(sig.scope.get().trait.is_some()){
+        if(sig.scope.get().is_trait()){
             Drop::drop(st);
             st = sig.args.get_ptr(0).unwrap_ptr().as_simple().clone();
         }

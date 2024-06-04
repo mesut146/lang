@@ -13,7 +13,6 @@ std::string printType(TokenType t) {
         TOKEN_CASE(NEW)
         TOKEN_CASE(LET)
         TOKEN_CASE(RETURN)
-        TOKEN_CASE(FROM)
         TOKEN_CASE(IS)
         TOKEN_CASE(VIRTUAL)
         TOKEN_CASE(NAMESPACE)

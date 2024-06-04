@@ -121,25 +121,35 @@ impl DebugInfo{
         return st;
     }
 
-    func make_variant_type(self, c: Compiler*, decl: Decl*, idx: i32, var_part: DICompositeType*, file: DIFile*, enum_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
-      let ev = decl.get_variants().get_ptr(idx);
+    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: DIFile*, var_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
+      let ev = decl.get_variants().get_ptr(var_idx);
       let name: String = format("{}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
       let elems = Metadata_vector_new();
       //empty ty
-      let st = createStructType(scope as DIScope*, name.clone().cstr().ptr(), file, decl.line, enum_size, elems);
+      let st = createStructType(scope as DIScope*, name.clone().cstr().ptr(), file, decl.line, var_size, elems);
       //fill ty
       let sl = getStructLayout(var_type as StructType*);
-      for(let i=0;i<ev.fields.len();++i){
+      let idx = 0;
+      if(decl.base.is_some()){
+        let base_ty = self.map_di(decl.base.get(), c);
+        let base_size = DIType_getSizeInBits(base_ty);
+        let off = 0;
+        let mem = createMemberType(st as DIScope*, CStr::from_slice("super").ptr(), file, decl.line, base_size, off, base_ty);
+        Metadata_vector_push(elems, mem as Metadata*);
+        ++idx;
+      }
+      for(let i = 0;i < ev.fields.len();++i){
         let fd = ev.fields.get_ptr(i);
         let fd_ty = self.map_di(&fd.type, c);
-        let off = getElementOffsetInBits(sl, i);
+        let off = getElementOffsetInBits(sl, idx);
         let fd_size = DIType_getSizeInBits(fd_ty);
         let mem = createMemberType(st as DIScope*, fd.name.clone().cstr().ptr(), file, decl.line, fd_size, off, fd_ty);
         Metadata_vector_push(elems, mem as Metadata*);
+        ++idx;
       }
       replaceElements(st, elems);
-      return createVariantMemberType(var_part as DIScope*, name.cstr().ptr(), file, decl.line, enum_size, var_off, idx, st as DIType*);
+      return createVariantMemberType(var_part as DIScope*, name.cstr().ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
     }
 
     func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
@@ -152,9 +162,6 @@ impl DebugInfo{
       if(decl.base.is_some()){
         let ty = self.map_di(decl.base.get(), c);
         base_ty = Option<DIType*>::new(ty);
-        let size = DIType_getSizeInBits(ty);
-        let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, 0, ty);
-        Metadata_vector_push(elems, mem as Metadata*);
       }
       let st_real = c.mapType(&decl.type);
       //Type_dump(st_real);
@@ -162,6 +169,10 @@ impl DebugInfo{
       if let Decl::Struct(fields*)=(decl){
         let idx = 0;
         if(decl.base.is_some()){
+          let ty = *base_ty.get();
+          let size = DIType_getSizeInBits(ty);
+          let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, 0, ty);
+          Metadata_vector_push(elems, mem as Metadata*);
           ++idx;
         }
         for(let i = 0;i < fields.len();++i){
@@ -174,25 +185,20 @@ impl DebugInfo{
           ++idx;
         }
       }else if let Decl::Enum(variants*)=(decl){
-        let enum_size = c.getSize(decl);
+        let data_size = c.getSize(decl) - ENUM_TAG_BITS();
         let tag_off = 0i64;
-        let var_idx = 1;
-        if(decl.base.is_some()){
-          tag_off = getElementOffsetInBits(sl, 1);
-          enum_size = DIType_getSizeInBits(base_ty.unwrap());
-          var_idx = 2;
-        }
         //create empty variant
         let tag_ty0 = as_type(ENUM_TAG_BITS());
         let tag = self.map_di(&tag_ty0, c);
-        let disc = createMemberType(scope, "".ptr(), file, decl.line, enum_size, tag_off, tag);
+        let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, tag);
         let elems2 = Metadata_vector_new();
-        let var_part = createVariantPart(scope, "".ptr(), file, decl.line, enum_size, disc, elems2);
+        let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
         //fill variant
+        let var_idx = 1;
         let var_off = getElementOffsetInBits(sl, var_idx);
-        for(let i=0;i<variants.len();++i){
+        for(let i = 0;i < variants.len();++i){
           let ev = variants.get_ptr(i);
-          let var_type = self.make_variant_type(c, decl, i, var_part, file, enum_size, st, var_off);
+          let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
           Metadata_vector_push(elems2, var_type as Metadata*);
         }
         replaceElements(var_part, elems2);

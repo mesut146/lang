@@ -143,7 +143,7 @@ impl DropHelper{
 
 func make_slice_type(): StructType*{
     let elems = make_vec();
-    vec_push(elems, getPointerTo(getInt(8)));
+    vec_push(elems, getPointerTo(getInt(8)) as llvm_Type*);
     vec_push(elems, getInt(SLICE_LEN_BITS()));
     let res = make_struct_ty2("__slice".ptr(), elems);
     //free(elems as i8*);
@@ -160,7 +160,7 @@ func make_string_type(sliceType: llvm_Type*): StructType*{
 
 func make_printf(): Function*{
     let args = make_vec();
-    vec_push(args, getPointerTo(getInt(8)));
+    vec_push(args, getPointerTo(getInt(8)) as llvm_Type*);
     let ft = make_ft(getInt(32), args, true);
     let f = make_func(ft, ext(), "printf".ptr());
     setCallingConv(f);
@@ -169,7 +169,7 @@ func make_printf(): Function*{
 }
 func make_fflush(): Function*{
     let args = make_vec();
-    vec_push(args, getPointerTo(getInt(8)));
+    vec_push(args, getPointerTo(getInt(8)) as llvm_Type*);
     let ft = make_ft(getInt(32), args, false);
     let f = make_func(ft, ext(), "fflush".ptr());
     setCallingConv(f);
@@ -179,7 +179,7 @@ func make_fflush(): Function*{
 func make_malloc(): Function*{
     let args = make_vec();
     vec_push(args, getInt(64));
-    let ft = make_ft(getPointerTo(getInt(8)), args, false);
+    let ft = make_ft(getPointerTo(getInt(8)) as llvm_Type*, args, false);
     let f = make_func(ft, ext(), "malloc".ptr());
     setCallingConv(f);
     //free(args as i8*);
@@ -240,10 +240,6 @@ func getMethods(unit: Unit*): List<Method*>{
   return list;
 }
 
-func make_decl_proto(decl: Decl*): StructType*{
-  return make_struct_ty(decl.type.print().cstr().ptr());
-}
-
 impl Compiler{
   func mapType(self, type: Type*): llvm_Type*{
     let p = self.protos.get();
@@ -268,7 +264,7 @@ impl Compiler{
     }
     if let Type::Pointer(elem*)=(type){
       let elem_ty = self.mapType(elem.get());
-      return getPointerTo(elem_ty);
+      return getPointerTo(elem_ty) as llvm_Type*;
     }
     if(!p.classMap.contains(&s)){
       p.dump();
@@ -277,19 +273,67 @@ impl Compiler{
     return p.get(&s);
   }
 
-  func make_decl(self, decl: Decl*, st: StructType*){
-    let elems = make_vec();
-    if(decl.base.is_some()){
-      vec_push(elems, self.mapType(decl.base.get()));
+  func make_decl_proto(self, decl: Decl*){
+    let p = self.protos.get();
+    if(decl.is_enum()){
+      let vars = decl.get_variants();
+      for(let i = 0;i < vars.len();++i){
+        let ev = vars.get_ptr(i);
+        let name = format("{}::{}", decl.type, ev.name);
+        let var_ty = make_struct_ty(name.clone().cstr().ptr());
+        p.classMap.add(name, var_ty as llvm_Type*);
+      }
     }
+    let st = make_struct_ty(decl.type.print().cstr().ptr());
+    p.classMap.add(decl.type.print(), st as llvm_Type*);
+  }
+
+  //normal decl protos and di protos
+  func make_decl_protos(self){
+    let p = self.protos.get();
+    let list = List<Decl*>::new();
+    getTypes(self.unit(), &list);
+    for (let i = 0;i < self.get_resolver().used_types.len();++i) {
+      let rt = self.get_resolver().used_types.get_ptr(i);
+      let decl = self.get_resolver().get_decl(rt).unwrap();
+      if (decl.is_generic) continue;
+      list.add(decl);
+    }
+    sort(&list, self.get_resolver());
+    //first create just protos to fill later
+    for(let i = 0;i < list.len();++i){
+      let decl = *list.get_ptr(i);
+      self.make_decl_proto(decl);
+    }
+    //fill with elems
+    for(let i = 0;i < list.len();++i){
+      let decl = *list.get_ptr(i);
+      self.fill_decl(decl, p.get(decl) as StructType*);
+    }
+    //di proto
+    for(let i = 0;i < list.len();++i){
+      let decl = *list.get_ptr(i);
+      self.llvm.di.get().map_di_proto(decl, self);
+    }
+    //di fill
+    for(let i = 0;i < list.len();++i){
+      let decl = *list.get_ptr(i);
+      self.llvm.di.get().map_di_fill(decl, self);
+    }
+    list.drop();
+  }
+
+  func fill_decl(self, decl: Decl*, st: StructType*){
+    let p = self.protos.get();
+    let elems = make_vec();
     if let Decl::Enum(variants*)=(decl){
       //calc enum size
       let max = 0;
-      for(let i=0;i < variants.len();++i){
+      for(let i = 0;i < variants.len();++i){
         let ev = variants.get_ptr(i);
         let name = format("{}::{}", decl.type, ev.name.str());
-        let var_ty = self.make_variant_type(ev, decl, &name);
-        self.protos.get().classMap.add(name, var_ty as llvm_Type*);
+        let var_ty = p.get(&name) as StructType*;
+        self.make_variant_type(ev, decl, &name, var_ty);
         let sz = getSizeInBits(var_ty);
         if(sz > max){
           max = sz;
@@ -298,7 +342,9 @@ impl Compiler{
       vec_push(elems, getInt(ENUM_TAG_BITS()));
       vec_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
     }else if let Decl::Struct(fields*)=(decl){
-      //if(fields.empty()) return;
+      if(decl.base.is_some()){
+        vec_push(elems, self.mapType(decl.base.get()));
+      }
       for(let i = 0;i < fields.len();++i){
         let fd = fields.get_ptr(i);
         let ft = self.mapType(&fd.type);
@@ -306,19 +352,18 @@ impl Compiler{
       }
     }
     setBody(st, elems);
-    //free(elems as i8*);
-    //Type_dump(st as llvm_Type*);
   }
-  func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*): StructType*{
+  func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: StructType*){
     let elems = make_vec();
-    for(let j=0;j < ev.fields.len();++j){
+    if(decl.base.is_some()){
+      vec_push(elems, self.mapType(decl.base.get()));
+    }
+    for(let j = 0;j < ev.fields.len();++j){
       let fd = ev.fields.get_ptr(j);
       let ft = self.mapType(&fd.type);
       vec_push(elems, ft);
     }
-    let res = make_struct_ty2(name.clone().cstr().ptr(), elems);
-    //free(elems as i8*);
-    return res;
+    setBody(ty, elems);
   }
 
   func make_proto(self, m: Method*){
@@ -337,13 +382,13 @@ impl Compiler{
     }
     let args = make_vec();
     if(rvo){
-      let rvo_ty = getPointerTo(self.mapType(&m.type));
+      let rvo_ty = getPointerTo(self.mapType(&m.type)) as llvm_Type*;
       vec_push(args, rvo_ty);
     }
     if(m.self.is_some()){
       let self_ty = self.mapType(&m.self.get().type);
       if(is_struct(&m.self.get().type)){
-        self_ty = getPointerTo(self_ty);
+        self_ty = getPointerTo(self_ty) as llvm_Type*;
       }
       vec_push(args, self_ty);
     }
@@ -351,7 +396,7 @@ impl Compiler{
       let prm = m.params.get_ptr(i);
       let pt = self.mapType(&prm.type);
       if(is_struct(&prm.type)){
-        pt = getPointerTo(pt);
+        pt = getPointerTo(pt) as llvm_Type*;
       }
       vec_push(args, pt);
     }
@@ -468,7 +513,7 @@ impl Compiler{
       }
     }
     let val = self.visit(node);
-    if(node is Expr::Obj || node is Expr::Call|| node is Expr::Lit || node is Expr::Unary || node is Expr::As){
+    if(node is Expr::Obj || node is Expr::Call|| node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
       return val;
     }
     if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
@@ -552,9 +597,6 @@ func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
 
 
 func get_tag_index(decl: Decl*): i32{
-  if(decl.base.is_some()){
-    return 1;
-  }
   return 0;
 }
 func get_data_index(decl: Decl*): i32{

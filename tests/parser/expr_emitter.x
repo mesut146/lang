@@ -12,6 +12,16 @@ import std/map
 
 //expr------------------------------------------------------
 impl Compiler{
+    func visit_name(self, node: Expr*, name: String*): Value*{
+      if(self.globals.contains(name)){
+        return *self.globals.get_ptr(name).unwrap();
+      }
+      let res = self.NamedValues.get_ptr(name);
+      if(res.is_none()){
+        self.get_resolver().err(node, format("internal err, no named value"));
+      }
+      return *res.unwrap();
+    } 
     func visit(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
       if let Expr::Par(e*)=(node){
@@ -27,11 +37,7 @@ impl Compiler{
         return self.visit_infix(op, l.get(), r.get());
       }
       if let Expr::Name(name*)=(node){
-        let res = self.NamedValues.get_ptr(name);
-        if(res.is_none()){
-          self.get_resolver().err(node, format("internal err, no named value"));
-        }
-        return *res.unwrap();
+        return self.visit_name(node, name);
       }
       if let Expr::Unary(op*, e*)=(node){
         if(op.eq("&")){
@@ -78,17 +84,25 @@ impl Compiler{
     }
   
     func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
-      let lhs_type = self.getType(lhs);
+      let lhs_rt = self.get_resolver().visit(lhs);
+      let rhs_rt = self.get_resolver().visit_type(rhs);
       //ptr to int
-      if (lhs_type.is_pointer() && rhs.print().eq("u64")) {
+      if (lhs_rt.type.is_pointer() && rhs.print().eq("u64")) {
         let val = self.get_obj_ptr(lhs);
           return CreatePtrToInt(val, self.mapType(rhs));
       }
-      if (lhs_type.is_prim()) {
-        let rhs_type = &self.get_resolver().visit_type(rhs).type;
-        return self.cast(lhs, rhs_type);
+      if (lhs_rt.type.is_prim()) {
+        return self.cast(lhs, &rhs_rt.type);
       }
-      return self.get_obj_ptr(lhs);
+      //enum to base, skip tag
+      let val = self.get_obj_ptr(lhs);
+      if(lhs_rt.is_decl()){
+        let decl = self.get_resolver().get_decl(&lhs_rt).unwrap();
+        if(decl.is_enum() && rhs_rt.is_decl()){
+          val = self.gep2(val, get_data_index(decl), self.mapType(&decl.type));
+        }
+      }
+      return val;
     }
   
     func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
@@ -110,7 +124,7 @@ impl Compiler{
       let index = Resolver::findVariant(decl, &smp.name);
       let ptr = self.get_alloc(node);
       let decl_ty = self.mapType(&decl.type);
-      let tag_ptr = self.gep2(ptr, get_tag_index(decl),decl_ty);
+      let tag_ptr = self.gep2(ptr, get_tag_index(decl), decl_ty);
       CreateStore(makeInt(index, ENUM_TAG_BITS()), tag_ptr);
       return ptr;
     }
@@ -119,13 +133,13 @@ impl Compiler{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.getType(scope);
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
+      if(decl.is_enum()){
+        //base field, skip tag
+        let ty = self.mapType(&decl.type);
+        scope_ptr = self.gep2(scope_ptr, 1, ty);
+      }
       let pair = self.get_resolver().findField(node, name, decl, &decl.type);
       let index = pair.b;
-      if(decl is Decl::Enum){
-        //enum base
-        //todo more depth
-        //scope_ptr = self.gep2(scope_ptr, 1, self.mapType(&decl.type));
-      }
       if (pair.a.base.is_some()) ++index;
       let sd_ty = self.mapType(&pair.a.type);
       return self.gep2(scope_ptr, index, sd_ty);
@@ -160,7 +174,7 @@ impl Compiler{
       let nextbb = create_bb();
       CreateBr(condbb);
       self.set_and_insert(condbb);
-      let phi_ty = getPointerTo(elem_ty);
+      let phi_ty = getPointerTo(elem_ty) as llvm_Type*;
       let phi = CreatePHI(phi_ty, 2);
       phi_addIncoming(phi, cur, bb);
       let ne = CreateCmp(get_comp_op("!=".ptr()), phi as Value*, end);
@@ -336,7 +350,8 @@ impl Compiler{
         return CreateCall(proto, args);
       }
       if(Resolver::is_ptr_null(mc)){
-        panic("ptr null");
+        let ty = self.mapType(mc.type_args.get_ptr(0));
+        return ConstantPointerNull_get(getPointerTo(ty));
       }
       if(Resolver::is_ptr_deref(mc)){
         let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
@@ -696,10 +711,14 @@ impl Compiler{
         for(let i = 0;i < args.len();++i){
           let arg = args.get_ptr(i);
           if(!arg.isBase) continue;
-          let base_ptr = self.gep2(ptr, 0, ty);
+          let base_index = 0;
+          if(decl.is_enum()){
+            base_index = 1;
+          }
+          let base_ptr = self.gep2(ptr, base_index, ty);
           let val_ptr = self.visit(&arg.expr);
-          let base_rt = self.get_resolver().visit(&arg.expr);
-          self.copy(base_ptr, val_ptr, &base_rt.type);
+          let base_ty = self.get_resolver().getType(&arg.expr);
+          self.copy(base_ptr, val_ptr, &base_ty);
         }
         if let Decl::Struct(fields*)=(decl){
           let field_idx = 0;

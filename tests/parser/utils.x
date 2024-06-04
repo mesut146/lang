@@ -351,6 +351,14 @@ impl Exit{
             }
             return res;
         }
+        if let Stmt::IfLet(iflet*)=(stmt){
+            let res = Exit::new(ExitType::NONE);
+            res.if_kind = Ptr::new(get_exit_type(iflet.then.get()));
+            if(iflet.els.is_some()){
+                res.else_kind = Ptr::new(get_exit_type(iflet.els.get().get()));
+            }
+            return res;
+        }
         return Exit::new(ExitType::NONE);
     }
 }

@@ -605,6 +605,10 @@ llvm::PointerType *getPointerTo(llvm::Type *type) {
     return type->getPointerTo();
 }
 
+llvm::Value* ConstantPointerNull_get(llvm::PointerType* ty){
+    return llvm::ConstantPointerNull::get(ty);
+}
+
 void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
     st->setBody(*elems);
 }

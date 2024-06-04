@@ -243,7 +243,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
         block.list.add(drop_st);
-        block.list.add(parse_stmt(format("exit(1);"), &r.unit));
+        block.list.add(parse_stmt("exit(1);".str(), &r.unit));
         //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);

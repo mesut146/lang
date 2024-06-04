@@ -1056,9 +1056,8 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         }
     }
     if (is_ptr_null(mc)) {
-        //return null
         auto ty = mapType(mc->typeArgs.at(0));
-        return (llvm::Value *) llvm::Constant::getNullValue(ty);
+        return (llvm::Value *) llvm::ConstantPointerNull::get(ty->getPointerTo());
     }
     if (is_ptr_get(mc)) {
         auto elem_type = resolv->getType(mc).unwrap();
@@ -1500,18 +1499,16 @@ std::any Compiler::visitFieldAccess(FieldAccess *node) {
     auto rt = resolv->resolve(node->scope);
     auto scope = get_obj_ptr(node->scope);
     auto decl = rt.targetDecl;
+    if (decl->isEnum()) {
+        //base field, skip tag
+        scope = gep2(scope, Layout::get_base_index(decl), decl->type);
+    }
     auto [sd, index] = resolv->findField(node->name, decl);
     if (index == -1) {
         resolv->err(node, "internal error");
     }
-    auto sd_ty = mapType(sd->type);
-    if (decl->isEnum()) {
-        //base field, skip tag
-        scope = gep2(scope, Layout::get_base_index(decl), decl->type);
-        //index++;
-    } else {
-    }
     if (sd->base) index++;
+    auto sd_ty = mapType(sd->type);
     return add_comment(gep2(scope, index, sd_ty), node->print());
 }
 
@@ -1856,7 +1853,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
         }
-        if (!else_scope->exit.is_exit()) {
+        if (!else_scope->exit.is_jump()) {
             Builder->CreateBr(next);
         } else {
             //return cleans all
@@ -1866,14 +1863,17 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         curOwner.end_branch(*else_scope);
         Builder->CreateBr(next);
     }
-    set_and_insert(next);
-    auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
-    auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
-    Builder->CreateCondBr(cond, then_clean, next2);
-    set_and_insert(then_clean);
-    curOwner.end_branch(*then_scope);
-    Builder->CreateBr(next2);
-    set_and_insert(next2);
+    if (!(then_scope->exit.is_jump() && else_scope->exit.is_jump())) {
+        set_and_insert(next);
+        auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
+        auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
+        Builder->CreateCondBr(cond, then_clean, next2);
+        set_and_insert(then_clean);
+        curOwner.end_branch(*then_scope);
+        Builder->CreateBr(next2);
+        set_and_insert(next2);
+    }
+
     curOwner.setScope(cur_scope);
     return nullptr;
 }

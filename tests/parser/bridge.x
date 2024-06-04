@@ -100,12 +100,13 @@ extern{
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
     func makeInt(val: i64, bits: i32): Value*;
-    func getPointerTo(type: llvm_Type*): llvm_Type*;
+    func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;
+    func ConstantPointerNull_get(ty: PointerType*): Value*;
     
     func make_ft(ret: llvm_Type*, args: vector*, vararg: bool): FunctionType*;
     func ext(): i32;

@@ -49,7 +49,7 @@ impl AstCopier{
         return Box::new(self.visit(box.get()));
     }
 
-    func visit_ptr<E>(self, opt: Ptr<E>*): Option<E>{
+    func visit_ptr<E>(self, opt: Ptr<E>*): Ptr<E>{
         if(opt.is_some()){
             return Ptr<E>::new(self.visit(opt.get()));
         }
@@ -71,6 +71,9 @@ impl AstCopier{
     func node(self, old: Node*): Node{
         let unit = self.unit.unwrap();
         let id = ++unit.last_id;
+        if(id == 713){
+            let a = 10;
+        }
         return Node::new(id, old.line);
     }
 
@@ -244,13 +247,13 @@ impl AstCopier{
             return Expr::Name{.id, name.clone()};
         }
         if let Expr::Call(mc*)=(node){
-            return Expr::Call{.id,self.visit(mc)};
+            return Expr::Call{.id, self.visit(mc)};
         }
         if let Expr::Par(e*)=(node){
-            return Expr::Par{.id,self.visit_box(e)};
+            return Expr::Par{.id, self.visit_box(e)};
         }
         if let Expr::Type(type*)=(node){
-            return Expr::Type{.id,self.visit(type)};
+            return Expr::Type{.id, self.visit(type)};
         }
         if let Expr::Unary(op*, e*)=(node){
             return Expr::Unary{.id, op.clone(), self.visit_box(e)};

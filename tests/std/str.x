@@ -31,6 +31,10 @@ impl str{
       return self.buf.len() as i32;
     }
 
+    func empty(self): bool{
+      return self.len() == 0;
+    }
+
     func new(buf: [u8]): str{
         let res = str{buf: buf};
         res.check_all();
@@ -147,6 +151,9 @@ impl str{
     }
     
     func eq(self, s: str): bool{
+      if(self.empty()){
+        return s.empty();
+      }
       return self.cmp(s) == 0;
     }
 

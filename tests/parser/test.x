@@ -27,9 +27,9 @@ func make_context(): Context{
   return Context::new(root().str(), out_dir.str());
 }
 
-func build_std(){
+func build_std(out_dir: str){
   use_cache = true;
-  Compiler::compile_dir("../tests/std", get_out(), root(), LinkType::Static{"std.a"});
+  Compiler::compile_dir("../tests/std", out_dir, root(), LinkType::Static{"std.a"});
 }
 
 func compile_dir2(dir: str, args: str){
@@ -50,47 +50,61 @@ func compile_dir2(dir: str, args: str){
 func compiler_test(std_test: bool){
   print("compiler_test\n");
   if(std_test){
-    build_std();
+    build_std(get_out());
     compile_dir2("../tests/std_test", format("{}/std.a", get_out()).str());
   }else{
     compile_dir2("../tests/normal", "");
   }
 }
 
-func bootstrap(run: bool){
+func bootstrap(run: bool, out_dir: str){
   print("test::bootstrap\n");
-  build_std();
-  Compiler::compile_dir("../tests/parser", get_out(), root(), LinkType::Binary{"x2", "std.a", run});
+  build_std(out_dir);
+  let args = format("{}/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", out_dir);
+  let name = "x_".str();
+  if(out_dir.contains("/")){
+    let rest = out_dir.substr(out_dir.lastIndexOf("/") + 1);
+    name.append(rest);
+  }
+  let bin = Compiler::compile_dir("../tests/parser", out_dir, root(), LinkType::Binary{name.str(), args.str(), run});
+  let bin2 = format("./{}", name);
+  File::copy(bin.str(), bin2.str());
+  print("wrote {}\n", bin2);
 }
 
 func main(argc: i32, args: i8**){
   print("##########running##########\n");
   print_unit = false;
   if(argc == 1){
-    bootstrap(true);
+    bootstrap(true, get_out());
     return;
   }
-  let a1 = get_arg(args, 1);
-  if(a1.eq("test")){
+  let cmd = Args::new(argc, args);
+  let arg = cmd.get();
+  if(arg.eq("test")){
     compiler_test(false);
     return;
   }
-  else if(a1.eq("test2")){
+  else if(arg.eq("test2")){
     compiler_test(true);
     return;
-  }else if(a1.eq("std")){
-    build_std();
-  }else if(a1.eq("bt")){
-    bootstrap(false);
+  }else if(arg.eq("std")){
+    build_std(get_out());
+  }else if(arg.eq("bt")){
+    let out = get_out();
+    if(cmd.has()){
+      out = cmd.get().str();
+    }
+    bootstrap(false, out);
   }
-  else if(a1.eq("c")){
+  else if(arg.eq("c")){
     let path = get_arg(args, 2);
     if(is_dir(path)){
       Compiler::compile_dir(path, get_out(), root(), LinkType::Binary{bin_name(path).str(), "", true});
     }else{
       Compiler::compile_single(root(), get_out(), path, "");
     }
+  }else{
+    panic("invalid cmd: {}", arg);
   }
-
-  
 }

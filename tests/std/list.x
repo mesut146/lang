@@ -62,16 +62,16 @@ impl<T> List<T>{
     panic("index {} out of bounds ({}, {})", pos, 0, self.count);
   }
   
-  func remove(self, pos: i64){
+  func remove(self, pos: i64): T{
     self.check(pos);
     let elem = self.get_internal(pos);
-    Drop::drop(elem);
     //shift rhs of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
       let lhs = ptr::get(self.ptr, i);
       *lhs = ptr::deref(ptr::get(self.ptr, i + 1));
     }
     self.count -= 1;
+    return elem;
   }
 
   func pop_back(self){

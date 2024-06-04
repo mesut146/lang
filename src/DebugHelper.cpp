@@ -176,9 +176,6 @@ llvm::DIType *Compiler::map_di_fill(BaseDecl *decl) {
         int idx = 0;
         int var_off = sl->getElementOffsetInBits(Layout::get_data_index(decl));
         for (auto &evar : ed->variants) {
-            auto var_name = decl->type.print() + "::" + evar.name;
-            auto var_type = (llvm::StructType *) classMap.at(var_name);
-            auto var_size = mod->getDataLayout().getStructLayout(var_type)->getSizeInBits();
             auto var_type_di = make_variant_type(ed, evar, this, var_part, file, idx, st, var_off, base_ty);
             var_elems.push_back(var_type_di);
             ++idx;

@@ -361,6 +361,17 @@ Exit Exit::get_exit_type(Statement *stmt) {
         }
         return res;
     }
+    auto iflet = dynamic_cast<IfLetStmt *>(stmt);
+    if (iflet) {
+        auto res = Exit{ExitType::NONE};
+        auto if_type = get_exit_type(iflet->thenStmt.get());
+        res.if_kind = std::make_unique<Exit>(std::move(if_type));
+        if (iflet->elseStmt) {
+            auto else_kind = get_exit_type(iflet->elseStmt.get());
+            res.else_kind = std::make_unique<Exit>(std::move(else_kind));
+        }
+        return res;
+    }
     return ExitType::NONE;
 }
 
@@ -369,15 +380,12 @@ void Compiler::make_decl_protos() {
     for (auto bd : getTypes(unit.get())) {
         if (bd->isGeneric) continue;
         list.push_back(bd);
-        //print("local "+bd->type.print());
     }
     for (auto bd : resolv->usedTypes) {
         if (bd->isGeneric) {
-            //error("gen");
             continue;
         }
         list.push_back(bd);
-        //print("used "+bd->type.print());
     }
     sort(list, resolv.get());
     for (auto bd : list) {
@@ -437,9 +445,6 @@ llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
             if (var_size > max_var) {
                 max_var = var_size;
             }
-            /*if (decl->type.print() == "Expr") {
-                print(var_mangled + "=" + std::to_string(var_size / 8) + " max=" + std::to_string(max_var / 8));
-            }*/
         }
         auto data_size = max_var / 8;
         auto tag_type = getInt(ENUM_TAG_BITS);

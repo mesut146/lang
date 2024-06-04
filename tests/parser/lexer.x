@@ -187,7 +187,6 @@ impl Lexer{
     if(s.eq("null")) return TokenType::NULL_LIT;
     if(s.eq("as")) return TokenType::AS;
     if(s.eq("is")) return TokenType::IS;
-    if(s.eq("from")) return TokenType::FROM;
     if(s.eq("return")) return TokenType::RETURN;
     if(s.eq("continue")) return TokenType::CONTINUE;
     if(s.eq("if")) return TokenType::IF;

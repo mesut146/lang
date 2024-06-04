@@ -183,24 +183,24 @@ impl Desc{
 
 struct RType{
   type: Type;
-  trait: Option<Trait*>;
   value: Option<String>;
   vh: Option<VarHolder>;
   desc: Desc;
+  method_desc: Option<Desc>;
 }
 impl RType{
   func new(s: str): RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<Trait*>::None, Option<String>::None, Option<VarHolder>::None, Desc::new()};
+    return RType{typ, Option<String>::None, Option<VarHolder>::None, Desc::new(), Option<Desc>::new()};
   }
   func clone(self): RType{
     return RType{type: self.type.clone(),
-      trait: self.trait,
       value: self.value.clone(),
       vh: self.vh.clone(),
-      desc: self.desc.clone()
+      desc: self.desc.clone(),
+      method_desc: self.method_desc.clone()
     };
   }
   func is_decl(self): bool{
@@ -210,7 +210,10 @@ impl RType{
     return self.desc.kind.is_trait();
   }
   func is_method(self): bool{
-    return self.desc.kind.is_method();
+    if(self.method_desc.is_none()){
+      return false;
+    }
+    return self.method_desc.get().kind.is_method();
   }
 }
 
@@ -514,7 +517,6 @@ impl Resolver{
         self.addType(decl.type.name().clone(), res);
       }else if let Item::Trait(tr*)=(it){
         let res = RType::new(tr.type.clone());
-        res.trait = Option::new(tr);
         res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*)=(it){
@@ -575,7 +577,6 @@ impl Resolver{
       path = &self.curMethod.unwrap().path;
     }
     let str = format("{}:{}\n{} {}", path, node.line, msg, node);
-    //self.err(str);
     panic("{}\n", str);
   }
   func err(self, node: Expr*, msg: String){
@@ -588,6 +589,14 @@ impl Resolver{
   }
   func err(self, node: Stmt*, msg: String){
     self.err(node, msg.str());
+  }
+  func err(self, line: i32, msg: String){
+    let path = &self.unit.path;
+    if(self.curMethod.is_some()){
+      path = &self.curMethod.unwrap().path;
+    }
+    let str = format("{}:{}\n{}", path, line, msg);
+    panic("{}\n", str);
   }
 
   func getType(self, e: Type*): Type{
@@ -655,38 +664,42 @@ impl Resolver{
     panic("get_trait {}={}", rt.type, rt.desc);
   }
   func get_method(self, rt: RType*): Option<Method*>{
-    if(rt.desc.kind is RtKind::Method){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+    if(rt.method_desc.is_none()){
+      return Option<Method*>::new();
+    }
+    let desc = rt.method_desc.get();
+    if(desc.kind is RtKind::Method){
+      let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(rt.desc.idx);
+      let item = unit.items.get_ptr(desc.idx);
       if let Item::Method(m*) = (item){
         return Option::new(m);
       }
     }
-    if let RtKind::MethodImpl(idx2) = (rt.desc.kind){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+    if let RtKind::MethodImpl(idx2) = (desc.kind){
+      let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(rt.desc.idx);
+      let item = unit.items.get_ptr(desc.idx);
       if let Item::Impl(imp*) = (item){
         let m = imp.methods.get_ptr(idx2);
         return Option::new(m);
       }
     }
-    if let RtKind::MethodGen = (rt.desc.kind){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
-      let m = resolver.generated_methods.get_ptr(rt.desc.idx);
+    if let RtKind::MethodGen = (desc.kind){
+      let resolver = self.ctx.create_resolver(&desc.path);
+      let m = resolver.generated_methods.get_ptr(desc.idx);
       return Option::new(m.get());
     }
-    if let RtKind::MethodExtern(idx2) = (rt.desc.kind){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+    if let RtKind::MethodExtern(idx2) = (desc.kind){
+      let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(rt.desc.idx);
+      let item = unit.items.get_ptr(desc.idx);
       if let Item::Extern(methods*) = (item){
         let m = methods.get_ptr(idx2);
         return Option::new(m);
       }
     }
-    panic("get_method {}={}", rt.type, rt.desc);
+    panic("get_method {}={}", rt.type, desc);
   }
 
   func visit_item(self, node: Item*){
@@ -759,11 +772,25 @@ impl Resolver{
   func visit_decl(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
     node.is_resolved = true;
+    let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
-      self.visit_type(node.base.get());
+      let base_rt = self.visit_type(node.base.get());
+      let base_decl = self.get_decl(&base_rt).unwrap();
+      if(base_decl.is_struct()){
+        base_fields = Option::new(base_decl.get_fields());
+      }
     }
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get_ptr(i);
+      if(base_fields.is_some()){
+        let base_f = base_fields.unwrap();
+        for(let j = 0;j < base_f.len();++j){
+          let bf = base_f.get_ptr(j);
+          if(bf.name.eq(&fd.name)){
+            self.err(node.line, format("field name '{}' already declared in base", fd.name));
+          }
+        }
+      }
       self.visit_type(&fd.type);
       if(self.is_cyclic(&fd.type, &node.type)){
         self.err(format("cyclic type {}", node.type));
@@ -1377,6 +1404,9 @@ impl Resolver{
   }
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
+    if(node.id == 712){
+      let a = 10;
+    }
     if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess || e is Expr::Lit){
       let res = self.visit(e);
       res.type = res.type.clone().toPtr();
@@ -1606,12 +1636,11 @@ impl Resolver{
       let arr_type = self.getType(call.scope.get()).unwrap_ptr();
       return RType::new(arr_type.elem().clone().toPtr());
     }
-    let sig = Signature::new(call, self);
-    if(call.scope.is_some()){
-      let mr = MethodResolver::new(self);
-      return mr.handle(node, &sig);
-    }
-    if(call.name.eq("malloc")){
+    if(call.scope.is_none() && call.name.eq("malloc")){
+      let argt = self.getType(call.args.get_ptr(0));
+      if(!argt.is_prim()){
+        self.err(node, "malloc arg is not integer");
+      }
       if(call.type_args.empty()){
         return RType::new(Type::new("i8").toPtr());
       }else{
@@ -1619,6 +1648,10 @@ impl Resolver{
         return RType::new(arg.type.clone().toPtr());
       }
     }
+    if(node.print().eq("(0).debug(&f_678)")){
+      let a = 10;
+    }
+    let sig = Signature::new(call, self);
     let mr = MethodResolver::new(self);
     return mr.handle(node, &sig);
   }
@@ -1764,6 +1797,20 @@ impl Resolver{
         return res;
       }
     }
+    //external globals
+    let imports = self.get_imports();
+    for (let i = 0;i < imports.len();++i) {
+      let is = imports.get_ptr(i);
+      let res = self.ctx.get_resolver(is);
+      for (let j = 0;j < res.unit.globals.len();++j) {
+        let glob = res.unit.globals.get_ptr(j);
+        if (glob.name.eq(name)) {
+          //other unit's expr id conflicts our unit, so clone to have unique id
+          let expr_copied = AstCopier::clone(&glob.expr, &self.unit);
+          return self.visit(&expr_copied);
+        }
+      }
+    }
     self.dump();
     self.err(node, "unknown identifier");
     panic("");
@@ -1775,7 +1822,8 @@ impl Resolver{
     if(self.cache.contains(&node.id)){
       return self.cache.get_ptr(&node.id).unwrap().clone();
     }
-    panic("not cached id={} line: {} {}", id, node.line, node);
+    self.err(node, format("not cached id={} line: {}", id, node.line));
+    panic("");
   }
 
   func visit(self, node: Expr*): RType{
@@ -1783,6 +1831,9 @@ impl Resolver{
     if(id == -1) panic("id=-1");
     if(self.cache.contains(&node.id)){
       return self.cache.get_ptr(&node.id).unwrap().clone();
+    }
+    if(id == 713){
+      let a = 10;
     }
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());

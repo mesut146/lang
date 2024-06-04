@@ -297,38 +297,7 @@ impl Compiler{
   func createProtos(self){
     self.protos = Option::new(Protos::new());
     let p = self.protos.get();
-    let list = List<Decl*>::new();
-    getTypes(self.unit(), &list);
-    for (let i = 0;i < self.get_resolver().used_types.len();++i) {
-      let rt = self.get_resolver().used_types.get_ptr(i);
-      let decl = self.get_resolver().get_decl(rt).unwrap();
-      if (decl.is_generic) continue;
-      list.add(decl);
-    }
-    sort(&list, self.get_resolver());
-    //first create just protos to fill later
-    for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
-      let st = make_decl_proto(decl);
-      p.classMap.add(decl.type.print(), st as llvm_Type*);
-    }
-    //fill with elems
-    for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
-      self.make_decl(decl, p.get(decl) as StructType*);
-    }
-    //di proto
-    for(let i=0;i<list.len();++i){
-      let decl = *list.get_ptr(i);
-      self.llvm.di.get().map_di_proto(decl, self);
-    }
-    //di fill
-    for(let i = 0;i<list.len();++i){
-      let decl = *list.get_ptr(i);
-      self.llvm.di.get().map_di_fill(decl, self);
-    }
-    list.drop();
-    
+    self.make_decl_protos();
     //methods
     let methods: List<Method*> = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
@@ -464,6 +433,10 @@ impl Compiler{
     return self.protos.get().cur.unwrap();
   }
 
+  func add_bb(self, bb: BasicBlock*){
+    func_insert(self.cur_func(), bb);
+  }
+
   func set_and_insert(self, bb: BasicBlock*){
     func_insert(self.cur_func(), bb);
     SetInsertPoint(bb);
@@ -522,6 +495,7 @@ impl Compiler{
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
       //run if linked
+      print("build binary {}\n", path);
     }else{
       panic("link failed '{}'", cmd_s);
     }
@@ -539,6 +513,7 @@ impl Compiler{
   }
 
   func compile_single(src_dir: str, out_dir: str, file: str, args: str){
+    create_dir(out_dir);
     let ctx = Context::new(src_dir.str(), out_dir.str());
     let cmp = Compiler::new(ctx);
     let compiled = List<String>::new();
@@ -551,7 +526,7 @@ impl Compiler{
     Drop::drop(cmp);
   }
 
-  func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType){
+  func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
     create_dir(out_dir);
     let cache = Cache::new(out_dir);
     cache.read_cache();
@@ -568,25 +543,23 @@ impl Compiler{
       Drop::drop(cmp);
       compiled.add(obj);
       file.drop();
-      // if(i == 0 /*name.eq("stmt_emitter.x")*/){
-      //   list.drop();
-      //   compiled.drop();
-      //   return;
-      // }
     }
     list.drop();
     if let LinkType::Binary(bin_name, args, run) = (&lt){
       let path = link(&compiled, out_dir, bin_name, args);
+      compiled.drop();
       if(run){
         Compiler::run(path);
       }
+      return path;
     }
     else if let LinkType::Static(lib_name) = (&lt){
-      Compiler::build_library(&compiled, lib_name, out_dir, false);
+      let res = Compiler::build_library(&compiled, lib_name, out_dir, false);
+      compiled.drop();
+      return res;
     }else{
       panic("compile_dir");
     }
-    compiled.drop();
   }
  
 }//Compiler

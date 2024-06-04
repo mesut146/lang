@@ -76,6 +76,42 @@ impl Compiler{
       CreateBr(condbb);
       self.set_and_insert(next);
     }
+
+    func visit_if(self, node: IfStmt*){
+      let cond = self.branch(&node.e);
+      let line = node.e.line;
+      let then_name = format("if_then_{}", line);
+      let else_name = format("if_else_{}", line);
+      let next_name = format("if_next_{}", line);
+      let then = create_bb_named(CStr::new(then_name).ptr());
+      let elsebb = create_bb_named(CStr::new(else_name).ptr());
+      let next = create_bb_named(CStr::new(next_name).ptr());
+      CreateCondBr(cond, then, elsebb);
+      self.set_and_insert(then);
+      self.visit(node.then.get());
+      let exit_then = Exit::get_exit_type(node.then.get());
+      if(!exit_then.is_jump()){
+        CreateBr(next);
+      }
+      self.set_and_insert(elsebb);
+      let else_jump = false;
+      if(node.els.is_some()){
+        self.visit(node.els.get().get());
+        let exit_else = Exit::get_exit_type(node.els.get().get());
+        else_jump = exit_else.is_jump();
+        if(!else_jump){
+          CreateBr(next);
+        }
+        exit_else.drop();
+      }else{
+        CreateBr(next);
+      }
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(next);
+        self.add_bb(next);
+      }
+      exit_then.drop();
+    }
   
     func visit_iflet(self, node: IfLet*){
       let rt = self.get_resolver().visit_type(&node.ty);
@@ -126,16 +162,23 @@ impl Compiler{
         CreateBr(next);
       }
       self.set_and_insert(elsebb);
+      let else_jump = false;
       if (node.els.is_some()) {
         self.visit(node.els.get().get());
         let exit_else = Exit::get_exit_type(node.els.get().get());
-        if (!exit_else.is_jump()) {
+        else_jump = exit_else.is_jump();
+        if (!else_jump) {
           CreateBr(next);
         }
+        exit_else.drop();
       }else{
         CreateBr(next);
       }
-      self.set_and_insert(next);
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(next);
+        self.add_bb(next);
+      }
+      exit_then.drop();
     }
   
     func visit_for(self, node: ForStmt*){
@@ -174,40 +217,6 @@ impl Compiler{
       self.loopNext.pop_back();
       CreateBr(condbb);
       self.set_and_insert(next);
-    }
-  
-    func visit_if(self, node: IfStmt*){
-      let cond = self.branch(&node.e);
-      let line = node.e.line;
-      let then_name = format("if_then_{}", line);
-      let else_name = format("if_else_{}", line);
-      let next_name = format("if_next_{}", line);
-      let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-      let elsebb = create_bb_named(CStr::new(else_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
-      CreateCondBr(cond, then, elsebb);
-      SetInsertPoint(then);
-      self.visit(node.then.get());
-      let exit_then = Exit::get_exit_type(node.then.get());
-      if(!exit_then.is_jump()){
-        CreateBr(next);
-      }
-      self.set_and_insert(elsebb);
-      if(node.els.is_some()){
-        self.visit(node.els.get().get());
-        let exit_else = Exit::get_exit_type(node.els.get().get());
-        if(!exit_else.is_jump()){
-          CreateBr(next);
-        }
-        if(!exit_then.is_jump() || !exit_else.is_jump()){
-          self.set_and_insert(next);
-        }
-        exit_else.drop();
-      }else{
-        CreateBr(next);
-        self.set_and_insert(next);
-      }
-      exit_then.drop();
     }
 
     func visit_assert(self, expr: Expr*){

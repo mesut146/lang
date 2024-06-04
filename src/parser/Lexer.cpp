@@ -27,8 +27,6 @@ TokenType kw(std::string &s) {
         return IMPORT;
     if (s == "as")
         return AS;
-    if (s == "from")
-        return FROM;
     if (s == "return")
         return RETURN;
     if (s == "continue")

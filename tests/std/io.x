@@ -8,6 +8,11 @@ impl File{
     remove(path_c.ptr());
     path_c.drop();
   }
+  func copy(from: str, to: str): bool{
+    let data = read_bytes(from);
+    write_bytes(data.slice(), to);
+    return true;
+  }
 }
 
 func open_checked(path: str, mode: str): FILE*{
@@ -203,6 +208,31 @@ func get_arg(args: i8**, idx: i32): str{
     panic("null");
   }
   let len = strlen(a1 as i8*, 1000);
-  //let sl = a1[0..len];
   return str::new(a1[0..len]);
+}
+
+struct Args{
+  args: List<String>;
+}
+
+impl Args{
+  func new(argc: i32, args: i8**): Args{
+    let res = Args{args: List<String>::new()};
+    for(let i = 1; i < argc;++i){
+      let a1 = *ptr::get(args, i) as u8*;
+      if(a1 as u64 == 0){
+        panic("null");
+      }
+      let len = strlen(a1 as i8*, 1000);
+      res.args.add(str::new(a1[0..len]).str());
+    }
+    return res;
+  }
+  func get(self): String{
+    let res = self.args.remove(0);
+    return res;
+  }
+  func has(self): bool{
+    return self.args.len() > 0;
+  }
 }

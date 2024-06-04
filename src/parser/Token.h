@@ -37,7 +37,6 @@ enum TokenType {
     IMPORT,
     EXTERN,
     AS,
-    FROM,
     RETURN,
     BREAK,
     CONTINUE,
