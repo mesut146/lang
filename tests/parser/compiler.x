@@ -261,30 +261,39 @@ impl Compiler{
   }
 
   func init_globals(self){
-    let imports = self.get_resolver().get_imports();
+    let resolv = self.get_resolver();
+    //extern globals
+    /*let imports = self.get_resolver().get_imports();
     for(let i = 0;i < imports.len();++i){
       let is = imports.get_ptr(i);
       let resolver = self.get_resolver().ctx.get_resolver(is);
       for(let j = 0;j < resolver.unit.globals.len();++j){
         let gl = resolver.unit.globals.get_ptr(j);
-        let type = self.get_resolver().getType(&gl.expr);
-        let ty = self.mapType(&type);
+        let rt = self.get_resolver().glob_map.get_ptr(&gl.id).unwrap();
+        let ty = self.mapType(&rt.type);
         let init = ptr::null<Constant>();
         let glob = make_global(gl.name.clone().cstr().ptr(), ty, init);
         self.globals.add(gl.name.clone(), glob as Value*);
       }
+    }*/
+    for(let i = 0;i < resolv.glob_map.len();++i){
+      let pair = resolv.glob_map.get_pair_idx(i).unwrap();
+      let ty = self.mapType(&pair.b.type);
+      let init = ptr::null<Constant>();
+      let glob = make_global(pair.a.clone().cstr().ptr(), ty, init);
+      self.globals.add(pair.a.clone(), glob as Value*);
     }
     if(self.get_resolver().unit.globals.empty()){
       return;
     }
     for(let j = 0;j < self.get_resolver().unit.globals.len();++j){
       let gl = self.get_resolver().unit.globals.get_ptr(j);
-      let type = self.get_resolver().getType(&gl.expr);
-      let ty = self.mapType(&type);
+      let rt = self.get_resolver().visit(&gl.expr);
+      let ty = self.mapType(&rt.type);
       let init = ptr::null<Constant>();
-      if(type.is_prim()){
+      if(rt.type.is_prim()){
         let rhs_str = gl.expr.print();
-        init = makeInt(i64::parse(rhs_str.str()), self.getSize(&type) as i32) as Constant*;
+        init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
       }else{
         panic("glob struct");
       }

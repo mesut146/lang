@@ -432,9 +432,6 @@ RType Resolver::resolve(Expression *expr) {
     if (cache.contains(expr->id)) {
         return cache[expr->id];
     }
-    /*std::cout << unit->path << ":"<<expr->line<<"\n";
-    std::cout << printMethod(curMethod) << ", ";
-    std::cout << expr->id << ", " << expr->print() << std::endl;*/
     auto res = std::any_cast<RType>(expr->accept(this));
     cache[expr->id] = res;
     return res;

@@ -71,9 +71,6 @@ impl AstCopier{
     func node(self, old: Node*): Node{
         let unit = self.unit.unwrap();
         let id = ++unit.last_id;
-        if(id == 713){
-            let a = 10;
-        }
         return Node::new(id, old.line);
     }
 
@@ -104,19 +101,20 @@ impl AstCopier{
     }
 
     func visit(self, type: Type*): Type{
+        let id = Node::new(-1, type.line);
         if let Type::Pointer(bx*) = (type){
             let scope = self.visit(bx.get());
-            let res = Type::Pointer{Box::new(scope)};
+            let res = Type::Pointer{.id, Box::new(scope)};
             return res;
         }
         if let Type::Array(bx*, size) = (type){
             let scope = self.visit(bx.get());
-            let res = Type::Array{Box::new(scope), size};
+            let res = Type::Array{.id, Box::new(scope), size};
             return res;
         }
         if let Type::Slice(bx*) = (type){
             let scope = self.visit(bx.get());
-            let res = Type::Slice{Box::new(scope)};
+            let res = Type::Slice{.id, Box::new(scope)};
             return res;
         }
         let smp = type.as_simple();
@@ -131,7 +129,7 @@ impl AstCopier{
             let ta = smp.args.get_ptr(i);
             res.args.add(self.visit(ta));
         }
-        return res.into();
+        return res.into(type.line);
     }
 
     func visit(self, p: Param*): Param{
@@ -204,35 +202,36 @@ impl AstCopier{
     }
 
     func visit(self, node: Stmt*): Stmt{
+        let id = self.node(node as Node*);
         if let Stmt::Block(b*)=(node){
-            return Stmt::Block{self.visit(b)};
+            return Stmt::Block{.id, self.visit(b)};
         }
         if let Stmt::Var(ve*)=(node){
-            return Stmt::Var{self.visit(ve)};
+            return Stmt::Var{.id, self.visit(ve)};
         }
         if let Stmt::Expr(e*)=(node){
-            return Stmt::Expr{self.visit(e)};
+            return Stmt::Expr{.id, self.visit(e)};
         }
         if let Stmt::Ret(opt*)=(node){
-            return Stmt::Ret{self.visit_opt(opt)};
+            return Stmt::Ret{.id, self.visit_opt(opt)};
         }
         if let Stmt::While(e*, body*)=(node){
-            return Stmt::While{e: self.visit(e), b: self.visit(body)};
+            return Stmt::While{.id, e: self.visit(e), b: self.visit(body)};
         }
         if let Stmt::If(is*)=(node){
-            return Stmt::If{IfStmt{e: self.visit(&is.e), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+            return Stmt::If{.id, IfStmt{e: self.visit(&is.e), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
         }
         if let Stmt::IfLet(is*)=(node){
-            return Stmt::IfLet{IfLet{ty: self.visit(&is.ty), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+            return Stmt::IfLet{.id, IfLet{ty: self.visit(&is.ty), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
         }
         if let Stmt::For(fs*)=(node){
-            return Stmt::For{ForStmt{v: self.visit_opt(&fs.v), e: self.visit_opt(&fs.e), u: self.visit_list(&fs.u), body: self.visit_box(&fs.body)}};
+            return Stmt::For{.id, ForStmt{v: self.visit_opt(&fs.v), e: self.visit_opt(&fs.e), u: self.visit_list(&fs.u), body: self.visit_box(&fs.body)}};
         }
-        if let Stmt::Continue=(node){
-            return Stmt::Continue;
+        if let Stmt::Continue = (node){
+            return Stmt::Continue{.id};
         }
-        if let Stmt::Break=(node){
-            return Stmt::Break;
+        if let Stmt::Break = (node){
+            return Stmt::Break{.id};
         }
         let msg = format("stmt {}", node);
         panic("{}", msg.str());

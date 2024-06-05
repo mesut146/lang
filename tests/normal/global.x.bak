@@ -1,7 +1,0 @@
-static x: i32 = 11;
-
-func main(){
-  print("x={}\n", x);
-  x = 22;
-  print("x={}\n", x);
-}

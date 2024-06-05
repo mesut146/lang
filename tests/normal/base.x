@@ -36,7 +36,6 @@ func base_of_enum(){
 func if_let(){
   let e = E::E2{.A{a: 50}, c: 60};
   assert(e is E::E2);
-  printf("e.a=%d\n", e.a);
   assert(e.a == 50);
   if let E::E2(c) = (&e) {
     assert(c == 60);

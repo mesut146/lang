@@ -65,6 +65,8 @@ func bootstrap(run: bool, out_dir: str){
   if(out_dir.contains("/")){
     let rest = out_dir.substr(out_dir.lastIndexOf("/") + 1);
     name.append(rest);
+  }else{
+    name.append(out_dir);
   }
   let bin = Compiler::compile_dir("../tests/parser", out_dir, root(), LinkType::Binary{name.str(), args.str(), run});
   let bin2 = format("./{}", name);

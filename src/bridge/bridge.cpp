@@ -311,8 +311,15 @@ llvm::DIType *createArrayType(int64_t size, llvm::DIType *ty, std::vector<llvm::
     return DBuilder->createArrayType(size, 0, ty, subs);
 }
 
-llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int64_t size, int64_t off, llvm::DIType *ty) {
-    return DBuilder->createMemberType(scope, name, file, line, size, 0, off, llvm::DINode::FlagZero, ty);
+uint32_t make_di_flags(bool artificial) {
+    if (artificial) {
+        return llvm::DINode::FlagArtificial;
+    }
+    return llvm::DINode::FlagZero;
+}
+
+llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name, llvm::DIFile *file, int line, int64_t size, int64_t off, uint32_t flags, llvm::DIType *ty) {
+    return DBuilder->createMemberType(scope, name, file, line, size, 0, off, (llvm::DINode::DIFlags) flags, ty);
 }
 
 llvm::DIScope *get_null_scope() {
@@ -366,12 +373,12 @@ llvm::Argument *get_arg(llvm::Function *f, int i) {
     return f->getArg(i);
 }
 
-void arg_setName(llvm::Argument *arg, char *name) {
+void Argument_setname(llvm::Argument *arg, char *name) {
     arg->setName(name);
 }
-
-void arg_attr(llvm::Argument *arg, llvm::Attribute::AttrKind *attr) {
-    arg->addAttr(*attr);
+void Argument_setsret(llvm::Argument *arg, llvm::Type* ty) {
+    auto attr = llvm::Attribute::get(*ctx, llvm::Attribute::StructRet, ty);
+    arg->addAttr(attr);
 }
 
 llvm::Attribute::AttrKind get_sret() {
@@ -605,7 +612,7 @@ llvm::PointerType *getPointerTo(llvm::Type *type) {
     return type->getPointerTo();
 }
 
-llvm::Value* ConstantPointerNull_get(llvm::PointerType* ty){
+llvm::Value *ConstantPointerNull_get(llvm::PointerType *ty) {
     return llvm::ConstantPointerNull::get(ty);
 }
 

@@ -147,17 +147,18 @@ impl Parser{
           let list = self.parse_methods(Parent::Extern);
           unit.items.add(Item::Extern{methods: list});
         }else if(self.is(TokenType::STATIC)){
+          let id = self.node();
         	self.pop();
-            let name = self.name();
-            let type = Option<Type>::None;
-            if(self.is(TokenType::COLON)){
-              self.pop();
-              type = Option::new(self.parse_type());
-            }
-            self.consume(TokenType::EQ);
-            let rhs = self.parse_expr();
-            self.consume(TokenType::SEMI);
-            unit.globals.add(Global{name, type, rhs});
+          let name = self.name();
+          let type = Option<Type>::None;
+          if(self.is(TokenType::COLON)){
+            self.pop();
+            type = Option::new(self.parse_type());
+          }
+          self.consume(TokenType::EQ);
+          let rhs = self.parse_expr();
+          self.consume(TokenType::SEMI);
+          unit.globals.add(Global{.id, name, type, rhs});
         }else{
           panic("invalid top level decl: {}", self.peek());
         }
@@ -368,6 +369,7 @@ impl Parser{
 
     func parse_type_prim(self): Type{
       if(self.is(TokenType::LBRACKET)){
+        let id = self.node();
         self.pop();
         let type = self.parse_type();
         if(self.is(TokenType::SEMI)){
@@ -375,10 +377,10 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          return Type::Array{bx,  i32::parse(size.value.str())};
+          return Type::Array{.id, bx,  i32::parse(size.value.str())};
         }else{
           self.consume(TokenType::RBRACKET);
-          return Type::Slice{Box::new(type)};
+          return Type::Slice{.id, Box::new(type)};
         }
       }else{
         let res: Type = self.gen_part();
@@ -386,7 +388,8 @@ impl Parser{
           self.pop();
           let part = self.gen_part();
           if let Type::Simple(smp*) = (&part){
-            res = Type::Simple{Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
+            let id = self.node();
+            res = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           }
           Drop::drop(part);
         }
@@ -397,19 +400,21 @@ impl Parser{
     func parse_type(self): Type{
       let res = self.parse_type_prim();
       while (self.is(TokenType::STAR)) {
+        let id = self.node();
         self.consume(TokenType::STAR);
-        res = Type::Pointer{Box::new(res)};
+        res = Type::Pointer{.id, Box::new(res)};
       }
       return res;
     }
     
     func gen_part(self): Type{
       //a<b>::c<d>
-      let id = self.popv();
+      let line = self.peek().line;
+      let name = self.popv();
       if(self.is(TokenType::LT)){
-        return Simple{Ptr<Type>::new(), id, self.generics()}.into();
+        return Simple{Ptr<Type>::new(), name, self.generics()}.into(line);
       }
-      return Simple{Ptr<Type>::new(), id, List<Type>::new()}.into();
+      return Simple{Ptr<Type>::new(), name, List<Type>::new()}.into(line);
     }
     
     func generics(self): List<Type>{
@@ -477,23 +482,24 @@ impl Parser{
     }
     
     func parse_stmt(self): Stmt{
+      let id = self.node();
       if(self.is(TokenType::LBRACE)){
-        let res = Stmt::Block{self.parse_block()};
+        let res = Stmt::Block{.id, self.parse_block()};
         return res;
       }
       else if(self.is(TokenType::LET)){
         let vd = self.var();
         self.consume(TokenType::SEMI);
-        return Stmt::Var{vd};
+        return Stmt::Var{.id, vd};
       }else if(self.is(TokenType::RETURN)){
         self.pop();
         if(self.is(TokenType::SEMI)){
           self.consume(TokenType::SEMI);
-          return Stmt::Ret{Option<Expr>::None};
+          return Stmt::Ret{.id, Option<Expr>::None};
         }else{
           let e = self.parse_expr();
           self.consume(TokenType::SEMI);
-          return Stmt::Ret{Option::new(e)};
+          return Stmt::Ret{.id, Option::new(e)};
         }
       }else if(self.is(TokenType::WHILE)){
         self.pop();
@@ -501,7 +507,7 @@ impl Parser{
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
         let b = self.parse_block();
-        return Stmt::While{e, b};
+        return Stmt::While{.id, e, b};
       }else if(self.is(TokenType::IF, TokenType::LET)){
         self.pop();
         self.consume(TokenType::LET);
@@ -526,7 +532,7 @@ impl Parser{
             self.pop();
             els = Option::new(Box::new(self.parse_stmt()));
         }
-        return Stmt::IfLet{IfLet{ty, args, rhs, Box::new(then), els}};
+        return Stmt::IfLet{.id, IfLet{ty, args, rhs, Box::new(then), els}};
       }else if(self.is(TokenType::IF)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -536,9 +542,9 @@ impl Parser{
         if(self.is(TokenType::ELSE)){
           self.pop();
           let els = self.parse_stmt();
-          return Stmt::If{IfStmt{e, b, Option::new(Box::new(els))}};
+          return Stmt::If{.id, IfStmt{e, b, Option::new(Box::new(els))}};
         }
-        return Stmt::If{IfStmt{e, b, Option<Box<Stmt>>::None}};
+        return Stmt::If{.id, IfStmt{e, b, Option<Box<Stmt>>::None}};
       }else if(self.is(TokenType::FOR)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -555,19 +561,19 @@ impl Parser{
         let u = self.exprList(TokenType::RPAREN);
         self.consume(TokenType::RPAREN);
         let b = self.parse_stmt();
-        return Stmt::For{ForStmt{v, e, u, Box::new(b)}};
+        return Stmt::For{.id, ForStmt{v, e, u, Box::new(b)}};
       }else if(self.is(TokenType::CONTINUE)){
         self.pop();
         self.consume(TokenType::SEMI);
-        return Stmt::Continue;
+        return Stmt::Continue{.id};
       }else if(self.is(TokenType::BREAK)){
         self.pop();
         self.consume(TokenType::SEMI);
-        return Stmt::Break;
+        return Stmt::Break{.id};
       }else{
         let e = self.parse_expr();
         self.consume(TokenType::SEMI);
-        return Stmt::Expr{e};
+        return Stmt::Expr{.id, e};
       }
     }
     

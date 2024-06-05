@@ -135,7 +135,7 @@ impl DebugInfo{
         let base_ty = self.map_di(decl.base.get(), c);
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
-        let mem = createMemberType(st as DIScope*, CStr::from_slice("super").ptr(), file, decl.line, base_size, off, base_ty);
+        let mem = createMemberType(st as DIScope*, CStr::from_slice("super").ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
         Metadata_vector_push(elems, mem as Metadata*);
         ++idx;
       }
@@ -144,12 +144,12 @@ impl DebugInfo{
         let fd_ty = self.map_di(&fd.type, c);
         let off = getElementOffsetInBits(sl, idx);
         let fd_size = DIType_getSizeInBits(fd_ty);
-        let mem = createMemberType(st as DIScope*, fd.name.clone().cstr().ptr(), file, decl.line, fd_size, off, fd_ty);
+        let mem = createMemberType(st as DIScope*, fd.name.clone().cstr().ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
         Metadata_vector_push(elems, mem as Metadata*);
         ++idx;
       }
       replaceElements(st, elems);
-      return createVariantMemberType(var_part as DIScope*, name.cstr().ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
+      return createVariantMemberType(var_part as DIScope*, ev.name.clone().cstr().ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
     }
 
     func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
@@ -171,7 +171,8 @@ impl DebugInfo{
         if(decl.base.is_some()){
           let ty = *base_ty.get();
           let size = DIType_getSizeInBits(ty);
-          let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, 0, ty);
+          let off = 0;
+          let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, off, make_di_flags(false), ty);
           Metadata_vector_push(elems, mem as Metadata*);
           ++idx;
         }
@@ -180,7 +181,7 @@ impl DebugInfo{
           let ty = self.map_di(&fd.type, c);
           let size = DIType_getSizeInBits(ty);
           let off = getElementOffsetInBits(sl, idx);
-          let mem = createMemberType(scope, fd.name.clone().cstr().ptr(), file, decl.line, size, off, ty);
+          let mem = createMemberType(scope, fd.name.clone().cstr().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
           Metadata_vector_push(elems, mem as Metadata*);
           ++idx;
         }
@@ -190,7 +191,7 @@ impl DebugInfo{
         //create empty variant
         let tag_ty0 = as_type(ENUM_TAG_BITS());
         let tag = self.map_di(&tag_ty0, c);
-        let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, tag);
+        let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
         let elems2 = Metadata_vector_new();
         let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
         //fill variant
@@ -253,12 +254,14 @@ impl DebugInfo{
         let line = 0;
         //ptr
         let ptr_ty = createPointerType(self.map_di(elem, c), 64);
-        let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, 0, ptr_ty);
+        let off = 0;
+        let flags = make_di_flags(false);
+        let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
         Metadata_vector_push(elems, ptr_mem as Metadata*);
         //len
         let bits = as_type(SLICE_LEN_BITS());
         let len_ty = self.map_di(&bits, c);
-        let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, len_ty);
+        let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
         Metadata_vector_push(elems, len_mem as Metadata*);
         return createStructType(self.cu as DIScope*, name.cstr().ptr(), self.file, line, size, elems) as DIType*;
       }

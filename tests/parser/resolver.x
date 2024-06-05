@@ -98,6 +98,7 @@ struct Resolver{
   generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
   own: Option<Own>;
+  glob_map: Map<String, RType>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -112,6 +113,7 @@ impl Drop for Resolver{
     self.generated_decl.drop();
     self.generated_impl.drop();
     self.format_map.drop();
+    self.glob_map.drop();
     self.own.drop();
   }
 }
@@ -181,6 +183,7 @@ impl Desc{
   }
 }
 
+#derive(Debug)
 struct RType{
   type: Type;
   value: Option<String>;
@@ -244,11 +247,11 @@ impl Debug for Resolver{
     panic("Resolver::debug");
   }
 }
-impl Debug for RType{
+/*impl Debug for RType{
   func debug(self, f: Fmt*){
     panic("RType::debug");
   }
-}
+}*/
 
 impl Context{
   func create_resolver(self, path: String*): Resolver*{
@@ -355,7 +358,8 @@ impl Resolver{
       generated_decl: List<Box<Decl>>::new(),
       generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
-      own: Option<Own>::new()};
+      own: Option<Own>::new(),
+      glob_map: Map<String, RType>::new()};
     return res;
   }
 
@@ -438,18 +442,13 @@ impl Resolver{
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get_ptr(i);
-      //print("visit item i={}/{}\n", i + 1, self.unit.items.len());
       self.visit_item(item);
-      //print("visit item after i={}/{}\n", i + 1, self.unit.items.len());
     }
     //todo these would generate more methods, whose are not visited
     for(let j = 0;j < self.generated_methods.len();++j){
       let gm = self.generated_methods.get_ptr(j).get();
-      //print("j={}/{} {}\n", j, self.generated_methods.len(), printMethod(gm));
-      //print("{}\n", gm);
       self.visit_method(gm);
     }
-    //self.dump();
   }
   
   func init_globals(self){
@@ -492,13 +491,8 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
-    if(name.eq("List<u8>")){
-      let a = 10;
-    }
+    print("addType {}={}", name, res);
     self.typeMap.add(name, res);
-  }
-  func addType(self, name: String*, res: RType){
-    self.addType(name.clone(), res);
   }
   
   func init(self){
@@ -523,7 +517,7 @@ impl Resolver{
         //pass
       }else if let Item::Type(name*, rhs*) = (it){
         let res = self.visit_type(rhs);
-        self.addType(name, res);
+        self.addType(name.clone(), res);
       }
     }
     //derives
@@ -1004,11 +998,11 @@ impl Resolver{
     if(node.is_slice()){
       let inner = node.elem();
       let elem = self.visit_type(inner);
-      return RType::new(Type::Slice{Box::new(elem.type.clone())});      
+      return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.type.clone())});      
     }
     if let Type::Array(inner*, size) = (node){
       let elem = self.visit_type(inner.get());
-      return RType::new(Type::Array{Box::new(elem.type.clone()), size});      
+      return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.type.clone()), size});      
     }
     if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
       let imp = self.curMethod.unwrap().parent.as_impl();
@@ -1322,7 +1316,7 @@ impl Resolver{
     return res;
   }
 
-  func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>* ,args: List<Entry>*): Type{
+  func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>*, args: List<Entry>*): Type{
     let inferMap = Map<String, Option<Type>>::new();
     let typeArgs = type.get_args();
     for (let i=0;i<typeArgs.len();++i) {
@@ -1349,7 +1343,7 @@ impl Resolver{
         }
         res.args.add(p.b.unwrap());
     }
-    return res.into();
+    return res.into(node.line);
   }
   
   func visit_unary(self, node: Expr*, op: String*, e: Expr*): RType{
@@ -1686,7 +1680,6 @@ impl Resolver{
     if (idx.print().eq("bool") || !idx.is_prim()){
       self.err(node, "array index is not an integer");
     }
-
     if (aa.idx2.is_some()) {
         let idx2 = self.getType(aa.idx2.get().get());
         if (idx2.print().eq("bool") || !idx2.is_prim()){
@@ -1696,10 +1689,10 @@ impl Resolver{
         if (inner.is_slice()) {
             return RType::new(inner.clone());
         } else if (inner.is_array()) {
-            return RType::new(Type::Slice{Box::new(inner.elem().clone())});
+            return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(inner.elem().clone())});
         } else if (arr.is_pointer()) {
             //from raw pointer
-            return RType::new(Type::Slice{Box::new(inner.clone())});
+            return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(inner.clone())});
         } else {
             self.err(node, "cant make slice out of ");
         }
@@ -1717,9 +1710,8 @@ impl Resolver{
   func visit_array(self, node: Expr*, list: List<Expr>*, size: Option<i32>*): RType{
     if (size.is_some()) {
         let e = self.visit(list.get_ptr(0));
-        //let elemType = self.getType(list.get_ptr(0));
         let elemType = e.type.clone();
-        return RType::new(Type::Array{Box::new(elemType), *size.get()});
+        return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), *size.get()});
     }
     let elemType = self.getType(list.get_ptr(0));
     for (let i = 1; i < list.len(); ++i) {
@@ -1731,7 +1723,7 @@ impl Resolver{
             self.err(node, msg.str());
         }
     }
-    return RType::new(Type::Array{Box::new(elemType), list.len() as i32});
+    return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), list.len() as i32});
   }
   
   func visit_as(self, node: Expr*, lhs: Expr*, type: Type*): RType{
@@ -1828,9 +1820,11 @@ impl Resolver{
       for (let j = 0;j < res.unit.globals.len();++j) {
         let glob = res.unit.globals.get_ptr(j);
         if (glob.name.eq(name)) {
-          //other unit's expr id conflicts our unit, so clone to have unique id
-          let expr_copied = AstCopier::clone(&glob.expr, &self.unit);
-          return self.visit(&expr_copied);
+          //clone to have unique id
+          let expr2 = AstCopier::clone(&glob.expr, &self.unit);
+          let rt = self.visit(&expr2);
+          self.glob_map.add(glob.name.clone(), rt.clone());
+          return rt;
         }
       }
     }
@@ -1868,7 +1862,14 @@ impl Resolver{
     if let Expr::Lit(lit*)=(node){
       return self.visit_lit(lit);
     }else if let Expr::Type(type*) = (node){
-      return self.visit_type(node, type);
+      let res = self.visit_type(node, type);
+      //if(res.is_decl()){
+        /*let decl = self.get_decl(&res).unwrap();
+        if(decl.base.is_some()){
+          self.err(node, "base is not initialized");
+        }*/
+      //}
+      return res;
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){

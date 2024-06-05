@@ -121,19 +121,20 @@ func max_for(type: Type*): i64{
 
 //replace any type in decl with src by same index
 func replace_type(type: Type*, map: Map<String, Type>*): Type {
+    let id = Node::new(-1, type.line);
     if let Type::Pointer(bx*) = (type){
         let scope = replace_type(bx.get(), map);
-        let res = Type::Pointer{Box::new(scope)};
+        let res = Type::Pointer{.id, Box::new(scope)};
         return res;
     }
     if let Type::Array(bx*, size) = (type){
         let scope = replace_type(bx.get(), map);
-        let res = Type::Array{Box::new(scope), size};
+        let res = Type::Array{.id, Box::new(scope), size};
         return res;
     }
     if let Type::Slice(bx*) = (type){
         let scope = replace_type(bx.get(), map);
-        let res = Type::Slice{Box::new(scope)};
+        let res = Type::Slice{.id, Box::new(scope)};
         return res;
     }
     let str = type.print();
@@ -151,7 +152,7 @@ func replace_type(type: Type*, map: Map<String, Type>*): Type {
         let ta = smp.args.get_ptr(i);
         res.args.add(replace_type(ta, map));
     }
-    return res.into();
+    return res.into(type.line);
 }
 
 func is_struct(type: Type*): bool{

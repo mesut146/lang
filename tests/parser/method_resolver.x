@@ -825,7 +825,7 @@ impl MethodResolver{
             }
         }
         Drop::drop(res.parent);
-        res.parent = Parent::Impl{ImplInfo::new(st.into())};
+        res.parent = Parent::Impl{ImplInfo::new(st.into(res.line))};
         return Pair::new(res, desc);
     }
 }

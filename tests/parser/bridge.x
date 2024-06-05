@@ -84,7 +84,8 @@ extern{
     func createPointerType(elem: DIType*, size: i64): DIType*;
     func getOrCreateSubrange(lo: i64, count: i64): Metadata*;
     func createArrayType(size: i64, ty: DIType*, elems: Metadata_vector*): DIType*;
-    func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, ty: DIType*): DIDerivedType*;
+    func make_di_flags(artificial: bool): u32;
+    func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: u32, ty: DIType*): DIDerivedType*;
     func DIType_getSizeInBits(ty: DIType*): i64;
     func getStructLayout(st: StructType*): StructLayout*;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
@@ -113,8 +114,8 @@ extern{
     func odr(): i32;
     func make_func(fr: FunctionType*, l: i32, name: i8*): Function*;
     func get_arg(f: Function*, i: i32): Argument*;
-    func arg_attr(a: Argument* , at: i32*);
-    func get_sret(): i32;
+    func Argument_setname(a: Argument*, name: i8*);
+    func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
     func verifyFunction(f: Function*): bool;
     

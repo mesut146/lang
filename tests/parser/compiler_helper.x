@@ -413,8 +413,8 @@ impl Compiler{
     let f = make_func(ft, linkage, mangled.clone().cstr().ptr());
     if(rvo){
       let arg = get_arg(f, 0);
-      let sret = get_sret();
-      arg_attr(arg, &sret);
+      Argument_setname(arg, CStr::from_slice("ret").ptr());
+      Argument_setsret(arg, self.mapType(&m.type));
     }
     if(self.protos.get().funcMap.contains(&mangled)){
       panic("already proto {}\n", mangled);
@@ -603,14 +603,4 @@ func get_tag_index(decl: Decl*): i32{
 func get_data_index(decl: Decl*): i32{
   assert(decl.is_enum());
   return 1;
-}
-//variant ptr without base
-func get_data_ptr(c: Compiler*, decl: Decl*, ptr: Value*, ty: llvm_Type*): Value*{
-  assert(decl.is_enum());
-  if(decl.base.is_none()){
-    //data ptr
-    return c.gep2(ptr, get_data_index(decl), ty);
-  }
-  let data = c.gep2(ptr, get_data_index(decl), ty);
-  return data;
 }

@@ -41,7 +41,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into();
+            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
             let then = Block::new();
 
             for(let j = 0;j < ev.fields.len();++j){
@@ -52,13 +52,15 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             }
 
             let self_id = unit.node(0);
-            let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{then}), Option<Box<Stmt>>::new()};
+            let block_id = unit.node(0);
+            let iflet_id = unit.node(0);
+            let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(0);
                 iflet.args.add(ArgBind{.arg_id,fd.name.clone(), true});
             }
-            body.list.add(Stmt::IfLet{iflet});
+            body.list.add(Stmt::IfLet{.iflet_id, iflet});
         }
     }else{
         let fields = decl.get_fields();
@@ -90,9 +92,9 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     m.path = unit.path.clone();
     let body = Block::new();
     if let Decl::Enum(variants*)=(decl){
-        for(let i=0;i<variants.len();++i){
+        for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into();
+            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
             let then = Block::new();
 
             //f.print({decl.type}::{ev.name})
@@ -110,13 +112,15 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
 
             let self_id = unit.node(0);
-            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{then}), Option<Box<Stmt>>::new()};
+            let block_id = unit.node(0);
+            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(0);
                 is.args.add(ArgBind{.arg_id,fd.name.clone(), true});
             }
-            body.list.add(Stmt::IfLet{is});
+            let iflet_id = unit.node(0);
+            body.list.add(Stmt::IfLet{.iflet_id, is});
         }
     }else{
         //f.print(<decl.type.print()>)

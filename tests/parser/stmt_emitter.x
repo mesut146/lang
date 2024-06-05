@@ -150,6 +150,8 @@ impl Compiler{
               self.NamedValues.add(arg.name.clone(), alloc_ptr);
               if (arg.is_ptr) {
                   CreateStore(field_ptr, alloc_ptr);
+                  let ty_ptr = prm.type.clone().toPtr();
+                  self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
               } else {
                   if (prm.type.is_prim() || prm.type.is_pointer()) {
                       let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
@@ -157,6 +159,7 @@ impl Compiler{
                   } else {
                       self.copy(alloc_ptr, field_ptr, &prm.type);
                   }
+                  self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
               }
           }
       }

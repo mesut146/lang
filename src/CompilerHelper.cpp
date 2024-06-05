@@ -143,6 +143,9 @@ llvm::Type *Compiler::getInt(int bit) {
 void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
     auto bd = resolv->resolve(n.scope.get()).targetDecl;
     auto decl = dynamic_cast<EnumDecl *>(bd);
+     if (decl->base) {
+        resolv->err("base is not initialized");
+    }
     int index = Resolver::findVariant(decl, n.name);
     setOrdinal(index, ptr, bd);
 }

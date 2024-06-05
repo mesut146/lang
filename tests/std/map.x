@@ -70,10 +70,6 @@ impl<K, V> Map<K, V>{
   func contains(self, k: K*): bool{
     return self.indexOf(k) != -1;
   }
-  
-  /*func get(self, k: K): Option<V*>{
-    return self.get_ptr(&k);
-  }*/
 
   func get_ptr(self, k: K*): Option<V*>{
     let opt = self.get_pair(k);
@@ -105,6 +101,10 @@ impl<K, V> Map<K, V>{
       return Option::new(self.arr.get_ptr(idx));
     }
     return Option<Pair<K, V>*>::None;
+  }
+
+  func get_idx(self, idx: i32): V*{
+    return &self.get_pair_idx(idx).unwrap().b;
   }
 
   func remove(self, idx: i64){

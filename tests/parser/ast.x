@@ -59,7 +59,7 @@ impl Unit{
   }
 }
 
-struct Global{
+struct Global: Node{
   name: String;
   type: Option<Type>;
   expr: Expr;
@@ -277,16 +277,16 @@ impl Simple{
   func new(scope: Type, name: String): Simple{
     return Simple{scope: Ptr<Type>::new(scope), name: name, args: List<Type>::new()};
   }
-  func into(*self): Type{
-    //return Type::Simple{*ptr::get(self, 0)};
-    return Type::Simple{self};
+  func into(*self, line: i32): Type{
+    let id = Node::new(-1, line);
+    return Type::Simple{.id, self};
   }
   func clone(self): Simple{
     return Simple{scope: self.scope.clone(), name: self.name.clone(), args: self.args.clone()};
   }
 }
 
-enum Type{
+enum Type: Node{
   Simple(type: Simple),
   Pointer(type: Box<Type>),
   Array(type: Box<Type>, size: i32),
@@ -294,20 +294,21 @@ enum Type{
 }
 
 impl Type{
-  func new(s: str): Type{
-    return Type::new(String::new(s));
+  func new(name: str): Type{
+    return Type::new(String::new(name));
   }
-  func new(s: String): Type{
-    return Simple::new(s).into();
+  func new(name: String): Type{
+    return Simple::new(name).into(0);
   }
-  func new(s: String, args: List<Type>): Type{
-    return Simple::new(s, args).into();
+  func new(name: String, args: List<Type>): Type{
+    return Simple::new(name, args).into(0);
   }
-  func new(scp: Type, s: String): Type{
-    return Simple::new(scp, s).into();
+  func new(scp: Type, name: String): Type{
+    return Simple::new(scp, name).into(0);
   }
   func toPtr(*self): Type{
-    return Type::Pointer{Box::new(self)};
+    let id = Node::new(-1, self.line);
+    return Type::Pointer{.id, Box::new(self)};
   }
   
   func name(self): String*{
@@ -457,7 +458,7 @@ struct IfStmt{
 }
 
 
-enum Stmt{
+enum Stmt: Node{
     Block(x: Block),
     Var(ve: VarExpr),
     Expr(e: Expr),
