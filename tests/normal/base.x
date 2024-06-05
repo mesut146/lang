@@ -8,7 +8,7 @@ struct B: A{
 
 enum E: A{
   E1,
-  E2(a: i64)
+  E2(c: i64)
 }
 
 func base_of_struct(){
@@ -34,12 +34,12 @@ func base_of_enum(){
   assert(a_ptr.a == 30);
 }
 func if_let(){
-  let e = E::E2{.A{a: 50}, a: 60};
+  let e = E::E2{.A{a: 50}, c: 60};
   assert(e is E::E2);
   printf("e.a=%d\n", e.a);
   assert(e.a == 50);
-  if let E::E2(a) = (&e) {
-    assert(a == 60);
+  if let E::E2(c) = (&e) {
+    assert(c == 60);
   }else{
     panic("if_let");
   }

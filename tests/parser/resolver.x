@@ -713,7 +713,7 @@ impl Resolver{
       if let Decl::Struct(fields*) = (decl){
         self.visit_decl(decl, fields);
       }else if let Decl::Enum(variants*) = (decl){
-        //self.visit(decl, variants);
+        self.visit_enum(decl, variants);
       }
     }else if let Item::Trait(tr*) = (node){
     }else if let Item::Extern(methods*) = (node){
@@ -769,6 +769,22 @@ impl Resolver{
     return false;
   }
 
+  func is_valid_field(self, fd: FieldDecl*, node: Decl*, base_fields: Option<List<FieldDecl>*>){
+    if(base_fields.is_some()){
+      let base_f = base_fields.unwrap();
+      for(let j = 0;j < base_f.len();++j){
+        let bf = base_f.get_ptr(j);
+        if(bf.name.eq(&fd.name)){
+          self.err(node.line, format("field name '{}' already declared in base", fd.name));
+        }
+      }
+    }
+    self.visit_type(&fd.type);
+    if(self.is_cyclic(&fd.type, &node.type)){
+      self.err(format("cyclic type {}", node.type));
+    }
+  }
+
   func visit_decl(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
     node.is_resolved = true;
@@ -782,18 +798,25 @@ impl Resolver{
     }
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get_ptr(i);
-      if(base_fields.is_some()){
-        let base_f = base_fields.unwrap();
-        for(let j = 0;j < base_f.len();++j){
-          let bf = base_f.get_ptr(j);
-          if(bf.name.eq(&fd.name)){
-            self.err(node.line, format("field name '{}' already declared in base", fd.name));
-          }
-        }
+      self.is_valid_field(fd, node, base_fields);
+    }
+  }
+  func visit_enum(self, node: Decl*, vars: List<Variant>*){
+    if(node.is_generic) return;
+    node.is_resolved = true;
+    let base_fields = Option<List<FieldDecl>*>::new();
+    if(node.base.is_some()){
+      let base_rt = self.visit_type(node.base.get());
+      let base_decl = self.get_decl(&base_rt).unwrap();
+      if(base_decl.is_struct()){
+        base_fields = Option::new(base_decl.get_fields());
       }
-      self.visit_type(&fd.type);
-      if(self.is_cyclic(&fd.type, &node.type)){
-        self.err(format("cyclic type {}", node.type));
+    }
+    for(let i = 0;i < vars.len();++i){
+      let ev = vars.get_ptr(i);
+      for(let j = 0;j < ev.fields.len();++j){
+        let fd = ev.fields.get_ptr(j);
+        self.is_valid_field(fd, node, base_fields);
       }
     }
   }

@@ -130,13 +130,16 @@ impl Compiler{
     }
   
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
+      if(node.print().eq("e.a")){
+        let a = 10;
+      }
       let scope_ptr = self.get_obj_ptr(scope);
-      let scope_rt = self.getType(scope);
+      let scope_rt = self.get_resolver().visit(scope);
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
       if(decl.is_enum()){
         //base field, skip tag
         let ty = self.mapType(&decl.type);
-        scope_ptr = self.gep2(scope_ptr, 1, ty);
+        scope_ptr = self.gep2(scope_ptr, get_data_index(decl), ty);
       }
       let pair = self.get_resolver().findField(node, name, decl, &decl.type);
       let index = pair.b;
@@ -682,7 +685,7 @@ impl Compiler{
   
     func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
       let field_idx = 0;
-      for(let i=0;i<args.len();++i){
+      for(let i = 0;i < args.len();++i){
         let arg = args.get_ptr(i);
         if(arg.isBase){
           continue;
@@ -695,7 +698,7 @@ impl Compiler{
           ++field_idx;
         }
         let fd = fields.get_ptr(prm_idx);
-        if(decl.base.is_some() && decl is Decl::Struct) ++prm_idx;
+        if(decl.base.is_some()) ++prm_idx;
         //Value_dump(ptr);
         //Type_dump(ty);
         let field_target_ptr = self.gep2(ptr, prm_idx, ty);
@@ -708,6 +711,7 @@ impl Compiler{
         let rt = self.get_resolver().visit(node);
         let ty = self.mapType(&rt.type);
         let decl = self.get_resolver().get_decl(&rt).unwrap();
+        //set base
         for(let i = 0;i < args.len();++i){
           let arg = args.get_ptr(i);
           if(!arg.isBase) continue;

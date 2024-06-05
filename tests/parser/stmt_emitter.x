@@ -141,7 +141,11 @@ impl Compiler{
               //regular var decl
               let prm = params.get_ptr(i);
               let arg = node.args.get_ptr(i);
-              let field_ptr = self.gep2(dataPtr, i, var_ty);
+              let real_idx = i;
+              if(decl.base.is_some()){
+                ++real_idx;
+              }
+              let field_ptr = self.gep2(dataPtr, real_idx, var_ty);
               let alloc_ptr = self.get_alloc(arg.id);
               self.NamedValues.add(arg.name.clone(), alloc_ptr);
               if (arg.is_ptr) {

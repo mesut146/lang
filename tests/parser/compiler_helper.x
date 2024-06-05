@@ -597,8 +597,20 @@ func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
 
 
 func get_tag_index(decl: Decl*): i32{
+  assert(decl.is_enum());
   return 0;
 }
 func get_data_index(decl: Decl*): i32{
-  return get_tag_index(decl) + 1;
+  assert(decl.is_enum());
+  return 1;
+}
+//variant ptr without base
+func get_data_ptr(c: Compiler*, decl: Decl*, ptr: Value*, ty: llvm_Type*): Value*{
+  assert(decl.is_enum());
+  if(decl.base.is_none()){
+    //data ptr
+    return c.gep2(ptr, get_data_index(decl), ty);
+  }
+  let data = c.gep2(ptr, get_data_index(decl), ty);
+  return data;
 }
