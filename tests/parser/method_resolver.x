@@ -595,10 +595,7 @@ impl MethodResolver{
                         arg = mc.args.get_ptr(i).print().str();
                     }
                 }
-                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}", t1_str.str(), arg, t2_str.str())};
-                if(res.get_err().eq("arg is not compatible with param Pair<i32, i32> vs Pair<T, U>")){
-                    let aa = 10;
-                }
+                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}\n{}\nagrs: {}", t1_str.str(), arg, t2_str.str(), cmp.get(), typeParams)};
                 Drop::drop(t1_str);
                 Drop::drop(t2_str);
                 Drop::drop(typeParams);
@@ -633,7 +630,7 @@ impl MethodResolver{
     }
 
     func is_compatible(arg: Type*, arg_str: String*, arg_val: Option<String>*, target: Type*, target_str: String*, typeParams: List<Type>*): Option<String>{
-        if (isGeneric(target, typeParams)) return Option<String>::None;
+        if (isGeneric2(target, typeParams)) return Option<String>::None;
         if (arg_str.eq(target_str.str())) return Option<String>::None;
         if(arg.is_pointer()){
             if(target.is_pointer()){
@@ -642,9 +639,12 @@ impl MethodResolver{
             }
             return Option::new("target is not pointer".str());
         }
+        if(target.is_pointer()){
+            return Option::new("arg is not pointer".str());
+        }
         if (!arg.is_simple()) {
             if(target.is_simple()){
-                return Option::new("".str());
+                return Option::new("diff kind".str());
             }
             if (arg_str.eq(target_str)) {
                 return Option<String>::None;
@@ -659,10 +659,44 @@ impl MethodResolver{
                 return MethodResolver::is_compatible(arg.elem(), trg_elem, typeParams);
             }
             //return arg_str + " is not compatible with " + target_str;
-            return Option::new("".str());
+            return Option::new("unknown".str());
         }
+        if(!target.is_simple()){
+            return Option::new("diff kind".str());
+        }
+        //both simple
         if (!arg.is_prim()) {
-            return Option::new("".str());
+            //arg struct
+            if (target.is_prim()) return Option::new("target is prim".str());
+            let targs = arg.get_args();
+            let targs2 = target.get_args();
+            if(!arg.name().eq(target.name())){
+                return Option::new("not match".str());
+            }
+            if(targs.len() != targs2.len()){
+                return Option::new(format("type args size dont match {} vs {}", targs.len(), targs2.len()));
+            }
+            if(!hasGeneric(target, typeParams)){
+                //target is generated param, must match whole
+                if (arg_str.eq(target_str)) {
+                    return Option<String>::new();
+                } else {
+                    return Option::new("type args don't match".str());
+                }
+            }
+            //A<i32> and A<i64> not compatible
+            for (let i = 0; i < targs.len(); ++i) {
+                let ta = targs.get_ptr(i);
+                let tp = targs2.get_ptr(i);
+                let cmp = is_compatible(ta, tp, typeParams);
+                if (cmp.is_some()) {
+                    return cmp;
+                }
+                /*if (cmp.cast) {
+                    return CompareResult("cant cast subtype");
+                }*/
+            }
+            return Option<String>::new();
         }
         if (!target.is_prim()) return Option::new("target is not prim".str());
         if (arg_str.eq("bool") || target_str.eq("bool")) return Option::new("target is not bool".str());

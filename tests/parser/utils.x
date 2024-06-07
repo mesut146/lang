@@ -9,6 +9,17 @@ func SLICE_LEN_INDEX(): i32{ return 1; }
 func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
 
+func join_list<T>(arr: List<T>*): String{
+    let f = Fmt::new();
+    for(let i = 0;i < arr.len();++i){
+        f.print(arr.get_ptr(i));
+        if(i!= arr.len() - 1){
+            f.print(", ");
+        }
+    }
+    return f.unwrap();
+}
+
 func get_filename(path: str): str{
     let idx = path.lastIndexOf("/");
     if(idx == -1){
@@ -78,6 +89,14 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     return false;
 }
 
+func isGeneric2(typ: Type*, typeParams: List<Type>*): bool{
+    let type_str = typ.print();
+    for (let i = 0;i < typeParams.size();++i) {
+        if (typeParams.get_ptr(i).print().eq(&type_str)) return true;
+    }
+    return false;
+}
+
 func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
     if (!(typ is Type::Simple)) return false;
     if let Type::Simple(smp*) = (typ){
@@ -85,10 +104,10 @@ func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
             panic("isGeneric::scope");
         }
     }
+    let type_str = typ.print();
     let targs = typ.get_args();
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
-            let type_str = typ.print();
             if (typeParams.get_ptr(i).print().eq(&type_str)) return true;
         }
     } else {

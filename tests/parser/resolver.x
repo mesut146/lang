@@ -491,7 +491,7 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
-    print("addType {}={}", name, res);
+    //print("addType {}={}\n", name, res);
     self.typeMap.add(name, res);
   }
   

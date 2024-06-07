@@ -388,6 +388,9 @@ SigResult MethodResolver::isSame(Signature &sig, Signature &sig2) {
     auto mc = sig.mc;
     auto m = sig2.m;
     if (mc->name != m->name) return "not possible";
+    if (mc->print() == "inferb(b)") {
+        int aa = 10;
+    }
     if (!m->typeArgs.empty()) {
         if (!mc->typeArgs.empty() && mc->typeArgs.size() != m->typeArgs.size()) {
             return "type arg size mismatched";
@@ -456,8 +459,12 @@ SigResult MethodResolver::checkArgs(Signature &sig, Signature &sig2) {
         if (t1.print() != t2.print()) {
             all_exact = false;
         }
-        if (isCompatible(RType(t1), t2, typeParams).is_err()) {
-            return "arg type " + t1.print() + " is not compatible with param " + t2.print();
+        auto cmp = isCompatible(RType(t1), t2, typeParams);
+        if (cmp.is_err()) {
+            if (t1.print() == "Option<String>*" && t2.print() == "Option<T>*") {
+                int a = 10;
+            }
+            return "arg type " + t1.print() + " is not compatible with param " + t2.print() + "\n" + cmp.err + "\nparams: " + join(typeParams, ",");
         }
     }
     return all_exact;
@@ -501,6 +508,14 @@ CompareResult MethodResolver::isCompatible(const RType &arg0, const Type &target
         if (arg.typeArgs.size() != target.typeArgs.size()) {
             return CompareResult("type args size don't match");
         }
+        if (!hasGeneric(target, typeParams)) {
+            //target is generated param, must match whole
+            if (arg.print() == target.print()) {
+                return {};
+            } else {
+                return CompareResult("type args don't match");
+            }
+        }
         //A<i32> and A<i64> not compatible
         for (int i = 0; i < arg.typeArgs.size(); ++i) {
             auto &ta = arg.typeArgs[i];
@@ -520,7 +535,7 @@ CompareResult MethodResolver::isCompatible(const RType &arg0, const Type &target
     }
     //if (isGeneric(target, typeParams)) return {};
     if (!arg.isPrim()) {
-        return CompareResult("arg is unknown");
+        return CompareResult("arg is unknown " + arg.print() + ", " + target.print());
     }
     if (!target.isPrim()) return CompareResult("target is not prim");
     if (arg.print() == "bool" || target.print() == "bool") return CompareResult("target is not bool");

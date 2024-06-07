@@ -272,8 +272,8 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Debug");
     imp->type_params = bd->type.typeArgs;
-    //m.parent = imp.get();
     m.parent = Parent{Parent::IMPL, imp->type, imp->trait_name};
+    m.parent.type_params = bd->type.typeArgs;
     imp->methods.push_back(std::move(m));
     auto tr = resolve(Type("Debug")).trait;
     for (auto &mm : tr->methods) {

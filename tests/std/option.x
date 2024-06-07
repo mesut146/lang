@@ -52,12 +52,6 @@ impl<T> Option<T>{
   }
 }
 
-/*impl<T> Clone for Option<T*>{
-  func clone(self): Option<T*>{
-    if(self.is_none()) return Option<T*>::new();
-    return Option<T*>::new(self.get().clone());
-  }
-}*/
 impl<T> Clone for Option<T>{
   func clone(self): Option<T>{
     if(self.is_none()) return Option<T>::new();
@@ -65,12 +59,12 @@ impl<T> Clone for Option<T>{
   }
 }
 
-func drop2<T>(a: T**){
+/*func drop2<T>(a: T**){
 
 }
 func drop2<T>(a: T*){
   Drop::drop(a);
-}
+}*/
 
 impl<T> Drop for Option<T>{
   func drop(*self){
