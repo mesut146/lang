@@ -423,10 +423,19 @@ impl Type{
   }
 
 }
-
 impl Clone for Type{
   func clone(self): Type{
     return AstCopier::clone(self);
+  }
+}
+impl Eq for Type{
+  func eq(self, other: Type*): bool{
+    let s1 = self.print();
+    let s2 = other.print();
+    let res = s1.eq(&s2);
+    s1.drop();
+    s2.drop();
+    return res;
   }
 }
 

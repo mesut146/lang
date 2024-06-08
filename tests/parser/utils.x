@@ -97,7 +97,7 @@ func isGeneric2(typ: Type*, typeParams: List<Type>*): bool{
     return false;
 }
 
-func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
+/*func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
     if (!(typ is Type::Simple)) return false;
     if let Type::Simple(smp*) = (typ){
         if(smp.scope.is_some()){
@@ -116,7 +116,7 @@ func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
         }
     }
     return false;
-}
+}*/
 
 func isUnsigned(type: Type*): bool{
     let s = type.print();

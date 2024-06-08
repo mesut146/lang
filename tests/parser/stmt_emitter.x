@@ -13,6 +13,7 @@ import std/map
 //stmt
 impl Compiler{
     func visit(self, node: Stmt*){
+      self.llvm.di.get().loc(node.line, node.pos);
       if let Stmt::Ret(e*)=(node){
         if(e.is_none()){
           if(is_main(self.curMethod.unwrap())){

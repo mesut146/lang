@@ -1317,12 +1317,8 @@ impl Resolver{
   }
 
   func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>*, args: List<Entry>*): Type{
-    let inferMap = Map<String, Option<Type>>::new();
-    let typeArgs = type.get_args();
-    for (let i=0;i<typeArgs.len();++i) {
-        let ta = typeArgs.get_ptr(i);
-        inferMap.add(ta.name().clone(), Option<Type>::None);
-    }
+    let inferMap = Map<String, Type>::new();
+    let type_params: List<Type>* = type.get_args();
     for (let i = 0; i < args.len(); ++i) {
         let e = args.get_ptr(i);
         let prm_idx = 0;
@@ -1333,15 +1329,16 @@ impl Resolver{
         }
         let arg_type = self.visit(&e.expr);
         let target_type = &fields.get_ptr(i).type;
-        MethodResolver::infer(&arg_type.type, target_type, &inferMap);
+        MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params);
     }
     let res = Simple::new(type.name().clone());
-    for (let i = 0;i < inferMap.len();++i) {
-        let p = inferMap.get_pair_idx(i).unwrap(); 
-        if (p.b.is_none()) {
-            self.err(node, format("can't infer type parameter: {}", p.a));
+    for (let i = 0;i < type_params.len();++i) {
+        let tp = type_params.get_ptr(i);
+        let opt = inferMap.get_ptr(tp.name());
+        if (opt.is_none()) {
+            self.err(node, format("can't infer type parameter: {}", tp));
         }
-        res.args.add(p.b.unwrap());
+        res.args.add(opt.unwrap().clone());
     }
     return res.into(node.line);
   }

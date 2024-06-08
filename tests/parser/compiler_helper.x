@@ -372,7 +372,10 @@ impl Compiler{
       let aa = 10;
     }
     let mangled = mangle(m);
-    //print("proto %s\n", mangled.cstr());
+    //print("proto {}\n", mangled);
+    if(self.protos.get().funcMap.contains(&mangled)){
+      panic("already proto {}\n", mangled);
+    }
     let rvo = is_struct(&m.type);
     let ret = getVoidTy();
     if(is_main(m)){
@@ -415,9 +418,6 @@ impl Compiler{
       let arg = get_arg(f, 0);
       Argument_setname(arg, CStr::from_slice("ret").ptr());
       Argument_setsret(arg, self.mapType(&m.type));
-    }
-    if(self.protos.get().funcMap.contains(&mangled)){
-      panic("already proto {}\n", mangled);
     }
     self.protos.get().funcMap.add(mangled, f);
     free(args as i8*);

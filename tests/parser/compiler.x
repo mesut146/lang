@@ -309,16 +309,19 @@ impl Compiler{
     self.make_decl_protos();
     //methods
     let methods: List<Method*> = getMethods(self.unit());
+    //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
       let m = methods.get(i);
       self.make_proto(m);
     }
     methods.drop();
     //generic methods from resolver
+    //print("gen m\n");
     for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
         let m = self.get_resolver().generated_methods.get_ptr(i).get();
         self.make_proto(m);
     }
+    //print("used m\n");
     for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
         let m = self.get_resolver().used_methods.get(i);
         self.make_proto(m);

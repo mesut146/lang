@@ -38,6 +38,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new();
+    let line = decl.line;
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
@@ -51,14 +52,14 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 then.list.add(drop_stmt);
             }
 
-            let self_id = unit.node(0);
-            let block_id = unit.node(0);
-            let iflet_id = unit.node(0);
+            let self_id = unit.node(line);
+            let block_id = unit.node(line);
+            let iflet_id = unit.node(line);
             let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
-                let arg_id = unit.node(0);
-                iflet.args.add(ArgBind{.arg_id,fd.name.clone(), true});
+                let arg_id = unit.node(line);
+                iflet.args.add(ArgBind{.arg_id, fd.name.clone(), true});
             }
             body.list.add(Stmt::IfLet{.iflet_id, iflet});
         }
@@ -72,9 +73,9 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             body.list.add(drop_stmt);
         }
     }
-    let m = Method::new(unit.node(0), "drop".str(), Type::new("void"));
+    let m = Method::new(unit.node(line), "drop".str(), Type::new("void"));
     m.is_generic = decl.is_generic;
-    m.self = Option::new(Param{.unit.node(0), "self".str(), decl.type.clone(), true, true});
+    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone(), true, true});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
     m.path = unit.path.clone();
     m.body = Option::new(body);
@@ -85,16 +86,19 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
 
 func generate_debug(decl: Decl*, unit: Unit*): Impl{
     let imp = make_impl(decl, "Debug");
-    let m = Method::new(Node::new(++unit.last_id, 0), "debug".str(), Type::new("void"));
-    m.self = Option::new(Param{.Node::new(++unit.last_id, 0), "self".str(), decl.type.clone().toPtr(), true, false});
-    m.params.add(Param{.Node::new(++unit.last_id, 0), "f".str(), Type::new("Fmt").toPtr(), false, false});
+    let line = decl.line;
+    let m = Method::new(unit.node(line), "debug".str(), Type::new("void"));
+    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone().toPtr(), true, false});
+    m.params.add(Param{.unit.node(line), "f".str(), Type::new("Fmt").toPtr(), false, false});
     m.parent = Parent::Impl{make_info(decl, "Debug")};
     m.path = unit.path.clone();
+    m.is_generic = decl.is_generic;
     let body = Block::new();
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+            //let vt = format("{}::{}", decl.type, ev.name);
+            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
             let then = Block::new();
 
             //f.print({decl.type}::{ev.name})
@@ -111,15 +115,15 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             }
             then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
 
-            let self_id = unit.node(0);
-            let block_id = unit.node(0);
+            let self_id = unit.node(line);
+            let block_id = unit.node(line);
             let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
-                let arg_id = unit.node(0);
+                let arg_id = unit.node(line);
                 is.args.add(ArgBind{.arg_id,fd.name.clone(), true});
             }
-            let iflet_id = unit.node(0);
+            let iflet_id = unit.node(line);
             body.list.add(Stmt::IfLet{.iflet_id, is});
         }
     }else{

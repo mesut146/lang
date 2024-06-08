@@ -27,6 +27,13 @@ impl<T> Option<T>{
     panic("unwrap on None");
   }
 
+  func unwrap_ptr(self): T{
+    if(std::is_ptr<T>()){
+      return *self.get();
+    }
+    panic("invalid usage");
+  }
+
   func is_some(self): bool{
     return !self.is_none();
   }

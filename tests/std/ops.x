@@ -1,5 +1,11 @@
 import std/libc
 
+func dbg(c: bool, id: i32){
+  if(c){
+    let a = 10;
+  }
+}
+
 trait Eq{
   func eq(self, x: Self*): bool;
 }
