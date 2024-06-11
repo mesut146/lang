@@ -1,6 +1,7 @@
 import parser/ast
 import parser/bridge
 import parser/utils
+import std/map
 
 static last_scope: i32 = 0;
 
@@ -31,7 +32,7 @@ enum ScopeType {
 }
 
 struct VarScope{
-    type: ScopeType;
+    kind: ScopeType;
     id: i32;
     line: i32;
     vars: List<Variable>;
@@ -65,25 +66,10 @@ struct Move{
     is_assign: bool;
 }
 
-struct Own{
-    method: Method*;
-    main_scope: i32;
-    cur_scope: VarScope*;
-    scope_map: Map<i32, VarScope>;
-}
-impl Own{
-    func new(m: Method*): Own{
-        let main_scope = make_scope(ScopeType::MAIN, m.line, exit);
-        return Own{
-            method: m,
-            main_scope: main_scope.id;
-            cur_scope: &main_scope,
-            scope_map: Map::new(),
-        };
-    }
-    func make_scope(type: ScopeType, line: i32, exit: Exit): VarScope{
+impl VarScope{
+    func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
         let scope = VarScope{
-            type: type,
+            kind: kind,
             id: ++last_scope,
             line: line,
             vars: List<Variable>::new(),
@@ -91,9 +77,33 @@ impl Own{
             actions: List<Action>::new(),
             exit: exit,
             parent: -1,
-            sibling: -1,
+            sibling: -1
         };
         return scope;
+    }
+}
+
+struct Own{
+    method: Method*;
+    main_scope: i32;
+    cur_scope: i32;
+    scope_map: Map<i32, VarScope>;
+}
+impl Own{
+    func new(m: Method*): Own{
+        let exit = Exit::get_exit_type(m.body.get());
+        let main_scope = VarScope::new(ScopeType::MAIN, m.line, exit);
+        let res = Own{
+            method: m,
+            main_scope: main_scope.id,
+            cur_scope: main_scope.id,
+            scope_map: Map<i32, VarScope>::new()
+        };
+        res.scope_map.add(main_scope.id, main_scope);
+        return res;
+    }
+    func add_scope(self, kind: ScopeType){
+
     }
     func add_prm(self, p: Param*){
 

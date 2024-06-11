@@ -22,8 +22,13 @@ impl Compiler{
         self.get_resolver().err(node, format("internal err, no named value"));
       }
       return *res.unwrap();
-    } 
+    }
     func visit(self, node: Expr*): Value*{
+      let res = self.visit_expr(node);
+      self.own.get().add_obj(node);
+      return res;
+    }
+    func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
       if let Expr::Par(e*)=(node){
         return self.visit(e.get());

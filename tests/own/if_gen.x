@@ -34,6 +34,17 @@ func if_else(c: bool, id: i32){
     assert check(1, id);
     //no drop
 }
+func if_else_2_var(c: bool, id: i32, id2: i32){
+    let a = A{a: id};
+    let b = A{a: id2};
+    if(c){
+        send(a);
+        //b.drop();
+    }else{
+        send(b);
+        //a.drop();
+    }
+}
 func if_else_redo(c: bool, id: i32){
     let a = A{a: id};
     if(c){

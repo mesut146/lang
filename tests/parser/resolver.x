@@ -97,7 +97,6 @@ struct Resolver{
   generated_decl: List<Box<Decl>>;
   generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
-  own: Option<Own>;
   glob_map: Map<String, RType>;
 }
 impl Drop for Resolver{
@@ -114,7 +113,6 @@ impl Drop for Resolver{
     self.generated_impl.drop();
     self.format_map.drop();
     self.glob_map.drop();
-    self.own.drop();
   }
 }
 
@@ -359,7 +357,6 @@ impl Resolver{
       generated_decl: List<Box<Decl>>::new(),
       generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
-      own: Option<Own>::new(),
       glob_map: Map<String, RType>::new()};
     return res;
   }
@@ -876,7 +873,6 @@ impl Resolver{
       return;
     }
     self.curMethod = Option::new(node);
-    self.own = Option::new(Own::new(node));
     let res = self.visit_type(&node.type);
     //res.desc = Desc::new_method(node, self);
     self.newScope();
@@ -889,7 +885,6 @@ impl Resolver{
       let prm = node.params.get_ptr(i);
       self.visit_type(&prm.type);
       self.addScope(prm.name.clone(), prm.type.clone(), true);
-      self.own.get().add_prm(prm);
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
@@ -902,8 +897,6 @@ impl Resolver{
       }
     }
     self.dropScope();
-    Drop::drop(self.own);
-    self.own = Option<Own>::new();
     self.curMethod = Option<Method*>::None;
   }
 
@@ -1835,11 +1828,7 @@ impl Resolver{
     if(self.cache.contains(&node.id)){
       return self.cache.get_ptr(&node.id).unwrap().clone();
     }
-    if(id == 713){
-      let a = 10;
-    }
     let res = self.visit_nc(node);
-    self.own.get().add_obj(node);
     self.cache.add(node.id, res.clone());
     //print("cached id={} line: {} {}\n", id, node.line, node);
     return res.clone();
@@ -1943,7 +1932,7 @@ impl Resolver{
       self.dropScope();
       return;
     }else if let Stmt::If(is*) = (node){
-      self.visit(node, is);
+      self.visit_if(node, is);
       return;
     }else if let Stmt::IfLet(is*) = (node){
       self.visit(node, is);
@@ -1977,7 +1966,7 @@ impl Resolver{
     self.dropScope();
   }
   
-  func visit(self, node: Stmt*, is: IfStmt*){
+  func visit_if(self, node: Stmt*, is: IfStmt*){
     if (!self.isCondition(&is.e)) {
         self.err(&is.e, "if condition is not a boolean");
     }
@@ -2025,7 +2014,6 @@ impl Resolver{
         } 
         self.addScope(arg.name.clone(), ty.clone(), false);
         self.cache.add(arg.id, RType::new(ty));
-        self.own.get().add_if_var(arg, field);
     }
     self.visit(is.then.get());
     self.dropScope();
@@ -2052,7 +2040,6 @@ impl Resolver{
       let f = node.list.get_ptr(i);
       let res = self.visit(f);
       self.addScope(f.name.clone(), res.type.clone(), false);
-      self.own.get().add_var(f);
     }
   }
 

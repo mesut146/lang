@@ -29,6 +29,7 @@ struct Compiler{
   curMethod: Option<Method*>;
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
+  own: Option<Own>;
 }
 impl Drop for Compiler{
   func drop(*self){
@@ -42,6 +43,7 @@ impl Drop for Compiler{
     Drop::drop(self.allocMap);
     Drop::drop(self.loops);
     Drop::drop(self.loopNext);
+    Drop::drop(self.own);
   }
 }
 
@@ -189,7 +191,9 @@ impl Compiler{
      allocMap: Map<i32, Value*>::new(),
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
-     loopNext: List<BasicBlock*>::new()};
+     loopNext: List<BasicBlock*>::new(),
+     own: Option<Own>::new()
+    };
   }
 
   func get_resolver(self): Resolver*{
@@ -337,6 +341,7 @@ impl Compiler{
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
+    self.own = Option::new(Own::new(m));
     let mangled = mangle(m);
     let f = self.protos.get().get_func(&mangled);
     self.protos.get().cur = Option::new(f);
@@ -362,6 +367,8 @@ impl Compiler{
     self.llvm.di.get().finalize();
     verifyFunction(f);
     mangled.drop();
+    Drop::drop(self.own);
+    self.own = Option<Own>::new();
   }
   
   func makeLocals(self, b: Block*){
@@ -419,6 +426,7 @@ impl Compiler{
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
+      self.own.get().add_prm(prm);
     }
     for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get_ptr(i);
@@ -426,6 +434,7 @@ impl Compiler{
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
+      self.own.get().add_prm(prm);
     }
   }
   

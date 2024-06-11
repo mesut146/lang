@@ -93,9 +93,10 @@ impl Compiler{
       CreateCondBr(cond, then, elsebb);
       self.set_and_insert(then);
       self.llvm.di.get().new_scope(node.then.get().line);
+      let exit_then = Exit::get_exit_type(node.then.get());
+      self.own.get().add_scope(ScopeType::IF);
       self.visit(node.then.get());
       self.llvm.di.get().exit_scope();
-      let exit_then = Exit::get_exit_type(node.then.get());
       if(!exit_then.is_jump()){
         CreateBr(next);
       }
@@ -103,6 +104,7 @@ impl Compiler{
       let else_jump = false;
       if(node.els.is_some()){
         self.llvm.di.get().new_scope(node.els.get().get().line);
+        self.own.get().add_scope(ScopeType::ELSE);
         self.visit(node.els.get().get());
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.els.get().get());
@@ -142,14 +144,15 @@ impl Compiler{
       self.llvm.di.get().new_scope(stmt.line);
       if(!variant.fields.empty()){
           //declare vars
-          let params = &variant.fields;
+          let fields = &variant.fields;
           let data_index = get_data_index(decl);
           let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
           let var_ty = self.get_variant_ty(decl, variant);
-          for (let i = 0; i < params.size(); ++i) {
+          for (let i = 0; i < fields.size(); ++i) {
               //regular var decl
-              let prm = params.get_ptr(i);
+              let prm = fields.get_ptr(i);
               let arg = node.args.get_ptr(i);
+              self.own.get().add_if_var(arg, prm);
               let real_idx = i;
               if(decl.base.is_some()){
                 ++real_idx;
@@ -276,6 +279,7 @@ impl Compiler{
           //self allocated
           self.visit(&f.rhs);
           self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
+          self.own.get().add_var(f);
           continue;
         }
         if(is_struct(&type)){
@@ -294,6 +298,7 @@ impl Compiler{
         }
         self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
+        self.own.get().add_var(f);
       }
     }
     func visit_block(self, node: Block*){
