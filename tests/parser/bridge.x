@@ -28,6 +28,7 @@ struct DIType;
 struct DICompositeType;
 struct DIDerivedType;
 struct DIScope;
+struct DILexicalBlock;
 struct Metadata;
 struct Metadata_vector;
 struct DILocalVariable;
@@ -68,6 +69,7 @@ extern{
     func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
     func setSubprogram(f: Function*, sp: DISubprogram*);
     func finalizeSubprogram(sp: DISubprogram*);
+    func createLexicalBlock(scope: DIScope*, file: DIFile*, line: i32, col: i32): DILexicalBlock*;
     func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool): DILocalVariable*;
     func createAutoVariable(scope :DIScope*, name: i8*, file: DIFile *, line: i32, ty: DIType*): DILocalVariable*;
     func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
@@ -172,6 +174,7 @@ extern{
     func CreateAShr(l: Value*, r: Value*): Value*;
 
     func get_last_write_time(path: i8*): i64;
+    func set_as_executable(path: i8*);
 }
 
 func getDefaultTargetTriple2(): CStr{

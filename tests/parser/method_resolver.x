@@ -418,12 +418,13 @@ impl MethodResolver{
                 }
             }
         }
+        dbg(mc.print().eq("Debug::debug(self.value, f)"), 10);
         //infer from args
-        for (let i = 0; i < sig.args.size(); ++i) {
-            let arg_type = sig.args.get_ptr(i);
-            let target_type = sig2.args.get_ptr(i);
+        for (let k = 0; k < sig.args.size(); ++k) {
+            let arg_type = sig.args.get_ptr(k);
+            let target_type = sig2.args.get_ptr(k);
             //case for self coerced to ptr
-            if(i == 0 && !mc.is_static && target.self.is_some() && target_type.is_pointer() && !arg_type.is_pointer()){
+            if(k == 0 && !mc.is_static && target.self.is_some() && target_type.is_pointer() && !arg_type.is_pointer()){
                 let arg2 = arg_type.clone().toPtr();
                 MethodResolver::infer(&arg2, target_type, &typeMap, &type_params);
                 arg2.drop();
@@ -831,7 +832,7 @@ impl MethodResolver{
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
-        print("add gen {} {}\n", printMethod(&res2), sig.mc.unwrap_ptr());
+        //print("add gen {} {}\n", printMethod(&res2), sig.mc.unwrap_ptr());
         let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{
             kind: RtKind::MethodGen,

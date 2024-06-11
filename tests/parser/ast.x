@@ -292,7 +292,13 @@ enum Type: Node{
   Array(type: Box<Type>, size: i32),
   Slice(type: Box<Type>)
 }
-
+/*impl Drop for Type{
+  func drop(self){
+    if let Type::Simple(simple) = (self){
+    
+    }
+  }
+}*/
 impl Type{
   func new(name: str): Type{
     return Type::new(String::new(name));
@@ -488,11 +494,12 @@ impl Stmt{
 
 struct Block{
   list: List<Stmt>;
+  line: i32;
 }
 
 impl Block{
-  func new(): Block{
-    return Block{List<Stmt>::new()};
+  func new(line: i32): Block{
+    return Block{List<Stmt>::new(), line};
   }
 }
 

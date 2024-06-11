@@ -13,6 +13,7 @@ import parser/cache
 import std/map
 import std/io
 import std/libc
+import std/stack
 
 func root(): str{
   return "../tests";
@@ -72,6 +73,7 @@ func bootstrap(run: bool, out_dir: str){
   let bin2 = format("./{}", name);
   File::copy(bin.str(), bin2.str());
   print("wrote {}\n", bin2);
+  set_as_executable(bin2.cstr().ptr());
 }
 
 func main(argc: i32, args: i8**){
@@ -98,6 +100,8 @@ func main(argc: i32, args: i8**){
       out = cmd.get().str();
     }
     bootstrap(false, out);
+  }else if(arg.eq("leak")){
+    Compiler::compile_single(root(), get_out(), "../tests/normal/alloc.x", "");
   }
   else if(arg.eq("c")){
     let path = get_arg(args, 2);

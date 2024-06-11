@@ -54,6 +54,8 @@ extern{
   //func malloc(size: i64): i8*;
   func memcpy(dest: i8*, src: i8*, cnt: i64);
   func fopen(name: i8*, mode: i8*): FILE*;
+  func fdopen(fd: i32, mode: i8*): FILE*;
+  func open(name: i8*, flags: i32, mode: i32): i32;
   func fclose(file: FILE*): i32;
   //func fflush(file: FILE*): i32;
   func fwrite(buf: i8*, size: i32, count: i32, target: FILE*): i32;

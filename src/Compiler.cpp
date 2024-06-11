@@ -1767,15 +1767,9 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         curOwner.end_branch(*else_scope);
         Builder->CreateBr(next);
     }
-    if (!(then_returns.is_jump() && else_scope->exit.is_jump())) {
-        set_and_insert(next);
-        auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
-        auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
-        Builder->CreateCondBr(cond, then_clean, next2);
-        set_and_insert(then_clean);
-        curOwner.end_branch(*then_scope);
-        Builder->CreateBr(next2);
-        set_and_insert(next2);
+    if (!(then_scope->exit.is_jump() && else_scope->exit.is_jump())) {
+        add_bb(next);
+        Builder->SetInsertPoint(next);
     }
     curOwner.setScope(cur_scope);
     return nullptr;
@@ -1864,16 +1858,9 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         Builder->CreateBr(next);
     }
     if (!(then_scope->exit.is_jump() && else_scope->exit.is_jump())) {
-        set_and_insert(next);
-        auto then_clean = llvm::BasicBlock::Create(ctx(), "then_clean_" + std::to_string(node->line));
-        auto next2 = llvm::BasicBlock::Create(ctx(), "next2_" + std::to_string(node->line));
-        Builder->CreateCondBr(cond, then_clean, next2);
-        set_and_insert(then_clean);
-        curOwner.end_branch(*then_scope);
-        Builder->CreateBr(next2);
-        set_and_insert(next2);
+        add_bb(next);
+        Builder->SetInsertPoint(next);
     }
-
     curOwner.setScope(cur_scope);
     return nullptr;
 }

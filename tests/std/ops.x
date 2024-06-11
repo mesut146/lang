@@ -360,6 +360,11 @@ impl i64{
     }
     return String{list};
   }
+  func debug_hex(x: i64, f: Fmt*){
+    let str = i64::print_hex(x);
+    f.print(&str);
+    Drop::drop(str);
+  }
 }
 trait Compare{
   //-1, 0, 1

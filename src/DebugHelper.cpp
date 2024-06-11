@@ -42,7 +42,7 @@ void Compiler::dbg_prm(Param &p, const Type &type, int idx) {
     if (!Config::debug) return;
     auto sp = di.sp;
     auto dt = map_di(type);
-    auto v = DBuilder->createParameterVariable(sp, p.name, idx, di.file, p.line, dt, true);
+    auto v = DBuilder->createParameterVariable(sp, p.name, idx, di.file, p.line, dt, false);
     auto val = NamedValues.at(p.name);
     auto lc = llvm::DILocation::get(sp->getContext(), p.line, p.pos, sp);
     DBuilder->insertDeclare(val, v, DBuilder->createExpression(), lc, Builder->GetInsertBlock());
@@ -51,7 +51,7 @@ void Compiler::dbg_prm(Param &p, const Type &type, int idx) {
 void Compiler::dbg_var(const std::string &name, int line, int pos, const Type &type) {
     if (!Config::debug) return;
     auto sp = di.sp;
-    auto v = DBuilder->createAutoVariable(sp, name, di.file, line, map_di(type), true);
+    auto v = DBuilder->createAutoVariable(sp, name, di.file, line, map_di(type), false);
     auto val = NamedValues.at(name);
     auto lc = llvm::DILocation::get(sp->getContext(), line, pos, sp);
     auto e = DBuilder->createExpression();

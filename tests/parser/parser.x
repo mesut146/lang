@@ -43,55 +43,59 @@ impl Parser{
     Drop::drop(lexer);
   }
     
-    func has(self): bool{
-      return self.pos < self.tokens.len();
-    }
+  func has(self): bool{
+    return self.pos < self.tokens.len();
+  }
+  
+  func is(self, tt: TokenType): bool{
+    return self.has() && self.peek().type is tt;
+  }
+  
+  func is(self, tt1: TokenType, tt2: TokenType): bool{
+    return self.has() && self.peek().type is tt1 && self.peek(1).type is tt2;
+  }
+  
+  func peek(self): Token*{
+    return self.get(self.pos);
+  }
     
-    func is(self, tt: TokenType): bool{
-      return self.has() && self.peek().type is tt;
-    }
-    
-    func is(self, tt1: TokenType, tt2: TokenType): bool{
-      return self.has() && self.peek().type is tt1 && self.peek(1).type is tt2;
-    }
-    
-    func peek(self): Token*{
-      return self.get(self.pos);
-    }
-    
-    func peek(self, la: i32): Token*{
-      return self.get(self.pos + la);
-    }
-    
-    func get(self, pos: i32): Token*{
-      if(pos >= self.tokens.len()) panic("eof pos={} len={}", pos, self.tokens.len());
-      return self.tokens.get_ptr(pos);
-    }
-    
-    func pop(self): Token*{
-      let t = self.peek();
-      ++self.pos;
-      return t;
-    }
-    
-    func popv(self): String{
-    	return self.pop().value.clone();
-    }
-    
-    func consume(self, tt: TokenType): Token*{
-      let t: Token* = self.pop();
-      if(t.type is tt) return t;
-      panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
-    }
+  func peek(self, la: i32): Token*{
+    return self.get(self.pos + la);
+  }
 
-    func err(self, msg: str){
-      let line = self.peek().line;
-      print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
-      panic("{}", msg);
-    }
-    func err(self, msg: String){
-      self.err(msg.str());
-    }
+  func line(self): i32{
+    return self.peek().line;
+  }
+  
+  func get(self, pos: i32): Token*{
+    if(pos >= self.tokens.len()) panic("eof pos={} len={}", pos, self.tokens.len());
+    return self.tokens.get_ptr(pos);
+  }
+  
+  func pop(self): Token*{
+    let t = self.peek();
+    ++self.pos;
+    return t;
+  }
+  
+  func popv(self): String{
+    return self.pop().value.clone();
+  }
+    
+  func consume(self, tt: TokenType): Token*{
+    let t: Token* = self.pop();
+    if(t.type is tt) return t;
+    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
+  }
+
+  func err(self, msg: str){
+    let line = self.peek().line;
+    print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
+    panic("{}", msg);
+  }
+  func err(self, msg: String){
+    self.err(msg.str());
+  }
     
     func parse_unit(self): Unit{
       let unit = Unit::new(self.path.clone());
@@ -411,10 +415,11 @@ impl Parser{
       //a<b>::c<d>
       let line = self.peek().line;
       let name = self.popv();
+      let res = Simple::new(name);
       if(self.is(TokenType::LT)){
-        return Simple{Ptr<Type>::new(), name, self.generics()}.into(line);
+        res.args.add_list(self.generics());
       }
-      return Simple{Ptr<Type>::new(), name, List<Type>::new()}.into(line);
+      return res.into(line);
     }
     
     func generics(self): List<Type>{
@@ -451,13 +456,12 @@ impl Parser{
 impl Parser{
   func parse_block(self): Block{
       self.consume(TokenType::LBRACE);
-      let arr = List<Stmt>::new();
+      let res = Block::new(self.line());
       while(!self.is(TokenType::RBRACE)){
-        arr.add(self.parse_stmt());
-        //dump(arr.last());
+        res.list.add(self.parse_stmt());
       }
       self.consume(TokenType::RBRACE);
-      return Block{arr};
+      return res;
     }
     
     func var(self): VarExpr{
@@ -796,11 +800,14 @@ impl Parser{
       }else if(self.is(TokenType::COLON2)){
         self.pop();
         let ty = self.parse_type();
+        let ty_name = ty.name().clone();
         if(self.is(TokenType::LPAREN)){
           let ta = ty.as_simple().args.clone();
-          return self.call(Expr::Type{.n, Type::new(nm)}, ty.name().clone(), true, ta);
+          ty.drop();
+          return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
         }else{
-          return Expr::Type{.n,Type::new(Type::new(nm), ty.name().clone())};
+          ty.drop();
+          return Expr::Type{.n, Type::new(Type::new(nm), ty_name)};
         }
       }else{
         return Expr::Name{.n,nm};

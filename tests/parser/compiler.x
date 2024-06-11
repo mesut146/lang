@@ -14,6 +14,7 @@ import parser/cache
 import std/map
 import std/io
 import std/libc
+import std/stack
 
 struct Compiler{
   ctx: Context;
@@ -136,6 +137,9 @@ func get_out_file(path: str, c: Compiler*): String{
 
 func trimExtenstion(name: str): str{
   let i = name.lastIndexOf(".");
+  if(i == -1){
+    return name;
+  }
   return name.substr(0, i);
 }
 

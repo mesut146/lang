@@ -9,6 +9,7 @@ import parser/utils
 import parser/printer
 import parser/ownership
 import std/map
+import std/stack
 
 //expr------------------------------------------------------
 impl Compiler{
@@ -532,6 +533,10 @@ impl Compiler{
         if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
           args_push(args, val);
+        }else if(arg_type.is_pointer()){
+          let val = self.get_obj_ptr(arg);
+          args_push(args, val);
+          continue;
         }else{
           panic("compiler err printf arg {}", arg_type);
         }

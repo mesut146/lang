@@ -19,14 +19,16 @@ impl AstCopier{
     func clone<T>(node: T*, unit: Unit*): T{
         let map = Map<String, Type>::new();
         let copier = AstCopier::new(&map, unit);
+        let res = copier.visit(node);
         Drop::drop(map);
-        return copier.visit(node);
+        return res;
     }
     func clone<T>(node: T*): T{
         let map = Map<String, Type>::new();
         let copier = AstCopier::new(&map);
+        let res = copier.visit(node);
         Drop::drop(map);
-        return copier.visit(node);
+        return res;
     }
 
     func visit_list<E>(self, list: List<E>*): List<E>{
@@ -184,7 +186,7 @@ impl AstCopier{
     }
 
     func visit(self, node: Block*): Block{
-        return Block{list: self.visit_list(&node.list)};
+        return Block{list: self.visit_list(&node.list), line: node.line};
     }
     
     func visit(self, node: Fragment*): Fragment{

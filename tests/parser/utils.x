@@ -185,37 +185,49 @@ func is_main(m: Method*): bool{
 func mangleType(type: Type*): String{
   let s = type.print();
   s = s.replace("*", "P");
+  s = s.replace("<", "$LT");
+  s = s.replace(">", "$GT");
+  s = s.replace("::", "__");
   return s;
+}
+func mangleType(type: Type*, f: Fmt*){
+    let s = mangleType(type);
+    f.print(&s);
+    s.drop();
 }
 
 func mangle(m: Method*): String{
   if(is_main(m)) return m.name.clone();
-  let s = Fmt::new();
+  let f = Fmt::new();
   if let Parent::Impl(info*) = (&m.parent){
-    s.print(&info.type);
-    s.print("::");
+    mangleType(&info.type, &f);
+    f.print("__");
   }else if let Parent::Trait(ty*) = (&m.parent){
-    s.print(ty);
-    s.print("::");
+    mangleType(ty, &f);
+    f.print("__");
   }else if let Parent::Extern = (&m.parent){
     return m.name.clone();
   }
-  s.print(&m.name);
-  for(let i = 0;i < m.type_params.len();++i){
-    let tp = m.type_params.get_ptr(i);
-    s.print("_");
-    s.print(tp);
+  f.print(&m.name);
+  if(m.type_params.len() > 0){
+    f.print("$LT");
+    for(let i = 0;i < m.type_params.len();++i){
+        let tp = m.type_params.get_ptr(i);
+        f.print("_");
+        f.print(tp);
+    }
+    f.print("$GT");
   }
   if(m.self.is_some()){
-    s.print("_");
-    s.print(mangleType(&m.self.get().type).str());
+    f.print("_");
+    mangleType(&m.self.get().type, &f);
   }
   for(let i = 0;i < m.params.len();++i){
     let prm = m.params.get_ptr(i);
-    s.print("_");
-    s.print(mangleType(&prm.type).str());
+    f.print("_");
+    mangleType(&prm.type, &f);
   }
-  return s.unwrap();
+  return f.unwrap();
 }
 func printMethod(m: Method*): String{
     let s = Fmt::new();

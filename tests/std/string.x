@@ -229,6 +229,11 @@ impl CStr{
     return CStr::Lit{s};
   }*/
   func new(s: String): CStr{
+    if(s.empty()){
+      s.append(0u8);
+      --s.arr.count;
+      return CStr::Heap{s};
+    }
     if(!s.empty()){
       let last = *s.arr.last();
       if(last != 0){

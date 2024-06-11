@@ -189,6 +189,10 @@ llvm::DICompileUnit *createCompileUnit(llvm::DIFile *file) {
     return DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C, file, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
 }
 
+llvm::DILexicalBlock *createLexicalBlock(llvm::DIScope *scope, llvm::DIFile *file, int line, int col) {
+    return DBuilder->createLexicalBlock(scope, file, line, col);
+}
+
 void SetCurrentDebugLocation(llvm::DIScope *scope, int line, int pos) {
     Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
@@ -214,6 +218,7 @@ llvm::DISubroutineType *createSubroutineType(std::vector<llvm::Metadata *> *type
 }
 
 llvm::DISubprogram *createFunction(llvm::DIScope *scope, char *name, char *linkage_name, llvm::DIFile *file, int line, llvm::DISubroutineType *ft, int spflags) {
+    //std::cout << "createFunction " << name << ", " << linkage_name << "\n";
     return DBuilder->createFunction(scope, name, linkage_name, file, line, ft, line, llvm::DINode::FlagPrototyped, (llvm::DISubprogram::DISPFlags) spflags);
 }
 
@@ -376,7 +381,7 @@ llvm::Argument *get_arg(llvm::Function *f, int i) {
 void Argument_setname(llvm::Argument *arg, char *name) {
     arg->setName(name);
 }
-void Argument_setsret(llvm::Argument *arg, llvm::Type* ty) {
+void Argument_setsret(llvm::Argument *arg, llvm::Type *ty) {
     auto attr = llvm::Attribute::get(*ctx, llvm::Attribute::StructRet, ty);
     arg->addAttr(attr);
 }
@@ -662,5 +667,9 @@ llvm::Value *getFalse() {
 int64_t get_last_write_time(const char *path) {
     auto time = std::filesystem::last_write_time(path).time_since_epoch() / std::chrono::milliseconds(1);
     return time;
+}
+
+void set_as_executable(const char *path) {
+    std::filesystem::permissions(path, std::filesystem::perms::owner_all | std::filesystem::perms::group_read | std::filesystem::perms::others_read, std::filesystem::perm_options::add);
 }
 }

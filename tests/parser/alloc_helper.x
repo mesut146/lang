@@ -10,6 +10,7 @@ import parser/printer
 import parser/ownership
 import std/map
 import std/libc
+import std/stack
 
 struct AllocHelper{
   c: Compiler*;
@@ -41,7 +42,7 @@ impl AllocHelper{
     return ptr;
   }
   func visit(self, node: Block*){
-    for(let i=0;i<node.list.len();++i){
+    for(let i = 0;i < node.list.len();++i){
       let st = node.list.get_ptr(i);
       self.visit(st);
     }
@@ -76,13 +77,12 @@ impl AllocHelper{
       return;
     }
     if let Stmt::IfLet(is*)=(node){
-      for(let i=0;i<is.args.len();++i){
+      for(let i = 0;i < is.args.len();++i){
         let arg = is.args.get_ptr(i);
         let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
-        let arg_cloned = arg.name.clone();
-        Value_setName(arg_ptr, arg_cloned.clone().cstr().ptr());
-        self.c.NamedValues.add(arg_cloned, arg_ptr);
+        Value_setName(arg_ptr, arg.name.clone().cstr().ptr());
+        self.c.allocMap.add(arg.id, arg_ptr);
       }
       self.visit(&is.rhs);
       self.visit(is.then.get());
@@ -113,7 +113,7 @@ impl AllocHelper{
     self.visit(expr);
   }
   func visit(self, node: VarExpr*){
-    for(let i=0;i<node.list.len();++i){
+    for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
       let ty = self.c.get_resolver().visit(f);
       let rhs: Option<Value*> = self.visit(&f.rhs);
@@ -121,10 +121,9 @@ impl AllocHelper{
       if(!doesAlloc(&f.rhs, self.c.get_resolver())){
         let ptr = self.alloc_ty(&ty.type, f);
         Value_setName(ptr, name.clone().cstr().ptr());
-        self.c.NamedValues.add(name, ptr);
       }else{
         Value_setName(rhs.unwrap(), name.clone().cstr().ptr());
-        self.c.NamedValues.add(name, rhs.unwrap());
+        self.c.allocMap.add(f.id, rhs.unwrap());
       }
     }
   }

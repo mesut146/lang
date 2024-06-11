@@ -196,7 +196,8 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    return RType{typ, Option<String>::None, Option<VarHolder>::None, Desc::new(), Option<Desc>::new()};
+    let res = RType{typ, Option<String>::None, Option<VarHolder>::None, Desc::new(), Option<Desc>::new()};
+    return res;
   }
   func clone(self): RType{
     return RType{type: self.type.clone(),
@@ -491,7 +492,8 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
-    //print("addType {}={}\n", name, res);
+    //print("addType {}=", name);
+    //print("{}\n", &res);
     self.typeMap.add(name, res);
   }
   
@@ -505,15 +507,16 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get_ptr(i);
       //Fmt::str(it).dump();
-      if let Item::Decl(decl*)=(it){
-        let res = RType::new(decl.type.clone());
+      if let Item::Decl(decl*) = (it){
+        let ty = decl.type.clone();
+        let res = RType::new(ty);
         res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
         self.addType(decl.type.name().clone(), res);
-      }else if let Item::Trait(tr*)=(it){
+      }else if let Item::Trait(tr*) = (it){
         let res = RType::new(tr.type.clone());
         res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
         self.addType(tr.type.name().clone(), res);
-      }else if let Item::Impl(imp*)=(it){
+      }else if let Item::Impl(imp*) = (it){
         //pass
       }else if let Item::Type(name*, rhs*) = (it){
         let res = self.visit_type(rhs);
@@ -886,6 +889,7 @@ impl Resolver{
       let prm = node.params.get_ptr(i);
       self.visit_type(&prm.type);
       self.addScope(prm.name.clone(), prm.type.clone(), true);
+      self.own.get().add_prm(prm);
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
@@ -898,7 +902,7 @@ impl Resolver{
       }
     }
     self.dropScope();
-    self.own.drop();
+    Drop::drop(self.own);
     self.own = Option<Own>::new();
     self.curMethod = Option<Method*>::None;
   }
@@ -1042,9 +1046,6 @@ impl Resolver{
   }
 
   func visit_type2(self, expr: Expr*, simple: Simple*, str: String*): RType{
-    if(str.eq("List<u8>")){
-      let aa = 10;
-    }
     let target_rt: RType = self.find_type(expr, simple);
     if(!target_rt.is_decl()){
       //add used
@@ -1062,8 +1063,10 @@ impl Resolver{
         let res = RType::new(target.type.clone());
         res.desc = target_rt.desc.clone();
         self.addType(str.clone(), res.clone());
+        target_rt.drop();
         return res;
     }
+    target_rt.drop();
     if (simple.args.len() != target.type.get_args().len()) {
       self.err(expr, "type arguments size not matched");
     }
@@ -1073,17 +1076,6 @@ impl Resolver{
     let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
     let res = self.getTypeCached(str);
-    /*let smp = Simple::new(simple.name.clone());
-    let args = &simple.args;
-    for (let i = 0;i < args.len();++i) {
-        let ta =  args.get_ptr(i);
-        smp.args.add(ta.clone());
-    }
-    let res = RType::new(smp.into());
-    res.desc = target_rt.desc.clone();
-    res.desc.kind = RtKind::DeclGen;
-    res.desc.path = self.unit.path.clone();
-    self.addType(str.clone(), res.clone());*/
     return res;
   }
 
@@ -1527,16 +1519,13 @@ impl Resolver{
     //check rest
     for (let i = 1; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get_ptr(i));
-        if (!(arg.is_prim() || arg.eq("i8*") || arg.eq("u8*"))) {
+        if (!(arg.is_prim() || arg.is_pointer())) {
             self.err(node, "format arg is invalid");
         }
     }
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
-    if(call.print().eq("Drop::drop(pair.b)")){
-      let a = 10;
-    }
     if(is_drop_call(call)){
       let argt = self.visit(call.args.get_ptr(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){
@@ -1850,6 +1839,7 @@ impl Resolver{
       let a = 10;
     }
     let res = self.visit_nc(node);
+    self.own.get().add_obj(node);
     self.cache.add(node.id, res.clone());
     //print("cached id={} line: {} {}\n", id, node.line, node);
     return res.clone();
@@ -1870,7 +1860,8 @@ impl Resolver{
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){
-      return self.visit_call(node, call);
+      let res = self.visit_call(node, call);
+      return res;
     }else if let Expr::Name(name*) = (node){
       return self.visit_name(node, name);
     }else if let Expr::Unary(op*, ebox*) = (node){
@@ -2025,7 +2016,7 @@ impl Resolver{
     }
     //init arg variables
     self.newScope();
-    for (let i=0;i < is.args.len();++i) {
+    for (let i = 0;i < is.args.len();++i) {
         let arg = is.args.get_ptr(i);
         let field = variant.fields.get_ptr(i);
         let ty = field.type.clone();
@@ -2034,6 +2025,7 @@ impl Resolver{
         } 
         self.addScope(arg.name.clone(), ty.clone(), false);
         self.cache.add(arg.id, RType::new(ty));
+        self.own.get().add_if_var(arg, field);
     }
     self.visit(is.then.get());
     self.dropScope();
@@ -2060,6 +2052,7 @@ impl Resolver{
       let f = node.list.get_ptr(i);
       let res = self.visit(f);
       self.addScope(f.name.clone(), res.type.clone(), false);
+      self.own.get().add_var(f);
     }
   }
 

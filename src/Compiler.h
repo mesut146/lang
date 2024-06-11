@@ -161,6 +161,9 @@ public:
     llvm::LLVMContext &ctx() { return *ctxp; };
 
     void set_and_insert(llvm::BasicBlock *bb);
+    void add_bb(llvm::BasicBlock *bb) {
+        func->insert(func->end(), bb);
+    }
     int getSize2(const Type *type);
     int getSize2(const Type &type) { return getSize2(&type); }
     int getSize2(BaseDecl *decl);

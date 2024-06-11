@@ -37,13 +37,13 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
-    let body = Block::new();
     let line = decl.line;
+    let body = Block::new(line);
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
-            let then = Block::new();
+            let then = Block::new(line);
 
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
@@ -93,13 +93,13 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     m.parent = Parent::Impl{make_info(decl, "Debug")};
     m.path = unit.path.clone();
     m.is_generic = decl.is_generic;
-    let body = Block::new();
+    let body = Block::new(line);
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
             //let vt = format("{}::{}", decl.type, ev.name);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
-            let then = Block::new();
+            let then = Block::new(line);
 
             //f.print({decl.type}::{ev.name})
             then.list.add(parse_stmt(format("f.print(\"{}{\");", vt), unit));
@@ -108,10 +108,17 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 if(j > 0){
                     then.list.add(parse_stmt(format("f.print(\", \");"), unit));
                 }
-                //f.print("fd.name: ")
+                //f.print("<fd.name>: ")
                 then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
-                //{fd.name}.debug(f);
-                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit));
+                if(fd.type.is_pointer()){
+                    //print hex based address
+                    //i64::debug_hex(<fd.name> as u64, f);
+                    then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit));
+                }else{
+                    //{fd.name}.debug(f);
+                    //already ptr from if let arg
+                    then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit));
+                }
             }
             then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
 
@@ -137,8 +144,14 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             }
             //f.print("<fd.name>: ");
             body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
-            //self.{fd.name}.debug(f);
-            body.list.add(parse_stmt(format("Debug::debug(self.{}, f);", fd.name), unit));
+            if(fd.type.is_pointer()){
+                //print hex based address
+                //i64::debug_hex(fd.name as u64, f);
+                body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit));
+            }else{
+                //self.{fd.name}.debug(f);
+                body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit));
+            }
         }
         body.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
     }
@@ -181,7 +194,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         }
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo{block: Block::new(line), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
     //print("gen {} id={} {}\n", node, node.id, r.unit.path);
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
@@ -327,7 +340,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
         r.err(node, format("assert expr is not bool: {}", node));
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo{block: Block::new(node.line), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
     //parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
     let arg_norm = normalize_quotes(arg.print().str());

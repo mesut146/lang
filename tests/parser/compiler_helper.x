@@ -9,6 +9,7 @@ import parser/expr_emitter
 import parser/ownership
 import std/map
 import std/libc
+import std/stack
 
 struct RvalueHelper {
   rvalue: bool;
@@ -420,7 +421,7 @@ impl Compiler{
       Argument_setsret(arg, self.mapType(&m.type));
     }
     self.protos.get().funcMap.add(mangled, f);
-    free(args as i8*);
+    //free(args as i8*);
   }
 
   func getSize(self, type: Type*): i64{

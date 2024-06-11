@@ -9,6 +9,7 @@ import parser/utils
 import parser/printer
 import parser/ownership
 import std/map
+import std/stack
 
 //stmt
 impl Compiler{
@@ -35,16 +36,16 @@ impl Compiler{
         self.visit_if(is);
       }
       else if let Stmt::IfLet(is*)=(node){
-        self.visit_iflet(is);
+        self.visit_iflet(node, is);
       }
       else if let Stmt::Block(b*)=(node){
         self.visit_block(b);
       }
       else if let Stmt::For(fs*)=(node){
-        self.visit_for(fs);
+        self.visit_for(node, fs);
       }
       else if let Stmt::While(cnd*, body*)=(node){
-        self.visit_while(cnd, body);
+        self.visit_while(node, cnd, body);
       }
       else if(node is Stmt::Continue){
         CreateBr(*self.loops.last());
@@ -58,7 +59,7 @@ impl Compiler{
       return;
     }
     
-    func visit_while(self, c: Expr*, body: Block*){
+    func visit_while(self, stmt: Stmt*, c: Expr*, body: Block*){
       let cond_name = format("while_cond_{}", c.line);
       let then_name = format("while_then_{}", c.line);
       let next_name = format("while_next_{}", c.line);
@@ -71,7 +72,9 @@ impl Compiler{
       self.set_and_insert(then);
       self.loops.add(condbb);
       self.loopNext.add(next);
+      self.llvm.di.get().new_scope(body.line);
       self.visit_block(body);
+      self.llvm.di.get().exit_scope();
       self.loops.pop_back();
       self.loopNext.pop_back();
       CreateBr(condbb);
@@ -89,7 +92,9 @@ impl Compiler{
       let next = create_bb_named(CStr::new(next_name).ptr());
       CreateCondBr(cond, then, elsebb);
       self.set_and_insert(then);
+      self.llvm.di.get().new_scope(node.then.get().line);
       self.visit(node.then.get());
+      self.llvm.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
       if(!exit_then.is_jump()){
         CreateBr(next);
@@ -97,7 +102,9 @@ impl Compiler{
       self.set_and_insert(elsebb);
       let else_jump = false;
       if(node.els.is_some()){
+        self.llvm.di.get().new_scope(node.els.get().get().line);
         self.visit(node.els.get().get());
+        self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.els.get().get());
         else_jump = exit_else.is_jump();
         if(!else_jump){
@@ -114,7 +121,7 @@ impl Compiler{
       exit_then.drop();
     }
   
-    func visit_iflet(self, node: IfLet*){
+    func visit_iflet(self, stmt: Stmt*, node: IfLet*){
       let rt = self.get_resolver().visit_type(&node.ty);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
@@ -123,15 +130,16 @@ impl Compiler{
       let index = Resolver::findVariant(decl, node.ty.name());
       let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
   
-      let then_name = format("iflet_then_{}", node.rhs.line);
-      let else_name = format("iflet_else_{}", node.rhs.line);
-      let next_name = format("iflet_next_{}", node.rhs.line);
+      let then_name = format("iflet_then_{}", stmt.line);
+      let else_name = format("iflet_else_{}", stmt.line);
+      let next_name = format("iflet_next_{}", stmt.line);
       let then_bb = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
       let elsebb = create_bb_named(CStr::new(else_name).ptr());
       let next = create_bb_named(CStr::new(next_name).ptr());
       CreateCondBr(self.branch(cmp), then_bb, elsebb);
       SetInsertPoint(then_bb);
       let variant = decl.get_variants().get_ptr(index);
+      self.llvm.di.get().new_scope(stmt.line);
       if(!variant.fields.empty()){
           //declare vars
           let params = &variant.fields;
@@ -165,6 +173,7 @@ impl Compiler{
           }
       }
       self.visit(node.then.get());
+      self.llvm.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
       if (!exit_then.is_jump()) {
         CreateBr(next);
@@ -172,7 +181,9 @@ impl Compiler{
       self.set_and_insert(elsebb);
       let else_jump = false;
       if (node.els.is_some()) {
+        self.llvm.di.get().new_scope(node.els.get().get().line);
         self.visit(node.els.get().get());
+        self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.els.get().get());
         else_jump = exit_else.is_jump();
         if (!else_jump) {
@@ -189,12 +200,12 @@ impl Compiler{
       exit_then.drop();
     }
   
-    func visit_for(self, node: ForStmt*){
+    func visit_for(self, stmt: Stmt*, node: ForStmt*){
       if(node.v.is_some()){
         self.visit_var(node.v.get());
       }
       let f = self.cur_func();
-      let line = 1;
+      let line = stmt.line;
       let then_name = format("for_then_{}", line);
       let cond_name = format("for_cond_{}", line);
       let update_name = format("for_update_{}", line);
@@ -206,21 +217,28 @@ impl Compiler{
   
       CreateBr(condbb);
       SetInsertPoint(condbb);
+      
+      let di_scope = self.llvm.di.get().new_scope(stmt.line);
       if (node.e.is_some()) {
         CreateCondBr(self.branch(node.e.get()), then, next);
       } else {
         CreateBr(then);
       }
+      self.llvm.di.get().exit_scope();
       self.set_and_insert(then);
       self.loops.add(updatebb);
       self.loopNext.add(next);
+      self.llvm.di.get().new_scope(node.body.get().line);
       self.visit(node.body.get());
+      self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
-      for (let i=0;i<node.u.len();++i) {
+      self.llvm.di.get().new_scope(di_scope);
+      for (let i = 0;i < node.u.len();++i) {
         let u = node.u.get_ptr(i);
         self.visit(u);
       }
+      self.llvm.di.get().exit_scope();
       self.loops.pop_back();
       self.loopNext.pop_back();
       CreateBr(condbb);
@@ -251,7 +269,8 @@ impl Compiler{
     func visit_var(self, node: VarExpr*){
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get_ptr(i);
-        let ptr = *self.NamedValues.get_ptr(&f.name).unwrap();
+        let ptr = self.get_alloc(f.id);
+        self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
         if(doesAlloc(&f.rhs, self.get_resolver())){
           //self allocated

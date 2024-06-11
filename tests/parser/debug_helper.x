@@ -8,6 +8,7 @@ import parser/printer
 import parser/ownership
 import std/map
 import std/libc
+import std/stack
 
 struct DebugInfo{
     cu: DICompileUnit*;
@@ -16,6 +17,7 @@ struct DebugInfo{
     types: Map<String, DIType*>;
     incomplete_types: Map<String, DICompositeType*>;
     debug: bool;
+    scopes: Stack<DILexicalBlock*>;
 }
 
 func method_parent(m: Method*): Type*{
@@ -41,7 +43,8 @@ impl DebugInfo{
              sp: Option<DISubprogram*>::new(),
              types: Map<String, DIType*>::new(),
              incomplete_types: Map<String, DICompositeType*>::new(),
-             debug: true};
+             debug: true,
+             scopes: Stack<DILexicalBlock*>::new()};
     }
     
     func finalize(self){
@@ -53,9 +56,10 @@ impl DebugInfo{
     func loc(self, line: i32, pos: i32) {
         if (!self.debug) return;
         if (self.sp.is_some()) {
-            SetCurrentDebugLocation(self.sp.unwrap() as DIScope*, line, pos);
+            SetCurrentDebugLocation(self.get_scope(), line, pos);
         } else {
-            SetCurrentDebugLocation(self.cu as DIScope*, line, pos);
+            panic("err");
+            //SetCurrentDebugLocation(self.cu as DIScope*, line, pos);
         }
     }
 
@@ -67,7 +71,7 @@ impl DebugInfo{
             let st = self.map_di(&m.self.get().type, c);
             Metadata_vector_push(tys, createObjectPointerType(st) as Metadata*);
         }
-        for(let i=0;i<m.params.len();++i){
+        for(let i = 0;i < m.params.len();++i){
             let prm = m.params.get_ptr(i);
             let pt = self.map_di(&prm.type, c);
             Metadata_vector_push(tys, pt as Metadata*);
@@ -76,7 +80,8 @@ impl DebugInfo{
         if(!is_main(m)){
             linkage_name = mangle(m);
         }
-        let file = createFile(m.path.clone().cstr().ptr(), ".".ptr());
+        let path_c = m.path.clone().cstr();
+        let file = createFile(path_c.ptr(), ".".ptr());
         //self.file = file;
         let scope = file as DIScope*;
         if(!m.parent.is_none()){
@@ -85,10 +90,14 @@ impl DebugInfo{
         }
         let ft = createSubroutineType(tys);
         let flags = make_spflags(is_main(m));
-        let sp = createFunction(scope, m.name.clone().cstr().ptr(), linkage_name.cstr().ptr(), file, m.line, ft, flags);
+        let name_c = m.name.clone().cstr();
+        let linkage_c = linkage_name.cstr();
+        let sp = createFunction(scope, name_c.ptr(), linkage_c.ptr(), file, m.line, ft, flags);
         setSubprogram(f, sp);
         self.sp = Option<DISubprogram*>::new(sp);
         self.loc(m.line, 0);
+        name_c.drop();
+        linkage_c.drop();
     }
     
     func dbg_prm(self, p: Param*, idx: i32, c: Compiler*) {
@@ -104,11 +113,30 @@ impl DebugInfo{
     func dbg_var(self, name: String*, type: Type*, line: i32, c: Compiler*) {
       if (!self.debug) return;
       let dt = self.map_di(type, c);
-      let scope = self.sp.unwrap() as DIScope*;
+      let scope = self.get_scope();
       let v = createAutoVariable(scope, name.clone().cstr().ptr(), self.file, line, dt);
       let val = *c.NamedValues.get_ptr(name).unwrap();
       let lc = DILocation_get(scope, line, 0);
       insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+    }
+
+    func get_scope(self): DIScope*{
+      if(self.scopes.len() == 0){
+        return self.sp.unwrap() as DIScope*;
+      }
+      return *self.scopes.top() as DIScope*;
+    }
+
+    func new_scope(self, line: i32): DILexicalBlock*{
+      let scope = createLexicalBlock(self.get_scope(), self.file, line, 0);
+      self.scopes.push(scope);
+      return scope;
+    }
+    func exit_scope(self){
+      self.scopes.pop();
+    }
+    func new_scope(self, scope: DILexicalBlock*){
+      self.scopes.push(scope);
     }
 
     func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{
