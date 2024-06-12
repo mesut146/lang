@@ -242,6 +242,7 @@ Variable *Ownership::add(std::string &name, Type &type, llvm::Value *ptr, int id
 }
 
 void Ownership::check(Expression *expr) {
+    if (!enabled) return;
     for (auto &act : last_scope->actions) {
         if (!act.is_move()) {
             continue;
@@ -447,6 +448,7 @@ bool isMoved(Variable &v, VarScope &scope, Ownership *own, bool use_return) {
 }
 
 void Ownership::check_assignable(Expression *expr) {
+    if (!enabled) return;
     auto de = dynamic_cast<DerefExpr *>(expr);
     if (de) {
         return;
@@ -471,6 +473,7 @@ void Ownership::check_assignable(Expression *expr) {
 }
 
 void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
+    if (!enabled) return;
     if (lhs == nullptr) return;
     if (verbose) std::cout << "beginAssign " << lhs->print() << " line: " << lhs->line << std::endl;
     check_assignable(lhs);
@@ -479,6 +482,7 @@ void Ownership::beginAssign(Expression *lhs, llvm::Value *ptr) {
 }
 
 void Ownership::endAssign(Expression *lhs, Expression *rhs) {
+    if (!enabled) return;
     if (!isDropType(rhs)) return;
     //is_movable(rhs, this);
     auto de = dynamic_cast<DerefExpr *>(lhs);
@@ -496,25 +500,26 @@ void Ownership::endAssign(Expression *lhs, Expression *rhs) {
 }
 
 void Ownership::doMoveReturn(Expression *expr) {
+    if (!enabled) return;
     check(expr);
     last_scope->actions.push_back(Action(Move::make_transfer(Object::make(expr))));
 }
 
 //?.name = expr
 void Ownership::moveToField(Expression *expr) {
+    if (!enabled) return;
     doMoveCall(expr);
 }
 
 void Ownership::doMoveCall(Expression *arg) {
+    if (!enabled) return;
     if (!isDropType(arg)) return;
     check(arg);
     last_scope->actions.push_back(Action(Move::make_transfer(Object::make(arg))));
 }
 
 void Ownership::call_drop(Type &type, llvm::Value *ptr) {
-    if (!enabled) {
-        return;
-    }
+    if (!enabled) return;
     call_drop_force(type, ptr);
 }
 
@@ -538,6 +543,7 @@ void drop_info(Expression *expr) {
 }
 
 void Ownership::drop(Variable &v) {
+    if (!enabled) return;
     if (verbose) print("drop " + v.print());
     if (v.is_self && is_drop_method(*method)) {
         //prevent recursion of drop self
@@ -547,6 +553,7 @@ void Ownership::drop(Variable &v) {
 }
 
 void Ownership::drop(Expression *expr, llvm::Value *ptr) {
+    if (!enabled) return;
     auto rt = r->resolve(expr);
     DropHelper helper(r);
     if (!helper.isDrop(rt.targetDecl)) return;
@@ -609,6 +616,7 @@ std::vector<Variable *> get_outer_vars(VarScope &scope, Ownership *own) {
 }
 
 void drop_objects(VarScope &scope, Ownership *own) {
+    if (!enabled) return;
     for (auto &obj : scope.objects) {
         //todo is valid
         bool is_moved = false;
@@ -633,6 +641,7 @@ void drop_objects(VarScope &scope, Ownership *own) {
 
 //drop vars in this scope
 void Ownership::endScope(VarScope &scope) {
+    if (!enabled) return;
     if (verbose) print("endscope " + printMethod(method) + " " + scope.print_info());
     if (scope.type == ScopeId::MAIN) {
         //doReturn(scope.line);
@@ -658,6 +667,7 @@ void Ownership::endScope(VarScope &scope) {
 
 //if sibling moves outer var, we must drop it
 void Ownership::end_branch(VarScope &branch) {
+    if (!enabled) return;
     //doReturn already drops
     if (branch.exit.is_return()) return;
     if (verbose) print("end_branch " + printMethod(method) + " " + branch.print_info());
@@ -680,6 +690,7 @@ void Ownership::end_branch(VarScope &branch) {
 
 //cleans all vars
 void Ownership::doReturn(int line) {
+    if (!enabled) return;
     if (verbose) print("doReturn " + printMethod(method) + " line: " + std::to_string(line));
     auto vars = get_outer_vars(*last_scope, this);
     for (auto v : vars) {

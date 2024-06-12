@@ -15,8 +15,9 @@ import std/stack
 impl Compiler{
     func visit(self, node: Stmt*){
       self.llvm.di.get().loc(node.line, node.pos);
-      if let Stmt::Ret(e*)=(node){
+      if let Stmt::Ret(e*) = (node){
         if(e.is_none()){
+          self.own.get().do_return();
           if(is_main(self.curMethod.unwrap())){
             CreateRet(makeInt(0, 32));
           }else{
@@ -48,9 +49,11 @@ impl Compiler{
         self.visit_while(node, cnd, body);
       }
       else if(node is Stmt::Continue){
+        self.own.get().do_continue();
         CreateBr(*self.loops.last());
       }
       else if(node is Stmt::Break){
+        self.own.get().do_break();
         CreateBr(*self.loopNext.last());
       }
       else{
@@ -59,21 +62,24 @@ impl Compiler{
       return;
     }
     
-    func visit_while(self, stmt: Stmt*, c: Expr*, body: Block*){
-      let cond_name = format("while_cond_{}", c.line);
-      let then_name = format("while_then_{}", c.line);
-      let next_name = format("while_next_{}", c.line);
+    func visit_while(self, stmt: Stmt*, cond: Expr*, body: Block*){
+      let line = stmt.line;
+      let cond_name = format("while_cond_{}", line);
+      let then_name = format("while_then_{}", line);
+      let next_name = format("while_next_{}", line);
       let then = create_bb_named(CStr::new(then_name).ptr());
       let condbb = create_bb2_named(self.cur_func(), CStr::new(cond_name).ptr());
       let next = create_bb_named(CStr::new(next_name).ptr());
       CreateBr(condbb);
       SetInsertPoint(condbb);
-      CreateCondBr(self.branch(c), then, next);
+      CreateCondBr(self.branch(cond), then, next);
       self.set_and_insert(then);
       self.loops.add(condbb);
       self.loopNext.add(next);
       self.llvm.di.get().new_scope(body.line);
+      self.own.get().add_scope(ScopeType::WHILE, body);
       self.visit_block(body);
+      self.own.get().end_scope();
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
       self.loopNext.pop_back();
@@ -94,8 +100,10 @@ impl Compiler{
       self.set_and_insert(then);
       self.llvm.di.get().new_scope(node.then.get().line);
       let exit_then = Exit::get_exit_type(node.then.get());
-      self.own.get().add_scope(ScopeType::IF);
+      self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.visit(node.then.get());
+      //dont drop anything, we need else moves too
+      let own_if = self.own.get().end_if_scope();
       self.llvm.di.get().exit_scope();
       if(!exit_then.is_jump()){
         CreateBr(next);
@@ -104,8 +112,10 @@ impl Compiler{
       let else_jump = false;
       if(node.els.is_some()){
         self.llvm.di.get().new_scope(node.els.get().get().line);
-        self.own.get().add_scope(ScopeType::ELSE);
+        //this will restore if, bc we did fake end_scope
+        self.own.get().add_scope(ScopeType::ELSE, node.els.get().get());
         self.visit(node.els.get().get());
+        self.own.get().end_scope();
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.els.get().get());
         else_jump = exit_else.is_jump();
@@ -143,37 +153,37 @@ impl Compiler{
       let variant = decl.get_variants().get_ptr(index);
       self.llvm.di.get().new_scope(stmt.line);
       if(!variant.fields.empty()){
-          //declare vars
-          let fields = &variant.fields;
-          let data_index = get_data_index(decl);
-          let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
-          let var_ty = self.get_variant_ty(decl, variant);
-          for (let i = 0; i < fields.size(); ++i) {
-              //regular var decl
-              let prm = fields.get_ptr(i);
-              let arg = node.args.get_ptr(i);
-              self.own.get().add_if_var(arg, prm);
-              let real_idx = i;
-              if(decl.base.is_some()){
-                ++real_idx;
-              }
-              let field_ptr = self.gep2(dataPtr, real_idx, var_ty);
-              let alloc_ptr = self.get_alloc(arg.id);
-              self.NamedValues.add(arg.name.clone(), alloc_ptr);
-              if (arg.is_ptr) {
-                  CreateStore(field_ptr, alloc_ptr);
-                  let ty_ptr = prm.type.clone().toPtr();
-                  self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
-              } else {
-                  if (prm.type.is_prim() || prm.type.is_pointer()) {
-                      let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
-                      CreateStore(field_val, alloc_ptr);
-                  } else {
-                      self.copy(alloc_ptr, field_ptr, &prm.type);
-                  }
-                  self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
-              }
-          }
+        //declare vars
+        let fields = &variant.fields;
+        let data_index = get_data_index(decl);
+        let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
+        let var_ty = self.get_variant_ty(decl, variant);
+        for (let i = 0; i < fields.size(); ++i) {
+            //regular var decl
+            let prm = fields.get_ptr(i);
+            let arg = node.args.get_ptr(i);
+            //self.own.get().add_iflet_var(arg, prm);
+            let real_idx = i;
+            if(decl.base.is_some()){
+              ++real_idx;
+            }
+            let field_ptr = self.gep2(dataPtr, real_idx, var_ty);
+            let alloc_ptr = self.get_alloc(arg.id);
+            self.NamedValues.add(arg.name.clone(), alloc_ptr);
+            if (arg.is_ptr) {
+                CreateStore(field_ptr, alloc_ptr);
+                let ty_ptr = prm.type.clone().toPtr();
+                self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
+            } else {
+                if (prm.type.is_prim() || prm.type.is_pointer()) {
+                    let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
+                    CreateStore(field_val, alloc_ptr);
+                } else {
+                    self.copy(alloc_ptr, field_ptr, &prm.type);
+                }
+                self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
+            }
+        }
       }
       self.visit(node.then.get());
       self.llvm.di.get().exit_scope();
@@ -232,7 +242,9 @@ impl Compiler{
       self.loops.add(updatebb);
       self.loopNext.add(next);
       self.llvm.di.get().new_scope(node.body.get().line);
+      self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit(node.body.get());
+      self.own.get().end_scope();
       self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
@@ -308,21 +320,24 @@ impl Compiler{
       }
     }
     func visit_ret(self, expr: Expr*){
-      let type = &self.curMethod.unwrap().type;
-      type = &self.get_resolver().visit_type(type).type;
+      let mtype = &self.curMethod.unwrap().type;
+      let type = self.get_resolver().getType(mtype);
       if(type.is_pointer()){
         let val = self.get_obj_ptr(expr);
+        self.own.get().do_return(expr);
         CreateRet(val);
         return;
       }
-      if(!is_struct(type)){
-        let val = self.cast(expr, type);
+      if(!is_struct(&type)){
+        let val = self.cast(expr, &type);
+        self.own.get().do_return(expr);
         CreateRet(val);
         return;
       }
       let ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
       let val = self.visit(expr);
-      self.copy(ptr, val, type);
+      self.copy(ptr, val, &type);
+      self.own.get().do_return(expr);
       CreateRetVoid();
     }
 }//end impl

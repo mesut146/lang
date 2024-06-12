@@ -452,6 +452,10 @@ bool Resolver::isCyclic(const Type &type0, BaseDecl *target) {
     if (type.print() == target->type.print()) {
         return true;
     }
+    //print("cycle " + type0.print() + " -> " + target->type.print());
+    if (target->type.print() == "Option<Pair<String, Value*>*>") {
+        int aa = 10;
+    }
     auto bd = resolve(type).targetDecl;
     if (bd->base && isCyclic(bd->base.value(), target)) {
         return true;

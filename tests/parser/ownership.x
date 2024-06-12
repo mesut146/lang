@@ -102,8 +102,29 @@ impl Own{
         res.scope_map.add(main_scope.id, main_scope);
         return res;
     }
-    func add_scope(self, kind: ScopeType){
+    func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
+        let exit = Exit::get_exit_type(stmt);
+        let scope = VarScope::new(kind, stmt.line, exit);
+        let id = scope.id;
+        self.scope_map.add(scope.id, scope);
+        return id;
+    }
+    func add_scope(self, kind: ScopeType, stmt: Block*): i32{
+        let exit = Exit::get_exit_type(stmt);
+        let scope = VarScope::new(kind, stmt.line, exit);
+        let id = scope.id;
+        self.scope_map.add(scope.id, scope);
+        return id;
+    }
+    func end_scope(self){
 
+    }
+    func get_scope(self): VarScope*{
+        return self.scope_map.get_ptr(&self.cur_scope).unwrap();
+    }
+    func end_if_scope(self){
+        //fake end no actual drops
+        self.cur_scope = self.get_scope().parent;
     }
     func add_prm(self, p: Param*){
 
@@ -111,10 +132,27 @@ impl Own{
     func add_var(self, f: Fragment*){
         //self.move(f.rhs);
     }
-    func add_if_var(self, arg: ArgBind*, fd: FieldDecl*){
+    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*){
 
     }
     func add_obj(self, expr: Expr*){
 
+    }
+
+    func do_move(self, expr: Expr*){
+
+    }
+
+    func do_return(self, expr: Expr*){
+        self.do_move(expr);
+    }
+    func do_return(self){
+
+    }
+    func do_continue(self){
+
+    }
+    func do_break(self){
+        
     }
 }

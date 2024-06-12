@@ -50,27 +50,70 @@ bool Cache::need_compile(const fs::path &p, const std::string &out) {
 }
 
 void sort(std::vector<BaseDecl *> &list, Resolver *r) {
-    // for (auto decl : list) {
-    //     std::cout << decl->type.print() << ", ";
-    // }
-    // std::cout << std::endl;
-    bool swapped = false;
-    do {
-        swapped = false;
+    //bool swapped = false;
+    //do {
+    //swapped = false;
+    for (int i = 0; i < list.size(); i++) {
+        //find min that belongs to i'th index
+        auto min = list[i];
+        print("sort " + min->type.print() + " i=" + std::to_string(i) + "/" + std::to_string(list.size()));
+        for (int j = i + 1; j < list.size(); j++) {
+            auto &cur = list[j];
+            if (r->isCyclic(min->type, cur)) {
+                //print("swap " + min->type.print() + " and " + cur->type.print());
+                min = cur;
+                std::swap(list[i], list[j]);
+                //swapped = true;
+            }
+        }
+    }
+    //} while (swapped);
+}
+void sort2(std::vector<BaseDecl *> &list, Resolver *r) {
+    //type -> index
+    std::unordered_map<std::string, int> map;
+    for (int i = 0; i < list.size(); i++) {
+        auto bd = list[i];
+        map.insert({bd->type.print(), i});
+    }
+    bool go = true;
+    while (go) {
+        go = false;
         for (int i = 0; i < list.size(); i++) {
-            //find min that belongs to i'th index
-            auto min = list[i];
-            for (int j = i + 1; j < list.size(); j++) {
-                auto &cur = list[j];
-                if (r->isCyclic(min->type, cur)) {
-                    //print("swap " + min->type.print() + " and " + cur->type.print());
-                    min = cur;
-                    std::swap(list[i], list[j]);
-                    swapped = true;
+            auto bd = list[i];
+            if (bd->isClass()) {
+                auto sd = dynamic_cast<StructDecl *>(bd);
+                for (auto &fd : sd->fields) {
+                    auto type = fd.type.print();
+                    if (map.contains(type)) {
+                        int fi = map[type];
+                        if (fi > i) {
+                            std::swap(list[i], list[fi]);
+                            map[type] = i;
+                            map[bd->type.print()] = fi;
+                            go = true;
+                        }
+                    }
+                }
+            } else {
+                auto ed = dynamic_cast<EnumDecl *>(bd);
+                for (auto &ev : ed->variants) {
+                    for (auto &fd : ev.fields) {
+                        auto type = fd.type.print();
+                        if (map.contains(type)) {
+                            int fi = map[type];
+                            if (fi > i) {
+                                std::swap(list[i], list[fi]);
+                                map[type] = i;
+                                map[bd->type.print()] = fi;
+                                go = true;
+                            }
+                        }
+                    }
                 }
             }
         }
-    } while (swapped);
+    }
 }
 
 std::vector<Method *> getMethods(Unit *unit) {
@@ -143,7 +186,7 @@ llvm::Type *Compiler::getInt(int bit) {
 void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
     auto bd = resolv->resolve(n.scope.get()).targetDecl;
     auto decl = dynamic_cast<EnumDecl *>(bd);
-     if (decl->base) {
+    if (decl->base) {
         resolv->err("base is not initialized");
     }
     int index = Resolver::findVariant(decl, n.name);
@@ -390,7 +433,7 @@ void Compiler::make_decl_protos() {
         }
         list.push_back(bd);
     }
-    sort(list, resolv.get());
+    sort2(list, resolv.get());
     for (auto bd : list) {
         make_decl_proto(bd);
     }
@@ -421,6 +464,14 @@ llvm::Type *Compiler::make_decl_proto(BaseDecl *decl) {
         }
     }
     return ty;
+}
+
+void dump_st(llvm::StructType *st) {
+    st->dump();
+    std::cout << st->getPrimitiveSizeInBits() << std::endl;
+}
+void dump_sl(llvm::StructLayout *sl) {
+    std::cout << sl->getSizeInBits() << std::endl;
 }
 
 llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
@@ -466,6 +517,10 @@ llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
             Layout::set_elems_struct(ty, nullptr, elems);
         }
     }
+    auto ss = mod->getDataLayout().getStructLayout(ty)->getSizeInBits();
+    print("fill_decl " + decl->type.print() + " " + std::to_string(ss));
+    ty->print(llvm::outs(), true, false);
+    print("");
     return ty;
 }
 
@@ -625,4 +680,5 @@ llvm::Value *Compiler::load_prim(Expression *expr) {
     }
     //auto re = dynamic_cast<RefExpr *>(expr);
     resolv->err(expr, "load_prim");
+    throw std::runtime_error("");
 }
