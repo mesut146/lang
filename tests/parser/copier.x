@@ -218,16 +218,16 @@ impl AstCopier{
             return Stmt::Ret{.id, self.visit_opt(opt)};
         }
         if let Stmt::While(e*, body*)=(node){
-            return Stmt::While{.id, e: self.visit(e), b: self.visit(body)};
+            return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)};
         }
         if let Stmt::If(is*)=(node){
-            return Stmt::If{.id, IfStmt{e: self.visit(&is.e), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+            return Stmt::If{.id, IfStmt{cond: self.visit(&is.cond), then: self.visit_box(&is.then), else_stmt: self.visit_ptr(&is.else_stmt)}};
         }
         if let Stmt::IfLet(is*)=(node){
-            return Stmt::IfLet{.id, IfLet{ty: self.visit(&is.ty), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), els: self.visit_opt(&is.els)}};
+            return Stmt::IfLet{.id, IfLet{type: self.visit(&is.type), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), else_stmt: self.visit_ptr(&is.else_stmt)}};
         }
         if let Stmt::For(fs*)=(node){
-            return Stmt::For{.id, ForStmt{v: self.visit_opt(&fs.v), e: self.visit_opt(&fs.e), u: self.visit_list(&fs.u), body: self.visit_box(&fs.body)}};
+            return Stmt::For{.id, ForStmt{var_decl: self.visit_opt(&fs.var_decl), cond: self.visit_opt(&fs.cond), updaters: self.visit_list(&fs.updaters), body: self.visit_box(&fs.body)}};
         }
         if let Stmt::Continue = (node){
             return Stmt::Continue{.id};
@@ -278,7 +278,7 @@ impl AstCopier{
             return Expr::Array{.id,self.visit_list(list), self.visit_opt(size)};
         }
         if let Expr::ArrAccess(aa*)=(node){
-            return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_opt(&aa.idx2)}};
+            return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_ptr(&aa.idx2)}};
         }
         let msg = format("Expr {}", node);
         panic("{}", msg.str());

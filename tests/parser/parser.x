@@ -510,8 +510,8 @@ impl Parser{
         self.consume(TokenType::LPAREN);
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
-        let b = self.parse_block();
-        return Stmt::While{.id, e, b};
+        let b = self.parse_stmt();
+        return Stmt::While{.id, e, Box::new(b)};
       }else if(self.is(TokenType::IF, TokenType::LET)){
         self.pop();
         self.consume(TokenType::LET);
@@ -531,10 +531,10 @@ impl Parser{
         let rhs = self.parse_expr();
         self.consume(TokenType::RPAREN);
         let then = self.parse_stmt();
-        let els = Option<Box<Stmt>>::None;
+        let els = Ptr<Stmt>::new();
         if(self.is(TokenType::ELSE)){
             self.pop();
-            els = Option::new(Box::new(self.parse_stmt()));
+            els = Ptr::new(self.parse_stmt());
         }
         return Stmt::IfLet{.id, IfLet{ty, args, rhs, Box::new(then), els}};
       }else if(self.is(TokenType::IF)){
@@ -546,9 +546,9 @@ impl Parser{
         if(self.is(TokenType::ELSE)){
           self.pop();
           let els = self.parse_stmt();
-          return Stmt::If{.id, IfStmt{e, b, Option::new(Box::new(els))}};
+          return Stmt::If{.id, IfStmt{e, b, Ptr::new(els)}};
         }
-        return Stmt::If{.id, IfStmt{e, b, Option<Box<Stmt>>::None}};
+        return Stmt::If{.id, IfStmt{e, b, Ptr<Stmt>::new()}};
       }else if(self.is(TokenType::FOR)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -859,14 +859,14 @@ impl Parser{
       }else{
           self.pop();
           let idx = self.parse_expr();
-          let idx2 = Option<Box<Expr>>::None;
+          let idx2 = Ptr<Expr>::new();
           if(self.is(TokenType::DOTDOT)){
               self.pop();
-              idx2 = Option::new(Box::new(self.parse_expr()));
+              idx2 = Ptr::new(self.parse_expr());
           }
           self.consume(TokenType::RBRACKET);
           let n = self.node();
-          res = Expr::ArrAccess{.n,ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
+          res = Expr::ArrAccess{.n, ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
       }
     }
     return res; 

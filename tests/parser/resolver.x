@@ -1660,7 +1660,7 @@ impl Resolver{
       self.err(node, "array index is not an integer");
     }
     if (aa.idx2.is_some()) {
-        let idx2 = self.getType(aa.idx2.get().get());
+        let idx2 = self.getType(aa.idx2.get());
         if (idx2.print().eq("bool") || !idx2.is_prim()){
           self.err(node, "range end is not an integer");
         }
@@ -1915,16 +1915,16 @@ impl Resolver{
       return;
     }else if let Stmt::For(f*) = (node){
       self.newScope();
-      if(f.v.is_some()){
-        self.visit(f.v.get());
+      if(f.var_decl.is_some()){
+        self.visit(f.var_decl.get());
       }
-      if(f.e.is_some()){
-        if (!self.isCondition(f.e.get())) {
-            self.err(f.e.get(), "for statement expr is not a bool");
+      if(f.cond.is_some()){
+        if (!self.isCondition(f.cond.get())) {
+            self.err(f.cond.get(), "for statement expr is not a bool");
         }
       }
-      for (let i=0;i<f.u.len();++i) {
-        self.visit(f.u.get_ptr(i));
+      for (let i = 0;i < f.updaters.len();++i) {
+        self.visit(f.updaters.get_ptr(i));
       }
       self.inLoop+=1;
       self.visit(f.body.get());
@@ -1937,8 +1937,8 @@ impl Resolver{
     }else if let Stmt::IfLet(is*) = (node){
       self.visit(node, is);
       return;
-    }else if let Stmt::While(e*,b*) = (node){
-      self.visit_while(node, e, b);
+    }else if let Stmt::While(e*, b*) = (node){
+      self.visit_while(node, e, b.get());
       return;
     }
     else if let Stmt::Continue = (node){
@@ -1955,37 +1955,37 @@ impl Resolver{
     panic("visit stmt {}", node);
   }
   
-  func visit_while(self, node: Stmt*, e: Expr*, b: Block*){
-    if (!self.isCondition(e)) {
+  func visit_while(self, node: Stmt*, cond: Expr*, body: Stmt*){
+    if (!self.isCondition(cond)) {
         self.err(node, "while statement expr is not a bool");
     }
     ++self.inLoop;
     self.newScope();
-    self.visit(b);
+    self.visit(body);
     --self.inLoop;
     self.dropScope();
   }
   
   func visit_if(self, node: Stmt*, is: IfStmt*){
-    if (!self.isCondition(&is.e)) {
-        self.err(&is.e, "if condition is not a boolean");
+    if (!self.isCondition(&is.cond)) {
+        self.err(&is.cond, "if condition is not a boolean");
     }
     self.newScope();
     self.visit(is.then.get());
     self.dropScope();
-    if (is.els.is_some()) {
+    if (is.else_stmt.is_some()) {
         self.newScope();
-        self.visit(is.els.get().get());
+        self.visit(is.else_stmt.get());
         self.dropScope();
     }
   }
 
   func visit(self, node: Stmt*, is: IfLet*){
     //check lhs
-    let rt = self.visit_type(&is.ty);
+    let rt = self.visit_type(&is.type);
     let decl_opt = self.get_decl(&rt);
     if (decl_opt.is_none() || !decl_opt.unwrap().is_enum()) {
-        let msg = format("if let type is not enum: {}", is.ty);
+        let msg = format("if let type is not enum: {}", is.type);
         self.err(node, msg);
     }
     //check rhs
@@ -1997,7 +1997,7 @@ impl Resolver{
     }
     //match variant
     let decl: Decl* = decl_opt.unwrap();
-    let index = Resolver::findVariant(decl, is.ty.name());
+    let index = Resolver::findVariant(decl, is.type.name());
     let variant = decl.get_variants().get_ptr(index);
     if (variant.fields.len() != is.args.len()) {
         let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
@@ -2017,9 +2017,9 @@ impl Resolver{
     }
     self.visit(is.then.get());
     self.dropScope();
-    if (is.els.is_some()) {
+    if (is.else_stmt.is_some()) {
         self.newScope();
-        self.visit(is.els.get().get());
+        self.visit(is.else_stmt.get());
         self.dropScope();
     }
   }
@@ -2045,6 +2045,9 @@ impl Resolver{
 
   func visit(self, node: Fragment*): RType{
     let rhs = self.visit(&node.rhs);
+    if(rhs.type.is_void()){
+      self.err(node.line, format("void variable, {}", node.name));
+    }
     if(node.type.is_none()){
       return rhs.clone();
     }

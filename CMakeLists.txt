@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.12)
 
 project(lang)
 
-set(CMAKE_CXX_FLAGS "-std=c++2a -g")
+set(CMAKE_CXX_FLAGS "-std=c++2a -g -fstack-protector-all")
 
 file(GLOB src src/*.cpp src/parser/*.cpp)
 

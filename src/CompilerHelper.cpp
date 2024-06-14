@@ -56,7 +56,7 @@ void sort(std::vector<BaseDecl *> &list, Resolver *r) {
     for (int i = 0; i < list.size(); i++) {
         //find min that belongs to i'th index
         auto min = list[i];
-        print("sort " + min->type.print() + " i=" + std::to_string(i) + "/" + std::to_string(list.size()));
+        //print("sort " + min->type.print() + " i=" + std::to_string(i) + "/" + std::to_string(list.size()));
         for (int j = i + 1; j < list.size(); j++) {
             auto &cur = list[j];
             if (r->isCyclic(min->type, cur)) {
@@ -191,21 +191,6 @@ void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
     }
     int index = Resolver::findVariant(decl, n.name);
     setOrdinal(index, ptr, bd);
-}
-
-void Layout::set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields) {
-    if (base) {
-        fields.insert(fields.begin(), base);
-    }
-    st->setBody(fields);
-}
-
-void Layout::set_elems_enum(llvm::StructType *st, llvm::Type *tag, llvm::ArrayType *data) {
-    //tag, {base, ...data}
-    std::vector<llvm::Type *> elems;
-    elems.push_back(tag);
-    elems.push_back(data);
-    st->setBody(elems);
 }
 
 int Layout::get_base_index(BaseDecl *decl) {
@@ -433,7 +418,7 @@ void Compiler::make_decl_protos() {
         }
         list.push_back(bd);
     }
-    sort2(list, resolv.get());
+    sort(list, resolv.get());
     for (auto bd : list) {
         make_decl_proto(bd);
     }
@@ -468,10 +453,24 @@ llvm::Type *Compiler::make_decl_proto(BaseDecl *decl) {
 
 void dump_st(llvm::StructType *st) {
     st->dump();
-    std::cout << st->getPrimitiveSizeInBits() << std::endl;
 }
 void dump_sl(llvm::StructLayout *sl) {
     std::cout << sl->getSizeInBits() << std::endl;
+}
+
+llvm::StructType *fill_variant(BaseDecl *decl, EnumVariant &ev, Compiler *compiler) {
+    auto var_mangled = decl->type.print() + "::" + ev.name;
+    auto var_ty = (llvm::StructType *) compiler->classMap.at(var_mangled);
+    std::vector<llvm::Type *> var_elems;
+    if (decl->base) {
+        auto base_ty = compiler->mapType(decl->base.value(), compiler->resolv.get());
+        var_elems.push_back(base_ty);
+    }
+    for (auto &field : ev.fields) {
+        var_elems.push_back(compiler->mapType(&field.type, compiler->resolv.get()));
+    }
+    var_ty->setBody(var_elems, false);
+    return var_ty;
 }
 
 llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
@@ -480,47 +479,34 @@ llvm::Type *Compiler::fill_decl_proto(BaseDecl *decl) {
     }
     auto mangled = decl->type.print();
     auto ty = (llvm::StructType *) classMap.at(mangled);
+    std::vector<llvm::Type *> elems;
     if (decl->isEnum()) {
         auto ed = dynamic_cast<EnumDecl *>(decl);
         int max_var = 0;
         for (auto &ev : ed->variants) {
-            auto var_mangled = mangled + "::" + ev.name;
-            auto var_ty = (llvm::StructType *) classMap.at(var_mangled);
-            std::vector<llvm::Type *> var_elems;
-            if (decl->base) {
-                auto base_ty = mapType(decl->base.value(), resolv.get());
-                var_elems.push_back(base_ty);
-            }
-            for (auto &field : ev.fields) {
-                var_elems.push_back(mapType(&field.type, resolv.get()));
-            }
-            var_ty->setBody(var_elems);
+            auto var_ty = fill_variant(decl, ev, this);
             auto var_size = mod->getDataLayout().getStructLayout(var_ty)->getSizeInBits();
+            //std::cout << "fill_variant " << var_ty->getName().str() << " sz: " << var_size << "\n";
             if (var_size > max_var) {
                 max_var = var_size;
             }
         }
-        auto data_size = max_var / 8;
         auto tag_type = getInt(ENUM_TAG_BITS);
+        elems.push_back(tag_type);
+        auto data_size = max_var / 8;
         auto data_type = llvm::ArrayType::get(getInt(8), data_size);
-        Layout::set_elems_enum(ty, tag_type, data_type);
+        elems.push_back(data_type);
     } else {
         auto sd = dynamic_cast<StructDecl *>(decl);
-        std::vector<llvm::Type *> elems;
+        if (decl->base) {
+            auto base_ty = mapType(decl->base.value(), resolv.get());
+            elems.push_back(base_ty);
+        }
         for (auto &field : sd->fields) {
             elems.push_back(mapType(&field.type, resolv.get()));
         }
-        if (decl->base) {
-            auto base_ty = mapType(decl->base.value(), resolv.get());
-            Layout::set_elems_struct(ty, base_ty, elems);
-        } else {
-            Layout::set_elems_struct(ty, nullptr, elems);
-        }
     }
-    auto ss = mod->getDataLayout().getStructLayout(ty)->getSizeInBits();
-    print("fill_decl " + decl->type.print() + " " + std::to_string(ss));
-    ty->print(llvm::outs(), true, false);
-    print("");
+    ty->setBody(elems, false);
     return ty;
 }
 

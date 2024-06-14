@@ -574,9 +574,7 @@ void Compiler::genCode(Method *m) {
     if (m->isGeneric || !m->body) {
         return;
     }
-    /*if (m->name == "drop" && m->parent.type && m->parent.type->print() == "Unit") {
-        print(m->print());
-    }*/
+    //print("genCode " + printMethod(m));
     resolv->curMethod = m;
     curMethod = m;
     auto id = mangle(m);

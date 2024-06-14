@@ -8,14 +8,14 @@ func join<T>(f: Fmt*, arr: List<T>*, sep: str){
 }
 
 func body(node: Stmt*, f: Fmt*){
-  let s = Fmt::str(node); 
-  let lines: List<str> = s.str().split("\n");
+  let str = Fmt::str(node); 
+  let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
     f.print("  ");
     f.print(lines.get_ptr(j));
     f.print("\n");
   }
-  Drop::drop(s);
+  Drop::drop(str);
   Drop::drop(lines);
 }
 
@@ -259,41 +259,41 @@ impl Debug for Stmt{
     }
     else if let Stmt::If(is*)=(self){
      f.print("if(");
-     is.e.debug(f);
+     is.cond.debug(f);
      f.print(")");
      if(!(is.then.get() is Stmt::Block)){
        f.print(" ");
      }
      is.then.get().debug(f);
-     if(is.els.is_some()){
+     if(is.else_stmt.is_some()){
        f.print("\nelse ");
-       let els = is.els.get();
-       els.get().debug(f);
+       let els = is.else_stmt.get();
+       els.debug(f);
      }
     }else if let Stmt::IfLet(il*)=(self){
       f.print("if let ");
-      il.ty.debug(f);
+      il.type.debug(f);
       f.print("(");
       join(f, &il.args, ", ");
       f.print(") = (");
       il.rhs.debug(f);
       f.print(")");
       il.then.get().debug(f);
-      if(il.els.is_some()){
+      if(il.else_stmt.is_some()){
         f.print("else ");
-        il.els.get().get().debug(f);
+        il.else_stmt.get().debug(f);
       }
     }else if let Stmt::For(fs*)=(self){
       f.print("for(");
-      if(fs.v.is_some()){
-        fs.v.get().debug(f);
+      if(fs.var_decl.is_some()){
+        fs.var_decl.get().debug(f);
       }
       f.print(";");
-      if(fs.e.is_some()){
-        fs.e.get().debug(f);
+      if(fs.cond.is_some()){
+        fs.cond.get().debug(f);
       }
       f.print(";");
-      join(f, &fs.u, ", ");
+      join(f, &fs.updaters, ", ");
       f.print(")");
       fs.body.get().debug(f);
     }else if let Stmt::Continue = (self){
@@ -428,7 +428,7 @@ impl Debug for Expr{
       aa.idx.get().debug(f);
       if(aa.idx2.is_some()){
         f.print("..");
-        aa.idx2.get().get().debug(f);
+        aa.idx2.get().debug(f);
       }
       f.print("]");
     }

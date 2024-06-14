@@ -658,6 +658,9 @@ std::any Resolver::visitParam(Param *p) {
 
 std::any Resolver::visitFragment(Fragment *f) {
     auto rhs = resolve(f->rhs.get());
+    if (rhs.type.isVoid()) {
+        err(f, "void var");
+    }
     if (!f->type) return rhs.clone();
     auto res = resolve(*f->type);
     auto err_opt = MethodResolver::isCompatible(rhs, res.type);

@@ -159,20 +159,8 @@ impl String{
       return self.str().substr(start, end);
     }
     
-    func split(self, sep: str): List<String>{
-      let arr = List<String>::new();
-      let last = 0;
-      while(true){
-        let i = self.str().indexOf(sep, last);
-        if(i == -1){
-          arr.add(self.substr(last).str());
-          break;
-        }else{
-          arr.add(self.substr(last, i).str());
-          last = i + sep.len();
-        }
-      }
-      return arr;
+    func split(self, sep: str): List<str>{
+      return self.str().split(sep);
     }
     
     func eq(self, s: str): bool{

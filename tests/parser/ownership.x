@@ -1,6 +1,7 @@
 import parser/ast
 import parser/bridge
 import parser/utils
+import parser/own_visitor
 import std/map
 
 static last_scope: i32 = 0;
@@ -102,29 +103,28 @@ impl Own{
         res.scope_map.add(main_scope.id, main_scope);
         return res;
     }
-    func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
-        let exit = Exit::get_exit_type(stmt);
-        let scope = VarScope::new(kind, stmt.line, exit);
+    func add_scope(self, kind: ScopeType, line: i32, exit: Exit): i32{
+        let scope = VarScope::new(kind, line, exit);
+        scope.parent = self.get_scope().id;
         let id = scope.id;
         self.scope_map.add(scope.id, scope);
+        self.set_current(id);
         return id;
+    }
+    func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
+        let exit = Exit::get_exit_type(stmt);
+        return self.add_scope(kind, stmt.line, exit);
     }
     func add_scope(self, kind: ScopeType, stmt: Block*): i32{
         let exit = Exit::get_exit_type(stmt);
-        let scope = VarScope::new(kind, stmt.line, exit);
-        let id = scope.id;
-        self.scope_map.add(scope.id, scope);
-        return id;
+        return self.add_scope(kind, stmt.line, exit);
     }
-    func end_scope(self){
-
+    func set_current(self, id: i32){
+        assert(id != -1);
+        self.cur_scope = id;
     }
     func get_scope(self): VarScope*{
         return self.scope_map.get_ptr(&self.cur_scope).unwrap();
-    }
-    func end_if_scope(self){
-        //fake end no actual drops
-        self.cur_scope = self.get_scope().parent;
     }
     func add_prm(self, p: Param*){
 
@@ -154,5 +154,23 @@ impl Own{
     }
     func do_break(self){
         
+    }
+
+    func end_scope(self){
+        let scope = self.get_scope();
+        if(scope.exit.is_jump()){
+            //has own drop
+            self.set_current(scope.parent);
+            return;
+        }
+        self.set_current(scope.parent);
+    }
+    func end_scope_if(self, else_stmt: Stmt*): i32{
+        //merge else moves then drop all
+        let visitor = OwnVisitor{self};
+        visitor.visit(else_stmt);
+        let res = self.get_scope().id;
+        self.set_current(self.get_scope().parent);
+        return res;
     }
 }

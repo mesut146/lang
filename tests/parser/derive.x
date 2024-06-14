@@ -55,7 +55,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             let self_id = unit.node(line);
             let block_id = unit.node(line);
             let iflet_id = unit.node(line);
-            let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
+            let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);
@@ -124,7 +124,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
 
             let self_id = unit.node(line);
             let block_id = unit.node(line);
-            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Option<Box<Stmt>>::new()};
+            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);

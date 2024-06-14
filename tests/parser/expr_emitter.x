@@ -250,7 +250,7 @@ impl Compiler{
       //store ptr
       CreateStore(arr, trg_ptr);
       //set len
-      let val_end = self.cast(node.idx2.get().get(), &i32_ty);
+      let val_end = self.cast(node.idx2.get(), &i32_ty);
       let len = CreateSub(val_end, val_start);
       len = CreateSExt(len, getInt(SLICE_LEN_BITS()));
       CreateStore(len, trg_len);

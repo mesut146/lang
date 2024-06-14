@@ -188,7 +188,7 @@ impl str{
       while(true){
         let i = self.indexOf(sep, last);
         if(i == -1){
-          if(last > self.len()){
+          if(last < self.len()){
             arr.add(self.substr(last));
           }
           break;

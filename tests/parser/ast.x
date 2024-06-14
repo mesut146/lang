@@ -451,34 +451,33 @@ struct ArgBind: Node{
 }
 
 struct IfLet{
-  ty: Type;
+  type: Type;
   args: List<ArgBind>;
   rhs: Expr;
   then: Box<Stmt>;
-  els: Option<Box<Stmt>>;
+  else_stmt: Ptr<Stmt>;
 }
 
 struct ForStmt{
-  v: Option<VarExpr>;
-  e: Option<Expr>;
-  u: List<Expr>;
+  var_decl: Option<VarExpr>;
+  cond: Option<Expr>;
+  updaters: List<Expr>;
   body: Box<Stmt>;
 }
 
 
 struct IfStmt{
-  e: Expr;
+  cond: Expr;
   then: Box<Stmt>;
-  els: Option<Box<Stmt>>;
+  else_stmt: Ptr<Stmt>;
 }
-
 
 enum Stmt: Node{
     Block(x: Block),
     Var(ve: VarExpr),
     Expr(e: Expr),
     Ret(e: Option<Expr>),
-    While(e: Expr, b: Block),
+    While(cond: Expr, then: Box<Stmt>),
     If(e: IfStmt),
     IfLet(e: IfLet),
     For(e: ForStmt),
@@ -545,7 +544,7 @@ enum LitKind{
 struct ArrAccess{
   arr: Box<Expr>;
   idx: Box<Expr>;
-  idx2: Option<Box<Expr>>;
+  idx2: Ptr<Expr>;
 }
 
 enum Expr: Node{

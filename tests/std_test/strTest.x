@@ -1,3 +1,10 @@
+func split_test(){
+  let str = "asd//def//ghj";
+  let arr = str.split("//");
+  assert(arr.len() == 3);
+  assert(Fmt::str(&arr).eq("[asd, def, ghj]"));
+}
+
 func main(){
     bug();
     let helloArr = ['h' as u8, 'e', 'l', 'l', 'o'];
@@ -5,7 +12,7 @@ func main(){
     let s = str::new(helloSlice);
 
     lit();
-
+    split_test();
     print("strTest done\n");
 }
 

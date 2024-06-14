@@ -46,7 +46,7 @@ impl Compiler{
         self.visit_for(node, fs);
       }
       else if let Stmt::While(cnd*, body*)=(node){
-        self.visit_while(node, cnd, body);
+        self.visit_while(node, cnd, body.get());
       }
       else if(node is Stmt::Continue){
         self.own.get().do_continue();
@@ -62,7 +62,7 @@ impl Compiler{
       return;
     }
     
-    func visit_while(self, stmt: Stmt*, cond: Expr*, body: Block*){
+    func visit_while(self, stmt: Stmt*, cond: Expr*, body: Stmt*){
       let line = stmt.line;
       let cond_name = format("while_cond_{}", line);
       let then_name = format("while_then_{}", line);
@@ -78,7 +78,7 @@ impl Compiler{
       self.loopNext.add(next);
       self.llvm.di.get().new_scope(body.line);
       self.own.get().add_scope(ScopeType::WHILE, body);
-      self.visit_block(body);
+      self.visit(body);
       self.own.get().end_scope();
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
@@ -88,8 +88,8 @@ impl Compiler{
     }
 
     func visit_if(self, node: IfStmt*){
-      let cond = self.branch(&node.e);
-      let line = node.e.line;
+      let cond = self.branch(&node.cond);
+      let line = node.cond.line;
       let then_name = format("if_then_{}", line);
       let else_name = format("if_else_{}", line);
       let next_name = format("if_next_{}", line);
@@ -102,22 +102,26 @@ impl Compiler{
       let exit_then = Exit::get_exit_type(node.then.get());
       self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.visit(node.then.get());
-      //dont drop anything, we need else moves too
-      let own_if = self.own.get().end_if_scope();
+      if(node.else_stmt.is_some()){
+        //else move aware end_scope
+        self.own.get().end_scope_if(node.else_stmt.get());
+      }else{
+        self.own.get().end_scope();
+      }
       self.llvm.di.get().exit_scope();
       if(!exit_then.is_jump()){
         CreateBr(next);
       }
       self.set_and_insert(elsebb);
       let else_jump = false;
-      if(node.els.is_some()){
-        self.llvm.di.get().new_scope(node.els.get().get().line);
+      if(node.else_stmt.is_some()){
+        self.llvm.di.get().new_scope(node.else_stmt.get().line);
         //this will restore if, bc we did fake end_scope
-        self.own.get().add_scope(ScopeType::ELSE, node.els.get().get());
-        self.visit(node.els.get().get());
+        self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.visit(node.else_stmt.get());
         self.own.get().end_scope();
         self.llvm.di.get().exit_scope();
-        let exit_else = Exit::get_exit_type(node.els.get().get());
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if(!else_jump){
           CreateBr(next);
@@ -134,12 +138,12 @@ impl Compiler{
     }
   
     func visit_iflet(self, stmt: Stmt*, node: IfLet*){
-      let rt = self.get_resolver().visit_type(&node.ty);
+      let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
       let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
-      let index = Resolver::findVariant(decl, node.ty.name());
+      let index = Resolver::findVariant(decl, node.type.name());
       let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
   
       let then_name = format("iflet_then_{}", stmt.line);
@@ -193,11 +197,11 @@ impl Compiler{
       }
       self.set_and_insert(elsebb);
       let else_jump = false;
-      if (node.els.is_some()) {
-        self.llvm.di.get().new_scope(node.els.get().get().line);
-        self.visit(node.els.get().get());
+      if (node.else_stmt.is_some()) {
+        self.llvm.di.get().new_scope(node.else_stmt.get().line);
+        self.visit(node.else_stmt.get());
         self.llvm.di.get().exit_scope();
-        let exit_else = Exit::get_exit_type(node.els.get().get());
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if (!else_jump) {
           CreateBr(next);
@@ -214,8 +218,8 @@ impl Compiler{
     }
   
     func visit_for(self, stmt: Stmt*, node: ForStmt*){
-      if(node.v.is_some()){
-        self.visit_var(node.v.get());
+      if(node.var_decl.is_some()){
+        self.visit_var(node.var_decl.get());
       }
       let f = self.cur_func();
       let line = stmt.line;
@@ -232,8 +236,8 @@ impl Compiler{
       SetInsertPoint(condbb);
       
       let di_scope = self.llvm.di.get().new_scope(stmt.line);
-      if (node.e.is_some()) {
-        CreateCondBr(self.branch(node.e.get()), then, next);
+      if (node.cond.is_some()) {
+        CreateCondBr(self.branch(node.cond.get()), then, next);
       } else {
         CreateBr(then);
       }
@@ -249,8 +253,8 @@ impl Compiler{
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
       self.llvm.di.get().new_scope(di_scope);
-      for (let i = 0;i < node.u.len();++i) {
-        let u = node.u.get_ptr(i);
+      for (let i = 0;i < node.updaters.len();++i) {
+        let u = node.updaters.get_ptr(i);
         self.visit(u);
       }
       self.llvm.di.get().exit_scope();

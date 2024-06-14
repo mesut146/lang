@@ -57,22 +57,22 @@ impl AllocHelper{
       return;
     }
     if let Stmt::For(fs*)=(node){
-      if(fs.v.is_some()){
-        self.visit(fs.v.get());
+      if(fs.var_decl.is_some()){
+        self.visit(fs.var_decl.get());
       }
       self.visit(fs.body.get());
       return;
     }
     if let Stmt::While(e*, b*)=(node){
       self.visit(e);
-      self.visit(b);
+      self.visit(b.get());
       return;
     }
     if let Stmt::If(is*)=(node){
-      self.visit(&is.e);
+      self.visit(&is.cond);
       self.visit(is.then.get());
-      if(is.els.is_some()){
-        self.visit(is.els.get().get());
+      if(is.else_stmt.is_some()){
+        self.visit(is.else_stmt.get());
       }
       return;
     }
@@ -86,8 +86,8 @@ impl AllocHelper{
       }
       self.visit(&is.rhs);
       self.visit(is.then.get());
-      if(is.els.is_some()){
-        self.visit(is.els.get().get());
+      if(is.else_stmt.is_some()){
+        self.visit(is.else_stmt.get());
       }
       return;
     }
@@ -210,7 +210,7 @@ impl AllocHelper{
       self.visit(aa.arr.get());
       self.visit(aa.idx.get());
       if(aa.idx2.is_some()){
-        self.visit(aa.idx2.get().get());
+        self.visit(aa.idx2.get());
         let st = self.c.protos.get().std("slice");
         return Option::new(self.alloc_ty(st as llvm_Type*, node));
       }

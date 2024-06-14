@@ -28,8 +28,6 @@ constexpr int SLICE_PTR_INDEX = 0;
 constexpr int SLICE_LEN_INDEX = 1;
 
 struct Layout {
-    static void set_elems_struct(llvm::StructType *st, llvm::Type *base, std::vector<llvm::Type *> &fields);
-    static void set_elems_enum(llvm::StructType *st, llvm::Type *tag, llvm::ArrayType *data);
     static int get_tag_index(BaseDecl *decl);
     static int get_data_index(BaseDecl *decl);
     static int get_base_index(BaseDecl *decl);
