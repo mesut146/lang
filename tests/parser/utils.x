@@ -97,27 +97,6 @@ func isGeneric2(typ: Type*, typeParams: List<Type>*): bool{
     return false;
 }
 
-/*func isGeneric(typ: Type*, typeParams: List<Type>*): bool{
-    if (!(typ is Type::Simple)) return false;
-    if let Type::Simple(smp*) = (typ){
-        if(smp.scope.is_some()){
-            panic("isGeneric::scope");
-        }
-    }
-    let type_str = typ.print();
-    let targs = typ.get_args();
-    if (targs.empty()) {
-        for (let i = 0;i < typeParams.size();++i) {
-            if (typeParams.get_ptr(i).print().eq(&type_str)) return true;
-        }
-    } else {
-        for (let i = 0;i < targs.size();++i) {
-            if (isGeneric(targs.get_ptr(i), typeParams)) return true;
-        }
-    }
-    return false;
-}*/
-
 func isUnsigned(type: Type*): bool{
     let s = type.print();
     return s.eq("u8") || s.eq("u16") || s.eq("u32") || s.eq("u64");

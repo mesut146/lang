@@ -8,6 +8,7 @@ struct Lexer{
   buf: String;
   pos: i32;
   line: i32;
+  single_line: i32;//macro code is single lined
   ops: Map<str, TokenType>;
 }
 
@@ -31,10 +32,10 @@ impl i8{
 impl Lexer{
   func from_path(path: String): Lexer{
     let s = read_string(path.str());
-    return Lexer{path: path, buf: s, pos: 0, line: 1, ops: make_ops()};
+    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1, ops: make_ops()};
   }
-  func from_string(path: String, buf: String): Lexer{
-    return Lexer{path: path, buf: buf, pos: 0, line: 1, ops: make_ops()};
+  func from_string(path: String, buf: String, line: i32): Lexer{
+    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line, ops: make_ops()};
   }
   
   func peek(self): i8{
@@ -63,6 +64,13 @@ impl Lexer{
     return self.buf.str().substr(a, b);
   }
 
+  func line(self): i32{
+    if(self.single_line == -1){
+      return self.line;
+    }
+    return self.single_line;
+  }
+
   func get_line(buf: str, line: i32): str{
     let cur_line = 1;
     let pos = 0;
@@ -87,7 +95,7 @@ impl Lexer{
   }
 
   func err(self, msg: str){
-    print("in file {}:{} `{}`\n", &self.path, self.line, get_line(self.buf.str(), self.line));
+    print("in file {}:{} `{}`\n", &self.path, self.line(), get_line(self.buf.str(), self.line()));
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -241,7 +249,7 @@ impl Lexer{
   func next(self): Token{
     let start = self.pos;
     let res = self.next0();
-    res.line = self.line;
+    res.line = self.line();
     res.start = start;
     res.end = self.pos;
     return res;
@@ -260,7 +268,7 @@ impl Lexer{
       } else {
         if (self.peek() == '\r') {
           self.pos+=1;
-          self.line+=1;
+          self.line += 1;
           if (self.peek() == '\n') {
            self.pos+=1;
           }
@@ -272,7 +280,7 @@ impl Lexer{
         }
       }
     }            
-    panic("unclosed block comment at line {}" , self.line);
+    panic("unclosed block comment at line {}" , self.line());
   }
 
   func read_string(self): Token{
@@ -311,9 +319,6 @@ impl Lexer{
     let start = self.pos;
     if(c.is_letter() || c == '_'){
       return self.read_ident();
-    }
-    if(self.path.eq("../tests/std_test/i64_test.x") && self.line == 37){
-      let aa = 10;
     }
     if(c.is_digit()){
       return self.read_number();

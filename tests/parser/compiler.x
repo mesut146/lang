@@ -341,7 +341,7 @@ impl Compiler{
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
-    self.own = Option::new(Own::new(m));
+    self.own = Option::new(Own::new(self, m));
     let mangled = mangle(m);
     let f = self.protos.get().get_func(&mangled);
     self.protos.get().cur = Option::new(f);
@@ -357,6 +357,7 @@ impl Compiler{
     self.visit_block(m.body.get());
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit() && m.type.is_void()){
+      self.own.get().do_return();
       if(is_main(m)){
         CreateRet(makeInt(0, 32));
       }else{
@@ -409,6 +410,7 @@ impl Compiler{
     let val = get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
+      self.own.get().add_prm(prm, ptr);
     }else{
       CreateStore(val, ptr);
     }
@@ -426,7 +428,6 @@ impl Compiler{
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
-      self.own.get().add_prm(prm);
     }
     for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get_ptr(i);
@@ -434,7 +435,6 @@ impl Compiler{
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
-      self.own.get().add_prm(prm);
     }
   }
   

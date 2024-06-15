@@ -3,7 +3,12 @@ import parser/ownership
 import parser/bridge
 import parser/utils
 import parser/printer
+import parser/compiler
+import parser/resolver
+import parser/compiler_helper
+import parser/debug_helper
 import std/map
+import std/stack
 
 struct OwnVisitor{
     own: Own*;

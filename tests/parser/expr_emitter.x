@@ -25,7 +25,7 @@ impl Compiler{
     }
     func visit(self, node: Expr*): Value*{
       let res = self.visit_expr(node);
-      self.own.get().add_obj(node);
+      //self.own.get().add_obj(node);
       return res;
     }
     func visit_expr(self, node: Expr*): Value*{
@@ -80,10 +80,12 @@ impl Compiler{
 
     func visit_ref(self, node: Expr*, expr: Expr*): Value*{
       if (RvalueHelper::is_rvalue(expr)) {
-        let allc = self.get_alloc(node);
+        let alloc_ptr = self.get_alloc(node);
         let val = self.loadPrim(expr);
-        CreateStore(val, allc);
-        return allc;
+        CreateStore(val, alloc_ptr);
+        let expr_type = self.get_resolver().getType(expr);
+        self.own.get().add_obj(node, alloc_ptr, &expr_type);
+        return alloc_ptr;
       }
       let inner = self.visit(expr);
       return inner;
@@ -157,6 +159,7 @@ impl Compiler{
     func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
       let ptr = self.get_alloc(node);
       let arrt = self.getType(node);
+      self.own.get().add_obj(node, ptr, &arrt);
       let elem_type = self.getType(list.get_ptr(0));
       let arr_ty = self.mapType(&arrt);
       if(sz.is_none()){
@@ -338,8 +341,6 @@ impl Compiler{
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
         return self.visit(info.unwrap_mc.get());
-        /*let ptr = self.get_alloc(expr);
-        return ptr;*/
       }
       if(Resolver::is_assert(mc)){
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
@@ -421,13 +422,11 @@ impl Compiler{
         panic("mc no method {} {}", expr, rt.desc);
       }
       //print("{}\n", expr);
-      if(expr.print().eq("(self.len()).debug(&f_9)")){
-        let aa = 10;
-      }
       let type = &rt.type;
       let ptr = Option<Value*>::new();
       if(is_struct(type)){
         ptr = Option::new(self.get_alloc(expr));
+        self.own.get().add_obj(expr, ptr.unwrap(), &rt.type);
       }
       let target = self.get_resolver().get_method(&rt).unwrap();
       let proto = self.protos.get().get_func(target);
@@ -449,6 +448,8 @@ impl Compiler{
         }
         if(mc.is_static){
           ++argIdx;
+        }else if(target.self.get().is_deref){
+          self.own.get().do_move(mc.scope.get());
         }
         //++paramIdx;
       }
@@ -471,6 +472,7 @@ impl Compiler{
           let pt = &self.get_resolver().visit_type(&prm.type).type;
           args_push(args, self.cast(arg, pt));
         }
+        self.own.get().do_move(arg);
         ++paramIdx;
       }
       let res = CreateCall(proto, args);
@@ -719,6 +721,7 @@ impl Compiler{
     func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
         let ptr = self.get_alloc(node);
         let rt = self.get_resolver().visit(node);
+        self.own.get().add_obj(node, ptr, &rt.type);
         let ty = self.mapType(&rt.type);
         let decl = self.get_resolver().get_decl(&rt).unwrap();
         //set base
@@ -733,10 +736,11 @@ impl Compiler{
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
+          self.own.get().do_move(&arg.expr);
         }
         if let Decl::Struct(fields*)=(decl){
           let field_idx = 0;
-          for(let i=0;i<args.len();++i){
+          for(let i = 0;i < args.len();++i){
             let arg = args.get_ptr(i);
             if(arg.isBase){
               continue;
@@ -752,6 +756,7 @@ impl Compiler{
             if(decl.base.is_some()) ++prm_idx;
             let field_target_ptr = self.gep2(ptr, prm_idx, ty);
             self.setField(&arg.expr, &fd.type, field_target_ptr);
+            self.own.get().do_move(&arg.expr);
           }
         }else{
           let variant_index = Resolver::findVariant(decl, type.name());

@@ -36,6 +36,21 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     panic("generate_derive decl: {} der: '{}'", decl.type, der);
 }
 
+func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
+    let parser = Parser::from_string(input, line);
+    parser.unit = Option::new(unit);
+    let res = parser.parse_stmt();
+    Drop::drop(parser);
+    return res;
+}
+func parse_expr(input: String, unit: Unit*, line: i32): Expr{
+    let parser = Parser::from_string(input, line);
+    parser.unit = Option::new(unit);
+    let res = parser.parse_expr();
+    Drop::drop(parser);
+    return res;
+}
+
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let line = decl.line;
     let body = Block::new(line);
@@ -48,7 +63,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 //Drop::drop({fd.name})
-                let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit);
+                let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
                 then.list.add(drop_stmt);
             }
 
@@ -69,7 +84,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             let fd = fields.get_ptr(i);
             if(!is_struct(&fd.type)) continue;
             //self.{fd.name}.drop();
-            let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit);
+            let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
             body.list.add(drop_stmt);
         }
     }
@@ -102,25 +117,25 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new(line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(\"{}{\");", vt), unit));
+            then.list.add(parse_stmt(format("f.print(\"{}{\");", vt), unit, line));
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 if(j > 0){
-                    then.list.add(parse_stmt(format("f.print(\", \");"), unit));
+                    then.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
                 }
                 //f.print("<fd.name>: ")
-                then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
+                then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
                 if(fd.type.is_pointer()){
                     //print hex based address
                     //i64::debug_hex(<fd.name> as u64, f);
-                    then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit));
+                    then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
                 }else{
                     //{fd.name}.debug(f);
                     //already ptr from if let arg
-                    then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit));
+                    then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
                 }
             }
-            then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
+            then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit, line));
 
             let self_id = unit.node(line);
             let block_id = unit.node(line);
@@ -135,45 +150,30 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
         }
     }else{
         //f.print(<decl.type.print()>)
-        body.list.add(parse_stmt(format("f.print(\"{}{\");", decl.type), unit));
+        body.list.add(parse_stmt(format("f.print(\"{}{\");", decl.type), unit, line));
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
             let fd = fields.get_ptr(i);
             if(i > 0){
-                body.list.add(parse_stmt(format("f.print(\", \");"), unit));
+                body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
             }
             //f.print("<fd.name>: ");
-            body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit));
+            body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
             if(fd.type.is_pointer()){
                 //print hex based address
                 //i64::debug_hex(fd.name as u64, f);
-                body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit));
+                body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
             }else{
                 //self.{fd.name}.debug(f);
-                body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit));
+                body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
             }
         }
-        body.list.add(parse_stmt(format("f.print(\"}\");", vt), unit));
+        body.list.add(parse_stmt(format("f.print(\"}\");", vt), unit, line));
     }
     m.body = Option::new(body);
     imp.methods.add(m);
     //print("{}\n", imp);
     return imp;
-}
-
-func parse_stmt(input: String, unit: Unit*): Stmt{
-    let parser = Parser::from_string(input);
-    parser.unit = Option::new(unit);
-    let res = parser.parse_stmt();
-    Drop::drop(parser);
-    return res;
-}
-func parse_expr(input: String, unit: Unit*): Expr{
-    let parser = Parser::from_string(input);
-    parser.unit = Option::new(unit);
-    let res = parser.parse_expr();
-    Drop::drop(parser);
-    return res;
 }
 
 func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
@@ -203,11 +203,11 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         if (Resolver::is_panic(mc)) {
             let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str)).str();
             msg = normalize_quotes(msg).str();
-            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit));
-            block.list.add(parse_stmt(format("exit(1);"), &r.unit));
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
         }else{
             let msg = normalize_quotes(fmt_str).str();
-            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit));
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
         }
         r.visit(block);
         r.format_map.add(node.id, info);
@@ -215,7 +215,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     }
     let var_name = format("f_{}", node.id);
     //let f = Fmt::new();
-    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit);
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit, line);
     block.list.add(var_stmt);
     let pos = 0;
     let arg_idx = 1;
@@ -229,7 +229,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
                 sub = fmt_str.substr(pos, br_pos);
             }
             let sub2 = normalize_quotes(sub);
-            let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit);
+            let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit, line);
             block.list.add(st);
             if(br_pos == -1){
                 break;
@@ -239,15 +239,15 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let arg = mc.args.get_ptr(arg_idx);
         ++arg_idx;
         //<arg>.debug(&f);
-        let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit);
+        let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit, line);
         block.list.add(dbg_st);
     }
     if(Resolver::is_print(mc)){
         //f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
+        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
         block.list.add(print_st);
         //Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
+        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
         block.list.add(drop_st);
         //print("block={}\n", block);
         r.visit(block);
@@ -256,22 +256,22 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     }else if(Resolver::is_panic(mc)){
         //"<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
-        let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit);
+        let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
         block.list.add(pos_info_st);
         //f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
+        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
         block.list.add(print_st);
         //Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit);
+        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
         block.list.add(drop_st);
-        block.list.add(parse_stmt("exit(1);".str(), &r.unit));
+        block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
         //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);
         return;
     }else if(Resolver::is_format(mc)){
         //f.unwrap()
-        let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit);
+        let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
         info.unwrap_mc = Option::new(unwrap_mc);
         r.visit(block);
         r.visit(info.unwrap_mc.get());
@@ -340,11 +340,11 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
         r.err(node, format("assert expr is not bool: {}", node));
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(node.line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo{block: Block::new(line), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
-    //parse_stmt(format("{}.buf.print();", &var_name), &r.unit);
     let arg_norm = normalize_quotes(arg.print().str());
-    block.list.add(parse_stmt(format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, printMethod(r.curMethod.unwrap())), &r.unit));
+    let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, printMethod(r.curMethod.unwrap()));
+    block.list.add(parse_stmt(str, &r.unit, line));
     r.visit(block);
     r.format_map.add(node.id, info);
 }

@@ -20,8 +20,8 @@ impl Parser{
     res.fill(lexer);
     return res;
   }
-  func from_string(buf: String): Parser{
-    let lexer = Lexer::from_string("<buf>".str(), buf.clone());
+  func from_string(buf: String, line: i32): Parser{
+    let lexer = Lexer::from_string("<buf>".str(), buf.clone(), line);
     let res = Parser{lexer.path.clone(), lexer.buf.clone(),  List<Token>::new(), 0, Option<Unit*>::new()};
     res.fill(lexer);
     return res;
@@ -64,7 +64,15 @@ impl Parser{
   }
 
   func line(self): i32{
-    return self.peek().line;
+    if(self.has()){
+      return self.peek().line;
+    }else{
+      return self.tokens.last().line;
+    }
+  }
+
+  func node(self): Node{
+    return Node::new(++self.unit.unwrap().last_id, self.line());
   }
   
   func get(self, pos: i32): Token*{
@@ -89,7 +97,7 @@ impl Parser{
   }
 
   func err(self, msg: str){
-    let line = self.peek().line;
+    let line = self.line();
     print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
     panic("{}", msg);
   }
@@ -232,7 +240,7 @@ impl Parser{
         self.pop();
       }
       self.consume(TokenType::FUNC);
-      let line = self.node();
+      let node = self.node();
       let name = self.popv();
       let type_args = List<Type>::new();
       let is_generic = false;
@@ -285,7 +293,7 @@ impl Parser{
         let bl = self.parse_block();
         body = Option::new(bl);
       }
-      let res = Method{.line, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.path.clone()};
+      let res = Method{.node, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.path.clone()};
       return res;
     }
     
@@ -298,7 +306,7 @@ impl Parser{
     }
     
     func parse_struct(self, derives: List<Type>, attr: List<String>): Decl{
-      let line = self.peek().line;
+      let line = self.line();
       self.consume(TokenType::STRUCT);
       let type = self.parse_type();
       let is_generic = type.is_generic();
@@ -323,7 +331,7 @@ impl Parser{
     }
     
     func parse_field(self, semi: bool): FieldDecl{
-      let line = self.peek().line;
+      let line = self.line();
       let name = self.popv();
       self.consume(TokenType::COLON);
       let type=self.parse_type();
@@ -334,7 +342,7 @@ impl Parser{
     }
     
     func parse_enum(self, derives: List<Type>, attr: List<String>): Decl{
-      let line = self.peek().line;
+      let line = self.line();
       self.consume(TokenType::ENUM);
       let type = self.parse_type();
       let is_generic = type.is_generic();
@@ -413,7 +421,7 @@ impl Parser{
     
     func gen_part(self): Type{
       //a<b>::c<d>
-      let line = self.peek().line;
+      let line = self.line();
       let name = self.popv();
       let res = Simple::new(name);
       if(self.is(TokenType::LT)){
@@ -594,15 +602,6 @@ impl Parser{
       return Fragment{.n, nm.value.clone(), type, rhs};
     }
 
-    func node(self): Node{
-      let line = 0;
-      if(self.has()){
-        line = self.peek().line;
-      }else{
-        line = self.tokens.last().line;
-      }
-      return Node::new(++self.unit.unwrap().last_id, line);
-    }
 }
 
 

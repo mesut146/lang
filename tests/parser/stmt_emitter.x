@@ -166,12 +166,11 @@ impl Compiler{
             //regular var decl
             let prm = fields.get_ptr(i);
             let arg = node.args.get_ptr(i);
-            //self.own.get().add_iflet_var(arg, prm);
-            let real_idx = i;
+            let gep_idx = i;
             if(decl.base.is_some()){
-              ++real_idx;
+              ++gep_idx;
             }
-            let field_ptr = self.gep2(dataPtr, real_idx, var_ty);
+            let field_ptr = self.gep2(dataPtr, gep_idx, var_ty);
             let alloc_ptr = self.get_alloc(arg.id);
             self.NamedValues.add(arg.name.clone(), alloc_ptr);
             if (arg.is_ptr) {
@@ -184,6 +183,7 @@ impl Compiler{
                     CreateStore(field_val, alloc_ptr);
                 } else {
                     self.copy(alloc_ptr, field_ptr, &prm.type);
+                    self.own.get().add_iflet_var(arg, prm, alloc_ptr);
                 }
                 self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
             }
@@ -291,13 +291,6 @@ impl Compiler{
         let ptr = self.get_alloc(f.id);
         self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
-        if(doesAlloc(&f.rhs, self.get_resolver())){
-          //self allocated
-          self.visit(&f.rhs);
-          self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
-          self.own.get().add_var(f);
-          continue;
-        }
         if(is_struct(&type)){
           let val = self.visit(&f.rhs);
           if(Value_isPointerTy(val)){
@@ -314,7 +307,7 @@ impl Compiler{
         }
         self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
-        self.own.get().add_var(f);
+        self.own.get().add_var(f, ptr);
       }
     }
     func visit_block(self, node: Block*){

@@ -115,16 +115,13 @@ impl AllocHelper{
   func visit(self, node: VarExpr*){
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
-      let ty = self.c.get_resolver().visit(f);
+      let rt = self.c.get_resolver().visit(f);
+      let ptr = self.alloc_ty(&rt.type, f);
+      let name_c = f.name.clone().cstr();
+      Value_setName(ptr, name_c.ptr());
+      name_c.drop();
+      rt.drop();
       let rhs: Option<Value*> = self.visit(&f.rhs);
-      let name: String = f.name.clone();
-      if(!doesAlloc(&f.rhs, self.c.get_resolver())){
-        let ptr = self.alloc_ty(&ty.type, f);
-        Value_setName(ptr, name.clone().cstr().ptr());
-      }else{
-        Value_setName(rhs.unwrap(), name.clone().cstr().ptr());
-        self.c.allocMap.add(f.id, rhs.unwrap());
-      }
     }
   }
 
@@ -230,7 +227,7 @@ impl AllocHelper{
       //get full type
       let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
-      for(let i=0;i<args.len();++i){
+      for(let i = 0;i < args.len();++i){
         let arg = args.get_ptr(i);
         //self.child(&arg.expr);//rvo opt
         self.visit(&arg.expr);
@@ -255,7 +252,7 @@ impl AllocHelper{
         let elem = list.get_ptr(0);
         self.visit(elem);
       }else{
-        for(let i=0;i<list.len();++i){
+        for(let i = 0;i < list.len();++i){
           let elem = list.get_ptr(i);
           self.visit(elem);
         }

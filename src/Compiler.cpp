@@ -1912,7 +1912,9 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     node->body->accept(this);
     curOwner.endScope(*then_scope);
     curOwner.setScope(cur_scope);
-    Builder->CreateBr(updatebb);
+    if (!then_scope->exit.is_jump()) {
+        Builder->CreateBr(updatebb);
+    }
     Builder->SetInsertPoint(updatebb);
     for (auto &u : node->updaters) {
         u->accept(this);

@@ -2,7 +2,13 @@ import parser/ast
 import parser/bridge
 import parser/utils
 import parser/own_visitor
+import parser/compiler
+import parser/resolver
+import parser/compiler_helper
+import parser/debug_helper
+import parser/printer
 import std/map
+import std/stack
 
 static last_scope: i32 = 0;
 
@@ -44,7 +50,8 @@ struct VarScope{
     sibling: i32;
 }
 
-enum States {
+#derive(Debug)
+enum StateType {
     NONE,
     MOVED,
     MOVED_PARTIAL,
@@ -52,7 +59,7 @@ enum States {
 }
 
 enum Action {
-    MOVE(mv: Move, line: i32),
+    MOVE(mv: Move),
     SCOPE(id: i32, line: i32)
 }
 
@@ -61,10 +68,9 @@ struct Lhs{
 }
 
 struct Move{
-    lhs: Lhs;
-    rhs: Object;
+    lhs: Option<Lhs>;
+    rhs: Expr*;
     line: i32;
-    is_assign: bool;
 }
 
 impl VarScope{
@@ -85,16 +91,18 @@ impl VarScope{
 }
 
 struct Own{
+    compiler: Compiler*;
     method: Method*;
     main_scope: i32;
     cur_scope: i32;
     scope_map: Map<i32, VarScope>;
 }
 impl Own{
-    func new(m: Method*): Own{
+    func new(c: Compiler*, m: Method*): Own{
         let exit = Exit::get_exit_type(m.body.get());
         let main_scope = VarScope::new(ScopeType::MAIN, m.line, exit);
         let res = Own{
+            compiler: c,
             method: m,
             main_scope: main_scope.id,
             cur_scope: main_scope.id,
@@ -126,28 +134,101 @@ impl Own{
     func get_scope(self): VarScope*{
         return self.scope_map.get_ptr(&self.cur_scope).unwrap();
     }
-    func add_prm(self, p: Param*){
-
+    //register var & obj
+    func is_drop_type(self, type: Type*): bool{
+        let helper = DropHelper{self.compiler.get_resolver()};
+        return helper.is_drop_type(type);
     }
-    func add_var(self, f: Fragment*){
-        //self.move(f.rhs);
+    func add_prm(self, p: Param*, ptr: Value*){
+        if(!self.is_drop_type(&p.type)) return;
+        let var = Variable{
+            name: p.name.clone(),
+            type: p.type.clone(),
+            ptr: ptr,
+            id: p.id,
+            line: p.line,
+            scope: self.get_scope().id,
+            is_self: p.is_self
+        };
+        self.get_scope().vars.add(var);
     }
-    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*){
-
+    func add_var(self, f: Fragment*, ptr: Value*){
+        let rt = self.compiler.get_resolver().visit(f);
+        if(!self.is_drop_type(&rt.type)) return;
+        let var = Variable{
+            name: f.name.clone(),
+            type: rt.type.clone(),
+            ptr: ptr,
+            id: f.id,
+            line: f.line,
+            scope: self.get_scope().id,
+            is_self: false
+        };
+        self.get_scope().vars.add(var);
+        self.do_move(&f.rhs);
     }
-    func add_obj(self, expr: Expr*){
-
+    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
+        if(arg.is_ptr) return;
+        if(!self.is_drop_type(&fd.type)) return;
+        let var = Variable{
+            name: arg.name.clone(),
+            type: fd.type.clone(),
+            ptr: ptr,
+            id: arg.id,
+            line: arg.line,
+            scope: self.get_scope().id,
+            is_self: false
+        };
+        self.get_scope().vars.add(var);
+    }
+    func add_obj(self, expr: Expr*, ptr: Value*, type: Type*){
+        if(!self.is_drop_type(type)) return;
+        let obj = Object{
+            expr: expr,
+            ptr: ptr,
+            id: expr.id,
+            name: expr.print()
+        };
+        self.get_scope().objects.add(obj);
+        //panic("add_obj {}: {} in {}", expr, type, printMethod(self.method));
     }
 
     func do_move(self, expr: Expr*){
-
+        let mv = Move{
+            lhs: Option<Lhs>::new(),
+            rhs: expr,
+            line: expr.line
+        };
+        let act = Action::MOVE{mv};
+        self.get_scope().actions.add(act);
     }
 
     func do_return(self, expr: Expr*){
         self.do_move(expr);
+        self.do_return();
+    }
+    func get_state(self, expr: Expr*, scope: VarScope*): StateType{
+        for(let i = 0;i < scope.actions.len();++i){
+            let act = scope.actions.get_ptr(i);
+            if let Action::MOVE(mv*) = (act){
+                if(mv.rhs.id == expr.id){
+                    return StateType::MOVED;
+                }
+            }
+        }
+        return StateType::NONE;
     }
     func do_return(self){
-
+        //drop
+        let scope = self.get_scope();
+        for(let i = 0;i < scope.objects.len();++i){
+            let obj = scope.objects.get_ptr(i);
+            let state = self.get_state(obj.expr, scope);
+            if(state is StateType::MOVED){
+                continue;
+            }
+            panic("drop obj {} in {} state:{}", obj.expr, self.method, state);
+        }
     }
     func do_continue(self){
 
@@ -167,7 +248,7 @@ impl Own{
     }
     func end_scope_if(self, else_stmt: Stmt*): i32{
         //merge else moves then drop all
-        let visitor = OwnVisitor{self};
+        let visitor = OwnVisitor{self, -1};
         visitor.visit(else_stmt);
         let res = self.get_scope().id;
         self.set_current(self.get_scope().parent);
