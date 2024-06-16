@@ -11,6 +11,7 @@ impl File{
   func copy(from: str, to: str): bool{
     let data = read_bytes(from);
     write_bytes(data.slice(), to);
+    data.drop();
     return true;
   }
 }

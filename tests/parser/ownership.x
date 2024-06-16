@@ -59,6 +59,60 @@ struct VarScope{
     sibling: i32;
 }
 
+impl VarScope{
+    func print(self, own: Own*): String{
+        let f = Fmt::new();
+        self.debug(&f, own, "");
+        return f.unwrap();
+    }
+    func debug(self, f: Fmt*, own: Own*, indent: str){
+        f.print(indent);
+        f.print("VarScope ");
+        f.print(&self.kind);
+        f.print(", line: ");
+        f.print(&self.line);
+        f.print("{");
+        for(let i=0;i<self.vars.len();++i){
+            let var = self.vars.get_ptr(i);
+            f.print("\n");
+            f.print(indent);
+            f.print("let ");
+            f.print(&var.name);
+            f.print(": ");
+            f.print(&var.type);
+            f.print(", line: ");
+            f.print(&var.line);
+        }
+        for(let i=0;i<self.objects.len();++i){
+            let obj = self.objects.get_ptr(i);
+            f.print("\n");
+            f.print(indent);
+            f.print("obj line: ");
+            f.print(&obj.expr.line);
+            f.print(", ");
+            f.print(obj.expr);
+        }
+        for(let i=0;i<self.actions.len();++i){
+            let act = self.actions.get_ptr(i);
+            if let Action::SCOPE(id, line)=(act){
+                let ch_scope = own.get_scope(id);
+                let id2 = format("{} ", indent);
+                f.print("\n");
+                ch_scope.debug(f, own, id2.str());
+                id2.drop();
+            }else{
+                f.print("\n");
+                f.print(indent);
+                f.print("act ");
+                f.print(act);
+            }
+        }
+        f.print("\n");
+        f.print(indent);
+        f.print("}");
+    }
+}
+
 #derive(Debug)
 enum StateType {
     NONE,
@@ -67,11 +121,30 @@ enum StateType {
     ASSIGNED
 }
 
-#derive(Debug)
 enum Action {
     MOVE(mv: Move),
     SCOPE(id: i32, line: i32)
 }
+impl Debug for Action{
+    func debug(self, f: Fmt*){
+        f.print("Action::");
+        if let Action::MOVE(mv*)=(self){
+            f.print("MOVE{");
+            f.print(mv.rhs);
+            f.print(" line: ");
+            f.print(&mv.line);
+            f.print("}");
+        }
+        if let Action::SCOPE(id, line)=(self){
+            f.print("SCOPE{");
+            f.print(&id);
+            f.print(", ");
+            f.print(&line);
+            f.print("}");
+        }
+    }
+}
+
 #derive(Debug)
 struct Lhs{
     expr: Expr*;
@@ -107,8 +180,11 @@ impl Rhs{
         if let Rhs::EXPR(e)=(self){
             let rt = compiler.get_resolver().visit(e);
             if(rt.vh.is_some()){
-                return rt.vh.get().id == vh.id;
+                let res = rt.vh.get().id == vh.id;
+                rt.drop();
+                return res;
             }
+            rt.drop();
             return false;
         }
         return self.get_var().id == vh.id;
@@ -138,6 +214,11 @@ impl VarScope{
     }
 }
 
+enum Droppable{
+    VAR(var: Variable*),
+    OBJ(obj: Object*)
+}
+
 struct Own{
     compiler: Compiler*;
     method: Method*;
@@ -164,6 +245,7 @@ impl Own{
         scope.parent = self.get_scope().id;
         let id = scope.id;
         self.scope_map.add(scope.id, scope);
+        self.get_scope().actions.add(Action::SCOPE{id, line});        
         self.set_current(id);
         return id;
     }
@@ -262,7 +344,7 @@ impl Own{
         print("do_return {}\n", expr.line);
         self.do_return();
     }
-    func get_state(self, rhs: Rhs, scope: VarScope*): StateType{
+    func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool): StateType{
         for(let i = 0;i < scope.actions.len();++i){
             let act = scope.actions.get_ptr(i);
             if let Action::MOVE(mv*) = (act){
@@ -271,9 +353,6 @@ impl Own{
                     if(mv.rhs.id == rhs.get_id()){
                         return StateType::MOVED{mv.line};
                     }
-                }
-                if(rhs is Rhs::VAR){
-
                 }
                 let mv_rt = self.compiler.get_resolver().visit(mv.rhs);
                 if(mv_rt.vh.is_some()){
@@ -287,52 +366,79 @@ impl Own{
                 }
             }
         }
+        if(look_parent && scope.parent != -1){
+            let parent = self.get_scope(scope.parent);
+            return self.get_state(rhs, parent, true);
+        }
         return StateType::NONE;
     }
     func check(self, expr: Expr*){
         let scope = self.get_scope();
         let rhs = Rhs::EXPR{expr};
-        let state = self.get_state(rhs, scope);
+        let state = self.get_state(rhs, scope, true);
         //print("check {} line:{} {}\n", expr, expr.line, state);
         if let StateType::MOVED(line)=(state){
             self.compiler.get_resolver().err(expr, format("use after move in {}", line));
         }
     }
-    func drop_return(self, scope: VarScope*){
-        print("drop_return {} line: {}\n", scope.kind, scope.line);
-        //drop objects
-        for(let i = 0;i < scope.objects.len();++i){
-            let obj = scope.objects.get_ptr(i);
-            let rhs = Rhs::EXPR{obj.expr};
-            let state = self.get_state(rhs, scope);
-            if(state is StateType::MOVED){
-                continue;
-            }
-            panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
-        }
-        //drop vars
+
+    func get_outer_vars(self, scope: VarScope*, list: List<Droppable>*){
         for(let i = 0;i < scope.vars.len();++i){
             let var = scope.vars.get_ptr(i);
-            let rhs = Rhs::VAR{var};
-            let state = self.get_state(rhs, scope);
-            if(state is StateType::MOVED){
-                continue;
+            list.add(Droppable::VAR{var});
+        }
+        for(let i = 0;i < scope.objects.len();++i){
+            let obj = scope.objects.get_ptr(i);
+            list.add(Droppable::OBJ{obj});
+        }
+        if(scope.parent != -1){
+            let parent = self.get_scope(scope.parent);
+            self.get_outer_vars(parent, list);
+        }
+    }
+    func drop_obj(self, obj: Object*, scope: VarScope*){
+        let rhs = Rhs::EXPR{obj.expr};
+        let state = self.get_state(rhs, scope, true);
+        if(state is StateType::MOVED){
+            return;
+        }
+        panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+    }
+    func drop_var(self, var: Variable*, scope: VarScope*){
+        let rhs = Rhs::VAR{var};
+        let state = self.get_state(rhs, scope, true);
+        if(state is StateType::MOVED){
+            return;
+        }
+        if(var.is_self && is_drop_method(self.method)){
+            return;
+        }
+        print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
+        print("{}\n", scope.print(self));
+        self.compiler.get_resolver().err(var.line, "".str());
+    }
+    func drop_return(self, scope: VarScope*){
+        print("drop_return {} line: {}\n", scope.kind, scope.line);
+        let drops = List<Droppable>::new();
+        self.get_outer_vars(scope, &drops);
+        for(let i = 0;i < drops.len();++i){
+            let dr = drops.get_ptr(i);
+            if let Droppable::OBJ(obj)=(dr){
+                self.drop_obj(obj, scope);
             }
-            if(var.is_self && is_drop_method(self.method)){
-                continue;
+            if let Droppable::VAR(var)=(dr){
+                self.drop_var(var, scope);
             }
-            print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
-            self.compiler.get_resolver().err(var.line, "".str());
         }
     }
     func do_return(self){
         let scope = self.get_scope();
         self.drop_return(scope);
-        while(scope.parent != -1){
+        /*while(scope.parent != -1){
             let parent = self.get_scope(scope.parent);
             self.drop_return(parent);
             scope = parent;
-        }
+        }*/
     }
     func do_continue(self){
 
