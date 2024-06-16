@@ -21,6 +21,7 @@ impl Compiler{
       if(res.is_none()){
         self.get_resolver().err(node, format("internal err, no named value"));
       }
+      self.own.get().check(node);
       return *res.unwrap();
     }
     func visit(self, node: Expr*): Value*{
@@ -303,6 +304,7 @@ impl Compiler{
       }
       if(Resolver::is_std_no_drop(mc)){
         let arg = mc.args.get_ptr(0);
+        self.own.get().do_move(arg);
         return getVoidTy() as Value*;
       }
       if(Resolver::std_size(mc)){
@@ -340,7 +342,9 @@ impl Compiler{
       if(Resolver::is_format(mc)){
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return self.visit(info.unwrap_mc.get());
+        let res = self.visit(info.unwrap_mc.get());
+        self.own.get().do_move(info.unwrap_mc.get());
+        return res;
       }
       if(Resolver::is_assert(mc)){
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
@@ -423,16 +427,16 @@ impl Compiler{
       }
       //print("{}\n", expr);
       let type = &rt.type;
-      let ptr = Option<Value*>::new();
+      let ptr_ret = Option<Value*>::new();
       if(is_struct(type)){
-        ptr = Option::new(self.get_alloc(expr));
-        self.own.get().add_obj(expr, ptr.unwrap(), &rt.type);
+        ptr_ret = Option::new(self.get_alloc(expr));
+        self.own.get().add_obj(expr, ptr_ret.unwrap(), &rt.type);
       }
       let target = self.get_resolver().get_method(&rt).unwrap();
       let proto = self.protos.get().get_func(target);
       let args = make_args();
-      if(ptr.is_some()){
-        args_push(args, ptr.unwrap());
+      if(ptr_ret.is_some()){
+        args_push(args, ptr_ret.unwrap());
       }
       let paramIdx = 0;
       let argIdx = 0;
@@ -448,6 +452,7 @@ impl Compiler{
         }
         if(mc.is_static){
           ++argIdx;
+          self.own.get().do_move(mc.args.get_ptr(0));
         }else if(target.self.get().is_deref){
           self.own.get().do_move(mc.scope.get());
         }
@@ -479,7 +484,7 @@ impl Compiler{
       if(mc.name.eq("exit") && mc.scope.is_none()){
         CreateUnreachable();
       }
-      if(ptr.is_some()) return ptr.unwrap();
+      if(ptr_ret.is_some()) return ptr_ret.unwrap();
       return res;
     }
   
@@ -711,10 +716,9 @@ impl Compiler{
         }
         let fd = fields.get_ptr(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
-        //Value_dump(ptr);
-        //Type_dump(ty);
         let field_target_ptr = self.gep2(ptr, prm_idx, ty);
         self.setField(&arg.expr, &fd.type, field_target_ptr);
+        self.own.get().do_move(&arg.expr);
       }
     }
     

@@ -7,10 +7,10 @@ func file_name(): str{
 
 func read_test(){
   let path = file_name();
-  let buf = read_bytes(path);
-  assert(buf.len() == 5);
-  let s = String::new(&buf);
-  assert(s.eq("hello"));
+  let str = read_string(path);
+  assert(str.len() == 5);
+  assert(str.eq("hello"));
+  str.drop();
 }
 
 func seek_test(f: FILE*){
@@ -19,9 +19,10 @@ func seek_test(f: FILE*){
 }
 
 func write_test(){
-  let buf = String::new("hello");
+  let str = String::new("hello");
   let path = file_name();
-  write_bytes(buf.slice(), path);
+  write_bytes(str.slice(), path);
+  str.drop();
 }
 
 func list_test(){
@@ -32,11 +33,13 @@ func list_test(){
     let file = arr.get_ptr(i);
     print("{}\n", file.ptr());
   }*/
+  arr.drop();
 }
 
 func main(){
-  let cur = ".";
-  print("pwd = {}\n", resolve(cur));
+  let cur = resolve(".");
+  print("pwd = {}\n", cur);
+  cur.drop();
   write_test();
   read_test();
   list_test();

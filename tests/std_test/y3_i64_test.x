@@ -16,6 +16,9 @@ func print_test(){
   let str2 = i64::print(y);
   print("print_test y={}\n", str2);
   assert(str2.eq("-112233"));
+
+  str.drop();
+  str2.drop();
 }
 
 func hex_parse(){
@@ -38,6 +41,9 @@ func hex_print(){
   let str2 = i64::print_hex(y);
   print("hex_print str2={}\n", str2);
   assert(str2.eq("-0xab"));
+  
+  str.drop();
+  str2.drop();
 }
 
 func main(){

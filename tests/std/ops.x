@@ -89,7 +89,9 @@ impl Fmt{
     return Fmt{s};
   }
   func unwrap(*self): String{
-    return self.buf;
+    let res = self.buf;
+    std::no_drop(self);
+    return res;
   }
   func print(self, c: i8){
     self.buf.append(c);

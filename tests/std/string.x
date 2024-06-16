@@ -213,9 +213,6 @@ enum CStr{
 }
 
 impl CStr{
-  /*func new(s: str): CStr{
-    return CStr::Lit{s};
-  }*/
   func new(s: String): CStr{
     if(s.empty()){
       s.append(0u8);

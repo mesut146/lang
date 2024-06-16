@@ -5,4 +5,5 @@ func main(){
   arr.add(30);
   let a = arr.get_ptr(0);
   print("a = {}\n", a);
+  arr.drop();
 }

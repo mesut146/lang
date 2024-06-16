@@ -1,8 +1,11 @@
 func split_test(){
   let str = "asd//def//ghj";
-  let arr = str.split("//");
+  let arr: List<str> = str.split("//");
   assert(arr.len() == 3);
-  assert(Fmt::str(&arr).eq("[asd, def, ghj]"));
+  let str2 = Fmt::str(&arr);
+  assert(str2.eq("[asd, def, ghj]"));
+  str2.drop();
+  arr.drop();
 }
 
 func main(){
@@ -20,6 +23,7 @@ func bug(){
   let arr = ['h' as i8, 'e', 'l'];
   let len = 3;
   let s = String::new(arr[0..len]);
+  s.drop();
 }
 
 

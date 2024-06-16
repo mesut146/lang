@@ -12,7 +12,16 @@ import std/stack
 
 static last_scope: i32 = 0;
 
+func is_drop_method(method: Method*): bool{
+    if(method.name.eq("drop") && method.parent.is_impl()){
+        let imp =  method.parent.as_impl();
+        return imp.trait_name.is_some() && imp.trait_name.get().eq("Drop");
+    }
+    return false;
+}
+
 //prm or var
+#derive(Debug)
 struct Variable {
     name: String;
     type: Type;
@@ -23,13 +32,14 @@ struct Variable {
     is_self: bool;
 }
 //dropable
+#derive(Debug)
 struct Object {
     expr: Expr*;
     ptr: Value*;
     id: i32;          //prm
     name: String;     //prm
 }
-
+#derive(Debug)
 enum ScopeType {
     MAIN,
     IF,
@@ -37,7 +47,6 @@ enum ScopeType {
     WHILE,
     FOR
 }
-
 struct VarScope{
     kind: ScopeType;
     id: i32;
@@ -53,20 +62,59 @@ struct VarScope{
 #derive(Debug)
 enum StateType {
     NONE,
-    MOVED,
+    MOVED(line: i32),
     MOVED_PARTIAL,
     ASSIGNED
 }
 
+#derive(Debug)
 enum Action {
     MOVE(mv: Move),
     SCOPE(id: i32, line: i32)
 }
-
+#derive(Debug)
 struct Lhs{
     expr: Expr*;
 }
-
+#derive(Debug)
+enum Rhs{
+    EXPR(e: Expr*),
+    VAR(v: Variable*)
+}
+impl Rhs{
+    func get_var(self): Variable*{
+        if let Rhs::VAR(v)=(self){
+            return v;
+        }
+        panic("");
+    }
+    func get_expr(self): Expr*{
+        if let Rhs::EXPR(e)=(self){
+            return e;
+        }
+        panic("");
+    }
+    func get_id(self): i32{
+        if let Rhs::EXPR(e)=(self){
+            return e.id;
+        }
+        if let Rhs::VAR(v)=(self){
+            return v.id;
+        }
+        panic("");
+    }
+    func is_vh(self, vh: VarHolder*, compiler: Compiler*): bool{
+        if let Rhs::EXPR(e)=(self){
+            let rt = compiler.get_resolver().visit(e);
+            if(rt.vh.is_some()){
+                return rt.vh.get().id == vh.id;
+            }
+            return false;
+        }
+        return self.get_var().id == vh.id;
+    }
+}
+#derive(Debug)
 struct Move{
     lhs: Option<Lhs>;
     rhs: Expr*;
@@ -134,6 +182,9 @@ impl Own{
     func get_scope(self): VarScope*{
         return self.scope_map.get_ptr(&self.cur_scope).unwrap();
     }
+    func get_scope(self, id: i32): VarScope*{
+        return self.scope_map.get_ptr(&id).unwrap();
+    }
     //register var & obj
     func is_drop_type(self, type: Type*): bool{
         let helper = DropHelper{self.compiler.get_resolver()};
@@ -194,40 +245,93 @@ impl Own{
     }
 
     func do_move(self, expr: Expr*){
+        let type = self.compiler.get_resolver().visit(expr);
+        if(!self.is_drop_type(&type.type)) return;
         let mv = Move{
             lhs: Option<Lhs>::new(),
             rhs: expr,
             line: expr.line
         };
+        print("move {} line:{}\n", mv.rhs, mv.line);
         let act = Action::MOVE{mv};
         self.get_scope().actions.add(act);
     }
 
     func do_return(self, expr: Expr*){
         self.do_move(expr);
+        print("do_return {}\n", expr.line);
         self.do_return();
     }
-    func get_state(self, expr: Expr*, scope: VarScope*): StateType{
+    func get_state(self, rhs: Rhs, scope: VarScope*): StateType{
         for(let i = 0;i < scope.actions.len();++i){
             let act = scope.actions.get_ptr(i);
             if let Action::MOVE(mv*) = (act){
-                if(mv.rhs.id == expr.id){
-                    return StateType::MOVED;
+                if(rhs is Rhs::EXPR){
+                    //tmp obj moved immediatly
+                    if(mv.rhs.id == rhs.get_id()){
+                        return StateType::MOVED{mv.line};
+                    }
+                }
+                if(rhs is Rhs::VAR){
+
+                }
+                let mv_rt = self.compiler.get_resolver().visit(mv.rhs);
+                if(mv_rt.vh.is_some()){
+                    if(rhs.is_vh(mv_rt.vh.get(), self.compiler)){
+                        return StateType::MOVED{mv.line};
+                    }
+                }else{
+                    if(mv.rhs.id == rhs.get_id()){
+                        return StateType::MOVED{mv.line};
+                    }
                 }
             }
         }
         return StateType::NONE;
     }
-    func do_return(self){
-        //drop
+    func check(self, expr: Expr*){
         let scope = self.get_scope();
+        let rhs = Rhs::EXPR{expr};
+        let state = self.get_state(rhs, scope);
+        //print("check {} line:{} {}\n", expr, expr.line, state);
+        if let StateType::MOVED(line)=(state){
+            self.compiler.get_resolver().err(expr, format("use after move in {}", line));
+        }
+    }
+    func drop_return(self, scope: VarScope*){
+        print("drop_return {} line: {}\n", scope.kind, scope.line);
+        //drop objects
         for(let i = 0;i < scope.objects.len();++i){
             let obj = scope.objects.get_ptr(i);
-            let state = self.get_state(obj.expr, scope);
+            let rhs = Rhs::EXPR{obj.expr};
+            let state = self.get_state(rhs, scope);
             if(state is StateType::MOVED){
                 continue;
             }
-            panic("drop obj {} in {} state:{}", obj.expr, self.method, state);
+            panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+        }
+        //drop vars
+        for(let i = 0;i < scope.vars.len();++i){
+            let var = scope.vars.get_ptr(i);
+            let rhs = Rhs::VAR{var};
+            let state = self.get_state(rhs, scope);
+            if(state is StateType::MOVED){
+                continue;
+            }
+            if(var.is_self && is_drop_method(self.method)){
+                continue;
+            }
+            print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
+            self.compiler.get_resolver().err(var.line, "".str());
+        }
+    }
+    func do_return(self){
+        let scope = self.get_scope();
+        self.drop_return(scope);
+        while(scope.parent != -1){
+            let parent = self.get_scope(scope.parent);
+            self.drop_return(parent);
+            scope = parent;
         }
     }
     func do_continue(self){

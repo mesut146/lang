@@ -24,14 +24,19 @@ struct Ptr{
 
 func main(){
     let a = A{a: 1, b: 2};
-    print("{}\n", &a);
-    assert(Fmt::str(&a).eq("A{a: 1, b: 2}"));
+    let s1 = Fmt::str(&a);
+    assert(s1.eq("A{a: 1, b: 2}"));
+    s1.drop();
 
     let b = B{a: a, b: 3};
-    assert(Fmt::str(&b).eq("B{a: A{a: 1, b: 2}, b: 3}"));
+    let s2 = Fmt::str(&b);
+    assert(s2.eq("B{a: A{a: 1, b: 2}, b: 3}"));
+    s2.drop();
 
     let e = E::B{b};
-    assert(Fmt::str(&e).eq("E::B{val: B{a: A{a: 1, b: 2}, b: 3}}"));
+    let s3 = Fmt::str(&e);
+    assert(s3.eq("E::B{val: B{a: A{a: 1, b: 2}, b: 3}}"));
+    s3.drop();
 
     let x = 123;
     let p = Ptr{a: 10, b: &x};

@@ -13,7 +13,7 @@ import std/map
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
     info.trait_name = Option::new(Type::new(trait_name.str()));
-    for(let i=0;i<decl.type.get_args().len();++i){
+    for(let i = 0;i < decl.type.get_args().len();++i){
         let ta = decl.type.get_args().get_ptr(i);
         info.type_params.add(ta.clone());
     }

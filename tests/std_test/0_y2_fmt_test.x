@@ -3,6 +3,7 @@ func test_format(){
     let s = format("{} world\n", h);
     s.print();
     Drop::drop(s);
+    //s.drop();
 }
 
 func test_print(){

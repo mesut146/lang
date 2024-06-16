@@ -21,9 +21,10 @@ impl<T> Box<T>{
         return self.val;
     }
 
-    func unwrap(self): T{
-        //return *self.val;
-        return ptr::deref(self.val);
+    func unwrap(*self): T{
+      let res = ptr::deref(self.val);
+      std::no_drop(self);
+      return res;
     }
 }
 

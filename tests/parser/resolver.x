@@ -59,10 +59,11 @@ struct VarHolder{
   name: String;
   type: Type;
   prm: bool;
+  id: i32;
 }
 impl VarHolder{
-  func new(name: String, type: Type, prm: bool): VarHolder{
-    return VarHolder{name: name, type: type, prm: prm};
+  func new(name: String, type: Type, prm: bool, id: i32): VarHolder{
+    return VarHolder{name: name, type: type, prm: prm, id: id};
   }
 }
 impl Clone for VarHolder{
@@ -70,7 +71,8 @@ impl Clone for VarHolder{
     return VarHolder{
       name: self.name.clone(),
       type: self.type.clone(),
-      prm: self.prm
+      prm: self.prm,
+      id: self.id
     };
   }
 }
@@ -160,25 +162,6 @@ impl Desc{
       idx: self.idx
     };
   }
-  func new_method(method: Method*, r: Resolver*): Desc{
-    let parent = &method.parent;
-    if(parent.is_impl()){
-      //non generic
-      let imp: ImplInfo* = parent.as_impl();
-      let resolver = r.ctx.create_resolver(&method.path);
-      let unit = &resolver.unit;
-      for(let i = 0;i < unit.items.len();++i){
-        let item = unit.items.get_ptr(i);
-      }
-      
-    }
-    panic("new_method {} {}:{} {}", printMethod(method), method.path, method.line, method.parent);
-    /*return Desc{
-      kind: RtKind::Method,
-      path: "".str(),
-      idx: -1,
-    };*/
-  }
 }
 
 #derive(Debug)
@@ -246,11 +229,6 @@ impl Debug for Resolver{
     panic("Resolver::debug");
   }
 }
-/*impl Debug for RType{
-  func debug(self, f: Fmt*){
-    panic("RType::debug");
-  }
-}*/
 
 impl Context{
   func create_resolver(self, path: String*): Resolver*{
@@ -369,7 +347,7 @@ impl Resolver{
     //self.scopes.remove(self.scopes.len() - 1);
     --self.scopes.count;
   }
-  func addScope(self, name: String, type: Type, prm: bool){
+  func addScope(self, name: String, type: Type, prm: bool, id: i32){
     for(let i=0;i<self.scopes.len();++i){
       let s = self.scopes.get_ptr(i);
       if(s.find(&name).is_some()){
@@ -377,7 +355,7 @@ impl Resolver{
       }
     }
     let scope = self.scopes.last();
-    scope.list.add(VarHolder::new(name, type, prm));
+    scope.list.add(VarHolder::new(name, type, prm, id));
   }
  
   func get_unit(self, path: String*): Unit*{
@@ -463,7 +441,7 @@ impl Resolver{
                 self.err(msg);
             }
         }
-        self.addScope(g.name.clone(), rhs.type.clone(), false);
+        self.addScope(g.name.clone(), rhs.type.clone(), false, g.id);
     }
   }
 
@@ -874,17 +852,16 @@ impl Resolver{
     }
     self.curMethod = Option::new(node);
     let res = self.visit_type(&node.type);
-    //res.desc = Desc::new_method(node, self);
     self.newScope();
     if(node.self.is_some()){
       let self_prm: Param* = node.self.get();
       self.visit_type(&self_prm.type);
-      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true);
+      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true, self_prm.id);
     }
     for(let i = 0;i < node.params.len();++i){
       let prm = node.params.get_ptr(i);
       self.visit_type(&prm.type);
-      self.addScope(prm.name.clone(), prm.type.clone(), true);
+      self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id);
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
@@ -1783,11 +1760,11 @@ impl Resolver{
   func visit_name(self, node: Expr*, name: String*): RType{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get_ptr(i);
-      let vh = scope.find(name);
-      if(vh.is_some()){
-        let vh2 = vh.unwrap();
-        let res = self.visit_type(&vh2.type);
-        res.vh = Option::new(vh2.clone());
+      let vh_opt = scope.find(name);
+      if(vh_opt.is_some()){
+        let vh = vh_opt.unwrap();
+        let res = self.visit_type(&vh.type);
+        res.vh = Option::new(vh.clone());
         return res;
       }
     }
@@ -2012,7 +1989,7 @@ impl Resolver{
         if (arg.is_ptr) {
             ty = ty.toPtr();
         } 
-        self.addScope(arg.name.clone(), ty.clone(), false);
+        self.addScope(arg.name.clone(), ty.clone(), false, arg.id);
         self.cache.add(arg.id, RType::new(ty));
     }
     self.visit(is.then.get());
@@ -2039,7 +2016,7 @@ impl Resolver{
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
       let res = self.visit(f);
-      self.addScope(f.name.clone(), res.type.clone(), false);
+      self.addScope(f.name.clone(), res.type.clone(), false, f.id);
     }
   }
 

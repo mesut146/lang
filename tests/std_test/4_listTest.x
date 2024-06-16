@@ -22,6 +22,7 @@ func listStruct(){
   assert(v1.a == 5 && v1.b == 10);
   let v2 = list.last();
   assert(v2.a == 10 && v2.b == 20);
+  list.drop();
 }
 
 struct LB{
@@ -39,6 +40,7 @@ func listStruct2(){
   print("v2.b={}\n", v2.b);
   assert(v1.b == 10);
   assert(v2.b == 20);
+  list.drop();
 }
 
 struct Align{
@@ -80,6 +82,7 @@ func listptr(){
   check_list(&list, 2, 30);
 
   assert(*list.get(1) == 20);
+  list.drop();
 }
 
 func check_list(list: List<LA*>*, idx: i32, a: i8, b: i32){
@@ -107,6 +110,7 @@ func listptr_struct(){
   check_list(&list, 0, 5i8, 10);
   check_list(&list, 1, 20i8, 30);
   check_list(&list, 2, 40i8, 50);
+  list.drop();
 }
 
 func main(){
@@ -126,6 +130,8 @@ func main(){
   assert(s[0] == 20);
   //iterTest(&list);
   list.remove(1);
+  list.drop();
+  
   listStruct();
   //listStruct2();
   listAlign();
