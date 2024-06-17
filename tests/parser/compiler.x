@@ -110,12 +110,18 @@ impl Protos{
   func std(self, nm: str): StructType*{
     return *self.std.get_ptr(&nm).unwrap();
   }
-  func get_func(self, nm: String*): Function*{
-    return *self.funcMap.get_ptr(nm).unwrap();
+  func get_func(self, mangled: String*): Function*{
+    let opt = self.funcMap.get_ptr(mangled);
+    if(opt.is_none()){
+      panic("no proto for {}, {}", mangled, demangle(mangled.str()));
+    }
+    return *opt.unwrap();
   }
   func get_func(self, m: Method*): Function*{
     let id = mangle(m);
-    return *self.funcMap.get_ptr(&id).unwrap();
+    let res = self.get_func(&id);
+    id.drop();
+    return res;
   }
 }
 

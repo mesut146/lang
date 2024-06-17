@@ -880,13 +880,17 @@ impl Resolver{
   func add_used_decl(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
       let used: RType* = self.used_types.get_ptr(i);
-      if(used.type.print().eq(decl.type.print().str())){
+      if(used.type.eq(decl.type.print().str())){
         return;
       }
     }
     //print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
     self.used_types.add(rt);
+    //gen drop method for each used type
+    if(!decl.type.get_args().is_empty()){
+      //generic type
+    }
     if(decl.base.is_some()){
       self.visit_type(decl.base.get());
     }
@@ -906,7 +910,6 @@ impl Resolver{
         }
       }
     }
-    //return *self.used_types.last();
   }
   
   func addUsed(self, m: Method*){

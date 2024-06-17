@@ -907,9 +907,6 @@ void Resolver::addUsed(BaseDecl *bd) {
         if (prev->type.print() == bd->type.print()) return;
     }
     usedTypes.push_back(bd);
-    if (bd->type.print() == "Map<String, Type>") {
-        int xxx = 555;
-    }
     //find drop impl and generate drop method
     //generate drop impl
     DropHelper helper(this);

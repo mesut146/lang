@@ -161,9 +161,19 @@ func is_main(m: Method*): bool{
   return m.name.eq("main") && (m.params.empty() || m.params.len() == 2);
 }
 
+func demangle(input: str): String{
+    let res = Fmt::new();
+    let s = input.replace("$LT", "<");
+    s = s.replace("$GT", ">");
+    s = s.replace("$P", "*");
+    s = s.replace("__", "::");
+    res.print(&s);
+    return res.unwrap();
+}
+
 func mangleType(type: Type*): String{
   let s = type.print();
-  s = s.replace("*", "P");
+  s = s.replace("*", "$P");
   s = s.replace("<", "$LT");
   s = s.replace(">", "$GT");
   s = s.replace("::", "__");

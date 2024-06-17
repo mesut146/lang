@@ -76,6 +76,9 @@ impl Clone for u64{
 trait Debug{
   func debug(self, f: Fmt*);
 }
+trait Display{
+  func print(self, f: Fmt*);
+}
 
 struct Fmt{
   buf: String;
@@ -139,7 +142,9 @@ impl Debug for bool{
 
 impl Debug for str{
   func debug(self, f: Fmt*){
+    //f.print("\"");
     f.print(*self);
+    //f.print("\"");
   }
 }
 

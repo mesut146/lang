@@ -5,8 +5,10 @@ import parser/own_visitor
 import parser/compiler
 import parser/resolver
 import parser/compiler_helper
+import parser/method_resolver
 import parser/debug_helper
 import parser/printer
+import parser/derive
 import std/map
 import std/stack
 
@@ -287,7 +289,10 @@ impl Own{
     }
     func add_var(self, f: Fragment*, ptr: Value*){
         let rt = self.compiler.get_resolver().visit(f);
-        if(!self.is_drop_type(&rt.type)) return;
+        if(!self.is_drop_type(&rt.type)){
+            rt.drop();
+            return;
+        } 
         let var = Variable{
             name: f.name.clone(),
             type: rt.type.clone(),
@@ -297,6 +302,7 @@ impl Own{
             scope: self.get_scope().id,
             is_self: false
         };
+        rt.drop();
         self.get_scope().vars.add(var);
         self.do_move(&f.rhs);
     }
@@ -327,8 +333,12 @@ impl Own{
     }
 
     func do_move(self, expr: Expr*){
-        let type = self.compiler.get_resolver().visit(expr);
-        if(!self.is_drop_type(&type.type)) return;
+        let rt = self.compiler.get_resolver().visit(expr);
+        if(!self.is_drop_type(&rt.type)){
+            rt.drop();
+            return;
+        }
+        rt.drop();
         let mv = Move{
             lhs: Option<Lhs>::new(),
             rhs: expr,
@@ -357,9 +367,11 @@ impl Own{
                 let mv_rt = self.compiler.get_resolver().visit(mv.rhs);
                 if(mv_rt.vh.is_some()){
                     if(rhs.is_vh(mv_rt.vh.get(), self.compiler)){
+                        mv_rt.drop();
                         return StateType::MOVED{mv.line};
                     }
                 }else{
+                    mv_rt.drop();
                     if(mv.rhs.id == rhs.get_id()){
                         return StateType::MOVED{mv.line};
                     }
@@ -402,7 +414,8 @@ impl Own{
         if(state is StateType::MOVED){
             return;
         }
-        panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+        //panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+        self.drop_obj_real(obj);
     }
     func drop_var(self, var: Variable*, scope: VarScope*){
         let rhs = Rhs::VAR{var};
@@ -415,7 +428,7 @@ impl Own{
         }
         print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
         print("{}\n", scope.print(self));
-        self.compiler.get_resolver().err(var.line, "".str());
+        //self.compiler.get_resolver().err(var.line, "".str());
     }
     func drop_return(self, scope: VarScope*){
         print("drop_return {} line: {}\n", scope.kind, scope.line);
@@ -463,5 +476,41 @@ impl Own{
         let res = self.get_scope().id;
         self.set_current(self.get_scope().parent);
         return res;
+    }
+
+    func unwrap_mc(expr: Expr*): Call*{
+        if let Expr::Call(mc*) = (expr){
+            return mc;
+        }
+        panic("unwrap_mc {}", expr);
+    }
+
+    func drop_obj_real(self, obj: Object*){
+        let resolver = self.compiler.get_resolver();
+        let rt = resolver.visit(obj.expr);
+        let expr = parse_expr(format("{}::drop({})", &rt.type, obj.expr), &resolver.unit, obj.expr.line);
+        let mc = unwrap_mc(&expr);
+        let sig = Signature::new("drop".str());
+        sig.scope = Option::new(rt.clone());
+        sig.args.add(rt.type.clone());
+        sig.mc = Option::new(mc);
+        sig.r = Option::new(resolver);
+        let mr = MethodResolver::new(resolver);
+        let res_rt = mr.handle(&expr, &sig);
+        let method = resolver.get_method(&res_rt).unwrap();
+        /*let methods = mr.collect(&sig);
+        assert(methods.len() == 1);
+        let method = methods.get_ptr(0).m.unwrap();*/
+        let protos = self.compiler.protos.get();
+        let mangled = mangle(method);
+        if(!protos.funcMap.contains(&mangled)){
+            self.compiler.make_proto(method);
+        }
+        let proto = protos.get_func(method);
+        let args = make_args();
+        args_push(args, obj.ptr);
+        CreateCall(proto, args);
+        mangled.drop();
+        //panic("drop_obj_real {} type: {} line: {} sig: {}", obj.expr, rt.type, obj.expr.line, res_rt);
     }
 }

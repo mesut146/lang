@@ -13,7 +13,6 @@ struct Signature{
     name: String;
     args: List<Type>;
     scope: Option<RType>;
-    real_scope: Option<RType>;
     r: Option<Resolver*>;
     desc: Desc;
 }
@@ -38,13 +37,22 @@ struct MethodResolver{
 }
 
 impl Signature{
+    func new(name: String): Signature{
+        return Signature{mc: Option<Call*>::None,
+                    m: Option<Method*>::None,
+                    name: name,
+                    args: List<Type>::new(),
+                    scope: Option<RType>::None,
+                    r: Option<Resolver*>::None,
+                    desc: Desc::new()
+        };
+    }
     func new(mc: Call*, r: Resolver*): Signature{
         let res = Signature{mc: Option::new(mc),
                     m: Option<Method*>::None,
                     name: mc.name.clone(),
                     args: List<Type>::new(),
                     scope: Option<RType>::None,
-                    real_scope: Option<RType>::None,
                     r: Option::new(r),
                     desc: Desc::new()};
         let is_trait = false;                            
@@ -52,7 +60,7 @@ impl Signature{
             let str = mc.print();
             //print("{}\n", str);
             let scp: RType = r.visit(mc.scope.get());
-            res.real_scope = Option::new(scp.clone());
+            let real_scope = Option::new(scp.clone());
             is_trait = scp.is_trait();
             //we need this to handle cases like Option::new(...)
             if (scp.is_decl()) {
@@ -70,8 +78,9 @@ impl Signature{
                 res.scope = Option::new(scp);
             }
             if (!mc.is_static) {
-                res.args.add(res.real_scope.get().type.clone());
+                res.args.add(real_scope.get().type.clone());
             }
+            real_scope.drop();
         }
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get_ptr(i);
@@ -118,7 +127,6 @@ impl Signature{
             name: m.name.clone(),
             args: List<Type>::new(),
             scope: Option<RType>::None,
-            real_scope: Option<RType>::None,
             r: Option<Resolver*>::None,
             desc: desc};
         if let Parent::Impl(info*) = (&m.parent){

@@ -180,7 +180,8 @@ impl Clone for String{
 
 impl Debug for String{
   func debug(self, f: Fmt*){
-    f.print(self.str());
+    self.str().debug(f);
+    //f.print(self.str());
   }
 }
 
