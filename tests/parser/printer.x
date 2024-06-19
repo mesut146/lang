@@ -97,7 +97,13 @@ impl Debug for Impl{
 
 impl Debug for ImplInfo{
   func debug(self, f: Fmt*){
-    f.print("impl ");
+    f.print("impl");
+    if(!self.type_params.empty()){
+      f.print("<");
+      join(f, &self.type_params, ",");
+      f.print(">");
+    }
+    f.print(" ");
     if(self.trait_name.is_some()){
       self.trait_name.get().debug(f);
       f.print(" for ");

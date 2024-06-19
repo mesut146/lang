@@ -13,7 +13,7 @@ import std/stack
 
 //expr------------------------------------------------------
 impl Compiler{
-    func visit_name(self, node: Expr*, name: String*): Value*{
+    func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
       if(self.globals.contains(name)){
         return *self.globals.get_ptr(name).unwrap();
       }
@@ -21,7 +21,9 @@ impl Compiler{
       if(res.is_none()){
         self.get_resolver().err(node, format("internal err, no named value"));
       }
-      self.own.get().check(node);
+      if(check){
+        self.own.get().check(node);
+      }
       return *res.unwrap();
     }
     func visit(self, node: Expr*): Value*{
@@ -44,7 +46,7 @@ impl Compiler{
         return self.visit_infix(op, l.get(), r.get());
       }
       if let Expr::Name(name*)=(node){
-        return self.visit_name(node, name);
+        return self.visit_name(node, name, true);
       }
       if let Expr::Unary(op*, e*)=(node){
         if(op.eq("&")){
@@ -640,6 +642,13 @@ impl Compiler{
       phi_addIncoming(phi, rbit, then);
       return Pair::new(CreateZExt(phi as Value*, getInt(8)), next);
     }
+
+    func get_lhs(self, expr: Expr*): Value*{
+      if let Expr::Name(name*)=(expr){
+        return self.visit_name(expr, name, false);
+      }
+      return self.visit(expr);
+    }
   
     func visit_assign(self, l: Expr*, r: Expr*): Value*{
       if(l is Expr::Infix) panic("assign lhs");
@@ -653,7 +662,7 @@ impl Compiler{
           return lhs;
         }
       }
-      let lhs = self.visit(l);
+      let lhs = self.get_lhs(l);
       self.setField(r, &type, lhs);
       return lhs;
     }

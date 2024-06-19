@@ -840,6 +840,7 @@ impl MethodResolver{
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
+        dbg(printMethod(&res2).eq("Option<RType>::drop(*self)"), 10);
         //print("add gen {} {}\n", printMethod(&res2), sig.mc.unwrap_ptr());
         let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{

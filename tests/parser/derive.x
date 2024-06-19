@@ -52,6 +52,7 @@ func parse_expr(input: String, unit: Unit*, line: i32): Expr{
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
+    //print("generate_drop {}\n", decl.type);
     let line = decl.line;
     let body = Block::new(line);
     if let Decl::Enum(variants*)=(decl){

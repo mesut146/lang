@@ -12,6 +12,8 @@ import parser/ownership
 import std/map
 import std/libc
 
+static verbose_method: bool = false;
+
 func verbose_stmt(): bool{
   return false;
 }
@@ -97,7 +99,6 @@ struct Resolver{
   inLoop: i32;
   used_types: List<RType>;
   generated_decl: List<Box<Decl>>;
-  generated_impl: List<Impl>;
   format_map: Map<i32, FormatInfo>;
   glob_map: Map<String, RType>;
 }
@@ -112,7 +113,6 @@ impl Drop for Resolver{
     self.generated_methods.drop();
     self.used_types.drop();
     self.generated_decl.drop();
-    self.generated_impl.drop();
     self.format_map.drop();
     self.glob_map.drop();
   }
@@ -333,7 +333,7 @@ impl Resolver{
       inLoop: 0,
       used_types: List<RType>::new(),
       generated_decl: List<Box<Decl>>::new(),
-      generated_impl: List<Impl>::new(),
+      //generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
       glob_map: Map<String, RType>::new()};
     return res;
@@ -509,9 +509,6 @@ impl Resolver{
     self.unit.items.add_list(newItems);
   }
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
-    if(decl.type.eq("En")){
-      let aa = 10;
-    }
     //derive
     for(let j = 0;j < decl.derives.len();++j){
       let der: Type* = decl.derives.get_ptr(j);
@@ -847,6 +844,9 @@ impl Resolver{
   }
 
   func visit_method(self, node: Method*){
+    if(verbose_method){
+      print("visit_method {} {} generic: {}\n", printMethod(node), self.unit.path, node.is_generic);
+    }
     if(node.is_generic){
       return;
     }
@@ -880,16 +880,20 @@ impl Resolver{
   func add_used_decl(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
       let used: RType* = self.used_types.get_ptr(i);
-      if(used.type.eq(decl.type.print().str())){
+      if(used.type.eq(&decl.type)){
         return;
       }
     }
     //print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
     self.used_types.add(rt);
-    //gen drop method for each used type
-    if(!decl.type.get_args().is_empty()){
+    //gen drop method
+    let helper = DropHelper{self};
+    if(helper.is_drop_decl(decl)){
+      //let imp = helper.find_drop_impl(decl);
+      /*if(!decl.type.get_args().is_empty()){
       //generic type
+      }*/
     }
     if(decl.base.is_some()){
       self.visit_type(decl.base.get());
@@ -1915,7 +1919,7 @@ impl Resolver{
       self.visit_if(node, is);
       return;
     }else if let Stmt::IfLet(is*) = (node){
-      self.visit(node, is);
+      self.visit_iflet(node, is);
       return;
     }else if let Stmt::While(e*, b*) = (node){
       self.visit_while(node, e, b.get());
@@ -1960,7 +1964,7 @@ impl Resolver{
     }
   }
 
-  func visit(self, node: Stmt*, is: IfLet*){
+  func visit_iflet(self, node: Stmt*, is: IfLet*){
     //check lhs
     let rt = self.visit_type(&is.type);
     let decl_opt = self.get_decl(&rt);

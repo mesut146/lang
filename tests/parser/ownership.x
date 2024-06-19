@@ -13,6 +13,7 @@ import std/map
 import std/stack
 
 static last_scope: i32 = 0;
+static verbose: bool = false;
 
 func is_drop_method(method: Method*): bool{
     if(method.name.eq("drop") && method.parent.is_impl()){
@@ -60,7 +61,6 @@ struct VarScope{
     parent: i32;
     sibling: i32;
 }
-
 impl VarScope{
     func print(self, own: Own*): String{
         let f = Fmt::new();
@@ -148,10 +148,6 @@ impl Debug for Action{
 }
 
 #derive(Debug)
-struct Lhs{
-    expr: Expr*;
-}
-#derive(Debug)
 enum Rhs{
     EXPR(e: Expr*),
     VAR(v: Variable*)
@@ -178,9 +174,9 @@ impl Rhs{
         }
         panic("");
     }
-    func is_vh(self, vh: VarHolder*, compiler: Compiler*): bool{
+    func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){
-            let rt = compiler.get_resolver().visit(e);
+            let rt = resolver.visit(e);
             if(rt.vh.is_some()){
                 let res = rt.vh.get().id == vh.id;
                 rt.drop();
@@ -191,12 +187,43 @@ impl Rhs{
         }
         return self.get_var().id == vh.id;
     }
+    func eq(self, expr: Expr*, resolver: Resolver*): bool{
+        if let Rhs::EXPR(e)=(self){
+            if(e.id == expr.id){
+                return true;
+            }
+            let rt1 = resolver.visit(e);
+            let rt2 = resolver.visit(expr);
+            //return self.is_vh(vh, compiler);
+        }
+        return false;
+    }
 }
-#derive(Debug)
+
 struct Move{
-    lhs: Option<Lhs>;
+    lhs: Option<Expr*>;
     rhs: Expr*;
     line: i32;
+}
+impl Move{
+    func is_lhs(self, lhs2: Rhs*, own: Own*): bool{
+        if(self.lhs.is_none()){
+            return false;
+        }
+        let lhs: Expr* = *self.lhs.get();
+        return lhs2.eq(lhs, own.compiler.get_resolver());
+    }
+}
+impl Debug for Move{
+    func debug(self, f: Fmt*){
+        f.print("Move{");
+        if(self.lhs.is_some()){
+            f.print(*self.lhs.get());
+            f.print(" = ");
+        }
+        f.print(self.rhs);
+        f.print("}");
+    }
 }
 
 impl VarScope{
@@ -340,57 +367,78 @@ impl Own{
         }
         rt.drop();
         let mv = Move{
-            lhs: Option<Lhs>::new(),
+            lhs: Option<Expr*>::new(),
             rhs: expr,
             line: expr.line
         };
-        print("move {} line:{}\n", mv.rhs, mv.line);
+        if(verbose){
+            print("move {} line:{}\n", mv.rhs, mv.line);
+        }
         let act = Action::MOVE{mv};
         self.get_scope().actions.add(act);
     }
 
     func do_return(self, expr: Expr*){
         self.do_move(expr);
-        print("do_return {}\n", expr.line);
+        if(verbose){
+            print("do_return {}\n", expr.line);
+        }
         self.do_return();
     }
-    func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool): StateType{
-        for(let i = 0;i < scope.actions.len();++i){
+    func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool): Pair<StateType, VarScope*>{
+        for(let i = scope.actions.len() - 1;i >= 0;--i){
             let act = scope.actions.get_ptr(i);
             if let Action::MOVE(mv*) = (act){
                 if(rhs is Rhs::EXPR){
                     //tmp obj moved immediatly
                     if(mv.rhs.id == rhs.get_id()){
-                        return StateType::MOVED{mv.line};
+                        return Pair::new(StateType::MOVED{mv.line}, scope);
                     }
                 }
                 let mv_rt = self.compiler.get_resolver().visit(mv.rhs);
                 if(mv_rt.vh.is_some()){
-                    if(rhs.is_vh(mv_rt.vh.get(), self.compiler)){
+                    if(rhs.is_vh(mv_rt.vh.get(), self.compiler.get_resolver())){
                         mv_rt.drop();
-                        return StateType::MOVED{mv.line};
+                        return Pair::new(StateType::MOVED{mv.line}, scope);
                     }
                 }else{
                     mv_rt.drop();
                     if(mv.rhs.id == rhs.get_id()){
-                        return StateType::MOVED{mv.line};
+                        return Pair::new(StateType::MOVED{mv.line}, scope);
                     }
+                }
+                if(mv.is_lhs(&rhs, self)){
+                    return Pair::new(StateType::ASSIGNED, scope);
+                }
+            }else if let Action::SCOPE(scp_id, line) = (act){
+                let scp = self.get_scope(scp_id);
+                let ch_state = self.get_state(rhs, scp, false);
+                if(!(ch_state.a is StateType::NONE)){
+                    return ch_state;
                 }
             }
         }
         if(look_parent && scope.parent != -1){
             let parent = self.get_scope(scope.parent);
-            return self.get_state(rhs, parent, true);
+            let res = self.get_state(rhs, parent, true);
+            if(!(res.a is StateType::NONE) && scope.kind is ScopeType::ELSE && res.b.kind is ScopeType::IF){
+                //ignore sibling move
+                return Pair::new(StateType::NONE, scope);
+            }
+            return res;
         }
-        return StateType::NONE;
+        return Pair::new(StateType::NONE, scope);
     }
     func check(self, expr: Expr*){
         let scope = self.get_scope();
         let rhs = Rhs::EXPR{expr};
-        let state = self.get_state(rhs, scope, true);
+        let state_pair = self.get_state(rhs, scope, true);
         //print("check {} line:{} {}\n", expr, expr.line, state);
-        if let StateType::MOVED(line)=(state){
-            self.compiler.get_resolver().err(expr, format("use after move in {}", line));
+        if let StateType::MOVED(line)=(state_pair.a){
+            if(!state_pair.b.exit.is_return()){
+                print("{}\n", self.get_scope(self.main_scope).print(self));
+                self.compiler.get_resolver().err(expr, format("use after move in {}", line));
+            }
         }
     }
 
@@ -410,7 +458,7 @@ impl Own{
     }
     func drop_obj(self, obj: Object*, scope: VarScope*){
         let rhs = Rhs::EXPR{obj.expr};
-        let state = self.get_state(rhs, scope, true);
+        let state = self.get_state(rhs, scope, true).a;
         if(state is StateType::MOVED){
             return;
         }
@@ -419,19 +467,23 @@ impl Own{
     }
     func drop_var(self, var: Variable*, scope: VarScope*){
         let rhs = Rhs::VAR{var};
-        let state = self.get_state(rhs, scope, true);
+        let state = self.get_state(rhs, scope, true).a;
         if(state is StateType::MOVED){
             return;
         }
         if(var.is_self && is_drop_method(self.method)){
             return;
         }
-        print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
-        print("{}\n", scope.print(self));
+        if(verbose){
+            print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
+            print("{}\n", scope.print(self));
+        }
         //self.compiler.get_resolver().err(var.line, "".str());
     }
     func drop_return(self, scope: VarScope*){
-        print("drop_return {} line: {}\n", scope.kind, scope.line);
+        if(verbose){
+            print("drop_return {} line: {}\n", scope.kind, scope.line);
+        }
         let drops = List<Droppable>::new();
         self.get_outer_vars(scope, &drops);
         for(let i = 0;i < drops.len();++i){
@@ -485,32 +537,53 @@ impl Own{
         panic("unwrap_mc {}", expr);
     }
 
-    func drop_obj_real(self, obj: Object*){
+    func get_proto(self, rt: RType*, expr: Expr*): Function*{
         let resolver = self.compiler.get_resolver();
-        let rt = resolver.visit(obj.expr);
-        let expr = parse_expr(format("{}::drop({})", &rt.type, obj.expr), &resolver.unit, obj.expr.line);
-        let mc = unwrap_mc(&expr);
-        let sig = Signature::new("drop".str());
-        sig.scope = Option::new(rt.clone());
-        sig.args.add(rt.type.clone());
-        sig.mc = Option::new(mc);
-        sig.r = Option::new(resolver);
-        let mr = MethodResolver::new(resolver);
-        let res_rt = mr.handle(&expr, &sig);
-        let method = resolver.get_method(&res_rt).unwrap();
-        /*let methods = mr.collect(&sig);
-        assert(methods.len() == 1);
-        let method = methods.get_ptr(0).m.unwrap();*/
+        let decl = resolver.get_decl(rt).unwrap();
+        let helper = DropHelper{resolver};
+        let drop_impl = helper.find_drop_impl(decl);
+        let method = drop_impl.methods.get_ptr(0);
+        if(method.is_generic){
+            let drop_expr = parse_expr(format("{}::drop({})", &rt.type, expr), &resolver.unit, expr.line);
+            let mc = unwrap_mc(&drop_expr);
+            let sig = Signature::new("drop".str());
+            sig.scope = Option::new(rt.clone());
+            sig.args.add(rt.type.clone());
+            sig.mc = Option::new(mc);
+            sig.r = Option::new(resolver);
+            let mr = MethodResolver::new(resolver);
+            let map = Map<String, Type>::new();
+            let pair = mr.generateMethod(&map, method, &sig);
+            method = pair.a;
+            //panic("generic {}", printMethod(method2));
+        }
         let protos = self.compiler.protos.get();
         let mangled = mangle(method);
         if(!protos.funcMap.contains(&mangled)){
             self.compiler.make_proto(method);
         }
         let proto = protos.get_func(method);
+        mangled.drop();
+        return proto;
+    }
+
+    func drop_obj_real(self, obj: Object*){
+        let resolver = self.compiler.get_resolver();
+        let rt = resolver.visit(obj.expr);
+        // let expr = parse_expr(format("{}::drop({})", &rt.type, obj.expr), &resolver.unit, obj.expr.line);
+        // let mc = unwrap_mc(&expr);
+        // let sig = Signature::new("drop".str());
+        // sig.scope = Option::new(rt.clone());
+        // sig.args.add(rt.type.clone());
+        // sig.mc = Option::new(mc);
+        // sig.r = Option::new(resolver);
+        // let mr = MethodResolver::new(resolver);
+        // let res_rt = mr.handle(&expr, &sig);
+        // let method = resolver.get_method(&res_rt).unwrap();
+        let proto = self.get_proto(&rt, obj.expr);
         let args = make_args();
         args_push(args, obj.ptr);
         CreateCall(proto, args);
-        mangled.drop();
         //panic("drop_obj_real {} type: {} line: {} sig: {}", obj.expr, rt.type, obj.expr.line, res_rt);
     }
 }

@@ -390,16 +390,14 @@ impl Lexer{
     self.pos += 1;
     while (true){
       let c = self.peek();
-      let c2 = self.peek(1);
       if(c.is_digit()){
         self.pos += 1;
-      }else if(c == '_' && c2.is_digit()){
+      }else if(c == '_' && self.has(2) && self.peek(1).is_digit()){
         self.pos+=2;
       }else break;
     }
     let dot = false;
-    let c2 = self.peek(1);
-    if(self.peek() == '.' && c2.is_digit()){
+    if(self.peek() == '.' && self.has(2) && self.peek(1).is_digit()){
       dot = true;
       self.pos += 2;
       while (self.has()) {

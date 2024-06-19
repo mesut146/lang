@@ -57,8 +57,19 @@ struct DropHelper {
 
 impl DropHelper{
   func is_drop_type(self, type: Type*): bool{
+    if (type.is_str() || type.is_slice()) return false;
+    if (!is_struct(type)) return false;
+    if (type.is_array()) {
+        let elem = type.elem();
+        return self.is_drop_type(elem);
+    }
     let rt = self.r.visit_type(type);
-    return self.is_drop_type(&rt);
+    let res = self.is_drop_type(&rt);
+    rt.drop();
+    return res;
+    /*let decl = self.r.get_decl(&rt).unwrap();
+    rt.drop();
+    return self.is_drop_decl(decl);*/
   }
   func is_drop_type(self, rt: RType*): bool{
     let type = &rt.type;
@@ -98,6 +109,7 @@ impl DropHelper{
   }
   func is_drop_impl(decl: Decl*, imp: Impl*): bool{
     let info = &imp.info;
+    //print("is_drop_impl {} {}\n", decl.type, info);
     if (info.trait_name.is_none() || !info.trait_name.get().eq("Drop")) return false;
     if (decl.is_generic) {
         if (!info.type_params.empty()) {//generic impl
@@ -108,15 +120,15 @@ impl DropHelper{
         }
     } else {                           //full type
         if (info.type_params.empty()) {//full impl
-          let info_str = info.type.print();
-          return decl.type.print().eq(&info_str);
+          let res = decl.type.eq(&info.type);
+          return res;
         } else {//generic impl
           return decl.type.name().eq(info.type.name());
         }
     }
-}
+  }
   func has_drop_impl(decl: Decl*, r: Resolver*): bool{
-    if (decl.path.eq(&r.unit.path)) {
+    if (!decl.path.eq(&r.unit.path)) {
         //need own resolver
         let r2 = r.ctx.create_resolver(&decl.path);
         r2.init();
@@ -131,14 +143,28 @@ impl DropHelper{
       if (is_drop_impl(decl, imp)) {
         return true;
       }
-      for (let j = 0;j < r.generated_impl.len();++j) {
-        let gen_imp: Impl* = r.generated_impl.get_ptr(j);
-        if (is_drop_impl(decl, gen_imp)) {
-            return true;
-        }
-      }
     }
     return false;
+  }
+  func find_drop_impl(self, decl: Decl*): Impl*{
+    let r = self.r;
+    if (!decl.path.eq(&r.unit.path)) {
+      //need own resolver
+      let r2 = r.ctx.create_resolver(&decl.path);
+      r2.init();
+      r = r2;
+    }
+    for (let i = 0;i < r.unit.items.len();++i) {
+      let it: Item* = r.unit.items.get_ptr(i);
+      if(!(it is Item::Impl)){
+        continue;
+      }
+      let imp: Impl* = it.as_impl();
+      if (is_drop_impl(decl, imp)) {
+        return imp;
+      }
+    }
+    panic("no drop method for {} self.r={} r={} decl.path={}", decl.type, self.r.unit.path, r.unit.path, decl.path);
   }
 }
 

@@ -5,6 +5,10 @@ func dbg(c: bool, id: i32){
     let a = 10;
   }
 }
+func dbg(s1: String, s2: str, id: i32){
+  dbg(s1.eq(s2), id);
+  s1.drop();
+}
 
 trait Eq{
   func eq(self, x: Self*): bool;
