@@ -12,11 +12,14 @@ impl A{
     func new(id: i32): A{
         return A{a: id};
     }
+    func check(self, id: i32){
+        assert(self.a == id);
+    }
 }
 
 impl Drop for A{
     func drop(*self){
-        print("A::drop %d\n", self.a);
+        printf("A::drop %d\n", self.a);
         cnt += 1;
         last_id = self.a;
         ids.push_back(self.a);
@@ -36,7 +39,7 @@ impl B{
 
 impl Drop for B{
     func drop(*self){
-        print("B::drop %d\n", self.b.a);
+        printf("B::drop %d\n", self.b.a);
         cnt += 1;
         last_id = self.b.a;
         ids.push_back(self.b.a);
@@ -57,18 +60,26 @@ func check(cnt2: i32, id: i32): bool{
     return cnt == cnt2 && last_id == id;
 }
 
-func check_ids(id1: i32): bool{
-    assert ids.len() == 1;
-    return ids.pop_front() == id1;
+func check_ids(id1: i32){
+    assert(ids.len() == 1);
+    assert(ids.pop_front() == id1);
 }
 
-func check_ids(id1: i32, id2: i32): bool{
-    assert ids.len() == 2;
-    return ids.pop_front() == id1 && ids.pop_front() == id2;
+func check_ids(id1: i32, id2: i32){
+    assert(ids.len() == 2);
+    assert(ids.pop_front() == id1);
+    assert(ids.pop_front() == id2);
+}
+
+func check_ids(id1: i32, id2: i32, id3: i32){
+    assert(ids.len() == 3);
+    assert(ids.pop_front() == id1);
+    assert(ids.pop_front() == id2);
+    assert(ids.pop_front() == id3);
 }
 
 func check_ids(arr: [i32]): bool{
-    assert arr.len() == ids.len();
+    assert(arr.len() == ids.len());
     let res = true;
     for(let i = 0;i < arr.len();++i){
         let id = arr[i];

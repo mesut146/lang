@@ -421,6 +421,10 @@ llvm::GlobalVariable *make_global(const char *name, llvm::Type *ty, llvm::Consta
     return res;
 }
 
+llvm::Constant* ConstantStruct_get(llvm::StructType *ty) {
+    return llvm::ConstantStruct::get(ty);
+}
+
 llvm::Value *CreateAlloca(llvm::Type *ty) {
     return Builder->CreateAlloca(ty);
 }

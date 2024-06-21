@@ -160,6 +160,7 @@ extern{
     func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
     func make_global(name: i8*, ty: llvm_Type*, init: Constant*): GlobalVariable*;
+    func ConstantStruct_get(ty: StructType*): Constant*;
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;

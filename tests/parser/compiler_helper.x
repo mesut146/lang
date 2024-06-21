@@ -395,9 +395,6 @@ impl Compiler{
 
   func make_proto(self, m: Method*){
     if(m.is_generic) return;
-    if(is_main(m)){
-      let aa = 10;
-    }
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
@@ -569,6 +566,28 @@ impl Compiler{
     Drop::drop(name);
     return res;
   }
+
+  func mangle_unit(path: str): String{
+    return path.replace(".", "_").replace("/", "_");
+  }
+
+  func mangle_static(path: str): String{
+    let mangled = mangle_unit(path);
+    let res = format("{}_static_init", mangled);
+    mangled.drop();
+    return res;
+  }
+
+  func make_init_proto(self, path: str): Function*{
+    let ret = getVoidTy();
+    let args = make_vec();
+    let ft = make_ft(ret, args, false);
+    let linkage = ext();
+    let mangled = mangle_static(path).cstr();
+    let res = make_func(ft, linkage, mangled.ptr());
+    mangled.drop();
+    return res;
+  }
 }
 
 
@@ -622,12 +641,14 @@ func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
   return CreateGEP(type, ptr, args);
 }
 
-
 func get_tag_index(decl: Decl*): i32{
   assert(decl.is_enum());
   return 0;
 }
+
 func get_data_index(decl: Decl*): i32{
   assert(decl.is_enum());
   return 1;
 }
+
+

@@ -129,26 +129,7 @@ impl String{
     }
     
     func replace(self, s1: str, s2: str): String{
-      let res = String::new();
-      let last = 0;
-      //"abcdbce" "bc" "x"
-      //"axdxe"
-      while(true){
-        let i = self.find(s1, last);
-        if(i.is_some()){
-          if(last < i.unwrap()){
-            res.append(self.str().substr(last, i.unwrap()));
-          }
-          res.append(s2);
-          last = i.unwrap() + s1.len();
-        }else{
-          if(last < self.len()){
-            res.append(self.str().substr(last));
-          }
-          break;
-        }
-      }
-      return res;
+      return self.str().replace(s1, s2);
     }
     
     func substr(self, start: i64): str{

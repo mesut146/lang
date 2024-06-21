@@ -421,20 +421,25 @@ impl Compiler{
       }
       return self.visit_call2(expr, mc);
     }
-  
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
       let rt = self.get_resolver().visit(expr);
       if(!rt.is_method()){
         panic("mc no method {} {}", expr, rt.desc);
       }
       //print("{}\n", expr);
-      let type = &rt.type;
       let ptr_ret = Option<Value*>::new();
-      if(is_struct(type)){
+      if(is_struct(&rt.type)){
         ptr_ret = Option::new(self.get_alloc(expr));
+      }
+      return self.visit_call2(expr, mc, ptr_ret, rt);
+    }
+  
+    func visit_call2(self, expr: Expr*, mc: Call*, ptr_ret: Option<Value*>, rt: RType): Value*{
+      if(is_struct(&rt.type)){
         self.own.get().add_obj(expr, ptr_ret.unwrap(), &rt.type);
       }
       let target = self.get_resolver().get_method(&rt).unwrap();
+      rt.drop();
       let proto = self.protos.get().get_func(target);
       let args = make_args();
       if(ptr_ret.is_some()){
@@ -663,7 +668,9 @@ impl Compiler{
         }
       }
       let lhs = self.get_lhs(l);
+      //todo setField should free lhs
       self.setField(r, &type, lhs);
+      self.own.get().do_assign(l, r);
       return lhs;
     }
     

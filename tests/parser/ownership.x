@@ -60,59 +60,7 @@ struct VarScope{
     exit: Exit;
     parent: i32;
     sibling: i32;
-}
-impl VarScope{
-    func print(self, own: Own*): String{
-        let f = Fmt::new();
-        self.debug(&f, own, "");
-        return f.unwrap();
-    }
-    func debug(self, f: Fmt*, own: Own*, indent: str){
-        f.print(indent);
-        f.print("VarScope ");
-        f.print(&self.kind);
-        f.print(", line: ");
-        f.print(&self.line);
-        f.print("{");
-        for(let i=0;i<self.vars.len();++i){
-            let var = self.vars.get_ptr(i);
-            f.print("\n");
-            f.print(indent);
-            f.print("let ");
-            f.print(&var.name);
-            f.print(": ");
-            f.print(&var.type);
-            f.print(", line: ");
-            f.print(&var.line);
-        }
-        for(let i=0;i<self.objects.len();++i){
-            let obj = self.objects.get_ptr(i);
-            f.print("\n");
-            f.print(indent);
-            f.print("obj line: ");
-            f.print(&obj.expr.line);
-            f.print(", ");
-            f.print(obj.expr);
-        }
-        for(let i=0;i<self.actions.len();++i){
-            let act = self.actions.get_ptr(i);
-            if let Action::SCOPE(id, line)=(act){
-                let ch_scope = own.get_scope(id);
-                let id2 = format("{} ", indent);
-                f.print("\n");
-                ch_scope.debug(f, own, id2.str());
-                id2.drop();
-            }else{
-                f.print("\n");
-                f.print(indent);
-                f.print("act ");
-                f.print(act);
-            }
-        }
-        f.print("\n");
-        f.print(indent);
-        f.print("}");
-    }
+    state_map: Map<i32, StateType>; //var_id -> StateType
 }
 
 #derive(Debug)
@@ -126,25 +74,6 @@ enum StateType {
 enum Action {
     MOVE(mv: Move),
     SCOPE(id: i32, line: i32)
-}
-impl Debug for Action{
-    func debug(self, f: Fmt*){
-        f.print("Action::");
-        if let Action::MOVE(mv*)=(self){
-            f.print("MOVE{");
-            f.print(mv.rhs);
-            f.print(" line: ");
-            f.print(&mv.line);
-            f.print("}");
-        }
-        if let Action::SCOPE(id, line)=(self){
-            f.print("SCOPE{");
-            f.print(&id);
-            f.print(", ");
-            f.print(&line);
-            f.print("}");
-        }
-    }
 }
 
 #derive(Debug)
@@ -195,6 +124,14 @@ impl Rhs{
             let rt1 = resolver.visit(e);
             let rt2 = resolver.visit(expr);
             //return self.is_vh(vh, compiler);
+            if(rt1.vh.is_some() && rt2.vh.is_some()){
+                return rt1.vh.get().id == rt2.vh.get().id;
+            }
+            return false;
+        }
+        let rt2 = resolver.visit(expr);
+        if(rt2.vh.is_some()){
+            return self.get_var().id == rt2.vh.get().id;
         }
         return false;
     }
@@ -214,17 +151,6 @@ impl Move{
         return lhs2.eq(lhs, own.compiler.get_resolver());
     }
 }
-impl Debug for Move{
-    func debug(self, f: Fmt*){
-        f.print("Move{");
-        if(self.lhs.is_some()){
-            f.print(*self.lhs.get());
-            f.print(" = ");
-        }
-        f.print(self.rhs);
-        f.print("}");
-    }
-}
 
 impl VarScope{
     func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
@@ -237,7 +163,8 @@ impl VarScope{
             actions: List<Action>::new(),
             exit: exit,
             parent: -1,
-            sibling: -1
+            sibling: -1,
+            state_map: Map<i32, StateType>::new()
         };
         return scope;
     }
@@ -365,7 +292,6 @@ impl Own{
             rt.drop();
             return;
         }
-        rt.drop();
         let mv = Move{
             lhs: Option<Expr*>::new(),
             rhs: expr,
@@ -376,6 +302,12 @@ impl Own{
         }
         let act = Action::MOVE{mv};
         self.get_scope().actions.add(act);
+        if(rt.vh.is_some()){
+            self.get_scope().state_map.add(rt.vh.get().id, StateType::MOVED);
+        }else{
+            self.get_scope().state_map.add(expr.id, StateType::MOVED);
+        }
+        rt.drop();
     }
 
     func do_return(self, expr: Expr*){
@@ -414,7 +346,9 @@ impl Own{
                 let scp = self.get_scope(scp_id);
                 let ch_state = self.get_state(rhs, scp, false);
                 if(!(ch_state.a is StateType::NONE)){
-                    return ch_state;
+                    if(!scp.exit.is_jump()){
+                        return ch_state;
+                    }
                 }
             }
         }
@@ -433,12 +367,12 @@ impl Own{
         let scope = self.get_scope();
         let rhs = Rhs::EXPR{expr};
         let state_pair = self.get_state(rhs, scope, true);
-        //print("check {} line:{} {}\n", expr, expr.line, state);
+        //print("check {} line:{} {}\n", expr, expr.line, state_pair.a);
         if let StateType::MOVED(line)=(state_pair.a){
-            if(!state_pair.b.exit.is_return()){
+            //if(!state_pair.b.exit.is_return()){
                 print("{}\n", self.get_scope(self.main_scope).print(self));
                 self.compiler.get_resolver().err(expr, format("use after move in {}", line));
-            }
+            //}
         }
     }
 
@@ -585,5 +519,102 @@ impl Own{
         args_push(args, obj.ptr);
         CreateCall(proto, args);
         //panic("drop_obj_real {} type: {} line: {} sig: {}", obj.expr, rt.type, obj.expr.line, res_rt);
+    }
+
+    func do_assign(self, lhs: Expr*, rhs: Expr*){
+        let scope = self.get_scope();
+        let rt = self.compiler.get_resolver().visit(rhs);
+        if(!self.is_drop_type(&rt.type)){
+            rt.drop();
+            return;
+        }
+        scope.actions.add(Action::MOVE{Move{Option::new(lhs), rhs, lhs.line}});
+    }
+}
+
+
+impl VarScope{
+    func print(self, own: Own*): String{
+        let f = Fmt::new();
+        self.debug(&f, own, "");
+        return f.unwrap();
+    }
+    func debug(self, f: Fmt*, own: Own*, indent: str){
+        f.print(indent);
+        f.print("VarScope ");
+        f.print(&self.kind);
+        f.print(", line: ");
+        f.print(&self.line);
+        f.print("{");
+        for(let i=0;i<self.vars.len();++i){
+            let var = self.vars.get_ptr(i);
+            f.print("\n");
+            f.print(indent);
+            f.print("let ");
+            f.print(&var.name);
+            f.print(": ");
+            f.print(&var.type);
+            f.print(", line: ");
+            f.print(&var.line);
+        }
+        for(let i=0;i<self.objects.len();++i){
+            let obj = self.objects.get_ptr(i);
+            f.print("\n");
+            f.print(indent);
+            f.print("obj line: ");
+            f.print(&obj.expr.line);
+            f.print(", ");
+            f.print(obj.expr);
+        }
+        for(let i=0;i<self.actions.len();++i){
+            let act = self.actions.get_ptr(i);
+            if let Action::SCOPE(id, line)=(act){
+                let ch_scope = own.get_scope(id);
+                let id2 = format("{} ", indent);
+                f.print("\n");
+                ch_scope.debug(f, own, id2.str());
+                id2.drop();
+            }else{
+                f.print("\n");
+                f.print(indent);
+                f.print("act ");
+                f.print(act);
+            }
+        }
+        f.print("\n");
+        f.print(indent);
+        f.print("}");
+    }
+}
+
+impl Debug for Action{
+    func debug(self, f: Fmt*){
+        f.print("Action::");
+        if let Action::MOVE(mv*)=(self){
+            f.print("MOVE{");
+            f.print(mv);
+            f.print(" line: ");
+            f.print(&mv.line);
+            f.print("}");
+        }
+        if let Action::SCOPE(id, line)=(self){
+            f.print("SCOPE{");
+            f.print(&id);
+            f.print(", ");
+            f.print(&line);
+            f.print("}");
+        }
+    }
+}
+
+impl Debug for Move{
+    func debug(self, f: Fmt*){
+        f.print("Move{");
+        if(self.lhs.is_some()){
+            f.print(*self.lhs.get());
+            f.print(" = ");
+        }
+        f.print(self.rhs);
+        f.print("}");
     }
 }

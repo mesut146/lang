@@ -220,11 +220,15 @@ impl str{
       while(true){
         let i = self.indexOf(s1, last);
         if(i != -1){
-          res.append(self.str().substr(last, i));
+          if(i > last){
+            res.append(self.substr(last, i));
+          }
           res.append(s2);
           last = i + s1.len();
         }else{
-          res.append(self.str().substr(last));
+          if(last < self.len()){
+            res.append(self.substr(last));
+          }
           break;
         }
       }

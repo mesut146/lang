@@ -76,6 +76,21 @@ func bootstrap(run: bool, out_dir: str){
   set_as_executable(bin2.cstr().ptr());
 }
 
+func own_test(){
+  print("test::own_test\n");
+  let config = CompilerConfig::new();
+  config
+    .set_file("../tests/own/common.x")
+    .set_out(get_out())
+    .add_dir(root())
+    .set_link(LinkType::Static{"common.a"});
+  Compiler::compile_single(&config);
+  let static_out = format("{}/common.a", get_out());
+  compile_dir2("../tests/own", static_out.str());
+  static_out.drop();
+  config.drop();
+}
+
 func main(argc: i32, args: i8**){
   print("##########running##########\n");
   print_unit = false;
@@ -85,6 +100,10 @@ func main(argc: i32, args: i8**){
   }
   let cmd = Args::new(argc, args);
   let arg = cmd.get();
+  if(arg.eq("own")){
+    own_test();
+    return;
+  }
   if(arg.eq("test")){
     compiler_test(false);
     return;

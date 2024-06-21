@@ -30,6 +30,7 @@ struct Compiler{
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
+  global_protos: List<String>;
 }
 impl Drop for Compiler{
   func drop(*self){
@@ -44,6 +45,7 @@ impl Drop for Compiler{
     Drop::drop(self.loops);
     Drop::drop(self.loopNext);
     Drop::drop(self.own);
+    Drop::drop(self.global_protos);
   }
 }
 
@@ -198,7 +200,8 @@ impl Compiler{
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
      loopNext: List<BasicBlock*>::new(),
-     own: Option<Own>::new()
+     own: Option<Own>::new(),
+     global_protos: List<String>::new()
     };
   }
 
@@ -274,6 +277,13 @@ impl Compiler{
     self.NamedValues.clear();
   }
 
+  func is_constexpr(expr: Expr*): bool{
+    if let Expr::Lit(lit*)=(expr){
+      return true;
+    }
+    return false;
+  }
+
   func init_globals(self){
     let resolv = self.get_resolver();
     //extern globals
@@ -300,20 +310,41 @@ impl Compiler{
     if(self.get_resolver().unit.globals.empty()){
       return;
     }
-    for(let j = 0;j < self.get_resolver().unit.globals.len();++j){
-      let gl = self.get_resolver().unit.globals.get_ptr(j);
-      let rt = self.get_resolver().visit(&gl.expr);
+    let proto = self.make_init_proto(resolv.unit.path.str());
+    self.global_protos.add(resolv.unit.path.clone());
+    let bb = create_bb2(proto);
+    SetInsertPoint(bb);
+    let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
+    method.body = Option::new(Block::new(0));
+    self.own = Option::new(Own::new(self, &method));
+    for(let j = 0;j < resolv.unit.globals.len();++j){
+      let gl = resolv.unit.globals.get_ptr(j);
+      let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
       let init = ptr::null<Constant>();
       if(rt.type.is_prim()){
+        if(!is_constexpr(&gl.expr)){
+          panic("prim not const {}", gl);
+        }
         let rhs_str = gl.expr.print();
         init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+      }else if(is_struct(&rt.type)){
+        init = ConstantStruct_get(ty as StructType*);
       }else{
-        panic("glob struct");
+        panic("glob type {}", rt.type);
       }
-      let glob = make_global(gl.name.clone().cstr().ptr(), ty, init);
+      let glob: GlobalVariable* = make_global(gl.name.clone().cstr().ptr(), ty, init);
       self.globals.add(gl.name.clone(), glob as Value*);
+      if let Expr::Call(mc*)=(&gl.expr){
+        self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
+      }else{
+        if(!is_constexpr(&gl.expr)){
+          panic("glob rhs {}", gl);
+        }
+      }
     }
+    CreateRetVoid();
+    method.drop();
   }
 
   //make all struct decl & method decl used by this module
@@ -556,6 +587,18 @@ impl Compiler{
     run(path);
     Drop::drop(cmp);
   }
+  func compile_single(config: CompilerConfig*){
+    create_dir(config.out_dir.str());
+    let ctx = Context::new(config.src_dirs.remove(0), config.out_dir.clone());
+    let cmp = Compiler::new(ctx);
+    let compiled = List<String>::new();
+    use_cache = false;
+    let cache = Cache::new(config.out_dir.str());
+    let obj = cmp.compile(config.file.str(), &cache);
+    compiled.add(obj);
+    config.link(&compiled);
+    Drop::drop(cmp);
+  }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
     create_dir(out_dir);
@@ -576,6 +619,7 @@ impl Compiler{
       file.drop();
     }
     list.drop();
+    cache.drop();
     if let LinkType::Binary(bin_name, args, run) = (&lt){
       let path = link(&compiled, out_dir, bin_name, args);
       compiled.drop();
@@ -599,4 +643,55 @@ enum LinkType{
   Binary(name: str, args: str, run: bool),
   Static(name: str),
   Dynamic
+}
+
+struct CompilerConfig{
+  file: String;
+  src_dirs: List<String>;
+  out_dir: String;
+  args: String;
+  lt: LinkType;
+}
+
+impl CompilerConfig{
+  func new(): CompilerConfig{
+    return CompilerConfig{
+      file: "".str(),
+      src_dirs: List<String>::new(),
+      out_dir: "".str(),
+      args: "".str(),
+      lt: LinkType::Dynamic
+    };
+  }
+  func set_out(self, out: str): CompilerConfig*{
+    self.out_dir = out.str();
+    return self;
+  }
+  func add_dir(self, dir: str): CompilerConfig*{
+    self.src_dirs.add(dir.str());
+    return self;
+  }
+  func set_link(self, lt: LinkType): CompilerConfig*{
+    self.lt = lt;
+    return self;
+  }
+  func set_file(self, file: str): CompilerConfig*{
+    self.file = file.str();
+    return self;
+  }
+  func link(self, compiled: List<String>*): String{
+    if let LinkType::Binary(bin_name, args, run) = (&self.lt){
+      let path = Compiler::link(compiled, self.out_dir.str(), bin_name, args);
+      if(run){
+        Compiler::run(path);
+      }
+      return path;
+    }
+    else if let LinkType::Static(lib_name) = (&self.lt){
+      let res = Compiler::build_library(compiled, lib_name, self.out_dir.str(), false);
+      return res;
+    }else{
+      panic("CompilerConfig::link");
+    }
+  }
 }
