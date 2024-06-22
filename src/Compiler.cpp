@@ -201,6 +201,7 @@ void init_globals(Compiler *c) {
     }
     //init rhs of globals
     auto staticf = make_init_proto(c->unit->path, c);
+    staticf->setSection(".text.startup");
     std::string mangled = staticf->getName().str();
     DirCompiler::global_protos.push_back(c->unit->path);
     Method m(c->unit->path);

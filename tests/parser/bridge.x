@@ -1,5 +1,6 @@
 struct vector;
 struct Args;
+struct vector_Constant;//std::vector<llvm::Constant*>
 struct Target;
 struct TargetMachine;
 struct Module;
@@ -41,6 +42,8 @@ extern{
     func vec_push(vec: vector*, elem: llvm_Type*);
     func make_args(): Args*;
     func args_push(vec: Args*, elem: Value*);
+    func make_vector_Constant(): vector_Constant*;
+    func vector_Constant_push(vec: vector_Constant*, elem: Constant*);
 
     func getDefaultTargetTriple(ptr: i8*): i32;
     func InitializeAllTargetInfos();
@@ -66,6 +69,8 @@ extern{
     func Metadata_vector_push(vec: Metadata_vector*, elem: Metadata*);
     func createSubroutineType(tys: Metadata_vector*): DISubroutineType*;
     func make_spflags(is_main: bool): i32;
+    func getFunction(name: i8*): Function*;
+    func setSection(f: Function *, sec: i8*);
     func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
     func setSubprogram(f: Function*, sp: DISubprogram*);
     func finalizeSubprogram(sp: DISubprogram*);
@@ -98,6 +103,7 @@ extern{
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;
+    func make_struct_ty_noname(elems: vector*): StructType*;
     func setBody(st: StructType*, elems: vector*);
     func getSizeInBits(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
@@ -160,7 +166,12 @@ extern{
     func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
     func make_global(name: i8*, ty: llvm_Type*, init: Constant*): GlobalVariable*;
+    func make_global_linkage(name: i8*, ty: llvm_Type*, init: Constant*, linkage: i32): GlobalVariable*;
     func ConstantStruct_get(ty: StructType*): Constant*;
+    func ConstantStruct_get_elems(ty: StructType*, elems: vector_Constant*): Constant*;
+    func ConstantArray_get(ty: ArrayType*, elems: vector_Constant*): Constant*;
+    func GlobalValue_ext(): i32;
+    func GlobalValue_appending(): i32;
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;

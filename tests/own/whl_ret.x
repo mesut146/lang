@@ -1,5 +1,4 @@
 import own/common
-//import std/deque
 
 func whl_ret(c: bool, id: i32){
     let a = A{a: id};
@@ -19,10 +18,28 @@ func whl_ret(c: bool, id: i32){
     Drop::drop(a);
 }
 
+
+func while_continue(){
+    let id = 100;
+    let c = true;
+    let i = 0;
+    while(++i < 5){
+        let a = A::new(id);
+        if(c){
+            send(a);
+            continue;
+        }
+        //valid
+        a.check(id);
+    }
+}
+
 func main(){
     whl_ret(true, 10);
     assert check_ids([10, 11][0..2]);
     reset();
     whl_ret(false, 20);
     assert check(1, 20);
+
+    while_continue();
 }

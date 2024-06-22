@@ -166,6 +166,20 @@ impl DropHelper{
     }
     panic("no drop method for {} self.r={} r={} decl.path={}", decl.type, self.r.unit.path, r.unit.path, decl.path);
   }
+
+  func get_drop_method(self, rt: RType*): Method*{
+    //let expr = parse_expr("");
+    //self.r.visit(expr);
+    let decl = self.r.get_decl(rt).unwrap();
+    let drop_impl = self.find_drop_impl(decl);
+    if(drop_impl.info.type_params.empty()){
+      return drop_impl.methods.get_ptr(0);
+    }
+    let key = rt.type.print();
+    let method_desc = self.r.drop_map.get_ptr(&key).unwrap();
+    //panic("{} -> {}", rt);
+    return self.r.get_method(method_desc, &decl.type).unwrap();
+  }
 }
 
 func make_slice_type(): StructType*{
@@ -498,10 +512,19 @@ impl Compiler{
     let type = self.getType(expr);
     return CreateLoad(self.mapType(&type), val);//local var
   }
-  
+
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
+    self.setField(expr, type, trg, false);
+  }
+  
+  func setField(self, expr: Expr*, type: Type*, trg: Value*, assign: bool){
     if(is_struct(type)){
       let val = self.visit(expr);
+      if(assign){
+        let rt = self.get_resolver().visit(expr);
+        self.own.get().drop_real(&rt, trg, expr.line);
+        rt.drop();
+      }
       self.copy(trg, val, type);
     }else if(type.is_pointer()){
       let val = self.get_obj_ptr(expr);

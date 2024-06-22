@@ -217,6 +217,14 @@ llvm::DISubroutineType *createSubroutineType(std::vector<llvm::Metadata *> *type
     return DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray(*types));
 }
 
+llvm::Function *getFunction(char *name) {
+    return mod->getFunction(name);
+}
+
+void setSection(llvm::Function *f, char *sec) {
+    f->setSection(sec);
+}
+
 llvm::DISubprogram *createFunction(llvm::DIScope *scope, char *name, char *linkage_name, llvm::DIFile *file, int line, llvm::DISubroutineType *ft, int spflags) {
     //std::cout << "createFunction " << name << ", " << linkage_name << "\n";
     return DBuilder->createFunction(scope, name, linkage_name, file, line, ft, line, llvm::DINode::FlagPrototyped, (llvm::DISubprogram::DISPFlags) spflags);
@@ -396,6 +404,9 @@ llvm::StructType *make_struct_ty(char *name) {
 llvm::StructType *make_struct_ty2(char *name, std::vector<llvm::Type *> *elems) {
     return llvm::StructType::create(*ctx, *elems, name);
 }
+llvm::StructType *make_struct_ty_noname(std::vector<llvm::Type *> *elems) {
+    return llvm::StructType::create(*ctx, *elems);
+}
 
 int getSizeInBits(llvm::StructType *st) {
     return mod->getDataLayout().getStructLayout(st)->getSizeInBits();
@@ -421,8 +432,36 @@ llvm::GlobalVariable *make_global(const char *name, llvm::Type *ty, llvm::Consta
     return res;
 }
 
-llvm::Constant* ConstantStruct_get(llvm::StructType *ty) {
+int GlobalValue_ext() {
+    return llvm::GlobalValue::ExternalLinkage;
+}
+int GlobalValue_appending() {
+    return llvm::GlobalValue::AppendingLinkage;
+}
+
+llvm::GlobalVariable *make_global_linkage(const char *name, llvm::Type *ty, llvm::Constant *init, int linkage) {
+    auto res = new llvm::GlobalVariable(*mod, ty, false, (llvm::GlobalValue::LinkageTypes) linkage, init, name);
+    return res;
+}
+
+llvm::Constant *ConstantStruct_get(llvm::StructType *ty) {
     return llvm::ConstantStruct::get(ty);
+}
+
+llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty, std::vector<llvm::Constant *> *elems) {
+    return llvm::ConstantStruct::get(ty, *elems);
+}
+
+std::vector<llvm::Constant *> *make_vector_Constant() {
+    return new std::vector<llvm::Constant *>();
+}
+
+void vector_Constant_push(std::vector<llvm::Constant *> *vec, llvm::Constant *elem) {
+    vec->push_back(elem);
+}
+
+llvm::Constant *ConstantArray_get(llvm::ArrayType *ty, std::vector<llvm::Constant *> *vec) {
+    return llvm::ConstantArray::get(ty, *vec);
 }
 
 llvm::Value *CreateAlloca(llvm::Type *ty) {

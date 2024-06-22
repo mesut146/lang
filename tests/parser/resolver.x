@@ -84,6 +84,12 @@ struct FormatInfo {
   unwrap_mc: Option<Expr>;
 }
 
+struct GlobalInfo{
+  name: String;
+  rt: RType;
+  path: String;
+}
+
 struct Resolver{
   unit: Unit;
   is_resolved: bool;
@@ -100,7 +106,8 @@ struct Resolver{
   used_types: List<RType>;
   generated_decl: List<Box<Decl>>;
   format_map: Map<i32, FormatInfo>;
-  glob_map: Map<String, RType>;
+  glob_map: List<GlobalInfo>;//external glob name->local rt for it, (cloned)
+  drop_map: Map<String, Desc>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -115,6 +122,7 @@ impl Drop for Resolver{
     self.generated_decl.drop();
     self.format_map.drop();
     self.glob_map.drop();
+    self.drop_map.drop();
   }
 }
 
@@ -335,7 +343,9 @@ impl Resolver{
       generated_decl: List<Box<Decl>>::new(),
       //generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
-      glob_map: Map<String, RType>::new()};
+      glob_map: List<GlobalInfo>::new(),
+      drop_map: Map<String, Desc>::new()
+    };
     return res;
   }
 
@@ -636,7 +646,9 @@ impl Resolver{
     if(rt.method_desc.is_none()){
       return Option<Method*>::new();
     }
-    let desc = rt.method_desc.get();
+    return self.get_method(rt.method_desc.get(), &rt.type);
+  }
+  func get_method(self, desc: Desc*, type: Type*): Option<Method*>{
     if(desc.kind is RtKind::Method){
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
@@ -668,7 +680,7 @@ impl Resolver{
         return Option::new(m);
       }
     }
-    panic("get_method {}={}", rt.type, desc);
+    panic("get_method {}={}", type, desc);
   }
 
   func visit_item(self, node: Item*){
@@ -877,6 +889,45 @@ impl Resolver{
     self.curMethod = Option<Method*>::None;
   }
 
+  func unwrap_mc(expr: Expr*): Call*{
+    if let Expr::Call(mc*) = (expr){
+        return mc;
+    }
+    panic("unwrap_mc {}", expr);
+  }
+
+  func handle_drop_method(self, rt: RType*, decl: Decl*){
+    let helper = DropHelper{self};
+    if(!helper.is_drop_decl(decl)){
+      return;
+    }
+    if(decl.type.get_args().empty()){
+      //extern drop
+      return;
+    }
+    //generic drop, local or extern
+    let drop_impl = helper.find_drop_impl(decl);
+    let method = drop_impl.methods.get_ptr(0);
+    let drop_expr = parse_expr(format("{}::drop()", &decl.type), &self.unit, decl.line);
+    let mc = unwrap_mc(&drop_expr);
+    let sig = Signature::new("drop".str());
+    sig.scope = Option::new(rt.clone());
+    sig.args.add(decl.type.clone());
+    sig.mc = Option::new(mc);
+    sig.r = Option::new(self);
+    let mr = MethodResolver::new(self);
+    let map = Map<String, Type>::new();
+    let generic_type = &method.parent.as_impl().type;
+    for(let i = 0;i < decl.type.get_args().len();++i){
+        let tp = generic_type.get_args().get_ptr(i);
+        map.add(tp.print(), decl.type.get_args().get_ptr(i).clone());
+    }
+    let pair = mr.generateMethod(&map, method, &sig);
+    //method = pair.a;
+    self.drop_map.add(decl.type.print().clone(), pair.b.clone());
+    //print("handle_drop_method {}\n", rt.type);
+  }
+
   func add_used_decl(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
       let used: RType* = self.used_types.get_ptr(i);
@@ -886,15 +937,9 @@ impl Resolver{
     }
     //print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
-    self.used_types.add(rt);
     //gen drop method
-    let helper = DropHelper{self};
-    if(helper.is_drop_decl(decl)){
-      //let imp = helper.find_drop_impl(decl);
-      /*if(!decl.type.get_args().is_empty()){
-      //generic type
-      }*/
-    }
+    self.handle_drop_method(&rt, decl);
+    self.used_types.add(rt);
     if(decl.base.is_some()){
       self.visit_type(decl.base.get());
     }
@@ -1786,7 +1831,7 @@ impl Resolver{
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
-          self.glob_map.add(glob.name.clone(), rt.clone());
+          self.glob_map.add(GlobalInfo{glob.name.clone(), rt.clone(), res.unit.path.clone()});
           return rt;
         }
       }

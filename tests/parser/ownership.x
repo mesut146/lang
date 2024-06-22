@@ -471,25 +471,13 @@ impl Own{
         panic("unwrap_mc {}", expr);
     }
 
-    func get_proto(self, rt: RType*, expr: Expr*): Function*{
+    func get_proto(self, rt: RType*, line: i32): Function*{
         let resolver = self.compiler.get_resolver();
         let decl = resolver.get_decl(rt).unwrap();
         let helper = DropHelper{resolver};
-        let drop_impl = helper.find_drop_impl(decl);
-        let method = drop_impl.methods.get_ptr(0);
+        let method = helper.get_drop_method(rt);
         if(method.is_generic){
-            let drop_expr = parse_expr(format("{}::drop({})", &rt.type, expr), &resolver.unit, expr.line);
-            let mc = unwrap_mc(&drop_expr);
-            let sig = Signature::new("drop".str());
-            sig.scope = Option::new(rt.clone());
-            sig.args.add(rt.type.clone());
-            sig.mc = Option::new(mc);
-            sig.r = Option::new(resolver);
-            let mr = MethodResolver::new(resolver);
-            let map = Map<String, Type>::new();
-            let pair = mr.generateMethod(&map, method, &sig);
-            method = pair.a;
-            //panic("generic {}", printMethod(method2));
+            panic("generic {}", rt.type);
         }
         let protos = self.compiler.protos.get();
         let mangled = mangle(method);
@@ -504,21 +492,19 @@ impl Own{
     func drop_obj_real(self, obj: Object*){
         let resolver = self.compiler.get_resolver();
         let rt = resolver.visit(obj.expr);
-        // let expr = parse_expr(format("{}::drop({})", &rt.type, obj.expr), &resolver.unit, obj.expr.line);
-        // let mc = unwrap_mc(&expr);
-        // let sig = Signature::new("drop".str());
-        // sig.scope = Option::new(rt.clone());
-        // sig.args.add(rt.type.clone());
-        // sig.mc = Option::new(mc);
-        // sig.r = Option::new(resolver);
-        // let mr = MethodResolver::new(resolver);
-        // let res_rt = mr.handle(&expr, &sig);
-        // let method = resolver.get_method(&res_rt).unwrap();
-        let proto = self.get_proto(&rt, obj.expr);
+        self.drop_real(&rt, obj.ptr, obj.expr.line);
+    }
+
+    func drop_real(self, rt: RType*, ptr: Value*, line: i32){
+        if(!self.is_drop_type(&rt.type)){
+            return;
+        }
+        let proto = self.get_proto(rt, line);
         let args = make_args();
-        args_push(args, obj.ptr);
+        args_push(args, ptr);
         CreateCall(proto, args);
-        //panic("drop_obj_real {} type: {} line: {} sig: {}", obj.expr, rt.type, obj.expr.line, res_rt);
+        dbg(rt.type.eq("List<u8>"), 10);
+        print("drop {} line: {}\n", rt.type, line);
     }
 
     func do_assign(self, lhs: Expr*, rhs: Expr*){

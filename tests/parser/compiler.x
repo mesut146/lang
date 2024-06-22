@@ -21,7 +21,6 @@ struct Compiler{
   resolver: Option<Resolver*>;
   main_file: Option<String>;
   llvm: llvm_holder;
-  compiled: List<String>;
   protos: Option<Protos>;
   NamedValues: Map<String, Value*>;
   globals: Map<String, Value*>;
@@ -30,14 +29,12 @@ struct Compiler{
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
-  global_protos: List<String>;
 }
 impl Drop for Compiler{
   func drop(*self){
     Drop::drop(self.ctx);
     Drop::drop(self.main_file);
     Drop::drop(self.llvm);
-    Drop::drop(self.compiled);
     Drop::drop(self.protos);
     Drop::drop(self.NamedValues);
     Drop::drop(self.globals);
@@ -45,7 +42,6 @@ impl Drop for Compiler{
     Drop::drop(self.loops);
     Drop::drop(self.loopNext);
     Drop::drop(self.own);
-    Drop::drop(self.global_protos);
   }
 }
 
@@ -192,7 +188,6 @@ impl Compiler{
      resolver: Option<Resolver*>::None,
      main_file: Option<String>::new(),
      llvm: vm,
-     compiled: List<String>::new(),
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
      globals: Map<String, Value*>::new(),
@@ -200,8 +195,7 @@ impl Compiler{
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
      loopNext: List<BasicBlock*>::new(),
-     own: Option<Own>::new(),
-     global_protos: List<String>::new()
+     own: Option<Own>::new()
     };
   }
 
@@ -216,7 +210,6 @@ impl Compiler{
   func compile(self, path: str, cache: Cache*): String{
     let outFile: String = get_out_file(path, self);
     if(!cache.need_compile(path, outFile.str())){
-      self.compiled.add(outFile.clone());
       return outFile;
     }
     let ext = Path::ext(path);
@@ -260,7 +253,6 @@ impl Compiler{
       print("writing {}\n", llvm_file_cstr);
     }
     llvm_file_cstr.drop();
-    self.compiled.add(outFile.clone());
     let outFile_cstr = CStr::new(outFile.clone());
     emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
     if(self.ctx.verbose){
@@ -286,32 +278,19 @@ impl Compiler{
 
   func init_globals(self){
     let resolv = self.get_resolver();
-    //extern globals
-    /*let imports = self.get_resolver().get_imports();
-    for(let i = 0;i < imports.len();++i){
-      let is = imports.get_ptr(i);
-      let resolver = self.get_resolver().ctx.get_resolver(is);
-      for(let j = 0;j < resolver.unit.globals.len();++j){
-        let gl = resolver.unit.globals.get_ptr(j);
-        let rt = self.get_resolver().glob_map.get_ptr(&gl.id).unwrap();
-        let ty = self.mapType(&rt.type);
-        let init = ptr::null<Constant>();
-        let glob = make_global(gl.name.clone().cstr().ptr(), ty, init);
-        self.globals.add(gl.name.clone(), glob as Value*);
-      }
-    }*/
+    //external globals
     for(let i = 0;i < resolv.glob_map.len();++i){
-      let pair = resolv.glob_map.get_pair_idx(i).unwrap();
-      let ty = self.mapType(&pair.b.type);
+      let gl_info = resolv.glob_map.get_ptr(i);
+      let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Constant>();
-      let glob = make_global(pair.a.clone().cstr().ptr(), ty, init);
-      self.globals.add(pair.a.clone(), glob as Value*);
+      let glob = make_global(gl_info.name.clone().cstr().ptr(), ty, init);
+      self.globals.add(gl_info.name.clone(), glob as Value*);
     }
     if(self.get_resolver().unit.globals.empty()){
       return;
     }
     let proto = self.make_init_proto(resolv.unit.path.str());
-    self.global_protos.add(resolv.unit.path.clone());
+    setSection(proto, CStr::from_slice(".text.startup").ptr());
     let bb = create_bb2(proto);
     SetInsertPoint(bb);
     let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
@@ -343,6 +322,21 @@ impl Compiler{
         }
       }
     }
+    let struct_elem_types = make_vec();
+    vec_push(struct_elem_types, getInt(32));
+    vec_push(struct_elem_types, getPtr());
+    vec_push(struct_elem_types, getPtr());
+    let ctor_elem_ty = make_struct_ty_noname(struct_elem_types);
+    let ctor_ty = getArrTy(ctor_elem_ty as llvm_Type*, 1);
+    let struct_elems = make_vector_Constant();
+    vector_Constant_push(struct_elems, makeInt(65535, 32) as Constant*);
+    vector_Constant_push(struct_elems, proto as Constant*);
+    vector_Constant_push(struct_elems, ConstantPointerNull_get(getPointerTo(getInt(32))) as Constant*);
+    let ctor_init_struct = ConstantStruct_get_elems(ctor_elem_ty, struct_elems);
+    let elems = make_vector_Constant();
+    vector_Constant_push(elems, ctor_init_struct);
+    let ctor_init = ConstantArray_get(ctor_ty, elems);
+    let ctor = make_global_linkage("llvm.global_ctors".str().cstr().ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
     CreateRetVoid();
     method.drop();
   }
@@ -389,7 +383,20 @@ impl Compiler{
     self.makeLocals(m.body.get());
     self.allocParams(m);
     self.storeParams(m,f);
-    //todo call globals
+    //call all global init func from main
+    /*if(is_main(m)){
+      for(let i = 0;i < self.get_resolver().glob_map.len();++i){
+        let gl_info = self.get_resolver().glob_map.get_ptr(i);
+        let mng = Compiler::mangle_static(gl_info.path.str()).cstr();
+        let init_proto = getFunction(mng.ptr());
+        if(init_proto as u64 == 0){
+          init_proto = self.make_init_proto(gl_info.path.str());
+        }
+        //call
+        let gl_args = make_args();
+        CreateCall(init_proto, gl_args);
+      }
+    }*/
 
     self.visit_block(m.body.get());
     let exit = Exit::get_exit_type(m.body.get());

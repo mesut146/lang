@@ -2,7 +2,12 @@ import std/deque
 
 static cnt: i32 = 0;
 static last_id: i32 = -1;
-static ids = Deque<i32>::new();
+static ids = getdeq();
+
+func getdeq(): Deque<i32>{
+    printf("ctor running\n");
+    return Deque<i32>::new();
+}
 
 #drop
 struct A{
