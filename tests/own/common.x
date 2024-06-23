@@ -65,6 +65,10 @@ func check(cnt2: i32, id: i32): bool{
     return cnt == cnt2 && last_id == id;
 }
 
+func check_ids(){
+    assert(ids.len() == 0);
+}
+
 func check_ids(id1: i32){
     assert(ids.len() == 1);
     assert(ids.pop_front() == id1);

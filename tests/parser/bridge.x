@@ -20,6 +20,7 @@ struct BasicBlock;
 struct PHINode;
 struct Constant;
 struct GlobalVariable;
+struct DIGlobalVariableExpression;
 
 struct DICompileUnit;
 struct DIFile;
@@ -99,7 +100,10 @@ extern{
     func replaceElements(st: DICompositeType*, elems: Metadata_vector*);
     func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata_vector*): DICompositeType*;
     func createVariantMemberType(scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
-
+    //glob dbg
+    func createGlobalVariableExpression(scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
+    func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
+    func replaceGlobalVariables(cu: DICompileUnit*, vec: Metadata_vector*);
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector*): StructType*;

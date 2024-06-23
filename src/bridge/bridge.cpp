@@ -189,6 +189,12 @@ llvm::DICompileUnit *createCompileUnit(llvm::DIFile *file) {
     return DBuilder->createCompileUnit(llvm::dwarf::DW_LANG_C, file, "lang dbg", false, "", 0, "", llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false, llvm::DICompileUnit::DebugNameTableKind::None);
 }
 
+void replaceGlobalVariables(llvm::DICompileUnit *cu, std::vector<llvm::Metadata *> *vec) {
+    llvm::MDTuple *tuple = llvm::MDTuple::get(*ctx, *vec);
+    llvm::MDTupleTypedArrayWrapper<llvm::DIGlobalVariableExpression> w(tuple);
+    cu->replaceGlobalVariables(w);
+}
+
 llvm::DILexicalBlock *createLexicalBlock(llvm::DIScope *scope, llvm::DIFile *file, int line, int col) {
     return DBuilder->createLexicalBlock(scope, file, line, col);
 }
@@ -341,6 +347,14 @@ llvm::DIScope *get_null_scope() {
 
 llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
     return DBuilder->createObjectPointerType(ty);
+}
+
+llvm::DIGlobalVariableExpression *createGlobalVariableExpression(llvm::DIScope *scope, char *name, char *lname, llvm::DIFile *file, int line, llvm::DIType *type) {
+    return DBuilder->createGlobalVariableExpression(scope, name, lname, file, line, type, false, true);
+}
+
+void addDebugInfo(llvm::GlobalVariable *gv, llvm::DIGlobalVariableExpression *gve) {
+    gv->addDebugInfo(gve);
 }
 
 void finalizeSubprogram(llvm::DISubprogram *sp) {

@@ -338,7 +338,7 @@ impl MethodResolver{
         if(list.empty()){
             let msg = format("no such method {}", sig);
             self.r.err(expr, msg.str());
-            Drop::drop(msg);
+            panic("unreachable");
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
@@ -371,6 +371,7 @@ impl MethodResolver{
             Drop::drop(real);
             Drop::drop(errors);
             self.r.err(expr, f.unwrap());
+            panic("unreachable");
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {} has {} candidates\n", mc, real.size());
@@ -383,6 +384,7 @@ impl MethodResolver{
             Drop::drop(real);
             Drop::drop(errors);
             self.r.err(expr, msg);
+            panic("unreachable");
         }
         let sig2 = *real.get_ptr(0);
         if(exact.is_some()){
@@ -450,6 +452,7 @@ impl MethodResolver{
                 Drop::drop(real);
                 Drop::drop(errors);
                 self.r.err(expr, msg);
+                panic("unreachable");
             }
         }
         let gen_pair: Pair<Method*, Desc> = self.generateMethod(&typeMap, target, sig);

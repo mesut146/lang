@@ -14,6 +14,7 @@ import std/stack
 
 static last_scope: i32 = 0;
 static verbose: bool = false;
+static print_drop: bool = false;
 
 func is_drop_method(method: Method*): bool{
     if(method.name.eq("drop") && method.parent.is_impl()){
@@ -297,10 +298,11 @@ impl Own{
             rhs: expr,
             line: expr.line
         };
-        if(verbose){
-            print("move {} line:{}\n", mv.rhs, mv.line);
-        }
         let act = Action::MOVE{mv};
+        if(verbose){
+            //print("move {} line:{}\n", mv.rhs, mv.line);
+            print("do_move {}\n", act);
+        }
         self.get_scope().actions.add(act);
         if(rt.vh.is_some()){
             self.get_scope().state_map.add(rt.vh.get().id, StateType::MOVED);
@@ -371,7 +373,7 @@ impl Own{
         if let StateType::MOVED(line)=(state_pair.a){
             //if(!state_pair.b.exit.is_return()){
                 print("{}\n", self.get_scope(self.main_scope).print(self));
-                self.compiler.get_resolver().err(expr, format("use after move in {}", line));
+                self.compiler.get_resolver().err(expr, format("use after move in {}:{}", printMethod(self.method), line));
             //}
         }
     }
@@ -396,28 +398,38 @@ impl Own{
         if(state is StateType::MOVED){
             return;
         }
-        //panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+        if(print_drop){
+            panic("drop_obj {} state: {} in\n{}", obj.expr, state, printMethod(self.method));
+        }
         self.drop_obj_real(obj);
     }
     func drop_var(self, var: Variable*, scope: VarScope*){
         let rhs = Rhs::VAR{var};
         let state = self.get_state(rhs, scope, true).a;
+        if(print_drop){
+            print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
+            print("{}\n", scope.print(self));
+        }
         if(state is StateType::MOVED){
             return;
         }
         if(var.is_self && is_drop_method(self.method)){
             return;
         }
-        if(verbose){
+        let rt = self.compiler.get_resolver().visit_type(&var.type);
+        self.drop_real(&rt, var.ptr, var.line);
+        rt.drop();
+        /*if(print_drop){
             print("drop_var {} state: {} in {}\n{}\n", var, state, self.method.parent, printMethod(self.method));
             print("{}\n", scope.print(self));
-        }
+        }*/
         //self.compiler.get_resolver().err(var.line, "".str());
     }
     func drop_return(self, scope: VarScope*){
         if(verbose){
             print("drop_return {} line: {}\n", scope.kind, scope.line);
         }
+        dbg(scope.kind is ScopeType::MAIN && scope.line == 4, 10);
         let drops = List<Droppable>::new();
         self.get_outer_vars(scope, &drops);
         for(let i = 0;i < drops.len();++i){

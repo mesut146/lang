@@ -58,7 +58,7 @@ impl DebugInfo{
         if (self.sp.is_some()) {
             SetCurrentDebugLocation(self.get_scope(), line, pos);
         } else {
-            panic("err");
+            panic("err no func for dbg");
             //SetCurrentDebugLocation(self.cu as DIScope*, line, pos);
         }
     }
@@ -118,6 +118,16 @@ impl DebugInfo{
       let val = *c.NamedValues.get_ptr(name).unwrap();
       let lc = DILocation_get(scope, line, 0);
       insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+    }
+
+    func dbg_glob(self, gl: Global*, ty: Type*, gv: GlobalVariable*, c: Compiler*): DIGlobalVariableExpression*{
+      let scope = self.cu as DIScope*;
+      let di_type = self.map_di(ty, c);
+      let name = gl.name.clone().cstr();
+      let gve = createGlobalVariableExpression(scope, name.ptr(), name.ptr(), self.file, gl.line, di_type);
+      name.drop();
+      addDebugInfo(gv, gve);
+      return gve;
     }
 
     func get_scope(self): DIScope*{

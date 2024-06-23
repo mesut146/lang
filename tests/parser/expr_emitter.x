@@ -295,6 +295,7 @@ impl Compiler{
   
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       if(Resolver::is_drop_call(mc)){
+        //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get_ptr(0));
         if(argt.is_pointer() || argt.is_prim()){
           return getVoidTy() as Value*;

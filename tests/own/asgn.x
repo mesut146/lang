@@ -8,7 +8,7 @@ func test(){
     check_ids(1);
     //a.drop();
     a = A{a: 3};
-    check_ids(1, 2);
+    check_ids(2);
     //A::drop 1
     //A::drop 2
     //A::drop 3
@@ -16,5 +16,5 @@ func test(){
 
 func main(){
     test();
-    check_ids(1, 2, 3);
+    check_ids(3);
 }

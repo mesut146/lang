@@ -34,12 +34,19 @@ func build_std(out_dir: str){
 }
 
 func compile_dir2(dir: str, args: str){
+  compile_dir2(dir, args, Option<str>::new());
+}
+
+func compile_dir2(dir: str, args: str, exc: Option<str>){
   let list: List<String> = list(dir);
   list.sort();
   print("compile_dir '{}' -> {} elems\n", dir, list.len());
   for(let i = 0;i < list.len();++i){
     let name: String* = list.get_ptr(i);
     if(!name.str().ends_with(".x")) continue;
+    if(exc.is_some() && name.eq(*exc.get())){
+      continue;
+    }
     let file: String = dir.str();
     file.append("/");
     file.append(name);
@@ -86,7 +93,7 @@ func own_test(){
     .set_link(LinkType::Static{"common.a"});
   Compiler::compile_single(&config);
   let static_out = format("{}/common.a", get_out());
-  compile_dir2("../tests/own", static_out.str());
+  compile_dir2("../tests/own", static_out.str(), Option::new("common.x"));
   static_out.drop();
   config.drop();
 }
@@ -95,7 +102,7 @@ func main(argc: i32, args: i8**){
   print("##########running##########\n");
   print_unit = false;
   if(argc == 1){
-    bootstrap(true, get_out());
+    bootstrap(false, get_out());
     return;
   }
   let cmd = Args::new(argc, args);

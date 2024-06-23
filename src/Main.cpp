@@ -132,7 +132,7 @@ int main(int argc, char **args) {
         }
         //no arg
         if (argc == 0) {
-            bootstrap(true);
+            bootstrap(false);
             return 0;
         }
         auto arg = std::string(args[i]);

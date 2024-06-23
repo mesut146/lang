@@ -220,6 +220,7 @@ void init_globals(Compiler *c) {
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
         c->NamedValues[g.name] = gv;
+        //llvm::DIGlobalVariable::get()
         auto glob_di = c->DBuilder->createGlobalVariableExpression(c->di.cu, g.name, g.name, nullptr, g.line, c->map_di(type), false, true, nullptr);
         gv->addDebugInfo(glob_di);
 
@@ -233,6 +234,10 @@ void init_globals(Compiler *c) {
         }
         //dbg_glob();
     }
+    /*std::vector<llvm::Metadata *> mds;
+    llvm::MDTuple *tuple = llvm::MDTuple::get(c->ctx(), mds);
+    llvm::MDTupleTypedArrayWrapper<llvm::DIGlobalVariableExpression> w(tuple);
+    c->di.cu->replaceGlobalVariables(w);*/
     c->Builder->CreateRetVoid();
 
     if (Config::debug) {
@@ -1148,16 +1153,6 @@ std::any Compiler::visitMethodCall(MethodCall *mc) {
         if (!helper.isDropType(argt)) {
             return (llvm::Value *) Builder->getVoidTy();
         }
-        /*auto arg = mc->args.at(0);
-        auto ptr = gen(arg);
-        curOwner.call_drop_force(argt.type, ptr);
-        //todo bc of partial drop we have to comment below
-        if (dynamic_cast<SimpleName *>(arg)) {
-            //todo f.access
-            curOwner.doMoveCall(arg);
-        } else {
-            curOwner.doMoveCall(arg);
-        }*/
     }
     auto rt = resolv->resolve(mc);
     auto target = rt.targetMethod;

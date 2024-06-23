@@ -296,8 +296,9 @@ impl Compiler{
     let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
     method.body = Option::new(Block::new(0));
     self.own = Option::new(Own::new(self, &method));
+    let globs = Metadata_vector_new();
     for(let j = 0;j < resolv.unit.globals.len();++j){
-      let gl = resolv.unit.globals.get_ptr(j);
+      let gl: Global* = resolv.unit.globals.get_ptr(j);
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
       let init = ptr::null<Constant>();
@@ -313,6 +314,8 @@ impl Compiler{
         panic("glob type {}", rt.type);
       }
       let glob: GlobalVariable* = make_global(gl.name.clone().cstr().ptr(), ty, init);
+      let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
+      Metadata_vector_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
       if let Expr::Call(mc*)=(&gl.expr){
         self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
@@ -322,6 +325,7 @@ impl Compiler{
         }
       }
     }
+    replaceGlobalVariables(self.llvm.di.get().cu, globs);
     let struct_elem_types = make_vec();
     vec_push(struct_elem_types, getInt(32));
     vec_push(struct_elem_types, getPtr());
@@ -631,7 +635,7 @@ impl Compiler{
       let path = link(&compiled, out_dir, bin_name, args);
       compiled.drop();
       if(run){
-        Compiler::run(path);
+        Compiler::run(path.clone());
       }
       return path;
     }
