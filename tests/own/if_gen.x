@@ -51,7 +51,6 @@ func if_else_2_var(c: bool, id: i32, id2: i32){
         check_ids(id2);
         //a.drop();
     }
-    check_ids(id, id2);
 }
 func test2(){
     if_else_2_var(true, 10, 15);
@@ -59,7 +58,7 @@ func test2(){
     reset();
 
     if_else_2_var(false, 20, 25);
-    check_ids(20, 25);
+    check_ids(25, 20);
     reset();
 }
 
@@ -80,7 +79,7 @@ func if_else_redo(c: bool, id: i32){
     }
     //a.drop
 }
-func if_else_redo1(c: bool, id: i32){
+func if_else_redo2(c: bool, id: i32){
     let a = A{a: id};
     if(c){
         send(a);
@@ -97,11 +96,18 @@ func if_else_redo1(c: bool, id: i32){
     //no drop at end
 }
 
-func test(){
-    if_else_redo1(true, 7);
+func test3(){
+    if_else_redo(true, 7);
     check_ids(8);
     reset();
-    if_else_redo1(false, 10);
+    if_else_redo(false, 9);
+    check_ids(11);
+    reset();
+
+    if_else_redo2(true, 70);
+    check_ids(71);
+    reset();
+    if_else_redo2(false, 100);
     check_ids();
 }
 
@@ -165,7 +171,7 @@ func if1_redo(c: bool, id: i32){
         check_ids();
     }
     //no drop bc reassign
-    check_ids(0);
+    check_ids();
     //valid
     let tmp = a.a;
     //drop at end
@@ -193,13 +199,7 @@ func els_redo(c: bool, id: i32){
 func main(){
     test1();
     test2();
-
-    if_else_redo(true, 7);
-    check_ids(8);
-    reset();
-    if_else_redo(false, 8);
-    check_ids(10);
-    reset();
+    test3();
 
     if_var_if(true, true, 7);
     check_ids(7);
@@ -250,8 +250,6 @@ func main(){
     els_redo(false, 20);
     check_ids(21);
     reset();
-
-    test();
 
     if_multi(true, false, 50);
     check_ids(50);

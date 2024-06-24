@@ -560,7 +560,8 @@ enum Expr: Node{
   As(e: Box<Expr>, type: Type),
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
-  ArrAccess(val: ArrAccess)
+  ArrAccess(val: ArrAccess),
+  MatchExpr(val: Box<Match>)
 }
 
 impl Expr{
@@ -596,13 +597,16 @@ func print5(e: Expr*){
   print("{}\n", e);
 }
 
-struct Match: Node{
+struct Match{
   expr: Expr;
   cases: List<MatchCase>;
 }
 
 struct MatchCase{
-  type: Type;
-  args: List<ArgBind>;
+  lhs: MatchLhs;
   rhs: Expr;
+}
+enum MatchLhs{
+  NONE,
+  ENUM(type: Type, args: List<ArgBind>)
 }

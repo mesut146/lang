@@ -514,16 +514,14 @@ impl Compiler{
   }
 
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
-    self.setField(expr, type, trg, false);
+    self.setField(expr, type, trg, Option<Expr*>::new());
   }
   
-  func setField(self, expr: Expr*, type: Type*, trg: Value*, assign: bool){
+  func setField(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
     if(is_struct(type)){
       let val = self.visit(expr);
-      if(assign){
-        let rt = self.get_resolver().visit(expr);
-        self.own.get().drop_real(&rt, trg, expr.line);
-        rt.drop();
+      if(lhs.is_some()){
+        self.own.get().drop_lhs(lhs.unwrap(), trg);
       }
       self.copy(trg, val, type);
     }else if(type.is_pointer()){

@@ -54,6 +54,10 @@ impl Parser{
   func is(self, tt1: TokenType, tt2: TokenType): bool{
     return self.has() && self.peek().type is tt1 && self.peek(1).type is tt2;
   }
+
+  func is(self, val: str): bool{
+    return self.has() && self.peek().value.eq(val);
+  }
   
   func peek(self): Token*{
     return self.get(self.pos);
@@ -744,11 +748,34 @@ impl Parser{
 
   func parse_match(self): Expr{
     self.consume(TokenType::MATCH);
-    /*let res = match expr{
-  E::A => 5,
-  E::B(val) => val,
-  _ => panic("err")
-}; */
+    let id = self.node();
+    let expr = self.prim();
+    let res = Match{expr, List<MatchCase>::new()};
+    self.consume(TokenType::LBRACE);
+    while(self.has()){
+      let lhs = Option<MatchLhs>::new();
+      if(self.is("_")){
+        self.pop();
+        lhs = Option::new(MatchLhs::NONE);
+      }else{
+        let type = self.parse_type();
+        lhs = Option::new(MatchLhs::ENUM{type, List<ArgBind>::new()});
+        if(self.is(TokenType::LPAREN)){
+          self.consume(TokenType::LPAREN);
+          self.consume(TokenType::RPAREN);
+        }
+      }
+      self.consume(TokenType::ARROW);
+      let rhs = self.parse_expr();
+      if(self.is(TokenType::COMMA)){
+        self.consume(TokenType::COMMA);
+      }else{
+        break;
+      }
+      res.cases.add(MatchCase{lhs.unwrap(), rhs});
+    }
+    self.consume(TokenType::RBRACE);
+    return Expr::MatchExpr{.id, Box::new(res)};
   }
 
   func prim(self): Expr{
@@ -774,19 +801,6 @@ impl Parser{
         }
         self.consume(TokenType::RBRACKET);
         return Expr::Array{.n, arr, sz};
-    }else if(false && self.isObj()){
-      let ty = self.parse_type();
-      let args = List<Entry>::new();
-      self.consume(TokenType::LBRACE);
-      if(!self.is(TokenType::RBRACE)){
-        args.add(self.entry());
-        while(self.is(TokenType::COMMA)){
-          self.pop();
-          args.add(self.entry());
-        }
-      }
-      self.consume(TokenType::RBRACE);
-      return Expr::Obj{.n, ty, args};
     }
     else if(isName(self.peek()) || isPrim(self.peek())){
       let nm = self.popv();

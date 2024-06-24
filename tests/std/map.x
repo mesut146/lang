@@ -107,8 +107,15 @@ impl<K, V> Map<K, V>{
     return &self.get_pair_idx(idx).unwrap().b;
   }
 
-  func remove(self, idx: i64){
+  func remove_idx(self, idx: i64){
     self.arr.remove(idx);
+  }
+
+  func remove(self, k: K*){
+    let idx = self.indexOf(k);
+    if(idx!= -1){
+      self.remove_idx(idx);
+    }
   }
 
   func clear(self){

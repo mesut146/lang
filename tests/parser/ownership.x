@@ -501,13 +501,46 @@ impl Own{
         }
         self.set_current(scope.parent);
     }
-    func end_scope_if(self, else_stmt: Stmt*): i32{
+    func end_scope_if(self, else_stmt: Stmt*){
         //merge else moves then drop all
+        let backup_id = self.cur_scope;
+        let backup = self.get_scope(backup_id);
         let visitor = OwnVisitor::new(self);
-        visitor.begin(else_stmt);
-        let res = self.get_scope().id;
-        self.set_current(self.get_scope().parent);
-        return res;
+        let tmp_id = visitor.begin(else_stmt);
+        let tmp_state = self.get_scope(tmp_id);
+        let outers = self.get_outer_vars(backup);
+        for(let i = 0;i < outers.len();++i){
+            let out = outers.get_ptr(i);
+            if let Droppable::OBJ(obj)=(out){
+            }
+            if let Droppable::VAR(var)=(out){
+                let rhs = Rhs::VAR{var};
+                let state = self.get_state(rhs, tmp_state, true);
+                if(state.a is StateType::MOVED){
+                    let rt = self.compiler.get_resolver().visit_type(&var.type);
+                    self.drop_real(&rt, var.ptr, var.line);
+                    rt.drop();
+                    //panic("moved in sibling {}", var);
+                }
+            }
+        }
+
+        //restore old scope
+        let last_act = backup.actions.last();
+        for(let i = 0;i < backup.actions.len();++i){
+            let act = backup.actions.get_ptr(i);
+            if let Action::SCOPE(id,line)=(act){
+                if(id == tmp_id){
+                    backup.actions.remove(i);
+                    break;
+                }
+            }
+        }
+        for(let i = 0;i < visitor.scopes.len();++i){
+            let st = visitor.scopes.get_ptr(i);
+            self.scope_map.remove(st);
+        }
+        self.set_current(backup_id);
     }
 
     func unwrap_mc(expr: Expr*): Call*{
@@ -562,6 +595,16 @@ impl Own{
             return;
         }
         scope.actions.add(Action::MOVE{Move{Option::new(lhs), rhs, lhs.line}});
+    }
+    func drop_lhs(self, lhs: Expr*, ptr: Value*){
+        let rhs = Rhs::EXPR{lhs};
+        let state = self.get_state(rhs, self.get_scope(), true).a;
+        if(state is StateType::MOVED){
+            return;
+        }
+        let rt = self.compiler.get_resolver().visit(lhs);
+        self.drop_real(&rt, ptr, lhs.line);
+        rt.drop();
     }
 }
 

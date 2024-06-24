@@ -170,6 +170,7 @@ impl Lexer{
     ops.add("++", TokenType::PLUSPLUS);
     ops.add("--", TokenType::MINUSMINUS);
     ops.add("..", TokenType::DOTDOT);
+    ops.add("=>", TokenType::ARROW);
     return ops;
   }
   

@@ -664,14 +664,14 @@ impl Compiler{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           //let rt = self.get_resolver().visit(l);
-          self.setField(r, &type, lhs, true);
+          self.setField(r, &type, lhs, Option::new(l));
           self.own.get().do_assign(l, r);
           return lhs;
         }
       }
       let lhs = self.get_lhs(l);
       //todo setField should free lhs
-      self.setField(r, &type, lhs, true);
+      self.setField(r, &type, lhs, Option::new(l));
       self.own.get().do_assign(l, r);
       return lhs;
     }

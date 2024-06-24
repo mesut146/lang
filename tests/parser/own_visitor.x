@@ -17,7 +17,7 @@ struct OwnVisitor{
 }
 
 impl OwnVisitor{
-    func new(own: Own*){
+    func new(own: Own*): OwnVisitor{
         return OwnVisitor{
             own: own,
             if_scope: -1,
@@ -28,18 +28,20 @@ impl OwnVisitor{
         return self.own.compiler.get_resolver();
     }
     func do_move(self, expr: Expr*){
-        let rt = self.get_resolver().visit(expr);
+        /*let rt = self.get_resolver().visit(expr);
         let helper = DropHelper{self.get_resolver()};
         if(!helper.is_drop_type(&rt)){
             rt.drop();
             return;
-        }
+        }*/
+        self.own.do_move(expr);
         print("do_move {} line: {}\n", expr, expr.line);
     }
-    func begin(self, node: Stmt*){
-        let id = self.own.add_scope(ScopeType::ELSE, stmt);
+    func begin(self, node: Stmt*): i32{
+        let id = self.own.add_scope(ScopeType::ELSE, node);
         self.scopes.add(id);
         self.visit(node);
+        return id;
     }
     func visit(self, node: Stmt*){
         if let Stmt::Block(b*)=(node){
@@ -69,6 +71,11 @@ impl OwnVisitor{
             self.visit_call(expr, call);
         }else if let Expr::Obj(type*, args*)=(expr){
             self.visit_obj(expr, type, args);
+        }else if let Expr::Infix(op*, l*, r*)=(expr){
+            if(op.eq("=")){
+                self.visit_expr(r.get());
+                self.own.do_assign(l.get(), r.get());
+            }
         }
     }
     func visit_call(self, expr: Expr*, mc: Call*){
