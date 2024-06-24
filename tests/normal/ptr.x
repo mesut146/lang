@@ -17,16 +17,18 @@ func deref_struct(){
     assert(a2.b == 300);
 }
 
-func prm(ptr: i32*, val: i32){
+func mut_prm(ptr: i32*, val: i32){
     assert(*ptr == val);
     let local: i32* = ptr;
     assert(*local == val);
+    *ptr = val * 2;
 }
 
 func main(){
     deref_prim();
     deref_struct();
     let a = 10;
-    prm(&a, 10);
+    mut_prm(&a, 10);
+    assert(a == 20);
     print("ptr_test done\n");
 }

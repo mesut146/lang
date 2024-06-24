@@ -100,7 +100,7 @@ impl Compiler{
       self.set_and_insert(then);
       self.llvm.di.get().new_scope(node.then.get().line);
       let exit_then = Exit::get_exit_type(node.then.get());
-      self.own.get().add_scope(ScopeType::IF, node.then.get());
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.visit(node.then.get());
       if(node.else_stmt.is_some()){
         //else move aware end_scope
@@ -117,7 +117,8 @@ impl Compiler{
       if(node.else_stmt.is_some()){
         self.llvm.di.get().new_scope(node.else_stmt.get().line);
         //this will restore if, bc we did fake end_scope
-        self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
         self.visit(node.else_stmt.get());
         self.own.get().end_scope();
         self.llvm.di.get().exit_scope();
@@ -128,6 +129,9 @@ impl Compiler{
         }
         exit_else.drop();
       }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE));
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope();
         CreateBr(next);
       }
       if(!(exit_then.is_jump() && else_jump)){

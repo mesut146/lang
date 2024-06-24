@@ -665,6 +665,7 @@ impl Compiler{
           let lhs = self.get_obj_ptr(l2.get());
           //let rt = self.get_resolver().visit(l);
           self.setField(r, &type, lhs, true);
+          self.own.get().do_assign(l, r);
           return lhs;
         }
       }

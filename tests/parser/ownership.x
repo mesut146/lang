@@ -42,6 +42,7 @@ struct Object {
     ptr: Value*;
     id: i32;          //prm
     name: String;     //prm
+    scope: i32;
 }
 #derive(Debug)
 enum ScopeType {
@@ -281,7 +282,8 @@ impl Own{
             expr: expr,
             ptr: ptr,
             id: expr.id,
-            name: expr.print()
+            name: expr.print(),
+            scope: self.cur_scope
         };
         self.get_scope().objects.add(obj);
         //panic("add_obj {}: {} in {}", expr, type, printMethod(self.method));
@@ -392,6 +394,12 @@ impl Own{
             self.get_outer_vars(parent, list);
         }
     }
+    func get_outer_vars(self, scope: VarScope*): List<Droppable>{
+        let list = List<Droppable>::new();
+        self.get_outer_vars(scope, &list);
+        return list;
+    }
+
     func drop_obj(self, obj: Object*, scope: VarScope*){
         let rhs = Rhs::EXPR{obj.expr};
         let state = self.get_state(rhs, scope, true).a;
@@ -465,12 +473,38 @@ impl Own{
             self.set_current(scope.parent);
             return;
         }
+        //drop cur vars & obj & moved outers
+        let outers = self.get_outer_vars(scope);
+        for(let i = 0;i < outers.len();++i){
+            let dr: Droppable* = outers.get_ptr(i);
+            if let Droppable::OBJ(obj)=(dr){
+                if(obj.scope == scope.id){
+                    self.drop_obj(obj, scope);
+                }
+            }
+            if let Droppable::VAR(var)=(dr){
+                if(var.scope == scope.id){
+                    self.drop_var(var, scope);
+                }else{
+                    //outer var, check if moved by sibling
+                    if(scope.sibling != -1){
+                        let sibling = self.get_scope(scope.sibling);
+                        let rhs = Rhs::VAR{var};
+                        let state = self.get_state(rhs, sibling, false);
+                        print("sibling {} {}\n", var, state.a);
+                        if(state.a is StateType::MOVED){
+                            self.drop_var(var, scope);
+                        }
+                    }
+                }
+            }
+        }
         self.set_current(scope.parent);
     }
     func end_scope_if(self, else_stmt: Stmt*): i32{
         //merge else moves then drop all
-        let visitor = OwnVisitor{self, -1};
-        visitor.visit(else_stmt);
+        let visitor = OwnVisitor::new(self);
+        visitor.begin(else_stmt);
         let res = self.get_scope().id;
         self.set_current(self.get_scope().parent);
         return res;
@@ -516,9 +550,10 @@ impl Own{
         args_push(args, ptr);
         CreateCall(proto, args);
         dbg(rt.type.eq("List<u8>"), 10);
-        print("drop {} line: {}\n", rt.type, line);
+        print("drop_real {} line: {}\n", rt.type, line);
     }
 
+    //move rhs
     func do_assign(self, lhs: Expr*, rhs: Expr*){
         let scope = self.get_scope();
         let rt = self.compiler.get_resolver().visit(rhs);

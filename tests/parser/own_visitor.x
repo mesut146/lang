@@ -13,9 +13,34 @@ import std/stack
 struct OwnVisitor{
     own: Own*;
     if_scope: i32;
+    scopes: List<i32>;//tmp scopes created, will be removed later
 }
 
 impl OwnVisitor{
+    func new(own: Own*){
+        return OwnVisitor{
+            own: own,
+            if_scope: -1,
+            scopes: List<i32>::new()
+        };
+    }
+    func get_resolver(self): Resolver*{
+        return self.own.compiler.get_resolver();
+    }
+    func do_move(self, expr: Expr*){
+        let rt = self.get_resolver().visit(expr);
+        let helper = DropHelper{self.get_resolver()};
+        if(!helper.is_drop_type(&rt)){
+            rt.drop();
+            return;
+        }
+        print("do_move {} line: {}\n", expr, expr.line);
+    }
+    func begin(self, node: Stmt*){
+        let id = self.own.add_scope(ScopeType::ELSE, stmt);
+        self.scopes.add(id);
+        self.visit(node);
+    }
     func visit(self, node: Stmt*){
         if let Stmt::Block(b*)=(node){
             self.visit_block(b);
@@ -33,8 +58,57 @@ impl OwnVisitor{
             self.visit(stmt);
         }
     }
-    func visit_var(self, var: VarExpr*){
+    func visit_var(self, ve: VarExpr*){
+        for(let i = 0;i < ve.list.len();++i){
+            let fr = ve.list.get_ptr(i);
+            self.do_move(&fr.rhs);
+        }
     }
     func visit_expr(self, expr: Expr*){
+        if let Expr::Call(call*)=(expr){
+            self.visit_call(expr, call);
+        }else if let Expr::Obj(type*, args*)=(expr){
+            self.visit_obj(expr, type, args);
+        }
+    }
+    func visit_call(self, expr: Expr*, mc: Call*){
+        if(Resolver::is_std_no_drop(mc)){
+            let arg = mc.args.get_ptr(0);
+            self.do_move(arg);
+            return;
+        }
+        if(Resolver::is_format(mc)){
+            let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+            self.visit_block(&info.block);
+            self.do_move(info.unwrap_mc.get());
+            return;
+        }
+        let rt = self.get_resolver().visit(expr);
+        if(!rt.is_method()){
+            //macro
+            return;
+        }
+        let target = self.get_resolver().get_method(&rt).unwrap();
+        rt.drop();
+        let argIdx = 0;
+        if(target.self.is_some()){
+            if(mc.is_static){
+                ++argIdx;
+                self.do_move(mc.args.get_ptr(0));
+              }else if(target.self.get().is_deref){
+                self.do_move(mc.scope.get());
+              }
+        }
+        for(;argIdx < mc.args.len();++argIdx){
+            let arg = mc.args.get_ptr(argIdx);
+            self.do_move(arg);
+        }
+    }
+
+    func visit_obj(self, expr: Expr*, type: Type*, args: List<Entry>*){
+        for(let i = 0;i < args.len();++i){
+            let arg = args.get_ptr(i);
+            self.do_move(&arg.expr);
+        }
     }
 }

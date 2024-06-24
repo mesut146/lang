@@ -595,3 +595,14 @@ struct Entry{
 func print5(e: Expr*){
   print("{}\n", e);
 }
+
+struct Match: Node{
+  expr: Expr;
+  cases: List<MatchCase>;
+}
+
+struct MatchCase{
+  type: Type;
+  args: List<ArgBind>;
+  rhs: Expr;
+}

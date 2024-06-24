@@ -81,8 +81,17 @@ impl<T> Deque<T>{
     }
 
     func peek_front(self): T*{
+        return self.peek_front(0);
+    }
+
+    func check_range(self, pos: i32){
+        assert(pos >= self.start_pos && pos <= self.end_pos);
+    }
+
+    func peek_front(self, off: i32): T*{
         assert(!self.empty());
-        return &self.arr[self.start_pos];
+        self.check_range(self.start_pos + off);
+        return &self.arr[self.start_pos + off];
     }
     func peek_back(self): T*{
         assert(!self.empty());

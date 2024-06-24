@@ -742,8 +742,20 @@ impl Parser{
     return Entry{Option<String>::None, e, dot};
   }
 
+  func parse_match(self): Expr{
+    self.consume(TokenType::MATCH);
+    /*let res = match expr{
+  E::A => 5,
+  E::B(val) => val,
+  _ => panic("err")
+}; */
+  }
+
   func prim(self): Expr{
     let n = self.node();
+    if(self.is(TokenType::MATCH)){
+      return self.parse_match();
+    }
     if(isLit(self.peek())){
       return self.parseLit();
     }else if(self.is(TokenType::LPAREN)){
