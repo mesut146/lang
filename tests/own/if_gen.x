@@ -23,6 +23,24 @@ func else_only(c: bool, id: i32){
     }
     check_ids(id);
 }
+func else_only_redo(c: bool, id: i32){
+    let a = A{a: id};
+    send(a);
+    check_ids(id);
+    reset();
+    //already moved
+    if(c){
+        //no drop
+        //todo; a is none by else which is false, ignore else
+    }else{
+        a = A::new(id + 1);//drop
+        check_ids();
+        send(a);
+        check_ids(id + 1);
+        reset();
+    }
+    check_ids();
+}
 func test1(){
     if_only(true, 1);
     check_ids(1);
@@ -87,7 +105,7 @@ func if_else_redo2(c: bool, id: i32){
         reset();
         a = A{a: id + 1};//no drop
         check_ids();
-        //drop at end bc else moves
+        //a.drop() bc else moves
     }else{
         send(a);
         check_ids(id);
@@ -132,7 +150,7 @@ func if_var_if_redo(c: bool, c2: bool, id: i32){
             check_ids();
         }
         check_ids();
-    }
+    }//a.drop()
 }
 
 func var_if_if(c: bool, c2: bool, id: i32){
@@ -141,13 +159,14 @@ func var_if_if(c: bool, c2: bool, id: i32){
         if(c2){
             send(a);
             check_ids(id);
-        }//gen drop in else
+        }//a.drop() in else
         check_ids(id);
-    }//gen drop in else
+    }//a.drop() in else
     check_ids(id);
 }//no drop in end
 func var_if_if_redo(c: bool, c2: bool, id: i32){
     let a = A{a: id};
+    let new_id = id;
     if(c){
         if(c2){
             send(a);
@@ -155,11 +174,13 @@ func var_if_if_redo(c: bool, c2: bool, id: i32){
             reset();
             a = A{a: id + 1};//no drop
             check_ids();
+            new_id = id + 1;
         }//no drop
         check_ids();
     }//no drop in else
     check_ids();
-}//drop at end
+    a.check(new_id);
+}//a.drop()
 
 func if1_redo(c: bool, id: i32){
     let a = A{a: id};
@@ -175,7 +196,7 @@ func if1_redo(c: bool, id: i32){
     //valid
     let tmp = a.a;
     //drop at end
-}
+}//a.drop()
 func els_redo(c: bool, id: i32){
     let a = A{a: id};
     if(c){
@@ -193,7 +214,7 @@ func els_redo(c: bool, id: i32){
     //valid
     let tmp = a.a;
     //drop at end
-}
+}//a.drop()
 
 
 func main(){
@@ -250,39 +271,5 @@ func main(){
     els_redo(false, 20);
     check_ids(21);
     reset();
-
-    if_multi(true, false, 50);
-    check_ids(50);
-    reset();
-
-    while_if_multi(true ,false, 100);
 }
 
-func if_multi(c1: bool, c2: bool, id: i32){
-    let a = A::new(id);
-    if(c1){
-        send(a);
-    }else if(c2){
-        send(a);
-    }else{
-        let x = a.a;
-    }
-    check_ids(id);
-}
-
-func while_if_multi(c1: bool, c2: bool, id: i32){
-    let i = 0;
-    while(i < 1){
-        let a = A::new(id);
-        if(c1){
-            send(a);
-        }else if(c2){
-            send(a);
-        }else{
-            let x = a.a;
-        }
-        check_ids(id);
-        ++i;
-    }
-    check_ids(id);
-}

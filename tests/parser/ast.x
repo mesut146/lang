@@ -494,11 +494,12 @@ impl Stmt{
 struct Block{
   list: List<Stmt>;
   line: i32;
+  end_line: i32;
 }
 
 impl Block{
-  func new(line: i32): Block{
-    return Block{List<Stmt>::new(), line};
+  func new(line: i32, end_line: i32): Block{
+    return Block{List<Stmt>::new(), line, end_line};
   }
 }
 

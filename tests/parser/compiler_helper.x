@@ -407,8 +407,8 @@ impl Compiler{
     setBody(ty, elems);
   }
 
-  func make_proto(self, m: Method*){
-    if(m.is_generic) return;
+  func make_proto(self, m: Method*): Option<Function*>{
+    if(m.is_generic) return Option<Function*>::new();
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
@@ -459,6 +459,7 @@ impl Compiler{
     }
     self.protos.get().funcMap.add(mangled, f);
     //free(args as i8*);
+    return Option::new(f);
   }
 
   func getSize(self, type: Type*): i64{

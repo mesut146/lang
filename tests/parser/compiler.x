@@ -11,6 +11,7 @@ import parser/stmt_emitter
 import parser/expr_emitter
 import parser/ownership
 import parser/cache
+import parser/derive
 import std/map
 import std/io
 import std/libc
@@ -65,19 +66,22 @@ struct Protos{
   stdout_ptr: Value*;
   std: Map<str, StructType*>;
   cur: Option<Function*>;
+  compiler: Compiler*;
 }
 
 impl Protos{
-  func new(): Protos{
+  func new(compiler: Compiler*): Protos{
     let res = Protos{
       classMap: Map<String, llvm_Type*>::new(),
       funcMap: Map<String, Function*>::new(),
       libc: Map<str, Function*>::new(),
       stdout_ptr: make_stdout(),
       std: Map<str, StructType*>::new(),
-      cur: Option<Function*>::new()};
-      res.init();
-      return res;
+      cur: Option<Function*>::new(),
+      compiler: compiler
+    };
+    res.init();
+    return res;
   }
   func init(self){
       let sliceType = make_slice_type();
@@ -108,18 +112,23 @@ impl Protos{
   func std(self, nm: str): StructType*{
     return *self.std.get_ptr(&nm).unwrap();
   }
-  func get_func(self, mangled: String*): Function*{
+  /*func get_func(self, mangled: String*): Function*{
     let opt = self.funcMap.get_ptr(mangled);
     if(opt.is_none()){
       panic("no proto for {}, {}", mangled, demangle(mangled.str()));
     }
     return *opt.unwrap();
-  }
+  }*/
   func get_func(self, m: Method*): Function*{
-    let id = mangle(m);
-    let res = self.get_func(&id);
-    id.drop();
-    return res;
+    let mangled = mangle(m);
+    let opt = self.funcMap.get_ptr(&mangled);
+    if(opt.is_none()){
+      mangled.drop();
+      return self.compiler.make_proto(m).unwrap();
+      //panic("no proto for {}, {}", mangled, demangle(mangled.str()));
+    }
+    mangled.drop();
+    return *opt.unwrap();
   }
 }
 
@@ -294,9 +303,10 @@ impl Compiler{
     let bb = create_bb2(proto);
     SetInsertPoint(bb);
     let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
-    method.body = Option::new(Block::new(0));
+    method.body = Option::new(Block::new(0, 0));
     self.own = Option::new(Own::new(self, &method));
     let globs = Metadata_vector_new();
+    self.protos.get().cur = Option::new(proto);
     for(let j = 0;j < resolv.unit.globals.len();++j){
       let gl: Global* = resolv.unit.globals.get_ptr(j);
       let rt = resolv.visit(&gl.expr);
@@ -321,7 +331,13 @@ impl Compiler{
         self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
       }else{
         if(!is_constexpr(&gl.expr)){
-          panic("glob rhs {}", gl);
+          if let Expr::Array(list*, size*)=(&gl.expr){
+            self.llvm.di.get().dbg_func(&method, proto, self);
+            AllocHelper{self}.visit(&gl.expr);
+            self.visit_array(&gl.expr, list, size);
+          }else{
+            panic("glob rhs {}", gl);
+          }
         }
       }
     }
@@ -347,7 +363,7 @@ impl Compiler{
 
   //make all struct decl & method decl used by this module
   func createProtos(self){
-    self.protos = Option::new(Protos::new());
+    self.protos = Option::new(Protos::new(self));
     let p = self.protos.get();
     self.make_decl_protos();
     //methods
@@ -371,41 +387,49 @@ impl Compiler{
     }
   }
 
+  func exit_frame(self){
+    let m = *self.curMethod.get();
+    if(self.ctx.stack_trace && !m.name.eq("enter_frame") && !m.name.eq("exit_frame") && !m.name.eq("print_frame")){
+      let stmt = parse_stmt("exit_frame();".str(), &self.get_resolver().unit, m.line);
+      self.visit(&stmt);
+      stmt.drop();
+    }
+  }
+  func enter_frame(self){
+    let m = *self.curMethod.get();
+    if(self.ctx.stack_trace && !m.name.eq("enter_frame") && !m.name.eq("exit_frame") && !m.name.eq("print_frame")){
+      let pretty = printMethod(m);
+      let str = format("enter_frame(\"{} {}:{}\");", pretty, m.path, m.line);
+      let stmt = parse_stmt(str, &self.get_resolver().unit, m.line);
+      AllocHelper::new(self).visit(&stmt);
+      self.visit(&stmt);
+      pretty.drop();
+      stmt.drop();
+    }
+  }
+
   func genCode(self, m: Method*){
     //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
     self.own = Option::new(Own::new(self, m));
-    let mangled = mangle(m);
-    let f = self.protos.get().get_func(&mangled);
+    let f = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(f);
     let bb = create_bb2(f);
     self.NamedValues.clear();
     SetInsertPoint(bb);
     self.llvm.di.get().dbg_func(m, f, self);
-    self.makeLocals(m.body.get());
+    AllocHelper::makeLocals(self, m.body.get());
     self.allocParams(m);
+    self.enter_frame();
     self.storeParams(m,f);
-    //call all global init func from main
-    /*if(is_main(m)){
-      for(let i = 0;i < self.get_resolver().glob_map.len();++i){
-        let gl_info = self.get_resolver().glob_map.get_ptr(i);
-        let mng = Compiler::mangle_static(gl_info.path.str()).cstr();
-        let init_proto = getFunction(mng.ptr());
-        if(init_proto as u64 == 0){
-          init_proto = self.make_init_proto(gl_info.path.str());
-        }
-        //call
-        let gl_args = make_args();
-        CreateCall(init_proto, gl_args);
-      }
-    }*/
 
     self.visit_block(m.body.get());
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit() && m.type.is_void()){
-      self.own.get().do_return();
+      self.own.get().do_return(m.body.get().end_line);
+      self.exit_frame();
       if(is_main(m)){
         CreateRet(makeInt(0, 32));
       }else{
@@ -415,15 +439,8 @@ impl Compiler{
     exit.drop();
     self.llvm.di.get().finalize();
     verifyFunction(f);
-    mangled.drop();
     Drop::drop(self.own);
     self.own = Option<Own>::new();
-  }
-  
-  func makeLocals(self, b: Block*){
-    //allocMap.clear();
-    let ah = AllocHelper::new(self);
-    ah.visit(b);
   }
   
   func allocParams(self, m: Method*){

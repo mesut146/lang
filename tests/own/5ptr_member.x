@@ -5,7 +5,7 @@ import std/deque
 func test(p: B*, id: i32){
     //p.b.drop()
     p.b = A{a: id};
-    assert check(1, 10);
+    check_ids(10);
 }
 
 func test2(){
@@ -15,5 +15,5 @@ func test2(){
 
 func main(){
     test2();
-    assert check_ids([10, 20][0..2]);
+    check_ids(10, 20);
 }

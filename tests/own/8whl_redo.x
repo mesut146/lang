@@ -7,14 +7,14 @@ func test(){
     while(i <= 4){
         //a.drop()
         a = A{a: ++i};
-        assert check(i - 1, i - 1);
+        check_ids(i - 1);
+        reset();
         if(i == 5) break;
     }
-    assert check_ids([1,2,3,4][0..4]);
-    reset();
+    check_ids();
 }
 
 func main(){
     test();
-    assert check(1, 5);
+    check_ids(5);
 }

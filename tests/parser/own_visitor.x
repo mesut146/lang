@@ -35,12 +35,13 @@ impl OwnVisitor{
             return;
         }*/
         self.own.do_move(expr);
-        print("do_move {} line: {}\n", expr, expr.line);
     }
     func begin(self, node: Stmt*): i32{
+        let prev = self.own.cur_scope;
         let id = self.own.add_scope(ScopeType::ELSE, node);
         self.scopes.add(id);
         self.visit(node);
+        self.own.set_current(prev);
         return id;
     }
     func visit(self, node: Stmt*){

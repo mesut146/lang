@@ -17,6 +17,14 @@ struct AllocHelper{
 }
 
 impl AllocHelper{
+  func makeLocals(c: Compiler*, b: Block*){
+    //allocMap.clear();
+    let ah = AllocHelper::new(c);
+    /*if(c.ctx.stack_trace){
+    }*/
+    ah.visit(b);
+  } 
+
   func new(c: Compiler*): AllocHelper{
     return AllocHelper{c: c};
   }

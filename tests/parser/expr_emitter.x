@@ -8,6 +8,7 @@ import parser/compiler_helper
 import parser/utils
 import parser/printer
 import parser/ownership
+import parser/derive
 import std/map
 import std/stack
 
@@ -487,6 +488,11 @@ impl Compiler{
         }
         self.own.get().do_move(arg);
         ++paramIdx;
+      }
+      if(mc.name.eq("exit") && mc.scope.is_none()){
+        let stmt = parse_stmt("print_frame();".str(), self.unit(), expr.line);
+        self.visit(&stmt);
+        stmt.drop();
       }
       let res = CreateCall(proto, args);
       if(mc.name.eq("exit") && mc.scope.is_none()){

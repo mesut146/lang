@@ -25,10 +25,11 @@ struct Context{
   out_dir: String;
   verbose: bool;
   single_mode: bool;
+  stack_trace: bool;
 }
 impl Context{
   func new(src_dir: String, out_dir: String): Context{
-    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map"];
+    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map", "rt"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
@@ -38,7 +39,9 @@ impl Context{
        prelude: pre,
        out_dir: out_dir,
        verbose: true,
-       single_mode: true};
+       single_mode: true,
+       stack_trace: true
+    };
   }
 }
 
@@ -828,7 +831,7 @@ impl Resolver{
         let mangled = mangle2(m, &imp.info.type);
         let idx = required.indexOf(&mangled);
         if(idx != -1){
-          required.remove(idx);
+          required.remove_idx(idx);
         }
       }
       if(!required.empty()){
@@ -1412,7 +1415,7 @@ impl Resolver{
     if(lt.type.is_str() || rt.type.is_str()){
       self.err(node, "string op not supported yet");
     }
-    if(!(lt.type.is_prim() && rt.type.is_prim())){
+    if(!lt.type.is_prim() || !rt.type.is_prim()){
       self.err(node, "infix on non prim type");
     }
     if(is_comp(op.str())){

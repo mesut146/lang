@@ -1,13 +1,21 @@
 import own/common
 import std/deque
 
-func test(c: bool, id: i32){
+func outer_copy(c: bool, id: i32){
     let a = A{a: id};
     if(c){
         let b = a;
         ++b.a;
         //b.drop
     }//a.drop in else
+}
+func test_outer(){
+    outer_copy(true, 1);
+    check_ids(1, 2);
+    reset();
+    outer_copy(false, 3);
+    check_ids(1, 3);
+    reset();
 }
 
 func if_if(c1: bool, c2: bool){
@@ -39,7 +47,7 @@ func if_if(c1: bool, c2: bool){
             //a.drop()
             let t3 = a.a;
             a = b;
-            assert check(1, 5);
+            check_ids(5);
             //!b.drop bc then moves=no drop
         }
         //b->moved, a->valid but a moved in :18 so mark as moved too
@@ -49,26 +57,20 @@ func if_if(c1: bool, c2: bool){
 
 func test_if_if(){
     if_if(true, true);
-    assert check_ids(7, 17);
+    check_ids(7, 17);
     reset();
     if_if(true, false);
-    assert check_ids(19, 5);
+    check_ids(19, 5);
     reset();
     if_if(false, true);
-    assert check_ids(23, 5);
+    check_ids(23, 5);
     reset();
     if_if(false, false);
-    assert check_ids(5, 17);
+    check_ids(5, 17);
     reset();
 }
 
 func main(){
-    test(true, 1);
-    assert check(1, 2);
-    reset();
-    test(false, 3);
-    assert check(1, 3);
-    reset();
-
+    test_outer();
     test_if_if();
 }

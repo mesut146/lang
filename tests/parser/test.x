@@ -92,9 +92,12 @@ func own_test(){
     .add_dir(root())
     .set_link(LinkType::Static{"common.a"});
   Compiler::compile_single(&config);
-  let static_out = format("{}/common.a", get_out());
-  compile_dir2("../tests/own", static_out.str(), Option::new("common.x"));
-  static_out.drop();
+
+  build_std(get_out());
+
+  let args = format("{}/common.a {}/std.a", get_out(), get_out());
+  compile_dir2("../tests/own", args.str(), Option::new("common.x"));
+  args.drop();
   config.drop();
 }
 

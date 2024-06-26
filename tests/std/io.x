@@ -143,7 +143,7 @@ func create_dir(path: str){
   Drop::drop(path_c);
   if(rc != 0){
     print("code='{}'\n", rc);
-    panic("failed to create dir {}, code={}", path, &rc);
+    panic("failed to create dir '{}', code={}", path, &rc);
   }
 }
 

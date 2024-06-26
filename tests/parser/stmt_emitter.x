@@ -17,7 +17,8 @@ impl Compiler{
       self.llvm.di.get().loc(node.line, node.pos);
       if let Stmt::Ret(e*) = (node){
         if(e.is_none()){
-          self.own.get().do_return();
+          self.own.get().do_return(node.line);
+          self.exit_frame();
           if(is_main(self.curMethod.unwrap())){
             CreateRet(makeInt(0, 32));
           }else{
@@ -61,6 +62,12 @@ impl Compiler{
       }
       return;
     }
+    func get_end_line(stmt: Stmt*): i32{
+      if let Stmt::Block(b*)=(stmt){
+        return b.end_line;
+      }
+      return stmt.line;
+    }
     
     func visit_while(self, stmt: Stmt*, cond: Expr*, body: Stmt*){
       let line = stmt.line;
@@ -79,7 +86,7 @@ impl Compiler{
       self.llvm.di.get().new_scope(body.line);
       self.own.get().add_scope(ScopeType::WHILE, body);
       self.visit(body);
-      self.own.get().end_scope();
+      self.own.get().end_scope(get_end_line(body));
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
       self.loopNext.pop_back();
@@ -104,9 +111,9 @@ impl Compiler{
       self.visit(node.then.get());
       if(node.else_stmt.is_some()){
         //else move aware end_scope
-        self.own.get().end_scope_if(node.else_stmt.get());
+        self.own.get().end_scope_if(node.else_stmt.get(), get_end_line(node.then.get()));
       }else{
-        self.own.get().end_scope();
+        self.own.get().end_scope(get_end_line(node.then.get()));
       }
       self.llvm.di.get().exit_scope();
       if(!exit_then.is_jump()){
@@ -120,7 +127,7 @@ impl Compiler{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
         self.visit(node.else_stmt.get());
-        self.own.get().end_scope();
+        self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
@@ -131,7 +138,7 @@ impl Compiler{
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE));
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.own.get().end_scope();
+        self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
       }
       if(!(exit_then.is_jump() && else_jump)){
@@ -252,7 +259,7 @@ impl Compiler{
       self.llvm.di.get().new_scope(node.body.get().line);
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit(node.body.get());
-      self.own.get().end_scope();
+      self.own.get().end_scope(get_end_line(node.body.get()));
       self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
@@ -268,7 +275,7 @@ impl Compiler{
       self.set_and_insert(next);
     }
 
-    func visit_assert(self, expr: Expr*){
+    /*func visit_assert(self, expr: Expr*){
       let m = self.curMethod.unwrap();
       let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
       let ptr = CreateGlobalStringPtr(msg.ptr());
@@ -285,9 +292,8 @@ impl Compiler{
       args_push(pr_args, ptr);
       let printf_proto = self.protos.get().libc("printf");
       CreateCall(printf_proto, pr_args);
-      //self.call_exit(1);
       self.set_and_insert(next);
-    }
+    }*/
 
     func visit_var(self, node: VarExpr*){
       for(let i = 0;i < node.list.len();++i){
@@ -326,12 +332,14 @@ impl Compiler{
       if(type.is_pointer()){
         let val = self.get_obj_ptr(expr);
         self.own.get().do_return(expr);
+        self.exit_frame();
         CreateRet(val);
         return;
       }
       if(!is_struct(&type)){
         let val = self.cast(expr, &type);
         self.own.get().do_return(expr);
+        self.exit_frame();
         CreateRet(val);
         return;
       }
@@ -339,6 +347,7 @@ impl Compiler{
       let val = self.visit(expr);
       self.copy(ptr, val, &type);
       self.own.get().do_return(expr);
+      self.exit_frame();
       CreateRetVoid();
     }
 }//end impl

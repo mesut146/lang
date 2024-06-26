@@ -10,7 +10,7 @@ func if_ret(c: bool, id: i32){
     }//no drop in else bc return
     check_ids();
     //valid bc return
-    let tmp = a.a;
+    a.check(id);
     //drop at end
 }
 
