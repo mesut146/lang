@@ -12,10 +12,12 @@ func if_multi(c1: bool, c2: bool, id: i32){
     let a = A::new(id);
     if(c1){
         send(a);
-    }else if(c2){
-        send(a);
     }else{
-        a.check(id);
+        if(c2){
+            send(a);
+        }else{
+            a.check(id);
+        }
     }
     check_ids(id);
 }

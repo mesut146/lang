@@ -334,6 +334,11 @@ impl Own{
     func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool, exclude: i32): State{
         return self.get_state(rhs, scope, look_parent, exclude, true);
     }
+    func get_state(self, rhs: Rhs, scope: VarScope*){
+        let list = List<VarScope*>::new();
+        list.add(scope);
+
+    }
     func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool, exclude: i32, look_child: bool): State{
         for(let i = scope.actions.len() - 1;i >= 0;--i){
             let act = scope.actions.get_ptr(i);
@@ -370,6 +375,10 @@ impl Own{
                 let ch_state = self.get_state(rhs, scp, false, exclude);
                 if(!(ch_state.kind is StateType::NONE)){
                     if(!scp.exit.is_jump()){
+                        //check then scope too
+                        if(scp.kind is ScopeType::ELSE && ch_state.kind is ASSIGNED){
+                            //todo remove assign, todo dominate
+                        }
                         return ch_state;
                     }
                 }
@@ -377,7 +386,7 @@ impl Own{
         }
         if(look_parent && scope.parent != -1){
             let parent = self.get_scope(scope.parent);
-            let res = self.get_state(rhs, parent, true);
+            let res = self.get_state(rhs, parent, true, exclude, false);
             //todo specificly test if under sibling
             /*if(!(res.kind is StateType::NONE) && scope.kind is ScopeType::ELSE && res.scope.kind is ScopeType::IF && res.scope.id == scope.sibling){
                 //ignore sibling move
@@ -394,10 +403,8 @@ impl Own{
         let state = self.get_state(rhs, scope, true);
         //print("check {} line:{} {}\n", expr, expr.line, state_pair.a);
         if let StateType::MOVED(line)=(state.kind){
-            //if(!state.scope.exit.is_return()){
-                print("{}\n", self.get_scope(self.main_scope).print(self));
-                self.compiler.get_resolver().err(expr, format("use after move in {}:{}", printMethod(self.method), line));
-            //}
+            print("{}\n", self.get_scope(self.main_scope).print(self));
+            self.compiler.get_resolver().err(expr, format("use after move in {}:{}", printMethod(self.method), line));
         }
     }
     func check_field(self, expr: Expr*){
@@ -525,6 +532,11 @@ impl Own{
             let out: Droppable* = outers.get_ptr(i);
             if let Droppable::VAR(var)=(out){
                 let rhs = Rhs::VAR{var};
+                if(var.scope == if_id){
+                    //local var, we must drop it
+                    self.drop_var(var, if_scope, false, line);
+                    continue;
+                }
                 if(self.get_state(rhs, parent_scope, true, parent_scope.sibling, false).is_moved()){
                     //todo dont look child
                     //already moved in parent, dont check sibling move
@@ -579,7 +591,7 @@ impl Own{
             return;
         }
         if(verbose){
-            print("drop_lhs {} line: {}", lhs, lhs.line);
+            print("drop_lhs {} line: {}\n", lhs, lhs.line);
         }
         let rt = self.compiler.get_resolver().visit(lhs);
         self.drop_real(&rt, ptr, lhs.line);
@@ -589,9 +601,6 @@ impl Own{
 
 //drop logic
 impl Own{
-    /*func drop_var(self, var: Variable*, scope: VarScope*){
-        self.drop_var(var, scope, true);
-    }*/
     func drop_var(self, var: Variable*, scope: VarScope*, look_parent: bool, line: i32){
         if(var.is_self && is_drop_method(self.method)){
             return;
@@ -627,9 +636,6 @@ impl Own{
         let rt = resolver.visit(obj.expr);
         self.drop_real(&rt, obj.ptr, obj.expr.line);
         rt.drop();
-    }
-    func drop_var_real(self, var: Variable*){
-        //self.drop_real(, var.ptr, var.line);
     }
 
     func drop_real(self, rt: RType*, ptr: Value*, line: i32){
