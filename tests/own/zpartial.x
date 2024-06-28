@@ -25,6 +25,15 @@ func test(){
     check_ids(15);
 }
 
+struct G{
+    f: F;
+    a: A;
+} 
+
+func test_double(){
+
+}
+
 func main(){
     test();
     check_ids(15, 20);

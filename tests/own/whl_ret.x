@@ -7,7 +7,7 @@ func whl_ret(c: bool, id: i32){
         if(c){
             Drop::drop(a);
             a = A{a: id + 1};//a.drop
-            assert check(1, id);
+            check_ids(id);
             return;
         }else{
             let tmp = a.a;
@@ -36,10 +36,11 @@ func while_continue(){
 
 func main(){
     whl_ret(true, 10);
-    assert check_ids([10, 11][0..2]);
+    check_ids(10, 11);
     reset();
+    
     whl_ret(false, 20);
-    assert check(1, 20);
+    check_ids(20);
 
     while_continue();
 }

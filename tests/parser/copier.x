@@ -186,7 +186,7 @@ impl AstCopier{
     }
 
     func visit(self, node: Block*): Block{
-        return Block{list: self.visit_list(&node.list), line: node.line};
+        return Block{list: self.visit_list(&node.list), line: node.line, end_line: node.end_line};
     }
     
     func visit(self, node: Fragment*): Fragment{
