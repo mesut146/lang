@@ -676,6 +676,37 @@ impl Own{
 
 //drop logic
 impl Own{
+    func drop_partial(self, var: Variable*, scope: VarScope*){
+        //check if all fields moved
+        //let rhs = Rhs::new(var);
+        let rt = self.compiler.get_resolver().visit_type(&var.type);
+        let decl = self.compiler.get_resolver().get_decl(&rt).unwrap();
+        let fields = decl.get_fields();
+        let moved_fields = List<String>::new();
+        for(let i = scope.actions.len() - 1;i >= 0;--i){
+            let act = scope.actions.get_ptr(i);
+            if let Action::MOVE(mv)=(act){
+                if let Expr::Access(scp*, name*)=(mv.rhs.expr){
+                    let rhs2 = Rhs::new(scp.get(), self);
+                    if(rhs2 is Rhs::VAR && var.id == rhs2.get_var().id){
+                        moved_fields.add(name.clone());
+                        //return State::new(StateType::MOVED_PARTIAL, scope);
+                    }
+                    
+                }
+            }
+        }
+        for(let i = 0;i < fields.len();++i){
+            let fd = fields.get_ptr(i);
+            if(!self.is_drop_type(&fd.type)){
+                continue;
+            }
+            if(!moved_fields.contains(&fd.name)){
+                panic("field {} not moved", fd.name);
+            }
+        }
+        rt.drop();
+    }
     func drop_var(self, var: Variable*, scope: VarScope*, look_parent: bool, line: i32){
         if(var.is_self && is_drop_method(self.method)){
             return;
@@ -687,7 +718,9 @@ impl Own{
             print("drop_var {} state: {}\n", var, state);
         }
         if(state.kind is StateType::MOVED_PARTIAL){
-            self.compiler.get_resolver().err(var.line, format("var {} moved partially", var));
+            self.drop_partial(var, scope);
+            //self.compiler.get_resolver().err(var.line, format("var {} moved partially", var));
+            return;
         }
         if(state.is_moved()){
             return;

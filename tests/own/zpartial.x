@@ -22,7 +22,8 @@ func test(){
     f.c = 999;//nothing
 
     send(f.a);
-    check_ids(15);
+    send(f.b);
+    check_ids(15, 20);
 }
 
 struct G{
