@@ -165,6 +165,7 @@ impl Compiler{
       let next = create_bb_named(CStr::new(next_name).ptr());
       CreateCondBr(self.branch(cmp), then_bb, elsebb);
       SetInsertPoint(then_bb);
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       let variant = decl.get_variants().get_ptr(index);
       self.llvm.di.get().new_scope(stmt.line);
       if(!variant.fields.empty()){
@@ -201,6 +202,12 @@ impl Compiler{
         }
       }
       self.visit(node.then.get());
+      if(node.else_stmt.is_some()){
+        //else move aware end_scope
+        self.own.get().end_scope_if(node.else_stmt.get(), get_end_line(node.then.get()));
+      }else{
+        self.own.get().end_scope(get_end_line(node.then.get()));
+      }
       self.llvm.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
       if (!exit_then.is_jump()) {
@@ -210,7 +217,10 @@ impl Compiler{
       let else_jump = false;
       if (node.else_stmt.is_some()) {
         self.llvm.di.get().new_scope(node.else_stmt.get().line);
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
         self.visit(node.else_stmt.get());
+        self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
@@ -219,6 +229,9 @@ impl Compiler{
         }
         exit_else.drop();
       }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, stmt.line, Exit::new(ExitType::NONE));
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
       }
       if(!(exit_then.is_jump() && else_jump)){

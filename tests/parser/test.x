@@ -61,7 +61,14 @@ func compiler_test(std_test: bool){
     build_std(get_out());
     compile_dir2("../tests/std_test", format("{}/std.a", get_out()).str());
   }else{
-    compile_dir2("../tests/normal", "");
+    let config = CompilerConfig::new();
+    config
+      .set_file("../tests/std/rt.x")
+      .set_out(get_out())
+      .add_dir(root())
+      .set_link(LinkType::Static{"rt.a"});
+    let lib = Compiler::compile_single(&config);
+    compile_dir2("../tests/normal", lib.str());
   }
 }
 

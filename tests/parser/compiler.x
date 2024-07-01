@@ -475,10 +475,10 @@ impl Compiler{
     let val = get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
-      self.own.get().add_prm(prm, ptr);
     }else{
       CreateStore(val, ptr);
     }
+    self.own.get().add_prm(prm, ptr);
   }
 
   func storeParams(self, m: Method*, f: Function*){
@@ -615,7 +615,7 @@ impl Compiler{
     run(path);
     Drop::drop(cmp);
   }
-  func compile_single(config: CompilerConfig*){
+  func compile_single(config: CompilerConfig*): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.src_dirs.remove(0), config.out_dir.clone());
     let cmp = Compiler::new(ctx);
@@ -623,9 +623,9 @@ impl Compiler{
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
     let obj = cmp.compile(config.file.str(), &cache);
-    compiled.add(obj);
-    config.link(&compiled);
     Drop::drop(cmp);
+    compiled.add(obj);
+    return config.link(&compiled);
   }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{

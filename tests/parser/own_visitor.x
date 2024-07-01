@@ -28,12 +28,6 @@ impl OwnVisitor{
         return self.own.compiler.get_resolver();
     }
     func do_move(self, expr: Expr*){
-        /*let rt = self.get_resolver().visit(expr);
-        let helper = DropHelper{self.get_resolver()};
-        if(!helper.is_drop_type(&rt)){
-            rt.drop();
-            return;
-        }*/
         self.own.do_move(expr);
     }
     func begin(self, node: Stmt*): i32{
@@ -64,6 +58,7 @@ impl OwnVisitor{
     func visit_var(self, ve: VarExpr*){
         for(let i = 0;i < ve.list.len();++i){
             let fr = ve.list.get_ptr(i);
+            self.own.add_var(fr, ptr::null<Value>());
             self.do_move(&fr.rhs);
         }
     }

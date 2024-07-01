@@ -2,9 +2,9 @@ import own/common
 import std/deque
 
 
-func test(p: B*, id: i32){
+func test(pp: B*, id: i32){
     //p.b.drop()
-    p.b = A{a: id};
+    pp.b = A{a: id};
     check_ids(10);
 }
 

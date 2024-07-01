@@ -61,7 +61,7 @@ impl<K, V> Map<K, V>{
       return res;
     }
     //already exist, change old
-    let pair = opt.unwrap();
+    let pair: Pair<K, V>* = opt.unwrap();
     Drop::drop(pair.b);
     pair.b = v;
     return pair;
