@@ -6,102 +6,93 @@
 bool print_block = false;
 
 //Debug::debug(e, f)
-Ptr<ExprStmt> makeDebug(std::shared_ptr<Unit> &unit, Expression *e, bool use_ref, const std::string &fmt) {
+Ptr<ExprStmt> makeDebug(int line, Expression *e, bool use_ref, const std::string &fmt) {
     auto mc = new MethodCall;
-    mc->loc(++unit->lastLine);
+    mc->loc(line);
     mc->is_static = true;
     mc->scope.reset(new Type("Debug"));
     mc->name = "debug";
     if (use_ref) {
         e = new RefExpr(std::unique_ptr<Expression>(e));
-        e->loc(0);
+        e->loc(line);
     }
     mc->args.push_back(e);
-    mc->args.push_back((new SimpleName(fmt))->loc(0));
+    mc->args.push_back((new SimpleName(fmt))->loc(line));
     auto res = std::make_unique<ExprStmt>(mc);
-    res->line = unit->lastLine;
+    res->line = line;
     return res;
 }
 
-FieldAccess *makeFa(const std::string &scope, const std::string &name) {
+FieldAccess *makeFa(const std::string &scope, const std::string &name, int line) {
     auto fa = new FieldAccess;
-    fa->scope = (new SimpleName(scope))->loc(0);
+    fa->scope = (new SimpleName(scope))->loc(line);
     fa->name = name;
-    fa->loc(0);
+    fa->loc(line);
     return fa;
 }
 
+std::unique_ptr<ExprStmt> make_drop(const std::string &name, int line) {
+    //Drop::drop(f);
+    auto drop_mc = new MethodCall;
+    drop_mc->loc(line);
+    drop_mc->is_static = true;
+    drop_mc->name = "drop";
+    drop_mc->scope.reset(new Type("Drop"));
+    drop_mc->scope->loc(line);
+    drop_mc->args.push_back((new SimpleName(name))->loc(line));
+    auto drop_stmt = std::make_unique<ExprStmt>(drop_mc);
+    drop_stmt->loc(line);
+    return drop_stmt;
+}
 //Drop::drop(expr)
-std::unique_ptr<Statement> newDrop2(Expression *expr, Unit *unit) {
+std::unique_ptr<Statement> newDrop2(Expression *expr, int line) {
     auto mc = new MethodCall;
-    mc->loc(++unit->lastLine);
+    mc->loc(line);
     mc->is_static = true;
     mc->scope.reset(new Type("Drop"));
     mc->name = "drop";
     mc->args.push_back(expr);
     auto res = std::make_unique<ExprStmt>(mc);
-    res->line = unit->lastLine;
+    res->line = line;
     return res;
 }
 
 //Drop::drop({scope.fd});
-std::unique_ptr<Statement> newDrop(const std::string &scope, const std::string &field, Unit *unit) {
+std::unique_ptr<Statement> newDrop(const std::string &scope, const std::string &field, Unit *unit, int line) {
     auto fa = new FieldAccess;
-    fa->loc(++unit->lastLine);
+    fa->loc(line);
     fa->scope = (new SimpleName(scope))->loc(fa->line);
     fa->name = field;
-    return newDrop2(fa, unit);
+    return newDrop2(fa, line);
 }
 //Drop::drop({fd.name});
-std::unique_ptr<Statement> newDrop(const std::string &field, Unit *unit) {
+std::unique_ptr<Statement> newDrop(const std::string &field, Unit *unit, int line) {
     auto arg = new SimpleName(field);
-    arg->loc(++unit->lastLine);
-    return newDrop2(arg, unit);
+    arg->loc(line);
+    return newDrop2(arg, line);
 }
-
-
-MethodCall *newStr(std::shared_ptr<Unit> &unit, const std::string &name) {
+Ptr<ExprStmt> newPrint(int line, const std::string &scope, Expression *e) {
     auto mc = new MethodCall;
-    mc->is_static = true;
-    mc->line = unit->lastLine;
-    mc->scope.reset(new Type("String"));
-    mc->name = "new";
-    if (!name.empty()) {
-        auto lit = new Literal(Literal::STR, name);
-        lit->line = unit->lastLine;
-        mc->args.push_back(lit);
-    }
-    return mc;
-}
-Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, Expression *e) {
-    auto mc = new MethodCall;
-    mc->line = unit->lastLine;
+    mc->line = line;
     mc->scope.reset(new SimpleName(scope));
     mc->name = "print";
     mc->args.push_back(e);
     auto res = std::make_unique<ExprStmt>(mc);
-    res->line = unit->lastLine;
+    res->line = line;
     return res;
 }
 //scope.print(str);
-Ptr<ExprStmt> newPrint(std::shared_ptr<Unit> &unit, const std::string &scope, const std::string &str) {
+Ptr<ExprStmt> newPrint(int line, const std::string &scope, const std::string &str) {
     auto mc = new MethodCall;
-    mc->loc(unit->lastLine);
+    mc->loc(line);
     mc->scope.reset((new SimpleName(scope))->loc(0));
     mc->name = "print";
     auto lit = new Literal(Literal::STR, str);
-    lit->loc(unit->lastLine);
+    lit->loc(line);
     mc->args.push_back(lit);
     auto res = std::make_unique<ExprStmt>(mc);
-    res->line = unit->lastLine;
+    res->line = line;
     return res;
-}
-
-Ptr<ReturnStmt> makeRet(std::shared_ptr<Unit> unit, Expression *e) {
-    auto ret = std::make_unique<ReturnStmt>();
-    ret->line = ++unit->lastLine;
-    ret->expr.reset(e);
-    return ret;
 }
 
 bool need_drop(const Type &type) {
@@ -111,10 +102,13 @@ bool need_drop(const Type &type) {
 }
 
 Method Resolver::derive_drop_method(BaseDecl *bd) {
+    if (bd->line == 0) {
+        throw std::runtime_error("bd line 0");
+    }
     if (bd->type.name == "List") {
         throw std::runtime_error("derive drop list");
     }
-    int line = unit->lastLine;
+    int line = bd->line;
     Method m(unit->path);
     m.name = "drop";
     //*self
@@ -140,7 +134,7 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
             as->expr = (new SimpleName("self"))->loc(line);
             as->type = base_ty.toPtr();
             deref_call->args.push_back(as);
-            bl->list.push_back(newDrop2(deref_call, unit.get()));
+            bl->list.push_back(newDrop2(deref_call, line));
         }
     }
 
@@ -160,11 +154,12 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
             }
             ifs->rhs.reset((new SimpleName("self"))->loc(line));
             auto then = new Block;
+            then->loc(line);
             ifs->thenStmt.reset(then);
             for (auto &fd : ev.fields) {
                 if (!need_drop(fd.type)) continue;
                 //Drop::drop(fd)
-                then->list.push_back(newDrop(fd.name, unit.get()));
+                then->list.push_back(newDrop(fd.name, unit.get(), line));
             }
             if (last_iflet == nullptr) {
                 bl->list.push_back(std::move(ifs));
@@ -181,7 +176,7 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
         for (auto &fd : sd->fields) {
             if (!need_drop(fd.type)) continue;
             //Drop::drop(self.fd);
-            bl->list.push_back(newDrop("self", fd.name, unit.get()));
+            bl->list.push_back(newDrop("self", fd.name, unit.get(), line));
         }
     }
     m.parent = Parent{Parent::IMPL, bd->type, Type("Drop")};
@@ -202,20 +197,16 @@ std::unique_ptr<Impl> Resolver::derive_drop(BaseDecl *bd) {
         imp->type_params = bd->type.typeArgs;
     }
     imp->methods.push_back(derive_drop_method(bd));
-    // auto tr = resolve(Type("Drop")).trait;
-    // for (auto &mm : tr->methods) {
-    //     if (mm.body) {
-    //         AstCopier copier;
-    //         auto m2 = std::any_cast<Method *>(mm.accept(&copier));
-    //         imp->methods.push_back(std::move(*m2));
-    //     }
-    // }
     return imp;
 }
 
 std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
-    int line = unit->lastLine;
+    if (bd->line == 0) {
+        throw std::runtime_error("bd line 0");
+    }
+    int line = bd->line;
     Method m(unit->path);
+    m.line = line;
     m.name = "debug";
     Param s("self", clone(bd->type).toPtr());
     m.self = std::move(s);
@@ -223,6 +214,7 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     Param fp("f", Type(Type::Pointer, Type("Fmt")));
     m.params.push_back(std::move(fp));
     auto bl = new Block;
+    bl->loc(line);
     m.body.reset(bl);
     if (bd->isEnum()) {
         auto ed = (EnumDecl *) bd;
@@ -239,35 +231,36 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
                 arg.loc(line);
                 ifs->args.push_back(arg);
             }
-            ifs->rhs.reset((new SimpleName("self"))->loc(0));
+            ifs->rhs.reset((new SimpleName("self"))->loc(line));
             auto then = new Block;
+            then->line = bd->line;
             ifs->thenStmt.reset(then);
-            then->list.push_back(newPrint(unit, "f", bd->type.print() + "::" + ev.name));
+            then->list.push_back(newPrint(line, "f", bd->type.print() + "::" + ev.name));
             if (!ev.fields.empty()) {
-                then->list.push_back(newPrint(unit, "f", "{"));
+                then->list.push_back(newPrint(line, "f", "{"));
                 int j = 0;
                 for (auto &fd : ev.fields) {
                     if (fd.type.isPointer()) continue;
-                    if (j++ > 0) then->list.push_back(newPrint(unit, "f", ", "));
-                    then->list.push_back(newPrint(unit, "f", fd.name + ": "));
-                    then->list.push_back(makeDebug(unit, (new SimpleName(fd.name))->loc(0), false, "f"));
+                    if (j++ > 0) then->list.push_back(newPrint(line, "f", ", "));
+                    then->list.push_back(newPrint(line, "f", fd.name + ": "));
+                    then->list.push_back(makeDebug(line, (new SimpleName(fd.name))->loc(line), false, "f"));
                 }
-                then->list.push_back(newPrint(unit, "f", "}"));
+                then->list.push_back(newPrint(line, "f", "}"));
             }
             bl->list.push_back(std::move(ifs));
         }
     } else {
         auto sd = (StructDecl *) bd;
-        bl->list.push_back(newPrint(unit, "f", sd->type.name + "{"));
+        bl->list.push_back(newPrint(line, "f", sd->type.name + "{"));
         int i = 0;
         for (auto &fd : sd->fields) {
             if (fd.type.isPointer()) continue;
-            bl->list.push_back(newPrint(unit, "f", (i > 0 ? ", " : "") + fd.name + ": "));
+            bl->list.push_back(newPrint(line, "f", (i > 0 ? ", " : "") + fd.name + ": "));
             //auto ts = fd.type.print();
-            bl->list.push_back(makeDebug(unit, makeFa("self", fd.name), true, "f"));
+            bl->list.push_back(makeDebug(line, makeFa("self", fd.name, line), true, "f"));
             i++;
         }
-        bl->list.push_back(newPrint(unit, "f", "}"));
+        bl->list.push_back(newPrint(line, "f", "}"));
     }
     auto imp = std::make_unique<Impl>(bd->type);
     imp->trait_name = Type("Debug");
@@ -275,29 +268,7 @@ std::unique_ptr<Impl> Resolver::derive_debug(BaseDecl *bd) {
     m.parent = Parent{Parent::IMPL, imp->type, imp->trait_name};
     m.parent.type_params = bd->type.typeArgs;
     imp->methods.push_back(std::move(m));
-    auto tr = resolve(Type("Debug")).trait;
-    for (auto &mm : tr->methods) {
-        if (mm.body) {
-            AstCopier copier;
-            auto m2 = std::any_cast<Method *>(mm.accept(&copier));
-            imp->methods.push_back(std::move(*m2));
-        }
-    }
     return imp;
-}
-
-std::unique_ptr<ExprStmt> make_drop(const std::string &name, int line) {
-    //Drop::drop(f);
-    auto drop_mc = new MethodCall;
-    drop_mc->loc(line);
-    drop_mc->is_static = true;
-    drop_mc->name = "drop";
-    drop_mc->scope.reset(new Type("Drop"));
-    drop_mc->scope->loc(line);
-    drop_mc->args.push_back((new SimpleName(name))->loc(line));
-    auto drop_stmt = std::make_unique<ExprStmt>(drop_mc);
-    drop_stmt->loc(line);
-    return drop_stmt;
 }
 
 std::unique_ptr<Statement> parse_stmt(const std::string &str) {

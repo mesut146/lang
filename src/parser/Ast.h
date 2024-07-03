@@ -13,7 +13,6 @@ class Visitor;
 class Type;
 class StructDecl;
 class Impl;
-//class Method;
 class Expression;
 class Statement;
 class VarDecl;
@@ -53,6 +52,9 @@ public:
         return res;
     }
     Node *loc(int line) {
+        if (line <= 0) {
+            throw std::invalid_argument("Line number must be positive");
+        }
         this->line = line;
         this->id = ++Node::last_id;
         return this;
@@ -62,7 +64,7 @@ public:
 };
 class Expression : public Node {
 public:
-    virtual std::string print() const = 0;
+    //virtual std::string print() const = 0;
 
     virtual std::any accept(Visitor *v) = 0;
 
@@ -72,6 +74,13 @@ public:
         return this;
     }
 };
+class Statement : public Node {
+public:
+    //virtual std::string print() const = 0;
+
+    virtual std::any accept(Visitor *v) = 0;
+};
+
 class Type : public Expression {
 public:
     std::unique_ptr<Type> scope;
@@ -205,6 +214,7 @@ public:
     int lastLine = 0;
 
     std::string print();
+    std::string print_lined();
 };
 
 struct BaseDecl : public Item {
@@ -358,13 +368,6 @@ public:
     std::any accept(Visitor *v) override;
 };
 
-
-class Statement : public Node {
-public:
-    virtual std::string print() const = 0;
-
-    virtual std::any accept(Visitor *v) = 0;
-};
 
 class Block : public Statement {
 public:
@@ -654,15 +657,6 @@ class WhileStmt : public Statement {
 public:
     std::unique_ptr<Expression> expr;
     std::unique_ptr<Statement> body;
-
-    std::string print() const override;
-    std::any accept(Visitor *v) override;
-};
-
-class DoWhile : public Statement {
-public:
-    std::unique_ptr<Expression> expr;
-    std::unique_ptr<Block> body;
 
     std::string print() const override;
     std::any accept(Visitor *v) override;

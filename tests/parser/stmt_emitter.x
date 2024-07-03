@@ -288,26 +288,6 @@ impl Compiler{
       self.set_and_insert(next);
     }
 
-    /*func visit_assert(self, expr: Expr*){
-      let m = self.curMethod.unwrap();
-      let msg = format("{}:{} in {}\nassertion {} failed\n", m.path, expr.line, m.name, expr).cstr();
-      let ptr = CreateGlobalStringPtr(msg.ptr());
-      Drop::drop(msg);
-      let then_name = format("assert_then_{}", expr.line);
-      let next_name = format("assert_next_{}", expr.line);
-      let then = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
-      let cond = self.branch(expr);
-      CreateCondBr(cond, next, then);
-      SetInsertPoint(then);
-      //print error and exit
-      let pr_args = make_args();
-      args_push(pr_args, ptr);
-      let printf_proto = self.protos.get().libc("printf");
-      CreateCall(printf_proto, pr_args);
-      self.set_and_insert(next);
-    }*/
-
     func visit_var(self, node: VarExpr*){
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get_ptr(i);

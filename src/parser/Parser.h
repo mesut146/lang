@@ -106,7 +106,7 @@ public:
     }
 
     bool isName() {
-        return is({IDENT, NEW, IS, AS, TYPE, TRAIT});
+        return is({IDENT, IS, AS, TYPE, TRAIT});
     }
 
     std::string strLit();

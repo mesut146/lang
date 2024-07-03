@@ -314,6 +314,7 @@ public:
 
     llvm::Value *gen(Expression *e);
     llvm::Value *gen(std::unique_ptr<Expression> &e);
+    void gen(Statement* stmt);
 
     std::any visitParExpr(ParExpr *node) override;
     std::pair<llvm::Value *, llvm::BasicBlock *> andOr(Infix *node);

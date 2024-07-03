@@ -1046,10 +1046,10 @@ std::any Resolver::visitInfix(Infix *node) {
     if (rt1.type.isString() || rt2.type.isString()) {
         err(node, "string op not supported yet");
     }
-    if (rt1.targetDecl && node->op == "==") {
-        if (rt1.type.print() == rt2.type.print())
-            return makeSimple("bool");
-    }
+    // if (rt1.targetDecl && node->op == "==") {
+    //     if (rt1.type.print() == rt2.type.print())
+    //         return makeSimple("bool");
+    // }
     if (!rt1.type.isPrim() || !rt2.type.isPrim()) {
         err(node, "infix on non prim type: " + rt1.type.print() + " vs " + rt2.type.print());
     }

@@ -48,6 +48,5 @@ public:
     virtual std::any visitIfStmt(IfStmt *node) todo("IfStmt");
     virtual std::any visitIfLetStmt(IfLetStmt *node) todo("if let");
     virtual std::any visitWhileStmt(WhileStmt *node) todo("WhileStmt");
-    virtual std::any visitDoWhile(DoWhile *node) todo("DoWhile");
     virtual std::any visitForStmt(ForStmt *node) todo("ForStmt");
 };

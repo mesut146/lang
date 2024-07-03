@@ -204,12 +204,6 @@ Expression *makeObj(Parser *p, bool isPointer) {
     return makeObj(p, isPointer, p->parseType());
 }
 
-Expression *makeAlloc(Parser *p) {
-    p->consume(NEW);
-    auto type = p->parseType();
-    return makeObj(p, true, type);
-}
-
 MethodCall *parseCall(Parser *p, const std::string &name) {
     auto res = Node::make<MethodCall>();
     res->name = name;
@@ -242,8 +236,6 @@ Expression *PRIM(Parser *p) {
         return loc(res, line);
     } else if (isLit(p->first())) {
         return loc(parseLit(p), line);
-    } else if (p->is(NEW)) {
-        return loc(makeAlloc(p), line);
     }
     if (isObj(p)) {
         return loc(makeObj(p, false), line);

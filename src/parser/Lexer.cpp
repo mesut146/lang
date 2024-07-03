@@ -4,7 +4,6 @@
 #include <vector>
 
 TokenType kw(std::string &s) {
-    if (s == "class") return CLASS;
     if (s == "struct") return STRUCT;
     if (s == "enum") return ENUM;
     if (s == "trait") return TRAIT;
@@ -41,30 +40,16 @@ TokenType kw(std::string &s) {
         return FOR;
     if (s == "while")
         return WHILE;
-    if (s == "do")
-        return DO;
     if (s == "break")
         return BREAK;
-    if (s == "fn" || s == "func")
+    if (s == "func")
         return FUNC;
     if (s == "let")
         return LET;
     if (s == "namespace")
         return NAMESPACE;
-    if (s == "new")
-        return NEW;
     if (s == "const")
         return CONST_KW;
-    if (s == "try")
-        return TRY;
-    if (s == "catch")
-        return CATCH;
-    if (s == "throw")
-        return THROW;
-    if (s == "switch")
-        return SWITCH;
-    if (s == "case")
-        return CASE;
     return EOF_;
 }
 

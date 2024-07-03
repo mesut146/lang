@@ -106,17 +106,6 @@ std::unique_ptr<WhileStmt> parseWhile(Parser *p) {
     return res;
 }
 
-std::unique_ptr<DoWhile> parseDoWhile(Parser *p) {
-    auto res = std::make_unique<DoWhile>();
-    p->consume(DO);
-    res->body = p->parseBlock();
-    p->consume(WHILE);
-    p->consume(LPAREN);
-    res->expr.reset(p->parseExpr());
-    p->consume(RPAREN);
-    p->consume(SEMI);
-    return res;
-}
 std::unique_ptr<Statement> Parser::parseStmt() {
     int line = first()->line;
     auto res = parseStmt2();
@@ -134,8 +123,6 @@ std::unique_ptr<Statement> Parser::parseStmt2() {
         return parseFor(this);
     } else if (is(WHILE)) {
         return parseWhile(this);
-    } else if (is(DO)) {
-        return parseDoWhile(this);
     } else if (is(LBRACE)) {
         return parseBlock();
     } else if (is(RETURN)) {

@@ -656,10 +656,14 @@ llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
     return gen(expr.get());
 }
 
+void Compiler::gen(Statement* stmt){
+    loc(stmt);
+    stmt->accept(this);
+}
+
 std::any Compiler::visitBlock(Block *node) {
     for (auto &stmt : node->list) {
-        loc(stmt.get());
-        stmt->accept(this);
+        gen(stmt.get());
     }
     return nullptr;
 }
@@ -1697,25 +1701,6 @@ std::any Compiler::array(ArrayExpr *node, llvm::Value *ptr) {
     return ptr;
 }
 
-/*std::any Compiler::visitAssertStmt(AssertStmt *node) {
-    loc(node);
-    auto str = node->expr->print();
-    auto then = llvm::BasicBlock::Create(ctx(), "assert_body_" + std::to_string(node->line));
-    auto next = llvm::BasicBlock::Create(ctx(), "assert_next_" + std::to_string(node->line));
-    Builder->CreateCondBr(branch(node->expr.get()), next, then);
-    set_and_insert(then);
-    //print error and exit
-    auto msg = curMethod->path;
-    msg += ":";
-    msg += std::to_string(node->line);
-    msg += "\n";
-    msg += std::string("assertion ") + str + " failed in " + printMethod(curMethod) + "\n";
-    std::vector<llvm::Value *> pr_args = {Builder->CreateGlobalStringPtr(msg)};
-    Builder->CreateCall(printf_proto, pr_args, "");
-    set_and_insert(next);
-    return nullptr;
-}*/
-
 std::any Compiler::visitIfStmt(IfStmt *node) {
     auto cond = branch(node->expr.get());
     auto then = llvm::BasicBlock::Create(ctx(), "if_then_" + std::to_string(node->line));
@@ -1727,7 +1712,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
     int cur_scope = curOwner.last_scope->id;
     auto then_returns = Exit::get_exit_type(node->thenStmt.get());
     auto then_scope = curOwner.newScope(ScopeId::IF, then_returns, cur_scope, node->thenStmt->line);
-    node->thenStmt->accept(this);
+    gen(node->thenStmt.get());
     if (!then_scope->exit.is_exit()) {
         auto &last_ins = Builder->GetInsertBlock()->back();
         if (!last_ins.isTerminator()) {
@@ -1746,7 +1731,7 @@ std::any Compiler::visitIfStmt(IfStmt *node) {
         resolv->newScope();
         else_scope->exit = Exit::get_exit_type(node->elseStmt.get());
         else_scope->line = node->elseStmt->line;
-        node->elseStmt->accept(this);
+        gen(node->elseStmt.get());
         if (!else_scope->exit.is_return()) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
@@ -1809,7 +1794,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
             NamedValues[arg.name] = alloc_ptr;
             if (arg.ptr) {
                 Builder->CreateStore(field_ptr, alloc_ptr);
-                dbg_var(arg.name, node->rhs->line, 0, Type(Type::Pointer, fd.type));
+                dbg_var(arg.name, arg.line, 0, Type(Type::Pointer, fd.type));
             } else {
                 if (fd.type.isPrim() || fd.type.isPointer()) {
                     Builder->CreateStore(load(field_ptr, mapType(fd.type)), alloc_ptr);
@@ -1818,11 +1803,11 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
                     copy(alloc_ptr, field_ptr, fd.type);
                     curOwner.add(fd.name, fd.type, alloc_ptr, arg.id, arg.line);
                 }
-                dbg_var(arg.name, node->rhs->line, 0, fd.type);
+                dbg_var(arg.name, arg.line, 0, fd.type);
             }
         }
     }
-    node->thenStmt->accept(this);
+    gen(node->thenStmt.get());
     if (!then_scope->exit.is_exit()) {
         curOwner.endScope(*then_scope);
         Builder->CreateBr(next);
@@ -1836,7 +1821,7 @@ std::any Compiler::visitIfLetStmt(IfLetStmt *node) {
         resolv->newScope();
         else_scope->exit = Exit::get_exit_type(node->elseStmt.get());
         else_scope->line = node->elseStmt->line;
-        node->elseStmt->accept(this);
+        gen(node->elseStmt.get());
         if (!else_scope->exit.is_return()) {
             curOwner.endScope(*else_scope);
             curOwner.end_branch(*else_scope);
@@ -1873,7 +1858,7 @@ std::any Compiler::visitWhileStmt(WhileStmt *node) {
     resolv->newScope();
     auto cur_scope = curOwner.last_scope->id;
     auto then_scope = curOwner.newScope(ScopeId::WHILE, Exit::get_exit_type(node->body.get()), cur_scope, node->body->line);
-    node->body->accept(this);
+    gen(node->body.get());
     curOwner.endScope(*then_scope);
     curOwner.setScope(cur_scope);
     loops.pop_back();
@@ -1888,6 +1873,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     auto then_scope = curOwner.newScope(ScopeId::FOR, Exit::get_exit_type(node->body.get()), cur_scope, node->body->line);
     resolv->newScope();
     if (node->decl) {
+        loc(node->line, 0);
         node->decl->accept(this);
     }
     auto then = llvm::BasicBlock::Create(ctx(), "for_body_" + std::to_string(node->line));
@@ -1905,7 +1891,7 @@ std::any Compiler::visitForStmt(ForStmt *node) {
     set_and_insert(then);
     loops.push_back(updatebb);
     loopNext.push_back(next);
-    node->body->accept(this);
+    gen(node->body.get());
     curOwner.endScope(*then_scope);
     curOwner.setScope(cur_scope);
     if (!then_scope->exit.is_jump()) {

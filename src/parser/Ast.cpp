@@ -4,6 +4,21 @@
 
 int Node::last_id = -1;
 
+bool print_line = false;
+
+void print_lined(const Node *node, std::string &s) {
+    if (print_line) {
+        s += std::to_string(node->line);
+        s += ": ";
+    }
+}
+std::string print_lined2(const Node *node) {
+    print_line = true;
+    auto res = node->print();
+    print_line = false;
+    return res;
+}
+
 std::string &BaseDecl::getName() {
     return type.name;
 }
@@ -165,6 +180,7 @@ std::string VarDecl::print() const {
 
 std::string VarDeclExpr::print() const {
     std::string s;
+    print_lined(this, s);
     s.append("let");
     s.append(" ");
     s.append(join(list, ", "));
@@ -183,11 +199,17 @@ std::string Fragment::print() const {
 }
 
 std::string ExprStmt::print() const {
-    return expr->print() + ";";
+    std::string s;
+    print_lined(this, s);
+    s += expr->print() + ";";
+    return s;
 }
+
 
 std::string Block::print() const {
     std::string s;
+    print_lined(this, s);
+
     s.append("{\n");
     for (int i = 0; i < list.size(); ++i) {
         printIdent(list[i]->print(), s);
@@ -268,6 +290,8 @@ std::string Entry::print() const {
 
 std::string IfLetStmt::print() const {
     std::string s;
+    print_lined(this, s);
+
     s.append("if let ");
     s.append(type.print());
     if (!args.empty()) {
@@ -286,6 +310,9 @@ std::string IfLetStmt::print() const {
 
 std::string IfStmt::print() const {
     std::string s;
+
+    print_lined(this, s);
+
     s.append("if(").append(expr->print()).append(")").append(thenStmt->print());
     if (elseStmt) {
         s.append("else ").append(elseStmt->print());
@@ -295,6 +322,8 @@ std::string IfStmt::print() const {
 
 std::string ForStmt::print() const {
     std::string s;
+    print_lined(this, s);
+
     s.append("for(");
     if (decl != nullptr) {
         s.append(decl->print());
@@ -374,28 +403,47 @@ std::string ArrayExpr::print() const {
 
 std::string WhileStmt::print() const {
     std::string s;
+    print_lined(this, s);
+
     s.append("while(").append(expr->print()).append(")");
     printBody(s, body.get());
     return s;
 }
 
 std::string ReturnStmt::print() const {
-    if (!expr) return "return";
-    return "return " + expr->print() + ";";
+    std::string s;
+    print_lined(this, s);
+
+    s += "return";
+    if (expr) {
+        s += expr->print();
+    }
+    s += ";";
+    return s;
 }
 
 std::string ContinueStmt::print() const {
-    if (!label.has_value()) return "continue";
-    return "continue " + label.value();
+    std::string s;
+    print_lined(this, s);
+
+    s += "continue";
+    if (label.has_value()) {
+        s += label.value();
+    }
+    s += ";";
+    return s;
 }
 
 std::string BreakStmt::print() const {
-    if (!label.has_value()) return "break";
-    return "break " + label.value();
-}
+    std::string s;
+    print_lined(this, s);
 
-std::string DoWhile::print() const {
-    return "do" + body->print() + "\nwhile(" + expr->print() + ");";
+    s += "break";
+    if (label.has_value()) {
+        s += label.value();
+    }
+    s += ";";
+    return s;
 }
 
 
@@ -413,9 +461,6 @@ std::any ReturnStmt::accept(Visitor *v) {
 
 std::any ContinueStmt::accept(Visitor *v) {
     return v->visitContinueStmt(this);
-}
-std::any DoWhile::accept(Visitor *v) {
-    return v->visitDoWhile(this);
 }
 
 std::any RefExpr::accept(Visitor *v) {

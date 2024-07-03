@@ -35,11 +35,7 @@ std::unique_ptr<StructDecl> Parser::parseTypeDecl() {
     auto res = std::make_unique<StructDecl>();
     res->line = first()->line;
     res->path = unit->path;
-    if (is(CLASS)) {
-        consume(CLASS);
-    } else {
-        consume(STRUCT);
-    }
+    consume(STRUCT);
     res->type = parseType();
     if (!res->type.typeArgs.empty()) {
         res->isGeneric = true;
@@ -85,6 +81,7 @@ EnumVariant parseEnumEntry(Parser *p) {
 
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl() {
     auto res = std::make_unique<EnumDecl>();
+    res->line = first()->line;
     res->path = unit->path;
     consume(ENUM);
     res->type = parseType();
@@ -209,7 +206,7 @@ std::shared_ptr<Unit> Parser::parseUnit() {
                 }
             }
         }
-        if (is({CLASS}) || is({STRUCT})) {
+        if (is({STRUCT})) {
             auto td = parseTypeDecl();
             td->derives = derives;
             td->attr = attr;
