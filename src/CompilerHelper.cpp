@@ -190,6 +190,10 @@ void Compiler::simpleVariant(const Type &n, llvm::Value *ptr) {
         resolv->err("base is not initialized");
     }
     int index = Resolver::findVariant(decl, n.name);
+    auto ev = decl->variants[index];
+    if(!ev.fields.empty()){
+        resolv->err("simple variant provided but has fields");
+    }
     setOrdinal(index, ptr, bd);
 }
 

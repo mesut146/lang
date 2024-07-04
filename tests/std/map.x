@@ -122,3 +122,14 @@ impl<K, V> Map<K, V>{
     self.arr.clear();
   }
 }
+
+impl<K,V> Clone for Map<K,V>{
+  func clone(self): Map<K, V>{
+    return Map<K, V>{self.arr.clone()};
+  }
+}
+impl<K,V> Clone for Pair<K,V>{
+  func clone(self): Pair<K, V>{
+    return Pair<K, V>{self.a.clone(), self.b.clone()};
+  }
+}

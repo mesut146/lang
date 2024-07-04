@@ -76,6 +76,7 @@ struct VarScope{
     parent: i32;
     sibling: i32;
     state_map: Map<i32, StateType>; //var_id -> StateType
+    pending_parent: Map<i32, StateType>; //var_id -> StateType
 }
 
 #derive(Debug)
@@ -107,7 +108,6 @@ struct Moved{
     field: Option<String>;
 }
 
-#derive(Debug)
 enum Rhs{
     EXPR(e: Expr*),
     VAR(v: Variable),
@@ -126,6 +126,39 @@ impl State{
     }
     func is_none(self): bool{
         return self.kind is StateType::NONE;
+    }
+}
+impl StateType{
+    func is_moved(self): bool{
+        return self is StateType::MOVED || self is StateType::MOVED_PARTIAL;
+    }
+    func is_assigned(self): bool{
+        return self is StateType::ASSIGNED;
+    }
+    func is_none(self): bool{
+        return self is StateType::NONE;
+    }
+}
+
+impl Debug for Rhs{
+    func debug(self, f: Fmt*){
+        if let Rhs::EXPR(e)=(self){
+            f.print("Rhs::EXPR{");
+            f.print(e);
+            f.print("}");
+        }
+        else if let Rhs::VAR(v*)=(self){
+            f.print("Rhs::VAR{");
+            f.print(v);
+            f.print("}");
+        }
+        else if let Rhs::FIELD(scp*,name*)=(self){
+            f.print("Rhs::FIELD{");
+            f.print(scp);
+            f.print(", ");
+            f.print(name);
+            f.print("}");
+        }
     }
 }
 
@@ -262,7 +295,8 @@ impl VarScope{
             exit: exit,
             parent: -1,
             sibling: -1,
-            state_map: Map<i32, StateType>::new()
+            state_map: Map<i32, StateType>::new(),
+            pending_parent: Map<i32, StateType>::new()
         };
         return scope;
     }
@@ -302,10 +336,16 @@ impl Own{
             print("add_scope {} line:{}\n", kind, line);
         }
         let scope = VarScope::new(kind, line, exit);
-        scope.parent = self.get_scope().id;
+        let parent = self.get_scope();
+        //copy parent states
+        for(let i = 0;i < parent.state_map.len();++i){
+            let pair = parent.state_map.get_pair_idx(i).unwrap();
+            scope.state_map.add(pair.a, pair.b);
+        }
+        scope.parent = parent.id;
         let id = scope.id;
         self.scope_map.add(scope.id, scope);
-        self.get_scope().actions.add(Action::SCOPE{id, line});        
+        parent.actions.add(Action::SCOPE{id, line});        
         self.set_current(id);
         return id;
     }
@@ -368,8 +408,9 @@ impl Own{
             scope: self.get_scope().id,
             is_self: p.is_self
         };
-        self.get_scope().vars.add(var.id);
-        self.var_map.add(var.id, var);
+        self.get_scope().vars.add(p.id);
+        self.var_map.add(p.id, var);
+        self.get_scope().state_map.add(p.id, StateType::NONE);
     }
     func add_var(self, f: Fragment*, ptr: Value*){
         let rt = self.compiler.get_resolver().visit(f);
@@ -389,6 +430,7 @@ impl Own{
         rt.drop();
         self.get_scope().vars.add(var.id);
         self.var_map.add(var.id, var);
+        self.get_scope().state_map.add(f.id, StateType::NONE);
         self.do_move(&f.rhs);
     }
     func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
@@ -405,6 +447,7 @@ impl Own{
         };
         self.get_scope().vars.add(var.id);
         self.var_map.add(var.id, var);
+        self.get_scope().state_map.add(arg.id, StateType::NONE);
     }
     func add_obj(self, expr: Expr*, ptr: Value*, type: Type*){
         if(!self.is_drop_type(type)) return;
@@ -416,7 +459,7 @@ impl Own{
             scope: self.cur_scope
         };
         self.get_scope().objects.add(obj);
-        //panic("add_obj {}: {} in {}", expr, type, printMethod(self.method));
+        self.get_scope().state_map.add(expr.id, StateType::NONE);
     }
 
     func do_move(self, expr: Expr*){
@@ -434,13 +477,26 @@ impl Own{
         if(verbose){
             print("do_move {}\n", act);
         }
-        self.get_scope().actions.add(act);
-        if(rt.vh.is_some()){
-            self.get_scope().state_map.add(rt.vh.get().id, StateType::MOVED);
-        }else{
-            self.get_scope().state_map.add(expr.id, StateType::MOVED);
-        }
+        let scope = self.get_scope();
+        scope.actions.add(act);
+        self.update_state(expr, &rt, StateType::MOVED{expr.line}, scope);
         rt.drop();
+    }
+
+    func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
+        if(rt.vh.is_some()){
+            scope.state_map.add(rt.vh.get().id, kind);
+            if(scope.parent != -1){
+                scope.pending_parent.add(rt.vh.get().id, kind);
+                let parent = self.get_scope(scope.parent);
+                self.update_state(expr, rt, kind, parent);
+            }
+        }else{
+            scope.state_map.add(expr.id, kind);
+        }
+    }
+    func update_parent_state(self){
+
     }
 
     func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool): State{
@@ -465,108 +521,121 @@ impl Own{
     }
     func get_state(self, rhs: Rhs*, scope: VarScope*, look_parent: bool, exclude: i32, look_child: bool): State{
         //print("get_state {} from {} ch:{} p:{} exc:{}\n", rhs, scope.print_info(), look_child, look_parent, exclude);
-        for(let i = scope.actions.len() - 1;i >= 0;--i){
-            let act = scope.actions.get_ptr(i);
-            if let Action::MOVE(mv*) = (act){
-                //partial move
-                if let Expr::Access(scp*, name*)=(mv.rhs.expr){
-                    if(rhs is Rhs::VAR){
-                        let rhs2 = Rhs::new(scp.get(), self);
-                        if(rhs2 is Rhs::VAR && rhs.get_var().id == rhs2.get_var().id){
-                            return State::new(StateType::MOVED_PARTIAL, scope);
-                        }
-                    }
-                }
-                if(mv.is_lhs(rhs, self)){
-                    return State::new(StateType::ASSIGNED, scope);
-                }
-                if(mv.is_rhs(rhs, self)){
-                    return State::new(StateType::MOVED{mv.line}, scope);
-                }
-            }else if let Action::SCOPE(scp_id, line) = (act){
-                if(!look_child){
-                    continue;
-                }
-                if(scp_id == exclude){
-                    continue;
-                }
-                let ch_scope = self.get_scope(scp_id);
-                let ch_state = self.get_state(rhs, ch_scope, false, exclude, true);
-                if(ch_state.is_moved()){
-                    if(!ch_scope.exit.is_jump()){
-                        return ch_state;
-                    }
-                    continue;
-                }
-                if(ch_scope.kind is ScopeType::ELSE){
-                    if(ch_state.is_assigned()){
-                        let if_scope = self.get_scope(ch_scope.sibling);
-                        let if_state = self.get_state(rhs, if_scope, false, exclude, true);
-                        if(if_state.is_assigned()){
-                            return ch_state;
-                        }
-                    }
-                }
-                
-                /*if(!(ch_state.kind is StateType::NONE)){
-                    if(!ch_scope.exit.is_jump()){
-                        //check then scope too
-                        //todo dominate
-                        if(ch_scope.kind is ScopeType::ELSE){
-                            if(ch_state.kind is StateType::ASSIGNED){
-                                let if_scope = self.get_scope(ch_scope.sibling);
-                                let if_state = self.get_state(rhs, if_scope, false, exclude, true);
-                                if(if_state.kind is StateType::ASSIGNED){
-                                    //return ch_state;
-                                    continue;
-                                }
-                                if(if_state.kind is StateType::MOVED){
-                                    return if_state;
-                                }
-                                if(if_state.kind is StateType::MOVED_PARTIAL){
-                                    return if_state;
-                                }
-                                if(if_state.kind is StateType::NONE){
-                                    continue;
-                                }
-                            }
-                        }
-                        return ch_state;
-                    }
-                }
-                else if(ch_scope.kind is ScopeType::ELSE){
-                    let if_scope = self.get_scope(ch_scope.sibling);
-                    let if_state = self.get_state(rhs, if_scope, false, exclude, true);
-                    if(if_state.kind is StateType::ASSIGNED){
-                        assert(exclude == -1);
-                        exclude = ch_scope.sibling;
-                        continue;
-                    }
-                    if(if_state.kind is StateType::MOVED){
-                        return if_state;
-                    }
-                    if(if_state.kind is StateType::MOVED_PARTIAL){
-                        return if_state;
-                    }
-                    if(if_state.kind is StateType::NONE){
-                        assert(exclude == -1);
-                        exclude = ch_scope.sibling;
-                        continue;
-                    }
-                }*/
+        if(rhs is Rhs::VAR){
+            if(scope.state_map.contains(&rhs.get_var().id)){
+                return State::new(*scope.state_map.get_ptr(&rhs.get_var().id).unwrap(), scope);
+            }
+        }else{
+            let opt = scope.state_map.get_ptr(&rhs.get_id());
+            if(opt.is_some()){
+                return State::new(*opt.unwrap(), scope);
             }
         }
-        if(look_parent && scope.parent != -1){
-            let parent = self.get_scope(scope.parent);
-            let res = self.get_state(rhs, parent, true, exclude, false);
-            //todo specificly test if under sibling
-            /*if(!(res.kind is StateType::NONE) && scope.kind is ScopeType::ELSE && res.scope.kind is ScopeType::IF && res.scope.id == scope.sibling){
-                //ignore sibling move
-                return State::new(StateType::NONE, scope);
-            }*/
-            return res;
-        }
-        return State::new(StateType::NONE, scope);
+        print("{}\n", self.get_scope(self.main_scope).print(self));
+        panic("no state {} from {}", rhs, scope.kind);
+        
+        // for(let i = scope.actions.len() - 1;i >= 0;--i){
+        //     let act = scope.actions.get_ptr(i);
+        //     if let Action::MOVE(mv*) = (act){
+        //         //partial move
+        //         if let Expr::Access(scp*, name*)=(mv.rhs.expr){
+        //             if(rhs is Rhs::VAR){
+        //                 let rhs2 = Rhs::new(scp.get(), self);
+        //                 if(rhs2 is Rhs::VAR && rhs.get_var().id == rhs2.get_var().id){
+        //                     return State::new(StateType::MOVED_PARTIAL, scope);
+        //                 }
+        //             }
+        //         }
+        //         if(mv.is_lhs(rhs, self)){
+        //             return State::new(StateType::ASSIGNED, scope);
+        //         }
+        //         if(mv.is_rhs(rhs, self)){
+        //             return State::new(StateType::MOVED{mv.line}, scope);
+        //         }
+        //     }else if let Action::SCOPE(scp_id, line) = (act){
+        //         if(!look_child){
+        //             continue;
+        //         }
+        //         if(scp_id == exclude){
+        //             continue;
+        //         }
+        //         let ch_scope = self.get_scope(scp_id);
+        //         let ch_state = self.get_state(rhs, ch_scope, false, exclude, true);
+        //         if(ch_state.is_moved()){
+        //             if(!ch_scope.exit.is_jump()){
+        //                 return ch_state;
+        //             }
+        //             continue;
+        //         }
+        //         if(ch_scope.kind is ScopeType::ELSE){
+        //             if(ch_state.is_assigned()){
+        //                 let if_scope = self.get_scope(ch_scope.sibling);
+        //                 let if_state = self.get_state(rhs, if_scope, false, exclude, true);
+        //                 if(if_state.is_assigned()){
+        //                     return ch_state;
+        //                 }
+        //             }
+        //         }
+                
+        //         /*if(!(ch_state.kind is StateType::NONE)){
+        //             if(!ch_scope.exit.is_jump()){
+        //                 //check then scope too
+        //                 //todo dominate
+        //                 if(ch_scope.kind is ScopeType::ELSE){
+        //                     if(ch_state.kind is StateType::ASSIGNED){
+        //                         let if_scope = self.get_scope(ch_scope.sibling);
+        //                         let if_state = self.get_state(rhs, if_scope, false, exclude, true);
+        //                         if(if_state.kind is StateType::ASSIGNED){
+        //                             //return ch_state;
+        //                             continue;
+        //                         }
+        //                         if(if_state.kind is StateType::MOVED){
+        //                             return if_state;
+        //                         }
+        //                         if(if_state.kind is StateType::MOVED_PARTIAL){
+        //                             return if_state;
+        //                         }
+        //                         if(if_state.kind is StateType::NONE){
+        //                             continue;
+        //                         }
+        //                     }
+        //                 }
+        //                 return ch_state;
+        //             }
+        //         }
+        //         else if(ch_scope.kind is ScopeType::ELSE){
+        //             let if_scope = self.get_scope(ch_scope.sibling);
+        //             let if_state = self.get_state(rhs, if_scope, false, exclude, true);
+        //             if(if_state.kind is StateType::ASSIGNED){
+        //                 assert(exclude == -1);
+        //                 exclude = ch_scope.sibling;
+        //                 continue;
+        //             }
+        //             if(if_state.kind is StateType::MOVED){
+        //                 return if_state;
+        //             }
+        //             if(if_state.kind is StateType::MOVED_PARTIAL){
+        //                 return if_state;
+        //             }
+        //             if(if_state.kind is StateType::NONE){
+        //                 assert(exclude == -1);
+        //                 exclude = ch_scope.sibling;
+        //                 continue;
+        //             }
+        //         }*/
+        //     }
+        // }
+        // if(look_parent && scope.parent != -1){
+        //     let parent = self.get_scope(scope.parent);
+        //     let res = self.get_state(rhs, parent, true, exclude, false);
+        //     //todo specificly test if under sibling
+        //     /*if(!(res.kind is StateType::NONE) && scope.kind is ScopeType::ELSE && res.scope.kind is ScopeType::IF && res.scope.id == scope.sibling){
+        //         //ignore sibling move
+        //         return State::new(StateType::NONE, scope);
+        //     }*/
+        //     return res;
+        // }
+        // return State::new(StateType::NONE, scope);
     }
     func check(self, expr: Expr*){
         let rt = self.get_type(expr);
