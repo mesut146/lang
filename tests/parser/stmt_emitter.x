@@ -109,9 +109,9 @@ impl Compiler{
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.visit(node.then.get());
+      //else move aware end_scope
       if(node.else_stmt.is_some()){
-        //else move aware end_scope
-        self.own.get().end_scope_if(node.else_stmt.get(), get_end_line(node.then.get()));
+        self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
       }else{
         self.own.get().end_scope(get_end_line(node.then.get()));
       }
@@ -202,9 +202,9 @@ impl Compiler{
         }
       }
       self.visit(node.then.get());
+      //else move aware end_scope
       if(node.else_stmt.is_some()){
-        //else move aware end_scope
-        self.own.get().end_scope_if(node.else_stmt.get(), get_end_line(node.then.get()));
+        self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
       }else{
         self.own.get().end_scope(get_end_line(node.then.get()));
       }

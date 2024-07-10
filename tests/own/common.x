@@ -74,10 +74,21 @@ func check_ids(id1: i32){
     assert(*ids.peek_front(0) == id1);
 }
 
+func validate(c: bool, msg: String*){
+    if(!c){
+        panic("{}\n", msg);
+    }
+}
+
 func check_ids(id1: i32, id2: i32){
-    assert(ids.len() == 2);
-    assert(*ids.peek_front(0) == id1);
-    assert(*ids.peek_front(1) == id2);
+    let msg = format("id1: {}, id2: {}", id1, id2);
+    //assert(ids.len() == 2);
+    //assert(*ids.peek_front(0) == id1);
+    //assert(*ids.peek_front(1) == id2);
+    validate(ids.len() == 2, &msg);
+    validate(*ids.peek_front(0) == id1, &msg);
+    validate(*ids.peek_front(1) == id2, &msg);
+    msg.drop();
 }
 
 func check_ids(id1: i32, id2: i32, id3: i32){

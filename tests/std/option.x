@@ -66,13 +66,6 @@ impl<T> Clone for Option<T>{
   }
 }
 
-/*func drop2<T>(a: T**){
-
-}
-func drop2<T>(a: T*){
-  Drop::drop(a);
-}*/
-
 impl<T> Drop for Option<T>{
   func drop(*self){
     //if(std::is_ptr<T>()) return;

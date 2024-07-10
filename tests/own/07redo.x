@@ -21,8 +21,21 @@ func redo_both(id: i32, c: bool){
         a = A::new(id + 1);
     }else{
         a = A::new(id + 2);
-    }
+    }//no drop
     send(a);
+}
+
+func redo_else(id: i32, c: bool){
+    let aa = A::new(id);
+    send(aa);
+    if(c){
+    }else{
+        aa = A::new(id + 1);
+        //aa.drop();
+    }
+    //invalid
+    //send(aa);
+    //panic("impossible");
 }
 
 func redo_if(id: i32, c: bool){
@@ -36,20 +49,9 @@ func redo_if(id: i32, c: bool){
     //send(aa);
     //panic("impossible");
 }
-func redo_else(id: i32, c: bool){
-    let aa = A::new(id);
-    send(aa);
-    if(c){
-    }else{
-        aa = A::new(id + 1);
-    }
-    //invalid
-    //send(aa);
-    //panic("impossible");
-}
 
 func main(){
-    test();
+    /*test();
     check_ids(4);
     reset();
 
@@ -59,7 +61,15 @@ func main(){
 
     redo_both(20, false);
     check_ids(20, 22);
+    reset();*/
+
+    /*redo_else(50, true);
+    check_ids(50);
     reset();
+
+    redo_else(60, false);
+    check_ids(60, 61);
+    reset();*/
 
     redo_if(30, true);
     check_ids(30, 31);
