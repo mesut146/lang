@@ -90,7 +90,7 @@ func bootstrap(run: bool, out_dir: str){
   set_as_executable(bin2.cstr().ptr());
 }
 
-func own_test(){
+func own_test(id: i32){
   print("test::own_test\n");
   let config = CompilerConfig::new();
   config
@@ -103,7 +103,11 @@ func own_test(){
   build_std(get_out());
 
   let args = format("{}/common.a {}/std.a", get_out(), get_out());
-  compile_dir2("../tests/own", args.str(), Option::new("common.x"));
+  if(id == 1){
+    compile_dir2("../tests/own", args.str(), Option::new("common.x"));
+  }else{
+    compile_dir2("../tests/own_if", args.str(), Option::new("common.x"));
+  }
   args.drop();
   config.drop();
 }
@@ -118,7 +122,11 @@ func main(argc: i32, args: i8**){
   let cmd = Args::new(argc, args);
   let arg = cmd.get();
   if(arg.eq("own")){
-    own_test();
+    own_test(1);
+    return;
+  }
+  if(arg.eq("own2")){
+    own_test(2);
     return;
   }
   if(arg.eq("test")){

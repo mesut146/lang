@@ -975,7 +975,7 @@ impl Resolver{
     Fmt::str(last);
   }
   
-  func visit(self, node: FieldDecl*): RType{
+  func visit_field(self, node: FieldDecl*): RType{
     return self.visit_type(&node.type);
   }
 }
@@ -1231,7 +1231,8 @@ impl Resolver{
     let decl = self.get_decl(&scp).unwrap();
     let pair = self.findField(node, name, decl, &scp.type);
     let fd = pair.a.get_fields().get_ptr(pair.b);
-    return self.visit(fd);
+    scp.drop();
+    return self.visit_field(fd);
   }
   
   func fieldIndex(arr: List<FieldDecl>*, name: str, type: Type*): i32{

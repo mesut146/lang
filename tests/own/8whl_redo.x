@@ -2,11 +2,11 @@ import own/common
 import std/deque
 
 func test(){
-    let i = 0;
-    let a = A{a: ++i};
+    let i = 1;
+    let a = A::new(i);
     while(i <= 4){
         //a.drop()
-        a = A{a: ++i};
+        a = A::new(++i);
         check_ids(i - 1);
         reset();
         if(i == 5) break;

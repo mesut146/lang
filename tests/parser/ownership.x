@@ -76,7 +76,7 @@ struct VarScope{
     exit: Exit;
     parent: i32;
     sibling: i32;
-    state_map: Map<i32, StateType>; //var_id -> StateType
+    state_map: Map<Rhs, StateType>; //var_id -> StateType
     pending_parent: Map<i32, StateType>; //var_id -> StateType
 }
 
@@ -106,7 +106,7 @@ struct Move{
 struct Moved{
     expr: Expr*;
     var: Option<Variable>;
-    field: Option<String>;
+    //field: Option<String>;
 }
 
 enum Rhs{
@@ -141,55 +141,21 @@ impl StateType{
     }
 }
 
-impl Debug for Rhs{
-    func debug(self, f: Fmt*){
-        if let Rhs::EXPR(e)=(self){
-            f.print("Rhs::EXPR{");
-            f.print(e);
-            f.print("}");
-        }
-        else if let Rhs::VAR(v*)=(self){
-            f.print("Rhs::VAR{");
-            f.print(v);
-            f.print("}");
-        }
-        else if let Rhs::FIELD(scp*,name*)=(self){
-            f.print("Rhs::FIELD{");
-            f.print(scp);
-            f.print(", ");
-            f.print(name);
-            f.print("}");
-        }
-    }
-}
-
-impl Debug for Moved{
-    func debug(self, f: Fmt*){
-        if(self.var.is_some()){
-            //f.print("var{");
-            self.var.get().debug(f);
-            //f.print("}");
-        }else{
-            f.print(self.expr);
-        }
-    }
-}
-
 impl Moved{
     func new(expr: Expr*, own: Own*): Moved{
-        if let Expr::Access(scp*, name*)=(expr){
+        /*if let Expr::Access(scp*, name*)=(expr){
             let scp_rt = own.compiler.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
-                return Moved{expr, Option::new(scp_var.clone()), Option::new(name.clone())};
+                return Moved{expr, Option::new(scp_var.clone())};
             }
-        }
+        }*/
         let rt = own.compiler.get_resolver().visit(expr);
         if(rt.vh.is_some()){
             let var = own.get_var(rt.vh.get().id);
-            return Moved{expr, Option::new(var.clone()), Option<String>::new()};
+            return Moved{expr, Option::new(var.clone())};
         }
-        return Moved{expr, Option<Variable>::new(), Option<String>::new()};
+        return Moved{expr, Option<Variable>::new()};
     }
 }
 
@@ -203,7 +169,7 @@ impl Rhs{
             }
         }
         let rt = own.compiler.get_resolver().visit(expr);
-        if(rt.vh.is_some() && expr is Expr::Name){
+        if(rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary)){
             let var = own.get_var(rt.vh.get().id);
             return Rhs::VAR{var.clone()};
         }
@@ -231,7 +197,7 @@ impl Rhs{
         if let Rhs::VAR(v)=(self){
             return v.id;
         }
-        panic("");
+        panic("{}", self);
     }
     func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){
@@ -296,7 +262,7 @@ impl VarScope{
             exit: exit,
             parent: -1,
             sibling: -1,
-            state_map: Map<i32, StateType>::new(),
+            state_map: Map<Rhs, StateType>::new(),
             pending_parent: Map<i32, StateType>::new()
         };
         return scope;
@@ -341,7 +307,7 @@ impl Own{
         //copy parent states
         for(let i = 0;i < parent.state_map.len();++i){
             let pair = parent.state_map.get_pair_idx(i).unwrap();
-            scope.state_map.add(pair.a, pair.b);
+            scope.state_map.add(pair.a.clone(), pair.b);
         }
         scope.parent = parent.id;
         let id = scope.id;
@@ -410,8 +376,8 @@ impl Own{
             is_self: p.is_self
         };
         self.get_scope().vars.add(p.id);
+        self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(p.id, var);
-        self.get_scope().state_map.add(p.id, StateType::NONE);
     }
     func add_var(self, f: Fragment*, ptr: Value*){
         let rt = self.compiler.get_resolver().visit(f);
@@ -430,8 +396,8 @@ impl Own{
         };
         rt.drop();
         self.get_scope().vars.add(var.id);
+        self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(var.id, var);
-        self.get_scope().state_map.add(f.id, StateType::NONE);
         self.do_move(&f.rhs);
     }
     func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
@@ -447,8 +413,8 @@ impl Own{
             is_self: false
         };
         self.get_scope().vars.add(var.id);
+        self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(var.id, var);
-        self.get_scope().state_map.add(arg.id, StateType::NONE);
     }
     func add_obj(self, expr: Expr*, ptr: Value*, type: Type*){
         if(!self.is_drop_type(type)) return;
@@ -460,7 +426,7 @@ impl Own{
             scope: self.cur_scope
         };
         self.get_scope().objects.add(obj);
-        self.get_scope().state_map.add(expr.id, StateType::NONE);
+        self.get_scope().state_map.add(Rhs::new(expr, self), StateType::NONE);
     }
 
     func do_move(self, expr: Expr*){
@@ -480,22 +446,50 @@ impl Own{
         }
         let scope = self.get_scope();
         scope.actions.add(act);
-        //self.update_state(expr, &rt, StateType::MOVED{expr.line}, scope);
+        self.update_state(expr, &rt, StateType::MOVED{expr.line}, scope);
         rt.drop();
     }
+    //move rhs
+    func do_assign(self, lhs: Expr*, rhs: Expr*){
+        let scope = self.get_scope();
+        let rt = self.get_type(rhs);
+        if(!self.is_drop_type(&rt.type)){
+            rt.drop();
+            return;
+        }
+        let mv = Move{Option::new(Moved::new(lhs, self)), Moved::new(rhs, self), lhs.line};
+        if(verbose){
+            print("do_move {} line:{}\n", mv, lhs.line);
+        }
+        scope.actions.add(Action::MOVE{mv});
+        self.update_state(rhs, &rt, StateType::MOVED{rhs.line}, scope);
+        let rt_lhs = self.get_type(lhs);
+        self.update_state(lhs, &rt_lhs, StateType::ASSIGNED, scope);
+        rt.drop();
+        rt_lhs.drop();
+    }
 
-    /*func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
+    func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
         //scope.pending_parent.add(rt.vh.get().id, kind);
+        let rhs = Rhs::new(expr, self);
+        //set parent partially moved
+        if let Rhs::FIELD(scp*, name*) = (&rhs){
+            let scp_rhs = Rhs::new(scp.clone());
+            self.update_state(scp_rhs, StateType::MOVED_PARTIAL, scope);
+        }
+        scope.state_map.add(rhs, kind);
         if(rt.vh.is_some()){
-            scope.state_map.add(rt.vh.get().id, kind);
-            if(scope.parent != -1 && !(scope.kind is ScopeType::IF || scope.kind is ScopeType::ELSE)){
+            //scope.state_map.add(rt.vh.get().id, kind);
+            /*if(scope.parent != -1 && !(scope.kind is ScopeType::IF || scope.kind is ScopeType::ELSE)){
                 let parent = self.get_scope(scope.parent);
                 self.update_state(expr, rt, kind, parent);
-            }
+            }*/
         }else{
-            scope.state_map.add(expr.id, kind);
         }
-    }*/
+    }
+    func update_state(self, rhs: Rhs, kind: StateType, scope: VarScope*){
+        scope.state_map.add(rhs, kind);
+    }
     func update_parent_state(self){
         //let parent = self.get_scope(scope.parent);
         //self.update_state(expr, rt, kind, parent);
@@ -534,15 +528,6 @@ impl Own{
     func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool, exclude: i32): State{
         return self.get_state(&rhs, scope, look_parent, exclude, true);
     }
-    /*func get_state(self, rhs: Rhs, mv: Move*, scope: VarScope*): Option<State>{
-        if(mv.is_lhs(&rhs, self)){
-            return Option<State>::new(State::new(StateType::NONE, scope));
-        }
-        if(mv.is_rhs(&rhs, self)){
-            return Option<State>::new(State::new(StateType::MOVED{mv.line}, scope));
-        }
-        return Option<State>::new();
-    }*/
     func get_state(self, rhs: Rhs, scope: VarScope*, look_parent: bool, exclude: i32, look_child: bool): State{
         let state = self.get_state(&rhs, scope, look_parent, exclude, look_child);
         rhs.drop();
@@ -550,18 +535,30 @@ impl Own{
     }
     func get_state(self, rhs: Rhs*, scope: VarScope*, look_parent: bool, exclude: i32, look_child: bool): State{
         //print("get_state {} from {} ch:{} p:{} exc:{}\n", rhs, scope.print_info(), look_child, look_parent, exclude);
-        /*if(rhs is Rhs::VAR){
-            if(scope.state_map.contains(&rhs.get_var().id)){
-                return State::new(*scope.state_map.get_ptr(&rhs.get_var().id).unwrap(), scope);
+        if(rhs is Rhs::VAR){
+            let opt = scope.state_map.get_ptr(rhs);
+            if(opt.is_some()){
+                return State::new(*opt.unwrap(), scope);
             }
+        }else if let Rhs::FIELD(scp*, name*) = (rhs){
+            let opt = scope.state_map.get_ptr(rhs);
+            if(opt.is_some()){
+                return State::new(*opt.unwrap(), scope);
+            }else{
+                return State::new(StateType::NONE, scope);
+            }
+            //let scp_state = self.get_state(Rhs::new(scp));
         }else{
-            let opt = scope.state_map.get_ptr(&rhs.get_id());
+            let opt = scope.state_map.get_ptr(rhs);
             if(opt.is_some()){
                 return State::new(*opt.unwrap(), scope);
             }
         }
         print("{}\n", self.get_scope(self.main_scope).print(self));
-        panic("no state {} from {}", rhs, scope.kind);*/
+        panic("no state {} from {}", rhs, scope.kind);
+    }
+    func get_state2(self, rhs: Rhs*, scope: VarScope*, look_parent: bool, exclude: i32, look_child: bool): State{
+        //print("get_state {} from {} ch:{} p:{} exc:{}\n", rhs, scope.print_info(), look_child, look_parent, exclude);
         
         for(let i = scope.actions.len() - 1;i >= 0;--i){
             let act = scope.actions.get_ptr(i);
@@ -605,58 +602,13 @@ impl Own{
                         }
                     }
                 }
-                
-                /*if(!(ch_state.kind is StateType::NONE)){
-                    if(!ch_scope.exit.is_jump()){
-                        //check then scope too
-                        //todo dominate
-                        if(ch_scope.kind is ScopeType::ELSE){
-                            if(ch_state.kind is StateType::ASSIGNED){
-                                let if_scope = self.get_scope(ch_scope.sibling);
-                                let if_state = self.get_state(rhs, if_scope, false, exclude, true);
-                                if(if_state.kind is StateType::ASSIGNED){
-                                    //return ch_state;
-                                    continue;
-                                }
-                                if(if_state.kind is StateType::MOVED){
-                                    return if_state;
-                                }
-                                if(if_state.kind is StateType::MOVED_PARTIAL){
-                                    return if_state;
-                                }
-                                if(if_state.kind is StateType::NONE){
-                                    continue;
-                                }
-                            }
-                        }
-                        return ch_state;
-                    }
-                }
-                else if(ch_scope.kind is ScopeType::ELSE){
-                    let if_scope = self.get_scope(ch_scope.sibling);
-                    let if_state = self.get_state(rhs, if_scope, false, exclude, true);
-                    if(if_state.kind is StateType::ASSIGNED){
-                        assert(exclude == -1);
-                        exclude = ch_scope.sibling;
-                        continue;
-                    }
-                    if(if_state.kind is StateType::MOVED){
-                        return if_state;
-                    }
-                    if(if_state.kind is StateType::MOVED_PARTIAL){
-                        return if_state;
-                    }
-                    if(if_state.kind is StateType::NONE){
-                        assert(exclude == -1);
-                        exclude = ch_scope.sibling;
-                        continue;
-                    }
-                }*/
             }
         }
         if(look_parent && scope.parent != -1){
             let parent = self.get_scope(scope.parent);
-            let res = self.get_state(rhs, parent, true, exclude, false);
+            //let res = self.get_state(rhs, parent, true, exclude, false);
+            //assert(exclude == -1);
+            let res = self.get_state(rhs, parent, true, scope.id, true);
             //todo specificly test if under sibling
             /*if(!(res.kind is StateType::NONE) && scope.kind is ScopeType::ELSE && res.scope.kind is ScopeType::IF && res.scope.id == scope.sibling){
                 //ignore sibling move
@@ -691,7 +643,7 @@ impl Own{
     func do_return(self, line: i32){
         let scope = self.get_scope();
         if(verbose){
-            print("do_return {} line: {}\n", scope.kind, line);
+            print("do_return {} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
         dbg(scope.kind is ScopeType::MAIN && scope.line == 4, 10);
         let drops: List<Droppable> = self.get_outer_vars(scope);
@@ -759,8 +711,8 @@ impl Own{
                     else if(scope.kind is ScopeType::IF){
                         let rhs = Rhs::new(var.clone());
                         let parent_scope = self.get_scope(scope.parent);
+                        let parent_state = self.get_state(&rhs, parent_scope, true, -1, true);//exc?
                         let if_state = self.get_state(rhs, scope, false);
-                        let parent_state = self.get_state(rhs, parent_scope, true, -1, true);//exc?
                         if(parent_state.is_moved()){
                             self.drop_var(var, scope, false, line);
                         }
@@ -772,6 +724,20 @@ impl Own{
         self.set_current(scope.parent);
         if(verbose){
             print("\n");
+        }
+        //update both assign
+        if(scope.kind is ScopeType::ELSE){
+            for(let i = 0;i < scope.state_map.len();++i){
+                let pair: Pair<Rhs, StateType>* = scope.state_map.get_pair_idx(i).unwrap();
+                if(pair.b is StateType::ASSIGNED){
+                    let if_scope = self.get_scope(scope.sibling);
+                    let if_state = if_scope.state_map.get_ptr(&pair.a);
+                    if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
+                        let parent = self.get_scope(scope.parent);
+                        self.update_state(pair.a, StateType::ASSIGNED, parent);
+                    }
+                }
+            }
         }
     }
     func end_scope_update(self){
@@ -864,27 +830,12 @@ impl Own{
         }
         self.set_current(if_scope.parent);
     }
-
-    //move rhs
-    func do_assign(self, lhs: Expr*, rhs: Expr*){
-        let scope = self.get_scope();
-        let rt = self.get_type(rhs);
-        if(!self.is_drop_type(&rt.type)){
-            rt.drop();
-            return;
-        }
-        let mv = Move{Option::new(Moved::new(lhs, self)), Moved::new(rhs, self), lhs.line};
-        if(verbose){
-            print("do_move {} line:{}\n", mv, lhs.line);
-        }
-        scope.actions.add(Action::MOVE{mv});
-    }
     func drop_lhs(self, lhs: Expr*, ptr: Value*){
         if(!self.is_drop_type(lhs)){
             return;
         }
-        let rhs = Rhs::new(lhs, self);
-        let state = self.get_state(rhs, self.get_scope(), true);
+        let lhs2 = Rhs::new(lhs, self);
+        let state = self.get_state(lhs2, self.get_scope(), true);
         if(state.is_moved()){
             return;
         }
@@ -944,6 +895,9 @@ impl Own{
         let state = self.get_state(rhs, scope, look_parent);
         if(print_drop){
             print("drop_var {} state: {}\n", var, state);
+        }
+        if(var.name.eq("f") && var.line == 18){
+            print("{}\n", self.get_scope(self.main_scope).print(self));
         }
         if(state.kind is StateType::MOVED_PARTIAL){
             self.drop_partial(var, scope);
@@ -1076,6 +1030,16 @@ impl VarScope{
                 f.print(act);
             }
         }
+        for(let i=0;i<self.state_map.len();++i){
+            let pair = self.state_map.get_pair_idx(i).unwrap();
+            f.print("\n");
+            f.print(indent);
+            f.print("  state(");
+            pair.a.debug(f);
+            f.print(")");
+            f.print("=");
+            pair.b.debug(f);
+        }
         f.print("\n");
         f.print(indent);
         f.print("}");
@@ -1123,5 +1087,59 @@ impl Debug for Variable{
         f.print(", line: ");
         f.print(&self.line);
         f.print("}");
+    }
+}
+impl Debug for Rhs{
+    func debug(self, f: Fmt*){
+        if let Rhs::EXPR(e)=(self){
+            f.print("Rhs::EXPR{");
+            f.print(e);
+            f.print("}");
+        }
+        else if let Rhs::VAR(v*)=(self){
+            f.print("Rhs::VAR{");
+            f.print(v);
+            f.print("}");
+        }
+        else if let Rhs::FIELD(scp*,name*)=(self){
+            f.print("Rhs::FIELD{");
+            f.print(scp);
+            f.print(", ");
+            f.print(name);
+            f.print("}");
+        }
+    }
+}
+impl Clone for Rhs{
+    func clone(self): Rhs{
+        if let Rhs::EXPR(e)=(self){
+            return Rhs::EXPR{e};
+        }
+        if let Rhs::VAR(v*)=(self){
+            return Rhs::VAR{v.clone()};
+        }
+        panic("{}", self);
+    }
+}
+impl Eq for Rhs{
+    func eq(self, other: Rhs*): bool{
+        let s1 = Fmt::str(self);
+        let s2 = Fmt::str(other);
+        let res = s1.eq(&s2);
+        s1.drop();
+        s2.drop();
+        return res;
+    }
+}
+
+impl Debug for Moved{
+    func debug(self, f: Fmt*){
+        if(self.var.is_some()){
+            //f.print("var{");
+            self.var.get().debug(f);
+            //f.print("}");
+        }else{
+            f.print(self.expr);
+        }
     }
 }

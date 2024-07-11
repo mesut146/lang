@@ -1,7 +1,6 @@
 import own/common
 import std/deque
 
-
 func test(pp: B*, id: i32){
     //p.b.drop()
     pp.b = A{a: id};

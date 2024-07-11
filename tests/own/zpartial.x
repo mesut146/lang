@@ -14,7 +14,7 @@ impl F{
         };
     }
 }
-func test(){
+func mut_field(){
     let f = F::new(10, 20);
     f.a = A::new(15); //drop lhs
     check_ids(10);
@@ -24,6 +24,7 @@ func test(){
     send(f.a);
     send(f.b);
     check_ids(15, 20);
+    //dont drop f(all fields moved)
 }
 
 struct G{
@@ -36,6 +37,6 @@ func test_double(){
 }
 
 func main(){
-    test();
+    mut_field();
     check_ids(15, 20);
 }

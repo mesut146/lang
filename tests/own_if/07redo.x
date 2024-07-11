@@ -22,7 +22,10 @@ func redo_both(id: i32, c: bool){
     }else{
         a = A::new(id + 2);
     }//no drop
-    send(a);
+    let aa = a.a;
+    while(false){
+        let bb = a.a;
+    }
 }
 
 func redo_else(id: i32, c: bool){
@@ -51,7 +54,7 @@ func redo_if(id: i32, c: bool){
 }
 
 func main(){
-    /*test();
+    test();
     check_ids(4);
     reset();
 
@@ -61,15 +64,15 @@ func main(){
 
     redo_both(20, false);
     check_ids(20, 22);
-    reset();*/
+    reset();
 
-    /*redo_else(50, true);
+    redo_else(50, true);
     check_ids(50);
     reset();
 
     redo_else(60, false);
     check_ids(60, 61);
-    reset();*/
+    reset();
 
     redo_if(30, true);
     check_ids(30, 31);
