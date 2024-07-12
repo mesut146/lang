@@ -314,8 +314,8 @@ impl Own{
         }
         scope.parent = parent.id;
         let id = scope.id;
-        self.scope_map.add(scope.id, scope);
         parent.actions.add(Action::SCOPE{id, line});        
+        self.scope_map.add(scope.id, scope);
         self.set_current(id);
         return id;
     }

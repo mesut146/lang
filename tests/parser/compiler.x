@@ -711,7 +711,7 @@ impl CompilerConfig{
     if let LinkType::Binary(bin_name, args, run) = (&self.lt){
       let path = Compiler::link(compiled, self.out_dir.str(), bin_name, args);
       if(run){
-        Compiler::run(path);
+        Compiler::run(path.clone());
       }
       return path;
     }

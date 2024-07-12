@@ -1835,6 +1835,13 @@ impl Resolver{
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
+          for(let gi=0;gi < self.glob_map.len();++gi){
+            let old = self.glob_map.get_ptr(gi);
+            if(old.name.eq(name)){
+              //already have
+              return rt;
+            }
+          }
           self.glob_map.add(GlobalInfo{glob.name.clone(), rt.clone(), res.unit.path.clone()});
           return rt;
         }

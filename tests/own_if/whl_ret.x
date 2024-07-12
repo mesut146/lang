@@ -18,19 +18,37 @@ func whl_ret(c: bool, id: i32){
     Drop::drop(a);
 }
 
-
 func while_continue(){
     let id = 100;
     let c = true;
     let i = 0;
-    while(++i < 5){
+    while(i <= 2){
         let a = A::new(id);
+        ++i;
+        ++id;
+        if(c){
+            //a.drop()
+            continue;
+        }
+        //valid
+        a.check();
+    }
+}
+
+func while_continue2(){
+    let id = 200;
+    let c = true;
+    let i = 0;
+    while(i <= 2){
+        let a = A::new(id);
+        ++i;
+        ++id;
         if(c){
             send(a);
             continue;
         }
         //valid
-        a.check(id);
+        a.check();
     }
 }
 
@@ -41,6 +59,11 @@ func main(){
     
     whl_ret(false, 20);
     check_ids(20);
+    reset();
 
     while_continue();
+    reset();
+
+    while_continue2();
+    check_ids(200, 201, 202);
 }

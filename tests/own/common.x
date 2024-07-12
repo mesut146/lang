@@ -20,6 +20,9 @@ impl A{
     func check(self, id: i32){
         assert(self.a == id);
     }
+    func check(self){
+        
+    }
 }
 
 impl Drop for A{
@@ -91,17 +94,17 @@ func check_ids(id1: i32, id2: i32){
     //assert(ids.len() == 2);
     //assert(*ids.peek_front(0) == id1);
     //assert(*ids.peek_front(1) == id2);
-    validate(ids.len() == 2, &msg);
+    assert_eq(ids.len(), 2);
     validate(*ids.peek_front(0) == id1, &msg);
     validate(*ids.peek_front(1) == id2, &msg);
     msg.drop();
 }
 
 func check_ids(id1: i32, id2: i32, id3: i32){
-    assert(ids.len() == 3);
-    assert(*ids.peek_front(0) == id1);
-    assert(*ids.peek_front(1) == id2);
-    assert(*ids.peek_front(2) == id3);
+    assert_eq(ids.len(), 3);
+    assert_eq(*ids.peek_front(0), id1);
+    assert_eq(*ids.peek_front(1), id2);
+    assert_eq(*ids.peek_front(2), id3);
 }
 
 func check_ids(arr: [i32]): bool{
