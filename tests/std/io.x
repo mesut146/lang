@@ -212,13 +212,13 @@ func get_arg(args: i8**, idx: i32): str{
   return str::new(a1[0..len]);
 }
 
-struct Args{
+struct CmdArgs{
   args: List<String>;
 }
 
-impl Args{
-  func new(argc: i32, args: i8**): Args{
-    let res = Args{args: List<String>::new()};
+impl CmdArgs{
+  func new(argc: i32, args: i8**): CmdArgs{
+    let res = CmdArgs{args: List<String>::new()};
     for(let i = 1; i < argc;++i){
       let a1 = *ptr::get(args, i) as u8*;
       if(a1 as u64 == 0){

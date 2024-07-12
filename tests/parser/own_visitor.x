@@ -25,13 +25,13 @@ impl OwnVisitor{
         };
     }
     func get_resolver(self): Resolver*{
-        return self.own.compiler.get_resolver();
+        return self.own.get_resolver();
     }
     func do_move(self, expr: Expr*){
         self.own.do_move(expr);
     }
     func begin(self, node: Stmt*): i32{
-        let prev = self.own.cur_scope;
+        let prev = self.own.get_scope().id;
         let id = self.own.add_scope(ScopeType::ELSE, node);
         self.scopes.add(id);
         self.visit(node);

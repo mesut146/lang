@@ -54,7 +54,8 @@ impl Signature{
                     args: List<Type>::new(),
                     scope: Option<RType>::None,
                     r: Option::new(r),
-                    desc: Desc::new()};
+                    desc: Desc::new()
+        };
         let is_trait = false;                            
         if(mc.scope.is_some()){
             let str = mc.print();

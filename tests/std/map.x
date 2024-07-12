@@ -13,31 +13,8 @@ impl<K, V> Pair<K, V>{
   }
 }
 
-impl<A,B> Debug for Pair<A,B>{
-  func debug(self, f: Fmt*){
-    f.print("{");
-    Debug::debug(&self.a, f);
-    f.print(", ");
-    Debug::debug(&self.b, f);
-    f.print("}");
-  }
-}
-
 struct Map<K, V>{
   arr: List<Pair<K, V>>;
-}
-
-impl<K, V> Debug for Map<K, V>{
-  func debug(self, f: Fmt*){
-    f.print("{");
-    for(let i = 0;i < self.len();++i){
-      if(i > 0){
-        f.print(", ");
-      }
-      Debug::debug(self.arr.get_ptr(i), f);
-    }
-    f.print("}");
-  }
 }
 
 impl<K, V> Map<K, V>{
@@ -123,6 +100,27 @@ impl<K, V> Map<K, V>{
   }
 }
 
+impl<K, V> Debug for Map<K, V>{
+  func debug(self, f: Fmt*){
+    f.print("{");
+    for(let i = 0;i < self.len();++i){
+      if(i > 0){
+        f.print(", ");
+      }
+      Debug::debug(self.arr.get_ptr(i), f);
+    }
+    f.print("}");
+  }
+}
+impl<A,B> Debug for Pair<A,B>{
+  func debug(self, f: Fmt*){
+    f.print("{");
+    Debug::debug(&self.a, f);
+    f.print(", ");
+    Debug::debug(&self.b, f);
+    f.print("}");
+  }
+}
 impl<K,V> Clone for Map<K,V>{
   func clone(self): Map<K, V>{
     return Map<K, V>{self.arr.clone()};

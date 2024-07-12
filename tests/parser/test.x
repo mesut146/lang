@@ -119,7 +119,7 @@ func main(argc: i32, args: i8**){
     bootstrap(false, get_out());
     return;
   }
-  let cmd = Args::new(argc, args);
+  let cmd = CmdArgs::new(argc, args);
   let arg = cmd.get();
   if(arg.eq("own")){
     own_test(1);
@@ -141,6 +141,7 @@ func main(argc: i32, args: i8**){
   }else if(arg.eq("bt")){
     let out = get_out();
     if(cmd.has()){
+      print("cmd len={}\n", cmd.args.len());
       out = cmd.get().str();
     }
     bootstrap(false, out);

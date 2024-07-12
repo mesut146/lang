@@ -70,8 +70,14 @@ func check_ids(){
 }
 
 func check_ids(id1: i32){
-    assert(ids.len() == 1);
-    assert(*ids.peek_front(0) == id1);
+    assert_eq(ids.len(), 1);
+    assert_eq(*ids.peek_front(0), id1);
+}
+
+func assert_eq(got: i32, expected: i32){
+    if(got != expected){
+        panic("expected: {} got: {}\n", expected, got);
+    }
 }
 
 func validate(c: bool, msg: String*){
