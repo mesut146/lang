@@ -67,11 +67,18 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
                 then.list.add(drop_stmt);
             }
+            then.list.add(parse_stmt("return;".str(), unit, line));
 
             let self_id = unit.node(line);
             let block_id = unit.node(line);
             let iflet_id = unit.node(line);
-            let iflet = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
+            let iflet = IfLet{
+                type: vt,
+                args: List<ArgBind>::new(),
+                rhs: Expr::Name{.self_id, "self".str()},
+                then: Box::new(Stmt::Block{.block_id, then}),
+                else_stmt: Ptr<Stmt>::new()
+            };
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);

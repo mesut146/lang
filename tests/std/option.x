@@ -72,6 +72,8 @@ impl<T> Drop for Option<T>{
     if let Option<T>::Some(val)=(self){
       //print("%s::drop\n", std::parent_name());
       Drop::drop(val);
+      return;
     }
+    std::no_drop(self);
   }
 }

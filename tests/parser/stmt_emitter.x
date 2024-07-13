@@ -166,6 +166,7 @@ impl Compiler{
       CreateCondBr(self.branch(cmp), then_bb, elsebb);
       SetInsertPoint(then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      self.own.get().do_move(&node.rhs);
       let variant = decl.get_variants().get_ptr(index);
       self.llvm.di.get().new_scope(stmt.line);
       if(!variant.fields.empty()){
@@ -190,10 +191,19 @@ impl Compiler{
                 let ty_ptr = prm.type.clone().toPtr();
                 self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
             } else {
+                //deref
                 if (prm.type.is_prim() || prm.type.is_pointer()) {
                     let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
                     CreateStore(field_val, alloc_ptr);
                 } else {
+                    //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
+                    let rt2 = self.get_resolver().visit(&node.rhs);
+                    if(rt2.type.is_pointer() && !prm.type.is_str()){
+                      rt2.drop();
+                      self.get_resolver().err(&node.rhs, "can't deref member from ptr rhs");
+                    }else{
+                      rt2.drop();
+                    }
                     self.copy(alloc_ptr, field_ptr, &prm.type);
                     self.own.get().add_iflet_var(arg, prm, alloc_ptr);
                 }

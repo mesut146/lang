@@ -489,13 +489,11 @@ impl Compiler{
         self.own.get().do_move(arg);
         ++paramIdx;
       }
-      if(mc.name.eq("exit") && mc.scope.is_none()){
-        let stmt = parse_stmt("print_frame();".str(), self.unit(), expr.line);
-        self.visit(&stmt);
-        stmt.drop();
+      if(Resolver::is_exit(mc)){
+        self.print_frame();
       }
       let res = CreateCall(proto, args);
-      if(mc.name.eq("exit") && mc.scope.is_none()){
+      if(Resolver::is_exit(mc)){
         CreateUnreachable();
       }
       if(ptr_ret.is_some()) return ptr_ret.unwrap();

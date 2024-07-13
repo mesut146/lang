@@ -40,7 +40,7 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        single_mode: true,
-       stack_trace: true
+       stack_trace: false
     };
   }
 }
@@ -1534,6 +1534,9 @@ impl Resolver{
   } 
   func is_assert(mc: Call*): bool{
     return mc.name.eq("assert") && mc.scope.is_none();
+  }
+  func is_exit(mc: Call*): bool{
+    return mc.name.eq("exit") && mc.scope.is_none();
   }
 
   func validate_printf(self, node: Expr*, mc: Call*){

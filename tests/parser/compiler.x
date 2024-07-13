@@ -386,10 +386,13 @@ impl Compiler{
         self.make_proto(m);
     }
   }
-
+  
+  func is_frame_call(self, m: Method*): bool{
+    return m.name.eq("enter_frame") || m.name.eq("exit_frame") || m.name.eq("print_frame");
+  }
   func exit_frame(self){
     let m = *self.curMethod.get();
-    if(self.ctx.stack_trace && !m.name.eq("enter_frame") && !m.name.eq("exit_frame") && !m.name.eq("print_frame")){
+    if(self.ctx.stack_trace && !self.is_frame_call(m)){
       let stmt = parse_stmt("exit_frame();".str(), &self.get_resolver().unit, m.line);
       self.visit(&stmt);
       stmt.drop();
@@ -397,13 +400,21 @@ impl Compiler{
   }
   func enter_frame(self){
     let m = *self.curMethod.get();
-    if(self.ctx.stack_trace && !m.name.eq("enter_frame") && !m.name.eq("exit_frame") && !m.name.eq("print_frame")){
+    if(self.ctx.stack_trace && !self.is_frame_call(m)){
       let pretty = printMethod(m);
       let str = format("enter_frame(\"{} {}:{}\");", pretty, m.path, m.line);
       let stmt = parse_stmt(str, &self.get_resolver().unit, m.line);
       AllocHelper::new(self).visit(&stmt);
       self.visit(&stmt);
       pretty.drop();
+      stmt.drop();
+    }
+  }
+  func print_frame(self){
+    let m = *self.curMethod.get();
+    if(self.ctx.stack_trace && !self.is_frame_call(m)){
+      let stmt = parse_stmt("print_frame();".str(), self.unit(), m.line);
+      self.visit(&stmt);
       stmt.drop();
     }
   }

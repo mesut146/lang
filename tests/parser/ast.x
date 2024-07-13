@@ -335,6 +335,7 @@ impl Type{
   }
   func unwrap_simple(*self): Simple{
     if let Type::Simple(simple) = (self){
+      std::no_drop(self);
       return simple;
     }
     Drop::drop(self);
@@ -357,7 +358,7 @@ impl Type{
     return res;
   }
   func is_str(self): bool{
-    return self.print().eq("str");
+    return self.eq("str");
   }
   func eq(self, s: str): bool{
     let tmp = self.print();
@@ -531,6 +532,7 @@ impl Literal{
     }
     let suffix_str = self.suffix.get().print();
     let res = self.val.substr(0, self.val.len() - suffix_str.len());
+    suffix_str.drop();
     if(res.ends_with("_")){
       res = res.substr(0, res.len() - 1);
     }

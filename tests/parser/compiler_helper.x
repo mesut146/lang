@@ -56,6 +56,15 @@ struct DropHelper {
 }
 
 impl DropHelper{
+  func new(r: Resolver*): DropHelper{
+    return DropHelper{r};
+  }
+  func is_drop_type(self, expr: Expr*): bool{
+    let rt = self.r.visit(expr);
+    let res = self.is_drop_type(&rt);
+    rt.drop();
+    return res;
+  }
   func is_drop_type(self, type: Type*): bool{
     if (type.is_str() || type.is_slice()) return false;
     if (!is_struct(type)) return false;
@@ -67,9 +76,6 @@ impl DropHelper{
     let res = self.is_drop_type(&rt);
     rt.drop();
     return res;
-    /*let decl = self.r.get_decl(&rt).unwrap();
-    rt.drop();
-    return self.is_drop_decl(decl);*/
   }
   func is_drop_type(self, rt: RType*): bool{
     let type = &rt.type;

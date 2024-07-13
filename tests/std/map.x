@@ -41,6 +41,7 @@ impl<K, V> Map<K, V>{
     let pair: Pair<K, V>* = opt.unwrap();
     Drop::drop(pair.b);
     pair.b = v;
+    pair.a = k;//todo add option to keep old key
     return pair;
   }
 
@@ -84,8 +85,9 @@ impl<K, V> Map<K, V>{
     return &self.get_pair_idx(idx).unwrap().b;
   }
 
-  func remove_idx(self, idx: i64){
-    self.arr.remove(idx);
+  func remove_idx(self, idx: i64): Pair<K, V>{
+    let tmp = self.arr.remove(idx);
+    return tmp;
   }
 
   func remove(self, k: K*){
