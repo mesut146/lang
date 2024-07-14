@@ -38,6 +38,8 @@ impl Cache{
             let time = line.substr(eq + 1);
             self.map.add(path.str(), time.str());
         }
+        lines.drop();
+        buf.drop();
         //print("read_cache={}\n", self.map);
     }
     func write_cache(self){
@@ -51,6 +53,7 @@ impl Cache{
             str.append("\n");
         }
         write_string(str.str(), self.file.str());
+        str.drop();
     }
     func need_compile(self, file: str, out: str): bool{
         if(!use_cache) return true;
@@ -59,10 +62,13 @@ impl Cache{
         }
         let file_s = file.str();
         let old = self.map.get_ptr(&file_s);
+        file_s.drop();
         if(old.is_some()){
             let old_time = old.unwrap();
             let cur_time = self.get_time(file);
-            return !old_time.eq(cur_time.str());
+            let res = !old_time.eq(cur_time.str());
+            cur_time.drop();
+            return res;
         }
         return true;
     }
@@ -71,7 +77,9 @@ impl Cache{
         self.map.add(file.str(), self.get_time(file));
     }
     func get_time(self, file: str): String{
-        let time = get_last_write_time(CStr::from_slice(file).ptr());
+        let cs = CStr::from_slice(file);
+        let time = get_last_write_time(cs.ptr());
+        cs.drop();
         return time.str();
     }
     func delete_cache(out_dir: str){
@@ -79,5 +87,6 @@ impl Cache{
         if(is_file(file.str())){
             File::remove_file(file.str());
         }
+        file.drop();
     }
 }

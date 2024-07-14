@@ -39,7 +39,8 @@ impl<K, V> Map<K, V>{
     }
     //already exist, change old
     let pair: Pair<K, V>* = opt.unwrap();
-    Drop::drop(pair.b);
+    //let old_val = ptr::deref(&pair.b);
+    //Drop::drop(pair.b);
     pair.b = v;
     pair.a = k;//todo add option to keep old key
     return pair;
@@ -92,8 +93,9 @@ impl<K, V> Map<K, V>{
 
   func remove(self, k: K*){
     let idx = self.indexOf(k);
-    if(idx!= -1){
-      self.remove_idx(idx);
+    if(idx != -1){
+      let old = self.remove_idx(idx);
+      old.drop();
     }
   }
 

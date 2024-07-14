@@ -71,12 +71,13 @@ impl Compiler{
     
     func visit_while(self, stmt: Stmt*, cond: Expr*, body: Stmt*){
       let line = stmt.line;
-      let cond_name = format("while_cond_{}", line);
-      let then_name = format("while_then_{}", line);
-      let next_name = format("while_next_{}", line);
-      let then = create_bb_named(CStr::new(then_name).ptr());
-      let condbb = create_bb2_named(self.cur_func(), CStr::new(cond_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
+      let cond_name = CStr::new(format("while_cond_{}", line));
+      let then_name = CStr::new(format("while_then_{}", line));
+      let next_name = CStr::new(format("while_next_{}", line));
+      let then = create_bb_named(then_name.ptr());
+      let condbb = create_bb2_named(self.cur_func(), cond_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+      cond_name.drop();then_name.drop();next_name.drop();
       CreateBr(condbb);
       SetInsertPoint(condbb);
       CreateCondBr(self.branch(cond), then, next);
@@ -97,12 +98,13 @@ impl Compiler{
     func visit_if(self, node: IfStmt*){
       let cond = self.branch(&node.cond);
       let line = node.cond.line;
-      let then_name = format("if_then_{}", line);
-      let else_name = format("if_else_{}", line);
-      let next_name = format("if_next_{}", line);
-      let then = create_bb_named(CStr::new(then_name).ptr());
-      let elsebb = create_bb_named(CStr::new(else_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
+      let then_name = CStr::new(format("if_then_{}", line));
+      let else_name = CStr::new(format("if_else_{}", line));
+      let next_name = CStr::new(format("if_next_{}", line));
+      let then = create_bb_named(then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+      then_name.drop();else_name.drop();next_name.drop();
       CreateCondBr(cond, then, elsebb);
       self.set_and_insert(then);
       self.llvm.di.get().new_scope(node.then.get().line);
@@ -151,18 +153,20 @@ impl Compiler{
     func visit_iflet(self, stmt: Stmt*, node: IfLet*){
       let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
+      rt.drop();
       let rhs = self.get_obj_ptr(&node.rhs);
       let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
       let index = Resolver::findVariant(decl, node.type.name());
-      let cmp = CreateCmp(get_comp_op("==".cstr().ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
+      let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
   
-      let then_name = format("iflet_then_{}", stmt.line);
-      let else_name = format("iflet_else_{}", stmt.line);
-      let next_name = format("iflet_next_{}", stmt.line);
-      let then_bb = create_bb2_named(self.cur_func(), CStr::new(then_name).ptr());
-      let elsebb = create_bb_named(CStr::new(else_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
+      let then_name = CStr::new(format("iflet_then_{}", stmt.line));
+      let else_name = CStr::new(format("iflet_else_{}", stmt.line));
+      let next_name = CStr::new(format("iflet_next_{}", stmt.line));
+      let then_bb = create_bb2_named(self.cur_func(), then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+      then_name.drop();else_name.drop();next_name.drop();
       CreateCondBr(self.branch(cmp), then_bb, elsebb);
       SetInsertPoint(then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
@@ -190,6 +194,7 @@ impl Compiler{
                 CreateStore(field_ptr, alloc_ptr);
                 let ty_ptr = prm.type.clone().toPtr();
                 self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
+                ty_ptr.drop();
             } else {
                 //deref
                 if (prm.type.is_prim() || prm.type.is_pointer()) {
@@ -257,14 +262,16 @@ impl Compiler{
       }
       let f = self.cur_func();
       let line = stmt.line;
-      let then_name = format("for_then_{}", line);
-      let cond_name = format("for_cond_{}", line);
-      let update_name = format("for_update_{}", line);
-      let next_name = format("for_next_{}", line);
-      let then = create_bb_named(CStr::new(then_name).ptr());
-      let condbb = create_bb2_named(f, CStr::new(cond_name).ptr());
-      let updatebb = create_bb2_named(f, CStr::new(update_name).ptr());
-      let next = create_bb_named(CStr::new(next_name).ptr());
+      let then_name = CStr::new(format("for_then_{}", line));
+      let cond_name = CStr::new(format("for_cond_{}", line));
+      let update_name = CStr::new(format("for_update_{}", line));
+      let next_name = CStr::new(format("for_next_{}", line));
+      let then = create_bb_named(then_name.ptr());
+      let condbb = create_bb2_named(f, cond_name.ptr());
+      let updatebb = create_bb2_named(f, update_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+
+      then_name.drop();cond_name.drop();update_name.drop();next_name.drop();
   
       CreateBr(condbb);
       SetInsertPoint(condbb);
@@ -337,6 +344,7 @@ impl Compiler{
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(val);
+        type.drop();
         return;
       }
       if(!is_struct(&type)){
@@ -344,6 +352,7 @@ impl Compiler{
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(val);
+        type.drop();
         return;
       }
       let ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
@@ -352,6 +361,7 @@ impl Compiler{
       self.own.get().do_return(expr);
       self.exit_frame();
       CreateRetVoid();
+      type.drop();
     }
 }//end impl
   

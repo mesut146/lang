@@ -26,6 +26,12 @@ impl<T> Box<T>{
       std::no_drop(self);
       return res;
     }
+
+    func set(self, e: T): T{
+      let old = ptr::deref(self.val);
+      *self.val = e;
+      return old;
+    }
 }
 
 impl<T> Debug for Box<T>{
@@ -75,6 +81,16 @@ impl<T> Ptr<T>{
   }
   func unwrap(*self): T{
     return self.val.unwrap().unwrap();
+  }
+  func unwrap_box(*self): Box<T>{
+    return self.val.unwrap();
+  }
+  func set(self, e: T): Option<T>{
+    if(self.is_some()){
+      return Option::new(self.val.get().set(e));
+    }
+    self.val = Option::new(Box::new(e));
+    return Option<Box<T>>::new();
   }
 }
 

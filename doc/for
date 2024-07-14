@@ -1,0 +1,42 @@
+for(x in vec){
+
+}
+
+
+let it: ??: Iterable<T*> = vec.iter();
+while(it.has()){
+  let x: T* = it.next();
+}
+
+
+let it: ??: Iterable<T> = vec.into_iter();
+while(it.has()){
+  let x: T = it.next();
+}
+
+struct ListIter<T>{
+    idx: i32;
+    list: List<T>*;
+}
+
+impl<T> Iterator<T> for ListIter<T>{
+    func has(self): bool{
+        return self.idx < list.len();
+    }
+    func next(self): T{
+        let res = self.list.get_ptr(self.idx);
+        self.idx += 1;
+        return res;
+    }
+}
+
+impl<T> IntoIterator<T> for ListIter<T>{
+    func has(self): bool{
+        return self.idx < list.len();
+    }
+    func next(self): T{
+        let res = self.list.get_internal(self.idx);
+        self.idx += 1;
+        return res;
+    }
+}//std::no_drop(list) at the end

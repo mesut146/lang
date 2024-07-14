@@ -877,7 +877,7 @@ impl MethodResolver{
         let info = ImplInfo::new(st.into(res.line));
         //todo args of trait
         info.trait_name = imp.trait_name.clone();
-        res.parent = Parent::Impl{info};
+        //res.parent = Parent::Impl{info};
         return Pair::new(res, desc);
     }
 }

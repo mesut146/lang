@@ -27,6 +27,7 @@ impl<T> Option<T>{
     panic("unwrap on None");
   }
 
+  //read val if no drop type
   func unwrap_ptr(self): T{
     if(std::is_ptr<T>()){
       return *self.get();

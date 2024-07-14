@@ -18,7 +18,8 @@ static print_drop: bool = true;//moved or valid
 static print_drop_valid: bool = true;//only valid
 static print_drop_real: bool = false;
 static print_check: bool = false;
-static drop_enabled: bool = true;
+static drop_enabled: bool = false;
+static move_ptr_field = true;
 
 func is_drop_method(method: Method*): bool{
     if(method.name.eq("drop") && method.parent.is_impl()){
@@ -458,7 +459,13 @@ impl Own{
         }
         let scope = self.get_scope();
         scope.actions.add(act);
-        self.update_state(expr, &rt, StateType::MOVED{expr.line}, scope);
+        let rhs = Rhs::new(expr, self);
+        if let Rhs::FIELD(scp*,name*)=(&rhs){
+            if(!move_ptr_field && scp.type.is_pointer()){
+                self.get_resolver().err(expr, "move out of pointer");
+            }
+        }
+        self.update_state(rhs, StateType::MOVED{expr.line}, scope);
         rt.drop();
     }
     //move rhs
@@ -672,6 +679,7 @@ impl Own{
         if(verbose){
             print("do_return {} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
+        self.check_ptr_field(scope, line);
         dbg(scope.kind is ScopeType::MAIN && scope.line == 4, 10);
         let drops: List<Droppable> = self.get_outer_vars(scope);
         for(let i = 0;i < drops.len();++i){
@@ -698,6 +706,19 @@ impl Own{
     }
     func do_break(self){
         
+    }
+
+    func check_ptr_field(self, scope: VarScope*, line: i32){
+        for(let i = 0;i < scope.state_map.len();++i){
+            let pair = scope.state_map.get_pair_idx(i).unwrap();
+            if(pair.b is StateType::MOVED){
+                if let Rhs::FIELD(scp*, name*) = (&pair.a){
+                    if(scp.type.is_pointer()){
+                        self.get_resolver().err(line, "move out of ptr but not assigned".str());
+                    }
+                }
+            }
+        }
     }
 
     func end_scope(self, line: i32){
@@ -765,7 +786,7 @@ impl Own{
                     let if_state = if_scope.state_map.get_ptr(&pair.a);
                     if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
                         let parent = self.get_scope(scope.parent);
-                        self.update_state(pair.a, StateType::ASSIGNED, parent);
+                        self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
                     }
                 }
             }
