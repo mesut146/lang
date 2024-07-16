@@ -209,13 +209,15 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //optimized print, no heap alloc, no fmt
         //printf("..")
         if (Resolver::is_panic(mc)) {
-            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str)).str();
-            msg = normalize_quotes(msg).str();
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
+            msg = normalize_quotes(msg.str());
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
+            msg.drop();
         }else{
-            let msg = normalize_quotes(fmt_str).str();
+            let msg = normalize_quotes(fmt_str);
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            msg.drop();
         }
         r.visit(block);
         r.format_map.add(node.id, info);
@@ -238,6 +240,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             }
             let sub2 = normalize_quotes(sub);
             let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit, line);
+            sub2.drop();
             block.list.add(st);
             if(br_pos == -1){
                 break;
@@ -260,11 +263,11 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);
-        return;
     }else if(Resolver::is_panic(mc)){
         //"<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
+        pos_info.drop();
         block.list.add(pos_info_st);
         //f.buf.print();
         let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
@@ -276,7 +279,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //print("block={}\n", block);
         r.visit(block);
         r.format_map.add(node.id, info);
-        return;
     }else if(Resolver::is_format(mc)){
         //f.unwrap()
         let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
@@ -284,9 +286,11 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.visit(block);
         r.visit(info.unwrap_mc.get());
         r.format_map.add(node.id, info);
-        return;
+    }else{
+        info.drop();
+        r.err(node, "generate_format");
     }
-    r.err(node, "generate_format");
+    var_name.drop();
 }
 
 //replace non escaped quotes into escaped ones
@@ -352,6 +356,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let block = &info.block;
     let arg_norm = normalize_quotes(arg.print().str());
     let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, printMethod(r.curMethod.unwrap()));
+    arg_norm.drop();
     block.list.add(parse_stmt(str, &r.unit, line));
     r.visit(block);
     r.format_map.add(node.id, info);

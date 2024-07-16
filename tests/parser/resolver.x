@@ -199,6 +199,14 @@ impl RType{
       method_desc: self.method_desc.clone()
     };
   }
+  func unwrap(*self): Type{
+    let res = self.type;
+    self.value.drop();
+    self.vh.drop();
+    self.desc.drop();
+    self.method_desc.drop();
+    return res;
+  }
   func is_decl(self): bool{
     return self.desc.kind.is_decl();
   }
@@ -689,7 +697,7 @@ impl Resolver{
   func visit_item(self, node: Item*){
     if let Item::Method(m*) = (node){
       self.visit_method(m);
-    }else if let Item::Type(name, rhs) = (node){
+    }else if let Item::Type(name*, rhs*) = (node){
       //pass
     }else if let Item::Impl(imp*) = (node){
       self.visit_impl(imp);
@@ -1301,11 +1309,11 @@ impl Resolver{
     let field_idx = 0;
     let names = List<String>::new();
     for (let i = 0; i < args.len(); ++i) {
-        let e = args.get_ptr(i);
+        let e: Entry* = args.get_ptr(i);
         if (e.isBase) continue;
         let prm_idx = 0;
         if (hasNamed) {
-            names.add(e.name.unwrap());
+            names.add(e.name.get().clone());
             prm_idx = fieldIndex(fields, e.name.get().str(), &type);
         } else {
             prm_idx = field_idx;
@@ -1810,7 +1818,10 @@ impl Resolver{
       return res;
     }else if(kind is LitKind::CHAR){
       let res = RType::new("u32");
-      res.value = Option::new(value);
+      //res.value = Option::new(value);
+      assert(value.len() == 1);
+      res.value = Option::new(i64::print(value.get(0)));
+      value.drop();
       return res;
     }
     panic("lit");
@@ -1943,7 +1954,7 @@ impl Resolver{
     }else if let Stmt::Block(b*) = (node){
       self.visit(b);
       return;
-    }else if let Stmt::Ret(e) = (node){
+    }else if let Stmt::Ret(e*) = (node){
       if(e.is_some()){
         //todo
         self.visit(e.get());
@@ -2094,7 +2105,13 @@ impl Resolver{
     if(node.type.is_none()){
       return rhs.clone();
     }
-    let type = self.visit_type(node.type.get());
-    return type;
+    let res = self.visit_type(node.type.get());
+    let err_opt = MethodResolver::is_compatible(&rhs.type, &rhs.value, &res.type);
+    if(err_opt.is_some()){
+      self.err(node.line, format("type mismatch {} vs {}\n{}", res.type, rhs.type, err_opt.get()));
+    }
+    err_opt.drop();
+    rhs.drop();
+    return res;
   }
 }

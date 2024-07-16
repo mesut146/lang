@@ -51,7 +51,13 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
     file.append("/");
     file.append(name);
     if(is_dir(file.str())) continue;
-    Compiler::compile_single(root(), get_out(), file.str(), args);
+    let config = CompilerConfig::new();
+    config
+      .set_file(file)
+      .set_out(get_out())
+      .add_dir(root())
+      .set_link(LinkType::Binary{"a.out", args, true});
+    Compiler::compile_single(config);
   }
 }
 
@@ -67,7 +73,7 @@ func compiler_test(std_test: bool){
       .set_out(get_out())
       .add_dir(root())
       .set_link(LinkType::Static{"rt.a"});
-    let lib = Compiler::compile_single(&config);
+    let lib = Compiler::compile_single(config);
     compile_dir2("../tests/normal", lib.str());
   }
 }
@@ -98,7 +104,7 @@ func own_test(id: i32){
     .set_out(get_out())
     .add_dir(root())
     .set_link(LinkType::Static{"common.a"});
-  Compiler::compile_single(&config);
+  Compiler::compile_single(config);
 
   build_std(get_out());
 
@@ -109,7 +115,6 @@ func own_test(id: i32){
     compile_dir2("../tests/own_if", args.str(), Option::new("common.x"));
   }
   args.drop();
-  config.drop();
 }
 
 func main(argc: i32, args: i8**){
@@ -145,15 +150,19 @@ func main(argc: i32, args: i8**){
       out = cmd.get().str();
     }
     bootstrap(false, out);
-  }else if(arg.eq("leak")){
-    Compiler::compile_single(root(), get_out(), "../tests/normal/alloc.x", "");
   }
   else if(arg.eq("c")){
     let path = get_arg(args, 2);
     if(is_dir(path)){
       Compiler::compile_dir(path, get_out(), root(), LinkType::Binary{bin_name(path).str(), "", true});
     }else{
-      Compiler::compile_single(root(), get_out(), path, "");
+      let config = CompilerConfig::new();
+      config
+      .set_file(path)
+      .set_out(get_out())
+      .add_dir(root())
+      .set_link(LinkType::Binary{"a.out", "", false});
+      Compiler::compile_single(config);
     }
   }else{
     panic("invalid cmd: {}", arg);

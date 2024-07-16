@@ -101,6 +101,11 @@ impl String{
         }
         return self;
     }
+    func append(self, s: String): String*{
+      self.append(&s);
+      s.drop();
+      return self;
+    }
 
     func append(self, chr: i8): String*{
         self.arr.add(chr as u8);

@@ -21,7 +21,7 @@ impl Parser{
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
-    let lexer = Lexer::from_string("<buf>".str(), buf.clone(), line);
+    let lexer = Lexer::from_string("<buf>".str(), buf, line);
     let res = Parser{lexer.path.clone(), lexer.buf.clone(),  List<Token>::new(), 0, Option<Unit*>::new()};
     res.fill(lexer);
     return res;
@@ -107,6 +107,7 @@ impl Parser{
   }
   func err(self, msg: String){
     self.err(msg.str());
+    msg.drop();
   }
     
     func parse_unit(self): Unit{

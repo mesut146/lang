@@ -18,7 +18,8 @@ static print_drop: bool = true;//moved or valid
 static print_drop_valid: bool = true;//only valid
 static print_drop_real: bool = false;
 static print_check: bool = false;
-static drop_enabled: bool = false;
+
+static drop_enabled: bool = true;
 static move_ptr_field = true;
 
 func is_drop_method(method: Method*): bool{
@@ -709,12 +710,13 @@ impl Own{
     }
 
     func check_ptr_field(self, scope: VarScope*, line: i32){
+        if(!move_ptr_field) return;
         for(let i = 0;i < scope.state_map.len();++i){
             let pair = scope.state_map.get_pair_idx(i).unwrap();
-            if(pair.b is StateType::MOVED){
+            if let StateType::MOVED(mv_line) = (pair.b){
                 if let Rhs::FIELD(scp*, name*) = (&pair.a){
                     if(scp.type.is_pointer()){
-                        self.get_resolver().err(line, "move out of ptr but not assigned".str());
+                        self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}", mv_line));
                     }
                 }
             }
@@ -990,7 +992,7 @@ impl Own{
             return;
         }
         let rhs = Rhs::new(var.clone());
-        dbg(var.name.eq("f"), 33);
+        dbg(var.name.eq("res") && var.line == 853, 55);
         let state = self.get_state(&rhs, scope, look_parent);
         if(print_drop && !print_drop_valid){
             print("drop_var {} line: {} state: {}\n", var, line,  state);

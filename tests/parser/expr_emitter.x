@@ -802,21 +802,21 @@ impl Compiler{
     func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
         let type = &self.get_resolver().visit(l).type;
         if(is_comp(op.str())){
-        //todo remove redundant cast
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
-        return CreateCmp(get_comp_op(op.clone().cstr().ptr()), lv, rv);
+          //todo remove redundant cast
+          let lv = self.cast(l, type);
+          let rv = self.cast(r, type);
+          return CreateCmp(get_comp_op(op.clone().cstr().ptr()), lv, rv);
         }
         if(op.eq("&&") || op.eq("||")){
-        return self.andOr(op, l, r).a;
+          return self.andOr(op, l, r).a;
         }
         if(op.eq("=")){
-        return self.visit_assign(l, r);
+          return self.visit_assign(l, r);
         }
         if(op.eq("+")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
-        return CreateNSWAdd(lv, rv);
+          let lv = self.cast(l, type);
+          let rv = self.cast(r, type);
+          return CreateNSWAdd(lv, rv);
         }
         if(op.eq("-")){
         let lv = self.cast(l, type);

@@ -46,7 +46,7 @@ func makeSelf(scope: Type*): Type{
 }
 
 func replace_self(typ: Type*, m: Method*): Type{
-    if(!typ.print().eq("Self")){
+    if(!typ.eq("Self")){
         return typ.clone();
     }
     if let Parent::Impl(info*)=(&m.parent){
@@ -77,8 +77,7 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
             let tp = typeParams.get_ptr(i);
-            let type_str = type.print();
-            if (tp.print().eq(&type_str)) return true;
+            if (tp.eq(type)) return true;
         }
     } else {
         for (let i = 0;i < targs.size();++i) {
@@ -90,20 +89,23 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
 }
 
 func isGeneric2(typ: Type*, typeParams: List<Type>*): bool{
-    let type_str = typ.print();
     for (let i = 0;i < typeParams.size();++i) {
-        if (typeParams.get_ptr(i).print().eq(&type_str)) return true;
+        if (typeParams.get_ptr(i).eq(typ)) return true;
     }
     return false;
 }
 
 func isUnsigned(type: Type*): bool{
-    let s = type.print();
-    return s.eq("u8") || s.eq("u16") || s.eq("u32") || s.eq("u64");
+    let str = type.print();
+    let res = str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
+    str.drop();
+    return res;
 }
 func isSigned(type: Type*): bool{
-    let s = type.print();
-    return s.eq("i8") || s.eq("i16") || s.eq("i32") || s.eq("i64");
+    let str = type.print();
+    let res = str.eq("i8") || str.eq("i16") || str.eq("i32") || str.eq("i64");
+    str.drop();
+    return res;
 }
 
 func max_for(type: Type*): i64{
@@ -168,6 +170,7 @@ func demangle(input: str): String{
     s = s.replace("$P", "*");
     s = s.replace("__", "::");
     res.print(&s);
+    s.drop();
     return res.unwrap();
 }
 
@@ -187,6 +190,9 @@ func mangleType(type: Type*, f: Fmt*){
 
 func mangle(m: Method*): String{
   if(is_main(m)) return m.name.clone();
+  if(m.parent is Parent::Extern){
+    return m.name.clone();
+  }
   let f = Fmt::new();
   if let Parent::Impl(info*) = (&m.parent){
     mangleType(&info.type, &f);
@@ -194,8 +200,6 @@ func mangle(m: Method*): String{
   }else if let Parent::Trait(ty*) = (&m.parent){
     mangleType(ty, &f);
     f.print("__");
-  }else if let Parent::Extern = (&m.parent){
-    return m.name.clone();
   }
   f.print(&m.name);
   if(m.type_params.len() > 0){

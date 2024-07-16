@@ -630,7 +630,7 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
   if let Expr::Type(ty*)=(e){
     return true;//enum creation
   }
-  if let Expr::Array(list*,size)=(e){
+  if let Expr::Array(list*,size*)=(e){
     return true;
   }
   if let Expr::Call(call*)=(e){

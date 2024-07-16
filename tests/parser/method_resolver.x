@@ -82,6 +82,7 @@ impl Signature{
                 res.args.add(real_scope.get().type.clone());
             }
             real_scope.drop();
+            str.drop();
         }
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get_ptr(i);
@@ -228,8 +229,7 @@ impl MethodResolver{
                     if(imp.info.trait_name.is_none()){
                         continue;
                     }
-                    let tr_str = (*tr.get()).print();
-                    if(!imp.info.trait_name.get().eq(tr_str.str())){
+                    if(!imp.info.trait_name.get().eq(*tr.get())){
                         continue;
                     }
                 }
@@ -332,9 +332,6 @@ impl MethodResolver{
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
-        if(mc.print().eq("free(self.ptr as i8*)") && expr.id == 511){
-            let x = 10;
-        }
         let list = self.collect(sig);
         if(list.empty()){
             let msg = format("no such method {}", sig);
@@ -376,10 +373,10 @@ impl MethodResolver{
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {} has {} candidates\n", mc, real.size());
-            for(let i=0;i < real.len();++i){
-                let err = *real.get_ptr(i);
+            for(let i = 0;i < real.len();++i){
+                let err: Signature* = *real.get_ptr(i);
                 msg.append("\n");
-                msg.append(err.print().str());
+                msg.append(err.print());
             }
             Drop::drop(list);
             Drop::drop(real);
@@ -429,7 +426,7 @@ impl MethodResolver{
                 }
             }
         }
-        dbg(mc.print().eq("Debug::debug(self.value, f)"), 10);
+        dbg(mc.print(), "Debug::debug(self.value, f)", 10);
         //infer from args
         for (let k = 0; k < sig.args.size(); ++k) {
             let arg_type = sig.args.get_ptr(k);
@@ -502,11 +499,8 @@ impl MethodResolver{
         }
         let imp = m.parent.as_impl();
         let ty = &imp.type;
-        let scope = &sig.scope.get().type;
-        let scope_str = scope.print();
-        let ty_str = ty.print();
-        if(ty_str.eq(scope_str.str())){
-            Drop::drop(ty_str);
+        let scope: Type* = &sig.scope.get().type;
+        if(ty.eq(scope)){
             return self.check_args(sig, sig2);
         }
 
@@ -519,11 +513,10 @@ impl MethodResolver{
                 return self.check_args(sig, sig2);
             }
             else if (!real_scope.name().eq(ty.name())) {
-                let real_scope_str =  real_scope.print();
-                return SigResult::Err{format("not same impl {} vs {}", real_scope_str, ty_str)};
+                return SigResult::Err{format("not same impl {} vs {}", real_scope, ty)};
             }
         } else if (!scope.name().eq(ty.name().str())) {
-            return SigResult::Err{format("not same impl {} vs {}", scope_str, ty_str)};
+            return SigResult::Err{format("not same impl {} vs {}", scope, ty)};
             //return self.check_args(sig, sig2);
         } else{
         }
@@ -535,9 +528,11 @@ impl MethodResolver{
             //generated method impl
             //check they belong same impl
             let scp_rt = sig.scope.get();
+            let scp_rt2 = Option<RType>::new();
             if(sig.scope.get().is_method()){
                 let tmp = self.r.visit_type(&scp_rt.type);
-                scp_rt = &tmp;
+                scp_rt2 = Option::new(tmp);
+                scp_rt = scp_rt2.get();
             }
             else if(sig.scope.get().is_trait()){
             }else{
@@ -545,14 +540,16 @@ impl MethodResolver{
                 if(!decl.is_generic){
                     let scope_args = scope.get_args();
                     for (let i = 0; i < scope_args.size(); ++i) {
-                        let tp_str = ty.get_args().get_ptr(i).print();
-                        let scope_args_str = scope_args.get_ptr(i).print();
-                        if (!scope_args_str.eq(&tp_str)){
+                        let tp = ty.get_args().get_ptr(i);
+                        let scope_arg = scope_args.get_ptr(i);
+                        if (!scope_arg.eq(tp)){
+                            scp_rt2.drop();
                             return SigResult::Err{"not same impl".str()};
                         }
                     }
                 }
             }
+            scp_rt2.drop();
         }
         //check if args are compatible with non generic params
         return self.check_args(sig, sig2);
@@ -569,11 +566,11 @@ impl MethodResolver{
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
-        if(mc.print().eq("Drop::drop(pair.b)")){
-            let aa = 10;
-        }
+        dbg(mc.print(), "Drop::drop(pair.b)", 66);
+      
         for (let i = 0; i < sig.args.len(); ++i) {
             let t1: Type = sig.args.get_ptr(i).clone();
+            let t1p: Type* = sig.args.get_ptr(i);
             let t2: Type* = sig2.args.get_ptr(i);
             if(i == 0 && method.self.is_some()){
                 if (t2.is_pointer()) {
@@ -583,7 +580,9 @@ impl MethodResolver{
                     }
                 } else {
                     if (t1.is_pointer()) {
-                        return SigResult::Err{format("can't convert borrowed self to *self, {} vs {}", &t1, t2)};
+                        typeParams.drop();
+                        t1.drop();
+                        return SigResult::Err{format("can't convert borrowed self to *self, {} vs {}", t1p, t2)};
                     }
                 }
             }
@@ -594,33 +593,34 @@ impl MethodResolver{
             }
             let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
-                let arg = "";
+                let arg = String::new();
+                arg.drop();
                 if(method.self.is_some()){
                     if(mc.is_static){
-                        arg = mc.args.get_ptr(i).print().str();
+                        arg = mc.args.get_ptr(i).print();
                     }else{
-                        arg = mc.scope.get().print().str();
+                        arg = mc.scope.get().print();
                     }
                 }else{
                     if(!mc.is_static && mc.scope.is_some()){
-                        arg = mc.scope.get().print().str();
+                        arg = mc.scope.get().print();
                     }else{
-                        arg = mc.args.get_ptr(i).print().str();
+                        arg = mc.args.get_ptr(i).print();
                     }
                 }
                 let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}\n{}\nagrs: {}", t1_str.str(), arg, t2_str.str(), cmp.get(), typeParams)};
-                if(t1_str.eq("Option<String>*") && t2_str.eq("Option<T>*")){
-                    let a = 10;
-                }
+                arg.drop();
                 Drop::drop(t1_str);
                 Drop::drop(t2_str);
                 Drop::drop(typeParams);
                 Drop::drop(cmp);
+                t1.drop();
                 return res;
             }
             Drop::drop(t1_str);
             Drop::drop(t2_str);
             Drop::drop(cmp);
+            t1.drop();
         }
         Drop::drop(typeParams);
         if(all_exact){
@@ -711,6 +711,7 @@ impl MethodResolver{
                 /*if (cmp.cast) {
                     return CompareResult("cant cast subtype");
                 }*/
+                cmp.drop();
             }
             return Option<String>::new();
         }
@@ -827,7 +828,7 @@ impl MethodResolver{
             let gm = self.r.generated_methods.get_ptr(i).get();
             if(!m.name.eq(gm.name.str())) continue;
             let sig2 = Signature::new(gm, Desc::new());
-            dbg(sig.mc.unwrap().print().eq("one(3, 4)"), 2);
+            dbg(sig.mc.unwrap().print(), "one(3, 4)", 2);
             let sig_res: SigResult = self.is_same(sig, &sig2);
             let is_err = sig_res is SigResult::Err;
             Drop::drop(sig2);
@@ -844,7 +845,7 @@ impl MethodResolver{
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
-        dbg(printMethod(&res2).eq("Option<RType>::drop(*self)"), 10);
+        dbg(printMethod(&res2), "Option<RType>::drop(*self)", 10);
         //print("add gen {} {}\n", printMethod(&res2), sig.mc.unwrap_ptr());
         let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{
@@ -877,7 +878,7 @@ impl MethodResolver{
         let info = ImplInfo::new(st.into(res.line));
         //todo args of trait
         info.trait_name = imp.trait_name.clone();
-        //res.parent = Parent::Impl{info};
+        res.parent = Parent::Impl{info};
         return Pair::new(res, desc);
     }
 }

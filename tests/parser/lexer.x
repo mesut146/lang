@@ -100,6 +100,7 @@ impl Lexer{
   }
   func err(self, msg: String){
     self.err(msg.str());
+    msg.drop();
   }
   
   func line_comment(self): Token{

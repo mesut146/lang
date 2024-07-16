@@ -93,7 +93,9 @@ impl Protos{
   }
   func get(self, d: Decl*): llvm_Type*{
     let name = d.type.print();
-    return self.get(&name);
+    let res = self.get(&name);
+    name.drop();
+    return res;
   }
   func get(self, name: String*): llvm_Type*{
     let res = self.classMap.get_ptr(name);
@@ -317,7 +319,13 @@ impl Compiler{
           panic("prim not const {}", gl);
         }
         let rhs_str = gl.expr.print();
-        init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+        if(rhs_str.eq("true")){
+          init =  makeInt(1, 8) as Constant*;
+        }else if(rhs_str.eq("false")){
+          init =  makeInt(0, 8) as Constant*;
+        }else{
+          init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+        }
       }else if(is_struct(&rt.type)){
         init = ConstantStruct_get(ty as StructType*);
       }else{
@@ -339,6 +347,7 @@ impl Compiler{
             panic("glob rhs {}", gl);
           }
         }
+        rt.drop();
       }
     }
     replaceGlobalVariables(self.llvm.di.get().cu, globs);
@@ -356,7 +365,7 @@ impl Compiler{
     let elems = make_vector_Constant();
     vector_Constant_push(elems, ctor_init_struct);
     let ctor_init = ConstantArray_get(ctor_ty, elems);
-    let ctor = make_global_linkage("llvm.global_ctors".str().cstr().ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
+    let ctor = make_global_linkage("llvm.global_ctors".ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
     CreateRetVoid();
     method.drop();
   }
@@ -545,7 +554,9 @@ impl Compiler{
 
   func getType(self, e: Expr*): Type{
     let rt = self.get_resolver().visit_cached(e);
-    return rt.type.clone();
+    let res = rt.type.clone();
+    rt.drop();
+    return res;
   }
 
   func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
@@ -613,20 +624,7 @@ impl Compiler{
     path_c.drop();
   }
 
-  func compile_single(src_dir: str, out_dir: str, file: str, args: str){
-    create_dir(out_dir);
-    let ctx = Context::new(src_dir.str(), out_dir.str());
-    let cmp = Compiler::new(ctx);
-    let compiled = List<String>::new();
-    use_cache = false;
-    let cache = Cache::new(out_dir);
-    let obj = cmp.compile(file, &cache);
-    compiled.add(obj);
-    let path = link(&compiled, out_dir, bin_name(file).str(), args);
-    run(path);
-    Drop::drop(cmp);
-  }
-  func compile_single(config: CompilerConfig*): String{
+  func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.src_dirs.remove(0), config.out_dir.clone());
     let cmp = Compiler::new(ctx);
@@ -634,9 +632,13 @@ impl Compiler{
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
     let obj = cmp.compile(config.file.str(), &cache);
-    Drop::drop(cmp);
     compiled.add(obj);
-    return config.link(&compiled);
+    let res = config.link(&compiled);
+    config.drop();
+    cmp.drop();
+    compiled.drop();
+    cache.drop();
+    return res;
   }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
@@ -716,6 +718,10 @@ impl CompilerConfig{
   }
   func set_file(self, file: str): CompilerConfig*{
     self.file = file.str();
+    return self;
+  }
+  func set_file(self, file: String): CompilerConfig*{
+    self.file = file;
     return self;
   }
   func link(self, compiled: List<String>*): String{

@@ -276,7 +276,9 @@ impl i64{
       neg = true;
     }
     while(pos < s.len()){
-      x = 10 * x + (s.get(pos) as i64 - ('0' as i64));
+      let ch = s.get(pos) as i32;
+      assert(ch >= '0' && ch <= '9');
+      x = 10 * x + (ch as i64 - ('0' as i64));
       ++pos;
     }
     if(neg){
