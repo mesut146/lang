@@ -99,3 +99,23 @@ impl<T> Clone for Ptr<T>{
     return Ptr<T>{Clone::clone(&self.val)};
   }
 }
+
+struct RawPtr<T>{
+  ptr: T*;
+}
+
+impl<T> RawPtr<T>{
+  func new(ptr: T*): RawPtr<T>{
+    return RawPtr<T>{ptr: ptr};
+  }
+  func get(self): T*{
+    return self.ptr;
+  }
+}
+
+impl<T> Drop for RawPtr<T>{
+  func drop(*self){
+    let ptr = self.ptr as i8*;
+    free(ptr);
+  }
+}

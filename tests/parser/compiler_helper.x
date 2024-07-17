@@ -46,6 +46,7 @@ impl RvalueHelper{
             res.rvalue = true;
             res.scope_type = Option::new(scope_type.type.clone());
          }
+         scope_type.drop();
        }
        return res;
     }
@@ -183,6 +184,7 @@ impl DropHelper{
     }
     let key = rt.type.print();
     let method_desc = self.r.drop_map.get_ptr(&key).unwrap();
+    key.drop();
     //panic("{} -> {}", rt);
     return self.r.get_method(method_desc, &decl.type).unwrap();
   }
@@ -289,11 +291,16 @@ func getMethods(unit: Unit*): List<Method*>{
 
 impl Compiler{
   func mapType(self, type: Type*): llvm_Type*{
-    let p = self.protos.get();
     let r = self.get_resolver();
     let rt = r.visit_type(type);
-    type = &rt.type;
-    let s = type.print();
+    let str = rt.type.print();
+    let res = self.mapType(&rt.type, &str);
+    rt.drop();
+    str.drop();
+    return res;
+  }
+  func mapType(self, type: Type*, s: String*): llvm_Type*{
+    let p = self.protos.get();
     if(s.eq("str")){
       return p.std("str") as llvm_Type*;
     }
@@ -313,11 +320,11 @@ impl Compiler{
       let elem_ty = self.mapType(elem.get());
       return getPointerTo(elem_ty) as llvm_Type*;
     }
-    if(!p.classMap.contains(&s)){
+    if(!p.classMap.contains(s)){
       p.dump();
       panic("mapType {}\n", s);
     }
-    return p.get(&s);
+    return p.get(s);
   }
 
   func make_decl_proto(self, decl: Decl*){
@@ -327,11 +334,15 @@ impl Compiler{
       for(let i = 0;i < vars.len();++i){
         let ev = vars.get_ptr(i);
         let name = format("{}::{}", decl.type, ev.name);
-        let var_ty = make_struct_ty(name.clone().cstr().ptr());
+        let name_c = name.clone().cstr();
+        let var_ty = make_struct_ty(name_c.ptr());
+        name_c.drop();
         p.classMap.add(name, var_ty as llvm_Type*);
       }
     }
-    let st = make_struct_ty(decl.type.print().cstr().ptr());
+    let type_c = decl.type.print().cstr();
+    let st = make_struct_ty(type_c.ptr());
+    type_c.drop();
     p.classMap.add(decl.type.print(), st as llvm_Type*);
   }
 
@@ -381,6 +392,7 @@ impl Compiler{
         let name = format("{}::{}", decl.type, ev.name.str());
         let var_ty = p.get(&name) as StructType*;
         self.make_variant_type(ev, decl, &name, var_ty);
+        name.drop();
         let sz = getSizeInBits(var_ty);
         if(sz > max){
           max = sz;
@@ -456,11 +468,12 @@ impl Compiler{
         linkage = odr();
       }
     }
-
-    let f = make_func(ft, linkage, mangled.clone().cstr().ptr());
+    let mangled_c = mangled.clone().cstr();
+    let f = make_func(ft, linkage, mangled_c.ptr());
+    mangled_c.drop();
     if(rvo){
       let arg = get_arg(f, 0);
-      Argument_setname(arg, CStr::from_slice("ret").ptr());
+      Argument_setname(arg, "ret".ptr());
       Argument_setsret(arg, self.mapType(&m.type));
     }
     self.protos.get().funcMap.add(mangled, f);
@@ -483,8 +496,10 @@ impl Compiler{
     let rt = self.get_resolver().visit_type(type);
     if(rt.is_decl()){
       let decl = self.get_resolver().get_decl(&rt).unwrap();
+      rt.drop();
       return self.getSize(decl);
     }
+    rt.drop();
     panic("getSize {}", type);
   }
 
@@ -493,20 +508,22 @@ impl Compiler{
     return getSizeInBits(mapped as StructType*);
   }
 
-  func cast(self, expr: Expr*, type: Type*): Value*{
+  func cast(self, expr: Expr*, target_type: Type*): Value*{
     let val = self.loadPrim(expr);
     let val_ty = Value_getType(val);
     let src = getPrimitiveSizeInBits(val_ty);
-    let trg = self.getSize(type);
-    let trg_ty = getInt(trg as i32);
-    let src_type = &self.get_resolver().visit(expr).type;
-    if(src < trg){
-      if(isUnsigned(src_type)){
+    let trg_size = self.getSize(target_type);
+    let trg_ty = getInt(trg_size as i32);
+    if(src < trg_size){
+      let src_type = self.get_resolver().getType(expr);
+      if(isUnsigned(&src_type)){
+        src_type.drop();
         return CreateZExt(val, trg_ty);
       }else{
+        src_type.drop();
         return CreateSExt(val, trg_ty);
       }
-    }else if(src > trg){
+    }else if(src > trg_size){
       return CreateTrunc(val, trg_ty);
     }
     return val;
@@ -517,7 +534,9 @@ impl Compiler{
     let ty = Value_getType(val);
     if(!isPointerTy(ty)) return val;
     let type = self.getType(expr);
-    return CreateLoad(self.mapType(&type), val);//local var
+    let res = CreateLoad(self.mapType(&type), val);//local var
+    type.drop();
+    return res;
   }
 
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
@@ -571,8 +590,10 @@ impl Compiler{
     if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
       let ty = self.getType(node);
       if(ty.is_pointer()){
+        ty.drop();
         return CreateLoad(getPtr(), val);
       }
+      ty.drop();
       return val;
     }
     panic("get_obj_ptr {}", node);
@@ -584,6 +605,7 @@ impl Compiler{
     let tag_idx = get_tag_index(decl);
     let tag = self.get_obj_ptr(expr);
     let mapped = self.mapType(rt.type.unwrap_ptr());
+    rt.drop();
     tag = self.gep2(tag, tag_idx, mapped);
     return CreateLoad(getInt(ENUM_TAG_BITS()), tag);
   }
@@ -596,7 +618,10 @@ impl Compiler{
   }
 
   func mangle_unit(path: str): String{
-    return path.replace(".", "_").replace("/", "_");
+    let s1 = path.replace(".", "_");
+    let res = s1.replace("/", "_");
+    s1.drop();
+    return res;
   }
 
   func mangle_static(path: str): String{
@@ -637,8 +662,10 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     let rt = r.visit(e);
     if(rt.is_method()){
       let target = r.get_method(&rt).unwrap();
+      rt.drop();
       return is_struct(&target.type);
     }
+    rt.drop();
     return false;
   }
   return false;

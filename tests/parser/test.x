@@ -30,7 +30,8 @@ func make_context(): Context{
 
 func build_std(out_dir: str){
   use_cache = true;
-  Compiler::compile_dir("../tests/std", out_dir, root(), LinkType::Static{"std.a"});
+  let bin = Compiler::compile_dir("../tests/std", out_dir, root(), LinkType::Static{"std.a"});
+  bin.drop();
 }
 
 func compile_dir2(dir: str, args: str){
@@ -57,8 +58,10 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
       .set_out(get_out())
       .add_dir(root())
       .set_link(LinkType::Binary{"a.out", args, true});
-    Compiler::compile_single(config);
+    let bin = Compiler::compile_single(config);
+    bin.drop();
   }
+  list.drop();
 }
 
 func compiler_test(std_test: bool){
@@ -75,6 +78,7 @@ func compiler_test(std_test: bool){
       .set_link(LinkType::Static{"rt.a"});
     let lib = Compiler::compile_single(config);
     compile_dir2("../tests/normal", lib.str());
+    lib.drop();
   }
 }
 
@@ -93,7 +97,13 @@ func bootstrap(run: bool, out_dir: str){
   let bin2 = format("./{}", name);
   File::copy(bin.str(), bin2.str());
   print("wrote {}\n", bin2);
-  set_as_executable(bin2.cstr().ptr());
+  bin.drop();
+
+  let binc = bin2.cstr();
+  set_as_executable(binc.ptr());
+  binc.drop();
+  name.drop();
+  args.drop();
 }
 
 func own_test(id: i32){
@@ -104,7 +114,8 @@ func own_test(id: i32){
     .set_out(get_out())
     .add_dir(root())
     .set_link(LinkType::Static{"common.a"});
-  Compiler::compile_single(config);
+  let bin = Compiler::compile_single(config);
+  bin.drop();
 
   build_std(get_out());
 
@@ -118,43 +129,50 @@ func own_test(id: i32){
 }
 
 func main(argc: i32, args: i8**){
+  let cmd = CmdArgs::new(argc, args);
+  handle(&cmd);
+  cmd.drop();
+}
+
+func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
-  if(argc == 1){
+  if(!cmd.has()){
     bootstrap(false, get_out());
     return;
   }
-  let cmd = CmdArgs::new(argc, args);
-  let arg = cmd.get();
-  if(arg.eq("own")){
+  if(cmd.is("own")){
     own_test(1);
     return;
   }
-  if(arg.eq("own2")){
+  if(cmd.is("own2")){
     own_test(2);
     return;
   }
-  if(arg.eq("test")){
+  if(cmd.is("test")){
     compiler_test(false);
     return;
   }
-  else if(arg.eq("test2")){
+  else if(cmd.is("test2")){
     compiler_test(true);
     return;
-  }else if(arg.eq("std")){
+  }else if(cmd.is("std")){
     build_std(get_out());
-  }else if(arg.eq("bt")){
+  }else if(cmd.is("bt")){
+    cmd.consume();
     let out = get_out();
     if(cmd.has()){
       print("cmd len={}\n", cmd.args.len());
-      out = cmd.get().str();
+      out = cmd.peek().str();
     }
     bootstrap(false, out);
   }
-  else if(arg.eq("c")){
-    let path = get_arg(args, 2);
-    if(is_dir(path)){
-      Compiler::compile_dir(path, get_out(), root(), LinkType::Binary{bin_name(path).str(), "", true});
+  else if(cmd.is("c")){
+    let path: String = cmd.get();
+    if(is_dir(path.str())){
+      let bin = bin_name(path.str());
+      Compiler::compile_dir(path.str(), get_out(), root(), LinkType::Binary{bin.str(), "", true});
+      bin.drop();
     }else{
       let config = CompilerConfig::new();
       config
@@ -162,9 +180,10 @@ func main(argc: i32, args: i8**){
       .set_out(get_out())
       .add_dir(root())
       .set_link(LinkType::Binary{"a.out", "", false});
-      Compiler::compile_single(config);
+      let out = Compiler::compile_single(config);
+      out.drop();
     }
   }else{
-    panic("invalid cmd: {}", arg);
+    panic("invalid cmd: {}", cmd.args);
   }
 }

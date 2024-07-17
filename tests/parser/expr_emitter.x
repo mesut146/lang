@@ -89,6 +89,7 @@ impl Compiler{
         CreateStore(val, alloc_ptr);
         let expr_type = self.get_resolver().getType(expr);
         self.own.get().add_obj(node, alloc_ptr, &expr_type);
+        expr_type.drop();
         return alloc_ptr;
       }
       let inner = self.visit(expr);
@@ -97,14 +98,18 @@ impl Compiler{
   
     func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
       let lhs_rt = self.get_resolver().visit(lhs);
-      let rhs_rt = self.get_resolver().visit_type(rhs);
       //ptr to int
-      if (lhs_rt.type.is_pointer() && rhs.print().eq("u64")) {
+      if (lhs_rt.type.is_pointer() && rhs.eq("u64")) {
         let val = self.get_obj_ptr(lhs);
-          return CreatePtrToInt(val, self.mapType(rhs));
+        lhs_rt.drop();
+        return CreatePtrToInt(val, self.mapType(rhs));
       }
+      let rhs_rt = self.get_resolver().visit_type(rhs);
       if (lhs_rt.type.is_prim()) {
-        return self.cast(lhs, &rhs_rt.type);
+        let res = self.cast(lhs, &rhs_rt.type);
+        lhs_rt.drop();
+        rhs_rt.drop();
+        return res;
       }
       //enum to base, skip tag
       let val = self.get_obj_ptr(lhs);
@@ -114,6 +119,8 @@ impl Compiler{
           val = self.gep2(val, get_data_index(decl), self.mapType(&decl.type));
         }
       }
+      lhs_rt.drop();
+      rhs_rt.drop();
       return val;
     }
   
@@ -142,12 +149,10 @@ impl Compiler{
     }
   
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
-      if(node.print().eq("e.a")){
-        let a = 10;
-      }
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
+      scope_rt.drop();
       if(decl.is_enum()){
         //base field, skip tag
         let ty = self.mapType(&decl.type);
@@ -164,19 +169,21 @@ impl Compiler{
       let ptr = self.get_alloc(node);
       let arrt = self.getType(node);
       self.own.get().add_obj(node, ptr, &arrt);
-      let elem_type = self.getType(list.get_ptr(0));
       let arr_ty = self.mapType(&arrt);
+      arrt.drop();
       if(sz.is_none()){
-        for(let i = 0;i<list.len();++i){
+        for(let i = 0;i < list.len();++i){
           let e = list.get_ptr(i);
           let elem_target = gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
           self.setField(e, &et, elem_target);
+          et.drop();
         }
         return ptr;
       }
       let elem = list.get_ptr(0);
       let elem_ptr = Option<Value*>::new();
+      let elem_type = self.getType(list.get_ptr(0));
       let elem_ty = self.mapType(&elem_type);
       if (doesAlloc(elem, self.get_resolver())) {
           elem_ptr = Option::new(self.visit(elem));
@@ -205,21 +212,24 @@ impl Compiler{
       phi_addIncoming(phi, step, setbb);
       CreateBr(condbb);
       self.set_and_insert(nextbb);
+      elem_type.drop();
       return ptr;
     }
   
     func visit_aa(self, expr: Expr*, node: ArrAccess*): Value*{
-      let type = self.getType(node.arr.get());
       if(node.idx2.is_some()){
         return self.visit_slice(expr, node);
       }
       let i64t = Type::new("i64");
+      let type = self.getType(node.arr.get());
       let ty = type.unwrap_ptr();
       let src = self.get_obj_ptr(node.arr.get());
       if(ty.is_array()){
           //regular array access
           let i1 = makeInt(0, 64);
           let i2 = self.cast(node.idx.get(), &i64t);
+          i64t.drop();
+          type.drop();
           return gep_arr(self.mapType(ty), src, i1, i2);
       }
       
@@ -231,8 +241,11 @@ impl Compiler{
       let arr = self.gep2(src, SLICE_PTR_INDEX(), sliceType);
       arr = CreateLoad(getPtr(), arr);
       let index = self.cast(node.idx.get(), &i64t);
+      i64t.drop();
+      type.drop();
       return gep_ptr(elemty, arr, index);
     }
+
     func visit_slice(self,expr: Expr*, node: ArrAccess*): Value*{
       let ptr = self.get_alloc(expr);
       let arr = self.visit(node.arr.get());
@@ -245,7 +258,6 @@ impl Compiler{
       let elem_ty = arr_ty.elem();
       let i32_ty = Type::new("i32");
       let val_start = self.cast(node.idx.get(), &i32_ty);
-  
       let ptr_ty = self.mapType(elem_ty);
       //shift by start
       arr = gep_ptr(ptr_ty, arr, val_start);
@@ -261,6 +273,8 @@ impl Compiler{
       let len = CreateSub(val_end, val_start);
       len = CreateSExt(len, getInt(SLICE_LEN_BITS()));
       CreateStore(len, trg_len);
+      arr_ty.drop();
+      i32_ty.drop();
       return ptr;
     }
   
@@ -299,12 +313,15 @@ impl Compiler{
         //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get_ptr(0));
         if(argt.is_pointer() || argt.is_prim()){
+          argt.drop();
           return getVoidTy() as Value*;
         }
         let helper = DropHelper{self.get_resolver()};
         if(!helper.is_drop_type(&argt)){
+          argt.drop();
           return getVoidTy() as Value*;
         }
+        argt.drop();
       }
       if(Resolver::is_std_no_drop(mc)){
         let arg = mc.args.get_ptr(0);
@@ -315,6 +332,7 @@ impl Compiler{
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get_ptr(0));
           let sz = self.getSize(&ty) / 8;
+          ty.drop();
           return makeInt(sz, 32);
         }else{
           let ty = mc.type_args.get_ptr(0);
@@ -358,6 +376,7 @@ impl Compiler{
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
         let size = self.cast(mc.args.get_ptr(0), &i64_ty);
+        i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get_ptr(0)) / 8;
             size = CreateNSWMul(size, makeInt(typeSize, 64));
@@ -375,32 +394,42 @@ impl Compiler{
         let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
         let type = self.getType(expr);
         if (!is_struct(&type)) {
-            return CreateLoad(self.mapType(&type), arg_ptr);
+            let res = CreateLoad(self.mapType(&type), arg_ptr);
+            type.drop();
+            return res;
         }
+        type.drop();
         return arg_ptr;
       }
       if(Resolver::is_ptr_get(mc)){
-        let elem_type = self.getType(expr).unwrap_ptr();
+        let elem_type = self.getType(expr);
         let src = self.get_obj_ptr(mc.args.get_ptr(0));
         let idx = self.loadPrim(mc.args.get_ptr(1));
-        return gep_ptr(self.mapType(elem_type), src, idx);
+        let res = gep_ptr(self.mapType(elem_type.unwrap_ptr()), src, idx);
+        elem_type.drop();
+        return res;
       }
       if(Resolver::is_ptr_copy(mc)){
         //ptr::copy(src_ptr, src_idx, elem)
         let src_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
         let i64_ty = Type::new("i64");
         let idx = self.cast(mc.args.get_ptr(1), &i64_ty);
+        i64_ty.drop();
         let val = self.visit(mc.args.get_ptr(2));
         let elem_type: Type = self.getType(mc.args.get_ptr(2));
         let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
         self.copy(trg_ptr, val, &elem_type);
+        elem_type.drop();
         return getVoidTy() as Value*;
       }
       if(self.get_resolver().is_array_get_len(mc)){
-        let arr_type = self.getType(mc.scope.get()).unwrap_ptr();
-        if let Type::Array(elem*, sz)=(arr_type){
+        let arr_type = self.getType(mc.scope.get());
+        let arr_type2 = arr_type.unwrap_ptr();
+        if let Type::Array(elem*, sz)=(&arr_type2){
+          arr_type.drop();
           return makeInt(sz, 64);
         }
+        arr_type.drop();
         panic("");
       }
       if(self.get_resolver().is_array_get_ptr(mc)){
@@ -459,6 +488,7 @@ impl Compiler{
         }else{
           args_push(args, scp_val);
         }
+        rval.drop();
         if(mc.is_static){
           ++argIdx;
           self.own.get().do_move(mc.args.get_ptr(0));
@@ -483,9 +513,11 @@ impl Compiler{
           }
         } else {
           let prm = target.params.get_ptr(paramIdx);
-          let pt = &self.get_resolver().visit_type(&prm.type).type;
-          args_push(args, self.cast(arg, pt));
+          let pt = self.get_resolver().getType(&prm.type);
+          args_push(args, self.cast(arg, &pt));
+          pt.drop();
         }
+        at.drop();
         self.own.get().do_move(arg);
         ++paramIdx;
       }
@@ -512,7 +544,7 @@ impl Compiler{
           continue;
         }
         let arg_type = self.getType(arg);
-        if(arg_type.print().eq("i8*") || arg_type.print().eq("u8*")){
+        if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.get_obj_ptr(arg);
           args_push(args, val);
         }
@@ -525,6 +557,7 @@ impl Compiler{
         }else{
           panic("print {}", arg_type);
         }
+        arg_type.drop();
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(printf_proto, args);
@@ -564,6 +597,7 @@ impl Compiler{
         }else{
           panic("compiler err printf arg {}", arg_type);
         }
+        arg_type.drop();
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(printf_proto, args);
@@ -575,7 +609,7 @@ impl Compiler{
       CreateCall(fflush_proto, args2);
     }
     
-    func call_printf(self, s: str){
+    /*func call_printf(self, s: str){
       let args = make_args();
       let val = CreateGlobalStringPtr(s.cstr().ptr());
       args_push(args, val);
@@ -587,14 +621,17 @@ impl Compiler{
       let stdout_ptr = self.protos.get().stdout_ptr;
       args_push(args2, CreateLoad(getPtr(), stdout_ptr));
       CreateCall(fflush_proto, args2);
-    }
+    }*/
   
     func visit_deref(self, node: Expr*, e: Expr*): Value*{
       let type = self.getType(node);
       let val = self.get_obj_ptr(e);
       if (type.is_prim() || type.is_pointer()) {
-          return self.load(val, &type);
+          let res = self.load(val, &type);
+          type.drop();
+          return res;
       }
+      type.drop();
       return val;
     }
   
@@ -670,6 +707,7 @@ impl Compiler{
           //let rt = self.get_resolver().visit(l);
           self.setField(r, &type, lhs, Option::new(l));
           self.own.get().do_assign(l, r);
+          type.drop();
           return lhs;
         }
       }
@@ -677,6 +715,7 @@ impl Compiler{
       //todo setField should free lhs
       self.setField(r, &type, lhs, Option::new(l));
       self.own.get().do_assign(l, r);
+      type.drop();
       return lhs;
     }
     
@@ -690,9 +729,11 @@ impl Compiler{
           let normal = trimmed.replace("_", "");
           if (normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
             let val: i64 = i64::parse_hex(normal.str());
+            normal.drop();
             return makeInt(val, bits);
           }
           let val: i64 = i64::parse(normal.str());
+          normal.drop();
           return makeInt(val, bits);
       }
       if(node.kind is LitKind::BOOL){
@@ -701,7 +742,9 @@ impl Compiler{
       }
       if(node.kind is LitKind::STR){
         let trg_ptr = self.get_alloc(expr);
-        let src = CreateGlobalStringPtr(node.val.clone().cstr().ptr());
+        let val_c = node.val.clone().cstr();
+        let src = CreateGlobalStringPtr(val_c.ptr());
+        val_c.drop();
         let stringType = self.protos.get().std("str") as llvm_Type*;
         let sliceType = self.protos.get().std("slice") as llvm_Type*;
         let slice_ptr = self.gep2(trg_ptr, 0, stringType);
@@ -762,6 +805,7 @@ impl Compiler{
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
+          base_ty.drop();
           self.own.get().do_move(&arg.expr);
         }
         if let Decl::Struct(fields*)=(decl){
@@ -796,16 +840,26 @@ impl Compiler{
           let var_ty = self.get_variant_ty(decl, variant);
           self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
         }
+        rt.drop();
         return ptr;
     }
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
-        let type = &self.get_resolver().visit(l).type;
+      let rt = self.get_resolver().visit(l);
+      let res = self.visit_infix(op, l, r, &rt.type);
+      rt.drop();
+      return res;
+    }
+
+    func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
         if(is_comp(op.str())){
           //todo remove redundant cast
           let lv = self.cast(l, type);
           let rv = self.cast(r, type);
-          return CreateCmp(get_comp_op(op.clone().cstr().ptr()), lv, rv);
+          let op_c = op.clone().cstr();
+          let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
+          op_c.drop();
+          return res;
         }
         if(op.eq("&&") || op.eq("||")){
           return self.andOr(op, l, r).a;

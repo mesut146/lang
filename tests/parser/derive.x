@@ -318,7 +318,9 @@ func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Ex
     message.print(":");
     message.print(&line);
     message.print(" ");
-    message.print(printMethod(method).str());
+    let method_sig = printMethod(method);
+    message.print(method_sig.str());
+    method_sig.drop();
     if (s.is_some()) {
         message.print("\n");
         message.print(s.get());
@@ -334,7 +336,9 @@ func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
     message.print(":");
     message.print(&line);
     message.print(" ");
-    message.print(printMethod(method).str());
+    let method_sig = printMethod(method);
+    message.print(method_sig.str());
+    method_sig.drop();
     if (s.is_some()) {
         message.print("\n");
         message.print(s.get());
@@ -354,9 +358,13 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let line = node.line;
     let info = FormatInfo{block: Block::new(line, line), unwrap_mc: Option<Expr>::new()};
     let block = &info.block;
-    let arg_norm = normalize_quotes(arg.print().str());
-    let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, printMethod(r.curMethod.unwrap()));
+    let arg_str = arg.print();
+    let arg_norm = normalize_quotes(arg_str.str());
+    arg_str.drop();
+    let method_sig = printMethod(r.curMethod.unwrap());
+    let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
     arg_norm.drop();
+    method_sig.drop();
     block.list.add(parse_stmt(str, &r.unit, line));
     r.visit(block);
     r.format_map.add(node.id, info);

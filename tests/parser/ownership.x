@@ -19,7 +19,7 @@ static print_drop_valid: bool = true;//only valid
 static print_drop_real: bool = false;
 static print_check: bool = false;
 
-static drop_enabled: bool = true;
+static drop_enabled: bool = false;
 static move_ptr_field = true;
 
 func is_drop_method(method: Method*): bool{
@@ -527,7 +527,6 @@ impl Own{
         if(print_check){
             print("check {} line:{}\n", expr, expr.line);
         }
-        dbg(expr.line == 35 && expr.print().eq("aa"), 100);
         let state = self.get_state(&rhs, scope, true);
         rhs.drop();
         if let StateType::MOVED(line)=(state.kind){
@@ -992,11 +991,14 @@ impl Own{
             return;
         }
         let rhs = Rhs::new(var.clone());
-        dbg(var.name.eq("res") && var.line == 853, 55);
+        //dbg(var.name.eq("type_expr") && var.line == 851, 55);
+        /*if(var.name.eq("type_expr") && var.line == 851){
+            print("{}\n", scope.print(self));
+        }*/
         let state = self.get_state(&rhs, scope, look_parent);
-        if(print_drop && !print_drop_valid){
-            print("drop_var {} line: {} state: {}\n", var, line,  state);
-        }
+        /*if(print_drop && !print_drop_valid){
+            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, scope.print_info());
+        }*/
         if(var.name.eq("f") && var.line == 18){
             let s = self.get_scope(self.main_scope).print(self);
             print("{}\n", s);
@@ -1013,7 +1015,7 @@ impl Own{
             return;
         }
         if(print_drop_valid){
-            print("drop_var {} line: {} state: {}\n", var, line,  state);
+            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, scope.print_info());
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
         self.drop_real(&rt, var.ptr, line, &rhs);

@@ -203,14 +203,14 @@ impl Path{
 }
 
 
-func get_arg(args: i8**, idx: i32): str{
+/*func get_arg(args: i8**, idx: i32): str{
   let a1 = *ptr::get(args, idx) as u8*;
   if(a1 as u64 == 0){
     panic("null");
   }
   let len = strlen(a1 as i8*, 1000);
   return str::new(a1[0..len]);
-}
+}*/
 
 struct CmdArgs{
   args: List<String>;
@@ -229,11 +229,21 @@ impl CmdArgs{
     }
     return res;
   }
+  func consume(self){
+    let arg = self.get();
+    arg.drop();
+  }
+  func peek(self): String*{
+    return self.args.get_ptr(0);
+  }
   func get(self): String{
     let res = self.args.remove(0);
     return res;
   }
   func has(self): bool{
     return self.args.len() > 0;
+  }
+  func is(self, arg: str): bool{
+    return self.args.get_ptr(0).eq(arg);
   }
 }

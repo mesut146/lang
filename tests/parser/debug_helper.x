@@ -82,6 +82,7 @@ impl DebugInfo{
         }
         let path_c = m.path.clone().cstr();
         let file = createFile(path_c.ptr(), ".".ptr());
+        path_c.drop();
         //self.file = file;
         let scope = file as DIScope*;
         if(!m.parent.is_none()){
@@ -104,28 +105,32 @@ impl DebugInfo{
         if (!self.debug) return;
         let dt = self.map_di(&p.type, c);
         let scope = self.sp.unwrap() as DIScope*;
-        let v = createParameterVariable(scope, p.name.clone().cstr().ptr(), idx, self.file, p.line, dt, true);
+        let name_c = p.name.clone().cstr();
+        let v = createParameterVariable(scope, name_c.ptr(), idx, self.file, p.line, dt, true);
         let val = *c.NamedValues.get_ptr(&p.name).unwrap();
         let lc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+        name_c.drop();
     }
 
     func dbg_var(self, name: String*, type: Type*, line: i32, c: Compiler*) {
       if (!self.debug) return;
       let dt = self.map_di(type, c);
       let scope = self.get_scope();
-      let v = createAutoVariable(scope, name.clone().cstr().ptr(), self.file, line, dt);
+      let name_c = name.clone().cstr();
+      let v = createAutoVariable(scope, name_c.ptr(), self.file, line, dt);
       let val = *c.NamedValues.get_ptr(name).unwrap();
       let lc = DILocation_get(scope, line, 0);
       insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+      name_c.drop();
     }
 
     func dbg_glob(self, gl: Global*, ty: Type*, gv: GlobalVariable*, c: Compiler*): DIGlobalVariableExpression*{
       let scope = self.cu as DIScope*;
       let di_type = self.map_di(ty, c);
-      let name = gl.name.clone().cstr();
-      let gve = createGlobalVariableExpression(scope, name.ptr(), name.ptr(), self.file, gl.line, di_type);
-      name.drop();
+      let name_c = gl.name.clone().cstr();
+      let gve = createGlobalVariableExpression(scope, name_c.ptr(), name_c.ptr(), self.file, gl.line, di_type);
+      name_c.drop();
       addDebugInfo(gv, gve);
       return gve;
     }
@@ -153,9 +158,13 @@ impl DebugInfo{
         let name: String = decl.type.print();
         let elems = Metadata_vector_new();
         let st_size = c.getSize(decl);
-        let file = createFile(decl.path.clone().cstr().ptr(), ".".ptr());
-        let st = createStructType(self.cu as DIScope*, name.clone().cstr().ptr(), file, decl.line, st_size, elems);
+        let path_c = decl.path.clone().cstr();
+        let name_c = name.clone().cstr();
+        let file = createFile(path_c.ptr(), ".".ptr());
+        let st = createStructType(self.cu as DIScope*, name_c.ptr(), file, decl.line, st_size, elems);
         self.incomplete_types.add(name, st);
+        path_c.drop();
+        name_c.drop();
         return st;
     }
 
@@ -165,7 +174,9 @@ impl DebugInfo{
       let var_type = c.protos.get().get(&name);
       let elems = Metadata_vector_new();
       //empty ty
-      let st = createStructType(scope as DIScope*, name.clone().cstr().ptr(), file, decl.line, var_size, elems);
+      let name_c = name.clone().cstr();
+      let st = createStructType(scope as DIScope*, name_c.ptr(), file, decl.line, var_size, elems);
+      name_c.drop();
       //fill ty
       let sl = getStructLayout(var_type as StructType*);
       let idx = 0;
@@ -173,7 +184,7 @@ impl DebugInfo{
         let base_ty = self.map_di(decl.base.get(), c);
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
-        let mem = createMemberType(st as DIScope*, CStr::from_slice("super").ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
+        let mem = createMemberType(st as DIScope*, "super".ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
         Metadata_vector_push(elems, mem as Metadata*);
         ++idx;
       }
@@ -182,18 +193,26 @@ impl DebugInfo{
         let fd_ty = self.map_di(&fd.type, c);
         let off = getElementOffsetInBits(sl, idx);
         let fd_size = DIType_getSizeInBits(fd_ty);
-        let mem = createMemberType(st as DIScope*, fd.name.clone().cstr().ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
+        let fdname_c = fd.name.clone().cstr();
+        let mem = createMemberType(st as DIScope*, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
+        fdname_c.drop();
         Metadata_vector_push(elems, mem as Metadata*);
         ++idx;
       }
       replaceElements(st, elems);
-      return createVariantMemberType(var_part as DIScope*, ev.name.clone().cstr().ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
+      let evname_c = ev.name.clone().cstr();
+      let res = createVariantMemberType(var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
+      evname_c.drop();
+      name.drop();
+      return res;
     }
 
     func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
       let s = decl.type.print();
       let st = *self.incomplete_types.get_ptr(&s).unwrap();
-      let file = createFile(decl.path.clone().cstr().ptr(), ".".ptr());
+      let path_c = decl.path.clone().cstr();
+      let file = createFile(path_c.ptr(), ".".ptr());
+      path_c.drop();
       let elems = Metadata_vector_new();
       let base_ty = Option<DIType*>::new();
       let scope = st as DIScope*;
@@ -219,7 +238,9 @@ impl DebugInfo{
           let ty = self.map_di(&fd.type, c);
           let size = DIType_getSizeInBits(ty);
           let off = getElementOffsetInBits(sl, idx);
-          let mem = createMemberType(scope, fd.name.clone().cstr().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+          let name_c = fd.name.clone().cstr();
+          let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+          name_c.drop();
           Metadata_vector_push(elems, mem as Metadata*);
           ++idx;
         }
@@ -227,8 +248,9 @@ impl DebugInfo{
         let data_size = c.getSize(decl) - ENUM_TAG_BITS();
         let tag_off = 0i64;
         //create empty variant
-        let tag_ty0 = as_type(ENUM_TAG_BITS());
+        let tag_ty0: Type = as_type(ENUM_TAG_BITS());
         let tag = self.map_di(&tag_ty0, c);
+        tag_ty0.drop();
         let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
         let elems2 = Metadata_vector_new();
         let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
@@ -250,29 +272,35 @@ impl DebugInfo{
 
     func map_di(self, type: Type*, c: Compiler*): DIType*{
       let rt = c.get_resolver().visit_type(type);
-      type = &rt.type;
-      let name: String = type.print();
-      if(self.types.contains(&name)){
-        return *self.types.get_ptr(&name).unwrap();
+      let name = rt.type.print();
+      let res = self.map_di_resolved(&rt.type, &name, c);
+      rt.drop();
+      name.drop();
+      return res;
+    }
+
+    func map_di_resolved(self, type: Type*, name: String*, c: Compiler*): DIType*{
+      if(self.types.contains(name)){
+        return *self.types.get_ptr(name).unwrap();
       }
-      if(self.incomplete_types.contains(&name)){
-        return *self.incomplete_types.get_ptr(&name).unwrap() as DIType*;
+      if(self.incomplete_types.contains(name)){
+        return *self.incomplete_types.get_ptr(name).unwrap() as DIType*;
       }
       if(name.eq("void")) return get_di_null();
       if(name.eq("bool")){
-        return createBasicType(name.cstr().ptr(), 8, DW_ATE_boolean());
+        return createBasicType(name, 8, DW_ATE_boolean());
       }
       if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
         let size = c.getSize(type);
-        return createBasicType(name.cstr().ptr(), size, DW_ATE_signed());
+        return createBasicType(name, size, DW_ATE_signed());
       }
       if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
         let size = c.getSize(type);
-        return createBasicType(name.cstr().ptr(), size, DW_ATE_unsigned());
+        return createBasicType(name, size, DW_ATE_unsigned());
       }
       if(name.eq("f32") || name.eq("f64")){
         let size = c.getSize(type);
-        return createBasicType(name.cstr().ptr(), size, DW_ATE_float());
+        return createBasicType(name, size, DW_ATE_float());
       }
       if(type.is_pointer()){
         let elem = type.elem();
@@ -297,12 +325,23 @@ impl DebugInfo{
         let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
         Metadata_vector_push(elems, ptr_mem as Metadata*);
         //len
-        let bits = as_type(SLICE_LEN_BITS());
+        let bits: Type = as_type(SLICE_LEN_BITS());
         let len_ty = self.map_di(&bits, c);
+        bits.drop();
         let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
         Metadata_vector_push(elems, len_mem as Metadata*);
-        return createStructType(self.cu as DIScope*, name.cstr().ptr(), self.file, line, size, elems) as DIType*;
+        let name_c = name.clone().cstr();
+        let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
+        name_c.drop();
+        return res;
       }
       panic("map di {}\n", name);
     }
+}
+
+func createBasicType(name: String*, size: i64, enc: i32): DIType*{
+  let name_c = name.clone().cstr();
+  let res = createBasicType(name_c.ptr(), size, enc);
+  name_c.drop();
+  return res;
 }

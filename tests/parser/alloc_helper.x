@@ -89,7 +89,9 @@ impl AllocHelper{
         let arg = is.args.get_ptr(i);
         let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
-        Value_setName(arg_ptr, arg.name.clone().cstr().ptr());
+        let name_c = arg.name.clone().cstr();
+        Value_setName(arg_ptr, name_c.ptr());
+        name_c.drop();
         self.c.allocMap.add(arg.id, arg_ptr);
       }
       self.visit(&is.rhs);
@@ -151,7 +153,9 @@ impl AllocHelper{
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
       self.visit(&info.block);
       let str_ty = Type::new("String");
-      return Option::new(self.alloc_ty(&str_ty, info.unwrap_mc.get()));
+      let res = Option::new(self.alloc_ty(&str_ty, info.unwrap_mc.get()));
+      str_ty.drop();
+      return res;
     }
     let rt = self.c.get_resolver().visit(node);
     if(rt.is_method()){
@@ -167,6 +171,7 @@ impl AllocHelper{
       //non-internal method
       res = Option::new(self.alloc_ty(&rt.type, node));
     }
+    rt.drop();
     if(call.scope.is_some()){
       self.visit(call.scope.get());
     }
@@ -207,6 +212,7 @@ impl AllocHelper{
         if(RvalueHelper::is_rvalue(e.get())){
           let ty = self.c.get_resolver().getType(e.get());
           self.alloc_ty(&ty, node);
+          ty.drop();
         }
       }
       return res;
@@ -235,6 +241,7 @@ impl AllocHelper{
       //get full type
       let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
+      rt.drop();
       for(let i = 0;i < args.len();++i){
         let arg = args.get_ptr(i);
         //self.child(&arg.expr);//rvo opt
@@ -256,6 +263,7 @@ impl AllocHelper{
     if let Expr::Array(list*,sz*)=(node){
       let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
+      rt.drop();
       if(sz.is_some()){
         let elem = list.get_ptr(0);
         self.visit(elem);

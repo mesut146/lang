@@ -710,7 +710,7 @@ impl Parser{
     panic("expected name got {}", self.peek());
   }
   
-  func isObj(self): bool{
+  /*func isObj(self): bool{
     if (!self.is(TokenType::IDENT)) {
         return false;
     }
@@ -730,7 +730,7 @@ impl Parser{
         return true;
     }
     return false;
-  }
+  }*/
   
   func entry(self): Entry{
     if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
@@ -847,31 +847,37 @@ impl Parser{
       panic("invalid expr {}", self.peek());
     }
   }
+
+  func parse_obj(self, type_expr: Expr): Expr{
+    let ty = Option<Type>::None; 
+    if let Expr::Name(nm)=(type_expr){
+      ty = Option::new(Type::new(nm));
+    }
+    else if let Expr::Type(t)=(type_expr){
+      ty = Option::new(t);
+    }
+    else{
+      panic("was expecting name got {}", &type_expr);
+    }
+    let args = List<Entry>::new();
+    self.consume(TokenType::LBRACE);
+    if(!self.is(TokenType::RBRACE)){
+      args.add(self.entry());
+      while(self.is(TokenType::COMMA)){
+        self.pop();
+        args.add(self.entry());
+      }
+    }
+    self.consume(TokenType::RBRACE);
+    let n = self.node();
+    return Expr::Obj{.n, ty.unwrap(), args};
+  }
   
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
   func prim2(self): Expr{
     let res: Expr = self.prim();
     if(self.is(TokenType::LBRACE)){
-      let ty = Option<Type>::None; 
-      if let Expr::Name(nm)=(res){
-        ty = Option::new(Type::new(nm));
-      }else if let Expr::Type(t)=(res){
-        ty = Option::new(t);
-      }else{
-        panic("was expecting name got {}", &res);
-      }
-      let args = List<Entry>::new();
-      self.consume(TokenType::LBRACE);
-      if(!self.is(TokenType::RBRACE)){
-        args.add(self.entry());
-        while(self.is(TokenType::COMMA)){
-          self.pop();
-          args.add(self.entry());
-        }
-      }
-      self.consume(TokenType::RBRACE);
-      let n = self.node();
-      res = Expr::Obj{.n,ty.unwrap(), args};
+      res = self.parse_obj(res);
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
       if(self.is(TokenType::DOT)){

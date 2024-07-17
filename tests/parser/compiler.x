@@ -294,14 +294,16 @@ impl Compiler{
       let gl_info = resolv.glob_map.get_ptr(i);
       let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Constant>();
-      let glob = make_global(gl_info.name.clone().cstr().ptr(), ty, init);
+      let name_c = gl_info.name.clone().cstr();
+      let glob = make_global(name_c.ptr(), ty, init);
+      name_c.drop();
       self.globals.add(gl_info.name.clone(), glob as Value*);
     }
     if(self.get_resolver().unit.globals.empty()){
       return;
     }
     let proto = self.make_init_proto(resolv.unit.path.str());
-    setSection(proto, CStr::from_slice(".text.startup").ptr());
+    setSection(proto, ".text.startup".ptr());
     let bb = create_bb2(proto);
     SetInsertPoint(bb);
     let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
@@ -326,12 +328,15 @@ impl Compiler{
         }else{
           init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
         }
+        rhs_str.drop();
       }else if(is_struct(&rt.type)){
         init = ConstantStruct_get(ty as StructType*);
       }else{
         panic("glob type {}", rt.type);
       }
-      let glob: GlobalVariable* = make_global(gl.name.clone().cstr().ptr(), ty, init);
+      let name_c = gl.name.clone().cstr();
+      let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
+      name_c.drop();
       let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
       Metadata_vector_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
