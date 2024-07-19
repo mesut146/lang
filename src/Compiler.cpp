@@ -118,7 +118,7 @@ void copy_file(const std::string &path, const std::string &outDir, const std::st
     trg << src.rdbuf();
 }
 
-llvm::Constant *getDefault(Type &type, Compiler *c) {
+llvm::Constant *getDefault(Type &type, Compiler *c, Expression* e) {
     if (type.isPointer()) {
         return llvm::ConstantPointerNull::get(c->Builder->getPtrTy());
     }
@@ -133,6 +133,13 @@ llvm::Constant *getDefault(Type &type, Compiler *c) {
     }
     auto s = type.print();
     auto bits = c->getSize2(type);
+    auto s2 = e->print();
+    if(s2 == "true"){
+        return c->makeInt(1, 8);
+    }
+    if(s2 == "false"){
+        return c->makeInt(0, 8);
+    }
     if (s == "bool" || s == "i8" || s == "i16" || s == "i32" || s == "i64") {
         return c->makeInt(0, bits);
     }
@@ -216,7 +223,7 @@ void init_globals(Compiler *c) {
         auto ty = c->mapType(type);
         auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
         //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
-        llvm::Constant *init = getDefault(type, c);
+        llvm::Constant *init = getDefault(type, c, g.expr.get());
         auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
         c->globals[g.name] = gv;
         c->NamedValues[g.name] = gv;

@@ -37,10 +37,10 @@ impl<T> Set<T>{
                 continue;
             }
             if(i == 0){
-                let old: Node<T> = self.head.unwrap();
+                /*let old: Node<T> = self.head.unwrap();
                 let node = Node<T>::new(e);
                 node.next = Ptr::new(old);
-                self.head = Option::new(node);
+                self.head = Option::new(node);*/
             }else{
                 //let cur_tmp = prev.next.unwrap();
                 //let new_node = Node<T>::new(e, cur_tmp);

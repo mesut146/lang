@@ -1158,11 +1158,11 @@ impl Resolver{
     }
     let map = make_type_map(simple, target);
     let copier = AstCopier::new(&map);
-    map.drop();
     let decl0 = copier.visit(target);
     let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
     let res = self.getTypeCached(str);
+    map.drop();
     return res;
   }
 
