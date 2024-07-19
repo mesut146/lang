@@ -247,10 +247,11 @@ func getTypes(unit: Unit*, list: List<Decl*>*){
 
 func sort(list: List<Decl*>*, r: Resolver*){
   for (let i = 0; i < list.len(); ++i) {
-    //find min that belongs to i'th index
+    //find decl belongs to i'th index
     let min = *list.get_ptr(i);
     for (let j = i + 1; j < list.len(); ++j) {
-      let cur = *list.get_ptr(j);
+      let cur: Decl* = *list.get_ptr(j);
+      print("sort i={} j={} type={}\n", i, j, &cur.type);
       if (r.is_cyclic(&min.type, &cur.type)) {
         //print("swap " + min->type.print() + " and " + cur->type.print());
         min = cur;
@@ -258,6 +259,11 @@ func sort(list: List<Decl*>*, r: Resolver*){
       }
     }
   }
+}
+
+func sort2(list: List<Decl*>*, r: Resolver*){
+  //type -> idx
+  let map = Map<String, i32>::new();
 }
 
 func swap(list: List<Decl*>*, i: i32, j: i32){
@@ -604,7 +610,7 @@ impl Compiler{
     let decl = self.get_resolver().get_decl(&rt).unwrap();
     let tag_idx = get_tag_index(decl);
     let tag = self.get_obj_ptr(expr);
-    let mapped = self.mapType(rt.type.unwrap_ptr());
+    let mapped = self.mapType(rt.type.get_ptr());
     rt.drop();
     tag = self.gep2(tag, tag_idx, mapped);
     return CreateLoad(getInt(ENUM_TAG_BITS()), tag);

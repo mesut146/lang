@@ -286,19 +286,18 @@ impl Simple{
   }
 }
 
+/*enum Typex{
+  Basic(name: String),
+  Scoped(scope: Box<Type>, name: String)
+  Generic(scope: Box<Type>, name: String, args: List<Type>)
+}*/
+
 enum Type: Node{
   Simple(type: Simple),
   Pointer(type: Box<Type>),
   Array(type: Box<Type>, size: i32),
   Slice(type: Box<Type>)
 }
-/*impl Drop for Type{
-  func drop(self){
-    if let Type::Simple(simple) = (self){
-    
-    }
-  }
-}*/
 impl Type{
   func new(name: str): Type{
     return Type::new(String::new(name));
@@ -381,15 +380,24 @@ impl Type{
   func is_pointer(self): bool{
     return self is Type::Pointer;
   }
+  func is_dpointer(self): bool{
+    return self.is_pointer() && self.elem().is_pointer();
+  }
   func is_array(self): bool{
     return self is Type::Array;
   }
   func is_slice(self): bool{
     return self is Type::Slice;
   }
-  func unwrap_ptr(self): Type*{
+  func get_ptr(self): Type*{
     if let Type::Pointer(bx*) = (self){
       return bx.get();
+    }
+    return self;
+  }
+  func unwrap_ptr(*self): Type{
+    if let Type::Pointer(bx) = (self){
+      return bx.unwrap();
     }
     return self;
   }
@@ -404,6 +412,18 @@ impl Type{
       return bx.get();
     }
     panic("elem {}", self);
+  }
+  func unwrap_elem(*self): Type{
+    if let Type::Pointer(bx) = (self){
+      return bx.unwrap();
+    }
+    if let Type::Array(bx, sz) = (self){
+      return bx.unwrap();
+    }
+    if let Type::Slice(bx) = (self){
+      return bx.unwrap();
+    }
+    panic("unwrap_elem {}", self);
   }
 
   //get plain(generic)

@@ -72,7 +72,7 @@ impl Signature{
             }
             Drop::drop(res.scope);
             if (scp.type.is_pointer()) {
-                let inner = scp.type.unwrap_ptr();
+                let inner = scp.type.get_ptr();
                 res.scope = Option::new(r.visit_type(inner));
                 Drop::drop(scp);
             } else {
@@ -188,7 +188,7 @@ impl MethodResolver{
     func collect(self, sig: Signature*): List<Signature>{
         let list = List<Signature>::new();
         if(sig.mc.unwrap().scope.is_some()){
-            let scope_type = sig.scope.get().type.unwrap_ptr();
+            let scope_type = sig.scope.get().type.get_ptr();
             self.collect_member(sig, scope_type, &list, true);
         }else{
             //static sibling
@@ -270,12 +270,12 @@ impl MethodResolver{
     }
 
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, imports: bool){
-        //let scope_type = sig.scope.get().type.unwrap_ptr();
+        //let scope_type = sig.scope.get().type.get_ptr();
         //let type_plain = scope_type;
         let imp_list = List<Pair<Impl*, i32>>::new();
         Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
-            let actual: Type* = sig.args.get_ptr(0).unwrap_ptr();
+            let actual: Type* = sig.args.get_ptr(0).get_ptr();
             imp_list = self.get_impl(actual, Option::new(&sig.scope.get().type));
         }else{
             imp_list = self.get_impl(scope_type, Option<Type*>::new());
@@ -505,7 +505,7 @@ impl MethodResolver{
         }
 
         if (sig.scope.get().is_trait()) {
-            let real_scope = sig.args.get_ptr(0).unwrap_ptr();
+            let real_scope = sig.args.get_ptr(0).get_ptr();
             if(imp.trait_name.is_some()){
                 if(!imp.trait_name.get().name().eq(scope.name().str())){
                     return SigResult::Err{"not same trait".str()};
@@ -846,7 +846,7 @@ impl MethodResolver{
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
         dbg(printMethod(&res2), "Option<RType>::drop(*self)", 10);
-        //print("add gen {} {}\n", printMethod(&res2), sig.mc.unwrap_ptr());
+        //print("add gen {} {}\n", printMethod(&res2), sig.mc.get_ptr());
         let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{
             kind: RtKind::MethodGen,
@@ -860,7 +860,7 @@ impl MethodResolver{
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().is_trait()){
             Drop::drop(st);
-            st = sig.args.get_ptr(0).unwrap_ptr().as_simple().clone();
+            st = sig.args.get_ptr(0).get_ptr().as_simple().clone();
         }
         //put full type, Box::new(...) -> Box<...>::new()
         let imp_args = imp.type.get_args();

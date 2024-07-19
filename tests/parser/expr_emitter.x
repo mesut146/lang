@@ -222,15 +222,16 @@ impl Compiler{
       }
       let i64t = Type::new("i64");
       let type = self.getType(node.arr.get());
-      let ty = type.unwrap_ptr();
+      let ty = type.get_ptr();
       let src = self.get_obj_ptr(node.arr.get());
       if(ty.is_array()){
           //regular array access
           let i1 = makeInt(0, 64);
           let i2 = self.cast(node.idx.get(), &i64t);
-          i64t.drop();
+          let res = gep_arr(self.mapType(ty), src, i1, i2);
           type.drop();
-          return gep_arr(self.mapType(ty), src, i1, i2);
+          i64t.drop();
+          return res;
       }
       
       //slice access
@@ -405,7 +406,7 @@ impl Compiler{
         let elem_type = self.getType(expr);
         let src = self.get_obj_ptr(mc.args.get_ptr(0));
         let idx = self.loadPrim(mc.args.get_ptr(1));
-        let res = gep_ptr(self.mapType(elem_type.unwrap_ptr()), src, idx);
+        let res = gep_ptr(self.mapType(elem_type.get_ptr()), src, idx);
         elem_type.drop();
         return res;
       }
@@ -424,8 +425,8 @@ impl Compiler{
       }
       if(self.get_resolver().is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
-        let arr_type2 = arr_type.unwrap_ptr();
-        if let Type::Array(elem*, sz)=(&arr_type2){
+        let arr_type2 = arr_type.get_ptr();
+        if let Type::Array(elem*, sz)=(arr_type2){
           arr_type.drop();
           return makeInt(sz, 64);
         }
