@@ -647,7 +647,7 @@ impl Compiler{
   }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
-    return "".str();
+    panic("removed");
   }
 
   func compile_dir(config: CompilerConfig): String{
