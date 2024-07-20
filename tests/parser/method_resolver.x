@@ -199,15 +199,14 @@ impl MethodResolver{
                 }
             }            
             self.collect_static(sig, &list);
-            let imports = self.r.get_imports();
-            for (let i = 0;i < imports.len();++i) {
-                let is = imports.get_ptr(i);
-                let resolver = self.r.ctx.get_resolver(is);
+            let arr = self.r.get_resolvers();
+            for (let i = 0;i < arr.len();++i) {
+                let resolver = *arr.get_ptr(i);
                 resolver.init();
                 let mr = MethodResolver::new(resolver);
                 mr.collect_static(sig, &list);
             }
-            Drop::drop(imports);          
+            Drop::drop(arr);          
         }
         return list;
     }
@@ -269,7 +268,7 @@ impl MethodResolver{
       }
     }
 
-    func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, imports: bool){
+    func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool){
         //let scope_type = sig.scope.get().type.get_ptr();
         //let type_plain = scope_type;
         let imp_list = List<Pair<Impl*, i32>>::new();
@@ -315,16 +314,15 @@ impl MethodResolver{
                 }
             }
         }
-        if (imports) {
-          let ims: List<ImportStmt> = self.r.get_imports();
-          for (let i = 0;i < ims.len();++i) {
-            let is = ims.get_ptr(i);
-            let resolver = self.r.ctx.get_resolver(is);
+        if (use_imports) {
+          let arr: List<Resolver*> = self.r.get_resolvers();
+          for (let i = 0;i < arr.len();++i) {
+            let resolver = *arr.get_ptr(i);
             resolver.init();
             let mr = MethodResolver::new(resolver);
             mr.collect_member(sig, scope_type, list, false);
           }
-          Drop::drop(ims);
+          Drop::drop(arr);
         }
         Drop::drop(imp_list);
         Drop::drop(map);

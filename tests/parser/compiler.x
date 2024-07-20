@@ -631,7 +631,7 @@ impl Compiler{
 
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
-    let ctx = Context::new(config.src_dirs.remove(0), config.out_dir.clone());
+    let ctx = Context::new(config.src_dirs.get_ptr(0).clone(), config.out_dir.clone(), config.std_path.clone());
     let cmp = Compiler::new(ctx);
     let compiled = List<String>::new();
     use_cache = false;
@@ -647,17 +647,22 @@ impl Compiler{
   }
 
   func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
-    create_dir(out_dir);
-    let cache = Cache::new(out_dir);
+    return "".str();
+  }
+
+  func compile_dir(config: CompilerConfig): String{
+    create_dir(config.out_dir.str());
+    let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
-    let list: List<String> = list(src_dir);
+    let src_dir = &config.file;
+    let list: List<String> = list(src_dir.str());
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
       if(is_dir(file.str())) continue;
-      let ctx = Context::new(root.str(), out_dir.str());
+      let ctx = Context::new(config.file.clone(), config.out_dir.clone(), config.std_path.clone());
       let cmp = Compiler::new(ctx);
       let obj = cmp.compile(file.str(), &cache);
       Drop::drop(cmp);
@@ -666,16 +671,16 @@ impl Compiler{
     }
     list.drop();
     cache.drop();
-    if let LinkType::Binary(bin_name, args, run) = (&lt){
-      let path = link(&compiled, out_dir, bin_name, args);
+    if let LinkType::Binary(bin_name, args, run) = (&config.lt){
+      let path = link(&compiled, config.out_dir.str(), bin_name, args);
       compiled.drop();
       if(run){
         Compiler::run(path.clone());
       }
       return path;
     }
-    else if let LinkType::Static(lib_name) = (&lt){
-      let res = Compiler::build_library(&compiled, lib_name, out_dir, false);
+    else if let LinkType::Static(lib_name) = (&config.lt){
+      let res = Compiler::build_library(&compiled, lib_name, config.out_dir.str(), false);
       compiled.drop();
       return res;
     }else{
@@ -697,20 +702,26 @@ struct CompilerConfig{
   out_dir: String;
   args: String;
   lt: LinkType;
+  std_path: String;
 }
 
 impl CompilerConfig{
-  func new(): CompilerConfig{
+  func new(std_path: String): CompilerConfig{
     return CompilerConfig{
       file: "".str(),
       src_dirs: List<String>::new(),
       out_dir: "".str(),
       args: "".str(),
-      lt: LinkType::Dynamic
+      lt: LinkType::Dynamic,
+      std_path: std_path
     };
   }
   func set_out(self, out: str): CompilerConfig*{
     self.out_dir = out.str();
+    return self;
+  }
+  func set_out(self, out: String): CompilerConfig*{
+    self.out_dir = out;
     return self;
   }
   func add_dir(self, dir: str): CompilerConfig*{
@@ -727,6 +738,10 @@ impl CompilerConfig{
   }
   func set_file(self, file: String): CompilerConfig*{
     self.file = file;
+    return self;
+  }
+  func set_std_path(self, std_path: str): CompilerConfig*{
+    self.std_path = std_path.str();
     return self;
   }
   func link(self, compiled: List<String>*): String{

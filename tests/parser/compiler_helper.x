@@ -251,7 +251,7 @@ func sort(list: List<Decl*>*, r: Resolver*){
     let min = *list.get_ptr(i);
     for (let j = i + 1; j < list.len(); ++j) {
       let cur: Decl* = *list.get_ptr(j);
-      print("sort i={} j={} type={}\n", i, j, &cur.type);
+      //print("sort i={} j={} type={}\n", i, j, &cur.type);
       if (r.is_cyclic(&min.type, &cur.type)) {
         //print("swap " + min->type.print() + " and " + cur->type.print());
         min = cur;
@@ -264,6 +264,8 @@ func sort(list: List<Decl*>*, r: Resolver*){
 func sort2(list: List<Decl*>*, r: Resolver*){
   //type -> idx
   let map = Map<String, i32>::new();
+
+  map.drop();
 }
 
 func swap(list: List<Decl*>*, i: i32, j: i32){

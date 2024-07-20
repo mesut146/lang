@@ -21,16 +21,20 @@ func root(): str{
 func get_out(): str{
   return "./bt_out";
 }
-
-func make_context(): Context{
-  let out_dir = get_out();
-  create_dir(out_dir);
-  return Context::new(root().str(), out_dir.str());
+func get_std_path(): str{
+  return "../tests";
 }
 
 func build_std(out_dir: str){
   use_cache = true;
-  let bin = Compiler::compile_dir("../tests/std", out_dir, root(), LinkType::Static{"std.a"});
+  let config = CompilerConfig::new(get_std_path().str());
+  config
+    .set_file(get_std_path())
+    .set_out(get_out())
+    .add_dir(get_std_path())
+    .set_link(LinkType::Static{"std.a"});
+
+  let bin = Compiler::compile_dir(config);
   bin.drop();
 }
 
@@ -52,7 +56,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
     file.append("/");
     file.append(name);
     if(is_dir(file.str())) continue;
-    let config = CompilerConfig::new();
+    let config = CompilerConfig::new(get_std_path().str());
     config
       .set_file(file)
       .set_out(get_out())
@@ -70,7 +74,7 @@ func compiler_test(std_test: bool){
     build_std(get_out());
     compile_dir2("../tests/std_test", format("{}/std.a", get_out()).str());
   }else{
-    let config = CompilerConfig::new();
+    let config = CompilerConfig::new(get_std_path().str());
     config
       .set_file("../tests/std/rt.x")
       .set_out(get_out())
@@ -108,7 +112,7 @@ func bootstrap(run: bool, out_dir: str){
 
 func own_test(id: i32){
   print("test::own_test\n");
-  let config = CompilerConfig::new();
+  let config = CompilerConfig::new(get_std_path().str());
   config
     .set_file("../tests/own/common.x")
     .set_out(get_out())
@@ -168,21 +172,29 @@ func handle(cmd: CmdArgs*){
     bootstrap(false, out);
   }
   else if(cmd.is("c")){
+    cmd.consume();
+    use_cache = false;
     let path: String = cmd.get();
+    let out_dir = get_out().str();
+    if(cmd.is("-out")){
+      cmd.consume();
+      out_dir = cmd.get();
+    }
     if(is_dir(path.str())){
       let bin = bin_name(path.str());
-      Compiler::compile_dir(path.str(), get_out(), root(), LinkType::Binary{bin.str(), "", true});
+      Compiler::compile_dir(path.str(), out_dir.str(), root(), LinkType::Binary{bin.str(), "", true});
       bin.drop();
     }else{
-      let config = CompilerConfig::new();
+      let config = CompilerConfig::new(get_std_path().str());
       config
       .set_file(path)
-      .set_out(get_out())
+      .set_out(out_dir)
       .add_dir(root())
       .set_link(LinkType::Binary{"a.out", "", false});
       let out = Compiler::compile_single(config);
       out.drop();
     }
+    out_dir.drop();
   }else{
     panic("invalid cmd: {}", cmd.args);
   }

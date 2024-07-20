@@ -22,26 +22,33 @@ struct Context{
   map: Map<String, Box<Resolver>>;
   root: String;
   prelude: List<String>;
+  std_path: String;
+  search_paths: List<String>;
   out_dir: String;
   verbose: bool;
   single_mode: bool;
   stack_trace: bool;
 }
 impl Context{
-  func new(src_dir: String, out_dir: String): Context{
+  func new(src_dir: String, out_dir: String, std_path: String): Context{
     let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map", "rt"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
-    return Context{map: Map<String, Box<Resolver>>::new(),
-       root: src_dir,
+    let res = Context{
+       map: Map<String, Box<Resolver>>::new(),
+       root: src_dir.clone(),
        prelude: pre,
+       std_path: std_path,
+       search_paths: List<String>::new(),
        out_dir: out_dir,
        verbose: true,
        single_mode: true,
        stack_trace: false
     };
+    res.search_paths.add(src_dir);
+    return res;
   }
 }
 
@@ -51,6 +58,8 @@ impl Drop for Context{
     self.map.drop();
     self.root.drop();
     self.prelude.drop();
+    self.std_path.drop();
+    self.search_paths.drop();
     self.out_dir.drop();
   }
 }
@@ -399,16 +408,62 @@ impl Resolver{
         return path.substr(root.len() + 1);//+1 for slash
     }
     return path;
-}
+  }
+
+  func get_resolvers(self): List<Resolver*>{
+    let res = List<Resolver*>::new();
+    let added = List<str>::new();
+    added.add(self.unit.path.str());
+    //add preludes
+    for (let i = 0;i < self.ctx.prelude.len();++i) {
+      let pre: String* = self.ctx.prelude.get_ptr(i);
+      //skip self unit being prelude
+      let path = format("{}/std/{}.x", self.ctx.std_path, pre);
+      if(!added.contains(&path.str())){
+        let r = self.ctx.create_resolver(&path);
+        res.add(r);
+        added.add(r.unit.path.str());
+      }
+      path.drop();
+    }
+    //normal imports
+    for (let i = 0;i < self.unit.imports.len();++i) {
+      let is = self.unit.imports.get_ptr(i);
+      let path = self.ctx.get_path(is);
+      if(!added.contains(&path.str())){
+        let r = self.ctx.create_resolver(&path);
+        res.add(r);
+        added.add(r.unit.path.str());
+      }
+      path.drop();
+    }
+    //generic method, transitive imports
+    if (self.curMethod.is_some() && !self.curMethod.unwrap_ptr().type_params.empty()) {
+      let imports = &self.get_unit(&self.curMethod.unwrap_ptr().path).imports;
+      for (let i = 0;i < imports.len();++i) {
+          let is = imports.get_ptr(i);
+          //skip self being cycle
+          let path = self.ctx.get_path(is);
+          if (!added.contains(&path.str())) {
+            let r = self.ctx.create_resolver(&path);
+            res.add(r);
+            added.add(r.unit.path.str());
+          }
+          path.drop();
+      }
+    }
+    added.drop();
+    return res;
+  }
 
   func get_imports(self): List<ImportStmt>{
     let imports = List<ImportStmt>::new();
-    let cur = get_relative_root(self.unit.path.str(), self.ctx.root.str());
+    let cur: str = get_relative_root(self.unit.path.str(), self.ctx.root.str());
     for (let i = 0;i < self.ctx.prelude.len();++i) {
-      let pre = self.ctx.prelude.get_ptr(i);
+      let pre: String* = self.ctx.prelude.get_ptr(i);
       //skip self unit being prelude
       let path = format("std/{}.x", pre);
-      if (cur.eq(path.str())){
+      if (cur.eq(path.str()) || self.unit.path.str().ends_with(path.str())){
         path.drop();
         continue;
       }
@@ -442,7 +497,7 @@ impl Resolver{
         }
     }
     return imports;
-}
+  }
   
   func resolve_all(self){
     if(self.is_resolved) return;
@@ -1189,13 +1244,9 @@ impl Resolver{
 
 
   func find_imports(self, type: Simple*, str: String*): Option<RType>{
-    if(str.eq("List<u8>")){
-      let aa = 10;
-    }
-    let arr = self.get_imports();
+    let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
-      let is = arr.get_ptr(i);
-      let resolver = self.ctx.get_resolver(is);
+      let resolver: Resolver* = *arr.get_ptr(i);
       resolver.init();
       let cached = resolver.typeMap.get_ptr(&type.name);
       if (cached.is_some()) {
@@ -1968,10 +2019,9 @@ impl Resolver{
       }
     }
     //external globals
-    let imports = self.get_imports();
-    for (let i = 0;i < imports.len();++i) {
-      let is = imports.get_ptr(i);
-      let res = self.ctx.get_resolver(is);
+    let arr = self.get_resolvers();
+    for (let i = 0;i < arr.len();++i) {
+      let res = *arr.get_ptr(i);
       for (let j = 0;j < res.unit.globals.len();++j) {
         let glob = res.unit.globals.get_ptr(j);
         if (glob.name.eq(name)) {
@@ -1983,17 +2033,17 @@ impl Resolver{
             let old = self.glob_map.get_ptr(gi);
             if(old.name.eq(name)){
               //already have
-              imports.drop();
+              arr.drop();
               return rt;
             }
           }
           self.glob_map.add(GlobalInfo{glob.name.clone(), rt.clone(), res.unit.path.clone()});
-          imports.drop();
+          arr.drop();
           return rt;
         }
       }
     }
-    imports.drop();
+    arr.drop();
     self.dump();
     self.err(node, "unknown identifier");
     panic("");
