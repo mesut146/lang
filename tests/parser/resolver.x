@@ -275,6 +275,7 @@ impl Context{
     return res;
   }
   func get_path(self, is: ImportStmt*): String{
+    print("get_path {} {}, {}\n", self.root, self.search_paths, is.list);
     let path = self.root.clone();
     for(let i = 0;i < is.list.len();++i){
       let part: String* = is.list.get_ptr(i);

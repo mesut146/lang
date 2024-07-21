@@ -29,7 +29,7 @@ func build_std(out_dir: str){
   use_cache = true;
   let config = CompilerConfig::new(get_std_path().str());
   config
-    .set_file(get_std_path())
+    .set_file("../tests/std".str())
     .set_out(get_out())
     .add_dir(get_std_path())
     .set_link(LinkType::Static{"std.a"});
