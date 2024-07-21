@@ -58,6 +58,7 @@ extern{
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
     func destroy_ctx();
+    func destroy_llvm(tm: TargetMachine*);
     func emit_llvm(out: i8*);
     func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
 

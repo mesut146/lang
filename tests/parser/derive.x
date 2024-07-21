@@ -110,11 +110,10 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
 func generate_debug(decl: Decl*, unit: Unit*): Impl{
     let imp = make_impl(decl, "Debug");
     let line = decl.line;
-    let m = Method::new(unit.node(line), "debug".str(), Type::new("void"));
+    let m = Method::new(unit.node(line), "debug".str(), Type::new("void"), unit.path.clone());
     m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone().toPtr(), true, false});
     m.params.add(Param{.unit.node(line), "f".str(), Type::new("Fmt").toPtr(), false, false});
     m.parent = Parent::Impl{make_info(decl, "Debug")};
-    m.path = unit.path.clone();
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);
     if let Decl::Enum(variants*)=(decl){

@@ -56,6 +56,7 @@ impl Drop for llvm_holder{
     Drop::drop(self.target_triple);
     Drop::drop(self.di);
     destroy_ctx();
+    destroy_llvm(self.target_machine);
   }
 }
 
@@ -632,22 +633,21 @@ impl Compiler{
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.src_dirs.get_ptr(0).clone(), config.out_dir.clone(), config.std_path.clone());
+    for(let i = 0;i < config.src_dirs.len();++i){
+      ctx.add_path(config.src_dirs.get_ptr(i).str());
+    }
     let cmp = Compiler::new(ctx);
     let compiled = List<String>::new();
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
     let obj = cmp.compile(config.file.str(), &cache);
     compiled.add(obj);
-    let res = config.link(&compiled);
+    let res = config.link(&compiled, &cmp);
     config.drop();
     cmp.drop();
     compiled.drop();
     cache.drop();
     return res;
-  }
-
-  func compile_dir(src_dir: str, out_dir: str, root: str, lt: LinkType): String{
-    panic("removed");
   }
 
   func compile_dir(config: CompilerConfig): String{
@@ -663,6 +663,9 @@ impl Compiler{
       let file: String = format("{}/{}", src_dir, name);
       if(is_dir(file.str())) continue;
       let ctx = Context::new(config.file.clone(), config.out_dir.clone(), config.std_path.clone());
+      for(let j = 0;j < config.src_dirs.len();++j){
+        ctx.add_path(config.src_dirs.get_ptr(j).str());
+      }
       let cmp = Compiler::new(ctx);
       let obj = cmp.compile(file.str(), &cache);
       Drop::drop(cmp);
@@ -677,13 +680,16 @@ impl Compiler{
       if(run){
         Compiler::run(path.clone());
       }
+      config.drop();
       return path;
     }
     else if let LinkType::Static(lib_name) = (&config.lt){
       let res = Compiler::build_library(&compiled, lib_name, config.out_dir.str(), false);
       compiled.drop();
+      config.drop();
       return res;
     }else{
+      config.drop();
       panic("compile_dir");
     }
   }
@@ -744,8 +750,11 @@ impl CompilerConfig{
     self.std_path = std_path.str();
     return self;
   }
-  func link(self, compiled: List<String>*): String{
+  func link(self, compiled: List<String>*, cmp: Compiler*): String{
     if let LinkType::Binary(bin_name, args, run) = (&self.lt){
+      if(cmp.main_file.is_none()){
+        return "".str();
+      }
       let path = Compiler::link(compiled, self.out_dir.str(), bin_name, args);
       if(run){
         Compiler::run(path.clone());

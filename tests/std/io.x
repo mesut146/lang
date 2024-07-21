@@ -203,15 +203,6 @@ impl Path{
 }
 
 
-/*func get_arg(args: i8**, idx: i32): str{
-  let a1 = *ptr::get(args, idx) as u8*;
-  if(a1 as u64 == 0){
-    panic("null");
-  }
-  let len = strlen(a1 as i8*, 1000);
-  return str::new(a1[0..len]);
-}*/
-
 struct CmdArgs{
   args: List<String>;
 }

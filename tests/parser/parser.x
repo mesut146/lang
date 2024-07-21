@@ -250,6 +250,7 @@ impl Parser{
       let type_args = List<Type>::new();
       let is_generic = false;
       if(self.is(TokenType::LT)){
+        type_args.drop();
         type_args = self.type_params();
         is_generic = true;
       }

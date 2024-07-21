@@ -30,7 +30,7 @@ func build_std(out_dir: str){
   let config = CompilerConfig::new(get_std_path().str());
   config
     .set_file("../tests/std".str())
-    .set_out(get_out())
+    .set_out(out_dir)
     .add_dir(get_std_path())
     .set_link(LinkType::Static{"std.a"});
 
@@ -97,7 +97,13 @@ func bootstrap(run: bool, out_dir: str){
   }else{
     name.append(out_dir);
   }
-  let bin = Compiler::compile_dir("../tests/parser", out_dir, root(), LinkType::Binary{name.str(), args.str(), run});
+  let config = CompilerConfig::new(get_std_path().str());
+  config
+    .set_file("../tests/parser".str())
+    .set_out(out_dir)
+    .add_dir(get_std_path())
+    .set_link(LinkType::Binary{name.str(), args.str(), run});
+  let bin = Compiler::compile_dir(config);
   let bin2 = format("./{}", name);
   File::copy(bin.str(), bin2.str());
   print("wrote {}\n", bin2);
@@ -166,7 +172,6 @@ func handle(cmd: CmdArgs*){
     cmd.consume();
     let out = get_out();
     if(cmd.has()){
-      print("cmd len={}\n", cmd.args.len());
       out = cmd.peek().str();
     }
     bootstrap(false, out);
@@ -174,15 +179,26 @@ func handle(cmd: CmdArgs*){
   else if(cmd.is("c")){
     cmd.consume();
     use_cache = false;
-    let path: String = cmd.get();
     let out_dir = get_out().str();
     if(cmd.is("-out")){
       cmd.consume();
       out_dir = cmd.get();
     }
+    let run = true;
+    if(cmd.is("-norun")){
+      cmd.consume();
+      run = false;
+    }
+    let path: String = cmd.get();
     if(is_dir(path.str())){
       let bin = bin_name(path.str());
-      Compiler::compile_dir(path.str(), out_dir.str(), root(), LinkType::Binary{bin.str(), "", true});
+      let config = CompilerConfig::new(get_std_path().str());
+      config
+        .set_file(path.str())
+        .set_out(out_dir)
+        .add_dir(get_std_path())
+        .set_link(LinkType::Binary{bin.str(), "", run});
+      Compiler::compile_dir(config);
       bin.drop();
     }else{
       let config = CompilerConfig::new(get_std_path().str());
@@ -194,7 +210,6 @@ func handle(cmd: CmdArgs*){
       let out = Compiler::compile_single(config);
       out.drop();
     }
-    out_dir.drop();
   }else{
     panic("invalid cmd: {}", cmd.args);
   }

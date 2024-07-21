@@ -250,10 +250,21 @@ struct Param: Node{
 
 impl Method{
   func new(node: Node, name: String, type: Type): Method{
-    return Method{.node, type_params: List<Type>::new(),
-                 name: name, self: Option<Param>::None, params: List<Param>::new(),
-                 type: type, body: Option<Block>::None, is_generic: false,
-                 parent: Parent::None, path: String::new()};
+    return Method::new(node, name, type, "".str());
+  }
+  func new(node: Node, name: String, type: Type, path: String): Method{
+    return Method{
+      .node,
+      type_params: List<Type>::new(),
+      name: name,
+      self: Option<Param>::None,
+      params: List<Param>::new(),
+      type: type,
+      body: Option<Block>::None,
+      is_generic: false,
+      parent: Parent::None,
+      path: path
+    };
   }
   func print(self): String{
     return Fmt::str(self);

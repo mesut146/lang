@@ -355,7 +355,9 @@ impl Debug for Fragment{
 impl Debug for Literal{
   func debug(self, f: Fmt*){
     let replaced = self.val.replace("\n", "\\n");
-    replaced = replaced.replace("\"", "\\\"");
+    let tmp = replaced.replace("\"", "\\\"");
+    replaced.drop();
+    replaced = tmp;
     if(self.kind is LitKind::STR){
       f.print("\"");
     }else if(self.kind is LitKind::CHAR){

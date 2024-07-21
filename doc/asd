@@ -1,0 +1,1 @@
+ valgrind --leak-check=full ./x c -out ./xx -norun ../tests/parser/token.x

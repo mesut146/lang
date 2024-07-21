@@ -11,6 +11,7 @@ import parser/derive
 import parser/ownership
 import std/map
 import std/libc
+import std/io
 
 static verbose_method: bool = false;
 
@@ -38,7 +39,7 @@ impl Context{
     }
     let res = Context{
        map: Map<String, Box<Resolver>>::new(),
-       root: src_dir.clone(),
+       root: src_dir,
        prelude: pre,
        std_path: std_path,
        search_paths: List<String>::new(),
@@ -47,7 +48,6 @@ impl Context{
        single_mode: true,
        stack_trace: false
     };
-    res.search_paths.add(src_dir);
     return res;
   }
 }
@@ -259,6 +259,9 @@ impl Debug for Resolver{
 }
 
 impl Context{
+  func add_path(self, path: str){
+    self.search_paths.add(path.str());
+  }
   func create_resolver(self, path: String*): Resolver*{
     let res = self.map.get_ptr(path);
     if(res.is_some()){
@@ -275,15 +278,25 @@ impl Context{
     return res;
   }
   func get_path(self, is: ImportStmt*): String{
-    print("get_path {} {}, {}\n", self.root, self.search_paths, is.list);
-    let path = self.root.clone();
+    //print("get_path root: {} arr: {}, imp: {}\n", self.root, self.search_paths, is.list);
+    let suffix = "".str();
     for(let i = 0;i < is.list.len();++i){
       let part: String* = is.list.get_ptr(i);
-      path.append("/");
-      path.append(part.str());
+      suffix.append("/");
+      suffix.append(part.str());
     }
-    path.append(".x");
-    return path;
+    suffix.append(".x");
+    for(let i = 0;i < self.search_paths.len();++i){
+      let path = self.search_paths.get_ptr(i).clone();
+      path.append(&suffix);
+      if(is_file(path.str())){
+        suffix.drop();
+        return path;
+      }
+      path.drop();
+    }
+    suffix.drop();
+    panic("can't resolve import: {}", is);
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = self.get_path(is);
@@ -377,8 +390,8 @@ impl Resolver{
     self.scopes.add(sc);
   }
   func dropScope(self){
-    //self.scopes.remove(self.scopes.len() - 1);
-    --self.scopes.count;
+    let tmp = self.scopes.remove(self.scopes.len() - 1);
+    tmp.drop();
   }
   func addScope(self, name: String, type: Type, prm: bool, id: i32){
     for(let i=0;i<self.scopes.len();++i){
@@ -505,6 +518,7 @@ impl Resolver{
     //print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
     self.init();
+    self.newScope();//globals
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get_ptr(i);
@@ -515,10 +529,10 @@ impl Resolver{
       let gm = self.generated_methods.get_ptr(j).get();
       self.visit_method(gm);
     }
+    self.dropScope();//globals
   }
   
   func init_globals(self){
-    self.newScope();//globals
     for (let i = 0;i < self.unit.globals.len();++i) {
         let g = self.unit.globals.get_ptr(i);
         let rhs: RType = self.visit(&g.expr);
@@ -661,12 +675,15 @@ impl Resolver{
     msg.drop();
   }
   func err(self, line: i32, msg: String){
+    self.err(line, msg.str());
+    msg.drop();
+  }
+  func err(self, line: i32, msg: str){
     let path = &self.unit.path;
     if(self.curMethod.is_some()){
       path = &self.curMethod.unwrap().path;
     }
     let str = format("{}:{}\n{}", path, line, msg);
-    msg.drop();
     panic("{}\n", str);
   }
 
@@ -1107,22 +1124,15 @@ impl Resolver{
     if(op.is_none()) return Option<Decl*>::new();
     return Option<Decl*>::new(*op.get());
   }
-  func visit_type(self, node: Type*): RType{
-    let id = Node::new(0);
-    let expr = Expr::Type{.id, node.clone()};
-    let res = self.visit_type(&expr, node);
-    Drop::drop(expr);
-    return res;
-  }
 
-  func visit_type(self, expr: Expr*, node: Type*): RType{
+  func visit_type(self, node: Type*): RType{
     let str = node.print();
-    let res = self.visit_type_str(expr, node, &str);
+    let res = self.visit_type_str(node, &str);
     Drop::drop(str);
     return res;
   }
 
-  func visit_type_str(self, expr: Expr*, node: Type*, str: String*): RType{
+  func visit_type_str(self, node: Type*, str: String*): RType{
     let cached = self.typeMap.get_ptr(str);
     if(cached.is_some()){
       return cached.unwrap().clone();
@@ -1136,6 +1146,7 @@ impl Resolver{
       let inner = node.get_ptr();
       let res = self.visit_type(inner);
       let ptr = res.type.clone().toPtr();
+      res.type.drop();
       res.type = ptr;
       return res;
     }
@@ -1158,7 +1169,7 @@ impl Resolver{
       let scope = self.visit_type(simple.scope.get());
       let decl = self.get_decl(&scope).unwrap();
       if (!(decl is Decl::Enum)) {
-          self.err(expr, format("type scope is not enum: {}", str));
+          self.err(node.line, format("type scope is not enum: {}", str));
       }
       findVariant(decl, &simple.name);
       let ds = decl.type.print();
@@ -1168,12 +1179,12 @@ impl Resolver{
       scope.drop();
       return res;
     }
-    let res = self.visit_type2(expr, simple, str);
+    let res = self.visit_type2(node, simple, str);
     //print("visit_type2 {} -> {}\n", node, res.desc);
     return res;
   }
 
-  func find_type(self, expr: Expr*, simple: Simple*): RType{
+  func find_type(self, node: Type*, simple: Simple*): RType{
     let name = &simple.name;
     if (self.typeMap.contains(name)) {
       let rt: RType* = self.typeMap.get_ptr(name).unwrap();
@@ -1181,14 +1192,14 @@ impl Resolver{
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
-      self.err(expr, "couldn't find type");
+      self.err(node.line, "couldn't find type");
     }
     let tmp: RType = imp_result.unwrap();
     return tmp;
   }
 
-  func visit_type2(self, expr: Expr*, simple: Simple*, str: String*): RType{
-    let target_rt: RType = self.find_type(expr, simple);
+  func visit_type2(self, node: Type*, simple: Simple*, str: String*): RType{
+    let target_rt: RType = self.find_type(node, simple);
     if(!target_rt.is_decl()){
       //add used
       return target_rt;
@@ -1210,7 +1221,7 @@ impl Resolver{
     }
     target_rt.drop();
     if (simple.args.len() != target.type.get_args().len()) {
-      self.err(expr, "type arguments size not matched");
+      self.err(node.line, "type arguments size not matched");
     }
     let map = make_type_map(simple, target);
     let copier = AstCopier::new(&map);
@@ -1395,16 +1406,16 @@ impl Resolver{
         base_ty.drop();
     }
     let fields0 = Option<List<FieldDecl>*>::new();
-    let type = Type::new("");
+    let type_opt = Option<Type>::new();
     
     if let Decl::Enum(variants*)=(decl){
         let idx = findVariant(decl, type0.name());
         let variant = variants.get_ptr(idx);
         fields0 = Option::new(&variant.fields);
-        type = Type::new(decl.type.clone(), variant.name.clone());
+        type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
     }else if let Decl::Struct(f*)=(decl){
         fields0 = Option::new(f);
-        type = decl.type.clone();
+        type_opt = Option::new(decl.type.clone());
         if (decl.is_generic) {
             //infer
             let inferred: Type = self.inferStruct(node, &decl.type, hasNamed, f, args);
@@ -1414,6 +1425,7 @@ impl Resolver{
             fields0 = Option::new(gen_decl.get_fields());
         }
     }
+    let type = type_opt.unwrap();
     let fields = fields0.unwrap();
     let field_idx = 0;
     let names = List<String>::new();
@@ -1575,16 +1587,9 @@ impl Resolver{
   }
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
-    if(node.id == 712){
-      let a = 10;
-    }
-    if(e is Expr::Name || e is Expr::Access || e is Expr::ArrAccess || e is Expr::Lit){
-      let res = self.visit(e);
-      res.type = res.type.clone().toPtr();
-      return res;
-    }
-    self.err(node, "ref expr is not supported");
-    panic("");
+    let res = self.visit(e);
+    res.type = res.type.clone().toPtr();
+    return res;
   }
 
   func visit_deref(self, node: Expr*, e: Expr*): RType{
@@ -2076,7 +2081,7 @@ impl Resolver{
     if let Expr::Lit(lit*)=(node){
       return self.visit_lit(lit);
     }else if let Expr::Type(type*) = (node){
-      let res = self.visit_type(node, type);
+      let res = self.visit_type(type);
       //if(res.is_decl()){
         /*let decl = self.get_decl(&res).unwrap();
         if(decl.base.is_some()){

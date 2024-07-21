@@ -120,6 +120,10 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine, char *tri
     dest.close();
 }
 
+void destroy_llvm(llvm::TargetMachine *tm) {
+    delete tm;
+}
+
 void destroy_ctx() {
     if (mod != nullptr) {
         delete mod;
