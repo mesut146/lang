@@ -106,11 +106,11 @@ impl<T> List<T>{
     }
   }
 
-  func set(self, pos: i64, val: T){
+  func set(self, pos: i64, val: T): T{
       let old = self.get_internal(pos);
-      Drop::drop(old);
       ptr::copy(self.ptr, pos, val);
       std::no_drop(val);
+      return old;
   }
 
   func get_internal(self, pos: i64): T{
@@ -182,6 +182,13 @@ impl<T> List<T>{
     return self.get_ptr(self.count - 1 - off);
   }
 
+  func swap(self, i: i32, j: i32){
+    let cur = self.get_internal(i);
+    let next = self.set(j, cur);
+    let cur2 = self.set(i, next);
+    std::no_drop(cur2);
+  }
+
   func sort(self){
     //bubble sort for now
     for(let i = 0;i < self.len();++i){
@@ -191,10 +198,7 @@ impl<T> List<T>{
         let cmp = Compare::compare(a1, a2);
         //a1 > a2
         if(cmp == 1){
-          let tmp = self.get_internal(j);
-          let tmp2 = self.get_internal(j + 1);
-          self.set(j, tmp2);
-          self.set(j + 1, tmp);
+          self.swap(j, j + 1);
         }
       }
     }
