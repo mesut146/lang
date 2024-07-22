@@ -179,7 +179,7 @@ impl str{
     }
 
     func cstr(self): CStr{
-      return CStr::from_slice(*self);
+      return CStr::new(*self);
     }
     
     func split(self, sep: str): List<str>{

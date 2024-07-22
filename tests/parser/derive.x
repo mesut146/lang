@@ -100,8 +100,12 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     m.is_generic = decl.is_generic;
     m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone(), true, true});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
+    m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
+    /*if(decl.type.eq("Type")){
+        print("{}\n", &m);
+    }*/
     let imp = make_impl(decl, "Drop");
     imp.methods.add(m);
     return imp;
@@ -209,7 +213,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //printf("..")
         if (Resolver::is_panic(mc)) {
             let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
-            msg = normalize_quotes(msg.str());
+            let tmp = normalize_quotes(msg.str());
+            msg.drop();
+            msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
             msg.drop();
@@ -283,7 +289,8 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
         info.unwrap_mc = Option::new(unwrap_mc);
         r.visit(block);
-        r.visit(info.unwrap_mc.get());
+        let tmp = r.visit(info.unwrap_mc.get());
+        tmp.drop();
         r.format_map.add(node.id, info);
     }else{
         info.drop();

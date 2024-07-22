@@ -129,11 +129,7 @@ std::string Method::print() const {
     }
     s.append("(");
     if (self) {
-        s.append(self->name);
-        if (self->type) {
-            s.append(": ");
-            s.append(self->type->print());
-        }
+        s.append(self->print());
         if (!params.empty()) s.append(", ");
     }
     s.append(join(params, ", "));

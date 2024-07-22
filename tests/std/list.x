@@ -107,7 +107,8 @@ impl<T> List<T>{
   }
 
   func set(self, pos: i64, val: T){
-      //*self.get_ptr_write(pos) = val;
+      let old = self.get_internal(pos);
+      Drop::drop(old);
       ptr::copy(self.ptr, pos, val);
       std::no_drop(val);
   }
@@ -130,7 +131,6 @@ impl<T> List<T>{
   }
 
   func clear(self){
-    //todo dealloc
     self.drop_elems();
     self.count = 0;
   }

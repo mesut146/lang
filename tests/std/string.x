@@ -194,9 +194,8 @@ impl Compare for String{
 }
 
 
-enum CStr{
-  Lit(val: str),
-  Heap(val: String)
+struct CStr{
+  val: String;
 }
 
 impl CStr{
@@ -204,18 +203,15 @@ impl CStr{
     if(s.empty()){
       s.append(0u8);
       --s.arr.count;
-      return CStr::Heap{s};
     }
-    if(!s.empty()){
+    else{
       let last = *s.arr.last();
       if(last != 0){
         s.append(0u8);
-        --s.arr.count;
-      }else{
-        --s.arr.count;
       }
+      --s.arr.count;
     }
-    return CStr::Heap{s};
+    return CStr{val: s};
   }
   func new(arr: [u8]): CStr{
     let s = String::new(arr);
@@ -225,44 +221,22 @@ impl CStr{
     let s = String::new(arr);
     return CStr::new(s);
   }
-  func from_slice(s: str): CStr{
+  func new(s: str): CStr{
     return CStr::new(s.str());
   }
   func ptr(self): i8*{
-    if let CStr::Lit(v*)=(self){
-      return v.ptr() as i8*;
-    }else if let CStr::Heap(v*)=(self){
-      return v.ptr();
-    }
-    panic("CStr::ptr");
+    return self.val.ptr();
   }
   func get(self): str{
-    if let CStr::Lit(v)=(self){
-      return v;
-    }else if let CStr::Heap(v*)=(self){
-      return v.str();
-    }
-    panic("CStr::get");
+    return self.val.str();
   }
   func get_heap(self): String{
-    return self.get().str();
-  }
-}
-
-impl Drop for CStr{
-  func drop(*self){
-    if let CStr::Heap(v)=(self){
-      Drop::drop(v);
-    }
+    return self.val.clone();
   }
 }
 
 impl Debug for CStr{
   func debug(self, f: Fmt*){
-    if let CStr::Lit(v)=(self){
-      v.debug(f);
-    }else if let CStr::Heap(v*)=(self){
-      v.debug(f);
-    }
+    f.print(self.val.str());
   }
 }

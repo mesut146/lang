@@ -191,47 +191,47 @@ impl DropHelper{
 }
 
 func make_slice_type(): StructType*{
-    let elems = make_vec();
-    vec_push(elems, getPointerTo(getInt(8)) as llvm_Type*);
-    vec_push(elems, getInt(SLICE_LEN_BITS()));
+    let elems = vector_Type_new();
+    vector_Type_push(elems, getPointerTo(getInt(8)) as llvm_Type*);
+    vector_Type_push(elems, getInt(SLICE_LEN_BITS()));
     let res = make_struct_ty2("__slice".ptr(), elems);
-    //free(elems as i8*);
+    vector_Type_delete(elems);
     return res;
 }
 
 func make_string_type(sliceType: llvm_Type*): StructType*{
-    let elems = make_vec();
-    vec_push(elems, sliceType);
+    let elems = vector_Type_new();
+    vector_Type_push(elems, sliceType);
     let res = make_struct_ty2("str".ptr(), elems);
-    //free(elems as i8*);
+    vector_Type_delete(elems);
     return res;
 }
 
 func make_printf(): Function*{
-    let args = make_vec();
-    vec_push(args, getPointerTo(getInt(8)) as llvm_Type*);
+    let args = vector_Type_new();
+    vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
     let ft = make_ft(getInt(32), args, true);
     let f = make_func(ft, ext(), "printf".ptr());
     setCallingConv(f);
-    //free(args as i8*);
+    vector_Type_delete(args);
     return f;
 }
 func make_fflush(): Function*{
-    let args = make_vec();
-    vec_push(args, getPointerTo(getInt(8)) as llvm_Type*);
+    let args = vector_Type_new();
+    vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
     let ft = make_ft(getInt(32), args, false);
     let f = make_func(ft, ext(), "fflush".ptr());
     setCallingConv(f);
-    //free(args as i8*);
+    vector_Type_delete(args);
     return f;
 }
 func make_malloc(): Function*{
-    let args = make_vec();
-    vec_push(args, getInt(64));
+    let args = vector_Type_new();
+    vector_Type_push(args, getInt(64));
     let ft = make_ft(getPointerTo(getInt(8)) as llvm_Type*, args, false);
     let f = make_func(ft, ext(), "malloc".ptr());
     setCallingConv(f);
-    //free(args as i8*);
+    vector_Type_delete(args);
     return f;
 }
 
@@ -391,7 +391,7 @@ impl Compiler{
 
   func fill_decl(self, decl: Decl*, st: StructType*){
     let p = self.protos.get();
-    let elems = make_vec();
+    let elems = vector_Type_new();
     if let Decl::Enum(variants*)=(decl){
       //calc enum size
       let max = 0;
@@ -406,31 +406,33 @@ impl Compiler{
           max = sz;
         }
       }
-      vec_push(elems, getInt(ENUM_TAG_BITS()));
-      vec_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
+      vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
+      vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
     }else if let Decl::Struct(fields*)=(decl){
       if(decl.base.is_some()){
-        vec_push(elems, self.mapType(decl.base.get()));
+        vector_Type_push(elems, self.mapType(decl.base.get()));
       }
       for(let i = 0;i < fields.len();++i){
         let fd = fields.get_ptr(i);
         let ft = self.mapType(&fd.type);
-        vec_push(elems, ft);
+        vector_Type_push(elems, ft);
       }
     }
     setBody(st, elems);
+    vector_Type_delete(elems);
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: StructType*){
-    let elems = make_vec();
+    let elems = vector_Type_new();
     if(decl.base.is_some()){
-      vec_push(elems, self.mapType(decl.base.get()));
+      vector_Type_push(elems, self.mapType(decl.base.get()));
     }
     for(let j = 0;j < ev.fields.len();++j){
       let fd = ev.fields.get_ptr(j);
       let ft = self.mapType(&fd.type);
-      vec_push(elems, ft);
+      vector_Type_push(elems, ft);
     }
     setBody(ty, elems);
+    vector_Type_delete(elems);
   }
 
   func make_proto(self, m: Method*): Option<Function*>{
@@ -447,17 +449,17 @@ impl Compiler{
     }else if(!rvo){
       ret = self.mapType(&m.type);
     }
-    let args = make_vec();
+    let args = vector_Type_new();
     if(rvo){
       let rvo_ty = getPointerTo(self.mapType(&m.type)) as llvm_Type*;
-      vec_push(args, rvo_ty);
+      vector_Type_push(args, rvo_ty);
     }
     if(m.self.is_some()){
       let self_ty = self.mapType(&m.self.get().type);
       if(is_struct(&m.self.get().type)){
         self_ty = getPointerTo(self_ty) as llvm_Type*;
       }
-      vec_push(args, self_ty);
+      vector_Type_push(args, self_ty);
     }
     for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get_ptr(i);
@@ -465,7 +467,7 @@ impl Compiler{
       if(is_struct(&prm.type)){
         pt = getPointerTo(pt) as llvm_Type*;
       }
-      vec_push(args, pt);
+      vector_Type_push(args, pt);
     }
     let ft = make_ft(ret, args, false);
     let linkage = ext();
@@ -485,7 +487,7 @@ impl Compiler{
       Argument_setsret(arg, self.mapType(&m.type));
     }
     self.protos.get().funcMap.add(mangled, f);
-    //free(args as i8*);
+    vector_Type_delete(args);
     return Option::new(f);
   }
 
@@ -641,12 +643,13 @@ impl Compiler{
 
   func make_init_proto(self, path: str): Function*{
     let ret = getVoidTy();
-    let args = make_vec();
+    let args = vector_Type_new();
     let ft = make_ft(ret, args, false);
     let linkage = ext();
     let mangled = mangle_static(path).cstr();
     let res = make_func(ft, linkage, mangled.ptr());
     mangled.drop();
+    vector_Type_delete(args);
     return res;
   }
 }
@@ -685,23 +688,29 @@ func getPrimitiveSizeInBits2(val: Value*): i32{
 }
 
 func gep_arr(type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
-  let args = make_args();
-  args_push(args, makeInt(i1, 64));
-  args_push(args, makeInt(i2, 64));
-  return CreateInBoundsGEP(type, ptr, args);
+  let args = vector_Value_new();
+  vector_Value_push(args, makeInt(i1, 64));
+  vector_Value_push(args, makeInt(i2, 64));
+  let res = CreateInBoundsGEP(type, ptr, args);
+  vector_Value_delete(args);
+  return res;
 }
 
 func gep_arr(type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
-  let args = make_args();
-  args_push(args, i1);
-  args_push(args, i2);
-  return CreateInBoundsGEP(type, ptr, args);
+  let args = vector_Value_new();
+  vector_Value_push(args, i1);
+  vector_Value_push(args, i2);
+  let res = CreateInBoundsGEP(type, ptr, args);
+  vector_Value_delete(args);
+  return res;
 }
 
 func gep_ptr(type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
-  let args = make_args();
-  args_push(args, i1);
-  return CreateGEP(type, ptr, args);
+  let args = vector_Value_new();
+  vector_Value_push(args, i1);
+  let res = CreateGEP(type, ptr, args);
+  vector_Value_delete(args);
+  return res;
 }
 
 func get_tag_index(decl: Decl*): i32{

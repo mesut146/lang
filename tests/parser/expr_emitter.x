@@ -383,9 +383,11 @@ impl Compiler{
             size = CreateNSWMul(size, makeInt(typeSize, 64));
         }
         let proto = self.protos.get().libc("malloc");
-        let args = make_args();
-        args_push(args, size);
-        return CreateCall(proto, args);
+        let args = vector_Value_new();
+        vector_Value_push(args, size);
+        let res = CreateCall(proto, args);
+        vector_Value_delete(args);
+        return res;
       }
       if(Resolver::is_ptr_null(mc)){
         let ty = self.mapType(mc.type_args.get_ptr(0));
@@ -473,9 +475,9 @@ impl Compiler{
       let target = self.get_resolver().get_method(&rt).unwrap();
       rt.drop();
       let proto = self.protos.get().get_func(target);
-      let args = make_args();
+      let args = vector_Value_new();
       if(ptr_ret.is_some()){
-        args_push(args, ptr_ret.unwrap());
+        vector_Value_push(args, ptr_ret.unwrap());
       }
       let paramIdx = 0;
       let argIdx = 0;
@@ -485,9 +487,9 @@ impl Compiler{
         if(rval.rvalue){
           let rv_ptr = self.get_alloc(*rval.scope.get());
           CreateStore(scp_val, rv_ptr);
-          args_push(args, rv_ptr);
+          vector_Value_push(args, rv_ptr);
         }else{
-          args_push(args, scp_val);
+          vector_Value_push(args, scp_val);
         }
         rval.drop();
         if(mc.is_static){
@@ -502,20 +504,20 @@ impl Compiler{
         let arg = mc.args.get_ptr(argIdx);
         let at = self.getType(arg);
         if (at.is_pointer()) {
-          args_push(args, self.get_obj_ptr(arg));
+          vector_Value_push(args, self.get_obj_ptr(arg));
         }
         else if (is_struct(&at)) {
           let de = is_deref(arg);
           if (de.is_some()) {
-            args_push(args, self.get_obj_ptr(de.unwrap()));
+            vector_Value_push(args, self.get_obj_ptr(de.unwrap()));
           }
           else {
-            args_push(args, self.visit(arg));
+            vector_Value_push(args, self.visit(arg));
           }
         } else {
           let prm = target.params.get_ptr(paramIdx);
           let pt = self.get_resolver().getType(&prm.type);
-          args_push(args, self.cast(arg, &pt));
+          vector_Value_push(args, self.cast(arg, &pt));
           pt.drop();
         }
         at.drop();
@@ -526,6 +528,7 @@ impl Compiler{
         self.print_frame();
       }
       let res = CreateCall(proto, args);
+      vector_Value_delete(args);
       if(Resolver::is_exit(mc)){
         CreateUnreachable();
       }
@@ -534,27 +537,29 @@ impl Compiler{
     }
   
     func visit_print(self, mc: Call*): Value*{
-      let args = make_args();
+      let args = vector_Value_new();
       for(let i = 0;i < mc.args.len();++i){
         let arg: Expr* = mc.args.get_ptr(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
           let val: str = lit.unwrap().str();
-          let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
-          args_push(args, ptr);
+          let val_c = CStr::new(val);
+          let ptr = CreateGlobalStringPtr(val_c.ptr());
+          vector_Value_push(args, ptr);
+          val_c.drop();
           continue;
         }
         let arg_type = self.getType(arg);
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.get_obj_ptr(arg);
-          args_push(args, val);
+          vector_Value_push(args, val);
         }
         else if(arg_type.is_str()){
           panic("print str");
         }else if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
           //val = CreateLoad(self.mapType(&arg_type), val);
-          args_push(args, val);
+          vector_Value_push(args, val);
         }else{
           panic("print {}", arg_type);
         }
@@ -562,38 +567,42 @@ impl Compiler{
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(printf_proto, args);
+      vector_Value_delete(args);
       //flush
       let fflush_proto = self.protos.get().libc("fflush");
-      let args2 = make_args();
+      let args2 = vector_Value_new();
       let stdout_ptr = self.protos.get().stdout_ptr;
-      args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+      vector_Value_push(args2, CreateLoad(getPtr(), stdout_ptr));
       CreateCall(fflush_proto, args2);
+      vector_Value_delete(args2);
       return res;
     }
   
     func call_printf(self, mc: Call*){
-      let args = make_args();
+      let args = vector_Value_new();
       for(let i = 0;i < mc.args.len();++i){
         let arg: Expr* = mc.args.get_ptr(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
           let val: str = lit.unwrap().str();
-          let ptr = CreateGlobalStringPtr(CStr::from_slice(val).ptr());
-          args_push(args, ptr);
+          let val_c = CStr::new(val);
+          let ptr = CreateGlobalStringPtr(val_c.ptr());
+          vector_Value_push(args, ptr);
+          val_c.drop();
           continue;
         }
         let arg_type = self.getType(arg);
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.get_obj_ptr(arg);
-          args_push(args, val);
+          vector_Value_push(args, val);
           continue;
         }
         if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
-          args_push(args, val);
+          vector_Value_push(args, val);
         }else if(arg_type.is_pointer()){
           let val = self.get_obj_ptr(arg);
-          args_push(args, val);
+          vector_Value_push(args, val);
           continue;
         }else{
           panic("compiler err printf arg {}", arg_type);
@@ -602,25 +611,27 @@ impl Compiler{
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(printf_proto, args);
+      vector_Value_delete(args);
       //flush
       let fflush_proto = self.protos.get().libc("fflush");
-      let args2 = make_args();
+      let args2 = vector_Value_new();
       let stdout_ptr = self.protos.get().stdout_ptr;
-      args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+      vector_Value_push(args2, CreateLoad(getPtr(), stdout_ptr));
       CreateCall(fflush_proto, args2);
+      vector_Value_delete(args2);
     }
     
     /*func call_printf(self, s: str){
-      let args = make_args();
+      let args = vector_Value_new();
       let val = CreateGlobalStringPtr(s.cstr().ptr());
-      args_push(args, val);
+      vector_Value_push(args, val);
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(printf_proto, args);
       //flush
       let fflush_proto = self.protos.get().libc("fflush");
-      let args2 = make_args();
+      let args2 = vector_Value_new();
       let stdout_ptr = self.protos.get().stdout_ptr;
-      args_push(args2, CreateLoad(getPtr(), stdout_ptr));
+      vector_Value_push(args2, CreateLoad(getPtr(), stdout_ptr));
       CreateCall(fflush_proto, args2);
     }*/
   

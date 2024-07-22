@@ -286,9 +286,11 @@ impl MethodResolver{
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get_ptr(j);       
                 if(!m.name.eq(&sig.name)) continue;
-                let desc = Desc{kind: RtKind::MethodImpl{j},
+                let desc = Desc{
+                    kind: RtKind::MethodImpl{j},
                     path: m.path.clone(),
-                    idx: pair.b};
+                    idx: pair.b
+                };
                 if(!scope_type.is_simple()){
                   list.add(Signature::new(m, desc));
                   continue;
@@ -309,8 +311,8 @@ impl MethodResolver{
                     let mapped = ac.visit(arg);
                     sig2.args.set(k, mapped);
                   }
-                  Drop::drop(typeMap);
                   list.add(sig2);
+                  Drop::drop(typeMap);
                 }
             }
         }

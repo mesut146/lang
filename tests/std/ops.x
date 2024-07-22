@@ -394,3 +394,9 @@ impl Compare for i32{
     return 0;
   }
 }
+
+func assign_eq<T>(l: T*, r: T){
+  let lval = ptr::deref(l);
+  lval.drop();
+  *l = r;
+}

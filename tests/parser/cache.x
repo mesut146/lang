@@ -77,7 +77,7 @@ impl Cache{
         self.map.add(file.str(), self.get_time(file));
     }
     func get_time(self, file: str): String{
-        let cs = CStr::from_slice(file);
+        let cs = CStr::new(file);
         let time = get_last_write_time(cs.ptr());
         cs.drop();
         return time.str();

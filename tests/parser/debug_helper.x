@@ -33,8 +33,8 @@ func method_parent(m: Method*): Type*{
 impl DebugInfo{
     func new(path: str, debug: bool): DebugInfo{
         init_dbg();
-        let path_c = CStr::from_slice(path);
-        let dir_c = CStr::from_slice(".");
+        let path_c = CStr::new(path);
+        let dir_c = CStr::new(".");
         let file = createFile(path_c.ptr(), dir_c.ptr());
         let cu = createCompileUnit(file);
         path_c.drop();
@@ -65,19 +65,20 @@ impl DebugInfo{
 
     func dbg_func(self, m: Method*, f: Function*, c: Compiler*){
         if (!self.debug) return;
-        let tys = Metadata_vector_new();
-        Metadata_vector_push(tys, self.map_di(&m.type, c) as Metadata*);
+        let tys = vector_Metadata_new();
+        vector_Metadata_push(tys, self.map_di(&m.type, c) as Metadata*);
         if(m.self.is_some()){
             let st = self.map_di(&m.self.get().type, c);
-            Metadata_vector_push(tys, createObjectPointerType(st) as Metadata*);
+            vector_Metadata_push(tys, createObjectPointerType(st) as Metadata*);
         }
         for(let i = 0;i < m.params.len();++i){
             let prm = m.params.get_ptr(i);
             let pt = self.map_di(&prm.type, c);
-            Metadata_vector_push(tys, pt as Metadata*);
+            vector_Metadata_push(tys, pt as Metadata*);
         }
         let linkage_name = "".str();
         if(!is_main(m)){
+            linkage_name.drop();
             linkage_name = mangle(m);
         }
         let path_c = m.path.clone().cstr();
@@ -99,6 +100,7 @@ impl DebugInfo{
         self.loc(m.line, 0);
         name_c.drop();
         linkage_c.drop();
+        vector_Metadata_delete(tys);
     }
     
     func dbg_prm(self, p: Param*, idx: i32, c: Compiler*) {
@@ -156,7 +158,7 @@ impl DebugInfo{
 
     func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{
         let name: String = decl.type.print();
-        let elems = Metadata_vector_new();
+        let elems = vector_Metadata_new();
         let st_size = c.getSize(decl);
         let path_c = decl.path.clone().cstr();
         let name_c = name.clone().cstr();
@@ -165,6 +167,7 @@ impl DebugInfo{
         self.incomplete_types.add(name, st);
         path_c.drop();
         name_c.drop();
+        vector_Metadata_delete(elems);
         return st;
     }
 
@@ -172,7 +175,7 @@ impl DebugInfo{
       let ev = decl.get_variants().get_ptr(var_idx);
       let name: String = format("{}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
-      let elems = Metadata_vector_new();
+      let elems = vector_Metadata_new();
       //empty ty
       let name_c = name.clone().cstr();
       let st = createStructType(scope as DIScope*, name_c.ptr(), file, decl.line, var_size, elems);
@@ -185,7 +188,7 @@ impl DebugInfo{
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
         let mem = createMemberType(st as DIScope*, "super".ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
-        Metadata_vector_push(elems, mem as Metadata*);
+        vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
       }
       for(let i = 0;i < ev.fields.len();++i){
@@ -196,7 +199,7 @@ impl DebugInfo{
         let fdname_c = fd.name.clone().cstr();
         let mem = createMemberType(st as DIScope*, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
         fdname_c.drop();
-        Metadata_vector_push(elems, mem as Metadata*);
+        vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
       }
       replaceElements(st, elems);
@@ -204,6 +207,7 @@ impl DebugInfo{
       let res = createVariantMemberType(var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
       evname_c.drop();
       name.drop();
+      vector_Metadata_delete(elems);
       return res;
     }
 
@@ -213,7 +217,7 @@ impl DebugInfo{
       let path_c = decl.path.clone().cstr();
       let file = createFile(path_c.ptr(), ".".ptr());
       path_c.drop();
-      let elems = Metadata_vector_new();
+      let elems = vector_Metadata_new();
       let base_ty = Option<DIType*>::new();
       let scope = st as DIScope*;
       if(decl.base.is_some()){
@@ -230,7 +234,7 @@ impl DebugInfo{
           let size = DIType_getSizeInBits(ty);
           let off = 0;
           let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-          Metadata_vector_push(elems, mem as Metadata*);
+          vector_Metadata_push(elems, mem as Metadata*);
           ++idx;
         }
         for(let i = 0;i < fields.len();++i){
@@ -241,7 +245,7 @@ impl DebugInfo{
           let name_c = fd.name.clone().cstr();
           let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
           name_c.drop();
-          Metadata_vector_push(elems, mem as Metadata*);
+          vector_Metadata_push(elems, mem as Metadata*);
           ++idx;
         }
       }else if let Decl::Enum(variants*)=(decl){
@@ -252,7 +256,7 @@ impl DebugInfo{
         let tag = self.map_di(&tag_ty0, c);
         tag_ty0.drop();
         let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
-        let elems2 = Metadata_vector_new();
+        let elems2 = vector_Metadata_new();
         let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
         //fill variant
         let var_idx = 1;
@@ -260,13 +264,15 @@ impl DebugInfo{
         for(let i = 0;i < variants.len();++i){
           let ev = variants.get_ptr(i);
           let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
-          Metadata_vector_push(elems2, var_type as Metadata*);
+          vector_Metadata_push(elems2, var_type as Metadata*);
         }
         replaceElements(var_part, elems2);
-        Metadata_vector_push(elems, var_part as Metadata*);
+        vector_Metadata_push(elems, var_part as Metadata*);
+        vector_Metadata_delete(elems2);
       }
       replaceElements(st, elems);
       self.types.add(s, st as DIType*);
+      vector_Metadata_delete(elems);
       return st as DIType*;
     }
 
@@ -307,32 +313,35 @@ impl DebugInfo{
         return createPointerType(self.map_di(elem, c), 64);
       }
       if let Type::Array(elem*, count)=(type){
-        let elems = Metadata_vector_new();
-        Metadata_vector_push(elems, getOrCreateSubrange(0, count));
+        let elems = vector_Metadata_new();
+        vector_Metadata_push(elems, getOrCreateSubrange(0, count));
         let elem_ty = self.map_di(elem.get(), c);
         let size = c.getSize(type);
-        return createArrayType(size, elem_ty, elems);
+        let res = createArrayType(size, elem_ty, elems);
+        vector_Metadata_delete(elems);
+        return res;
       }
       if(type.is_slice()){
         let elem = type.elem();
         let size = c.getSize(type);
-        let elems = Metadata_vector_new();
+        let elems = vector_Metadata_new();
         let line = 0;
         //ptr
         let ptr_ty = createPointerType(self.map_di(elem, c), 64);
         let off = 0;
         let flags = make_di_flags(false);
         let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
-        Metadata_vector_push(elems, ptr_mem as Metadata*);
+        vector_Metadata_push(elems, ptr_mem as Metadata*);
         //len
         let bits: Type = as_type(SLICE_LEN_BITS());
         let len_ty = self.map_di(&bits, c);
         bits.drop();
         let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
-        Metadata_vector_push(elems, len_mem as Metadata*);
+        vector_Metadata_push(elems, len_mem as Metadata*);
         let name_c = name.clone().cstr();
         let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
         name_c.drop();
+        vector_Metadata_delete(elems);
         return res;
       }
       panic("map di {}\n", name);

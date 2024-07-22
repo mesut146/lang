@@ -197,11 +197,18 @@ impl RType{
     return RType::new(Type::new(s.str()));
   }
   func new(typ: Type): RType{
-    let res = RType{typ, Option<String>::None, Option<VarHolder>::None, Desc::new(), Option<Desc>::new()};
+    let res = RType{
+      type: typ,
+      value: Option<String>::new(),
+      vh: Option<VarHolder>::new(),
+      desc: Desc::new(),
+      method_desc: Option<Desc>::new()
+    };
     return res;
   }
   func clone(self): RType{
-    return RType{type: self.type.clone(),
+    return RType{
+      type: self.type.clone(),
       value: self.value.clone(),
       vh: self.vh.clone(),
       desc: self.desc.clone(),
@@ -580,6 +587,10 @@ impl Resolver{
   func addType(self, name: String, res: RType){
     //print("addType {}=", name);
     //print("{}\n", &res);
+    /*let opt = self.typeMap.get_ptr(&name);
+    if(opt.is_some()){
+
+    }*/
     self.typeMap.add(name, res);
   }
   
@@ -596,10 +607,12 @@ impl Resolver{
       if let Item::Decl(decl*) = (it){
         let ty = decl.type.clone();
         let res = RType::new(ty);
+        res.desc.drop();
         res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
         self.addType(decl.type.name().clone(), res);
       }else if let Item::Trait(tr*) = (it){
         let res = RType::new(tr.type.clone());
+        res.desc.drop();
         res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
         self.addType(tr.type.name().clone(), res);
       }else if let Item::Impl(imp*) = (it){
@@ -1152,7 +1165,7 @@ impl Resolver{
     }
     if(node.is_slice()){
       let inner = node.elem();
-      let elem = self.visit_type(inner);
+      let elem: RType = self.visit_type(inner);
       return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())});      
     }
     if let Type::Array(inner*, size) = (node){
@@ -1214,6 +1227,7 @@ impl Resolver{
     if (simple.args.empty() || !target.is_generic) {
         //inferred later
         let res = RType::new(target.type.clone());
+        res.desc.drop();
         res.desc = target_rt.desc.clone();
         self.addType(str.clone(), res.clone());
         target_rt.drop();
@@ -1237,6 +1251,7 @@ impl Resolver{
     let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
+    rt.desc.drop();
     rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32};
     //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
@@ -1349,7 +1364,9 @@ impl Resolver{
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
-    scp = self.visit_type(&scp.type);
+    let scp2 = self.visit_type(&scp.type);
+    scp.drop();
+    scp = scp2;
     if (!scp.is_decl()) {
       let msg = format("invalid field {} of {}", name, scp.type); 
       self.err(node, msg);
@@ -1419,6 +1436,7 @@ impl Resolver{
         if (decl.is_generic) {
             //infer
             let inferred: Type = self.inferStruct(node, &decl.type, hasNamed, f, args);
+            res.drop();
             res = self.visit_type(&inferred);
             inferred.drop();
             let gen_decl = self.get_decl(&res).unwrap();
@@ -1588,7 +1606,9 @@ impl Resolver{
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
     let res = self.visit(e);
-    res.type = res.type.clone().toPtr();
+    let tmp = res.type.clone().toPtr();
+    res.type.drop();
+    res.type = tmp;
     return res;
   }
 
@@ -1597,7 +1617,9 @@ impl Resolver{
     if(!inner.type.is_pointer()){
       self.err(node, format("deref expr is not pointer: {}", inner.type));
     }
-    inner.type = inner.type.get_ptr().clone();
+    let tmp = inner.type.get_ptr().clone();
+    inner.type.drop();
+    inner.type = tmp;
     return inner;
   }
 
@@ -2020,6 +2042,7 @@ impl Resolver{
       if(vh_opt.is_some()){
         let vh = vh_opt.unwrap();
         let res = self.visit_type(&vh.type);
+        res.vh.drop();
         res.vh = Option::new(vh.clone());
         return res;
       }
@@ -2035,7 +2058,7 @@ impl Resolver{
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
           expr2.drop();
-          for(let gi=0;gi < self.glob_map.len();++gi){
+          for(let gi = 0;gi < self.glob_map.len();++gi){
             let old = self.glob_map.get_ptr(gi);
             if(old.name.eq(name)){
               //already have
@@ -2147,7 +2170,8 @@ impl Resolver{
     }else if let Stmt::Ret(e*) = (node){
       if(e.is_some()){
         //todo
-        self.visit(e.get());
+        let tmp = self.visit(e.get());
+        tmp.drop();
       }else{
         if(!self.curMethod.unwrap().type.is_void()){
           self.err("non-void method returns void");

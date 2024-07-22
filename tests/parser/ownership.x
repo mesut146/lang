@@ -1058,10 +1058,10 @@ impl Own{
         }
         if(drop_enabled){
             let proto = self.get_proto(rt);
-            let args = make_args();
-            args_push(args, ptr);
+            let args = vector_Value_new();
+            vector_Value_push(args, ptr);
             CreateCall(proto, args);
-            free(args as u8*);
+            vector_Value_delete(args);
         }
         dbg(rt.type.eq("List<u8>"), 10);
         dbg(line == 318, 33);
@@ -1147,7 +1147,7 @@ impl VarScope{
                 f.print(act);
             }
         }
-        for(let i=0;i<self.state_map.len();++i){
+        for(let i = 0;i < self.state_map.len();++i){
             let pair = self.state_map.get_pair_idx(i).unwrap();
             f.print("\n");
             f.print(indent);

@@ -26,19 +26,45 @@ static llvm::DIBuilder *DBuilder = nullptr;
 
 extern "C" {
 
-std::vector<llvm::Type *> *make_vec() {
+std::vector<llvm::Type *> *vector_Type_new() {
     return new std::vector<llvm::Type *>();
 }
-
-void vec_push(std::vector<llvm::Type *> *vec, llvm::Type *type) {
+void vector_Type_push(std::vector<llvm::Type *> *vec, llvm::Type *type) {
     vec->push_back(type);
 }
-std::vector<llvm::Value *> *make_args() {
-    return new std::vector<llvm::Value *>();
+void vector_Type_delete(std::vector<llvm::Type *> *vec) {
+    delete vec;
 }
 
-void args_push(std::vector<llvm::Value *> *vec, llvm::Value *val) {
+std::vector<llvm::Value *> *vector_Value_new() {
+    return new std::vector<llvm::Value *>();
+}
+void vector_Value_push(std::vector<llvm::Value *> *vec, llvm::Value *val) {
     vec->push_back(val);
+}
+void vector_Value_delete(std::vector<llvm::Value *> *vec) {
+    delete vec;
+}
+
+std::vector<llvm::Metadata *> *vector_Metadata_new() {
+    return new std::vector<llvm::Metadata *>();
+}
+void vector_Metadata_push(std::vector<llvm::Metadata *> *vec, llvm::Metadata *md) {
+    vec->push_back(md);
+}
+void vector_Metadata_delete(std::vector<llvm::Metadata *> *vec) {
+    delete vec;
+}
+
+std::vector<llvm::Constant *> *vector_Constant_new() {
+    return new std::vector<llvm::Constant *>();
+}
+
+void vector_Constant_push(std::vector<llvm::Constant *> *vec, llvm::Constant *elem) {
+    vec->push_back(elem);
+}
+void vector_Constant_delete(std::vector<llvm::Constant *> *vec) {
+    delete vec;
 }
 
 void setBuilder(llvm::IRBuilder<> *b) {
@@ -207,13 +233,6 @@ void SetCurrentDebugLocation(llvm::DIScope *scope, int line, int pos) {
     Builder->SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
 
-std::vector<llvm::Metadata *> *Metadata_vector_new() {
-    return new std::vector<llvm::Metadata *>();
-}
-
-void Metadata_vector_push(std::vector<llvm::Metadata *> *vec, llvm::Metadata *md) {
-    vec->push_back(md);
-}
 
 int make_spflags(bool is_main) {
     auto spflags = llvm::DISubprogram::SPFlagDefinition;
@@ -470,13 +489,6 @@ llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty, std::vector<llvm:
     return llvm::ConstantStruct::get(ty, *elems);
 }
 
-std::vector<llvm::Constant *> *make_vector_Constant() {
-    return new std::vector<llvm::Constant *>();
-}
-
-void vector_Constant_push(std::vector<llvm::Constant *> *vec, llvm::Constant *elem) {
-    vec->push_back(elem);
-}
 
 llvm::Constant *ConstantArray_get(llvm::ArrayType *ty, std::vector<llvm::Constant *> *vec) {
     return llvm::ConstantArray::get(ty, *vec);

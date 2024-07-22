@@ -163,12 +163,13 @@ func is_main(m: Method*): bool{
   return m.name.eq("main") && (m.params.empty() || m.params.len() == 2);
 }
 
+
 func demangle(input: str): String{
     let res = Fmt::new();
     let s = input.replace("$LT", "<");
-    s = s.replace("$GT", ">");
-    s = s.replace("$P", "*");
-    s = s.replace("__", "::");
+    assign_eq(&s, s.replace("$GT", ">"));
+    assign_eq(&s, s.replace("$P", "*"));
+    assign_eq(&s, s.replace("__", "::"));
     res.print(&s);
     s.drop();
     return res.unwrap();
@@ -176,10 +177,10 @@ func demangle(input: str): String{
 
 func mangleType(type: Type*): String{
   let s = type.print();
-  s = s.replace("*", "$P");
-  s = s.replace("<", "$LT");
-  s = s.replace(">", "$GT");
-  s = s.replace("::", "__");
+  assign_eq(&s, s.replace("*", "$P"));
+  assign_eq(&s, s.replace("<", "$LT"));
+  assign_eq(&s, s.replace(">", "$GT"));
+  assign_eq(&s, s.replace("::", "__"));
   return s;
 }
 func mangleType(type: Type*, f: Fmt*){

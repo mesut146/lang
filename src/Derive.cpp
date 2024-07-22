@@ -184,6 +184,9 @@ Method Resolver::derive_drop_method(BaseDecl *bd) {
         m.parent.type_params = bd->type.typeArgs;
     }
     m.isGeneric = bd->isGeneric;
+    /*if(bd->type.print()=="Type"){
+        print(m.print());
+    }*/
     return m;
 }
 

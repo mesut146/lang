@@ -310,7 +310,7 @@ impl Compiler{
     let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
     method.body = Option::new(Block::new(0, 0));
     self.own = Option::new(Own::new(self, &method));
-    let globs = Metadata_vector_new();
+    let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
     for(let j = 0;j < resolv.unit.globals.len();++j){
       let gl: Global* = resolv.unit.globals.get_ptr(j);
@@ -339,7 +339,7 @@ impl Compiler{
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
       name_c.drop();
       let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
-      Metadata_vector_push(globs, gve as Metadata*);
+      vector_Metadata_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
       if let Expr::Call(mc*)=(&gl.expr){
         self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
@@ -357,23 +357,30 @@ impl Compiler{
       }
     }
     replaceGlobalVariables(self.llvm.di.get().cu, globs);
-    let struct_elem_types = make_vec();
-    vec_push(struct_elem_types, getInt(32));
-    vec_push(struct_elem_types, getPtr());
-    vec_push(struct_elem_types, getPtr());
+    vector_Metadata_delete(globs);
+    
+    let struct_elem_types = vector_Type_new();
+    vector_Type_push(struct_elem_types, getInt(32));
+    vector_Type_push(struct_elem_types, getPtr());
+    vector_Type_push(struct_elem_types, getPtr());
     let ctor_elem_ty = make_struct_ty_noname(struct_elem_types);
     let ctor_ty = getArrTy(ctor_elem_ty as llvm_Type*, 1);
-    let struct_elems = make_vector_Constant();
+    let struct_elems = vector_Constant_new();
     vector_Constant_push(struct_elems, makeInt(65535, 32) as Constant*);
     vector_Constant_push(struct_elems, proto as Constant*);
     vector_Constant_push(struct_elems, ConstantPointerNull_get(getPointerTo(getInt(32))) as Constant*);
     let ctor_init_struct = ConstantStruct_get_elems(ctor_elem_ty, struct_elems);
-    let elems = make_vector_Constant();
+    let elems = vector_Constant_new();
     vector_Constant_push(elems, ctor_init_struct);
     let ctor_init = ConstantArray_get(ctor_ty, elems);
     let ctor = make_global_linkage("llvm.global_ctors".ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
     CreateRetVoid();
     method.drop();
+    vector_Constant_delete(struct_elems);
+    vector_Constant_delete(elems);
+    self.own.drop();
+    self.own = Option<Own>::new();
+    vector_Type_delete(struct_elem_types);
   }
 
   //make all struct decl & method decl used by this module
@@ -439,6 +446,7 @@ impl Compiler{
     if(m.body.is_none()) return;
     if(m.is_generic) return;
     self.curMethod = Option<Method*>::new(m);
+    self.own.drop();
     self.own = Option::new(Own::new(self, m));
     let f = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(f);
@@ -723,10 +731,10 @@ impl CompilerConfig{
     };
   }
   func set_out(self, out: str): CompilerConfig*{
-    self.out_dir = out.str();
-    return self;
+    return self.set_out(out.str());
   }
   func set_out(self, out: String): CompilerConfig*{
+    self.out_dir.drop();
     self.out_dir = out;
     return self;
   }
@@ -739,14 +747,15 @@ impl CompilerConfig{
     return self;
   }
   func set_file(self, file: str): CompilerConfig*{
-    self.file = file.str();
-    return self;
+    return self.set_file(file.str());
   }
   func set_file(self, file: String): CompilerConfig*{
+    self.file.drop();
     self.file = file;
     return self;
   }
   func set_std_path(self, std_path: str): CompilerConfig*{
+    self.std_path.drop();
     self.std_path = std_path.str();
     return self;
   }

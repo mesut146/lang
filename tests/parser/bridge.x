@@ -1,6 +1,7 @@
-struct vector;
-struct Args;
+struct vector_Type;
+struct vector_Value;
 struct vector_Constant;//std::vector<llvm::Constant*>
+struct vector_Metadata;
 struct Target;
 struct TargetMachine;
 struct Module;
@@ -32,19 +33,27 @@ struct DIDerivedType;
 struct DIScope;
 struct DILexicalBlock;
 struct Metadata;
-struct Metadata_vector;
 struct DILocalVariable;
 struct DIExpression;
 struct DILocation;
 struct StructLayout;
 
 extern{
-    func make_vec(): vector*;
-    func vec_push(vec: vector*, elem: llvm_Type*);
-    func make_args(): Args*;
-    func args_push(vec: Args*, elem: Value*);
-    func make_vector_Constant(): vector_Constant*;
+    func vector_Type_new(): vector_Type*;
+    func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
+    func vector_Type_delete(vec: vector_Type*);
+    
+    func vector_Value_new(): vector_Value*;
+    func vector_Value_push(vec: vector_Value*, elem: Value*);
+    func vector_Value_delete(vec: vector_Value*);
+
+    func vector_Constant_new(): vector_Constant*;
     func vector_Constant_push(vec: vector_Constant*, elem: Constant*);
+    func vector_Constant_delete(vec: vector_Constant*);
+
+    func vector_Metadata_new(): vector_Metadata*;
+    func vector_Metadata_push(vec: vector_Metadata*, elem: Metadata*);
+    func vector_Metadata_delete(vec: vector_Metadata*);
 
     func getDefaultTargetTriple(ptr: i8*): i32;
     func InitializeAllTargetInfos();
@@ -67,9 +76,7 @@ extern{
     func createCompileUnit(file: DIFile*): DICompileUnit*;
     func SetCurrentDebugLocation(scope: DIScope*, line: i32, pos: i32);
     func createObjectPointerType(type: DIType*): DIType*;
-    func Metadata_vector_new(): Metadata_vector*;
-    func Metadata_vector_push(vec: Metadata_vector*, elem: Metadata*);
-    func createSubroutineType(tys: Metadata_vector*): DISubroutineType*;
+    func createSubroutineType(tys: vector_Metadata*): DISubroutineType*;
     func make_spflags(is_main: bool): i32;
     func getFunction(name: i8*): Function*;
     func setSection(f: Function *, sec: i8*);
@@ -82,7 +89,7 @@ extern{
     func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
     func createExpression(): DIExpression*;
     func insertDeclare(value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
-    func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata_vector*): DICompositeType*;
+    func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*): DICompositeType*;
     func get_di_null(): DIType*;
     func get_null_scope(): DIScope*;
     func createBasicType(name: i8*, size: i64, enco: i32): DIType*;
@@ -92,24 +99,24 @@ extern{
     func DW_ATE_float(): i32;
     func createPointerType(elem: DIType*, size: i64): DIType*;
     func getOrCreateSubrange(lo: i64, count: i64): Metadata*;
-    func createArrayType(size: i64, ty: DIType*, elems: Metadata_vector*): DIType*;
+    func createArrayType(size: i64, ty: DIType*, elems: vector_Metadata*): DIType*;
     func make_di_flags(artificial: bool): u32;
     func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: u32, ty: DIType*): DIDerivedType*;
     func DIType_getSizeInBits(ty: DIType*): i64;
     func getStructLayout(st: StructType*): StructLayout*;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
-    func replaceElements(st: DICompositeType*, elems: Metadata_vector*);
-    func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata_vector*): DICompositeType*;
+    func replaceElements(st: DICompositeType*, elems: vector_Metadata*);
+    func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: vector_Metadata*): DICompositeType*;
     func createVariantMemberType(scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
     //glob dbg
     func createGlobalVariableExpression(scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
     func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
-    func replaceGlobalVariables(cu: DICompileUnit*, vec: Metadata_vector*);
+    func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
 
     func make_struct_ty(name: i8*): StructType*;
-    func make_struct_ty2(name: i8*, elems: vector*): StructType*;
-    func make_struct_ty_noname(elems: vector*): StructType*;
-    func setBody(st: StructType*, elems: vector*);
+    func make_struct_ty2(name: i8*, elems: vector_Type*): StructType*;
+    func make_struct_ty_noname(elems: vector_Type*): StructType*;
+    func setBody(st: StructType*, elems: vector_Type*);
     func getSizeInBits(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
@@ -122,7 +129,7 @@ extern{
     func Value_isPointerTy(val: Value*): bool;
     func ConstantPointerNull_get(ty: PointerType*): Value*;
     
-    func make_ft(ret: llvm_Type*, args: vector*, vararg: bool): FunctionType*;
+    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): FunctionType*;
     func ext(): i32;
     func odr(): i32;
     func make_func(fr: FunctionType*, l: i32, name: i8*): Function*;
@@ -156,10 +163,10 @@ extern{
     func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
     func CreatePtrToInt(val: Value*, type: llvm_Type*): Value*;
     func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type*): Value*;
-    func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: Args*): Value*;
-    func CreateGEP(type: llvm_Type*, ptr: Value*, idx: Args*): Value*;
+    func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: vector_Value*): Value*;
+    func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
-    func CreateCall(f: Function*, args: Args*): Value*;
+    func CreateCall(f: Function*, args: vector_Value*): Value*;
     func CreateUnreachable();
     func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
     func CreateBr(bb: BasicBlock*);

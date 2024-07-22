@@ -118,6 +118,7 @@ func bootstrap(run: bool, out_dir: str){
 
 func own_test(id: i32){
   print("test::own_test\n");
+  drop_enabled = true;
   let config = CompilerConfig::new(get_std_path().str());
   config
     .set_file("../tests/own/common.x")
@@ -136,6 +137,7 @@ func own_test(id: i32){
     compile_dir2("../tests/own_if", args.str(), Option::new("common.x"));
   }
   args.drop();
+  drop_enabled = false;
 }
 
 func main(argc: i32, args: i8**){
@@ -182,6 +184,7 @@ func handle(cmd: CmdArgs*){
     let out_dir = get_out().str();
     if(cmd.is("-out")){
       cmd.consume();
+      out_dir.drop();
       out_dir = cmd.get();
     }
     let run = true;

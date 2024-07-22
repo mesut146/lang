@@ -4,7 +4,7 @@ struct File;
 
 impl File{
   func remove_file(path: str){
-    let path_c = CStr::from_slice(path);
+    let path_c = CStr::new(path);
     remove(path_c.ptr());
     path_c.drop();
   }
@@ -17,8 +17,8 @@ impl File{
 }
 
 func open_checked(path: str, mode: str): FILE*{
-  let path_c = CStr::from_slice(path);
-  let mode_c = CStr::from_slice(mode);
+  let path_c = CStr::new(path);
+  let mode_c = CStr::new(mode);
   let f = fopen(path_c.ptr(), mode_c.ptr());
   path_c.drop();
   mode_c.drop();
@@ -79,7 +79,7 @@ func write_string(data: str, path: str){
 
 func list(path: str): List<String>{
   let list = List<String>::new(128);
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let dp = opendir(path_c.ptr());
   path_c.drop();
   if(dp as u64 == 0) panic("no such dir {}", path);
@@ -94,7 +94,7 @@ func list(path: str): List<String>{
 }
 
 func is_dir(path: str): bool{
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let dp = opendir(path_c.ptr());
   if(dp as u64 != 0){
     closedir(dp);
@@ -106,7 +106,7 @@ func is_dir(path: str): bool{
 }
 
 func is_file(path: str): bool{
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let fp = fopen(path_c.ptr(), "r".cptr());
   if(fp as u64 != 0){
     fclose(fp);
@@ -126,7 +126,7 @@ func exist(path: str): bool{
 }
 
 func create_file(path: str){
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let fp = fopen(path_c.ptr(), "w".cptr());
   if(fp as u64 != 0){
     fclose(fp);
@@ -138,7 +138,7 @@ func create_dir(path: str){
   if(exist(path)){
     return;
   }
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let rc = mkdir(path_c.ptr(), /*0777*/ /*511*/ 511);
   Drop::drop(path_c);
   if(rc != 0){
@@ -149,7 +149,7 @@ func create_dir(path: str){
 
 func resolve(path: str): String{
   let buf = [0i8; 256];
-  let path_c = CStr::from_slice(path);
+  let path_c = CStr::new(path);
   let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
   Drop::drop(path_c);
   if(ptr as u64 == 0){

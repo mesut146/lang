@@ -39,10 +39,14 @@ impl<K, V> Map<K, V>{
     }
     //already exist, change old
     let pair: Pair<K, V>* = opt.unwrap();
-    //let old_val = ptr::deref(&pair.b);
-    //Drop::drop(pair.b);
-    pair.b = v;
+    let old_b = ptr::deref(&pair.b);
+    Drop::drop(old_b);
+
+    let old_a = ptr::deref(&pair.a);
+    Drop::drop(old_a);
+
     pair.a = k;//todo add option to keep old key
+    pair.b = v;
     return pair;
   }
 
