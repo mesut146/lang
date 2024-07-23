@@ -640,7 +640,7 @@ impl Compiler{
 
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
-    let ctx = Context::new(config.src_dirs.get_ptr(0).clone(), config.out_dir.clone(), config.std_path.clone());
+    let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for(let i = 0;i < config.src_dirs.len();++i){
       ctx.add_path(config.src_dirs.get_ptr(i).str());
     }
@@ -670,7 +670,7 @@ impl Compiler{
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
       if(is_dir(file.str())) continue;
-      let ctx = Context::new(config.file.clone(), config.out_dir.clone(), config.std_path.clone());
+      let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }

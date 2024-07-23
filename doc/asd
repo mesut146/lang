@@ -1,3 +1,5 @@
- valgrind --leak-check=full ./x c -out ./xx -norun ../tests/parser/token.x
+clear;valgrind --leak-check=full --num-callers=30 ./x c -out ./xx -norun ../tests/parser/token.x
 
-clear;valgrind --leak-check=full --num-callers=50 ./x c -out ./xx -norun ../tests/normal/alloc.x 
+clear;valgrind --leak-check=full --num-callers=30 ./x c -out ./xx -norun ../tests/normal/alloc.x 
+
+clear;valgrind --leak-check=full --num-callers=30 ./x_x2 r ../tests/normal/alloc.x 

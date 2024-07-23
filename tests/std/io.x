@@ -228,6 +228,9 @@ impl CmdArgs{
     return self.args.get_ptr(0);
   }
   func get(self): String{
+    if(self.args.len() == 0){
+      panic("no more arguments");
+    }
     let res = self.args.remove(0);
     return res;
   }

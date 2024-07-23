@@ -21,7 +21,6 @@ func verbose_stmt(): bool{
 
 struct Context{
   map: Map<String, Box<Resolver>>;
-  root: String;
   prelude: List<String>;
   std_path: String;
   search_paths: List<String>;
@@ -31,7 +30,7 @@ struct Context{
   stack_trace: bool;
 }
 impl Context{
-  func new(src_dir: String, out_dir: String, std_path: String): Context{
+  func new(out_dir: String, std_path: String): Context{
     let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map", "rt"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
@@ -39,7 +38,6 @@ impl Context{
     }
     let res = Context{
        map: Map<String, Box<Resolver>>::new(),
-       root: src_dir,
        prelude: pre,
        std_path: std_path,
        search_paths: List<String>::new(),
@@ -56,7 +54,7 @@ impl Drop for Context{
   func drop(*self){
     //print("Context::drop\n");
     self.map.drop();
-    self.root.drop();
+    //self.root.drop();
     self.prelude.drop();
     self.std_path.drop();
     self.search_paths.drop();
@@ -285,7 +283,7 @@ impl Context{
     return res;
   }
   func get_path(self, is: ImportStmt*): String{
-    //print("get_path root: {} arr: {}, imp: {}\n", self.root, self.search_paths, is.list);
+    //print("get_path arr: {}, imp: {}\n", self.search_paths, is.list);
     let suffix = "".str();
     for(let i = 0;i < is.list.len();++i){
       let part: String* = is.list.get_ptr(i);
@@ -416,21 +414,6 @@ impl Resolver{
     return &r.unit;
   }
 
-  func getPath(self, is: ImportStmt*): String {
-    let joined = join(&is.list, "/");
-    let res = format("{}/{}.x", self.ctx.root, joined);
-    joined.drop();
-    return res;
-  }
-
-  func get_relative_root(path: str, root: str): str{
-    //print("cur=" + path + ", root=" + root);
-    if (path.starts_with(root)) {
-        return path.substr(root.len() + 1);//+1 for slash
-    }
-    return path;
-  }
-
   func get_resolvers(self): List<Resolver*>{
     let res = List<Resolver*>::new();
     let added = List<str>::new();
@@ -475,49 +458,6 @@ impl Resolver{
     }
     added.drop();
     return res;
-  }
-
-  func get_imports(self): List<ImportStmt>{
-    let imports = List<ImportStmt>::new();
-    let cur: str = get_relative_root(self.unit.path.str(), self.ctx.root.str());
-    for (let i = 0;i < self.ctx.prelude.len();++i) {
-      let pre: String* = self.ctx.prelude.get_ptr(i);
-      //skip self unit being prelude
-      let path = format("std/{}.x", pre);
-      if (cur.eq(path.str()) || self.unit.path.str().ends_with(path.str())){
-        path.drop();
-        continue;
-      }
-      path.drop();
-      let is = ImportStmt::new();
-      is.list.add("std".str());
-      is.list.add(pre.clone());
-      imports.add(is);
-    }
-    for (let i = 0;i < self.unit.imports.len();++i) {
-        let is = self.unit.imports.get_ptr(i);
-        //ignore prelude imports
-        //let rest = join(&is.list, "/");
-        if (!has(&imports, is)) {
-            imports.add(is.clone());
-        }
-    }
-    if (self.curMethod.is_some() && !self.curMethod.unwrap().type_params.empty()) {
-        let tmp = &self.get_unit(&self.curMethod.unwrap().path).imports;
-        for (let i = 0;i < tmp.len();++i) {
-            let is = tmp.get_ptr(i);
-            if (has(&imports, is)) continue;
-            //skip self being cycle
-            let iss = self.getPath(is);
-            if (self.unit.path.eq(&iss)) {
-              iss.drop();
-              continue;
-            }
-            imports.add(is.clone());
-            iss.drop();
-        }
-    }
-    return imports;
   }
   
   func resolve_all(self){
@@ -970,7 +910,9 @@ impl Resolver{
           msg.print("method ");
           msg.print(p.a.str());
           msg.print(" ");
-          msg.print(printMethod(p.b).str());
+          let tmp = printMethod(p.b);
+          msg.print(tmp.str());
+          tmp.drop();
           msg.print(" not implemented for ");
           msg.print(&imp.info.type);
           msg.print("\n");
@@ -990,7 +932,9 @@ impl Resolver{
 
   func visit_method(self, node: Method*){
     if(verbose_method){
-      print("visit_method {} {} generic: {}\n", printMethod(node), self.unit.path, node.is_generic);
+      let tmp = printMethod(node);
+      print("visit_method {} {} generic: {}\n", tmp, self.unit.path, node.is_generic);
+      tmp.drop();
     }
     if(node.is_generic){
       return;
@@ -1014,7 +958,9 @@ impl Resolver{
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
         let msg = String::new("non void function ");
-        msg.append(printMethod(node).str());
+        let tmp = printMethod(node);
+        msg.append(tmp.str());
+        tmp.drop();
         msg.append(" must return a value");
         self.err(node.line, msg);
       }

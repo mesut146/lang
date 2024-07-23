@@ -181,6 +181,7 @@ impl Compiler{
         }
         return ptr;
       }
+      //repeated
       let elem = list.get_ptr(0);
       let elem_ptr = Option<Value*>::new();
       let elem_type = self.getType(list.get_ptr(0));

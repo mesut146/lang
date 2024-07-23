@@ -25,6 +25,10 @@ func get_std_path(): str{
   return "../tests";
 }
 
+func version(): str{
+  return "1.0";
+}
+
 func build_std(out_dir: str){
   use_cache = true;
   let config = CompilerConfig::new(get_std_path().str());
@@ -146,11 +150,52 @@ func main(argc: i32, args: i8**){
   cmd.drop();
 }
 
+func handle_c(cmd: CmdArgs*){
+  cmd.consume();
+  use_cache = false;
+  let out_dir = get_out().str();
+  if(cmd.is("-out")){
+    cmd.consume();
+    out_dir.drop();
+    out_dir = cmd.get();
+  }
+  let run = true;
+  if(cmd.is("-norun")){
+    cmd.consume();
+    run = false;
+  }
+  let path: String = cmd.get();
+  if(is_dir(path.str())){
+    let bin = bin_name(path.str());
+    let config = CompilerConfig::new(get_std_path().str());
+    config
+      .set_file(path.str())
+      .set_out(out_dir)
+      .add_dir(get_std_path())
+      .set_link(LinkType::Binary{bin.str(), "", run});
+    Compiler::compile_dir(config);
+    bin.drop();
+  }else{
+    let config = CompilerConfig::new(get_std_path().str());
+    config
+    .set_file(path)
+    .set_out(out_dir)
+    .add_dir(root())
+    .set_link(LinkType::Binary{"a.out", "", false});
+    let out = Compiler::compile_single(config);
+    out.drop();
+  }
+}
+
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
   if(!cmd.has()){
     bootstrap(false, get_out());
+    return;
+  }
+  if(cmd.is("-v")){
+    print("version {}\n", version());
     return;
   }
   if(cmd.is("own")){
@@ -179,40 +224,26 @@ func handle(cmd: CmdArgs*){
     bootstrap(false, out);
   }
   else if(cmd.is("c")){
+    handle_c(cmd);
+    return;
+  }else if(cmd.is("p")){
+    //parse test
     cmd.consume();
-    use_cache = false;
-    let out_dir = get_out().str();
-    if(cmd.is("-out")){
-      cmd.consume();
-      out_dir.drop();
-      out_dir = cmd.get();
-    }
-    let run = true;
-    if(cmd.is("-norun")){
-      cmd.consume();
-      run = false;
-    }
-    let path: String = cmd.get();
-    if(is_dir(path.str())){
-      let bin = bin_name(path.str());
-      let config = CompilerConfig::new(get_std_path().str());
-      config
-        .set_file(path.str())
-        .set_out(out_dir)
-        .add_dir(get_std_path())
-        .set_link(LinkType::Binary{bin.str(), "", run});
-      Compiler::compile_dir(config);
-      bin.drop();
-    }else{
-      let config = CompilerConfig::new(get_std_path().str());
-      config
-      .set_file(path)
-      .set_out(out_dir)
-      .add_dir(root())
-      .set_link(LinkType::Binary{"a.out", "", false});
-      let out = Compiler::compile_single(config);
-      out.drop();
-    }
+    let path = cmd.get();
+    let parser = Parser::from_path(path);
+    print("parse done {}\n", parser.path);
+    parser.drop();
+    return;
+  }else if(cmd.is("r")){
+    //resolver test
+    cmd.consume();
+    let path = cmd.get();
+    let ctx = Context::new(get_out().str(), get_std_path().str());
+    let resolver = ctx.create_resolver(&path);
+    print("resolve done {}\n", path);
+    ctx.drop();
+    path.drop();
+    return;
   }else{
     panic("invalid cmd: {}", cmd.args);
   }

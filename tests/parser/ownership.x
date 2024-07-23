@@ -533,7 +533,9 @@ impl Own{
             let s = self.get_scope(self.main_scope).print(self);
             print("{}\n", s);
             s.drop();
-            self.compiler.get_resolver().err(expr, format("use after move in {}:{}", printMethod(self.method), line));
+            let tmp = printMethod(self.method);
+            self.compiler.get_resolver().err(expr, format("use after move in {}:{}", tmp, line));
+            tmp.drop();
         }
     }
     func check_field(self, expr: Expr*){
@@ -1015,7 +1017,9 @@ impl Own{
             return;
         }
         if(print_drop_valid){
-            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, scope.print_info());
+            let tmp = scope.print_info();
+            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, tmp);
+            tmp.drop();
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
         self.drop_real(&rt, var.ptr, line, &rhs);

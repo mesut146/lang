@@ -309,7 +309,8 @@ impl MethodResolver{
                     let arg = sig2.args.get_ptr(k);
                     let ac = AstCopier::new(&typeMap);
                     let mapped = ac.visit(arg);
-                    sig2.args.set(k, mapped);
+                    let tmp = sig2.args.set(k, mapped);
+                    tmp.drop();
                   }
                   list.add(sig2);
                   Drop::drop(typeMap);

@@ -43,14 +43,26 @@ struct Unit{
   globals: List<Global>;
   last_id: i32;
 }
+impl Drop for Unit{
+  func drop(*self){
+    //print("Unit::drop() {}\n", self.path);
+    self.path.drop();
+    self.imports.drop();
+    self.items.drop();
+    self.globals.drop();
+  }
+}
 impl Unit{
   func new(path: String): Unit{
-    return Unit{path: path,
-                last_line: 0,
-                imports: List<ImportStmt>::new(),
-                items: List<Item>::new(),
-                globals: List<Global>::new(),
-                last_id: -1};
+    //print("Unit::new() {}\n", path);
+    return Unit{
+      path: path,
+      last_line: 0,
+      imports: List<ImportStmt>::new(),
+      items: List<Item>::new(),
+      globals: List<Global>::new(),
+      last_id: -1
+    };
   }
 
   func node(self, line: i32): Node{

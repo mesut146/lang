@@ -1,0 +1,14 @@
+#derive(Debug, MyDebugTrait)
+struct A{}
+
+trait MyDebugTrait{
+  func debug2(self, f: Fmt*);
+}
+
+//manualy
+impl Debug for A{
+  func debug(self, f: Fmt*){ 
+    print("delegate\n");
+    MyDebugTrait::debug2(self, f);//derived
+  }
+}

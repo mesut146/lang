@@ -20,8 +20,6 @@ impl AllocHelper{
   func makeLocals(c: Compiler*, b: Block*){
     //allocMap.clear();
     let ah = AllocHelper::new(c);
-    /*if(c.ctx.stack_trace){
-    }*/
     ah.visit(b);
   } 
 
@@ -276,9 +274,5 @@ impl AllocHelper{
       return res;
     }
     panic("alloc {}\n", node);
-  }
-
-  func child(self, node: Expr*){
-
   }
 }

@@ -217,10 +217,10 @@ impl<T> Debug for List<T>{
   }
 }
 
-// struct ListIter<T>{
-//   list: List<T>*;
-//   pos: i32;
-// }
+struct ListIter<T>{
+  list: List<T>*;
+  pos: i32;
+}
 
 // impl<T> Iterator<T> for ListIter<T>{
 //   func has(self): bool{
@@ -240,7 +240,6 @@ impl<T> Debug for List<T>{
 impl<T> Clone for List<T>{
   func clone(self): List<T>{
     let res = List<T>::new(self.count);
-    //res.add(self);
     for(let i = 0;i < self.len();++i){
       let elem = self.get_ptr(i);
       res.add(Clone::clone(elem));
