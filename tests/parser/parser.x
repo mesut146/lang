@@ -285,19 +285,18 @@ impl Parser{
         }
       }
       self.consume(TokenType::RPAREN);
-      let type = Option<Type>::None;
+      let type = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         type = Option::new(self.parse_type());
       }else{
         type = Option::new(Type::new("void".str()));
       }
-      let body = Option<Block>::None;
+      let body = Option<Block>::new();
       if(self.is(TokenType::SEMI)){
         self.pop();
       }else{
-        let bl = self.parse_block();
-        body = Option::new(bl);
+        body = Option::new(self.parse_block());
       }
       let res = Method{.node, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.path.clone()};
       return res;
