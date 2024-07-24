@@ -17,6 +17,8 @@ import std/io
 import std/libc
 import std/stack
 
+static bootstrap = false;
+
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
@@ -219,7 +221,7 @@ impl Compiler{
     return &self.get_resolver().unit;
   }
 
-  func compile(self, path: str, cache: Cache*): String{
+  func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
     let outFile: String = get_out_file(path, self);
     if(!cache.need_compile(path, outFile.str())){
       return outFile;
@@ -240,10 +242,11 @@ impl Compiler{
           return outFile;
       }
     }
-    self.get_resolver().resolve_all();
+    let resolver = self.get_resolver();
+    resolver.resolve_all();
     self.llvm.initModule(path);
     self.createProtos();
-    self.init_globals();
+    self.init_globals(config);
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
@@ -251,8 +254,8 @@ impl Compiler{
       self.genCode(m);
     }
     //generic methods from resolver
-    for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
-        let m = self.get_resolver().generated_methods.get_ptr(i).get();
+    for (let i = 0;i < resolver.generated_methods.len();++i) {
+        let m = resolver.generated_methods.get_ptr(i).get();
         self.genCode(m);
     }
     methods.drop();
@@ -288,7 +291,7 @@ impl Compiler{
     return false;
   }
 
-  func init_globals(self){
+  func init_globals(self, config: CompilerConfig*){
     let resolv = self.get_resolver();
     //external globals
     for(let i = 0;i < resolv.glob_map.len();++i){
@@ -297,8 +300,8 @@ impl Compiler{
       let init = ptr::null<Constant>();
       let name_c = gl_info.name.clone().cstr();
       let glob = make_global(name_c.ptr(), ty, init);
-      name_c.drop();
       self.globals.add(gl_info.name.clone(), glob as Value*);
+      name_c.drop();
     }
     if(self.get_resolver().unit.globals.empty()){
       return;
@@ -317,23 +320,51 @@ impl Compiler{
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
       let init = ptr::null<Constant>();
-      if(rt.type.is_prim()){
-        if(!is_constexpr(&gl.expr)){
-          panic("prim not const {}", gl);
-        }
-        let rhs_str = gl.expr.print();
-        if(rhs_str.eq("true")){
-          init =  makeInt(1, 8) as Constant*;
-        }else if(rhs_str.eq("false")){
-          init =  makeInt(0, 8) as Constant*;
+      if(is_constexpr(&gl.expr)){
+        if(rt.type.is_prim()){
+          let rhs_str = gl.expr.print();
+          if(rhs_str.eq("true")){
+            init =  makeInt(1, 8) as Constant*;
+          }else if(rhs_str.eq("false")){
+            init =  makeInt(0, 8) as Constant*;
+          }else{
+            init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+          }
+          rhs_str.drop();
+        }else if(rt.type.is_str()){
+          let val = is_str_lit(&gl.expr).unwrap().str();
+          if(bootstrap){
+            if(gl.name.eq("vendor_str")){
+              val = config.vendor.str();
+            }
+            else if(gl.name.eq("compiler_name_str")){
+              if let LinkType::Binary(name, args*, run)=(&config.lt){
+                val = name;
+              }
+            }
+          }
+          let slice_ty = self.protos.get().std("slice");
+          let cons_elems = vector_Constant_new();
+          let cons_elems_slice = vector_Constant_new();
+          let val_c = CStr::new(val);
+          let ptr = CreateGlobalStringPtr(val_c.ptr());
+          val_c.drop();
+          vector_Constant_push(cons_elems_slice, ptr as Constant*);
+          vector_Constant_push(cons_elems_slice, makeInt(val.len(), 64) as Constant*);
+          let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
+          vector_Constant_push(cons_elems, cons_slice);
+          init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
+          
+          vector_Constant_delete(cons_elems);
         }else{
-          init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+          panic("glob constexpr not supported: {}", gl);
         }
-        rhs_str.drop();
-      }else if(is_struct(&rt.type)){
-        init = ConstantStruct_get(ty as StructType*);
       }else{
-        panic("glob type {}", rt.type);
+        if(is_struct(&rt.type)){
+          init = ConstantStruct_get(ty as StructType*);
+        }else{
+          init =  makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
+        }
       }
       let name_c = gl.name.clone().cstr();
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
@@ -648,7 +679,7 @@ impl Compiler{
     let compiled = List<String>::new();
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
-    let obj = cmp.compile(config.file.str(), &cache);
+    let obj = cmp.compile(config.file.str(), &cache, &config);
     compiled.add(obj);
     let res = config.link(&compiled, &cmp);
     config.drop();
@@ -675,7 +706,7 @@ impl Compiler{
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }
       let cmp = Compiler::new(ctx);
-      let obj = cmp.compile(file.str(), &cache);
+      let obj = cmp.compile(file.str(), &cache, &config);
       Drop::drop(cmp);
       compiled.add(obj);
       file.drop();
@@ -717,6 +748,7 @@ struct CompilerConfig{
   args: String;
   lt: LinkType;
   std_path: String;
+  vendor: String;
 }
 
 impl CompilerConfig{
@@ -727,8 +759,14 @@ impl CompilerConfig{
       out_dir: "".str(),
       args: "".str(),
       lt: LinkType::Dynamic,
-      std_path: std_path
+      std_path: std_path,
+      vendor: "".str()
     };
+  }
+  func set_vendor(self, vendor: str): CompilerConfig*{
+    self.vendor.drop();
+    self.vendor = vendor.str();
+    return self;
   }
   func set_out(self, out: str): CompilerConfig*{
     return self.set_out(out.str());

@@ -205,20 +205,28 @@ impl Path{
 
 struct CmdArgs{
   args: List<String>;
+  root: String;
 }
 
 impl CmdArgs{
+  func get_arg(args: i8**, idx: i32): str{
+    let ptr = *ptr::get(args, idx) as u8*;
+    if(ptr as u64 == 0){
+      panic("ptr is null");
+    }
+    let len = strlen(ptr as i8*, 1000);
+    return str::new(ptr[0..len]);
+  }
   func new(argc: i32, args: i8**): CmdArgs{
-    let res = CmdArgs{args: List<String>::new()};
+    let root = CmdArgs::get_arg(args, 0).str();
+    let res = CmdArgs{args: List<String>::new(), root: root};
     for(let i = 1; i < argc;++i){
-      let a1 = *ptr::get(args, i) as u8*;
-      if(a1 as u64 == 0){
-        panic("null");
-      }
-      let len = strlen(a1 as i8*, 1000);
-      res.args.add(str::new(a1[0..len]).str());
+      res.args.add(CmdArgs::get_arg(args, i).str());
     }
     return res;
+  }
+  func get_root(self): str{
+    return self.root.str();
   }
   func consume(self){
     let arg = self.get();

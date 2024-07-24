@@ -25,9 +25,9 @@ func get_std_path(): str{
   return "../tests";
 }
 
-func version(): str{
-  return "1.0";
-}
+static version_str = "1.0";
+static vendor_str = "lang";
+static compiler_name_str = "x";
 
 func build_std(out_dir: str){
   use_cache = true;
@@ -90,23 +90,19 @@ func compiler_test(std_test: bool){
   }
 }
 
-func bootstrap(run: bool, out_dir: str){
+func bootstrap(run: bool, name: str, vendor: str){
   print("test::bootstrap\n");
-  build_std(out_dir);
+  bootstrap = true;
+  let out_dir = format("{}_out", name);
+  build_std(out_dir.str());
   let args = format("{}/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", out_dir);
-  let name = "x_".str();
-  if(out_dir.contains("/")){
-    let rest = out_dir.substr(out_dir.lastIndexOf("/") + 1);
-    name.append(rest);
-  }else{
-    name.append(out_dir);
-  }
   let config = CompilerConfig::new(get_std_path().str());
   config
     .set_file("../tests/parser".str())
     .set_out(out_dir)
     .add_dir(get_std_path())
-    .set_link(LinkType::Binary{name.str(), args.str(), run});
+    .set_link(LinkType::Binary{name, args.str(), run})
+    .set_vendor(vendor);
   let bin = Compiler::compile_dir(config);
   let bin2 = format("./{}", name);
   File::copy(bin.str(), bin2.str());
@@ -116,7 +112,6 @@ func bootstrap(run: bool, out_dir: str){
   let binc = bin2.cstr();
   set_as_executable(binc.ptr());
   binc.drop();
-  name.drop();
   args.drop();
 }
 
@@ -191,11 +186,11 @@ func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
   if(!cmd.has()){
-    bootstrap(false, get_out());
+    bootstrap(false, "x2", Path::name(cmd.get_root()));
     return;
   }
   if(cmd.is("-v")){
-    print("version {}\n", version());
+    print("{} version {} by {}\n", compiler_name_str, version_str, vendor_str);
     return;
   }
   if(cmd.is("own")){
@@ -217,11 +212,11 @@ func handle(cmd: CmdArgs*){
     build_std(get_out());
   }else if(cmd.is("bt")){
     cmd.consume();
-    let out = get_out();
+    let name = "x2";
     if(cmd.has()){
-      out = cmd.peek().str();
+      name = cmd.peek().str();
     }
-    bootstrap(false, out);
+    bootstrap(false, name, Path::name(cmd.get_root()));
   }
   else if(cmd.is("c")){
     handle_c(cmd);

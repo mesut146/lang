@@ -6,6 +6,11 @@ struct str{
   buf: [u8];
 }
 
+/*struct str{
+  ptr: u8*;
+  len: i64;
+}*/
+
 impl str{
 
     func print(self){
