@@ -311,7 +311,10 @@ impl Compiler{
         let ptr = self.get_alloc(f.id);
         self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
-        if(is_struct(&type)){
+        if(can_inline(&f.rhs, self.get_resolver())){
+          self.do_inline(&f.rhs, ptr);
+        }
+        else if(is_struct(&type)){
           let val = self.visit(&f.rhs);
           if(Value_isPointerTy(val)){
             self.copy(ptr, val, &type);
@@ -355,9 +358,13 @@ impl Compiler{
         type.drop();
         return;
       }
-      let ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
-      let val = self.visit(expr);
-      self.copy(ptr, val, &type);
+      let sret_ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
+      if(can_inline(expr, self.get_resolver())){
+        self.do_inline(expr, sret_ptr);
+      }else{
+        let val = self.visit(expr);
+        self.copy(sret_ptr, val, &type);
+      }
       self.own.get().do_return(expr);
       self.exit_frame();
       CreateRetVoid();

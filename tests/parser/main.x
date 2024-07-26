@@ -21,6 +21,9 @@ func root(): str{
 func get_out(): str{
   return "./bt_out";
 }
+func get_stdlib(): str{
+  return "./bt_out/std.a";
+}
 func get_std_path(): str{
   return "../tests";
 }
@@ -149,6 +152,12 @@ func handle_c(cmd: CmdArgs*){
   cmd.consume();
   use_cache = false;
   let out_dir = get_out().str();
+  let std = false;
+  if(cmd.is("-std")){
+    cmd.consume();
+    build_std(get_out());
+    std = true;
+  }
   if(cmd.is("-out")){
     cmd.consume();
     out_dir.drop();
@@ -175,8 +184,13 @@ func handle_c(cmd: CmdArgs*){
     config
     .set_file(path)
     .set_out(out_dir)
-    .add_dir(root())
-    .set_link(LinkType::Binary{"a.out", "", false});
+    .add_dir(root());
+
+    if(std){
+      config.set_link(LinkType::Binary{"a.out", get_stdlib(), false});
+    }else{
+      config.set_link(LinkType::Binary{"a.out", "", false});
+    }
     let out = Compiler::compile_single(config);
     out.drop();
   }

@@ -71,6 +71,18 @@ struct Protos{
   cur: Option<Function*>;
   compiler: Compiler*;
 }
+impl Drop for Protos{
+  func drop(*self){
+    /*for(let i = 0;i < self.libc.len();++i){
+      let pair = self.libc.get_pair_idx(i).unwrap();
+      Function_delete(pair.b);
+    }*/
+    Drop::drop(self.classMap);
+    Drop::drop(self.funcMap);
+    Drop::drop(self.libc);
+    Drop::drop(self.std);
+  }
+}
 
 impl Protos{
   func new(compiler: Compiler*): Protos{

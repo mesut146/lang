@@ -35,6 +35,9 @@ void vector_Type_push(std::vector<llvm::Type *> *vec, llvm::Type *type) {
 void vector_Type_delete(std::vector<llvm::Type *> *vec) {
     delete vec;
 }
+void Function_delete(llvm::Function *f) {
+    delete f;
+}
 
 std::vector<llvm::Value *> *vector_Value_new() {
     return new std::vector<llvm::Value *>();

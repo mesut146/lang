@@ -37,7 +37,7 @@ impl Compiler{
       if let Expr::Par(e*)=(node){
         return self.visit(e.get());
       }
-      if let Expr::Obj(type*,args*)=(node){
+      if let Expr::Obj(type*, args*)=(node){
         return self.visit_obj(node, type, args);
       }
       if let Expr::Lit(lit*)=(node){
@@ -136,12 +136,16 @@ impl Compiler{
       let tag2 = self.getTag(rhs);
       return CreateCmp(op, tag1, tag2);
     }
-  
+
     func simple_enum(self, node: Expr*, type: Type*): Value*{
+      let ptr = self.get_alloc(node);
+      return self.simple_enum(type, ptr);
+    }
+  
+    func simple_enum(self, type: Type*, ptr: Value*): Value*{
       let smp = type.as_simple();
       let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
       let index = Resolver::findVariant(decl, &smp.name);
-      let ptr = self.get_alloc(node);
       let decl_ty = self.mapType(&decl.type);
       let tag_ptr = self.gep2(ptr, get_tag_index(decl), decl_ty);
       CreateStore(makeInt(index, ENUM_TAG_BITS()), tag_ptr);
@@ -167,6 +171,9 @@ impl Compiler{
   
     func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
       let ptr = self.get_alloc(node);
+      return self.visit_array(node, list, sz, ptr);
+    }
+    func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*, ptr: Value*): Value*{
       let arrt = self.getType(node);
       self.own.get().add_obj(node, ptr, &arrt);
       let arr_ty = self.mapType(&arrt);
@@ -248,8 +255,12 @@ impl Compiler{
       return gep_ptr(elemty, arr, index);
     }
 
-    func visit_slice(self,expr: Expr*, node: ArrAccess*): Value*{
+    func visit_slice(self, expr: Expr*, node: ArrAccess*): Value*{
       let ptr = self.get_alloc(expr);
+      return self.visit_slice(expr, node, ptr);
+    }
+
+    func visit_slice(self,expr: Expr*, node: ArrAccess*, ptr: Value*): Value*{
       let arr = self.visit(node.arr.get());
       let arr_ty = self.getType(node.arr.get());
       if(arr_ty.is_slice()){
@@ -596,6 +607,7 @@ impl Compiler{
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.get_obj_ptr(arg);
           vector_Value_push(args, val);
+          arg_type.drop();
           continue;
         }
         if(arg_type.is_prim()){
@@ -604,6 +616,7 @@ impl Compiler{
         }else if(arg_type.is_pointer()){
           let val = self.get_obj_ptr(arg);
           vector_Value_push(args, val);
+          arg_type.drop();
           continue;
         }else{
           panic("compiler err printf arg {}", arg_type);
@@ -755,20 +768,7 @@ impl Compiler{
       }
       if(node.kind is LitKind::STR){
         let trg_ptr = self.get_alloc(expr);
-        let val_c = node.val.clone().cstr();
-        let src = CreateGlobalStringPtr(val_c.ptr());
-        val_c.drop();
-        let stringType = self.protos.get().std("str") as llvm_Type*;
-        let sliceType = self.protos.get().std("slice") as llvm_Type*;
-        let slice_ptr = self.gep2(trg_ptr, 0, stringType);
-        let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
-        let len_target = self.gep2(slice_ptr, SLICE_LEN_INDEX(), sliceType);
-        //set ptr
-        CreateStore(src, data_target);
-        //set len
-        let len = makeInt(node.val.len(), SLICE_LEN_BITS());
-        CreateStore(len, len_target);
-        return trg_ptr;
+        return self.str_lit(node, trg_ptr);
       }
       if(node.kind is LitKind::CHAR){
         assert(node.val.len() == 1);
@@ -776,6 +776,23 @@ impl Compiler{
         return makeInt(trimmed, 32);
       }
       panic("lit {}", node.val);
+    }
+
+    func str_lit(self, node: Literal*, trg_ptr: Value*): Value*{
+      let val_c = node.val.clone().cstr();
+      let src = CreateGlobalStringPtr(val_c.ptr());
+      val_c.drop();
+      let stringType = self.protos.get().std("str") as llvm_Type*;
+      let sliceType = self.protos.get().std("slice") as llvm_Type*;
+      let slice_ptr = self.gep2(trg_ptr, 0, stringType);
+      let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
+      let len_target = self.gep2(slice_ptr, SLICE_LEN_INDEX(), sliceType);
+      //set ptr
+      CreateStore(src, data_target);
+      //set len
+      let len = makeInt(node.val.len(), SLICE_LEN_BITS());
+      CreateStore(len, len_target);
+      return trg_ptr;
     }
   
     func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
@@ -799,9 +816,12 @@ impl Compiler{
         self.own.get().do_move(&arg.expr);
       }
     }
-    
     func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
-        let ptr = self.get_alloc(node);
+      let ptr = self.get_alloc(node);
+      return self.visit_obj(node, type, args, ptr);
+    }
+    
+    func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*, ptr: Value*): Value*{
         let rt = self.get_resolver().visit(node);
         self.own.get().add_obj(node, ptr, &rt.type);
         let ty = self.mapType(&rt.type);

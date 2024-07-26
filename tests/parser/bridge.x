@@ -43,6 +43,8 @@ extern{
     func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
     func vector_Type_delete(vec: vector_Type*);
     
+    func Function_delete(f: Function*);
+    
     func vector_Value_new(): vector_Value*;
     func vector_Value_push(vec: vector_Value*, elem: Value*);
     func vector_Value_delete(vec: vector_Value*);

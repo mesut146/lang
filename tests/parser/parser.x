@@ -298,8 +298,17 @@ impl Parser{
       }else{
         body = Option::new(self.parse_block());
       }
-      let res = Method{.node, type_args, name, selfp, params, type.unwrap(), body, is_generic, parent, self.path.clone()};
-      return res;
+      return Method{.node,
+         type_params: type_args,
+         name: name, 
+         self: selfp,
+         params: params,
+         type: type.unwrap(), 
+         body: body,
+         is_generic: is_generic,
+         parent: parent,
+         path: self.path.clone()
+      };
     }
     
     func parse_param(self): Param{
@@ -307,7 +316,7 @@ impl Parser{
       let name = self.pop();
       self.consume(TokenType::COLON);
       let type = self.parse_type();
-      return Param{.id, name.value.clone(), type, false, false};
+      return Param{.id, name: name.value.clone(), type: type, is_self: false, is_deref: false};
     }
     
     func parse_struct(self, derives: List<Type>, attr: List<String>): Decl{

@@ -555,6 +555,11 @@ impl Compiler{
   
   func setField(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
     if(is_struct(type)){
+      if(can_inline(expr, self.get_resolver())){
+        //todo own drop_lhs
+        self.do_inline(expr, trg);
+        return;
+      }
       let val = self.visit(expr);
       if(lhs.is_some()){
         self.own.get().drop_lhs(lhs.unwrap(), trg);
@@ -652,8 +657,44 @@ impl Compiler{
     vector_Type_delete(args);
     return res;
   }
+
+  func do_inline(self, expr: Expr*, ptr_ret: Value*){
+    if let Expr::Call(call*)=(expr){
+      let rt = self.get_resolver().visit(expr);
+      let method = self.get_resolver().get_method(&rt);
+      if(method.is_some()){
+        self.visit_call2(expr, call, Option::new(ptr_ret), rt);
+        return;
+      }
+      rt.drop();
+    }
+    if let Expr::Type(type*)=(expr){
+      self.simple_enum(type, ptr_ret);
+      return;
+    }
+    if let Expr::Obj(type*, args*)=(expr){
+      self.visit_obj(expr, type, args, ptr_ret);
+      return;
+    }
+    if let Expr::ArrAccess(aa*)=(expr){
+      self.visit_slice(expr, aa, ptr_ret);
+      return;
+    }
+    if let Expr::Lit(lit*)=(expr){
+      self.str_lit(lit, ptr_ret);
+      return;
+    }
+    if let Expr::Array(list*, sz*)=(expr){
+      self.visit_array(expr, list, sz, ptr_ret);
+      return;
+    }
+    panic("inline {}", expr);
+  }
 }
 
+func can_inline(expr: Expr*, r: Resolver*): bool{
+  return doesAlloc(expr, r);
+}
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{
   if(e is Expr::Obj) return true;
@@ -663,10 +704,10 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
   if let Expr::Lit(lit*)=(e){
     return lit.kind is LitKind::STR;
   }
-  if let Expr::Type(ty*)=(e){
+  if (e is Expr::Type){
     return true;//enum creation
   }
-  if let Expr::Array(list*,size*)=(e){
+  if (e is Expr::Array){
     return true;
   }
   if let Expr::Call(call*)=(e){
@@ -722,5 +763,3 @@ func get_data_index(decl: Decl*): i32{
   assert(decl.is_enum());
   return 1;
 }
-
-
