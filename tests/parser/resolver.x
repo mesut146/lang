@@ -14,6 +14,7 @@ import std/libc
 import std/io
 
 static verbose_method: bool = false;
+static verbose_drop: bool = true;
 
 func verbose_stmt(): bool{
   return false;
@@ -52,9 +53,10 @@ impl Context{
 
 impl Drop for Context{
   func drop(*self){
-    //print("Context::drop\n");
+    if(verbose_drop){
+      print("Context::drop\n");
+    }
     self.map.drop();
-    //self.root.drop();
     self.prelude.drop();
     self.std_path.drop();
     self.search_paths.drop();
@@ -121,7 +123,9 @@ struct Resolver{
 }
 impl Drop for Resolver{
   func drop(*self){
-    //print("Resolver::drop {}\n", &self.unit.path);
+    if(verbose_drop){
+      print("Resolver::drop {}\n", &self.unit.path);
+    }
     self.unit.drop();
     self.typeMap.drop();
     self.cache.drop();
