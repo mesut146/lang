@@ -543,7 +543,13 @@ struct Block{
 
 impl Block{
   func new(line: i32, end_line: i32): Block{
-    return Block{List<Stmt>::new(), line, end_line};
+    //print("Block::new {} {}\n", line, end_line);
+    return Block{list: List<Stmt>::new(), line: line, end_line: end_line};
+  }
+}
+impl Drop for Block{
+  func drop(*self){
+    print("Block::drop {} {}\n", self.line, self.end_line);
   }
 }
 

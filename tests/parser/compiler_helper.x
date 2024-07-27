@@ -693,7 +693,7 @@ impl Compiler{
 }
 
 func can_inline(expr: Expr*, r: Resolver*): bool{
-  return doesAlloc(expr, r);
+  return inline_rvo && doesAlloc(expr, r);
 }
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{

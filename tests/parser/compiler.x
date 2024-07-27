@@ -18,6 +18,7 @@ import std/libc
 import std/stack
 
 static bootstrap = false;
+static inline_rvo = false;
 
 struct Compiler{
   ctx: Context;
