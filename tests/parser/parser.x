@@ -512,8 +512,7 @@ impl Parser{
     func parse_stmt(self): Stmt{
       let id = self.node();
       if(self.is(TokenType::LBRACE)){
-        let res = Stmt::Block{.id, self.parse_block()};
-        return res;
+        return Stmt::Block{.id, self.parse_block()};
       }
       else if(self.is(TokenType::LET)){
         let vd = self.var();

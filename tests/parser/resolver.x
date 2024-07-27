@@ -15,6 +15,7 @@ import std/io
 
 static verbose_method: bool = false;
 static verbose_drop: bool = true;
+static print_unit: bool = false;
 
 func verbose_stmt(): bool{
   return false;
@@ -359,11 +360,11 @@ func dumpp(r: Resolver*){
   r.dump();
 }
 
-static print_unit: bool = false;
-
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
-    //print("Resolver::new {}\n", &path);
+    if(verbose_drop){
+      print("Resolver::new {}\n", &path);
+    }
     let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
     Drop::drop(parser);

@@ -118,7 +118,7 @@ void copy_file(const std::string &path, const std::string &outDir, const std::st
     trg << src.rdbuf();
 }
 
-llvm::Constant *getDefault(Type &type, Compiler *c, Expression* e) {
+llvm::Constant *getDefault(Type &type, Compiler *c, Expression *e) {
     if (type.isPointer()) {
         return llvm::ConstantPointerNull::get(c->Builder->getPtrTy());
     }
@@ -134,10 +134,10 @@ llvm::Constant *getDefault(Type &type, Compiler *c, Expression* e) {
     auto s = type.print();
     auto bits = c->getSize2(type);
     auto s2 = e->print();
-    if(s2 == "true"){
+    if (s2 == "true") {
         return c->makeInt(1, 8);
     }
-    if(s2 == "false"){
+    if (s2 == "false") {
         return c->makeInt(0, 8);
     }
     if (s == "bool" || s == "i8" || s == "i16" || s == "i32" || s == "i64") {
@@ -189,20 +189,18 @@ void dbg_glob(Compiler *c, Global &g, const Type &type) {
 
 void init_globals(Compiler *c) {
     //imported globals
-    for (auto &is : c->resolv->get_imports()) {
-        auto res = c->resolv->context->getResolver(is);
-        for (auto &g : res->unit->globals) {
-            //auto type = c->resolv->getType(g.expr.get());
-            auto type = res->getType(g.expr.get());
-            auto ty = c->mapType(type);
-            auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
-            //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
-            llvm::Constant *init = nullptr;//getDefault(type, c);
-            auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
-            c->globals[g.name] = gv;
-            c->NamedValues[g.name] = gv;
-        }
+    for (auto &g : c->resolv->glob_map) {
+        //auto type = c->resolv->getType(g.expr.get());
+        auto type = &g.rt.type;
+        auto ty = c->mapType(type);
+        auto linkage = llvm::GlobalValue::LinkageTypes::ExternalLinkage;
+        //auto linkage = llvm::GlobalValue::LinkOnceODRLinkage;
+        llvm::Constant *init = nullptr;//getDefault(type, c);
+        auto gv = new llvm::GlobalVariable(*c->mod, ty, false, linkage, init, g.name);
+        c->globals[g.name] = gv;
+        c->NamedValues[g.name] = gv;
     }
+
     if (c->unit->globals.empty()) {
         return;
     }
@@ -663,7 +661,7 @@ llvm::Value *Compiler::gen(std::unique_ptr<Expression> &expr) {
     return gen(expr.get());
 }
 
-void Compiler::gen(Statement* stmt){
+void Compiler::gen(Statement *stmt) {
     loc(stmt);
     stmt->accept(this);
 }

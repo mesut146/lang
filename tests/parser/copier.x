@@ -40,6 +40,13 @@ impl AstCopier{
         return res;
     }
 
+    func visit_list<E>(self, list1: List<E>*, list2: List<E>*){
+        for(let i = 0;i < list1.size();++i){
+            let arg = list1.get_ptr(i);
+            list2.add(self.visit(arg));
+        }
+    }
+
     func visit_opt<E>(self, opt: Option<E>*): Option<E>{
         if(opt.is_some()){
             return Option<E>::new(self.visit(opt.get()));
@@ -186,7 +193,9 @@ impl AstCopier{
     }
 
     func visit(self, node: Block*): Block{
-        return Block{list: self.visit_list(&node.list), line: node.line, end_line: node.end_line};
+        let res = Block::new(node.line, node.end_line);
+        self.visit_list(&node.list, &res.list);
+        return res;
     }
     
     func visit(self, node: Fragment*): Fragment{

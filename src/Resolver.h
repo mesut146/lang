@@ -294,6 +294,12 @@ struct Context {
 
 void generate_assert(MethodCall *mc, Resolver *r);
 
+struct GlobalInfo{
+  std::string name;
+  RType rt;
+  std::string path;
+};
+
 class Resolver : public Visitor {
 public:
     std::shared_ptr<Unit> unit;
@@ -312,6 +318,7 @@ public:
     std::map<int, FormatInfo> format_map;
     std::unordered_set<Method *> usedMethods;
     Context *context;
+    std::vector<GlobalInfo> glob_map; 
 
     explicit Resolver(std::shared_ptr<Unit> unit, Context *ctx) : unit(unit), context(ctx) {}
     ~Resolver() = default;

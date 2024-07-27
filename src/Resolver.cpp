@@ -1119,7 +1119,17 @@ std::any Resolver::visitSimpleName(SimpleName *node) {
         auto res = context->getResolver(is);
         for (auto &glob : res->unit->globals) {
             if (glob.name == node->name) {
-                return resolve(glob.expr);
+                if (glob.type.has_value()) {
+                    resolve(glob.type.value());
+                }
+                auto rt = resolve(glob.expr);
+                for (auto &old : glob_map) {
+                    if (old.name == glob.name) {
+                        return rt;
+                    }
+                }
+                glob_map.push_back(GlobalInfo{glob.name, rt.clone(), res->unit->path});
+                return rt;
             }
         }
     }

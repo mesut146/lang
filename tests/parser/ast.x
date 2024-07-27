@@ -539,17 +539,24 @@ struct Block{
   list: List<Stmt>;
   line: i32;
   end_line: i32;
+  id: i32;
 }
-
+static block_cnt = 0;
+static blocks = List<i32>::new();
 impl Block{
   func new(line: i32, end_line: i32): Block{
-    //print("Block::new {} {}\n", line, end_line);
-    return Block{list: List<Stmt>::new(), line: line, end_line: end_line};
+    let id = blocks.len() as i32;
+    print("Block::new {} {} id: {}\n", line, end_line, id);
+    blocks.add(id);
+    return Block{list: List<Stmt>::new(), line: line, end_line: end_line, id: id};
   }
 }
 impl Drop for Block{
   func drop(*self){
-    //print("Block::drop {} {}\n", self.line, self.end_line);
+    print("Block::drop {} {} id: {}\n", self.line, self.end_line, self.id);
+    let idx = blocks.indexOf(&self.id);
+    blocks.remove(idx);
+    self.list.drop();
   }
 }
 

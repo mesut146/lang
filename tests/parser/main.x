@@ -249,7 +249,7 @@ func handle(cmd: CmdArgs*){
     let path = cmd.get();
     let ctx = Context::new(get_out().str(), get_std_path().str());
     let resolver = ctx.create_resolver(&path);
-    print("resolve done {}\n", path);
+    print("resolve done {} bcnt: {}\n", path, blocks);
     ctx.drop();
     path.drop();
     return;
