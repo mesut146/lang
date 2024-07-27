@@ -479,7 +479,7 @@ impl Parser{
   func parse_block(self): Block{
       self.consume(TokenType::LBRACE);
       let res = Block::new(self.line(), 0);
-      print("Block::new {} {}\n", res.line, res.end_line);
+      //print("Block::new {} {}\n", res.line, res.end_line);
       while(!self.is(TokenType::RBRACE)){
         res.list.add(self.parse_stmt());
       }

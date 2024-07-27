@@ -549,7 +549,7 @@ impl Block{
 }
 impl Drop for Block{
   func drop(*self){
-    print("Block::drop {} {}\n", self.line, self.end_line);
+    //print("Block::drop {} {}\n", self.line, self.end_line);
   }
 }
 
