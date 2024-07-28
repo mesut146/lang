@@ -323,7 +323,7 @@ func normalize_quotes(s: str): String{
     return res;
 }
 
-func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
+/*func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
     let message = Fmt::new("panic ".str());
     message.print(&method.path);
     message.print(":");
@@ -339,7 +339,7 @@ func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Ex
     message.print("\n");
     let id = unit.node(line);
     return Expr::Lit{.id, Literal{LitKind::STR, message.unwrap(), Option<Type>::new()}};
-}
+}*/
 
 func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
     let message = Fmt::new("panic ".str());

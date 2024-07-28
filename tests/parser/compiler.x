@@ -751,7 +751,8 @@ impl Compiler{
 enum LinkType{
   Binary(name: str, args: str, run: bool),
   Static(name: str),
-  Dynamic
+  Dynamic,
+  None
 }
 
 struct CompilerConfig{
@@ -811,6 +812,9 @@ impl CompilerConfig{
     return self;
   }
   func link(self, compiled: List<String>*, cmp: Compiler*): String{
+    if(self.lt is LinkType::None){
+      return "".str();
+    }
     if let LinkType::Binary(bin_name, args, run) = (&self.lt){
       if(cmp.main_file.is_none()){
         return "".str();

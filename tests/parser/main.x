@@ -150,20 +150,18 @@ func handle_c(cmd: CmdArgs*){
   use_cache = false;
   let out_dir = get_out().str();
   let std = false;
+  let run = !cmd.consume_any("-norun");
+  let compile_only = cmd.consume_any("-nolink");
+  let link_static = cmd.consume_any("-static");
+  let link_shared = cmd.consume_any("-shared");
   if(cmd.is("-std")){
     cmd.consume();
     build_std(get_out());
     std = true;
   }
-  if(cmd.is("-out")){
-    cmd.consume();
+  if(cmd.has_any("-out")){
     out_dir.drop();
-    out_dir = cmd.get();
-  }
-  let run = true;
-  if(cmd.is("-norun")){
-    cmd.consume();
-    run = false;
+    out_dir = cmd.get_val("-out").unwrap();
   }
   let path: String = cmd.get();
   if(is_dir(path.str())){
@@ -172,24 +170,33 @@ func handle_c(cmd: CmdArgs*){
     config
       .set_file(path.str())
       .set_out(out_dir)
-      .add_dir(get_std_path())
-      .set_link(LinkType::Binary{bin.str(), "", run});
+      .add_dir(get_std_path());
+    config.set_link(LinkType::Binary{bin.str(), "", run});
     Compiler::compile_dir(config);
     bin.drop();
   }else{
+    let bin = bin_name(path.str());
     let config = CompilerConfig::new(get_std_path().str());
     config
-    .set_file(path)
-    .set_out(out_dir)
-    .add_dir(root());
-
+      .set_file(path)
+      .set_out(out_dir)
+      .add_dir(root());
+    let args = ""; 
     if(std){
-      config.set_link(LinkType::Binary{"a.out", get_stdlib(), false});
+      args = get_stdlib();
+    }
+    if(link_static){
+      config.set_link(LinkType::Static{bin.str()});
+    }else if(link_shared){
+      config.set_link(LinkType::Static{bin.str()});
+    }else if(compile_only){
+      config.set_link(LinkType::None);
     }else{
-      config.set_link(LinkType::Binary{"a.out", "", false});
+      config.set_link(LinkType::Binary{bin.str(), args, run});
     }
     let out = Compiler::compile_single(config);
     out.drop();
+    bin.drop();
   }
 }
 

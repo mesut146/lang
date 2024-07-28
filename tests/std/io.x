@@ -248,4 +248,34 @@ impl CmdArgs{
   func is(self, arg: str): bool{
     return self.args.get_ptr(0).eq(arg);
   }
+
+  func has_any(self, arg: str): bool{
+    for(let i = 0; i < self.args.len(); ++i){
+      if(self.args.get_ptr(i).eq(arg)){
+        return true;
+      }
+    }
+    return false;
+  }
+  func consume_any(self, arg: str): bool{
+    for(let i = 0; i < self.args.len(); ++i){
+      if(self.args.get_ptr(i).eq(arg)){
+        let tmp = self.args.remove(i);
+        tmp.drop();
+        return true;
+      }
+    }
+    return false;
+  }
+  func get_val(self, arg: str): Option<String>{
+    for(let i = 0; i < self.args.len(); ++i){
+      if(self.args.get_ptr(i).eq(arg)){
+        let val = self.args.remove(i + 1);
+        let key = self.args.remove(i);
+        key.drop();
+        return Option::new(val);
+      }
+    }
+    return Option<String>::new();
+  }
 }
