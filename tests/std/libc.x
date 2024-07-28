@@ -22,8 +22,8 @@ impl dirent{
     }
     panic("no eof");
   }
-  func cstr(self): [u8]{
-    return self.d_name[0..self.len()];
+  func str(self): str{
+    return str::new(self.d_name[0..self.len()]);
   }
 }
 

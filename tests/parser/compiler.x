@@ -243,9 +243,9 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
     }
-    if(self.ctx.verbose){
+    /*if(self.ctx.verbose){
       print("compiling {}\n", path);
-    }
+    }*/
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     if (has_main(self.unit())) {
@@ -369,6 +369,7 @@ impl Compiler{
           init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
           
           vector_Constant_delete(cons_elems);
+          vector_Constant_delete(cons_elems_slice);
         }else{
           panic("glob constexpr not supported: {}", gl);
         }
@@ -692,6 +693,9 @@ impl Compiler{
     let compiled = List<String>::new();
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
+    if(cmp.ctx.verbose){
+      print("compiling {}\n", config.file);
+    }
     let obj = cmp.compile(config.file.str(), &cache, &config);
     compiled.add(obj);
     let res = config.link(&compiled, &cmp);
@@ -707,7 +711,7 @@ impl Compiler{
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
     let src_dir = &config.file;
-    let list: List<String> = list(src_dir.str());
+    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
@@ -719,6 +723,9 @@ impl Compiler{
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }
       let cmp = Compiler::new(ctx);
+      if(cmp.ctx.verbose){
+        print("compiling [{}/{}] {}\n", i + 1, list.len(), file);
+      }
       let obj = cmp.compile(file.str(), &cache, &config);
       Drop::drop(cmp);
       compiled.add(obj);

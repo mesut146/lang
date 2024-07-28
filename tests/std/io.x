@@ -77,8 +77,33 @@ func write_string(data: str, path: str){
   write_bytes(data.slice(), path);
 }
 
+func list(path: str, ext: Option<str>, file_only: bool): List<String>{
+  let list = List<String>::new();
+  let path_c = CStr::new(path);
+  let dp = opendir(path_c.ptr());
+  path_c.drop();
+  if(dp as u64 == 0) panic("no such dir {}", path);
+  while(true){
+    let ep: dirent* = readdir(dp);
+    if(ep as u64 == 0) break;
+    let name = ep.str();
+    if(ext.is_some() && name.ends_with(*ext.get())){
+      if(file_only){
+        let full_path = format("{}/{}", path, name);
+        if(is_file(full_path.str())){
+          list.add(name.str());
+        }
+        full_path.drop();
+      }else{
+        list.add(name.str());
+      }
+    }
+  }
+  closedir(dp);
+  return list;
+}
 func list(path: str): List<String>{
-  let list = List<String>::new(128);
+  let list = List<String>::new();
   let path_c = CStr::new(path);
   let dp = opendir(path_c.ptr());
   path_c.drop();
