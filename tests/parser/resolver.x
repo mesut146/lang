@@ -14,7 +14,7 @@ import std/libc
 import std/io
 
 static verbose_method: bool = false;
-static verbose_drop: bool = true;
+static verbose_drop: bool = false;
 static print_unit: bool = false;
 
 func verbose_stmt(): bool{

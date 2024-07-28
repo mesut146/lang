@@ -21,6 +21,9 @@ func root(): str{
 func get_out(): str{
   return "./bt_out";
 }
+func test_out(): str{
+  return "./test_out";
+}
 func get_stdlib(): str{
   return "./bt_out/std.a";
 }
@@ -78,13 +81,13 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
 func compiler_test(std_test: bool){
   print("compiler_test\n");
   if(std_test){
-    build_std(get_out());
-    compile_dir2("../tests/std_test", format("{}/std.a", get_out()).str());
+    build_std(test_out());
+    compile_dir2("../tests/std_test", format("{}/std.a", test_out()).str());
   }else{
     let config = CompilerConfig::new(get_std_path().str());
     config
       .set_file("../tests/std/rt.x")
-      .set_out(get_out())
+      .set_out(test_out())
       .add_dir(root())
       .set_link(LinkType::Static{"rt.a"});
     let lib = Compiler::compile_single(config);
@@ -124,15 +127,15 @@ func own_test(id: i32){
   let config = CompilerConfig::new(get_std_path().str());
   config
     .set_file("../tests/own/common.x")
-    .set_out(get_out())
+    .set_out(test_out())
     .add_dir(root())
     .set_link(LinkType::Static{"common.a"});
   let bin = Compiler::compile_single(config);
   bin.drop();
 
-  build_std(get_out());
+  build_std(test_out());
 
-  let args = format("{}/common.a {}/std.a", get_out(), get_out());
+  let args = format("{}/common.a {}/std.a", test_out(), test_out());
   if(id == 1){
     compile_dir2("../tests/own", args.str(), Option::new("common.x"));
   }else{
@@ -140,12 +143,6 @@ func own_test(id: i32){
   }
   args.drop();
   drop_enabled = false;
-}
-
-func main(argc: i32, args: i8**){
-  let cmd = CmdArgs::new(argc, args);
-  handle(&cmd);
-  cmd.drop();
 }
 
 func handle_c(cmd: CmdArgs*){
@@ -249,11 +246,17 @@ func handle(cmd: CmdArgs*){
     let path = cmd.get();
     let ctx = Context::new(get_out().str(), get_std_path().str());
     let resolver = ctx.create_resolver(&path);
-    print("resolve done {} bcnt: {}\n", path, blocks);
+    print("resolve done {}\n", path);
     ctx.drop();
     path.drop();
     return;
   }else{
     panic("invalid cmd: {}", cmd.args);
   }
+}
+
+func main(argc: i32, args: i8**){
+  let cmd = CmdArgs::new(argc, args);
+  handle(&cmd);
+  cmd.drop();
 }

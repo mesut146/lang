@@ -91,6 +91,11 @@ impl DropHelper{
   }
   func is_drop_decl(self, decl: Decl*): bool{
     if(decl.is_drop()) return true;
+    if(decl.base.is_some()){
+      if(self.is_drop_type(decl.base.get())){
+        return true;
+      }
+    }
     if(decl.is_struct()){
       let fields = decl.get_fields();
       for(let i = 0;i < fields.len();++i){

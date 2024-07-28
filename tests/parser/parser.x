@@ -415,7 +415,8 @@ impl Parser{
           let part = self.gen_part();
           if let Type::Simple(smp*) = (&part){
             let id = self.node();
-            res = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
+            let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
+            res = tmp;
           }
           Drop::drop(part);
         }
@@ -428,13 +429,14 @@ impl Parser{
       while (self.is(TokenType::STAR)) {
         let id = self.node();
         self.consume(TokenType::STAR);
-        res = Type::Pointer{.id, Box::new(res)};
+        let tmp = Type::Pointer{.id, Box::new(res)};
+        res = tmp;
       }
       return res;
     }
     
     func gen_part(self): Type{
-      //a<b>::c<d>
+      //a<b>
       let line = self.line();
       let name = self.popv();
       let res = Simple::new(name);

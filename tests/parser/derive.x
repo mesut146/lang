@@ -55,6 +55,10 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     //print("generate_drop {}\n", decl.type);
     let line = decl.line;
     let body = Block::new(line, line);
+    if(decl.base.is_some()){
+        //Drop::drop(ptr::deref(self as <Base>*));
+        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {}*));", decl.base.get()), unit, line));
+    }
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
@@ -82,7 +86,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);
-                iflet.args.add(ArgBind{.arg_id, fd.name.clone(), true});
+                iflet.args.add(ArgBind{.arg_id, fd.name.clone(), false});
             }
             body.list.add(Stmt::IfLet{.iflet_id, iflet});
         }
@@ -103,8 +107,9 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
-    /*if(decl.type.eq("Type")){
+    /*if(decl.type.eq("Decl")){
         print("{}\n", &m);
+        panic("");
     }*/
     let imp = make_impl(decl, "Drop");
     imp.methods.add(m);

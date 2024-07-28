@@ -3,6 +3,8 @@ import std/libc
 import parser/copier
 import parser/printer
 
+static print_drops = false;
+
 func prim_size(s: str): Option<u32>{
   let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
   let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
@@ -52,6 +54,7 @@ impl Drop for Unit{
     self.globals.drop();
   }
 }
+
 impl Unit{
   func new(path: String): Unit{
     //print("Unit::new() {}\n", path);
@@ -101,6 +104,27 @@ enum Item{
   Type(name: String, rhs: Type),
   Extern(methods: List<Method>)
 }
+/*impl Drop for Item{
+  func drop(*self){
+    print("Item::drop\n");
+    if let Item::Method(m)=(self){
+      m.drop();
+    }else if let Item::Decl(d)=(self){
+      d.drop();
+    }else if let Item::Impl(i)=(self){
+      i.drop();
+    }else if let Item::Trait(t)=(self){
+      t.drop();
+    }else if let Item::Type(name, rhs)=(self){
+      name.drop();
+      rhs.drop();
+    }else if let Item::Extern(methods)=(self){
+      methods.drop();
+    }else{
+      panic("drop {}\n", self);
+    }
+  }
+}*/
 
 impl Item{
   func as_impl(self): Impl*{
@@ -541,21 +565,21 @@ struct Block{
   end_line: i32;
   id: i32;
 }
-static block_cnt = 0;
-static blocks = List<i32>::new();
+//static block_cnt = 0;
+//static blocks = List<i32>::new();
 impl Block{
   func new(line: i32, end_line: i32): Block{
-    let id = blocks.len() as i32;
-    print("Block::new {} {} id: {}\n", line, end_line, id);
-    blocks.add(id);
-    return Block{list: List<Stmt>::new(), line: line, end_line: end_line, id: id};
+    //let id = blocks.len() as i32;
+    //print("Block::new {} {} id: {}\n", line, end_line, id);
+    //blocks.add(id);
+    return Block{list: List<Stmt>::new(), line: line, end_line: end_line, id: 0};
   }
 }
 impl Drop for Block{
   func drop(*self){
-    print("Block::drop {} {} id: {}\n", self.line, self.end_line, self.id);
-    let idx = blocks.indexOf(&self.id);
-    blocks.remove(idx);
+    //print("Block::drop {} {} id: {}\n", self.line, self.end_line, self.id);
+    //let idx = blocks.indexOf(&self.id);
+    //blocks.remove(idx);
     self.list.drop();
   }
 }
