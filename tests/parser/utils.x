@@ -3,6 +3,7 @@ import parser/copier
 import parser/printer
 import std/map
 import std/libc
+import std/io
 
 func SLICE_PTR_INDEX(): i32{ return 0; }
 func SLICE_LEN_INDEX(): i32{ return 1; }
@@ -30,7 +31,7 @@ func get_filename(path: str): str{
 
 func bin_name(path: str): String{
     let name = get_filename(path);
-    return format("{}.bin", name.substr(0, name.len() as i32 - 2));
+    return format("{}.bin", Path::noext(name));
 }
 
 func as_type(bits: i32): Type{

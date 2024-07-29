@@ -225,6 +225,13 @@ impl Path{
     let i = self.name().lastIndexOf(".");
     return self.path.substr(0, i);
   }
+  func noext(path: str): str{
+    let i = path.lastIndexOf(".");
+    if(i == -1){
+      return path;
+    }
+    return path.substr(0, i);
+  }
 }
 
 
