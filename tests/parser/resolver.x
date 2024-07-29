@@ -30,6 +30,7 @@ struct Context{
   verbose: bool;
   single_mode: bool;
   stack_trace: bool;
+  nostd: bool;
 }
 impl Context{
   func new(out_dir: String, std_path: String): Context{
@@ -46,7 +47,8 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        single_mode: true,
-       stack_trace: false
+       stack_trace: false,
+       nostd: false
     };
     return res;
   }
@@ -424,16 +426,18 @@ impl Resolver{
     let added = List<str>::new();
     added.add(self.unit.path.str());
     //add preludes
-    for (let i = 0;i < self.ctx.prelude.len();++i) {
-      let pre: String* = self.ctx.prelude.get_ptr(i);
-      //skip self unit being prelude
-      let path = format("{}/std/{}.x", self.ctx.std_path, pre);
-      if(!added.contains(&path.str())){
-        let r = self.ctx.create_resolver(&path);
-        res.add(r);
-        added.add(r.unit.path.str());
+    if(!self.ctx.nostd){
+      for (let i = 0;i < self.ctx.prelude.len();++i) {
+        let pre: String* = self.ctx.prelude.get_ptr(i);
+        //skip self unit being prelude
+        let path = format("{}/std/{}.x", self.ctx.std_path, pre);
+        if(!added.contains(&path.str())){
+          let r = self.ctx.create_resolver(&path);
+          res.add(r);
+          added.add(r.unit.path.str());
+        }
+        path.drop();
       }
-      path.drop();
     }
     //normal imports
     for (let i = 0;i < self.unit.imports.len();++i) {
@@ -1156,7 +1160,7 @@ impl Resolver{
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
-      self.err(node.line, "couldn't find type");
+      self.err(node.line, format("couldn't find type: {}", node));
     }
     let tmp: RType = imp_result.unwrap();
     return tmp;

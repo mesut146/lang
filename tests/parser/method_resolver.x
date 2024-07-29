@@ -378,6 +378,7 @@ impl MethodResolver{
                 let err: Signature* = *real.get_ptr(i);
                 msg.append("\n");
                 msg.append(err.print());
+                msg.append(err.m.unwrap_ptr().path);
             }
             Drop::drop(list);
             Drop::drop(real);

@@ -137,6 +137,10 @@ impl Protos{
     }
     return *opt.unwrap();
   }*/
+  func make_proto(self, m: Method*){
+    if(m.is_generic) return;
+    self.get_func(m);
+  }
   func get_func(self, m: Method*): Function*{
     let mangled = mangle(m);
     let opt = self.funcMap.get_ptr(&mangled);
@@ -438,19 +442,19 @@ impl Compiler{
     //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
       let m = methods.get(i);
-      self.make_proto(m);
+      p.make_proto(m);
     }
     methods.drop();
     //generic methods from resolver
     //print("gen m\n");
     for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
         let m = self.get_resolver().generated_methods.get_ptr(i).get();
-        self.make_proto(m);
+        p.make_proto(m);
     }
     //print("used m\n");
     for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
         let m = self.get_resolver().used_methods.get(i);
-        self.make_proto(m);
+        p.make_proto(m);
     }
   }
   
@@ -686,6 +690,7 @@ impl Compiler{
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+    ctx.nostd = config.nostd;
     for(let i = 0;i < config.src_dirs.len();++i){
       ctx.add_path(config.src_dirs.get_ptr(i).str());
     }
@@ -719,6 +724,7 @@ impl Compiler{
       let file: String = format("{}/{}", src_dir, name);
       if(is_dir(file.str())) continue;
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.nostd = config.nostd;
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }
@@ -742,8 +748,8 @@ impl Compiler{
       config.drop();
       return path;
     }
-    else if let LinkType::Static(lib_name) = (&config.lt){
-      let res = Compiler::build_library(&compiled, lib_name, config.out_dir.str(), false);
+    else if let LinkType::Static(lib_name*) = (&config.lt){
+      let res = Compiler::build_library(&compiled, lib_name.str(), config.out_dir.str(), false);
       compiled.drop();
       config.drop();
       return res;
@@ -757,8 +763,8 @@ impl Compiler{
 
 enum LinkType{
   Binary(name: str, args: str, run: bool),
-  Static(name: str),
-  Dynamic,
+  Static(name: String),
+  Dynamic(name: str),
   None
 }
 
@@ -770,6 +776,7 @@ struct CompilerConfig{
   lt: LinkType;
   std_path: String;
   vendor: String;
+  nostd: bool;
 }
 
 impl CompilerConfig{
@@ -779,9 +786,10 @@ impl CompilerConfig{
       src_dirs: List<String>::new(),
       out_dir: "".str(),
       args: "".str(),
-      lt: LinkType::Dynamic,
+      lt: LinkType::None,
       std_path: std_path,
-      vendor: "".str()
+      vendor: "".str(),
+      nostd: false
     };
   }
   func set_vendor(self, vendor: str): CompilerConfig*{
@@ -799,6 +807,10 @@ impl CompilerConfig{
   }
   func add_dir(self, dir: str): CompilerConfig*{
     self.src_dirs.add(dir.str());
+    return self;
+  }
+  func add_dir(self, dir: String): CompilerConfig*{
+    self.src_dirs.add(dir);
     return self;
   }
   func set_link(self, lt: LinkType): CompilerConfig*{
@@ -832,8 +844,8 @@ impl CompilerConfig{
       }
       return path;
     }
-    else if let LinkType::Static(lib_name) = (&self.lt){
-      let res = Compiler::build_library(compiled, lib_name, self.out_dir.str(), false);
+    else if let LinkType::Static(lib_name*) = (&self.lt){
+      let res = Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
       return res;
     }else{
       panic("CompilerConfig::link");

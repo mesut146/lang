@@ -42,7 +42,7 @@ func build_std(out_dir: str){
     .set_file("../tests/std".str())
     .set_out(out_dir)
     .add_dir(get_std_path())
-    .set_link(LinkType::Static{"std.a"});
+    .set_link(LinkType::Static{"std.a".str()});
 
   let bin = Compiler::compile_dir(config);
   bin.drop();
@@ -89,7 +89,7 @@ func compiler_test(std_test: bool){
       .set_file("../tests/std/rt.x")
       .set_out(test_out())
       .add_dir(root())
-      .set_link(LinkType::Static{"rt.a"});
+      .set_link(LinkType::Static{"rt.a".str()});
     let lib = Compiler::compile_single(config);
     compile_dir2("../tests/normal", lib.str());
     lib.drop();
@@ -129,7 +129,7 @@ func own_test(id: i32){
     .set_file("../tests/own/common.x")
     .set_out(test_out())
     .add_dir(root())
-    .set_link(LinkType::Static{"common.a"});
+    .set_link(LinkType::Static{"common.a".str()});
   let bin = Compiler::compile_single(config);
   bin.drop();
 
@@ -147,57 +147,73 @@ func own_test(id: i32){
 
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
-  use_cache = false;
+  use_cache = cmd.consume_any("-cache");
+  let std_path = get_std_path().str();
   let out_dir = get_out().str();
   let std = false;
   let run = !cmd.consume_any("-norun");
   let compile_only = cmd.consume_any("-nolink");
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
-  if(cmd.is("-std")){
-    cmd.consume();
-    build_std(get_out());
-    std = true;
-  }
+  let nostd = cmd.consume_any("-nostd");
+  let noroot = cmd.consume_any("-noroot");
+  let flags = "".str();
   if(cmd.has_any("-out")){
     out_dir.drop();
     out_dir = cmd.get_val("-out").unwrap();
   }
+  if(cmd.has_any("-stdpath")){
+    std_path.drop();
+    std_path = cmd.get_val("-stdpath").unwrap();
+  }
+  if(cmd.has_any("-flags")){
+    flags.drop();
+    flags = cmd.get_val("-flags").unwrap();
+  }
+  if(cmd.consume_any("-std")){
+    build_std(get_out());
+    std = true;
+  }
+  let config = CompilerConfig::new(std_path.clone());
+  while(cmd.has_any("-i")){
+    let dir: String = cmd.get_val("-i").unwrap();
+    config.add_dir(dir);
+  }
   let path: String = cmd.get();
-  if(is_dir(path.str())){
-    let bin = bin_name(path.str());
-    let config = CompilerConfig::new(get_std_path().str());
-    config
-      .set_file(path.str())
-      .set_out(out_dir)
-      .add_dir(get_std_path());
-    config.set_link(LinkType::Binary{bin.str(), "", run});
-    Compiler::compile_dir(config);
-    bin.drop();
+  let bin = bin_name(path.str());
+  if(std){
+    flags.append(" ");
+    flags.append(get_stdlib());
+  }
+  config.set_file(path.str());
+  config.set_out(out_dir);
+  if(link_static){
+    config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
+  }else if(link_shared){
+    config.set_link(LinkType::Dynamic{bin.str()});
+  }else if(compile_only){
+    config.set_link(LinkType::None);
   }else{
-    let bin = bin_name(path.str());
-    let config = CompilerConfig::new(get_std_path().str());
-    config
-      .set_file(path)
-      .set_out(out_dir)
-      .add_dir(root());
-    let args = ""; 
-    if(std){
-      args = get_stdlib();
+    config.set_link(LinkType::Binary{bin.str(), flags.str(), run});
+  }
+  config.nostd = nostd;
+  if(!nostd){
+    config.add_dir(std_path.clone());
+  }
+  if(is_dir(path.str())){
+    if(!noroot){
+      config.add_dir(path.str());
     }
-    if(link_static){
-      config.set_link(LinkType::Static{bin.str()});
-    }else if(link_shared){
-      config.set_link(LinkType::Static{bin.str()});
-    }else if(compile_only){
-      config.set_link(LinkType::None);
-    }else{
-      config.set_link(LinkType::Binary{bin.str(), args, run});
-    }
+    Compiler::compile_dir(config);
+  }else{
+    //config.add_dir(root());
     let out = Compiler::compile_single(config);
     out.drop();
-    bin.drop();
   }
+  path.drop();
+  bin.drop();
+  std_path.drop();
+  flags.drop();
 }
 
 func handle(cmd: CmdArgs*){
