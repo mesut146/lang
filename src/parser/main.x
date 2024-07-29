@@ -35,13 +35,13 @@ static version_str = "1.0";
 static vendor_str = "lang";
 static compiler_name_str = "x";
 
-func build_std(out_dir: str){
+func build_std(root: str, out_dir: str){
   use_cache = true;
-  let config = CompilerConfig::new(get_std_path().str());
+  let config = CompilerConfig::new(format("{}/src", root));
   config
-    .set_file("../tests/std".str())
+    .set_file(format("{}/src/std", root))
     .set_out(out_dir)
-    .add_dir(get_std_path())
+    .add_dir(format("{}/src", root))
     .set_link(LinkType::Static{"std.a".str()});
 
   let bin = Compiler::compile_dir(config);
@@ -96,13 +96,23 @@ func compiler_test(std_test: bool){
   }
 }
 
-func bootstrap(run: bool, name: str, vendor: str){
+func bootstrap(cmd: CmdArgs*){
   print("test::bootstrap\n");
   bootstrap = true;
-  let out_dir = format("{}_out", name);
+  cmd.consume();
+  let root = cmd.get_val("-root").unwrap();
+  let build = format("{}/build", root);
+  let run = false;
+  let name = "x2";
+  if(cmd.has()){
+    name = cmd.peek.str();
+  }
+  let out_dir = format("{}/{}_out", build, name);
   build_std(out_dir.str());
   let args = format("{}/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", out_dir);
   let config = CompilerConfig::new(get_std_path().str());
+  let vendor = Path::name(cmd.get_root());
+  print("vendor={}\n", vendor);
   config
     .set_file("../tests/parser".str())
     .set_out(out_dir)
@@ -113,12 +123,13 @@ func bootstrap(run: bool, name: str, vendor: str){
   let bin2 = format("./{}", name);
   File::copy(bin.str(), bin2.str());
   print("wrote {}\n", bin2);
-  bin.drop();
-
+  
   let binc = bin2.cstr();
   set_as_executable(binc.ptr());
   binc.drop();
   args.drop();
+  root.drop();
+  bin.drop();
 }
 
 func own_test(id: i32){
@@ -220,7 +231,7 @@ func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
   if(!cmd.has()){
-    bootstrap(false, "x2", Path::name(cmd.get_root()));
+    print("enter a command\n");
     return;
   }
   if(cmd.is("-v")){
@@ -245,12 +256,8 @@ func handle(cmd: CmdArgs*){
   }else if(cmd.is("std")){
     build_std(get_out());
   }else if(cmd.is("bt")){
-    cmd.consume();
-    let name = "x2";
-    if(cmd.has()){
-      name = cmd.peek().str();
-    }
-    bootstrap(false, name, Path::name(cmd.get_root()));
+    bootstrap();
+    return;
   }
   else if(cmd.is("c")){
     handle_c(cmd);

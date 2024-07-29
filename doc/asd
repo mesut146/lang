@@ -5,11 +5,3 @@ clear;valgrind --leak-check=full --num-callers=30 ./x c -out ./xx -norun ../test
 clear;valgrind --leak-check=full --num-callers=30 ./x2 r ../tests/normal/alloc.x 
 
 --vgdb-error=0
-
-./x c -static -noroot -stdpath /home/mesut/Desktop/proj/lang -i /home/mesut/Desktop/proj/lang -out ./std_out /home/mesut/Desktop/proj/lang/std
-
-./x c -cache -noroot -norun -stdpath /home/mesut/Desktop/proj/lang -i /home/mesut/Desktop/proj/lang -out ./x2_out -flags "./std_out/std.a /home/mesut/Desktop/proj/lang/cpp_bridge/build/libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++" /home/mesut/Desktop/proj/lang/parser
-
-../bin/x-1.0-x64 c -static -noroot -stdpath ../src -i ../src -out ./std_out ../src/std
-
-../bin/x-1.0-x64 c -norun -cache -noroot -stdpath ../src -i ../src -out ./x2_out -flags "../cpp_bridge/build/libbridge.a ./std_out/std.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++" ../src/parser
