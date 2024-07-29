@@ -2,3 +2,5 @@
 cmake-build-debug
 .idea
 out
+cpp_bridge/build
+cpp_source/build
