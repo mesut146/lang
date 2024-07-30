@@ -690,7 +690,6 @@ impl Compiler{
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-    ctx.nostd = config.nostd;
     for(let i = 0;i < config.src_dirs.len();++i){
       ctx.add_path(config.src_dirs.get_ptr(i).str());
     }
@@ -724,7 +723,6 @@ impl Compiler{
       let file: String = format("{}/{}", src_dir, name);
       if(is_dir(file.str())) continue;
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-      ctx.nostd = config.nostd;
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }
@@ -774,13 +772,18 @@ struct CompilerConfig{
   out_dir: String;
   args: String;
   lt: LinkType;
-  std_path: String;
+  std_path: Option<String>;
   vendor: String;
-  nostd: bool;
 }
 
 impl CompilerConfig{
+  func new(): CompilerConfig{
+    return CompilerConfig::new(Option<String>::new());
+  }
   func new(std_path: String): CompilerConfig{
+    return CompilerConfig::new(Option<String>::new(std_path));
+  }
+  func new(std_path: Option<String>): CompilerConfig{
     return CompilerConfig{
       file: "".str(),
       src_dirs: List<String>::new(),
@@ -788,9 +791,13 @@ impl CompilerConfig{
       args: "".str(),
       lt: LinkType::None,
       std_path: std_path,
-      vendor: "".str(),
-      nostd: false
+      vendor: "".str()
     };
+  }
+  func set_std(self, std_path: String): CompilerConfig*{
+    self.std_path.drop();
+    self.std_path = Option::new(std_path);
+    return self;
   }
   func set_vendor(self, vendor: str): CompilerConfig*{
     self.vendor.drop();
@@ -827,7 +834,7 @@ impl CompilerConfig{
   }
   func set_std_path(self, std_path: str): CompilerConfig*{
     self.std_path.drop();
-    self.std_path = std_path.str();
+    self.std_path = Option::new(std_path.str());
     return self;
   }
   func link(self, compiled: List<String>*, cmp: Compiler*): String{

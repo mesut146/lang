@@ -35,17 +35,18 @@ static version_str = "1.0";
 static vendor_str = "lang";
 static compiler_name_str = "x";
 
-func build_std(root: str, out_dir: str){
+func build_std(std_dir: str, out_dir: str): String{
   use_cache = true;
-  let config = CompilerConfig::new(format("{}/src", root));
+  let src_dir = Path::parent(std_dir);
+  let config = CompilerConfig::new(src_dir.str());
   config
-    .set_file(format("{}/src/std", root))
+    .set_file(std_dir)
     .set_out(out_dir)
-    .add_dir(format("{}/src", root))
+    .add_dir(src_dir)
     .set_link(LinkType::Static{"std.a".str()});
 
-  let bin = Compiler::compile_dir(config);
-  bin.drop();
+  let lib = Compiler::compile_dir(config);
+  return lib;
 }
 
 func compile_dir2(dir: str, args: str){
@@ -81,8 +82,9 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
 func compiler_test(std_test: bool){
   print("compiler_test\n");
   if(std_test){
-    build_std(test_out());
+    //build_std(test_out());
     compile_dir2("../tests/std_test", format("{}/std.a", test_out()).str());
+    panic("");
   }else{
     let config = CompilerConfig::new(get_std_path().str());
     config
@@ -100,15 +102,16 @@ func bootstrap(cmd: CmdArgs*){
   print("test::bootstrap\n");
   bootstrap = true;
   cmd.consume();
-  let root = cmd.get_val("-root").unwrap();
+  let root = cmd.get_val2("-root");
   let build = format("{}/build", root);
   let run = false;
   let name = "x2";
   if(cmd.has()){
-    name = cmd.peek.str();
+    name = cmd.peek().str();
   }
   let out_dir = format("{}/{}_out", build, name);
-  build_std(out_dir.str());
+  if(true) panic("");
+  //build_std(out_dir.str());
   let args = format("{}/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", out_dir);
   let config = CompilerConfig::new(get_std_path().str());
   let vendor = Path::name(cmd.get_root());
@@ -130,9 +133,10 @@ func bootstrap(cmd: CmdArgs*){
   args.drop();
   root.drop();
   bin.drop();
+  build.drop();
 }
 
-func own_test(id: i32){
+func own_test(id: i32, std_dir: str){
   print("test::own_test\n");
   drop_enabled = true;
   let config = CompilerConfig::new(get_std_path().str());
@@ -144,7 +148,8 @@ func own_test(id: i32){
   let bin = Compiler::compile_single(config);
   bin.drop();
 
-  build_std(test_out());
+  let lib = build_std(std_dir, test_out());
+  lib.drop();
 
   let args = format("{}/common.a {}/std.a", test_out(), test_out());
   if(id == 1){
@@ -159,45 +164,23 @@ func own_test(id: i32){
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
   use_cache = cmd.consume_any("-cache");
-  let std_path = get_std_path().str();
-  let out_dir = get_out().str();
-  let std = false;
+  let out_dir = cmd.get_val2("-out");
   let run = !cmd.consume_any("-norun");
   let compile_only = cmd.consume_any("-nolink");
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
   let nostd = cmd.consume_any("-nostd");
   let noroot = cmd.consume_any("-noroot");
-  let flags = "".str();
-  if(cmd.has_any("-out")){
-    out_dir.drop();
-    out_dir = cmd.get_val("-out").unwrap();
-  }
-  if(cmd.has_any("-stdpath")){
-    std_path.drop();
-    std_path = cmd.get_val("-stdpath").unwrap();
-  }
-  if(cmd.has_any("-flags")){
-    flags.drop();
-    flags = cmd.get_val("-flags").unwrap();
-  }
-  if(cmd.consume_any("-std")){
-    build_std(get_out());
-    std = true;
-  }
-  let config = CompilerConfig::new(std_path.clone());
+  let flags = cmd.get_val_or("-flags", "".str());
+  let config = CompilerConfig::new();
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);
   }
   let path: String = cmd.get();
   let bin = bin_name(path.str());
-  if(std){
-    flags.append(" ");
-    flags.append(get_stdlib());
-  }
   config.set_file(path.str());
-  config.set_out(out_dir);
+  config.set_out(out_dir.clone());
   if(link_static){
     config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
   }else if(link_shared){
@@ -207,9 +190,17 @@ func handle_c(cmd: CmdArgs*){
   }else{
     config.set_link(LinkType::Binary{bin.str(), flags.str(), run});
   }
-  config.nostd = nostd;
-  if(!nostd){
+  if(cmd.has_any("-stdpath")){
+    let std_path = cmd.get_val2("-stdpath");
     config.add_dir(std_path.clone());
+    config.set_std(std_path.clone());
+    if(cmd.consume_any("-std")){
+      let lib = build_std(std_path.str(), out_dir.str());
+      flags.append(" ");
+      flags.append(lib.str());
+      lib.drop();
+    }
+    std_path.drop();
   }
   if(is_dir(path.str())){
     if(!noroot){
@@ -223,8 +214,24 @@ func handle_c(cmd: CmdArgs*){
   }
   path.drop();
   bin.drop();
-  std_path.drop();
   flags.drop();
+  out_dir.drop();
+}
+
+func handle_std(cmd: CmdArgs*){
+  cmd.consume();
+  let root = cmd.get_val2("-root");
+  let out = format("{}/build/std_out", root);
+  if(cmd.has_any("-out")){
+    out.drop();
+    out = cmd.get_val2("-out");
+  }
+  let std_dir = format("{}/src/std", root);
+  let lib = build_std(std_dir.str(), out.str());
+  root.drop();
+  out.drop();
+  std_dir.drop();
+  lib.drop();
 }
 
 func handle(cmd: CmdArgs*){
@@ -239,11 +246,11 @@ func handle(cmd: CmdArgs*){
     return;
   }
   if(cmd.is("own")){
-    own_test(1);
+    //own_test(1);
     return;
   }
   if(cmd.is("own2")){
-    own_test(2);
+    //own_test(2);
     return;
   }
   if(cmd.is("test")){
@@ -254,9 +261,10 @@ func handle(cmd: CmdArgs*){
     compiler_test(true);
     return;
   }else if(cmd.is("std")){
-    build_std(get_out());
+    handle_std(cmd);
+    return;
   }else if(cmd.is("bt")){
-    bootstrap();
+    bootstrap(cmd);
     return;
   }
   else if(cmd.is("c")){
@@ -274,7 +282,7 @@ func handle(cmd: CmdArgs*){
     //resolver test
     cmd.consume();
     let path = cmd.get();
-    let ctx = Context::new(get_out().str(), get_std_path().str());
+    let ctx = Context::new(get_out().str(), Option::new(get_std_path().str()));
     let resolver = ctx.create_resolver(&path);
     print("resolve done {}\n", path);
     ctx.drop();

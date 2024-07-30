@@ -51,6 +51,15 @@ impl<T> Option<T>{
     *self = Option::new(val);
   }
 
+  func unwrap_or(*self, def: T): T{
+    if(self.is_none()){
+      std::no_drop(self);
+      return def;
+    }
+    def.drop();
+    return self.unwrap();
+  }
+
   func dump(self){
     if(self.is_some()){
       print("Option::Some{%d}", self.unwrap());

@@ -47,6 +47,16 @@ func is_null<T>(ptr: T*): bool{
 func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }
 
+func getenv2(name: str): Option<str>{
+  let c_name = CStr::new(name);
+  let c_env = getenv(c_name.ptr());
+  c_name.drop();
+  if(is_null(c_env)){
+    return Option<str>::new();
+  }
+  return Option::new(str::from_raw(c_env));
+}
+
 extern{
   //func printf(fmt: i8*);
   func exit(code: i32);
@@ -74,6 +84,7 @@ extern{
   func putchar(chr: i32): i32;
 
   func stat(path: i8*, st: stat*): i32;
+  func getenv(name: i8*): i8*;
 }
 
 type dev_t = i64;

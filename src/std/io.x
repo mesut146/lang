@@ -232,6 +232,13 @@ impl Path{
     }
     return path.substr(0, i);
   }
+  func parent(path: str): str{
+    let i = path.lastIndexOf("/");
+    if(i == -1){
+      return "/";
+    }
+    return path.substr(0, i);
+  }
 }
 
 
@@ -309,5 +316,16 @@ impl CmdArgs{
       }
     }
     return Option<String>::new();
+  }
+  func get_val_or(self, arg: str, def: String): String{
+    let val = self.get_val(arg);
+    return val.unwrap_or(def);
+  }
+  func get_val2(self, arg: str): String{
+    let val = self.get_val(arg);
+    if(val.is_none()){
+      panic("expected arg and val: {}", arg);
+    }
+    return val.unwrap();
   }
 }

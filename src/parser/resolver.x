@@ -24,16 +24,15 @@ func verbose_stmt(): bool{
 struct Context{
   map: Map<String, Box<Resolver>>;
   prelude: List<String>;
-  std_path: String;
+  std_path: Option<String>;
   search_paths: List<String>;
   out_dir: String;
   verbose: bool;
   single_mode: bool;
   stack_trace: bool;
-  nostd: bool;
 }
 impl Context{
-  func new(out_dir: String, std_path: String): Context{
+  func new(out_dir: String, std_path: Option<String>): Context{
     let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map", "rt"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
@@ -47,8 +46,7 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        single_mode: true,
-       stack_trace: false,
-       nostd: false
+       stack_trace: false
     };
     return res;
   }
@@ -426,11 +424,11 @@ impl Resolver{
     let added = List<str>::new();
     added.add(self.unit.path.str());
     //add preludes
-    if(!self.ctx.nostd){
+    if(self.ctx.std_path.is_some()){
       for (let i = 0;i < self.ctx.prelude.len();++i) {
         let pre: String* = self.ctx.prelude.get_ptr(i);
         //skip self unit being prelude
-        let path = format("{}/std/{}.x", self.ctx.std_path, pre);
+        let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         if(!added.contains(&path.str())){
           let r = self.ctx.create_resolver(&path);
           res.add(r);

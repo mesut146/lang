@@ -12,6 +12,25 @@ struct str{
 }*/
 
 impl str{
+  func new(buf: [u8]): str{
+    let res = str{buf: buf};
+    res.check_all();
+    return res;
+  }
+  func new(buf: [i8]): str{
+    let ptr2 = buf.ptr() as u8*;
+    let buf2 = ptr2[0..buf.len()];
+    let res = str{buf: buf2};
+    res.check_all();
+    return res;
+  }
+  func from_raw(ptr: i8*): str{
+    if(is_null(ptr)){
+      panic("ptr is null");
+    }
+    let len = strlen(ptr, 255) as i32;
+    return str::new(ptr[0..len]);
+  }
 
     func print(self){
       printf("%.*s", self.len(), self.cptr());
@@ -38,12 +57,6 @@ impl str{
 
     func empty(self): bool{
       return self.len() == 0;
-    }
-
-    func new(buf: [u8]): str{
-        let res = str{buf: buf};
-        res.check_all();
-        return res;
     }
 
     func get(self, i: i32): u8{
