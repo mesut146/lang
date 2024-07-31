@@ -32,8 +32,11 @@ func get_std_path(): str{
 }
 
 static version_str = "1.0";
-static vendor_str = "lang";
 static compiler_name_str = "x";
+
+func get_vendor(): str{
+  return std::env("vendor").unwrap_or("lang");
+}
 
 func build_std(std_dir: str, out_dir: str): String{
   use_cache = true;
@@ -111,8 +114,9 @@ func bootstrap(cmd: CmdArgs*){
   }
   let out_dir = format("{}/{}_out", build, name);
   if(true) panic("");
-  //build_std(out_dir.str());
-  let args = format("{}/std.a libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", out_dir);
+  let std_dir = "".str();
+  let stdlib = build_std(std_dir, out_dir.str());
+  let args = format("{} libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", stdlib);
   let config = CompilerConfig::new(get_std_path().str());
   let vendor = Path::name(cmd.get_root());
   print("vendor={}\n", vendor);
@@ -134,6 +138,7 @@ func bootstrap(cmd: CmdArgs*){
   root.drop();
   bin.drop();
   build.drop();
+  stdlib.drop();
 }
 
 func own_test(id: i32, std_dir: str){
@@ -172,23 +177,12 @@ func handle_c(cmd: CmdArgs*){
   let nostd = cmd.consume_any("-nostd");
   let noroot = cmd.consume_any("-noroot");
   let flags = cmd.get_val_or("-flags", "".str());
+  let name = cmd.get_val("-name");
   let config = CompilerConfig::new();
+  config.set_vendor(get_vendor());
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);
-  }
-  let path: String = cmd.get();
-  let bin = bin_name(path.str());
-  config.set_file(path.str());
-  config.set_out(out_dir.clone());
-  if(link_static){
-    config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
-  }else if(link_shared){
-    config.set_link(LinkType::Dynamic{bin.str()});
-  }else if(compile_only){
-    config.set_link(LinkType::None);
-  }else{
-    config.set_link(LinkType::Binary{bin.str(), flags.str(), run});
   }
   if(cmd.has_any("-stdpath")){
     let std_path = cmd.get_val2("-stdpath");
@@ -202,13 +196,30 @@ func handle_c(cmd: CmdArgs*){
     }
     std_path.drop();
   }
+  let path: String = cmd.get();
+  let bin = bin_name(path.str());
+  config.set_file(path.str());
+  config.set_out(out_dir.clone());
+  if(link_static){
+    config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
+  }else if(link_shared){
+    config.set_link(LinkType::Dynamic{format("{}.a", get_filename(path.str()))});
+  }else if(compile_only){
+    config.set_link(LinkType::None);
+  }else{
+    if(name.is_some()){
+      config.set_link(LinkType::Binary{name.get().str(), flags.str(), run});
+    }else{
+      config.set_link(LinkType::Binary{bin.str(), flags.str(), run});
+    }
+  }
   if(is_dir(path.str())){
     if(!noroot){
       config.add_dir(path.str());
     }
-    Compiler::compile_dir(config);
+    let out = Compiler::compile_dir(config);
+    out.drop();
   }else{
-    //config.add_dir(root());
     let out = Compiler::compile_single(config);
     out.drop();
   }
@@ -216,6 +227,7 @@ func handle_c(cmd: CmdArgs*){
   bin.drop();
   flags.drop();
   out_dir.drop();
+  name.drop();
 }
 
 func handle_std(cmd: CmdArgs*){
@@ -237,12 +249,14 @@ func handle_std(cmd: CmdArgs*){
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
+  print("vendor env={}\n", getenv2("vendor"));
+  print("vendor={}\n", get_vendor());
   if(!cmd.has()){
     print("enter a command\n");
     return;
   }
   if(cmd.is("-v")){
-    print("{} version {} by {}\n", compiler_name_str, version_str, vendor_str);
+    print("{} version {} by {}\n", compiler_name_str, version_str, get_vendor());
     return;
   }
   if(cmd.is("own")){

@@ -802,7 +802,7 @@ impl Parser{
         self.pop();
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
-        return Expr::Par{.n,Box::new(e)};
+        return Expr::Par{.n, Box::new(e)};
     }else if(self.is(TokenType::LBRACKET)){
         self.pop();
         let arr = self.exprList(TokenType::SEMI);
@@ -815,10 +815,32 @@ impl Parser{
         self.consume(TokenType::RBRACKET);
         return Expr::Array{.n, arr, sz};
     }
-    else if(isName(self.peek()) || isPrim(self.peek())){
+    else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
+      let op = self.popv();
+      let e = self.prim2();
+      return Expr::Unary{.n,op, Box::new(e)};
+    }else if(isName(self.peek()) || isPrim(self.peek())){
       let nm = self.popv();
       if(self.is(TokenType::LPAREN)){
         return self.call(nm);
+      }else if(self.is(TokenType::COLON2)){
+        self.pop();
+        let ty = self.parse_type();
+        let ty_name = ty.name().clone();
+        if(self.is(TokenType::LPAREN)){
+          let ta = ty.as_simple().args.clone();
+          ty.drop();
+          return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
+        }else{
+          ty.drop();
+          return Expr::Type{.n, Type::new(Type::new(nm), ty_name)};
+        }
+      }else if(self.is(TokenType::BANG, TokenType::LPAREN)){
+        self.consume(TokenType::BANG);
+        self.consume(TokenType::LPAREN);
+        let args = self.exprList(TokenType::RPAREN);
+        self.consume(TokenType::RPAREN);
+        return Expr::MacroCall{.n, MacroCall{name: nm, args: args}};
       }else if(self.isTypeArg(self.pos) != -1){
         let g = self.generics();
         if(self.is(TokenType::LPAREN)){
@@ -835,28 +857,11 @@ impl Parser{
         }else {
           return Expr::Type{.n, Type::new(nm, g)};
         }
-      }else if(self.is(TokenType::COLON2)){
-        self.pop();
-        let ty = self.parse_type();
-        let ty_name = ty.name().clone();
-        if(self.is(TokenType::LPAREN)){
-          let ta = ty.as_simple().args.clone();
-          ty.drop();
-          return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
-        }else{
-          ty.drop();
-          return Expr::Type{.n, Type::new(Type::new(nm), ty_name)};
-        }
       }else{
-        return Expr::Name{.n,nm};
+        return Expr::Name{.n, nm};
       }
-    }else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
-      let op = self.popv();
-      let e = self.prim2();
-      return Expr::Unary{.n,op, Box::new(e)};
-    }else{
-      panic("invalid expr {}", self.peek());
     }
+    panic("invalid expr {}", self.peek());
   }
 
   func parse_obj(self, type_expr: Expr): Expr{

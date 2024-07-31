@@ -322,6 +322,32 @@ impl Compiler{
     }
   
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
+      if(Resolver::is_call(mc, "std", "env")){
+        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        return self.visit(info.unwrap_mc.get());
+
+        /*let arg = mc.args.get_ptr(0);
+        let arg_val = is_str_lit(arg).unwrap();
+        let opt = getenv2(arg_val.str());
+        let ptr = self.get_alloc(expr);
+        if(opt.is_some()){
+          let str = format("Option::new(\"{}\")", arg_val);
+          let tmp = parse_expr(str, self.unit(), expr.line);
+          //let res = self.visit(&tmp);
+          let rt = self.get_resolver().visit(&tmp);
+          let res = self.visit_call2(&tmp, tmp.get_call(), Option::new(ptr), rt);
+          tmp.drop();
+          return res;
+        }else{
+          let str = "Option<str>::new()".str();
+          let tmp = parse_expr(str, self.unit(), expr.line);
+          //let res = self.visit(&tmp);
+          let rt = self.get_resolver().visit(&tmp);
+          let res = self.visit_call2(&tmp, tmp.get_call(), Option::new(ptr), rt);
+          tmp.drop();
+          return res;
+        }*/
+      }
       if(Resolver::is_drop_call(mc)){
         //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get_ptr(0));

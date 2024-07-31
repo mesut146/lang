@@ -1671,7 +1671,35 @@ impl Resolver{
     }
   }
 
+  func handle_env(self, node: Expr*, mc: Call*){
+    let arg = mc.args.get_ptr(0);
+    let arg_val = is_str_lit(arg).unwrap();
+    let opt = getenv2(arg_val.str());
+    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    if(opt.is_some()){
+      let str = format("Option::new(\"{}\")", opt.get());
+      let tmp = parse_expr(str, &self.unit, node.line);
+      info.unwrap_mc = Option::new(tmp);
+    }else{
+      let str = "Option<str>::new()".str();
+      let tmp = parse_expr(str, &self.unit, node.line);
+      info.unwrap_mc = Option::new(tmp);
+    }
+    //print("{}=>{}\n", node, info.unwrap_mc.get());
+    let rt = self.visit(info.unwrap_mc.get());
+    rt.drop();
+    self.format_map.add(node.id, info);
+  }
+
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "env")){
+      let arg = call.args.get_ptr(0);
+      if(is_str_lit(arg).is_none()){
+        self.err(node, "std::env expects str literal");
+      }
+      self.handle_env(node, call);
+      return RType::new(Type::parse("Option<str>"));
+    }
     if(is_drop_call(call)){
       let argt = self.visit(call.args.get_ptr(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){

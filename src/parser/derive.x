@@ -280,7 +280,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         pos_info.drop();
         block.list.add(pos_info_st);
         //f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
+        let print_st = parse_stmt(format("{}.buf.println();", &var_name), &r.unit, line);
         block.list.add(print_st);
         //Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);

@@ -2,6 +2,8 @@ import std/map
 import std/libc
 import parser/copier
 import parser/printer
+import parser/parser
+import parser/token
 
 static print_drops = false;
 
@@ -496,6 +498,13 @@ impl Type{
     panic("Type::scope");
   }
 
+  func parse(input: str): Type{
+    let parser = Parser::from_string(input.str(), 0);
+    let res = parser.parse_type();
+    parser.drop();
+    return res;
+  }
+
 }
 impl Clone for Type{
   func clone(self): Type{
@@ -563,24 +572,11 @@ struct Block{
   list: List<Stmt>;
   line: i32;
   end_line: i32;
-  id: i32;
 }
-//static block_cnt = 0;
-//static blocks = List<i32>::new();
+
 impl Block{
   func new(line: i32, end_line: i32): Block{
-    //let id = blocks.len() as i32;
-    //print("Block::new {} {} id: {}\n", line, end_line, id);
-    //blocks.add(id);
-    return Block{list: List<Stmt>::new(), line: line, end_line: end_line, id: 0};
-  }
-}
-impl Drop for Block{
-  func drop(*self){
-    //print("Block::drop {} {} id: {}\n", self.line, self.end_line, self.id);
-    //let idx = blocks.indexOf(&self.id);
-    //blocks.remove(idx);
-    self.list.drop();
+    return Block{list: List<Stmt>::new(), line: line, end_line: end_line};
   }
 }
 
@@ -634,6 +630,7 @@ enum Expr: Node{
   Lit(val: Literal),
   Name(val: String),
   Call(mc: Call),
+  MacroCall(mc: MacroCall),
   Par(e: Box<Expr>),
   Type(val: Type),
   Unary(op: String, e: Box<Expr>),
@@ -646,11 +643,21 @@ enum Expr: Node{
   ArrAccess(val: ArrAccess),
   MatchExpr(val: Box<Match>)
 }
-
 impl Expr{
   func print(self): String{
     return Fmt::str(self);
   }
+  func get_call(self): Call*{
+    if let Expr::Call(cx*) = (self){
+      return cx;
+    }
+    panic("get_call {}", self);
+  }
+}
+
+struct MacroCall{
+  name: String;
+  args: List<Expr>;
 }
 
 struct Call{

@@ -351,9 +351,6 @@ impl Compiler{
         }else if(rt.type.is_str()){
           let val = is_str_lit(&gl.expr).unwrap().str();
           if(bootstrap){
-            if(gl.name.eq("vendor_str")){
-              val = config.vendor.str();
-            }
             else if(gl.name.eq("compiler_name_str")){
               if let LinkType::Binary(name, args*, run)=(&config.lt){
                 val = name;
@@ -762,7 +759,7 @@ impl Compiler{
 enum LinkType{
   Binary(name: str, args: str, run: bool),
   Static(name: String),
-  Dynamic(name: str),
+  Dynamic(name: String),
   None
 }
 
