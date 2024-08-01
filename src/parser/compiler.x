@@ -350,13 +350,6 @@ impl Compiler{
           rhs_str.drop();
         }else if(rt.type.is_str()){
           let val = is_str_lit(&gl.expr).unwrap().str();
-          if(bootstrap){
-            else if(gl.name.eq("compiler_name_str")){
-              if let LinkType::Binary(name, args*, run)=(&config.lt){
-                val = name;
-              }
-            }
-          }
           let slice_ty = self.protos.get().std("slice");
           let cons_elems = vector_Constant_new();
           let cons_elems_slice = vector_Constant_new();

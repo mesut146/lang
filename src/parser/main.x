@@ -31,11 +31,14 @@ func get_std_path(): str{
   return "../tests";
 }
 
-static version_str = "1.0";
-static compiler_name_str = "x";
-
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("lang");
+}
+func get_compiler_name(): str{
+  return std::env("compiler_name").unwrap_or("x");
+}
+func get_version(): str{
+  return std::env("version").unwrap_or("1.1");
 }
 
 func build_std(std_dir: str, out_dir: str): String{
@@ -107,24 +110,23 @@ func bootstrap(cmd: CmdArgs*){
   cmd.consume();
   let root = cmd.get_val2("-root");
   let build = format("{}/build", root);
-  let run = false;
+  let src_dir = format("{}/src", root);
+  let std_dir = format("{}/src/std", root);
   let name = "x2";
   if(cmd.has()){
     name = cmd.peek().str();
   }
-  let out_dir = format("{}/{}_out", build, name);
-  if(true) panic("");
-  let std_dir = "".str();
-  let stdlib = build_std(std_dir, out_dir.str());
-  let args = format("{} libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", stdlib);
-  let config = CompilerConfig::new(get_std_path().str());
+  let out_dir = format("{}/{}_out", &build, name);
+  let stdlib = build_std(std_dir.str(), out_dir.str());
+  let args = format("{} {}/cpp_bridge/build/libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", &stdlib, &root);
+  let config = CompilerConfig::new(src_dir.clone());
   let vendor = Path::name(cmd.get_root());
   print("vendor={}\n", vendor);
   config
-    .set_file("../tests/parser".str())
+    .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
-    .add_dir(get_std_path())
-    .set_link(LinkType::Binary{name, args.str(), run})
+    .add_dir(src_dir.clone())
+    .set_link(LinkType::Binary{name, args.str(), false})
     .set_vendor(vendor);
   let bin = Compiler::compile_dir(config);
   let bin2 = format("./{}", name);
@@ -139,6 +141,8 @@ func bootstrap(cmd: CmdArgs*){
   bin.drop();
   build.drop();
   stdlib.drop();
+  src_dir.drop();
+  std_dir.drop();
 }
 
 func own_test(id: i32, std_dir: str){
@@ -249,14 +253,13 @@ func handle_std(cmd: CmdArgs*){
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
-  print("vendor env={}\n", getenv2("vendor"));
-  print("vendor={}\n", get_vendor());
+  print("vendor={} name={} version={}\n", get_vendor(), get_compiler_name(), get_version());
   if(!cmd.has()){
     print("enter a command\n");
     return;
   }
   if(cmd.is("-v")){
-    print("{} version {} by {}\n", compiler_name_str, version_str, get_vendor());
+    print("{} version {} by {}\n", get_compiler_name(), get_version(), get_vendor());
     return;
   }
   if(cmd.is("own")){
