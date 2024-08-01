@@ -135,6 +135,14 @@ impl AllocHelper{
 
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.c.get_resolver();
+    if(Resolver::is_call(call, "std", "print_type")){
+      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let rt = resolver.visit(node);
+      self.visit(info.unwrap_mc.get());
+      let res = Option::new(self.alloc_ty(&rt.type, node));
+      rt.drop();
+      return res;
+    }
     if(Resolver::is_call(call, "std", "env")){
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
       let rt = resolver.visit(node);

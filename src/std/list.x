@@ -175,6 +175,11 @@ impl<T> List<T>{
   func iter(self): ListIter<T>{
     return ListIter<T>{list: self, pos: 0};
   }
+
+  func into_iter(*self): ListIntoIter<T>{
+    return ListIntoIter<T>{list: self, pos: 0};
+  }
+
   func last(self): T*{
     return self.last(0);
   }
@@ -217,26 +222,6 @@ impl<T> Debug for List<T>{
   }
 }
 
-struct ListIter<T>{
-  list: List<T>*;
-  pos: i32;
-}
-
-// impl<T> Iterator<T> for ListIter<T>{
-//   func has(self): bool{
-//     return self.pos < self.list.len();
-//   }
-
-//   func next(self): Option<T>{
-//     if(self.has()){
-//       let p = self.pos;
-//       self.pos+=1;
-//       return Option<T>::Some{self.list.get(p)};
-//     }
-//     return Option<T>::None;
-//   }
-// }
-
 impl<T> Clone for List<T>{
   func clone(self): List<T>{
     let res = List<T>::new(self.count);
@@ -259,5 +244,47 @@ impl<T> Drop for List<T>{
       let ep = self.get_internal(i);
       Drop::drop(ep);
     }
+  }
+}
+
+//iters
+struct ListIter<T>{
+  list: List<T>*;
+  pos: i32;
+}
+
+impl<T> Iterator<T*> for ListIter<T>{
+
+  func next(self): Option<T*>{
+    if(self.pos < self.list.len()){
+      let idx = self.pos;
+      self.pos += 1;
+      return Option::new(self.list.get_ptr(idx));
+    }
+    return Option<T>::new();
+  }
+
+}
+
+struct ListIntoIter<T>{
+  list: List<T>;
+  pos: i32;
+}
+
+impl<T> Iterator<T> for ListIntoIter<T>{
+
+  func next(self): Option<T>{
+    if(self.pos < self.list.len()){
+      let idx = self.pos;
+      self.pos += 1;
+      return Option::new(ptr::deref(self.list.get_ptr(idx)));
+    }
+    return Option<T>::new();
+  }
+
+}
+impl<T> Drop for ListIntoIter<T>{
+  func drop(*self){
+    free(self.list.ptr as i8*);
   }
 }

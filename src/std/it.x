@@ -1,6 +1,5 @@
-trait Iterator<T>{
-  func next(self): Option<T>;
-  func has(self): bool;
+trait Iterator<Item>{
+  func next(self): Option<Item>;
 }
 
 trait IntoIter<S>{

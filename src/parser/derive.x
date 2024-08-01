@@ -132,13 +132,12 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new(line, line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(\"{}{\");", &vt), unit, line));
-            //todo
-            //then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
+            then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
+            then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 if(j > 0){
-                    then.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
+                    then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
                 }
                 //f.print("<fd.name>: ")
                 then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
@@ -167,7 +166,8 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
         }
     }else{
         //f.print(<decl.type.print()>)
-        body.list.add(parse_stmt(format("f.print(\"{}{\");", decl.type), unit, line));
+        body.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &decl.type), unit, line));
+        body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
             let fd = fields.get_ptr(i);

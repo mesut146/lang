@@ -1693,6 +1693,15 @@ impl Resolver{
     rt.drop();
     self.format_map.add(node.id, info);
   }
+  func handle_type_print(self, node: Expr*, mc: Call*){
+    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    let ta = mc.type_args.get_ptr(0);
+    let tmp = parse_expr(format("\"{}\"", ta), &self.unit, node.line);
+    info.unwrap_mc = Option::new(tmp);
+    let rt = self.visit(info.unwrap_mc.get());
+    rt.drop();
+    self.format_map.add(node.id, info);
+  }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
     if(Resolver::is_call(call, "std", "print_type")){
@@ -1701,6 +1710,7 @@ impl Resolver{
       let ta = call.type_args.get_ptr(0);
       let tmp = self.visit_type(ta);
       tmp.drop();
+      self.handle_type_print(node, call);
       return RType::new("str");
     }
     if(Resolver::is_call(call, "std", "env")){
