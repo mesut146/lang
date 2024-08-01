@@ -10,26 +10,11 @@ import parser/bridge
 import parser/utils
 import parser/ownership
 import parser/cache
+import parser/tests
 import std/map
 import std/io
 import std/libc
 import std/stack
-
-func root(): str{
-  return "../tests";
-}
-func get_out(): str{
-  return "./bt_out";
-}
-func test_out(): str{
-  return "./test_out";
-}
-func get_stdlib(): str{
-  return "./bt_out/std.a";
-}
-func get_std_path(): str{
-  return "../tests";
-}
 
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("lang");
@@ -55,55 +40,6 @@ func build_std(std_dir: str, out_dir: str): String{
   return lib;
 }
 
-func compile_dir2(dir: str, args: str){
-  compile_dir2(dir, args, Option<str>::new());
-}
-
-func compile_dir2(dir: str, args: str, exc: Option<str>){
-  let list: List<String> = list(dir);
-  list.sort();
-  print("compile_dir '{}' -> {} elems\n", dir, list.len());
-  for(let i = 0;i < list.len();++i){
-    let name: String* = list.get_ptr(i);
-    if(!name.str().ends_with(".x")) continue;
-    if(exc.is_some() && name.eq(*exc.get())){
-      continue;
-    }
-    let file: String = dir.str();
-    file.append("/");
-    file.append(name);
-    if(is_dir(file.str())) continue;
-    let config = CompilerConfig::new(get_std_path().str());
-    config
-      .set_file(file)
-      .set_out(get_out())
-      .add_dir(root())
-      .set_link(LinkType::Binary{"a.out", args, true});
-    let bin = Compiler::compile_single(config);
-    bin.drop();
-  }
-  list.drop();
-}
-
-func compiler_test(std_test: bool){
-  print("compiler_test\n");
-  if(std_test){
-    //build_std(test_out());
-    compile_dir2("../tests/std_test", format("{}/std.a", test_out()).str());
-    panic("");
-  }else{
-    let config = CompilerConfig::new(get_std_path().str());
-    config
-      .set_file("../tests/std/rt.x")
-      .set_out(test_out())
-      .add_dir(root())
-      .set_link(LinkType::Static{"rt.a".str()});
-    let lib = Compiler::compile_single(config);
-    compile_dir2("../tests/normal", lib.str());
-    lib.drop();
-  }
-}
-
 func bootstrap(cmd: CmdArgs*){
   print("test::bootstrap\n");
   bootstrap = true;
@@ -121,7 +57,6 @@ func bootstrap(cmd: CmdArgs*){
   let args = format("{} {}/cpp_bridge/build/libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", &stdlib, &root);
   let config = CompilerConfig::new(src_dir.clone());
   let vendor = Path::name(cmd.get_root());
-  print("vendor={}\n", vendor);
   config
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
@@ -143,31 +78,6 @@ func bootstrap(cmd: CmdArgs*){
   stdlib.drop();
   src_dir.drop();
   std_dir.drop();
-}
-
-func own_test(id: i32, std_dir: str){
-  print("test::own_test\n");
-  drop_enabled = true;
-  let config = CompilerConfig::new(get_std_path().str());
-  config
-    .set_file("../tests/own/common.x")
-    .set_out(test_out())
-    .add_dir(root())
-    .set_link(LinkType::Static{"common.a".str()});
-  let bin = Compiler::compile_single(config);
-  bin.drop();
-
-  let lib = build_std(std_dir, test_out());
-  lib.drop();
-
-  let args = format("{}/common.a {}/std.a", test_out(), test_out());
-  if(id == 1){
-    compile_dir2("../tests/own", args.str(), Option::new("common.x"));
-  }else{
-    compile_dir2("../tests/own_if", args.str(), Option::new("common.x"));
-  }
-  args.drop();
-  drop_enabled = false;
 }
 
 func handle_c(cmd: CmdArgs*){
@@ -262,22 +172,10 @@ func handle(cmd: CmdArgs*){
     print("{} version {} by {}\n", get_compiler_name(), get_version(), get_vendor());
     return;
   }
-  if(cmd.is("own")){
-    //own_test(1);
+  if(handle_tests(cmd)){
     return;
   }
-  if(cmd.is("own2")){
-    //own_test(2);
-    return;
-  }
-  if(cmd.is("test")){
-    compiler_test(false);
-    return;
-  }
-  else if(cmd.is("test2")){
-    compiler_test(true);
-    return;
-  }else if(cmd.is("std")){
+  if(cmd.is("std")){
     handle_std(cmd);
     return;
   }else if(cmd.is("bt")){
@@ -286,24 +184,6 @@ func handle(cmd: CmdArgs*){
   }
   else if(cmd.is("c")){
     handle_c(cmd);
-    return;
-  }else if(cmd.is("p")){
-    //parse test
-    cmd.consume();
-    let path = cmd.get();
-    let parser = Parser::from_path(path);
-    print("parse done {}\n", parser.path);
-    parser.drop();
-    return;
-  }else if(cmd.is("r")){
-    //resolver test
-    cmd.consume();
-    let path = cmd.get();
-    let ctx = Context::new(get_out().str(), Option::new(get_std_path().str()));
-    let resolver = ctx.create_resolver(&path);
-    print("resolve done {}\n", path);
-    ctx.drop();
-    path.drop();
     return;
   }else{
     panic("invalid cmd: {}", cmd.args);

@@ -430,6 +430,9 @@ impl Resolver{
         //skip self unit being prelude
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         if(!added.contains(&path.str())){
+          if(!is_file(path.str())){
+            panic("can't resolve import: import std/{}", pre);
+          }
           let r = self.ctx.create_resolver(&path);
           res.add(r);
           added.add(r.unit.path.str());
@@ -1692,6 +1695,14 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "print_type")){
+      assert(call.args.empty());
+      assert(call.type_args.len() == 1);
+      let ta = call.type_args.get_ptr(0);
+      let tmp = self.visit_type(ta);
+      tmp.drop();
+      return RType::new("str");
+    }
     if(Resolver::is_call(call, "std", "env")){
       let arg = call.args.get_ptr(0);
       if(is_str_lit(arg).is_none()){

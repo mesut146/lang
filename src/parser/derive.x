@@ -128,12 +128,13 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
             let ev = variants.get_ptr(i);
-            //let vt = format("{}::{}", decl.type, ev.name);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
             let then = Block::new(line, line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(\"{}{\");", vt), unit, line));
+            then.list.add(parse_stmt(format("f.print(\"{}{\");", &vt), unit, line));
+            //todo
+            //then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 if(j > 0){
@@ -151,7 +152,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                     then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
                 }
             }
-            then.list.add(parse_stmt(format("f.print(\"}\");", vt), unit, line));
+            then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
 
             let self_id = unit.node(line);
             let block_id = unit.node(line);

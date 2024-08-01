@@ -281,15 +281,15 @@ impl Compiler{
     let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
-    if(self.ctx.verbose){
+    /*if(self.ctx.verbose){
       print("writing {}\n", llvm_file_cstr);
-    }
+    }*/
     llvm_file_cstr.drop();
     let outFile_cstr = CStr::new(outFile.clone());
     emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
-    if(self.ctx.verbose){
+    /*if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
-    }
+    }*/
     Drop::drop(outFile_cstr);
     self.cleanup();
     cache.update(path);
