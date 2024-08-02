@@ -1,3 +1,5 @@
+import std/it
+
 func test_normal(){
     let list = List<i32>::new();
     list.add(11);
@@ -18,8 +20,17 @@ func test_into_iter(){
     }
 }
 
+func slice_iter(){
+    let arr = [1111, 2222, 3333];
+    let slice = arr[0..3];
+    for z in &slice{
+        print("z={}\n", z);
+    }
+}
+
 func main(){
     test_normal();
     test_into_iter();
+    slice_iter();
     print("for_each done\n");
 }
