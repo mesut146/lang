@@ -3,12 +3,16 @@ func test_iter(){
     list.add(11);
     list.add(22);
     let it = list.iter();
+    let arr = [11, 22];
+    let i = 0;
     while(true){
         let cur: Option<i32*> = it.next();
         if(cur.is_none()) break;
-        print("cur={}\n", cur.unwrap());
+        assert_eq(*cur.unwrap(), arr[i]);
+        i += 1;
     }
-    print("list={}\n", &list);
+    assert_eq(list.len() as i32, 2);
+    assert_eq(i, 2);
     list.drop();
 }
 

@@ -23,7 +23,7 @@ func get_compiler_name(): str{
   return std::env("compiler_name").unwrap_or("x");
 }
 func get_version(): str{
-  return std::env("version").unwrap_or("1.1");
+  return std::env("version").unwrap_or("1.2");
 }
 
 func build_std(std_dir: str, out_dir: str): String{
@@ -54,7 +54,7 @@ func bootstrap(cmd: CmdArgs*){
   }
   let out_dir = format("{}/{}_out", &build, name);
   let stdlib = build_std(std_dir.str(), out_dir.str());
-  let args = format("{} {}/cpp_bridge/build/libbridge.a /usr/lib/llvm-16/lib/libLLVM.so -lstdc++", &stdlib, &root);
+  let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
   let config = CompilerConfig::new(src_dir.clone());
   let vendor = Path::name(cmd.get_root());
   config

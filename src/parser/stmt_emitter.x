@@ -46,6 +46,9 @@ impl Compiler{
       else if let Stmt::For(fs*)=(node){
         self.visit_for(node, fs);
       }
+      else if let Stmt::ForEach(fe*)=(node){
+        self.visit_for_each(node, fe);
+      }
       else if let Stmt::While(cnd*, body*)=(node){
         self.visit_while(node, cnd, body.get());
       }
@@ -254,6 +257,12 @@ impl Compiler{
         self.add_bb(next);
       }
       exit_then.drop();
+    }
+
+    func visit_for_each(self, stmt: Stmt*, node: ForEach*){
+      let info = self.get_resolver().format_map.get_ptr(&stmt.id).unwrap();
+      //todo own doesnt move rhs
+      self.visit_block(&info.block);
     }
   
     func visit_for(self, stmt: Stmt*, node: ForStmt*){

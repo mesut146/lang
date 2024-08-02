@@ -27,6 +27,12 @@ func find_root(bin_path: str): String*{
         //root = Option::new(res);
         root.set(res);
         return root.get();
+    }else if(Path::parent(dir).ends_with("build")){
+        let res = Path::parent(Path::parent(dir)).str();
+        full.drop();
+        //root = Option::new(res);
+        root.set(res);
+        return root.get();
     }
     full.drop();
     panic("can't find root");
@@ -123,7 +129,7 @@ func own_test(id: i32, std_dir: str){
     let out = get_out();
     config
       .set_file("../tests/own/common.x")
-      .set_out(get_out())
+      .set_out(out.clone())
       .add_dir(root())
       .set_link(LinkType::Static{"common.a".str()});
     let bin = Compiler::compile_single(config);
@@ -132,7 +138,7 @@ func own_test(id: i32, std_dir: str){
     let lib = build_std(std_dir, out.str());
     lib.drop();
   
-    let args = format("{}/common.a {}/std.a", get_out(), get_out());
+    let args = format("{}/common.a {}/std.a", &out, &out);
     if(id == 1){
       compile_dir2("../tests/own", args.str(), Option::new("common.x"));
     }else{

@@ -542,6 +542,11 @@ struct ForStmt{
   body: Box<Stmt>;
 }
 
+struct ForEach{
+  var_name: String;
+  rhs: Expr;
+  body: Box<Stmt>;
+}
 
 struct IfStmt{
   cond: Expr;
@@ -558,6 +563,7 @@ enum Stmt: Node{
     If(e: IfStmt),
     IfLet(e: IfLet),
     For(e: ForStmt),
+    ForEach(e: ForEach),
     Continue,
     Break
 }

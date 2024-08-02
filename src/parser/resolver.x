@@ -327,7 +327,7 @@ impl Scope{
         return Option::new(vh);
       }
     }
-    return Option<VarHolder*>::None;
+    return Option<VarHolder*>::new();
   }
 }
 
@@ -378,8 +378,8 @@ impl Resolver{
       is_init: false,
       typeMap: Map<String, RType>::new(),
       cache: Map<i32, RType>::new(),
-      curMethod: Option<Method*>::None,
-      curImpl: Option<Impl*>::None,
+      curMethod: Option<Method*>::new(),
+      curImpl: Option<Impl*>::new(),
       scopes: List<Scope>::new(),
       ctx: ctx,
       used_methods: List<Method*>::new(),
@@ -937,7 +937,7 @@ impl Resolver{
         self.visit_method(m);
       }
     }
-    self.curImpl = Option<Impl*>::None;
+    self.curImpl = Option<Impl*>::new();
   }
 
   func visit_method(self, node: Method*){
@@ -977,7 +977,7 @@ impl Resolver{
       exit.drop();
     }
     self.dropScope();
-    self.curMethod = Option<Method*>::None;
+    self.curMethod = Option<Method*>::new();
   }
 
   func unwrap_mc(expr: Expr*): Call*{
@@ -1225,7 +1225,6 @@ impl Resolver{
     return map;
   }
 
-
   func find_imports(self, type: Simple*, str: String*): Option<RType>{
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
@@ -1242,34 +1241,9 @@ impl Resolver{
         arr.drop();
         return Option::new(res);
       }
-      //try full type
-      /*let cached = resolver.typeMap.get_ptr(str);
-      if (cached.is_some()) {
-          let res = cached.unwrap().clone();
-          res.desc.path = self.unit.path.clone();
-          self.addType(str, res.clone());
-          if (res.is_decl()) {
-            let decl = self.get_decl(&res).unwrap();
-            if (!decl.is_generic) {
-                self.add_used_decl(decl);
-            }
-          }
-          //todo trait
-          return Option::new(res);
-      }
-      if (!type.args.empty()) {
-          //generic type
-          //try root type
-          let cached2 = resolver.typeMap.get_ptr(&type.name);
-          if (cached2.is_some() && cached2.unwrap().is_decl()){
-            let res = cached2.unwrap().clone();
-            res.desc.path = self.unit.path.clone();
-            return Option::new(res);
-          }
-      }*/
     }
     arr.drop();
-    return Option<RType>::None;
+    return Option<RType>::new();
   }
   
   func findVariant(decl: Decl*, name: String*): i32{
@@ -2222,8 +2196,41 @@ impl Resolver{
         self.err(node, "break in outside of loop");
       }
       return;
+    }else if let Stmt::ForEach(fe*) = (node){
+      self.visit_for_each(node, fe);
+      return;
     }
     panic("visit stmt {}", node);
+  }
+
+  func visit_for_each(self, node: Stmt*, fe: ForEach*){
+    let rt = self.visit(&fe.rhs);
+    let call_name = "iter";
+    if(!rt.type.is_pointer()){
+      call_name = "into_iter";
+    }
+    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    let body = &info.block;
+    let it_name = format("it_{}", node.id);
+    let it_decl = parse_stmt(format("let {} = ({}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);
+    body.list.add(it_decl);
+    let whl = "while(true){\n".str();
+    let opt_name = format("{}_{}", &fe.var_name, node.id);
+    whl.append(format("let {} = {}.next();\n", &opt_name, &it_name));
+    whl.append(format("if({}.is_none()) break;\n", &opt_name));
+    whl.append(format("let {} = {}.unwrap();\n", &fe.var_name, &opt_name));
+    let body_str = fe.body.get().print();
+    whl.append(body_str);
+    whl.append("}\n");
+    let stmt = parse_stmt(whl, &self.unit, node.line);
+    body.list.add(stmt);
+    body.list.add(parse_stmt(format("{}.drop();", &it_name), &self.unit, node.line));
+    self.visit(body);
+
+    self.format_map.add(node.id, info);
+    rt.drop();
+    it_name.drop();
+    opt_name.drop();
   }
   
   func visit_while(self, node: Stmt*, cond: Expr*, body: Stmt*){
@@ -2309,6 +2316,15 @@ impl Resolver{
 
   func visit(self, node: Block*){
     for(let i = 0;i < node.list.len();++i){
+      if(i > 0){
+        let prev = Exit::get_exit_type(node.list.get_ptr(i - 1));
+        if(prev.is_jump()){
+          prev.drop();
+          self.err(node.list.get_ptr(i), "unreachable code");
+        }else{
+          prev.drop();
+        }
+      }
       self.visit(node.list.get_ptr(i));
     }
   }

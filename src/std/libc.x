@@ -39,6 +39,9 @@ func strlen(arr: i8*, max: i32): i32{
   }
   panic("no eof");
 }
+func strlen(ptr: i8*): i32{
+  return strlen(ptr, 100000);
+}
 
 func is_null<T>(ptr: T*): bool{
   return ptr as u64 == 0;

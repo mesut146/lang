@@ -68,6 +68,10 @@ impl AllocHelper{
       }
       self.visit(fs.body.get());
       return;
+    }if let Stmt::ForEach(fe*)=(node){
+      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      self.visit(&info.block);
+      return;
     }
     if let Stmt::While(e*, b*)=(node){
       self.visit(e);

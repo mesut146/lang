@@ -100,6 +100,12 @@ impl Parser{
     panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
   }
 
+  func consume_ident(self, val: str): Token*{
+    let tok = self.consume(TokenType::IDENT);
+    if(tok.value.eq(val)) return tok;
+    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, tok.line, tok, val);
+  }
+
   func err(self, msg: str){
     let line = self.line();
     print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
@@ -575,22 +581,7 @@ impl Parser{
         }
         return Stmt::If{.id, IfStmt{e, b, Ptr<Stmt>::new()}};
       }else if(self.is(TokenType::FOR)){
-        self.pop();
-        self.consume(TokenType::LPAREN);
-        let v = Option<VarExpr>::None;
-        if(!self.is(TokenType::SEMI)){
-          v = Option::new(self.var());
-        }
-        self.consume(TokenType::SEMI);
-        let e = Option<Expr>::None;
-        if(!self.is(TokenType::SEMI)){
-          e = Option::new(self.parse_expr());
-        }
-        self.consume(TokenType::SEMI);
-        let u = self.exprList(TokenType::RPAREN);
-        self.consume(TokenType::RPAREN);
-        let b = self.parse_stmt();
-        return Stmt::For{.id, ForStmt{v, e, u, Box::new(b)}};
+        return self.parse_for(id);
       }else if(self.is(TokenType::CONTINUE)){
         self.pop();
         self.consume(TokenType::SEMI);
@@ -604,6 +595,35 @@ impl Parser{
         self.consume(TokenType::SEMI);
         return Stmt::Expr{.id, e};
       }
+    }
+    func parse_for(self, id: Node): Stmt{
+      if(!self.peek(1).is(TokenType::LPAREN)){
+        return self.parse_for_each(id);
+      }
+      self.pop();
+      self.consume(TokenType::LPAREN);
+      let v = Option<VarExpr>::None;
+      if(!self.is(TokenType::SEMI)){
+        v = Option::new(self.var());
+      }
+      self.consume(TokenType::SEMI);
+      let e = Option<Expr>::None;
+      if(!self.is(TokenType::SEMI)){
+        e = Option::new(self.parse_expr());
+      }
+      self.consume(TokenType::SEMI);
+      let u = self.exprList(TokenType::RPAREN);
+      self.consume(TokenType::RPAREN);
+      let b = self.parse_stmt();
+      return Stmt::For{.id, ForStmt{v, e, u, Box::new(b)}};
+    }
+    func parse_for_each(self, id: Node): Stmt{
+      self.consume(TokenType::FOR);
+      let name = self.popv();
+      self.consume_ident("in");
+      let rhs = self.prim2(false);
+      let b = self.parse_stmt();
+      return Stmt::ForEach{.id, ForEach{name, rhs, Box::new(b)}};
     }
     
     func parse_frag(self): Fragment{
@@ -633,7 +653,7 @@ impl Parser{
     if (!self.get(pos).is(TokenType::LT)) {
         return -1;
     }
-    pos+=1;
+    pos += 1;
     let open = 1;
     while (pos < self.tokens.len()) {
       if (self.get(pos).is(TokenType::LT)) {
@@ -649,7 +669,7 @@ impl Parser{
         let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2];
         let tok = self.get(pos);
         let any = false;
-        for(let i=0;i<7;++i){
+        for(let i = 0;i < valid_tokens.len();++i){
           if (tok.is(valid_tokens[i])) {
             any = true;
             break;
@@ -721,27 +741,6 @@ impl Parser{
     panic("expected name got {}", self.peek());
   }
   
-  /*func isObj(self): bool{
-    if (!self.is(TokenType::IDENT)) {
-        return false;
-    }
-    let pos = self.pos + 1;
-    let ta = self.isTypeArg(pos);
-    if (ta != -1) {
-        pos = ta;
-    }
-    if (self.get(pos).is(TokenType::COLON2)) {
-        pos+=1;
-        if (!self.get(pos).is(TokenType::IDENT)) {
-            return false;
-        }
-        pos+=1;
-    }
-    if (self.get(pos).is(TokenType::LBRACE)) {
-        return true;
-    }
-    return false;
-  }*/
   
   func entry(self): Entry{
     if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
@@ -762,7 +761,7 @@ impl Parser{
   func parse_match(self): Expr{
     self.consume(TokenType::MATCH);
     let id = self.node();
-    let expr = self.prim();
+    let expr = self.prim(false);
     let res = Match{expr, List<MatchCase>::new()};
     self.consume(TokenType::LBRACE);
     while(self.has()){
@@ -791,7 +790,7 @@ impl Parser{
     return Expr::MatchExpr{.id, Box::new(res)};
   }
 
-  func prim(self): Expr{
+  func prim(self, allow_obj: bool): Expr{
     let n = self.node();
     if(self.is(TokenType::MATCH)){
       return self.parse_match();
@@ -817,8 +816,8 @@ impl Parser{
     }
     else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
       let op = self.popv();
-      let e = self.prim2();
-      return Expr::Unary{.n,op, Box::new(e)};
+      let e = self.prim2(allow_obj);
+      return Expr::Unary{.n, op, Box::new(e)};
     }else if(isName(self.peek()) || isPrim(self.peek())){
       let nm = self.popv();
       if(self.is(TokenType::LPAREN)){
@@ -873,7 +872,9 @@ impl Parser{
       ty = Option::new(t);
     }
     else{
-      panic("was expecting name got {}", &type_expr);
+      print("was expecting name got {}", &type_expr);
+      type_expr.drop();
+      panic("");
     }
     let args = List<Entry>::new();
     self.consume(TokenType::LBRACE);
@@ -890,9 +891,9 @@ impl Parser{
   }
   
   //Type "{" entries* "}" | "." name ( args ) | "." name | "[" expr (".." expr)? "]"
-  func prim2(self): Expr{
-    let res: Expr = self.prim();
-    if(self.is(TokenType::LBRACE)){
+  func prim2(self, allow_obj: bool): Expr{
+    let res: Expr = self.prim(allow_obj);
+    if(allow_obj && self.is(TokenType::LBRACE)){
       res = self.parse_obj(res);
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
@@ -922,16 +923,16 @@ impl Parser{
   }
   
   func as_is(self): Expr{
-    let e = self.prim2();
+    let e = self.prim2(true);
     let n = self.node();
     if(self.is(TokenType::AS)){
       self.pop();
       let t = self.parse_type();
-      e = Expr::As{.n,Box::new(e), t};
+      e = Expr::As{.n, Box::new(e), t};
     }
     if(self.is(TokenType::IS)){
       self.pop();
-      let rhs = self.prim2();
+      let rhs = self.prim2(true);
       e = Expr::Is{.n,Box::new(e), Box::new(rhs)};
     }
     return e;

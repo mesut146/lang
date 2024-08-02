@@ -180,7 +180,7 @@ func resolve(path: str): String{
   if(ptr as u64 == 0){
     panic("resolving path is null '{}'\n", path);
   }
-  let len = strlen(buf[0..256]);
+  let len = strlen(buf.ptr(), buf.len() as i32);
   let slice = buf[0..len];
   return String::new(slice);
 }
@@ -253,7 +253,7 @@ impl CmdArgs{
     if(ptr as u64 == 0){
       panic("ptr is null");
     }
-    let len = strlen(ptr as i8*, 1000);
+    let len = strlen(ptr as i8*);
     return str::new(ptr[0..len]);
   }
   func new(argc: i32, args: i8**): CmdArgs{

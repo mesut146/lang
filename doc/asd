@@ -1,7 +1,2 @@
-clear;valgrind --leak-check=full --num-callers=30 ./x c -out ./xx -norun ../tests/parser/token.x
-
-clear;valgrind --leak-check=full --num-callers=30 ./x c -out ./xx -norun ../tests/normal/alloc.x 
-
-clear;valgrind --leak-check=full --num-callers=30 ./x2 r ../tests/normal/alloc.x 
-
---vgdb-error=0
+./x bt -root .. x2
+../bin/x-x64 bt -root .. x2

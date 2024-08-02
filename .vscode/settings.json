@@ -79,5 +79,6 @@
         "set": "cpp",
         "regex": "cpp"
     },
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json"
+    "sonarlint.pathToCompileCommands": "${workspaceFolder}/build/compile_commands.json",
+    "cmake.ignoreCMakeListsMissing": true
 }

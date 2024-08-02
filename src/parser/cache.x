@@ -60,6 +60,8 @@ impl Cache{
         if(!is_file(out)){
             return true;
         }
+        let resolved = resolve(file);
+        file = resolved.str();
         let file_s = file.str();
         let old = self.map.get_ptr(&file_s);
         file_s.drop();
@@ -68,16 +70,21 @@ impl Cache{
             let cur_time = self.get_time(file);
             let res = !old_time.eq(cur_time.str());
             cur_time.drop();
+            resolved.drop();
             return res;
         }
+        resolved.drop();
         return true;
     }
     func update(self, file: str){
         if(!use_cache) return;
-        self.map.add(file.str(), self.get_time(file));
+        let resolved = resolve(file);
+        let time = self.get_time(resolved.str());
+        self.map.add(resolved, time);
     }
     func get_time(self, file: str): String{
-        let cs = CStr::new(file);
+        let resolved = resolve(file);
+        let cs = CStr::new(resolved);
         let time = get_last_write_time(cs.ptr());
         cs.drop();
         return time.str();

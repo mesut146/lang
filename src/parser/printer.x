@@ -261,7 +261,7 @@ impl Debug for Stmt{
      f.print("while(");
      e.debug(f);
      f.print(")");
-     b.debug(f);
+     b.get().debug(f);
     }
     else if let Stmt::If(is*)=(self){
      f.print("if(");
@@ -306,6 +306,12 @@ impl Debug for Stmt{
       f.print("continue;");
     }else if let Stmt::Break = (self){
       f.print("break;");
+    }else if let Stmt::ForEach(fe*)=(self){
+      f.print("for ");
+      f.print(&fe.var_name);
+      f.print(" in ");
+      fe.rhs.debug(f);
+      fe.body.get().debug(f);
     }
     else{
       panic("Stmt::debug");

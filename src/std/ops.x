@@ -406,3 +406,8 @@ func assert_eq(s1: str, s2: str){
     panic("assertion failed: {}!= {}", s1, s2);
   }
 }
+func assert_eq(s1: i32, s2: i32){
+  if(s1 != s2){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+}
