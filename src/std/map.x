@@ -139,3 +139,39 @@ impl<K,V> Clone for Pair<K,V>{
     return Pair<K, V>{self.a.clone(), self.b.clone()};
   }
 }
+
+//iters
+struct MapIter<K, V>{
+  map: Map<K, V>*;
+  pos: i32;
+}
+impl<K, V> Iterator<Pair<K, V>*> for MapIter<K, V>{
+  func next(self): Option<Pair<K, V>*>{
+    if(self.pos < self.map.len()){
+      let idx = self.pos;
+      self.pos += 1;
+      return self.map.get_pair_idx(idx);
+    }
+    return Option<Pair<K, V>*>::new();
+  }
+}
+
+struct MapIntoIter<K, V>{
+  map: Map<K, V>;
+  pos: i32;
+}
+impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
+  func next(self): Option<Pair<K, V>>{
+    if(self.pos < self.map.len()){
+      let idx = self.pos;
+      self.pos += 1;
+      return Option::new(ptr::deref(self.map.get_pair_idx(idx).unwrap()));
+    }
+    return Option<T>::new();
+  }
+}
+impl<K, V> Drop for MapIntoIter<K, V>{
+  func drop(*self){
+    free(self.map.arr.ptr as i8*);
+  }
+}

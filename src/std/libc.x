@@ -59,6 +59,13 @@ func getenv2(name: str): Option<str>{
   }
   return Option::new(str::from_raw(c_env));
 }
+func setenv2(name: str, val: str, overwrite: i32){
+  let c_name = CStr::new(name);
+  let c_val = CStr::new(val);
+  setenv(c_name.ptr(), c_val.ptr(), overwrite);
+  c_name.drop();
+  c_val.drop();
+}
 
 extern{
   //func printf(fmt: i8*);

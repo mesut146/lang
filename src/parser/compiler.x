@@ -763,7 +763,6 @@ struct CompilerConfig{
   args: String;
   lt: LinkType;
   std_path: Option<String>;
-  vendor: String;
 }
 
 impl CompilerConfig{
@@ -780,18 +779,12 @@ impl CompilerConfig{
       out_dir: "".str(),
       args: "".str(),
       lt: LinkType::None,
-      std_path: std_path,
-      vendor: "".str()
+      std_path: std_path
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{
     self.std_path.drop();
     self.std_path = Option::new(std_path);
-    return self;
-  }
-  func set_vendor(self, vendor: str): CompilerConfig*{
-    self.vendor.drop();
-    self.vendor = vendor.str();
     return self;
   }
   func set_out(self, out: str): CompilerConfig*{

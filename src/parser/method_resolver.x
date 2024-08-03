@@ -223,20 +223,35 @@ impl MethodResolver{
         let erased: String = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item: Item* = self.r.unit.items.get_ptr(i);
-            if let Item::Impl(imp*) = (item){
-                if(tr.is_some()){
-                    if(imp.info.trait_name.is_none()){
-                        continue;
-                    }
-                    if(!imp.info.trait_name.get().eq(*tr.get())){
-                        continue;
-                    }
+            if(!(item is Item::Impl)) continue;
+            let imp = item.as_impl();
+            if(tr.is_some()){
+                if(imp.info.trait_name.is_none()){
+                    continue;
                 }
+                if(!imp.info.trait_name.get().eq(*tr.get())){
+                    continue;
+                }
+            }
+            if(type.is_simple()){
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
-                  list.add(Pair::new(imp, i));
+                    list.add(Pair::new(imp, i));
                 }
                 Drop::drop(imp_erased);
+            }else if(type.is_slice()){
+                if(!imp.info.type.is_slice()){
+                    continue;
+                }
+                let val = Option<String>::new();
+                let cmp = is_compatible(type, &val, &imp.info.type, &imp.info.type_params);
+                if(cmp.is_none()){
+                    list.add(Pair::new(imp, i));
+                }
+                cmp.drop();
+                val.drop();
+            }else{
+                panic("get_impl type not covered: {}", type);
             }
         }
         Drop::drop(erased);
@@ -271,6 +286,9 @@ impl MethodResolver{
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool){
         //let scope_type = sig.scope.get().type.get_ptr();
         //let type_plain = scope_type;
+        if(sig.mc.unwrap().print().eq("(&slice).iter()") && self.r.unit.path.str().ends_with("it.x")){
+            let xx = 10;
+        }
         let imp_list = List<Pair<Impl*, i32>>::new();
         Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
@@ -333,6 +351,7 @@ impl MethodResolver{
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
+        dbg(expr.print(), "(&slice).iter()", 35);
         let list = self.collect(sig);
         if(list.empty()){
             let msg = format("no such method {}", sig);
@@ -537,6 +556,7 @@ impl MethodResolver{
                 scp_rt = scp_rt2.get();
             }
             else if(sig.scope.get().is_trait()){
+                //??
             }else{
                 let decl = self.r.get_decl(scp_rt).unwrap();
                 if(!decl.is_generic){

@@ -252,9 +252,7 @@ struct ListIter<T>{
   list: List<T>*;
   pos: i32;
 }
-
 impl<T> Iterator<T*> for ListIter<T>{
-
   func next(self): Option<T*>{
     if(self.pos < self.list.len()){
       let idx = self.pos;
@@ -263,16 +261,13 @@ impl<T> Iterator<T*> for ListIter<T>{
     }
     return Option<T>::new();
   }
-
 }
 
 struct ListIntoIter<T>{
   list: List<T>;
   pos: i32;
 }
-
 impl<T> Iterator<T> for ListIntoIter<T>{
-
   func next(self): Option<T>{
     if(self.pos < self.list.len()){
       let idx = self.pos;
@@ -281,7 +276,6 @@ impl<T> Iterator<T> for ListIntoIter<T>{
     }
     return Option<T>::new();
   }
-
 }
 impl<T> Drop for ListIntoIter<T>{
   func drop(*self){

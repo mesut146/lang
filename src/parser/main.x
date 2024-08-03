@@ -17,7 +17,7 @@ import std/libc
 import std/stack
 
 func get_vendor(): str{
-  return std::env("vendor").unwrap_or("lang");
+  return std::env("vendor").unwrap_or("x");
 }
 func get_compiler_name(): str{
   return std::env("compiler_name").unwrap_or("x");
@@ -44,7 +44,11 @@ func bootstrap(cmd: CmdArgs*){
   print("test::bootstrap\n");
   bootstrap = true;
   cmd.consume();
-  let root = cmd.get_val2("-root");
+  let root_opt = cmd.get_val("-root");
+  if(root_opt.is_none()){
+    root_opt = Option::new(find_root(cmd.get_root()).clone());
+  }
+  let root = root_opt.unwrap();
   let build = format("{}/build", root);
   let src_dir = format("{}/src", root);
   let std_dir = format("{}/src/std", root);
@@ -52,19 +56,21 @@ func bootstrap(cmd: CmdArgs*){
   if(cmd.has()){
     name = cmd.peek().str();
   }
+  let vendor: str = Path::name(cmd.get_root());
+  setenv2("vendor", vendor, 1);
+  //setenv2("vendor", get_compiler_name(), 1);
+  setenv2("compiler_name", name, 1);
   let out_dir = format("{}/{}_out", &build, name);
   let stdlib = build_std(std_dir.str(), out_dir.str());
   let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
   let config = CompilerConfig::new(src_dir.clone());
-  let vendor = Path::name(cmd.get_root());
   config
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
     .add_dir(src_dir.clone())
-    .set_link(LinkType::Binary{name, args.str(), false})
-    .set_vendor(vendor);
+    .set_link(LinkType::Binary{name, args.str(), false});
   let bin = Compiler::compile_dir(config);
-  let bin2 = format("./{}", name);
+  let bin2 = format("{}/{}", &build, name);
   File::copy(bin.str(), bin2.str());
   print("wrote {}\n", bin2);
   
@@ -93,7 +99,6 @@ func handle_c(cmd: CmdArgs*){
   let flags = cmd.get_val_or("-flags", "".str());
   let name = cmd.get_val("-name");
   let config = CompilerConfig::new();
-  config.set_vendor(get_vendor());
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);

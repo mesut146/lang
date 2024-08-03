@@ -12,8 +12,8 @@ struct IterSlice<T>{
   pos: i32;
 }
 impl<T> IterSlice<T>{
-  func new(slice: [T]){
-    return IterSlice{slice, pos: 0};
+  func new(slice: [T]): IterSlice<T>{
+    return IterSlice{slice, 0};
   }
 }
 impl<T> Iterator<T*> for IterSlice<T>{
@@ -33,7 +33,7 @@ struct IntoIterSlice<T>{
 }
 impl<T> IntoIterSlice<T>{
   func new(slice: [T]){
-    return IterSlice{slice, pos: 0};
+    return IterSlice{slice, 0};
   }
 }
 impl<T> Iterator<T> for IntoIterSlice<T>{
@@ -50,5 +50,8 @@ impl<T> Iterator<T> for IntoIterSlice<T>{
 impl<T> [T]{
   func iter(self): IterSlice<T>{
     return IterSlice::new(*self);
+  }
+  func into_iter(self): IterSlice<T>{
+    return IntoIterSlice{*self, 0};
   }
 }
