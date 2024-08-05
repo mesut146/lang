@@ -72,18 +72,18 @@ impl<K, V> Map<K, V>{
   }
   func get_pair(self, k: K*): Option<Pair<K, V>*>{
     for(let i = 0;i < self.arr.len();++i){
-      let pr =  self.arr.get_ptr(i);
-      if(Eq::eq(&pr.a, k)){
-        return Option::new(pr);
+      let pair = self.arr.get_ptr(i);
+      if(Eq::eq(&pair.a, k)){
+        return Option::new(pair);
       }
     }
-    return Option<Pair<K, V>*>::None;
+    return Option<Pair<K, V>*>::new();
   }
   func get_pair_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){
       return Option::new(self.arr.get_ptr(idx));
     }
-    return Option<Pair<K, V>*>::None;
+    return Option<Pair<K, V>*>::new();
   }
 
   func get_idx(self, idx: i32): V*{

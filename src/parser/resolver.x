@@ -96,6 +96,11 @@ struct FormatInfo {
   block: Block;
   unwrap_mc: Option<Expr>;
 }
+impl FormatInfo{
+  func new(line: i32): FormatInfo{
+    return FormatInfo{block: Block::new(line, line), unwrap_mc: Option<Expr>::new()};
+  }
+}
 
 struct GlobalInfo{
   name: String;
@@ -1652,7 +1657,7 @@ impl Resolver{
     let arg = mc.args.get_ptr(0);
     let arg_val = is_str_lit(arg).unwrap();
     let opt = getenv2(arg_val.str());
-    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo::new(node.line);
     if(opt.is_some()){
       let str = format("Option::new(\"{}\")", opt.get());
       let tmp = parse_expr(str, &self.unit, node.line);
@@ -1668,7 +1673,7 @@ impl Resolver{
     self.format_map.add(node.id, info);
   }
   func handle_type_print(self, node: Expr*, mc: Call*){
-    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo::new(node.line);
     let ta = mc.type_args.get_ptr(0);
     let tmp = parse_expr(format("\"{}\"", ta), &self.unit, node.line);
     info.unwrap_mc = Option::new(tmp);
@@ -2217,7 +2222,7 @@ impl Resolver{
     if(!rt.type.is_pointer()){
       call_name = "into_iter";
     }
-    let info = FormatInfo{block: Block::new(node.line, node.line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo::new(node.line);
     let body = &info.block;
     let it_name = format("it_{}", node.id);
     let it_decl = parse_stmt(format("let {} = ({}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);

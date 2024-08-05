@@ -289,8 +289,8 @@ impl CmdArgs{
   }
 
   func has_any(self, arg: str): bool{
-    for(let i = 0; i < self.args.len(); ++i){
-      if(self.args.get_ptr(i).eq(arg)){
+    for arg1 in &self.args{
+      if(arg1.eq(arg)){
         return true;
       }
     }

@@ -16,10 +16,16 @@ impl<T> Stack<T>{
     func push(self, val: T){
         self.list.add(val);
     }
+
     func pop(self): T{
         return self.list.remove(self.list.len() - 1);
     }
+
     func top(self): T*{
         return self.list.get_ptr(self.list.len() - 1);
+    }
+
+    func peek(self): T*{
+        return self.top();
     }
 } 

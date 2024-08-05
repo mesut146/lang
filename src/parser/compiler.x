@@ -247,9 +247,6 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension {}", ext);
     }
-    /*if(self.ctx.verbose){
-      print("compiling {}\n", path);
-    }*/
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     if (has_main(self.unit())) {
@@ -688,7 +685,7 @@ impl Compiler{
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
     if(cmp.ctx.verbose){
-      print("compiling {}\n", config.file);
+      print("compiling {}\n", config.trim_by_root(config.file.str()));
     }
     let obj = cmp.compile(config.file.str(), &cache, &config);
     compiled.add(obj);
@@ -718,7 +715,7 @@ impl Compiler{
       }
       let cmp = Compiler::new(ctx);
       if(cmp.ctx.verbose){
-        print("compiling [{}/{}] {}\n", i + 1, list.len(), file);
+        print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
       }
       let obj = cmp.compile(file.str(), &cache, &config);
       Drop::drop(cmp);
@@ -763,6 +760,7 @@ struct CompilerConfig{
   args: String;
   lt: LinkType;
   std_path: Option<String>;
+  root_dir: Option<String>;
 }
 
 impl CompilerConfig{
@@ -779,7 +777,8 @@ impl CompilerConfig{
       out_dir: "".str(),
       args: "".str(),
       lt: LinkType::None,
-      std_path: std_path
+      std_path: std_path,
+      root_dir: Option<String>::new()
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{
@@ -840,5 +839,15 @@ impl CompilerConfig{
     }else{
       panic("CompilerConfig::link");
     }
+  }
+  func trim_by_root(self, path: str): str{
+    if(self.root_dir.is_none()){
+      return path;
+    }
+    let root = self.root_dir.get();
+    if(path.starts_with(root.str())){
+      return path.substr(root.len());
+    }
+    return path;
   }
 }

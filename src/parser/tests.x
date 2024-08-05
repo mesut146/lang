@@ -87,6 +87,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
         .set_out(get_out())
         .add_dir(get_src_dir())
         .set_link(LinkType::Binary{"a.out", args, true});
+      config.root_dir.set(root.get().clone());
       let bin = Compiler::compile_single(config);
       bin.drop();
     }
@@ -115,6 +116,7 @@ func normal_test(){
     .set_out(get_out())
     .add_dir(get_src_dir())
     .set_link(LinkType::Static{"rt.a".str()});
+    config.root_dir.set(root.get().clone());
     let lib = Compiler::compile_single(config);
     let dir = format("{}/tests/normal", root.get());
     compile_dir2(dir.str(), lib.str());

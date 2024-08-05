@@ -139,10 +139,12 @@ impl Signature{
         if(m.self.is_some()){
             res.args.add(m.self.get().type.clone());
         }
+        let copier = AstCopier::new(map);
         for(let i = 0;i < m.params.len();++i){
             let prm = m.params.get_ptr(i);
             //if m is generic, replace <T> with real type
-            let mapped = replace_type(&prm.type, map);
+            //let mapped = replace_type(&prm.type, map);
+            let mapped = copier.visit(&prm.type);
             res.args.add(replace_self(&mapped, m));
             Drop::drop(mapped);
         }
@@ -288,9 +290,6 @@ impl MethodResolver{
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool){
         //let scope_type = sig.scope.get().type.get_ptr();
         //let type_plain = scope_type;
-        if(sig.mc.unwrap().print().eq("(&slice).iter()") && self.r.unit.path.str().ends_with("it.x")){
-            let xx = 10;
-        }
         let imp_list = List<Pair<Impl*, i32>>::new();
         Drop::drop(imp_list);
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
@@ -581,67 +580,11 @@ impl MethodResolver{
         let scope: Type* = &sig.scope.get().type;
         let tmp = self.is_same(sig.scope.get(), imp, sig);
         if(tmp is SigResult::Err){
-            if(tmp.get_err().eq("not same impl Option<T> vs Option<i32*>")){
-                let x=11;
-            }
             return tmp;
-        }else{
-            tmp.drop();
-            return self.check_args(sig, sig2);
         }
-        // if(ty.eq(scope)){
-        //     return self.check_args(sig, sig2);
-        // }
-        // if (sig.scope.get().is_trait()) {
-        //     let real_scope = sig.args.get_ptr(0).get_ptr();
-        //     if(imp.trait_name.is_some()){
-        //         if(!imp.trait_name.get().name().eq(scope.name().str())){
-        //             return SigResult::Err{"not same trait".str()};
-        //         }
-        //         return self.check_args(sig, sig2);
-        //     }
-        //     else if (!real_scope.name().eq(ty.name())) {
-        //         return SigResult::Err{format("not same impl {} vs {}", real_scope, ty)};
-        //     }
-        // } else if (!scope.name().eq(ty.name().str())) {
-        //     return SigResult::Err{format("not same impl {} vs {}", scope, ty)};
-        //     //return self.check_args(sig, sig2);
-        // } else{
-        // }
-        // /*let cmp = is_compatible(RType::new(scope.clone()), &imp.type, &imp.type_params);
-        // if(cmp.is_some()){
-        //     return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), imp.type.print().str())};
-        // }*/
-        // if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
-        //     //generated method impl
-        //     //check they belong same impl
-        //     let scp_rt = sig.scope.get();
-        //     let scp_rt2 = Option<RType>::new();
-        //     if(sig.scope.get().is_method()){
-        //         let tmp = self.r.visit_type(&scp_rt.type);
-        //         scp_rt2 = Option::new(tmp);
-        //         scp_rt = scp_rt2.get();
-        //     }
-        //     else if(sig.scope.get().is_trait()){
-        //         //??
-        //     }else{
-        //         let decl = self.r.get_decl(scp_rt).unwrap();
-        //         if(!decl.is_generic){
-        //             let scope_args = scope.get_args();
-        //             for (let i = 0; i < scope_args.size(); ++i) {
-        //                 let tp = ty.get_args().get_ptr(i);
-        //                 let scope_arg = scope_args.get_ptr(i);
-        //                 if (!scope_arg.eq(tp)){
-        //                     scp_rt2.drop();
-        //                     return SigResult::Err{"not same impl".str()};
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     scp_rt2.drop();
-        // }
-        // //check if args are compatible with non generic params
-        // return self.check_args(sig, sig2);
+        tmp.drop();
+        return self.check_args(sig, sig2);
+        
     }
 
     func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
@@ -655,7 +598,6 @@ impl MethodResolver{
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
-        dbg(mc.print(), "Drop::drop(pair.b)", 66);
       
         for (let i = 0; i < sig.args.len(); ++i) {
             let t1: Type = sig.args.get_ptr(i).clone();
@@ -763,7 +705,6 @@ impl MethodResolver{
                 let trg_elem = target.elem();
                 return MethodResolver::is_compatible(arg.elem(), trg_elem, typeParams);
             }
-            //return arg_str + " is not compatible with " + target_str;
             return Option::new("unknown".str());
         }
         if(!target.is_simple()){
@@ -892,23 +833,6 @@ impl MethodResolver{
                 let tp = ta2.get_ptr(i);
                 infer(ta, tp, inferred, type_params);
             }
-        }else {
-            //prm: T
-            /*let nm: String* = prm.name();
-            if (type_params.contains(nm)) {
-                let opt = typeMap.get_ptr(nm);
-                let it: Option<Type>* = opt.unwrap();
-                if (it.is_none()) {//not set yet
-                    typeMap.add(prm.name().clone(), Option::new(arg.clone()));
-                } else {//already set
-                    let cmp: Option<String> = MethodResolver::is_compatible(arg, it.get());
-                    if (cmp.is_some()) {
-                        print("{}\n", cmp.get());
-                        panic("type infer failed: {} vs {}\n", it.get().print(), arg.print());
-                    }
-                    Drop::drop(cmp);
-                }
-            }*/
         }
     }
 

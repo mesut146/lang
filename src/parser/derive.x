@@ -13,8 +13,7 @@ import std/map
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
     info.trait_name = Option::new(Type::new(trait_name.str()));
-    for(let i = 0;i < decl.type.get_args().len();++i){
-        let ta = decl.type.get_args().get_ptr(i);
+    for ta in decl.type.get_args(){
         info.type_params.add(ta.clone());
     }
     return info;
@@ -211,7 +210,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         }
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(line, line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo::new(line);
     let block = &info.block;
     //print("gen {} id={} {}\n", node, node.id, r.unit.path);
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
@@ -324,23 +323,6 @@ func normalize_quotes(s: str): String{
     return res;
 }
 
-/*func make_panic_lit(line: i32, method: Method*, s: Option<str>, unit: Unit*): Expr {
-    let message = Fmt::new("panic ".str());
-    message.print(&method.path);
-    message.print(":");
-    message.print(&line);
-    message.print(" ");
-    let method_sig = printMethod(method);
-    message.print(method_sig.str());
-    method_sig.drop();
-    if (s.is_some()) {
-        message.print("\n");
-        message.print(s.get());
-    }
-    message.print("\n");
-    let id = unit.node(line);
-    return Expr::Lit{.id, Literal{LitKind::STR, message.unwrap(), Option<Type>::new()}};
-}*/
 
 func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
     let message = Fmt::new("panic ".str());
@@ -368,7 +350,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
         r.err(node, format("assert expr is not bool: {}", node));
     }
     let line = node.line;
-    let info = FormatInfo{block: Block::new(line, line), unwrap_mc: Option<Expr>::new()};
+    let info = FormatInfo::new(line);
     let block = &info.block;
     let arg_str = arg.print();
     let arg_norm = normalize_quotes(arg_str.str());

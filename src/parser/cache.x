@@ -28,8 +28,7 @@ impl Cache{
         }
         let buf = read_string(self.file.str());
         let lines = buf.str().split("\n");
-        for(let i = 0;i < lines.len();++i){
-            let line = lines.get_ptr(i);
+        for line in &lines{
             if(line.len() == 0){
                 continue;
             }
@@ -45,8 +44,7 @@ impl Cache{
     func write_cache(self){
         if(!use_cache) return;
         let str = String::new();
-        for(let i = 0;i < self.map.len();++i){
-            let pair = self.map.get_pair_idx(i).unwrap();
+        for pair in &self.map{
             str.append(pair.a.str());
             str.append("=");
             str.append(pair.b.str());

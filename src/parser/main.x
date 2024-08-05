@@ -23,7 +23,7 @@ func get_compiler_name(): str{
   return std::env("compiler_name").unwrap_or("x");
 }
 func get_version(): str{
-  return std::env("version").unwrap_or("1.2");
+  return std::env("version").unwrap_or("1.3");
 }
 
 func build_std(std_dir: str, out_dir: str): String{
@@ -35,7 +35,7 @@ func build_std(std_dir: str, out_dir: str): String{
     .set_out(out_dir)
     .add_dir(src_dir)
     .set_link(LinkType::Static{"std.a".str()});
-
+  config.root_dir.set(std_dir.str());
   let lib = Compiler::compile_dir(config);
   return lib;
 }
@@ -69,6 +69,7 @@ func bootstrap(cmd: CmdArgs*){
     .set_out(out_dir)
     .add_dir(src_dir.clone())
     .set_link(LinkType::Binary{name, args.str(), false});
+  config.root_dir.set(root.clone());
   let bin = Compiler::compile_dir(config);
   let bin2 = format("{}/{}", &build, name);
   File::copy(bin.str(), bin2.str());

@@ -238,6 +238,9 @@ impl AstCopier{
         if let Stmt::For(fs*)=(node){
             return Stmt::For{.id, ForStmt{var_decl: self.visit_opt(&fs.var_decl), cond: self.visit_opt(&fs.cond), updaters: self.visit_list(&fs.updaters), body: self.visit_box(&fs.body)}};
         }
+        if let Stmt::ForEach(fe*)=(node){
+            return Stmt::ForEach{.id, ForEach{var_name: fe.var_name.clone(), rhs: self.visit(&fe.rhs), body: self.visit_box(&fe.body)}};
+        }
         if let Stmt::Continue = (node){
             return Stmt::Continue{.id};
         }

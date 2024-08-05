@@ -48,8 +48,7 @@ impl AllocHelper{
     return ptr;
   }
   func visit(self, node: Block*){
-    for(let i = 0;i < node.list.len();++i){
-      let st = node.list.get_ptr(i);
+    for st in &node.list{
       self.visit(st);
     }
   }
@@ -87,8 +86,7 @@ impl AllocHelper{
       return;
     }
     if let Stmt::IfLet(is*)=(node){
-      for(let i = 0;i < is.args.len();++i){
-        let arg = is.args.get_ptr(i);
+      for arg in &is.args{
         let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
         let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
         let name_c = arg.name.clone().cstr();
@@ -125,8 +123,7 @@ impl AllocHelper{
     self.visit(expr);
   }
   func visit(self, node: VarExpr*){
-    for(let i = 0;i < node.list.len();++i){
-      let f = node.list.get_ptr(i);
+    for f in &node.list{
       let rt = self.c.get_resolver().visit(f);
       let ptr = self.alloc_ty(&rt.type, f);
       let name_c = f.name.clone().cstr();
@@ -200,8 +197,7 @@ impl AllocHelper{
     if(call.scope.is_some()){
       self.visit(call.scope.get());
     }
-    for(let i = 0;i < call.args.len();++i){
-      let arg = call.args.get_ptr(i);
+    for arg in &call.args{
       self.visit(arg);
     }
     return res;
@@ -267,8 +263,7 @@ impl AllocHelper{
       let rt = self.c.get_resolver().visit(node);
       res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
-      for(let i = 0;i < args.len();++i){
-        let arg = args.get_ptr(i);
+      for arg in args{
         //self.child(&arg.expr);//rvo opt
         self.visit(&arg.expr);
       }
@@ -293,8 +288,7 @@ impl AllocHelper{
         let elem = list.get_ptr(0);
         self.visit(elem);
       }else{
-        for(let i = 0;i < list.len();++i){
-          let elem = list.get_ptr(i);
+        for elem in list{
           self.visit(elem);
         }
       }

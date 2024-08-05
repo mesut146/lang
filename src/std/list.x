@@ -41,7 +41,6 @@ impl<T> List<T>{
     }
     let tmp = List<T>::get_malloc(self.cap + 10);
     for(let i = 0;i < self.count;++i){
-      //let shifted: T* = self.get_ptr(i);
       let old: T = ptr::deref(self.get_ptr(i));
       ptr::copy(tmp, i, old);
       std::no_drop(old);
