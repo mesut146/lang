@@ -2,9 +2,9 @@
 //import std/Option
 import std/ops
 
-struct Pair<T, U>{
-  a: T;
-  b: U;
+struct Pair<K, V>{
+  a: K;
+  b: V;
 }
 
 impl<K, V> Pair<K, V>{
@@ -106,6 +106,13 @@ impl<K, V> Map<K, V>{
   func clear(self){
     self.arr.clear();
   }
+
+  func iter(self): MapIter<K, V>{
+    return MapIter{self, 0};
+  }
+  func into_iter(*self): MapIntoIter<K, V>{
+    return MapIntoIter{self, 0};
+  }
 }
 
 impl<K, V> Debug for Map<K, V>{
@@ -167,7 +174,7 @@ impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
       self.pos += 1;
       return Option::new(ptr::deref(self.map.get_pair_idx(idx).unwrap()));
     }
-    return Option<T>::new();
+    return Option<Pair<K, V>>::new();
   }
 }
 impl<K, V> Drop for MapIntoIter<K, V>{

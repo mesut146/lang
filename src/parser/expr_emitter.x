@@ -322,6 +322,16 @@ impl Compiler{
     }
   
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
+      if(Resolver::is_call(mc, "std", "typeof")){
+        let arg = mc.args.get_ptr(0);
+        let ty = self.getType(arg);
+        let str = ty.print();
+        let ptr = self.get_alloc(expr);
+        let res = self.str_lit(str.str(), ptr);
+        str.drop();
+        ty.drop();
+        return res;
+      }
       if(Resolver::is_call(mc, "std", "print_type")){
         let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
         return self.visit(info.unwrap_mc.get());
@@ -776,7 +786,7 @@ impl Compiler{
       }
       if(node.kind is LitKind::STR){
         let trg_ptr = self.get_alloc(expr);
-        return self.str_lit(node, trg_ptr);
+        return self.str_lit(node.val.str(), trg_ptr);
       }
       if(node.kind is LitKind::CHAR){
         assert(node.val.len() == 1);
@@ -786,8 +796,8 @@ impl Compiler{
       panic("lit {}", node.val);
     }
 
-    func str_lit(self, node: Literal*, trg_ptr: Value*): Value*{
-      let val_c = node.val.clone().cstr();
+    func str_lit(self, val: str, trg_ptr: Value*): Value*{
+      let val_c = val.str().cstr();
       let src = CreateGlobalStringPtr(val_c.ptr());
       val_c.drop();
       let stringType = self.protos.get().std("str") as llvm_Type*;
@@ -798,7 +808,7 @@ impl Compiler{
       //set ptr
       CreateStore(src, data_target);
       //set len
-      let len = makeInt(node.val.len(), SLICE_LEN_BITS());
+      let len = makeInt(val.len(), SLICE_LEN_BITS());
       CreateStore(len, len_target);
       return trg_ptr;
     }

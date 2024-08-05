@@ -16,17 +16,7 @@ impl Compiler{
     func visit(self, node: Stmt*){
       self.llvm.di.get().loc(node.line, node.pos);
       if let Stmt::Ret(e*) = (node){
-        if(e.is_none()){
-          self.own.get().do_return(node.line);
-          self.exit_frame();
-          if(is_main(self.curMethod.unwrap())){
-            CreateRet(makeInt(0, 32));
-          }else{
-            CreateRetVoid();
-          }
-        }else{
-          self.visit_ret(e.get());
-        }
+        self.visit_ret(node, e);
       }
       else if let Stmt::Var(ve*)=(node){
         self.visit_var(ve);
@@ -346,6 +336,19 @@ impl Compiler{
       for(let i = 0;i < node.list.len();++i){
         let st = node.list.get_ptr(i);
         self.visit(st);
+      }
+    }
+    func visit_ret(self, node: Stmt*, val: Option<Expr>*){
+      if(val.is_none()){
+        self.own.get().do_return(node.line);
+        self.exit_frame();
+        if(is_main(self.curMethod.unwrap())){
+          CreateRet(makeInt(0, 32));
+        }else{
+          CreateRetVoid();
+        }
+      }else{
+        self.visit_ret(val.get());
       }
     }
     func visit_ret(self, expr: Expr*){

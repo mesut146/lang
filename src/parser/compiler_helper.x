@@ -686,7 +686,7 @@ impl Compiler{
       return;
     }
     if let Expr::Lit(lit*)=(expr){
-      self.str_lit(lit, ptr_ret);
+      self.str_lit(lit.val.str(), ptr_ret);
       return;
     }
     if let Expr::Array(list*, sz*)=(expr){

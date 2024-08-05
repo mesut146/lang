@@ -1,0 +1,18 @@
+format("", ...): String;
+print("", ...): void;
+panic("", ...): void;
+assert(<bool>): void;
+
+printf("", ...): void;
+
+std::print_type<...>(): str;
+std::size<...>(): i64;
+std::is_ptr<...>(): bool;
+std::env("<name>"): Option<str>;
+std::no_drop(obj): void;
+std::typeof(obj): <obj type>: str;
+
+ptr::null<T>(): T*;
+ptr::get(src, index): <src_type>;
+ptr::copy(src, index, elem): void;
+ptr::deref(ptr): <*ptr>;

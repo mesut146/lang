@@ -17,6 +17,7 @@ struct Signature{
     desc: Desc;
 }
 
+#derive(Debug)
 enum SigResult{
     Err(s: String),
     Exact,
@@ -275,7 +276,8 @@ impl MethodResolver{
                 if (m.name.eq(name)) {
                     let desc = Desc{kind: RtKind::MethodExtern{j},
                         path: m.path.clone(),
-                        idx: i};
+                        idx: i
+                    };
                     list.add(Signature::new(m, desc));
                 }
             }
@@ -428,16 +430,18 @@ impl MethodResolver{
             //todo trait
             //is static & have type args
             let scope = &sig.scope.get().type;
-            let scope_args = scope.get_args();
-            if let Expr::Type(scp*)=(mc.scope.get()){
-              scope = scp;
-              scope_args = scp.get_args();
-            }
-            for (let i = 0; i < scope_args.size(); ++i) {
-                typeMap.add(type_params.get_ptr(i).name().clone(), scope_args.get_ptr(i).clone());
-            }
-            if (!mc.type_args.empty()) {
-                panic("todo");
+            if(scope.is_simple()){
+                let scope_args = scope.get_args();
+                if let Expr::Type(scp*)=(mc.scope.get()){
+                  scope = scp;
+                  scope_args = scp.get_args();
+                }
+                for (let i = 0; i < scope_args.size(); ++i) {
+                    typeMap.add(type_params.get_ptr(i).name().clone(), scope_args.get_ptr(i).clone());
+                }
+                if (!mc.type_args.empty()) {
+                    panic("todo");
+                }
             }
         } else {
             if (!mc.type_args.empty()) {
@@ -474,6 +478,13 @@ impl MethodResolver{
                 panic("unreachable");
             }
         }
+        if(sig.scope.is_some()){
+            let ac = AstCopier::new(&typeMap);
+            let full_scope = ac.visit(&sig.scope.get().type);
+            let scp_rt = sig.scope.get();
+            //print("{} -> {} map={}\n", scp_rt.type, full_scope, typeMap);
+            scp_rt.type = full_scope;
+        }
         let gen_pair: Pair<Method*, Desc> = self.generateMethod(&typeMap, target, sig);
         Drop::drop(typeMap);
         let res = self.r.visit_type(&gen_pair.a.type);
@@ -483,6 +494,53 @@ impl MethodResolver{
         Drop::drop(real);
         Drop::drop(errors);
         return res;
+    }
+
+    func is_same(self, scope_rt:  RType*, info: ImplInfo*, sig: Signature*): SigResult{
+        let type1 = &scope_rt.type;
+        let type2 = &info.type;
+        if(type1.eq(type2)){
+            return SigResult::Exact;
+        }
+        if(type1.is_slice()){
+            if(!type2.is_slice()){
+                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            }
+            if(info.type_params.empty()){
+                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            }
+            let cmp = is_compatible(type1, type2, &info.type_params);
+            if(cmp.is_some()){
+                cmp.drop();
+                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            }
+            cmp.drop();
+            return SigResult::Exact;
+            //panic("todo {} vs {}, mc={} cmp={}", type1, type2, sig.mc.unwrap(), &cmp);
+        }
+        if(!type1.is_simple() || !type2.is_simple()){
+            return SigResult::Err{format("not same kind {} vs {}", type1, type2)};
+        }
+        if (scope_rt.is_trait()) {
+            let real_scope = sig.args.get_ptr(0).get_ptr();
+            if(info.trait_name.is_some()){
+                if(!info.trait_name.get().name().eq(type1.name().str())){
+                    return SigResult::Err{"not same trait".str()};
+                }
+                return SigResult::Exact;
+            }
+            else if (!real_scope.name().eq(type2.name())) {
+                return SigResult::Err{format("not same impl {} vs {}", real_scope, type2)};
+            }
+        }
+        if(info.type_params.empty()){
+            return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+        }
+        if (!type1.name().eq(type2.name().str())) {
+            return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            //return self.check_args(sig, sig2);
+        }
+        return SigResult::Exact;
     }
 
     func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
@@ -518,63 +576,72 @@ impl MethodResolver{
         if(mc.scope.is_none()){//static sibling
             return self.check_args(sig, sig2);
         }
-        let imp = m.parent.as_impl();
+        let imp: ImplInfo* = m.parent.as_impl();
         let ty = &imp.type;
         let scope: Type* = &sig.scope.get().type;
-        if(ty.eq(scope)){
+        let tmp = self.is_same(sig.scope.get(), imp, sig);
+        if(tmp is SigResult::Err){
+            if(tmp.get_err().eq("not same impl Option<T> vs Option<i32*>")){
+                let x=11;
+            }
+            return tmp;
+        }else{
+            tmp.drop();
             return self.check_args(sig, sig2);
         }
-
-        if (sig.scope.get().is_trait()) {
-            let real_scope = sig.args.get_ptr(0).get_ptr();
-            if(imp.trait_name.is_some()){
-                if(!imp.trait_name.get().name().eq(scope.name().str())){
-                    return SigResult::Err{"not same trait".str()};
-                }
-                return self.check_args(sig, sig2);
-            }
-            else if (!real_scope.name().eq(ty.name())) {
-                return SigResult::Err{format("not same impl {} vs {}", real_scope, ty)};
-            }
-        } else if (!scope.name().eq(ty.name().str())) {
-            return SigResult::Err{format("not same impl {} vs {}", scope, ty)};
-            //return self.check_args(sig, sig2);
-        } else{
-        }
-        /*let cmp = is_compatible(RType::new(scope.clone()), &imp.type, &imp.type_params);
-        if(cmp.is_some()){
-            return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), imp.type.print().str())};
-        }*/
-        if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
-            //generated method impl
-            //check they belong same impl
-            let scp_rt = sig.scope.get();
-            let scp_rt2 = Option<RType>::new();
-            if(sig.scope.get().is_method()){
-                let tmp = self.r.visit_type(&scp_rt.type);
-                scp_rt2 = Option::new(tmp);
-                scp_rt = scp_rt2.get();
-            }
-            else if(sig.scope.get().is_trait()){
-                //??
-            }else{
-                let decl = self.r.get_decl(scp_rt).unwrap();
-                if(!decl.is_generic){
-                    let scope_args = scope.get_args();
-                    for (let i = 0; i < scope_args.size(); ++i) {
-                        let tp = ty.get_args().get_ptr(i);
-                        let scope_arg = scope_args.get_ptr(i);
-                        if (!scope_arg.eq(tp)){
-                            scp_rt2.drop();
-                            return SigResult::Err{"not same impl".str()};
-                        }
-                    }
-                }
-            }
-            scp_rt2.drop();
-        }
-        //check if args are compatible with non generic params
-        return self.check_args(sig, sig2);
+        // if(ty.eq(scope)){
+        //     return self.check_args(sig, sig2);
+        // }
+        // if (sig.scope.get().is_trait()) {
+        //     let real_scope = sig.args.get_ptr(0).get_ptr();
+        //     if(imp.trait_name.is_some()){
+        //         if(!imp.trait_name.get().name().eq(scope.name().str())){
+        //             return SigResult::Err{"not same trait".str()};
+        //         }
+        //         return self.check_args(sig, sig2);
+        //     }
+        //     else if (!real_scope.name().eq(ty.name())) {
+        //         return SigResult::Err{format("not same impl {} vs {}", real_scope, ty)};
+        //     }
+        // } else if (!scope.name().eq(ty.name().str())) {
+        //     return SigResult::Err{format("not same impl {} vs {}", scope, ty)};
+        //     //return self.check_args(sig, sig2);
+        // } else{
+        // }
+        // /*let cmp = is_compatible(RType::new(scope.clone()), &imp.type, &imp.type_params);
+        // if(cmp.is_some()){
+        //     return SigResult::Err{Fmt::format("not same impl {} vs {}", scope.print().str(), imp.type.print().str())};
+        // }*/
+        // if (imp.type_params.empty() && ty.is_simple() && !ty.get_args().empty()) {
+        //     //generated method impl
+        //     //check they belong same impl
+        //     let scp_rt = sig.scope.get();
+        //     let scp_rt2 = Option<RType>::new();
+        //     if(sig.scope.get().is_method()){
+        //         let tmp = self.r.visit_type(&scp_rt.type);
+        //         scp_rt2 = Option::new(tmp);
+        //         scp_rt = scp_rt2.get();
+        //     }
+        //     else if(sig.scope.get().is_trait()){
+        //         //??
+        //     }else{
+        //         let decl = self.r.get_decl(scp_rt).unwrap();
+        //         if(!decl.is_generic){
+        //             let scope_args = scope.get_args();
+        //             for (let i = 0; i < scope_args.size(); ++i) {
+        //                 let tp = ty.get_args().get_ptr(i);
+        //                 let scope_arg = scope_args.get_ptr(i);
+        //                 if (!scope_arg.eq(tp)){
+        //                     scp_rt2.drop();
+        //                     return SigResult::Err{"not same impl".str()};
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     scp_rt2.drop();
+        // }
+        // //check if args are compatible with non generic params
+        // return self.check_args(sig, sig2);
     }
 
     func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
@@ -846,12 +913,19 @@ impl MethodResolver{
     }
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
+        let mc = sig.mc.unwrap();
         for (let i = 0;i < self.r.generated_methods.len();++i) {
             let gm = self.r.generated_methods.get_ptr(i).get();
             if(!m.name.eq(gm.name.str())) continue;
             let sig2 = Signature::new(gm, Desc::new());
-            dbg(sig.mc.unwrap().print(), "one(3, 4)", 2);
+            /*let c = mc.print().eq("Pair::new(imp, i)");
+            if(c){
+                print("sig={} sig2={}\n", sig, sig2);
+            }*/
             let sig_res: SigResult = self.is_same(sig, &sig2);
+            /*if(c){
+                print("sr={}\n", sig_res);
+            }*/
             let is_err = sig_res is SigResult::Err;
             Drop::drop(sig2);
             Drop::drop(sig_res);
@@ -868,7 +942,7 @@ impl MethodResolver{
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
         dbg(printMethod(&res2), "Option<RType>::drop(*self)", 10);
-        //print("add gen {} {}\n", printMethod(&res2), sig.mc.get_ptr());
+        //print("add gen {} {}\n", printMethod(&res2), mc);
         let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
         let desc = Desc{
             kind: RtKind::MethodGen,
@@ -879,6 +953,11 @@ impl MethodResolver{
             return Pair::new(res, desc);
         }
         let imp: ImplInfo* = m.parent.as_impl();
+        if(sig.scope.get().type.is_slice()){
+            let info2 = res.parent.as_impl();
+            info2.type_params.clear();
+            return Pair::new(res, desc);
+        }
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().is_trait()){
             Drop::drop(st);
@@ -886,7 +965,7 @@ impl MethodResolver{
         }
         //put full type, Box::new(...) -> Box<...>::new()
         let imp_args = imp.type.get_args();
-        if (sig.mc.unwrap().is_static && !imp_args.empty()) {
+        if (mc.is_static && !imp_args.empty()) {
             st.args.clear();
             for (let i = 0;i < imp_args.size();++i) {
                 let ta = imp_args.get_ptr(i);

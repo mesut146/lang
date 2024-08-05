@@ -51,7 +51,7 @@ impl<T> [T]{
   func iter(self): IterSlice<T>{
     return IterSlice::new(*self);
   }
-  func into_iter(self): IterSlice<T>{
+  func into_iter(self): IntoIterSlice<T>{
     return IntoIterSlice{*self, 0};
   }
 }

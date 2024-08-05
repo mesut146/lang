@@ -1574,8 +1574,8 @@ impl Resolver{
   func is_array_get_ptr(self, mc: Call*): bool{
     return self.is_special(mc, "ptr", TypeKind::Array);
    }
-   //x.len()
-   func is_array_get_len(self, mc: Call*): bool{
+  //x.len()
+  func is_array_get_len(self, mc: Call*): bool{
     return self.is_special(mc, "len", TypeKind::Array);
   }
 
@@ -1678,6 +1678,14 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "typeof")){
+      assert(call.args.len() == 1);
+      assert(call.type_args.len() == 0);
+      let arg = call.args.get_ptr(0);
+      let tmp = self.visit(arg);
+      tmp.drop();
+      return RType::new("str");
+    }
     if(Resolver::is_call(call, "std", "print_type")){
       assert(call.args.empty());
       assert(call.type_args.len() == 1);
