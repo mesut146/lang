@@ -130,24 +130,28 @@ func own_test(id: i32, std_dir: str){
     let config = CompilerConfig::new(get_src_dir());
     let out = get_out();
     config
-      .set_file("../tests/own/common.x")
+      .set_file(format("{}/tests/own/common.x", root.get()))
       .set_out(out.clone())
-      .add_dir(root())
+      .add_dir(get_src_dir())
       .set_link(LinkType::Static{"common.a".str()});
-    let bin = Compiler::compile_single(config);
-    bin.drop();
-  
-    let lib = build_std(std_dir, out.str());
-    lib.drop();
-  
-    let args = format("{}/common.a {}/std.a", &out, &out);
+
+    let common_lib = Compiler::compile_single(config);
+    let stdlib = build_std(std_dir, out.str());
+    
+    let args = format("{} {}", &common_lib, &stdlib);
     if(id == 1){
-      compile_dir2("../tests/own", args.str(), Option::new("common.x"));
+        let dir = format("{}/tests/own", root.get());
+        compile_dir2(dir.str(), args.str(), Option::new("common.x"));
+        dir.drop();
     }else{
-      compile_dir2("../tests/own_if", args.str(), Option::new("common.x"));
+        let dir = format("{}/tests/own_if", root.get());
+        compile_dir2(dir.str(), args.str(), Option::new("common.x"));
+        dir.drop();
     }
     args.drop();
     out.drop();
+    common_lib.drop();
+    stdlib.drop();
     drop_enabled = false;
 }
 

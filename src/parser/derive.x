@@ -257,6 +257,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             }
         }
         pos = br_pos + 2;
+        if(!(arg_idx < mc.args.len())){
+            r.err(node, "format specifier not matched");
+        }
         let arg = mc.args.get_ptr(arg_idx);
         ++arg_idx;
         //<arg>.debug(&f);
