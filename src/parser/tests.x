@@ -66,8 +66,10 @@ func get_std_path(): String{
 func compile_dir2(dir: str, args: str){
     compile_dir2(dir, args, Option<str>::new());
 }
-  
 func compile_dir2(dir: str, args: str, exc: Option<str>){
+    compile_dir2(dir, args, exc, Option<String>::new());
+}
+func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
     let list: List<String> = list(dir);
     list.sort();
     print("compile_dir '{}' -> {} elems\n", dir, list.len());
@@ -82,11 +84,13 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
       file.append(name);
       if(is_dir(file.str())) continue;
       let config = CompilerConfig::new(get_src_dir());
-      config
-        .set_file(file)
-        .set_out(get_out())
-        .add_dir(get_src_dir())
-        .set_link(LinkType::Binary{"a.out", args, true});
+      config.set_file(file);
+      config.set_out(get_out());
+      config.add_dir(get_src_dir());
+      config.set_link(LinkType::Binary{"a.out", args, true});
+      if(inc.is_some()){
+        config.add_dir(inc.get().clone());
+      }
       config.root_dir.set(root.get().clone());
       let bin = Compiler::compile_single(config);
       bin.drop();
@@ -124,45 +128,48 @@ func normal_test(){
     dir.drop();
 }
 
-func own_test(id: i32, std_dir: str){
+func own_test(id: i32){
     print("test::own_test\n");
     drop_enabled = true;
     let config = CompilerConfig::new(get_src_dir());
     let out = get_out();
+    let std_dir = get_std_path();
     config
-      .set_file(format("{}/tests/own/common.x", root.get()))
+      .set_file(format("{}/tests/own/common.x" , root.get()))
       .set_out(out.clone())
+      .add_dir(test_dir())
       .add_dir(get_src_dir())
       .set_link(LinkType::Static{"common.a".str()});
 
     let common_lib = Compiler::compile_single(config);
-    let stdlib = build_std(std_dir, out.str());
+    let stdlib = build_std(std_dir.str(), out.str());
     
     let args = format("{} {}", &common_lib, &stdlib);
     if(id == 1){
         let dir = format("{}/tests/own", root.get());
-        compile_dir2(dir.str(), args.str(), Option::new("common.x"));
+        compile_dir2(dir.str(), args.str(), Option::new("common.x"), Option::new(test_dir()));
         dir.drop();
     }else{
         let dir = format("{}/tests/own_if", root.get());
-        compile_dir2(dir.str(), args.str(), Option::new("common.x"));
+        compile_dir2(dir.str(), args.str(), Option::new("common.x"), Option::new(test_dir()));
         dir.drop();
     }
     args.drop();
     out.drop();
     common_lib.drop();
     stdlib.drop();
+    std_dir.drop();
     drop_enabled = false;
 }
 
 func handle_tests(cmd: CmdArgs*): bool{
     print("root={}\n", find_root(cmd.get_root()));
     if(cmd.is("own")){
-        //own_test(1);
+        own_test(1);
         return true;
     }
     if(cmd.is("own2")){
-        //own_test(2);
+        own_test(2);
         return true;
     }
     if(cmd.is("test")){

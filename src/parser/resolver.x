@@ -311,7 +311,7 @@ impl Context{
       path.drop();
     }
     suffix.drop();
-    panic("can't resolve import: {}", is);
+    panic("can't resolve import: {}\nstd: {}\npaths={}", is, self.std_path, self.search_paths);
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = self.get_path(is);
@@ -436,7 +436,7 @@ impl Resolver{
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         if(!added.contains(&path.str())){
           if(!is_file(path.str())){
-            panic("can't resolve import: import std/{}", pre);
+            panic("can't resolve import: import std/{}\npath={}", pre, &path);
           }
           let r = self.ctx.create_resolver(&path);
           res.add(r);

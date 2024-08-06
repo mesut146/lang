@@ -77,12 +77,6 @@ func check_ids(id1: i32){
     assert_eq(*ids.peek_front(0), id1);
 }
 
-func assert_eq(got: i32, expected: i32){
-    if(got != expected){
-        panic("expected: {} got: {}\n", expected, got);
-    }
-}
-
 func validate(c: bool, msg: String*){
     if(!c){
         panic("{}\n", msg);
@@ -91,9 +85,6 @@ func validate(c: bool, msg: String*){
 
 func check_ids(id1: i32, id2: i32){
     let msg = format("id1: {}, id2: {}", id1, id2);
-    //assert(ids.len() == 2);
-    //assert(*ids.peek_front(0) == id1);
-    //assert(*ids.peek_front(1) == id2);
     assert_eq(ids.len(), 2);
     validate(*ids.peek_front(0) == id1, &msg);
     validate(*ids.peek_front(1) == id2, &msg);

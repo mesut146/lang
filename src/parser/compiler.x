@@ -677,8 +677,8 @@ impl Compiler{
   func compile_single(config: CompilerConfig): String{
     create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-    for(let i = 0;i < config.src_dirs.len();++i){
-      ctx.add_path(config.src_dirs.get_ptr(i).str());
+    for inc in &config.src_dirs{
+      ctx.add_path(inc.str());
     }
     let cmp = Compiler::new(ctx);
     let compiled = List<String>::new();

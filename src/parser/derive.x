@@ -132,26 +132,27 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
 
             //f.print({decl.type}::{ev.name})
             then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
-            then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
-            for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
-                if(j > 0){
-                    then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
+            if(ev.fields.len() > 0){
+                then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
+                for(let j = 0;j < ev.fields.len();++j){
+                    let fd = ev.fields.get_ptr(j);
+                    if(j > 0){
+                        then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
+                    }
+                    //f.print("<fd.name>: ")
+                    then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
+                    if(fd.type.is_pointer()){
+                        //print hex based address
+                        //i64::debug_hex(<fd.name> as u64, f);
+                        then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
+                    }else{
+                        //{fd.name}.debug(f);
+                        //already ptr from if let arg
+                        then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                    }
                 }
-                //f.print("<fd.name>: ")
-                then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
-                if(fd.type.is_pointer()){
-                    //print hex based address
-                    //i64::debug_hex(<fd.name> as u64, f);
-                    then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
-                }else{
-                    //{fd.name}.debug(f);
-                    //already ptr from if let arg
-                    then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
-                }
+                then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
             }
-            then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
-
             let self_id = unit.node(line);
             let block_id = unit.node(line);
             let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
