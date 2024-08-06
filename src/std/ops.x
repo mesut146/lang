@@ -401,6 +401,12 @@ func assign_eq<T>(l: T*, r: T){
   *l = r;
 }
 
+
+func assert_eq(s1: String*, s2: String*){
+  if(!s1.eq(s2)){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+}
 func assert_eq(s1: str, s2: str){
   if(!s1.eq(s2)){
     panic("assertion failed: {}!= {}", s1, s2);

@@ -31,7 +31,9 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Drop")){
         return generate_drop(decl, unit);
     }
-    //todo clone
+    if(der.eq("Clone")){
+        return generate_clone(decl, unit);
+    }
     panic("generate_derive decl: {} der: '{}'", decl.type, der);
 }
 
@@ -48,6 +50,116 @@ func parse_expr(input: String, unit: Unit*, line: i32): Expr{
     let res = parser.parse_expr();
     Drop::drop(parser);
     return res;
+}
+
+func make_impl_m(m: Method*, decl: Decl*, trait_name: str): Impl{
+    m.parent = Parent::Impl{make_info(decl, trait_name)};
+    m.path.drop();
+    m.path = decl.path.clone();
+    m.body = Option::new(Block::new(decl.line, decl.line));
+    return make_impl(decl, trait_name);
+}
+
+func generate_clone(decl: Decl*, unit: Unit*): Impl{
+    let line = decl.line;
+    let body = Block::new(decl.line, decl.line);
+    if(decl.base.is_some()){
+        //clone::clone(ptr::deref(self as <Base>*));
+        body.list.add(parse_stmt(format("Clone::clone(self as {}*);", decl.base.get()), unit, decl.line));
+    }
+    
+    if let Decl::Enum(variants*)=(decl){
+        for ev in variants{
+            let then = Block::new(line, line);
+            for fd in &ev.fields{
+                if(fd.type.is_pointer()){
+                    then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
+                }else{
+                    then.list.add(parse_stmt(format("let __{} = {}.clone();", &fd.name, &fd.name), unit, line));
+                }
+            }
+            let str = Fmt::new();
+            str.print("return ");
+            str.print(&decl.type);
+            str.print("::");
+            str.print(&ev.name);
+            if(!ev.fields.empty()){
+                str.print("{");
+                let i = 0;
+                for fd in &ev.fields{
+                    if(i > 0){
+                        str.print(", ");
+                    }
+                    str.print(&fd.name);
+                    str.print(": __");
+                    str.print(&fd.name);
+                    ++i;
+                }
+                str.print("};");
+            }else{
+                str.print(";");
+            }
+            let return_stmt = parse_stmt(str.unwrap(), unit, line);
+            then.list.add(return_stmt);
+
+            let self_id = unit.node(line);
+            let block_id = unit.node(line);
+            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
+            for fd in &ev.fields{
+                let arg_id = unit.node(line);
+                is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
+            }
+            let iflet_id = unit.node(line);
+            body.list.add(Stmt::IfLet{.iflet_id, is});
+        }
+        body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
+    }else{
+        let fields = decl.get_fields();
+        for fd in fields{
+            if(fd.type.is_pointer()){
+                //let <name> = self.<name>;
+                let clone_stmt = parse_stmt(format("let {} = self.{};", &fd.name, &fd.name), unit, line);
+                body.list.add(clone_stmt);
+            }else{
+                //let <name> = self.<name>.clone();
+                let clone_stmt = parse_stmt(format("let {} = self.{}.clone();", &fd.name, &fd.name), unit, line);
+                body.list.add(clone_stmt);
+            }
+        }
+        let str = Fmt::new();
+        str.print("return ");
+        str.print(&decl.type);
+        str.print("{");
+        let i = 0;
+        for fd in fields{
+            if(i > 0){
+                str.print(", ");
+            }
+            str.print(&fd.name);
+            str.print(": ");
+            str.print(&fd.name);
+            ++i;
+        }
+        str.print("};");
+        let return_stmt = parse_stmt(str.unwrap(), unit, line);
+        body.list.add(return_stmt);
+    }
+    let m = Method::new(unit.node(decl.line), "clone".str(), decl.type.clone());
+    m.is_generic = decl.is_generic;
+    m.self = Option::new(Param{.unit.node(decl.line),
+                                name: "self".str(),
+                                type: decl.type.clone().toPtr(),
+                                is_self: true,
+                                is_deref: false});
+    m.parent = Parent::Impl{make_info(decl, "Clone")};
+    m.path.drop();
+    m.path = unit.path.clone();
+    m.body = Option::new(body);
+    let imp = make_impl(decl, "Clone");
+    imp.methods.add(m);
+    print("clone={}\n", &imp);
+    return imp;
 }
 
 func generate_drop(decl: Decl*, unit: Unit*): Impl{
@@ -106,10 +218,6 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
-    /*if(decl.type.eq("Decl")){
-        print("{}\n", &m);
-        panic("");
-    }*/
     let imp = make_impl(decl, "Drop");
     imp.methods.add(m);
     return imp;
