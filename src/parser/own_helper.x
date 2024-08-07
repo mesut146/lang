@@ -65,21 +65,6 @@ impl VarScope{
             f.print(", ");
             f.print(obj.expr);
         }
-        for(let i=0;i<self.actions.len();++i){
-            let act = self.actions.get_ptr(i);
-            if let Action::SCOPE(id, line)=(act){
-                let ch_scope = own.get_scope(id);
-                let id2 = format("{}  ", indent);
-                f.print("\n");
-                ch_scope.debug(f, own, id2.str());
-                id2.drop();
-            }else{
-                f.print("\n");
-                f.print(indent);
-                f.print("  ");
-                f.print(act);
-            }
-        }
         for(let i = 0;i < self.state_map.len();++i){
             let pair = self.state_map.get_pair_idx(i).unwrap();
             f.print("\n");
@@ -96,26 +81,6 @@ impl VarScope{
     }
 }
 
-impl Debug for Action{
-    func debug(self, f: Fmt*){
-        f.print("Action::");
-        if let Action::MOVE(mv*)=(self){
-            f.print("MOVE{");
-            f.print(mv);
-            f.print(" line: ");
-            f.print(&mv.line);
-            f.print("}");
-        }
-        if let Action::SCOPE(id, line)=(self){
-            f.print("SCOPE{");
-            f.print(&id);
-            f.print(", ");
-            f.print(&line);
-            f.print("}");
-        }
-    }
-}
-
 impl Debug for Move{
     func debug(self, f: Fmt*){
         f.print("Move{");
@@ -125,6 +90,12 @@ impl Debug for Move{
         }
         Debug::debug(&self.rhs, f);
         f.print("}");
+    }
+}
+
+impl Debug for State{
+    func debug(self, f: Fmt*){
+        self.kind.debug(f);
     }
 }
 

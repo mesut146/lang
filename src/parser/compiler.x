@@ -848,8 +848,8 @@ impl CompilerConfig{
     let root = self.root_dir.get();
     if(path.starts_with(root.str())){
       let res = path.substr(root.len());
-      if(res.ends_with("/")){
-        return res.substr(0, res.len() - 1);
+      if(res.starts_with("/")){
+        return res.substr(1, res.len());
       }
     }
     return path;

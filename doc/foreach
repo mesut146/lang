@@ -1,9 +1,14 @@
+for e in &list{
+    stmt...
+}
+
+
 {
  let it_?? = (&list).iter();
  while(true){
   let e_?? = it_??.next();
   if(e??.is_none()) break;
   let e = e??.unwrap();
-  stmt..
+  stmt...
  }
 }

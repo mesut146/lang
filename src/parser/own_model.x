@@ -62,7 +62,6 @@ struct VarScope{
     line: i32;
     vars: List<i32>;
     objects: List<Object>;
-    actions: List<Action>;
     exit: Exit;
     parent: i32;
     sibling: i32;
@@ -78,16 +77,11 @@ enum StateType {
     ASSIGNED
 }
 
-#derive(Debug)
 struct State{
     kind: StateType;
     scope: VarScope*;
 }
 
-enum Action {
-    MOVE(mv: Move),
-    SCOPE(id: i32, line: i32)
-}
 struct Move{
     lhs: Option<Moved>;
     rhs: Moved;
@@ -152,6 +146,9 @@ impl Moved{
 }
 
 impl Rhs{
+    func new(scope: Variable, name: String): Rhs{
+        return Rhs::FIELD{scope, name};
+    }
     func new(expr: Expr*, own: Own*): Rhs{
         if let Expr::Access(scp*, name*)=(expr){
             let scp_rt = own.compiler.get_resolver().visit(scp.get());
@@ -254,7 +251,6 @@ impl VarScope{
             line: line,
             vars: List<i32>::new(),
             objects: List<Object>::new(),
-            actions: List<Action>::new(),
             exit: exit,
             parent: -1,
             sibling: -1,
