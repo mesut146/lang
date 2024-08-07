@@ -10,6 +10,7 @@ import parser/debug_helper
 import parser/stmt_emitter
 import parser/expr_emitter
 import parser/ownership
+import parser/own_model
 import parser/cache
 import parser/derive
 import std/map
@@ -846,7 +847,10 @@ impl CompilerConfig{
     }
     let root = self.root_dir.get();
     if(path.starts_with(root.str())){
-      return path.substr(root.len());
+      let res = path.substr(root.len());
+      if(res.ends_with("/")){
+        return res.substr(0, res.len() - 1);
+      }
     }
     return path;
   }

@@ -8,6 +8,7 @@ import parser/utils
 import parser/debug_helper
 import parser/printer
 import parser/ownership
+import parser/own_model
 import std/map
 import std/libc
 import std/stack

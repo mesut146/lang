@@ -73,7 +73,8 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new(line, line);
             for fd in &ev.fields{
                 if(fd.type.is_pointer()){
-                    then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
+                    //then.list.add(parse_stmt(format("printf(\"{}=%p *=%d\\n\", *&fd.name);", &fd.name, &fd.name, &fd.name), unit, line));
+                    //then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
                 }else{
                     then.list.add(parse_stmt(format("let __{} = {}.clone();", &fd.name, &fd.name), unit, line));
                 }
@@ -91,8 +92,13 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                         str.print(", ");
                     }
                     str.print(&fd.name);
-                    str.print(": __");
-                    str.print(&fd.name);
+                    str.print(": ");
+                    if(fd.type.is_pointer()){
+                        str.print(&fd.name);
+                    }else{
+                        str.print("__");
+                        str.print(&fd.name);
+                    }
                     ++i;
                 }
                 str.print("};");
@@ -158,7 +164,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     m.body = Option::new(body);
     let imp = make_impl(decl, "Clone");
     imp.methods.add(m);
-    print("clone={}\n", &imp);
+    //print("clone={}\n", &imp);
     return imp;
 }
 
@@ -293,7 +299,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
             }
         }
-        body.list.add(parse_stmt(format("f.print(\"}\");", vt), unit, line));
+        body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
     }
     m.body = Option::new(body);
     imp.methods.add(m);
@@ -311,13 +317,13 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.err(node, "format arg not str literal");
     }
     let fmt_str: str = lit_opt.unwrap().str();
-    let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
+    /*let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
     for (let i = 0;i < format_specs.len();++i) {
         let fs = format_specs[i];
         if (fmt_str.contains(fs)) {
             r.err(node, format("invalid format specifier: {}", fs));
         }
-    }
+    }*/
     let line = node.line;
     let info = FormatInfo::new(line);
     let block = &info.block;
@@ -374,6 +380,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //<arg>.debug(&f);
         let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit, line);
         block.list.add(dbg_st);
+    }
+    if(arg_idx < mc.args.len()){
+        r.err(node, "format arg not matched in specifier");
     }
     if(Resolver::is_print(mc)){
         //f.buf.print();

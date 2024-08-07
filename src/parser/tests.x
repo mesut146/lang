@@ -9,6 +9,7 @@ import parser/debug_helper
 import parser/bridge
 import parser/utils
 import parser/ownership
+import parser/own_model
 import parser/cache
 import parser/main
 import std/map
@@ -96,6 +97,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
       bin.drop();
     }
     list.drop();
+    inc.drop();
 }
 
 func std_test(){

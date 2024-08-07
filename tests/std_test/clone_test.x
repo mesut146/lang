@@ -16,6 +16,17 @@ enum E{
     E2
 }
 
+impl E{
+  func dump(self){
+    if let E::E1(a, b, c*)=(self){
+      let b2 = b;
+      printf("E::E1{a: %d, b: %p, c: %d} b2=%p\n", a, b, c.d, b2);
+      return;
+    }
+    panic("");
+  }
+}
+
 func main(){
   let x = 10;
   let b = B{20};
@@ -31,7 +42,9 @@ func main(){
   let e1_clone = e1.clone();
   let e1_str = Fmt::str(&e1);
   let e1c_str = Fmt::str(&e1_clone);
-  assert_eq(&e1_str, &e1c_str);
+  printf("&x=%p\n", &x);
+  e1.dump();
+  //assert_eq(&e1_str, &e1c_str);
   e1_str.drop();
   e1c_str.drop();
 

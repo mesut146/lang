@@ -9,6 +9,7 @@ import parser/debug_helper
 import parser/bridge
 import parser/utils
 import parser/ownership
+import parser/own_model
 import parser/cache
 import parser/tests
 import std/map

@@ -1,5 +1,7 @@
 import parser/ast
 import parser/ownership
+import parser/own_helper
+import parser/own_model
 import parser/bridge
 import parser/utils
 import parser/printer

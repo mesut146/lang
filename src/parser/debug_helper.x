@@ -6,6 +6,7 @@ import parser/resolver
 import parser/utils
 import parser/printer
 import parser/ownership
+import parser/own_model
 import std/map
 import std/libc
 import std/stack
