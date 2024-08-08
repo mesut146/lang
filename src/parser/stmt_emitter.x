@@ -44,11 +44,11 @@ impl Compiler{
         self.visit_while(node, cnd, body.get());
       }
       else if(node is Stmt::Continue){
-        self.own.get().do_continue();
+        self.own.get().do_continue(node.line);
         CreateBr(*self.loops.last());
       }
       else if(node is Stmt::Break){
-        self.own.get().do_break();
+        self.own.get().do_break(node.line);
         CreateBr(*self.loopNext.last());
       }
       else{

@@ -50,7 +50,7 @@ impl Drop for B{
 }
 
 func send(a: A){
-    //a.drop();
+    a.drop();
 }
 
 func reset(){
