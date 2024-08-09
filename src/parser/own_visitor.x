@@ -47,6 +47,10 @@ impl OwnVisitor{
             self.visit_var(ve);
         }else if let Stmt::Expr(expr*)=(node){
             self.visit_expr(expr);
+        }else if let Stmt::If(is*)=(node){
+            //todo
+        }else if let Stmt::IfLet(il*)=(node){
+            //todo
         }else{
             //panic("visit line: {} {}\n", node.line, node);
         }

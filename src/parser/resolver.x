@@ -289,7 +289,7 @@ impl Context{
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
     let res = self.create_resolver(&path2);
-    Drop::drop(path2);
+    path2.drop();
     return res;
   }
   func get_path(self, is: ImportStmt*): String{
@@ -350,13 +350,12 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
       let i1 = arr.get_ptr(i);
       let s1: String = join(&i1.list, "/");
       let s2: String = join(&is.list, "/");
-      if (s1.eq(&s2)) {
-          Drop::drop(s1);
-          Drop::drop(s2);
+      let res = s1.eq(&s2);
+      s1.drop();
+      s2.drop();
+      if (res) {
           return true;
       }
-      Drop::drop(s1);
-      Drop::drop(s2);
   }
   return false;
 }
@@ -372,7 +371,7 @@ impl Resolver{
     }
     let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
-    Drop::drop(parser);
+    parser.drop();
     if(print_unit){
       print("print_unit\n");
       print("unit={}\n", unit);
@@ -408,11 +407,10 @@ impl Resolver{
     let tmp = self.scopes.remove(self.scopes.len() - 1);
     tmp.drop();
   }
-  func addScope(self, name: String, type: Type, prm: bool, id: i32){
-    for(let i=0;i<self.scopes.len();++i){
-      let s = self.scopes.get_ptr(i);
-      if(s.find(&name).is_some()){
-        panic("variable {} already exists\n", name);
+  func addScope(self, name: String, type: Type, prm: bool, id: i32, line: i32){
+    for scope in &self.scopes{
+      if(scope.find(&name).is_some()){
+        self.err(line, format("variable {} already exists\n", &name));
       }
     }
     let scope = self.scopes.last();
@@ -513,7 +511,7 @@ impl Resolver{
             err_opt.drop();
             type.drop();
         }
-        self.addScope(g.name.clone(), rhs.type.clone(), false, g.id);
+        self.addScope(g.name.clone(), rhs.type.clone(), false, g.id, g.line);
         rhs.drop();
     }
   }
@@ -614,13 +612,13 @@ impl Resolver{
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
       print("{}\n", str);
-      Drop::drop(str);
+      str.drop();
     }
     panic("{}\n", msg);
   }
   func err(self, msg: String){
     self.err(msg.str());
-    Drop::drop(msg);
+    msg.drop();
   }
   func err(self, node: Expr*, msg: str){
     let path = &self.unit.path;
@@ -632,7 +630,7 @@ impl Resolver{
   }
   func err(self, node: Expr*, msg: String){
     self.err(node, msg.str());
-    Drop::drop(msg);
+    msg.drop();
   }
   func err(self, node: Stmt*, msg: str){
     let str = format("{}\n{} {}", self.unit.path, msg, node);
@@ -805,7 +803,7 @@ impl Resolver{
       return false;
     }
     let decl = self.get_decl(&rt).unwrap();
-    Drop::drop(rt);
+    rt.drop();
     if (decl.base.is_some()) {
       if(self.is_cyclic(decl.base.get(), target)){
         return true;
@@ -961,12 +959,12 @@ impl Resolver{
     if(node.self.is_some()){
       let self_prm: Param* = node.self.get();
       self.visit_type(&self_prm.type).drop();
-      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true, self_prm.id);
+      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true, self_prm.id, self_prm.line);
     }
     for(let i = 0;i < node.params.len();++i){
       let prm = node.params.get_ptr(i);
       self.visit_type(&prm.type).drop();
-      self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id);
+      self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id, prm.line);
     }
     if(node.body.is_some()){
       self.visit(node.body.get());
@@ -1102,7 +1100,7 @@ impl Resolver{
   func visit_type(self, node: Type*): RType{
     let str = node.print();
     let res = self.visit_type_str(node, &str);
-    Drop::drop(str);
+    str.drop();
     return res;
   }
 
@@ -2308,7 +2306,7 @@ impl Resolver{
         if (arg.is_ptr) {
             ty = ty.toPtr();
         } 
-        self.addScope(arg.name.clone(), ty.clone(), false, arg.id);
+        self.addScope(arg.name.clone(), ty.clone(), false, arg.id, arg.line);
         self.cache.add(arg.id, RType::new(ty));
     }
     self.visit(is.then.get());
@@ -2346,7 +2344,7 @@ impl Resolver{
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
       let res = self.visit(f);
-      self.addScope(f.name.clone(), res.type.clone(), false, f.id);
+      self.addScope(f.name.clone(), res.type.clone(), false, f.id, f.line);
       res.drop();
     }
   }

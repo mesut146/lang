@@ -78,5 +78,7 @@ func main(){
     check_ids(30, 31);
     reset();
 
-    redo_if(40, true);
+    redo_if(40, false);
+    check_ids(40);
+    reset();
 }

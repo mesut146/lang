@@ -83,7 +83,10 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
       let file: String = dir.str();
       file.append("/");
       file.append(name);
-      if(is_dir(file.str())) continue;
+      if(is_dir(file.str())){
+        file.drop();
+        continue;
+      }
       let config = CompilerConfig::new(get_src_dir());
       config.set_file(file);
       config.set_out(get_out());

@@ -120,42 +120,6 @@ func max_for(type: Type*): i64{
     return x - 1;
 }
 
-//replace any type in decl with src by same index
-/*func replace_type(type: Type*, map: Map<String, Type>*): Type {
-    let id = Node::new(-1, type.line);
-    if let Type::Pointer(bx*) = (type){
-        let scope = replace_type(bx.get(), map);
-        let res = Type::Pointer{.id, Box::new(scope)};
-        return res;
-    }
-    if let Type::Array(bx*, size) = (type){
-        let scope = replace_type(bx.get(), map);
-        let res = Type::Array{.id, Box::new(scope), size};
-        return res;
-    }
-    if let Type::Slice(bx*) = (type){
-        let scope = replace_type(bx.get(), map);
-        let res = Type::Slice{.id, Box::new(scope)};
-        return res;
-    }
-    let str = type.print();
-    let opt = map.get_ptr(&str);
-    Drop::drop(str);
-    if (opt.is_some()) {
-        return opt.unwrap().clone();
-    }
-    let smp = type.as_simple();
-    let res = Simple::new(smp.name.clone());
-    if (smp.scope.is_some()) {
-        res.scope = Ptr::new(replace_type(smp.scope.get(), map));
-    }
-    for (let i = 0; i < smp.args.size(); ++i) {
-        let ta = smp.args.get_ptr(i);
-        res.args.add(replace_type(ta, map));
-    }
-    return res.into(type.line);
-}*/
-
 func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer() && !type.is_void(); 
 }
@@ -269,9 +233,9 @@ func printMethod(m: Method*): String{
       let prm_type = &m.params.get_ptr(i).type;
       let mapped: Type = copier.visit(prm_type);
       s.print(&mapped);
-      Drop::drop(mapped);
+      mapped.drop();
     }
-    Drop::drop(map);
+    map.drop();
     s.print(")");
     return s.unwrap();
   }

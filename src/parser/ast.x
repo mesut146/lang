@@ -20,7 +20,7 @@ func prim_size(s: str): Option<u32>{
 
 func prim_size(s: String): Option<u32>{
   let res = prim_size(s.str());
-  Drop::drop(s);
+  s.drop();
   return res;
 }
 
@@ -386,14 +386,14 @@ impl Type{
       std::no_drop(self);
       return simple;
     }
-    Drop::drop(self);
+    self.drop();
     panic("as_simple");
   }
 
   func is_void(self): bool{
     let str = self.print();
     let res = str.eq("void");
-    Drop::drop(str);
+    str.drop();
     return res;
   }
   func is_prim(self): bool{
@@ -402,7 +402,7 @@ impl Type{
   func is_unsigned(self): bool{
     let str = self.print();
     let res = str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
-    Drop::drop(str);
+    str.drop();
     return res;
   }
   func is_str(self): bool{
@@ -411,7 +411,7 @@ impl Type{
   func eq(self, s: str): bool{
     let tmp = self.print();
     let res = tmp.eq(s);
-    Drop::drop(tmp);
+    tmp.drop();
     return res;
   }
   func is_generic(self): bool{

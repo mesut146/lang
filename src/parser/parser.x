@@ -40,7 +40,7 @@ impl Parser{
         }
         self.tokens.add(t);
     }
-    Drop::drop(lexer);
+    lexer.drop();
   }
     
   func has(self): bool{
@@ -149,8 +149,8 @@ impl Parser{
           unit.items.add(Item::Decl{self.parse_enum(derives, attr)});
           continue;
         }else{
-          Drop::drop(derives);
-          Drop::drop(attr);
+          derives.drop();
+          attr.drop();
         }
         if(self.is(TokenType::IMPL)){
           unit.items.add(Item::Impl{self.parse_impl()});
@@ -198,7 +198,7 @@ impl Parser{
           let parent = Parent::Trait{type: type.clone()};
           res.methods.add(self.parse_method(parent));
       }
-      Drop::drop(type);
+      type.drop();
       self.consume(TokenType::RBRACE);
       return res;
     }
@@ -218,7 +218,7 @@ impl Parser{
         self.consume(TokenType::IMPL);
         let type_params = List<Type>::new();
         if (self.is(TokenType::LT)) {
-          Drop::drop(type_params);
+          type_params.drop();
           type_params = self.type_params();
         }
         let t1 = self.parse_type();
@@ -242,7 +242,7 @@ impl Parser{
             arr.add(self.parse_method(parent.clone()));
         }
         self.consume(TokenType::RBRACE);
-        Drop::drop(parent);
+        parent.drop();
         return arr;
     }
     
@@ -424,7 +424,7 @@ impl Parser{
             let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
             res = tmp;
           }
-          Drop::drop(part);
+          part.drop();
         }
         return res;
       }
@@ -772,6 +772,7 @@ impl Parser{
       }else{
         let type = self.parse_type();
         lhs = Option::new(MatchLhs::ENUM{type, List<ArgBind>::new()});
+        //todo args
         if(self.is(TokenType::LPAREN)){
           self.consume(TokenType::LPAREN);
           self.consume(TokenType::RPAREN);
@@ -779,12 +780,12 @@ impl Parser{
       }
       self.consume(TokenType::ARROW);
       let rhs = self.parse_expr();
+      res.cases.add(MatchCase{lhs.unwrap(), rhs});
       if(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);
       }else{
         break;
       }
-      res.cases.add(MatchCase{lhs.unwrap(), rhs});
     }
     self.consume(TokenType::RBRACE);
     return Expr::MatchExpr{.id, Box::new(res)};
@@ -868,13 +869,15 @@ impl Parser{
     if let Expr::Name(nm)=(type_expr){
       ty = Option::new(Type::new(nm));
     }
-    else if let Expr::Type(t)=(type_expr){
-      ty = Option::new(t);
-    }
     else{
-      print("was expecting name got {}", &type_expr);
-      type_expr.drop();
-      panic("");
+      if let Expr::Type(t)=(type_expr){
+        ty = Option::new(t);
+      }
+      else{
+        print("was expecting name got {}", &type_expr);
+        type_expr.drop();
+        panic("");
+      }
     }
     let args = List<Entry>::new();
     self.consume(TokenType::LBRACE);
@@ -1025,11 +1028,11 @@ func dump(e: Expr*){
   let f = Fmt::new();
   e.debug(&f);
   f.buf.print();
-  Drop::drop(f);
+  f.drop();
 }
 func dump(e: Stmt*){
   let f = Fmt::new();
   e.debug(&f);
   f.buf.print();
-  Drop::drop(f);
+  f.drop();
 }

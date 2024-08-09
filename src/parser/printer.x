@@ -15,8 +15,8 @@ func body(node: Stmt*, f: Fmt*){
     f.print(lines.get_ptr(j));
     f.print("\n");
   }
-  Drop::drop(str);
-  Drop::drop(lines);
+  str.drop();
+  lines.drop();
 }
 
 impl Debug for Unit{
@@ -88,8 +88,8 @@ impl Debug for Impl{
         f.print(lines.get_ptr(j));
         f.print("\n");
       }
-      Drop::drop(ms);
-      Drop::drop(lines);
+      ms.drop();
+      lines.drop();
     }
     f.print("\n}");
   }
@@ -379,7 +379,7 @@ impl Debug for Literal{
       f.print("_");
       self.suffix.get().debug(f);
     }*/
-    Drop::drop(replaced);
+    replaced.drop();
   }
 }
 

@@ -187,20 +187,20 @@ impl AllocHelper{
       if (rval.rvalue) {
           self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
       }
-      Drop::drop(rval);
+      rval.drop();
     }
     let res = Option<Value*>::new();
     if(rt.is_method() && is_struct(&rt.type)){
       //non-internal method
       res = Option::new(self.alloc_ty(&rt.type, node));
     }
-    rt.drop();
     if(call.scope.is_some()){
       self.visit(call.scope.get());
     }
     for arg in &call.args{
       self.visit(arg);
     }
+    rt.drop();
     return res;
   }
   

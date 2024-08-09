@@ -20,14 +20,14 @@ impl AstCopier{
         let map = Map<String, Type>::new();
         let copier = AstCopier::new(&map, unit);
         let res = copier.visit(node);
-        Drop::drop(map);
+        map.drop();
         return res;
     }
     func clone<T>(node: T*): T{
         let map = Map<String, Type>::new();
         let copier = AstCopier::new(&map);
         let res = copier.visit(node);
-        Drop::drop(map);
+        map.drop();
         return res;
     }
 
@@ -96,7 +96,7 @@ impl AstCopier{
             let res = self.visit_list(variants);
             return Decl::Enum{.base, res};
         }
-        Drop::drop(base);
+        base.drop();
         let msg = format("visit decl {}\n", node);
         panic("{}", msg.str());
     }

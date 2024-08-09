@@ -41,14 +41,14 @@ func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
     let parser = Parser::from_string(input, line);
     parser.unit = Option::new(unit);
     let res = parser.parse_stmt();
-    Drop::drop(parser);
+    parser.drop();
     return res;
 }
 func parse_expr(input: String, unit: Unit*, line: i32): Expr{
     let parser = Parser::from_string(input, line);
     parser.unit = Option::new(unit);
     let res = parser.parse_expr();
-    Drop::drop(parser);
+    parser.drop();
     return res;
 }
 

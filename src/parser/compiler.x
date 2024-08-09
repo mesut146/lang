@@ -35,20 +35,6 @@ struct Compiler{
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
 }
-impl Drop for Compiler{
-  func drop(*self){
-    Drop::drop(self.ctx);
-    Drop::drop(self.main_file);
-    Drop::drop(self.llvm);
-    Drop::drop(self.protos);
-    Drop::drop(self.NamedValues);
-    Drop::drop(self.globals);
-    Drop::drop(self.allocMap);
-    Drop::drop(self.loops);
-    Drop::drop(self.loopNext);
-    Drop::drop(self.own);
-  }
-}
 
 struct llvm_holder{
   target_machine: TargetMachine*;
@@ -57,8 +43,8 @@ struct llvm_holder{
 }
 impl Drop for llvm_holder{
   func drop(*self){
-    Drop::drop(self.target_triple);
-    Drop::drop(self.di);
+    self.target_triple.drop();
+    self.di.drop();
     destroy_ctx();
     destroy_llvm(self.target_machine);
   }
@@ -79,10 +65,10 @@ impl Drop for Protos{
       let pair = self.libc.get_pair_idx(i).unwrap();
       Function_delete(pair.b);
     }*/
-    Drop::drop(self.classMap);
-    Drop::drop(self.funcMap);
-    Drop::drop(self.libc);
-    Drop::drop(self.std);
+    self.classMap.drop();
+    self.funcMap.drop();
+    self.libc.drop();
+    self.std.drop();
   }
 }
 
@@ -288,7 +274,7 @@ impl Compiler{
     /*if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
     }*/
-    Drop::drop(outFile_cstr);
+    outFile_cstr.drop();
     self.cleanup();
     cache.update(path);
     cache.write_cache();
@@ -510,7 +496,7 @@ impl Compiler{
     exit.drop();
     self.llvm.di.get().finalize();
     verifyFunction(f);
-    Drop::drop(self.own);
+    self.own.drop();
     self.own = Option<Own>::new();
   }
   
@@ -709,7 +695,10 @@ impl Compiler{
       let name = list.get_ptr(i).str();
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
-      if(is_dir(file.str())) continue;
+      if(is_dir(file.str())) {
+        file.drop();
+        continue;
+      }
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get_ptr(j).str());
@@ -719,8 +708,8 @@ impl Compiler{
         print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
       }
       let obj = cmp.compile(file.str(), &cache, &config);
-      Drop::drop(cmp);
       compiled.add(obj);
+      cmp.drop();
       file.drop();
     }
     list.drop();

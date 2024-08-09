@@ -1,45 +1,5 @@
 import own/common
 
-func if_only(c: bool, id: i32){
-    let a = A{a: id};
-    if(c){
-        send(a);
-        check_ids(id);
-    }else{
-        check_ids();
-        //a.drop()
-    }
-    check_ids(id);
-    //no drop
-}
-func else_only(c: bool, id: i32){
-    let a = A{a: id};
-    if(c){
-        check_ids();
-        //a.drop()
-    }else{
-        send(a);
-        check_ids(id);
-    }
-    check_ids(id);
-}
-
-func test1(){
-    if_only(true, 1);
-    check_ids(1);
-    reset();
-    if_only(false, 2);
-    check_ids(2);
-    reset();
-
-    else_only(true, 3);
-    check_ids(3);
-    reset();
-    else_only(false, 4);
-    check_ids(4);
-    reset();
-}
-
 func if_else_2_var(c: bool, id: i32, id2: i32){
     let a = A{a: id};
     let b = A{a: id2};
@@ -88,7 +48,6 @@ func var_if_if(c: bool, c2: bool, id: i32){
 
 
 func main(){
-    test1();
     test2();
 
     if_var_if(true, true, 7);

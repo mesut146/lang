@@ -358,7 +358,7 @@ impl Own{
                 self.drop_obj(obj, scope, line);
             }
             if let Droppable::VAR(var)=(dr){
-                self.drop_var(var, scope, true, line);
+                self.drop_var(var, scope, line);
             }
         }
         drops.drop();
@@ -380,7 +380,7 @@ impl Own{
                 self.drop_obj(obj, scope, line);
             }
             if let Droppable::VAR(var)=(dr){
-                self.drop_var(var, scope, false, line);
+                self.drop_var(var, scope, line);
             }
         }
         drops.drop();
@@ -416,41 +416,41 @@ impl Own{
         }
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);
-        for(let i = 0;i < outers.len();++i){
-            let dr: Droppable* = outers.get_ptr(i);
+        for dr in &outers{
             if let Droppable::OBJ(obj)=(dr){
+                //local obj, drop it
                 if(obj.scope == scope.id){
                     self.drop_obj(obj, scope, line);
                 }
+                continue;
             }
-            if let Droppable::VAR(var)=(dr){
-                dbg(scope.line == 32 && line == 35, 69);
-                if(var.scope == scope.id){
-                    //local var, we must drop it
-                    self.drop_var(var, scope, true, line);
-                }else{
-                    //outer var, check if moved by sibling
-                    if(scope.kind is ScopeType::ELSE){
-                        let if_scope = self.get_scope(scope.sibling);
-                        let rhs = Rhs::new(var.clone());
-                        let state = self.get_state(&rhs, if_scope);
-                        rhs.drop();
-                        //print("sibling {} {}\n", var, state);
-                        if(state.is_moved() && !state.scope.exit.is_jump()){
-                            self.drop_var(var, scope, false, line);
-                        }
-                    }
-                    else if(scope.kind is ScopeType::IF){
-                        let rhs = Rhs::new(var.clone());
-                        let parent_scope = self.get_scope(scope.parent);
-                        let parent_state = self.get_state(&rhs, parent_scope);
-                        let if_state = self.get_state(&rhs, scope);
-                        rhs.drop();
-                        if(parent_state.is_moved()){
-                            self.drop_var(var, scope, false, line);
-                        }
-                    }
+            let var = dr.as_var();
+            if(var.scope == scope.id){
+                //local var, drop it
+                self.drop_var(var, scope, line);
+                continue;
+            }
+            //outer var, check if moved by sibling
+            if(scope.kind is ScopeType::ELSE){
+                let if_scope = self.get_scope(scope.sibling);
+                let rhs = Rhs::new(var.clone());
+                let if_state = self.get_state(&rhs, if_scope);
+                if(if_state.is_moved() && !if_state.scope.exit.is_jump()){
+                    self.drop_var(var, scope, line);
                 }
+                rhs.drop();
+            }
+            else if(scope.kind is ScopeType::IF){
+                //if without else
+                let rhs = Rhs::new(var.clone());
+                let parent_scope = self.get_scope(scope.parent);
+                let parent_state = self.get_state(&rhs, parent_scope);
+                let if_state = self.get_state(&rhs, scope);
+                //parent moved, if reinit, else inferred moved, so must drop
+                if(parent_state.is_moved()){
+                    self.drop_var(var, scope, line);
+                }
+                rhs.drop();
             }
         }
         outers.drop();
@@ -459,20 +459,8 @@ impl Own{
         if(verbose){
             print("\n");
         }
-        //update both assign
-        if(scope.kind is ScopeType::ELSE){
-            for pair in &scope.state_map{//Pair<Rhs, StateType>*
-                if(pair.b is StateType::ASSIGNED){
-                    let if_scope = self.get_scope(scope.sibling);
-                    let if_state = if_scope.state_map.get_ptr(&pair.a);
-                    if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
-                        let parent = self.get_scope(scope.parent);
-                        self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
-                    }
-                }
-            }
-        }
     }
+
     func end_scope_update(self){
         let id = self.cur_scope;
         let scope = self.get_scope(id);
@@ -497,24 +485,33 @@ impl Own{
         if(!(scope.kind is ScopeType::ELSE)){
             panic("end {}", scope.kind);
         }
-        //any move, both assign
+        //move in else -> parent
         if(!scope.exit.is_jump()){
-            for(let i = 0;i < scope.state_map.len();++i){
-                let pair: Pair<Rhs, StateType>* = scope.state_map.get_pair_idx(i).unwrap();
+            for pair in &scope.state_map{//Pair<Rhs, StateType>*
                 if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
                     parent.state_map.add(pair.a.clone(), pair.b);
                 }
             }
         }
+        //move in if -> parent
         let if_scope = self.get_scope(scope.sibling);
         if(!if_scope.exit.is_jump()){
-            for(let i = 0;i < if_scope.state_map.len();++i){
-                let pair: Pair<Rhs, StateType>* = if_scope.state_map.get_pair_idx(i).unwrap();
+            for pair in &if_scope.state_map{
                 if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
                     parent.state_map.add(pair.a.clone(), pair.b);
                 }
             }
         }
+        //both assign -> parent
+        for pair in &scope.state_map{//Pair<Rhs, StateType>*
+            if(pair.b is StateType::ASSIGNED){
+                let if_state = if_scope.state_map.get_ptr(&pair.a);
+                if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
+                    self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
+                }
+            }
+        }
+        
     }
     func end_scope_if(self, else_stmt: Ptr<Stmt>*, line: i32){
         //merge else moves then drop all
@@ -545,43 +542,46 @@ impl Own{
         if(verbose){
             print("end_scope_if_after line: {}\n", if_scope.line);
         }
-        for(let i = 0;i < outers.len();++i){
-            let out: Droppable* = outers.get_ptr(i);
-            if let Droppable::VAR(var)=(out){
-                dbg(var.name.eq("aa"), 44);
-                let rhs = Rhs::new(var.clone());
-                if(var.scope == if_id){
-                    //local var, we must drop it
-                    self.drop_var(var, if_scope, false, line);
-                    rhs.drop();
-                    continue;
+        for out in &outers{
+            if let Droppable::OBJ(obj) = (out){
+                //local obj, drop it
+                if(obj.scope == if_scope.id){
+                    self.drop_obj(obj, if_scope, line);
                 }
-                let parent_state = self.get_state(&rhs, parent_scope);
-                //print("parent_state={}\n", parent_state);
-                if(parent_state.is_moved()){
-                    let if_state = self.get_state(&rhs, if_scope);
-                    if(if_state.is_assigned()){
-                        let else_state = self.get_state(&rhs, else_scope);
-                        if(else_state.is_none()){
-                            //self.drop_var(var, if_scope, false, line);
-                            self.drop_var_real(var, line);
-                            panic("aha");
-                        }
-                    }
-                    //todo dont look child
-                    //already moved in parent, dont check sibling move
-                    rhs.drop();
-                    continue;
-                }
-                let else_state = self.get_state(&rhs, else_scope);
-                if(else_state.is_moved()){
-                    //print("sibling2 {}\n", var);
-                    //else moved outer, drop in if
-                    self.drop_var(var, if_scope, false, line);
-                    //panic("moved in sibling {}", var);
-                }
-                rhs.drop();
+                continue;
             }
+            let var = out.as_var();
+            if(var.scope == if_id){
+                //local var, drop it
+                self.drop_var(var, if_scope, line);
+                continue;
+            }
+            let rhs = Rhs::new(var.clone());
+            let parent_state = self.get_state(&rhs, parent_scope);
+            //print("parent_state={}\n", parent_state);
+            if(parent_state.is_moved()){
+                let if_state = self.get_state(&rhs, if_scope);
+                if(if_state.is_assigned()){
+                    let else_state = self.get_state(&rhs, else_scope);
+                    if(else_state.is_none()){
+                        //self.drop_var(var, if_scope, line);
+                        self.drop_var_real(var, line);
+                        panic("aha");
+                    }
+                }
+                //todo dont look child
+                //already moved in parent, dont check sibling move
+                rhs.drop();
+                continue;
+            }
+            let else_state = self.get_state(&rhs, else_scope);
+            if(else_state.is_moved()){
+                //print("sibling2 {}\n", var);
+                //else moved outer, drop in if
+                self.drop_var(var, if_scope, line);
+                //panic("moved in sibling {}", var);
+            }
+            rhs.drop();
         }
         outers.drop();
         //restore old scope
@@ -589,7 +589,6 @@ impl Own{
             let st = visitor.scopes.get_ptr(i);
             self.scope_map.remove(st);
         }
-        
         if(verbose){
             print("\n");
         }
@@ -649,7 +648,7 @@ impl Own{
         moved_fields.drop();
         rt.drop();
     }
-    func drop_var(self, var: Variable*, scope: VarScope*, look_parent: bool, line: i32){
+    func drop_var(self, var: Variable*, scope: VarScope*, line: i32){
         if(var.is_self && is_drop_method(self.method)){
             return;
         }

@@ -11,4 +11,5 @@ for e in &list{
   let e = e??.unwrap();
   stmt...
  }
+ it_??.drop();
 }

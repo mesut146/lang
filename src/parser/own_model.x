@@ -265,3 +265,25 @@ enum Droppable{
     VAR(var: Variable*),
     OBJ(obj: Object*)
 }
+impl Droppable{
+    func as_var(self): Variable*{
+        if let Droppable::VAR(v)=(self){
+            return v;
+        }
+        panic("");
+    }
+    func drop_local(self, scope: VarScope*, line: i32, own: Own*): bool{
+        if let Droppable::OBJ(obj) = (self){
+            if(obj.scope == scope.id){
+                own.drop_obj(obj, scope, line);
+                return true;
+            }
+        }else if let Droppable::VAR(var) = (self){
+            if(var.scope == scope.id){
+                own.drop_var(var, scope, line);
+                return true;
+            }
+        }
+        return false;
+    }
+}

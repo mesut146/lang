@@ -634,7 +634,7 @@ impl Compiler{
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
     let name = format("{}::{}", decl.type, variant.name.str());
     let res = *self.protos.get().classMap.get_ptr(&name).unwrap();
-    Drop::drop(name);
+    name.drop();
     return res;
   }
 
