@@ -341,11 +341,17 @@ impl Simple{
   Generic(scope: Box<Type>, name: String, args: List<Type>)
 }*/
 
+struct FunctionType{
+  return_type: Type;
+  params: List<Type>;
+}
+
 enum Type: Node{
   Simple(type: Simple),
   Pointer(type: Box<Type>),
   Array(type: Box<Type>, size: i32),
-  Slice(type: Box<Type>)
+  Slice(type: Box<Type>),
+  Function(type: Box<FunctionType>)
 }
 impl Type{
   func new(name: str): Type{

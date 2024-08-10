@@ -204,19 +204,7 @@ impl Debug for Param{
 impl Debug for Type{
   func debug(self, f: Fmt*){
     if let Type::Simple(smp*)=(self){
-      if(smp.scope.is_some()){
-        smp.scope.get().debug(f);
-        f.print("::");
-      }
-      f.print(&smp.name);
-      if(!smp.args.empty()){
-        f.print("<");
-        for(let i = 0;i < smp.args.len();++i){
-          if(i>0) f.print(", ");
-          smp.args.get_ptr(i).debug(f);
-        }
-        f.print(">");
-      }
+     smp.debug(f);
     }
     else if let Type::Pointer(ty*) = (self){
       ty.get().debug(f);
@@ -233,7 +221,38 @@ impl Debug for Type{
       f.print("[");
       box.get().debug(f);
       f.print("]");
-    }else panic("Type::debug() corrupt");
+    }else if let Type::Function(ft*) = (self){
+      ft.debug(f);
+    }
+    else panic("Type::debug() corrupt");
+  }
+}
+impl Debug for Simple{
+  func debug(self, f: Fmt*){
+    if(self.scope.is_some()){
+      self.scope.get().debug(f);
+      f.print("::");
+    }
+    f.print(&self.name);
+    if(!self.args.empty()){
+      f.print("<");
+      for(let i = 0;i < self.args.len();++i){
+        if(i>0) f.print(", ");
+        self.args.get_ptr(i).debug(f);
+      }
+      f.print(">");
+    }
+  }
+}
+
+impl Debug for FunctionType{
+  func debug(self, f: Fmt*){
+    f.print("func(");
+    if(!self.params.empty()){
+      join(f, &self.params, ", ");
+    }
+    f.print(") -> ");
+    self.return_type.debug(f);
   }
 }
 

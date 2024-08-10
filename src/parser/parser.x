@@ -431,6 +431,9 @@ impl Parser{
     }
     
     func parse_type(self): Type{
+      if(self.is(TokenType::FUNC)){
+        return self.parse_func_type();
+      }
       let res = self.parse_type_prim();
       while (self.is(TokenType::STAR)) {
         let id = self.node();
@@ -439,6 +442,23 @@ impl Parser{
         res = tmp;
       }
       return res;
+    }
+    func parse_func_type(self): Type{
+      let id = self.node();
+      self.consume(TokenType::FUNC);
+      self.consume(TokenType::LPAREN);
+      let params = List<Type>::new();
+      if(!self.is(TokenType::RPAREN)){
+        params.add(self.parse_type());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          params.add(self.parse_type());
+        }
+      }
+      self.consume(TokenType::RPAREN);
+      self.consume(TokenType::ARROW);
+      let ret = self.parse_type();
+      return Type::Function{.id, Box::new(FunctionType{return_type: ret, params: params})};
     }
     
     func gen_part(self): Type{

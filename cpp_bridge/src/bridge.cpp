@@ -80,6 +80,10 @@ void setCtx(llvm::LLVMContext *c) {
     ctx = c;
 }
 
+void printDefaultTargetAndDetectedCPU(){
+    llvm::sys::printDefaultTargetAndDetectedCPU(llvm::outs());
+}
+
 int getDefaultTargetTriple(char *ptr) {
     std::string res = llvm::sys::getDefaultTargetTriple();
     memcpy(ptr, res.data(), res.length());

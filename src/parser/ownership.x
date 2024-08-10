@@ -407,7 +407,8 @@ impl Own{
         let scope = self.get_scope();
         //assert(scope.kind is ScopeType::ELSE || scope.kind is ScopeType::IF);
         if(scope.exit.is_jump()){
-            //has own drop
+            //has own drop, just update state
+            self.end_scope_update();
             self.set_current(scope.parent);
             return;
         }
@@ -595,6 +596,7 @@ impl Own{
         self.set_current(if_scope.parent);
         visitor.drop();
     }
+
     func drop_lhs(self, lhs: Expr*, ptr: Value*){
         if(!self.is_drop_type(lhs)){
             return;

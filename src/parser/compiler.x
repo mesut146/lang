@@ -190,7 +190,14 @@ impl llvm_holder{
     InitializeAllAsmParsers();
     InitializeAllAsmPrinters();
     
+    //printDefaultTargetAndDetectedCPU();
     let target_triple = getDefaultTargetTriple2();
+    let env_triple = getenv2("target_triple");
+    if(env_triple.is_some()){
+      target_triple.drop();
+      target_triple = "aarch64-linux-gnu".str().cstr();
+      print("triple={}\n", target_triple);
+    }
     let target_machine = createTargetMachine(target_triple.ptr());
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
