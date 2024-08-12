@@ -195,6 +195,7 @@ impl AstCopier{
     func visit(self, node: Block*): Block{
         let res = Block::new(node.line, node.end_line);
         self.visit_list(&node.list, &res.list);
+        res.return_expr = self.visit_opt(&node.return_expr);
         return res;
     }
     

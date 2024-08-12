@@ -263,6 +263,7 @@ func is_deref(expr: Expr*): Option<Expr*>{
 enum ExitType {
     NONE,
     RETURN,
+    BLOCK_RETURN,
     PANIC,
     BREAK,
     CONTINE,
@@ -328,6 +329,9 @@ impl Exit{
             return Exit::new(ExitType::NONE);
         }
         if let Stmt::Block(block*)=(stmt){
+            if(block.return_expr.is_some()){
+                return Exit::new(ExitType::BLOCK_RETURN);
+            }
             if(block.list.empty()){
                 return Exit::new(ExitType::NONE);
             }

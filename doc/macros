@@ -8,7 +8,7 @@ printf("", ...): void;
 std::print_type<...>(): str;
 std::size<...>(): i64;
 std::is_ptr<...>(): bool;
-std::env("<name>"): Option<str>;
+std::env("<name>"): Option<str>;//compile time env
 std::no_drop(obj): void;
 std::typeof(obj): <obj type>: str;
 

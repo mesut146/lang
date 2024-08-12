@@ -191,6 +191,10 @@ impl str{
       }
       return 0;
     }
+
+    func owned(self): String{
+      return String::new(*self);
+    }
     
     func str(self): String{
       return String::new(*self);

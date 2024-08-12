@@ -507,9 +507,20 @@ impl Parser{
   func parse_block(self): Block{
       self.consume(TokenType::LBRACE);
       let res = Block::new(self.line(), 0);
-      //print("Block::new {} {}\n", res.line, res.end_line);
       while(!self.is(TokenType::RBRACE)){
-        res.list.add(self.parse_stmt());
+        if(self.is_stmt()){
+          res.list.add(self.parse_stmt());
+        }else{
+          let id = self.node();
+          let expr = self.parse_expr();
+          if(self.is(TokenType::SEMI)){
+            self.pop();
+            res.list.add(Stmt::Expr{.id, expr});
+          }else{
+            res.return_expr.set(expr);
+            break;
+          }
+        }
       }
       res.end_line = self.line();
       self.consume(TokenType::RBRACE);
@@ -535,6 +546,10 @@ impl Parser{
         return ArgBind{.id, name, true};
       }
       return ArgBind{.id, name, false};
+    }
+
+    func is_stmt(self): bool{
+      return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::IF) || self.is(TokenType::LBRACE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
     }
     
     func parse_stmt(self): Stmt{
@@ -800,7 +815,8 @@ impl Parser{
       }
       self.consume(TokenType::ARROW);
       let rhs = self.parse_expr();
-      res.cases.add(MatchCase{lhs.unwrap(), rhs});
+      //todo rhs stmt
+      res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs)});
       if(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);
       }else{

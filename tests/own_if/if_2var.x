@@ -13,6 +13,7 @@ func if_else_2_var(c: bool, id: i32, id2: i32){
         //a.drop();
     }
 }
+
 func main(){
     if_else_2_var(true, 10, 15);
     check_ids(10, 15);

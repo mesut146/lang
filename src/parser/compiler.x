@@ -21,6 +21,14 @@ import std/stack
 static bootstrap = false;
 static inline_rvo = false;
 
+func get_linker(): str{
+  let opt = getenv2("LD");
+  if(opt.is_some()){
+    return opt.unwrap();
+  }
+  return "clang-16";
+}
+
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
@@ -195,9 +203,9 @@ impl llvm_holder{
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
       target_triple.drop();
-      target_triple = "aarch64-linux-gnu".str().cstr();
-      print("triple={}\n", target_triple);
+      target_triple = env_triple.unwrap().owned().cstr();
     }
+    //print("target_triple2={}\n", target_triple);
     let target_machine = createTargetMachine(target_triple.ptr());
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
@@ -239,7 +247,7 @@ impl Compiler{
     }
     let ext = Path::ext(path);
     if (!ext.eq("x")) {
-      panic("invalid extension {}", ext);
+      panic("invalid extension for {}", path);
     }
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
@@ -607,7 +615,8 @@ impl Compiler{
     create_dir(out_dir);
     let cmd = "".str();
     if(is_shared){
-      cmd.append("clang-16 -shared -o ");
+      cmd.append(get_linker());
+      cmd.append("-shared -o ");
     }else{
       cmd.append("ar rcs ");
     }
@@ -631,15 +640,13 @@ impl Compiler{
   }
 
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
-    if(exist(name)){
-      let name_c: CStr = name.cstr();
-      remove(name_c.ptr());
-      name_c.drop();
-    }
     let path = format("{}/{}", out_dir, name);
+    if(exist(path.str())){
+      File::remove_file(path.str());
+    }
     create_dir(out_dir);
-    let cmd = "clang-16 ".str();
-    cmd.append("-o ");
+    let cmd = get_linker().str();
+    cmd.append(" -o ");
     cmd.append(&path);
     cmd.append(" ");
     for(let i = 0;i < compiled.len();++i){
@@ -692,6 +699,10 @@ impl Compiler{
   }
 
   func compile_dir(config: CompilerConfig): String{
+    let env_triple = getenv2("target_triple");
+    if(env_triple.is_some()){
+      print("triple={}\n", env_triple.get());
+    }
     create_dir(config.out_dir.str());
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();

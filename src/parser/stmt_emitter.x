@@ -132,7 +132,7 @@ impl Compiler{
         }
         exit_else.drop();
       }else{
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE));
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
@@ -238,7 +238,7 @@ impl Compiler{
         }
         exit_else.drop();
       }else{
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, stmt.line, Exit::new(ExitType::NONE));
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, stmt.line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);

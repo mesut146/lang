@@ -23,6 +23,7 @@ static print_check: bool = false;
 
 static drop_enabled: bool = false;
 static move_ptr_field = true;
+static allow_else_move = true;
 
 
 struct Own{
@@ -52,11 +53,12 @@ impl Own{
     func get_resolver(self): Resolver*{
         return self.compiler.get_resolver();
     }
-    func add_scope(self, kind: ScopeType, line: i32, exit: Exit): i32{
+    func add_scope(self, kind: ScopeType, line: i32, exit: Exit, is_empty: bool): i32{
         if(verbose){
             print("add_scope {} line:{}\n", kind, line);
         }
         let scope = VarScope::new(kind, line, exit);
+        scope.is_empty = is_empty;
         let parent = self.get_scope();
         //copy parent states
         for pair in &parent.state_map{
@@ -70,11 +72,11 @@ impl Own{
     }
     func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
         let exit = Exit::get_exit_type(stmt);
-        return self.add_scope(kind, stmt.line, exit);
+        return self.add_scope(kind, stmt.line, exit, false);
     }
     func add_scope(self, kind: ScopeType, stmt: Block*): i32{
         let exit = Exit::get_exit_type(stmt);
-        return self.add_scope(kind, stmt.line, exit);
+        return self.add_scope(kind, stmt.line, exit, false);
     }
     func set_current(self, id: i32){
         assert(id != -1);
@@ -450,6 +452,19 @@ impl Own{
                 //parent moved, if reinit, else inferred moved, so must drop
                 if(parent_state.is_moved()){
                     self.drop_var(var, scope, line);
+                }
+                rhs.drop();
+            }
+            //forbid else-only move
+            if(!allow_else_move && scope.kind is ScopeType::ELSE && !scope.is_empty){
+                let rhs = Rhs::new(var.clone());
+                let st = self.get_state(&rhs, scope);
+                if(st.is_moved()){
+                    let if_scope = self.get_scope(scope.sibling);
+                    let if_state = self.get_state(&rhs, if_scope);
+                    if(!if_state.is_moved()){
+                        self.get_resolver().err(scope.line, format("else-only move of {} in {}\n", var, st.get_line()));
+                    }
                 }
                 rhs.drop();
             }

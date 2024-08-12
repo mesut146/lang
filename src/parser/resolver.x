@@ -2338,6 +2338,16 @@ impl Resolver{
       }
       self.visit(node.list.get_ptr(i));
     }
+    if(node.return_expr.is_some()){
+      let rt = self.visit(node.return_expr.get());
+      let ret = &self.curMethod.unwrap().type;
+      let cmp = MethodResolver::is_compatible(&rt.type, ret);
+      if(cmp.is_some()){
+        self.err(node.return_expr.get(), format("return type mismatch {} vs {}", &rt.type, ret));
+      }
+      cmp.drop();
+      rt.drop();
+    }
   }
 
   func visit(self, node: VarExpr*){

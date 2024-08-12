@@ -65,6 +65,7 @@ struct VarScope{
     exit: Exit;
     parent: i32;
     sibling: i32;
+    is_empty: bool;
     state_map: Map<Rhs, StateType>; //var_id -> StateType
     pending_parent: Map<i32, StateType>; //var_id -> StateType
 }
@@ -111,6 +112,12 @@ impl State{
     }
     func is_none(self): bool{
         return self.kind is StateType::NONE;
+    }
+    func get_line(self): i32{
+        if let StateType::MOVED(line)=(self.kind){
+            return line;
+        }
+        panic("not move");
     }
 }
 impl StateType{
@@ -254,6 +261,7 @@ impl VarScope{
             exit: exit,
             parent: -1,
             sibling: -1,
+            is_empty: false,
             state_map: Map<Rhs, StateType>::new(),
             pending_parent: Map<i32, StateType>::new()
         };

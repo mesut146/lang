@@ -584,11 +584,12 @@ struct Block{
   list: List<Stmt>;
   line: i32;
   end_line: i32;
+  return_expr: Option<Expr>;
 }
 
 impl Block{
   func new(line: i32, end_line: i32): Block{
-    return Block{list: List<Stmt>::new(), line: line, end_line: end_line};
+    return Block{list: List<Stmt>::new(), line: line, end_line: end_line, return_expr: Option<Expr>::new()};
   }
 }
 
@@ -706,9 +707,21 @@ struct Match{
 
 struct MatchCase{
   lhs: MatchLhs;
-  rhs: Expr;
+  rhs: MatchRhs;
 }
 enum MatchLhs{
   NONE,
   ENUM(type: Type, args: List<ArgBind>)
+}
+enum MatchRhs{
+  EXPR(e: Expr),
+  STMT(stmt: Stmt*)
+}
+impl MatchRhs{
+  func new(e: Expr): MatchRhs{
+    return MatchRhs::EXPR{e};
+  }
+  func new(stmt: Stmt*): MatchRhs{
+    return MatchRhs::STMT{stmt};
+  }
 }
