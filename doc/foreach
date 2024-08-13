@@ -4,12 +4,12 @@ for e in &list{
 
 
 {
- let it_?? = (&list).iter();
+ let it = (&list).iter();
  while(true){
-  let e_?? = it_??.next();
-  if(e??.is_none()) break;
-  let e = e??.unwrap();
+  let opt = it.next();
+  if(opt.is_none()) break;
+  let e = opt.unwrap();
   stmt...
  }
- it_??.drop();
+ it.drop();
 }

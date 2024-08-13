@@ -229,31 +229,71 @@ impl Own{
     }
 
     func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
-        //scope.pending_parent.add(rt.vh.get().id, kind);
         let rhs = Rhs::new(expr, self);
+        self.update_state(rhs, kind, scope);
+    }
+    func update_state(self, rhs: Rhs, kind: StateType, scope: VarScope*){
         //set parent partially moved
         /*if let Rhs::FIELD(scp*, name*) = (&rhs){
             let scp_rhs = Rhs::new(scp.clone());
             self.update_state(scp_rhs, StateType::MOVED_PARTIAL, scope);
         }*/
-        scope.state_map.add(rhs, kind);
-        if(rt.vh.is_some()){
-            //scope.state_map.add(rt.vh.get().id, kind);
-            /*if(scope.parent != -1 && !(scope.kind is ScopeType::IF || scope.kind is ScopeType::ELSE)){
-                let parent = self.get_scope(scope.parent);
-                self.update_state(expr, rt, kind, parent);
-            }*/
-        }else{
-        }
-    }
-    func update_state(self, rhs: Rhs, kind: StateType, scope: VarScope*){
         //todo remove self param
         scope.state_map.add(rhs, kind);
     }
-    func update_parent_state(self){
-        //let parent = self.get_scope(scope.parent);
-        //self.update_state(expr, rt, kind, parent);
+    func end_scope_update(self){
+        let id = self.cur_scope;
+        let scope = self.get_scope(id);
+        let parent = self.get_scope(scope.parent);
+        if(scope.kind is ScopeType::WHILE || scope.kind is ScopeType::FOR){
+            //copy states to parent directly
+            for pair in &scope.state_map{
+                self.update_state(pair.a.clone(), pair.b, parent);
+            }
+            return;
+        }
+        if(scope.kind is ScopeType::IF){
+            //move only in if
+            /*for(let i = 0;i < scope.state_map.len();++i){
+                let pair: Pair<Rhs, StateType>* = scope.state_map.get_pair_idx(i).unwrap();
+                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
+                    parent.state_map.add(pair.a.clone(), pair.b);
+                }
+            }*/
+            return;
+        }
+        if(!(scope.kind is ScopeType::ELSE)){
+            panic("end {}", scope.kind);
+        }
+        //move in else -> parent
+        if(!scope.exit.is_jump()){
+            for pair in &scope.state_map{//Pair<Rhs, StateType>*
+                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
+                    self.update_state(pair.a.clone(), pair.b, parent);
+                }
+            }
+        }
+        //move in if -> parent
+        let if_scope = self.get_scope(scope.sibling);
+        if(!if_scope.exit.is_jump()){
+            for pair in &if_scope.state_map{
+                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
+                    self.update_state(pair.a.clone(), pair.b, parent);
+                }
+            }
+        }
+        //both assign -> parent
+        for pair in &scope.state_map{//Pair<Rhs, StateType>*
+            if(pair.b is StateType::ASSIGNED){
+                let if_state = if_scope.state_map.get_ptr(&pair.a);
+                if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
+                    self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
+                }
+            }
+        }
+        
     }
+
     func check(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
@@ -387,14 +427,14 @@ impl Own{
         }
         drops.drop();
     }
+    
     func do_break(self, line: i32){
         self.do_continue(line);
     }
 
     func check_ptr_field(self, scope: VarScope*, line: i32){
         if(!move_ptr_field) return;
-        for(let i = 0;i < scope.state_map.len();++i){
-            let pair = scope.state_map.get_pair_idx(i).unwrap();
+        for pair in &scope.state_map{
             if let StateType::MOVED(mv_line) = (pair.b){
                 if let Rhs::FIELD(scp*, name*) = (&pair.a){
                     if(scp.type.is_pointer()){
@@ -477,58 +517,6 @@ impl Own{
         }
     }
 
-    func end_scope_update(self){
-        let id = self.cur_scope;
-        let scope = self.get_scope(id);
-        let parent = self.get_scope(scope.parent);
-        if(scope.kind is ScopeType::WHILE || scope.kind is ScopeType::FOR){
-            //copy states to parent directly
-            for pair in &scope.state_map{
-                parent.state_map.add(pair.a.clone(), pair.b);
-            }
-            return;
-        }
-        if(scope.kind is ScopeType::IF){
-            //move only in if
-            /*for(let i = 0;i < scope.state_map.len();++i){
-                let pair: Pair<Rhs, StateType>* = scope.state_map.get_pair_idx(i).unwrap();
-                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
-                    parent.state_map.add(pair.a.clone(), pair.b);
-                }
-            }*/
-            return;
-        }
-        if(!(scope.kind is ScopeType::ELSE)){
-            panic("end {}", scope.kind);
-        }
-        //move in else -> parent
-        if(!scope.exit.is_jump()){
-            for pair in &scope.state_map{//Pair<Rhs, StateType>*
-                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
-                    parent.state_map.add(pair.a.clone(), pair.b);
-                }
-            }
-        }
-        //move in if -> parent
-        let if_scope = self.get_scope(scope.sibling);
-        if(!if_scope.exit.is_jump()){
-            for pair in &if_scope.state_map{
-                if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
-                    parent.state_map.add(pair.a.clone(), pair.b);
-                }
-            }
-        }
-        //both assign -> parent
-        for pair in &scope.state_map{//Pair<Rhs, StateType>*
-            if(pair.b is StateType::ASSIGNED){
-                let if_state = if_scope.state_map.get_ptr(&pair.a);
-                if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
-                    self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
-                }
-            }
-        }
-        
-    }
     func end_scope_if(self, else_stmt: Ptr<Stmt>*, line: i32){
         //merge else moves then drop all
         let if_id = self.cur_scope;
