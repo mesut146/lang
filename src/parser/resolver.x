@@ -126,6 +126,7 @@ struct Resolver{
   format_map: Map<i32, FormatInfo>;
   glob_map: List<GlobalInfo>;//external glob name->local rt for it, (cloned)
   drop_map: Map<String, Desc>;
+  block_map: Map<i32, Block*>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -394,7 +395,8 @@ impl Resolver{
       //generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
       glob_map: List<GlobalInfo>::new(),
-      drop_map: Map<String, Desc>::new()
+      drop_map: Map<String, Desc>::new(),
+      block_map: Map<i32, Block*>::new()
     };
     return res;
   }
@@ -1681,6 +1683,15 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "internal_block")){
+      assert(call.args.len() == 1);
+      let arg = call.args.get_ptr(0).print();
+      let id = i32::parse(arg.str());
+      let ptr: Block* = *self.block_map.get_ptr(&id).unwrap();
+      self.visit(ptr);
+      arg.drop();
+      return RType::new("void");
+    }
     if(Resolver::is_call(call, "std", "typeof")){
       assert(call.args.len() == 1);
       assert(call.type_args.len() == 0);
@@ -2230,7 +2241,9 @@ impl Resolver{
     whl.append(format("let {} = {}.next();\n", &opt_name, &it_name));
     whl.append(format("if({}.is_none()) break;\n", &opt_name));
     whl.append(format("let {} = {}.unwrap();\n", &fe.var_name, &opt_name));
-    let body_str = fe.body.get().print();
+    //whl.append(format("std::internal_block({});\n", &node.id));
+    self.block_map.add(node.id, &fe.body);
+    let body_str = fe.body.print();
     whl.append(body_str);
     whl.append("}\n");
     let stmt = parse_stmt(whl, &self.unit, node.line);

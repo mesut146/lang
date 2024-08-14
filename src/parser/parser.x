@@ -657,8 +657,8 @@ impl Parser{
       let name = self.popv();
       self.consume_ident("in");
       let rhs = self.prim2(false);
-      let b = self.parse_stmt();
-      return Stmt::ForEach{.id, ForEach{name, rhs, Box::new(b)}};
+      let b = self.parse_block();
+      return Stmt::ForEach{.id, ForEach{name, rhs,b}};
     }
     
     func parse_frag(self): Fragment{

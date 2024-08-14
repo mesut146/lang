@@ -16,12 +16,12 @@ func test(id: i32, c1: bool, c2: bool){
 
 func main(){
     test(100, true, false);
-    check_ids(100);reset();
+    pop_ids(100);
 
     test(101, false, true);
-    check_ids(101);reset();
+    pop_ids(101);
     
     test(102, false, false);
-    check_ids(102);reset();
+    pop_ids(102);
     print("bug done\n");
 }

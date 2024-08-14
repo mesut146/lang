@@ -71,7 +71,6 @@ impl Compiler{
       let then = create_bb_named(then_name.ptr());
       let condbb = create_bb2_named(self.cur_func(), cond_name.ptr());
       let next = create_bb_named(next_name.ptr());
-      cond_name.drop();then_name.drop();next_name.drop();
       CreateBr(condbb);
       SetInsertPoint(condbb);
       CreateCondBr(self.branch(cond), then, next);
@@ -87,6 +86,9 @@ impl Compiler{
       self.loopNext.pop_back();
       CreateBr(condbb);
       self.set_and_insert(next);
+      cond_name.drop();
+      then_name.drop();
+      next_name.drop();
     }
 
     func visit_if(self, node: IfStmt*){
@@ -98,7 +100,6 @@ impl Compiler{
       let then = create_bb_named(then_name.ptr());
       let elsebb = create_bb_named(else_name.ptr());
       let next = create_bb_named(next_name.ptr());
-      then_name.drop();else_name.drop();next_name.drop();
       CreateCondBr(cond, then, elsebb);
       self.set_and_insert(then);
       self.llvm.di.get().new_scope(node.then.get().line);
@@ -142,12 +143,14 @@ impl Compiler{
         self.add_bb(next);
       }
       exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
     }
   
     func visit_iflet(self, stmt: Stmt*, node: IfLet*){
       let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
-      rt.drop();
       let rhs = self.get_obj_ptr(&node.rhs);
       let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
@@ -160,7 +163,7 @@ impl Compiler{
       let then_bb = create_bb2_named(self.cur_func(), then_name.ptr());
       let elsebb = create_bb_named(else_name.ptr());
       let next = create_bb_named(next_name.ptr());
-      then_name.drop();else_name.drop();next_name.drop();
+      
       CreateCondBr(self.branch(cmp), then_bb, elsebb);
       SetInsertPoint(then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
@@ -198,13 +201,11 @@ impl Compiler{
                     //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
                     let rt2 = self.get_resolver().visit(&node.rhs);
                     if(rt2.type.is_pointer() && !prm.type.is_str()){
-                      rt2.drop();
                       self.get_resolver().err(&node.rhs, "can't deref member from ptr rhs");
-                    }else{
-                      rt2.drop();
                     }
                     self.copy(alloc_ptr, field_ptr, &prm.type);
                     self.own.get().add_iflet_var(arg, prm, alloc_ptr);
+                    rt2.drop();
                 }
                 self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
             }
@@ -248,6 +249,10 @@ impl Compiler{
         self.add_bb(next);
       }
       exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
+      rt.drop();
     }
 
     func visit_for_each(self, stmt: Stmt*, node: ForEach*){
@@ -270,8 +275,6 @@ impl Compiler{
       let condbb = create_bb2_named(f, cond_name.ptr());
       let updatebb = create_bb2_named(f, update_name.ptr());
       let next = create_bb_named(next_name.ptr());
-
-      then_name.drop();cond_name.drop();update_name.drop();next_name.drop();
   
       CreateBr(condbb);
       SetInsertPoint(condbb);
@@ -303,6 +306,11 @@ impl Compiler{
       self.loopNext.pop_back();
       CreateBr(condbb);
       self.set_and_insert(next);
+
+      then_name.drop();
+      cond_name.drop();
+      update_name.drop();
+      next_name.drop();
     }
 
     func visit_var(self, node: VarExpr*){
@@ -353,7 +361,7 @@ impl Compiler{
       }
     }
     func visit_ret(self, expr: Expr*){
-      let mtype = &self.curMethod.unwrap().type;
+      let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
       if(type.is_pointer()){
         let val = self.get_obj_ptr(expr);

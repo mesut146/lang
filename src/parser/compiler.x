@@ -241,6 +241,9 @@ impl Compiler{
   }
 
   func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
+    /*if(bootstrap && path.ends_with("stmt_emitter.x")){
+      drop_enabled = true;
+    }*/
     let outFile: String = get_out_file(path, self);
     if(!cache.need_compile(path, outFile.str())){
       return outFile;

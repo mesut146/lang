@@ -330,7 +330,7 @@ impl Debug for Stmt{
       f.print(&fe.var_name);
       f.print(" in ");
       fe.rhs.debug(f);
-      fe.body.get().debug(f);
+      fe.body.debug(f);
     }
     else{
       panic("Stmt::debug");

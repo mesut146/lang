@@ -63,7 +63,7 @@ impl Compiler{
         return self.visit_call(node, mc);
       }
       if let Expr::ArrAccess(aa*)=(node){
-        return self.visit_aa(node, aa);
+        return self.visit_array_access(node, aa);
       }
       if let Expr::Array(list*, sz*)=(node){
         return self.visit_array(node, list, sz);
@@ -225,7 +225,7 @@ impl Compiler{
       return ptr;
     }
   
-    func visit_aa(self, expr: Expr*, node: ArrAccess*): Value*{
+    func visit_array_access(self, expr: Expr*, node: ArrAccess*): Value*{
       if(node.idx2.is_some()){
         return self.visit_slice(expr, node);
       }
@@ -321,8 +321,18 @@ impl Compiler{
       }
       panic("unary {}", op);
     }
+
+    func is_drop_call2(mc: Call*): bool{
+      return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
+    }
   
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
+      let resolver = self.get_resolver();
+      if(is_drop_call2(mc) && self.unit().path.str().ends_with("expr_emitter.x")){
+        //let arg = mc.scope.get();
+        //self.own.get().do_move(arg);
+        return getVoidTy() as Value*;
+      }
       if(Resolver::is_call(mc, "std", "typeof")){
         let arg = mc.args.get_ptr(0);
         let ty = self.getType(arg);
@@ -334,11 +344,11 @@ impl Compiler{
         return res;
       }
       if(Resolver::is_call(mc, "std", "print_type")){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         return self.visit(info.unwrap_mc.get());
       }
       if(Resolver::is_call(mc, "std", "env")){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         return self.visit(info.unwrap_mc.get());
       }
       if(Resolver::is_drop_call(mc)){
@@ -348,7 +358,7 @@ impl Compiler{
           argt.drop();
           return getVoidTy() as Value*;
         }
-        let helper = DropHelper{self.get_resolver()};
+        let helper = DropHelper{resolver};
         if(!helper.is_drop_type(&argt)){
           argt.drop();
           return getVoidTy() as Value*;
@@ -384,24 +394,24 @@ impl Compiler{
         return getVoidTy() as Value*;
       }
       if(Resolver::is_print(mc)){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
       if(Resolver::is_panic(mc)){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
       if(Resolver::is_format(mc)){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
         let res = self.visit(info.unwrap_mc.get());
         self.own.get().do_move(info.unwrap_mc.get());
         return res;
       }
       if(Resolver::is_assert(mc)){
-        let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
@@ -456,7 +466,7 @@ impl Compiler{
         elem_type.drop();
         return getVoidTy() as Value*;
       }
-      if(self.get_resolver().is_array_get_len(mc)){
+      if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
         let arr_type2 = arr_type.get_ptr();
         if let Type::Array(elem*, sz)=(arr_type2){
@@ -466,18 +476,18 @@ impl Compiler{
         arr_type.drop();
         panic("");
       }
-      if(self.get_resolver().is_array_get_ptr(mc)){
+      if(resolver.is_array_get_ptr(mc)){
         //arr.ptr()
         return self.get_obj_ptr(mc.scope.get());
       }
-      if(self.get_resolver().is_slice_get_len(mc)){
+      if(resolver.is_slice_get_len(mc)){
         //sl.len()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice") as llvm_Type*;
         let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
         return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
       }
-      if(self.get_resolver().is_slice_get_ptr(mc)){
+      if(resolver.is_slice_get_ptr(mc)){
         //sl.ptr()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice") as llvm_Type*;
@@ -653,20 +663,6 @@ impl Compiler{
       CreateCall(fflush_proto, args2);
       vector_Value_delete(args2);
     }
-    
-    /*func call_printf(self, s: str){
-      let args = vector_Value_new();
-      let val = CreateGlobalStringPtr(s.cstr().ptr());
-      vector_Value_push(args, val);
-      let printf_proto = self.protos.get().libc("printf");
-      let res = CreateCall(printf_proto, args);
-      //flush
-      let fflush_proto = self.protos.get().libc("fflush");
-      let args2 = vector_Value_new();
-      let stdout_ptr = self.protos.get().stdout_ptr;
-      vector_Value_push(args2, CreateLoad(getPtr(), stdout_ptr));
-      CreateCall(fflush_proto, args2);
-    }*/
   
     func visit_deref(self, node: Expr*, e: Expr*): Value*{
       let type = self.getType(node);
@@ -904,95 +900,72 @@ impl Compiler{
     }
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
-        if(is_comp(op.str())){
-          //todo remove redundant cast
-          let lv = self.cast(l, type);
-          let rv = self.cast(r, type);
-          let op_c = op.clone().cstr();
-          let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
-          op_c.drop();
-          return res;
-        }
-        if(op.eq("&&") || op.eq("||")){
-          return self.andOr(op, l, r).a;
-        }
-        if(op.eq("=")){
-          return self.visit_assign(l, r);
-        }
-        if(op.eq("+")){
-          let lv = self.cast(l, type);
-          let rv = self.cast(r, type);
-          return CreateNSWAdd(lv, rv);
-        }
-        if(op.eq("-")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      if(op.eq("&&") || op.eq("||")){
+        return self.andOr(op, l, r).a;
+      }
+      if(op.eq("=")){
+        return self.visit_assign(l, r);
+      }
+      let rv = self.cast(r, type);
+      if(op.eq("+=")){
+        let lv = self.visit(l);
+        let lval = self.loadPrim(l);
+        let tmp = CreateNSWAdd(lval, rv);
+        CreateStore(tmp, lv);
+        return lv;
+      }
+      if(op.eq("-=")){
+        let lv = self.visit(l);
+        let lval = self.loadPrim(l);
+        let tmp = CreateNSWSub(lval, rv);
+        CreateStore(tmp, lv);
+        return lv;
+      }
+      if(op.eq("/=")){
+        let lv = self.visit(l);
+        let lval = self.loadPrim(l);
+        let tmp = CreateSDiv(lval, rv);
+        CreateStore(tmp, lv);
+        return lv;
+      }
+      let lv = self.cast(l, type);
+      if(is_comp(op.str())){
+        //todo remove redundant cast
+        let op_c = op.clone().cstr();
+        let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
+        op_c.drop();
+        return res;
+      }
+      if(op.eq("+")){
+        return CreateNSWAdd(lv, rv);
+      }
+      if(op.eq("-")){
         return CreateNSWSub(lv, rv);
-        }
-        if(op.eq("*")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("*")){
         return CreateNSWMul(lv, rv);
-        }
-        if(op.eq("/")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("/")){
         return CreateSDiv(lv, rv);
-        }
-        if(op.eq("%")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("%")){
         return CreateSRem(lv, rv);
-        }
-        if(op.eq("&")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("&")){
         return CreateAnd(lv, rv);
-        }
-        if(op.eq("|")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("|")){
         return CreateOr(lv, rv);
-        }
-        if(op.eq("^")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("^")){
         return CreateXor(lv, rv);
-        }
-        if(op.eq("<<")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq("<<")){
         return CreateShl(lv, rv);
-        }
-        if(op.eq(">>")){
-        let lv = self.cast(l, type);
-        let rv = self.cast(r, type);
+      }
+      if(op.eq(">>")){
         return CreateAShr(lv, rv);
-        }
-        if(op.eq("+=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
-        let rval = self.cast(r, type);
-        let tmp = CreateNSWAdd(lval, rval);
-        CreateStore(tmp, lv);
-        return lv;
-        }
-        if(op.eq("-=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
-        let rval = self.cast(r, type);
-        let tmp = CreateNSWSub(lval, rval);
-        CreateStore(tmp, lv);
-        return lv;
-        }
-        if(op.eq("/=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
-        let rval = self.cast(r, type);
-        let tmp = CreateSDiv(lval, rval);
-        CreateStore(tmp, lv);
-        return lv;
-        }
-        panic("infix '{}'\n", op);
+      }
+      panic("infix '{}'\n", op);
     }
 }//end impl

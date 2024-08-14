@@ -551,7 +551,7 @@ struct ForStmt{
 struct ForEach{
   var_name: String;
   rhs: Expr;
-  body: Box<Stmt>;
+  body: Block;
 }
 
 struct IfStmt{
@@ -590,6 +590,9 @@ struct Block{
 impl Block{
   func new(line: i32, end_line: i32): Block{
     return Block{list: List<Stmt>::new(), line: line, end_line: end_line, return_expr: Option<Expr>::new()};
+  }
+  func print(self): String{
+    return Fmt::str(self);
   }
 }
 
@@ -637,6 +640,14 @@ struct ArrAccess{
   arr: Box<Expr>;
   idx: Box<Expr>;
   idx2: Ptr<Expr>;
+}
+
+enum InfixOp{
+  PLUS, MINUS, MUL, DIV, PERCENT, POW,
+  AND, OR, XOR, NOT, LTLT, GTGT,
+  LT, LTEQ, GT, GTEQ,
+  EQ, PLUSEQ, MINUSEQ, MULEQ, DIVEQ, PERCENTEQ, POWEQ, ANDEQ, OREQ,
+  NOTEQ, LTEQ, GTEQ, LTLTEQ, GTGTEQ
 }
 
 enum Expr: Node{
