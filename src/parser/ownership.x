@@ -16,15 +16,46 @@ import std/stack
 
 static last_scope: i32 = 0;
 static verbose: bool = false;
-static print_drop: bool = true;//moved or valid
-static print_drop_valid: bool = true;//only valid
-static print_drop_real: bool = false;
 static print_check: bool = false;
+
+func print_drop_valid(): i32{ return 0; }
+func print_drop_any(): i32{ return 1; }
+
+static print_kind: i32 = print_drop_valid();
+static print_drop_real: bool = false;
+static print_drop_lhs: bool = true;
+
 
 static drop_enabled: bool = false;
 static move_ptr_field = true;
 static allow_else_move = true;
 
+static logger = Logger::new();
+
+struct Logger{
+    list: List<String>;
+}
+impl Logger{
+    func new(): Logger{
+        return Logger{list: List<String>::new()};
+    }
+    func add(msg: String){
+        logger.list.add(msg);
+    }
+    func exit(own: Own*){
+        if(logger.list.empty()){
+            return;
+        }
+        let m = printMethod(own.method);
+        print("in {}\n", &m);
+        for msg in &logger.list{
+            print("  {}", msg);
+        }
+        print("\n");
+        logger.list.clear();
+        m.drop();
+    }
+}
 
 struct Own{
     compiler: Compiler*;
@@ -33,6 +64,14 @@ struct Own{
     cur_scope: i32;
     scope_map: Map<i32, VarScope>;
     var_map: Map<i32, Variable>;
+}
+
+impl Drop for Own{
+    func drop(*self){
+        self.scope_map.drop();
+        self.var_map.drop();
+        Logger::exit(&self);
+    }
 }
 
 impl Own{
@@ -610,8 +649,8 @@ impl Own{
             lhs2.drop();
             return;
         }
-        if(verbose){
-            print("drop_lhs {} line: {}\n", lhs, lhs.line);
+        if(print_drop_lhs){
+            Logger::add(format("drop_lhs {} line: {}\n", lhs, lhs.line));
         }
         let rt = self.get_type(lhs);
         self.drop_real(&rt, ptr, lhs.line, &lhs2);
@@ -663,9 +702,11 @@ impl Own{
         }
         let rhs = Rhs::new(var.clone());
         let state = self.get_state(&rhs, scope);
-        /*if(print_drop && !print_drop_valid){
-            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, scope.print_info());
-        }*/
+        if(print_kind == print_drop_any()){
+            let info = scope.print_info();
+            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, info);
+            info.drop();
+        }
 
         if(state.kind is StateType::MOVED_PARTIAL){
             self.check_partial(var, scope);
@@ -677,9 +718,9 @@ impl Own{
             rhs.drop();
             return;
         }
-        if(print_drop_valid){
+        if(print_kind == print_drop_valid()){
             let tmp = scope.print_info();
-            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, tmp);
+            Logger::add(format("drop_var_real {} line: {} state: {} scope: {}\n", var, line,  state, tmp));
             tmp.drop();
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
@@ -688,8 +729,8 @@ impl Own{
         rhs.drop();
     }
     func drop_var_real(self, var: Variable*, line: i32){
-        if(print_drop){
-            print("drop_var {}\n", var);
+        if(print_kind == print_drop_valid()){
+            Logger::add(format("drop_var_real {}\n", var));
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
         let rhs = Rhs::new(var.clone());
@@ -700,15 +741,15 @@ impl Own{
     func drop_obj(self, obj: Object*, scope: VarScope*, line: i32){
         let rhs = Rhs::new(obj.expr, self);
         let state = self.get_state(&rhs, scope);
-        if(print_drop && !print_drop_valid){
-            print("drop_obj {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line);
+        if(print_kind == print_drop_any()){
+            Logger::add(format("drop_obj {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         if(state.is_moved()){
             rhs.drop();
             return;
         }
-        if(print_drop_valid){
-            print("drop_obj {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line);
+        if(print_kind == print_drop_valid()){
+            Logger::add(format("drop_obj_real {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         let resolver = self.compiler.get_resolver();
         let rt = resolver.visit(obj.expr);
@@ -728,10 +769,8 @@ impl Own{
             CreateCall(proto, args);
             vector_Value_delete(args);
         }
-        dbg(rt.type.eq("List<u8>"), 10);
-        dbg(line == 318, 33);
         if(print_drop_real){
-            print("drop_real {} line: {} rhs: {}\n", rt.type, line, rhs);
+            Logger::add(format("drop_real {} line: {} rhs: {}\n", rt.type, line, rhs));
         }
     }
     func get_proto(self, rt: RType*): Function*{

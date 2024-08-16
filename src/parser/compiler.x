@@ -383,7 +383,11 @@ impl Compiler{
       vector_Metadata_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
       if let Expr::Call(mc*)=(&gl.expr){
-        self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
+        if(is_struct(&rt.type)){
+          self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
+        }else{
+          self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
+        }
       }else{
         if(!is_constexpr(&gl.expr)){
           if let Expr::Array(list*, size*)=(&gl.expr){

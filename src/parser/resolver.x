@@ -540,12 +540,6 @@ impl Resolver{
   }
 
   func addType(self, name: String, res: RType){
-    //print("addType {}=", name);
-    //print("{}\n", &res);
-    /*let opt = self.typeMap.get_ptr(&name);
-    if(opt.is_some()){
-
-    }*/
     self.typeMap.add(name, res);
   }
   

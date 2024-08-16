@@ -47,7 +47,7 @@ func bootstrap(cmd: CmdArgs*){
   cmd.consume();
   let root_opt = cmd.get_val("-root");
   if(root_opt.is_none()){
-    root_opt = Option::new(find_root(cmd.get_root()).clone());
+    root_opt.set(find_root(cmd.get_root()).clone());
   }
   let root = root_opt.unwrap();
   let build = format("{}/build", root);

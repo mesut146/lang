@@ -1,8 +1,9 @@
 import parser/ast
 
+//T: Debug
 func join<T>(f: Fmt*, arr: List<T>*, sep: str){
-  for(let i=0;i<arr.len();++i){
-    if(i>0) f.print(sep);
+  for(let i = 0;i < arr.len();++i){
+    if(i > 0) f.print(sep);
     arr.get_ptr(i).debug(f);
   }
 }

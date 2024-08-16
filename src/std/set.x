@@ -23,7 +23,7 @@ impl<T> Set<T>{
     func add(self, e: T){
         if(self.len() == 0){
             ++self.count;
-            self.head = Option::new(Node<T>::new(e));
+            self.head.set(Node<T>::new(e));
             return;
         }
         let cur: Node<T>* = self.head.get();

@@ -66,7 +66,8 @@ impl<T> List<T>{
     let elem = self.get_internal(pos);
     //shift rhs of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
-      let lhs = ptr::get(self.ptr, i);
+      let lhs: T* = ptr::get(self.ptr, i);
+      std::no_drop(*lhs);
       *lhs = ptr::deref(ptr::get(self.ptr, i + 1));
     }
     self.count -= 1;
@@ -278,6 +279,7 @@ impl<T> Iterator<T> for ListIntoIter<T>{
 }
 impl<T> Drop for ListIntoIter<T>{
   func drop(*self){
+    //elems alive, drop main memory only
     free(self.list.ptr as i8*);
   }
 }

@@ -47,7 +47,11 @@ impl<T> Option<T>{
   }
   
   func set(self, val: T){
-    //todo
+    if(self.is_some()){
+      let old = ptr::deref(self.get());
+      Drop::drop(old);
+    }
+    std::no_drop(*self);
     *self = Option::new(val);
   }
 
