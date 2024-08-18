@@ -15,18 +15,23 @@ import std/map
 import std/stack
 
 static last_scope: i32 = 0;
-static verbose: bool = false;
+static verbose: bool = hasenv("own_verbose");
 static print_check: bool = false;
 
-func print_drop_valid(): i32{ return 0; }
-func print_drop_any(): i32{ return 1; }
+func print_drop_none(): i32{ return 0; }
+func print_drop_valid(): i32{ return 1; }
+func print_drop_any(): i32{ return 2; }
 
-static print_kind: i32 = print_drop_valid();
+static print_kind: i32 = print_drop_none();
 static print_drop_real: bool = false;
-static print_drop_lhs: bool = true;
+static print_drop_lhs: bool = hasenv("print_drop_lhs");
 
+func hasenv(key: str): bool{
+    return getenv2(key).is_some();
+}
 
-static drop_enabled: bool = false;
+static drop_enabled: bool = hasenv("drop_enabled");
+static drop_lhs_enabled: bool = hasenv("drop_lhs_enabled");
 static move_ptr_field = true;
 static allow_else_move = true;
 
@@ -432,7 +437,6 @@ impl Own{
             print("do_return {} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
         self.check_ptr_field(scope, line);
-        dbg(scope.kind is ScopeType::MAIN && scope.line == 4, 10);
         let drops: List<Droppable> = self.get_outer_vars(scope);
         for dr in &drops{
             if let Droppable::OBJ(obj)=(dr){
@@ -652,9 +656,11 @@ impl Own{
         if(print_drop_lhs){
             Logger::add(format("drop_lhs {} line: {}\n", lhs, lhs.line));
         }
-        let rt = self.get_type(lhs);
-        self.drop_real(&rt, ptr, lhs.line, &lhs2);
-        rt.drop();
+        if(drop_lhs_enabled){
+            let rt = self.get_type(lhs);
+            self.drop_force(&rt, ptr, lhs.line, &lhs2);
+            rt.drop();
+        }
         lhs2.drop();
     }
 }
@@ -704,7 +710,7 @@ impl Own{
         let state = self.get_state(&rhs, scope);
         if(print_kind == print_drop_any()){
             let info = scope.print_info();
-            print("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, info);
+            Logger::add(format("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, info));
             info.drop();
         }
 
@@ -763,15 +769,18 @@ impl Own{
             return;
         }
         if(drop_enabled){
-            let proto = self.get_proto(rt);
-            let args = vector_Value_new();
-            vector_Value_push(args, ptr);
-            CreateCall(proto, args);
-            vector_Value_delete(args);
+            self.drop_force(rt, ptr, line, rhs);
         }
         if(print_drop_real){
             Logger::add(format("drop_real {} line: {} rhs: {}\n", rt.type, line, rhs));
         }
+    }
+    func drop_force(self, rt: RType*, ptr: Value*, line: i32, rhs: Rhs*){
+        let proto = self.get_proto(rt);
+        let args = vector_Value_new();
+        vector_Value_push(args, ptr);
+        CreateCall(proto, args);
+        vector_Value_delete(args);
     }
     func get_proto(self, rt: RType*): Function*{
         let resolver = self.compiler.get_resolver();

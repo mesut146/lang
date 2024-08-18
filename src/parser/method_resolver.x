@@ -129,9 +129,10 @@ impl Signature{
             m: Option<Method*>::new(m),
             name: m.name.clone(),
             args: List<Type>::new(),
-            scope: Option<RType>::None,
-            r: Option<Resolver*>::None,
-            desc: desc};
+            scope: Option<RType>::new(),
+            r: Option<Resolver*>::new(),
+            desc: desc
+        };
         if let Parent::Impl(info*) = (&m.parent){
             let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);

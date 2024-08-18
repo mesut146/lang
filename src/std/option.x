@@ -64,6 +64,15 @@ impl<T> Option<T>{
     return self.unwrap();
   }
 
+  func reset(self){
+    if(self.is_some()){
+      let old = ptr::deref(self.get());
+      Drop::drop(old);
+    }
+    std::no_drop(*self);
+    *self = Option<T>::new();
+  }
+
   func dump(self){
     if(self.is_some()){
       print("Option::Some{%d}", self.unwrap());

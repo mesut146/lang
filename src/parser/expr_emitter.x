@@ -157,7 +157,6 @@ impl Compiler{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
-      scope_rt.drop();
       if(decl.is_enum()){
         //base field, skip tag
         let ty = self.mapType(&decl.type);
@@ -167,6 +166,7 @@ impl Compiler{
       let index = pair.b;
       if (pair.a.base.is_some()) ++index;
       let sd_ty = self.mapType(&pair.a.type);
+      scope_rt.drop();
       return self.gep2(scope_ptr, index, sd_ty);
     }
   
@@ -328,9 +328,14 @@ impl Compiler{
   
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
-      if(is_drop_call2(mc) && self.unit().path.str().ends_with("expr_emitter.x")){
+      let env = getenv2("ignore_drop");
+      if(is_drop_call2(mc) && env.is_some() && self.unit().path.str().ends_with(env.unwrap())){
         //let arg = mc.scope.get();
         //self.own.get().do_move(arg);
+        return getVoidTy() as Value*;
+      }
+      if(Resolver::is_call(mc, "std", "unreachable")){
+        CreateUnreachable();
         return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "typeof")){
@@ -583,11 +588,9 @@ impl Compiler{
         let arg: Expr* = mc.args.get_ptr(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
-          let val: str = lit.unwrap().str();
-          let val_c = CStr::new(val);
-          let ptr = CreateGlobalStringPtr(val_c.ptr());
+          let val: String = lit.unwrap().clone();
+          let ptr = self.get_global_string(val);
           vector_Value_push(args, ptr);
-          val_c.drop();
           continue;
         }
         let arg_type = self.getType(arg);
@@ -625,11 +628,9 @@ impl Compiler{
         let arg: Expr* = mc.args.get_ptr(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
-          let val: str = lit.unwrap().str();
-          let val_c = CStr::new(val);
-          let ptr = CreateGlobalStringPtr(val_c.ptr());
+          let val: String = lit.unwrap().clone();
+          let ptr = self.get_global_string(val);
           vector_Value_push(args, ptr);
-          val_c.drop();
           continue;
         }
         let arg_type = self.getType(arg);
@@ -794,9 +795,7 @@ impl Compiler{
     }
 
     func str_lit(self, val: str, trg_ptr: Value*): Value*{
-      let val_c = val.str().cstr();
-      let src = CreateGlobalStringPtr(val_c.ptr());
-      val_c.drop();
+      let src = self.get_global_string(val.str());
       let stringType = self.protos.get().std("str") as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
       let slice_ptr = self.gep2(trg_ptr, 0, stringType);

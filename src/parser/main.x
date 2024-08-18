@@ -17,6 +17,11 @@ import std/io
 import std/libc
 import std/stack
 
+func aaa(){
+  let s = "asd".str();
+  s = "aa".str(); 
+}
+
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");
 }
@@ -42,7 +47,7 @@ func build_std(std_dir: str, out_dir: str): String{
 }
 
 func bootstrap(cmd: CmdArgs*){
-  print("test::bootstrap\n");
+  print("main::bootstrap()\n");
   bootstrap = true;
   cmd.consume();
   let root_opt = cmd.get_val("-root");

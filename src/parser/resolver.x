@@ -1677,6 +1677,11 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "unreachable")){
+      assert(call.args.len() == 0);
+      assert(call.type_args.len() == 0);
+      return RType::new("void");
+    }
     if(Resolver::is_call(call, "std", "internal_block")){
       assert(call.args.len() == 1);
       let arg = call.args.get_ptr(0).print();
@@ -2336,7 +2341,7 @@ impl Resolver{
     for(let i = 0;i < node.list.len();++i){
       if(i > 0){
         let prev = Exit::get_exit_type(node.list.get_ptr(i - 1));
-        if(prev.is_jump()){
+        if(prev.is_jump() || prev.is_unreachable()){
           prev.drop();
           self.err(node.list.get_ptr(i), "unreachable code");
         }else{

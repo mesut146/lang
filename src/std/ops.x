@@ -397,8 +397,9 @@ impl Compare for i32{
 
 func assign_eq<T>(l: T*, r: T){
   let lval = ptr::deref(l);
-  lval.drop();
+  std::no_drop(*l);
   *l = r;
+  lval.drop();
 }
 
 
@@ -411,6 +412,12 @@ func assert_eq(s1: str, s2: str){
   if(!s1.eq(s2)){
     panic("assertion failed: {}!= {}", s1, s2);
   }
+}
+func assert_eq(s1: String, s2: str){
+  if(!s1.eq(s2)){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+  s1.drop();
 }
 func assert_eq(s1: i32, s2: i32){
   if(s1 != s2){

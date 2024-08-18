@@ -304,6 +304,18 @@ func getMethods(unit: Unit*): List<Method*>{
 }
 
 impl Compiler{
+  func get_global_string(self, val: String): Value*{
+    let opt = self.string_map.get_ptr(&val);
+    if(opt.is_some()){
+      return *opt.unwrap();
+    }
+    let val2 = val.clone();
+    let val_c = val.cstr();
+    let ptr = CreateGlobalStringPtr(val_c.ptr());
+    self.string_map.add(val2, ptr);
+    val_c.drop();
+    return ptr;
+  }
   func mapType(self, type: Type*): llvm_Type*{
     let r = self.get_resolver();
     let rt = r.visit_type(type);

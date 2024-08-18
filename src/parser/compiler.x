@@ -42,6 +42,7 @@ struct Compiler{
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
+  string_map: Map<String, Value*>;
 }
 
 struct llvm_holder{
@@ -228,7 +229,8 @@ impl Compiler{
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
      loopNext: List<BasicBlock*>::new(),
-     own: Option<Own>::new()
+     own: Option<Own>::new(),
+     string_map: Map<String, Value*>::new()
     };
   }
 
@@ -334,6 +336,7 @@ impl Compiler{
     self.own = Option::new(Own::new(self, &method));
     let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
+    self.llvm.di.get().dbg_func(&method, proto, self);
     for(let j = 0;j < resolv.unit.globals.len();++j){
       let gl: Global* = resolv.unit.globals.get_ptr(j);
       let rt = resolv.visit(&gl.expr);
@@ -355,9 +358,7 @@ impl Compiler{
           let slice_ty = self.protos.get().std("slice");
           let cons_elems = vector_Constant_new();
           let cons_elems_slice = vector_Constant_new();
-          let val_c = CStr::new(val);
-          let ptr = CreateGlobalStringPtr(val_c.ptr());
-          val_c.drop();
+          let ptr = self.get_global_string(val.str());
           vector_Constant_push(cons_elems_slice, ptr as Constant*);
           vector_Constant_push(cons_elems_slice, makeInt(val.len(), 64) as Constant*);
           let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
@@ -373,7 +374,7 @@ impl Compiler{
         if(is_struct(&rt.type)){
           init = ConstantStruct_get(ty as StructType*);
         }else{
-          init =  makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
+          init = makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
         }
       }
       let name_c = gl.name.clone().cstr();
@@ -383,16 +384,17 @@ impl Compiler{
       vector_Metadata_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
       if let Expr::Call(mc*)=(&gl.expr){
+        AllocHelper::new(self).visit(&gl.expr);
         if(is_struct(&rt.type)){
           self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
         }else{
-          self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
+          let val = self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
+          CreateStore(val, glob as Value*);
         }
       }else{
         if(!is_constexpr(&gl.expr)){
           if let Expr::Array(list*, size*)=(&gl.expr){
-            self.llvm.di.get().dbg_func(&method, proto, self);
-            AllocHelper{self}.visit(&gl.expr);
+            AllocHelper::new(self).visit(&gl.expr);
             self.visit_array(&gl.expr, list, size);
           }else{
             panic("glob rhs {}", gl);
@@ -420,12 +422,11 @@ impl Compiler{
     let ctor_init = ConstantArray_get(ctor_ty, elems);
     let ctor = make_global_linkage("llvm.global_ctors".ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
     CreateRetVoid();
-    method.drop();
     vector_Constant_delete(struct_elems);
     vector_Constant_delete(elems);
-    self.own.drop();
-    self.own = Option<Own>::new();
+    self.own.reset();
     vector_Type_delete(struct_elem_types);
+    method.drop();
   }
 
   //make all struct decl & method decl used by this module

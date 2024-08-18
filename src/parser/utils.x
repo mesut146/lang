@@ -1,6 +1,7 @@
 import parser/ast
 import parser/copier
 import parser/printer
+import parser/resolver
 import std/map
 import std/libc
 import std/io
@@ -141,12 +142,16 @@ func demangle(input: str): String{
 }
 
 func mangleType(type: Type*): String{
-  let s = type.print();
-  assign_eq(&s, s.replace("*", "$P"));
-  assign_eq(&s, s.replace("<", "$LT"));
-  assign_eq(&s, s.replace(">", "$GT"));
-  assign_eq(&s, s.replace("::", "__"));
-  return s;
+  let s = type.print(); 
+  let s2 = s.replace("*", "$P");
+  let s3 = s2.replace("<", "$LT");
+  let s4 = s3.replace(">", "$GT");
+  let s5 = s4.replace("::", "__");
+  s.drop();
+  s2.drop();
+  s3.drop();
+  s4.drop();
+  return s5;
 }
 func mangleType(type: Type*, f: Fmt*){
     let s = mangleType(type);
@@ -267,7 +272,8 @@ enum ExitType {
     PANIC,
     BREAK,
     CONTINE,
-    EXIT
+    EXIT,
+    UNREACHABLE
 }
 
 struct Exit {
@@ -279,6 +285,11 @@ struct Exit {
 impl Exit{
     func new(kind: ExitType): Exit{
         return Exit{kind: kind, if_kind: Ptr<Exit>::new(), else_kind: Ptr<Exit>::new()};
+    }
+    func is_unreachable(self): bool{
+        if (self.kind is ExitType::UNREACHABLE) return true;
+        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_unreachable() && self.else_kind.get().is_unreachable();
+        return false;
     }
     func is_return(self): bool{
         if (self.kind is ExitType::RETURN) return true;
@@ -324,6 +335,9 @@ impl Exit{
                 }
                 if(call.name.eq("exit") && call.scope.is_none()){
                     return Exit::new(ExitType::EXIT);
+                }
+                if(Resolver::is_call(call, "std", "unreachable")){
+                    return Exit::new(ExitType::UNREACHABLE);
                 }
             }
             return Exit::new(ExitType::NONE);

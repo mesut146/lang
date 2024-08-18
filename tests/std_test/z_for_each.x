@@ -5,9 +5,12 @@ func test_normal(){
     list.add(11);
     list.add(22);
     list.add(33);
+    let arr = [11, 22, 33];
+    let i = 0;
     for x in &list{
         assert(std::typeof(x).eq("i32*"));
-        print("x={}\n", x);
+        assert(*x == arr[i]);
+        i += 1;
     }
     list.drop();
 }
@@ -16,27 +19,34 @@ func test_into_iter(){
     list.add(111);
     list.add(222);
     list.add(333);
+    let arr = [111, 222, 333];
+    let i = 0;
     for x in list{
         assert(std::typeof(x).eq("i32"));
-        print("x2={}\n", x);
+        assert(x == arr[i]);
+        i += 1;
     }
 }
 
 func slice_iter(){
     let arr = [1111, 2222, 3333];
     let slice = arr[0..3];
+    let i = 0;
     for x in &slice{
         assert(std::typeof(x).eq("i32*"));
-        print("x3={}\n", x);
+        assert(*x == arr[i]);
+        i += 1;
     }
 }
 
 func slice_into_iter(){
     let arr = [11111, 22222, 33333];
     let slice = arr[0..3];
+    let i = 0;
     for x in slice{
         assert(std::typeof(x).eq("i32"));
-        print("x4={}\n", x);
+        assert(x == arr[i]);
+        i += 1;
     }
 }
 
@@ -45,9 +55,12 @@ func map_iter(){
     map.add(1, 7);
     map.add(2, 11);
     map.add(3, 13);
+    let arr = ["{1, 7}", "{2, 11}", "{3, 13}"];
+    let i = 0;
     for pair in &map{
         assert(std::typeof(pair).eq("Pair<i32, i32>*"));
-        print("map.pair={}\n", pair);
+        assert_eq(Fmt::str(pair), arr[i]);
+        i += 1;
     }
 }
 
@@ -56,9 +69,12 @@ func map_into_iter(){
     map.add(1, 7);
     map.add(2, 11);
     map.add(3, 13);
+    let arr = ["{1, 7}", "{2, 11}", "{3, 13}"];
+    let i = 0;
     for pair in map{
         assert(std::typeof(pair).eq("Pair<i32, i32>"));
-        print("map.pair2={}\n", pair);
+        assert_eq(Fmt::str(&pair), arr[i]);
+        i += 1;
     }
 }
 
