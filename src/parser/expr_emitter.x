@@ -329,10 +329,17 @@ impl Compiler{
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let env = getenv2("ignore_drop");
-      if(is_drop_call2(mc) && env.is_some() && self.unit().path.str().ends_with(env.unwrap())){
-        //let arg = mc.scope.get();
-        //self.own.get().do_move(arg);
-        return getVoidTy() as Value*;
+      if(is_drop_call2(mc) && env.is_some()){
+        let list = env.unwrap().split(",");
+        //let cur_name: str = Path::name(self.unit().path.str());
+        let cur_name: str = Path::name(self.curMethod.unwrap().path.str()); 
+        if(list.contains(&cur_name)){
+          //let arg = mc.scope.get();
+          //self.own.get().do_move(arg);
+          list.drop();
+          return getVoidTy() as Value*;
+        }
+        list.drop();
       }
       if(Resolver::is_call(mc, "std", "unreachable")){
         CreateUnreachable();

@@ -14,21 +14,21 @@ import parser/derive
 import std/map
 import std/stack
 
+func hasenv(key: str): bool{
+    return getenv2(key).is_some();
+}
+
 static last_scope: i32 = 0;
 static verbose: bool = hasenv("own_verbose");
-static print_check: bool = false;
+static print_check: bool = hasenv("print_check");
 
 func print_drop_none(): i32{ return 0; }
 func print_drop_valid(): i32{ return 1; }
 func print_drop_any(): i32{ return 2; }
 
 static print_kind: i32 = print_drop_none();
-static print_drop_real: bool = false;
+static print_drop_real: bool = hasenv("print_drop_real");
 static print_drop_lhs: bool = hasenv("print_drop_lhs");
-
-func hasenv(key: str): bool{
-    return getenv2(key).is_some();
-}
 
 static drop_enabled: bool = hasenv("drop_enabled");
 static drop_lhs_enabled: bool = hasenv("drop_lhs_enabled");
@@ -667,7 +667,7 @@ impl Own{
 
 //drop logic
 impl Own{
-    func check_partial(self, var: Variable*, scope: VarScope*){
+    func check_partial(self, var: Variable*, scope: VarScope*, line: i32){
         //check if all fields moved
         //let rhs = Rhs::new(var);
         let rt = self.compiler.get_resolver().visit_type(&var.type);
@@ -684,16 +684,19 @@ impl Own{
             }
             rhs.drop();
         }
+        let err = false;
         for(let i = 0;i < fields.len();++i){
             let fd = fields.get_ptr(i);
             if(!self.is_drop_type(&fd.type)){
                 continue;
             }
             if(!moved_fields.contains(&fd.name)){
-                moved_fields.drop();
-                self.compiler.get_resolver().err(var.line, format("field '{}.{}' not moved", decl.type, fd.name));
-                panic("unc");
+                print("field '{}.{}' vline: {} not moved at: {}\n", var.name, fd.name, var.line, line);
+                err = true;
             }
+        }
+        if(err){
+            self.compiler.get_resolver().err(line, "");
         }
         moved_fields.drop();
         rt.drop();
@@ -715,7 +718,7 @@ impl Own{
         }
 
         if(state.kind is StateType::MOVED_PARTIAL){
-            self.check_partial(var, scope);
+            self.check_partial(var, scope, line);
             //self.compiler.get_resolver().err(var.line, format("var {} moved partially", var));
             rhs.drop();
             return;
@@ -772,7 +775,7 @@ impl Own{
             self.drop_force(rt, ptr, line, rhs);
         }
         if(print_drop_real){
-            Logger::add(format("drop_real {} line: {} rhs: {}\n", rt.type, line, rhs));
+            Logger::add(format("drop_real at: {} {}\n", line, rhs));
         }
     }
     func drop_force(self, rt: RType*, ptr: Value*, line: i32, rhs: Rhs*){

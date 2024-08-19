@@ -118,9 +118,9 @@ impl Debug for Rhs{
             f.print("}");
         }
         else if let Rhs::VAR(v*)=(self){
-            f.print("Rhs::VAR{");
+            //f.print("Rhs::VAR{");
             f.print(v);
-            f.print("}");
+            //f.print("}");
         }
         else if let Rhs::FIELD(scp*,name*)=(self){
             f.print("Rhs::FIELD{");

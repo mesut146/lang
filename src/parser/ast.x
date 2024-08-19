@@ -47,15 +47,6 @@ struct Unit{
   globals: List<Global>;
   last_id: i32;
 }
-impl Drop for Unit{
-  func drop(*self){
-    //print("Unit::drop() {}\n", self.path);
-    self.path.drop();
-    self.imports.drop();
-    self.items.drop();
-    self.globals.drop();
-  }
-}
 
 impl Unit{
   func new(path: String): Unit{
@@ -106,27 +97,6 @@ enum Item{
   Type(name: String, rhs: Type),
   Extern(methods: List<Method>)
 }
-/*impl Drop for Item{
-  func drop(*self){
-    print("Item::drop\n");
-    if let Item::Method(m)=(self){
-      m.drop();
-    }else if let Item::Decl(d)=(self){
-      d.drop();
-    }else if let Item::Impl(i)=(self){
-      i.drop();
-    }else if let Item::Trait(t)=(self){
-      t.drop();
-    }else if let Item::Type(name, rhs)=(self){
-      name.drop();
-      rhs.drop();
-    }else if let Item::Extern(methods)=(self){
-      methods.drop();
-    }else{
-      panic("drop {}\n", self);
-    }
-  }
-}*/
 
 impl Item{
   func as_impl(self): Impl*{

@@ -28,7 +28,7 @@ impl str{
     if(is_null(ptr)){
       panic("ptr is null");
     }
-    let len = strlen(ptr, 255) as i32;
+    let len = strlen(ptr) as i32;
     return str::new(ptr[0..len]);
   }
 

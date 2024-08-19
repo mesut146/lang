@@ -307,6 +307,7 @@ impl Compiler{
   func get_global_string(self, val: String): Value*{
     let opt = self.string_map.get_ptr(&val);
     if(opt.is_some()){
+      val.drop();
       return *opt.unwrap();
     }
     let val2 = val.clone();

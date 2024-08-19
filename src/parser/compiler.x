@@ -360,7 +360,7 @@ impl Compiler{
           let cons_elems_slice = vector_Constant_new();
           let ptr = self.get_global_string(val.str());
           vector_Constant_push(cons_elems_slice, ptr as Constant*);
-          vector_Constant_push(cons_elems_slice, makeInt(val.len(), 64) as Constant*);
+          vector_Constant_push(cons_elems_slice, makeInt(val.len(), SLICE_LEN_BITS()) as Constant*);
           let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
           vector_Constant_push(cons_elems, cons_slice);
           init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
@@ -383,6 +383,7 @@ impl Compiler{
       let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
       vector_Metadata_push(globs, gve as Metadata*);
       self.globals.add(gl.name.clone(), glob as Value*);
+      //todo AllocHelper should visit rhs?
       if let Expr::Call(mc*)=(&gl.expr){
         AllocHelper::new(self).visit(&gl.expr);
         if(is_struct(&rt.type)){
@@ -404,7 +405,6 @@ impl Compiler{
       }
     }
     replaceGlobalVariables(self.llvm.di.get().cu, globs);
-    vector_Metadata_delete(globs);
     
     let struct_elem_types = vector_Type_new();
     vector_Type_push(struct_elem_types, getInt(32));
@@ -422,9 +422,12 @@ impl Compiler{
     let ctor_init = ConstantArray_get(ctor_ty, elems);
     let ctor = make_global_linkage("llvm.global_ctors".ptr(), ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending());
     CreateRetVoid();
-    vector_Constant_delete(struct_elems);
-    vector_Constant_delete(elems);
     self.own.reset();
+    self.llvm.di.get().finalize();
+    verifyFunction(proto);
+    vector_Constant_delete(elems);
+    vector_Constant_delete(struct_elems);
+    vector_Metadata_delete(globs);
     vector_Type_delete(struct_elem_types);
     method.drop();
   }

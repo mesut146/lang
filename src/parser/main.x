@@ -17,11 +17,6 @@ import std/io
 import std/libc
 import std/stack
 
-func aaa(){
-  let s = "asd".str();
-  s = "aa".str(); 
-}
-
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");
 }
@@ -102,7 +97,6 @@ func handle_c(cmd: CmdArgs*){
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
   let nostd = cmd.consume_any("-nostd");
-  let noroot = cmd.consume_any("-noroot");
   let flags = cmd.get_val_or("-flags", "".str());
   let name = cmd.get_val("-name");
   let config = CompilerConfig::new();
@@ -140,9 +134,6 @@ func handle_c(cmd: CmdArgs*){
     }
   }
   if(is_dir(path.str())){
-    if(!noroot){
-      config.add_dir(path.str());
-    }
     let out = Compiler::compile_dir(config);
     out.drop();
   }else{
@@ -172,16 +163,20 @@ func handle_std(cmd: CmdArgs*){
   lib.drop();
 }
 
+func print_version(){
+  print("{} version {} by {}\n", get_compiler_name(), get_version(), get_vendor());
+}
+
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
   print_unit = false;
-  print("vendor={} name={} version={}\n", get_vendor(), get_compiler_name(), get_version());
+  //print_version();
   if(!cmd.has()){
     print("enter a command\n");
     return;
   }
   if(cmd.is("-v")){
-    print("{} version {} by {}\n", get_compiler_name(), get_version(), get_vendor());
+    print_version();
     return;
   }
   if(handle_tests(cmd)){

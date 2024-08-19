@@ -225,11 +225,8 @@ impl RType{
     };
   }
   func unwrap(*self): Type{
-    let res = self.type;
-    self.value.drop();
-    self.vh.drop();
-    self.desc.drop();
-    self.method_desc.drop();
+    let res = self.type.clone();
+    self.drop();
     return res;
   }
   func is_decl(self): bool{

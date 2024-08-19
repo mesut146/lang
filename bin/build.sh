@@ -22,9 +22,9 @@ flags="$bridge $out_dir/std.a $libs"
 flags="$flags -lstdc++"
 libs="/usr/lib/llvm-16/lib/libLLVM.so"
 
-$compiler c -static -noroot -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
+$compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
 vendor=x4 compiler_name=$name version=1.4 \
-$compiler c -norun -cache -noroot -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+$compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 cp ${out_dir}/${name} $build
