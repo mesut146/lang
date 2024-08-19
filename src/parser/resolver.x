@@ -960,7 +960,7 @@ impl Resolver{
       self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id, prm.line);
     }
     if(node.body.is_some()){
-      self.visit(node.body.get());
+      let rt_blk = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
         let msg = String::new("non void function ");
@@ -970,6 +970,7 @@ impl Resolver{
         msg.append(" must return a value");
         self.err(node.line, msg);
       }
+      //todo comp of expr
       exit.drop();
     }
     self.dropScope();
@@ -1684,7 +1685,7 @@ impl Resolver{
       let arg = call.args.get_ptr(0).print();
       let id = i32::parse(arg.str());
       let ptr: Block* = *self.block_map.get_ptr(&id).unwrap();
-      self.visit(ptr);
+      self.visit_block(ptr);
       arg.drop();
       return RType::new("void");
     }
@@ -2095,6 +2096,9 @@ impl Resolver{
   }
   
   func visit_nc(self, node: Expr*): RType{
+    if let Expr::Block(blk*)=(node){
+      return self.visit_block(blk.get());
+    }
     if let Expr::Lit(lit*)=(node){
       return self.visit_lit(lit);
     }else if let Expr::Type(type*) = (node){
@@ -2157,9 +2161,6 @@ impl Resolver{
     if let Stmt::Expr(e*) = (node){
       let tmp = self.visit(e);
       tmp.drop();
-      return;
-    }else if let Stmt::Block(b*) = (node){
-      self.visit(b);
       return;
     }else if let Stmt::Ret(e*) = (node){
       if(e.is_some()){
@@ -2245,7 +2246,7 @@ impl Resolver{
     let stmt = parse_stmt(whl, &self.unit, node.line);
     body.list.add(stmt);
     body.list.add(parse_stmt(format("{}.drop();", &it_name), &self.unit, node.line));
-    self.visit(body);
+    self.visit_block(body);
 
     self.format_map.add(node.id, info);
     rt.drop();
@@ -2334,7 +2335,7 @@ impl Resolver{
     return res;
   }
 
-  func visit(self, node: Block*){
+  func visit_block(self, node: Block*): RType{
     for(let i = 0;i < node.list.len();++i){
       if(i > 0){
         let prev = Exit::get_exit_type(node.list.get_ptr(i - 1));
@@ -2348,15 +2349,16 @@ impl Resolver{
       self.visit(node.list.get_ptr(i));
     }
     if(node.return_expr.is_some()){
-      let rt = self.visit(node.return_expr.get());
-      let ret = &self.curMethod.unwrap().type;
-      let cmp = MethodResolver::is_compatible(&rt.type, ret);
-      if(cmp.is_some()){
-        self.err(node.return_expr.get(), format("return type mismatch {} vs {}", &rt.type, ret));
+      if(!node.list.empty()){
+        let last = Exit::get_exit_type(node.list.last());
+        if(last.is_jump() || last.is_unreachable()){
+          self.err(node.return_expr.get(), "unreachable code");
+        }
+        last.drop();
       }
-      cmp.drop();
-      rt.drop();
+      return self.visit(node.return_expr.get());
     }
+    return RType::new("void");
   }
 
   func visit(self, node: VarExpr*){

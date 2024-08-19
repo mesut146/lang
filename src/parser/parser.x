@@ -554,10 +554,10 @@ impl Parser{
     
     func parse_stmt(self): Stmt{
       let id = self.node();
-      if(self.is(TokenType::LBRACE)){
+      /*if(self.is(TokenType::LBRACE)){
         return Stmt::Block{.id, self.parse_block()};
-      }
-      else if(self.is(TokenType::LET)){
+      }*/
+      if(self.is(TokenType::LET)){
         let vd = self.var();
         self.consume(TokenType::SEMI);
         return Stmt::Var{.id, vd};
@@ -831,6 +831,10 @@ impl Parser{
     let n = self.node();
     if(self.is(TokenType::MATCH)){
       return self.parse_match();
+    }
+    if(self.is(TokenType::LBRACE)){
+      let block = self.parse_block();
+      return Expr::Block{.n, Box::new(block)};
     }
     if(isLit(self.peek())){
       return self.parseLit();

@@ -316,7 +316,27 @@ impl Exit{
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
         return false;
     }
+    func get_exit_type(expr: Expr*): Exit{
+        if let Expr::Call(call*)=(expr){
+            if(call.name.eq("panic") && call.scope.is_none()){
+                return Exit::new(ExitType::PANIC);
+            }
+            if(call.name.eq("exit") && call.scope.is_none()){
+                return Exit::new(ExitType::EXIT);
+            }
+            if(Resolver::is_call(call, "std", "unreachable")){
+                return Exit::new(ExitType::UNREACHABLE);
+            }
+        }
+        if let Expr::Block(blk*)=(expr){
+            return get_exit_type(blk.get());
+        }
+        return Exit::new(ExitType::NONE);
+    }
     func get_exit_type(block: Block*): Exit{
+        if(block.return_expr.is_some()){
+            return get_exit_type(block.return_expr.get());
+        }
         if(block.list.empty()){
             return Exit::new(ExitType::NONE);
         }
@@ -329,28 +349,7 @@ impl Exit{
         if(stmt is Stmt::Break) return Exit::new(ExitType::BREAK);
         if(stmt is Stmt::Continue) return Exit::new(ExitType::CONTINE);
         if let Stmt::Expr(expr*)=(stmt){
-            if let Expr::Call(call*)=(expr){
-                if(call.name.eq("panic") && call.scope.is_none()){
-                    return Exit::new(ExitType::PANIC);
-                }
-                if(call.name.eq("exit") && call.scope.is_none()){
-                    return Exit::new(ExitType::EXIT);
-                }
-                if(Resolver::is_call(call, "std", "unreachable")){
-                    return Exit::new(ExitType::UNREACHABLE);
-                }
-            }
-            return Exit::new(ExitType::NONE);
-        }
-        if let Stmt::Block(block*)=(stmt){
-            if(block.return_expr.is_some()){
-                return Exit::new(ExitType::BLOCK_RETURN);
-            }
-            if(block.list.empty()){
-                return Exit::new(ExitType::NONE);
-            }
-            let last = block.list.last();
-            return get_exit_type(last);
+            return get_exit_type(expr);
         }
         if let Stmt::If(is*)=(stmt){
             let res = Exit::new(ExitType::NONE);

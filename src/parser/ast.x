@@ -507,8 +507,8 @@ struct IfLet{
   type: Type;
   args: List<ArgBind>;
   rhs: Expr;
-  then: Box<Stmt>;
-  else_stmt: Ptr<Stmt>;
+  then: Block;
+  else_stmt: Ptr<Block>;
 }
 
 struct ForStmt{
@@ -531,7 +531,6 @@ struct IfStmt{
 }
 
 enum Stmt: Node{
-    Block(x: Block),
     Var(ve: VarExpr),
     Expr(e: Expr),
     Ret(e: Option<Expr>),
@@ -635,7 +634,8 @@ enum Expr: Node{
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(val: ArrAccess),
-  MatchExpr(val: Box<Match>)
+  MatchExpr(val: Box<Match>),
+  Block(val: Box<Block>)
 }
 impl Expr{
   func print(self): String{

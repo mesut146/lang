@@ -19,14 +19,3 @@ func resolve1(path: str){
     //let a = buf[0..1];
     //String_new(buf[0..len]);
 }
-
-
-/*func String_new(arr: [i8]){
-    //let ptr = arr.ptr();
-    get_malloc<i8>(arr.len());
-}*/
-
-    
-/*func String_new(cap: i64): String{
-    return String{List<u8>::new(cap)};
-}*/
