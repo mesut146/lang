@@ -619,7 +619,7 @@ enum InfixOp{
   EQ, PLUSEQ, MINUSEQ, MULEQ, DIVEQ, PERCENTEQ, POWEQ, ANDEQ, OREQ,
   NOTEQ, LTEQ, GTEQ, LTLTEQ, GTGTEQ
 }
-
+//fix-sort
 enum Expr: Node{
   Lit(val: Literal),
   Name(val: String),
