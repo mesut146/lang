@@ -354,9 +354,9 @@ impl Own{
         let state = self.get_state(&rhs, scope);
         rhs.drop();
         if let StateType::MOVED(line)=(state.kind){
-            let s = self.get_scope(self.main_scope).print(self);
-            print("{}\n", s);
-            s.drop();
+            // let scope_str = self.get_scope(self.main_scope).print(self);
+            // print("{}\n", scope_str);
+            // scope_str.drop();
             let tmp = printMethod(self.method);
             self.compiler.get_resolver().err(expr, format("use after move in {}:{}", tmp, line));
             tmp.drop();

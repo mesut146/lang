@@ -55,13 +55,6 @@ impl<K, V> Map<K, V>{
     return self.indexOf(k) != -1;
   }
 
-  func get_ptr(self, k: K*): Option<V*>{
-    let opt = self.get_pair(k);
-    if(opt.is_some()){
-      return Option<V*>::Some{&opt.unwrap().b};
-    }
-    return Option<V*>::None;
-  }  
   func indexOf(self, k: K*): i64{
     for(let i = 0;i < self.arr.len();i += 1){
       let pr =  self.arr.get_ptr(i);
@@ -71,6 +64,34 @@ impl<K, V> Map<K, V>{
     }
     return -1 as i64;
   }
+
+  func get_ptr(self, k: K*): Option<V*>{
+    let opt = self.get_pair(k);
+    if(opt.is_some()){
+      return Option<V*>::new(&opt.unwrap().b);
+    }
+    return Option<V*>::new();
+  }
+
+  func get_str(self, k: str): Option<V*>{
+    let opt = self.get_pair_str(k);
+    if(opt.is_some()){
+      return Option<V*>::new(&opt.unwrap().b);
+    }
+    return Option<V*>::new();
+  }
+
+  func get_pair_str(self, key: str): Option<Pair<K, V>*>{
+    for(let i = 0;i < self.arr.len();++i){
+      let pair = self.arr.get_ptr(i);
+      let s1: str = String::str(&pair.a);
+      if(Eq::eq(s1, key)){
+        return Option::new(pair);
+      }
+    }
+    return Option<Pair<K, V>*>::new();
+  }
+
   func get_pair(self, k: K*): Option<Pair<K, V>*>{
     for(let i = 0;i < self.arr.len();++i){
       let pair = self.arr.get_ptr(i);
@@ -79,6 +100,17 @@ impl<K, V> Map<K, V>{
       }
     }
     return Option<Pair<K, V>*>::new();
+  }
+  func get_pair_or(self, key: K, def: V): Pair<K, V>*{
+    for(let i = 0;i < self.arr.len();++i){
+      let pair = self.arr.get_ptr(i);
+      if(Eq::eq(&pair.a, &key)){
+        Drop::drop(key);
+        Drop::drop(def);
+        return pair;
+      }
+    }
+    return self.add(key, def);
   }
   func get_pair_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){
@@ -115,6 +147,8 @@ impl<K, V> Map<K, V>{
     return MapIntoIter{self, 0};
   }
 }
+
+
 
 impl<K, V> Debug for Map<K, V>{
   func debug(self, f: Fmt*){

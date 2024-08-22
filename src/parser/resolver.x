@@ -389,7 +389,6 @@ impl Resolver{
       inLoop: 0,
       used_types: List<RType>::new(),
       generated_decl: List<Box<Decl>>::new(),
-      //generated_impl: List<Impl>::new(),
       format_map: Map<i32, FormatInfo>::new(),
       glob_map: List<GlobalInfo>::new(),
       drop_map: Map<String, Desc>::new(),
@@ -1102,6 +1101,7 @@ impl Resolver{
     if(cached.is_some()){
       return cached.unwrap().clone();
     }
+    //print("visit_type {}\n", str);
     if(node.is_prim() || node.is_void()){
       let res = RType::new(str.str());
       self.addType(str.clone(), res.clone());
@@ -1634,6 +1634,7 @@ impl Resolver{
     if (is_str_lit(fmt).is_none()) {
         self.err(node, "format string is not a string literal");
     }
+    self.visit(fmt).drop();
     //check rest
     for (let i = 1; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get_ptr(i));

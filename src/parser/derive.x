@@ -203,7 +203,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);
-                iflet.args.add(ArgBind{.arg_id, fd.name.clone(), false});
+                iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
             }
             body.list.add(Stmt::IfLet{.iflet_id, iflet});
         }
@@ -273,7 +273,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             for(let j = 0;j < ev.fields.len();++j){
                 let fd = ev.fields.get_ptr(j);
                 let arg_id = unit.node(line);
-                is.args.add(ArgBind{.arg_id,fd.name.clone(), true});
+                is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
             }
             let iflet_id = unit.node(line);
             body.list.add(Stmt::IfLet{.iflet_id, is});
@@ -312,6 +312,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.err(node, "format no arg");
     }
     let fmt: Expr* = mc.args.get_ptr(0);
+    r.visit(fmt).drop();
     let lit_opt = is_str_lit(fmt);
     if (lit_opt.is_none()) {
         r.err(node, "format arg not str literal");
@@ -475,12 +476,13 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let block = &info.block;
     let arg_str = arg.print();
     let arg_norm = normalize_quotes(arg_str.str());
-    arg_str.drop();
     let method_sig = printMethod(r.curMethod.unwrap());
     let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
+    block.list.add(parse_stmt(str, &r.unit, line));
+    r.format_map.add(node.id, info);
+    //print("assert block={}\n", block);
+    r.visit(block);
+    arg_str.drop();
     arg_norm.drop();
     method_sig.drop();
-    block.list.add(parse_stmt(str, &r.unit, line));
-    r.visit(block);
-    r.format_map.add(node.id, info);
 }

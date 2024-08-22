@@ -234,7 +234,7 @@ impl DebugInfo{
           let ty = *base_ty.get();
           let size = DIType_getSizeInBits(ty);
           let off = 0;
-          let mem = createMemberType(scope, "super".ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+          let mem = createMemberType(scope, "<super>".ptr(), file, decl.line, size, off, make_di_flags(false), ty);
           vector_Metadata_push(elems, mem as Metadata*);
           ++idx;
         }

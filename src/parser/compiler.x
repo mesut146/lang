@@ -98,7 +98,7 @@ impl Protos{
   func init(self){
       let sliceType = make_slice_type();
       self.std.add("slice", sliceType);
-      self.std.add("str", make_string_type(sliceType as llvm_Type*));
+      //self.std.add("str", make_string_type(sliceType as llvm_Type*));
       self.libc.add("printf", make_printf());
       self.libc.add("fflush", make_fflush());
       self.libc.add("malloc", make_malloc());
@@ -112,13 +112,6 @@ impl Protos{
   func get(self, name: String*): llvm_Type*{
     let res = self.classMap.get_ptr(name);
     return *res.unwrap();
-  }
-  func dump(self){
-    print("dump classmap\n");
-    for(let i=0;i<self.classMap.len();++i){
-      let e = self.classMap.get_pair_idx(i).unwrap();
-      print("{}\n", e.a);
-    }
   }
   func libc(self, nm: str): Function*{
     return *self.libc.get_ptr(&nm).unwrap();

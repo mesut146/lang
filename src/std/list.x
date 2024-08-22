@@ -34,6 +34,9 @@ impl<T> List<T>{
   func ptr(self): T*{
     return self.ptr;
   }
+  func capacity(self): i64{
+    return self.cap;
+  }
 
   func expand(self){
     if(self.count < self.cap){
@@ -85,6 +88,14 @@ impl<T> List<T>{
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
     return self.get_ptr(self.count - 1);
+  }
+
+  func add_not_exist(self, e: T){
+    if(self.contains(&e)){
+      e.drop();
+      return;
+    }
+    self.add(e);
   }
 
   func add_list(self, list: List<T>){

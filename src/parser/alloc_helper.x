@@ -137,6 +137,13 @@ impl AllocHelper{
 
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.c.get_resolver();
+    if(Resolver::is_printf(call)){
+      for(let i = 1;i < call.args.len();++i){
+        let arg = call.args.get_ptr(i);
+        self.visit(arg);
+      }
+      return Option<Value*>::new();
+    }
     if(Resolver::is_call(call, "std", "typeof")){
       let rt = resolver.visit(node);
       let res = Option::new(self.alloc_ty(&rt.type, node));
@@ -218,7 +225,9 @@ impl AllocHelper{
     }
     if let Expr::Lit(lit*)=(node){
       if(lit.kind is LitKind::STR){
-        let st = self.c.protos.get().std("str");
+        let ty = Type::new("str");
+        let st = self.c.mapType(&ty);
+        ty.drop();
         return Option::new(self.alloc_ty(st as llvm_Type*, node));
       }
       return res;

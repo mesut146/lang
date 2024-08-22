@@ -803,7 +803,8 @@ impl Compiler{
 
     func str_lit(self, val: str, trg_ptr: Value*): Value*{
       let src = self.get_global_string(val.str());
-      let stringType = self.protos.get().std("str") as llvm_Type*;
+      let str_ty = Type::new("str");
+      let stringType = self.mapType(&str_ty) as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
       let slice_ptr = self.gep2(trg_ptr, 0, stringType);
       let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
@@ -813,6 +814,7 @@ impl Compiler{
       //set len
       let len = makeInt(val.len(), SLICE_LEN_BITS());
       CreateStore(len, len_target);
+      str_ty.drop();
       return trg_ptr;
     }
   

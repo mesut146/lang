@@ -29,7 +29,7 @@ impl<T> Box<T>{
 
     func set(self, e: T): T{
       let old = ptr::deref(self.val);
-      *self.val = e;
+      ptr::copy(self.val, 0, e);
       return old;
     }
 }
