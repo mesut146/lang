@@ -1675,6 +1675,34 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(Resolver::is_call(call, "std", "debug") || Resolver::is_call(call, "std", "debug2")){
+      assert(call.type_args.len() == 0);
+      assert(call.args.len() == 2);
+      let src = call.args.get_ptr(0);
+      let fmt = call.args.get_ptr(1);
+      let rt1 = self.visit(src);
+      let rt2 = self.visit(fmt);
+      //assert(rt1.type.is_pointer());
+      assert(rt2.type.eq("Fmt*"));
+      let info = FormatInfo::new(node.line);
+      let elem = &rt1.type;
+      if(elem.is_pointer()){
+        let elem2 = elem.elem();
+        if(elem2.is_pointer() || call.name.eq("debug2")){
+          //print hex based address
+          info.block.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", src), &self.unit, node.line));
+        }else{
+          info.block.list.add(parse_stmt(format("Debug::debug({}, {});", src, fmt), &self.unit, node.line));
+        }
+      }else{
+        info.block.list.add(parse_stmt(format("Debug::debug({}, {});", src, fmt), &self.unit, node.line));
+      }
+      self.visit(&info.block);
+      self.format_map.add(node.id, info);
+      rt1.drop();
+      rt2.drop();
+      return RType::new("void");
+    }
     if(Resolver::is_call(call, "std", "unreachable")){
       assert(call.args.len() == 0);
       assert(call.type_args.len() == 0);

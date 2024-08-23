@@ -12,6 +12,7 @@ std::env("<name>"): Option<str>;//compile time env
 std::no_drop(obj): void;
 std::typeof(obj): <obj type>: str;
 std::unreachable(): void;
+std::debug(ptr: T*, Fmt*): void;
 
 ptr::null<T>(): T*;
 ptr::get(src, index): <src_type>;

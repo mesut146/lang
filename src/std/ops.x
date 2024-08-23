@@ -413,14 +413,21 @@ func assert_eq(s1: str, s2: str){
     panic("assertion failed: {}!= {}", s1, s2);
   }
 }
+func assert_eq(s1: i32, s2: i32){
+  if(s1 != s2){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+}
+func assert_eq(s1: String, s2: String){
+  if(!s1.eq(s2.str())){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+  s1.drop();
+  s2.drop();
+}
 func assert_eq(s1: String, s2: str){
   if(!s1.eq(s2)){
     panic("assertion failed: {}!= {}", s1, s2);
   }
   s1.drop();
-}
-func assert_eq(s1: i32, s2: i32){
-  if(s1 != s2){
-    panic("assertion failed: {}!= {}", s1, s2);
-  }
 }

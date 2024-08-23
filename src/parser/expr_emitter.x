@@ -329,6 +329,7 @@ impl Compiler{
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let env = getenv2("ignore_drop");
+      //todo dont remove this until own is stable
       if(is_drop_call2(mc) && env.is_some()){
         let list = env.unwrap().split(",");
         //let cur_name: str = Path::name(self.unit().path.str());
@@ -340,6 +341,11 @@ impl Compiler{
           return getVoidTy() as Value*;
         }
         list.drop();
+      }
+      if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        self.visit_block(&info.block);
+        return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "unreachable")){
         CreateUnreachable();

@@ -245,7 +245,8 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new(line, line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
+            then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &decl.type), unit, line));
+            then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
             if(ev.fields.len() > 0){
                 then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
                 for(let j = 0;j < ev.fields.len();++j){
@@ -260,9 +261,13 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                         //i64::debug_hex(<fd.name> as u64, f);
                         then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
                     }else{
-                        //{fd.name}.debug(f);
-                        //already ptr from if let arg
-                        then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                        if(decl.is_generic){
+                            then.list.add(parse_stmt(format("std::debug({}, f);", fd.name), unit, line));
+                        }else{
+                            //{fd.name}.debug(f);
+                            //already ptr from if let arg
+                            then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                        }
                     }
                 }
                 then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
@@ -295,8 +300,12 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 //i64::debug_hex(fd.name as u64, f);
                 body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
             }else{
-                //self.{fd.name}.debug(f);
-                body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                if(decl.is_generic){
+                    body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name), unit, line));
+                }else{
+                    //self.{fd.name}.debug(f);
+                    body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                }
             }
         }
         body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));

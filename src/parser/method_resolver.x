@@ -636,7 +636,7 @@ impl MethodResolver{
                         arg = mc.args.get_ptr(i).print();
                     }
                 }
-                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}\n{}\nagrs: {}", t1_str.str(), arg, t2_str.str(), cmp.get(), typeParams)};
+                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}\n{}", t1_str.str(), arg, t2_str.str(), cmp.get())};
                 arg.drop();
                 t1_str.drop();
                 t2_str.drop();

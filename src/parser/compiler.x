@@ -674,7 +674,8 @@ impl Compiler{
     let path_c: CStr = path.cstr();
     let code = system(path_c.ptr());
     if(code != 0){
-      panic("error while running {} code={}", path_c, code);
+      print("error while running {} code={}\n", path_c, code);
+      exit(1);
     }
     path_c.drop();
   }

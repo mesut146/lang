@@ -100,6 +100,7 @@ impl<T> Clone for Ptr<T>{
   }
 }
 
+//c ptr
 struct RawPtr<T>{
   ptr: T*;
 }
