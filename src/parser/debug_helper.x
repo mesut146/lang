@@ -11,6 +11,10 @@ import std/map
 import std/libc
 import std/stack
 
+func base_class_name(): str{
+  return "<super>";
+}
+
 struct DebugInfo{
     cu: DICompileUnit*;
     file: DIFile*;
@@ -32,20 +36,23 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(path: str, debug: bool): DebugInfo{
+    func new(path: str): DebugInfo{
         init_dbg();
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
         let file = createFile(path_c.ptr(), dir_c.ptr());
         let cu = createCompileUnit(file);
+        let debug = !getenv2("DEBUG").unwrap_or("1").eq("0");
+        //print("debug={} env={}\n", debug, getenv2("DEBUG"));
         path_c.drop();
         dir_c.drop();
         return DebugInfo{cu: cu, file: file,
              sp: Option<DISubprogram*>::new(),
              types: Map<String, DIType*>::new(),
              incomplete_types: Map<String, DICompositeType*>::new(),
-             debug: true,
-             scopes: Stack<DILexicalBlock*>::new()};
+             debug: debug,
+             scopes: Stack<DILexicalBlock*>::new()
+        };
     }
     
     func finalize(self){
@@ -145,15 +152,18 @@ impl DebugInfo{
       return *self.scopes.top() as DIScope*;
     }
 
-    func new_scope(self, line: i32): DILexicalBlock*{
+    func new_scope(self, line: i32)/*: DILexicalBlock**/{
+      if(!self.debug) return;
       let scope = createLexicalBlock(self.get_scope(), self.file, line, 0);
       self.scopes.push(scope);
-      return scope;
+      //return scope;
     }
     func exit_scope(self){
+      if(!self.debug) return;
       self.scopes.pop();
     }
     func new_scope(self, scope: DILexicalBlock*){
+      if(!self.debug) return;
       self.scopes.push(scope);
     }
 
@@ -188,7 +198,7 @@ impl DebugInfo{
         let base_ty = self.map_di(decl.base.get(), c);
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
-        let mem = createMemberType(st as DIScope*, "super".ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
+        let mem = createMemberType(st as DIScope*, base_class_name().ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
       }
@@ -226,15 +236,16 @@ impl DebugInfo{
         base_ty = Option<DIType*>::new(ty);
       }
       let st_real = c.mapType(&decl.type);
-      //Type_dump(st_real);
+      Type_dump(st_real);
       let sl = getStructLayout(st_real as StructType*);
+      print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
       if let Decl::Struct(fields*)=(decl){
         let idx = 0;
         if(decl.base.is_some()){
           let ty = *base_ty.get();
           let size = DIType_getSizeInBits(ty);
           let off = 0;
-          let mem = createMemberType(scope, "<super>".ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+          let mem = createMemberType(scope, base_class_name().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
           vector_Metadata_push(elems, mem as Metadata*);
           ++idx;
         }
@@ -245,9 +256,9 @@ impl DebugInfo{
           let off = getElementOffsetInBits(sl, idx);
           let name_c = fd.name.clone().cstr();
           let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-          name_c.drop();
           vector_Metadata_push(elems, mem as Metadata*);
           ++idx;
+          name_c.drop();
         }
       }else if let Decl::Enum(variants*)=(decl){
         let data_size = c.getSize(decl) - ENUM_TAG_BITS();

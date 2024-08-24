@@ -279,7 +279,7 @@ impl Compiler{
       CreateBr(condbb);
       SetInsertPoint(condbb);
       
-      let di_scope = self.llvm.di.get().new_scope(stmt.line);
+      /*let di_scope =*/ self.llvm.di.get().new_scope(stmt.line);
       if (node.cond.is_some()) {
         CreateCondBr(self.branch(node.cond.get()), then, next);
       } else {
@@ -289,14 +289,14 @@ impl Compiler{
       self.set_and_insert(then);
       self.loops.add(updatebb);
       self.loopNext.add(next);
-      self.llvm.di.get().new_scope(node.body.get().line);
+      //self.llvm.di.get().new_scope(node.body.get().line);
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
       self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
-      self.llvm.di.get().new_scope(di_scope);
+      //self.llvm.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {
         let u = node.updaters.get_ptr(i);
         self.visit(u);

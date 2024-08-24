@@ -484,15 +484,17 @@ impl Compiler{
       let decl = *list.get_ptr(i);
       self.fill_decl(decl, p.get(decl) as StructType*);
     }
-    //di proto
-    for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
-      self.llvm.di.get().map_di_proto(decl, self);
-    }
-    //di fill
-    for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
-      self.llvm.di.get().map_di_fill(decl, self);
+    if(self.llvm.di.get().debug){
+      //di proto
+      for(let i = 0;i < list.len();++i){
+        let decl = *list.get_ptr(i);
+        self.llvm.di.get().map_di_proto(decl, self);
+      }
+      //di fill
+      for(let i = 0;i < list.len();++i){
+        let decl = *list.get_ptr(i);
+        self.llvm.di.get().map_di_fill(decl, self);
+      }
     }
     list.drop();
   }
@@ -527,11 +529,11 @@ impl Compiler{
         let name = format("{}::{}", decl.type, ev.name.str());
         let var_ty = p.get(&name) as StructType*;
         self.make_variant_type(ev, decl, &name, var_ty);
-        name.drop();
-        let sz = getSizeInBits(var_ty);
-        if(sz > max){
-          max = sz;
+        let variant_size = getSizeInBits(var_ty);
+        if(variant_size > max){
+          max = variant_size;
         }
+        name.drop();
       }
       vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
       vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
@@ -549,8 +551,10 @@ impl Compiler{
     vector_Type_delete(elems);
     //print("fill_decl {}\n", &decl.type);
     //Type_dump(st as llvm_Type*);
-    //print("\n");
-
+    let size = getSizeInBits(st);
+    if(size == 0){
+      print("sizeof {}={}\n", &decl.type, size);
+    }
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: StructType*){
     let elems = vector_Type_new();

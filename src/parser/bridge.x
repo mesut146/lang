@@ -107,6 +107,7 @@ extern{
     func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: u32, ty: DIType*): DIDerivedType*;
     func DIType_getSizeInBits(ty: DIType*): i64;
     func getStructLayout(st: StructType*): StructLayout*;
+    func DataLayout_getTypeSizeInBits(ty: llvm_Type*): i64;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
     func replaceElements(st: DICompositeType*, elems: vector_Metadata*);
     func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: vector_Metadata*): DICompositeType*;
@@ -121,6 +122,7 @@ extern{
     func make_struct_ty_noname(elems: vector_Type*): StructType*;
     func setBody(st: StructType*, elems: vector_Type*);
     func getSizeInBits(st: StructType*): i32;
+    func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
     func makeInt(val: i64, bits: i32): Value*;

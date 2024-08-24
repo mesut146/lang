@@ -182,7 +182,7 @@ impl llvm_holder{
     make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
     name_c.drop();
     make_builder();
-    self.di = Option::new(DebugInfo::new(path, true));
+    self.di = Option::new(DebugInfo::new(path));
   }
 
   func new(): llvm_holder{
@@ -373,8 +373,10 @@ impl Compiler{
       let name_c = gl.name.clone().cstr();
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
       name_c.drop();
-      let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
-      vector_Metadata_push(globs, gve as Metadata*);
+      if( self.llvm.di.get().debug){
+        let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
+        vector_Metadata_push(globs, gve as Metadata*);
+      }
       self.globals.add(gl.name.clone(), glob as Value*);
       //todo AllocHelper should visit rhs?
       if let Expr::Call(mc*)=(&gl.expr){
@@ -397,7 +399,9 @@ impl Compiler{
         rt.drop();
       }
     }
-    replaceGlobalVariables(self.llvm.di.get().cu, globs);
+    if( self.llvm.di.get().debug){
+      replaceGlobalVariables(self.llvm.di.get().cu, globs);
+    }
     
     let struct_elem_types = vector_Type_new();
     vector_Type_push(struct_elem_types, getInt(32));

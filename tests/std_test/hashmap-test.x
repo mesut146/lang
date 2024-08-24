@@ -8,7 +8,7 @@ func map_i32(){
     let key = 1;
     let op = map.get(&key);
     //Option<i32*>::debug fails
-    print("{} {}\n", std::typeof(op), op);
+    print("{} {}\n", std::typeof(op), op.unwrap());
     print("map={}\n", map);
 }
 
