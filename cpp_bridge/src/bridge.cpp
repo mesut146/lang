@@ -102,11 +102,18 @@ llvm::TargetMachine *createTargetMachine(const char *triple) {
   return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
+bool verifyModule(){
+  return llvm::verifyModule(*mod, &llvm::outs());
+}
+
 void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
                  char *triple) {
   std::string TargetTriple(triple);
   std::string Filename(name);
-  llvm::verifyModule(*mod, &llvm::outs());
+  if(llvm::verifyModule(*mod, &llvm::outs())){
+    llvm::errs() << "Module verification failed!\n";
+    exit(1);
+  }
   mod->setDataLayout(TargetMachine->createDataLayout());
   mod->setTargetTriple(TargetTriple);
 
@@ -435,6 +442,9 @@ void Argument_setsret(llvm::Argument *arg, llvm::Type *ty) {
 
 llvm::Attribute::AttrKind get_sret() { return llvm::Attribute::StructRet; }
 
+void Function_print(llvm::Function *f) { f->print(llvm::errs()); }
+
+
 llvm::StructType *make_struct_ty(char *name) {
   return llvm::StructType::create(*ctx, name);
 }
@@ -448,12 +458,12 @@ llvm::StructType *make_struct_ty_noname(std::vector<llvm::Type *> *elems) {
 
 int getSizeInBits(llvm::StructType *st) {
   int res = mod->getDataLayout().getStructLayout(st)->getSizeInBits();
-  if (res == 0) {
+  /*if (res == 0) {
     st->dump();
     auto name = st->getName().str();
     std::cout << "getSizeInBits " << name << " size: " << res
               << " elems:" << st->getNumElements() << std::endl;
-  }
+  }*/
   return res;
 }
 
@@ -510,6 +520,16 @@ llvm::Constant *ConstantArray_get(llvm::ArrayType *ty,
 llvm::Value *CreateAlloca(llvm::Type *ty) { return Builder->CreateAlloca(ty); }
 
 void Value_setName(llvm::Value *val, char *name) { val->setName(name); }
+
+llvm::Value* CreateFPCast(llvm::Value *val, llvm::Type *trg_type) {
+  return Builder->CreateFPCast(val, trg_type);
+}
+llvm::Value* CreateSIToFP(llvm::Value *val, llvm::Type *trg_type) {
+  return Builder->CreateSIToFP(val, trg_type);
+}
+llvm::Value* CreateUIToFP(llvm::Value *val, llvm::Type *trg_type) {
+  return Builder->CreateUIToFP(val, trg_type);
+}
 
 void CreateStore(llvm::Value *val, llvm::Value *ptr) {
   Builder->CreateStore(val, ptr);
@@ -613,6 +633,9 @@ llvm::Value *CreateSub(llvm::Value *l, llvm::Value *r) {
 llvm::Value *CreateNSWMul(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateNSWMul(l, r);
 }
+llvm::Value *CreateFMul(llvm::Value *l, llvm::Value *r) {
+  return Builder->CreateFMul(l, r);
+}
 llvm::Value *CreateSDiv(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateSDiv(l, r);
 }
@@ -676,6 +699,20 @@ llvm::ConstantInt *makeInt(int64_t val, int bits) {
 
 llvm::Type *getInt(int bit) { return llvm::IntegerType::get(*ctx, bit); }
 
+llvm::Type* getFloatTy(){
+  return llvm::Type::getFloatTy(*ctx);
+}
+llvm::Type* getDoubleTy(){
+  return llvm::Type::getDoubleTy(*ctx);
+}
+llvm::Constant* makeFloat(float val) {
+  return llvm::ConstantFP::get(getFloatTy(), val);
+}
+
+llvm::Constant* makeDouble(double val) {
+  return llvm::ConstantFP::get(getDoubleTy(), val);
+}
+
 llvm::ArrayType *getArrTy(llvm::Type *elem, int size) {
   return llvm::ArrayType::get(elem, size);
 }
@@ -701,6 +738,12 @@ llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {
 }
 llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
   return Builder->CreateZExt(val, type);
+}
+llvm::Value *CreateFPExt(llvm::Value *val, llvm::Type *type) {
+  return Builder->CreateFPExt(val, type);
+}
+llvm::Value *CreateFPTrunc(llvm::Value *val, llvm::Type *type) {
+  return Builder->CreateFPTrunc(val, type);
 }
 
 llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {

@@ -98,8 +98,8 @@ impl Protos{
   func init(self){
       let sliceType = make_slice_type();
       self.std.add("slice", sliceType);
-      //self.std.add("str", make_string_type(sliceType as llvm_Type*));
       self.libc.add("printf", make_printf());
+      self.libc.add("sprintf", make_sprintf());
       self.libc.add("fflush", make_fflush());
       self.libc.add("malloc", make_malloc());
   }

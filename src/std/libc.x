@@ -97,6 +97,9 @@ extern{
   func getenv(name: i8*): i8*;
   func setenv(name: i8*, value: i8*, overwrite: i32): i32;
   func unsetenv(name: i8*): i32;
+
+  func atof(ptr: i8*): f64;
+  //func sprintf(str: i8*, format: i8*, ...): i32;
 }
 
 type dev_t = i64;

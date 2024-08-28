@@ -102,6 +102,7 @@ struct A{
 struct B{
   b: i32;
 }
+
 func mixed(){
   let a1 = A{a: [B{10}, B{20}, B{30}], b: [B{5}][0..1]};
   assert(a1.a[0].b == 10);

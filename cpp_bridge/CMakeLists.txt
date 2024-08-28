@@ -28,7 +28,7 @@ endif()
 
 add_library(bridge STATIC src/bridge.cpp)
 
-add_library(bridge_shared SHARED src/bridge.cpp)
+#add_library(bridge_shared SHARED src/bridge.cpp)
 
 #target_link_libraries(bridge_shared ${llvm_libs})
 

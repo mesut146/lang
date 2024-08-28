@@ -381,6 +381,12 @@ impl Type{
     str.drop();
     return res;
   }
+  func is_float(self): bool{
+    let str = self.print();
+    let res = str.eq("f32") || str.eq("f64");
+    str.drop();
+    return res;
+  }
   func is_str(self): bool{
     return self.eq("str");
   }

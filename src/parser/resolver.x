@@ -1615,6 +1615,9 @@ impl Resolver{
   func is_printf(mc: Call*): bool{
     return mc.name.eq("printf") && mc.scope.is_none();
   }
+  func is_sprintf(mc: Call*): bool{
+    return mc.name.eq("sprintf") && mc.scope.is_none();
+  }
   func is_format(mc: Call*): bool{
     return mc.name.eq("format") && mc.scope.is_none();
   }
@@ -1643,6 +1646,28 @@ impl Resolver{
         }
         arg.drop();
     }
+  }
+
+  func validate_sprintf(self, node: Expr*, mc: Call*){
+    assert(mc.args.len() >= 2);
+    let ptr = mc.args.get_ptr(0);
+    let ptr_rt = self.visit(ptr);
+    assert(ptr_rt.type.eq("i8*"));
+    //check fmt literal
+    let fmt: Expr* = mc.args.get_ptr(1);
+    if (is_str_lit(fmt).is_none()) {
+        self.err(node, "format string is not a string literal");
+    }
+    self.visit(fmt).drop();
+    //check rest
+    for (let i = 1; i < mc.args.len(); ++i) {
+        let arg = self.getType(mc.args.get_ptr(i));
+        if (!(arg.is_prim() || arg.is_pointer())) {
+            self.err(node, "format arg is invalid");
+        }
+        arg.drop();
+    }
+    ptr_rt.drop();
   }
 
   func handle_env(self, node: Expr*, mc: Call*){
@@ -1761,6 +1786,10 @@ impl Resolver{
     if(is_printf(call)){
       self.validate_printf(node, call);
       return RType::new("void");
+    }
+    if(is_sprintf(call)){
+      self.validate_sprintf(node, call);
+      return RType::new("i32");
     }
     if(is_print(call) || is_panic(call)){
       generate_format(node, call, self);

@@ -236,9 +236,9 @@ impl DebugInfo{
         base_ty = Option<DIType*>::new(ty);
       }
       let st_real = c.mapType(&decl.type);
-      Type_dump(st_real);
+      //Type_dump(st_real);
       let sl = getStructLayout(st_real as StructType*);
-      print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
+      //print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
       if let Decl::Struct(fields*)=(decl){
         let idx = 0;
         if(decl.base.is_some()){

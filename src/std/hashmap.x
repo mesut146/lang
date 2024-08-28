@@ -1,6 +1,7 @@
 struct HashMap<K, V>{
   buckets: List<Option<Node<K, V>>>;
-  count: i64;
+  count: i64;//node count
+  bucket_len: i64;//filled buckets
 }
 struct Node<K, V>{
     key: K;
@@ -8,17 +9,24 @@ struct Node<K, V>{
     next: Ptr<Node<K,V>>;
 }
 
+func default_cap(): i64{
+    return 16;
+}
+
 impl<K, V> HashMap<K, V>{
     func new(): HashMap<K, V> {
-        let capacity = 16;
         let res = HashMap<K, V> {
-            buckets: List<Option<Node<K, V>>>::new(capacity),
-            count: 0
+            buckets: List<Option<Node<K, V>>>::new(default_cap()),
+            count: 0,
+            bucket_len: 0
         };
-        for(let i = 0;i < capacity;++i){
-            res.buckets.add(Option<Node<K, V>>::new());
-        }
+        res.init(default_cap());
         return res;
+    }
+    func init(self, len: i64){
+        for(let i = 0;i < len;++i){
+            self.buckets.add(Option<Node<K, V>>::new());
+        }
     }
 
     func len(self): i64{
@@ -27,8 +35,32 @@ impl<K, V> HashMap<K, V>{
 
     func get_index(self, key: K*): i64{
         let hash = key.hash();
-        let idx = hash % self.buckets.capacity();
+        let idx = hash % self.buckets.len();
         return idx;
+    }
+
+    func rehash(self){
+        let load_factor = 1.0 * self.count / self.buckets.len();
+        print("load_factor = ");
+        printf("%f\n", load_factor);
+        if(true /*load_factor <= 0.7*/){
+            return;
+        }
+        let new_cap = self.buckets.len() * 2;
+        let new_buckets = List<Option<Node<K, V>>>::new(new_cap);
+        let old = self.buckets;
+        self.buckets = new_buckets;
+        self.bucket_len = 0;
+        self.count = 0;
+        self.init(new_cap);
+
+        for bucket_op in old{
+            if(bucket_op.is_some()){
+                let bucket = bucket_op.unwrap();
+                self.insert(bucket.key, bucket.value);
+                //next
+            }
+        }
     }
 
     func insert(self, key: K, value: V) {
@@ -40,10 +72,14 @@ impl<K, V> HashMap<K, V>{
                 value: value,
                 next: Ptr<Node<K,V>>::new()
             });
+            self.bucket_len += 1;
+            self.count += 1;
+            self.rehash();
         }else{
-            //collision, goto end of linkedlist
+            //update or collision
             let node: Node<K,V>* = opt.get();
             if(key.eq(&node.key)){
+                //update
                 node.value = value;
                 Drop::drop(key);
                 return;
@@ -51,19 +87,21 @@ impl<K, V> HashMap<K, V>{
             while(node.next.is_some()){
                 node = node.next.get();
                 if(key.eq(&node.key)){
-                    //already exist, update value
+                    //update
                     node.value = value;
                     Drop::drop(key);
                     return;
                 }
             }
+            //collision, insert at end
             node.next.set(Node{
                 key: key,
                 value: value,
                 next: Ptr<Node<K,V>>::new()
             });
+            self.count += 1;
+            self.rehash();
         }
-        self.count += 1;
     }
 
     func get(self, key: K*): Option<V*> {
@@ -77,10 +115,10 @@ impl<K, V> HashMap<K, V>{
             return Option::new(&node.value);
         }
         while(node.next.is_some()){
-            node = node.next.get();
-            /*if(node.key == *key){
+            if(node.key.eq(key)){
                 return Option::new(&node.value);
-            }*/
+            }
+            node = node.next.get();
         }
         return Option::new(&node.value);
     }

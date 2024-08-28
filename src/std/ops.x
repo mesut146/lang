@@ -250,6 +250,13 @@ impl Debug for i64{
     Drop::drop(str);
   }
 }
+impl Debug for f32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
 
 impl i32{
   func parse(s: str): i32{
@@ -379,6 +386,38 @@ impl i64{
     Drop::drop(str);
   }
 }
+
+impl f32{
+  func parse(s: str): f32{
+    let x = f64::parse(s);
+    return x as f32;
+  }
+  func print(x: f32): String{
+    return x.str();
+  }
+  func str(self): String{
+    return f64::print(*self as f64);
+  }
+}
+
+impl f64{
+  func str(self): String{
+    return f64::print(*self);
+  }
+  func parse(s: str): f64{
+    let cs = CStr::new(s);
+    let res: f64 = atof(cs.ptr());
+    printf("f64::parse %s=%f\n", cs.ptr(), res);
+    cs.drop();
+    return res;
+  }
+
+  func print(x: f64): String{
+    panic("todo");
+  }
+
+}
+
 trait Compare{
   //-1, 0, 1
   func compare(self, other: Self*): i32;

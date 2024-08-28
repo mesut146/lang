@@ -36,7 +36,13 @@ func list_test(){
   arr.drop();
 }
 
+func parse_float(){
+  let x = atof("3.14".ptr());
+  printf("x=%f\n", x);
+}
+
 func main(){
+  parse_float();
   let cur = resolve(".");
   print("pwd = {}\n", cur);
   cur.drop();

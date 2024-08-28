@@ -126,6 +126,10 @@ extern{
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
     func makeInt(val: i64, bits: i32): Value*;
+    func makeFloat(val: f32): Constant*;
+    func makeDouble(val: f64): Constant*;
+    func getFloatTy(): llvm_Type*;
+    func getDoubleTy(): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
@@ -133,6 +137,11 @@ extern{
     func getPtr(): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;
     func ConstantPointerNull_get(ty: PointerType*): Value*;
+    func CreateFPCast(val: Value*, trg: llvm_Type*): Value*;
+    func CreateSIToFP(val: Value*, trg: llvm_Type*): Value*;
+    func CreateUIToFP(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPExt(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPTrunc(val: Value*, trg: llvm_Type*): Value*;
     
     func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): FunctionType*;
     func ext(): i32;
@@ -142,7 +151,9 @@ extern{
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
+    func Function_print(f: Function*);
     func verifyFunction(f: Function*): bool;
+    func verifyModule(): bool;
     
     func make_stdout(): Value*;
     
@@ -193,6 +204,7 @@ extern{
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;
     func CreateNSWMul(l: Value*, r: Value*): Value*;
+    func CreateFMul(l: Value*, r: Value*): Value*;
     func CreateSub(l: Value*, r: Value*): Value*;
     func CreateSDiv(l: Value*, r: Value*): Value*;
     func CreateSRem(l: Value*, r: Value*): Value*;

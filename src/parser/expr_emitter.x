@@ -45,7 +45,7 @@ impl Compiler{
         return self.visit_lit(node, lit);
       }
       if let Expr::Infix(op*, l*, r*)=(node){
-        return self.visit_infix(op, l.get(), r.get());
+        return self.visit_infix(node, op, l.get(), r.get());
       }
       if let Expr::Name(name*)=(node){
         return self.visit_name(node, name, true);
@@ -411,6 +411,9 @@ impl Compiler{
         self.call_printf(mc);
         return getVoidTy() as Value*;
       }
+      if(Resolver::is_sprintf(mc)){
+        return self.call_sprintf(mc);
+      }
       if(Resolver::is_print(mc)){
         let info = resolver.format_map.get_ptr(&expr.id).unwrap();
         self.visit_block(&info.block);
@@ -655,6 +658,9 @@ impl Compiler{
         }
         if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
+          if(arg_type.eq("f32")){
+            val = CreateFPExt(val, getDoubleTy());
+          }
           vector_Value_push(args, val);
         }else if(arg_type.is_pointer()){
           let val = self.get_obj_ptr(arg);
@@ -676,6 +682,43 @@ impl Compiler{
       vector_Value_push(args2, CreateLoad(getPtr(), stdout_ptr));
       CreateCall(fflush_proto, args2);
       vector_Value_delete(args2);
+    }
+
+    func call_sprintf(self, mc: Call*): Value*{
+      let args = vector_Value_new();
+      for(let i = 0;i < mc.args.len();++i){
+        let arg: Expr* = mc.args.get_ptr(i);
+        let lit: Option<String*> = is_str_lit(arg);
+        if(lit.is_some()){
+          let val: String = lit.unwrap().clone();
+          let ptr = self.get_global_string(val);
+          vector_Value_push(args, ptr);
+          continue;
+        }
+        let arg_type = self.getType(arg);
+        if(arg_type.eq("i8*") || arg_type.eq("u8*")){
+          let val = self.get_obj_ptr(arg);
+          vector_Value_push(args, val);
+          arg_type.drop();
+          continue;
+        }
+        if(arg_type.is_prim()){
+          let val = self.loadPrim(arg);
+          vector_Value_push(args, val);
+        }else if(arg_type.is_pointer()){
+          let val = self.get_obj_ptr(arg);
+          vector_Value_push(args, val);
+          arg_type.drop();
+          continue;
+        }else{
+          panic("compiler err sprintf arg {}", arg_type);
+        }
+        arg_type.drop();
+      }
+      let printf_proto = self.protos.get().libc("sprintf");
+      let res = CreateCall(printf_proto, args);
+      vector_Value_delete(args);
+      return res;
     }
   
     func visit_deref(self, node: Expr*, e: Expr*): Value*{
@@ -790,6 +833,13 @@ impl Compiler{
           let val: i64 = i64::parse(normal.str());
           normal.drop();
           return makeInt(val, bits);
+      }
+      if(node.kind is LitKind::FLOAT){
+        assert(node.suffix.is_none());
+        //let bits = 32;
+        let val: f32 = f32::parse(node.val.str());
+        dbg(true, 111);
+        return makeFloat(val);
       }
       if(node.kind is LitKind::BOOL){
         if(node.val.eq("true")) return getTrue();
@@ -906,14 +956,15 @@ impl Compiler{
         return ptr;
     }
 
-    func visit_infix(self, op: String*, l: Expr*, r: Expr*): Value*{
-      let rt = self.get_resolver().visit(l);
+    func visit_infix(self, expr: Expr*, op: String*, l: Expr*, r: Expr*): Value*{
+      let rt = self.get_resolver().visit(expr);
       let res = self.visit_infix(op, l, r, &rt.type);
       rt.drop();
       return res;
     }
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
+      dbg(op.eq("*") && (type.eq("f32") || type.eq("f64")), 321);
       if(op.eq("&&") || op.eq("||")){
         return self.andOr(op, l, r).a;
       }
@@ -957,6 +1008,9 @@ impl Compiler{
         return CreateNSWSub(lv, rv);
       }
       if(op.eq("*")){
+        if(type.eq("f32") || type.eq("f64")){
+          return CreateFMul(lv, rv);
+        }
         return CreateNSWMul(lv, rv);
       }
       if(op.eq("/")){

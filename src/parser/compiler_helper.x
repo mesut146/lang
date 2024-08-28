@@ -205,14 +205,6 @@ func make_slice_type(): StructType*{
     return res;
 }
 
-/*func make_string_type(sliceType: llvm_Type*): StructType*{
-    let elems = vector_Type_new();
-    vector_Type_push(elems, sliceType);
-    let res = make_struct_ty2("str".ptr(), elems);
-    vector_Type_delete(elems);
-    return res;
-}*/
-
 func make_printf(): Function*{
     let args = vector_Type_new();
     vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
@@ -221,6 +213,16 @@ func make_printf(): Function*{
     setCallingConv(f);
     vector_Type_delete(args);
     return f;
+}
+func make_sprintf(): Function*{
+  let args = vector_Type_new();
+  vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
+  vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
+  let ft = make_ft(getInt(32), args, true);
+  let f = make_func(ft, ext(), "sprintf".ptr());
+  setCallingConv(f);
+  vector_Type_delete(args);
+  return f;
 }
 func make_fflush(): Function*{
     let args = vector_Type_new();
@@ -265,12 +267,33 @@ func sort(list: List<Decl*>*, r: Resolver*){
   }
 }
 
+func all_deps(type: Type*, r: Resolver*, arr: List<String>*){
+  if(type.is_pointer() || type.is_prim() || type.is_slice()) return;
+  if(type.is_array()){
+    all_deps(type.elem(), r, arr);
+    return;
+  }
+  let rt = r.visit_type(type);
+  let opt = r.get_decl(&rt);
+  if(opt.is_none()){
+    rt.drop();
+    return;
+  }
+  arr.add_not_exist(type.print());
+  let decl = opt.unwrap();
+  all_deps(decl, r, arr);
+  rt.drop();
+}
+
 func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
+  if(decl.base.is_some()){
+    all_deps(decl.base.get(), r, res);
+  }
   if(decl.is_struct()){
     let fields = decl.get_fields();
     for (let j = 0; j < fields.len(); ++j) {
       let fd = fields.get_ptr(j);
-      res.add_not_exist(fd.type.print());
+      //add_type(res, &fd.type);
       all_deps(&fd.type, r, res);
     }
   }else{
@@ -279,50 +302,90 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
       let ev = variants.get_ptr(j);
       for (let k = 0; k < ev.fields.len(); ++k) {
         let fd = ev.fields.get_ptr(k);
-        res.add_not_exist(fd.type.print());
+        //add_type(res, &fd.type);
         all_deps(&fd.type, r, res);
       }
     }
   }
 }
-func all_deps(type: Type*, r: Resolver*, res: List<String>*){
-  if(type.is_pointer()) return;
-  let rt = r.visit_type(type);
-  let opt = r.get_decl(&rt);
-  if(opt.is_none()){
-    rt.drop();
-    return;
+
+func sort4(list: List<Decl*>*, r: Resolver*){
+  let index_map = Map<String, i32>::new(list.len());
+  for (let i = 0; i < list.len(); ++i) {
+    let d: Decl* = *list.get_ptr(i);
+    index_map.add(d.type.print(), 0);
+    if(d.is_struct()){
+      let fields = d.get_fields();
+      for (let j = 0; j < fields.len(); ++j) {
+        let fd = fields.get_ptr(j);
+        let key = fd.type.print();
+      }
+    }
   }
-  let decl = opt.unwrap();
-  all_deps(decl, r, res);
-  rt.drop();
 }
 
 func sort2(list: List<Decl*>*, r: Resolver*){
   //parent -> fields
   let map = Map<String, List<String>>::new();
+  //field -> parents
+  //let map2 = Map<String, List<String>>::new();
   for (let i = 0; i < list.len(); ++i) {
     let decl = *list.get_ptr(i);
     let arr = List<String>::new();
     all_deps(decl, r, &arr);
+    /*for ch in &arr{
+      let parents = &map2.get_pair_or(ch.clone(), List<String>::new()).b;
+      parents.add_not_exist(decl.type.print());
+    }*/
+    //print("{} -> {}\n", decl.type, arr);
     map.add(decl.type.print(), arr);
   }
-  for (let i = 0; i < list.len(); ++i) {
-    //find decl belongs to i'th index
-    for (let j = 0; j < list.len() - 1; ++j) {
-      let d1: Decl* = *list.get_ptr(j);
-      let d2: Decl* = *list.get_ptr(j + 1);
-      //if d1 is parent of d2, swap
-      let s1 = d1.type.print();
+  //print("map2={}\n", map2);
+  //sort
+  //let left_all = List<String>::new();
+  let right_all = List<String>::new();
+  for (let j = 0; j < list.len(); ++j) {
+    let d: Decl* = *list.get_ptr(j);
+    right_all.add(d.type.print());
+  }
+  for (let i = 0; i < list.len() - 1; ++i) {
+    //find decl for i
+    //i place, have all fields on left, all parents on right
+    for (let j = i + 1; j < list.len(); ++j) {
+      let d2: Decl* = *list.get_ptr(j);
       let s2 = d2.type.print();
-      let chs = map.get_ptr(&s1).unwrap();
-      if(chs.contains(&s2)){
-        swap(list, j, j + 1);
+      let fields: List<String>* = map.get_ptr(&s2).unwrap();
+      //let parents: List<String>* = map2.get_ptr(&s2).unwrap();
+      let is_all_left = true;
+      let is_all_right = true;
+      for fd in fields{
+        if(right_all.contains(fd)){
+          is_all_left = false;
+          break;
+        }
+      }
+      if(is_all_left){
+        //j belongs to i
+        let rpos = right_all.indexOf(&s2);
+        right_all.remove(rpos).drop();
+        swap(list, i, j);
+        break;
       }
       s2.drop();
     }
   }
+  //print("sorted={}\n", list);
   map.drop();
+  right_all.drop();
+}
+
+func printlist(list: List<Decl*>*){
+  print("list={\n");
+  for (let i = 0; i < list.len(); ++i) {
+    let decl = *list.get_ptr(i);
+    print("  {}", decl.type);
+  }
+  print("}\n\n");
 }
 
 /*func sort3(list: List<Decl*>*, r: Resolver*){
@@ -436,11 +499,13 @@ impl Compiler{
     return res;
   }
   func mapType(self, type: Type*, s: String*): llvm_Type*{
-    let p = self.protos.get();
-    /*if(s.eq("str")){
-      return p.std("str") as llvm_Type*;
-    }*/
     if(type.is_void()) return getVoidTy();
+    if(type.eq("f32")){
+      return getFloatTy();
+    }
+    if(type.eq("f64")){
+      return getDoubleTy();
+    }
     let prim_size = prim_size(s.str());
     if(prim_size.is_some()){
       return getInt(prim_size.unwrap());
@@ -449,12 +514,13 @@ impl Compiler{
       let elem_ty = self.mapType(elem.get());
       return getArrTy(elem_ty, size) as llvm_Type*;
     }
-    if let Type::Slice(elem*)=(type){
-      return p.std("slice") as llvm_Type*;
-    }
     if let Type::Pointer(elem*)=(type){
       let elem_ty = self.mapType(elem.get());
       return getPointerTo(elem_ty) as llvm_Type*;
+    }
+    let p = self.protos.get();
+    if let Type::Slice(elem*)=(type){
+      return p.std("slice") as llvm_Type*;
     }
     if(!p.classMap.contains(s)){
       panic("mapType {}\n", s);
@@ -477,6 +543,7 @@ impl Compiler{
     //first create just protos to fill later
     for(let i = 0;i < list.len();++i){
       let decl = *list.get_ptr(i);
+      //print("decl proto {}\n", decl.type);
       self.make_decl_proto(decl);
     }
     //fill with elems
@@ -551,10 +618,10 @@ impl Compiler{
     vector_Type_delete(elems);
     //print("fill_decl {}\n", &decl.type);
     //Type_dump(st as llvm_Type*);
-    let size = getSizeInBits(st);
-    if(size == 0){
-      print("sizeof {}={}\n", &decl.type, size);
-    }
+    //let size = getSizeInBits(st);
+    /*if(size == 0){
+      print("fill_decl sizeof {}={}\n", &decl.type, size);
+    }*/
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: StructType*){
     let elems = vector_Type_new();
@@ -615,14 +682,17 @@ impl Compiler{
     }
     let mangled_c = mangled.clone().cstr();
     let f = make_func(ft, linkage, mangled_c.ptr());
-    mangled_c.drop();
     if(rvo){
       let arg = get_arg(f, 0);
       Argument_setname(arg, "ret".ptr());
       Argument_setsret(arg, self.mapType(&m.type));
     }
+    if(m.name.eq("atof")){
+      Function_print(f);
+    }
     self.protos.get().funcMap.add(mangled, f);
     vector_Type_delete(args);
+    mangled_c.drop();
     return Option::new(f);
   }
 
@@ -654,23 +724,59 @@ impl Compiler{
   }
 
   func cast(self, expr: Expr*, target_type: Type*): Value*{
+    let src_type = self.get_resolver().getType(expr);
     let val = self.loadPrim(expr);
+    /*if(src_type.eq(target_type)){
+      if(src_type.eq("bool")){
+
+      }
+      src_type.drop();
+      return val;
+    }*/
+    let is_unsigned = isUnsigned(&src_type);
+    let target_ty = self.mapType(target_type);
+
+    if(target_type.is_float()){
+      if(src_type.is_float()){
+        if(src_type.eq("f32")){
+          //f32 -> f64
+          src_type.drop();
+          return CreateFPExt(val, target_ty);
+        }else{
+          //f64 -> f32
+          src_type.drop();
+          return CreateFPTrunc(val, target_ty);
+        }
+      }else{
+        if(is_unsigned){
+          src_type.drop();
+          return CreateUIToFP(val, target_ty);
+        }else{
+          src_type.drop();
+          return CreateSIToFP(val, target_ty);
+        }
+      }
+    }
+    if(src_type.is_float()){
+      //todo
+    }
     let val_ty = Value_getType(val);
-    let src = getPrimitiveSizeInBits(val_ty);
+    let src_size = getPrimitiveSizeInBits(val_ty);
     let trg_size = self.getSize(target_type);
     let trg_ty = getInt(trg_size as i32);
-    if(src < trg_size){
-      let src_type = self.get_resolver().getType(expr);
-      if(isUnsigned(&src_type)){
+    if(src_size < trg_size){
+      if(is_unsigned){
         src_type.drop();
         return CreateZExt(val, trg_ty);
       }else{
         src_type.drop();
         return CreateSExt(val, trg_ty);
       }
-    }else if(src > trg_size){
+    }else if(src_size > trg_size){
+      src_type.drop();
       return CreateTrunc(val, trg_ty);
     }
+    src_type.drop();
     return val;
   }
 

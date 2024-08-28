@@ -285,7 +285,7 @@ impl Compiler{
       } else {
         CreateBr(then);
       }
-      self.llvm.di.get().exit_scope();
+      //self.llvm.di.get().exit_scope();
       self.set_and_insert(then);
       self.loops.add(updatebb);
       self.loopNext.add(next);
@@ -293,7 +293,7 @@ impl Compiler{
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
-      self.llvm.di.get().exit_scope();
+      //self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
       SetInsertPoint(updatebb);
       //self.llvm.di.get().new_scope(di_scope);

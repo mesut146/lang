@@ -2,14 +2,13 @@ import std/hashmap
 
 func map_i32(){
     let map = HashMap<i32, i32>::new();
-    map.insert(1, 7);
-    map.insert(2, 11);
-    map.insert(3, 13);
-    let key = 1;
-    let op = map.get(&key);
-    //Option<i32*>::debug fails
-    print("{} {}\n", std::typeof(op), op.unwrap());
-    print("map={}\n", map);
+    for(let i = 1;i < 20;++i){
+        map.insert(i, i * i);
+    }
+    for(let i = 1;i < 20;++i){
+        let val: i32* = map.get(&i).unwrap();
+        assert_eq(*val, i * i);
+    }
 }
 
 func map_str(){
