@@ -55,3 +55,46 @@ impl<T> [T]{
     return IntoIterSlice{*self, 0};
   }
 }
+
+struct Range{
+  start: i32;
+  end: i32;
+}
+struct RangeIterator{
+  pos: i32;
+  end: i32;
+}
+
+func range(start: i32, end: i32): Range{
+  return Range{start: start, end: end};
+}
+
+impl Range{
+  func iter(self): RangeIterator{
+    return RangeIterator{pos: self.start, end: self.end};
+  }
+  func into_iter(self): RangeIterator{
+    return RangeIterator{pos: self.start, end: self.end};
+  }
+}
+
+impl Drop for RangeIterator{
+  func drop(*self){}
+}
+
+impl Iterator<i32> for RangeIterator{
+  func next(self): Option<i32>{
+    if(self.pos < self.end){
+      let idx = self.pos;
+      self.pos += 1;
+      return Option::new(idx);
+    }
+    return Option<i32>::new();
+  }
+}
+
+func range_test(){
+  for i in range(1, 10){
+    print("i={}", i);
+  }
+}

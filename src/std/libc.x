@@ -35,9 +35,15 @@ func strlen(arr: [i8]): i32{
 }
 func strlen(arr: i8*, max: i32): i32{
   for(let i = 0;i < max;++i){
-    if(*ptr::get(arr, i) == 0) return i;
+    let chr = *ptr::get(arr, i);
+    if(chr == 0) return i;
   }
-  panic("no eof");
+  for(let i = 0;i < max;++i){
+    let chr = *ptr::get(arr, i);
+    printf("chr=%c,%d ", chr, chr);
+  }
+  printf("max=%d ", max);
+  panic("no eof max={}", max);
 }
 func strlen(ptr: i8*): i32{
   return strlen(ptr, 100000);
