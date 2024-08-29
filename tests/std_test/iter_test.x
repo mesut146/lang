@@ -28,7 +28,10 @@ func test_iter_mut(){
         //*cur.unwrap() += 1;
         *ptr = *ptr + 1;
     }
-    print("list={}\n", &list);
+    let arr = [34, 45];
+    for(let i = 0;i < list.len();++i){
+        assert_eq(*list.get_ptr(i), arr[i]);
+    }
     list.drop();
 }
 
@@ -36,12 +39,16 @@ func test_into_iter(){
     let list = List<i32>::new();
     list.add(55);
     list.add(66);
+    let arr = [55, 66];
+    let i = 0;
     let it = list.into_iter();
     while(true){
         let cur: Option<i32> = it.next();
         if(cur.is_none()) break;
-        print("cur={}\n", cur.unwrap());
+        assert_eq(cur.unwrap(), arr[i]);
+        i += 1;
     }
+    assert_eq(i, 2);
     it.drop();
 }
 

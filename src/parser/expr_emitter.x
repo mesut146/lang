@@ -957,14 +957,14 @@ impl Compiler{
     }
 
     func visit_infix(self, expr: Expr*, op: String*, l: Expr*, r: Expr*): Value*{
-      let rt = self.get_resolver().visit(expr);
+      let rt = self.get_resolver().visit(l);
       let res = self.visit_infix(op, l, r, &rt.type);
       rt.drop();
       return res;
     }
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
-      dbg(op.eq("*") && (type.eq("f32") || type.eq("f64")), 321);
+      dbg(op.eq("*") && type.is_float(), 321);
       if(op.eq("&&") || op.eq("||")){
         return self.andOr(op, l, r).a;
       }
@@ -1008,7 +1008,7 @@ impl Compiler{
         return CreateNSWSub(lv, rv);
       }
       if(op.eq("*")){
-        if(type.eq("f32") || type.eq("f64")){
+        if(type.is_float()){
           return CreateFMul(lv, rv);
         }
         return CreateNSWMul(lv, rv);

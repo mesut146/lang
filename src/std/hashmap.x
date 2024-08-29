@@ -40,9 +40,9 @@ impl<K, V> HashMap<K, V>{
     }
 
     func rehash(self){
-        let load_factor = 1.0 * self.count / self.buckets.len();
-        print("load_factor = ");
-        printf("%f\n", load_factor);
+        //print("load_factor = ");
+        //let load_factor = 1.0 * self.count / self.buckets.len();
+        //printf("%f\n", load_factor);
         if(true /*load_factor <= 0.7*/){
             return;
         }

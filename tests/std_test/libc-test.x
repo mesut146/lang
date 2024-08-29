@@ -37,8 +37,8 @@ func list_test(){
 }
 
 func parse_float(){
-  let x = atof("3.14".ptr());
-  printf("x=%f\n", x);
+  //let x = atof("3.14".ptr());
+  //printf("x=%f\n", x);
 }
 
 func main(){

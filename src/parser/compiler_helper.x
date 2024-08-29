@@ -736,7 +736,7 @@ impl Compiler{
     let is_unsigned = isUnsigned(&src_type);
     let target_ty = self.mapType(target_type);
 
-    if(target_type.is_float()){
+    /*if(target_type.is_float()){
       if(src_type.is_float()){
         if(src_type.eq("f32")){
           //f32 -> f64
@@ -756,7 +756,7 @@ impl Compiler{
           return CreateSIToFP(val, target_ty);
         }
       }
-    }
+    }*/
     if(src_type.is_float()){
       //todo
     }
