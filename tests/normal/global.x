@@ -1,7 +1,7 @@
 static x: i32 = 11;
 
 func main(){
-  printf("x=%d\n", x);
+  assert(x == 11);
   x = 22;
-  printf("x=%d\n", x);
+  assert(x == 22);
 }

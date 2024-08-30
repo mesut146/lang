@@ -34,15 +34,10 @@ func strlen(arr: [i8]): i32{
   panic("no eof sl_len={}", arr.len());
 }
 func strlen(arr: i8*, max: i32): i32{
-  max = 200000;
-  print("strlen max={}", max);
-  printf(" %s\n", arr);
   for(let i = 0;i < max;++i){
     let chr = *ptr::get(arr, i);
     if(chr == 0) return i;
-    //printf("%c", chr, chr);
   }
-  printf("max=%d ", max);
   panic("no eof max={}", max);
 }
 func strlen(ptr: i8*): i32{
@@ -104,7 +99,7 @@ extern{
   func setenv(name: i8*, value: i8*, overwrite: i32): i32;
   func unsetenv(name: i8*): i32;
 
-  //func atof(ptr: i8*): f64;
+  func atof(ptr: i8*): f64;
   //func sprintf(str: i8*, format: i8*, ...): i32;
 }
 

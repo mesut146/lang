@@ -23,7 +23,6 @@ func open_checked(path: str, mode: str): FILE*{
   path_c.drop();
   mode_c.drop();
   if(!is_valid(f)){
-    printf("ptr=%p ", f);
     panic("no such file {}", path);
   }
   return f;
@@ -181,8 +180,7 @@ func resolve(path: str): String{
   if(ptr as u64 == 0){
     panic("resolving path is null '{}'\n", path);
   }
-  //let len = strlen(buf.ptr(), buf.len() as i32);
-  let len = strlen(buf.ptr(), 511);
+  let len = strlen(buf.ptr(), buf.len() as i32);
   let slice = buf[0..len];
   return String::new(slice);
 }

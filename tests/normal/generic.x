@@ -80,7 +80,6 @@ func inferTest(){
   assert(infera(3, A{4i64}) == 7);
 
   let b = B{A{50i32}, 60i32};
-  printf("inferb(b)=%d\n", inferb(b));
   assert(inferb(b) == 110);
 }
 

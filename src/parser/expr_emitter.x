@@ -965,6 +965,7 @@ impl Compiler{
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
       dbg(op.eq("*") && type.is_float(), 321);
+      dbg(op.eq(">") && l.line == 353, 322);
       if(op.eq("&&") || op.eq("||")){
         return self.andOr(op, l, r).a;
       }

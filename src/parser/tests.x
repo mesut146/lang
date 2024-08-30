@@ -107,7 +107,7 @@ func std_test(){
     print("std_test\n");
     let std_dir = get_std_path();
     let out = get_out();
-    let lib = build_std(std_dir.str(), out.str());
+    let lib = build_std(std_dir.str(), out.str(), false);
     let dir = format("{}/tests/std_test", root.get());
     compile_dir2(dir.str(), lib.str());
     std_dir.drop();

@@ -405,12 +405,11 @@ impl f64{
     return f64::print(*self);
   }
   func parse(s: str): f64{
-    panic("f64::parse");
-    /*let cs = CStr::new(s);
+    let cs = CStr::new(s);
     let res: f64 = atof(cs.ptr());
     printf("f64::parse %s=%f\n", cs.ptr(), res);
     cs.drop();
-    return res;*/
+    return res;
   }
 
   func print(x: f64): String{

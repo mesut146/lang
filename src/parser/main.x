@@ -28,7 +28,11 @@ func get_version(): str{
 }
 
 func build_std(std_dir: str, out_dir: str): String{
-  use_cache = true;
+  return build_std(std_dir, out_dir, true);
+}
+
+func build_std(std_dir: str, out_dir: str, use_cache0: bool): String{
+  use_cache = use_cache0;
   let src_dir = Path::parent(std_dir);
   let config = CompilerConfig::new(src_dir.str());
   config

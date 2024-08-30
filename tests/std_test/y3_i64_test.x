@@ -9,11 +9,11 @@ func parse_test(){
 func print_test(){
   let x: i64 = i64::parse("112233");
   let str = i64::print(x);
-  assert(str.eq("112233"));
+  assert_eq(str.str(), "112233");
 
   let y: i64 = i64::parse("-112233");
   let str2 = i64::print(y);
-  assert(str2.eq("-112233"));
+  assert_eq(str2.str(), "-112233");
 
   str.drop();
   str2.drop();
