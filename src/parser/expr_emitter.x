@@ -837,9 +837,9 @@ impl Compiler{
       if(node.kind is LitKind::FLOAT){
         assert(node.suffix.is_none());
         //let bits = 32;
-        let val: f32 = f32::parse(node.val.str());
+        let valf: f32 = f32::parse(node.val.str());
         dbg(true, 111);
-        return makeFloat(val);
+        return makeFloat(valf);
       }
       if(node.kind is LitKind::BOOL){
         if(node.val.eq("true")) return getTrue();
@@ -851,8 +851,8 @@ impl Compiler{
       }
       if(node.kind is LitKind::CHAR){
         assert(node.val.len() == 1);
-        let trimmed = node.val.get(0);
-        return makeInt(trimmed, 32);
+        let chr: i8 = node.val.get(0);
+        return makeInt(chr, 32);
       }
       panic("lit {}", node.val);
     }

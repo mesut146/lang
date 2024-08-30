@@ -208,7 +208,7 @@ impl<T> List<T>{
   func sort(self){
     //bubble sort for now
     for(let i = 0;i < self.len();++i){
-      for(let j = 0;j < self.len() - 1;++j){
+      for(let j = 0;j < self.len() - i - 1;++j){
         let a1 = self.get_ptr(j);
         let a2 = self.get_ptr(j + 1);
         let cmp = Compare::compare(a1, a2);

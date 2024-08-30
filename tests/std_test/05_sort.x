@@ -21,6 +21,7 @@ func list_i32(){
     str.drop();
     list.drop();
 }
+
 func list_str(){
     let list = List<String>::new();
     list.add("bxx".str());
