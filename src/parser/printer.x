@@ -180,6 +180,12 @@ impl Debug for Method{
       }
     }
     join(f, &self.params, ", ");
+    if(self.is_vararg){
+      if(!self.params.empty()){
+        f.print(", ");
+      }
+      f.print("...");
+    }
     f.print("): ");
     self.type.debug(f);
     if(self.body.is_some()){

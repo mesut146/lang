@@ -247,6 +247,7 @@ struct Method: Node{
   is_generic: bool;
   parent: Parent;
   path: String;
+  is_vararg: bool;
 }
 
 struct Param: Node{
@@ -271,7 +272,8 @@ impl Method{
       body: Option<Block>::None,
       is_generic: false,
       parent: Parent::None,
-      path: path
+      path: path,
+      is_vararg: false
     };
   }
   func print(self): String{

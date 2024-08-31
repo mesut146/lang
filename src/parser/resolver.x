@@ -941,6 +941,9 @@ impl Resolver{
       print("visit_method {} {} generic: {}\n", tmp, self.unit.path, node.is_generic);
       tmp.drop();
     }
+    if(node.is_vararg && node.body.is_some()){
+      self.err(node.line, "vararg method only for extern c");
+    }
     if(node.is_generic){
       return;
     }

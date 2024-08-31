@@ -557,7 +557,7 @@ impl Compiler{
       if(is_struct(&rt.type)){
         self.own.get().add_obj(expr, ptr_ret.unwrap(), &rt.type);
       }
-      let target = self.get_resolver().get_method(&rt).unwrap();
+      let target: Method* = self.get_resolver().get_method(&rt).unwrap();
       rt.drop();
       let proto = self.protos.get().get_func(target);
       let args = vector_Value_new();
@@ -586,7 +586,7 @@ impl Compiler{
         //++paramIdx;
       }
       for(;argIdx < mc.args.len();++argIdx){
-        let arg = mc.args.get_ptr(argIdx);
+        let arg: Expr* = mc.args.get_ptr(argIdx);
         let at = self.getType(arg);
         if (at.is_pointer()) {
           vector_Value_push(args, self.get_obj_ptr(arg));
@@ -600,10 +600,14 @@ impl Compiler{
             vector_Value_push(args, self.visit(arg));
           }
         } else {
-          let prm = target.params.get_ptr(paramIdx);
-          let pt = self.get_resolver().getType(&prm.type);
-          vector_Value_push(args, self.cast(arg, &pt));
-          pt.drop();
+          if(target.is_vararg && paramIdx >= target.params.len()){
+            vector_Value_push(args, self.loadPrim(arg));
+          }else{
+            let prm = target.params.get_ptr(paramIdx);
+            let pt = self.get_resolver().getType(&prm.type);
+            vector_Value_push(args, self.cast(arg, &pt));
+            pt.drop();
+          }
         }
         at.drop();
         self.own.get().do_move(arg);

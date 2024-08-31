@@ -85,7 +85,6 @@ impl Signature{
             real_scope.drop();
             str.drop();
         }
-        //dbg(mc.print().eq("f64::parse(\"3.1415\")"), 55);
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get_ptr(i);
             let argt: RType = r.visit(arg);
@@ -452,7 +451,6 @@ impl MethodResolver{
                 }
             }
         }
-        dbg(mc.print(), "Debug::debug(self.value, f)", 10);
         //infer from args
         for (let k = 0; k < sig.args.size(); ++k) {
             let arg_type = sig.args.get_ptr(k);
@@ -470,7 +468,6 @@ impl MethodResolver{
             let tp = type_params.get_ptr(i);
             if (!typeMap.contains(tp.name())) {
                 let msg = format("{}\ncan't infer type parameter: {}", sig, tp);
-                dbg(true, 1);
                 type_params.drop();
                 list.drop();
                 real.drop();
@@ -495,6 +492,111 @@ impl MethodResolver{
         real.drop();
         errors.drop();
         return res;
+    }
+
+    func infer(arg: Type*, prm: Type*, inferred: Map<String, Type>*, type_params: List<Type>*) {
+        if(type_params.contains(prm)){
+            if(!inferred.contains(prm.name())){
+                inferred.add(prm.name().clone(), arg.clone());
+            }
+            return;
+        }
+        if (arg.is_pointer()) {
+            if (!prm.is_pointer()) panic("prm is not ptr");
+            infer(arg.elem(), prm.elem(), inferred, type_params);
+            return;
+        }
+        if (arg.is_slice()) {
+            if (!prm.is_slice()) panic("prm is not slice");
+            infer(arg.elem(), prm.elem(), inferred, type_params);
+            return;
+        }
+        if (arg.is_array()) {
+            if (!prm.is_array()) panic("prm is not array");
+            infer(arg.elem(), prm.elem(), inferred, type_params);
+            return;
+        }
+        if(!prm.is_simple()){
+            panic("prm is not simple {} -> {}", arg, prm);
+        }
+        if(!prm.get_args().empty()){
+            //prm: A<T>
+            let ta1 = arg.get_args();
+            let ta2 = prm.get_args();
+            if (ta1.size() != ta2.size()) {
+                let msg = format("type arg size mismatch, {} = {}", arg, prm);
+                panic("{}", msg);
+            }
+            if (!arg.name().eq(prm.name())) panic("cant infer");
+            for (let i = 0; i < ta1.size(); ++i) {
+                let ta = ta1.get_ptr(i);
+                let tp = ta2.get_ptr(i);
+                infer(ta, tp, inferred, type_params);
+            }
+        }
+    }
+
+    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
+        let mc = sig.mc.unwrap();
+        for (let i = 0;i < self.r.generated_methods.len();++i) {
+            let gm = self.r.generated_methods.get_ptr(i).get();
+            if(!m.name.eq(gm.name.str())) continue;
+            let sig2 = Signature::new(gm, Desc::new());
+            let sig_res: SigResult = self.is_same(sig, &sig2);
+            let is_err = sig_res is SigResult::Err;
+            sig2.drop();
+            sig_res.drop();
+            if(!is_err){
+                let desc = Desc{
+                    kind: RtKind::MethodGen,
+                    path: self.r.unit.path.clone(),
+                    idx: i
+                };
+                return Pair::new(gm, desc);
+            }
+        }
+        let copier = AstCopier::new(map, &self.r.unit);
+        let res2: Method = copier.visit(m);
+        res2.is_generic = false;
+        //print("add gen {} {}\n", printMethod(&res2), mc);
+        let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
+        let desc = Desc{
+            kind: RtKind::MethodGen,
+            path: self.r.unit.path.clone(),
+            idx: self.r.generated_methods.len() as i32 - 1
+        };
+        if(!(m.parent is Parent::Impl)){
+            return Pair::new(res, desc);
+        }
+        let imp: ImplInfo* = m.parent.as_impl();
+        if(sig.scope.get().type.is_slice()){
+            let info2 = res.parent.as_impl();
+            info2.type_params.clear();
+            return Pair::new(res, desc);
+        }
+        let st: Simple = sig.scope.get().type.clone().unwrap_simple();
+        if(sig.scope.get().is_trait()){
+            st.drop();
+            st = sig.args.get_ptr(0).get_ptr().as_simple().clone();
+        }
+        //put full type, Box::new(...) -> Box<...>::new()
+        let imp_args = imp.type.get_args();
+        if (mc.is_static && !imp_args.empty()) {
+            st.args.clear();
+            for (let i = 0;i < imp_args.size();++i) {
+                let ta = imp_args.get_ptr(i);
+                let ta_str = ta.print();
+                let resolved = map.get_ptr(&ta_str).unwrap();
+                ta_str.drop();
+                st.args.add(resolved.clone());
+            }
+        }
+        res.parent.drop();
+        let info = ImplInfo::new(st.into(res.line));
+        //todo args of trait
+        info.trait_name = imp.trait_name.clone();
+        res.parent = Parent::Impl{info};
+        return Pair::new(res, desc);
     }
 
     func is_same(self, scope_rt:  RType*, info: ImplInfo*, sig: Signature*): SigResult{
@@ -592,12 +694,14 @@ impl MethodResolver{
             return SigResult::Err{"member method called without scope".str()};
         }
         if (sig.args.len() != sig2.args.len()){
-            return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), sig2.args.len())};
+            if(!method.is_vararg || method.is_vararg && sig.args.len() < sig2.args.len() ){
+                return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), sig2.args.len())};
+            }
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
       
-        for (let i = 0; i < sig.args.len(); ++i) {
+        for (let i = 0; i < sig2.args.len(); ++i) {
             let t1: Type = sig.args.get_ptr(i).clone();
             let t1p: Type* = sig.args.get_ptr(i);
             let t2: Type* = sig2.args.get_ptr(i);
@@ -788,118 +892,6 @@ impl MethodResolver{
         return res;
     }
 
-    func infer(arg: Type*, prm: Type*, inferred: Map<String, Type>*, type_params: List<Type>*) {
-        if(type_params.contains(prm)){
-            if(!inferred.contains(prm.name())){
-                inferred.add(prm.name().clone(), arg.clone());
-            }
-            return;
-        }
-        if (arg.is_pointer()) {
-            if (!prm.is_pointer()) panic("prm is not ptr");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
-        }
-        if (arg.is_slice()) {
-            if (!prm.is_slice()) panic("prm is not slice");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
-        }
-        if (arg.is_array()) {
-            if (!prm.is_array()) panic("prm is not array");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
-        }
-        if(!prm.is_simple()){
-            panic("prm is not simple {} -> {}", arg, prm);
-        }
-        if(!prm.get_args().empty()){
-            //prm: A<T>
-            let ta1 = arg.get_args();
-            let ta2 = prm.get_args();
-            if (ta1.size() != ta2.size()) {
-                let msg = format("type arg size mismatch, {} = {}", arg, prm);
-                panic("{}", msg);
-            }
-            if (!arg.name().eq(prm.name())) panic("cant infer");
-            for (let i = 0; i < ta1.size(); ++i) {
-                let ta = ta1.get_ptr(i);
-                let tp = ta2.get_ptr(i);
-                infer(ta, tp, inferred, type_params);
-            }
-        }
-    }
-
-    func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
-        let mc = sig.mc.unwrap();
-        for (let i = 0;i < self.r.generated_methods.len();++i) {
-            let gm = self.r.generated_methods.get_ptr(i).get();
-            if(!m.name.eq(gm.name.str())) continue;
-            let sig2 = Signature::new(gm, Desc::new());
-            /*let c = mc.print().eq("Pair::new(imp, i)");
-            if(c){
-                print("sig={} sig2={}\n", sig, sig2);
-            }*/
-            let sig_res: SigResult = self.is_same(sig, &sig2);
-            /*if(c){
-                print("sr={}\n", sig_res);
-            }*/
-            let is_err = sig_res is SigResult::Err;
-            sig2.drop();
-            sig_res.drop();
-            if(!is_err){
-                let desc = Desc{
-                    kind: RtKind::MethodGen,
-                    path: self.r.unit.path.clone(),
-                    idx: i
-                };
-                return Pair::new(gm, desc);
-            }
-        }
-        let copier = AstCopier::new(map, &self.r.unit);
-        let res2: Method = copier.visit(m);
-        res2.is_generic = false;
-        dbg(printMethod(&res2), "Option<RType>::drop(*self)", 10);
-        //print("add gen {} {}\n", printMethod(&res2), mc);
-        let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
-        let desc = Desc{
-            kind: RtKind::MethodGen,
-            path: self.r.unit.path.clone(),
-            idx: self.r.generated_methods.len() as i32 - 1
-        };
-        if(!(m.parent is Parent::Impl)){
-            return Pair::new(res, desc);
-        }
-        let imp: ImplInfo* = m.parent.as_impl();
-        if(sig.scope.get().type.is_slice()){
-            let info2 = res.parent.as_impl();
-            info2.type_params.clear();
-            return Pair::new(res, desc);
-        }
-        let st: Simple = sig.scope.get().type.clone().unwrap_simple();
-        if(sig.scope.get().is_trait()){
-            st.drop();
-            st = sig.args.get_ptr(0).get_ptr().as_simple().clone();
-        }
-        //put full type, Box::new(...) -> Box<...>::new()
-        let imp_args = imp.type.get_args();
-        if (mc.is_static && !imp_args.empty()) {
-            st.args.clear();
-            for (let i = 0;i < imp_args.size();++i) {
-                let ta = imp_args.get_ptr(i);
-                let ta_str = ta.print();
-                let resolved = map.get_ptr(&ta_str).unwrap();
-                ta_str.drop();
-                st.args.add(resolved.clone());
-            }
-        }
-        res.parent.drop();
-        let info = ImplInfo::new(st.into(res.line));
-        //todo args of trait
-        info.trait_name = imp.trait_name.clone();
-        res.parent = Parent::Impl{info};
-        return Pair::new(res, desc);
-    }
 }
 
 func get_type_params(m: Method*): List<Type>{

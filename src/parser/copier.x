@@ -189,7 +189,8 @@ impl AstCopier{
             body: self.visit_opt(&m.body),
             is_generic: m.is_generic,
             parent: self.visit(&m.parent),
-            path: m.path.clone()
+            path: m.path.clone(),
+            is_vararg: m.is_vararg
         };
     }
 

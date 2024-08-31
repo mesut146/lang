@@ -268,8 +268,14 @@ impl Parser{
       self.consume(TokenType::LPAREN);
       let params = List<Param>::new();
       let selfp = Option<Param>::None;
+      let is_vararg = false;
       if(!self.is(TokenType::RPAREN)){
-        if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
+        if(self.is(TokenType::DOTDOT)){
+          self.consume(TokenType::DOTDOT);
+          self.consume(TokenType::DOT);
+          is_vararg = true;
+        }
+        else if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
           params.add(self.parse_param());
         }else{
           let is_deref = false;
@@ -287,6 +293,12 @@ impl Parser{
         }
         while (self.is(TokenType::COMMA)) {
             self.consume(TokenType::COMMA);
+            if(self.is(TokenType::DOTDOT)){
+              self.consume(TokenType::DOTDOT);
+              self.consume(TokenType::DOT);
+              is_vararg = true;
+              break;
+            }
             params.add(self.parse_param());
         }
       }
@@ -313,7 +325,8 @@ impl Parser{
          body: body,
          is_generic: is_generic,
          parent: parent,
-         path: self.path.clone()
+         path: self.path.clone(),
+         is_vararg: is_vararg
       };
     }
     

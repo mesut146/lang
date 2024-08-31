@@ -673,7 +673,7 @@ impl Compiler{
       }
       vector_Type_push(args, pt);
     }
-    let ft = make_ft(ret, args, false);
+    let ft = make_ft(ret, args, m.is_vararg);
     let linkage = ext();
     if(!m.type_params.empty()){
       linkage = odr();
