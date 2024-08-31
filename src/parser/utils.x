@@ -110,6 +110,43 @@ func isSigned(type: Type*): bool{
     return res;
 }
 
+func is_less_than(){
+
+}
+
+func can_fit_into(val: str, target: Type*): bool{
+    if(target.eq("f64")){
+        //"179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368";
+        return true;
+    }
+    if(target.eq("f32")){
+        let max = "340282346638528859811704183484516925440";
+        let trimmed = val;
+        let comma = val.indexOf(".");
+        if(comma != -1){
+            trimmed = val.substr(0, val.indexOf("."));
+        }
+        if(trimmed.len() < max.len()){
+            return true;
+        }
+        if(trimmed.len() > max.len()){
+            return true;
+        }
+        let res = trimmed.cmp(max);
+        //the both f32::max, compare after comma
+        if(res == 0 && comma != -1){
+            for(let i = comma + 1;i < val.len();++i){
+                let chr = val.get(i);
+                if(chr != '0'){
+                    return false;
+                }
+            }
+        }
+        return res;
+    }
+    panic("can_fit_into todo {} -> {}", val, target);
+}
+
 func max_for(type: Type*): i64{
     let s = type.print();
     let bits = prim_size(s).unwrap() as i32;

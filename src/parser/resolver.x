@@ -1018,6 +1018,18 @@ impl Resolver{
     //print("handle_drop_method {}\n", rt.type);
   }
 
+  func print_used(self){
+    print("used_types=[");
+    for(let i = 0;i < self.used_types.len();++i){
+      let used: RType* = self.used_types.get_ptr(i);
+      if(i > 0){
+        print(", ");
+      }
+      print("{}", used.type);
+    }
+    print("]\n");
+  }
+
   func add_used_decl(self, decl: Decl*){
     for(let i = 0;i < self.used_types.len();++i){
       let used: RType* = self.used_types.get_ptr(i);
@@ -1025,10 +1037,11 @@ impl Resolver{
         return;
       }
     }
-    //print("add_used_decl {}\n", decl.type);
     let rt = self.visit_type(&decl.type);
     //gen drop method
     self.handle_drop_method(&rt, decl);
+    //print("add_used_decl {}, {}\n", decl.type, self.unit.path);
+    //self.print_used();
     self.used_types.add(rt);
     if(decl.base.is_some()){
       self.visit_type(decl.base.get()).drop();
@@ -1660,10 +1673,10 @@ impl Resolver{
     }
     self.visit(fmt).drop();
     //check rest
-    for (let i = 1; i < mc.args.len(); ++i) {
+    for (let i = 2; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get_ptr(i));
         if (!(arg.is_prim() || arg.is_pointer())) {
-            self.err(node, "format arg is invalid");
+            self.err(node, format("format arg is invalid: {}", arg));
         }
         arg.drop();
     }
@@ -2059,25 +2072,35 @@ impl Resolver{
   func visit_lit(self, lit: Literal*): RType{
     let kind = &lit.kind;
     let value: str = lit.trim_suffix();
-    if(lit.suffix.is_some()){
-      if(i64::parse(value) > max_for(lit.suffix.get())){
-        self.err(format("literal out of range expected: {} got: {}", lit.suffix.get(), value));
-      }
-      return self.visit_type(lit.suffix.get());
-    }
     if(kind is LitKind::INT){
+      if(lit.suffix.is_some()){
+        if(i64::parse(value) > max_for(lit.suffix.get())){
+          self.err(format("literal out of range {} -> {}", value, lit.suffix.get()));
+        }
+        return self.visit_type(lit.suffix.get());
+      }
       let res = RType::new("i32");
       res.value = Option::new(value.str());
       return res;
     }else if(kind is LitKind::STR){
-      return RType::new("str");
+      let res = RType::new("str");
+      let rt = self.visit_type(&res.type);
+      res.drop();
+      return rt;
     }else if(kind is LitKind::BOOL){
       return RType::new("bool");
     }else if(kind is LitKind::FLOAT){
+      if(lit.suffix.is_some()){
+        if(!can_fit_into(value, lit.suffix.get())){
+          self.err(format("literal out of range {} -> {}", value, lit.suffix.get()));
+        }
+        return self.visit_type(lit.suffix.get());
+      }
       let res = RType::new("f32");
       res.value = Option::new(value.str());
       return res;
     }else if(kind is LitKind::CHAR){
+      assert(lit.suffix.is_none());
       let res = RType::new("u32");
       //res.value = Option::new(value);
       assert(value.len() == 1);

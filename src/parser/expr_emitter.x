@@ -291,6 +291,13 @@ impl Compiler{
       i32_ty.drop();
       return ptr;
     }
+
+    func makeFloat_one(type: Type*): Value*{
+      if(type.eq("f32")){
+        return makeFloat(1.0);
+      }
+      return makeDouble(1.0);
+    }
   
     func visit_unary(self, op: String*, e: Expr*): Value*{
       let val = self.loadPrim(e);
@@ -301,19 +308,35 @@ impl Compiler{
         return CreateZExt(val, getInt(8));
       }
       let bits = getPrimitiveSizeInBits2(val);
+      let type = self.getType(e);
       if(op.eq("-")){
+        if(type.is_float()){
+          type.drop();
+          return CreateFNeg(val);
+        }
+        type.drop();
         return CreateNSWSub(makeInt(0, bits), val);
       }
       if(op.eq("++")){
-        let v = self.visit(e);//var without load
+        let var_ptr = self.visit(e);//var without load
+        if(type.is_float()){
+          let res = CreateFAdd(val, makeFloat_one(&type));
+          CreateStore(res, var_ptr);
+          return res;
+        }
         let res = CreateNSWAdd(val, makeInt(1, bits));
-        CreateStore(res, v);
+        CreateStore(res, var_ptr);
         return res;
       }
       if(op.eq("--")){
-        let v = self.visit(e);//var without load
+        let var_ptr = self.visit(e);//var without load
+        if(type.is_float()){
+          let res = CreateFSub(val, makeFloat_one(&type));
+          CreateStore(res, var_ptr);
+          return res;
+        }
         let res = CreateNSWSub(val, makeInt(1, bits));
-        CreateStore(res, v);
+        CreateStore(res, var_ptr);
         return res;
       }
       if(op.eq("~")){
@@ -835,10 +858,13 @@ impl Compiler{
           return makeInt(val, bits);
       }
       if(node.kind is LitKind::FLOAT){
-        assert(node.suffix.is_none());
-        //let bits = 32;
+        if(node.suffix.is_some()){
+          if(node.suffix.get().eq("f64")){
+            let valf: f64 = f64::parse(node.val.str());
+            return makeDouble(valf);
+          }
+        }
         let valf: f32 = f32::parse(node.val.str());
-        dbg(true, 111);
         return makeFloat(valf);
       }
       if(node.kind is LitKind::BOOL){
@@ -964,8 +990,6 @@ impl Compiler{
     }
 
     func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
-      dbg(op.eq("*") && type.is_float(), 321);
-      dbg(op.eq(">") && l.line == 353, 322);
       if(op.eq("&&") || op.eq("||")){
         return self.andOr(op, l, r).a;
       }
@@ -976,6 +1000,11 @@ impl Compiler{
       if(op.eq("+=")){
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
+        if(type.is_float()){
+          let tmp = CreateFAdd(lval, rv);
+          CreateStore(tmp, lv);
+          return lv;
+        }
         let tmp = CreateNSWAdd(lval, rv);
         CreateStore(tmp, lv);
         return lv;
@@ -983,13 +1012,35 @@ impl Compiler{
       if(op.eq("-=")){
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
+        if(type.is_float()){
+          let tmp = CreateFSub(lval, rv);
+          CreateStore(tmp, lv);
+          return lv;
+        }
         let tmp = CreateNSWSub(lval, rv);
+        CreateStore(tmp, lv);
+        return lv;
+      }
+      if(op.eq("*=")){
+        let lv = self.visit(l);
+        let lval = self.loadPrim(l);
+        if(type.is_float()){
+          let tmp = CreateFMul(lval, rv);
+          CreateStore(tmp, lv);
+          return lv;
+        }
+        let tmp = CreateNSWMul(lval, rv);
         CreateStore(tmp, lv);
         return lv;
       }
       if(op.eq("/=")){
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
+        if(type.is_float()){
+          let tmp = CreateFDiv(lval, rv);
+          CreateStore(tmp, lv);
+          return lv;
+        }
         let tmp = CreateSDiv(lval, rv);
         CreateStore(tmp, lv);
         return lv;
@@ -998,14 +1049,25 @@ impl Compiler{
       if(is_comp(op.str())){
         //todo remove redundant cast
         let op_c = op.clone().cstr();
+        if(type.is_float()){
+          let res = CreateCmp(get_comp_op_float(op_c.ptr()), lv, rv);
+          op_c.drop();
+          return res;
+        }
         let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
         op_c.drop();
         return res;
       }
       if(op.eq("+")){
+        if(type.is_float()){
+          return CreateFAdd(lv, rv);
+        }
         return CreateNSWAdd(lv, rv);
       }
       if(op.eq("-")){
+        if(type.is_float()){
+          return CreateFSub(lv, rv);
+        }
         return CreateNSWSub(lv, rv);
       }
       if(op.eq("*")){
@@ -1015,9 +1077,15 @@ impl Compiler{
         return CreateNSWMul(lv, rv);
       }
       if(op.eq("/")){
+        if(type.is_float()){
+          return CreateFDiv(lv, rv);
+        }
         return CreateSDiv(lv, rv);
       }
       if(op.eq("%")){
+        if(type.is_float()){
+          return CreateFRem(lv, rv);
+        }
         return CreateSRem(lv, rv);
       }
       if(op.eq("&")){

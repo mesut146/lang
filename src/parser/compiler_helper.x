@@ -531,15 +531,17 @@ impl Compiler{
   //normal decl protos and di protos
   func make_decl_protos(self){
     let p = self.protos.get();
+    let resolver = self.get_resolver();
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
-    for (let i = 0;i < self.get_resolver().used_types.len();++i) {
-      let rt = self.get_resolver().used_types.get_ptr(i);
-      let decl = self.get_resolver().get_decl(rt).unwrap();
+    //print("used={}\n", resolver.used_types);
+    for (let i = 0;i < resolver.used_types.len();++i) {
+      let rt = resolver.used_types.get_ptr(i);
+      let decl = resolver.get_decl(rt).unwrap();
       if (decl.is_generic) continue;
       list.add(decl);
     }
-    sort2(&list, self.get_resolver());
+    sort2(&list, resolver);
     //first create just protos to fill later
     for(let i = 0;i < list.len();++i){
       let decl = *list.get_ptr(i);
@@ -687,9 +689,6 @@ impl Compiler{
       Argument_setname(arg, "ret".ptr());
       Argument_setsret(arg, self.mapType(&m.type));
     }
-    if(m.name.eq("atof")){
-      Function_print(f);
-    }
     self.protos.get().funcMap.add(mangled, f);
     vector_Type_delete(args);
     mangled_c.drop();
@@ -758,8 +757,13 @@ impl Compiler{
       }
     }
     if(src_type.is_float()){
-      //todo
-      panic("{}->{}", src_type, target_type);
+      if(is_unsigned){
+        src_type.drop();
+        return CreateFPToUI(val, target_ty);
+      }else{
+        src_type.drop();
+        return CreateFPToSI(val, target_ty);
+      }
     }
     let val_ty = Value_getType(val);
     let src_size = getPrimitiveSizeInBits(val_ty);

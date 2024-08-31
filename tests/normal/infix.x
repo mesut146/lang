@@ -1,16 +1,16 @@
 func main(){
   let a: i32 = 2;
   let b: i32 = 11;
-  assert(a+3==5);
-  assert(a*5==10);
-  assert(10-a==8);
-  assert(6/a==3);
-  assert(15 % (a*a) == 3);
+  assert(a + 3 == 5);
+  assert(a * 5 == 10);
+  assert(10 - a == 8);
+  assert(6 / a == 3);
+  assert(15 % (a * a) == 3);
   assert((14 & b) == 10);
   assert((14 | b) == 15 );
-  assert((14^b)==5);
-  assert((a<<3)==16);
-  assert((b>>1)==5);
+  assert((14 ^ b)==5);
+  assert((a << 3)==16);
+  assert((b >> 1)==5);
   //unary
   assert(-a == -2);
   //++infix();

@@ -257,6 +257,13 @@ impl Debug for f32{
     Drop::drop(str);
   }
 }
+impl Debug for f64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
 
 impl i32{
   func parse(s: str): i32{
@@ -407,13 +414,18 @@ impl f64{
   func parse(s: str): f64{
     let cs = CStr::new(s);
     let res: f64 = atof(cs.ptr());
-    printf("f64::parse %s=%f\n", cs.ptr(), res);
+    //printf("f64::parse %s=%f\n", cs.ptr(), res);
     cs.drop();
     return res;
   }
 
   func print(x: f64): String{
-    panic("todo");
+    let buf = [0_i8;100];
+    let len = sprintf(buf.ptr(), "%f", x);
+    let res = str::new(buf[0..len]).str();
+    //print("f64::print res={}\n", res); 
+    //printf("x=%f", x);
+    return res;
   }
 
 }

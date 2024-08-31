@@ -109,11 +109,13 @@ func std_test(){
     let out = get_out();
     let lib = build_std(std_dir.str(), out.str(), false);
     let dir = format("{}/tests/std_test", root.get());
-    compile_dir2(dir.str(), lib.str());
+    let args = format("{} -lm", &lib);
+    compile_dir2(dir.str(), args.str());
     std_dir.drop();
     out.drop();
     lib.drop();
     dir.drop();
+    args.drop();
 }
 
 func normal_test(){
@@ -128,9 +130,11 @@ func normal_test(){
     config.root_dir.set(root.get().clone());
     let lib = Compiler::compile_single(config);
     let dir = format("{}/tests/normal", root.get());
-    compile_dir2(dir.str(), lib.str());
+    let args = format("{} -lm", &lib);
+    compile_dir2(dir.str(), args.str());
     lib.drop();
     dir.drop();
+    args.drop();
 }
 
 func own_test(id: i32){

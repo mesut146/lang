@@ -67,7 +67,7 @@ func bootstrap(cmd: CmdArgs*){
   setenv2("compiler_name", name, 1);
   let out_dir = format("{}/{}_out", &build, name);
   let stdlib = build_std(std_dir.str(), out_dir.str());
-  let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
+  let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
   let config = CompilerConfig::new(src_dir.clone());
   config
     .set_file(format("{}/parser", &src_dir))

@@ -140,6 +140,8 @@ extern{
     func CreateFPCast(val: Value*, trg: llvm_Type*): Value*;
     func CreateSIToFP(val: Value*, trg: llvm_Type*): Value*;
     func CreateUIToFP(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToSI(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToUI(val: Value*, trg: llvm_Type*): Value*;
     func CreateFPExt(val: Value*, trg: llvm_Type*): Value*;
     func CreateFPTrunc(val: Value*, trg: llvm_Type*): Value*;
     
@@ -188,6 +190,7 @@ extern{
     func CreateBr(bb: BasicBlock*);
     func CreateCmp(op: i32, l: Value*, r: Value*): Value*;
     func get_comp_op(op: i8*): i32;
+    func get_comp_op_float(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
     func getTrue(): Value*;
     func getFalse(): Value*;
@@ -202,17 +205,23 @@ extern{
     func GlobalValue_appending(): i32;
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
+    func CreateFAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;
+    func CreateSub(l: Value*, r: Value*): Value*;
+    func CreateFSub(l: Value*, r: Value*): Value*;
     func CreateNSWMul(l: Value*, r: Value*): Value*;
     func CreateFMul(l: Value*, r: Value*): Value*;
-    func CreateSub(l: Value*, r: Value*): Value*;
     func CreateSDiv(l: Value*, r: Value*): Value*;
+    func CreateFDiv(l: Value*, r: Value*): Value*;
     func CreateSRem(l: Value*, r: Value*): Value*;
+    func CreateFRem(l: Value*, r: Value*): Value*;
     func CreateAnd(l: Value*, r: Value*): Value*;
     func CreateOr(l: Value*, r: Value*): Value*;
     func CreateXor(l: Value*, r: Value*): Value*;
     func CreateShl(l: Value*, r: Value*): Value*;
     func CreateAShr(l: Value*, r: Value*): Value*;
+    func CreateNeg(l: Value*): Value*;
+    func CreateFNeg(l: Value*): Value*;
 
     func get_last_write_time(path: i8*): i64;
     func set_as_executable(path: i8*);

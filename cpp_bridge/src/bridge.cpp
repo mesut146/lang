@@ -530,6 +530,12 @@ llvm::Value* CreateSIToFP(llvm::Value *val, llvm::Type *trg_type) {
 llvm::Value* CreateUIToFP(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateUIToFP(val, trg_type);
 }
+llvm::Value* CreateFPToSI(llvm::Value *val, llvm::Type *trg_type) {
+  return Builder->CreateFPToSI(val, trg_type);
+}
+llvm::Value* CreateFPToUI(llvm::Value *val, llvm::Type *trg_type) {
+  return Builder->CreateFPToUI(val, trg_type);
+}
 
 void CreateStore(llvm::Value *val, llvm::Value *ptr) {
   Builder->CreateStore(val, ptr);
@@ -614,6 +620,29 @@ int get_comp_op(char *ops) {
   throw std::runtime_error("get_comp_op");
 }
 
+int get_comp_op_float(char *ops) {
+  std::string op(ops);
+  if (op == "==") {
+    return llvm::CmpInst::FCMP_OEQ;
+  }
+  if (op == "!=") {
+    return llvm::CmpInst::FCMP_ONE;
+  }
+  if (op == "<") {
+    return llvm::CmpInst::FCMP_OLT;
+  }
+  if (op == ">") {
+    return llvm::CmpInst::FCMP_OGT;
+  }
+  if (op == "<=") {
+    return llvm::CmpInst::FCMP_OLE;
+  }
+  if (op == ">=") {
+    return llvm::CmpInst::FCMP_OGE;
+  }
+  throw std::runtime_error("get_comp_op");
+}
+
 llvm::Value *CreateCmp(int op, llvm::Value *l, llvm::Value *r) {
   return Builder->CreateCmp((llvm::CmpInst::Predicate)op, l, r);
 }
@@ -624,11 +653,17 @@ llvm::Value *CreateNSWAdd(llvm::Value *l, llvm::Value *r) {
 llvm::Value *CreateAdd(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateAdd(l, r);
 }
+llvm::Value *CreateFAdd(llvm::Value *l, llvm::Value *r) {
+  return Builder->CreateFAdd(l, r);
+}
 llvm::Value *CreateNSWSub(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateNSWSub(l, r);
 }
 llvm::Value *CreateSub(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateSub(l, r);
+}
+llvm::Value *CreateFSub(llvm::Value *l, llvm::Value *r) {
+  return Builder->CreateFSub(l, r);
 }
 llvm::Value *CreateNSWMul(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateNSWMul(l, r);
@@ -639,8 +674,14 @@ llvm::Value *CreateFMul(llvm::Value *l, llvm::Value *r) {
 llvm::Value *CreateSDiv(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateSDiv(l, r);
 }
+llvm::Value *CreateFDiv(llvm::Value *l, llvm::Value *r) {
+  return Builder->CreateFDiv(l, r);
+}
 llvm::Value *CreateSRem(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateSRem(l, r);
+}
+llvm::Value *CreateFRem(llvm::Value *l, llvm::Value *r) {
+  return Builder->CreateFRem(l, r);
 }
 llvm::Value *CreateXor(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateXor(l, r);
@@ -657,9 +698,14 @@ llvm::Value *CreateShl(llvm::Value *l, llvm::Value *r) {
 llvm::Value *CreateAShr(llvm::Value *l, llvm::Value *r) {
   return Builder->CreateAShr(l, r);
 }
-
 llvm::Value *CreateTrunc(llvm::Value *val, llvm::Type *type) {
   return Builder->CreateTrunc(val, type);
+}
+llvm::Value *CreateNeg(llvm::Value *val) {
+  return Builder->CreateNeg(val);
+}
+llvm::Value *CreateFNeg(llvm::Value *val) {
+  return Builder->CreateFNeg(val);
 }
 
 llvm::Constant *CreateGlobalStringPtr(char *str) {

@@ -16,7 +16,7 @@ struct A: B{
 }
 
 
-func base_test(){
+func main(){
     let a = A{.B{b: 5}, a: 10};
     a.drop();
     assert(cnt == 1);
