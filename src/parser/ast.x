@@ -506,19 +506,6 @@ impl Eq for Type{
   }
 }
 
-struct ArgBind: Node{
-  name: String;
-  is_ptr: bool;
-}
-
-struct IfLet{
-  type: Type;
-  args: List<ArgBind>;
-  rhs: Expr;
-  then: Box<Stmt>;
-  else_stmt: Ptr<Stmt>;
-}
-
 struct ForStmt{
   var_decl: Option<VarExpr>;
   cond: Option<Expr>;
@@ -534,6 +521,18 @@ struct ForEach{
 
 struct IfStmt{
   cond: Expr;
+  then: Box<Stmt>;
+  else_stmt: Ptr<Stmt>;
+}
+
+struct ArgBind: Node{
+  name: String;
+  is_ptr: bool;
+}
+struct IfLet{
+  type: Type;
+  args: List<ArgBind>;
+  rhs: Expr;
   then: Box<Stmt>;
   else_stmt: Ptr<Stmt>;
 }
@@ -644,6 +643,7 @@ enum Expr: Node{
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(val: ArrAccess),
   MatchExpr(val: Box<Match>)
+  //Block(x: Box<Block>)
 }
 impl Expr{
   func print(self): String{

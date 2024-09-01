@@ -390,6 +390,9 @@ impl Parser{
       variants.add(self.parse_variant());
       while(self.is(TokenType::COMMA)){
         self.pop();
+        if(self.is(TokenType::RBRACE)){
+          break;
+        }
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
