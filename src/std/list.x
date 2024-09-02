@@ -270,7 +270,7 @@ impl<T> Iterator<T*> for ListIter<T>{
       self.pos += 1;
       return Option::new(self.list.get_ptr(idx));
     }
-    return Option<T>::new();
+    return Option<T*>::new();
   }
 }
 

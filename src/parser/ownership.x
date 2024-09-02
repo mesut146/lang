@@ -114,6 +114,10 @@ impl Own{
         self.set_current(id);
         return id;
     }
+    func add_scope(self, kind: ScopeType, stmt: Body*): i32{
+        let exit = Exit::get_exit_type(stmt);
+        return self.add_scope(kind, stmt.line(), exit, false);
+    }
     func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
         let exit = Exit::get_exit_type(stmt);
         return self.add_scope(kind, stmt.line, exit, false);
@@ -560,7 +564,7 @@ impl Own{
         }
     }
 
-    func end_scope_if(self, else_stmt: Ptr<Stmt>*, line: i32){
+    func end_scope_if(self, else_stmt: Ptr<Body>*, line: i32){
         //merge else moves then drop all
         let if_id = self.cur_scope;
         let if_scope = self.get_scope(if_id);

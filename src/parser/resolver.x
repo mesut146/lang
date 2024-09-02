@@ -358,10 +358,6 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
   return false;
 }
 
-func dumpp(r: Resolver*){
-  r.dump();
-}
-
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
     if(verbose_drop){
@@ -503,7 +499,7 @@ impl Resolver{
                 rhs.drop();
                 err_opt.drop();
                 type.drop();
-                self.err(msg);
+                self.err(g.line, msg);
                 panic("");
             }
             err_opt.drop();
@@ -584,12 +580,12 @@ impl Resolver{
       let der_str = der.print();
       if(der_str.eq("Drop")){
         der_str.drop();
-        self.err("drop is auto impl");
-        panic("");
+        self.err(decl.line, "drop is auto impl");
+      }else{
+        let imp = generate_derive(decl, &self.unit, der_str.str());
+        der_str.drop();
+        newItems.add(Item::Impl{imp});
       }
-      let imp = generate_derive(decl, &self.unit, der_str.str());
-      der_str.drop();
-      newItems.add(Item::Impl{imp});
     }
     let helper = DropHelper{self};
     //improve decl.is_generic, this way all generic types derives drop but dont need to
@@ -600,33 +596,28 @@ impl Resolver{
     }
   }
 
-  func err(self, msg: str){
+  func print_line_ctx(self, line: i32, msg: str){
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
-      print("{}\n", str);
+      print("{}:{} {}\n", self.curMethod.unwrap().path, line, str);
       str.drop();
+    }else{
+      print("{}:{}", self.unit.path, line);
     }
-    panic("{}\n", msg);
+    //get_line();
+    print("{}\n", msg);
+    exit(1);
   }
-  func err(self, msg: String){
-    self.err(msg.str());
-    msg.drop();
-  }
+
   func err(self, node: Expr*, msg: str){
-    let path = &self.unit.path;
-    if(self.curMethod.is_some()){
-      path = &self.curMethod.unwrap().path;
-    }
-    let str = format("{}:{}\n{} {}", path, node.line, msg, node);
-    panic("{}\n", str);
+    self.err(node.line, msg);
   }
   func err(self, node: Expr*, msg: String){
     self.err(node, msg.str());
     msg.drop();
   }
   func err(self, node: Stmt*, msg: str){
-    let str = format("{}\n{} {}", self.unit.path, msg, node);
-    self.err(str);
+    self.err(node.line, msg);
   }
   func err(self, node: Stmt*, msg: String){
     self.err(node, msg.str());
@@ -637,12 +628,7 @@ impl Resolver{
     msg.drop();
   }
   func err(self, line: i32, msg: str){
-    let path = &self.unit.path;
-    if(self.curMethod.is_some()){
-      path = &self.curMethod.unwrap().path;
-    }
-    let str = format("{}:{}\n{}", path, line, msg);
-    panic("{}\n", str);
+    self.print_line_ctx(line, msg);
   }
 
   func getType(self, e: Type*): Type{
@@ -835,7 +821,7 @@ impl Resolver{
     let tmp = self.visit_type(&fd.type);
     tmp.drop();
     if(self.is_cyclic(&fd.type, &node.type)){
-      self.err(format("cyclic type {}", node.type));
+      self.err(node.line, format("cyclic type {}", node.type));
     }
   }
 
@@ -922,7 +908,7 @@ impl Resolver{
           msg.print(&imp.info.type);
           msg.print("\n");
         }
-        self.err(msg.unwrap());
+        self.err(imp.info.type.line, msg.unwrap());
       }
       required.drop();
     }else{
@@ -962,7 +948,7 @@ impl Resolver{
       self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id, prm.line);
     }
     if(node.body.is_some()){
-      self.visit(node.body.get());
+      let body_rt = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
         let msg = String::new("non void function ");
@@ -972,6 +958,7 @@ impl Resolver{
         msg.append(" must return a value");
         self.err(node.line, msg);
       }
+      //todo comp of expr
       exit.drop();
     }
     self.dropScope();
@@ -1738,7 +1725,7 @@ impl Resolver{
       }else{
         info.block.list.add(parse_stmt(format("Debug::debug({}, {});", src, fmt), &self.unit, node.line));
       }
-      self.visit(&info.block);
+      self.visit_block(&info.block);
       self.format_map.add(node.id, info);
       rt1.drop();
       rt2.drop();
@@ -1753,8 +1740,8 @@ impl Resolver{
       assert(call.args.len() == 1);
       let arg = call.args.get_ptr(0).print();
       let id = i32::parse(arg.str());
-      let ptr: Block* = *self.block_map.get_ptr(&id).unwrap();
-      self.visit(ptr);
+      let blk: Block* = *self.block_map.get_ptr(&id).unwrap();
+      self.visit_block(blk);
       arg.drop();
       return RType::new("void");
     }
@@ -2072,13 +2059,13 @@ impl Resolver{
     return RType::new("bool");
   }
 
-  func visit_lit(self, lit: Literal*): RType{
+  func visit_lit(self, expr: Expr*, lit: Literal*): RType{
     let kind = &lit.kind;
     let value: str = lit.trim_suffix();
     if(kind is LitKind::INT){
       if(lit.suffix.is_some()){
         if(i64::parse(value) > max_for(lit.suffix.get())){
-          self.err(format("literal out of range {} -> {}", value, lit.suffix.get()));
+          self.err(expr, format("literal out of range {} -> {}", value, lit.suffix.get()));
         }
         return self.visit_type(lit.suffix.get());
       }
@@ -2095,7 +2082,7 @@ impl Resolver{
     }else if(kind is LitKind::FLOAT){
       if(lit.suffix.is_some()){
         if(!can_fit_into(value, lit.suffix.get())){
-          self.err(format("literal out of range {} -> {}", value, lit.suffix.get()));
+          self.err(expr, format("literal out of range {} -> {}", value, lit.suffix.get()));
         }
         return self.visit_type(lit.suffix.get());
       }
@@ -2180,7 +2167,7 @@ impl Resolver{
   
   func visit_nc(self, node: Expr*): RType{
     if let Expr::Lit(lit*)=(node){
-      return self.visit_lit(lit);
+      return self.visit_lit(node, lit);
     }else if let Expr::Type(type*) = (node){
       let res = self.visit_type(type);
       //if(res.is_decl()){
@@ -2193,8 +2180,7 @@ impl Resolver{
     }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){
-      let res = self.visit_call(node, call);
-      return res;
+      return self.visit_call(node, call);
     }else if let Expr::Name(name*) = (node){
       return self.visit_name(node, name);
     }else if let Expr::Unary(op*, ebox*) = (node){
@@ -2213,6 +2199,12 @@ impl Resolver{
       return self.visit_as(node, lhs.get(), type);
     }else if let Expr::Is(lhs*, rhs*) = (node){
       return self.visit_is(node, lhs.get(), rhs.get());
+    }else if let Expr::If(is*) = (node){
+      return self.visit_if(is.get());
+    }else if let Expr::IfLet(is*) = (node){
+      return self.visit_iflet(is.get());
+    }else if let Expr::Block(b*) = (node){
+      return self.visit_block(b.get());
     }
     panic("visit expr '{}'", node);
   }
@@ -2242,17 +2234,18 @@ impl Resolver{
       let tmp = self.visit(e);
       tmp.drop();
       return;
-    }else if let Stmt::Block(b*) = (node){
-      self.visit(b);
-      return;
     }else if let Stmt::Ret(e*) = (node){
       if(e.is_some()){
         //todo
-        let tmp = self.visit(e.get());
-        tmp.drop();
+        let rt = self.visit(e.get());
+        let cmp = MethodResolver::is_compatible(&rt.type, &self.curMethod.unwrap().type);
+        if(cmp.is_some()){
+          self.err(node, format("return type mismatch {} -> {}", rt.type, &self.curMethod.unwrap().type));
+        }
+        rt.drop();
       }else{
         if(!self.curMethod.unwrap().type.is_void()){
-          self.err("non-void method returns void");
+          self.err(node, "non-void method returns void");
         }
       }
       return;
@@ -2274,15 +2267,9 @@ impl Resolver{
         tmp.drop();
       }
       self.inLoop+=1;
-      self.visit(f.body.get());
+      self.visit_body(f.body.get());
       self.inLoop-=1;
       self.dropScope();
-      return;
-    }else if let Stmt::If(is*) = (node){
-      self.visit_if(node, is);
-      return;
-    }else if let Stmt::IfLet(is*) = (node){
-      self.visit_iflet(node, is);
       return;
     }else if let Stmt::While(e*, b*) = (node){
       self.visit_while(node, e, b.get());
@@ -2303,6 +2290,21 @@ impl Resolver{
       return;
     }
     panic("visit stmt {}", node);
+  }
+
+  func visit_body(self, node: Body*): RType{
+    if let Body::Block(b*)=(node){
+      return self.visit_block(b);
+    }else if let Body::Stmt(b*)=(node){
+      self.visit(b);
+      return RType::new("void");
+    }else if let Body::If(b*)=(node){
+      return self.visit_if(b);
+    }else if let Body::IfLet(b*)=(node){
+      return self.visit_iflet(b);
+    }else{
+      panic("");
+    }
   }
 
   func visit_for_each(self, node: Stmt*, fe: ForEach*){
@@ -2329,57 +2331,69 @@ impl Resolver{
     let stmt = parse_stmt(whl, &self.unit, node.line);
     body.list.add(stmt);
     body.list.add(parse_stmt(format("{}.drop();", &it_name), &self.unit, node.line));
-    self.visit(body);
+    let tmp = self.visit_block(body);
 
     self.format_map.add(node.id, info);
     rt.drop();
     it_name.drop();
     opt_name.drop();
+    tmp.drop();
   }
   
-  func visit_while(self, node: Stmt*, cond: Expr*, body: Stmt*){
+  func visit_while(self, node: Stmt*, cond: Expr*, body: Body*){
     if (!self.isCondition(cond)) {
         self.err(node, "while statement expr is not a bool");
     }
     ++self.inLoop;
     self.newScope();
-    self.visit(body);
+    self.visit_body(body);
     --self.inLoop;
     self.dropScope();
   }
   
-  func visit_if(self, node: Stmt*, is: IfStmt*){
+  func visit_if(self, is: IfStmt*): RType{
+    let line = is.cond.line;
     if (!self.isCondition(&is.cond)) {
         self.err(&is.cond, "if condition is not a boolean");
     }
     self.newScope();
-    self.visit(is.then.get());
+    let rt1 = self.visit_body(is.then.get());
     self.dropScope();
     if (is.else_stmt.is_some()) {
         self.newScope();
-        self.visit(is.else_stmt.get());
+        let rt2 = self.visit_body(is.else_stmt.get());
+        if(!rt1.type.eq(&rt2.type)){
+          self.err(line, format("then & else type mismatch {} vs {}", rt1.type, rt2.type));
+        }
         self.dropScope();
+        rt2.drop();
+    }else{
+      if(!rt1.type.is_void()){
+        self.err(line, "then returns a non-void but no else");
+      }
     }
+    return rt1;
   }
 
-  func visit_iflet(self, node: Stmt*, is: IfLet*){
+  func visit_iflet(self, is: IfLet*): RType{
+    let line = is.rhs.line;
     //check lhs
     let rt = self.visit_type(&is.type);
     let decl_opt = self.get_decl(&rt);
     rt.drop();
     if (decl_opt.is_none() || !decl_opt.unwrap().is_enum()) {
         let msg = format("if let type is not enum: {}", is.type);
-        self.err(node, msg);
+        self.err(line, msg);
     }
     //check rhs
     let rhs = self.visit(&is.rhs);
     if(rhs.type.is_dpointer()){
-      self.err(node, "rhs is double ptr");
+      self.err(line, "rhs is double ptr");
     }
     let rhs_opt = self.get_decl(&rhs);
     if (rhs_opt.is_none() || !rhs_opt.unwrap().is_enum()) {
       let msg = format("if let rhs is not enum: {}", rhs.type);
-      self.err(node, msg);
+      self.err(line, msg);
     }
     rhs.drop();
     //match variant
@@ -2388,7 +2402,7 @@ impl Resolver{
     let variant = decl.get_variants().get_ptr(index);
     if (variant.fields.len() != is.args.len()) {
         let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
-        self.err(node, msg);
+        self.err(line, msg);
     }
     //init arg variables
     self.newScope();
@@ -2402,13 +2416,22 @@ impl Resolver{
         self.addScope(arg.name.clone(), ty.clone(), false, arg.id, arg.line);
         self.cache.add(arg.id, RType::new(ty));
     }
-    self.visit(is.then.get());
+    let rt1 = self.visit_body(is.then.get());
     self.dropScope();
     if (is.else_stmt.is_some()) {
         self.newScope();
-        self.visit(is.else_stmt.get());
+        let rt2 = self.visit_body(is.else_stmt.get());
+        if(!rt1.type.eq(&rt2.type)){
+          self.err(line, format("then & else type mismatch {} vs {}", rt1.type, rt2.type));
+        }
         self.dropScope();
+        rt2.drop();
+    }else{
+      if(!rt1.type.is_void()){
+        self.err(line, "then returns a non-void but no else");
+      }
     }
+    return rt1;
   }
   
   func isCondition(self, e: Expr*): bool{
@@ -2418,7 +2441,7 @@ impl Resolver{
     return res;
   }
 
-  func visit(self, node: Block*){
+  func visit_block(self, node: Block*): RType{
     for(let i = 0;i < node.list.len();++i){
       if(i > 0){
         let prev = Exit::get_exit_type(node.list.get_ptr(i - 1));
@@ -2432,15 +2455,25 @@ impl Resolver{
       self.visit(node.list.get_ptr(i));
     }
     if(node.return_expr.is_some()){
-      let rt = self.visit(node.return_expr.get());
-      let ret = &self.curMethod.unwrap().type;
-      let cmp = MethodResolver::is_compatible(&rt.type, ret);
-      if(cmp.is_some()){
-        self.err(node.return_expr.get(), format("return type mismatch {} vs {}", &rt.type, ret));
+      if(!node.list.empty()){
+        let last = Exit::get_exit_type(node.list.last());
+        if(last.is_jump() || last.is_unreachable()){
+          self.err(node.return_expr.get(), "unreachable code");
+        }
+        last.drop();
       }
-      cmp.drop();
-      rt.drop();
+      // let rt = self.visit(node.return_expr.get());
+      // let ret = &self.curMethod.unwrap().type;
+      // let cmp = MethodResolver::is_compatible(&rt.type, ret);
+      // if(cmp.is_some()){
+      //   //todo move this into method visit
+      //   self.err(node.return_expr.get(), format("return type mismatch {} vs {}", &rt.type, ret));
+      // }
+      // cmp.drop();
+      // rt.drop();
+      return self.visit(node.return_expr.get());
     }
+    return RType::new("void");
   }
 
   func visit(self, node: VarExpr*){
@@ -2468,5 +2501,16 @@ impl Resolver{
     err_opt.drop();
     rhs.drop();
     return res;
+  }
+
+  func get_macro(self, node: Expr*): FormatInfo*{
+    let opt = self.format_map.get_ptr(&node.id);
+    if(opt.is_none()){
+      for pair in &self.format_map{
+        print("id={} info={}\n", pair.a, pair.b.block);
+      }
+      self.err(node, format("no macro id={} path={}", node.id, self.unit.path));
+    }
+    return opt.unwrap();
   }
 }

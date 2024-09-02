@@ -25,15 +25,6 @@ impl Compiler{
       else if let Stmt::Expr(e*)=(node){
         self.visit(e);
       }
-      else if let Stmt::If(is*)=(node){
-        self.visit_if(is);
-      }
-      else if let Stmt::IfLet(is*)=(node){
-        self.visit_iflet(node, is);
-      }
-      else if let Stmt::Block(b*)=(node){
-        self.visit_block(b);
-      }
       else if let Stmt::For(fs*)=(node){
         self.visit_for(node, fs);
       }
@@ -57,13 +48,41 @@ impl Compiler{
       return;
     }
     func get_end_line(stmt: Stmt*): i32{
-      if let Stmt::Block(b*)=(stmt){
+      /*if let Stmt::Block(b*)=(stmt){
         return b.end_line;
-      }
+      }*/
       return stmt.line;
     }
+
+    func get_end_line(body: Body*): i32{
+      if let Body::Block(b*)=(body){
+        return b.end_line;
+      }else if let Body::Stmt(b*)=(body){
+        return b.line;
+      }else if let Body::If(b*)=(body){
+        return b.cond.line;
+      }else if let Body::IfLet(b*)=(body){
+        return b.rhs.line;
+      }else{
+        panic("");
+      }
+    }
+
+    func visit_body(self, body: Body*): Option<Value*>{
+      if let Body::Block(b*)=(body){
+        return self.visit_block(b);
+      }else if let Body::Stmt(b*)=(body){
+        self.visit(b);
+        return Option<Value*>::new();
+      }else if let Body::If(b*)=(body){
+        return self.visit_if(b);
+      }else if let Body::IfLet(b*)=(body){
+        return self.visit_iflet(b.rhs.line, b);
+      }
+      panic("");
+    }
     
-    func visit_while(self, stmt: Stmt*, cond: Expr*, body: Stmt*){
+    func visit_while(self, stmt: Stmt*, cond: Expr*, body: Body*){
       let line = stmt.line;
       let cond_name = CStr::new(format("while_cond_{}", line));
       let then_name = CStr::new(format("while_then_{}", line));
@@ -77,9 +96,9 @@ impl Compiler{
       self.set_and_insert(then);
       self.loops.add(condbb);
       self.loopNext.add(next);
-      self.llvm.di.get().new_scope(body.line);
+      self.llvm.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
-      self.visit(body);
+      self.visit_body(body);
       self.own.get().end_scope(get_end_line(body));
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
@@ -91,7 +110,7 @@ impl Compiler{
       next_name.drop();
     }
 
-    func visit_if(self, node: IfStmt*){
+    func visit_if(self, node: IfStmt*): Option<Value*>{
       let cond = self.branch(&node.cond);
       let line = node.cond.line;
       let then_name = CStr::new(format("if_then_{}", line));
@@ -102,10 +121,10 @@ impl Compiler{
       let next = create_bb_named(next_name.ptr());
       CreateCondBr(cond, then, elsebb);
       self.set_and_insert(then);
-      self.llvm.di.get().new_scope(node.then.get().line);
+      self.llvm.di.get().new_scope(node.then.get().line());
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
-      self.visit(node.then.get());
+      self.visit_body(node.then.get());
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
@@ -119,11 +138,11 @@ impl Compiler{
       self.set_and_insert(elsebb);
       let else_jump = false;
       if(node.else_stmt.is_some()){
-        self.llvm.di.get().new_scope(node.else_stmt.get().line);
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
         //this will restore if, bc we did fake end_scope
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.visit(node.else_stmt.get());
+        self.visit_body(node.else_stmt.get());
         self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -146,9 +165,10 @@ impl Compiler{
       then_name.drop();
       else_name.drop();
       next_name.drop();
+      return Option<Value*>::new();
     }
   
-    func visit_iflet(self, stmt: Stmt*, node: IfLet*){
+    func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
       let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
@@ -157,9 +177,9 @@ impl Compiler{
       let index = Resolver::findVariant(decl, node.type.name());
       let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
   
-      let then_name = CStr::new(format("iflet_then_{}", stmt.line));
-      let else_name = CStr::new(format("iflet_else_{}", stmt.line));
-      let next_name = CStr::new(format("iflet_next_{}", stmt.line));
+      let then_name = CStr::new(format("iflet_then_{}", line));
+      let else_name = CStr::new(format("iflet_else_{}", line));
+      let next_name = CStr::new(format("iflet_next_{}", line));
       let then_bb = create_bb2_named(self.cur_func(), then_name.ptr());
       let elsebb = create_bb_named(else_name.ptr());
       let next = create_bb_named(next_name.ptr());
@@ -169,7 +189,7 @@ impl Compiler{
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.own.get().do_move(&node.rhs);
       let variant = decl.get_variants().get_ptr(index);
-      self.llvm.di.get().new_scope(stmt.line);
+      self.llvm.di.get().new_scope(line);
       if(!variant.fields.empty()){
         //declare vars
         let fields = &variant.fields;
@@ -211,7 +231,7 @@ impl Compiler{
             }
         }
       }
-      self.visit(node.then.get());
+      self.visit_body(node.then.get());
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
@@ -226,10 +246,10 @@ impl Compiler{
       self.set_and_insert(elsebb);
       let else_jump = false;
       if (node.else_stmt.is_some()) {
-        self.llvm.di.get().new_scope(node.else_stmt.get().line);
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.visit(node.else_stmt.get());
+        self.visit_body(node.else_stmt.get());
         self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -239,7 +259,7 @@ impl Compiler{
         }
         exit_else.drop();
       }else{
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, stmt.line, Exit::new(ExitType::NONE), true);
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
@@ -253,6 +273,7 @@ impl Compiler{
       else_name.drop();
       next_name.drop();
       rt.drop();
+      return Option<Value*>::new();
     }
 
     func visit_for_each(self, stmt: Stmt*, node: ForEach*){
@@ -291,7 +312,7 @@ impl Compiler{
       self.loopNext.add(next);
       //self.llvm.di.get().new_scope(node.body.get().line);
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
-      self.visit(node.body.get());
+      self.visit_body(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
       //self.llvm.di.get().exit_scope();
       CreateBr(updatebb);
@@ -341,11 +362,15 @@ impl Compiler{
         self.own.get().add_var(f, ptr);
       }
     }
-    func visit_block(self, node: Block*){
+    func visit_block(self, node: Block*): Option<Value*>{
       for(let i = 0;i < node.list.len();++i){
         let st = node.list.get_ptr(i);
         self.visit(st);
       }
+      if(node.return_expr.is_some()){
+        return Option<Value*>::new(self.visit(node.return_expr.get()));
+      }
+      return Option<Value*>::new();
     }
     func visit_ret(self, node: Stmt*, val: Option<Expr>*){
       if(val.is_none()){

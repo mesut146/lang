@@ -90,7 +90,7 @@ impl<T> Ptr<T>{
       return Option::new(self.val.get().set(e));
     }
     self.val = Option::new(Box::new(e));
-    return Option<Box<T>>::new();
+    return Option<T>::new();
   }
 }
 

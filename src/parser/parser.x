@@ -2,6 +2,7 @@ import parser/lexer
 import parser/token
 import parser/ast
 import parser/printer
+import parser/utils
 import std/map
 import std/libc
 
@@ -108,7 +109,7 @@ impl Parser{
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
+    print("in file {}:{} `{}`\n", &self.path, line, get_line(self.buf.str(), line));
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -567,13 +568,73 @@ impl Parser{
     func is_stmt(self): bool{
       return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::IF) || self.is(TokenType::LBRACE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
     }
+
+    func parse_body(self): Body{
+      if(self.is(TokenType::LBRACE)){
+        return Body::Block{self.parse_block()};
+      }
+      if(self.is(TokenType::IF, TokenType::LET)){
+        return Body::IfLet{self.parse_iflet()};
+      }
+      if(self.is(TokenType::IF)){
+        return Body::If{self.parse_if()};
+      }
+      return Body::Stmt{self.parse_stmt()};
+    }
+
+    func parse_if(self): IfStmt{
+      self.pop();
+      self.consume(TokenType::LPAREN);
+      let e = self.parse_expr();
+      self.consume(TokenType::RPAREN);
+      let b = Box::new(self.parse_body());
+      if(self.is(TokenType::ELSE)){
+        self.pop();
+        let els = self.parse_body();
+        return IfStmt{e, b, Ptr::new(els)};
+      }
+      return IfStmt{e, b, Ptr<Body>::new()};
+    }
+
+    func parse_iflet(self): IfLet{
+      self.pop();
+      self.consume(TokenType::LET);
+      let ty = self.parse_type();
+      let args = List<ArgBind>::new();
+      if(self.is(TokenType::LPAREN)){
+        self.consume(TokenType::LPAREN);
+        args.add(self.parse_bind());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          args.add(self.parse_bind());
+        }
+        self.consume(TokenType::RPAREN);
+      }
+      self.consume(TokenType::EQ);
+      self.consume(TokenType::LPAREN);
+      let rhs = self.parse_expr();
+      self.consume(TokenType::RPAREN);
+      let then = self.parse_body();
+      let els = Ptr<Body>::new();
+      if(self.is(TokenType::ELSE)){
+          self.pop();
+          els = Ptr::new(self.parse_body());
+      }
+      return IfLet{ty, args, rhs, Box::new(then), els};
+    }
     
     func parse_stmt(self): Stmt{
       let id = self.node();
-      if(self.is(TokenType::LBRACE)){
-        return Stmt::Block{.id, self.parse_block()};
+      /*if(self.is(TokenType::LBRACE)){
+        return Expr::Block{.id, Box::new(self.parse_block())};
       }
-      else if(self.is(TokenType::LET)){
+      if(self.is(TokenType::IF, TokenType::LET)){
+        return self.parse_iflet();
+      }
+      if(self.is(TokenType::IF)){
+        return self.parse_if();
+      }*/
+      if(self.is(TokenType::LET)){
         let vd = self.var();
         self.consume(TokenType::SEMI);
         return Stmt::Var{.id, vd};
@@ -592,45 +653,8 @@ impl Parser{
         self.consume(TokenType::LPAREN);
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
-        let b = self.parse_stmt();
+        let b = self.parse_body();
         return Stmt::While{.id, e, Box::new(b)};
-      }else if(self.is(TokenType::IF, TokenType::LET)){
-        self.pop();
-        self.consume(TokenType::LET);
-        let ty = self.parse_type();
-        let args = List<ArgBind>::new();
-        if(self.is(TokenType::LPAREN)){
-          self.consume(TokenType::LPAREN);
-          args.add(self.parse_bind());
-          while(self.is(TokenType::COMMA)){
-            self.pop();
-            args.add(self.parse_bind());
-          }
-          self.consume(TokenType::RPAREN);
-        }
-        self.consume(TokenType::EQ);
-        self.consume(TokenType::LPAREN);
-        let rhs = self.parse_expr();
-        self.consume(TokenType::RPAREN);
-        let then = self.parse_stmt();
-        let els = Ptr<Stmt>::new();
-        if(self.is(TokenType::ELSE)){
-            self.pop();
-            els = Ptr::new(self.parse_stmt());
-        }
-        return Stmt::IfLet{.id, IfLet{ty, args, rhs, Box::new(then), els}};
-      }else if(self.is(TokenType::IF)){
-        self.pop();
-        self.consume(TokenType::LPAREN);
-        let e = self.parse_expr();
-        self.consume(TokenType::RPAREN);
-        let b = Box::new(self.parse_stmt());
-        if(self.is(TokenType::ELSE)){
-          self.pop();
-          let els = self.parse_stmt();
-          return Stmt::If{.id, IfStmt{e, b, Ptr::new(els)}};
-        }
-        return Stmt::If{.id, IfStmt{e, b, Ptr<Stmt>::new()}};
       }else if(self.is(TokenType::FOR)){
         return self.parse_for(id);
       }else if(self.is(TokenType::CONTINUE)){
@@ -643,7 +667,9 @@ impl Parser{
         return Stmt::Break{.id};
       }else{
         let e = self.parse_expr();
-        self.consume(TokenType::SEMI);
+        if(!e.is_body()){
+          self.consume(TokenType::SEMI);
+        }
         return Stmt::Expr{.id, e};
       }
     }
@@ -665,9 +691,10 @@ impl Parser{
       self.consume(TokenType::SEMI);
       let u = self.exprList(TokenType::RPAREN);
       self.consume(TokenType::RPAREN);
-      let b = self.parse_stmt();
+      let b = self.parse_body();
       return Stmt::For{.id, ForStmt{v, e, u, Box::new(b)}};
     }
+
     func parse_for_each(self, id: Node): Stmt{
       self.consume(TokenType::FOR);
       let name = self.popv();
@@ -746,7 +773,7 @@ impl Parser{
     if(self.is(tt)) return arr;
     arr.add(self.parse_expr());
     while(self.is(TokenType::COMMA)){
-      self.pop();
+      self.consume(TokenType::COMMA);
       arr.add(self.parse_expr());
     }
     return arr;
@@ -802,7 +829,7 @@ impl Parser{
     }
     let dot = false; 
     if(self.is(TokenType::DOT)){
-      self.pop();
+      self.consume(TokenType::DOT);
       dot = true;
     }
     let e = self.parse_expr();
@@ -848,19 +875,28 @@ impl Parser{
     if(self.is(TokenType::MATCH)){
       return self.parse_match();
     }
+    if(self.is(TokenType::LBRACE)){
+      return Expr::Block{.n, Box::new(self.parse_block())};
+    }
+    if(self.is(TokenType::IF, TokenType::LET)){
+      return Expr::IfLet{.n, Box::new(self.parse_iflet())};
+    }
+    if(self.is(TokenType::IF)){
+      return Expr::If{.n, Box::new(self.parse_if())};
+    }
     if(isLit(self.peek())){
       return self.parseLit();
     }else if(self.is(TokenType::LPAREN)){
-        self.pop();
+        self.consume(TokenType::LPAREN);
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
         return Expr::Par{.n, Box::new(e)};
     }else if(self.is(TokenType::LBRACKET)){
-        self.pop();
+        self.consume(TokenType::LBRACKET);
         let arr = self.exprList(TokenType::SEMI);
         let sz = Option<i32>::None;
         if(self.is(TokenType::SEMI)){
-            self.pop();
+            self.consume(TokenType::SEMI);
             let s = self.consume(TokenType::INTEGER_LIT);
             sz = Option::new(i32::parse(s.value.str()));
         }
@@ -876,7 +912,7 @@ impl Parser{
       if(self.is(TokenType::LPAREN)){
         return self.call(nm);
       }else if(self.is(TokenType::COLON2)){
-        self.pop();
+        self.consume(TokenType::COLON2);
         let ty = self.parse_type();
         let ty_name = ty.name().clone();
         if(self.is(TokenType::LPAREN)){
@@ -936,7 +972,7 @@ impl Parser{
     if(!self.is(TokenType::RBRACE)){
       args.add(self.entry());
       while(self.is(TokenType::COMMA)){
-        self.pop();
+        self.consume(TokenType::COMMA);
         args.add(self.entry());
       }
     }
@@ -953,7 +989,7 @@ impl Parser{
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
       if(self.is(TokenType::DOT)){
-        self.pop();
+        self.consume(TokenType::DOT);
         let nm = self.name();
         if(self.is(TokenType::LPAREN)){
           res = self.call(res, nm, false);
@@ -962,11 +998,11 @@ impl Parser{
           res = Expr::Access{.n, Box::new(res), nm}; 
         }
       }else{
-          self.pop();
+          self.consume(TokenType::LBRACKET);
           let idx = self.parse_expr();
           let idx2 = Ptr<Expr>::new();
           if(self.is(TokenType::DOTDOT)){
-              self.pop();
+              self.consume(TokenType::DOTDOT);
               idx2 = Ptr::new(self.parse_expr());
           }
           self.consume(TokenType::RBRACKET);
@@ -981,12 +1017,12 @@ impl Parser{
     let e = self.prim2(true);
     let n = self.node();
     if(self.is(TokenType::AS)){
-      self.pop();
+      self.consume(TokenType::AS);
       let t = self.parse_type();
       e = Expr::As{.n, Box::new(e), t};
     }
     if(self.is(TokenType::IS)){
-      self.pop();
+      self.consume(TokenType::IS);
       let rhs = self.prim2(true);
       e = Expr::Is{.n,Box::new(e), Box::new(rhs)};
     }

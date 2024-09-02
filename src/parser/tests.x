@@ -193,8 +193,10 @@ func handle_tests(cmd: CmdArgs*): bool{
         cmd.consume();
         let path = cmd.get();
         let parser = Parser::from_path(path);
-        print("parse done {}\n", parser.path);
+        let unit = parser.parse_unit();
+        print("parse done {}\nunit={}\n", parser.path, unit);
         parser.drop();
+        unit.drop();
         return true;
     }else if(cmd.is("r")){
         //resolver test

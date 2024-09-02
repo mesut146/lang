@@ -266,16 +266,15 @@ impl Debug for FunctionType{
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
-    if let Stmt::Block(b*)=(self){
-      b.debug(f);
-    }
-    else if let Stmt::Var(ve*)=(self){
+    if let Stmt::Var(ve*)=(self){
       f.print("let ");
       ve.debug(f);
       f.print(";");
     }else if let Stmt::Expr(e*) =(self){
       e.debug(f);
-      f.print(";");
+      if(!e.is_body()){
+        f.print(";");
+      }
     }else if let Stmt::Ret(e*) =(self){
       f.print("return");
       if(e.is_some()){
@@ -289,33 +288,7 @@ impl Debug for Stmt{
      f.print(")");
      b.get().debug(f);
     }
-    else if let Stmt::If(is*)=(self){
-     f.print("if(");
-     is.cond.debug(f);
-     f.print(")");
-     if(!(is.then.get() is Stmt::Block)){
-       f.print(" ");
-     }
-     is.then.get().debug(f);
-     if(is.else_stmt.is_some()){
-       f.print("\nelse ");
-       let els = is.else_stmt.get();
-       els.debug(f);
-     }
-    }else if let Stmt::IfLet(il*)=(self){
-      f.print("if let ");
-      il.type.debug(f);
-      f.print("(");
-      join(f, &il.args, ", ");
-      f.print(") = (");
-      il.rhs.debug(f);
-      f.print(")");
-      il.then.get().debug(f);
-      if(il.else_stmt.is_some()){
-        f.print("else ");
-        il.else_stmt.get().debug(f);
-      }
-    }else if let Stmt::For(fs*)=(self){
+    else if let Stmt::For(fs*)=(self){
       f.print("for(");
       if(fs.var_decl.is_some()){
         fs.var_decl.get().debug(f);
@@ -341,6 +314,22 @@ impl Debug for Stmt{
     }
     else{
       panic("Stmt::debug");
+    }
+  }
+}
+
+impl Debug for Body{
+  func debug(self, f: Fmt*){
+    if let Body::Block(b*)=(self){
+      b.debug(f);
+    }else if let Body::Stmt(b*)=(self){
+      b.debug(f);
+    }else if let Body::If(b*)=(self){
+      b.debug(f);
+    }else if let Body::IfLet(b*)=(self){
+      b.debug(f);
+    }else{
+      panic("");
     }
   }
 }
@@ -471,9 +460,49 @@ impl Debug for Expr{
         aa.idx2.get().debug(f);
       }
       f.print("]");
+    }else if let Expr::Block(b*)=(self){
+      b.get().debug(f);
     }
-    else{
-     panic("Expr::debug");
+    else if let Expr::If(is*)=(self){
+      is.get().debug(f);
+    }else if let Expr::IfLet(il*)=(self){
+      il.get().debug(f);
+    }else{
+      panic("Expr::debug");
+    }
+  }
+}
+
+impl Debug for IfStmt{
+  func debug(self, f: Fmt*){
+    f.print("if(");
+    self.cond.debug(f);
+    f.print(")");
+    if(!(self.then.get() is Body::Block)){
+      f.print(" ");
+    }
+    self.then.get().debug(f);
+    if(self.else_stmt.is_some()){
+      f.print("\nelse ");
+      let els = self.else_stmt.get();
+      els.debug(f);
+    }
+  }
+}
+
+impl Debug for IfLet{
+  func debug(self, f: Fmt*){
+    f.print("if let ");
+    self.type.debug(f);
+    f.print("(");
+    join(f, &self.args, ", ");
+    f.print(") = (");
+    self.rhs.debug(f);
+    f.print(")");
+    self.then.get().debug(f);
+    if(self.else_stmt.is_some()){
+      f.print("else ");
+      self.else_stmt.get().debug(f);
     }
   }
 }

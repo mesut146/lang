@@ -142,7 +142,7 @@ func can_fit_into(val: str, target: Type*): bool{
                 }
             }
         }
-        return res;
+        return res <= 0;
     }
     panic("can_fit_into todo {} -> {}", val, target);
 }
@@ -323,6 +323,9 @@ impl Exit{
     func new(kind: ExitType): Exit{
         return Exit{kind: kind, if_kind: Ptr<Exit>::new(), else_kind: Ptr<Exit>::new()};
     }
+    func is_none(self): bool{
+        return self.kind is ExitType::NONE;
+    }
     func is_unreachable(self): bool{
         if (self.kind is ExitType::UNREACHABLE) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_unreachable() && self.else_kind.get().is_unreachable();
@@ -353,7 +356,34 @@ impl Exit{
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
         return false;
     }
+
+    func get_exit_type(body: Body*): Exit{
+        if let Body::Block(b*)=(body){
+            return get_exit_type(b);
+        }
+        else if let Body::If(val*)=(body){
+            return get_exit_type(val);
+        }
+        else if let Body::IfLet(val*)=(body){
+            return get_exit_type(val);
+        }
+        if let Body::Stmt(val*)=(body){
+            return get_exit_type(val);
+        }
+        else{
+            panic("{}", body);
+        }
+    }
+
     func get_exit_type(block: Block*): Exit{
+        if(block.return_expr.is_some()){
+            let res = get_exit_type(block.return_expr.get());
+            if(!res.is_none()){
+                return res;
+            }
+            res.drop();
+            return Exit::new(ExitType::BLOCK_RETURN);
+        }
         if(block.list.empty()){
             return Exit::new(ExitType::NONE);
         }
@@ -361,50 +391,82 @@ impl Exit{
         return get_exit_type(last);
     }
 
+    func get_exit_type(node: IfStmt*): Exit{
+        let res = Exit::new(ExitType::NONE);
+        res.if_kind = Ptr::new(get_exit_type(node.then.get()));
+        if(node.else_stmt.is_some()){
+            res.else_kind = Ptr::new(get_exit_type(node.else_stmt.get()));
+        }
+        return res;
+    }
+
+    func get_exit_type(node: IfLet*): Exit{
+        let res = Exit::new(ExitType::NONE);
+        res.if_kind = Ptr::new(get_exit_type(node.then.get()));
+        if(node.else_stmt.is_some()){
+            res.else_kind = Ptr::new(get_exit_type(node.else_stmt.get()));
+        }
+        return res;
+    }
+
+    func get_exit_type(expr: Expr*): Exit{
+        if let Expr::Call(call*)=(expr){
+            if(call.name.eq("panic") && call.scope.is_none()){
+                return Exit::new(ExitType::PANIC);
+            }
+            if(call.name.eq("exit") && call.scope.is_none()){
+                return Exit::new(ExitType::EXIT);
+            }
+            if(Resolver::is_call(call, "std", "unreachable")){
+                return Exit::new(ExitType::UNREACHABLE);
+            }
+        }
+        if let Expr::Block(block0*)=(expr){
+            let block = block0.get();
+            return get_exit_type(block);
+        }
+        if let Expr::If(is0*)=(expr){
+            let is = is0.get();
+            return get_exit_type(is);
+        }
+        if let Expr::IfLet(iflet0*)=(expr){
+            let iflet = iflet0.get();
+            return get_exit_type(iflet);
+        }
+        return Exit::new(ExitType::NONE);
+    }
+
     func get_exit_type(stmt: Stmt*): Exit{
         if(stmt is Stmt::Ret) return Exit::new(ExitType::RETURN);
         if(stmt is Stmt::Break) return Exit::new(ExitType::BREAK);
         if(stmt is Stmt::Continue) return Exit::new(ExitType::CONTINE);
         if let Stmt::Expr(expr*)=(stmt){
-            if let Expr::Call(call*)=(expr){
-                if(call.name.eq("panic") && call.scope.is_none()){
-                    return Exit::new(ExitType::PANIC);
-                }
-                if(call.name.eq("exit") && call.scope.is_none()){
-                    return Exit::new(ExitType::EXIT);
-                }
-                if(Resolver::is_call(call, "std", "unreachable")){
-                    return Exit::new(ExitType::UNREACHABLE);
-                }
-            }
-            return Exit::new(ExitType::NONE);
-        }
-        if let Stmt::Block(block*)=(stmt){
-            if(block.return_expr.is_some()){
-                return Exit::new(ExitType::BLOCK_RETURN);
-            }
-            if(block.list.empty()){
-                return Exit::new(ExitType::NONE);
-            }
-            let last = block.list.last();
-            return get_exit_type(last);
-        }
-        if let Stmt::If(is*)=(stmt){
-            let res = Exit::new(ExitType::NONE);
-            res.if_kind = Ptr::new(get_exit_type(is.then.get()));
-            if(is.else_stmt.is_some()){
-                res.else_kind = Ptr::new(get_exit_type(is.else_stmt.get()));
-            }
-            return res;
-        }
-        if let Stmt::IfLet(iflet*)=(stmt){
-            let res = Exit::new(ExitType::NONE);
-            res.if_kind = Ptr::new(get_exit_type(iflet.then.get()));
-            if(iflet.else_stmt.is_some()){
-                res.else_kind = Ptr::new(get_exit_type(iflet.else_stmt.get()));
-            }
-            return res;
+            return get_exit_type(expr);
         }
         return Exit::new(ExitType::NONE);
     }
 }
+
+func get_line(buf: str, line: i32): str{
+    assert(line >= 1);
+    let cur_line = 1;
+    let pos = 0;
+    while(pos < buf.len()){
+      if(cur_line == line){
+        let end = buf.indexOf("\n", pos);
+        if(end == -1){
+          end = buf.len() as i32;
+        }
+        return buf.substr(pos, end);
+      }else{
+        let i = buf.indexOf("\n", pos);
+        if(i == -1){
+    //todo
+        }else{
+          cur_line += 1;
+          pos = i + 1;
+        }
+      }
+    }
+    panic("not possible");
+  }

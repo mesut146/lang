@@ -32,7 +32,7 @@ impl OwnVisitor{
     func do_move(self, expr: Expr*){
         self.own.do_move(expr);
     }
-    func begin(self, node: Stmt*): i32{
+    func begin(self, node: Body*): i32{
         let prev = self.own.get_scope().id;
         let id = self.own.add_scope(ScopeType::ELSE, node);
         self.scopes.add(id);
@@ -40,17 +40,24 @@ impl OwnVisitor{
         self.own.set_current(prev);
         return id;
     }
-    func visit(self, node: Stmt*){
-        if let Stmt::Block(b*)=(node){
+    func visit(self, node: Body*){
+        if let Body::Block(b*)=(node){
             self.visit_block(b);
-        }else if let Stmt::Var(ve*)=(node){
+        }else if let Body::Stmt(b*)=(node){
+            self.visit(b);
+        }else if let Body::If(b*)=(node){
+            
+        }else if let Body::IfLet(b*)=(node){
+            
+        }else{
+            panic("");
+        }
+    }
+    func visit(self, node: Stmt*){
+        if let Stmt::Var(ve*)=(node){
             self.visit_var(ve);
         }else if let Stmt::Expr(expr*)=(node){
             self.visit_expr(expr);
-        }else if let Stmt::If(is*)=(node){
-            //todo
-        }else if let Stmt::IfLet(il*)=(node){
-            //todo
         }else{
             //panic("visit line: {} {}\n", node.line, node);
         }

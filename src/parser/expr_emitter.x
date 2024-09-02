@@ -35,7 +35,28 @@ impl Compiler{
     }
     func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
-      if let Expr::Par(e*)=(node){
+      if let Expr::If(is*)=(node){
+        let res = self.visit_if(is.get());
+        if(res.is_none()){
+          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+        }
+        return res.unwrap();
+      }
+      else if let Expr::IfLet(is*)=(node){
+        let res = self.visit_iflet(node.line, is.get());
+        if(res.is_none()){
+          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+        }
+        return res.unwrap();
+      }
+      else if let Expr::Block(b*)=(node){
+        let res = self.visit_block(b.get());
+        if(res.is_none()){
+          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+        }
+        return res.unwrap();
+      }
+      else if let Expr::Par(e*)=(node){
         return self.visit(e.get());
       }
       if let Expr::Obj(type*, args*)=(node){
@@ -294,9 +315,9 @@ impl Compiler{
 
     func makeFloat_one(type: Type*): Value*{
       if(type.eq("f32")){
-        return makeFloat(1.0);
+        return makeFloat(1.0) as Value*;
       }
-      return makeDouble(1.0);
+      return makeDouble(1.0) as Value*;
     }
   
     func visit_unary(self, op: String*, e: Expr*): Value*{
@@ -865,11 +886,11 @@ impl Compiler{
         if(node.suffix.is_some()){
           if(node.suffix.get().eq("f64")){
             let valf: f64 = f64::parse(node.val.str());
-            return makeDouble(valf);
+            return makeDouble(valf) as Value*;
           }
         }
         let valf: f32 = f32::parse(node.val.str());
-        return makeFloat(valf);
+        return makeFloat(valf) as Value*;
       }
       if(node.kind is LitKind::BOOL){
         if(node.val.eq("true")) return getTrue();

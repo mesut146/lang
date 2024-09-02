@@ -172,12 +172,10 @@ impl Decl{
   }
 }
 
-
 struct FieldDecl{
   name: String;
   type: Type;
 }
-
 
 struct Variant{
   name: String;
@@ -510,7 +508,7 @@ struct ForStmt{
   var_decl: Option<VarExpr>;
   cond: Option<Expr>;
   updaters: List<Expr>;
-  body: Box<Stmt>;
+  body: Box<Body>;
 }
 
 struct ForEach{
@@ -521,8 +519,8 @@ struct ForEach{
 
 struct IfStmt{
   cond: Expr;
-  then: Box<Stmt>;
-  else_stmt: Ptr<Stmt>;
+  then: Box<Body>;
+  else_stmt: Ptr<Body>;
 }
 
 struct ArgBind: Node{
@@ -533,18 +531,15 @@ struct IfLet{
   type: Type;
   args: List<ArgBind>;
   rhs: Expr;
-  then: Box<Stmt>;
-  else_stmt: Ptr<Stmt>;
+  then: Box<Body>;
+  else_stmt: Ptr<Body>;
 }
 
 enum Stmt: Node{
-    Block(x: Block),
     Var(ve: VarExpr),
     Expr(e: Expr),
     Ret(e: Option<Expr>),
-    While(cond: Expr, then: Box<Stmt>),
-    If(e: IfStmt),
-    IfLet(e: IfLet),
+    While(cond: Expr, then: Box<Body>),
     For(e: ForStmt),
     ForEach(e: ForEach),
     Continue,
@@ -554,6 +549,34 @@ enum Stmt: Node{
 impl Stmt{
   func print(self): String{
     return Fmt::str(self);
+  }
+}
+
+enum Body{
+  Block(val: Block),
+  Stmt(val: Stmt),
+  If(val: IfStmt),
+  IfLet(val: IfLet)
+}
+
+impl Body{
+  func line(self): i32{
+    if let Body::Block(b*) = (self){
+      return b.line;
+    }
+    else if let Body::If(is*) = (self){
+      return is.cond.line;
+    }
+    else if let Body::IfLet(il*) = (self){
+      return il.rhs.line;
+    }
+    else if let Body::Stmt(val*) = (self){
+      return val.line;
+    }
+    else{
+      panic("");
+    }
+    //std::unreachable();
   }
 }
 
@@ -642,8 +665,10 @@ enum Expr: Node{
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(val: ArrAccess),
-  MatchExpr(val: Box<Match>)
-  //Block(x: Box<Block>)
+  MatchExpr(val: Box<Match>),
+  Block(x: Box<Block>),
+  If(e: Box<IfStmt>),
+  IfLet(e: Box<IfLet>)
 }
 impl Expr{
   func print(self): String{
@@ -654,6 +679,13 @@ impl Expr{
       return cx;
     }
     panic("get_call {}", self);
+  }
+  func is_body(self): bool{
+    return self is Expr::Block || self is Expr::If || self is Expr::IfLet;
+  }
+  func into_stmt(*self): Stmt{
+    let id = *(self as Node*);
+    return Stmt::Expr{.id, self};
   }
 }
 

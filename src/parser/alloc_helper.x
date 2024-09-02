@@ -48,25 +48,63 @@ impl AllocHelper{
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
-  func visit(self, node: Block*){
+  func visit(self, node: Block*): Option<Value*>{
     for st in &node.list{
       self.visit(st);
     }
+    if(node.return_expr.is_some()){
+      return self.visit(node.return_expr.get());
+    }
+    return Option<Value*>::new();
+  }
+  func visit_body(self, body: Body*): Option<Value*>{
+    if let Body::Block(b*)=(body){
+      return self.visit(b);
+    }else if let Body::Stmt(b*)=(body){
+      self.visit(b);
+      return Option<Value*>::new();
+    }else if let Body::If(b*)=(body){
+      return self.visit_if(b);
+    }else if let Body::IfLet(b*)=(body){
+      return self.visit_iflet(b);
+    }else{
+      panic("");
+    }
+  }
+  func visit_if(self, node: IfStmt*): Option<Value*>{
+    self.visit(&node.cond);
+    self.visit_body(node.then.get());
+    if(node.else_stmt.is_some()){
+      self.visit_body(node.else_stmt.get());
+    }
+    return Option<Value*>::new();
+  }
+  func visit_iflet(self, node: IfLet*): Option<Value*>{
+    for arg in &node.args{
+      let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
+      let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
+      let name_c = arg.name.clone().cstr();
+      Value_setName(arg_ptr, name_c.ptr());
+      name_c.drop();
+      self.c.allocMap.add(arg.id, arg_ptr);
+    }
+    self.visit(&node.rhs);
+    self.visit_body(node.then.get());
+    if(node.else_stmt.is_some()){
+      self.visit_body(node.else_stmt.get());
+    }
+    return Option<Value*>::new();
   }
   func visit(self, node: Stmt*){
     if let Stmt::Var(ve*)=(node){
       self.visit(ve);
       return;
     }
-    if let Stmt::Block(bs*)=(node){
-      self.visit(bs);
-      return;
-    }
     if let Stmt::For(fs*)=(node){
       if(fs.var_decl.is_some()){
         self.visit(fs.var_decl.get());
       }
-      self.visit(fs.body.get());
+      self.visit_body(fs.body.get());
       return;
     }if let Stmt::ForEach(fe*)=(node){
       let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
@@ -75,31 +113,7 @@ impl AllocHelper{
     }
     if let Stmt::While(e*, b*)=(node){
       self.visit(e);
-      self.visit(b.get());
-      return;
-    }
-    if let Stmt::If(is*)=(node){
-      self.visit(&is.cond);
-      self.visit(is.then.get());
-      if(is.else_stmt.is_some()){
-        self.visit(is.else_stmt.get());
-      }
-      return;
-    }
-    if let Stmt::IfLet(is*)=(node){
-      for arg in &is.args{
-        let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
-        let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
-        let name_c = arg.name.clone().cstr();
-        Value_setName(arg_ptr, name_c.ptr());
-        name_c.drop();
-        self.c.allocMap.add(arg.id, arg_ptr);
-      }
-      self.visit(&is.rhs);
-      self.visit(is.then.get());
-      if(is.else_stmt.is_some()){
-        self.visit(is.else_stmt.get());
-      }
+      self.visit_body(b.get());
       return;
     }
     if let Stmt::Ret(e*)=(node){
@@ -151,7 +165,7 @@ impl AllocHelper{
       return res;
     }
     if(Resolver::is_call(call, "std", "print_type")){
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
       self.visit(info.unwrap_mc.get());
       let res = Option::new(self.alloc_ty(&rt.type, node));
@@ -159,7 +173,7 @@ impl AllocHelper{
       return res;
     }
     if(Resolver::is_call(call, "std", "env")){
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
       self.visit(info.unwrap_mc.get());
       let res = Option::new(self.alloc_ty(&rt.type, node));
@@ -167,30 +181,27 @@ impl AllocHelper{
       return res;
     }
     if(Resolver::is_print(call) || Resolver::is_panic(call)){
-      if(call.args.len() == 1){
-        //simple, no alloc
-      }
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let info = resolver.get_macro(node);
       self.visit(&info.block);
       return Option<Value*>::new();
     }
     if(Resolver::is_assert(call)){
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let info = resolver.get_macro(node);
       self.visit(&info.block);
       return Option<Value*>::new();
     }
     if(Resolver::is_format(call)){
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+      let info = resolver.get_macro(node);
       self.visit(&info.block);
       let str_ty = Type::new("String");
       let res = Option::new(self.alloc_ty(&str_ty, info.unwrap_mc.get()));
       str_ty.drop();
       return res;
     }
-    let rt = self.c.get_resolver().visit(node);
+    let rt = resolver.visit(node);
     if(rt.is_method()){
-      let rt_method = self.c.get_resolver().get_method(&rt);
-      let rval = RvalueHelper::need_alloc(call, rt_method.unwrap(), self.c.get_resolver());
+      let rt_method = resolver.get_method(&rt);
+      let rval = RvalueHelper::need_alloc(call, rt_method.unwrap(), resolver);
       if (rval.rvalue) {
           self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
       }
@@ -213,6 +224,15 @@ impl AllocHelper{
   
   func visit(self, node: Expr*): Option<Value*>{
     let res = Option<Value*>::new();
+    if let Expr::Block(blk*)=(node){
+      return self.visit(blk.get());
+    }
+    if let Expr::If(is*)=(node){
+      return self.visit_if(is.get());
+    }
+    if let Expr::IfLet(is*)=(node){
+      return self.visit_iflet(is.get());
+    }
     if let Expr::Type(ty*)=(node){
       if(ty.is_simple()){
         let smp = ty.as_simple();

@@ -1,4 +1,5 @@
 import parser/token
+import parser/utils
 import std/map
 import std/libc
 import std/io
@@ -69,29 +70,6 @@ impl Lexer{
       return self.line;
     }
     return self.single_line;
-  }
-
-  func get_line(buf: str, line: i32): str{
-    let cur_line = 1;
-    let pos = 0;
-    while(pos < buf.len()){
-      if(cur_line == line){
-        let end = buf.indexOf("\n", pos);
-        if(end == -1){
-          end = buf.len() as i32;
-        }
-        return buf.substr(pos, end);
-      }else{
-        let i = buf.indexOf("\n", pos);
-        if(i == -1){
-    
-        }else{
-          cur_line += 1;
-          pos = i + 1;
-        }
-      }
-    }
-    panic("not possible");
   }
 
   func err(self, msg: str){

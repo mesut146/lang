@@ -23,7 +23,7 @@ impl<T> Iterator<T*> for IterSlice<T>{
       self.pos += 1;
       return Option::new(&self.slice[idx]);
     }
-    return Option<T>::new();
+    return Option<T*>::new();
   }
 }
 

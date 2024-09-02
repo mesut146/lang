@@ -214,12 +214,22 @@ impl AstCopier{
         let id = self.node(node as Node*);
         return ArgBind{.id, node.name.clone(), node.is_ptr};
     }
+    func visit(self, node: Body*): Body{
+        if let Body::Block(b*)=(node){
+            return Body::Block{self.visit(b)};
+        }else if let Body::Stmt(b*)=(node){
+            return Body::Stmt{self.visit(b)};
+        }else if let Body::If(b*)=(node){
+            return Body::If{self.visit(b)};
+        }else if let Body::IfLet(b*)=(node){
+            return Body::IfLet{self.visit(b)};
+        }else{
+            panic("");
+        }     
+    }
 
     func visit(self, node: Stmt*): Stmt{
         let id = self.node(node as Node*);
-        if let Stmt::Block(b*)=(node){
-            return Stmt::Block{.id, self.visit(b)};
-        }
         if let Stmt::Var(ve*)=(node){
             return Stmt::Var{.id, self.visit(ve)};
         }
@@ -231,12 +241,6 @@ impl AstCopier{
         }
         if let Stmt::While(e*, body*)=(node){
             return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)};
-        }
-        if let Stmt::If(is*)=(node){
-            return Stmt::If{.id, IfStmt{cond: self.visit(&is.cond), then: self.visit_box(&is.then), else_stmt: self.visit_ptr(&is.else_stmt)}};
-        }
-        if let Stmt::IfLet(is*)=(node){
-            return Stmt::IfLet{.id, IfLet{type: self.visit(&is.type), args: self.visit_list(&is.args), rhs: self.visit(&is.rhs), then: self.visit_box(&is.then), else_stmt: self.visit_ptr(&is.else_stmt)}};
         }
         if let Stmt::For(fs*)=(node){
             return Stmt::For{.id, ForStmt{var_decl: self.visit_opt(&fs.var_decl), cond: self.visit_opt(&fs.cond), updaters: self.visit_list(&fs.updaters), body: self.visit_box(&fs.body)}};
@@ -254,8 +258,37 @@ impl AstCopier{
         panic("{}", msg.str());
     }
 
+    func visit(self, is: IfStmt*): IfStmt{
+        return IfStmt{
+            cond: self.visit(&is.cond),
+            then: self.visit_box(&is.then),
+            else_stmt: self.visit_ptr(&is.else_stmt)
+        };
+    }
+
+    func visit(self, is: IfLet*): IfLet{
+        return IfLet{
+            type: self.visit(&is.type),
+            args: self.visit_list(&is.args),
+            rhs: self.visit(&is.rhs),
+            then: self.visit_box(&is.then),
+            else_stmt: self.visit_ptr(&is.else_stmt)
+        };
+    }
+
     func visit(self, node: Expr*): Expr{
         let id = self.node(node as Node*);
+        if let Expr::If(is0*)=(node){
+            let is = is0.get();
+            return Expr::If{.id, Box::new(self.visit(is))};
+        }
+        if let Expr::IfLet(is0*)=(node){
+            let is = is0.get();
+            return Expr::IfLet{.id, Box::new(self.visit(is))};
+        }
+        if let Expr::Block(b*)=(node){
+            return Expr::Block{.id, Box::new(self.visit(b.get()))};
+        }
         if let Expr::Lit(lit*)=(node){
             return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}};
         }

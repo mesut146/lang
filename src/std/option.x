@@ -47,6 +47,7 @@ impl<T> Option<T>{
   }
   
   func set(self, val: T){
+    //todo return Option{ old val }
     if(self.is_some()){
       let old = ptr::deref(self.get());
       Drop::drop(old);
@@ -64,6 +65,7 @@ impl<T> Option<T>{
     return self.unwrap();
   }
 
+  //clears value, sets this to None
   func reset(self){
     if(self.is_some()){
       let old = ptr::deref(self.get());
