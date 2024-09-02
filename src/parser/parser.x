@@ -525,7 +525,17 @@ impl Parser{
       self.consume(TokenType::LBRACE);
       let res = Block::new(self.line(), 0);
       while(!self.is(TokenType::RBRACE)){
-        if(self.is_stmt()){
+        /*if(self.is(TokenType::LBRACE) || self.is(TokenType::IF, TokenType::LET) || self.is(TokenType::IF)){
+          let expr = self.parse_expr();
+          if(self.is(TokenType::RBRACE)){
+            res.return_expr.set(expr);
+            break;
+          }else{
+            let id = *(expr as Node*);
+            res.list.add(Stmt::Expr{.id, expr});
+          }
+        }
+        else */if(self.is_stmt()){
           res.list.add(self.parse_stmt());
         }else{
           let id = self.node();
@@ -539,6 +549,14 @@ impl Parser{
           }
         }
       }
+      /*if(res.return_expr.is_none() && !res.list.empty()){
+        let last = res.list.last();
+        if let Stmt::Expr(expr*) = last{
+          if(expr.is_body()){
+            //todo move last to ret expr
+          }
+        }
+      }*/
       res.end_line = self.line();
       self.consume(TokenType::RBRACE);
       return res;
@@ -570,16 +588,17 @@ impl Parser{
     }
 
     func parse_body(self): Body{
+      let id = self.node();
       if(self.is(TokenType::LBRACE)){
-        return Body::Block{self.parse_block()};
+        return Body::Block{.id, self.parse_block()};
       }
       if(self.is(TokenType::IF, TokenType::LET)){
-        return Body::IfLet{self.parse_iflet()};
+        return Body::IfLet{.id, self.parse_iflet()};
       }
       if(self.is(TokenType::IF)){
-        return Body::If{self.parse_if()};
+        return Body::If{.id, self.parse_if()};
       }
-      return Body::Stmt{self.parse_stmt()};
+      return Body::Stmt{.id, self.parse_stmt()};
     }
 
     func parse_if(self): IfStmt{

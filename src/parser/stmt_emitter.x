@@ -116,15 +116,15 @@ impl Compiler{
       let then_name = CStr::new(format("if_then_{}", line));
       let else_name = CStr::new(format("if_else_{}", line));
       let next_name = CStr::new(format("if_next_{}", line));
-      let then = create_bb_named(then_name.ptr());
+      let thenbb = create_bb_named(then_name.ptr());
       let elsebb = create_bb_named(else_name.ptr());
       let next = create_bb_named(next_name.ptr());
-      CreateCondBr(cond, then, elsebb);
-      self.set_and_insert(then);
+      CreateCondBr(cond, thenbb, elsebb);
+      self.set_and_insert(thenbb);
       self.llvm.di.get().new_scope(node.then.get().line());
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
-      self.visit_body(node.then.get());
+      let then_val = self.visit_body(node.then.get());
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
@@ -137,12 +137,13 @@ impl Compiler{
       }
       self.set_and_insert(elsebb);
       let else_jump = false;
+      let else_val = Option<Value*>::new();
       if(node.else_stmt.is_some()){
         self.llvm.di.get().new_scope(node.else_stmt.get().line());
         //this will restore if, bc we did fake end_scope
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.visit_body(node.else_stmt.get());
+        else_val = self.visit_body(node.else_stmt.get());
         self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -157,15 +158,33 @@ impl Compiler{
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
       }
+      let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
         SetInsertPoint(next);
         self.add_bb(next);
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          let phi_type = self.mapType(&then_rt.type);
+          if(is_struct(&then_rt.type)){
+            phi_type = getPointerTo(phi_type) as llvm_Type*;
+          }
+          let phi = CreatePHI(phi_type, 2);
+          if(is_struct(&then_rt.type)){
+            phi_addIncoming(phi, then_val.unwrap(), thenbb);
+            phi_addIncoming(phi, else_val.unwrap(), elsebb);
+          }else{
+            phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), thenbb);
+            phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), elsebb);
+          }
+          res = Option::new(phi as Value*);
+        }
+        then_rt.drop();
       }
       exit_then.drop();
       then_name.drop();
       else_name.drop();
       next_name.drop();
-      return Option<Value*>::new();
+      return res;
     }
   
     func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
@@ -362,16 +381,26 @@ impl Compiler{
         self.own.get().add_var(f, ptr);
       }
     }
+
     func visit_block(self, node: Block*): Option<Value*>{
       for(let i = 0;i < node.list.len();++i){
         let st = node.list.get_ptr(i);
         self.visit(st);
       }
       if(node.return_expr.is_some()){
-        return Option<Value*>::new(self.visit(node.return_expr.get()));
+        let val = self.visit(node.return_expr.get());
+        let rt = self.get_resolver().visit(node.return_expr.get());
+        if(is_struct(&rt.type)){
+
+        }else{
+          val = self.loadPrim(val, &rt.type);
+        }
+        rt.drop();
+        return Option<Value*>::new(val);
       }
       return Option<Value*>::new();
     }
+
     func visit_ret(self, node: Stmt*, val: Option<Expr>*){
       if(val.is_none()){
         self.own.get().do_return(node.line);

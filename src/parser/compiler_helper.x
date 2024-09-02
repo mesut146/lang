@@ -795,6 +795,13 @@ impl Compiler{
     return res;
   }
 
+  func loadPrim(self, val: Value*, type: Type*): Value*{
+    let ty = Value_getType(val);
+    if(!isPointerTy(ty)) return val;
+    let res = CreateLoad(self.mapType(type), val);//local var
+    return res;
+  }
+
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
     self.setField(expr, type, trg, Option<Expr*>::new());
   }

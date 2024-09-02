@@ -20,6 +20,18 @@ func body(node: Stmt*, f: Fmt*){
   lines.drop();
 }
 
+func body(node: Expr*, f: Fmt*){
+  let str = Fmt::str(node); 
+  let lines: List<str> = str.split("\n");
+  for(let j = 0;j < lines.len();++j){
+    f.print("  ");
+    f.print(lines.get_ptr(j));
+    f.print("\n");
+  }
+  str.drop();
+  lines.drop();
+}
+
 impl Debug for Unit{
   func debug(self, f: Fmt*){
     join(f, &self.imports, "\n");
@@ -348,6 +360,11 @@ impl Debug for Block{
     f.print("{\n");
     for(let i = 0;i < self.list.len();++i){
        body(self.list.get_ptr(i), f);
+    }
+    if(self.return_expr.is_some()){
+      //todo body(self.return_expr.get(), f);
+      self.return_expr.get().debug(f);
+      f.print("\n");
     }
     f.print("}");
   }

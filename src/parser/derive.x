@@ -115,7 +115,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                 type: vt,
                 args: List<ArgBind>::new(),
                 rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{/*.block_id,*/ then}),
+                then: Box::new(Body::Block{.block_id, then}),
                 else_stmt: Ptr<Body>::new()
             };
             for fd in &ev.fields{
@@ -203,7 +203,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 type: vt,
                 args: List<ArgBind>::new(),
                 rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{/*.block_id,*/ then}),
+                then: Box::new(Body::Block{.block_id, then}),
                 else_stmt: Ptr<Body>::new()
             };
             for(let j = 0;j < ev.fields.len();++j){
@@ -284,7 +284,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 type: vt,
                 args: List<ArgBind>::new(),
                 rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{/*.block_id,*/ then}),
+                then: Box::new(Body::Block{.block_id, then}),
                 else_stmt: Ptr<Body>::new()
             };
             for(let j = 0;j < ev.fields.len();++j){

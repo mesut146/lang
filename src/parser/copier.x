@@ -215,14 +215,15 @@ impl AstCopier{
         return ArgBind{.id, node.name.clone(), node.is_ptr};
     }
     func visit(self, node: Body*): Body{
+        let id = self.node(node as Node*);
         if let Body::Block(b*)=(node){
-            return Body::Block{self.visit(b)};
+            return Body::Block{.id, self.visit(b)};
         }else if let Body::Stmt(b*)=(node){
-            return Body::Stmt{self.visit(b)};
+            return Body::Stmt{.id, self.visit(b)};
         }else if let Body::If(b*)=(node){
-            return Body::If{self.visit(b)};
+            return Body::If{.id, self.visit(b)};
         }else if let Body::IfLet(b*)=(node){
-            return Body::IfLet{self.visit(b)};
+            return Body::IfLet{.id, self.visit(b)};
         }else{
             panic("");
         }     

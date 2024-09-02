@@ -552,7 +552,7 @@ impl Stmt{
   }
 }
 
-enum Body{
+enum Body: Node{
   Block(val: Block),
   Stmt(val: Stmt),
   If(val: IfStmt),

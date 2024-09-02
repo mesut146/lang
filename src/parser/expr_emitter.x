@@ -15,24 +15,13 @@ import std/stack
 
 //expr------------------------------------------------------
 impl Compiler{
-    func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
-      if(self.globals.contains(name)){
-        return *self.globals.get_ptr(name).unwrap();
-      }
-      let res = self.NamedValues.get_ptr(name);
-      if(res.is_none()){
-        self.get_resolver().err(node, format("internal err, no named value"));
-      }
-      if(check){
-        self.own.get().check(node);
-      }
-      return *res.unwrap();
-    }
+
     func visit(self, node: Expr*): Value*{
       let res = self.visit_expr(node);
       //self.own.get().add_obj(node);
       return res;
     }
+
     func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
       if let Expr::If(is*)=(node){
@@ -102,6 +91,20 @@ impl Compiler{
         return self.visit_as(lhs.get(), rhs);
       }
       panic("expr {}", node);
+    }
+
+    func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
+      if(self.globals.contains(name)){
+        return *self.globals.get_ptr(name).unwrap();
+      }
+      let res = self.NamedValues.get_ptr(name);
+      if(res.is_none()){
+        self.get_resolver().err(node, format("internal err, no named value"));
+      }
+      if(check){
+        self.own.get().check(node);
+      }
+      return *res.unwrap();
     }
 
     func visit_ref(self, node: Expr*, expr: Expr*): Value*{

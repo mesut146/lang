@@ -602,7 +602,7 @@ impl Resolver{
       print("{}:{} {}\n", self.curMethod.unwrap().path, line, str);
       str.drop();
     }else{
-      print("{}:{}", self.unit.path, line);
+      print("{}:{}\n", self.unit.path, line);
     }
     //get_line();
     print("{}\n", msg);
@@ -2293,18 +2293,24 @@ impl Resolver{
   }
 
   func visit_body(self, node: Body*): RType{
+    if(self.cache.contains(&node.id)){
+      return self.cache.get_ptr(&node.id).unwrap().clone();
+    }
+    let res = Option<RType>::new();
     if let Body::Block(b*)=(node){
-      return self.visit_block(b);
+      res = Option::new(self.visit_block(b));
     }else if let Body::Stmt(b*)=(node){
       self.visit(b);
-      return RType::new("void");
+      res = Option::new(RType::new("void"));
     }else if let Body::If(b*)=(node){
-      return self.visit_if(b);
+      res = Option::new(self.visit_if(b));
     }else if let Body::IfLet(b*)=(node){
-      return self.visit_iflet(b);
+      res = Option::new(self.visit_iflet(b));
     }else{
       panic("");
     }
+    self.cache.add(node.id, res.get().clone());
+    return res.unwrap();
   }
 
   func visit_for_each(self, node: Stmt*, fe: ForEach*){
