@@ -164,7 +164,7 @@ impl str{
     func substr(self, start: i64, end: i64): str{
       if(start < 0) panic("start index out of bounds {}", start);
       if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
-      if(start >= end) panic("range is invalid {}, {}", start, end);
+      if(start > end) panic("range is invalid {}, {}", start, end);
       return str{self.buf[start..end]};
     }
     

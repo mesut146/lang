@@ -133,6 +133,7 @@ extern{
     func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
+    func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;

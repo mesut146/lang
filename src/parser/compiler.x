@@ -505,7 +505,8 @@ impl Compiler{
     self.enter_frame();
     self.storeParams(m,f);
 
-    self.visit_block(m.body.get());
+    let blk_val = self.visit_block(m.body.get());
+    dbg(m.name.eq("handle"), 51);
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit() && m.type.is_void()){
       self.own.get().do_return(m.body.get().end_line);
@@ -515,6 +516,9 @@ impl Compiler{
       }else{
         CreateRetVoid();
       }
+    }else if(blk_val.is_some() && !m.type.is_void()){
+      //setField(blk_val.unwrap(), &m.type, );
+      self.visit_ret(blk_val.unwrap());
     }
     exit.drop();
     self.llvm.di.get().finalize();

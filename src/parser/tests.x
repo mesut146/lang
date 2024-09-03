@@ -191,6 +191,8 @@ func handle_tests(cmd: CmdArgs*): bool{
     }else if(cmd.is("p")){
         //parse test
         cmd.consume();
+        print_cst = cmd.consume_any("-cst");
+        print("cst={}\n", print_cst);
         let path = cmd.get();
         let parser = Parser::from_path(path);
         let unit = parser.parse_unit();

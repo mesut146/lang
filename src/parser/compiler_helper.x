@@ -790,12 +790,14 @@ impl Compiler{
     let ty = Value_getType(val);
     if(!isPointerTy(ty)) return val;
     let type = self.getType(expr);
+    assert(is_loadable(&type));
     let res = CreateLoad(self.mapType(&type), val);//local var
     type.drop();
     return res;
   }
 
   func loadPrim(self, val: Value*, type: Type*): Value*{
+    assert(is_loadable(type));
     let ty = Value_getType(val);
     if(!isPointerTy(ty)) return val;
     let res = CreateLoad(self.mapType(type), val);//local var

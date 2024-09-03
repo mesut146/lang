@@ -951,12 +951,13 @@ impl Resolver{
       let body_rt = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
-        let msg = String::new("non void function ");
+        self.check_return(&body_rt.type, node.body.get().end_line);
+        /*let msg = String::new("non void function ");
         let tmp = printMethod(node);
         msg.append(tmp.str());
         tmp.drop();
         msg.append(" must return a value");
-        self.err(node.line, msg);
+        self.err(node.line, msg);*/
       }
       //todo comp of expr
       exit.drop();
@@ -2139,7 +2140,7 @@ impl Resolver{
     }
     arr.drop();
     self.dump();
-    self.err(node, "unknown identifier");
+    self.err(node, format("unknown identifier '{}'", name));
     panic("");
   }
 
@@ -2226,6 +2227,13 @@ func infix_result(l: str, r: str): str{
 
 //statements-------------------------------------
 impl Resolver{
+  func check_return(self, type: Type*, line: i32){
+    let cmp = MethodResolver::is_compatible(type, &self.curMethod.unwrap().type);
+    if(cmp.is_some()){
+      self.err(line, format("return type mismatch {} -> {}", type, &self.curMethod.unwrap().type));
+    }
+  }
+
   func visit(self, node: Stmt*){
     if(verbose_stmt()){
       print("visit stmt {}\n", node);
@@ -2238,10 +2246,7 @@ impl Resolver{
       if(e.is_some()){
         //todo
         let rt = self.visit(e.get());
-        let cmp = MethodResolver::is_compatible(&rt.type, &self.curMethod.unwrap().type);
-        if(cmp.is_some()){
-          self.err(node, format("return type mismatch {} -> {}", rt.type, &self.curMethod.unwrap().type));
-        }
+        self.check_return(&rt.type, node.line);
         rt.drop();
       }else{
         if(!self.curMethod.unwrap().type.is_void()){
@@ -2368,7 +2373,9 @@ impl Resolver{
     if (is.else_stmt.is_some()) {
         self.newScope();
         let rt2 = self.visit_body(is.else_stmt.get());
-        if(!rt1.type.eq(&rt2.type)){
+        let else_exit = Exit::get_exit_type(is.else_stmt.get());
+        let then_exit = Exit::get_exit_type(is.then.get());
+        if(!rt1.type.eq(&rt2.type) && !else_exit.is_jump() && !then_exit.is_jump()){
           self.err(line, format("then & else type mismatch {} vs {}", rt1.type, rt2.type));
         }
         self.dropScope();

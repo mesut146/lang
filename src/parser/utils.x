@@ -162,6 +162,10 @@ func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer() && !type.is_void(); 
 }
 
+func is_loadable(type: Type*): bool{
+    return type.is_prim() || type.is_pointer();
+  }
+
 func is_main(m: Method*): bool{
   return m.name.eq("main") && (m.params.empty() || m.params.len() == 2);
 }
@@ -324,7 +328,7 @@ impl Exit{
         return Exit{kind: kind, if_kind: Ptr<Exit>::new(), else_kind: Ptr<Exit>::new()};
     }
     func is_none(self): bool{
-        return self.kind is ExitType::NONE;
+        return self.kind is ExitType::NONE && self.if_kind.is_none() && self.else_kind.is_none();
     }
     func is_unreachable(self): bool{
         if (self.kind is ExitType::UNREACHABLE) return true;

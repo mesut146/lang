@@ -771,6 +771,8 @@ llvm::Value *ConstantPointerNull_get(llvm::PointerType *ty) {
   return llvm::ConstantPointerNull::get(ty);
 }
 
+bool isVoidTy(llvm::Type *type) { return type->isVoidTy(); }
+
 void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
   st->setBody(*elems);
 }
@@ -807,6 +809,11 @@ llvm::Value *CreateGEP(llvm::Type *type, llvm::Value *ptr,
 }
 
 llvm::Value *CreateLoad(llvm::Type *type, llvm::Value *val) {
+  auto val_type = val->getType();
+  if(val_type->isVoidTy()){
+    llvm::errs() << "Error: Cannot load from void type\n";
+    exit(1);
+  }
   return Builder->CreateLoad(type, val);
 }
 
