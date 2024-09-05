@@ -519,11 +519,49 @@ impl Debug for Expr{
     else if let Expr::IfLet(il*)=(self){
       if(print_cst) f.print("Expr::IfLet{");
       il.get().debug(f);
+    }else if let Expr::Match(me*)=(self){
+      if(print_cst) f.print("Expr::Match{");
+      me.get().debug(f);
     }else{
       panic("Expr::debug");
     }
     if(print_cst) f.print("}");
   }
+}
+impl Debug for Match{
+  func debug(self, f: Fmt*){
+    f.print("match ");
+    self.expr.debug(f);
+    f.print("{\n");
+    for(let i = 0;i < self.cases.len();++i){
+      if(i > 0){
+        f.print(",\n");
+      }
+      let case = self.cases.get_ptr(i);
+      if(case.lhs is MatchLhs::NONE){
+        f.print("_");
+      }
+      else if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
+        type.debug(f);
+        if(!args.empty()){
+          f.print("(");
+          join(f, args, ", ");
+          f.print(")");
+        }
+      }else{
+        panic("unr");
+      }
+      f.print(" => ");
+      if let MatchRhs::EXPR(expr*)=(&case.rhs){
+        expr.debug(f);
+      }else if let MatchRhs::STMT(stmt*)=(&case.rhs){
+        stmt.debug(f);
+      }else{
+        panic("unr");
+      }
+    }
+    f.print("\n}\n");
+  } 
 }
 
 impl Debug for IfStmt{

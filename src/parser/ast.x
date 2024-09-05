@@ -642,6 +642,7 @@ struct ArrAccess{
   idx2: Ptr<Expr>;
 }
 
+//todo use this
 enum InfixOp{
   PLUS, MINUS, MUL, DIV, PERCENT, POW,
   AND, OR, XOR, NOT, LTLT, GTGT,
@@ -649,6 +650,7 @@ enum InfixOp{
   EQ, PLUSEQ, MINUSEQ, MULEQ, DIVEQ, PERCENTEQ, POWEQ, ANDEQ, OREQ,
   NOTEQ, LTEQ, GTEQ, LTLTEQ, GTGTEQ
 }
+
 //fix-sort
 enum Expr: Node{
   Lit(val: Literal),
@@ -665,7 +667,7 @@ enum Expr: Node{
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(val: ArrAccess),
-  MatchExpr(val: Box<Match>),
+  Match(val: Box<Match>),
   Block(x: Box<Block>),
   If(e: Box<IfStmt>),
   IfLet(e: Box<IfLet>)
@@ -736,13 +738,13 @@ enum MatchLhs{
 }
 enum MatchRhs{
   EXPR(e: Expr),
-  STMT(stmt: Stmt*)
+  STMT(stmt: Stmt)
 }
 impl MatchRhs{
   func new(e: Expr): MatchRhs{
     return MatchRhs::EXPR{e};
   }
-  func new(stmt: Stmt*): MatchRhs{
+  func new(stmt: Stmt): MatchRhs{
     return MatchRhs::STMT{stmt};
   }
 }

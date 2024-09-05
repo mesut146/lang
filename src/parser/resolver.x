@@ -1295,10 +1295,10 @@ impl Resolver{
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
-    let scp2 = self.visit_type(&scp.type);
+    /*let scp2 = self.visit_type(&scp.type);
     scp.drop();
-    scp = scp2;
-    if (!scp.is_decl()) {
+    scp = scp2;*/
+    if (!scp.is_decl() || scp.type.is_dpointer()) {
       let msg = format("invalid field {} of {}", name, scp.type); 
       self.err(node, msg);
     }
@@ -1533,6 +1533,60 @@ impl Resolver{
       s2.drop();
       return res;
     }
+  }
+
+  func visit_match(self, expr: Expr*, node: Match*): RType{
+    let scp = self.visit(&node.expr);
+    let decl_opt = self.get_decl(&scp);
+    if(decl_opt.is_none() || !decl_opt.unwrap().is_enum()){
+      self.err(expr, format("match expr is not enum: {}", scp.type));
+    }
+    if(node.cases.empty()){
+      self.err(expr, "node case");
+    }
+    let decl = decl_opt.unwrap();
+    let not_covered = List<String>::new();
+    for ev in decl.get_variants(){
+      not_covered.add(ev.name.clone());
+    }
+    let res = Option<RType>::new();
+    let none_cnt = 0;
+    for case in &node.cases{
+      if(case.lhs is MatchLhs::NONE){
+        none_cnt += 1;
+        continue;
+      }
+      if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
+        let smp = type.as_simple();
+        //todo check type
+        let idx = not_covered.indexOf(&smp.name);
+        if(idx == -1){
+          self.err(expr, format("invalid variant {}", smp.name));
+        }
+        not_covered.remove(idx).drop();
+      }
+      if let MatchRhs::EXPR(e*)=(&case.rhs){
+        let res_type = self.visit(e);
+        if(res.is_none()){
+          res.set(res_type);
+        }else if(!res.get().type.eq(&res_type.type)){
+          self.err(expr, format("invalid match result type: {}!= {}", res.get().type, res_type.type));
+        }
+      }else if let MatchRhs::STMT(st*)=(&case.rhs){
+        self.visit(st);
+        if(res.is_none()){
+          res.set(RType::new("void"));
+        }else if(!res.get().type.eq("void")){
+          self.err(expr, format("invalid match result type: {}!= void", res.get().type));
+        }
+      }
+    }
+    if(!not_covered.empty() || none_cnt == 0){
+      self.err(expr, format("not covered variants: {}", not_covered));
+    }
+    scp.drop();
+    not_covered.drop();
+    return res.unwrap();
   }
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
@@ -2207,6 +2261,8 @@ impl Resolver{
       return self.visit_iflet(is.get());
     }else if let Expr::Block(b*) = (node){
       return self.visit_block(b.get());
+    }else if let Expr::Match(me*) = (node){
+      return self.visit_match(node, me.get());
     }
     panic("visit expr '{}'", node);
   }

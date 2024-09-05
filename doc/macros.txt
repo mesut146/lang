@@ -19,3 +19,7 @@ ptr::null<T>(): T*;
 ptr::get(src, index): <src_type>;
 ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
+
+
+env
+ target_triple, LD=clang-16

@@ -525,7 +525,7 @@ impl Parser{
       self.consume(TokenType::LBRACE);
       let res = Block::new(self.line(), 0);
       while(!self.is(TokenType::RBRACE)){
-        if(self.is(TokenType::LBRACE) || self.is(TokenType::IF, TokenType::LET) || self.is(TokenType::IF)){
+        if(self.is(TokenType::LBRACE) || self.is(TokenType::IF, TokenType::LET) || self.is(TokenType::IF) || self.is(TokenType::MATCH)){
           let expr = self.parse_expr();
           if(self.is(TokenType::RBRACE)){
             res.return_expr.set(expr);
@@ -847,30 +847,44 @@ impl Parser{
     return Entry{Option<String>::None, e, dot};
   }
 
+  func is_stmt_noexpr(self): bool{
+    return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
+  }
+
   func parse_match(self): Expr{
     self.consume(TokenType::MATCH);
     let id = self.node();
     let expr = self.prim(false);
-    let res = Match{expr, List<MatchCase>::new()};
+    let res = Match{expr: expr, cases: List<MatchCase>::new()};
     self.consume(TokenType::LBRACE);
-    while(self.has()){
+    while(!self.is(TokenType::RBRACE)){
       let lhs = Option<MatchLhs>::new();
       if(self.is("_")){
         self.pop();
         lhs = Option::new(MatchLhs::NONE);
       }else{
         let type = self.parse_type();
-        lhs = Option::new(MatchLhs::ENUM{type, List<ArgBind>::new()});
+        let args = List<ArgBind>::new();
         //todo args
         if(self.is(TokenType::LPAREN)){
           self.consume(TokenType::LPAREN);
+          while(!self.is(TokenType::RPAREN)){
+            args.add(self.parse_bind());
+            if(self.is(TokenType::COMMA)){
+              self.pop();
+            }
+          }
           self.consume(TokenType::RPAREN);
         }
+        lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
       }
       self.consume(TokenType::ARROW);
-      let rhs = self.parse_expr();
-      //todo rhs stmt
-      res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs)});
+      if(self.is_stmt_noexpr()){
+        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt())});
+      }else{
+        let rhs_expr = self.parse_expr();
+        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr)});
+      }
       if(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);
       }else{
@@ -878,7 +892,7 @@ impl Parser{
       }
     }
     self.consume(TokenType::RBRACE);
-    return Expr::MatchExpr{.id, Box::new(res)};
+    return Expr::Match{.id, Box::new(res)};
   }
 
   func prim(self, allow_obj: bool): Expr{
@@ -961,6 +975,7 @@ impl Parser{
       }
     }
     self.err(format("invalid expr {}", self.peek()));
+    panic("");
   }
 
   func parse_obj(self, type_expr: Expr): Expr{
