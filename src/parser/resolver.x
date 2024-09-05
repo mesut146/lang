@@ -426,7 +426,8 @@ impl Resolver{
         let pre: String* = self.ctx.prelude.get_ptr(i);
         //skip self unit being prelude
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
-        if(!added.contains(&path.str())){
+        let path2 = path.str();
+        if(!added.contains(&path2)){
           if(!is_file(path.str())){
             panic("can't resolve import: import std/{}\npath={}", pre, &path);
           }

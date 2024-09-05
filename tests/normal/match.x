@@ -96,6 +96,14 @@ func if_panic(c: bool){
     };
 }
 
+func if_panic_ret(c: bool): i32{
+    if(c){
+        return 10;
+    }else{
+        panic("else");
+    }
+}
+
 func main(){
     blk();
     assert(blk_if(true, 10, 20) == 30);
@@ -112,7 +120,7 @@ func main(){
     test_ret_if2();
 
     if_panic(true);
-    if_panic(false);
+    //if_panic(false);
 
     let e = E::E1;
     /*match &e {

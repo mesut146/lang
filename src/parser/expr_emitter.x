@@ -110,9 +110,10 @@ impl Compiler{
     func visit_ref(self, node: Expr*, expr: Expr*): Value*{
       if (RvalueHelper::is_rvalue(expr)) {
         let alloc_ptr = self.get_alloc(node);
-        let val = self.loadPrim(expr);
-        CreateStore(val, alloc_ptr);
+        //let val = self.loadPrim(expr);
+        //CreateStore(val, alloc_ptr);
         let expr_type = self.get_resolver().getType(expr);
+        self.setField(expr, &expr_type, alloc_ptr);
         self.own.get().add_obj(node, alloc_ptr, &expr_type);
         expr_type.drop();
         return alloc_ptr;

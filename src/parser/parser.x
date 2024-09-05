@@ -960,7 +960,7 @@ impl Parser{
         return Expr::Name{.n, nm};
       }
     }
-    panic("invalid expr {}", self.peek());
+    self.err(format("invalid expr {}", self.peek()));
   }
 
   func parse_obj(self, type_expr: Expr): Expr{

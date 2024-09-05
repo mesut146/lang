@@ -512,9 +512,9 @@ impl Debug for Expr{
       if(print_cst) f.print("Expr::Block{");
       b.get().debug(f);
     }
-    else if let Expr::If(is*)=(self){
-      //if(print_cst) f.print("Expr::If{");
-      is.get().debug(f);
+    else if let Expr::If(ife*)=(self){
+      if(print_cst) f.print("Expr::If{");
+      ife.get().debug(f);
     }
     else if let Expr::IfLet(il*)=(self){
       if(print_cst) f.print("Expr::IfLet{");

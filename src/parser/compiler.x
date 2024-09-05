@@ -508,17 +508,19 @@ impl Compiler{
     let blk_val = self.visit_block(m.body.get());
     dbg(m.name.eq("handle"), 51);
     let exit = Exit::get_exit_type(m.body.get());
-    if(!exit.is_exit() && m.type.is_void()){
-      self.own.get().do_return(m.body.get().end_line);
-      self.exit_frame();
-      if(is_main(m)){
-        CreateRet(makeInt(0, 32));
-      }else{
-        CreateRetVoid();
+    if(!exit.is_exit()){
+      if(m.type.is_void()){
+        self.own.get().do_return(m.body.get().end_line);
+        self.exit_frame();
+        if(is_main(m)){
+          CreateRet(makeInt(0, 32));
+        }else{
+          CreateRetVoid();
+        }
+      }else if(blk_val.is_some() && !m.type.is_void()){
+        //setField(blk_val.unwrap(), &m.type, );
+        self.visit_ret(blk_val.unwrap());
       }
-    }else if(blk_val.is_some() && !m.type.is_void()){
-      //setField(blk_val.unwrap(), &m.type, );
-      self.visit_ret(blk_val.unwrap());
     }
     exit.drop();
     self.llvm.di.get().finalize();

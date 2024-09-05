@@ -153,7 +153,7 @@ impl Compiler{
       self.set_and_insert(elsebb);
       let else_jump = false;
       let else_val = Option<Value*>::new();
-      let res = Option<Value*>::new();
+      
       if(node.else_stmt.is_some()){
         self.llvm.di.get().new_scope(node.else_stmt.get().line());
         //this will restore if, bc we did fake end_scope
@@ -175,6 +175,7 @@ impl Compiler{
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(nextbb);
       }
+      let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
         SetInsertPoint(nextbb);
         self.add_bb(nextbb);
@@ -276,7 +277,9 @@ impl Compiler{
             }
         }
       }
-      self.visit_body(node.then.get());
+      let then_val = self.visit_body(node.then.get());
+      let then_end = GetInsertBlock();
+      let else_end = GetInsertBlock();
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, get_end_line(node.then.get()));
@@ -290,11 +293,13 @@ impl Compiler{
       }
       self.set_and_insert(elsebb);
       let else_jump = false;
+      let else_val = Option<Value*>::new();
       if (node.else_stmt.is_some()) {
         self.llvm.di.get().new_scope(node.else_stmt.get().line());
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.visit_body(node.else_stmt.get());
+        else_val = self.visit_body(node.else_stmt.get());
+        else_end = GetInsertBlock();
         self.own.get().end_scope(get_end_line(node.else_stmt.get()));
         self.llvm.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -309,16 +314,45 @@ impl Compiler{
         self.own.get().end_scope(get_end_line(node.then.get()));
         CreateBr(next);
       }
+      let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
         SetInsertPoint(next);
         self.add_bb(next);
+
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
+            //self.get_resolver().err(line, "nested if expr not allowed");
+          //}
+          if(exit_then.is_jump() && !else_jump){
+            res = else_val;
+          }
+          else if(!exit_then.is_jump() && else_jump){
+            res = then_val;
+          }else{
+            let phi_type = self.mapType(&then_rt.type);
+            if(is_struct(&then_rt.type)){
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
+            }
+            let phi = CreatePHI(phi_type, 2);
+            if(is_struct(&then_rt.type)){
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
+            }else{
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+            }
+            res = Option::new(phi as Value*);
+          }
+        }
+        then_rt.drop();
       }
       exit_then.drop();
       then_name.drop();
       else_name.drop();
       next_name.drop();
       rt.drop();
-      return Option<Value*>::new();
+      return res;
     }
 
     func visit_for_each(self, stmt: Stmt*, node: ForEach*){
