@@ -230,7 +230,7 @@ impl RType{
     return res;
   }
   func is_decl(self): bool{
-    return self.desc.kind.is_decl();
+    return !self.type.is_dpointer() && self.desc.kind.is_decl();
   }
   func is_trait(self): bool{
     return self.desc.kind.is_trait();

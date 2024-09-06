@@ -24,7 +24,7 @@ func get_compiler_name(): str{
   return std::env("compiler_name").unwrap_or("x");
 }
 func get_version(): str{
-  return std::env("version").unwrap_or("1.4");
+  return std::env("version").unwrap_or("1.6");
 }
 
 func build_std(std_dir: str, out_dir: str): String{
@@ -53,6 +53,7 @@ func bootstrap(cmd: CmdArgs*){
   if(root_opt.is_none()){
     root_opt.set(find_root(cmd.get_root()).clone());
   }
+  let is_static = cmd.consume_any("-static");
   let root = root_opt.unwrap();
   let build = format("{}/build", root);
   let src_dir = format("{}/src", root);
@@ -66,14 +67,20 @@ func bootstrap(cmd: CmdArgs*){
   //setenv2("vendor", get_compiler_name(), 1);
   setenv2("compiler_name", name, 1);
   let out_dir = format("{}/{}_out", &build, name);
-  let stdlib = build_std(std_dir.str(), out_dir.str());
-  let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
   let config = CompilerConfig::new(src_dir.clone());
+  if(is_static){
+    config.set_link(LinkType::Static{name.str()});
+  }else{
+    let stdlib = build_std(std_dir.str(), out_dir.str());
+    let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
+    config.set_link(LinkType::Binary{name, args.str(), false});
+    stdlib.drop();
+    args.drop();
+  }
   config
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
-    .add_dir(src_dir.clone())
-    .set_link(LinkType::Binary{name, args.str(), false});
+    .add_dir(src_dir.clone());
   config.root_dir.set(root.clone());
   let bin = Compiler::compile_dir(config);
   let bin2 = format("{}/{}", &build, name);
@@ -83,11 +90,9 @@ func bootstrap(cmd: CmdArgs*){
   let binc = bin2.cstr();
   set_as_executable(binc.ptr());
   binc.drop();
-  args.drop();
   root.drop();
   bin.drop();
   build.drop();
-  stdlib.drop();
   src_dir.drop();
   std_dir.drop();
 }
