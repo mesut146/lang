@@ -13,6 +13,12 @@ import parser/derive
 import std/map
 import std/stack
 
+struct MatchInfo{
+  type: Type*;
+  val: Value*;
+  bb: BasicBlock*;
+}
+
 //expr------------------------------------------------------
 impl Compiler{
 
@@ -124,8 +130,8 @@ impl Compiler{
     }
 
     func visit_match(self, expr: Expr*, node: Match*): Option<Value*>{
-      let rt = self.get_resolver().visit(&node.expr);
-      let decl = self.get_resolver().get_decl(&rt).unwrap();
+      let rhs_rt = self.get_resolver().visit(&node.expr);
+      let decl = self.get_resolver().get_decl(&rhs_rt).unwrap();
       let rhs = self.get_obj_ptr(&node.expr);
       let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
@@ -144,6 +150,9 @@ impl Compiler{
         CreateUnreachable();
       }
       //create bb's
+      let res = Option<Value*>::new();
+      let infos = List<MatchInfo>::new();
+      let match_rt = self.get_resolver().visit(expr);
       for case in &node.cases{
         if(case.lhs is MatchLhs::NONE){
           //def.set(...);
@@ -159,18 +168,39 @@ impl Compiler{
             self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
             ++arg_idx;
           }
-          self.visit_case(&case.rhs);
+          let rhs_val = self.visit_case(&case.rhs);
           let exit = Exit::get_exit_type(&case.rhs);
           if(!exit.is_jump()){
             CreateBr(nextbb);
+            if(!match_rt.type.is_void()){
+              infos.add(MatchInfo{&match_rt.type, rhs_val.unwrap(), bb});
+            }
           }
           name_c.drop();
         }
       }
       self.set_and_insert(nextbb);
+      //handle ret value
+      if(!infos.empty()){
+        let phi_type = self.mapType(&match_rt.type);
+        if(is_struct(&match_rt.type)){
+          phi_type = getPointerTo(phi_type) as llvm_Type*;
+        }
+        let phi = CreatePHI(phi_type, infos.len() as i32);
+        for info in &infos{
+          if(is_struct(&match_rt.type)){
+            phi_addIncoming(phi, info.val, info.bb);
+          }else{
+            phi_addIncoming(phi, self.loadPrim(info.val, &match_rt.type), info.bb);
+          }
+        }
+        res = Option::new(phi as Value*);
+      }
       def_name.drop();
       next_name.drop();
-      return Option<Value*>::new();
+      rhs_rt.drop();
+      match_rt.drop();
+      return res;
     }
 
     func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*){

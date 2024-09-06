@@ -652,12 +652,18 @@ impl Resolver{
   }
   
   func get_decl(self, ty: Type*): Option<Decl*>{
+    if(ty.is_dpointer()){
+      return Option<Decl*>::new();
+    }
     let rt = self.visit_type(ty);
     let res = self.get_decl(&rt);
     rt.drop();
     return res;
   }
   func get_decl(self, rt: RType*): Option<Decl*>{
+    if(rt.type.is_dpointer()){
+      return Option<Decl*>::new();
+    }
     if(rt.type.is_pointer()){
       return self.get_decl(rt.type.get_ptr());
     }
