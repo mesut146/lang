@@ -102,15 +102,13 @@ llvm::TargetMachine *createTargetMachine(const char *triple) {
   return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
-bool verifyModule(){
-  return llvm::verifyModule(*mod, &llvm::outs());
-}
+bool verifyModule() { return llvm::verifyModule(*mod, &llvm::outs()); }
 
 void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
                  char *triple) {
   std::string TargetTriple(triple);
   std::string Filename(name);
-  if(llvm::verifyModule(*mod, &llvm::outs())){
+  if (llvm::verifyModule(*mod, &llvm::outs())) {
     llvm::errs() << "Module verification failed!\n";
     exit(1);
   }
@@ -444,7 +442,6 @@ llvm::Attribute::AttrKind get_sret() { return llvm::Attribute::StructRet; }
 
 void Function_print(llvm::Function *f) { f->print(llvm::errs()); }
 
-
 llvm::StructType *make_struct_ty(char *name) {
   return llvm::StructType::create(*ctx, name);
 }
@@ -521,19 +518,19 @@ llvm::Value *CreateAlloca(llvm::Type *ty) { return Builder->CreateAlloca(ty); }
 
 void Value_setName(llvm::Value *val, char *name) { val->setName(name); }
 
-llvm::Value* CreateFPCast(llvm::Value *val, llvm::Type *trg_type) {
+llvm::Value *CreateFPCast(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateFPCast(val, trg_type);
 }
-llvm::Value* CreateSIToFP(llvm::Value *val, llvm::Type *trg_type) {
+llvm::Value *CreateSIToFP(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateSIToFP(val, trg_type);
 }
-llvm::Value* CreateUIToFP(llvm::Value *val, llvm::Type *trg_type) {
+llvm::Value *CreateUIToFP(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateUIToFP(val, trg_type);
 }
-llvm::Value* CreateFPToSI(llvm::Value *val, llvm::Type *trg_type) {
+llvm::Value *CreateFPToSI(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateFPToSI(val, trg_type);
 }
-llvm::Value* CreateFPToUI(llvm::Value *val, llvm::Type *trg_type) {
+llvm::Value *CreateFPToUI(llvm::Value *val, llvm::Type *trg_type) {
   return Builder->CreateFPToUI(val, trg_type);
 }
 
@@ -561,6 +558,15 @@ llvm::BasicBlock *GetInsertBlock() { return Builder->GetInsertBlock(); }
 
 void func_insert(llvm::Function *f, llvm::BasicBlock *bb) {
   f->insert(f->end(), bb);
+}
+
+llvm::SwitchInst *CreateSwitch(llvm::Value *cond, llvm::BasicBlock *default_bb,
+                               int num_cases) {
+  return Builder->CreateSwitch(cond, default_bb, num_cases);
+}
+
+void SwitchInst_addCase(llvm::SwitchInst* node, llvm::ConstantInt *OnVal, llvm::BasicBlock *Dest) {
+  node->addCase(OnVal, Dest);
 }
 
 llvm::Value *CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
@@ -701,12 +707,8 @@ llvm::Value *CreateAShr(llvm::Value *l, llvm::Value *r) {
 llvm::Value *CreateTrunc(llvm::Value *val, llvm::Type *type) {
   return Builder->CreateTrunc(val, type);
 }
-llvm::Value *CreateNeg(llvm::Value *val) {
-  return Builder->CreateNeg(val);
-}
-llvm::Value *CreateFNeg(llvm::Value *val) {
-  return Builder->CreateFNeg(val);
-}
+llvm::Value *CreateNeg(llvm::Value *val) { return Builder->CreateNeg(val); }
+llvm::Value *CreateFNeg(llvm::Value *val) { return Builder->CreateFNeg(val); }
 
 llvm::Constant *CreateGlobalStringPtr(char *str) {
   return Builder->CreateGlobalStringPtr(str);
@@ -745,17 +747,13 @@ llvm::ConstantInt *makeInt(int64_t val, int bits) {
 
 llvm::Type *getInt(int bit) { return llvm::IntegerType::get(*ctx, bit); }
 
-llvm::Type* getFloatTy(){
-  return llvm::Type::getFloatTy(*ctx);
-}
-llvm::Type* getDoubleTy(){
-  return llvm::Type::getDoubleTy(*ctx);
-}
-llvm::Constant* makeFloat(float val) {
+llvm::Type *getFloatTy() { return llvm::Type::getFloatTy(*ctx); }
+llvm::Type *getDoubleTy() { return llvm::Type::getDoubleTy(*ctx); }
+llvm::Constant *makeFloat(float val) {
   return llvm::ConstantFP::get(getFloatTy(), val);
 }
 
-llvm::Constant* makeDouble(double val) {
+llvm::Constant *makeDouble(double val) {
   return llvm::ConstantFP::get(getDoubleTy(), val);
 }
 
@@ -810,7 +808,7 @@ llvm::Value *CreateGEP(llvm::Type *type, llvm::Value *ptr,
 
 llvm::Value *CreateLoad(llvm::Type *type, llvm::Value *val) {
   auto val_type = val->getType();
-  if(val_type->isVoidTy()){
+  if (val_type->isVoidTy()) {
     llvm::errs() << "Error: Cannot load from void type\n";
     exit(1);
   }

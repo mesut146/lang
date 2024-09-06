@@ -1288,7 +1288,7 @@ impl Resolver{
             break;
         }
     }
-    let msg = format("invalid field {} of {}", name, type); 
+    let msg = format("invalid field {}.{}", type, name); 
     self.err(node, msg);
     panic("");
   }
@@ -1299,7 +1299,7 @@ impl Resolver{
     scp.drop();
     scp = scp2;*/
     if (!scp.is_decl() || scp.type.is_dpointer()) {
-      let msg = format("invalid field {} of {}", name, scp.type); 
+      let msg = format("invalid field {}.{}", scp.type, name); 
       self.err(node, msg);
     }
     let decl = self.get_decl(&scp).unwrap();
@@ -1550,12 +1550,16 @@ impl Resolver{
       not_covered.add(ev.name.clone());
     }
     let res = Option<RType>::new();
-    let none_cnt = 0;
+    let has_none = false;
     for case in &node.cases{
       if(case.lhs is MatchLhs::NONE){
-        none_cnt += 1;
+        if(has_none){
+          self.err(expr, "multiple 'none' case");
+        }
+        has_none = true;
         continue;
       }
+      self.newScope();
       if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
         let smp = type.as_simple();
         //todo check type
@@ -1564,6 +1568,20 @@ impl Resolver{
           self.err(expr, format("invalid variant {}", smp.name));
         }
         not_covered.remove(idx).drop();
+        let index = Resolver::findVariant(decl, &smp.name);
+        let variant = decl.get_variants().get_ptr(index);
+        for(let i = 0;i < args.len();++i){
+          let arg = args.get_ptr(i);
+          let field = variant.fields.get_ptr(i);
+          let ty = field.type.clone();
+          if (arg.is_ptr) {
+              ty = ty.toPtr();
+          }
+          self.addScope(arg.name.clone(), ty.clone(), false, arg.id, arg.line);
+          self.cache.add(arg.id, RType::new(ty));
+        }
+      }else{
+        panic("unr");
       }
       if let MatchRhs::EXPR(e*)=(&case.rhs){
         let res_type = self.visit(e);
@@ -1580,8 +1598,9 @@ impl Resolver{
           self.err(expr, format("invalid match result type: {}!= void", res.get().type));
         }
       }
+      self.dropScope();
     }
-    if(!not_covered.empty() || none_cnt == 0){
+    if(!not_covered.empty() && !has_none){
       self.err(expr, format("not covered variants: {}", not_covered));
     }
     scp.drop();
@@ -2391,10 +2410,10 @@ impl Resolver{
     whl.append(format("let {} = {}.next();\n", &opt_name, &it_name));
     whl.append(format("if({}.is_none()) break;\n", &opt_name));
     whl.append(format("let {} = {}.unwrap();\n", &fe.var_name, &opt_name));
-    //whl.append(format("std::internal_block({});\n", &node.id));
+    whl.append(format("std::internal_block({});\n", &node.id));
     self.block_map.add(node.id, &fe.body);
-    let body_str = fe.body.print();
-    whl.append(body_str);
+    //let body_str = fe.body.print();
+    //whl.append(body_str);
     whl.append("}\n");
     let stmt = parse_stmt(whl, &self.unit, node.line);
     body.list.add(stmt);

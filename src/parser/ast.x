@@ -727,6 +727,16 @@ struct Match{
   expr: Expr;
   cases: List<MatchCase>;
 }
+impl Match{
+  func has_none(self): Option<MatchCase*>{
+    for case in &self.cases{
+      if(case.lhs is MatchLhs::NONE){
+        return Option::new(case);
+      }
+    }
+    return Option<MatchCase*>::new();
+  }
+}
 
 struct MatchCase{
   lhs: MatchLhs;
@@ -736,6 +746,15 @@ enum MatchLhs{
   NONE,
   ENUM(type: Type, args: List<ArgBind>)
 }
+impl MatchLhs{
+  func get_type(self): Type*{
+    if let MatchLhs::ENUM(type*, args*)=(self){
+      return type;
+    }
+    panic("MatchLhs::get_type");
+  }
+}
+
 enum MatchRhs{
   EXPR(e: Expr),
   STMT(stmt: Stmt)

@@ -218,10 +218,11 @@ impl Compiler{
       let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
+      let rhs_rt = self.get_resolver().visit(&node.rhs);
       let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
       let index = Resolver::findVariant(decl, node.type.name());
-      let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()));
+      let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()) as Value*);
   
       let then_name = CStr::new(format("iflet_then_{}", line));
       let else_name = CStr::new(format("iflet_else_{}", line));
@@ -246,7 +247,8 @@ impl Compiler{
             //regular var decl
             let prm = fields.get_ptr(i);
             let arg = node.args.get_ptr(i);
-            let gep_idx = i;
+            self.alloc_enum_arg(arg, variant, i, decl, rhs);
+            /*let gep_idx = i;
             if(decl.base.is_some()){
               ++gep_idx;
             }
@@ -265,16 +267,14 @@ impl Compiler{
                     CreateStore(field_val, alloc_ptr);
                 } else {
                     //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
-                    let rt2 = self.get_resolver().visit(&node.rhs);
-                    if(rt2.type.is_pointer() && !prm.type.is_str()){
+                    if(rhs_rt.type.is_pointer() && !prm.type.is_str()){
                       self.get_resolver().err(&node.rhs, "can't deref member from ptr rhs");
                     }
                     self.copy(alloc_ptr, field_ptr, &prm.type);
-                    self.own.get().add_iflet_var(arg, prm, alloc_ptr);
-                    rt2.drop();
+                    self.own.get().add_iflet_var(arg, prm, alloc_ptr, &rhs_rt.type);
                 }
                 self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
-            }
+            }*/
         }
       }
       let then_val = self.visit_body(node.then.get());
@@ -352,6 +352,7 @@ impl Compiler{
       else_name.drop();
       next_name.drop();
       rt.drop();
+      rhs_rt.drop();
       return res;
     }
 
@@ -464,7 +465,7 @@ impl Compiler{
         self.own.get().do_return(node.line);
         self.exit_frame();
         if(is_main(self.curMethod.unwrap())){
-          CreateRet(makeInt(0, 32));
+          CreateRet(makeInt(0, 32) as Value*);
         }else{
           CreateRetVoid();
         }

@@ -90,7 +90,119 @@ impl Compiler{
       if let Expr::As(lhs*, rhs*)=(node){
         return self.visit_as(lhs.get(), rhs);
       }
+      if let Expr::Match(me*)=(node){
+        let res = self.visit_match(node, me.get());
+        if(res.is_none()){
+          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+        }
+        return res.unwrap();
+      }
       panic("expr {}", node);
+    }
+
+    func get_variant_index_match(case: MatchCase*, decl: Decl*): i32{
+      let idx = 0;
+      let name: String* = case.lhs.get_type().name();
+      for ev in decl.get_variants(){
+        if(ev.name.eq(name)){
+          return idx;
+        }
+        ++idx;
+      }
+      panic("idx {} {}", case.lhs.get_type(), decl.type);
+    }
+
+    func visit_case(self, rhs: MatchRhs*): Option<Value*>{
+      if let MatchRhs::EXPR(e*)=(rhs){
+        return Option<Value*>::new(self.visit(e));
+      }
+      else if let MatchRhs::STMT(st*)=(rhs){
+        self.visit(st);
+        return Option<Value*>::new();
+      }
+      panic("unr");
+    }
+
+    func visit_match(self, expr: Expr*, node: Match*): Option<Value*>{
+      let rt = self.get_resolver().visit(&node.expr);
+      let decl = self.get_resolver().get_decl(&rt).unwrap();
+      let rhs = self.get_obj_ptr(&node.expr);
+      let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
+      let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
+
+      let next_name = format("next_{}", expr.line).cstr();
+      let nextbb = create_bb_named(next_name.ptr());
+      let none_case = node.has_none();
+      let def_name = format("def_{}", expr.line).cstr();
+      let def_bb = create_bb_named(def_name.ptr());
+      let sw = CreateSwitch(tag, def_bb, node.cases.len() as i32);
+      if(none_case.is_some()){
+        self.set_and_insert(def_bb);
+        self.visit_case(&none_case.unwrap().rhs);
+      }else{
+        self.set_and_insert(def_bb);
+        CreateUnreachable();
+      }
+      //create bb's
+      for case in &node.cases{
+        if(case.lhs is MatchLhs::NONE){
+          //def.set(...);
+        }else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
+          let name_c = format("{}__{}_{}", decl.type, type.name(), expr.line).cstr();
+          let bb = create_bb_named(name_c.ptr());
+          let var_index = get_variant_index_match(case, decl);
+          SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
+          self.set_and_insert(bb);
+          let variant = decl.get_variants().get_ptr(var_index);
+          let arg_idx = 0;
+          for arg in args{
+            self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
+            ++arg_idx;
+          }
+          self.visit_case(&case.rhs);
+          let exit = Exit::get_exit_type(&case.rhs);
+          if(!exit.is_jump()){
+            CreateBr(nextbb);
+          }
+          name_c.drop();
+        }
+      }
+      self.set_and_insert(nextbb);
+      def_name.drop();
+      next_name.drop();
+      return Option<Value*>::new();
+    }
+
+    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*){
+      let data_index = get_data_index(decl);
+      let dataPtr = self.gep2(enum_ptr, data_index, self.mapType(&decl.type));
+      let var_ty = self.get_variant_ty(decl, variant);
+
+      let field = variant.fields.get_ptr(arg_idx);
+      let alloc_ptr = self.get_alloc(arg.id);
+      self.NamedValues.add(arg.name.clone(), alloc_ptr);
+      let gep_idx = arg_idx;
+      if(decl.base.is_some()){
+        ++gep_idx;
+      }
+      let field_ptr = self.gep2(dataPtr, gep_idx, var_ty);
+      if (arg.is_ptr) {
+        CreateStore(field_ptr, alloc_ptr);
+        let ty_ptr = field.type.clone().toPtr();
+        self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
+        ty_ptr.drop();
+      } else {
+        //deref
+        if (field.type.is_prim() || field.type.is_pointer()) {
+            let field_val = CreateLoad(self.mapType(&field.type), field_ptr);
+            CreateStore(field_val, alloc_ptr);
+        } else {
+            //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
+            self.copy(alloc_ptr, field_ptr, &field.type);
+            self.own.get().add_iflet_var(arg, field, alloc_ptr, &decl.type);
+        }
+        self.llvm.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
+      }      
     }
 
     func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
@@ -156,7 +268,7 @@ impl Compiler{
       if let Expr::Type(rhs_ty*)=(rhs){
         let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
         let index = Resolver::findVariant(decl, rhs_ty.name());
-        let tag2 = makeInt(index, ENUM_TAG_BITS());
+        let tag2 = makeInt(index, ENUM_TAG_BITS()) as Value*;
         return CreateCmp(op, tag1, tag2);
       }
       let tag2 = self.getTag(rhs);
@@ -174,7 +286,7 @@ impl Compiler{
       let index = Resolver::findVariant(decl, &smp.name);
       let decl_ty = self.mapType(&decl.type);
       let tag_ptr = self.gep2(ptr, get_tag_index(decl), decl_ty);
-      CreateStore(makeInt(index, ENUM_TAG_BITS()), tag_ptr);
+      CreateStore(makeInt(index, ENUM_TAG_BITS()) as Value*, tag_ptr);
       return ptr;
     }
   
@@ -242,7 +354,7 @@ impl Compiler{
       } else {
           self.setField(elem, &elem_type, phi as Value*);
       }
-      let step = gep_ptr(elem_ty, phi as Value*, makeInt(1, 64));
+      let step = gep_ptr(elem_ty, phi as Value*, makeInt(1, 64) as Value*);
       phi_addIncoming(phi, step, setbb);
       CreateBr(condbb);
       self.set_and_insert(nextbb);
@@ -260,7 +372,7 @@ impl Compiler{
       let src = self.get_obj_ptr(node.arr.get());
       if(ty.is_array()){
           //regular array access
-          let i1 = makeInt(0, 64);
+          let i1 = makeInt(0, 64) as Value*;
           let i2 = self.cast(node.idx.get(), &i64t);
           let res = gep_arr(self.mapType(ty), src, i1, i2);
           type.drop();
@@ -340,7 +452,7 @@ impl Compiler{
           return CreateFNeg(val);
         }
         type.drop();
-        return CreateNSWSub(makeInt(0, bits), val);
+        return CreateNSWSub(makeInt(0, bits) as Value*, val);
       }
       if(op.eq("++")){
         let var_ptr = self.visit(e);//var without load
@@ -349,7 +461,7 @@ impl Compiler{
           CreateStore(res, var_ptr);
           return res;
         }
-        let res = CreateNSWAdd(val, makeInt(1, bits));
+        let res = CreateNSWAdd(val, makeInt(1, bits) as Value*);
         CreateStore(res, var_ptr);
         return res;
       }
@@ -360,12 +472,12 @@ impl Compiler{
           CreateStore(res, var_ptr);
           return res;
         }
-        let res = CreateNSWSub(val, makeInt(1, bits));
+        let res = CreateNSWSub(val, makeInt(1, bits) as Value*);
         CreateStore(res, var_ptr);
         return res;
       }
       if(op.eq("~")){
-        return CreateXor(val, makeInt(-1, bits));
+        return CreateXor(val, makeInt(-1, bits) as Value*);
       }
       panic("unary {}", op);
     }
@@ -389,6 +501,14 @@ impl Compiler{
           return getVoidTy() as Value*;
         }
         list.drop();
+      }
+      if(Resolver::is_call(mc, "std", "internal_block")){
+        let arg = mc.args.get_ptr(0).print();
+        let id = i32::parse(arg.str());
+        let blk: Block* = *resolver.block_map.get_ptr(&id).unwrap();
+        self.visit_block(blk);
+        arg.drop();
+        return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
         let info = resolver.format_map.get_ptr(&expr.id).unwrap();
@@ -441,11 +561,11 @@ impl Compiler{
           let ty = self.getType(mc.args.get_ptr(0));
           let sz = self.getSize(&ty) / 8;
           ty.drop();
-          return makeInt(sz, 32);
+          return makeInt(sz, 32) as Value*;
         }else{
           let ty = mc.type_args.get_ptr(0);
           let sz = self.getSize(ty) / 8;
-          return makeInt(sz, 32);
+          return makeInt(sz, 32) as Value*;
         }
       }    
       if(Resolver::std_is_ptr(mc)){
@@ -490,7 +610,7 @@ impl Compiler{
         i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get_ptr(0)) / 8;
-            size = CreateNSWMul(size, makeInt(typeSize, 64));
+            size = CreateNSWMul(size, makeInt(typeSize, 64) as Value*);
         }
         let proto = self.protos.get().libc("malloc");
         let args = vector_Value_new();
@@ -540,7 +660,7 @@ impl Compiler{
         let arr_type2 = arr_type.get_ptr();
         if let Type::Array(elem*, sz)=(arr_type2){
           arr_type.drop();
-          return makeInt(sz, 64);
+          return makeInt(sz, 64) as Value*;
         }
         arr_type.drop();
         panic("");
@@ -835,7 +955,7 @@ impl Compiler{
       if(!isand){
         i8val = 1;
       }
-      phi_addIncoming(phi, makeInt(i8val, 8), bb);
+      phi_addIncoming(phi, makeInt(i8val, 8) as Value*, bb);
       phi_addIncoming(phi, rbit, then);
       return Pair::new(CreateZExt(phi as Value*, getInt(8)), next);
     }
@@ -880,11 +1000,11 @@ impl Compiler{
           if (normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
             let val: i64 = i64::parse_hex(normal.str());
             normal.drop();
-            return makeInt(val, bits);
+            return makeInt(val, bits) as Value*;
           }
           let val: i64 = i64::parse(normal.str());
           normal.drop();
-          return makeInt(val, bits);
+          return makeInt(val, bits) as Value*;
       }
       if(node.kind is LitKind::FLOAT){
         if(node.suffix.is_some()){
@@ -907,7 +1027,7 @@ impl Compiler{
       if(node.kind is LitKind::CHAR){
         assert(node.val.len() == 1);
         let chr: i8 = node.val.get(0);
-        return makeInt(chr, 32);
+        return makeInt(chr, 32) as Value*;
       }
       panic("lit {}", node.val);
     }
@@ -923,7 +1043,7 @@ impl Compiler{
       //set ptr
       CreateStore(src, data_target);
       //set len
-      let len = makeInt(val.len(), SLICE_LEN_BITS());
+      let len = makeInt(val.len(), SLICE_LEN_BITS()) as Value*;
       CreateStore(len, len_target);
       str_ty.drop();
       return trg_ptr;
@@ -1000,7 +1120,7 @@ impl Compiler{
           let variant = decl.get_variants().get_ptr(variant_index);
           //set tag
           let tag_ptr = self.gep2(ptr, get_tag_index(decl), ty);
-          let tag_val = makeInt(variant_index, ENUM_TAG_BITS());
+          let tag_val = makeInt(variant_index, ENUM_TAG_BITS()) as Value*;
           CreateStore(tag_val, tag_ptr);
           //set data
           let data_ptr = self.gep2(ptr, get_data_index(decl), ty);

@@ -513,7 +513,7 @@ impl Compiler{
         self.own.get().do_return(m.body.get().end_line);
         self.exit_frame();
         if(is_main(m)){
-          CreateRet(makeInt(0, 32));
+          CreateRet(makeInt(0, 32) as Value*);
         }else{
           CreateRetVoid();
         }

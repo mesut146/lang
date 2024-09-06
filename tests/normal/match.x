@@ -3,7 +3,11 @@ struct A{
     b: i64;
 }
 
-enum E{
+struct B{
+    aa: i64;
+}
+
+enum E: B{
     E1,
     E2(val: i32, a: A),
     E3(val: i32)
@@ -11,15 +15,15 @@ enum E{
 
 
 func main(){
-    let e = E::E1;
+    let e = E::E2{.B{aa: 12345}, val: 10, a: A{a: 20, b: 30}};
     match &e {
         E::E1 => print("E1\n"),
         E::E2(val, a) => {
-            print("E2\n");
+            printf("E2 %d %d,%d\n", val, a.a, a.b);
         },
         E::E3(val) => {
-            print("E3\n");
+            printf("E3\n");
         }
     }
-    print("match done\n");
+    printf("match done\n");
 }

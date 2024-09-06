@@ -19,7 +19,9 @@ struct AttrKind;
 struct Value;
 struct BasicBlock;
 struct PHINode;
+struct SwitchInst;
 struct Constant;
+struct ConstantInt;
 struct GlobalVariable;
 struct DIGlobalVariableExpression;
 
@@ -125,7 +127,7 @@ extern{
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
-    func makeInt(val: i64, bits: i32): Value*;
+    func makeInt(val: i64, bits: i32): ConstantInt*;
     func makeFloat(val: f32): Constant*;
     func makeDouble(val: f64): Constant*;
     func getFloatTy(): llvm_Type*;
@@ -204,6 +206,8 @@ extern{
     func ConstantArray_get(ty: ArrayType*, elems: vector_Constant*): Constant*;
     func GlobalValue_ext(): i32;
     func GlobalValue_appending(): i32;
+    func CreateSwitch(cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
+    func SwitchInst_addCase(node: SwitchInst*, OnVal: ConstantInt*, Dest: BasicBlock*);
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateFAdd(l: Value*, r: Value*): Value*;

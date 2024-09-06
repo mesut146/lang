@@ -27,23 +27,34 @@ impl AllocHelper{
   func new(c: Compiler*): AllocHelper{
     return AllocHelper{c: c};
   }
+  func check_type(ty: Type*){
+    if(ty.is_void()){
+      panic("internal err: alloc of void");
+    }
+  }
   func alloc_ty(self, ty: Type*, node: Fragment*): Value*{
+    check_type(ty);
     let mapped = self.c.mapType(ty);
     let ptr = CreateAlloca(mapped);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
   func alloc_ty(self, ty: Type*, node: Expr*): Value*{
+    check_type(ty);
     let mapped = self.c.mapType(ty);
     return self.alloc_ty(mapped, node);
   }
   func alloc_ty(self, ty: Type*, node: Node*): Value*{
+    check_type(ty);
     let mapped = self.c.mapType(ty);
     let ptr = CreateAlloca(mapped);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
   func alloc_ty(self, ty: llvm_Type*, node: Expr*): Value*{
+    if(isVoidTy(ty)){
+      panic("internal err: alloc of void");
+    }
     let ptr = CreateAlloca(ty);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
@@ -72,6 +83,7 @@ impl AllocHelper{
     }
   }
   func visit_if(self, node: IfStmt*): Option<Value*>{
+    //todo ret value?
     self.visit(&node.cond);
     self.visit_body(node.then.get());
     if(node.else_stmt.is_some()){
@@ -151,6 +163,14 @@ impl AllocHelper{
 
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.c.get_resolver();
+    if(Resolver::is_call(call, "std", "internal_block")){
+      let arg = call.args.get_ptr(0).print();
+      let id = i32::parse(arg.str());
+      let blk: Block* = *resolver.block_map.get_ptr(&id).unwrap();
+      self.visit(blk);
+      arg.drop();
+      return Option<Value*>::new();
+    }
     if(Resolver::is_printf(call)){
       for(let i = 1;i < call.args.len();++i){
         let arg = call.args.get_ptr(i);
@@ -322,6 +342,33 @@ impl AllocHelper{
           self.visit(elem);
         }
       }
+      return res;
+    }
+    if let Expr::Match(me*)=(node){
+      let rt = self.c.get_resolver().visit(node);
+      if(!rt.type.is_void()){
+        res = Option::new(self.alloc_ty(&rt.type, node));
+      }
+      self.visit(&me.get().expr);
+      for case in &me.get().cases{
+        if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
+          for arg in args{
+            let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
+            let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
+            let name_c = arg.name.clone().cstr();
+            Value_setName(arg_ptr, name_c.ptr());
+            name_c.drop();
+            self.c.allocMap.add(arg.id, arg_ptr);
+          }
+        }
+        if let MatchRhs::EXPR(e*)=(&case.rhs){
+          self.visit(e);
+        }
+        if let MatchRhs::STMT(st*)=(&case.rhs){
+          self.visit(st);
+        }
+      }
+      rt.drop();
       return res;
     }
     panic("alloc {}\n", node);

@@ -202,9 +202,12 @@ impl Own{
         self.var_map.add(var.id, var);
         self.do_move(&f.rhs);
     }
-    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
+    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*, rhs_type: Type*){
         if(arg.is_ptr) return;
         if(!self.is_drop_type(&fd.type)) return;
+        if(rhs_type.is_pointer()){
+            self.get_resolver().err(arg.line, format("can't deref member from ptr '{}'", arg.name));
+        }
         let var = Variable{
             name: arg.name.clone(),
             type: fd.type.clone(),

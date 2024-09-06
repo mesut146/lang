@@ -827,7 +827,8 @@ impl Parser{
     if(isName(self.peek())){
       return self.popv();
     }
-    panic("expected name got {}", self.peek());
+    self.err(format("expected name got {}", self.peek()));
+    panic("unr");
   }
   
   

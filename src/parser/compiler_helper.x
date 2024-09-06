@@ -985,8 +985,8 @@ func getPrimitiveSizeInBits2(val: Value*): i32{
 
 func gep_arr(type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
   let args = vector_Value_new();
-  vector_Value_push(args, makeInt(i1, 64));
-  vector_Value_push(args, makeInt(i2, 64));
+  vector_Value_push(args, makeInt(i1, 64) as Value*);
+  vector_Value_push(args, makeInt(i2, 64) as Value*);
   let res = CreateInBoundsGEP(type, ptr, args);
   vector_Value_delete(args);
   return res;

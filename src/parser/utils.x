@@ -361,6 +361,16 @@ impl Exit{
         return false;
     }
 
+    func get_exit_type(rhs: MatchRhs*): Exit{
+        if let MatchRhs::EXPR(e*)=(rhs){
+            return get_exit_type(e);
+        }
+        else if let MatchRhs::STMT(st*)=(rhs){
+            return get_exit_type(st);
+        }
+        panic("unr");
+    }
+
     func get_exit_type(body: Body*): Exit{
         if let Body::Block(b*)=(body){
             return get_exit_type(b);
