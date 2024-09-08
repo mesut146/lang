@@ -1589,21 +1589,30 @@ impl Resolver{
       }else{
         panic("unr");
       }
-      if let MatchRhs::EXPR(e*)=(&case.rhs){
-        let res_type = self.visit(e);
+      let res_type = self.visit_match_rhs(&case.rhs);
+      let rhs_exit = Exit::get_exit_type(&case.rhs);
+      if(!rhs_exit.is_jump()){
         if(res.is_none()){
           res.set(res_type);
         }else if(!res.get().type.eq(&res_type.type)){
           self.err(expr, format("invalid match result type: {}!= {}", res.get().type, res_type.type));
         }
-      }else if let MatchRhs::STMT(st*)=(&case.rhs){
-        self.visit(st);
-        if(res.is_none()){
-          res.set(RType::new("void"));
-        }else if(!res.get().type.eq("void")){
-          self.err(expr, format("invalid match result type: {}!= void", res.get().type));
-        }
       }
+      // if let MatchRhs::EXPR(e*)=(&case.rhs){
+      //   let res_type = self.visit(e);
+      //   if(res.is_none()){
+      //     res.set(res_type);
+      //   }else if(!res.get().type.eq(&res_type.type)){
+      //     self.err(expr, format("invalid match result type: {}!= {}", res.get().type, res_type.type));
+      //   }
+      // }else if let MatchRhs::STMT(st*)=(&case.rhs){
+      //   self.visit(st);
+      //   if(res.is_none()){
+      //     res.set(RType::new("void"));
+      //   }else if(!res.get().type.eq("void")){
+      //     self.err(expr, format("invalid match result type: {}!= void", res.get().type));
+      //   }
+      // }
       self.dropScope();
     }
     if(!not_covered.empty() && !has_none){
@@ -1612,6 +1621,17 @@ impl Resolver{
     scp.drop();
     not_covered.drop();
     return res.unwrap();
+  }
+
+  func visit_match_rhs(self, rhs: MatchRhs*): RType{
+    if let MatchRhs::EXPR(e*)=(rhs){
+      let res_type = self.visit(e);
+      return res_type;
+    }else if let MatchRhs::STMT(st*)=(rhs){
+      self.visit(st);
+      return RType::new("void");
+    }
+    panic("unr");
   }
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
