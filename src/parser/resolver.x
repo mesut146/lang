@@ -28,7 +28,6 @@ struct Context{
   search_paths: List<String>;
   out_dir: String;
   verbose: bool;
-  single_mode: bool;
   stack_trace: bool;
 }
 impl Context{
@@ -45,7 +44,6 @@ impl Context{
        search_paths: List<String>::new(),
        out_dir: out_dir,
        verbose: true,
-       single_mode: true,
        stack_trace: false
     };
     return res;

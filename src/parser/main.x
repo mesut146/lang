@@ -73,9 +73,8 @@ func bootstrap(cmd: CmdArgs*){
   }else{
     let stdlib = build_std(std_dir.str(), out_dir.str());
     let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
-    config.set_link(LinkType::Binary{name, args.str(), false});
+    config.set_link(LinkType::Binary{name.owned(), args, false});
     stdlib.drop();
-    args.drop();
   }
   config
     .set_file(format("{}/parser", &src_dir))
@@ -126,7 +125,7 @@ func handle_c(cmd: CmdArgs*){
     std_path.drop();
   }
   let path: String = cmd.get();
-  let bin = bin_name(path.str());
+  let bin: String = bin_name(path.str());
   config.set_file(path.str());
   config.set_out(out_dir.clone());
   if(link_static){
@@ -137,9 +136,11 @@ func handle_c(cmd: CmdArgs*){
     config.set_link(LinkType::None);
   }else{
     if(name.is_some()){
-      config.set_link(LinkType::Binary{name.get().str(), flags.str(), run});
+      config.set_link(LinkType::Binary{name.unwrap(), flags, run});
+      bin.drop();
     }else{
-      config.set_link(LinkType::Binary{bin.str(), flags.str(), run});
+      config.set_link(LinkType::Binary{bin, flags, run});
+      name.drop();
     }
   }
   if(is_dir(path.str())){
@@ -150,10 +151,7 @@ func handle_c(cmd: CmdArgs*){
     out.drop();
   }
   path.drop();
-  bin.drop();
-  flags.drop();
   out_dir.drop();
-  name.drop();
 }
 
 func handle_std(cmd: CmdArgs*){

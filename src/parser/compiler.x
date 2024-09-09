@@ -32,7 +32,6 @@ func get_linker(): str{
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
-  main_file: Option<String>;
   llvm: llvm_holder;
   protos: Option<Protos>;
   NamedValues: Map<String, Value*>;
@@ -157,7 +156,7 @@ func has_main(unit: Unit*): bool{
 
 func get_out_file(path: str, c: Compiler*): String{
   let name = getName(path);
-  let res = format("{}/{}-bt.o", c.ctx.out_dir, trimExtenstion(name));
+  let res = format("{}/{}.o", c.ctx.out_dir, trimExtenstion(name));
   return res;
 }
 
@@ -213,7 +212,6 @@ impl Compiler{
     let vm = llvm_holder::new();
     return Compiler{ctx: ctx,
      resolver: Option<Resolver*>::None,
-     main_file: Option<String>::new(),
      llvm: vm,
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
@@ -236,9 +234,6 @@ impl Compiler{
   }
 
   func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
-    /*if(bootstrap && path.ends_with("stmt_emitter.x")){
-      drop_enabled = true;
-    }*/
     let outFile: String = get_out_file(path, self);
     if(!cache.need_compile(path, outFile.str())){
       return outFile;
@@ -249,13 +244,6 @@ impl Compiler{
     }
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
-    if (has_main(self.unit())) {
-      self.main_file = Option::new(path.str());
-      if (!self.ctx.single_mode) {//compile last
-          print("skip main file\n");
-          return outFile;
-      }
-    }
     let resolver = self.get_resolver();
     resolver.resolve_all();
     self.llvm.initModule(path);
@@ -275,7 +263,7 @@ impl Compiler{
     methods.drop();
     
     let name = getName(path);
-    let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
+    let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     /*if(self.ctx.verbose){
@@ -705,7 +693,7 @@ impl Compiler{
     }
     let obj = cmp.compile(config.file.str(), &cache, &config);
     compiled.add(obj);
-    let res = config.link(&compiled, &cmp);
+    let res = config.link(&compiled);
     config.drop();
     cmp.drop();
     compiled.drop();
@@ -747,13 +735,14 @@ impl Compiler{
     }
     list.drop();
     cache.drop();
-    if let LinkType::Binary(bin_name, args, run) = (&config.lt){
-      let path = link(&compiled, config.out_dir.str(), bin_name, args);
-      compiled.drop();
+    return config.link(&compiled);
+    /*if let LinkType::Binary(bin_name*, args*, run) = (&config.lt){
+      let path = link(&compiled, config.out_dir.str(), bin_name.str(), args.str());
       if(run){
         Compiler::run(path.clone());
       }
       config.drop();
+      compiled.drop();
       return path;
     }
     else if let LinkType::Static(lib_name*) = (&config.lt){
@@ -764,13 +753,13 @@ impl Compiler{
     }else{
       config.drop();
       panic("compile_dir");
-    }
+    }*/
   }
  
 }//Compiler
 
 enum LinkType{
-  Binary(name: str, args: str, run: bool),
+  Binary(name: String, args: String, run: bool),
   Static(name: String),
   Dynamic(name: String),
   None
@@ -842,15 +831,12 @@ impl CompilerConfig{
     self.std_path = Option::new(std_path.str());
     return self;
   }
-  func link(self, compiled: List<String>*, cmp: Compiler*): String{
+  func link(self, compiled: List<String>*): String{
     if(self.lt is LinkType::None){
       return "".str();
     }
-    if let LinkType::Binary(bin_name, args, run) = (&self.lt){
-      if(cmp.main_file.is_none()){
-        return "".str();
-      }
-      let path = Compiler::link(compiled, self.out_dir.str(), bin_name, args);
+    if let LinkType::Binary(bin_name*, args*, run) = (&self.lt){
+      let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
       if(run){
         Compiler::run(path.clone());
       }

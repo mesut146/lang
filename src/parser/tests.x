@@ -91,7 +91,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
       config.set_file(file);
       config.set_out(get_out());
       config.add_dir(get_src_dir());
-      config.set_link(LinkType::Binary{"a.out", args, true});
+      config.set_link(LinkType::Binary{"a.out".str(), args.owned(), true});
       if(inc.is_some()){
         config.add_dir(inc.get().clone());
       }

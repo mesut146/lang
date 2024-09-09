@@ -763,7 +763,12 @@ impl Compiler{
       for(;argIdx < mc.args.len();++argIdx){
         let arg: Expr* = mc.args.get_ptr(argIdx);
         let at = self.getType(arg);
-        if (at.is_pointer()) {
+        let lit: Option<String*> = is_str_lit(arg);
+        if(target.is_vararg && lit.is_some()){
+          let val = self.get_global_string(lit.unwrap().clone());
+          vector_Value_push(args, val);
+        }
+        else if (at.is_pointer()) {
           vector_Value_push(args, self.get_obj_ptr(arg));
         }
         else if (is_struct(&at)) {
