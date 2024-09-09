@@ -131,7 +131,7 @@ func handle_c(cmd: CmdArgs*){
   if(link_static){
     config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
   }else if(link_shared){
-    config.set_link(LinkType::Dynamic{format("{}.a", get_filename(path.str()))});
+    config.set_link(LinkType::Dynamic{format("{}.so", get_filename(path.str()))});
   }else if(compile_only){
     config.set_link(LinkType::None);
   }else{
