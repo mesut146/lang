@@ -182,7 +182,7 @@ impl Own{
         self.var_map.add(p.id, var);
     }
     func add_var(self, f: Fragment*, ptr: Value*){
-        let rt = self.compiler.get_resolver().visit(f);
+        let rt = self.compiler.get_resolver().visit_frag(f);
         if(!self.is_drop_or_ptr(&rt.type)){
             rt.drop();
             return;

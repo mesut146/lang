@@ -223,7 +223,7 @@ impl Compiler{
         ty_ptr.drop();
       } else {
         //deref
-        if (field.type.is_prim() || field.type.is_pointer()) {
+        if (field.type.is_prim() || field.type.is_any_pointer()) {
             let field_val = CreateLoad(self.mapType(&field.type), field_ptr);
             CreateStore(field_val, alloc_ptr);
         } else {
@@ -236,6 +236,15 @@ impl Compiler{
     }
 
     func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
+      let rt = self.get_resolver().visit(node);
+      if(rt.type.is_fpointer()){
+        if(rt.method_desc.is_some()){
+          let target: Method* = self.get_resolver().get_method(&rt).unwrap();
+          let proto = self.protos.get().get_func(target);
+          rt.drop();
+          return proto as Value*;
+        }
+      }
       if(self.globals.contains(name)){
         return *self.globals.get_ptr(name).unwrap();
       }
@@ -267,7 +276,7 @@ impl Compiler{
     func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
       let lhs_rt = self.get_resolver().visit(lhs);
       //ptr to int
-      if (lhs_rt.type.is_pointer() && rhs.eq("u64")) {
+      if (lhs_rt.type.is_any_pointer() && rhs.eq("u64")) {
         let val = self.get_obj_ptr(lhs);
         lhs_rt.drop();
         return CreatePtrToInt(val, self.mapType(rhs));
@@ -485,9 +494,15 @@ impl Compiler{
         return CreateNSWSub(makeInt(0, bits) as Value*, val);
       }
       if(op.eq("++")){
+        dbg(e.line == 48, 111);
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
           let res = CreateFAdd(val, makeFloat_one(&type));
+          CreateStore(res, var_ptr);
+          return res;
+        }
+        if(type.is_unsigned()){
+          let res = CreateAdd(val, makeInt(1, bits) as Value*);
           CreateStore(res, var_ptr);
           return res;
         }
@@ -570,7 +585,7 @@ impl Compiler{
       if(Resolver::is_drop_call(mc)){
         //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get_ptr(0));
-        if(argt.is_pointer() || argt.is_prim()){
+        if(argt.is_any_pointer() || argt.is_prim()){
           argt.drop();
           return getVoidTy() as Value*;
         }
@@ -718,6 +733,14 @@ impl Compiler{
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
       let rt = self.get_resolver().visit(expr);
       if(!rt.is_method()){
+        if(mc.scope.is_none()){
+          let val = self.visit_name(expr, &mc.name, false);
+          let args = vector_Value_new();
+          //vector_Value_push(args, size);
+          let res = CreateCall_ft(proto, val, args);
+          vector_Value_delete(args);
+          return res as Value*;
+        }
         panic("mc no method {} {}", expr, rt.desc);
       }
       //print("{}\n", expr);
@@ -768,7 +791,7 @@ impl Compiler{
           let val = self.get_global_string(lit.unwrap().clone());
           vector_Value_push(args, val);
         }
-        else if (at.is_pointer()) {
+        else if (at.is_any_pointer()) {
           vector_Value_push(args, self.get_obj_ptr(arg));
         }
         else if (is_struct(&at)) {
@@ -869,7 +892,7 @@ impl Compiler{
             val = CreateFPExt(val, getDoubleTy());
           }
           vector_Value_push(args, val);
-        }else if(arg_type.is_pointer()){
+        }else if(arg_type.is_any_pointer()){
           let val = self.get_obj_ptr(arg);
           vector_Value_push(args, val);
           arg_type.drop();
@@ -912,7 +935,7 @@ impl Compiler{
         if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
           vector_Value_push(args, val);
-        }else if(arg_type.is_pointer()){
+        }else if(arg_type.is_any_pointer()){
           let val = self.get_obj_ptr(arg);
           vector_Value_push(args, val);
           arg_type.drop();

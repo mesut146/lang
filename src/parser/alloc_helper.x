@@ -32,33 +32,31 @@ impl AllocHelper{
       panic("internal err: alloc of void");
     }
   }
-  func alloc_ty(self, ty: Type*, node: Fragment*): Value*{
-    check_type(ty);
-    let mapped = self.c.mapType(ty);
-    let ptr = CreateAlloca(mapped);
-    self.c.allocMap.add(node.id, ptr);
-    return ptr;
-  }
-  func alloc_ty(self, ty: Type*, node: Expr*): Value*{
-    check_type(ty);
-    let mapped = self.c.mapType(ty);
-    return self.alloc_ty(mapped, node);
-  }
   func alloc_ty(self, ty: Type*, node: Node*): Value*{
     check_type(ty);
     let mapped = self.c.mapType(ty);
+    if(ty.is_fpointer()){
+      mapped = getPointerTo(getInt(8)) as llvm_Type*;
+    }
     let ptr = CreateAlloca(mapped);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
-  func alloc_ty(self, ty: llvm_Type*, node: Expr*): Value*{
+  func alloc_ty(self, ty: Type*, node: Fragment*): Value*{
+    return self.alloc_ty(ty, node as Node*);
+  }
+  func alloc_ty(self, ty: Type*, node: Expr*): Value*{
+    return self.alloc_ty(ty, node as Node*);
+  }
+  /*func alloc_ty(self, ty: llvm_Type*, node: Expr*): Value*{
     if(isVoidTy(ty)){
       panic("internal err: alloc of void");
     }
     let ptr = CreateAlloca(ty);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
-  }
+  }*/
+
   func visit(self, node: Block*): Option<Value*>{
     for st in &node.list{
       self.visit(st);
@@ -151,7 +149,7 @@ impl AllocHelper{
   }
   func visit(self, node: VarExpr*){
     for f in &node.list{
-      let rt = self.c.get_resolver().visit(f);
+      let rt = self.c.get_resolver().visit_frag(f);
       let ptr = self.alloc_ty(&rt.type, f);
       let name_c = f.name.clone().cstr();
       Value_setName(ptr, name_c.ptr());
@@ -266,9 +264,8 @@ impl AllocHelper{
     if let Expr::Lit(lit*)=(node){
       if(lit.kind is LitKind::STR){
         let ty = Type::new("str");
-        let st = self.c.mapType(&ty);
+        res.set(self.alloc_ty(&ty, node));
         ty.drop();
-        return Option::new(self.alloc_ty(st as llvm_Type*, node));
       }
       return res;
     }
@@ -293,8 +290,9 @@ impl AllocHelper{
       self.visit(aa.idx.get());
       if(aa.idx2.is_some()){
         self.visit(aa.idx2.get());
-        let st = self.c.protos.get().std("slice");
-        return Option::new(self.alloc_ty(st as llvm_Type*, node));
+        let ty = self.c.get_resolver().getType(node);
+        res.set(self.alloc_ty(&ty, node));
+        ty.drop();
       }
       return res;
     }

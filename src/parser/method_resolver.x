@@ -202,13 +202,13 @@ impl MethodResolver{
                     self.collect_member(sig, &info.type, &list, false);
                 }
             }            
-            self.collect_static(sig, &list);
+            self.collect_static(sig.name.str(), &list);
             let arr = self.r.get_resolvers();
             for (let i = 0;i < arr.len();++i) {
                 let resolver = *arr.get_ptr(i);
                 resolver.init();
                 let mr = MethodResolver::new(resolver);
-                mr.collect_static(sig, &list);
+                mr.collect_static(sig.name.str(), &list);
             }
             arr.drop();         
         }
@@ -262,15 +262,15 @@ impl MethodResolver{
         return list;
     }
 
-    func collect_static(self, sig: Signature*, list: List<Signature>*){
-      let name = &sig.name;
+    func collect_static(self, name: str, list: List<Signature>*){
       for (let i = 0;i < self.r.unit.items.len();++i) {
         let item: Item* = self.r.unit.items.get_ptr(i);
         if let Item::Method(m*) = (item){
             if (m.name.eq(name)) {
                 let desc = Desc{kind: RtKind::Method,
-                    path: m.path.clone(),
-                    idx: i};
+                                path: m.path.clone(),
+                                idx: i
+                };
                 list.add(Signature::new(m, desc));
             }
         } else if let Item::Extern(arr*) = (item){

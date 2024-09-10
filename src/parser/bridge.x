@@ -11,7 +11,7 @@ struct StructType;
 struct llvm_Type;
 struct PointerType;
 struct ArrayType;
-struct FunctionType;
+struct llvm_FunctionType;
 struct LinkageTypes;
 struct Function;
 struct Argument;
@@ -148,10 +148,10 @@ extern{
     func CreateFPExt(val: Value*, trg: llvm_Type*): Value*;
     func CreateFPTrunc(val: Value*, trg: llvm_Type*): Value*;
     
-    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): FunctionType*;
+    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
     func odr(): i32;
-    func make_func(fr: FunctionType*, l: i32, name: i8*): Function*;
+    func make_func(fr: llvm_FunctionType*, l: i32, name: i8*): Function*;
     func get_arg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
@@ -188,6 +188,7 @@ extern{
     func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
     func CreateCall(f: Function*, args: vector_Value*): Value*;
+    func CreateCall_ft(f: Function*, val: Value*, args: vector_Value*): Value*;
     func CreateUnreachable();
     func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
     func CreateBr(bb: BasicBlock*);
@@ -211,6 +212,7 @@ extern{
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
     func CreateFAdd(l: Value*, r: Value*): Value*;
+    func CreateAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;
     func CreateSub(l: Value*, r: Value*): Value*;
     func CreateFSub(l: Value*, r: Value*): Value*;

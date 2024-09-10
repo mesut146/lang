@@ -333,6 +333,17 @@ impl DebugInfo{
         vector_Metadata_delete(elems);
         return res;
       }
+      if let Type::Function(ft_box*)=(type){
+        let tys = vector_Metadata_new();
+        vector_Metadata_push(tys, self.map_di(&ft_box.get().return_type, c) as Metadata*);
+        for prm in & ft_box.get().params{
+          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+        }
+        let sp = createSubroutineType(tys);
+        vector_Metadata_delete(tys);
+        return createPointerType(sp as DIType*, 64);
+        //return sp as DIType*;
+      }
       if(type.is_slice()){
         let elem = type.elem();
         let size = c.getSize(type);

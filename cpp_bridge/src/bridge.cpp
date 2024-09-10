@@ -573,6 +573,10 @@ llvm::Value *CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
   return Builder->CreateCall(f, *args);
 }
 
+llvm::Value *CreateCall_ft(llvm::FunctionType *ft, llvm::Value* val, std::vector<llvm::Value *> *args) {
+  return Builder->CreateCall(ft, val, *args);
+}
+
 void CreateRet(llvm::Value *val) { Builder->CreateRet(val); }
 
 void CreateRetVoid() { Builder->CreateRetVoid(); }

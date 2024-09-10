@@ -430,7 +430,7 @@ impl Compiler{
           }else{
             CreateStore(val, ptr);
           }
-        }else if(type.is_pointer()){
+        }else if(type.is_pointer() || type.is_fpointer()){
           let val = self.get_obj_ptr(&f.rhs);
           CreateStore(val, ptr);
         } else{
@@ -477,7 +477,7 @@ impl Compiler{
     func visit_ret(self, val: Value*){
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
-      if(type.is_pointer()){
+      if(type.is_pointer() || type.is_fpointer()){
         self.exit_frame();
         CreateRet(val);
         type.drop();
@@ -499,7 +499,7 @@ impl Compiler{
     func visit_ret(self, expr: Expr*){
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
-      if(type.is_pointer()){
+      if(type.is_pointer() || type.is_fpointer()){
         let val = self.get_obj_ptr(expr);
         self.own.get().do_return(expr);
         self.exit_frame();

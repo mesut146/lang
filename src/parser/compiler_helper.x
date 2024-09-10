@@ -268,7 +268,7 @@ func sort(list: List<Decl*>*, r: Resolver*){
 }
 
 func all_deps(type: Type*, r: Resolver*, arr: List<String>*){
-  if(type.is_pointer() || type.is_prim() || type.is_slice()) return;
+  if(type.is_any_pointer() || type.is_prim() || type.is_slice()) return;
   if(type.is_array()){
     all_deps(type.elem(), r, arr);
     return;
@@ -518,6 +518,17 @@ impl Compiler{
       let elem_ty = self.mapType(elem.get());
       return getPointerTo(elem_ty) as llvm_Type*;
     }
+    if let Type::Function(elem_bx*)=(type){
+      let ret = self.mapType(&elem_bx.get().return_type);
+      let args = vector_Type_new();
+      for prm in &elem_bx.get().params{
+        vector_Type_push(args, self.mapType(prm));
+      }
+      let res = make_ft(ret, args, false);
+      vector_Type_delete(args);
+      Type_dump(res as llvm_Type*);
+      return res as llvm_Type*;
+    }
     let p = self.protos.get();
     if let Type::Slice(elem*)=(type){
       return p.std("slice") as llvm_Type*;
@@ -699,7 +710,7 @@ impl Compiler{
     if(type.is_prim()){
       return prim_size(type.name().str()).unwrap();
     }
-    if(type.is_pointer()) return 64;
+    if(type.is_any_pointer()) return 64;
     if let Type::Array(elem*, sz)=(type){
       return self.getSize(elem.get()) * sz;
     }
@@ -820,7 +831,7 @@ impl Compiler{
         self.own.get().drop_lhs(lhs.unwrap(), trg);
       }
       self.copy(trg, val, type);
-    }else if(type.is_pointer()){
+    }else if(type.is_any_pointer()){
       let val = self.get_obj_ptr(expr);
       CreateStore(val, trg);
     }else{
@@ -854,12 +865,12 @@ impl Compiler{
       }
     }
     let val = self.visit(node);
-    if(node is Expr::Obj || node is Expr::Call|| node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
+    if(node is Expr::Obj || node is Expr::Call || node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
       return val;
     }
     if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
       let ty = self.getType(node);
-      if(ty.is_pointer()){
+      if(ty.is_any_pointer()){
         ty.drop();
         return CreateLoad(getPtr(), val);
       }

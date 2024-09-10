@@ -19,12 +19,14 @@ func base_of_struct(){
   let a_ptr = b as A*;
   assert(a_ptr.a == 10);
 }
+
 func base_of_struct2(){
   let a = A{a: 30};
   let b2 = B{.a, b: 40};
   assert(b2.a == 30);
   assert(b2.b == 40);
 }
+
 func base_of_enum(){
   let e = E::E1{.A{a: 30}};
   assert(e is E::E1);
@@ -33,6 +35,7 @@ func base_of_enum(){
   let a_ptr = e as A*;
   assert(a_ptr.a == 30);
 }
+
 func if_let(){
   let e = E::E2{.A{a: 50}, c: 60};
   assert(e is E::E2);

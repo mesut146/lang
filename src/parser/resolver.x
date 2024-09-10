@@ -70,13 +70,16 @@ struct Scope{
 #derive(Debug)
 struct VarHolder{
   name: String;
-  type: Type;
+  type: Box<RType>;
   prm: bool;
   id: i32;
 }
 impl VarHolder{
-  func new(name: String, type: Type, prm: bool, id: i32): VarHolder{
-    return VarHolder{name: name, type: type, prm: prm, id: id};
+  func new(name: String, type: RType, prm: bool, id: i32): VarHolder{
+    return VarHolder{name: name, type: Box::new(type), prm: prm, id: id};
+  }
+  func get_type(self): Type*{
+    return &self.type.get().type;
   }
 }
 impl Clone for VarHolder{
@@ -213,15 +216,6 @@ impl RType{
     };
     return res;
   }
-  func clone(self): RType{
-    return RType{
-      type: self.type.clone(),
-      value: self.value.clone(),
-      vh: self.vh.clone(),
-      desc: self.desc.clone(),
-      method_desc: self.method_desc.clone()
-    };
-  }
   func unwrap(*self): Type{
     let res = self.type.clone();
     self.drop();
@@ -238,6 +232,17 @@ impl RType{
       return false;
     }
     return self.method_desc.get().kind.is_method();
+  }
+}
+impl Clone for RType{
+  func clone(self): RType{
+    return RType{
+      type: self.type.clone(),
+      value: self.value.clone(),
+      vh: self.vh.clone(),
+      desc: self.desc.clone(),
+      method_desc: self.method_desc.clone()
+    };
   }
 }
 
@@ -399,7 +404,7 @@ impl Resolver{
     let tmp = self.scopes.remove(self.scopes.len() - 1);
     tmp.drop();
   }
-  func addScope(self, name: String, type: Type, prm: bool, id: i32, line: i32){
+  func addScope(self, name: String, type: RType, prm: bool, id: i32, line: i32){
     for scope in &self.scopes{
       if(scope.find(&name).is_some()){
         self.err(line, format("variable {} already exists\n", &name));
@@ -504,8 +509,7 @@ impl Resolver{
             err_opt.drop();
             type.drop();
         }
-        self.addScope(g.name.clone(), rhs.type.clone(), false, g.id, g.line);
-        rhs.drop();
+        self.addScope(g.name.clone(), rhs, false, g.id, g.line);
     }
   }
 
@@ -643,7 +647,7 @@ impl Resolver{
     return res;
   }
   func getType(self, f: Fragment*): Type{
-    let rt = self.visit(f);
+    let rt = self.visit_frag(f);
     let res = rt.type.clone();
     rt.drop();
     return res;
@@ -944,13 +948,13 @@ impl Resolver{
     self.newScope();
     if(node.self.is_some()){
       let self_prm: Param* = node.self.get();
-      self.visit_type(&self_prm.type).drop();
-      self.addScope(self_prm.name.clone(), self_prm.type.clone(), true, self_prm.id, self_prm.line);
+      let prm_rt = self.visit_type(&self_prm.type);
+      self.addScope(self_prm.name.clone(), prm_rt, true, self_prm.id, self_prm.line);
     }
     for(let i = 0;i < node.params.len();++i){
       let prm = node.params.get_ptr(i);
-      self.visit_type(&prm.type).drop();
-      self.addScope(prm.name.clone(), prm.type.clone(), true, prm.id, prm.line);
+      let prm_rt = self.visit_type(&prm.type);
+      self.addScope(prm.name.clone(), prm_rt, true, prm.id, prm.line);
     }
     if(node.body.is_some()){
       let body_rt = self.visit_block(node.body.get());
@@ -1132,6 +1136,16 @@ impl Resolver{
     if let Type::Array(inner*, size) = (node){
       let elem: RType = self.visit_type(inner.get());
       return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), size});      
+    }
+    if let Type::Function(ft_box*) = (node){
+      let ft = FunctionType{
+        return_type: self.visit_type(&ft_box.get().return_type).unwrap(),
+        params: List<Type>::new()
+      };
+      for prm in &ft_box.get().params{
+        ft.params.add(self.visit_type(prm).unwrap());
+      }
+      return RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)});      
     }
     if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
       let imp = self.curMethod.unwrap().parent.as_impl();
@@ -1510,7 +1524,7 @@ impl Resolver{
       self.err(node, "string op not supported yet");
     }
     if(!lt.type.is_prim() || !rt.type.is_prim()){
-      self.err(node, "infix on non prim type");
+      self.err(node, format("infix on non prim type {} vs {}", lt.type, rt.type));
     }
     if(is_comp(op.str())){
       lt.drop();
@@ -1581,7 +1595,7 @@ impl Resolver{
           if (arg.is_ptr) {
               ty = ty.toPtr();
           }
-          self.addScope(arg.name.clone(), ty.clone(), false, arg.id, arg.line);
+          self.addScope(arg.name.clone(), self.visit_type(&ty), false, arg.id, arg.line);
           self.cache.add(arg.id, RType::new(ty));
         }
       }else{
@@ -1743,7 +1757,7 @@ impl Resolver{
     //check rest
     for (let i = 1; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get_ptr(i));
-        if (!(arg.is_prim() || arg.is_pointer())) {
+        if (!(arg.is_prim() || arg.is_pointer() || arg.is_fpointer())) {
             self.err(node, "format arg is invalid");
         }
         arg.drop();
@@ -1802,6 +1816,13 @@ impl Resolver{
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
+    if(call.scope.is_none()){
+      let fp = self.visit_name_opt(node, &call.name);
+      //is_method needed
+      if(fp.is_some() && !fp.get().is_method()){
+        return fp.unwrap();
+      }
+    }
     if(Resolver::is_call(call, "std", "debug") || Resolver::is_call(call, "std", "debug2")){
       assert(call.type_args.len() == 0);
       assert(call.args.len() == 2);
@@ -2200,15 +2221,27 @@ impl Resolver{
   }
 
   func visit_name(self, node: Expr*, name: String*): RType{
+    let res = self.visit_name_opt(node, name);
+    if(res.is_some()){
+      return res.unwrap();
+    }
+    self.err(node, format("unknown identifier '{}'", name));
+    panic("");
+  }
+
+  func visit_name_opt(self, node: Expr*, name: String*): Option<RType>{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get_ptr(i);
       let vh_opt = scope.find(name);
       if(vh_opt.is_some()){
-        let vh = vh_opt.unwrap();
-        let res = self.visit_type(&vh.type);
+        let vh: VarHolder* = vh_opt.unwrap();
+        let res = self.visit_type(vh.get_type());
         res.vh.drop();
         res.vh = Option::new(vh.clone());
-        return res;
+        /*if(res.type.is_fpointer()){
+          res.method_desc.set();
+        }*/
+        return Option::new(res);
       }
     }
     //external globals
@@ -2227,19 +2260,56 @@ impl Resolver{
             if(old.name.eq(name)){
               //already have
               arr.drop();
-              return rt;
+              return Option::new(rt);
             }
           }
           self.glob_map.add(GlobalInfo{glob.name.clone(), rt.clone(), res.unit.path.clone()});
           arr.drop();
-          return rt;
+          return Option::new(rt);
         }
       }
     }
     arr.drop();
-    self.dump();
-    self.err(node, format("unknown identifier '{}'", name));
-    panic("");
+    //func ptr, (statics & members) + imports
+    let res = self.try_func_ptr(node, name.str());
+    if(res.is_some()){
+      return res;
+    }
+    return Option<RType>::new();
+  }
+
+  func try_func_ptr(self, expr: Expr*, name: str): Option<RType>{
+    let list = List<Signature>::new();
+    let mr = MethodResolver::new(self);
+    mr.collect_static(name, &list);
+    if(list.len() > 1){
+      self.err(expr, format("multiple matching functions for '{}'", name));
+    }
+    if(list.len() == 1){
+      let sig = list.get_ptr(0);
+      let method = sig.m.unwrap();
+      if(method.is_generic){
+        list.drop();
+        return Option<RType>::new();
+      }
+      let ret = self.visit_type(&method.type).unwrap();
+      let ft = FunctionType{return_type: ret, params: List<Type>::new()};
+      for prm in &sig.args{
+        let prm_rt = self.visit_type(prm);
+        ft.params.add(prm_rt.unwrap());
+      }
+      let id = Node::new(-1, expr.line);
+      let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
+      /*let desc = Desc{kind: RtKind::Method,
+                      path: method.path.clone(),
+                      idx: i
+      };*/
+      rt.method_desc = Option::new(sig.desc.clone());
+      list.drop();
+      return Option::new(rt);
+    }
+    list.drop();
+    return Option<RType>::new();
   }
 
   func visit_cached(self, node: Expr*): RType{
@@ -2355,12 +2425,12 @@ impl Resolver{
       }
       return;
     }else if let Stmt::Var(ve*) = (node){
-      self.visit(ve);
+      self.visit_var(ve);
       return;
     }else if let Stmt::For(f*) = (node){
       self.newScope();
       if(f.var_decl.is_some()){
-        self.visit(f.var_decl.get());
+        self.visit_var(f.var_decl.get());
       }
       if(f.cond.is_some()){
         if (!self.isCondition(f.cond.get())) {
@@ -2526,7 +2596,7 @@ impl Resolver{
         if (arg.is_ptr) {
             ty = ty.toPtr();
         } 
-        self.addScope(arg.name.clone(), ty.clone(), false, arg.id, arg.line);
+        self.addScope(arg.name.clone(), self.visit_type(&ty), false, arg.id, arg.line);
         self.cache.add(arg.id, RType::new(ty));
     }
     let rt1 = self.visit_body(is.then.get());
@@ -2589,16 +2659,15 @@ impl Resolver{
     return RType::new("void");
   }
 
-  func visit(self, node: VarExpr*){
+  func visit_var(self, node: VarExpr*){
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
-      let res = self.visit(f);
-      self.addScope(f.name.clone(), res.type.clone(), false, f.id, f.line);
-      res.drop();
+      let rt = self.visit_frag(f);
+      self.addScope(f.name.clone(), rt, false, f.id, f.line);
     }
   }
 
-  func visit(self, node: Fragment*): RType{
+  func visit_frag(self, node: Fragment*): RType{
     let rhs: RType = self.visit(&node.rhs);
     if(rhs.type.is_void()){
       self.err(node.line, format("void variable, {}", node.name));
@@ -2611,9 +2680,10 @@ impl Resolver{
     if(err_opt.is_some()){
       self.err(node.line, format("type mismatch {} vs {}\n{}", res.type, rhs.type, err_opt.get()));
     }
+    rhs.type = res.type.clone();
     err_opt.drop();
-    rhs.drop();
-    return res;
+    res.drop();
+    return rhs;
   }
 
   func get_macro(self, node: Expr*): FormatInfo*{

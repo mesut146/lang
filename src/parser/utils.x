@@ -159,11 +159,11 @@ func max_for(type: Type*): i64{
 }
 
 func is_struct(type: Type*): bool{
-  return !type.is_prim() && !type.is_pointer() && !type.is_void(); 
+  return !type.is_prim() && !type.is_pointer() && !type.is_void() && !type.is_fpointer(); 
 }
 
 func is_loadable(type: Type*): bool{
-    return type.is_prim() || type.is_pointer();
+    return type.is_prim() || type.is_pointer() || type.is_fpointer();
   }
 
 func is_main(m: Method*): bool{

@@ -245,7 +245,7 @@ impl Debug for Type{
       box.get().debug(f);
       f.print("]");
     }else if let Type::Function(ft*) = (self){
-      ft.debug(f);
+      ft.get().debug(f);
     }
     else panic("Type::debug() corrupt");
   }

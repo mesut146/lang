@@ -126,6 +126,13 @@ impl AstCopier{
             let res = Type::Slice{.id, Box::new(scope)};
             return res;
         }
+        if let Type::Function(bx*) = (type){
+            let ft = FunctionType{
+                       return_type: self.visit(&bx.get().return_type),
+                       params: self.visit_list(&bx.get().params)
+            };
+            return Type::Function{.id, type: Box::new(ft)};
+        }
         let smp = type.as_simple();
         if(self.map.contains(&smp.name)){
             return self.map.get_ptr(&smp.name).unwrap().clone();

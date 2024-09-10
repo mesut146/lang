@@ -311,6 +311,7 @@ impl Simple{
   Generic(scope: Box<Type>, name: String, args: List<Type>)
 }*/
 
+// (params)=>ret
 struct FunctionType{
   return_type: Type;
   params: List<Type>;
@@ -413,6 +414,12 @@ impl Type{
   }
   func is_dpointer(self): bool{
     return self.is_pointer() && self.elem().is_pointer();
+  }
+  func is_fpointer(self): bool{
+    return self is Type::Function;
+  }
+  func is_any_pointer(self): bool{
+    return self.is_pointer() || self.is_fpointer();
   }
   func is_array(self): bool{
     return self is Type::Array;
