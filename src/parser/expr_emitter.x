@@ -732,15 +732,19 @@ impl Compiler{
     }
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
       let rt = self.get_resolver().visit(expr);
-      if(!rt.is_method()){
-        if(mc.scope.is_none()){
+      if let Type::Function(ft_bx*)=(&rt.type){
+        if(!rt.is_method() && mc.scope.is_none()){
           let val = self.visit_name(expr, &mc.name, false);
+          val = CreateLoad(getPtr(), val);
           let args = vector_Value_new();
           //vector_Value_push(args, size);
+          let proto = self.make_proto(ft_bx.get());
           let res = CreateCall_ft(proto, val, args);
           vector_Value_delete(args);
           return res as Value*;
         }
+      }
+      if(!rt.is_method()){
         panic("mc no method {} {}", expr, rt.desc);
       }
       //print("{}\n", expr);

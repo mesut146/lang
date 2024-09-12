@@ -489,6 +489,16 @@ impl Compiler{
     val_c.drop();
     return ptr;
   }
+  func make_proto(self, ft: FunctionType*): llvm_FunctionType*{
+    let ret = self.mapType(&ft.return_type);
+    let args = vector_Type_new();
+    for prm in &ft.params{
+      vector_Type_push(args, self.mapType(prm));
+    }
+    let res = make_ft(ret, args, false);
+    vector_Type_delete(args);
+    return res;
+  }
   func mapType(self, type: Type*): llvm_Type*{
     let r = self.get_resolver();
     let rt = r.visit_type(type);
@@ -519,14 +529,7 @@ impl Compiler{
       return getPointerTo(elem_ty) as llvm_Type*;
     }
     if let Type::Function(elem_bx*)=(type){
-      let ret = self.mapType(&elem_bx.get().return_type);
-      let args = vector_Type_new();
-      for prm in &elem_bx.get().params{
-        vector_Type_push(args, self.mapType(prm));
-      }
-      let res = make_ft(ret, args, false);
-      vector_Type_delete(args);
-      Type_dump(res as llvm_Type*);
+      let res = self.make_proto(elem_bx.get());
       return res as llvm_Type*;
     }
     let p = self.protos.get();
@@ -869,8 +872,8 @@ impl Compiler{
       return val;
     }
     if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
-      let ty = self.getType(node);
-      if(ty.is_any_pointer()){
+      let ty = self.get_resolver().visit(node);
+      if(ty.type.is_any_pointer() && !ty.is_method()){
         ty.drop();
         return CreateLoad(getPtr(), val);
       }

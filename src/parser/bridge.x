@@ -188,7 +188,7 @@ extern{
     func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
     func CreateCall(f: Function*, args: vector_Value*): Value*;
-    func CreateCall_ft(f: Function*, val: Value*, args: vector_Value*): Value*;
+    func CreateCall_ft(ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
     func CreateUnreachable();
     func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
     func CreateBr(bb: BasicBlock*);
