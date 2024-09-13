@@ -1,11 +1,14 @@
+struct c_void;
+struct FILE;
+struct DIR;
+
 //type char = i8
 //type int i32
 type ino_t = u64;
 type off_t = u64;
+type pthread_t = i64;
+type pthread_attr_t = c_void;
 
-struct c_void;
-struct FILE;
-struct DIR;
 
 struct dirent {
     d_ino: ino_t;      /* inode number */
@@ -101,6 +104,11 @@ extern{
 
   func atof(ptr: i8*): f64;
   //func sprintf(str: i8*, format: i8*, ...): i32;
+  //func pthread_create(th: pthread_t*, attr: pthread_attr_t*, fp: func() => void, arg: c_void*): i32;
+  func pthread_create(th: i64*, attr: c_void*, fp: func() => void, arg: c_void*): i32;
+  //func pthread_join(th: pthread_t, value_ptr: c_void**): i32;
+  func pthread_join(th: i64, value_ptr: c_void*): i32;
+  func sleep(sec: i32): i32;
 }
 
 type dev_t = i64;

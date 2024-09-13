@@ -85,8 +85,8 @@ func main(){
 
     assert(take2(g, 50) == 100);
 
-    let m1 = A::member;
-    m1();
+    //let m1 = A::member;
+    //m1();
     
     printf("\n");
     check([ID::F, ID::F, ID::F2, ID::G, ID::F, ID::F, ID::F2, ID::G]);

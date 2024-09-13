@@ -1815,7 +1815,7 @@ impl Resolver{
   func visit_call(self, node: Expr*, call: Call*): RType{
     if(call.scope.is_none()){
       //call to func ptr
-      let fp = self.visit_name_opt(node, &call.name);
+      let fp = self.visit_name_opt(node, &call.name, false);
       if(fp.is_some() && fp.get().type.is_fpointer() && !fp.get().is_method()){
         let ft = fp.get().type.get_ft();
         if(call.args.len() != ft.params.len()){
@@ -2234,7 +2234,7 @@ impl Resolver{
   }
 
   func visit_name(self, node: Expr*, name: String*): RType{
-    let res = self.visit_name_opt(node, name);
+    let res = self.visit_name_opt(node, name, true);
     if(res.is_some()){
       return res.unwrap();
     }
@@ -2242,7 +2242,7 @@ impl Resolver{
     panic("");
   }
 
-  func visit_name_opt(self, node: Expr*, name: String*): Option<RType>{
+  func visit_name_opt(self, node: Expr*, name: String*, err_multiple: bool): Option<RType>{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get_ptr(i);
       let vh_opt = scope.find(name);
@@ -2281,14 +2281,14 @@ impl Resolver{
     }
     arr.drop();
     //func ptr, (statics & members) + imports
-    let res = self.try_func_ptr(node, name.str());
+    let res = self.try_func_ptr(node, name.str(), err_multiple);
     if(res.is_some()){
       return res;
     }
     return Option<RType>::new();
   }
 
-  func try_func_ptr(self, expr: Expr*, name: str): Option<RType>{
+  func try_func_ptr(self, expr: Expr*, name: str, err_multiple: bool): Option<RType>{
     let list = List<Signature>::new();
     let mr = MethodResolver::new(self);
     mr.collect_static(name, &list);
@@ -2310,8 +2310,9 @@ impl Resolver{
         }
       }
     }
-    if(list.len() > 1){
-      self.err(expr, format("multiple matching functions for '{}'", name));
+    arr.drop();
+    if(list.len() > 1 && err_multiple){
+      self.err(expr, format("multiple matching functions for '{}'\n{}", name, list));
     }
     if(list.len() == 1){
       let sig = list.get_ptr(0);

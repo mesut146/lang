@@ -375,7 +375,7 @@ impl MethodResolver{
                     exact = Option::new(sig2);
                 }
                 real.add(sig2);
-               cmp_res.drop();
+                cmp_res.drop();
             }
         }
         if(real.empty()){
