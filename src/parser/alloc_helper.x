@@ -48,14 +48,6 @@ impl AllocHelper{
   func alloc_ty(self, ty: Type*, node: Expr*): Value*{
     return self.alloc_ty(ty, node as Node*);
   }
-  /*func alloc_ty(self, ty: llvm_Type*, node: Expr*): Value*{
-    if(isVoidTy(ty)){
-      panic("internal err: alloc of void");
-    }
-    let ptr = CreateAlloca(ty);
-    self.c.allocMap.add(node.id, ptr);
-    return ptr;
-  }*/
 
   func visit(self, node: Block*): Option<Value*>{
     for st in &node.list{
@@ -370,5 +362,23 @@ impl AllocHelper{
       return res;
     }
     panic("alloc {}\n", node);
+  }
+}
+
+impl AllocHelper{
+  func visit_child(self, node: Expr*){
+    if let Expr::Array(list*,sz*)=(node){
+      if(sz.is_some()){
+        let elem = list.get_ptr(0);
+        self.visit(elem);
+      }else{
+        for elem in list{
+          self.visit(elem);
+        }
+      }
+      return;
+    }else{
+      panic("visit_child {}", node);
+    }
   }
 }

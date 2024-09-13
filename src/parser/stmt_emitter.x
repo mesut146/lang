@@ -395,7 +395,10 @@ impl Compiler{
       self.visit_body(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
       //self.llvm.di.get().exit_scope();
-      CreateBr(updatebb);
+      let exit = Exit::get_exit_type(node.body.get());
+      if(!exit.is_jump()){
+        CreateBr(updatebb);
+      }
       SetInsertPoint(updatebb);
       //self.llvm.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {

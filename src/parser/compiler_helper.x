@@ -530,7 +530,8 @@ impl Compiler{
     }
     if let Type::Function(elem_bx*)=(type){
       let res = self.make_proto(elem_bx.get());
-      return res as llvm_Type*;
+      //return res as llvm_Type*;
+      return getPointerTo(res as llvm_Type*) as llvm_Type*;
     }
     let p = self.protos.get();
     if let Type::Slice(elem*)=(type){

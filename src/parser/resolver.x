@@ -201,6 +201,7 @@ struct RType{
   vh: Option<VarHolder>;
   desc: Desc;
   method_desc: Option<Desc>;
+  fp_info: Option<FunctionType>;
 }
 impl RType{
   func new(s: str): RType{
@@ -212,7 +213,8 @@ impl RType{
       value: Option<String>::new(),
       vh: Option<VarHolder>::new(),
       desc: Desc::new(),
-      method_desc: Option<Desc>::new()
+      method_desc: Option<Desc>::new(),
+      fp_info: Option<FunctionType>::new()
     };
     return res;
   }
@@ -241,7 +243,8 @@ impl Clone for RType{
       value: self.value.clone(),
       vh: self.vh.clone(),
       desc: self.desc.clone(),
-      method_desc: self.method_desc.clone()
+      method_desc: self.method_desc.clone(),
+      fp_info: self.fp_info.clone()
     };
   }
 }
@@ -482,7 +485,6 @@ impl Resolver{
       let item = self.unit.items.get_ptr(i);
       self.visit_item(item);
     }
-    //todo these would generate more methods, whose are not visited
     for(let j = 0;j < self.generated_methods.len();++j){
       let gm = self.generated_methods.get_ptr(j).get();
       self.visit_method(gm);
@@ -496,7 +498,6 @@ impl Resolver{
         let rhs: RType = self.visit(&g.expr);
         if (g.type.is_some()) {
             let type = self.getType(g.type.get());
-            //todo check
             let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
             if (err_opt.is_some()) {
                 let msg = format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name, type, rhs.type, err_opt.get());
@@ -960,15 +961,7 @@ impl Resolver{
       let body_rt = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
-        self.check_return(&body_rt.type, node.body.get().end_line);
-        /*let msg = String::new("non void function ");
-        let tmp = printMethod(node);
-        msg.append(tmp.str());
-        tmp.drop();
-        msg.append(" must return a value");
-        self.err(node.line, msg);*/
-      }
-      //todo comp of expr
+        self.check_return(&body_rt.type, node.body.get().end_line);      }
       exit.drop();
     }
     self.dropScope();
@@ -1157,6 +1150,10 @@ impl Resolver{
       let scope = self.visit_type(simple.scope.get());
       let decl = self.get_decl(&scope).unwrap();
       if (!(decl is Decl::Enum)) {
+          //todo ptr to member function
+          /*for method in decl.get_method(){
+
+          }*/
           self.err(node.line, format("type scope is not enum: {}", str));
       }
       findVariant(decl, &simple.name);
@@ -1817,11 +1814,27 @@ impl Resolver{
 
   func visit_call(self, node: Expr*, call: Call*): RType{
     if(call.scope.is_none()){
+      //call to func ptr
       let fp = self.visit_name_opt(node, &call.name);
-      //is_method needed
-      if(fp.is_some() && !fp.get().is_method()){
-        return fp.unwrap();
+      if(fp.is_some() && fp.get().type.is_fpointer() && !fp.get().is_method()){
+        let ft = fp.get().type.get_ft();
+        if(call.args.len() != ft.params.len()){
+          self.err(node, format("arg count do not match {} vs {}", call.args.len(), ft.params.len()));
+        }
+        for (let i = 0; i < call.args.len(); ++i) {
+          let arg = self.visit(call.args.get_ptr(i));
+          let prm = ft.params.get_ptr(i);
+          let cmp = MethodResolver::is_compatible(&arg.type, prm);
+          if(cmp.is_some()){
+            self.err(node, format("arg type do not match {} vs {} at {}", arg.type, prm, i + 1));
+          }
+        }
+        let res = self.visit_type(&ft.return_type);
+        res.fp_info.set(fp.get().type.clone().unwrap_ft());
+        fp.drop();
+        return res;
       }
+      fp.drop();
     }
     if(Resolver::is_call(call, "std", "debug") || Resolver::is_call(call, "std", "debug2")){
       assert(call.type_args.len() == 0);
@@ -2011,9 +2024,9 @@ impl Resolver{
         return RType::new(elem.toPtr());
     }
     if (self.is_slice_get_len(call)) {
-        let tmp = self.visit(call.scope.get());//todo already done?
-        tmp.drop();
+        let tmp = self.visit(call.scope.get());
         let ltype = as_type(SLICE_LEN_BITS());
+        tmp.drop();
         return RType::new(ltype);
     }
     if(self.is_array_get_len(call)){
@@ -2238,9 +2251,6 @@ impl Resolver{
         let res = self.visit_type(vh.get_type());
         res.vh.drop();
         res.vh = Option::new(vh.clone());
-        /*if(res.type.is_fpointer()){
-          res.method_desc.set();
-        }*/
         return Option::new(res);
       }
     }
@@ -2282,6 +2292,24 @@ impl Resolver{
     let list = List<Signature>::new();
     let mr = MethodResolver::new(self);
     mr.collect_static(name, &list);
+    //imported func
+    let arr = self.get_resolvers();
+    for (let i = 0;i < arr.len();++i) {
+      let res = *arr.get_ptr(i);
+      for(let j = 0;j < res.unit.items.len();++j){
+        let item = res.unit.items.get_ptr(j);
+        if let Item::Method(m*)=(item){
+          if(m.name.eq(name)){
+            let desc = Desc{
+              kind: RtKind::Method,
+              path: m.path.clone(),
+              idx: j
+            };
+            list.add(Signature::new(m, desc));
+          }
+        }
+      }
+    }
     if(list.len() > 1){
       self.err(expr, format("multiple matching functions for '{}'", name));
     }
@@ -2300,10 +2328,6 @@ impl Resolver{
       }
       let id = Node::new(-1, expr.line);
       let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
-      /*let desc = Desc{kind: RtKind::Method,
-                      path: method.path.clone(),
-                      idx: i
-      };*/
       rt.method_desc = Option::new(sig.desc.clone());
       list.drop();
       return Option::new(rt);
@@ -2414,7 +2438,6 @@ impl Resolver{
       return;
     }else if let Stmt::Ret(e*) = (node){
       if(e.is_some()){
-        //todo
         let rt = self.visit(e.get());
         self.check_return(&rt.type, node.line);
         rt.drop();
@@ -2645,15 +2668,6 @@ impl Resolver{
         }
         last.drop();
       }
-      // let rt = self.visit(node.return_expr.get());
-      // let ret = &self.curMethod.unwrap().type;
-      // let cmp = MethodResolver::is_compatible(&rt.type, ret);
-      // if(cmp.is_some()){
-      //   //todo move this into method visit
-      //   self.err(node.return_expr.get(), format("return type mismatch {} vs {}", &rt.type, ret));
-      // }
-      // cmp.drop();
-      // rt.drop();
       return self.visit(node.return_expr.get());
     }
     return RType::new("void");

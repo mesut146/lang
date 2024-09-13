@@ -731,21 +731,45 @@ impl Compiler{
       return self.visit_call2(expr, mc);
     }
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
-      let rt = self.get_resolver().visit(expr);
-      if let Type::Function(ft_bx*)=(&rt.type){
-        if(!rt.is_method() && mc.scope.is_none()){
+      let resolver = self.get_resolver();
+      let rt = resolver.visit(expr);
+      if(rt.fp_info.is_some()){
+        let ft = rt.fp_info.get();
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
+          let proto = self.make_proto(ft);
           let args = vector_Value_new();
+          let paramIdx = 0;
+          for arg in &mc.args{
+            let at = resolver.getType(arg);
+            if (at.is_any_pointer()) {
+              vector_Value_push(args, self.get_obj_ptr(arg));
+            }
+            else if (is_struct(&at)) {
+              let de = is_deref(arg);
+              if (de.is_some()) {
+                vector_Value_push(args, self.get_obj_ptr(de.unwrap()));
+              }
+              else {
+                vector_Value_push(args, self.visit(arg));
+              }
+            } else {
+                let pt0 = ft.params.get_ptr(paramIdx);
+                let pt = resolver.visit_type(pt0).unwrap();
+                vector_Value_push(args, self.cast(arg, &pt));
+                pt.drop();
+            }
+            ++paramIdx;
+            at.drop();
+          }
           //vector_Value_push(args, size);
-          let proto = self.make_proto(ft_bx.get());
           let res = CreateCall_ft(proto, val, args);
           vector_Value_delete(args);
+          rt.drop();
           return res as Value*;
-        }
       }
       if(!rt.is_method()){
-        panic("mc no method {} {}", expr, rt.desc);
+        resolver.err(expr, format("mc no method"));
       }
       //print("{}\n", expr);
       let ptr_ret = Option<Value*>::new();

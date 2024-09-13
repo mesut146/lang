@@ -305,7 +305,7 @@ impl Compiler{
       self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
-    if(self.get_resolver().unit.globals.empty()){
+    if(resolv.unit.globals.empty()){
       return;
     }
     let proto = self.make_init_proto(resolv.unit.path.str());
@@ -361,7 +361,7 @@ impl Compiler{
       let name_c = gl.name.clone().cstr();
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
       name_c.drop();
-      if( self.llvm.di.get().debug){
+      if(self.llvm.di.get().debug){
         let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
         vector_Metadata_push(globs, gve as Metadata*);
       }
@@ -378,8 +378,8 @@ impl Compiler{
       }else{
         if(!is_constexpr(&gl.expr)){
           if let Expr::Array(list*, size*)=(&gl.expr){
-            AllocHelper::new(self).visit(&gl.expr);
-            self.visit_array(&gl.expr, list, size);
+            AllocHelper::new(self).visit_child(&gl.expr);
+            self.visit_array(&gl.expr, list, size, glob as Value*);
           }else{
             panic("glob rhs {}", gl);
           }
@@ -387,7 +387,7 @@ impl Compiler{
         rt.drop();
       }
     }
-    if( self.llvm.di.get().debug){
+    if(self.llvm.di.get().debug){
       replaceGlobalVariables(self.llvm.di.get().cu, globs);
     }
     

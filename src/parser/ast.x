@@ -316,6 +316,11 @@ struct FunctionType{
   return_type: Type;
   params: List<Type>;
 }
+impl Clone for FunctionType{
+  func clone(self): FunctionType{
+    return FunctionType{return_type: self.return_type.clone(), params: self.params.clone()};
+  }
+}
 
 enum Type: Node{
   Simple(type: Simple),
@@ -462,6 +467,18 @@ impl Type{
       return bx.unwrap();
     }
     panic("unwrap_elem {}", self);
+  }
+  func get_ft(self): FunctionType*{
+    if let Type::Function(bx*) = (self){
+      return bx.get();
+    }
+    panic("get_ft {}", self);
+  }
+  func unwrap_ft(*self): FunctionType{
+    if let Type::Function(bx) = (self){
+      return bx.unwrap();
+    }
+    panic("get_ft {}", self);
   }
 
   //get plain(generic)
