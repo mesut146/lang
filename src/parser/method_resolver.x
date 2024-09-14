@@ -39,21 +39,21 @@ struct MethodResolver{
 
 impl Signature{
     func new(name: String): Signature{
-        return Signature{mc: Option<Call*>::None,
-                    m: Option<Method*>::None,
+        return Signature{mc: Option<Call*>::new(),
+                    m: Option<Method*>::new(),
                     name: name,
                     args: List<Type>::new(),
-                    scope: Option<RType>::None,
-                    r: Option<Resolver*>::None,
+                    scope: Option<RType>::new(),
+                    r: Option<Resolver*>::new(),
                     desc: Desc::new()
         };
     }
     func new(mc: Call*, r: Resolver*): Signature{
         let res = Signature{mc: Option::new(mc),
-                    m: Option<Method*>::None,
+                    m: Option<Method*>::new(),
                     name: mc.name.clone(),
                     args: List<Type>::new(),
-                    scope: Option<RType>::None,
+                    scope: Option<RType>::new(),
                     r: Option::new(r),
                     desc: Desc::new()
         };
@@ -363,7 +363,7 @@ impl MethodResolver{
         //test candidates and get errors
         let real = List<Signature*>::new();
         let errors = List<Pair<Signature*, String>>::new();
-        let exact = Option<Signature*>::None;
+        let exact = Option<Signature*>::new();
         for(let i = 0;i < list.size();++i){
             let sig2 = list.get_ptr(i);
             let cmp_res: SigResult = self.is_same(sig, sig2);
@@ -440,7 +440,11 @@ impl MethodResolver{
                     typeMap.add(type_params.get_ptr(i).name().clone(), scope_args.get_ptr(i).clone());
                 }
                 if (!mc.type_args.empty()) {
-                    panic("todo");
+                    //panic("todo");
+                    //place specified type args in order
+                    for (let i = 0; i < mc.type_args.size(); ++i) {
+                        typeMap.add(type_params.get_ptr(i).name().clone(), self.r.getType(mc.type_args.get_ptr(i)));
+                    }
                 }
             }
         } else {
@@ -741,7 +745,7 @@ impl MethodResolver{
                         arg = mc.args.get_ptr(i).print();
                     }
                 }
-                let res = SigResult::Err{format("arg is not compatible with param {}({}) vs {}\n{}", t1_str.str(), arg, t2_str.str(), cmp.get())};
+                let res = SigResult::Err{format("arg '{}' is not compatible with param {} vs {}\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
                 arg.drop();
                 t1_str.drop();
                 t2_str.drop();
@@ -779,8 +783,8 @@ impl MethodResolver{
     }
 
     func is_compatible(arg: Type*, arg_str: String*, arg_val: Option<String>*, target: Type*, target_str: String*, typeParams: List<Type>*): Option<String>{
-        if (isGeneric2(target, typeParams)) return Option<String>::None;
-        if (arg_str.eq(target_str.str())) return Option<String>::None;
+        if (isGeneric2(target, typeParams)) return Option<String>::new();
+        if (arg_str.eq(target_str.str())) return Option<String>::new();
         if(arg.is_pointer()){
             if(target.is_pointer()){
                 let trg_elem = target.elem();
@@ -791,12 +795,36 @@ impl MethodResolver{
         if(target.is_pointer()){
             return Option::new("arg is not pointer".str());
         }
+        if(arg.is_fpointer()){
+            if(!target.is_fpointer()){
+                return Option::new("target is not fpointer".str());
+            }
+            let ft1 = arg.get_ft();
+            let ft2 = target.get_ft();
+            let cmp1 = MethodResolver::is_compatible(&ft1.return_type, &ft2.return_type, typeParams);
+            if(cmp1.is_some()){
+                return cmp1;
+            }
+            if(ft1.params.len() != ft2.params.len()){
+                return Option::new("arg count mismatch".str());
+            }
+            for(let i = 0;i < ft1.params.len();++i){
+                let cmp2 = MethodResolver::is_compatible(ft1.params.get_ptr(i), ft2.params.get_ptr(i), typeParams);
+                if(cmp2.is_some()){
+                    return cmp2;
+                }
+            }
+            return Option<String>::new();
+        }
+        if(target.is_fpointer()){
+            return Option::new("arg is not fpointer".str());
+        }
         if (!arg.is_simple()) {
             if(target.is_simple()){
                 return Option::new("diff kind".str());
             }
             if (arg_str.eq(target_str)) {
-                return Option<String>::None;
+                return Option<String>::new();
             }
             let lhs_kind = TypeKind::new(arg);
             let rhs_kind = TypeKind::new(target);
@@ -859,7 +887,7 @@ impl MethodResolver{
                 //check range
             } else {
                 if (max_for(target) >= i64::parse(v.str())) {
-                    return Option<String>::None;
+                    return Option<String>::new();
                 } else {
                     return Option::new(format("{} can't fit into {}", v.str(), target_str.str()));
                 }
@@ -870,7 +898,7 @@ impl MethodResolver{
         }
         // auto cast to larger size
         if (prim_size(arg.name().str()).unwrap() <= prim_size(target.name().str()).unwrap()){
-            return Option<String>::None;
+            return Option<String>::new();
         }
         else {
             return Option::new(format("{} can't fit into {}", arg, target_str.str()));

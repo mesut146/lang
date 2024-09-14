@@ -1,4 +1,5 @@
 import std/libc
+import std/any
 
 struct File;
 
@@ -327,5 +328,59 @@ impl CmdArgs{
       panic("expected arg and val: {}", arg);
     }
     return val.unwrap();
+  }
+}
+
+struct Thread{
+  id: i64;
+}
+struct thread;
+
+impl thread{
+  func spawn(fp: func(c_void*) => void): Thread{
+    let id: i64 = 0;
+    let code = pthread_create(&id, ptr::null<pthread_attr_t>(), fp, ptr::null<c_void>());
+    if(code != 0){
+      panic("thread spawn failed, code={}", code);
+    }
+    return Thread{id: id};
+  }
+  func spawn2<T>(fp: func(T*) => void, arg: T*): Thread{
+    let id: i64 = 0;
+    let code = pthread_create(&id, ptr::null<pthread_attr_t>(), fp, argp as c_void*);
+    if(code != 0){
+      panic("thread spawn failed, code={}", code);
+    }
+    return Thread{id: id};
+  }
+}
+
+impl Thread{
+  func join(self){
+    let code = pthread_join(self.id, ptr::null<c_void*>());
+    if(code != 0){
+      panic("thread join failed, code={}", code);
+    }
+  }
+}
+
+struct Worker{
+  thread_cnt: i32;
+  list: List<Pair<Thread, Any>>;
+}
+
+impl Worker{
+  func new(thread_cnt: i32): Worker{
+    return Worker{thread_cnt: thread_cnt, list: List<Pair<Thread, Any>>::new()};
+  }
+  func add(self, fp: func(c_void*) => void){
+    self.list.add(Pair::new(thread::spawn(fp), Any::new()));
+  }
+  func add2<T>(self, fp: func(T*) => void, arg: T){
+    let bx = Box<T>::new(arg);
+    self.list.add(Pair::new(thread::spawn2(fp, arg), Any::new()));
+  }
+  func join(self){
+
   }
 }

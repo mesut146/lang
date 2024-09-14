@@ -174,7 +174,7 @@ impl Parser{
           let id = self.node();
         	self.pop();
           let name = self.name();
-          let type = Option<Type>::None;
+          let type = Option<Type>::new();
           if(self.is(TokenType::COLON)){
             self.pop();
             type = Option::new(self.parse_type());
@@ -230,7 +230,7 @@ impl Parser{
             let parent = Parent::Impl{info.clone()};
             return Impl{info, self.parse_methods(parent)};
         }else{
-          let info = ImplInfo{type_params, Option<Type>::None, t1};
+          let info = ImplInfo{type_params, Option<Type>::new(), t1};
           let parent = Parent::Impl{info.clone()};
           return Impl{info, self.parse_methods(parent)};
         }
@@ -268,7 +268,7 @@ impl Parser{
       }
       self.consume(TokenType::LPAREN);
       let params = List<Param>::new();
-      let selfp = Option<Param>::None;
+      let selfp = Option<Param>::new();
       let is_vararg = false;
       if(!self.is(TokenType::RPAREN)){
         if(self.is(TokenType::DOTDOT)){
@@ -345,7 +345,7 @@ impl Parser{
       let type = self.parse_type();
       let is_generic = type.is_generic();
       //isgen
-      let base = Option<Type>::None;
+      let base = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         base = Option<Type>::Some{self.parse_type()};
@@ -381,7 +381,7 @@ impl Parser{
       let type = self.parse_type();
       let is_generic = type.is_generic();
       //isgen
-      let base = Option<Type>::None;
+      let base = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         base = Option<Type>::Some{self.parse_type()};
@@ -653,7 +653,7 @@ impl Parser{
         self.pop();
         if(self.is(TokenType::SEMI)){
           self.consume(TokenType::SEMI);
-          return Stmt::Ret{.id, Option<Expr>::None};
+          return Stmt::Ret{.id, Option<Expr>::new()};
         }else{
           let e = self.parse_expr();
           self.consume(TokenType::SEMI);
@@ -690,12 +690,12 @@ impl Parser{
       }
       self.pop();
       self.consume(TokenType::LPAREN);
-      let v = Option<VarExpr>::None;
+      let v = Option<VarExpr>::new();
       if(!self.is(TokenType::SEMI)){
         v = Option::new(self.var());
       }
       self.consume(TokenType::SEMI);
-      let e = Option<Expr>::None;
+      let e = Option<Expr>::new();
       if(!self.is(TokenType::SEMI)){
         e = Option::new(self.parse_expr());
       }
@@ -717,7 +717,7 @@ impl Parser{
     
     func parse_frag(self): Fragment{
       let nm = self.pop();
-      let type = Option<Type>::None;
+      let type = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         type = Option::new(self.parse_type());
@@ -820,7 +820,7 @@ impl Parser{
           return Expr::Lit{.n, Literal{kind, val, Option<Type>::new(Type::new(sf))}};
       }
     }
-    return Expr::Lit{.n, Literal{kind, val, Option<Type>::None}};
+    return Expr::Lit{.n, Literal{kind, val, Option<Type>::new()}};
   }
   
   func name(self): String{
@@ -845,7 +845,7 @@ impl Parser{
       dot = true;
     }
     let e = self.parse_expr();
-    return Entry{Option<String>::None, e, dot};
+    return Entry{Option<String>::new(), e, dot};
   }
 
   func is_stmt_noexpr(self): bool{
@@ -920,7 +920,7 @@ impl Parser{
     }else if(self.is(TokenType::LBRACKET)){
         self.consume(TokenType::LBRACKET);
         let arr = self.exprList(TokenType::SEMI);
-        let sz = Option<i32>::None;
+        let sz = Option<i32>::new();
         if(self.is(TokenType::SEMI)){
             self.consume(TokenType::SEMI);
             let s = self.consume(TokenType::INTEGER_LIT);
@@ -980,7 +980,7 @@ impl Parser{
   }
 
   func parse_obj(self, type_expr: Expr): Expr{
-    let ty = Option<Type>::None; 
+    let ty = Option<Type>::new(); 
     if let Expr::Name(nm)=(type_expr){
       ty = Option::new(Type::new(nm));
     }

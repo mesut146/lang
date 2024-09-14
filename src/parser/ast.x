@@ -15,7 +15,7 @@ func prim_size(s: str): Option<u32>{
       return Option::new(sizes[i] as u32);
     }
   }
-  return Option<u32>::None;
+  return Option<u32>::new();
 }
 
 func prim_size(s: String): Option<u32>{
@@ -119,7 +119,7 @@ struct ImplInfo{
 }
 impl ImplInfo{
   func new(type: Type): ImplInfo{
-    return ImplInfo{List<Type>::new(), Option<Type>::None, type};
+    return ImplInfo{List<Type>::new(), Option<Type>::new(), type};
   }
   func clone(self): ImplInfo{
     return ImplInfo{self.type_params.clone(), self.trait_name.clone(), self.type.clone()};
@@ -264,10 +264,10 @@ impl Method{
       .node,
       type_params: List<Type>::new(),
       name: name,
-      self: Option<Param>::None,
+      self: Option<Param>::new(),
       params: List<Param>::new(),
       type: type,
-      body: Option<Block>::None,
+      body: Option<Block>::new(),
       is_generic: false,
       parent: Parent::None,
       path: path,

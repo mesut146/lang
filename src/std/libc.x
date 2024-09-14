@@ -105,9 +105,9 @@ extern{
   func atof(ptr: i8*): f64;
   //func sprintf(str: i8*, format: i8*, ...): i32;
   //func pthread_create(th: pthread_t*, attr: pthread_attr_t*, fp: func() => void, arg: c_void*): i32;
-  func pthread_create(th: i64*, attr: c_void*, fp: func() => void, arg: c_void*): i32;
+  func pthread_create(th: i64*, attr: c_void*, fp: func(c_void*) => void, arg: c_void*): i32;
   //func pthread_join(th: pthread_t, value_ptr: c_void**): i32;
-  func pthread_join(th: i64, value_ptr: c_void*): i32;
+  func pthread_join(th: i64, value_ptr: c_void**): i32;
   func sleep(sec: i32): i32;
 }
 

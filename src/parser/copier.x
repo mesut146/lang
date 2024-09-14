@@ -13,7 +13,7 @@ impl AstCopier{
         return AstCopier{map: map, unit: Option::new(unit)};
     }
     func new(map: Map<String, Type>*): AstCopier{
-        return AstCopier{map: map, unit: Option<Unit*>::None};
+        return AstCopier{map: map, unit: Option<Unit*>::new()};
     }
 
     func clone<T>(node: T*, unit: Unit*): T{

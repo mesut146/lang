@@ -74,7 +74,19 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
         let elem = type.elem();
         return hasGeneric(elem, typeParams);
     }
-    if (!(type is Type::Simple)) panic("hasGeneric::Complex");
+    if(type.is_fpointer()){
+        let ft = type.get_ft();
+        if(hasGeneric(&ft.return_type, typeParams)){
+            return true;
+        }
+        for prm in &ft.params{
+            if(hasGeneric(prm, typeParams)){
+                return true;
+            }
+        }
+        return false;
+    }
+    if (!(type is Type::Simple)) panic("hasGeneric::Complex {}", type);
     let targs = type.get_args();
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
@@ -183,16 +195,24 @@ func demangle(input: str): String{
 }
 
 func mangleType(type: Type*): String{
-  let s = type.print(); 
+  let s = type.print();
   let s2 = s.replace("*", "$P");
   let s3 = s2.replace("<", "$LT");
   let s4 = s3.replace(">", "$GT");
   let s5 = s4.replace("::", "__");
+  let s6 = s5.replace("(", "$LP");
+  let s7 = s6.replace(")", "$RP");
+  let s8 = s7.replace("=", "$EQ");
+  let s9 = s8.replace(" ", "");
   s.drop();
   s2.drop();
   s3.drop();
   s4.drop();
-  return s5;
+  s5.drop();
+  s6.drop();
+  s7.drop();
+  s8.drop();
+  return s9;
 }
 func mangleType(type: Type*, f: Fmt*){
     let s = mangleType(type);

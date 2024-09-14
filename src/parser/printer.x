@@ -274,7 +274,7 @@ impl Debug for FunctionType{
     if(!self.params.empty()){
       join(f, &self.params, ", ");
     }
-    f.print(") -> ");
+    f.print(") => ");
     self.return_type.debug(f);
   }
 }

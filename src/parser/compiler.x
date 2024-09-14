@@ -17,6 +17,7 @@ import std/map
 import std/io
 import std/libc
 import std/stack
+import std/any
 
 static bootstrap = false;
 static inline_rvo = false;
@@ -211,7 +212,7 @@ impl Compiler{
   func new(ctx: Context): Compiler{
     let vm = llvm_holder::new();
     return Compiler{ctx: ctx,
-     resolver: Option<Resolver*>::None,
+     resolver: Option<Resolver*>::new(),
      llvm: vm,
      protos: Option<Protos>::new(),
      NamedValues: Map<String, Value*>::new(),
@@ -736,27 +737,64 @@ impl Compiler{
     list.drop();
     cache.drop();
     return config.link(&compiled);
-    /*if let LinkType::Binary(bin_name*, args*, run) = (&config.lt){
-      let path = link(&compiled, config.out_dir.str(), bin_name.str(), args.str());
-      if(run){
-        Compiler::run(path.clone());
-      }
-      config.drop();
-      compiled.drop();
-      return path;
-    }
-    else if let LinkType::Static(lib_name*) = (&config.lt){
-      let res = Compiler::build_library(&compiled, lib_name.str(), config.out_dir.str(), false);
-      compiled.drop();
-      config.drop();
-      return res;
-    }else{
-      config.drop();
-      panic("compile_dir");
-    }*/
   }
  
+  func compile_dir_thread(config: CompilerConfig, jobs: i32): String{
+    let env_triple = getenv2("target_triple");
+    if(env_triple.is_some()){
+      print("triple={}\n", env_triple.get());
+    }
+    create_dir(config.out_dir.str());
+    let cache = Cache::new(config.out_dir.str());
+    cache.read_cache();
+    let src_dir = &config.file;
+    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
+    let compiled = List<String>::new();
+    let worker = Worker::new(jobs);
+    for(let i = 0;i < list.len();++i){
+      let name = list.get_ptr(i).str();
+      let file: String = format("{}/{}", src_dir, name);
+      if(is_dir(file.str()) || !name.ends_with(".x")) {
+        file.drop();
+        continue;
+      }
+      let args = CompileArgs{
+        file: file.clone(),
+        config: &config,
+        cache: &cache,
+        compiled: &compiled
+      };
+      //worker.add2(make_compile_job, args);
+      //thread::spawn2(make_compile_job);
+    }
+    worker.join();
+    list.drop();
+    cache.drop();
+    return config.link(&compiled);
+  } 
 }//Compiler
+
+func make_compile_job(args: CompileArgs){
+  let config = args.config;
+  let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+  for(let j = 0;j < config.src_dirs.len();++j){
+    ctx.add_path(config.src_dirs.get_ptr(j).str());
+  }
+  let cmp = Compiler::new(ctx);
+  if(cmp.ctx.verbose){
+    //print("compiling [{}/{}] {}\n", i + 1, len, config.trim_by_root(args.file.str()));
+  }
+  let obj = cmp.compile(args.file.str(), args.cache, config);
+  args.compiled.add(obj);
+  cmp.drop();
+}
+
+struct CompileArgs{
+  file: String;
+  config: CompilerConfig*;
+  cache: Cache*;
+  compiled: List<String>*;
+}
 
 enum LinkType{
   Binary(name: String, args: String, run: bool),
