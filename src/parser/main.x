@@ -53,6 +53,7 @@ func bootstrap(cmd: CmdArgs*){
   if(root_opt.is_none()){
     root_opt.set(find_root(cmd.get_root()).clone());
   }
+  let jobs = cmd.get_val("-j");
   let is_static = cmd.consume_any("-static");
   let root = root_opt.unwrap();
   let build = format("{}/build", root);
@@ -80,6 +81,9 @@ func bootstrap(cmd: CmdArgs*){
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
     .add_dir(src_dir.clone());
+  if(jobs.is_some()){
+    config.set_jobs(i32::parse(jobs.get().str()));
+  }
   config.root_dir.set(root.clone());
   let bin = Compiler::compile_dir(config);
   let bin2 = format("{}/{}", &build, name);

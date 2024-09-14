@@ -345,9 +345,9 @@ impl thread{
     }
     return Thread{id: id};
   }
-  func spawn2<T>(fp: func(T*) => void, arg: T*): Thread{
+  func spawn2<T>(fp: func(c_void*) => void, arg: T*): Thread{
     let id: i64 = 0;
-    let code = pthread_create(&id, ptr::null<pthread_attr_t>(), fp, argp as c_void*);
+    let code = pthread_create(&id, ptr::null<pthread_attr_t>(), fp, arg as c_void*);
     if(code != 0){
       panic("thread spawn failed, code={}", code);
     }
@@ -376,11 +376,15 @@ impl Worker{
   func add(self, fp: func(c_void*) => void){
     self.list.add(Pair::new(thread::spawn(fp), Any::new()));
   }
-  func add2<T>(self, fp: func(T*) => void, arg: T){
-    let bx = Box<T>::new(arg);
-    self.list.add(Pair::new(thread::spawn2(fp, arg), Any::new()));
+  func add2<T>(self, fp: func(c_void*) => void, arg: T){
+    let a = Any::new(arg);
+    // let aptr = a.get<T>();
+    let aptr = Any::get<T>(&a);
+    self.list.add(Pair::new(thread::spawn2(fp, aptr), a));
   }
   func join(self){
-
+    for pair in &self.list{
+      pair.a.join();
+    }
   }
 }

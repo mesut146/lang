@@ -520,6 +520,21 @@ impl MethodResolver{
             infer(arg.elem(), prm.elem(), inferred, type_params);
             return;
         }
+        if (arg.is_fpointer()) {
+            if (!prm.is_fpointer()) panic("prm is not fptr");
+            let ft1 = arg.get_ft();
+            let ft2 = prm.get_ft();
+            if(ft1.params.len() != ft2.params.len()){
+                panic("arg size not match");
+            }
+            infer(&ft1.return_type, &ft2.return_type, inferred, type_params);
+            for(let i = 0;i < ft1.params.len();++i){
+                let a1 = ft1.params.get_ptr(i);
+                let a2 = ft2.params.get_ptr(i);
+                infer(a1, a2, inferred, type_params);
+            }
+            return;
+        }
         if(!prm.is_simple()){
             panic("prm is not simple {} -> {}", arg, prm);
         }

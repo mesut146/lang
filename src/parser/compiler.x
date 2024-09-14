@@ -703,6 +703,9 @@ impl Compiler{
   }
 
   func compile_dir(config: CompilerConfig): String{
+    if(config.jobs > 1){
+      return Compiler::compile_dir_thread(config);
+    }
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
@@ -739,7 +742,7 @@ impl Compiler{
     return config.link(&compiled);
   }
  
-  func compile_dir_thread(config: CompilerConfig, jobs: i32): String{
+  func compile_dir_thread(config: CompilerConfig): String{
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
@@ -750,7 +753,7 @@ impl Compiler{
     let src_dir = &config.file;
     let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
-    let worker = Worker::new(jobs);
+    let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
       let file: String = format("{}/{}", src_dir, name);
@@ -764,8 +767,7 @@ impl Compiler{
         cache: &cache,
         compiled: &compiled
       };
-      //worker.add2(make_compile_job, args);
-      //thread::spawn2(make_compile_job);
+      worker.add2(make_compile_job, args);
     }
     worker.join();
     list.drop();
@@ -774,7 +776,8 @@ impl Compiler{
   } 
 }//Compiler
 
-func make_compile_job(args: CompileArgs){
+func make_compile_job(arg: c_void*){
+  let args = arg as CompileArgs*;
   let config = args.config;
   let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
   for(let j = 0;j < config.src_dirs.len();++j){
@@ -782,7 +785,9 @@ func make_compile_job(args: CompileArgs){
   }
   let cmp = Compiler::new(ctx);
   if(cmp.ctx.verbose){
-    //print("compiling [{}/{}] {}\n", i + 1, len, config.trim_by_root(args.file.str()));
+    let i = 0;
+    let len = 1;
+    print("compiling [{}/{}] {}\n", i + 1, len, config.trim_by_root(args.file.str()));
   }
   let obj = cmp.compile(args.file.str(), args.cache, config);
   args.compiled.add(obj);
@@ -811,6 +816,7 @@ struct CompilerConfig{
   lt: LinkType;
   std_path: Option<String>;
   root_dir: Option<String>;
+  jobs: i32;
 }
 
 impl CompilerConfig{
@@ -828,7 +834,8 @@ impl CompilerConfig{
       args: "".str(),
       lt: LinkType::None,
       std_path: std_path,
-      root_dir: Option<String>::new()
+      root_dir: Option<String>::new(),
+      jobs: 1
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{
@@ -867,6 +874,10 @@ impl CompilerConfig{
   func set_std_path(self, std_path: str): CompilerConfig*{
     self.std_path.drop();
     self.std_path = Option::new(std_path.str());
+    return self;
+  }
+  func set_jobs(self, j: i32): CompilerConfig*{
+    self.jobs = j;
     return self;
   }
   func link(self, compiled: List<String>*): String{
