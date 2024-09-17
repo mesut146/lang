@@ -522,6 +522,8 @@ impl Debug for Expr{
     }else if let Expr::Match(me*)=(self){
       if(print_cst) f.print("Expr::Match{");
       me.get().debug(f);
+    }else if let Expr::MacroCall(mc*)=(self){
+      panic("Expr::debug macro {}", self.line);
     }else{
       panic("Expr::debug");
     }

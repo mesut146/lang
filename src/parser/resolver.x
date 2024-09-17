@@ -2291,7 +2291,7 @@ impl Resolver{
   func try_func_ptr(self, expr: Expr*, name: str, err_multiple: bool): Option<RType>{
     let list = List<Signature>::new();
     let mr = MethodResolver::new(self);
-    mr.collect_static(name, &list);
+    mr.collect_static(name, &list, self);
     //imported func
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
@@ -2305,7 +2305,7 @@ impl Resolver{
               path: m.path.clone(),
               idx: j
             };
-            list.add(Signature::new(m, desc));
+            list.add(Signature::new(m, desc, self, self));
           }
         }
       }

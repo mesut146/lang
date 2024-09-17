@@ -1,3 +1,5 @@
+import std/str
+
 struct c_void;
 struct FILE;
 struct DIR;
@@ -8,6 +10,7 @@ type ino_t = u64;
 type off_t = u64;
 type pthread_t = i64;
 type pthread_attr_t = c_void;
+type pthread_mutexattr_t = c_void;
 
 
 struct dirent {
@@ -16,6 +19,10 @@ struct dirent {
     d_reclen: u16 ;    /* length of this record */
     d_type: u8;        /* type of file; not supported by all file system types */
     d_name: [u8; 256]; /* filename */
+}
+
+struct pthread_mutex_t{
+  data: [i8; 40];
 }
 
 impl dirent{
@@ -109,6 +116,15 @@ extern{
   //func pthread_join(th: pthread_t, value_ptr: c_void**): i32;
   func pthread_join(th: i64, value_ptr: c_void**): i32;
   func sleep(sec: i32): i32;
+  func pthread_mutex_init(mutex: pthread_mutex_t*, attr: pthread_mutexattr_t*): i32;
+  func pthread_mutex_destroy(mutex: pthread_mutex_t*): i32;
+  func pthread_mutex_lock(mutex: pthread_mutex_t*): i32;
+  func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
+}
+
+func make_pthread_mutex_t(): pthread_mutex_t{
+  let m: pthread_mutex_t = pthread_mutex_t{data: [0i8; 40]};
+  return m;
 }
 
 type dev_t = i64;
