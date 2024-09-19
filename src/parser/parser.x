@@ -109,7 +109,7 @@ impl Parser{
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{} `{}`\n", &self.path, line, get_line(self.buf.str(), line));
+    print("in file {}:{}\n`{}`\n", &self.path, line, get_line(self.buf.str(), line));
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -460,6 +460,7 @@ impl Parser{
       }
       return res;
     }
+
     func parse_func_type(self): Type{
       let id = self.node();
       self.consume(TokenType::FUNC);
@@ -716,7 +717,8 @@ impl Parser{
     }
     
     func parse_frag(self): Fragment{
-      let nm = self.pop();
+      let nm = self.popv();
+      dbg(nm.eq("xxx"), 32);
       let type = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
@@ -725,7 +727,7 @@ impl Parser{
       self.consume(TokenType::EQ);
       let rhs = self.parse_expr();
       let n = self.node();
-      return Fragment{.n, nm.value.clone(), type, rhs};
+      return Fragment{.n, nm, type, rhs};
     }
 
 }
@@ -746,16 +748,16 @@ impl Parser{
     let open = 1;
     while (pos < self.tokens.len()) {
       if (self.get(pos).is(TokenType::LT)) {
-        pos+=1;
-        open+=1;
+        pos += 1;
+        open += 1;
       } else if (self.get(pos).is(TokenType::GT)) {
-        pos+=1;
-        open-=1;
+        pos += 1;
+        open -= 1;
         if (open == 0) {
            return pos;
         }
       } else {
-        let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2];
+        let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2, TokenType::FUNC, TokenType::ARROW, TokenType::LPAREN, TokenType::RPAREN];
         let tok = self.get(pos);
         let any = false;
         for(let i = 0;i < valid_tokens.len();++i){
@@ -765,7 +767,7 @@ impl Parser{
           }
         }
         if(!any && !isPrim(tok)) return -1;
-        pos+=1;
+        pos += 1;
       }
     }
     return -1;
@@ -836,16 +838,16 @@ impl Parser{
     if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
       let name = self.popv();
       self.consume(TokenType::COLON);
-      let e = self.parse_expr();
-      return Entry{Option::new(name), e, false};
+      let expr = self.parse_expr();
+      return Entry{Option::new(name), expr, false};
     }
     let dot = false; 
     if(self.is(TokenType::DOT)){
       self.consume(TokenType::DOT);
       dot = true;
     }
-    let e = self.parse_expr();
-    return Entry{Option<String>::new(), e, dot};
+    let expr = self.parse_expr();
+    return Entry{Option<String>::new(), expr, dot};
   }
 
   func is_stmt_noexpr(self): bool{
@@ -897,7 +899,11 @@ impl Parser{
   }
 
   func prim(self, allow_obj: bool): Expr{
+    let tok = self.peek();
     let n = self.node();
+    if(self.is(TokenType::FUNC)){
+      return Expr::Type{.n, self.parse_func_type()};
+    }
     if(self.is(TokenType::MATCH)){
       return self.parse_match();
     }
@@ -1000,6 +1006,9 @@ impl Parser{
       args.add(self.entry());
       while(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);
+        if(self.is(TokenType::RBRACE)){
+          break;
+        }
         args.add(self.entry());
       }
     }

@@ -1,3 +1,6 @@
+import std/th
+import std/any
+
 func f(arg: c_void*){
     printf("th started\n");
     sleep(1);

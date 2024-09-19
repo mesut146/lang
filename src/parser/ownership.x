@@ -353,7 +353,7 @@ impl Own{
         }
         rt.drop();
         let scope = self.get_scope();
-        dbg(expr.line == 266, 100);
+        //dbg(expr.line == 266, 100);
         if(print_check){
             print("check {} line:{}\n", expr, expr.line);
         }

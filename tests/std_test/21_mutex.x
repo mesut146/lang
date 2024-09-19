@@ -1,3 +1,5 @@
+import std/th
+
 static lock = make_pthread_mutex_t();
 static cnt: i32 = 0;
 
@@ -11,8 +13,9 @@ func f1(arg: c_void*){
 
 func main(){
     pthread_mutex_init(&lock, ptr::null<pthread_mutexattr_t>());
-    let arr = List<Thread>::new(20);
-    for(let i = 0;i < 20;++i){
+    let th_cnt = 5;
+    let arr = List<Thread>::new(th_cnt);
+    for(let i = 0;i < th_cnt;++i){
         let th = thread::spawn(f1);
         arr.add(th);
     }

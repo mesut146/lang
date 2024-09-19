@@ -118,6 +118,33 @@ func std_test(){
     args.drop();
 }
 
+func std_test_single(file: String){
+    print("std_test\n");
+    let std_dir = get_std_path();
+    let out = get_out();
+    let lib = build_std(std_dir.str(), out.str(), false);
+    let dir = format("{}/tests/std_test", root.get());
+    let args = format("{} -lm", &lib);
+    
+    let config = CompilerConfig::new(get_src_dir());
+    config.set_file(format("{}/{}", dir, file));
+    config.set_out(get_out());
+    config.add_dir(get_src_dir());
+    config.set_link(LinkType::Binary{"a.out".str(), args.clone(), true});
+    /*if(inc.is_some()){
+      config.add_dir(inc.get().clone());
+    }*/
+    config.root_dir.set(root.get().clone());
+    let bin = Compiler::compile_single(config);
+    bin.drop();
+
+    std_dir.drop();
+    out.drop();
+    lib.drop();
+    dir.drop();
+    args.drop();
+}
+
 func normal_test(){
     print("normal_test\n");
     let rt_src = format("{}/src/std/rt.x", root.get());
@@ -182,11 +209,18 @@ func handle_tests(cmd: CmdArgs*): bool{
         return true;
     }
     if(cmd.is("test")){
+        cmd.consume();
         normal_test();
         return true;
     }
     else if(cmd.is("test2")){
-        std_test();
+        cmd.consume();
+        if(cmd.has()){
+            let path = cmd.get();
+            std_test_single(path);
+        }else{
+            std_test();
+        }
         return true;
     }else if(cmd.is("p")){
         //parse test

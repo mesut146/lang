@@ -120,6 +120,7 @@ extern{
   func pthread_mutex_destroy(mutex: pthread_mutex_t*): i32;
   func pthread_mutex_lock(mutex: pthread_mutex_t*): i32;
   func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
+  func strerror(err: i32): i8*;
 }
 
 func make_pthread_mutex_t(): pthread_mutex_t{

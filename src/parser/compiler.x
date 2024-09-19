@@ -18,6 +18,7 @@ import std/io
 import std/libc
 import std/stack
 import std/any
+import std/th
 
 static bootstrap = false;
 static inline_rvo = false;
@@ -765,10 +766,13 @@ impl Compiler{
         file: file.clone(),
         config: &config,
         cache: &cache,
-        compiled: &compiled
+        compiled: &compiled,
+        idx: i,
+        len: list.len() as i32
       };
-      worker.add2(make_compile_job, args);
+      worker.add_arg(make_compile_job, args);
     }
+    sleep(1);
     worker.join();
     list.drop();
     cache.drop();
@@ -785,9 +789,7 @@ func make_compile_job(arg: c_void*){
   }
   let cmp = Compiler::new(ctx);
   if(cmp.ctx.verbose){
-    let i = 0;
-    let len = 1;
-    print("compiling [{}/{}] {}\n", i + 1, len, config.trim_by_root(args.file.str()));
+    print("compiling [{}/{}] {}\n", args.idx + 1, args.len, config.trim_by_root(args.file.str()));
   }
   let obj = cmp.compile(args.file.str(), args.cache, config);
   args.compiled.add(obj);
@@ -799,6 +801,8 @@ struct CompileArgs{
   config: CompilerConfig*;
   cache: Cache*;
   compiled: List<String>*;
+  idx: i32;
+  len: i32;
 }
 
 enum LinkType{
