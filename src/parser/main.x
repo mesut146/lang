@@ -70,7 +70,7 @@ func bootstrap(cmd: CmdArgs*){
   let out_dir = format("{}/{}_out", &build, name);
   let config = CompilerConfig::new(src_dir.clone());
   if(is_static){
-    config.set_link(LinkType::Static{name.str()});
+    config.set_link(LinkType::Static{format("{}.a", name)});
   }else{
     let stdlib = build_std(std_dir.str(), out_dir.str());
     let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);

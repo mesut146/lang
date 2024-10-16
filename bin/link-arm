@@ -1,0 +1,1 @@
+clang-16 /usr/lib/llvm-16/lib/libLLVM.so -lstdc++ -o x std.a ../cpp-bridge/build/libbridge.a
