@@ -28,6 +28,7 @@ struct Context{
   search_paths: List<String>;
   out_dir: String;
   verbose: bool;
+  verbose_all: bool;
   stack_trace: bool;
 }
 impl Context{
@@ -44,6 +45,7 @@ impl Context{
        search_paths: List<String>::new(),
        out_dir: out_dir,
        verbose: true,
+       verbose_all: false,
        stack_trace: false
     };
     return res;
@@ -350,10 +352,10 @@ func join(list: List<String>*, sep: str): String{
 }
 
 func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
+  let s2: String = join(&is.list, "/");
   for (let i = 0;i < arr.len();++i) {
       let i1 = arr.get_ptr(i);
       let s1: String = join(&i1.list, "/");
-      let s2: String = join(&is.list, "/");
       let res = s1.eq(&s2);
       s1.drop();
       s2.drop();
@@ -1567,16 +1569,20 @@ impl Resolver{
     let res = Option<RType>::new();
     let has_none = false;
     for case in &node.cases{
+      self.newScope();
+      let case_lhs_type = "".owned();
       if(case.lhs is MatchLhs::NONE){
         if(has_none){
           self.err(expr, "multiple 'none' case");
         }
         has_none = true;
-        continue;
+        case_lhs_type = "_".owned();
+        //continue;
       }
-      self.newScope();
-      if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
+      //self.newScope();
+      else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
         let smp = type.as_simple();
+        case_lhs_type = type.print();
         //todo check type
         let idx = not_covered.indexOf(&smp.name);
         if(idx == -1){
@@ -1604,25 +1610,11 @@ impl Resolver{
         if(res.is_none()){
           res.set(res_type);
         }else if(!res.get().type.eq(&res_type.type)){
-          self.err(expr, format("invalid match result type: {}!= {}", res.get().type, res_type.type));
+          self.err(expr, format("invalid match result type: {}!= {} for case {}", res.get().type, res_type.type, case_lhs_type));
         }
       }
-      // if let MatchRhs::EXPR(e*)=(&case.rhs){
-      //   let res_type = self.visit(e);
-      //   if(res.is_none()){
-      //     res.set(res_type);
-      //   }else if(!res.get().type.eq(&res_type.type)){
-      //     self.err(expr, format("invalid match result type: {}!= {}", res.get().type, res_type.type));
-      //   }
-      // }else if let MatchRhs::STMT(st*)=(&case.rhs){
-      //   self.visit(st);
-      //   if(res.is_none()){
-      //     res.set(RType::new("void"));
-      //   }else if(!res.get().type.eq("void")){
-      //     self.err(expr, format("invalid match result type: {}!= void", res.get().type));
-      //   }
-      // }
       self.dropScope();
+      case_lhs_type.drop();
     }
     if(!not_covered.empty() && !has_none){
       self.err(expr, format("not covered variants: {}", not_covered));
@@ -2520,11 +2512,11 @@ impl Resolver{
     }
     let info = FormatInfo::new(node.line);
     let body = &info.block;
-    let it_name = format("it_{}", node.id);
+    let it_name = format("_it_{}", node.id);
     let it_decl = parse_stmt(format("let {} = ({}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);
     body.list.add(it_decl);
     let whl = "while(true){\n".str();
-    let opt_name = format("{}_{}", &fe.var_name, node.id);
+    let opt_name = format("_{}_{}_opt", &fe.var_name, node.id);
     whl.append(format("let {} = {}.next();\n", &opt_name, &it_name));
     whl.append(format("if({}.is_none()) break;\n", &opt_name));
     whl.append(format("let {} = {}.unwrap();\n", &fe.var_name, &opt_name));
@@ -2707,7 +2699,7 @@ impl Resolver{
       for pair in &self.format_map{
         print("id={} info={}\n", pair.a, pair.b.block);
       }
-      self.err(node, format("no macro id={} path={}", node.id, self.unit.path));
+      self.err(node, format("no macro id={} node={} path={}", node.id, node, self.unit.path));
     }
     return opt.unwrap();
   }

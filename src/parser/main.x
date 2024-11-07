@@ -54,6 +54,7 @@ func bootstrap(cmd: CmdArgs*){
     root_opt.set(find_root(cmd.get_root()).clone());
   }
   let jobs = cmd.get_val("-j");
+  let verbose_all = cmd.consume_any("-v");
   let is_static = cmd.consume_any("-static");
   let root = root_opt.unwrap();
   let build = format("{}/build", root);
@@ -69,6 +70,7 @@ func bootstrap(cmd: CmdArgs*){
   setenv2("compiler_name", name, 1);
   let out_dir = format("{}/{}_out", &build, name);
   let config = CompilerConfig::new(src_dir.clone());
+  config.verbose_all = verbose_all;
   if(is_static){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }else{

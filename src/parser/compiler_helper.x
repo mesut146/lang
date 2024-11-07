@@ -799,6 +799,24 @@ impl Compiler{
     src_type.drop();
     return val;
   }
+  
+  func cast2(self, val: Value*, src_type: Type*, target_type: Type*): Value*{
+    let is_unsigned = isUnsigned(src_type);
+    let val_ty = Value_getType(val);
+    let src_size = getPrimitiveSizeInBits(val_ty);
+    let trg_size = self.getSize(target_type);
+    let trg_ty = getInt(trg_size as i32);
+    if(src_size < trg_size){
+      if(is_unsigned){
+        return CreateZExt(val, trg_ty);
+      }else{
+        return CreateSExt(val, trg_ty);
+      }
+    }else if(src_size > trg_size){
+      return CreateTrunc(val, trg_ty);
+    }
+    return val;
+  }
 
   func loadPrim(self, expr: Expr*): Value*{
     let val = self.visit(expr);

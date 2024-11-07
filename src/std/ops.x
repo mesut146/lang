@@ -84,6 +84,12 @@ trait Display{
   func print(self, f: Fmt*);
 }
 
+func to_string<T>(node: T*): String{
+    let f = Fmt::new();
+    node.print(&f);
+    return f.unwrap();
+}
+
 struct Fmt{
   buf: String;
 }

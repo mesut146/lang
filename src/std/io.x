@@ -290,6 +290,10 @@ impl CmdArgs{
   func is(self, arg: str): bool{
     return self.args.get_ptr(0).eq(arg);
   }
+  func end(self){
+      if(self.args.empty()) return;
+      panic("extra args: {}", self.args);
+  }
 
   func has_any(self, arg: str): bool{
     for arg1 in &self.args{

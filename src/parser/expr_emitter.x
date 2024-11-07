@@ -14,7 +14,7 @@ import std/map
 import std/stack
 
 struct MatchInfo{
-  type: Type*;
+  type: Type;
   val: Value*;
   bb: BasicBlock*;
 }
@@ -118,7 +118,7 @@ impl Compiler{
       panic("idx {} {}", case.lhs.get_type(), decl.type);
     }
 
-    func visit_case(self, rhs: MatchRhs*): Option<Value*>{
+    func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
       if let MatchRhs::EXPR(e*)=(rhs){
         return Option<Value*>::new(self.visit(e));
       }
@@ -142,39 +142,55 @@ impl Compiler{
       let def_name = format("def_{}", expr.line).cstr();
       let def_bb = create_bb_named(def_name.ptr());
       let sw = CreateSwitch(tag, def_bb, node.cases.len() as i32);
-      if(none_case.is_some()){
-        self.set_and_insert(def_bb);
-        self.visit_case(&none_case.unwrap().rhs);
-      }else{
+      let match_rt = self.get_resolver().visit(expr);
+      let match_type = match_rt.unwrap();
+      if(none_case.is_none()){
         self.set_and_insert(def_bb);
         CreateUnreachable();
       }
       //create bb's
       let res = Option<Value*>::new();
       let infos = List<MatchInfo>::new();
-      let match_rt = self.get_resolver().visit(expr);
+      
       for case in &node.cases{
         if(case.lhs is MatchLhs::NONE){
-          //def.set(...);
+          self.set_and_insert(def_bb);
+          let rhs_val = self.visit_match_rhs(&none_case.unwrap().rhs);
+          let exit = Exit::get_exit_type(&none_case.unwrap().rhs);
+          if(!exit.is_jump()){
+              CreateBr(nextbb);
+              if(!match_type.is_void()){
+                let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
+                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), def_bb});
+              }
+          }
         }else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
           let name_c = format("{}__{}_{}", decl.type, type.name(), expr.line).cstr();
           let bb = create_bb_named(name_c.ptr());
           let var_index = get_variant_index_match(case, decl);
           SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
           self.set_and_insert(bb);
+          //alloc args
           let variant = decl.get_variants().get_ptr(var_index);
           let arg_idx = 0;
           for arg in args{
             self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
             ++arg_idx;
           }
-          let rhs_val = self.visit_case(&case.rhs);
+          let rhs_val = self.visit_match_rhs(&case.rhs);
+          let rhs_end_bb = GetInsertBlock();
           let exit = Exit::get_exit_type(&case.rhs);
           if(!exit.is_jump()){
-            CreateBr(nextbb);
-            if(!match_rt.type.is_void()){
-              infos.add(MatchInfo{&match_rt.type, rhs_val.unwrap(), bb});
+            if(!match_type.is_void()){
+              let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
+              let val = rhs_val.unwrap();
+              if(!is_struct(&match_type)){
+                  val = self.cast2(rhs_val.unwrap(), &rt2.type, &match_type);
+              }
+              rhs_val.set(val);
+              infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
             }
+            CreateBr(nextbb);
           }
           name_c.drop();
         }
@@ -182,16 +198,21 @@ impl Compiler{
       self.set_and_insert(nextbb);
       //handle ret value
       if(!infos.empty()){
-        let phi_type = self.mapType(&match_rt.type);
-        if(is_struct(&match_rt.type)){
+        let phi_type = self.mapType(&match_type);
+        if(is_struct(&match_type)){
           phi_type = getPointerTo(phi_type) as llvm_Type*;
         }
         let phi = CreatePHI(phi_type, infos.len() as i32);
+        //print("phi ty=\n");
+        //Type_dump(phi_type);
         for info in &infos{
-          if(is_struct(&match_rt.type)){
+          //print("val=\n");
+          //Value_dump(info.val);
+          if(is_struct(&match_type)){
             phi_addIncoming(phi, info.val, info.bb);
           }else{
-            phi_addIncoming(phi, self.loadPrim(info.val, &match_rt.type), info.bb);
+            let val = info.val;
+            phi_addIncoming(phi, val, info.bb);
           }
         }
         res = Option::new(phi as Value*);
@@ -199,7 +220,6 @@ impl Compiler{
       def_name.drop();
       next_name.drop();
       rhs_rt.drop();
-      match_rt.drop();
       return res;
     }
 

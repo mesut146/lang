@@ -103,6 +103,29 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
     inc.drop();
 }
 
+func test_single(file: String){
+    let rt_src = format("{}/src/std/rt.x", root.get());
+    let config_rt = CompilerConfig::new(get_src_dir());
+    config_rt
+    .set_file(rt_src)
+    .set_out(get_out())
+    .add_dir(get_src_dir())
+    .set_link(LinkType::Static{"rt.a".str()});
+    config_rt.root_dir.set(root.get().clone());
+    let lib = Compiler::compile_single(config_rt);
+    let dir = format("{}/tests/normal", root.get());
+    let args = format("{} -lm", &lib);
+    
+      let config = CompilerConfig::new(get_src_dir());
+      config.set_file(file);
+      config.set_out(get_out());
+      config.add_dir(get_src_dir());
+      config.set_link(LinkType::Binary{"a.out".str(), args, true});
+      config.root_dir.set(root.get().clone());
+      let bin = Compiler::compile_single(config);
+      bin.drop();
+}
+
 func std_test(){
     print("std_test\n");
     let std_dir = get_std_path();
@@ -122,7 +145,7 @@ func std_test_single(file: String){
     print("std_test\n");
     let std_dir = get_std_path();
     let out = get_out();
-    let lib = build_std(std_dir.str(), out.str(), false);
+    let lib = build_std(std_dir.str(), out.str(), true);
     let dir = format("{}/tests/std_test", root.get());
     let args = format("{} -lm", &lib);
     
@@ -162,6 +185,23 @@ func normal_test(){
     lib.drop();
     dir.drop();
     args.drop();
+}
+
+func normal_test(pattern: String){
+    print("normal_test\n");
+    /*"let rt_src = format("{}/src/std/rt.x", root.get());
+    let config = CompilerConfig::new(get_src_dir());
+    config
+    .set_file(rt_src)
+    .set_out(get_out())
+    .add_dir(get_src_dir())
+    .set_link(LinkType::Static{"rt.a".str()});
+    config.root_dir.set(root.get().clone());
+    let lib = Compiler::compile_single(config);*/
+    let file = format("{}/tests/normal/{}", root.get(), pattern);
+    test_single(file);
+    //lib.drop();
+    pattern.drop();
 }
 
 func own_test(id: i32){
@@ -210,7 +250,12 @@ func handle_tests(cmd: CmdArgs*): bool{
     }
     if(cmd.is("test")){
         cmd.consume();
-        normal_test();
+        if(cmd.has()){
+            normal_test(cmd.get());
+        }else{
+            normal_test();
+        }
+        cmd.end();
         return true;
     }
     else if(cmd.is("test2")){

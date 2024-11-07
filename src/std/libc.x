@@ -79,7 +79,7 @@ func setenv2(name: str, val: str, overwrite: i32){
 }
 
 extern{
-  //func printf(fmt: i8*);
+  //func printf(fmt: i8*, ...);
   func exit(code: i32);
   func free(ptr: i8*);
   //func malloc(size: i64): i8*;

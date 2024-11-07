@@ -38,8 +38,8 @@ func expr_struct(){
         F::F1(val) => {
             panic("");
         },
-        F::F2(val) => {
-            val
+        F::F2(b) => {
+            b
         }
     };
     assert(x.aa == 10);
@@ -56,6 +56,32 @@ func expr_struct(){
     assert(x2.a == 20 && x2.b == 30);
 }
 
+func getb(): bool{ return true; }
+func def_test(){
+    let f1 = F::F1{val: A{a: 20, b: 30}};
+    let res1 = match &f1{
+        F::F1(val*) => 123,
+        _=> panic("def")
+    };
+    assert(res1 == 123);
+    
+    let f2 = F::F1{val: A{a: 200, b: 300}};
+    let res2 = match &f2{
+        F::F2(val*) => 124,
+        _=> 234
+    };
+    assert(res2 == 234);
+}
+
+func cast(){
+    let f = F::F2{val: B{aa: 10}};
+    let b: bool = match &f{
+        F::F2(val*) => getb() == getb(),
+        F::F1(a*)=> /*getb()*/true
+    };
+    
+}
+
 func main(){
     let e = E::E2{.B{aa: 12345}, val: 10, a: A{a: 20, b: 30}};
     match &e {
@@ -69,5 +95,6 @@ func main(){
     }
     expr_i32();
     expr_struct();
+    def_test();
     printf("match done\n");
 }

@@ -234,6 +234,16 @@ impl Compiler{
   func unit(self): Unit*{
     return &self.get_resolver().unit;
   }
+  
+  func get_all_methods(self): List<Method*>{
+      let list = getMethods(self.unit());
+      let resolver = self.get_resolver();
+      for (let i = 0;i < resolver.generated_methods.len();++i) {
+        let m = resolver.generated_methods.get_ptr(i).get();
+        list.add(m);
+      }
+      return list;
+  }
 
   func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
     let outFile: String = get_out_file(path, self);
@@ -248,6 +258,9 @@ impl Compiler{
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
+    if(self.ctx.verbose_all){
+        print("resolve done\n");
+    }
     self.llvm.initModule(path);
     self.createProtos();
     self.init_globals(config);
@@ -256,11 +269,17 @@ impl Compiler{
     for (let i = 0;i < methods.len();++i) {
       let m = *methods.get_ptr(i);
       self.genCode(m);
+      if(self.ctx.verbose_all){
+          print("gencode done {}/{}\n", i+1, methods.len());
+      }
     }
     //generic methods from resolver
     for (let i = 0;i < resolver.generated_methods.len();++i) {
         let m = resolver.generated_methods.get_ptr(i).get();
         self.genCode(m);
+        if(self.ctx.verbose_all){
+            print("gencode2 done {}/{}\n", i+1, resolver.generated_methods.len());
+        }
     }
     methods.drop();
     
@@ -486,8 +505,8 @@ impl Compiler{
     self.own = Option::new(Own::new(self, m));
     let f = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(f);
-    let bb = create_bb2(f);
     self.NamedValues.clear();
+    let bb = create_bb2(f);
     SetInsertPoint(bb);
     self.llvm.di.get().dbg_func(m, f, self);
     AllocHelper::makeLocals(self, m.body.get());
@@ -496,7 +515,7 @@ impl Compiler{
     self.storeParams(m,f);
 
     let blk_val = self.visit_block(m.body.get());
-    dbg(m.name.eq("handle"), 51);
+    //dbg(m.name.eq("handle"), 51);
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit()){
       if(m.type.is_void()){
@@ -526,7 +545,7 @@ impl Compiler{
         let prm = m.self.get();
         self.alloc_prm(prm);
     }
-    for (let i=0;i<m.params.len();++i) {
+    for (let i = 0;i < m.params.len();++i) {
         let prm = m.params.get_ptr(i);
         self.alloc_prm(prm);
     }
@@ -625,6 +644,7 @@ impl Compiler{
       cmd.append("ar rcs ");
     }
     let path = format("{}/{}", out_dir, name);
+    print("linking {}\n", path);
     cmd.append(&path);
     cmd.append(" ");
     for(let i = 0;i < compiled.len();++i){
@@ -645,6 +665,7 @@ impl Compiler{
 
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
     let path = format("{}/{}", out_dir, name);
+    print("linking {}\n", path);
     if(exist(path.str())){
       File::remove_file(path.str());
     }
@@ -726,6 +747,7 @@ impl Compiler{
         continue;
       }
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get_ptr(j).str());
       }
@@ -821,6 +843,7 @@ struct CompilerConfig{
   std_path: Option<String>;
   root_dir: Option<String>;
   jobs: i32;
+  verbose_all: bool;
 }
 
 impl CompilerConfig{
@@ -839,7 +862,8 @@ impl CompilerConfig{
       lt: LinkType::None,
       std_path: std_path,
       root_dir: Option<String>::new(),
-      jobs: 1
+      jobs: 1,
+      verbose_all: false
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{

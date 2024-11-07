@@ -11,11 +11,12 @@ func SLICE_LEN_INDEX(): i32{ return 1; }
 func SLICE_LEN_BITS(): i32{ return 64; }
 func ENUM_TAG_BITS(): i32{ return 64; }
 
+//T: Debug
 func join_list<T>(arr: List<T>*): String{
     let f = Fmt::new();
     for(let i = 0;i < arr.len();++i){
         f.print(arr.get_ptr(i));
-        if(i!= arr.len() - 1){
+        if(i != arr.len() - 1){
             f.print(", ");
         }
     }
