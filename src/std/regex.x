@@ -60,7 +60,7 @@ impl Regex{
         let res = Regex{pat: pat, i: 0, node: Option<Node>::new()};
         res.node = Option::new(res.parse());
         let s = to_string(res.node.get());
-        //print("res={}\n", res.node.get());
+        print("pat={}\n", res.node.get());
         print("pat={}\n", s);
         return res;
     }
@@ -198,8 +198,14 @@ struct MatchVisitor{
     s: str;
 }
 impl MatchVisitor{
+    func has(self, i: i32): bool{
+        return i < self.s.len();
+    }
     func visit(self): bool{
         let res = self.visit_or(&self.r.node.get().or, 0);
+        if(res.a && res.b != self.s.len()){
+            return false;
+        }
         return res.a;
     }
     func visit_or(self, or: Or*, i: i32): Pair<bool, i32>{
@@ -219,14 +225,35 @@ impl MatchVisitor{
     }
     func visit_seq(self, sq: Seq*, i: i32): Pair<bool, i32>{
         let total = 0;
+        let idx = 0;
         for item in &sq.list{
-            let res = self.visit_item(item, i+total);
+            let res = self.visit_item(item, i + total);
             if(!res.a) return Pair::new(false, 0);
+            //prevent greedy match
+            match item{
+                Item::Op(ch*,kind*) => {
+                    if(ch.get() is Item::Dot && kind is OpKind::Star && idx < sq.list.len() - 1){
+                        let next = sq.list.get_ptr(idx + 1);
+                        let next_res = self.visit_item(next, i + total);
+                        if(next_res.a){
+                            //ignore .*
+                            idx+=1;
+                            continue;
+                        }
+                    }
+                },
+                _=>{}
+            }
             total += res.b;
+            idx+=1;
         }
         return Pair::new(true, total);
     }
+    func is_dot(it: Item*): bool{
+        return it is Item::Dot;
+    }
     func visit_item(self, it: Item*, i: i32): Pair<bool, i32>{
+        if(!self.has(i)) return Pair::new(false, 0);
         print("visit_item i={} s='{}' {}\n", i, self.s.substr(i), to_string(it));
         let res = match it{
             Item::Ch(ch) => 
@@ -259,10 +286,25 @@ impl MatchVisitor{
                        }
                        rr
                    },
-                   /*OpKind::Plus=>{
-                   }*/
+                   OpKind::Plus=>{
+                       let rr = Pair::new(false, 0);
+                       if(tmp.a){
+                           rr.a = true;
+                           rr.b = tmp.b;
+                           while(true){
+                               let tt = self.visit_item(node.get(), i + tmp.b);
+                               if(!tt.a) break;
+                               tmp.b += tt.b;
+                               rr.b += tt.b;
+                           }
+                       }
+                       rr
+                   },
                    _=> panic("other kind")
                 }
+            },
+            Item::Dot=>{
+                Pair::new(true, 1)
             },
             _=>  panic("it={}\n", it)
         };
