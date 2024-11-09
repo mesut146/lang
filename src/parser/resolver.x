@@ -1621,6 +1621,7 @@ impl Resolver{
     }
     scp.drop();
     not_covered.drop();
+    if(res.is_none()) return RType::new("void");
     return res.unwrap();
   }
 

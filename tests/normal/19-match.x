@@ -79,7 +79,14 @@ func cast(){
         F::F2(val*) => getb() == getb(),
         F::F1(a*)=> /*getb()*/true
     };
-    
+}
+
+func jump(): bool{
+    let f = F::F2{val: B{aa: 10}};
+    match &f{
+        F::F1=>{ return true; },
+        F::F2=>{ return false; }
+    }
 }
 
 func main(){

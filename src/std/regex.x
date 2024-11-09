@@ -75,12 +75,12 @@ impl Regex{
         let end = false;
         if(self.is('^')){
             start = true;
-            self.i+=1;
+            self.i += 1;
         }
         let or = self.parse_or();
         if(self.is('$')){
             end = true;
-            self.i+=1;
+            self.i += 1;
         }
         return Node{or, start, end};
     }
@@ -89,7 +89,7 @@ impl Regex{
         let s1 = self.parse_seq();
         or.list.add(s1);
         while(self.is('|')){
-            self.i+=1;
+            self.i += 1;
             let s2 = self.parse_seq();
             or.list.add(s2);
         }
@@ -231,29 +231,52 @@ impl MatchVisitor{
             if(!res.a) return Pair::new(false, 0);
             //prevent greedy match
             match item{
-                Item::Op(ch*,kind*) => {
+                Item::Op(ch*, kind*) => {
                     if(ch.get() is Item::Dot && kind is OpKind::Star && idx < sq.list.len() - 1){
                         let next = sq.list.get_ptr(idx + 1);
-                        let next_res = self.visit_item(next, i + total);
-                        if(next_res.a){
-                            //ignore .*
-                            idx+=1;
+                            //do non greedy  (ab)*a
+                            let end2 = i + total;
+                            while(true){
+                                let chr = self.visit_item(ch.get(), end2);
+                                if(!chr.a) break;
+                                let nextr = self.visit_item(next, end2);
+                                if(nextr.a){
+                                    //ignore ch
+                                    total = end2;
+                                    break;
+                                }else{
+                                    //we must use ch
+                                    end2 += chr.b;
+                                }
+                            }
+                            idx += 1;
                             continue;
-                        }
                     }
                 },
                 _=>{}
             }
             total += res.b;
-            idx+=1;
+            idx += 1;
         }
         return Pair::new(true, total);
     }
     func is_dot(it: Item*): bool{
         return it is Item::Dot;
     }
+    func is_empty(it: Item*): bool{
+        /*match it{
+            Item::Op(node*, kind*) => {
+                return kind is OpKind::Opt || kind is OpKind::Star;
+            },
+            _=> { return false; }
+        }*/
+        return false;
+    }
     func visit_item(self, it: Item*, i: i32): Pair<bool, i32>{
-        if(!self.has(i)) return Pair::new(false, 0);
+        if(!self.has(i)){
+            if(is_empty(it)) return Pair::new(true, 0);
+            return Pair::new(false, 0);
+        }
         print("visit_item i={} s='{}' {}\n", i, self.s.substr(i), to_string(it));
         let res = match it{
             Item::Ch(ch) => 
