@@ -151,7 +151,7 @@ impl Compiler{
       //create bb's
       let res = Option<Value*>::new();
       let infos = List<MatchInfo>::new();
-      
+      let use_next = false;
       for case in &node.cases{
         if(case.lhs is MatchLhs::NONE){
           self.set_and_insert(def_bb);
@@ -159,6 +159,7 @@ impl Compiler{
           let exit = Exit::get_exit_type(&none_case.unwrap().rhs);
           if(!exit.is_jump()){
               CreateBr(nextbb);
+              use_next = true;
               if(!match_type.is_void()){
                 let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
                 infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), def_bb});
@@ -191,11 +192,14 @@ impl Compiler{
               infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
             }
             CreateBr(nextbb);
+            use_next = true;
           }
           name_c.drop();
         }
       }
-      self.set_and_insert(nextbb);
+      if(use_next){
+          self.set_and_insert(nextbb);
+      }
       //handle ret value
       if(!infos.empty()){
         let phi_type = self.mapType(&match_type);

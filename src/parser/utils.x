@@ -334,7 +334,7 @@ enum ExitType {
     PANIC,
     BREAK,
     CONTINE,
-    EXIT,
+    EXITCALL,
     UNREACHABLE
 }
 
@@ -342,43 +342,89 @@ struct Exit {
     kind: ExitType;
     if_kind: Ptr<Exit>;
     else_kind: Ptr<Exit>;
+    cases: List<Exit>;
 }
 
 impl Exit{
     func new(kind: ExitType): Exit{
-        return Exit{kind: kind, if_kind: Ptr<Exit>::new(), else_kind: Ptr<Exit>::new()};
+        return Exit{
+                      kind: kind,
+                      if_kind: Ptr<Exit>::new(),
+                      else_kind: Ptr<Exit>::new(),
+                      cases: List<Exit>::new()
+        };
+    }
+    func is_unreachable2(self): bool{
+        for cs in &self.cases{
+            if(!cs.is_unreachable()){
+                return false;
+            }
+        }
+        return true;
+    }
+    func is_return2(self): bool{
+        for cs in &self.cases{
+            if(!cs.is_return()){
+                return false;
+            }
+        }
+        return true;
+    }
+    func is_panic2(self): bool{
+        for cs in &self.cases{
+            if(!cs.is_panic()){
+                return false;
+            }
+        }
+        return true;
+    }
+    func is_exit2(self): bool{
+        for cs in &self.cases{
+            if(!cs.is_exit()){
+                return false;
+            }
+        }
+        return true;
+    }
+    func is_jump2(self): bool{
+        for cs in &self.cases{
+            if(!cs.is_jump()){
+                return false;
+            }
+        }
+        return true;
     }
     func is_none(self): bool{
-        return self.kind is ExitType::NONE && self.if_kind.is_none() && self.else_kind.is_none();
+        return self.kind is ExitType::NONE && self.if_kind.is_none() && self.else_kind.is_none() && self.cases.empty();
     }
     func is_unreachable(self): bool{
         if (self.kind is ExitType::UNREACHABLE) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_unreachable() && self.else_kind.get().is_unreachable();
+        if(!self.cases.empty()) return self.is_unreachable2();
         return false;
     }
     func is_return(self): bool{
         if (self.kind is ExitType::RETURN) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_return() && self.else_kind.get().is_return();
+        if(!self.cases.empty()) return self.is_return2();
         return false;
     }
     func is_panic(self): bool{
         if (self.kind is ExitType::PANIC) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_panic() && self.else_kind.get().is_panic();
+        if(!self.cases.empty()) return self.is_panic2();
         return false;
     }
     func is_exit(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXIT) return true;
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXITCALL) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit() && self.else_kind.get().is_exit();
-        return false;
-    }    
-    func is_exit_call(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXIT) return true;
-        if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_exit_call() && self.else_kind.get().is_exit_call();
+        if(!self.cases.empty()) return self.is_exit2();
         return false;
     }
     func is_jump(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXIT) return true;
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXITCALL) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
+        if(!self.cases.empty()) return self.is_jump2();
         return false;
     }
 
@@ -402,7 +448,7 @@ impl Exit{
         else if let Body::IfLet(val*)=(body){
             return get_exit_type(val);
         }
-        if let Body::Stmt(val*)=(body){
+        else if let Body::Stmt(val*)=(body){
             return get_exit_type(val);
         }
         else{
@@ -443,6 +489,14 @@ impl Exit{
         }
         return res;
     }
+    
+    func get_exit_type(node: Match*): Exit{
+        let res = Exit::new(ExitType::NONE);
+        for cs in &node.cases{
+            res.cases.add(get_exit_type(&cs.rhs));
+        }
+        return res;
+    }
 
     func get_exit_type(expr: Expr*): Exit{
         if let Expr::Call(call*)=(expr){
@@ -450,7 +504,7 @@ impl Exit{
                 return Exit::new(ExitType::PANIC);
             }
             if(call.name.eq("exit") && call.scope.is_none()){
-                return Exit::new(ExitType::EXIT);
+                return Exit::new(ExitType::EXITCALL);
             }
             if(Resolver::is_call(call, "std", "unreachable")){
                 return Exit::new(ExitType::UNREACHABLE);
@@ -467,6 +521,9 @@ impl Exit{
         if let Expr::IfLet(iflet0*)=(expr){
             let iflet = iflet0.get();
             return get_exit_type(iflet);
+        }
+        if let Expr::Match(mt0*)=(expr){
+            return get_exit_type(mt0.get());
         }
         return Exit::new(ExitType::NONE);
     }

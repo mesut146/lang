@@ -963,7 +963,8 @@ impl Resolver{
       let body_rt = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
       if (!node.type.is_void() && !exit.is_exit()) {
-        self.check_return(&body_rt.type, node.body.get().end_line);      }
+        self.check_return(&body_rt.type, node.body.get().end_line);
+      }
       exit.drop();
     }
     self.dropScope();
