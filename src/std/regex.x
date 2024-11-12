@@ -60,7 +60,7 @@ impl Regex{
         let res = Regex{pat: pat, i: 0, node: Option<Node>::new()};
         res.node = Option::new(res.parse());
         let s = to_string(res.node.get());
-        print("pat={}\n", res.node.get());
+        //print("pat={}\n", res.node.get());
         print("pat={}\n", s);
         return res;
     }
@@ -182,6 +182,10 @@ impl Regex{
             self.i += 1;
             return ch;
         }
+        if(ch == '#'){
+            self.i += 1;
+            return ch;
+        }
         panic("ch={}", ch);
     }
 }
@@ -202,8 +206,12 @@ impl MatchVisitor{
         return i < self.s.len();
     }
     func visit(self): bool{
+        print("str={}\n", self.s);
         let res = self.visit_or(&self.r.node.get().or, 0);
         if(res.a && res.b != self.s.len()){
+            if(res.b != self.s.len()){
+                print("str not consumed {} len={}\n", res.b, self.s.len());
+            }
             return false;
         }
         return res.a;
@@ -225,38 +233,81 @@ impl MatchVisitor{
     }
     func visit_seq(self, sq: Seq*, i: i32): Pair<bool, i32>{
         let total = 0;
-        let idx = 0;
-        for item in &sq.list{
-            let res = self.visit_item(item, i + total);
-            if(!res.a) return Pair::new(false, 0);
+        for(let idx=0;idx<sq.list.len();idx+=1){
+            let item = sq.list.get_ptr(idx);
+            print("idx={} item={} total={}\n", idx, to_string(item), total);
+            let it_used = false;
             //prevent greedy match
             match item{
                 Item::Op(ch*, kind*) => {
-                    if(ch.get() is Item::Dot && kind is OpKind::Star && idx < sq.list.len() - 1){
+                    if((ch.get() is Item::Dot || ch.get() is Item::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
                         let next = sq.list.get_ptr(idx + 1);
-                            //do non greedy  (ab)*a
-                            let end2 = i + total;
-                            while(true){
-                                let chr = self.visit_item(ch.get(), end2);
-                                if(!chr.a) break;
-                                let nextr = self.visit_item(next, end2);
-                                if(nextr.a){
+                        print("gr ch={} next={}\n", ch.get(), next);
+                        //do non greedy  (ab)*a
+                        //b*b => bb
+                        let end2 = i + total;
+                        while(true){
+                            let chr = self.visit_item(ch.get(), end2);
+                            if(!chr.a) break;
+                            let nextr = self.visit_item(next, end2);
+                            if(nextr.a){
+                                let nextr2 = self.visit_item(next, end2 + chr.b);
+                                if(nextr2.a){
+                                    //use ch
+                                    print("use ch\n");
+                                    end2 += chr.b;
+                                    total += chr.b;
+                                    it_used = true;
+                                }else{
                                     //ignore ch
                                     total = end2;
+                                    print("ignore ch\n");
                                     break;
-                                }else{
-                                    //we must use ch
-                                    end2 += chr.b;
                                 }
+                            }else{
+                                //we must use ch
+                                print("use ch\n");
+                                end2 += chr.b;
+                                total += chr.b;
+                                it_used = true;           
                             }
-                            idx += 1;
-                            continue;
+                         }
+                        continue;
+                    }else if((ch.get() is Item::Dot || ch.get() is Item::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
+                        let next = sq.list.get_ptr(idx + 1);
+                        print("gr ch={} next={}\n", ch.get(), next);
+                        let chr = self.visit_item(ch.get(), i+total);
+                        if(!chr.a) continue;
+                        let nextr = self.visit_item(next, i+total);
+                        //a?a, a?(ab|c) => a,a,ab,aab,ac
+                        if(nextr.a){
+                            let nextr2 = self.visit_item(next, i+total + chr.b);
+                                if(nextr2.a){
+                                    //use ch
+                                    print("use ch\n");
+                                    total += chr.b;
+                                    it_used = true;
+                                }else{
+                                    //ignore ch                          
+                                    print("ignore ch\n");
+                                    continue;
+                                }
+                        }else{
+                            //use ch
+                            total += chr.b;
+                            it_used = true;        
+                        }
                     }
                 },
-                _=>{}
+                _=>{
+                    
+                }
             }
-            total += res.b;
-            idx += 1;
+            if(!it_used){
+                let res = self.visit_item(item, i + total);
+                if(!res.a) return Pair::new(false, 0);
+                total += res.b;
+            }
         }
         return Pair::new(true, total);
     }
@@ -264,13 +315,12 @@ impl MatchVisitor{
         return it is Item::Dot;
     }
     func is_empty(it: Item*): bool{
-        /*match it{
+        match it{
             Item::Op(node*, kind*) => {
                 return kind is OpKind::Opt || kind is OpKind::Star;
             },
             _=> { return false; }
-        }*/
-        return false;
+        }
     }
     func visit_item(self, it: Item*, i: i32): Pair<bool, i32>{
         if(!self.has(i)){
@@ -328,6 +378,23 @@ impl MatchVisitor{
             },
             Item::Dot=>{
                 Pair::new(true, 1)
+            },
+            Item::Brac(br*)=>{
+                let valid = false;
+                let ch = self.s.get(i);
+                if(br.negated){
+                }
+                for rng in &br.list{
+                    if(ch >= rng.start && ch <= rng.end){
+                        valid = true;
+                        break;
+                    }
+                }
+                if(br.negated){
+                    if(valid) return Pair::new(false, 0);
+                    else return Pair::new(true, 1);
+                }
+                Pair::new(valid, 1)
             },
             _=>  panic("it={}\n", it)
         };

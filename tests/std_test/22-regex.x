@@ -17,11 +17,12 @@ func test_match(){
     
     test_match_not("ab", "abc");
 
-    test_match("ab?c", "abc");
+    test_match("b?c", "bc");
     test_match("ab?c", "ac");
     test_match("ab*c", "ac");
-    test_match("ab*c", "abc");
-    test_match("ab*c", "abbbc");
+    test_match("b*c", "bc");
+    test_match("b*c", "bbc");
+    test_match("b*c", "bbbc");
     test_match("ab+c", "abc");
     test_match("ab+c", "abbbc");
     test_match_not("ab+c", "ac");
@@ -47,9 +48,20 @@ func test_match(){
     test_match("a.*c", "ac");
     test_match("a.*c", "abc");
     test_match("a.*c", "axxxc");
+    test_match("ab*b", "ab");
+    test_match("b*b", "bb");
     
     test_match("a(bc)*b", "ab");
     test_match("a(bc)*b", "abcbcb");
+    
+    test_match("ab?b", "ab");
+    test_match("ab?b", "abb");
+    
+    test_match("[a-z]#[0-9]", "m#5");
+    test_match("[a-z0-9]#", "x#");
+    test_match("[a-z0-9]#", "6#");
+    test_match("[^a-z]#", "3#");
+    test_match("[^a-z0-9]#", "=#");
 }
 
 func main(){
