@@ -130,7 +130,7 @@ func std_test(){
     print("std_test\n");
     let std_dir = get_std_path();
     let out = get_out();
-    let lib = build_std(std_dir.str(), out.str(), false);
+    let lib = build_std(std_dir.str(), out.str(), true);
     let dir = format("{}/tests/std_test", root.get());
     let args = format("{} -lm", &lib);
     compile_dir2(dir.str(), args.str());

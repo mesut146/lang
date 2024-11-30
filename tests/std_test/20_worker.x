@@ -15,7 +15,7 @@ func f1(arg: c_void*){
 
 func f2(arg: c_void*){
     let a = arg as A*;
-    print("f2 {} {} {}\n", a.a,a.b,a.c);
+    print("f2 {} {} {}\n", a.a, a.b, a.c);
     //for(let i = 0;i < 10;++i){}
     sleep(1);
     print("f2 end\n");

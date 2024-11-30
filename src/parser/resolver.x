@@ -477,6 +477,7 @@ impl Resolver{
   }
   
   func resolve_all(self){
+    assert(!self.is_resolved);
     if(self.is_resolved) return;
     //print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
@@ -486,10 +487,16 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get_ptr(i);
       self.visit_item(item);
+      if(self.ctx.verbose_all && item is Item::Method){
+          print("resolve method done\n");
+      }
     }
     for(let j = 0;j < self.generated_methods.len();++j){
       let gm = self.generated_methods.get_ptr(j).get();
       self.visit_method(gm);
+      if(self.ctx.verbose_all){
+          print("resolve method done {}/{}\n", j+1,self.generated_methods.len());
+      }
     }
     self.dropScope();//globals
   }
@@ -2127,6 +2134,16 @@ impl Resolver{
   func visit_as(self, node: Expr*, lhs: Expr*, type: Type*): RType{
     let left = self.visit(lhs);
     let right = self.visit_type(type);
+    if(left.type.is_fpointer() && right.type.is_fpointer()){
+        let ft1 = left.type.get_ft();
+        let ft2 = right.type.get_ft();
+        if(ft1.params.len() == 1 && ft2.params.len() == 1){
+            if(ft1.params.get_ptr(0).is_pointer()&&
+            ft2.params.get_ptr(0).is_pointer()){
+                return right;
+            }
+        }
+    }
     //prim->prim
     if (left.type.is_prim()) {
       left.drop();

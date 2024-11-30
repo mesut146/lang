@@ -24,5 +24,4 @@ func main(){
     }
     pthread_mutex_destroy(&lock); 
     arr.drop();
-
 }

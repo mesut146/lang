@@ -371,13 +371,15 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         return;
     }
     let var_name = format("f_{}", node.id);
-    //let f = Fmt::new();
+    //..let f = Fmt::new();
     let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit, line);
     block.list.add(var_stmt);
     let pos = 0;
     let arg_idx = 1;
     while(pos < fmt_str.len()){
         let br_pos = fmt_str.indexOf("{}", pos);
+        //let dbg_pos = fmt_str.indexOf("{:?}", pos);
+        //let pr_pos = fmt_str.indexOf("{:}", pos);
         if(br_pos == -1 || br_pos > pos){
             let sub = "";
             if(br_pos == -1){
@@ -399,7 +401,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         }
         let arg = mc.args.get_ptr(arg_idx);
         ++arg_idx;
-        //<arg>.debug(&f);
+        //..<arg>.debug(&f);
         let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit, line);
         block.list.add(dbg_st);
     }
@@ -407,33 +409,32 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.err(node, "format arg not matched in specifier");
     }
     if(Resolver::is_print(mc)){
-        //f.buf.print();
+        //..f.buf.print();
         let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
         block.list.add(print_st);
-        //Drop::drop(f);
+        //..Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
         block.list.add(drop_st);
-        //print("block={}\n", block);
         r.visit_block(block);
         r.format_map.add(node.id, info);
     }else if(Resolver::is_panic(mc)){
-        //"<method:line>".print();
+        //.."<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
         pos_info.drop();
         block.list.add(pos_info_st);
-        //f.buf.print();
+        //..f.buf.print();
         let print_st = parse_stmt(format("{}.buf.println();", &var_name), &r.unit, line);
         block.list.add(print_st);
-        //Drop::drop(f);
+        //..Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
         block.list.add(drop_st);
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
-        //print("block={}\n", block);
+        //..print("block={}\n", block);
         r.visit_block(block);
         r.format_map.add(node.id, info);
     }else if(Resolver::is_format(mc)){
-        //f.unwrap()
+        //..f.unwrap()
         let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
         info.unwrap_mc = Option::new(unwrap_mc);
         r.visit_block(block);

@@ -159,6 +159,24 @@ impl Regex{
             let res = Item::Brac{Bracket{neg, ranges}};
             return res;
         }
+        if(ch == '\\'){
+            self.i += 1;
+            let ch2 = self.pat.get(self.i);
+            let val = 0;
+            if(ch2=='\\'){
+                val = '\\';
+            }else if(ch2=='n'){
+                val = '\n';
+            }else if(ch2=='r'){
+                val = '\r';
+            }else if(ch2=='t'){
+                val = '\t';
+            }else if(ch2=='"'){
+                val = '"';
+            }else{
+                panic("invalid escape {}", self.pat);
+            }
+        }
         return Item::Ch{self.parse_chr()};
         //panic("{}", ch);
     }

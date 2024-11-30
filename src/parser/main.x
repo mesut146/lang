@@ -102,6 +102,16 @@ func bootstrap(cmd: CmdArgs*){
   std_dir.drop();
 }
 
+enum Progress{
+    RESOLVE_DONE,
+    METHOD_GEN_DONE,
+    COMPILE_DONE
+}
+impl Progress{
+     func gencode_done(self){
+     }
+}
+
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
   use_cache = cmd.consume_any("-cache");
@@ -131,7 +141,7 @@ func handle_c(cmd: CmdArgs*){
     std_path.drop();
   }
   let path: String = cmd.get();
-  let bin: String = bin_name(path.str());
+  
   config.set_file(path.str());
   config.set_out(out_dir.clone());
   if(link_static){
@@ -143,8 +153,8 @@ func handle_c(cmd: CmdArgs*){
   }else{
     if(name.is_some()){
       config.set_link(LinkType::Binary{name.unwrap(), flags, run});
-      bin.drop();
     }else{
+      let bin: String = bin_name(path.str());
       config.set_link(LinkType::Binary{bin, flags, run});
       name.drop();
     }
