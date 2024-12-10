@@ -84,6 +84,11 @@ impl<T> Mutex<T>{
       }
       return self.val;
   }
+  func clone2(self): T{
+      let res = self.lock().clone();
+      self.unlock();
+      return res;
+  }
 }
 impl<T> Drop for Mutex<T>{
   func drop(*self){
@@ -114,6 +119,8 @@ struct WorkerBridgeInfo{
   th: Option<Thread>;
   worker: Worker*;
 }
+
+static xxx = false;
   
 func worker_bridge(arg: c_void*){
   let info = arg as WorkerBridgeInfo*;
@@ -123,20 +130,32 @@ func worker_bridge(arg: c_void*){
   let worker = info.worker;
   //lock
   let infos = worker.infos.lock();
-  //todo must use linked list
-  
+  let todo = worker.todo.lock(); 
+  if(xxx) print("finished\n");
   if(infos.len() == 1){
       infos.clear();
   }else{
-      let last: Node<Box<WorkerBridgeInfo>>>* = infos.head().get();
-      while(last.val.get().th.id == info.th.id){
-          cur.remove(i);
+      let i = 0;
+      let cur: Node<Box<WorkerBridgeInfo>>* = infos.head.get();
+      while(true){
+          if(cur.val.get().th.get().id != info.th.get().id){
+              infos.remove(i);
+              if(xxx) print("removed {}\n", infos.len());
+              break;
+          }
+          if(cur.next.is_none()) break;
+          cur = cur.next.get().get();
+          i+=1;
       }
   }
-  let todo = worker.todo.lock();
-  while(!todo.empty() && worker.get_working() < worker.thread_cnt){
+  if(xxx) print("todo {} wc={}\n", todo.len(), infos.len());
+  while(!todo.empty() && infos.len() < worker.thread_cnt){
       let job = todo.remove(todo.len() - 1);
+      worker.todo.unlock();
+      worker.infos.unlock();
       worker.add_arg(job.fp, job.arg);
+      infos = worker.infos.lock();
+      todo  = worker.todo.lock();
   }
   worker.todo.unlock();
   worker.infos.unlock();
@@ -167,40 +186,41 @@ impl Worker{
   }
   
   func add_arg(self, fp: func(c_void*) => void, arg: Any){
-    if(self.get_working() < self.thread_cnt){
-        let infos = self.infos.lock();
-        let info = WorkerBridgeInfo{fp: fp,
+      let infos = self.infos.lock();
+      let wc = infos.len();
+      if(xxx) print("add_arg wc: {}\n", wc);
+      if(wc >= self.thread_cnt){
+          let todo = self.todo.lock();
+          todo.add(Job{fp, arg});
+          if(xxx) print("added todo {}\n", todo.len());
+          self.todo.unlock();
+          self.infos.unlock();
+          return;
+      }
+      //let infos = self.infos.lock();
+      let info = WorkerBridgeInfo{fp: fp,
                        arg: arg,
                        th: Option<Thread>::new(),
                        worker: self
       };
-      let info_ptr = infos.add(Box::new(info));
-      let th = thread::spawn_arg(worker_bridge, info_ptr.get());
-      info_ptr.get().th.set(th);
+      let bx: Box<WorkerBridgeInfo>* = infos.add(Box::new(info));
+      let info_ptr = bx.get();
+      let th = thread::spawn_arg(worker_bridge, info_ptr);
+      info_ptr.th = Option::new(th);
+      if(xxx) print("added1={}\n", infos.len());
       self.infos.unlock();
-      return;
-    }
-    let todo = self.todo.lock();
-    todo.add(Job{fp, arg});
-    self.todo.unlock();
+      if(xxx) print("added {}\n", self.get_working());
   }
 
   func join(self){
       let infos = self.infos.lock();
-      while(infos.empty()){
-          infos.last().get().th.get().join();
+      while(!infos.empty()){
+          //infos.last().get().th.get().join();
+          self.infos.unlock();
+          sleep(1);
+          infos = self.infos.lock();
       }
       self.infos.unlock();
-      sleep(5);
-    /*while(!self.list.empty()){
-      self.list.last().th.join();
-    }*/
-    /*for pair in &self.list{
-      pair.join();
-    }
-    while(self.get_working() > 0 || !self.todo.empty()){
-        print("working={} todo={}\n", self.get_working(), self.todo.empty());
-        sleep(1);
-    }*/
+      //sleep(5);
   }
 }

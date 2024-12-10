@@ -103,7 +103,10 @@ impl Compiler{
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
       self.loopNext.pop_back();
-      CreateBr(condbb);
+      let exit_body = Exit::get_exit_type(body);
+      if(!exit_body.is_jump()){
+          CreateBr(condbb);
+      }
       self.set_and_insert(next);
       cond_name.drop();
       then_name.drop();

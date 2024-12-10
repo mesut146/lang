@@ -16,6 +16,7 @@ import std/map
 import std/io
 import std/libc
 import std/stack
+import std/regex
 
 static root = Option<String>::new();
 
@@ -141,6 +142,25 @@ func std_test(){
     args.drop();
 }
 
+func std_test_reg(pat: String){
+    let dir = format("{}/tests/std_test", root.get());
+    let files = list(dir.str());
+    /*print("list2 {}\n", files);
+    print("list2 len {}\n", files.len());
+    print("0= {}\n", files.get_ptr(0));
+    print("1= {}\n", files.get_ptr(1));*/
+    for(let i = 0;i < files.len();++i){
+        //print("i={}\n", i);
+        let fl = files.get_ptr(i);
+        let fl2 = fl.str();
+        //print("file={}\n", fl);
+        if(Regex::new(pat.str()).is_match(fl2)){
+            std_test_single(fl.clone());
+        }
+    }
+    files.drop();
+}
+
 func std_test_single(file: String){
     print("std_test\n");
     let std_dir = get_std_path();
@@ -262,7 +282,9 @@ func handle_tests(cmd: CmdArgs*): bool{
         cmd.consume();
         if(cmd.has()){
             let path = cmd.get();
-            std_test_single(path);
+            //Regex::new(pat).is_match(s)
+            //std_test_single(path);
+            std_test_reg(path);
         }else{
             std_test();
         }

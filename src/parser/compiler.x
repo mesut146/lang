@@ -19,6 +19,7 @@ import std/libc
 import std/stack
 import std/any
 import std/th
+import std/llist
 
 static bootstrap = false;
 static inline_rvo = false;

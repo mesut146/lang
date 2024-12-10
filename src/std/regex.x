@@ -18,7 +18,7 @@ struct Or{
 
 #derive(Debug)
 struct Seq{
-    list: List<Item>;
+    list: List<RegexItem>;
 }
 
 #derive(Debug)
@@ -33,10 +33,10 @@ struct Bracket{
 }
 
 #derive(Debug)
-enum Item {
+enum RegexItem {
     Group(node: Or),
     Brac(node: Bracket),
-    Op(node: Box<Item>, kind: OpKind),
+    Op(node: Box<RegexItem>, kind: OpKind),
     Ch(val: i32),
     Escape(val: i32),
     Dot
@@ -61,7 +61,7 @@ impl Regex{
         res.node = Option::new(res.parse());
         let s = to_string(res.node.get());
         //print("pat={}\n", res.node.get());
-        print("pat={}\n", s);
+        //print("pat={}\n", s);
         return res;
     }
     func is(self, ch: i32): bool{
@@ -96,7 +96,7 @@ impl Regex{
         return or;
     }
     func parse_seq(self): Seq{
-        let seq = Seq{list: List<Item>::new()};
+        let seq = Seq{list: List<RegexItem>::new()};
         let s1 = self.parse_op();
         seq.list.add(s1);
         while(self.has() && !self.is('$') && !self.is('|') && !self.is(')')){
@@ -108,22 +108,22 @@ impl Regex{
     func is_op(self): bool{
         return self.is('.') || self.is('(') || self.is('[');
     }
-    func parse_op(self): Item{
+    func parse_op(self): RegexItem{
         let it = self.parse_item();
         while(self.has()){
             if(self.is('*')){
                 self.i += 1;
-                let res = Item::Op{Box::new(it), OpKind::Star};
+                let res = RegexItem::Op{Box::new(it), OpKind::Star};
                 it = res;
             }
             else if(self.is('+')){
                 self.i += 1;
-                let res = Item::Op{Box::new(it), OpKind::Plus};
+                let res = RegexItem::Op{Box::new(it), OpKind::Plus};
                 it = res;
             }
             else if(self.is('?')){
                 self.i += 1;
-                let res = Item::Op{Box::new(it), OpKind::Opt};
+                let res = RegexItem::Op{Box::new(it), OpKind::Opt};
                 it = res;
             }else{
                 break;
@@ -131,17 +131,17 @@ impl Regex{
         }
         return it;
     }
-    func parse_item(self): Item{
+    func parse_item(self): RegexItem{
         let ch = self.pat.get(self.i);
         if(ch == '.'){
             self.i += 1;
-            return Item::Dot;
+            return RegexItem::Dot;
         }
         if(ch == '('){
             self.i += 1;
             let or = self.parse_or();
             self.i += 1;
-            return Item::Group{or};
+            return RegexItem::Group{or};
         }
         if(ch == '['){
             self.i += 1;
@@ -156,7 +156,7 @@ impl Regex{
                 ranges.add(self.parse_range());
             }
             self.i += 1;
-            let res = Item::Brac{Bracket{neg, ranges}};
+            let res = RegexItem::Brac{Bracket{neg, ranges}};
             return res;
         }
         if(ch == '\\'){
@@ -177,7 +177,7 @@ impl Regex{
                 panic("invalid escape {}", self.pat);
             }
         }
-        return Item::Ch{self.parse_chr()};
+        return RegexItem::Ch{self.parse_chr()};
         //panic("{}", ch);
     }
 
@@ -224,7 +224,7 @@ impl MatchVisitor{
         return i < self.s.len();
     }
     func visit(self): bool{
-        print("str={}\n", self.s);
+        //print("str={}\n", self.s);
         let res = self.visit_or(&self.r.node.get().or, 0);
         if(res.a && res.b != self.s.len()){
             if(res.b != self.s.len()){
@@ -253,14 +253,14 @@ impl MatchVisitor{
         let total = 0;
         for(let idx=0;idx<sq.list.len();idx+=1){
             let item = sq.list.get_ptr(idx);
-            print("idx={} item={} total={}\n", idx, to_string(item), total);
+            //print("idx={} item={} total={}\n", idx, to_string(item), total);
             let it_used = false;
             //prevent greedy match
             match item{
-                Item::Op(ch*, kind*) => {
-                    if((ch.get() is Item::Dot || ch.get() is Item::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
+                RegexItem::Op(ch*, kind*) => {
+                    if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
                         let next = sq.list.get_ptr(idx + 1);
-                        print("gr ch={} next={}\n", ch.get(), next);
+                        //print("gr ch={} next={}\n", ch.get(), next);
                         //do non greedy  (ab)*a
                         //b*b => bb
                         let end2 = i + total;
@@ -272,28 +272,28 @@ impl MatchVisitor{
                                 let nextr2 = self.visit_item(next, end2 + chr.b);
                                 if(nextr2.a){
                                     //use ch
-                                    print("use ch\n");
+                                    //print("use ch\n");
                                     end2 += chr.b;
                                     total += chr.b;
                                     it_used = true;
                                 }else{
                                     //ignore ch
                                     total = end2;
-                                    print("ignore ch\n");
+                                    //print("ignore ch\n");
                                     break;
                                 }
                             }else{
                                 //we must use ch
-                                print("use ch\n");
+                                //print("use ch\n");
                                 end2 += chr.b;
                                 total += chr.b;
                                 it_used = true;           
                             }
                          }
                         continue;
-                    }else if((ch.get() is Item::Dot || ch.get() is Item::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
+                    }else if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
                         let next = sq.list.get_ptr(idx + 1);
-                        print("gr ch={} next={}\n", ch.get(), next);
+                        //print("gr ch={} next={}\n", ch.get(), next);
                         let chr = self.visit_item(ch.get(), i+total);
                         if(!chr.a) continue;
                         let nextr = self.visit_item(next, i+total);
@@ -302,12 +302,12 @@ impl MatchVisitor{
                             let nextr2 = self.visit_item(next, i+total + chr.b);
                                 if(nextr2.a){
                                     //use ch
-                                    print("use ch\n");
+                                    //print("use ch\n");
                                     total += chr.b;
                                     it_used = true;
                                 }else{
                                     //ignore ch                          
-                                    print("ignore ch\n");
+                                    //print("ignore ch\n");
                                     continue;
                                 }
                         }else{
@@ -329,35 +329,35 @@ impl MatchVisitor{
         }
         return Pair::new(true, total);
     }
-    func is_dot(it: Item*): bool{
-        return it is Item::Dot;
+    func is_dot(it: RegexItem*): bool{
+        return it is RegexItem::Dot;
     }
-    func is_empty(it: Item*): bool{
+    func is_empty(it: RegexItem*): bool{
         match it{
-            Item::Op(node*, kind*) => {
+            RegexItem::Op(node*, kind*) => {
                 return kind is OpKind::Opt || kind is OpKind::Star;
             },
             _=> { return false; }
         }
     }
-    func visit_item(self, it: Item*, i: i32): Pair<bool, i32>{
+    func visit_item(self, it: RegexItem*, i: i32): Pair<bool, i32>{
         if(!self.has(i)){
             if(is_empty(it)) return Pair::new(true, 0);
             return Pair::new(false, 0);
         }
-        print("visit_item i={} s='{}' {}\n", i, self.s.substr(i), to_string(it));
+        //print("visit_item i={} s='{}' {}\n", i, self.s.substr(i), to_string(it));
         let res = match it{
-            Item::Ch(ch) => 
+            RegexItem::Ch(ch) => 
                 Pair::new(self.s.get(i) == ch, 1)
             ,
-            Item::Group(or*) => {
+            RegexItem::Group(or*) => {
                 self.visit_or(or, i)
             },
-            Item::Op(node*, kind*) => {
+            RegexItem::Op(node*, kind*) => {
                 let tmp = self.visit_item(node.get(), i);
                 match kind{
                     OpKind::Opt=>{
-                        print("node={} s='{}' tmp={} i={}\n", it, self.s.substr(i), tmp, i);
+                        //print("node={} s='{}' tmp={} i={}\n", it, self.s.substr(i), tmp, i);
                         let rr = Pair::new(true, 0);
                         if(tmp.a){
                             rr.b = tmp.b;
@@ -394,10 +394,10 @@ impl MatchVisitor{
                    _=> panic("other kind")
                 }
             },
-            Item::Dot=>{
+            RegexItem::Dot=>{
                 Pair::new(true, 1)
             },
-            Item::Brac(br*)=>{
+            RegexItem::Brac(br*)=>{
                 let valid = false;
                 let ch = self.s.get(i);
                 if(br.negated){
@@ -416,7 +416,7 @@ impl MatchVisitor{
             },
             _=>  panic("it={}\n", it)
         };
-        print("visit_item2 i={} s='{}' {} res={}\n", i, self.s.substr(i), to_string(it), res);
+        //print("visit_item2 i={} s='{}' {} res={}\n", i, self.s.substr(i), to_string(it), res);
         return res;
     }
 }
@@ -459,26 +459,26 @@ impl Display for Bracket {
         f.print("]");
     }
 }
-impl Display for Item{
+impl Display for RegexItem{
     func print(self, f: Fmt*){
         match self{
-            Item::Dot => f.print("."), 
-            Item::Group(node*)=>{
+            RegexItem::Dot => f.print("."), 
+            RegexItem::Group(node*)=>{
                 f.print("(");
                 node.print(f);
                 f.print(")");
             },
-            Item::Brac(node*)=>{
+            RegexItem::Brac(node*)=>{
                 node.print(f);
             },
-            Item::Op(node*, kind*)=>{
+            RegexItem::Op(node*, kind*)=>{
                 node.get().print(f);
                 kind.print(f);
             },
-            Item::Ch(val)=>{
+            RegexItem::Ch(val)=>{
                 f.print(&(val as i8));
             },
-            Item::Escape(val*)=>{
+            RegexItem::Escape(val*)=>{
                 f.print("\\");
                 f.print(val);
             }
