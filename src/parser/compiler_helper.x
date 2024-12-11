@@ -840,8 +840,13 @@ impl Compiler{
   func setField(self, expr: Expr*, type: Type*, trg: Value*){
     self.setField(expr, type, trg, Option<Expr*>::new());
   }
-  
   func setField(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
+      let rt = self.get_resolver().visit_type(type);
+      self.setField(expr, &rt, trg, lhs);
+      rt.drop();
+  }
+  func setField(self, expr: Expr*, rt: RType*, trg: Value*, lhs: Option<Expr*>){
+      let type = &rt.type;
     if(is_struct(type)){
       if(can_inline(expr, self.get_resolver())){
         //todo own drop_lhs

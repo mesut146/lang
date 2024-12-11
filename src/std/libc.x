@@ -116,11 +116,17 @@ extern{
   //func pthread_join(th: pthread_t, value_ptr: c_void**): i32;
   func pthread_join(th: i64, value_ptr: c_void**): i32;
   func sleep(sec: i32): i32;
+  func nanosleep(req: timespec*, rem: timespec*): i32;
   func pthread_mutex_init(mutex: pthread_mutex_t*, attr: pthread_mutexattr_t*): i32;
   func pthread_mutex_destroy(mutex: pthread_mutex_t*): i32;
   func pthread_mutex_lock(mutex: pthread_mutex_t*): i32;
   func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
   func strerror(err: i32): i8*;
+}
+
+func msleep(ms: i64){
+    let tm = timespec{ms/1000, ms%1000};
+    nanosleep(&tm, ptr::null<timespec>());
 }
 
 func make_pthread_mutex_t(): pthread_mutex_t{
