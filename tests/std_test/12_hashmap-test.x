@@ -16,7 +16,7 @@ func map_str(){
     map.insert("a", "hello");
     map.insert("b", "world");
     map.insert("c", "...");
-    print("map={}\n", map);
+    print("map={:?}\n", map);
 }
 
 func main(){

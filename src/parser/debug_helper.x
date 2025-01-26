@@ -184,7 +184,7 @@ impl DebugInfo{
 
     func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: DIFile*, var_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
       let ev = decl.get_variants().get_ptr(var_idx);
-      let name: String = format("{}::{}", decl.type, ev.name.str());
+      let name: String = format("{:?}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
       let elems = vector_Metadata_new();
       //empty ty

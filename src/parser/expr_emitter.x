@@ -103,7 +103,7 @@ impl Compiler{
         }
         return res.unwrap();
       }
-      panic("expr {}", node);
+      panic("expr {:?}", node);
     }
 
     func get_variant_index_match(case: MatchCase*, decl: Decl*): i32{
@@ -115,7 +115,7 @@ impl Compiler{
         }
         ++idx;
       }
-      panic("idx {} {}", case.lhs.get_type(), decl.type);
+      panic("idx {:?} {:?}", case.lhs.get_type(), decl.type);
     }
 
     func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
@@ -166,7 +166,7 @@ impl Compiler{
               }
           }
         }else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
-          let name_c = format("{}__{}_{}", decl.type, type.name(), expr.line).cstr();
+          let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
           let bb = create_bb_named(name_c.ptr());
           let var_index = get_variant_index_match(case, decl);
           SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
@@ -903,7 +903,7 @@ impl Compiler{
           //val = CreateLoad(self.mapType(&arg_type), val);
           vector_Value_push(args, val);
         }else{
-          panic("print {}", arg_type);
+          panic("print {:?}", arg_type);
         }
         arg_type.drop();
       }
@@ -950,7 +950,7 @@ impl Compiler{
           arg_type.drop();
           continue;
         }else{
-          panic("compiler err printf arg {}", arg_type);
+          panic("compiler err printf arg {:?}", arg_type);
         }
         arg_type.drop();
       }
@@ -993,7 +993,7 @@ impl Compiler{
           arg_type.drop();
           continue;
         }else{
-          panic("compiler err sprintf arg {}", arg_type);
+          panic("compiler err sprintf arg {:?}", arg_type);
         }
         arg_type.drop();
       }

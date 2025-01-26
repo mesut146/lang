@@ -197,7 +197,7 @@ impl Rhs{
         if let Rhs::VAR(v*)=(self){
             return v.id;
         }
-        panic("{}", self);
+        panic("{:?}", self);
     }
     func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){

@@ -200,7 +200,7 @@ impl Regex{
             self.i += 1;
             return ch;
         }
-        if(ch == '#'){
+        if(ch == '#' || ch == '-' || ch == '_'){
             self.i += 1;
             return ch;
         }
@@ -219,6 +219,10 @@ struct MatchVisitor{
     r: Regex*;
     s: str;
 }
+struct MatchState{
+    is_match: bool;
+    len: i32;
+}
 impl MatchVisitor{
     func has(self, i: i32): bool{
         return i < self.s.len();
@@ -228,7 +232,8 @@ impl MatchVisitor{
         let res = self.visit_or(&self.r.node.get().or, 0);
         if(res.a && res.b != self.s.len()){
             if(res.b != self.s.len()){
-                print("str not consumed {} len={}\n", res.b, self.s.len());
+                //let pat = to_string(self.r);
+                //print("str not consumed {} len={} {} pat={}\n", res.b, self.s.len(), self.s, self.r.pat);   
             }
             return false;
         }
@@ -424,56 +429,56 @@ impl MatchVisitor{
 
 //-----------------------------------------------------
 impl Display for Node{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         if(self.begin) f.print("^");
-        self.or.print(f);
+        Display::fmt(&self.or, f);
         if(self.end) f.print("$");
     }
 }
 impl Display for Or{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         let i = 0;
         for s in &self.list{
             if(i>0) f.print("|");
             i+=1;
-            s.print(f);
+            Display::fmt(s, f);
         }
     }
 }
 impl Display for Seq{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         for item in &self.list{
-            item.print(f);
+            Display::fmt(item, f);
         }
     }
 }
 impl Display for Bracket {
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         f.print("[");
         if(self.negated){
             f.print("^");
         }
         for rn in &self.list{
-            rn.print(f);
+            Display::fmt(rn, f);
         }
         f.print("]");
     }
 }
 impl Display for RegexItem{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         match self{
             RegexItem::Dot => f.print("."), 
             RegexItem::Group(node*)=>{
                 f.print("(");
-                node.print(f);
+                Display::fmt(node, f);
                 f.print(")");
             },
             RegexItem::Brac(node*)=>{
-                node.print(f);
+                Display::fmt(node, f);
             },
             RegexItem::Op(node*, kind*)=>{
-                node.get().print(f);
-                kind.print(f);
+                Display::fmt(node.get(), f);
+                Display::fmt(kind, f);
             },
             RegexItem::Ch(val)=>{
                 f.print(&(val as i8));
@@ -486,14 +491,14 @@ impl Display for RegexItem{
     }
 }
 impl Display for Range{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         f.print(&(self.start as i8));
         f.print("-");
         f.print(&(self.end as i8));
     }
 }
 impl Display for OpKind{
-    func print(self, f: Fmt*){
+    func fmt(self, f: Fmt*){
         match self{
             OpKind::Opt => f.print("?"),
             OpKind::Star => f.print("*"),

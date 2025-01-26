@@ -261,7 +261,7 @@ impl MethodResolver{
                 cmp.drop();
                 val.drop();
             }else{
-                panic("get_impl type not covered: {}", type);
+                panic("get_impl type not covered: {:?}", type);
             }
         }
         erased.drop();
@@ -365,7 +365,7 @@ impl MethodResolver{
         let mc = sig.mc.unwrap();
         let list = self.collect(sig);
         if(list.empty()){
-            let msg = format("no such method {}", sig);
+            let msg = format("no such method {:?}", sig);
             self.r.err(expr, msg.str());
             panic("unreachable");
         }
@@ -388,7 +388,7 @@ impl MethodResolver{
             }
         }
         if(real.empty()){
-            let f = Fmt::new(format("method {} not found from candidates\n", mc));
+            let f = Fmt::new(format("method {:?} not found from candidates\n", mc));
             for(let i = 0;i < errors.len();++i){
                 let err: Pair<Signature*, String>* = errors.get_ptr(i);
                 f.print(err.a);
@@ -403,7 +403,7 @@ impl MethodResolver{
             panic("unreachable");
         }
         if (real.size() > 1 && exact.is_none()) {
-            let msg = format("method {} has {} candidates\n", mc, real.size());
+            let msg = format("method {:?} has {} candidates\n", mc, real.size());
             for(let i = 0;i < real.len();++i){
                 let err: Signature* = *real.get_ptr(i);
                 msg.append("\n  ");
@@ -481,7 +481,7 @@ impl MethodResolver{
         for (let i = 0;i < type_params.len();++i) {
             let tp = type_params.get_ptr(i);
             if (!typeMap.contains(tp.name())) {
-                let msg = format("{}\ncan't infer type parameter: {}", sig, tp);
+                let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
                 type_params.drop();
                 list.drop();
                 real.drop();
@@ -546,14 +546,14 @@ impl MethodResolver{
             return;
         }
         if(!prm.is_simple()){
-            panic("prm is not simple {} -> {}", arg, prm);
+            panic("prm is not simple {:?} -> {:?}", arg, prm);
         }
         if(!prm.get_args().empty()){
             //prm: A<T>
             let ta1 = arg.get_args();
             let ta2 = prm.get_args();
             if (ta1.size() != ta2.size()) {
-                let msg = format("type arg size mismatch, {} = {}", arg, prm);
+                let msg = format("type arg size mismatch, {:?} = {:?}", arg, prm);
                 panic("{}", msg);
             }
             if (!arg.name().eq(prm.name())) panic("cant infer");
@@ -636,22 +636,22 @@ impl MethodResolver{
         }
         if(type1.is_slice()){
             if(!type2.is_slice()){
-                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
             }
             if(info.type_params.empty()){
-                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
             }
             let cmp = is_compatible(type1, type2, &info.type_params);
             if(cmp.is_some()){
                 cmp.drop();
-                return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
             }
             cmp.drop();
             return SigResult::Exact;
             //panic("todo {} vs {}, mc={} cmp={}", type1, type2, sig.mc.unwrap(), &cmp);
         }
         if(!type1.is_simple() || !type2.is_simple()){
-            return SigResult::Err{format("not same kind {} vs {}", type1, type2)};
+            return SigResult::Err{format("not same kind {:?} vs {:?}", type1, type2)};
         }
         if (scope_rt.is_trait()) {
             let real_scope = sig.args.get_ptr(0).get_ptr();
@@ -662,14 +662,14 @@ impl MethodResolver{
                 return SigResult::Exact;
             }
             else if (!real_scope.name().eq(type2.name())) {
-                return SigResult::Err{format("not same impl {} vs {}", real_scope, type2)};
+                return SigResult::Err{format("not same impl {:?} vs {:?}", real_scope, type2)};
             }
         }
         if(info.type_params.empty()){
-            return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
         }
         if (!type1.name().eq(type2.name().str())) {
-            return SigResult::Err{format("not same impl {} vs {}", type1, type2)};
+            return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
             //return self.check_args(sig, sig2);
         }
         return SigResult::Exact;
@@ -692,7 +692,7 @@ impl MethodResolver{
                     let ta1 = mc_targs.get_ptr(i);
                     let ta2 = m.type_params.get_ptr(i);
                     if (!ta1.eq(ta2)) {
-                        let err = format("type arg {} not compatible with {}", ta1, ta2);
+                        let err = format("type arg {:?} not compatible with {:?}", ta1, ta2);
                         return SigResult::Err{err};
                     }
                 }
@@ -744,7 +744,7 @@ impl MethodResolver{
                     if (t1.is_pointer()) {
                         typeParams.drop();
                         t1.drop();
-                        return SigResult::Err{format("can't convert borrowed self to *self, {} vs {}", t1p, t2)};
+                        return SigResult::Err{format("can't convert borrowed self to *self, {:?} vs {:?}", t1p, t2)};
                     }
                 }
             }
@@ -770,7 +770,7 @@ impl MethodResolver{
                         arg = mc.args.get_ptr(i).print();
                     }
                 }
-                let res = SigResult::Err{format("arg '{}' is not compatible with param {} vs {}\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
+                let res = SigResult::Err{format("arg '{:?}' is not compatible with param {} vs {}\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
                 arg.drop();
                 t1_str.drop();
                 t2_str.drop();
@@ -926,7 +926,7 @@ impl MethodResolver{
             return Option<String>::new();
         }
         else {
-            return Option::new(format("{} can't fit into {}", arg, target_str.str()));
+            return Option::new(format("{:?} can't fit into {}", arg, target_str.str()));
         }
     }
 

@@ -3,8 +3,44 @@ import std/any
 
 type FUNC_TYPE = func(c_void*) => void;
 
-struct File;
+struct Process{
+    fp: FILE*;
+}
+impl Process{
+    func run(cmd: str): Process{
+        let cs = cmd.cstr();
+        let mode = "r".cstr();
+        let fp = popen(cs.ptr(), mode.ptr());
+        if(is_null(fp)){
+            panic("failed to run {}", cmd);
+        }
+        cs.drop();
+        mode.drop();
+        return Process{fp: fp};
+    }
+    func read_str(self): String{
+        return String::new(self.read());
+    }
+    func read(self): List<u8>{
+        let res = List<u8>::new();
+        let buf = [0u8; 1024];
+        while(true){
+            let cnt = fread(&buf[0], 1, 1024, self.fp);
+            if(cnt <= 0){ break; }
+            res.add_slice(buf[0..cnt]);
+        }
+        return res;
+    }
+    func close(*self){
+        pclose(self.fp);
+    }
+    func eat_close(*self){
+        self.read().drop();
+        self.close();
+    }
+}
 
+struct File;
 impl File{
   func remove_file(path: str){
     let path_c = CStr::new(path);
@@ -244,7 +280,7 @@ impl Path{
   }
 }
 
-
+static root_exe = Option<String>::new();
 struct CmdArgs{
   args: List<String>;
   root: String;
@@ -261,6 +297,8 @@ impl CmdArgs{
   }
   func new(argc: i32, args: i8**): CmdArgs{
     let root = CmdArgs::get_arg(args, 0).str();
+    print("root={}\n", root);
+    root_exe.set(root.clone());
     let res = CmdArgs{args: List<String>::new(), root: root};
     for(let i = 1; i < argc;++i){
       res.args.add(CmdArgs::get_arg(args, i).str());
@@ -292,7 +330,7 @@ impl CmdArgs{
   }
   func end(self){
       if(self.args.empty()) return;
-      panic("extra args: {}", self.args);
+      panic("extra args: {:?}", self.args);
   }
 
   func has_any(self, arg: str): bool{

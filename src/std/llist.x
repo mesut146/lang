@@ -141,3 +141,14 @@ impl<T> Debug for LinkedList<T>{
         f.print("]");
     }
 }
+
+impl<T> Display for Node<T>{
+    func fmt(self, f: Fmt*){
+        Debug::debug(self, f);
+    }
+}
+impl<T> Display for LinkedList<T>{
+    func fmt(self, f: Fmt*){
+        Debug::debug(self, f);
+    }
+}

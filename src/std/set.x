@@ -75,3 +75,7 @@ impl<T> Debug for Set<T>{
         f.print("}");
     }
 }
+/*impl<T> Display for Set<T>{
+    func fmt(self, f: Fmt*){
+    }
+}*/

@@ -98,13 +98,13 @@ impl Parser{
   func consume(self, tt: TokenType): Token*{
     let t: Token* = self.pop();
     if(t.type is tt) return t;
-    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.path, t.line, t, &tt);
   }
 
   func consume_ident(self, val: str): Token*{
     let tok = self.consume(TokenType::IDENT);
     if(tok.value.eq(val)) return tok;
-    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, tok.line, tok, val);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.path, tok.line, tok, val);
   }
 
   func err(self, msg: str){
@@ -184,7 +184,7 @@ impl Parser{
           self.consume(TokenType::SEMI);
           unit.globals.add(Global{.id, name, type, rhs});
         }else{
-          panic("invalid top level decl: {}", self.peek());
+          panic("invalid top level decl: {:?}", self.peek());
         }
       }
       return unit;
@@ -806,7 +806,7 @@ impl Parser{
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
       kind = LitKind::BOOL;
     }else{
-      panic("invalid literal {}", self.peek());
+      panic("invalid literal {:?}", self.peek());
     }
     let arr = Lexer::get_suffix();
     let val = self.popv();
@@ -829,7 +829,7 @@ impl Parser{
     if(isName(self.peek())){
       return self.popv();
     }
-    self.err(format("expected name got {}", self.peek()));
+    self.err(format("expected name got {:?}", self.peek()));
     panic("unr");
   }
   
@@ -981,7 +981,7 @@ impl Parser{
         return Expr::Name{.n, nm};
       }
     }
-    self.err(format("invalid expr {}", self.peek()));
+    self.err(format("invalid expr {:?}", self.peek()));
     panic("");
   }
 
@@ -995,7 +995,7 @@ impl Parser{
         ty = Option::new(t);
       }
       else{
-        print("was expecting name got {}", &type_expr);
+        print("was expecting name got {:?}", &type_expr);
         type_expr.drop();
         panic("");
       }

@@ -331,6 +331,9 @@ impl Lexer{
       return self.read_op();
     }
     os.drop();
+    if(self.single_line!=-1){
+        print("buf='{}'\n", self.buf);
+    }
     panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
   }
   

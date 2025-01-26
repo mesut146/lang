@@ -97,7 +97,7 @@ impl AstCopier{
             return Decl::Enum{.base, res};
         }
         base.drop();
-        let msg = format("visit decl {}\n", node);
+        let msg = format("visit decl {:?}\n", node);
         panic("{}", msg.str());
     }
 
@@ -262,7 +262,7 @@ impl AstCopier{
         if let Stmt::Break = (node){
             return Stmt::Break{.id};
         }
-        let msg = format("stmt {}", node);
+        let msg = format("stmt {:?}", node);
         panic("{}", msg.str());
     }
 
@@ -336,7 +336,7 @@ impl AstCopier{
         if let Expr::ArrAccess(aa*)=(node){
             return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_ptr(&aa.idx2)}};
         }
-        let msg = format("Expr {}", node);
+        let msg = format("Expr {:?}", node);
         panic("{}", msg.str());
     }
 

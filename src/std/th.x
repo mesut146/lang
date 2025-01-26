@@ -176,6 +176,12 @@ impl Worker{
       self.infos.unlock();
       return res;
   }
+  func get_todo(self): i64{
+      let todo = self.todo.lock();
+      let res = todo.len();
+      self.todo.unlock();
+      return res;
+  }
 
   func add(self, fp: func(c_void*) => void){
     self.add_arg(fp, Any::new());

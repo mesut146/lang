@@ -216,7 +216,7 @@ func handle(cmd: CmdArgs*){
     handle_c(cmd);
     return;
   }else{
-    panic("invalid cmd: {}", cmd.args);
+    panic("invalid cmd: {:?}", cmd.args);
   }
 }
 

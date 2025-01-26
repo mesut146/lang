@@ -32,6 +32,20 @@ func expr_i32(){
     assert(x == 200);
 }
 
+func expr_i32_omit(){
+    let e = E::E2{.B{aa: 12345}, val: 10, a: A{a: 20, b: 30}};
+    let x: i32 = match &e {
+        E::E1 => 100,
+        E2(val, a) => {
+            200
+        },
+        E3(val) => {
+            300
+        }
+    };
+    assert(x == 200);
+}
+
 func expr_struct(){
     let f = F::F2{val: B{aa: 10}};
     let x: B = match &f{
@@ -101,6 +115,7 @@ func main(){
         }
     }
     expr_i32();
+    expr_i32_omit();
     expr_struct();
     def_test();
     printf("match done\n");

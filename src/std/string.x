@@ -170,6 +170,12 @@ impl Debug for String{
     //f.print(self.str());
   }
 }
+impl Display for String{
+  func fmt(self, f: Fmt*){
+    self.str().debug(f);
+    //f.print(self.str());
+  }
+}
 
 impl Eq for String{
   func eq(self, rhs: String*): bool{
@@ -238,5 +244,10 @@ impl CStr{
 impl Debug for CStr{
   func debug(self, f: Fmt*){
     f.print(self.val.str());
+  }
+}
+impl Display for CStr{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
   }
 }

@@ -162,7 +162,7 @@ impl Decl{
     if let Decl::Enum(variants*)=(self){
       return variants;
     }
-    panic("get_variants {}", self.type);
+    panic("get_variants {:?}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
     if let Decl::Struct(fields*)=(self){
@@ -351,7 +351,7 @@ impl Type{
     if let Type::Simple(smp*)=(self){
       return &smp.name;
     }
-    panic("cant Type::name() {}", self);
+    panic("cant Type::name() {:?}", self);
   }
 
   func is_simple(self): bool{
@@ -412,7 +412,7 @@ impl Type{
     if let Type::Simple(smp*) = (self){
       return &smp.args;
     }
-    panic("get_args {}", self);
+    panic("get_args {:?}", self);
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
@@ -454,7 +454,7 @@ impl Type{
     if let Type::Slice(bx*) = (self){
       return bx.get();
     }
-    panic("elem {}", self);
+    panic("elem {:?}", self);
   }
   func unwrap_elem(*self): Type{
     if let Type::Pointer(bx) = (self){
@@ -466,19 +466,19 @@ impl Type{
     if let Type::Slice(bx) = (self){
       return bx.unwrap();
     }
-    panic("unwrap_elem {}", self);
+    panic("unwrap_elem {:?}", self);
   }
   func get_ft(self): FunctionType*{
     if let Type::Function(bx*) = (self){
       return bx.get();
     }
-    panic("get_ft {}", self);
+    panic("get_ft {:?}", self);
   }
   func unwrap_ft(*self): FunctionType{
     if let Type::Function(bx) = (self){
       return bx.unwrap();
     }
-    panic("get_ft {}", self);
+    panic("get_ft {:?}", self);
   }
 
   //get plain(generic)
@@ -490,7 +490,7 @@ impl Type{
         return Type::new(smp.name.clone());
       }
     }
-    panic("erase {}", self);
+    panic("erase {:?}", self);
   }
   
   func print(self): String{
@@ -704,7 +704,7 @@ impl Expr{
     if let Expr::Call(cx*) = (self){
       return cx;
     }
-    panic("get_call {}", self);
+    panic("get_call {:?}", self);
   }
   func is_body(self): bool{
     return self is Expr::Block || self is Expr::If || self is Expr::IfLet;
@@ -744,7 +744,7 @@ struct Entry{
 }
 
 func print5(e: Expr*){
-  print("{}\n", e);
+  print("{:?}\n", e);
 }
 
 struct Match{

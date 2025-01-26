@@ -87,7 +87,7 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
         }
         return false;
     }
-    if (!(type is Type::Simple)) panic("hasGeneric::Complex {}", type);
+    if (!(type is Type::Simple)) panic("hasGeneric::Complex {:?}", type);
     let targs = type.get_args();
     if (targs.empty()) {
         for (let i = 0;i < typeParams.size();++i) {
@@ -157,7 +157,7 @@ func can_fit_into(val: str, target: Type*): bool{
         }
         return res <= 0;
     }
-    panic("can_fit_into todo {} -> {}", val, target);
+    panic("can_fit_into todo {} -> {:?}", val, target);
 }
 
 func max_for(type: Type*): i64{
@@ -452,7 +452,7 @@ impl Exit{
             return get_exit_type(val);
         }
         else{
-            panic("{}", body);
+            panic("{:?}", body);
         }
     }
 

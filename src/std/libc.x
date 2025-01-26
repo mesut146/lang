@@ -91,6 +91,7 @@ extern{
   //func fflush(file: FILE*): i32;
   func fwrite(buf: i8*, size: i32, count: i32, target: FILE*): i32;
   func fread(buf: i8*, size: i32, count: i32, target: FILE*): i32;
+  func fgets(s: i8*, size: i32, file: FILE*): i8*;
   func fseek(file: FILE*, offset: i64, origin: i32): i32;
   func ftell(file: FILE*): i64;
   func remove(name: i8*): i32;
@@ -122,7 +123,11 @@ extern{
   func pthread_mutex_lock(mutex: pthread_mutex_t*): i32;
   func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
   func strerror(err: i32): i8*;
+  
+  func popen(cmd: i8*, mode: i8*): FILE*;
+  func pclose(fp: FILE*): i32;
 }
+
 
 func msleep(ms: i64){
     let tm = timespec{ms/1000, ms%1000};

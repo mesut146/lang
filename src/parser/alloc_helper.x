@@ -134,7 +134,7 @@ impl AllocHelper{
     if let Stmt::Continue=(node){
       return;
     }
-    panic("alloc {}\n", node);
+    panic("alloc {:?}\n", node);
   }
   func visit_ret(self, stmt: Stmt*, expr: Expr*){
     self.visit(expr);
@@ -361,7 +361,7 @@ impl AllocHelper{
       rt.drop();
       return res;
     }
-    panic("alloc {}\n", node);
+    panic("alloc {:?}\n", node);
   }
 }
 
@@ -378,7 +378,7 @@ impl AllocHelper{
       }
       return;
     }else{
-      panic("visit_child {}", node);
+      panic("visit_child {:?}", node);
     }
   }
 }

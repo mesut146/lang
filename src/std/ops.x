@@ -81,19 +81,18 @@ trait Debug{
   func debug(self, f: Fmt*);
 }
 trait Display{
-  func print(self, f: Fmt*);
+  func fmt(self, f: Fmt*);
 }
 
 func to_string<T>(node: T*): String{
     let f = Fmt::new();
-    node.print(&f);
+    node.fmt(&f);
     return f.unwrap();
 }
 
 struct Fmt{
   buf: String;
 }
-
 impl Fmt{
   func new(): Fmt{
     return Fmt{String::new()};
@@ -111,6 +110,10 @@ impl Fmt{
   }
   func print(self, s: str){
     self.buf.append(s); 
+  }
+  func print(self, s: String){
+    self.buf.append(&s);
+    s.drop();
   }
   func print<T>(self, node: T*){
     Debug::debug(node, self);
@@ -139,7 +142,6 @@ impl Debug for [i32]{
     f.print("]\n");
   }
 }
-
 impl Debug for bool{
   func debug(self, f: Fmt*){
     if(*self){
@@ -149,7 +151,11 @@ impl Debug for bool{
     }
   }
 }
-
+impl Display for bool{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for str{
   func debug(self, f: Fmt*){
     //f.print("\"");
@@ -157,21 +163,88 @@ impl Debug for str{
     //f.print("\"");
   }
 }
-
+impl Display for str{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for i8{
   func debug(self, f: Fmt*){
     f.print(*self);
   }
 }
-
+impl Display for i8{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for u8{
   func debug(self, f: Fmt*){
     f.print(*self);
   }
 }
+impl Display for u8{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+//prims
+impl Debug for i32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for i32{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for i64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for i64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for f32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for f32{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for f64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for f64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for u64{
   func debug(self, f: Fmt*){
     i64::debug(*self as i64, f);
+  }
+}
+impl Display for u64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
   }
 }
 
@@ -237,37 +310,6 @@ impl Drop for i64{
 }
 impl Drop for str{
   func drop(*self){
-    
-  }
-}
-
-//prims
-impl Debug for i32{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
-  }
-}
-impl Debug for i64{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
-  }
-}
-impl Debug for f32{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
-  }
-}
-impl Debug for f64{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
   }
 }
 

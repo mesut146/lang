@@ -118,7 +118,7 @@ func test_single(file: String){
     let args = format("{} -lm", &lib);
     
       let config = CompilerConfig::new(get_src_dir());
-      config.set_file(file);
+      config.set_file(format("{}/{}", dir, file));
       config.set_out(get_out());
       config.add_dir(get_src_dir());
       config.set_link(LinkType::Binary{"a.out".str(), args, true});
@@ -142,18 +142,12 @@ func std_test(){
     args.drop();
 }
 
-func std_test_reg(pat: String){
+func std_test_regex(pat: String){
     let dir = format("{}/tests/std_test", root.get());
     let files = list(dir.str());
-    /*print("list2 {}\n", files);
-    print("list2 len {}\n", files.len());
-    print("0= {}\n", files.get_ptr(0));
-    print("1= {}\n", files.get_ptr(1));*/
     for(let i = 0;i < files.len();++i){
-        //print("i={}\n", i);
         let fl = files.get_ptr(i);
         let fl2 = fl.str();
-        //print("file={}\n", fl);
         if(Regex::new(pat.str()).is_match(fl2)){
             std_test_single(fl.clone());
         }
@@ -207,21 +201,19 @@ func normal_test(){
     args.drop();
 }
 
-func normal_test(pattern: String){
+func normal_test_regex(pattern: String){
     print("normal_test\n");
-    /*"let rt_src = format("{}/src/std/rt.x", root.get());
-    let config = CompilerConfig::new(get_src_dir());
-    config
-    .set_file(rt_src)
-    .set_out(get_out())
-    .add_dir(get_src_dir())
-    .set_link(LinkType::Static{"rt.a".str()});
-    config.root_dir.set(root.get().clone());
-    let lib = Compiler::compile_single(config);*/
-    let file = format("{}/tests/normal/{}", root.get(), pattern);
-    test_single(file);
-    //lib.drop();
+    let dir = format("{}/tests/normal", root.get());
+    let files = list(dir.str());
+    for(let i = 0;i < files.len();++i){
+        let fl = files.get_ptr(i);
+        let fl2 = fl.str();
+        if(Regex::new(pattern.str()).is_match(fl2)){
+            test_single(fl.clone());
+        }
+    }
     pattern.drop();
+    files.drop();
 }
 
 func own_test(id: i32){
@@ -271,7 +263,7 @@ func handle_tests(cmd: CmdArgs*): bool{
     if(cmd.is("test")){
         cmd.consume();
         if(cmd.has()){
-            normal_test(cmd.get());
+            normal_test_regex(cmd.get());
         }else{
             normal_test();
         }
@@ -282,9 +274,7 @@ func handle_tests(cmd: CmdArgs*): bool{
         cmd.consume();
         if(cmd.has()){
             let path = cmd.get();
-            //Regex::new(pat).is_match(s)
-            //std_test_single(path);
-            std_test_reg(path);
+            std_test_regex(path);
         }else{
             std_test();
         }
@@ -297,7 +287,7 @@ func handle_tests(cmd: CmdArgs*): bool{
         let path = cmd.get();
         let parser = Parser::from_path(path);
         let unit = parser.parse_unit();
-        print("parse done {}\nunit={}\n", parser.path, unit);
+        print("parse done {}\nunit={:?}\n", parser.path, unit);
         parser.drop();
         unit.drop();
         return true;

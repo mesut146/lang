@@ -43,7 +43,7 @@ impl Compiler{
         CreateBr(*self.loopNext.last());
       }
       else{
-        panic("visit {}", node);
+        panic("visit {:?}", node);
       }
       return;
     }

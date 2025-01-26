@@ -99,7 +99,7 @@ impl Own{
     }
     func add_scope(self, kind: ScopeType, line: i32, exit: Exit, is_empty: bool): i32{
         if(verbose){
-            print("add_scope {} line:{}\n", kind, line);
+            print("add_scope {:?} line:{}\n", kind, line);
         }
         let scope = VarScope::new(kind, line, exit);
         scope.is_empty = is_empty;
@@ -139,7 +139,7 @@ impl Own{
     func get_var(self, id: i32): Variable*{
         let opt = self.var_map.get_ptr(&id);
         if(opt.is_none()){
-            panic("var not found id={} scope={}", id, self.get_scope(self.main_scope).print(self));
+            panic("var not found id={} scope={:?}", id, self.get_scope(self.main_scope).print(self));
         }
         return opt.unwrap();
     }
@@ -246,7 +246,7 @@ impl Own{
                 rhs: Moved::new(expr, self),
                 line: expr.line
             };
-            print("do_move {}\n", &mv);
+            print("do_move {:?}\n", &mv);
             mv.drop();
         }
         let rhs = Rhs::new(expr, self);
@@ -269,7 +269,7 @@ impl Own{
         }
         if(verbose){
             let mv = Move{Option::new(Moved::new(lhs, self)), Moved::new(rhs, self), lhs.line};
-            print("do_move {} line:{}\n", &mv, lhs.line);
+            print("do_move {:?} line:{}\n", &mv, lhs.line);
             mv.drop();
         }
         self.update_state(rhs, &rt, StateType::MOVED{rhs.line}, scope);
@@ -314,7 +314,7 @@ impl Own{
             return;
         }
         if(!(scope.kind is ScopeType::ELSE)){
-            panic("end {}", scope.kind);
+            panic("end {:?}", scope.kind);
         }
         //move in else -> parent
         if(!scope.exit.is_jump()){
@@ -355,7 +355,7 @@ impl Own{
         let scope = self.get_scope();
         //dbg(expr.line == 266, 100);
         if(print_check){
-            print("check {} line:{}\n", expr, expr.line);
+            print("check {:?} line:{}\n", expr, expr.line);
         }
         let rhs = Rhs::new(expr, self);
         let state = self.get_state(&rhs, scope);
@@ -373,7 +373,7 @@ impl Own{
         if let Expr::Access(scp*,name*)=(expr){
             //scope could be partially moved, check right right field is valid
         }else{
-            panic("check_field not field access {}", expr);
+            panic("check_field not field access {:?}", expr);
         }
     }
 
@@ -384,8 +384,8 @@ impl Own{
             if(rhs is Rhs::FIELD){
                 return State::new(StateType::NONE, scope);
             }
-            print("{}\n", self.get_scope(self.main_scope).print(self));
-            panic("no state {} from {}", rhs, scope.kind);
+            print("{:?}\n", self.get_scope(self.main_scope).print(self));
+            panic("no state {:?} from {:?}", rhs, scope.kind);
         }
         let state: StateType = *opt.unwrap();
         if let Rhs::FIELD(scp*, name*) = (rhs){
@@ -441,7 +441,7 @@ impl Own{
     func do_return(self, line: i32){
         let scope = self.get_scope();
         if(verbose){
-            print("do_return {} sline: {} line: {}\n", scope.kind, scope.line, line);
+            print("do_return {:?} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
         self.check_ptr_field(scope, line);
         let drops: List<Droppable> = self.get_outer_vars(scope);
@@ -505,7 +505,7 @@ impl Own{
             return;
         }
         if(verbose){
-            print("end_scope {} sline: {} line: {}\n", scope.kind, scope.line, line);
+            print("end_scope {:?} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);
@@ -553,7 +553,7 @@ impl Own{
                     let if_scope = self.get_scope(scope.sibling);
                     let if_state = self.get_state(&rhs, if_scope);
                     if(!if_state.is_moved()){
-                        self.get_resolver().err(scope.line, format("else-only move of {} in {}\n", var, st.get_line()));
+                        self.get_resolver().err(scope.line, format("else-only move of {:?} in {}\n", var, st.get_line()));
                     }
                 }
                 rhs.drop();
@@ -661,7 +661,7 @@ impl Own{
             return;
         }
         if(print_drop_lhs){
-            Logger::add(format("drop_lhs {} line: {}\n", lhs, lhs.line));
+            Logger::add(format("drop_lhs {:?} line: {}\n", lhs, lhs.line));
         }
         if(drop_lhs_enabled){
             let rt = self.get_type(lhs);
@@ -720,7 +720,7 @@ impl Own{
         let state = self.get_state(&rhs, scope);
         if(print_kind == print_drop_any()){
             let info = scope.print_info();
-            Logger::add(format("drop_var {} line: {} state: {} scope: {}\n", var, line,  state, info));
+            Logger::add(format("drop_var {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, info));
             info.drop();
         }
 
@@ -736,7 +736,7 @@ impl Own{
         }
         if(print_kind == print_drop_valid()){
             let tmp = scope.print_info();
-            Logger::add(format("drop_var_real {} line: {} state: {} scope: {}\n", var, line,  state, tmp));
+            Logger::add(format("drop_var_real {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, tmp));
             tmp.drop();
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
@@ -746,7 +746,7 @@ impl Own{
     }
     func drop_var_real(self, var: Variable*, line: i32){
         if(print_kind == print_drop_valid()){
-            Logger::add(format("drop_var_real {}\n", var));
+            Logger::add(format("drop_var_real {:?}\n", var));
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
         let rhs = Rhs::new(var.clone());
@@ -758,14 +758,14 @@ impl Own{
         let rhs = Rhs::new(obj.expr, self);
         let state = self.get_state(&rhs, scope);
         if(print_kind == print_drop_any()){
-            Logger::add(format("drop_obj {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
+            Logger::add(format("drop_obj {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         if(state.is_moved()){
             rhs.drop();
             return;
         }
         if(print_kind == print_drop_valid()){
-            Logger::add(format("drop_obj_real {} state: {} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
+            Logger::add(format("drop_obj_real {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         let resolver = self.compiler.get_resolver();
         let rt = resolver.visit(obj.expr);
@@ -782,7 +782,7 @@ impl Own{
             self.drop_force(rt, ptr, line, rhs);
         }
         if(print_drop_real){
-            Logger::add(format("drop_real at: {} {}\n", line, rhs));
+            Logger::add(format("drop_real at: {} {:?}\n", line, rhs));
         }
     }
     func drop_force(self, rt: RType*, ptr: Value*, line: i32, rhs: Rhs*){
@@ -798,7 +798,7 @@ impl Own{
         let helper = DropHelper{resolver};
         let method = helper.get_drop_method(rt);
         if(method.is_generic){
-            panic("generic {}", rt.type);
+            panic("generic {:?}", rt.type);
         }
         let protos = self.compiler.protos.get();
         let mangled = mangle(method);

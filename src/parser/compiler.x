@@ -372,7 +372,7 @@ impl Compiler{
           vector_Constant_delete(cons_elems);
           vector_Constant_delete(cons_elems_slice);
         }else{
-          panic("glob constexpr not supported: {}", gl);
+          panic("glob constexpr not supported: {:?}", gl);
         }
       }else{
         if(is_struct(&rt.type)){
@@ -404,7 +404,7 @@ impl Compiler{
             AllocHelper::new(self).visit_child(&gl.expr);
             self.visit_array(&gl.expr, list, size, glob as Value*);
           }else{
-            panic("glob rhs {}", gl);
+            panic("glob rhs {:?}", gl);
           }
         }
         rt.drop();
@@ -728,7 +728,7 @@ impl Compiler{
 
   func compile_dir(config: CompilerConfig): String{
     if(config.jobs > 1){
-      return Compiler::compile_dir_thread(config);
+      return Compiler::compile_dir_thread2(config);
     }
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
@@ -767,7 +767,7 @@ impl Compiler{
     return config.link(&compiled);
   }
  
-  func compile_dir_thread(config: CompilerConfig): String{
+   /*func compile_dir_thread(config: CompilerConfig): String{
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
@@ -801,7 +801,8 @@ impl Compiler{
     list.drop();
     cache.drop();
     return config.link(&compiled);
-  } 
+  }*/
+  
   func compile_dir_thread2(config: CompilerConfig): String{
     let env_triple = getenv2("target_triple");
     if(env_triple.is_some()){
@@ -812,7 +813,7 @@ impl Compiler{
     cache.read_cache();
     let src_dir = &config.file;
     let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
-    let compiled = List<String>::new();
+    let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
@@ -821,12 +822,13 @@ impl Compiler{
         file.drop();
         continue;
       }
+      let idx = Mutex::new(0);
       let args = CompileArgs{
         file: file.clone(),
         config: &config,
         cache: &cache,
         compiled: &compiled,
-        idx: i,
+        idx: &idx,
         len: list.len() as i32
       };
       worker.add_arg(make_compile_job2, args);
@@ -835,11 +837,12 @@ impl Compiler{
     worker.join();
     list.drop();
     cache.drop();
-    return config.link(&compiled);
+    let comp = compiled.unwrap();
+    return config.link(&comp);
   } 
 }//Compiler
 
-func make_compile_job(arg: c_void*){
+/*func make_compile_job(arg: c_void*){
   let args = arg as CompileArgs*;
   let config = args.config;
   let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
@@ -853,7 +856,7 @@ func make_compile_job(arg: c_void*){
   let obj = cmp.compile(args.file.str(), args.cache, config);
   args.compiled.add(obj);
   cmp.drop();
-}
+}*/
 
 func make_compile_job2(arg: c_void*){
   let args = arg as CompileArgs*;
@@ -863,21 +866,38 @@ func make_compile_job2(arg: c_void*){
     ctx.add_path(config.src_dirs.get_ptr(j).str());
   }
   let cmp = Compiler::new(ctx);
-  if(cmp.ctx.verbose){
-    print("compiling [{}/{}] {}\n", args.idx + 1, args.len, config.trim_by_root(args.file.str()));
+  let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
+  for inc in &args.config.src_dirs{
+      cmd.append(" -i ");
+      cmd.append(inc);
   }
-  //let obj = cmp.compile(args.file.str(), args.cache, config);
-  //args.compiled.add(obj);
+  if(cmp.ctx.verbose){
+      let idx = args.idx.lock();
+      print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
+      *idx = *idx + 1;
+      args.idx.unlock();
+  }
+  let proc = Process::run(cmd.str());
+  proc.eat_close();
+  if(cmp.ctx.verbose){
+      let compiled = args.compiled.lock();
+      print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
+      args.compiled.unlock();
+  }
+  let compiled = args.compiled.lock();
+  compiled.add(format("{}", get_out_file(args.file.str(), &cmp)));
+  args.compiled.unlock();
   sleep(1);
   cmp.drop();
+  cmd.drop();
 }
 
 struct CompileArgs{
   file: String;
   config: CompilerConfig*;
   cache: Cache*;
-  compiled: List<String>*;
-  idx: i32;
+  compiled: Mutex<List<String>>*;
+  idx: Mutex<i32>*;
   len: i32;
 }
 

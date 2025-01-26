@@ -317,7 +317,7 @@ impl Context{
       path.drop();
     }
     suffix.drop();
-    panic("can't resolve import: {}\nstd: {}\npaths={}", is, self.std_path, self.search_paths);
+    panic("can't resolve import: {:?}\nstd: {:?}\npaths={:?}", is, self.std_path, self.search_paths);
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = self.get_path(is);
@@ -376,7 +376,7 @@ impl Resolver{
     parser.drop();
     if(print_unit){
       print("print_unit\n");
-      print("unit={}\n", unit);
+      print("unit={:?}\n", unit);
     }
     
     let res = Resolver{unit: unit,
@@ -509,7 +509,7 @@ impl Resolver{
             let type = self.getType(g.type.get());
             let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
             if (err_opt.is_some()) {
-                let msg = format("variable type mismatch {}\nexpected: {} got {}\n{}'", g.name, type, rhs.type, err_opt.get());
+                let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
                 rhs.drop();
                 err_opt.drop();
                 type.drop();
@@ -527,7 +527,7 @@ impl Resolver{
     print("{} types\n", self.typeMap.len());
     for(let i = 0;i < self.typeMap.len();++i){
       let pair = self.typeMap.get_pair_idx(i).unwrap();
-      print("{} -> {}\n", pair.a, pair.b.type);
+      print("{} -> {:?}\n", pair.a, pair.b.type);
     }
   }
 
@@ -539,7 +539,7 @@ impl Resolver{
       print("scope {} has {} vars\n", i + 1, scope.list.len());
       for(let j = 0;j < scope.list.len();++j){
         let vh = scope.list.get_ptr(j);
-        print("{}:{}\n", vh.name, vh.type);
+        print("{}:{:?}\n", vh.name, vh.type);
       }
     }
   }
@@ -695,7 +695,7 @@ impl Resolver{
       if(resolver.generated_decl.in_index(rt.desc.idx)){
         let decl = resolver.generated_decl.get_ptr(rt.desc.idx).get();
         if(!decl.type.eq(rt.type.get_ptr())){
-          panic("get_decl err {}={}", rt.type, rt.desc);
+          panic("get_decl err {:?}={:?}", rt.type, rt.desc);
         }
         return Option::new(decl);
       }
@@ -703,7 +703,7 @@ impl Resolver{
     if(rt.desc.kind is RtKind::None || rt.desc.kind is RtKind::MethodImpl || rt.desc.kind is RtKind::MethodGen){
       return Option<Decl*>::new();
     }
-    panic("get_decl() {}={}", rt.type, rt.desc);
+    panic("get_decl() {:?}={:?}", rt.type, rt.desc);
   }
   func get_trait(self, rt: RType*): Option<Trait*>{
     if(rt.desc.kind is RtKind::Trait){
@@ -714,7 +714,7 @@ impl Resolver{
         return Option::new(tr);
       }
     }
-    panic("get_trait {}={}", rt.type, rt.desc);
+    panic("get_trait {:?}={:?}", rt.type, rt.desc);
   }
   func get_method(self, rt: RType*): Option<Method*>{
     if(rt.method_desc.is_none()){
@@ -754,7 +754,7 @@ impl Resolver{
         return Option::new(m);
       }
     }
-    panic("get_method {}={}", type, desc);
+    panic("get_method {:?}={:?}", type, desc);
   }
 
   func visit_item(self, node: Item*){
@@ -840,7 +840,7 @@ impl Resolver{
     let tmp = self.visit_type(&fd.type);
     tmp.drop();
     if(self.is_cyclic(&fd.type, &node.type)){
-      self.err(node.line, format("cyclic type {}", node.type));
+      self.err(node.line, format("cyclic type {:?}", node.type));
     }
   }
 
@@ -982,7 +982,7 @@ impl Resolver{
     if let Expr::Call(mc*) = (expr){
         return mc;
     }
-    panic("unwrap_mc {}", expr);
+    panic("unwrap_mc {:?}", expr);
   }
 
   func handle_drop_method(self, rt: RType*, decl: Decl*){
@@ -997,7 +997,7 @@ impl Resolver{
     //generic drop, local or extern
     let drop_impl = helper.find_drop_impl(decl);
     let method = drop_impl.methods.get_ptr(0);
-    let drop_expr = parse_expr(format("{}::drop()", &decl.type), &self.unit, decl.line);
+    let drop_expr = parse_expr(format("{:?}::drop()", &decl.type), &self.unit, decl.line);
     let mc = unwrap_mc(&drop_expr);
     let sig = Signature::new("drop".str());
     sig.scope = Option::new(rt.clone());
@@ -1028,7 +1028,7 @@ impl Resolver{
       if(i > 0){
         print(", ");
       }
-      print("{}", used.type);
+      print("{:?}", used.type);
     }
     print("]\n");
   }
@@ -1187,7 +1187,7 @@ impl Resolver{
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
-      self.err(node.line, format("couldn't find type: {}", node));
+      self.err(node.line, format("couldn't find type: {:?}", node));
     }
     let tmp: RType = imp_result.unwrap();
     return tmp;
@@ -1280,7 +1280,7 @@ impl Resolver{
         return i;
       }
     }
-    panic("unknown variant {}::{}", decl.type, name);
+    panic("unknown variant {:?}::{}", decl.type, name);
   }
 
   func getTypeCached(self, str: String*): RType{
@@ -1313,7 +1313,7 @@ impl Resolver{
             break;
         }
     }
-    let msg = format("invalid field {}.{}", type, name); 
+    let msg = format("invalid field {:?}.{}", type, name); 
     self.err(node, msg);
     panic("");
   }
@@ -1324,7 +1324,7 @@ impl Resolver{
     scp.drop();
     scp = scp2;*/
     if (!scp.is_decl() || scp.type.is_dpointer()) {
-      let msg = format("invalid field {}.{}", scp.type, name); 
+      let msg = format("invalid field {:?}.{}", scp.type, name); 
       self.err(node, msg);
     }
     let decl = self.get_decl(&scp).unwrap();
@@ -1341,7 +1341,7 @@ impl Resolver{
         return i;
       }
     }
-    panic("unknown field {}.{}", type, name);
+    panic("unknown field {:?}.{}", type, name);
   }
   
   func visit_obj(self, node: Expr*, type0: Type*, args: List<Entry>*): RType{
@@ -1373,7 +1373,7 @@ impl Resolver{
     if (base.is_some()) {
         let base_ty = self.visit(base.unwrap());
         if (!base_ty.type.eq(decl.base.get())){
-            let msg = format("invalid base class type: {} expecting {}", base_ty.type, decl.base.get());
+            let msg = format("invalid base class type: {:?} expecting {:?}", base_ty.type, decl.base.get());
             self.err(node, msg);
         }
         base_ty.drop();
@@ -1423,7 +1423,7 @@ impl Resolver{
         let arg = self.visit(&e.expr);
         let opt = MethodResolver::is_compatible(&arg.type, &pt);
         if (opt.is_some()) {
-            let err = format("field type is imcompatiple {}\n expected: {} got: {}", e.expr, pt, arg.type);
+            let err = format("field type is imcompatiple {:?}\n expected: {:?} got: {:?}", e.expr, pt, arg.type);
             self.err(node, err);
         }
         pt.drop();
@@ -1464,7 +1464,7 @@ impl Resolver{
         let tp = type_params.get_ptr(i);
         let opt = inferMap.get_ptr(tp.name());
         if (opt.is_none()) {
-            self.err(node, format("can't infer type parameter: {}", tp));
+            self.err(node, format("can't infer type parameter: {:?}", tp));
         }
         res.args.add(opt.unwrap().clone());
     }
@@ -1510,7 +1510,7 @@ impl Resolver{
     let t2 = self.visit(rhs);
     let opt = MethodResolver::is_compatible(&t2.type, &t1.type);
     if (opt.is_some()) {
-      let msg = format("cannot assign {}={}", t1.type, t2.type);
+      let msg = format("cannot assign {:?}={:?}", t1.type, t2.type);
       self.err(node, msg);
     }
     opt.drop();
@@ -1531,7 +1531,7 @@ impl Resolver{
       self.err(node, "string op not supported yet");
     }
     if(!lt.type.is_prim() || !rt.type.is_prim()){
-      self.err(node, format("infix on non prim type {} vs {}", lt.type, rt.type));
+      self.err(node, format("infix on non prim type {:?} vs {:?}", lt.type, rt.type));
     }
     if(is_comp(op.str())){
       lt.drop();
@@ -1540,10 +1540,10 @@ impl Resolver{
     }
     else if(op.eq("&&") || op.eq("||")){
       if (!lt.type.eq("bool")) {
-        self.err(node, format("infix lhs is not boolean: {}", lhs));
+        self.err(node, format("infix lhs is not boolean: {:?}", lhs));
       }
       if (!rt.type.eq("bool")) {
-        self.err(node, format("infix rhs is not boolean: {}", rhs));
+        self.err(node, format("infix rhs is not boolean: {:?}", rhs));
       }
       lt.drop();
       rt.drop();
@@ -1564,7 +1564,7 @@ impl Resolver{
     let scp = self.visit(&node.expr);
     let decl_opt = self.get_decl(&scp);
     if(decl_opt.is_none() || !decl_opt.unwrap().is_enum()){
-      self.err(expr, format("match expr is not enum: {}", scp.type));
+      self.err(expr, format("match expr is not enum: {:?}", scp.type));
     }
     if(node.cases.empty()){
       self.err(expr, "node case");
@@ -1592,6 +1592,9 @@ impl Resolver{
         let smp = type.as_simple();
         case_lhs_type = type.print();
         //todo check type
+        if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
+            self.err(expr, format("invalid variant {:?} {:?}!={:?}", type, smp.scope.get(), decl.type));
+        }
         let idx = not_covered.indexOf(&smp.name);
         if(idx == -1){
           self.err(expr, format("invalid variant {}", smp.name));
@@ -1618,14 +1621,14 @@ impl Resolver{
         if(res.is_none()){
           res.set(res_type);
         }else if(!res.get().type.eq(&res_type.type)){
-          self.err(expr, format("invalid match result type: {}!= {} for case {}", res.get().type, res_type.type, case_lhs_type));
+          self.err(expr, format("invalid match result type: {:?}!= {:?} for case {:?}", res.get().type, res_type.type, case_lhs_type));
         }
       }
       self.dropScope();
       case_lhs_type.drop();
     }
     if(!not_covered.empty() && !has_none){
-      self.err(expr, format("not covered variants: {}", not_covered));
+      self.err(expr, format("not covered variants: {:?}", not_covered));
     }
     scp.drop();
     not_covered.drop();
@@ -1655,7 +1658,7 @@ impl Resolver{
   func visit_deref(self, node: Expr*, e: Expr*): RType{
     let inner = self.visit(e);
     if(!inner.type.is_pointer()){
-      self.err(node, format("deref expr is not pointer: {}", inner.type));
+      self.err(node, format("deref expr is not pointer: {:?}", inner.type));
     }
     let tmp = inner.type.get_ptr().clone();
     inner.type.drop();
@@ -1777,7 +1780,7 @@ impl Resolver{
     for (let i = 2; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get_ptr(i));
         if (!(arg.is_prim() || arg.is_pointer())) {
-            self.err(node, format("format arg is invalid: {}", arg));
+            self.err(node, format("format arg is invalid: {:?}", arg));
         }
         arg.drop();
     }
@@ -1806,7 +1809,7 @@ impl Resolver{
   func handle_type_print(self, node: Expr*, mc: Call*){
     let info = FormatInfo::new(node.line);
     let ta = mc.type_args.get_ptr(0);
-    let tmp = parse_expr(format("\"{}\"", ta), &self.unit, node.line);
+    let tmp = parse_expr(format("\"{:?}\"", ta), &self.unit, node.line);
     info.unwrap_mc = Option::new(tmp);
     let rt = self.visit(info.unwrap_mc.get());
     rt.drop();
@@ -1827,7 +1830,7 @@ impl Resolver{
           let prm = ft.params.get_ptr(i);
           let cmp = MethodResolver::is_compatible(&arg.type, prm);
           if(cmp.is_some()){
-            self.err(node, format("arg type do not match {} vs {} at {}", arg.type, prm, i + 1));
+            self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
           }
         }
         let res = self.visit_type(&ft.return_type);
@@ -1852,12 +1855,12 @@ impl Resolver{
         let elem2 = elem.elem();
         if(elem2.is_pointer() || call.name.eq("debug2")){
           //print hex based address
-          info.block.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", src), &self.unit, node.line));
+          info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
         }else{
-          info.block.list.add(parse_stmt(format("Debug::debug({}, {});", src, fmt), &self.unit, node.line));
+          info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
         }
       }else{
-        info.block.list.add(parse_stmt(format("Debug::debug({}, {});", src, fmt), &self.unit, node.line));
+        info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
       }
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);
@@ -2119,7 +2122,7 @@ impl Resolver{
         let cur = self.visit(elem);
         let cmp = MethodResolver::is_compatible(&cur.type, &cur.value, &elemType);
         if (cmp.is_some()) {
-            let msg = format("{}\narray element type mismatch, expecting: {} got: {}({})", cmp.get(), elemType, &cur.type, elem);
+            let msg = format("{}\narray element type mismatch, expecting: {:?} got: {:?}({:?})", cmp.get(), elemType, &cur.type, elem);
             self.err(node, msg.str());
             cmp.drop();
             cur.drop();
@@ -2167,7 +2170,7 @@ impl Resolver{
     if (decl1_opt.is_some()) {
       let decl1 = decl1_opt.unwrap();
       if(decl1.base.is_some()){
-        let base_ptr = format("{}*", decl1.base.get());
+        let base_ptr = format("{:?}*", decl1.base.get());
         let rs = right.type.print();
         if (base_ptr.eq(rs.str())){
           base_ptr.drop();
@@ -2185,7 +2188,7 @@ impl Resolver{
     let rt = self.visit(lhs);
     let decl1_opt = self.get_decl(&rt);
     if (decl1_opt.is_none() || !(*decl1_opt.get() is Decl::Enum)) {
-        self.err(node, format("lhs of is expr is not enum: {}", rt.type));
+        self.err(node, format("lhs of is expr is not enum: {:?}", rt.type));
         rt.drop();
         panic("");
     }
@@ -2195,7 +2198,7 @@ impl Resolver{
     let decl2 = self.get_decl(&rt2).unwrap();
     rt2.drop();
     if (!decl1.type.eq(&decl2.type)) {
-        self.err(node, format("rhs is not same type with lhs {} vs {}", decl1.type, decl2.type));
+        self.err(node, format("rhs is not same type with lhs {:?} vs {:?}", decl1.type, decl2.type));
     }
     if let Expr::Type(ty*) = (rhs){
         findVariant(decl1, ty.name());
@@ -2209,7 +2212,7 @@ impl Resolver{
     if(kind is LitKind::INT){
       if(lit.suffix.is_some()){
         if(i64::parse(value) > max_for(lit.suffix.get())){
-          self.err(expr, format("literal out of range {} -> {}", value, lit.suffix.get()));
+          self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
         }
         return self.visit_type(lit.suffix.get());
       }
@@ -2226,7 +2229,7 @@ impl Resolver{
     }else if(kind is LitKind::FLOAT){
       if(lit.suffix.is_some()){
         if(!can_fit_into(value, lit.suffix.get())){
-          self.err(expr, format("literal out of range {} -> {}", value, lit.suffix.get()));
+          self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
         }
         return self.visit_type(lit.suffix.get());
       }
@@ -2323,7 +2326,7 @@ impl Resolver{
     }
     arr.drop();
     if(list.len() > 1 && err_multiple){
-      self.err(expr, format("multiple matching functions for '{}'\n{}", name, list));
+      self.err(expr, format("multiple matching functions for '{}'\n{:?}", name, list));
     }
     if(list.len() == 1){
       let sig = list.get_ptr(0);
@@ -2413,7 +2416,7 @@ impl Resolver{
     }else if let Expr::Match(me*) = (node){
       return self.visit_match(node, me.get());
     }
-    panic("visit expr '{}'", node);
+    panic("visit expr '{:?}'", node);
   }
 }
 
@@ -2436,13 +2439,13 @@ impl Resolver{
   func check_return(self, type: Type*, line: i32){
     let cmp = MethodResolver::is_compatible(type, &self.curMethod.unwrap().type);
     if(cmp.is_some()){
-      self.err(line, format("return type mismatch {} -> {}", type, &self.curMethod.unwrap().type));
+      self.err(line, format("return type mismatch {:?} -> {:?}", type, &self.curMethod.unwrap().type));
     }
   }
 
   func visit(self, node: Stmt*){
     if(verbose_stmt()){
-      print("visit stmt {}\n", node);
+      print("visit stmt {:?}\n", node);
     }
     if let Stmt::Expr(e*) = (node){
       let tmp = self.visit(e);
@@ -2499,7 +2502,7 @@ impl Resolver{
       self.visit_for_each(node, fe);
       return;
     }
-    panic("visit stmt {}", node);
+    panic("visit stmt {:?}", node);
   }
 
   func visit_body(self, node: Body*): RType{
@@ -2532,7 +2535,7 @@ impl Resolver{
     let info = FormatInfo::new(node.line);
     let body = &info.block;
     let it_name = format("_it_{}", node.id);
-    let it_decl = parse_stmt(format("let {} = ({}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);
+    let it_decl = parse_stmt(format("let {} = ({:?}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);
     body.list.add(it_decl);
     let whl = "while(true){\n".str();
     let opt_name = format("_{}_{}_opt", &fe.var_name, node.id);
@@ -2581,7 +2584,7 @@ impl Resolver{
         let else_exit = Exit::get_exit_type(is.else_stmt.get());
         let then_exit = Exit::get_exit_type(is.then.get());
         if(!rt1.type.eq(&rt2.type) && !else_exit.is_jump() && !then_exit.is_jump()){
-          self.err(line, format("then & else type mismatch {} vs {}", rt1.type, rt2.type));
+          self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
         }
         self.dropScope();
         rt2.drop();
@@ -2600,7 +2603,7 @@ impl Resolver{
     let decl_opt = self.get_decl(&rt);
     rt.drop();
     if (decl_opt.is_none() || !decl_opt.unwrap().is_enum()) {
-        let msg = format("if let type is not enum: {}", is.type);
+        let msg = format("if let type is not enum: {:?}", is.type);
         self.err(line, msg);
     }
     //check rhs
@@ -2610,7 +2613,7 @@ impl Resolver{
     }
     let rhs_opt = self.get_decl(&rhs);
     if (rhs_opt.is_none() || !rhs_opt.unwrap().is_enum()) {
-      let msg = format("if let rhs is not enum: {}", rhs.type);
+      let msg = format("if let rhs is not enum: {:?}", rhs.type);
       self.err(line, msg);
     }
     rhs.drop();
@@ -2640,7 +2643,7 @@ impl Resolver{
         self.newScope();
         let rt2 = self.visit_body(is.else_stmt.get());
         if(!rt1.type.eq(&rt2.type)){
-          self.err(line, format("then & else type mismatch {} vs {}", rt1.type, rt2.type));
+          self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
         }
         self.dropScope();
         rt2.drop();
@@ -2704,7 +2707,7 @@ impl Resolver{
     let res = self.visit_type(node.type.get());
     let err_opt = MethodResolver::is_compatible(&rhs.type, &rhs.value, &res.type);
     if(err_opt.is_some()){
-      self.err(node.line, format("type mismatch {} vs {}\n{}", res.type, rhs.type, err_opt.get()));
+      self.err(node.line, format("type mismatch {:?} vs {:?}\n{:?}", res.type, rhs.type, err_opt.get()));
     }
     rhs.type = res.type.clone();
     err_opt.drop();
@@ -2716,9 +2719,9 @@ impl Resolver{
     let opt = self.format_map.get_ptr(&node.id);
     if(opt.is_none()){
       for pair in &self.format_map{
-        print("id={} info={}\n", pair.a, pair.b.block);
+        print("id={:?} info={:?}\n", pair.a, pair.b.block);
       }
-      self.err(node, format("no macro id={} node={} path={}", node.id, node, self.unit.path));
+      self.err(node, format("no macro id={} node={:?} path={}", node.id, node, self.unit.path));
     }
     return opt.unwrap();
   }

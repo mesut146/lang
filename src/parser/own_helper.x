@@ -142,7 +142,7 @@ impl Clone for Rhs{
         if let Rhs::FIELD(scp*, name*)=(self){
             return Rhs::FIELD{scp: scp.clone(), name: name.clone()};
         }
-        panic("{}", self);
+        panic("{:?}", self);
     }
 }
 impl Eq for Rhs{

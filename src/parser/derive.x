@@ -34,7 +34,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Clone")){
         return generate_clone(decl, unit);
     }
-    panic("generate_derive decl: {} der: '{}'", decl.type, der);
+    panic("generate_derive decl: {:?} der: '{}'", decl.type, der);
 }
 
 func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
@@ -65,7 +65,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(decl.line, decl.line);
     if(decl.base.is_some()){
         //clone::clone(ptr::deref(self as <Base>*));
-        body.list.add(parse_stmt(format("Clone::clone(self as {}*);", decl.base.get()), unit, decl.line));
+        body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
     }
     
     if let Decl::Enum(variants*)=(decl){
@@ -180,7 +180,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(line, line);
     if(decl.base.is_some()){
         //Drop::drop(ptr::deref(self as <Base>*));
-        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {}*));", decl.base.get()), unit, line));
+        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
     }
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
@@ -251,7 +251,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             let then = Block::new(line, line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &decl.type), unit, line));
+            then.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
             then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
             if(ev.fields.len() > 0){
                 then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
@@ -297,7 +297,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
         }
     }else{
         //f.print(<decl.type.print()>)
-        body.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &decl.type), unit, line));
+        body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
         body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
@@ -370,50 +370,87 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.format_map.add(node.id, info);
         return;
     }
-    let var_name = format("f_{}", node.id);
+    let fmt_var_name = format("f_{}", node.id);
     //..let f = Fmt::new();
-    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit, line);
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &fmt_var_name), &r.unit, line);
     block.list.add(var_stmt);
     let pos = 0;
-    let arg_idx = 1;
+    let arg_idx = 1;//skip fmt_str
     while(pos < fmt_str.len()){
-        let br_pos = fmt_str.indexOf("{}", pos);
-        //let dbg_pos = fmt_str.indexOf("{:?}", pos);
-        //let pr_pos = fmt_str.indexOf("{:}", pos);
-        if(br_pos == -1 || br_pos > pos){
-            let sub = "";
-            if(br_pos == -1){
-                sub = fmt_str.substr(pos);
-            }else{
-                sub = fmt_str.substr(pos, br_pos);
-            }
+        let br_pos = fmt_str.indexOf("{", pos);
+        if(br_pos == -1){
+            let sub = fmt_str.substr(pos);
             let sub2 = normalize_quotes(sub);
-            let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit, line);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            block.list.add(st);
+            sub2.drop();
+            break;
+        }
+        if(fmt_str.get(br_pos+1) != ':' && fmt_str.get(br_pos+1) != '}'){
+            let sub = fmt_str.substr(pos, br_pos + 1);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            block.list.add(st);
+            pos = br_pos + 1;
+            sub2.drop();
+            continue;
+        }
+        if(br_pos > pos){
+            let sub = fmt_str.substr(pos, br_pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
             sub2.drop();
             block.list.add(st);
-            if(br_pos == -1){
-                break;
-            }
         }
-        pos = br_pos + 2;
+        let arg = mc.args.get_ptr(arg_idx);
+        let argt = r.visit(arg);
+        if(fmt_str.get(br_pos+1)=='}'){
+            //Display
+            if(is_struct(&argt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("Display::fmt(&{:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("Display::fmt({:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            pos = br_pos + 2;
+        }else if(fmt_str.get(br_pos+1)==':'){
+            if(fmt_str.get(br_pos + 2) != '?'){
+                r.err(node, "invalid format expecting ques(?)");
+            }
+            if(fmt_str.get(br_pos + 3) != '}'){
+                r.err(node, "invalid format no closing }");
+            }
+            //Debug
+            //..<arg>.debug(&f);
+            if(is_struct(&argt.type)){
+                let dbg_st = parse_stmt(format("Debug::debug(&{:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("Debug::debug({:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            //{:?}
+            pos = br_pos + 4;
+        }else{
+            r.err(node, format("invalid format '{}'", fmt_str.get(br_pos+1)));
+        }
         if(!(arg_idx < mc.args.len())){
             r.err(node, "format specifier not matched");
         }
-        let arg = mc.args.get_ptr(arg_idx);
         ++arg_idx;
-        //..<arg>.debug(&f);
-        let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit, line);
-        block.list.add(dbg_st);
+        argt.drop();
     }
     if(arg_idx < mc.args.len()){
         r.err(node, "format arg not matched in specifier");
     }
     if(Resolver::is_print(mc)){
         //..f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
+        let print_st = parse_stmt(format("{}.buf.print();", &fmt_var_name), &r.unit, line);
         block.list.add(print_st);
         //..Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
         r.visit_block(block);
         r.format_map.add(node.id, info);
@@ -424,10 +461,10 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         pos_info.drop();
         block.list.add(pos_info_st);
         //..f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.println();", &var_name), &r.unit, line);
+        let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
         block.list.add(print_st);
         //..Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
         //..print("block={}\n", block);
@@ -435,7 +472,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.format_map.add(node.id, info);
     }else if(Resolver::is_format(mc)){
         //..f.unwrap()
-        let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
+        let unwrap_mc = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
         info.unwrap_mc = Option::new(unwrap_mc);
         r.visit_block(block);
         let tmp = r.visit(info.unwrap_mc.get());
@@ -445,7 +482,8 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         info.drop();
         r.err(node, "generate_format");
     }
-    var_name.drop();
+    //print("block={:?}\n", block);
+    fmt_var_name.drop();
 }
 
 //replace non escaped quotes into escaped ones
@@ -491,15 +529,20 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     }
     let arg = mc.args.get_ptr(0);
     if(!r.is_condition(arg)){
-        r.err(node, format("assert expr is not bool: {}", node));
+        r.err(node, format("assert expr is not bool: {:?}", node));
     }
     let line = node.line;
     let info = FormatInfo::new(line);
     let block = &info.block;
     let arg_str = arg.print();
-    let arg_norm = normalize_quotes(arg_str.str());
+    let arg_norm: String = normalize_quotes(arg_str.str());
     let method_sig = printMethod(r.curMethod.unwrap());
-    let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
+    //let str = format("if(!({:?})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
+    let fm = Fmt::new(format("if(!({:?})){\n", arg));
+    fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.curMethod.unwrap().path, node.line, arg_norm, method_sig));
+    fm.print("exit(1);\n}");
+    let str = fm.unwrap();
+    //print("assert='{}'", str);
     block.list.add(parse_stmt(str, &r.unit, line));
     r.format_map.add(node.id, info);
     //print("assert {} id={} path={}\nblock={}\n", node, node.id, r.unit.path, block);

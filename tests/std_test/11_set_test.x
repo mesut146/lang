@@ -8,7 +8,7 @@ func main(){
     //set.add(30);
     //set.add(12);
     //set.add(70);
-    print("set={}\n", set);
+    print("set={:?}\n", set);
     set.drop();
     print("set test done\n");
 }

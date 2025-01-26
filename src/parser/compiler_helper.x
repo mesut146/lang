@@ -177,7 +177,7 @@ impl DropHelper{
         return imp;
       }
     }
-    panic("no drop method for {} self.r={} r={} decl.path={}", decl.type, self.r.unit.path, r.unit.path, decl.path);
+    panic("no drop method for {:?} self.r={} r={} decl.path={}", decl.type, self.r.unit.path, r.unit.path, decl.path);
   }
 
   func get_drop_method(self, rt: RType*): Method*{
@@ -383,7 +383,7 @@ func printlist(list: List<Decl*>*){
   print("list={\n");
   for (let i = 0; i < list.len(); ++i) {
     let decl = *list.get_ptr(i);
-    print("  {}", decl.type);
+    print("  {:?}", decl.type);
   }
   print("}\n\n");
 }
@@ -589,7 +589,7 @@ impl Compiler{
       let vars = decl.get_variants();
       for(let i = 0;i < vars.len();++i){
         let ev = vars.get_ptr(i);
-        let name = format("{}::{}", decl.type, ev.name);
+        let name = format("{:?}::{}", decl.type, ev.name);
         let name_c = name.clone().cstr();
         let var_ty = make_struct_ty(name_c.ptr());
         name_c.drop();
@@ -610,7 +610,7 @@ impl Compiler{
       let max = 0;
       for(let i = 0;i < variants.len();++i){
         let ev = variants.get_ptr(i);
-        let name = format("{}::{}", decl.type, ev.name.str());
+        let name = format("{:?}::{}", decl.type, ev.name.str());
         let var_ty = p.get(&name) as StructType*;
         self.make_variant_type(ev, decl, &name, var_ty);
         let variant_size = getSizeInBits(var_ty);
@@ -729,7 +729,7 @@ impl Compiler{
       return self.getSize(decl);
     }
     rt.drop();
-    panic("getSize {}", type);
+    panic("getSize {:?}", type);
   }
 
   func getSize(self, decl: Decl*): i64{
@@ -904,7 +904,7 @@ impl Compiler{
       ty.drop();
       return val;
     }
-    panic("get_obj_ptr {}", node);
+    panic("get_obj_ptr {:?}", node);
   }
 
   func getTag(self, expr: Expr*): Value*{
@@ -919,7 +919,7 @@ impl Compiler{
   }
 
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
-    let name = format("{}::{}", decl.type, variant.name.str());
+    let name = format("{:?}::{}", decl.type, variant.name.str());
     let res = *self.protos.get().classMap.get_ptr(&name).unwrap();
     name.drop();
     return res;
@@ -981,7 +981,7 @@ impl Compiler{
       self.visit_array(expr, list, sz, ptr_ret);
       return;
     }
-    panic("inline {}", expr);
+    panic("inline {:?}", expr);
   }
 }
 

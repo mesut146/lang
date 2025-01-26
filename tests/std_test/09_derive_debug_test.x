@@ -72,4 +72,5 @@ func main(){
 
     x_str.drop();
     x2_str.drop();
+    print("derive test done\n");
 }
