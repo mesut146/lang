@@ -945,6 +945,11 @@ impl CompilerConfig{
     self.std_path = Option::new(std_path);
     return self;
   }
+  func set_std_path(self, std_path: str): CompilerConfig*{
+    self.std_path.drop();
+    self.std_path = Option::new(std_path.str());
+    return self;
+  }
   func set_out(self, out: str): CompilerConfig*{
     return self.set_out(out.str());
   }
@@ -971,11 +976,6 @@ impl CompilerConfig{
   func set_file(self, file: String): CompilerConfig*{
     self.file.drop();
     self.file = file;
-    return self;
-  }
-  func set_std_path(self, std_path: str): CompilerConfig*{
-    self.std_path.drop();
-    self.std_path = Option::new(std_path.str());
     return self;
   }
   func set_jobs(self, j: i32): CompilerConfig*{

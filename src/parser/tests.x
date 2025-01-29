@@ -40,10 +40,6 @@ func find_root(bin_path: str): String*{
     panic("can't find root");
 }
 
-func root(): str{
-    panic("");
-}
-
 func get_build(): String{
     return format("{}/build", root.get());
 }
@@ -216,6 +212,18 @@ func normal_test_regex(pattern: String){
     files.drop();
 }
 
+func normal_test_dir(pat: String){
+    let dir = format("{}/{}", test_dir(), pat);
+    let config = CompilerConfig::new(get_src_dir());
+    config.set_file(dir);
+    config.set_out(get_out());
+    config.root_dir.set(root.get().clone());
+    config.add_dir(get_src_dir());
+    config.add_dir(test_dir());
+    config.set_link(LinkType::Binary{"a.out".str(), "".owned(), true});
+    Compiler::compile_dir(config);
+}
+
 func own_test(id: i32){
     print("test::own_test\n");
     drop_enabled = true;
@@ -267,6 +275,13 @@ func handle_tests(cmd: CmdArgs*): bool{
         }else{
             normal_test();
         }
+        cmd.end();
+        return true;
+    }
+    else if(cmd.is("testd")){
+        cmd.consume();
+        let path = cmd.get();
+        normal_test_dir(path);
         cmd.end();
         return true;
     }

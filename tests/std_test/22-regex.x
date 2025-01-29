@@ -64,13 +64,23 @@ func test_match(){
     test_match("[^a-z0-9]#", "=#");
 }
 
+func test_captures(){
+    let c = Regex::new("a(bc)d(e)?").captures("abcde").unwrap();
+    assert(c.get(0).str().eq("bc"));
+    assert(c.get(1).str().eq("e"));
+    
+    c = Regex::new("a(bc)d(e)?").captures("abcd").unwrap();
+    assert(c.get(0).str().eq("bc"));
+    assert(!c.has("1"));
+    
+    c = Regex::new("<([a-z][0-9])*<([a-z])+").captures("<b2x7<xyz").unwrap();
+    assert(c.get(0).str().eq("b2x7"));
+    assert(c.get(0).get(1).eq("x7"));
+    assert(c.get(1).str().eq("xyz"));
+    
+}
+
 func main(){
     test_match();
-    //let r = Regex::new("[0-9][a-z]*xy?.+");
-    //r.captures("asd"); //Cap
-    //r.is_match("asd"); //bool
-    //r.find("asd"); // List<String>
-    //^start_end$
-    //r.replace_all
-    //
+    test_captures();
 }

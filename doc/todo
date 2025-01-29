@@ -1,7 +1,10 @@
-match expression
-block expression
+
 add ?()throw operator
 
-& of tmp vals
-
 multiple types, methods mix up
+
+
+%closures
+let f = (a: i32, b: str): i32=>{
+};
+f();

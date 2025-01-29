@@ -2,6 +2,7 @@ struct Regex{
     pat: str;
     i: i32;
     node: Option<Node>;
+    group_cnt: i32;
 }
 
 #derive(Debug)
@@ -34,7 +35,7 @@ struct Bracket{
 
 #derive(Debug)
 enum RegexItem {
-    Group(node: Or),
+    Group(node: Or, name: String),
     Brac(node: Bracket),
     Op(node: Box<RegexItem>, kind: OpKind),
     Ch(val: i32),
@@ -57,7 +58,7 @@ enum OpKind{
 
 impl Regex{
     func new(pat: str): Regex{
-        let res = Regex{pat: pat, i: 0, node: Option<Node>::new()};
+        let res = Regex{pat: pat, i: 0, node: Option<Node>::new(), group_cnt: 0};
         res.node = Option::new(res.parse());
         let s = to_string(res.node.get());
         //print("pat={}\n", res.node.get());
@@ -108,6 +109,7 @@ impl Regex{
     func is_op(self): bool{
         return self.is('.') || self.is('(') || self.is('[');
     }
+    
     func parse_op(self): RegexItem{
         let it = self.parse_item();
         while(self.has()){
@@ -131,6 +133,7 @@ impl Regex{
         }
         return it;
     }
+    
     func parse_item(self): RegexItem{
         let ch = self.pat.get(self.i);
         if(ch == '.'){
@@ -141,7 +144,9 @@ impl Regex{
             self.i += 1;
             let or = self.parse_or();
             self.i += 1;
-            return RegexItem::Group{or};
+            let name = format("{}", self.group_cnt);
+            self.group_cnt += 1;
+            return RegexItem::Group{or, name};
         }
         if(ch == '['){
             self.i += 1;
@@ -192,7 +197,10 @@ impl Regex{
     }
     func parse_chr(self): i32{
         let ch = self.pat.get(self.i);
-        if(ch >= '0' && ch <= '9'){
+        if(ch=='\\') panic("escape ch={}", ch);
+        self.i += 1;
+        return ch;
+        /*if(ch >= '0' && ch <= '9'){
             self.i += 1;
             return ch;
         }
@@ -200,24 +208,78 @@ impl Regex{
             self.i += 1;
             return ch;
         }
-        if(ch == '#' || ch == '-' || ch == '_'){
+        if(ch == '#' || ch == '-' || ch == '_' || ch=='/'){
             self.i += 1;
             return ch;
         }
         panic("ch={}", ch);
+        */
     }
 }
 
 impl Regex{
     func is_match(self, s: str): bool{
-        let mv = MatchVisitor{self, s};
-        return mv.visit();
+        let mv = MatchVisitor{self, s, Captures::new()};
+        let res = mv.visit();
+        return res;
+    }
+    func captures(self, s: str): Option<Captures>{
+        let mv = MatchVisitor{self, s, Captures::new()};
+        let res = mv.visit();
+        if(res){
+             Option::new(mv.cap)
+        }else{
+            Option<Captures>::new()
+        }
+    }
+}
+struct Captures{
+    map: Map<str, Capture>;
+}
+impl Captures{
+    func new(): Captures{
+        return Captures{Map<str, Capture>::new()};
+    }
+    func get(self, idx: i32): Capture*{
+        let s = format("{}", idx);
+        let res = self.get(s.str());
+        s.drop();
+        return res;
+    }
+    func get(self, name: str): Capture*{
+        let opt = self.map.get_ptr(&name);
+        if(opt.is_none()){
+            panic("group {} not found", name);
+        }
+        return opt.unwrap();
+    }
+    func has(self, name: str): bool{
+        return self.map.get_ptr(&name).is_some();
+    }
+}
+#derive(Debug)
+struct Capture{
+    arr: List<str>;
+    buf: str;
+    start: i32;
+    end: i32;
+}
+impl Capture{
+    func new(): Capture{
+        return Capture{List<str>::new(), "", -1, -1};
+    }
+    func str(self): str{
+        return self.buf;
+    }
+    func get(self, idx: i32): str{
+        return *self.arr.get_ptr(idx);
     }
 }
 
 struct MatchVisitor{
     r: Regex*;
     s: str;
+    cap: Captures;
 }
 struct MatchState{
     is_match: bool;
@@ -355,8 +417,26 @@ impl MatchVisitor{
             RegexItem::Ch(ch) => 
                 Pair::new(self.s.get(i) == ch, 1)
             ,
-            RegexItem::Group(or*) => {
-                self.visit_or(or, i)
+            RegexItem::Group(or*, name*) => {
+                let tmp = self.visit_or(or, i);
+                if(tmp.a){
+                    let s = self.s.substr(i, i + tmp.b);
+                    let c0 = self.cap.map.get_ptr(&name.str());
+                    if(c0.is_some()){
+                        let c = c0.unwrap();
+                        c.arr.add(s);
+                        c.buf = self.s.substr(c.start, c.end + tmp.b);
+                        c.end += tmp.b;
+                    }else{
+                        let c = Capture::new();
+                        c.arr.add(s);
+                        c.buf = s;
+                        c.start = i;
+                        c.end = i + tmp.b;
+                        self.cap.map.add(name.str(), c);
+                    }
+                }
+                tmp
             },
             RegexItem::Op(node*, kind*) => {
                 let tmp = self.visit_item(node.get(), i);
@@ -468,8 +548,11 @@ impl Display for RegexItem{
     func fmt(self, f: Fmt*){
         match self{
             RegexItem::Dot => f.print("."), 
-            RegexItem::Group(node*)=>{
+            RegexItem::Group(node*, name*)=>{
                 f.print("(");
+                f.print("?<");
+                f.print(name);
+                f.print(">");
                 Display::fmt(node, f);
                 f.print(")");
             },

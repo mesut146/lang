@@ -59,17 +59,20 @@ impl AllocHelper{
     return Option<Value*>::new();
   }
   func visit_body(self, body: Body*): Option<Value*>{
-    if let Body::Block(b*)=(body){
-      return self.visit(b);
-    }else if let Body::Stmt(b*)=(body){
-      self.visit(b);
-      return Option<Value*>::new();
-    }else if let Body::If(b*)=(body){
-      return self.visit_if(b);
-    }else if let Body::IfLet(b*)=(body){
-      return self.visit_iflet(b);
-    }else{
-      panic("");
+    match body{
+        Body::Block(b*)=>{
+            return self.visit(b);
+        },
+        Body::Stmt(b*)=>{
+            self.visit(b);
+            return Option<Value*>::new();
+        },
+        Body::If(b*)=>{
+            return self.visit_if(b);
+        },
+        Body::IfLet(b*)=>{
+            return self.visit_iflet(b);
+        }
     }
   }
   func visit_if(self, node: IfStmt*): Option<Value*>{
@@ -98,43 +101,46 @@ impl AllocHelper{
     return Option<Value*>::new();
   }
   func visit(self, node: Stmt*){
-    if let Stmt::Var(ve*)=(node){
-      self.visit(ve);
-      return;
-    }
-    if let Stmt::For(fs*)=(node){
-      if(fs.var_decl.is_some()){
-        self.visit(fs.var_decl.get());
-      }
-      self.visit_body(fs.body.get());
-      return;
-    }if let Stmt::ForEach(fe*)=(node){
-      let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
-      self.visit(&info.block);
-      return;
-    }
-    if let Stmt::While(e*, b*)=(node){
+      match node{
+          Stmt::Var(ve*)=>{
+              self.visit(ve);
+              return;
+          },
+          Stmt::For(fs*)=>{
+              if(fs.var_decl.is_some()){
+                  self.visit(fs.var_decl.get());
+              }
+              self.visit_body(fs.body.get());
+              return;
+          },
+          Stmt::ForEach(fe*)=>{
+              let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+              self.visit(&info.block);
+              return;
+          },
+    Stmt::While(e*, b*)=>{
       self.visit(e);
       self.visit_body(b.get());
       return;
-    }
-    if let Stmt::Ret(e*)=(node){
+    },
+    Stmt::Ret(e*)=>{
       if(e.is_some()){
         self.visit_ret(node, e.get());
       }
       return;
-    }
-    if let Stmt::Expr(e*)=(node){
+    },
+    Stmt::Expr(e*)=>{
       self.visit(e);
       return;
-    }
-    if let Stmt::Break=(node){
+    },
+    Stmt::Break=>{
       return;
-    }
-    if let Stmt::Continue=(node){
+    },
+    Stmt::Continue=>{
       return;
+    },
+    _=>panic("alloc {:?}\n", node)
     }
-    panic("alloc {:?}\n", node);
   }
   func visit_ret(self, stmt: Stmt*, expr: Expr*){
     self.visit(expr);
@@ -351,11 +357,13 @@ impl AllocHelper{
             self.c.allocMap.add(arg.id, arg_ptr);
           }
         }
-        if let MatchRhs::EXPR(e*)=(&case.rhs){
+        match &case.rhs{
+            MatchRhs::EXPR(e*)=>{
           self.visit(e);
-        }
-        if let MatchRhs::STMT(st*)=(&case.rhs){
+        },
+        MatchRhs::STMT(st*)=>{
           self.visit(st);
+        }
         }
       }
       rt.drop();

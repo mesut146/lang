@@ -1602,6 +1602,9 @@ impl Resolver{
         not_covered.remove(idx).drop();
         let index = Resolver::findVariant(decl, &smp.name);
         let variant = decl.get_variants().get_ptr(index);
+        if(args.len() != variant.fields.len()){
+            self.err(expr, format("variant field count doesn't match got: {} expected: {}", args.len(), variant.fields.len()));
+        }
         for(let i = 0;i < args.len();++i){
           let arg = args.get_ptr(i);
           let field = variant.fields.get_ptr(i);

@@ -215,6 +215,10 @@ func handle(cmd: CmdArgs*){
   else if(cmd.is("c")){
     handle_c(cmd);
     return;
+  }else if(cmd.is("f")){
+      let dir = format("{}/parser", get_src_dir());
+      let out = format("{}/parser2", get_src_dir());
+      format_dir(dir.str(), out.str());
   }else{
     panic("invalid cmd: {:?}", cmd.args);
   }

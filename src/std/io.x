@@ -121,7 +121,7 @@ func list(path: str, ext: Option<str>, file_only: bool): List<String>{
   let path_c = CStr::new(path);
   let dp = opendir(path_c.ptr());
   path_c.drop();
-  if(dp as u64 == 0) panic("no such dir {}", path);
+  if(dp as u64 == 0) panic("no such dir '{}'", path);
   while(true){
     let ep: dirent* = readdir(dp);
     if(ep as u64 == 0) break;

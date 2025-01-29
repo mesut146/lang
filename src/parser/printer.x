@@ -1,6 +1,28 @@
 import parser/ast
+import parser/parser
+import parser/token
 
 static print_cst = false;
+//static pretty_print = true;
+
+func format_dir(dir: str, out: str){
+    create_dir(out);
+    let files = list(dir);
+    for file in &files{
+        let file2 = format("{}/{}", dir, file);
+        let outf = format("{}/{}", out, file);
+        if(is_dir(file2.str())) continue;
+        print("file={}\n", file2);
+        print("out={}\n", outf);
+        let p = Parser::from_path(file2);
+        let unit = p.parse_unit();
+        let str = Fmt::str(&unit);
+        write_string(str.str(), outf.str());
+        outf.drop();
+        str.drop();
+    }
+    files.drop();
+}
 
 //T: Debug
 func join<T>(f: Fmt*, arr: List<T>*, sep: str){
@@ -11,34 +33,61 @@ func join<T>(f: Fmt*, arr: List<T>*, sep: str){
 }
 
 func body(node: Stmt*, f: Fmt*){
+    body(node, f, false);
+}
+
+func body(node: Stmt*, f: Fmt*, skip_first: bool){
   let str = Fmt::str(node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
-    f.print("  ");
+    if(j > 0){
+        f.print("\n");
+    }
+    if(j > 0 || !skip_first){
+      f.print("    ");
+    }
     f.print(lines.get_ptr(j));
-    f.print("\n");
   }
   str.drop();
   lines.drop();
 }
 
 func body(node: Expr*, f: Fmt*){
+    body(node, f, false);
+}
+
+func body(node: Expr*, f: Fmt*, skip_first: bool){
   let str = Fmt::str(node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
-    f.print("  ");
+    if(j > 0 || !skip_first){
+      f.print("    ");
+    }
     f.print(lines.get_ptr(j));
-    f.print("\n");
+    if(j < lines.len() - 1){
+        f.print("\n");
+    }
   }
   str.drop();
   lines.drop();
+}
+func body(str: String, f: Fmt*){
+    for(let i=0;i<str.len();++i){
+        let ch = str.get(i);
+        if(ch=='\n'){
+        }
+        //f.print(ch);
+    }
+    str.drop();
 }
 
 impl Debug for Unit{
   func debug(self, f: Fmt*){
     join(f, &self.imports, "\n");
-    f.print("\n");
-    join(f, &self.items, "\n");
+    if(!self.imports.empty()){
+        f.print("\n\n");
+    }
+    join(f, &self.items, "\n\n");
   }
 }
 
@@ -98,10 +147,13 @@ impl Debug for Impl{
     self.info.debug(f);
     f.print("{\n");
     for(let i=0;i<self.methods.len();++i){
+        if(i>0){
+            f.print("\n");
+        }
       let ms = Fmt::str(self.methods.get_ptr(i));
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
-        f.print("  ");
+        f.print("    ");
         f.print(lines.get_ptr(j));
         f.print("\n");
       }
@@ -144,13 +196,17 @@ impl Debug for Decl{
           f.print(": ");
           decl.base.get().debug(f);
         }
+        if(fields.empty()){
+            f.print(";");
+            return;
+        }
         f.print("{\n");
         for(let i = 0;i < fields.len();++i){
-          f.print("  ");
+          f.print("    ");
           fields.get_ptr(i).debug(f);
           f.print(";\n");
         }
-        f.print("}\n");
+        f.print("}");
     }
     func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
         f.print("enum ");
@@ -158,7 +214,7 @@ impl Debug for Decl{
         f.print("{\n");
         for(let i = 0;i < variants.len();++i){
           let ev = variants.get_ptr(i);
-          f.print("  ");
+          f.print("    ");
           f.print(&ev.name);
           if(ev.fields.len()>0){
             f.print("(");
@@ -171,7 +227,7 @@ impl Debug for Decl{
           if(i < variants.len() - 1) f.print(",");
           f.print("\n");
         }
-        f.print("}\n");
+        f.print("}");
     }
 }
 
@@ -202,8 +258,11 @@ impl Debug for Method{
       }
       f.print("...");
     }
-    f.print("): ");
-    self.type.debug(f);
+    f.print(")");
+    if(!self.type.is_void()){
+        f.print(": ");
+        self.type.debug(f);
+    }
     if(self.body.is_some()){
       self.body.get().debug(f);
     }else{
@@ -373,16 +432,20 @@ impl Debug for Block{
   func debug(self, f: Fmt*){
     f.print("{\n");
     for(let i = 0;i < self.list.len();++i){
+        if(i>0) f.print("\n");
        body(self.list.get_ptr(i), f);
     }
     if(self.return_expr.is_some()){
+        if(!self.list.empty()){
+            f.print("\n");
+        }
       if(print_cst) f.print("Block::return_expr{\n");
-      //todo body(self.return_expr.get(), f);
-      self.return_expr.get().debug(f);
-      f.print("\n");
+      body(self.return_expr.get(), f);
+      //self.return_expr.get().debug(f);
+      //f.print("\n");
       if(print_cst) f.print("}\n");
     }
-    f.print("}");
+    f.print("\n}");
   }
 }
 
@@ -537,8 +600,9 @@ impl Debug for Match{
     f.print("{\n");
     for(let i = 0;i < self.cases.len();++i){
       if(i > 0){
-        f.print(",\n");
+        //f.print("    ,\n");
       }
+      f.print("    ");
       let case = self.cases.get_ptr(i);
       if(case.lhs is MatchLhs::NONE){
         f.print("_");
@@ -555,11 +619,16 @@ impl Debug for Match{
       }
       f.print(" => ");
       if let MatchRhs::EXPR(expr*)=(&case.rhs){
-        expr.debug(f);
+        //expr.debug(f);
+        body(expr, f, true);
       }else if let MatchRhs::STMT(stmt*)=(&case.rhs){
-        stmt.debug(f);
+        body(stmt, f, true);
+        //stmt.debug(f);
       }else{
         panic("unr");
+      }
+      if(i < self.cases.len() - 1){
+          f.print(",\n");
       }
     }
     f.print("\n}\n");
