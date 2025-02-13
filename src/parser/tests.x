@@ -302,7 +302,7 @@ func handle_tests(cmd: CmdArgs*): bool{
         let path = cmd.get();
         let parser = Parser::from_path(path);
         let unit = parser.parse_unit();
-        print("parse done {}\nunit={:?}\n", parser.path, unit);
+        print("parse done {}\nunit={:?}\n", parser.path(), unit);
         parser.drop();
         unit.drop();
         return true;

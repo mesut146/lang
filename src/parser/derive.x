@@ -9,6 +9,7 @@ import parser/token
 import parser/ownership
 import std/libc
 import std/map
+import std/stack
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());

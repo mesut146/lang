@@ -60,7 +60,7 @@ enum TokenType {
     QUES,
     SEMI,
     COLON,
-    COLON2,
+    COLON2,//::
     AND,
     OR,
     ANDAND,
@@ -92,8 +92,8 @@ enum TokenType {
     RBRACKET,
     LBRACE,
     RBRACE,
-    ARROW,
-    HASH
+    ARROW,//=>
+    HASH,
 }
 
 struct Token {

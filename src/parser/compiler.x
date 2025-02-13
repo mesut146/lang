@@ -283,6 +283,10 @@ impl Compiler{
             print("gencode2 done {}/{}\n", i+1, resolver.generated_methods.len());
         }
     }
+    for(let i=0;i<resolver.lambdas.len();i+=1){
+        let m = resolver.lambdas.get_idx(i);
+        self.genCode(m);
+    }
     methods.drop();
     
     let name = getName(path);
@@ -463,6 +467,9 @@ impl Compiler{
     for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
         let m = self.get_resolver().used_methods.get(i);
         p.make_proto(m);
+    }
+    for pair in &self.get_resolver().lambdas{
+        p.make_proto(&pair.b);
     }
   }
   
@@ -767,41 +774,6 @@ impl Compiler{
     return config.link(&compiled);
   }
  
-   /*func compile_dir_thread(config: CompilerConfig): String{
-    let env_triple = getenv2("target_triple");
-    if(env_triple.is_some()){
-      print("triple={}\n", env_triple.get());
-    }
-    create_dir(config.out_dir.str());
-    let cache = Cache::new(config.out_dir.str());
-    cache.read_cache();
-    let src_dir = &config.file;
-    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
-    let compiled = List<String>::new();
-    let worker = Worker::new(config.jobs);
-    for(let i = 0;i < list.len();++i){
-      let name = list.get_ptr(i).str();
-      let file: String = format("{}/{}", src_dir, name);
-      if(is_dir(file.str()) || !name.ends_with(".x")) {
-        file.drop();
-        continue;
-      }
-      let args = CompileArgs{
-        file: file.clone(),
-        config: &config,
-        cache: &cache,
-        compiled: &compiled,
-        idx: i,
-        len: list.len() as i32
-      };
-      worker.add_arg(make_compile_job, args);
-    }
-    sleep(1);
-    worker.join();
-    list.drop();
-    cache.drop();
-    return config.link(&compiled);
-  }*/
   
   func compile_dir_thread2(config: CompilerConfig): String{
     let env_triple = getenv2("target_triple");
@@ -842,21 +814,6 @@ impl Compiler{
   } 
 }//Compiler
 
-/*func make_compile_job(arg: c_void*){
-  let args = arg as CompileArgs*;
-  let config = args.config;
-  let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-  for(let j = 0;j < config.src_dirs.len();++j){
-    ctx.add_path(config.src_dirs.get_ptr(j).str());
-  }
-  let cmp = Compiler::new(ctx);
-  if(cmp.ctx.verbose){
-    print("compiling [{}/{}] {}\n", args.idx + 1, args.len, config.trim_by_root(args.file.str()));
-  }
-  let obj = cmp.compile(args.file.str(), args.cache, config);
-  args.compiled.add(obj);
-  cmp.drop();
-}*/
 
 func make_compile_job2(arg: c_void*){
   let args = arg as CompileArgs*;

@@ -6,10 +6,13 @@ enum Option<T>{
 
 impl<T> Option<T>{
   func new(val: T): Option<T>{
-    return Option<T>::Some{val};  
+    return Option<T>::Some{val};
   }
   func new(): Option<T>{
-    return Option<T>::None;  
+    return Option<T>::None;
+  }
+  func none(): Option<T>{
+      return Option<T>::None;
   }
 
   func unwrap(*self): T{

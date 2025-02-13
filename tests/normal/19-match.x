@@ -46,6 +46,33 @@ func expr_i32_omit(){
     assert(x == 200);
 }
 
+func expr_i32_2(){
+    let e = E::E2{.B{aa: 12345}, val: 10, a: A{a: 20, b: 30}};
+    let x: i64 = match &e {
+        E::E1 => 100i64,
+        E::E2(val, a) => {
+            a.b
+        },
+        E::E3(val) => {
+            300i64
+        }
+    };
+    assert(x == 30);
+}
+
+func expr_i32_ret(): i64{
+    let e = E::E2{.B{aa: 12345}, val: 10, a: A{a: 20, b: 30}};
+    match &e {
+        E::E1 => 100i64,
+        E::E2(val, a) => {
+            a.b
+        },
+        E::E3(val) => {
+            300i64
+        }
+    }
+}
+
 func expr_struct(){
     let f = F::F2{val: B{aa: 10}};
     let x: B = match &f{
@@ -98,8 +125,8 @@ func cast(){
 func jump(): bool{
     let f = F::F2{val: B{aa: 10}};
     match &f{
-        F::F1=>{ return true; },
-        F::F2=>{ return false; }
+        F::F1(val*)=>{ return true; },
+        F::F2(val*)=>{ return false; }
     }
 }
 
@@ -116,6 +143,7 @@ func main(){
     }
     expr_i32();
     expr_i32_omit();
+    expr_i32_2();
     expr_struct();
     def_test();
     printf("match done\n");

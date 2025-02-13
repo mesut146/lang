@@ -6,6 +6,7 @@ import parser/copier
 import parser/ownership
 import std/map
 import std/libc
+import std/stack
 
 struct Signature{
     mc: Option<Call*>;
@@ -229,12 +230,16 @@ impl MethodResolver{
     }
     
     func get_impl(self, type: Type*, tr: Option<Type*>): List<Pair<Impl*, i32>>{
+        if(type.is_simple() && type.as_simple().scope.is_some()){
+            self.r.err(type.line, "get_impl scoped type");
+        }
         let list = List<Pair<Impl*, i32>>::new();
         let erased: String = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
             let item: Item* = self.r.unit.items.get_ptr(i);
             if(!(item is Item::Impl)) continue;
             let imp = item.as_impl();
+            //print("imp {:?} {:?}\n", type, imp.info);
             if(tr.is_some()){
                 if(imp.info.trait_name.is_none()){
                     continue;

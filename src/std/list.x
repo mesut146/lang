@@ -258,6 +258,20 @@ impl<T> Drop for List<T>{
   }
 }
 
+impl<T> Eq for List<T>{
+    func eq(self, list: List<T>*): bool{
+        if(self.len() != list.len()) return false;
+        for(let i = 0;i < self.len();i += 1){
+            let e1 = self.get_ptr(i);
+            let e2 = list.get_ptr(i);
+            if(!Eq::eq(e1, e2)){
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
 //iters
 struct ListIter<T>{
   list: List<T>*;

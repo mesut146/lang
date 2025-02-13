@@ -334,7 +334,7 @@ impl Lexer{
     if(self.single_line!=-1){
         print("buf='{}'\n", self.buf);
     }
-    panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
+    panic("in file {}\nunexpected char: {}({}) at {} line:{}", &self.path, c, c, start,self.line);
   }
   
   func read_ident(self): Token {

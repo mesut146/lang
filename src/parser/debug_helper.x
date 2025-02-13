@@ -344,6 +344,20 @@ impl DebugInfo{
         return createPointerType(sp as DIType*, 64);
         //return sp as DIType*;
       }
+      if let Type::Lambda(ft_box*)=(type){
+        let tys = vector_Metadata_new();
+        vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
+        for prm in & ft_box.get().params{
+          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+        }
+        for prm in & ft_box.get().captured{
+          vector_Metadata_push(tys, self.map_di(&prm.type, c) as Metadata*);
+        }
+        let sp = createSubroutineType(tys);
+        vector_Metadata_delete(tys);
+        return createPointerType(sp as DIType*, 64);
+        //return sp as DIType*;
+      }
       if(type.is_slice()){
         let elem = type.elem();
         let size = c.getSize(type);

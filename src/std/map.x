@@ -146,6 +146,9 @@ impl<K, V> Map<K, V>{
   func into_iter(*self): MapIntoIter<K, V>{
     return MapIntoIter{self, 0};
   }
+  func values(self): ValuesIter<K, V>{
+    return ValuesIter{self, 0};
+  }
 }
 
 
@@ -162,12 +165,15 @@ impl<K, V> Debug for Map<K, V>{
     f.print("}");
   }
 }
-impl<A,B> Debug for Pair<A,B>{
+
+impl<A, B> Debug for Pair<A, B>{
   func debug(self, f: Fmt*){
     f.print("{");
-    Debug::debug(&self.a, f);
+    debug_member!(self.a, f);
+    //Debug::debug(&self.a, f);
     f.print(", ");
-    Debug::debug(&self.b, f);
+    //Debug::debug(&self.b, f);
+    debug_member!(self.b, f);
     f.print("}");
   }
 }
@@ -176,6 +182,8 @@ impl<K,V> Clone for Map<K,V>{
     return Map<K, V>{self.arr.clone()};
   }
 }
+
+//todo clone of ptr
 impl<K,V> Clone for Pair<K,V>{
   func clone(self): Pair<K, V>{
     return Pair<K, V>{self.a.clone(), self.b.clone()};
@@ -215,5 +223,20 @@ impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
 impl<K, V> Drop for MapIntoIter<K, V>{
   func drop(*self){
     free(self.map.arr.ptr as i8*);
+  }
+}
+
+struct ValuesIter<K, V>{
+  map: Map<K, V>*;
+  pos: i32;
+}
+impl<K, V> Iterator<V*> for ValuesIter<K, V>{
+  func next(self): Option<V*>{
+    if(self.pos < self.map.len()){
+      let idx = self.pos;
+      self.pos += 1;
+      return Option::new(self.map.get_idx(idx));
+    }
+    return Option<V*>::new();
   }
 }

@@ -5,6 +5,7 @@ import parser/resolver
 import std/map
 import std/libc
 import std/io
+import std/stack
 
 func SLICE_PTR_INDEX(): i32{ return 0; }
 func SLICE_LEN_INDEX(): i32{ return 1; }
@@ -172,11 +173,11 @@ func max_for(type: Type*): i64{
 }
 
 func is_struct(type: Type*): bool{
-  return !type.is_prim() && !type.is_pointer() && !type.is_void() && !type.is_fpointer(); 
+  return !type.is_prim() && !type.is_pointer() && !type.is_void() && !type.is_fpointer() && !(type is Type::Lambda);
 }
 
 func is_loadable(type: Type*): bool{
-    return type.is_prim() || type.is_pointer() || type.is_fpointer();
+    return type.is_prim() || type.is_pointer() || type.is_fpointer() || type is Type::Lambda;
   }
 
 func is_main(m: Method*): bool{

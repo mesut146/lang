@@ -1,4 +1,10 @@
 
+full macro support 
+asd!(5, "test");
+macro asd{
+}
+
+
 add ?()throw operator
 
 multiple types, methods mix up
@@ -7,4 +13,7 @@ multiple types, methods mix up
 %closures
 let f = (a: i32, b: str): i32=>{
 };
+
+let f = ()=>5;
+
 f();

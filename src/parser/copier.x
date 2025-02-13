@@ -3,6 +3,8 @@ import parser/printer
 import std/map
 import std/libc
 
+import parser/token
+
 struct AstCopier{
     map: Map<String, Type>*;
     unit: Option<Unit*>;
@@ -87,18 +89,29 @@ impl AstCopier{
         let type = self.visit(&node.type);
         //todo base type depends on map too
         let base = BaseDecl{line: node.line,path: node.path.clone(),type: type ,
-            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), derives: node.derives.clone(), attr: node.attr.clone()};
+            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), 
+            derives: node.derives.clone(), 
+            attr: node.attr.clone()
+        };
+        match node{
+            Decl::Struct(fields*)=>{
+                let res = self.visit_list(fields);
+                return Decl::Struct{.base, res};
+            },
+            Decl::Enum(variants*)=>{
+                //enum
+                let res = self.visit_list(variants);
+                return Decl::Enum{.base, res};
+            }
+        }/*
         if let Decl::Struct(fields*)=(node){
             let res = self.visit_list(fields);
             return Decl::Struct{.base, res};
         }else if let Decl::Enum(variants*)=(node){
-            //enum
             let res = self.visit_list(variants);
             return Decl::Enum{.base, res};
         }
-        base.drop();
-        let msg = format("visit decl {:?}\n", node);
-        panic("{}", msg.str());
+        panic("unr");*/
     }
 
     func visit(self, node: FieldDecl*): FieldDecl{
@@ -133,6 +146,14 @@ impl AstCopier{
             };
             return Type::Function{.id, type: Box::new(ft)};
         }
+        if let Type::Lambda(bx*) = (type){
+            let lt = LambdaType{
+                       return_type: self.visit_opt(&bx.get().return_type),
+                       params: self.visit_list(&bx.get().params),
+                       captured: self.visit_list(&bx.get().captured),
+            };
+            return Type::Lambda{.id, Box::new(lt)};
+        }
         let smp = type.as_simple();
         if(self.map.contains(&smp.name)){
             return self.map.get_ptr(&smp.name).unwrap().clone();
@@ -147,6 +168,10 @@ impl AstCopier{
         }
         return res.into(type.line);
     }
+    
+    func visit(self, node: CapturedInfo*): CapturedInfo{
+        return CapturedInfo{self.visit(&node.type), node.name.clone()};
+    }
 
     func visit(self, p: Param*): Param{
         let id = self.node(p as Node*);
@@ -158,21 +183,22 @@ impl AstCopier{
     }
 
     func visit(self, p: Parent*): Parent{
-        if let Parent::Impl(info*) = (p){
-            return Parent::Impl{ImplInfo{type_params: self.visit_list(&info.type_params),
+        match p{
+            Parent::Impl(info*) => {
+               return Parent::Impl{ImplInfo{type_params: self.visit_list(&info.type_params),
                 trait_name: self.visit_opt(&info.trait_name),
                 type: self.visit(&info.type)}};
+            },
+            Parent::Trait(ty*) => {
+                return Parent::Trait{self.visit(ty)};
+            },
+            Parent::None=>{
+                return Parent::None;
+            },
+            Parent::Extern=>{
+                return Parent::Extern;
+            }
         }
-        if let Parent::Trait(ty*) = (p){
-          return Parent::Trait{self.visit(ty)};
-        }
-        if(p is Parent::None){
-            return Parent::None;
-        }
-        if(p is Parent::Extern){
-            return Parent::Extern;
-        }
-        panic("parent clone");
     }
 
     func visit(self, m: Method*): Method{
@@ -223,16 +249,19 @@ impl AstCopier{
     }
     func visit(self, node: Body*): Body{
         let id = self.node(node as Node*);
-        if let Body::Block(b*)=(node){
-            return Body::Block{.id, self.visit(b)};
-        }else if let Body::Stmt(b*)=(node){
-            return Body::Stmt{.id, self.visit(b)};
-        }else if let Body::If(b*)=(node){
-            return Body::If{.id, self.visit(b)};
-        }else if let Body::IfLet(b*)=(node){
-            return Body::IfLet{.id, self.visit(b)};
-        }else{
-            panic("");
+        match node{
+            Body::Block(b*)=>{
+                return Body::Block{.id, self.visit(b)};
+            },
+            Body::Stmt(b*)=>{
+                return Body::Stmt{.id, self.visit(b)};
+            },
+            Body::If(b*)=>{
+                return Body::If{.id, self.visit(b)};
+            },
+            Body::IfLet(b*)=>{
+                return Body::IfLet{.id, self.visit(b)};
+            }
         }     
     }
 
@@ -306,6 +335,9 @@ impl AstCopier{
         if let Expr::Call(mc*)=(node){
             return Expr::Call{.id, self.visit(mc)};
         }
+        if let Expr::MacroCall(mc*)=(node){
+            return Expr::MacroCall{.id, self.visit(mc)};
+        }
         if let Expr::Par(e*)=(node){
             return Expr::Par{.id, self.visit_box(e)};
         }
@@ -331,13 +363,27 @@ impl AstCopier{
             return Expr::Is{.id,self.visit_box(e), self.visit_box(rhs)};
         }
         if let Expr::Array(list*, size*)=(node){
-            return Expr::Array{.id,self.visit_list(list), self.visit_opt(size)};
+            return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)};
         }
         if let Expr::ArrAccess(aa*)=(node){
-            return Expr::ArrAccess{.id,ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_ptr(&aa.idx2)}};
+            return Expr::ArrAccess{.id, ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_ptr(&aa.idx2)}};
+        }
+        if let Expr::Lambda(lm*)=(node){
+            return Expr::Lambda{.id, Lambda{params: self.visit_list(&lm.params), return_type: self.visit_opt(&lm.return_type), body: self.visit_box(&lm.body)}};
         }
         let msg = format("Expr {:?}", node);
         panic("{}", msg.str());
+    }
+    func visit(self, node: LambdaParam*): LambdaParam{
+        let id = self.node(node as Node*);
+        return LambdaParam{.id, type: self.visit_opt(&node.type), name: node.name.clone()};
+        
+    }
+    func visit(self, node: LambdaBody*): LambdaBody{
+        match node{
+            LambdaBody::Expr(e*) => return LambdaBody::Expr{self.visit(e)};,
+            LambdaBody::Stmt(st*) => return LambdaBody::Stmt{self.visit(st)};
+        }
     }
 
     func visit(self, node: Entry*): Entry{
@@ -347,5 +393,10 @@ impl AstCopier{
     func visit(self, node: Call*): Call{
       return Call{scope: self.visit_ptr(&node.scope), name: node.name.clone(),
         type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
+    }
+    func visit(self, node: MacroCall*): MacroCall{
+      return MacroCall{name: node.name.clone(),
+        args: self.visit_list(&node.args)
+      };
     }
 }

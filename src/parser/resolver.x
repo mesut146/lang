@@ -9,13 +9,17 @@ import parser/token
 import parser/copier
 import parser/derive
 import parser/ownership
+import parser/drop_helper
 import std/map
 import std/libc
 import std/io
+import std/stack
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
 static print_unit: bool = false;
+
+static lambdaCnt = 0;
 
 func verbose_stmt(): bool{
   return false;
@@ -46,7 +50,7 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        verbose_all: false,
-       stack_trace: false
+       stack_trace: getenv2("TRACE").is_some(),
     };
     return res;
   }
@@ -70,15 +74,40 @@ struct Scope{
 }
 
 #derive(Debug)
+enum VarKind{
+    GLOBAL,
+    PARAM,
+    LOCAL,
+    IFLET,
+    MATCH,
+}
+
+#derive(Clone, Debug)
+struct LambdaCallInfo{
+    type: Type;
+}
+impl LambdaCallInfo{
+    func new(type: Type): LambdaCallInfo{
+        LambdaCallInfo{type}
+    }
+}
+
+#derive(Debug)
 struct VarHolder{
   name: String;
   type: Box<RType>;
-  prm: bool;
   id: i32;
+  kind: VarKind;
+  inLambda: i32;
 }
 impl VarHolder{
-  func new(name: String, type: RType, prm: bool, id: i32): VarHolder{
-    return VarHolder{name: name, type: Box::new(type), prm: prm, id: id};
+  func new(name: String, type: RType, id: i32, kind: VarKind, inLambda: i32): VarHolder{
+    return VarHolder{name: name,
+                  type: Box::new(type), 
+                  id: id, kind: kind, 
+                  inLambda: inLambda,
+                  //lambda_call: Option<LambdaCallInfo>::none(),
+    };
   }
   func get_type(self): Type*{
     return &self.type.get().type;
@@ -89,8 +118,10 @@ impl Clone for VarHolder{
     return VarHolder{
       name: self.name.clone(),
       type: self.type.clone(),
-      prm: self.prm,
-      id: self.id
+      id: self.id,
+      kind: self.kind,
+      inLambda: self.inLambda.clone(),
+      //lambda_call: self.lambda_call.clone(),
     };
   }
 }
@@ -130,6 +161,9 @@ struct Resolver{
   glob_map: List<GlobalInfo>;//external glob name->local rt for it, (cloned)
   drop_map: Map<String, Desc>;
   block_map: Map<i32, Block*>;
+  lambdas: Map<i32, Method>;
+  inLambda: Stack<i32>;
+  extra_imports: List<ImportStmt>;
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -147,23 +181,27 @@ impl Drop for Resolver{
     self.format_map.drop();
     self.glob_map.drop();
     self.drop_map.drop();
+    self.block_map.drop();
+    self.lambdas.drop();
+    self.inLambda.drop();
   }
 }
 
 #derive(Debug)
 enum RtKind{
   None,//prim, ptr
-  Method,//free method in items
+  Method,//normal method in items
   MethodImpl(idx2: i32),//impl method
   MethodGen,//generic method in resolver
   MethodExtern(idx2: i32),
   Decl,//decl in items
   DeclGen,//generic decl in resolver
-  Trait//trait in items
+  Trait,//trait in items
+  Lambda(id: i32),
 }
 impl RtKind{
   func is_method(self): bool{
-    return self is RtKind::Method || self is RtKind::MethodImpl || self is RtKind::MethodGen || self is RtKind::MethodExtern;
+    return self is RtKind::Method || self is RtKind::MethodImpl || self is RtKind::MethodGen || self is RtKind::MethodExtern || self is RtKind::Lambda;
   }
   func is_decl(self): bool{
     return self is RtKind::Decl || self is RtKind::DeclGen;
@@ -204,6 +242,7 @@ struct RType{
   desc: Desc;
   method_desc: Option<Desc>;
   fp_info: Option<FunctionType>;
+  lambda_call: Option<LambdaCallInfo>;
 }
 impl RType{
   func new(s: str): RType{
@@ -216,7 +255,8 @@ impl RType{
       vh: Option<VarHolder>::new(),
       desc: Desc::new(),
       method_desc: Option<Desc>::new(),
-      fp_info: Option<FunctionType>::new()
+      fp_info: Option<FunctionType>::new(),
+      lambda_call: Option<LambdaCallInfo>::none(),
     };
     return res;
   }
@@ -246,7 +286,8 @@ impl Clone for RType{
       vh: self.vh.clone(),
       desc: self.desc.clone(),
       method_desc: self.method_desc.clone(),
-      fp_info: self.fp_info.clone()
+      fp_info: self.fp_info.clone(),
+      lambda_call: self.lambda_call.clone(),
     };
   }
 }
@@ -300,12 +341,7 @@ impl Context{
   }
   func get_path(self, is: ImportStmt*): String{
     //print("get_path arr: {}, imp: {}\n", self.search_paths, is.list);
-    let suffix = "".str();
-    for(let i = 0;i < is.list.len();++i){
-      let part: String* = is.list.get_ptr(i);
-      suffix.append("/");
-      suffix.append(part.str());
-    }
+    let suffix = is.str();
     suffix.append(".x");
     for(let i = 0;i < self.search_paths.len();++i){
       let path = self.search_paths.get_ptr(i).clone();
@@ -396,7 +432,10 @@ impl Resolver{
       format_map: Map<i32, FormatInfo>::new(),
       glob_map: List<GlobalInfo>::new(),
       drop_map: Map<String, Desc>::new(),
-      block_map: Map<i32, Block*>::new()
+      block_map: Map<i32, Block*>::new(),
+      lambdas: Map<i32, Method>::new(),
+      inLambda: Stack<i32>::new(),
+      extra_imports: List<ImportStmt>::new(),
     };
     return res;
   }
@@ -409,14 +448,18 @@ impl Resolver{
     let tmp = self.scopes.remove(self.scopes.len() - 1);
     tmp.drop();
   }
-  func addScope(self, name: String, type: RType, prm: bool, id: i32, line: i32){
+  func addScope(self, name: String, type: RType, id: i32, kind: VarKind, line: i32){
     for scope in &self.scopes{
       if(scope.find(&name).is_some()){
         self.err(line, format("variable {} already exists\n", &name));
       }
     }
     let scope = self.scopes.last();
-    scope.list.add(VarHolder::new(name, type, prm, id));
+    let lamb = -1;
+    if(!self.inLambda.empty()){
+        lamb = *self.inLambda.top();
+    }
+    scope.list.add(VarHolder::new(name, type, id, kind, lamb));
   }
  
   func get_unit(self, path: String*): Unit*{
@@ -472,6 +515,15 @@ impl Resolver{
           path.drop();
       }
     }
+    for is in &self.extra_imports{
+        let path = self.ctx.get_path(is);
+        if (!added.contains(&path.str())) {
+            let r = self.ctx.create_resolver(&path);
+            res.add(r);
+            added.add(r.unit.path.str());
+        }
+        path.drop();
+    }
     added.drop();
     return res;
   }
@@ -498,6 +550,9 @@ impl Resolver{
           print("resolve method done {}/{}\n", j+1,self.generated_methods.len());
       }
     }
+    for lm in &self.lambdas{
+        self.visit_method(&lm.b);
+    }
     self.dropScope();//globals
   }
   
@@ -519,7 +574,7 @@ impl Resolver{
             err_opt.drop();
             type.drop();
         }
-        self.addScope(g.name.clone(), rhs, false, g.id, g.line);
+        self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
     }
   }
 
@@ -959,12 +1014,12 @@ impl Resolver{
     if(node.self.is_some()){
       let self_prm: Param* = node.self.get();
       let prm_rt = self.visit_type(&self_prm.type);
-      self.addScope(self_prm.name.clone(), prm_rt, true, self_prm.id, self_prm.line);
+      self.addScope(self_prm.name.clone(), prm_rt, self_prm.id, VarKind::PARAM, self_prm.line);
     }
     for(let i = 0;i < node.params.len();++i){
       let prm = node.params.get_ptr(i);
       let prm_rt = self.visit_type(&prm.type);
-      self.addScope(prm.name.clone(), prm_rt, true, prm.id, prm.line);
+      self.addScope(prm.name.clone(), prm_rt, prm.id, VarKind::PARAM, prm.line);
     }
     if(node.body.is_some()){
       let body_rt = self.visit_block(node.body.get());
@@ -1040,6 +1095,21 @@ impl Resolver{
         return;
       }
     }
+    if(!decl.path.eq(&self.unit.path)){
+        let r = self.ctx.create_resolver(&decl.path);
+        for is in &r.unit.imports{
+            let has = false;
+            for ex in &self.extra_imports{
+                if(ex.eq(is)){
+                    has = true;
+                }
+            }
+            if(!has){
+                self.extra_imports.add(is.clone());
+            }
+        }
+    }
+    //todo use its imports to resolve
     let rt = self.visit_type(&decl.type);
     //gen drop method
     self.handle_drop_method(&rt, decl);
@@ -1150,6 +1220,24 @@ impl Resolver{
       }
       return RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)});      
     }
+    if let Type::Lambda(ft_box*) = (node){
+        let ret = Option<Type>::new();
+      if(ft_box.get().return_type.is_some()){
+          ret.set(self.visit_type(ft_box.get().return_type.get()).unwrap());
+      }
+      let ft = LambdaType{
+        return_type: ret,
+        params: List<Type>::new(),
+        captured: List<CapturedInfo>::new(),
+      };
+      for prm in &ft_box.get().params{
+        ft.params.add(self.visit_type(prm).unwrap());
+      }
+      for prm in &ft_box.get().captured{
+        ft.captured.add(CapturedInfo{self.visit_type(&prm.type).unwrap(), prm.name.clone()});
+      }
+      return RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)});      
+    }
     if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
       let imp = self.curMethod.unwrap().parent.as_impl();
       return self.visit_type(&imp.type);
@@ -1160,11 +1248,7 @@ impl Resolver{
       let scope = self.visit_type(simple.scope.get());
       let decl = self.get_decl(&scope).unwrap();
       if (!(decl is Decl::Enum)) {
-          //todo ptr to member function
-          /*for method in decl.get_method(){
-
-          }*/
-          self.err(node.line, format("type scope is not enum: {}", str));
+          return self.member_func_ptr(node, str);
       }
       findVariant(decl, &simple.name);
       let ds = decl.type.print();
@@ -1177,6 +1261,63 @@ impl Resolver{
     let res = self.visit_type2(node, simple, str);
     //print("visit_type2 {} -> {}\n", node, res.desc);
     return res;
+  }
+  
+  func member_func_ptr(self, node: Type*, str: String*): RType{
+      let simp = node.as_simple();
+      if(!simp.args.empty()){
+          self.err(node.line, "generic func ptr");
+      }
+      let mr = MethodResolver::new(self);
+      let arr = mr.get_impl(simp.scope.get(), Option<Type*>::new());
+      for resolv in self.get_resolvers(){
+          resolv.init();
+          mr = MethodResolver::new(resolv);
+          let arr2 = mr.get_impl(simp.scope.get(), Option<Type*>::new());
+          arr.add_list(arr2);
+      }
+      if(arr.empty()){
+          self.err(node.line, format("type scope is not enum: {} {:?}", str, arr));
+      }
+      let list = List<Signature>::new();
+      for pair in &arr{
+          let i = 0;
+          for m in &pair.a.methods{
+              if(m.name.eq(&simp.name)){
+                  let desc = Desc{
+                    kind: RtKind::MethodImpl{i},
+                    path: m.path.clone(),
+                    idx: pair.b
+                  };
+                  list.add(Signature::new(m, desc, self, self));
+              }
+              i+=1;
+          }
+      }
+      if(list.len()>1){
+          //not
+          self.err(node.line, "multiple func ptr");
+      }
+      if(list.empty()){
+          self.err(node.line, format("type scope is not enum: {}", str));
+      }
+      let sig = list.get_ptr(0);
+      let method = sig.m.unwrap();
+      if(method.is_generic){
+        //list.drop();
+        self.err(node.line, format("func ptr is generic: {}", str));
+      }
+      let ret = self.visit_type(&method.type).unwrap();
+      let ft = FunctionType{return_type: ret, params: List<Type>::new()};
+      for prm in &sig.args{
+        let prm_rt = self.visit_type(prm);
+        ft.params.add(prm_rt.unwrap());
+      }
+      let id = Node::new(-1, node.line);
+      let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
+      rt.method_desc = Option::new(sig.desc.clone());
+      list.drop();
+      return rt;
   }
 
   func find_type(self, node: Type*, simple: Simple*): RType{
@@ -1612,7 +1753,7 @@ impl Resolver{
           if (arg.is_ptr) {
               ty = ty.toPtr();
           }
-          self.addScope(arg.name.clone(), self.visit_type(&ty), false, arg.id, arg.line);
+          self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::MATCH, arg.line);
           self.cache.add(arg.id, RType::new(ty));
         }
       }else{
@@ -1818,6 +1959,31 @@ impl Resolver{
     rt.drop();
     self.format_map.add(node.id, info);
   }
+  
+  func visit_mcall(self, node: Expr*, call: MacroCall*): RType{
+      if(call.name.eq("debug_member")){
+          assert(call.args.len() == 2);
+          let src = call.args.get_ptr(0);
+          let fmt = call.args.get_ptr(1);
+          let rt1 = self.visit(src);
+          let rt2 = self.visit(fmt);
+          assert(rt2.type.eq("Fmt*"));
+          let info = FormatInfo::new(node.line);
+          if(rt1.type.is_pointer()){
+              //print hex based address
+              info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
+          }else{
+              //todo take ref of it?
+              info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
+          }
+          self.visit_block(&info.block);
+          self.format_map.add(node.id, info);
+          rt1.drop();
+          rt2.drop();
+          return RType::new("void");
+      }
+      panic("resolve macro {:?}", node);
+  }
 
   func visit_call(self, node: Expr*, call: Call*): RType{
     if(call.scope.is_none()){
@@ -1841,6 +2007,23 @@ impl Resolver{
         fp.drop();
         return res;
       }
+      else if(fp.is_some()){
+          if let Type::Lambda(bx*)=(fp.get().type){
+              let ret = bx.get().return_type.get();
+              let res = self.visit_type(ret);
+              res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
+              for (let i = 0; i < call.args.len(); ++i) {
+                  let arg = self.visit(call.args.get_ptr(i));
+                  let prm = bx.get().params.get_ptr(i);
+                  let cmp = MethodResolver::is_compatible(&arg.type, prm);
+                  if(cmp.is_some()){
+                      self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
+                  }
+              }
+              return res;
+              //self.err(node, "todo call lambda");
+          }
+      }
       fp.drop();
     }
     if(Resolver::is_call(call, "std", "debug") || Resolver::is_call(call, "std", "debug2")){
@@ -1855,14 +2038,15 @@ impl Resolver{
       let info = FormatInfo::new(node.line);
       let elem = &rt1.type;
       if(elem.is_pointer()){
-        let elem2 = elem.elem();
-        if(elem2.is_pointer() || call.name.eq("debug2")){
+        let inner = elem.elem();
+        if(inner.is_pointer() || call.name.eq("debug2")){
           //print hex based address
           info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
         }else{
           info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
         }
       }else{
+        //todo take ref of it?
         info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
       }
       self.visit_block(&info.block);
@@ -2268,6 +2452,22 @@ impl Resolver{
         let res = self.visit_type(vh.get_type());
         res.vh.drop();
         res.vh = Option::new(vh.clone());
+        if(!self.inLambda.empty()){
+            if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
+                //reference to outer variable
+                let m = self.lambdas.get_ptr(self.inLambda.top()).unwrap();
+                let has = false;
+                for prm in &m.params{
+                    if(prm.name.eq(&vh.name)){
+                        has = true;
+                        break;
+                    }
+                }
+                if(!has){
+                    m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
+                }
+            }
+        }
         return Option::new(res);
       }
     }
@@ -2392,6 +2592,8 @@ impl Resolver{
       return self.visit_infix(node, op, lhs.get(), rhs.get());
     }else if let Expr::Call(call*) = (node){
       return self.visit_call(node, call);
+    }else if let Expr::MacroCall(call*) = (node){
+      return self.visit_mcall(node, call);
     }else if let Expr::Name(name*) = (node){
       return self.visit_name(node, name);
     }else if let Expr::Unary(op*, ebox*) = (node){
@@ -2418,8 +2620,67 @@ impl Resolver{
       return self.visit_block(b.get());
     }else if let Expr::Match(me*) = (node){
       return self.visit_match(node, me.get());
+    }else if let Expr::Lambda(le*) = (node){
+      return self.visit_lambda(node, le);
     }
     panic("visit expr '{:?}'", node);
+  }
+  
+  func visit_lambda(self, expr: Expr*, node: Lambda*): RType{
+      if(node.return_type.is_none()){
+          self.err(expr, "todo lambda infer");
+      }
+      let ret = self.visit_type(node.return_type.get());
+      let m = Method::new(Node::new(expr.line), format("lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
+      self.newScope();
+      let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<CapturedInfo>::new()};
+      for prm in &node.params{
+          let rt = self.visit_type(prm.type.get());
+          m.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
+          lt.params.add(rt.type.clone());
+          self.addScope(prm.name.clone(), rt, prm.id, VarKind::PARAM, expr.line);
+      }
+      self.inLambda.push(expr.id);
+      
+      self.lambdas.add(expr.id, m);
+      
+      let mptr = self.lambdas.get_ptr(&expr.id).unwrap();
+      let plen = mptr.params.len();
+      match (node.body.get()){
+          LambdaBody::Expr(ex*)=>{
+              self.visit(ex);
+              if let Expr::Block(b*)=(ex){
+                  mptr.body = Option::new(AstCopier::clone(b.get(), &self.unit));
+              }else{
+                  mptr.body = Option::new(Block::new(expr.line, expr.line));
+                  mptr.body.get().list.add(Stmt::Expr{.Node::new(expr.line), AstCopier::clone(ex, &self.unit)});
+              }
+          },
+          LambdaBody::Stmt(st*)=>{
+              mptr.body = Option::new(Block::new(expr.line, expr.line));
+              self.visit(st);
+              mptr.body.get().list.add(AstCopier::clone(st, &self.unit));
+         }
+      }
+    
+      //res.vh.set();
+      for(let i=plen;i<mptr.params.len();i+=1){
+          let prm = mptr.params.get_ptr(i);
+          self.err(expr, format("captured params not supported yet '{}'", prm.line));
+          lt.captured.add(CapturedInfo{prm.type.clone(), prm.name.clone()});
+          let c_id = Node::new(expr.line);
+          //res.vh.get().captures.add(Expr::Name{.c_id, prm.name.clone()});
+      }
+      let id = Node::new(-1, expr.line);
+      let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
+      let desc = Desc{RtKind::Lambda{expr.id}, self.unit.path.clone(), -1};
+      res.method_desc = Option::new(desc);
+      print("lambda={:?}\n", mptr);
+      lambdaCnt += 1;
+      self.inLambda.pop();
+      self.dropScope();
+      //ret.drop();
+      return res;
   }
 }
 
@@ -2440,9 +2701,15 @@ func infix_result(l: str, r: str): str{
 //statements-------------------------------------
 impl Resolver{
   func check_return(self, type: Type*, line: i32){
-    let cmp = MethodResolver::is_compatible(type, &self.curMethod.unwrap().type);
+    let ex = Option<Type*>::none();
+    if(!self.inLambda.empty()){
+        ex = Option::new(&self.lambdas.get_ptr(self.inLambda.top()).unwrap().type);
+    }else{
+        ex = Option::new(&self.curMethod.unwrap().type);
+    }
+    let cmp = MethodResolver::is_compatible(type, ex.unwrap());
     if(cmp.is_some()){
-      self.err(line, format("return type mismatch {:?} -> {:?}", type, &self.curMethod.unwrap().type));
+      self.err(line, format("return type mismatch {:?} -> {:?}", type, ex.unwrap()));
     }
   }
 
@@ -2637,7 +2904,7 @@ impl Resolver{
         if (arg.is_ptr) {
             ty = ty.toPtr();
         } 
-        self.addScope(arg.name.clone(), self.visit_type(&ty), false, arg.id, arg.line);
+        self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
         self.cache.add(arg.id, RType::new(ty));
     }
     let rt1 = self.visit_body(is.then.get());
@@ -2645,7 +2912,7 @@ impl Resolver{
     if (is.else_stmt.is_some()) {
         self.newScope();
         let rt2 = self.visit_body(is.else_stmt.get());
-        if(!rt1.type.eq(&rt2.type)){
+        if(!rt1.type.eq(&rt2.type) && !Exit::get_exit_type(is.else_stmt.get()).is_jump()){
           self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
         }
         self.dropScope();
@@ -2695,7 +2962,7 @@ impl Resolver{
     for(let i = 0;i < node.list.len();++i){
       let f = node.list.get_ptr(i);
       let rt = self.visit_frag(f);
-      self.addScope(f.name.clone(), rt, false, f.id, f.line);
+      self.addScope(f.name.clone(), rt, f.id, VarKind::LOCAL, f.line);
     }
   }
 

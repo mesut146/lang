@@ -88,13 +88,14 @@ func bootstrap(cmd: CmdArgs*){
   }
   config.root_dir.set(root.clone());
   let bin = Compiler::compile_dir(config);
-  let bin2 = format("{}/{}", &build, name);
-  File::copy(bin.str(), bin2.str());
-  print("wrote {}\n", bin2);
-  
-  let binc = bin2.cstr();
-  set_as_executable(binc.ptr());
-  binc.drop();
+  if(!is_static){
+    let bin2 = format("{}/{}", &build, name);
+    File::copy(bin.str(), bin2.str());
+    print("wrote {}\n", bin2);
+    let binc = bin2.cstr();
+    set_as_executable(binc.ptr());
+    binc.drop();
+  }
   root.drop();
   bin.drop();
   build.drop();

@@ -54,7 +54,8 @@ enum ScopeType {
     IF,
     ELSE,
     WHILE,
-    FOR
+    FOR,
+    MATCH_CASE
 }
 struct VarScope{
     kind: ScopeType;

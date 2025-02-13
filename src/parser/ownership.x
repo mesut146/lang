@@ -11,6 +11,7 @@ import parser/method_resolver
 import parser/debug_helper
 import parser/printer
 import parser/derive
+import parser/drop_helper
 import std/map
 import std/stack
 
@@ -125,6 +126,10 @@ impl Own{
     func add_scope(self, kind: ScopeType, stmt: Block*): i32{
         let exit = Exit::get_exit_type(stmt);
         return self.add_scope(kind, stmt.line, exit, false);
+    }
+    func add_scope(self, kind: ScopeType, rhs: MatchRhs*): i32{
+        let exit = Exit::get_exit_type(rhs);
+        return self.add_scope(kind, 1/*todo*/, exit, false);
     }
     func set_current(self, id: i32){
         assert(id != -1);
@@ -313,6 +318,10 @@ impl Own{
             }*/
             return;
         }
+        if(scope.kind is ScopeType::MATCH_CASE){
+            //todo
+            return;
+        }
         if(!(scope.kind is ScopeType::ELSE)){
             panic("end {:?}", scope.kind);
         }
@@ -365,7 +374,7 @@ impl Own{
             // print("{}\n", scope_str);
             // scope_str.drop();
             let tmp = printMethod(self.method);
-            self.compiler.get_resolver().err(expr, format("use after move in {}:{}", tmp, line));
+            self.compiler.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
             tmp.drop();
         }
     }

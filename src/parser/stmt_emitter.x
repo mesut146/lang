@@ -53,6 +53,9 @@ impl Compiler{
       }*/
       return stmt.line;
     }
+    func get_end_line(expr: Expr*): i32{
+        return expr.line;
+    }
 
     func get_end_line(body: Body*): i32{
       if let Body::Block(b*)=(body){
@@ -66,6 +69,15 @@ impl Compiler{
       }else{
         panic("");
       }
+    }
+    func get_end_line(rhs: MatchRhs*): i32{
+        if let MatchRhs::STMT(stmt*)=(rhs){
+            return get_end_line(stmt);
+        }
+        if let MatchRhs::EXPR(expr*)=(rhs){
+            return get_end_line(expr);
+        }
+        panic("");
     }
 
     func visit_body(self, body: Body*): Option<Value*>{
@@ -436,7 +448,7 @@ impl Compiler{
           }else{
             CreateStore(val, ptr);
           }
-        }else if(type.is_pointer() || type.is_fpointer()){
+        }else if(type.is_pointer() || type.is_fpointer() || type.is_lambda()){
           let val = self.get_obj_ptr(&f.rhs);
           CreateStore(val, ptr);
         } else{

@@ -7,30 +7,35 @@ import std/map
 import std/libc
 
 struct Parser{
-  path: String;
-  buf: String;
+  //path: String;
+  //buf: String;
   tokens: List<Token>;
   pos: i32;
   unit: Option<Unit*>;
+  lexer: Lexer;
 }
 
 impl Parser{
   func from_path(path: String): Parser{
     let lexer = Lexer::from_path(path.clone());
-    let res = Parser{path, lexer.buf.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
-    res.fill(lexer);
+    let res = Parser{/*path, lexer.buf.clone(),*/ List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    res.fill();
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf, line);
-    let res = Parser{lexer.path.clone(), lexer.buf.clone(),  List<Token>::new(), 0, Option<Unit*>::new()};
-    res.fill(lexer);
+    let res = Parser{/*lexer.path.clone(), lexer.buf.clone(), */ List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    res.fill();
     return res;
   }
   
-  func fill(self, lexer: Lexer) {
+  func path(self): str{
+      return self.lexer.path.str();
+  }
+  
+  func fill(self) {
     while (true) {
-        let t = lexer.next();
+        let t = self.lexer.next();
         if (t.is(TokenType::EOF_)){
           t.drop();
           break;
@@ -41,7 +46,7 @@ impl Parser{
         }
         self.tokens.add(t);
     }
-    lexer.drop();
+    //lexer.drop();
   }
     
   func has(self): bool{
@@ -98,18 +103,18 @@ impl Parser{
   func consume(self, tt: TokenType): Token*{
     let t: Token* = self.pop();
     if(t.type is tt) return t;
-    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.path, t.line, t, &tt);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, t.line, t, &tt);
   }
 
   func consume_ident(self, val: str): Token*{
     let tok = self.consume(TokenType::IDENT);
     if(tok.value.eq(val)) return tok;
-    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.path, tok.line, tok, val);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, tok.line, tok, val);
   }
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{}\n`{}`\n", &self.path, line, get_line(self.buf.str(), line));
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line));
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -118,7 +123,7 @@ impl Parser{
   }
     
     func parse_unit(self): Unit{
-      let unit = Unit::new(self.path.clone());
+      let unit = Unit::new(self.lexer.path.clone());
       self.unit = Option::new(&unit);
       while(self.has() && self.is(TokenType::IMPORT)){
         unit.imports.add(self.parse_import());
@@ -326,7 +331,7 @@ impl Parser{
          body: body,
          is_generic: is_generic,
          parent: parent,
-         path: self.path.clone(),
+         path: self.lexer.path.clone(),
          is_vararg: is_vararg
       };
     }
@@ -360,7 +365,7 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      let path = self.path.clone();
+      let path = self.lexer.path.clone();
       return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, fields: fields};
     }
     
@@ -397,7 +402,7 @@ impl Parser{
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      let path = self.path.clone();
+      let path = self.lexer.path.clone();
       return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, variants: variants};
     }
     
@@ -623,9 +628,18 @@ impl Parser{
         self.consume(TokenType::RPAREN);
       }
       self.consume(TokenType::EQ);
-      self.consume(TokenType::LPAREN);
-      let rhs = self.parse_expr();
-      self.consume(TokenType::RPAREN);
+      let rhs_opt = Option<Expr>::none();
+      if(self.is(TokenType::LPAREN)){
+          self.consume(TokenType::LPAREN);
+          let rhs = self.parse_expr();
+          rhs_opt.set(rhs);
+          self.consume(TokenType::RPAREN);
+      }
+      else{
+          let rhs = self.prim2(false);
+          rhs_opt.set(rhs);
+      }
+      let rhs = rhs_opt.unwrap();
       let then = self.parse_body();
       let els = Ptr<Body>::new();
       if(self.is(TokenType::ELSE)){
@@ -718,7 +732,6 @@ impl Parser{
     
     func parse_frag(self): Fragment{
       let nm = self.popv();
-      dbg(nm.eq("xxx"), 32);
       let type = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
@@ -897,10 +910,50 @@ impl Parser{
     self.consume(TokenType::RBRACE);
     return Expr::Match{.id, Box::new(res)};
   }
+  
+  func parse_lambda(self): Expr{
+      let id = self.node();
+      let params = List<LambdaParam>::new();
+      if(self.is(TokenType::OROR)){
+          self.consume(TokenType::OROR);
+      }else{
+          self.consume(TokenType::OR);
+          while(!self.is(TokenType::OR)){
+              let nm = self.name();
+              if(self.is(TokenType::COLON)){
+                  self.consume(TokenType::COLON);
+                  let ty = self.parse_type();
+                  params.add(LambdaParam{.self.node(), nm, Option::new(ty)});
+              }else{
+                  params.add(LambdaParam{.self.node(), nm, Option<Type>::none()});
+              }
+              if(self.is(TokenType::COMMA)){
+                  self.consume(TokenType::COMMA);
+              }
+          }
+          self.consume(TokenType::OR);
+      }
+      let ret = Option<Type>::new();
+      if(self.is(TokenType::COLON)){
+          self.consume(TokenType::COLON);
+          let ty = self.parse_type();
+          ret.set(ty);
+      }
+      let body = Option<LambdaBody>::none();
+      if(self.is_stmt_noexpr()){
+          body = Option::new(LambdaBody::Stmt{self.parse_stmt()});
+      }else{
+          body = Option::new(LambdaBody::Expr{self.parse_expr()});
+      }
+      return Expr::Lambda{.id, Lambda{params, ret, Box::new(body.unwrap())}};
+  }
 
   func prim(self, allow_obj: bool): Expr{
     let tok = self.peek();
     let n = self.node();
+    if(self.is(TokenType::OR) || self.is(TokenType::OROR)){
+        return self.parse_lambda();
+    }
     if(self.is(TokenType::FUNC)){
       return Expr::Type{.n, self.parse_func_type()};
     }

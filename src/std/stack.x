@@ -12,6 +12,10 @@ impl<T> Stack<T>{
     func len(self): i64{
         return self.list.len() as i64;
     }
+    
+    func empty(self): bool{
+        return self.len() == 0;
+    }
 
     func push(self, val: T){
         self.list.add(val);

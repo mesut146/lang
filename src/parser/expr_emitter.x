@@ -10,6 +10,7 @@ import parser/printer
 import parser/ownership
 import parser/own_model
 import parser/derive
+import parser/drop_helper
 import std/map
 import std/stack
 
@@ -78,6 +79,9 @@ impl Compiler{
       if let Expr::Call(mc*)=(node){
         return self.visit_call(node, mc);
       }
+      if let Expr::MacroCall(mc*)=(node){
+        return self.visit_mcall(node, mc);
+      }
       if let Expr::ArrAccess(aa*)=(node){
         return self.visit_array_access(node, aa);
       }
@@ -88,7 +92,16 @@ impl Compiler{
         return self.visit_access(node, scope.get(), name);
       }
       if let Expr::Type(type*)=(node){
-        return self.simple_enum(node ,type);
+          let r = self.get_resolver();
+          let rt = r.visit(node);
+          if(rt.type.is_fpointer() && rt.method_desc.is_some()){
+              let target: Method* = r.get_method(&rt).unwrap();
+              let proto = self.protos.get().get_func(target);
+              rt.drop();
+              return proto as Value*;
+          }
+          rt.drop();
+          return self.simple_enum(node, type);
       }
       if let Expr::Is(lhs*, rhs*)=(node){
         return self.visit_is(lhs.get(), rhs.get());
@@ -102,6 +115,13 @@ impl Compiler{
           return ConstantPointerNull_get(getPointerTo(getVoidTy()));
         }
         return res.unwrap();
+      }
+      if let Expr::Lambda(le*)=(node){
+          let r = self.get_resolver();
+          let m = r.lambdas.get_ptr(&node.id).unwrap();
+          let proto = self.protos.get().get_func(m);
+          
+          return proto as Value*;
       }
       panic("expr {:?}", node);
     }
@@ -178,7 +198,9 @@ impl Compiler{
             self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
             ++arg_idx;
           }
+          self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
           let rhs_val = self.visit_match_rhs(&case.rhs);
+          self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
           let rhs_end_bb = GetInsertBlock();
           let exit = Exit::get_exit_type(&case.rhs);
           if(!exit.is_jump()){
@@ -186,7 +208,11 @@ impl Compiler{
               let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
               let val = rhs_val.unwrap();
               if(!is_struct(&match_type)){
-                  val = self.cast2(rhs_val.unwrap(), &rt2.type, &match_type);
+                  //fix
+                  if(match_type.is_prim() && Value_isPointerTy(val)){
+                      val = CreateLoad(self.mapType(&match_type), val);
+                  }
+                  val = self.cast2(val, &rt2.type, &match_type);
               }
               rhs_val.set(val);
               infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
@@ -212,12 +238,7 @@ impl Compiler{
         for info in &infos{
           //print("val=\n");
           //Value_dump(info.val);
-          if(is_struct(&match_type)){
-            phi_addIncoming(phi, info.val, info.bb);
-          }else{
-            let val = info.val;
-            phi_addIncoming(phi, val, info.bb);
-          }
+          phi_addIncoming(phi, info.val, info.bb);
         }
         res = Option::new(phi as Value*);
       }
@@ -554,7 +575,13 @@ impl Compiler{
     func is_drop_call2(mc: Call*): bool{
       return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
     }
-  
+    func visit_mcall(self, expr: Expr*, mc: MacroCall*): Value*{
+        let resolver = self.get_resolver();
+        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let res = self.visit_block(&info.block);
+        if(res.is_some()) return res.unwrap();
+        return getVoidTy() as Value*;
+    }
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let env = getenv2("ignore_drop");
@@ -758,7 +785,7 @@ impl Compiler{
       let resolver = self.get_resolver();
       let rt = resolver.visit(expr);
       if(rt.fp_info.is_some()){
-        let ft = rt.fp_info.get();
+          let ft = rt.fp_info.get();
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
           let proto = self.make_proto(ft);
@@ -791,6 +818,49 @@ impl Compiler{
           vector_Value_delete(args);
           rt.drop();
           return res as Value*;
+      }
+      if(rt.lambda_call.is_some()){
+          let val = self.visit_name(expr, &mc.name, false);
+          val = CreateLoad(getPtr(), val);
+          let ft0 = Option<LambdaType*>::none();
+          if let Type::Lambda(bx*)=(&rt.lambda_call.get().type){
+              ft0.set(bx.get());
+          }else{
+              panic("impossible");
+              //Option<LambdaType>::none().get()
+          }
+          let ft = ft0.unwrap();
+          let proto = self.make_proto(ft);
+          let args = vector_Value_new();
+          let paramIdx = 0;
+          for arg in &mc.args{
+            let at = resolver.getType(arg);
+            if (at.is_any_pointer()) {
+              vector_Value_push(args, self.get_obj_ptr(arg));
+            }
+            else if (is_struct(&at)) {
+              let de = is_deref(arg);
+              if (de.is_some()) {
+                vector_Value_push(args, self.get_obj_ptr(de.unwrap()));
+              }
+              else {
+                vector_Value_push(args, self.visit(arg));
+              }
+            } else {
+                let pt0 = ft.params.get_ptr(paramIdx);
+                let pt = resolver.visit_type(pt0).unwrap();
+                vector_Value_push(args, self.cast(arg, &pt));
+                pt.drop();
+            }
+            ++paramIdx;
+            at.drop();
+          }
+          //vector_Value_push(args, size);
+          let res = CreateCall_ft(proto, val, args);
+          vector_Value_delete(args);
+          rt.drop();
+          return res as Value*;
+          //resolver.err(expr, "lambda");
       }
       if(!rt.is_method()){
         resolver.err(expr, format("mc no method"));
@@ -1069,35 +1139,6 @@ impl Compiler{
       phi_addIncoming(phi, rbit, then);
       return Pair::new(CreateZExt(phi as Value*, getInt(8)), next);
     }
-
-    func get_lhs(self, expr: Expr*): Value*{
-      if let Expr::Name(name*)=(expr){
-        return self.visit_name(expr, name, false);
-      }
-      return self.visit(expr);
-    }
-  
-    func visit_assign(self, l: Expr*, r: Expr*): Value*{
-      if(l is Expr::Infix) panic("assign lhs");
-      //let lhs = Option<Value*>::new();
-      let type = self.getType(l);
-      if let Expr::Unary(op*,l2*)=(l){
-        if(op.eq("*")){
-          let lhs = self.get_obj_ptr(l2.get());
-          //let rt = self.get_resolver().visit(l);
-          self.setField(r, &type, lhs, Option::new(l));
-          self.own.get().do_assign(l, r);
-          type.drop();
-          return lhs;
-        }
-      }
-      let lhs = self.get_lhs(l);
-      //todo setField should free lhs
-      self.setField(r, &type, lhs, Option::new(l));
-      self.own.get().do_assign(l, r);
-      type.drop();
-      return lhs;
-    }
     
     func visit_lit(self, expr: Expr*, node: Literal*): Value*{
       if(node.kind is LitKind::INT){
@@ -1257,7 +1298,7 @@ impl Compiler{
       }
       let rv = self.cast(r, type);
       if(op.eq("+=")){
-        let lv = self.visit(l);
+        let lv = self.get_lhs(l);
         let lval = self.loadPrim(l);
         if(type.is_float()){
           let tmp = CreateFAdd(lval, rv);
@@ -1363,5 +1404,39 @@ impl Compiler{
         return CreateAShr(lv, rv);
       }
       panic("infix '{}'\n", op);
+    }
+    
+    func get_lhs(self, expr: Expr*): Value*{
+      if let Expr::Unary(op*, l2*)=(expr){
+        if(op.eq("*")){
+          let lhs = self.get_obj_ptr(l2.get());
+          return lhs;
+        }
+      }
+      if let Expr::Name(name*)=(expr){
+        return self.visit_name(expr, name, false);
+      }
+      return self.visit(expr);
+    }
+  
+    func visit_assign(self, l: Expr*, r: Expr*): Value*{
+      if(l is Expr::Infix) panic("assign lhs");
+      //let lhs = Option<Value*>::new();
+      let type = self.getType(l);
+      if let Expr::Unary(op*,l2*)=(l){
+        if(op.eq("*")){
+          let lhs = self.get_obj_ptr(l2.get());
+          self.setField(r, &type, lhs, Option::new(l));
+          self.own.get().do_assign(l, r);
+          type.drop();
+          return lhs;
+        }
+      }
+      let lhs = self.get_lhs(l);
+      //todo setField should free lhs
+      self.setField(r, &type, lhs, Option::new(l));
+      self.own.get().do_assign(l, r);
+      type.drop();
+      return lhs;
     }
 }//end impl

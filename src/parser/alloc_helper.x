@@ -156,6 +156,20 @@ impl AllocHelper{
       let rhs: Option<Value*> = self.visit(&f.rhs);
     }
   }
+  
+  func visit_mcall(self, node: Expr*, call: MacroCall*): Option<Value*>{
+      let resolver = self.c.get_resolver();
+      let info = resolver.get_macro(node);
+      let rt = resolver.visit(node);
+      self.visit(&info.block);
+      if(rt.type.is_void()){
+          rt.drop();
+          return Option<Value*>::new();
+      }
+      let res = Option::new(self.alloc_ty(&rt.type, node));
+      rt.drop();
+      return res;
+  }
 
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.c.get_resolver();
@@ -304,6 +318,9 @@ impl AllocHelper{
     if let Expr::Call(call*)=(node){
       return self.visit_call(node, call);
     }
+    if let Expr::MacroCall(call*)=(node){
+      return self.visit_mcall(node, call);
+    }
     if let Expr::Obj(type*, args*)=(node){
       //get full type
       let rt = self.c.get_resolver().visit(node);
@@ -368,6 +385,13 @@ impl AllocHelper{
       }
       rt.drop();
       return res;
+    }
+    if let Expr::Lambda(le*)=(node){
+        let r = self.c.get_resolver();
+        let m = r.lambdas.get_ptr(&node.id).unwrap();
+        let ty = r.getType(node);
+        res.set(self.alloc_ty(&ty, node));
+        return res;
     }
     panic("alloc {:?}\n", node);
   }
