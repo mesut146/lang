@@ -41,6 +41,23 @@ func parse_float(){
   //printf("x=%f\n", x);
 }
 
+func time_test(){
+   let tp: timeval = timeval{0, 0};
+   gettimeofday(&tp, ptr::null<i8>());
+   print("time={:?} ms={}\n", tp, tp.ms());
+}
+
+func measure(){
+    let tp: timeval = timeval{0, 0};
+    gettimeofday(&tp, ptr::null<i8>());
+    print("time1={:?} ms={}\n", tp, tp.ms());
+    sleep(2);
+    let end: timeval = timeval{0, 0};
+    gettimeofday(&end, ptr::null<i8>());
+    print("time2={:?} ms={}\n", end, end.ms());
+    print("diff={:?} sec={}\n", end.ms() - tp.ms(), end.tv_sec-tp.tv_sec);
+}
+
 func main(){
   parse_float();
   let cur = resolve(".");
@@ -49,5 +66,7 @@ func main(){
   write_test();
   read_test();
   list_test();
+  time_test();
+  measure();
   print("libc_test done\n");
 }

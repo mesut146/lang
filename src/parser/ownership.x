@@ -13,6 +13,7 @@ import parser/printer
 import parser/derive
 import parser/drop_helper
 import std/map
+import std/hashmap
 import std/stack
 
 func hasenv(key: str): bool{
@@ -107,7 +108,7 @@ impl Own{
         let parent = self.get_scope();
         //copy parent states
         for pair in &parent.state_map{
-            scope.state_map.add(pair.a.clone(), pair.b);
+            scope.state_map.add(pair.a.clone(), pair.b.clone());
         }
         scope.parent = parent.id;
         let id = scope.id;      
@@ -136,13 +137,13 @@ impl Own{
         self.cur_scope = id;
     }
     func get_scope(self): VarScope*{
-        return self.scope_map.get_ptr(&self.cur_scope).unwrap();
+        return self.scope_map.get(&self.cur_scope).unwrap();
     }
     func get_scope(self, id: i32): VarScope*{
-        return self.scope_map.get_ptr(&id).unwrap();
+        return self.scope_map.get(&id).unwrap();
     }
     func get_var(self, id: i32): Variable*{
-        let opt = self.var_map.get_ptr(&id);
+        let opt = self.var_map.get(&id);
         if(opt.is_none()){
             panic("var not found id={} scope={:?}", id, self.get_scope(self.main_scope).print(self));
         }
@@ -171,7 +172,6 @@ impl Own{
     }
     func add_prm(self, p: Param*, ptr: Value*){
         //print("add_prm {}:{} line={}\n", p.name, p.type, p.line);
-        dbg(p.name.eq("pp"), 22);
         if(!self.is_drop_or_ptr(&p.type)) return;
         let var = Variable{
             name: p.name.clone(),
@@ -304,7 +304,7 @@ impl Own{
         if(scope.kind is ScopeType::WHILE || scope.kind is ScopeType::FOR){
             //copy states to parent directly
             for pair in &scope.state_map{
-                self.update_state(pair.a.clone(), pair.b, parent);
+                self.update_state(pair.a.clone(), pair.b.clone(), parent);
             }
             return;
         }
@@ -329,7 +329,7 @@ impl Own{
         if(!scope.exit.is_jump()){
             for pair in &scope.state_map{//Pair<Rhs, StateType>*
                 if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
-                    self.update_state(pair.a.clone(), pair.b, parent);
+                    self.update_state(pair.a.clone(), pair.b.clone(), parent);
                 }
             }
         }
@@ -338,14 +338,14 @@ impl Own{
         if(!if_scope.exit.is_jump()){
             for pair in &if_scope.state_map{
                 if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
-                    self.update_state(pair.a.clone(), pair.b, parent);
+                    self.update_state(pair.a.clone(), pair.b.clone(), parent);
                 }
             }
         }
         //both assign -> parent
         for pair in &scope.state_map{//Pair<Rhs, StateType>*
             if(pair.b is StateType::ASSIGNED){
-                let if_state = if_scope.state_map.get_ptr(&pair.a);
+                let if_state = if_scope.state_map.get(pair.a);
                 if(if_state.is_some() && if_state.unwrap() is StateType::ASSIGNED){
                     self.update_state(pair.a.clone(), StateType::ASSIGNED, parent);
                 }
@@ -362,7 +362,6 @@ impl Own{
         }
         rt.drop();
         let scope = self.get_scope();
-        //dbg(expr.line == 266, 100);
         if(print_check){
             print("check {:?} line:{}\n", expr, expr.line);
         }
@@ -388,7 +387,7 @@ impl Own{
 
     func get_state(self, rhs: Rhs*, scope: VarScope*): State{
         //print("get_state {} from {}\n", rhs, scope.print_info());
-        let opt = scope.state_map.get_ptr(rhs);
+        let opt = scope.state_map.get(rhs);
         if(opt.is_none()){
             if(rhs is Rhs::FIELD){
                 return State::new(StateType::NONE, scope);
@@ -410,7 +409,7 @@ impl Own{
                 if(!(pair.b is StateType::MOVED)){
                     continue;
                 }
-                if let Rhs::FIELD(scp*, name*) = (&pair.a){
+                if let Rhs::FIELD(scp*, name*) = (pair.a){
                     if(scp.id == rhs.get_id()){
                         return State::new(StateType::MOVED_PARTIAL, scope);
                     }
@@ -495,7 +494,7 @@ impl Own{
         if(!move_ptr_field) return;
         for pair in &scope.state_map{
             if let StateType::MOVED(mv_line) = (pair.b){
-                if let Rhs::FIELD(scp*, name*) = (&pair.a){
+                if let Rhs::FIELD(scp*, name*) = (pair.a){
                     if(scp.type.is_pointer()){
                         self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}", mv_line));
                     }

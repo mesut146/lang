@@ -10,7 +10,10 @@ import parser/copier
 import parser/derive
 import parser/ownership
 import parser/drop_helper
+import parser/progress
 import std/map
+import std/hashmap
+import std/hashset
 import std/libc
 import std/io
 import std/stack
@@ -26,7 +29,7 @@ func verbose_stmt(): bool{
 }
 
 struct Context{
-  map: Map<String, Box<Resolver>>;
+  map: HashMap<String, Box<Resolver>>;
   prelude: List<String>;
   std_path: Option<String>;
   search_paths: List<String>;
@@ -34,6 +37,7 @@ struct Context{
   verbose: bool;
   verbose_all: bool;
   stack_trace: bool;
+  prog: Progress;
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
@@ -43,7 +47,7 @@ impl Context{
       pre.add(arr[i].str());
     }
     let res = Context{
-       map: Map<String, Box<Resolver>>::new(),
+       map: HashMap<String, Box<Resolver>>::new(),
        prelude: pre,
        std_path: std_path,
        search_paths: List<String>::new(),
@@ -51,6 +55,7 @@ impl Context{
        verbose: true,
        verbose_all: false,
        stack_trace: getenv2("TRACE").is_some(),
+       prog: Progress::new(),
     };
     return res;
   }
@@ -141,29 +146,90 @@ struct GlobalInfo{
   rt: RType;
   path: String;
 }
+impl Hash for GlobalInfo{
+    func hash(self): i64{
+        return self.path.hash() * 31 + self.name.hash();
+    }
+}
+impl Eq for GlobalInfo{
+    func eq(self, o: GlobalInfo*): bool{
+        return self.path.eq(&o.path) && self.name.eq(&o.name);
+    }
+}
 
 struct Resolver{
   unit: Unit;
   is_resolved: bool;
   is_init: bool;
-  typeMap: Map<String, RType>;
-  cache: Map<i32, RType>;
+  typeMap: HashMap<String, RType>;
+  cache: HashMap<i32, RType>;
   curMethod: Option<Method*>;
   curImpl: Option<Impl*>;
   scopes: List<Scope>;
   ctx: Context*;
-  used_methods: List<Method*>;
+  used_methods: HashMap<String, Method*>;
+  //used_methods: List<Method*>;
   generated_methods: List<Box<Method>>;
   inLoop: i32;
+  //used_types: HashSet<RType>;
   used_types: List<RType>;
   generated_decl: List<Box<Decl>>;
-  format_map: Map<i32, FormatInfo>;
-  glob_map: List<GlobalInfo>;//external glob name->local rt for it, (cloned)
-  drop_map: Map<String, Desc>;
-  block_map: Map<i32, Block*>;
-  lambdas: Map<i32, Method>;
+  format_map: HashMap<i32, FormatInfo>;
+  glob_map: HashSet<GlobalInfo>;//external glob name->local rt for it, (cloned)
+  drop_map: HashMap<String, Desc>;
+  block_map: HashMap<i32, Block*>;
+  lambdas: HashMap<i32, Method>;
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
+}
+
+func dump(r: Resolver*){
+    print("typeMap len={}\n", r.typeMap.len());
+    /*for p in &r.typeMap{
+        print("typeMap {:?} => {:?}\n", p.a, p.b.type);
+    }*/
+    print("---------\n");
+    //r.typeMap.dump();
+}
+impl Resolver{
+  func new(path: String, ctx: Context*): Resolver{
+    if(verbose_drop){
+      print("Resolver::new {}\n", &path);
+    }
+    let parser = Parser::from_path(path);
+    let unit = parser.parse_unit();
+    parser.drop();
+    if(print_unit){
+      print("print_unit\n");
+      print("unit={:?}\n", unit);
+    }
+    
+    let res = Resolver{unit: unit,
+      is_resolved: false,
+      is_init: false,
+      typeMap: HashMap<String, RType>::new(),
+      cache: HashMap<i32, RType>::new(),
+      curMethod: Option<Method*>::new(),
+      curImpl: Option<Impl*>::new(),
+      scopes: List<Scope>::new(),
+      ctx: ctx,
+      used_methods: HashMap<String, Method*>::new(),
+      //used_methods: List<Method*>::new(),
+      generated_methods: List<Box<Method>>::new(),
+      inLoop: 0,
+      //used_types: HashSet<RType>::new(),
+      used_types: List<RType>::new(),
+      generated_decl: List<Box<Decl>>::new(),
+      format_map: HashMap<i32, FormatInfo>::new(),
+      glob_map: HashSet<GlobalInfo>::new(),
+      drop_map: HashMap<String, Desc>::new(),
+      block_map: HashMap<i32, Block*>::new(),
+      lambdas: HashMap<i32, Method>::new(),
+      inLambda: Stack<i32>::new(),
+      extra_imports: List<ImportStmt>::new(),
+    };
+    return res;
+  }
 }
 impl Drop for Resolver{
   func drop(*self){
@@ -291,7 +357,19 @@ impl Clone for RType{
     };
   }
 }
-
+impl Hash for RType{
+  func hash(self): i64{
+    let s = self.type.print();
+    let h = s.hash();
+    s.drop();
+    return h;
+  }
+}
+impl Eq for RType{
+  func eq(self, o: RType*): bool {
+      return self.type.eq(&o.type);
+  }
+}
 enum TypeKind{
   Array,
   Slice,
@@ -325,13 +403,14 @@ impl Context{
     self.search_paths.add(path.str());
   }
   func create_resolver(self, path: String*): Resolver*{
-    let res = self.map.get_ptr(path);
+    let res = self.map.get(path);
     if(res.is_some()){
       return res.unwrap().get();
     }
     let r = Resolver::new(path.clone(), self);
-    let pair = self.map.add(path.clone(), Box::new(r));
-    return pair.b.get();
+    let p = path.clone();
+    self.map.add(p, Box::new(r));
+    return self.map.get(path).unwrap().get();
   }
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
@@ -345,6 +424,7 @@ impl Context{
     suffix.append(".x");
     for(let i = 0;i < self.search_paths.len();++i){
       let path = self.search_paths.get_ptr(i).clone();
+      path.append("/");
       path.append(&suffix);
       if(is_file(path.str())){
         suffix.drop();
@@ -403,42 +483,6 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
 }
 
 impl Resolver{
-  func new(path: String, ctx: Context*): Resolver{
-    if(verbose_drop){
-      print("Resolver::new {}\n", &path);
-    }
-    let parser = Parser::from_path(path);
-    let unit = parser.parse_unit();
-    parser.drop();
-    if(print_unit){
-      print("print_unit\n");
-      print("unit={:?}\n", unit);
-    }
-    
-    let res = Resolver{unit: unit,
-      is_resolved: false,
-      is_init: false,
-      typeMap: Map<String, RType>::new(),
-      cache: Map<i32, RType>::new(),
-      curMethod: Option<Method*>::new(),
-      curImpl: Option<Impl*>::new(),
-      scopes: List<Scope>::new(),
-      ctx: ctx,
-      used_methods: List<Method*>::new(),
-      generated_methods: List<Box<Method>>::new(),
-      inLoop: 0,
-      used_types: List<RType>::new(),
-      generated_decl: List<Box<Decl>>::new(),
-      format_map: Map<i32, FormatInfo>::new(),
-      glob_map: List<GlobalInfo>::new(),
-      drop_map: Map<String, Desc>::new(),
-      block_map: Map<i32, Block*>::new(),
-      lambdas: Map<i32, Method>::new(),
-      inLambda: Stack<i32>::new(),
-      extra_imports: List<ImportStmt>::new(),
-    };
-    return res;
-  }
 
   func newScope(self){
     let sc = Scope::new();
@@ -551,9 +595,14 @@ impl Resolver{
       }
     }
     for lm in &self.lambdas{
-        self.visit_method(&lm.b);
+        self.visit_method(lm.b);
     }
     self.dropScope();//globals
+    self.prog().resolve_done();
+  }
+  
+  func prog(self): Progress*{
+      return &self.ctx.prog;
   }
   
   func init_globals(self){
@@ -575,27 +624,6 @@ impl Resolver{
             type.drop();
         }
         self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
-    }
-  }
-
-  func dump_types(self){
-    print("{} types\n", self.typeMap.len());
-    for(let i = 0;i < self.typeMap.len();++i){
-      let pair = self.typeMap.get_pair_idx(i).unwrap();
-      print("{} -> {:?}\n", pair.a, pair.b.type);
-    }
-  }
-
-  func dump(self){
-    //print("---dump---");
-    print("scope count {}\n", self.scopes.len());
-    for(let i = 0;i < self.scopes.len();++i){
-      let scope = self.scopes.get_ptr(i);
-      print("scope {} has {} vars\n", i + 1, scope.list.len());
-      for(let j = 0;j < scope.list.len();++j){
-        let vh = scope.list.get_ptr(j);
-        print("{}:{:?}\n", vh.name, vh.type);
-      }
     }
   }
 
@@ -1007,6 +1035,7 @@ impl Resolver{
     if(node.is_generic){
       return;
     }
+    self.prog().resolve_begin(node);
     self.curMethod = Option::new(node);
     let res = self.visit_type(&node.type);
     res.drop();
@@ -1024,13 +1053,14 @@ impl Resolver{
     if(node.body.is_some()){
       let body_rt = self.visit_block(node.body.get());
       let exit = Exit::get_exit_type(node.body.get());
-      if (!node.type.is_void() && !exit.is_exit()) {
+      if (!node.type.is_void() && !exit.is_exit() && !exit.is_unreachable()) {
         self.check_return(&body_rt.type, node.body.get().end_line);
       }
       exit.drop();
     }
     self.dropScope();
     self.curMethod = Option<Method*>::new();
+    self.prog().resolve_end(node);
   }
 
   func unwrap_mc(expr: Expr*): Call*{
@@ -1078,19 +1108,24 @@ impl Resolver{
 
   func print_used(self){
     print("used_types=[");
-    for(let i = 0;i < self.used_types.len();++i){
-      let used: RType* = self.used_types.get_ptr(i);
+    let i=0;
+    for used in &self.used_types{
       if(i > 0){
         print(", ");
       }
       print("{:?}", used.type);
+      i+=1;
     }
     print("]\n");
   }
 
   func add_used_decl(self, decl: Decl*){
-    for(let i = 0;i < self.used_types.len();++i){
-      let used: RType* = self.used_types.get_ptr(i);
+      let rt = self.visit_type(&decl.type);
+      /*if(!self.used_types.add(rt.clone())){
+          rt.drop();
+          return;
+      }*/
+    for used in &self.used_types{
       if(used.type.eq(&decl.type)){
         return;
       }
@@ -1110,12 +1145,14 @@ impl Resolver{
         }
     }
     //todo use its imports to resolve
-    let rt = self.visit_type(&decl.type);
+    
     //gen drop method
     self.handle_drop_method(&rt, decl);
+    self.used_types.add(rt);
+    
     //print("add_used_decl {}, {}\n", decl.type, self.unit.path);
     //self.print_used();
-    self.used_types.add(rt);
+    
     if(decl.base.is_some()){
       self.visit_type(decl.base.get()).drop();
     }
@@ -1135,22 +1172,16 @@ impl Resolver{
         }
       }
     }
+    //rt.drop();
   }
   
   func addUsed(self, m: Method*){
     let mng = mangle(m);
-    for(let i = 0;i < self.used_methods.len();++i){
-      let prev = *self.used_methods.get_ptr(i);
-      let mng2 = mangle(prev);
-      if(mng2.eq(mng.str())){
+    if(self.used_methods.contains(&mng)){
         mng.drop();
-        mng2.drop();
         return;
-      }
-      mng2.drop();
     }
-    mng.drop();
-    self.used_methods.add(m);
+    self.used_methods.add(mng, m);
     //let last = *self.used_methods.last();
     //Fmt::str(last);
   }
@@ -1183,7 +1214,7 @@ impl Resolver{
   }
 
   func visit_type_str(self, node: Type*, str: String*): RType{
-    let cached = self.typeMap.get_ptr(str);
+    let cached = self.typeMap.get(str);
     if(cached.is_some()){
       return cached.unwrap().clone();
     }
@@ -1228,13 +1259,13 @@ impl Resolver{
       let ft = LambdaType{
         return_type: ret,
         params: List<Type>::new(),
-        captured: List<CapturedInfo>::new(),
+        captured: List<Type>::new(),
       };
       for prm in &ft_box.get().params{
         ft.params.add(self.visit_type(prm).unwrap());
       }
       for prm in &ft_box.get().captured{
-        ft.captured.add(CapturedInfo{self.visit_type(&prm.type).unwrap(), prm.name.clone()});
+        ft.captured.add(self.visit_type(prm).unwrap());
       }
       return RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)});      
     }
@@ -1322,9 +1353,15 @@ impl Resolver{
 
   func find_type(self, node: Type*, simple: Simple*): RType{
     let name = &simple.name;
-    if (self.typeMap.contains(name)) {
-      let rt: RType* = self.typeMap.get_ptr(name).unwrap();
+    if(node.line == 188 && name.eq("nlink_t")){
+        let x = 10;
+    }
+    let opt = self.typeMap.get(name);
+    if (opt.is_some()) {
+      let rt: RType* = opt.unwrap();
       return rt.clone();
+    }else{
+      //self.typeMap.get2(name);
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
@@ -1397,7 +1434,7 @@ impl Resolver{
     for (let i = 0;i < arr.len();++i) {
       let resolver: Resolver* = *arr.get_ptr(i);
       resolver.init();
-      let cached = resolver.typeMap.get_ptr(&type.name);
+      let cached = resolver.typeMap.get(&type.name);
       if (cached.is_some()) {
         let res: RType = cached.unwrap().clone();
         let decl = self.get_decl(&res);
@@ -1425,7 +1462,7 @@ impl Resolver{
   }
 
   func getTypeCached(self, str: String*): RType{
-    let res = self.typeMap.get_ptr(str);
+    let res = self.typeMap.get(str);
     if(res.is_some()){
       return res.unwrap().clone();
     }
@@ -2064,7 +2101,7 @@ impl Resolver{
       assert(call.args.len() == 1);
       let arg = call.args.get_ptr(0).print();
       let id = i32::parse(arg.str());
-      let blk: Block* = *self.block_map.get_ptr(&id).unwrap();
+      let blk: Block* = *self.block_map.get(&id).unwrap();
       self.visit_block(blk);
       arg.drop();
       return RType::new("void");
@@ -2455,7 +2492,7 @@ impl Resolver{
         if(!self.inLambda.empty()){
             if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
                 //reference to outer variable
-                let m = self.lambdas.get_ptr(self.inLambda.top()).unwrap();
+                let m = self.lambdas.get(self.inLambda.top()).unwrap();
                 let has = false;
                 for prm in &m.params{
                     if(prm.name.eq(&vh.name)){
@@ -2482,8 +2519,7 @@ impl Resolver{
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
           expr2.drop();
-          for(let gi = 0;gi < self.glob_map.len();++gi){
-            let old = self.glob_map.get_ptr(gi);
+          for old in &self.glob_map{
             if(old.name.eq(name)){
               //already have
               arr.drop();
@@ -2558,7 +2594,7 @@ impl Resolver{
     let id = node.id;
     if(id == -1) panic("id=-1");
     if(self.cache.contains(&node.id)){
-      return self.cache.get_ptr(&node.id).unwrap().clone();
+      return self.cache.get(&node.id).unwrap().clone();
     }
     self.err(node, format("not cached id={} line: {}", id, node.line));
     panic("");
@@ -2568,7 +2604,7 @@ impl Resolver{
     let id = node.id;
     if(id == -1) panic("id=-1");
     if(self.cache.contains(&node.id)){
-      return self.cache.get_ptr(&node.id).unwrap().clone();
+      return self.cache.get(&node.id).unwrap().clone();
     }
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());
@@ -2633,7 +2669,7 @@ impl Resolver{
       let ret = self.visit_type(node.return_type.get());
       let m = Method::new(Node::new(expr.line), format("lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
       self.newScope();
-      let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<CapturedInfo>::new()};
+      let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<Type>::new()};
       for prm in &node.params{
           let rt = self.visit_type(prm.type.get());
           m.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
@@ -2644,7 +2680,7 @@ impl Resolver{
       
       self.lambdas.add(expr.id, m);
       
-      let mptr = self.lambdas.get_ptr(&expr.id).unwrap();
+      let mptr = self.lambdas.get(&expr.id).unwrap();
       let plen = mptr.params.len();
       match (node.body.get()){
           LambdaBody::Expr(ex*)=>{
@@ -2667,7 +2703,7 @@ impl Resolver{
       for(let i=plen;i<mptr.params.len();i+=1){
           let prm = mptr.params.get_ptr(i);
           self.err(expr, format("captured params not supported yet '{}'", prm.line));
-          lt.captured.add(CapturedInfo{prm.type.clone(), prm.name.clone()});
+          lt.captured.add(prm.type.clone());
           let c_id = Node::new(expr.line);
           //res.vh.get().captures.add(Expr::Name{.c_id, prm.name.clone()});
       }
@@ -2703,7 +2739,7 @@ impl Resolver{
   func check_return(self, type: Type*, line: i32){
     let ex = Option<Type*>::none();
     if(!self.inLambda.empty()){
-        ex = Option::new(&self.lambdas.get_ptr(self.inLambda.top()).unwrap().type);
+        ex = Option::new(&self.lambdas.get(self.inLambda.top()).unwrap().type);
     }else{
         ex = Option::new(&self.curMethod.unwrap().type);
     }
@@ -2736,23 +2772,7 @@ impl Resolver{
       self.visit_var(ve);
       return;
     }else if let Stmt::For(f*) = (node){
-      self.newScope();
-      if(f.var_decl.is_some()){
-        self.visit_var(f.var_decl.get());
-      }
-      if(f.cond.is_some()){
-        if (!self.isCondition(f.cond.get())) {
-            self.err(f.cond.get(), "for statement expr is not a bool");
-        }
-      }
-      for (let i = 0;i < f.updaters.len();++i) {
-        let tmp = self.visit(f.updaters.get_ptr(i));
-        tmp.drop();
-      }
-      self.inLoop+=1;
-      self.visit_body(f.body.get());
-      self.inLoop-=1;
-      self.dropScope();
+      self.visit_for(node, f);
       return;
     }else if let Stmt::While(e*, b*) = (node){
       self.visit_while(node, e, b.get());
@@ -2774,10 +2794,36 @@ impl Resolver{
     }
     panic("visit stmt {:?}", node);
   }
+  
+  func visit_for(self, node: Stmt*, f: ForStmt*){
+      self.newScope();
+      if(f.var_decl.is_some()){
+        self.visit_var(f.var_decl.get());
+      }
+      if(f.cond.is_some()){
+        let cond = f.cond.get();
+        if(cond.line == 17&&cond.id == 56){
+            let xx = 55;
+        }
+        let c = self.getType(cond);
+        if (!c.eq("bool")) {
+            self.err(cond, format("for condition not a bool: {:?}", c));
+        }
+        c.drop();
+      }
+      for (let i = 0;i < f.updaters.len();++i) {
+        let tmp = self.visit(f.updaters.get_ptr(i));
+        tmp.drop();
+      }
+      self.inLoop += 1;
+      self.visit_body(f.body.get());
+      self.inLoop -= 1;
+      self.dropScope();
+  }
 
   func visit_body(self, node: Body*): RType{
     if(self.cache.contains(&node.id)){
-      return self.cache.get_ptr(&node.id).unwrap().clone();
+      return self.cache.get(&node.id).unwrap().clone();
     }
     let res = Option<RType>::new();
     if let Body::Block(b*)=(node){
@@ -2986,7 +3032,7 @@ impl Resolver{
   }
 
   func get_macro(self, node: Expr*): FormatInfo*{
-    let opt = self.format_map.get_ptr(&node.id);
+    let opt = self.format_map.get(&node.id);
     if(opt.is_none()){
       for pair in &self.format_map{
         print("id={:?} info={:?}\n", pair.a, pair.b.block);

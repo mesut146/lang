@@ -118,7 +118,7 @@ impl Compiler{
       }
       if let Expr::Lambda(le*)=(node){
           let r = self.get_resolver();
-          let m = r.lambdas.get_ptr(&node.id).unwrap();
+          let m = r.lambdas.get(&node.id).unwrap();
           let proto = self.protos.get().get_func(m);
           
           return proto as Value*;
@@ -291,9 +291,9 @@ impl Compiler{
         }
       }
       if(self.globals.contains(name)){
-        return *self.globals.get_ptr(name).unwrap();
+        return *self.globals.get(name).unwrap();
       }
-      let res = self.NamedValues.get_ptr(name);
+      let res = self.NamedValues.get(name);
       if(res.is_none()){
         self.get_resolver().err(node, format("internal err, no named value"));
       }
@@ -539,7 +539,6 @@ impl Compiler{
         return CreateNSWSub(makeInt(0, bits) as Value*, val);
       }
       if(op.eq("++")){
-        dbg(e.line == 48, 111);
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
           let res = CreateFAdd(val, makeFloat_one(&type));
@@ -577,7 +576,7 @@ impl Compiler{
     }
     func visit_mcall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
         if(res.is_some()) return res.unwrap();
         return getVoidTy() as Value*;
@@ -601,13 +600,13 @@ impl Compiler{
       if(Resolver::is_call(mc, "std", "internal_block")){
         let arg = mc.args.get_ptr(0).print();
         let id = i32::parse(arg.str());
-        let blk: Block* = *resolver.block_map.get_ptr(&id).unwrap();
+        let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit_block(blk);
         arg.drop();
         return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
@@ -626,11 +625,11 @@ impl Compiler{
         return res;
       }
       if(Resolver::is_call(mc, "std", "print_type")){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         return self.visit(info.unwrap_mc.get());
       }
       if(Resolver::is_call(mc, "std", "env")){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         return self.visit(info.unwrap_mc.get());
       }
       if(Resolver::is_drop_call(mc)){
@@ -679,24 +678,24 @@ impl Compiler{
         return self.call_sprintf(mc);
       }
       if(Resolver::is_print(mc)){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
       if(Resolver::is_panic(mc)){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }
       if(Resolver::is_format(mc)){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         let res = self.visit(info.unwrap_mc.get());
         self.own.get().do_move(info.unwrap_mc.get());
         return res;
       }
       if(Resolver::is_assert(mc)){
-        let info = resolver.format_map.get_ptr(&expr.id).unwrap();
+        let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return getVoidTy() as Value*;
       }

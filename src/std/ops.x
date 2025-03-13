@@ -265,10 +265,17 @@ impl Hash for i64{
 impl Hash for str{
   func hash(self): i64{
     let x: i64 = 0;
+    let m: i64 = 1i64 << 31;
     for(let i = 0;i < self.len();++i){
-      x = x * 31 + self.get(i);
+      x = (x * 31 + self.get(i)) % m;
     }
+    //print("hash {}={:?}\n", self, x);
     return x;
+  }
+}
+impl Hash for String{
+  func hash(self): i64{
+      return self.str().hash();
   }
 }
 
@@ -318,6 +325,9 @@ impl i32{
     let x = i64::parse(s);
     return x as i32;
   }
+  func parse_hex(s: str): i32{
+      return i64::parse_hex(s) as i32;
+  }
   func print(x: i32): String{
     return x.str();
   }
@@ -357,14 +367,13 @@ impl i64{
       neg = true;
       --len;
     }
-    if(len <= 2){
+    if(s.get(pos) == '0' && s.get(pos + 1) == 'x'){
+      pos += 2;
+    }
+    if(pos >= s.len()){
       panic("hex is too short {}", s);
     }
-    if(s.get(pos) != '0' || s.get(pos + 1) != 'x'){
-      panic("invalid hex {}", s);
-    }
     let x = 0_i64;
-    pos += 2;
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
       let y = 0;
@@ -526,4 +535,11 @@ func assert_eq(s1: String, s2: str){
     panic("assertion failed: {}!= {}", s1, s2);
   }
   s1.drop();
+}
+
+func assert2(c: bool, msg: String){
+    if(!c){
+        panic("{}\n", msg);
+    }
+    msg.drop();
 }

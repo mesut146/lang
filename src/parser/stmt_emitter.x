@@ -372,7 +372,7 @@ impl Compiler{
     }
 
     func visit_for_each(self, stmt: Stmt*, node: ForEach*){
-      let info = self.get_resolver().format_map.get_ptr(&stmt.id).unwrap();
+      let info = self.get_resolver().format_map.get(&stmt.id).unwrap();
       //todo own doesnt move rhs
       self.visit_block(&info.block);
     }

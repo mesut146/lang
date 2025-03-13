@@ -64,6 +64,10 @@ impl<K, V> Map<K, V>{
     }
     return -1 as i64;
   }
+  
+  func get(self, k: K*): Option<V*>{
+      return self.get_ptr(k);
+  }
 
   func get_ptr(self, k: K*): Option<V*>{
     let opt = self.get_pair(k);
@@ -195,14 +199,15 @@ struct MapIter<K, V>{
   map: Map<K, V>*;
   pos: i32;
 }
-impl<K, V> Iterator<Pair<K, V>*> for MapIter<K, V>{
-  func next(self): Option<Pair<K, V>*>{
+impl<K, V> Iterator<Pair<K*, V*>> for MapIter<K, V>{
+  func next(self): Option<Pair<K*, V*>>{
     if(self.pos < self.map.len()){
       let idx = self.pos;
       self.pos += 1;
-      return self.map.get_pair_idx(idx);
+      let p = self.map.get_pair_idx(idx).unwrap();
+      return Option::new(Pair::new(&p.a, &p.b));
     }
-    return Option<Pair<K, V>*>::new();
+    return Option<Pair<K*, V*>>::new();
   }
 }
 

@@ -12,6 +12,7 @@ import parser/debug_helper
 import parser/printer
 import parser/derive
 import std/map
+import std/hashmap
 import std/stack
 
 func is_drop_method(method: Method*): bool{
@@ -65,8 +66,7 @@ impl VarScope{
             f.print(", ");
             f.print(obj.expr);
         }
-        for(let i = 0;i < self.state_map.len();++i){
-            let pair = self.state_map.get_pair_idx(i).unwrap();
+        for pair in &self.state_map{
             f.print("\n");
             f.print(indent);
             f.print("  state(");

@@ -7,6 +7,7 @@ import parser/ownership
 import std/map
 import std/libc
 import std/stack
+import std/result
 
 struct Signature{
     mc: Option<Call*>;
@@ -477,10 +478,16 @@ impl MethodResolver{
             //case for self coerced to ptr
             if(k == 0 && !mc.is_static && target.self.is_some() && target_type.is_pointer() && !arg_type.is_pointer()){
                 let arg2 = arg_type.clone().toPtr();
-                MethodResolver::infer(&arg2, target_type, &typeMap, &type_params);
+                let err = MethodResolver::infer(&arg2, target_type, &typeMap, &type_params);
+                if(err.is_err()){
+                    self.r.err(expr, err.unwrap_err());
+                }
                 arg2.drop();
             }else{
-                MethodResolver::infer(arg_type, target_type, &typeMap, &type_params);
+                let err = MethodResolver::infer(arg_type, target_type, &typeMap, &type_params);
+                if(err.is_err()){
+                    self.r.err(expr, err.unwrap_err());
+                }
             }
         }
         for (let i = 0;i < type_params.len();++i) {
@@ -513,34 +520,35 @@ impl MethodResolver{
         return res;
     }
 
-    func infer(arg: Type*, prm: Type*, inferred: Map<String, Type>*, type_params: List<Type>*) {
+    func infer(arg: Type*, prm: Type*, inferred: Map<String, Type>*, type_params: List<Type>*): Result<i32, String>{
         if(type_params.contains(prm)){
             if(!inferred.contains(prm.name())){
                 inferred.add(prm.name().clone(), arg.clone());
             }
-            return;
+            return Result<i32, String>::ok(0);
         }
         if (arg.is_pointer()) {
-            if (!prm.is_pointer()) panic("prm is not ptr");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
+            if (!prm.is_pointer()){
+                return Result<i32, String>::err("prm is not ptr".owned());
+            }
+            return infer(arg.elem(), prm.elem(), inferred, type_params);
         }
         if (arg.is_slice()) {
-            if (!prm.is_slice()) panic("prm is not slice");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
+            if (!prm.is_slice()){
+                return Result<i32, String>::err("prm is not slice".owned());
+            }
+            return infer(arg.elem(), prm.elem(), inferred, type_params);
         }
         if (arg.is_array()) {
-            if (!prm.is_array()) panic("prm is not array");
-            infer(arg.elem(), prm.elem(), inferred, type_params);
-            return;
+            if (!prm.is_array()) return Result<i32, String>::err("prm is not array".owned());
+            return infer(arg.elem(), prm.elem(), inferred, type_params);
         }
         if (arg.is_fpointer()) {
-            if (!prm.is_fpointer()) panic("prm is not fptr");
+            if (!prm.is_fpointer()) return Result<i32, String>::err("prm is not func-ptr".owned());
             let ft1 = arg.get_ft();
             let ft2 = prm.get_ft();
             if(ft1.params.len() != ft2.params.len()){
-                panic("arg size not match");
+                return Result<i32, String>::err("arg size not match".owned());
             }
             infer(&ft1.return_type, &ft2.return_type, inferred, type_params);
             for(let i = 0;i < ft1.params.len();++i){
@@ -548,7 +556,28 @@ impl MethodResolver{
                 let a2 = ft2.params.get_ptr(i);
                 infer(a1, a2, inferred, type_params);
             }
-            return;
+            return Result<i32, String>::ok(0);
+        }
+        if (arg.is_lambda()) {
+            if (!prm.is_fpointer()) panic("prm is not fptr");
+            let ft1 = arg.get_lambda();
+            let ft2 = prm.get_ft();
+            if(ft1.params.len() != ft2.params.len()){
+                panic("arg size not match");
+            }
+            if(ft1.return_type.is_none()){
+                panic("lambda ret not resolved");
+            }
+            if(!ft1.captured.empty()){
+                panic("lambda has captured");
+            }
+            infer(ft1.return_type.get(), &ft2.return_type, inferred, type_params);
+            for(let i = 0;i < ft1.params.len();++i){
+                let a1 = ft1.params.get_ptr(i);
+                let a2 = ft2.params.get_ptr(i);
+                infer(a1, a2, inferred, type_params);
+            }
+            return Result<i32, String>::ok(0);
         }
         if(!prm.is_simple()){
             panic("prm is not simple {:?} -> {:?}", arg, prm);
@@ -568,6 +597,7 @@ impl MethodResolver{
                 infer(ta, tp, inferred, type_params);
             }
         }
+        return Result<i32, String>::ok(0);
     }
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
@@ -775,7 +805,7 @@ impl MethodResolver{
                         arg = mc.args.get_ptr(i).print();
                     }
                 }
-                let res = SigResult::Err{format("arg '{:?}' is not compatible with param {} vs {}\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
+                let res = SigResult::Err{format("arg '{:?}' is not compatible with param '{}' vs '{}'\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
                 arg.drop();
                 t1_str.drop();
                 t2_str.drop();
@@ -847,6 +877,31 @@ impl MethodResolver{
             return Option<String>::new();
         }
         if(target.is_fpointer()){
+            if(arg.is_lambda()){
+                let lm = arg.get_lambda();
+                let ft = target.get_ft();
+                if(!lm.captured.empty()){
+                    return Option::new("has captured".str());
+                }
+                if(lm.return_type.is_some()){
+                    let cmp = is_compatible(lm.return_type.get(), &ft.return_type, typeParams);
+                    if(cmp.is_some()){
+                        return Option::new(format("ret mismatch {}", cmp.get()));
+                    }
+                }else{
+                    return Option::new("lambda has no ret".str());
+                }
+                if(ft.params.len() != lm.params.len()){
+                    return Option::new("arg count mismatch".str());
+                }
+                for(let i = 0;i < ft.params.len();++i){
+                    let cmp2 = MethodResolver::is_compatible(lm.params.get_ptr(i), ft.params.get_ptr(i), typeParams);
+                    if(cmp2.is_some()){
+                        return cmp2;
+                    }
+                }
+                return Option<String>::new();
+            }
             return Option::new("arg is not fpointer".str());
         }
         if (!arg.is_simple()) {

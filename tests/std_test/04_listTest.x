@@ -81,7 +81,7 @@ func listptr(){
   check_list(&list, 1, 20);
   check_list(&list, 2, 30);
 
-  assert(*list.get(1) == 20);
+  assert(**list.get_ptr(1) == 20);
   list.drop();
 }
 

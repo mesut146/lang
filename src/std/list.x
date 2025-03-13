@@ -15,9 +15,9 @@ impl<T> List<T>{
   }
 
   func get_malloc(size: i64): T*{
-    /*if(size <= 0){
+    if(size < 0){
       panic("invalid size {}", size);
-    }*/
+    }
     let ptr = malloc<T>(size);
     if(ptr as u64 == 0){
       printf("size=%lld\n", size);
@@ -61,7 +61,9 @@ impl<T> List<T>{
     if(pos >= 0 && pos < self.count){
       return;
     }
-    panic("index {} out of bounds ({}, {})", pos, 0, self.count);
+    //panic("index {} out of bounds ({}, {})", pos, 0, self.count);
+    printf("index %d out of bounds (%d, %d)", pos, 0, self.count);
+    exit(1);
   }
   
   func remove(self, pos: i64): T{
@@ -133,12 +135,9 @@ impl<T> List<T>{
     return ptr::get(self.ptr, pos);
   }
 
-  func get(self, pos: i64): T{
-    //todo copy types safe to call this
-    if(!std::is_ptr<T>()){
-      panic("List::get() non ptr");
-    }
-    return *(self.get_ptr(pos));
+  func get(self, pos: i64): T*{
+    self.check(pos);
+    return ptr::get(self.ptr, pos);
   }
 
   func clear(self){
@@ -213,13 +212,42 @@ impl<T> List<T>{
         let a2 = self.get_ptr(j + 1);
         let cmp = Compare::compare(a1, a2);
         //a1 > a2
-        if(cmp == 1){
+        if(cmp > 0){
           self.swap(j, j + 1);
         }
       }
     }
   }
   
+  func find(self, f: func(T*)=> bool): i32{
+      for(let i = 0;i < self.len();++i){
+          let e = self.get_ptr(i);
+          if(f(e)){
+              return i;
+          }
+      }
+      return -1;
+  }
+  
+  func filter(self, f: func(T*)=> bool): List<T*>{
+      let res = List<T*>::new();
+      for(let i = 0;i < self.len();++i){
+          let e = self.get_ptr(i);
+          if(f(e)){
+              res.add(e);
+          }
+      }
+      return res;
+  }
+  
+  func map<E>(self, f: func(T*)=> E): List<E>{
+      let res = List<E>::new();
+      for(let i = 0;i < self.len();++i){
+          let e = self.get_ptr(i);
+          res.add(f(e));
+      }
+      return res;
+  }
 }
 
 impl<T> Debug for List<T>{

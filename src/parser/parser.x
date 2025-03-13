@@ -7,8 +7,6 @@ import std/map
 import std/libc
 
 struct Parser{
-  //path: String;
-  //buf: String;
   tokens: List<Token>;
   pos: i32;
   unit: Option<Unit*>;
@@ -18,13 +16,13 @@ struct Parser{
 impl Parser{
   func from_path(path: String): Parser{
     let lexer = Lexer::from_path(path.clone());
-    let res = Parser{/*path, lexer.buf.clone(),*/ List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
     res.fill();
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf, line);
-    let res = Parser{/*lexer.path.clone(), lexer.buf.clone(), */ List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
     res.fill();
     return res;
   }
@@ -46,7 +44,6 @@ impl Parser{
         }
         self.tokens.add(t);
     }
-    //lexer.drop();
   }
     
   func has(self): bool{
@@ -244,7 +241,7 @@ impl Parser{
     func parse_methods(self, parent: Parent): List<Method>{
         let arr = List<Method>::new();
         self.consume(TokenType::LBRACE);
-        while(!self.is(TokenType::RBRACE)){
+        while(self.has() && !self.is(TokenType::RBRACE)){
             arr.add(self.parse_method(parent.clone()));
         }
         self.consume(TokenType::RBRACE);
@@ -843,7 +840,8 @@ impl Parser{
       return self.popv();
     }
     self.err(format("expected name got {:?}", self.peek()));
-    panic("unr");
+    //std::unreachable();
+    panic("");
   }
   
   
@@ -864,7 +862,12 @@ impl Parser{
   }
 
   func is_stmt_noexpr(self): bool{
-    return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
+    return self.is(TokenType::LET)
+            || self.is(TokenType::RETURN)
+            || self.is(TokenType::WHILE)
+            || self.is(TokenType::FOR)
+            || self.is(TokenType::CONTINUE)
+            || self.is(TokenType::BREAK);
   }
 
   func parse_match(self): Expr{

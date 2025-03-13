@@ -87,6 +87,13 @@ func bootstrap(cmd: CmdArgs*){
     config.set_jobs(i32::parse(jobs.get().str()));
   }
   config.root_dir.set(root.clone());
+  let sng = cmd.get_val("-sng");
+  if(sng.is_some()){
+      config.set_file(format("{}/parser/{}", &src_dir, sng.get()));
+      Compiler::compile_single(config);
+      sng.drop();
+      return;
+  }
   let bin = Compiler::compile_dir(config);
   if(!is_static){
     let bin2 = format("{}/{}", &build, name);

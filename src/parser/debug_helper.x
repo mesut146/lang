@@ -41,7 +41,7 @@ impl DebugInfo{
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
         let file = createFile(path_c.ptr(), dir_c.ptr());
-        let cu = createCompileUnit(file);
+        let cu = createCompileUnit(get_dwarf_cpp(), file);
         let debug = !getenv2("DEBUG").unwrap_or("1").eq("0");
         //print("debug={} env={}\n", debug, getenv2("DEBUG"));
         path_c.drop();
@@ -117,7 +117,7 @@ impl DebugInfo{
         let scope = self.sp.unwrap() as DIScope*;
         let name_c = p.name.clone().cstr();
         let v = createParameterVariable(scope, name_c.ptr(), idx, self.file, p.line, dt, true);
-        let val = *c.NamedValues.get_ptr(&p.name).unwrap();
+        let val = *c.NamedValues.get(&p.name).unwrap();
         let lc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
         name_c.drop();
@@ -129,7 +129,7 @@ impl DebugInfo{
       let scope = self.get_scope();
       let name_c = name.clone().cstr();
       let v = createAutoVariable(scope, name_c.ptr(), self.file, line, dt);
-      let val = *c.NamedValues.get_ptr(name).unwrap();
+      let val = *c.NamedValues.get(name).unwrap();
       let lc = DILocation_get(scope, line, 0);
       insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
       name_c.drop();
@@ -351,7 +351,7 @@ impl DebugInfo{
           vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
         }
         for prm in & ft_box.get().captured{
-          vector_Metadata_push(tys, self.map_di(&prm.type, c) as Metadata*);
+          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
         }
         let sp = createSubroutineType(tys);
         vector_Metadata_delete(tys);

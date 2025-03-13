@@ -203,9 +203,31 @@ llvm::DIFile *createFile(char *path, char *dir) {
   return DBuilder->createFile(path, dir);
 }
 
-llvm::DICompileUnit *createCompileUnit(llvm::DIFile *file) {
+int get_dwarf_cpp(){
+    return llvm::dwarf::DW_LANG_C_plus_plus;
+}
+int get_dwarf_cpp20(){
+    return llvm::dwarf::DW_LANG_C_plus_plus_20;
+}
+int get_dwarf_c(){
+    return llvm::dwarf::DW_LANG_C;
+}
+int get_dwarf_c17(){
+    return llvm::dwarf::DW_LANG_C17;
+}
+int get_dwarf_rust(){
+    return llvm::dwarf::DW_LANG_Rust;
+}
+int get_dwarf_zig(){
+    return llvm::dwarf::DW_LANG_Zig;
+}
+int get_dwarf_swift(){
+    return llvm::dwarf::DW_LANG_Swift;
+}
+
+llvm::DICompileUnit *createCompileUnit(int lang, llvm::DIFile *file) {
   return DBuilder->createCompileUnit(
-      llvm::dwarf::DW_LANG_C, file, "lang dbg", false, "", 0, "",
+      lang, file, "lang dbg", false, "", 0, "",
       llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
       llvm::DICompileUnit::DebugNameTableKind::None);
 }

@@ -37,14 +37,14 @@ struct Compiler{
   resolver: Option<Resolver*>;
   llvm: llvm_holder;
   protos: Option<Protos>;
-  NamedValues: Map<String, Value*>;
-  globals: Map<String, Value*>;
-  allocMap: Map<i32, Value*>;
+  NamedValues: HashMap<String, Value*>;
+  globals: HashMap<String, Value*>;
+  allocMap: HashMap<i32, Value*>;
   curMethod: Option<Method*>;
   loops: List<BasicBlock*>;
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
-  string_map: Map<String, Value*>;
+  string_map: HashMap<String, Value*>;
 }
 
 struct llvm_holder{
@@ -62,11 +62,11 @@ impl Drop for llvm_holder{
 }
 
 struct Protos{
-  classMap: Map<String, llvm_Type*>;
-  funcMap: Map<String, Function*>;
-  libc: Map<str, Function*>;
+  classMap: HashMap<String, llvm_Type*>;
+  funcMap: HashMap<String, Function*>;
+  libc: HashMap<str, Function*>;
   stdout_ptr: Value*;
-  std: Map<str, StructType*>;
+  std: HashMap<str, StructType*>;
   cur: Option<Function*>;
   compiler: Compiler*;
 }
@@ -86,11 +86,11 @@ impl Drop for Protos{
 impl Protos{
   func new(compiler: Compiler*): Protos{
     let res = Protos{
-      classMap: Map<String, llvm_Type*>::new(),
-      funcMap: Map<String, Function*>::new(),
-      libc: Map<str, Function*>::new(),
+      classMap: HashMap<String, llvm_Type*>::new(),
+      funcMap: HashMap<String, Function*>::new(),
+      libc: HashMap<str, Function*>::new(),
       stdout_ptr: make_stdout(),
-      std: Map<str, StructType*>::new(),
+      std: HashMap<str, StructType*>::new(),
       cur: Option<Function*>::new(),
       compiler: compiler
     };
@@ -112,14 +112,14 @@ impl Protos{
     return res;
   }
   func get(self, name: String*): llvm_Type*{
-    let res = self.classMap.get_ptr(name);
+    let res = self.classMap.get(name);
     return *res.unwrap();
   }
   func libc(self, nm: str): Function*{
-    return *self.libc.get_ptr(&nm).unwrap();
+    return *self.libc.get(&nm).unwrap();
   }
   func std(self, nm: str): StructType*{
-    return *self.std.get_ptr(&nm).unwrap();
+    return *self.std.get(&nm).unwrap();
   }
   /*func get_func(self, mangled: String*): Function*{
     let opt = self.funcMap.get_ptr(mangled);
@@ -134,7 +134,7 @@ impl Protos{
   }
   func get_func(self, m: Method*): Function*{
     let mangled = mangle(m);
-    let opt = self.funcMap.get_ptr(&mangled);
+    let opt = self.funcMap.get(&mangled);
     if(opt.is_none()){
       mangled.drop();
       return self.compiler.make_proto(m).unwrap();
@@ -146,7 +146,7 @@ impl Protos{
 }
 
 func has_main(unit: Unit*): bool{
-  for (let i=0;i<unit.items.len();++i) {
+  for (let i = 0;i < unit.items.len();++i) {
     let it = unit.items.get_ptr(i);
     if let Item::Method(m*) = (it){
       if(is_main(m)){
@@ -217,14 +217,14 @@ impl Compiler{
      resolver: Option<Resolver*>::new(),
      llvm: vm,
      protos: Option<Protos>::new(),
-     NamedValues: Map<String, Value*>::new(),
-     globals: Map<String, Value*>::new(),
-     allocMap: Map<i32, Value*>::new(),
+     NamedValues: HashMap<String, Value*>::new(),
+     globals: HashMap<String, Value*>::new(),
+     allocMap: HashMap<i32, Value*>::new(),
      curMethod: Option<Method*>::new(),
      loops: List<BasicBlock*>::new(),
      loopNext: List<BasicBlock*>::new(),
      own: Option<Own>::new(),
-     string_map: Map<String, Value*>::new()
+     string_map: HashMap<String, Value*>::new()
     };
   }
 
@@ -283,9 +283,8 @@ impl Compiler{
             print("gencode2 done {}/{}\n", i+1, resolver.generated_methods.len());
         }
     }
-    for(let i=0;i<resolver.lambdas.len();i+=1){
-        let m = resolver.lambdas.get_idx(i);
-        self.genCode(m);
+    for p in &resolver.lambdas{
+        self.genCode(p.b);
     }
     methods.drop();
     
@@ -323,8 +322,7 @@ impl Compiler{
   func init_globals(self, config: CompilerConfig*){
     let resolv = self.get_resolver();
     //external globals
-    for(let i = 0;i < resolv.glob_map.len();++i){
-      let gl_info = resolv.glob_map.get_ptr(i);
+    for gl_info in &resolv.glob_map{
       let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Constant>();
       let name_c = gl_info.name.clone().cstr();
@@ -453,23 +451,23 @@ impl Compiler{
     let methods: List<Method*> = getMethods(self.unit());
     //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
-      let m = methods.get(i);
+      let m = *methods.get_ptr(i);
       p.make_proto(m);
     }
     methods.drop();
     //generic methods from resolver
     //print("gen m\n");
-    for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
-        let m = self.get_resolver().generated_methods.get_ptr(i).get();
+    let r = self.get_resolver();
+    for (let i = 0;i < r.generated_methods.len();++i) {
+        let m = r.generated_methods.get_ptr(i).get();
         p.make_proto(m);
     }
     //print("used m\n");
-    for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
-        let m = self.get_resolver().used_methods.get(i);
-        p.make_proto(m);
+    for pr in &r.used_methods{
+        p.make_proto(*pr.b);
     }
-    for pair in &self.get_resolver().lambdas{
-        p.make_proto(&pair.b);
+    for pair in &r.lambdas{
+        p.make_proto(pair.b);
     }
   }
   
@@ -509,6 +507,7 @@ impl Compiler{
     //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
+    self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
     self.own = Option::new(Own::new(self, m));
@@ -545,6 +544,7 @@ impl Compiler{
     verifyFunction(f);
     self.own.drop();
     self.own = Option<Own>::new();
+    self.ctx.prog.compile_end(m);
   }
   
   func allocParams(self, m: Method*){
@@ -575,7 +575,7 @@ impl Compiler{
   }
 
   func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
-    let ptr = *self.NamedValues.get_ptr(&prm.name).unwrap();
+    let ptr = *self.NamedValues.get(&prm.name).unwrap();
     let val = get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
@@ -608,14 +608,14 @@ impl Compiler{
   }
   
   func get_alloc(self, e: Expr*): Value*{
-    let ptr = self.allocMap.get_ptr(&e.id);
+    let ptr = self.allocMap.get(&e.id);
     if(ptr.is_none()){
       self.get_resolver().err(e, "get_alloc() not set");
     }
     return *ptr.unwrap();
   }
   func get_alloc(self, id: i32): Value*{
-    let ptr = self.allocMap.get_ptr(&id);
+    let ptr = self.allocMap.get(&id);
     return *ptr.unwrap();
   }
   

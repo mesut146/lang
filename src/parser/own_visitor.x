@@ -94,7 +94,7 @@ impl OwnVisitor{
             return;
         }
         if(Resolver::is_format(mc)){
-            let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+            let info = self.get_resolver().format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);
             self.do_move(info.unwrap_mc.get());
             return;

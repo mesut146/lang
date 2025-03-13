@@ -143,7 +143,7 @@ impl DropHelper{
       return drop_impl.methods.get_ptr(0);
     }
     let key = rt.type.print();
-    let method_desc = self.r.drop_map.get_ptr(&key).unwrap();
+    let method_desc = self.r.drop_map.get(&key).unwrap();
     key.drop();
     //panic("{} -> {}", rt);
     return self.r.get_method(method_desc, &decl.type).unwrap();

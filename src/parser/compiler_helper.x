@@ -335,7 +335,7 @@ func getMethods(unit: Unit*): List<Method*>{
 
 impl Compiler{
   func get_global_string(self, val: String): Value*{
-    let opt = self.string_map.get_ptr(&val);
+    let opt = self.string_map.get(&val);
     if(opt.is_some()){
       val.drop();
       return *opt.unwrap();
@@ -364,7 +364,7 @@ impl Compiler{
       vector_Type_push(args, self.mapType(prm));
     }
     for prm in &ft.captured{
-      vector_Type_push(args, self.mapType(&prm.type));
+      vector_Type_push(args, self.mapType(prm));
     }
     let res = make_ft(ret, args, false);
     vector_Type_delete(args);
@@ -426,8 +426,7 @@ impl Compiler{
     let list = List<Decl*>::new();
     getTypes(self.unit(), &list);
     //print("used={}\n", resolver.used_types);
-    for (let i = 0;i < resolver.used_types.len();++i) {
-      let rt = resolver.used_types.get_ptr(i);
+    for rt in &resolver.used_types{
       let decl = resolver.get_decl(rt).unwrap();
       if (decl.is_generic) continue;
       list.add(decl);
@@ -532,6 +531,9 @@ impl Compiler{
 
   func make_proto(self, m: Method*): Option<Function*>{
     if(m.is_generic) return Option<Function*>::new();
+    if(m.name.eq("spawn") && m.line == 14){
+        let xx = 66;
+    }
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
@@ -782,17 +784,20 @@ impl Compiler{
       return val;
     }
     if let Expr::Lambda(le*)=(node){
-        return self.visit(node);
+        return val;
     }
     if let Expr::Type(type*)=(node){
         //ptr to member func
         let rt = self.get_resolver().visit(node);
         if(rt.type.is_fpointer() && rt.method_desc.is_some()){
-            return self.visit(node);
+            return val;
+        }
+        if(rt.type.is_lambda()){
+            return val;
         }
     }
     if let Expr::IfLet(il*)=(node){
-        return self.visit(node);
+        return val;
     }
     panic("get_obj_ptr {:?}", node);
   }
@@ -810,7 +815,7 @@ impl Compiler{
 
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
     let name = format("{:?}::{}", decl.type, variant.name.str());
-    let res = *self.protos.get().classMap.get_ptr(&name).unwrap();
+    let res = *self.protos.get().classMap.get(&name).unwrap();
     name.drop();
     return res;
   }

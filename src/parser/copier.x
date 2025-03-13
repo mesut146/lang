@@ -169,9 +169,9 @@ impl AstCopier{
         return res.into(type.line);
     }
     
-    func visit(self, node: CapturedInfo*): CapturedInfo{
+    /*func visit(self, node: CapturedInfo*): CapturedInfo{
         return CapturedInfo{self.visit(&node.type), node.name.clone()};
-    }
+    }*/
 
     func visit(self, p: Param*): Param{
         let id = self.node(p as Node*);

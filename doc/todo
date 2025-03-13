@@ -17,3 +17,32 @@ let f = (a: i32, b: str): i32=>{
 let f = ()=>5;
 
 f();
+
+
+inside format macro, call custom printer
+print("method is {::TraitName}", m);
+=TraitName::fmt(m, f);
+
+
+match expr complex
+
+
+macro panic(e: Expr, s: String){
+
+
+}
+
+let r = Result:Ok{}
+r?.get();
+{
+  if let Result::Ok{val}=r{
+    val.get();
+  }else{
+    panic or return depends on method return type
+  }
+}
+
+func to_list<E, T>(it: T): List<E>
+call like to_list<i32>(..) should work
+
+self.len() < self.buckets.len() * 0.75, emit as mul 0

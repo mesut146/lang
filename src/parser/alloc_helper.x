@@ -86,7 +86,7 @@ impl AllocHelper{
   }
   func visit_iflet(self, node: IfLet*): Option<Value*>{
     for arg in &node.args{
-      let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
+      let ty = self.c.get_resolver().cache.get(&arg.id);
       let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
       let name_c = arg.name.clone().cstr();
       Value_setName(arg_ptr, name_c.ptr());
@@ -114,7 +114,7 @@ impl AllocHelper{
               return;
           },
           Stmt::ForEach(fe*)=>{
-              let info = self.c.get_resolver().format_map.get_ptr(&node.id).unwrap();
+              let info = self.c.get_resolver().format_map.get(&node.id).unwrap();
               self.visit(&info.block);
               return;
           },
@@ -176,7 +176,7 @@ impl AllocHelper{
     if(Resolver::is_call(call, "std", "internal_block")){
       let arg = call.args.get_ptr(0).print();
       let id = i32::parse(arg.str());
-      let blk: Block* = *resolver.block_map.get_ptr(&id).unwrap();
+      let blk: Block* = *resolver.block_map.get(&id).unwrap();
       self.visit(blk);
       arg.drop();
       return Option<Value*>::new();
@@ -366,7 +366,7 @@ impl AllocHelper{
       for case in &me.get().cases{
         if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
           for arg in args{
-            let ty = self.c.get_resolver().cache.get_ptr(&arg.id);
+            let ty = self.c.get_resolver().cache.get(&arg.id);
             let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
             let name_c = arg.name.clone().cstr();
             Value_setName(arg_ptr, name_c.ptr());
@@ -388,7 +388,7 @@ impl AllocHelper{
     }
     if let Expr::Lambda(le*)=(node){
         let r = self.c.get_resolver();
-        let m = r.lambdas.get_ptr(&node.id).unwrap();
+        let m = r.lambdas.get(&node.id).unwrap();
         let ty = r.getType(node);
         res.set(self.alloc_ty(&ty, node));
         return res;

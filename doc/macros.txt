@@ -17,7 +17,7 @@ std::debug2(ptr: T*, Fmt*): void;
 std::debug_member(field: T, Fmt*): void;
 
 ptr::null<T>(): T*;
-ptr::get(src, index): <src_type>;
+ptr::get(src: T*, index): T*;
 ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
 

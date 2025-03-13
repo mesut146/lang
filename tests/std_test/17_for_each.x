@@ -55,11 +55,13 @@ func map_iter(){
     map.add(1, 7);
     map.add(2, 11);
     map.add(3, 13);
-    let arr = ["{1, 7}", "{2, 11}", "{3, 13}"];
+    let keys = [1, 2, 3];
+    let vals = [7, 11, 13];
     let i = 0;
     for pair in &map{
-        assert(std::typeof(pair).eq("Pair<i32, i32>*"));
-        assert_eq(Fmt::str(pair), arr[i]);
+        assert(std::typeof(pair).eq("Pair<i32*, i32*>"));
+        assert_eq(*pair.a, keys[i]);
+        assert_eq(*pair.b, vals[i]);
         i += 1;
     }
 }
@@ -69,11 +71,13 @@ func map_into_iter(){
     map.add(1, 7);
     map.add(2, 11);
     map.add(3, 13);
-    let arr = ["{1, 7}", "{2, 11}", "{3, 13}"];
+    let keys = [1, 2, 3];
+    let vals = [7, 11, 13];
     let i = 0;
     for pair in map{
         assert(std::typeof(pair).eq("Pair<i32, i32>"));
-        assert_eq(Fmt::str(&pair), arr[i]);
+        assert(pair.a == keys[i]);
+        assert(pair.b == vals[i]);
         i += 1;
     }
 }

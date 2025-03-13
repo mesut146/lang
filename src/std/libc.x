@@ -11,7 +11,7 @@ type off_t = u64;
 type pthread_t = i64;
 type pthread_attr_t = c_void;
 type pthread_mutexattr_t = c_void;
-
+type suseconds_t = i32;
 
 struct dirent {
     d_ino: ino_t;      /* inode number */
@@ -126,8 +126,19 @@ extern{
   
   func popen(cmd: i8*, mode: i8*): FILE*;
   func pclose(fp: FILE*): i32;
+  
+  func gettimeofday(tv: timeval*, timezone: i8*): i32;
 }
 
+/*struct time{
+    tv: timeval;
+}*/
+
+func gettime(): timeval{
+    let tv: timeval = timeval{0, 0};
+    gettimeofday(&tv, ptr::null<i8>());
+    return tv;
+}
 
 func msleep(ms: i64){
     let tm = timespec{ms/1000, ms%1000};
@@ -154,6 +165,19 @@ type time_t = i64;
 struct timespec{
   tv_sec: time_t;
   tv_nsec: time_t;
+}
+#derive(Debug)
+struct timeval {
+  tv_sec: time_t;     /* seconds */
+  tv_usec: suseconds_t;    /* microseconds */
+}
+impl timeval{
+    func ms(self): i64{
+        return self.tv_sec * 1000 + self.tv_usec / 1000;
+    }
+    func sec(self, begin: timeval*): i32{
+        return (self.tv_sec - begin.tv_sec) as i32;
+    }
 }
 
 #derive(Debug)

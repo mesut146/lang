@@ -448,7 +448,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     }
     if(Resolver::is_print(mc)){
         //..f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &fmt_var_name), &r.unit, line);
+        let print_st = parse_stmt(format("String::print(&{}.buf);", &fmt_var_name), &r.unit, line);
         block.list.add(print_st);
         //..Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);

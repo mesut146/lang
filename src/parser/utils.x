@@ -206,6 +206,7 @@ func mangleType(type: Type*): String{
   let s7 = s6.replace(")", "$RP");
   let s8 = s7.replace("=", "$EQ");
   let s9 = s8.replace(" ", "");
+  let s10 = s9.replace(",", "");
   s.drop();
   s2.drop();
   s3.drop();
@@ -214,7 +215,8 @@ func mangleType(type: Type*): String{
   s6.drop();
   s7.drop();
   s8.drop();
-  return s9;
+  s9.drop();
+  return s10;
 }
 func mangleType(type: Type*, f: Fmt*){
     let s = mangleType(type);

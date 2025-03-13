@@ -78,7 +78,7 @@ extern{
 
     func init_dbg();
     func createFile(file: i8*, dir: i8*): DIFile*;
-    func createCompileUnit(file: DIFile*): DICompileUnit*;
+    func createCompileUnit(lang: i32, file: DIFile*): DICompileUnit*;
     func SetCurrentDebugLocation(scope: DIScope*, line: i32, pos: i32);
     func createObjectPointerType(type: DIType*): DIType*;
     func createSubroutineType(tys: vector_Metadata*): DISubroutineType*;
@@ -118,6 +118,13 @@ extern{
     func createGlobalVariableExpression(scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
     func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
     func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
+    func get_dwarf_cpp(): i32;
+    func get_dwarf_cpp20(): i32;
+    func get_dwarf_c(): i32;
+    func get_dwarf_c17(): i32;
+    func get_dwarf_rust(): i32;
+    func get_dwarf_zig(): i32;
+    func get_dwarf_swift(): i32;
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector_Type*): StructType*;
