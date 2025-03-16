@@ -1,6 +1,7 @@
 struct Any{
     box: Box<i8>;
     type: String;
+    //drop_f: func(i8*): void;
 }
    
 impl Any{
@@ -11,6 +12,7 @@ impl Any{
         let b = Box<T>::new(val);
         let b2 = ptr::deref(&b as Box<i8>*);
         std::no_drop(b);
+        //Drop::drop as func(T): void  T::drop
         return Any{box: b2, type: std::print_type<T>().owned()};
     }
 

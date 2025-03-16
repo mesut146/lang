@@ -41,6 +41,7 @@ impl Cache{
         buf.drop();
         //print("read_cache={}\n", self.map);
     }
+    
     func write_cache(self){
         if(!use_cache) return;
         let str = String::new();
@@ -53,6 +54,7 @@ impl Cache{
         write_string(str.str(), self.file.str());
         str.drop();
     }
+    
     func need_compile(self, file: str, out: str): bool{
         if(!use_cache) return true;
         if(!is_file(out)){
@@ -74,12 +76,14 @@ impl Cache{
         resolved.drop();
         return true;
     }
+    
     func update(self, file: str){
         if(!use_cache) return;
         let resolved = resolve(file);
         let time = self.get_time(resolved.str());
         self.map.add(resolved, time);
     }
+    
     func get_time(self, file: str): String{
         let resolved = resolve(file);
         let cs = CStr::new(resolved);
@@ -87,6 +91,7 @@ impl Cache{
         cs.drop();
         return time.str();
     }
+    
     func delete_cache(out_dir: str){
         let file = CACHE_FILE(out_dir);
         if(is_file(file.str())){

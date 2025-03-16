@@ -124,9 +124,9 @@ func isSigned(type: Type*): bool{
     return res;
 }
 
-func is_less_than(){
+/*func is_less_than(){
 
-}
+}*/
 
 func can_fit_into(val: str, target: Type*): bool{
     if(target.eq("f64")){
@@ -258,6 +258,7 @@ func mangle(m: Method*): String{
   }
   return f.unwrap();
 }
+
 func printMethod(m: Method*): String{
     let s = Fmt::new();
     if let Parent::Impl(info*)=(&m.parent){
