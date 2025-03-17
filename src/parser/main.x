@@ -71,14 +71,14 @@ func bootstrap(cmd: CmdArgs*){
   let out_dir = format("{}/{}_out", &build, name);
   let config = CompilerConfig::new(src_dir.clone());
   config.verbose_all = verbose_all;
+  let stdlib = build_std(std_dir.str(), out_dir.str());
   if(is_static){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }else{
-    let stdlib = build_std(std_dir.str(), out_dir.str());
     let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
     config.set_link(LinkType::Binary{name.owned(), args, false});
-    stdlib.drop();
   }
+  stdlib.drop();
   config
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir)
