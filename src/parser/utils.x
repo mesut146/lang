@@ -5,6 +5,7 @@ import parser/resolver
 import std/map
 import std/libc
 import std/io
+import std/fs
 import std/stack
 
 func SLICE_PTR_INDEX(): i32{ return 0; }
@@ -22,19 +23,6 @@ func join_list<T>(arr: List<T>*): String{
         }
     }
     return f.unwrap();
-}
-
-func get_filename(path: str): str{
-    let idx = path.lastIndexOf("/");
-    if(idx == -1){
-        return path;
-    }
-    return path.substr(idx + 1);
-}
-
-func bin_name(path: str): String{
-    let name = get_filename(path);
-    return format("{}.bin", Path::noext(name));
 }
 
 func as_type(bits: i32): Type{
@@ -433,30 +421,18 @@ impl Exit{
     }
 
     func get_exit_type(rhs: MatchRhs*): Exit{
-        if let MatchRhs::EXPR(e*)=(rhs){
-            return get_exit_type(e);
+        match rhs{
+            MatchRhs::EXPR(e*) => return get_exit_type(e);,
+            MatchRhs::STMT(st*) => return get_exit_type(st);,
         }
-        else if let MatchRhs::STMT(st*)=(rhs){
-            return get_exit_type(st);
-        }
-        panic("unr");
     }
 
     func get_exit_type(body: Body*): Exit{
-        if let Body::Block(b*)=(body){
-            return get_exit_type(b);
-        }
-        else if let Body::If(val*)=(body){
-            return get_exit_type(val);
-        }
-        else if let Body::IfLet(val*)=(body){
-            return get_exit_type(val);
-        }
-        else if let Body::Stmt(val*)=(body){
-            return get_exit_type(val);
-        }
-        else{
-            panic("{:?}", body);
+        match body{
+            Body::Block(b*) => return get_exit_type(b);,
+            Body::Stmt(st*) => return get_exit_type(st);,
+            Body::If(st*) => return get_exit_type(st);,
+            Body::IfLet(st*) => return get_exit_type(st);,
         }
     }
 

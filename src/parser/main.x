@@ -14,6 +14,7 @@ import parser/cache
 import parser/tests
 import std/map
 import std/io
+import std/fs
 import std/libc
 import std/stack
 
@@ -110,14 +111,9 @@ func bootstrap(cmd: CmdArgs*){
   std_dir.drop();
 }
 
-enum Progress{
-    RESOLVE_DONE,
-    METHOD_GEN_DONE,
-    COMPILE_DONE
-}
-impl Progress{
-     func gencode_done(self){
-     }
+func bin_name(path: str): String{
+  let name = Path::name(path);
+  return format("{}.bin", Path::noext(name));
 }
 
 func handle_c(cmd: CmdArgs*){
@@ -153,9 +149,9 @@ func handle_c(cmd: CmdArgs*){
   config.set_file(path.str());
   config.set_out(out_dir.clone());
   if(link_static){
-    config.set_link(LinkType::Static{format("{}.a", get_filename(path.str()))});
+    config.set_link(LinkType::Static{format("{}.a", Path::name(path.str()))});
   }else if(link_shared){
-    config.set_link(LinkType::Dynamic{format("{}.so", get_filename(path.str()))});
+    config.set_link(LinkType::Dynamic{format("{}.so", Path::name(path.str()))});
   }else if(compile_only){
     config.set_link(LinkType::None);
   }else{
@@ -167,7 +163,7 @@ func handle_c(cmd: CmdArgs*){
       name.drop();
     }
   }
-  if(is_dir(path.str())){
+  if(File::is_dir(path.str())){
     let out = Compiler::compile_dir(config);
     out.drop();
   }else{

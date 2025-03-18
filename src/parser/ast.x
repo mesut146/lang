@@ -236,7 +236,13 @@ impl Parent{
     panic("get_type");
   }
   func clone(self): Parent{
-    if let Parent::None=(self){
+    match self{
+      Parent::None => return Parent::None;,
+      Parent::Impl(info*) => return Parent::Impl{info.clone()};,
+      Parent::Trait(type*) => return Parent::Trait{type.clone()};,
+      Parent::Extern => return Parent::Extern;,
+    }
+    /*if let Parent::None=(self){
       return Parent::None;
     }
     if let Parent::Impl(info*)=(self){
@@ -248,7 +254,7 @@ impl Parent{
     if let Parent::Extern=(self){
       return Parent::Extern;
     }
-    panic("Parent::clone");
+    panic("Parent::clone");*/
   }
 }
 
@@ -619,22 +625,12 @@ enum Body: Node{
 
 impl Body{
   func line(self): i32{
-    if let Body::Block(b*) = (self){
-      return b.line;
+    match self{
+      Body::Block(b*) =>  return b.line;,
+      Body::If(is*) => return is.cond.line;,
+      Body::IfLet(il*) => return il.rhs.line;,
+      Body::Stmt(val*) => return val.line;,
     }
-    else if let Body::If(is*) = (self){
-      return is.cond.line;
-    }
-    else if let Body::IfLet(il*) = (self){
-      return il.rhs.line;
-    }
-    else if let Body::Stmt(val*) = (self){
-      return val.line;
-    }
-    else{
-      panic("");
-    }
-    //std::unreachable();
   }
 }
 

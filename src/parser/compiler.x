@@ -644,7 +644,7 @@ impl Compiler{
   }
 
   func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
-    create_dir(out_dir);
+    File::create_dir(out_dir);
     let cmd = "".str();
     if(is_shared){
       cmd.append(get_linker());
@@ -675,10 +675,10 @@ impl Compiler{
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
     let path = format("{}/{}", out_dir, name);
     print("linking {}\n", path);
-    if(exist(path.str())){
+    if(File::exist(path.str())){
       File::remove_file(path.str());
     }
-    create_dir(out_dir);
+    File::create_dir(out_dir);
     let cmd = get_linker().str();
     cmd.append(" -o ");
     cmd.append(&path);
@@ -711,7 +711,7 @@ impl Compiler{
   }
 
   func compile_single(config: CompilerConfig): String{
-    create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for inc in &config.src_dirs{
       ctx.add_path(inc.str());
@@ -741,17 +741,17 @@ impl Compiler{
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
     }
-    create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str());
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
     let src_dir = &config.file;
-    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
-      if(is_dir(file.str())) {
+      if(File::is_dir(file.str())) {
         file.drop();
         continue;
       }
@@ -780,17 +780,17 @@ impl Compiler{
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
     }
-    create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str());
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
     let src_dir = &config.file;
-    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
       let name = list.get_ptr(i).str();
       let file: String = format("{}/{}", src_dir, name);
-      if(is_dir(file.str()) || !name.ends_with(".x")) {
+      if(File::is_dir(file.str()) || !name.ends_with(".x")) {
         file.drop();
         continue;
       }

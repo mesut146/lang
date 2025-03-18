@@ -2,23 +2,24 @@
 import parser/ast
 import parser/parser
 import parser/token
+import std/fs
 
 static print_cst = false;
 //static pretty_print = true;
 
 func format_dir(dir: str, out: str){
-    create_dir(out);
-    let files = list(dir);
+    File::create_dir(out);
+    let files = File::list(dir);
     for file in &files{
         let file2 = format("{}/{}", dir, file);
         let outf = format("{}/{}", out, file);
-        if(is_dir(file2.str())) continue;
+        if(File::is_dir(file2.str())) continue;
         print("file={}\n", file2);
         print("out={}\n", outf);
         let p = Parser::from_path(file2);
         let unit = p.parse_unit();
         let str = Fmt::str(&unit);
-        write_string(str.str(), outf.str());
+        File::write_string(str.str(), outf.str());
         outf.drop();
         str.drop();
     }

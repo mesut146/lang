@@ -645,32 +645,29 @@ impl Parser{
       }
       return IfLet{ty, args, rhs, Box::new(then), els};
     }
+
+    func parse_ret(self, id: Node, force_semi: bool): Stmt{
+      self.pop();
+      if(force_semi && self.is(TokenType::SEMI)){
+        self.consume(TokenType::SEMI);
+        return Stmt::Ret{.id, Option<Expr>::new()};
+      }else{
+        let e = self.parse_expr();
+        if(force_semi){
+          self.consume(TokenType::SEMI);
+        }
+        return Stmt::Ret{.id, Option::new(e)};
+      }
+    }
     
     func parse_stmt(self): Stmt{
       let id = self.node();
-      /*if(self.is(TokenType::LBRACE)){
-        return Expr::Block{.id, Box::new(self.parse_block())};
-      }
-      if(self.is(TokenType::IF, TokenType::LET)){
-        return self.parse_iflet();
-      }
-      if(self.is(TokenType::IF)){
-        return self.parse_if();
-      }*/
       if(self.is(TokenType::LET)){
         let vd = self.var();
         self.consume(TokenType::SEMI);
         return Stmt::Var{.id, vd};
       }else if(self.is(TokenType::RETURN)){
-        self.pop();
-        if(self.is(TokenType::SEMI)){
-          self.consume(TokenType::SEMI);
-          return Stmt::Ret{.id, Option<Expr>::new()};
-        }else{
-          let e = self.parse_expr();
-          self.consume(TokenType::SEMI);
-          return Stmt::Ret{.id, Option::new(e)};
-        }
+        return self.parse_ret(id, true);
       }else if(self.is(TokenType::WHILE)){
         self.pop();
         self.consume(TokenType::LPAREN);
@@ -898,7 +895,10 @@ impl Parser{
         lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
       }
       self.consume(TokenType::ARROW);
-      if(self.is_stmt_noexpr()){
+      if(self.is(TokenType::RETURN)){
+        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_ret(self.node(), false))});
+      }
+      else if(self.is_stmt_noexpr()){
         res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt())});
       }else{
         let rhs_expr = self.parse_expr();

@@ -16,6 +16,7 @@ import std/hashmap
 import std/hashset
 import std/libc
 import std/io
+import std/fs
 import std/stack
 
 static verbose_method: bool = false;
@@ -41,7 +42,7 @@ struct Context{
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
-    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "map", "rt"];
+    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "fs", "map", "rt"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
@@ -426,7 +427,7 @@ impl Context{
       let path = self.search_paths.get_ptr(i).clone();
       path.append("/");
       path.append(&suffix);
-      if(is_file(path.str())){
+      if(File::is_file(path.str())){
         suffix.drop();
         return path;
       }
@@ -523,7 +524,7 @@ impl Resolver{
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         let path2 = path.str();
         if(!added.contains(&path2)){
-          if(!is_file(path.str())){
+          if(!File::is_file(path.str())){
             panic("can't resolve import: import std/{}\npath={}", pre, &path);
           }
           let r = self.ctx.create_resolver(&path);
@@ -2700,7 +2701,7 @@ impl Resolver{
       }
     
       //res.vh.set();
-      for(let i=plen;i<mptr.params.len();i+=1){
+      for(let i = plen;i < mptr.params.len();i += 1){
           let prm = mptr.params.get_ptr(i);
           self.err(expr, format("captured params not supported yet '{}'", prm.line));
           lt.captured.add(prm.type.clone());
@@ -2711,7 +2712,7 @@ impl Resolver{
       let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
       let desc = Desc{RtKind::Lambda{expr.id}, self.unit.path.clone(), -1};
       res.method_desc = Option::new(desc);
-      print("lambda={:?}\n", mptr);
+      //print("lambda={:?}\n", mptr);
       lambdaCnt += 1;
       self.inLambda.pop();
       self.dropScope();

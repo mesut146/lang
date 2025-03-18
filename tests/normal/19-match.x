@@ -125,8 +125,8 @@ func cast(){
 func jump(): bool{
     let f = F::F2{val: B{aa: 10}};
     match &f{
-        F::F1(val*)=>{ return true; },
-        F::F2(val*)=>{ return false; }
+        F::F1(val*) => { return true; },
+        F::F2(val*) => return false,
     }
 }
 

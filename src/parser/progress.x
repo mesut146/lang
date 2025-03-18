@@ -16,12 +16,13 @@ impl Compare for Pair<String*, ProgInfo*>{
 }
 
 static progress_print = false;
-static prog_map = HashMap<String, ProgInfo>::new();
 static prog_print_freq = false;
+static prog_map = HashMap<String, ProgInfo>::new();
 
 func init_prog(){
-     prog_print_freq = getenv2("prog").is_some() && getenv2("prog").get().eq("2");
-     progress_print = getenv2("prog").is_some() && getenv2("prog").get().eq("1");
+    let opt = getenv2("prog");
+    progress_print = opt.is_some() && opt.get().eq("1");
+    prog_print_freq = opt.is_some() && opt.get().eq("2");
 }
 
 struct Progress{

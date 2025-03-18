@@ -14,6 +14,7 @@ import parser/cache
 import parser/main
 import std/map
 import std/io
+import std/fs
 import std/libc
 import std/stack
 import std/regex
@@ -21,7 +22,7 @@ import std/regex
 static root = Option<String>::new();
 
 func find_root(bin_path: str): String*{
-    let full = resolve(bin_path);
+    let full = File::resolve(bin_path);
     let dir = Path::parent(full.str());
     if(dir.ends_with("build") || dir.ends_with("bin")){
         let res = Path::parent(dir).str();
@@ -68,7 +69,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
     compile_dir2(dir, args, exc, Option<String>::new());
 }
 func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
-    let list: List<String> = list(dir);
+    let list: List<String> = File::list(dir);
     list.sort();
     print("compile_dir '{}' -> {} elems\n", dir, list.len());
     for(let i = 0;i < list.len();++i){
@@ -80,7 +81,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
       let file: String = dir.str();
       file.append("/");
       file.append(name);
-      if(is_dir(file.str())){
+      if(File::is_dir(file.str())){
         file.drop();
         continue;
       }
@@ -140,7 +141,7 @@ func std_test(){
 
 func std_test_regex(pat: String){
     let dir = format("{}/tests/std_test", root.get());
-    let files = list(dir.str());
+    let files = File::list(dir.str());
     for(let i = 0;i < files.len();++i){
         let fl = files.get_ptr(i);
         let fl2 = fl.str();
@@ -200,7 +201,7 @@ func normal_test(){
 func normal_test_regex(pattern: String){
     print("normal_test\n");
     let dir = format("{}/tests/normal", root.get());
-    let files = list(dir.str());
+    let files = File::list(dir.str());
     for(let i = 0;i < files.len();++i){
         let fl = files.get_ptr(i);
         let fl2 = fl.str();
