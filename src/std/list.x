@@ -62,7 +62,7 @@ impl<T> List<T>{
       return;
     }
     //panic("index {} out of bounds ({}, {})", pos, 0, self.count);
-    printf("index %d out of bounds (%d, %d)", pos, 0, self.count);
+    printf("index %d out of bounds (%d, %d)\n", pos, 0, self.count);
     exit(1);
   }
   
@@ -79,9 +79,9 @@ impl<T> List<T>{
     return elem;
   }
 
-  func pop_back(self){
+  func pop_back(self): T{
     let idx = self.len() - 1;
-    self.remove(idx);
+    return self.remove(idx);
   }
 
   func add(self, e: T): T*{

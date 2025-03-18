@@ -237,10 +237,10 @@ impl Parent{
   }
   func clone(self): Parent{
     match self{
-      Parent::None => return Parent::None;,
-      Parent::Impl(info*) => return Parent::Impl{info.clone()};,
-      Parent::Trait(type*) => return Parent::Trait{type.clone()};,
-      Parent::Extern => return Parent::Extern;,
+      Parent::None => return Parent::None,
+      Parent::Impl(info*) => return Parent::Impl{info.clone()},
+      Parent::Trait(type*) => return Parent::Trait{type.clone()},
+      Parent::Extern => return Parent::Extern,
     }
     /*if let Parent::None=(self){
       return Parent::None;
@@ -327,13 +327,6 @@ impl Simple{
     return Simple{scope: self.scope.clone(), name: self.name.clone(), args: self.args.clone()};
   }
 }
-
-/*enum Typex{
-  Basic(name: String),
-  Scoped(scope: Box<Type>, name: String)
-  Generic(scope: Box<Type>, name: String, args: List<Type>)
-}*/
-
 // (params)=>ret
 struct FunctionType{
   return_type: Type;
@@ -626,10 +619,10 @@ enum Body: Node{
 impl Body{
   func line(self): i32{
     match self{
-      Body::Block(b*) =>  return b.line;,
-      Body::If(is*) => return is.cond.line;,
-      Body::IfLet(il*) => return il.rhs.line;,
-      Body::Stmt(val*) => return val.line;,
+      Body::Block(b*) =>  return b.line,
+      Body::If(is*) => return is.cond.line,
+      Body::IfLet(il*) => return il.rhs.line,
+      Body::Stmt(val*) => return val.line,
     }
   }
 }

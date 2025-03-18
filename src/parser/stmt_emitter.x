@@ -16,36 +16,26 @@ import std/stack
 impl Compiler{
     func visit(self, node: Stmt*){
       self.llvm.di.get().loc(node.line, node.pos);
-      if let Stmt::Ret(e*) = (node){
-        self.visit_ret(node, e);
+      match node{
+        Stmt::Comment(str*) => panic("internal err"),
+        Stmt::Ret(e*) => self.visit_ret(node, e),
+        Stmt::Var(ve*) => self.visit_var(ve),
+        Stmt::Expr(e*) => {
+          self.visit(e);
+          return;
+        },
+        Stmt::For(fs*) => self.visit_for(node, fs),
+        Stmt::ForEach(fe*) => self.visit_for_each(node, fe),
+        Stmt::While(cnd*, body*) => self.visit_while(node, cnd, body.get()),
+        Stmt::Continue => {
+          self.own.get().do_continue(node.line);
+          CreateBr(*self.loops.last());
+        },
+        Stmt::Break => {
+          self.own.get().do_break(node.line);
+          CreateBr(*self.loopNext.last());
+        },
       }
-      else if let Stmt::Var(ve*)=(node){
-        self.visit_var(ve);
-      }
-      else if let Stmt::Expr(e*)=(node){
-        self.visit(e);
-      }
-      else if let Stmt::For(fs*)=(node){
-        self.visit_for(node, fs);
-      }
-      else if let Stmt::ForEach(fe*)=(node){
-        self.visit_for_each(node, fe);
-      }
-      else if let Stmt::While(cnd*, body*)=(node){
-        self.visit_while(node, cnd, body.get());
-      }
-      else if(node is Stmt::Continue){
-        self.own.get().do_continue(node.line);
-        CreateBr(*self.loops.last());
-      }
-      else if(node is Stmt::Break){
-        self.own.get().do_break(node.line);
-        CreateBr(*self.loopNext.last());
-      }
-      else{
-        panic("visit {:?}", node);
-      }
-      return;
     }
     func get_end_line(stmt: Stmt*): i32{
       /*if let Stmt::Block(b*)=(stmt){
@@ -58,40 +48,32 @@ impl Compiler{
     }
 
     func get_end_line(body: Body*): i32{
-      if let Body::Block(b*)=(body){
-        return b.end_line;
-      }else if let Body::Stmt(b*)=(body){
-        return b.line;
-      }else if let Body::If(b*)=(body){
-        return b.cond.line;
-      }else if let Body::IfLet(b*)=(body){
-        return b.rhs.line;
-      }else{
-        panic("");
+      match body{
+        Body::Block(b*) => return b.end_line,
+        Body::Stmt(s*) => return s.line,
+        Body::If(b*) => return b.cond.line,
+        Body::IfLet(b*) => return b.rhs.line,
       }
     }
     func get_end_line(rhs: MatchRhs*): i32{
-        if let MatchRhs::STMT(stmt*)=(rhs){
-            return get_end_line(stmt);
-        }
-        if let MatchRhs::EXPR(expr*)=(rhs){
-            return get_end_line(expr);
-        }
-        panic("");
+      match rhs{
+        MatchRhs::STMT(stmt*) => return get_end_line(stmt),
+        MatchRhs::EXPR(expr*) => return get_end_line(expr),
+      }
     }
 
     func visit_body(self, body: Body*): Option<Value*>{
-      if let Body::Block(b*)=(body){
-        return self.visit_block(b);
-      }else if let Body::Stmt(b*)=(body){
-        self.visit(b);
-        return Option<Value*>::new();
-      }else if let Body::If(b*)=(body){
-        return self.visit_if(b);
-      }else if let Body::IfLet(b*)=(body){
-        return self.visit_iflet(b.rhs.line, b);
+      match body{
+        Body::Block(b*) => return self.visit_block(b),
+        Body::Stmt(s*) => {
+          self.visit(s);
+          return Option<Value*>::new();
+        },
+        Body::If(b*) => return self.visit_if(b),
+        Body::IfLet(b*) => {
+          return self.visit_iflet(b.rhs.line, b);
+        },
       }
-      panic("");
     }
     
     func visit_while(self, stmt: Stmt*, cond: Expr*, body: Body*){

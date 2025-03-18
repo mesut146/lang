@@ -32,71 +32,39 @@ func as_type(bits: i32): Type{
   return Type::new("i32");
 }
 
-func makeSelf(scope: Type*): Type{
-    //if (scope.is_prim()) return *scope;
-    return scope.clone().toPtr();
-}
-
-func replace_self(typ: Type*, m: Method*): Type{
-    if(!typ.eq("Self")){
-        return typ.clone();
-    }
-    if let Parent::Impl(info*)=(&m.parent){
-        return info.type.clone();
-    }
-    panic("replace_self not impl method");
-}
-
-func get_type_map(type: Type*, decl: Decl*): Map<String, Type>{
-    let res = Map<String, Type>::new();
-    let targs = type.get_args();
-    let type_params = decl.type.get_args();
-    for(let i = 0;i < type_params.len();++i) {
-        let ta = targs.get_ptr(i);
-        let tp = type_params.get_ptr(i);
-        res.add(tp.print(), ta.clone());
-    } 
-    return res;
-}
-
 func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
-    if (type.is_slice() || type.is_array() || type.is_pointer()) {
-        let elem = type.elem();
-        return hasGeneric(elem, typeParams);
-    }
-    if(type.is_fpointer()){
-        let ft = type.get_ft();
-        if(hasGeneric(&ft.return_type, typeParams)){
-            return true;
-        }
-        for prm in &ft.params{
-            if(hasGeneric(prm, typeParams)){
+    match type{
+        Type::Pointer(elem*) => return hasGeneric(elem.get(), typeParams),
+        Type::Array(elem*, size) => return hasGeneric(elem.get(), typeParams),
+        Type::Slice(elem*) => return hasGeneric(elem.get(), typeParams),
+        Type::Lambda(lt*) => panic("internal err"),
+        Type::Function(ft*) => {
+            if(hasGeneric(&ft.get().return_type, typeParams)){
                 return true;
             }
+            for prm in &ft.get().params{
+                if(hasGeneric(prm, typeParams)){
+                    return true;
+                }
+            }
+            return false;
+        },
+        Type::Simple(smp*) => {
+            if (smp.args.empty()) {
+                for (let i = 0;i < typeParams.size();++i) {
+                    let tp = typeParams.get_ptr(i);
+                    if (tp.eq(type)) return true;
+                }
+            } else {
+                for (let i = 0;i < smp.args.size();++i) {
+                    let ta = smp.args.get_ptr(i);
+                    if (hasGeneric(ta, typeParams)) return true;
+                }
+            }
+            return false;
         }
-        return false;
-    }
-    if (!(type is Type::Simple)) panic("hasGeneric::Complex {:?}", type);
-    let targs = type.get_args();
-    if (targs.empty()) {
-        for (let i = 0;i < typeParams.size();++i) {
-            let tp = typeParams.get_ptr(i);
-            if (tp.eq(type)) return true;
-        }
-    } else {
-        for (let i = 0;i < targs.size();++i) {
-            let ta = targs.get_ptr(i);
-            if (hasGeneric(ta, typeParams)) return true;
-        }
-    }
-    return false;
-}
 
-func isGeneric2(typ: Type*, typeParams: List<Type>*): bool{
-    for (let i = 0;i < typeParams.size();++i) {
-        if (typeParams.get_ptr(i).eq(typ)) return true;
     }
-    return false;
 }
 
 func isUnsigned(type: Type*): bool{
@@ -112,9 +80,6 @@ func isSigned(type: Type*): bool{
     return res;
 }
 
-/*func is_less_than(){
-
-}*/
 
 func can_fit_into(val: str, target: Type*): bool{
     if(target.eq("f64")){
@@ -312,13 +277,6 @@ func is_str_lit(e: Expr*): Option<String*>{
     return Option<String*>::new();
 }
 
-func is_deref(expr: Expr*): Option<Expr*>{
-    if let Expr::Unary(op*, e*)=(expr){
-        if(op.eq("*")) return Option::new(e.get());
-    }
-    return Option<Expr*>::new();
-}
-
 enum ExitType {
     NONE,
     RETURN,
@@ -422,17 +380,17 @@ impl Exit{
 
     func get_exit_type(rhs: MatchRhs*): Exit{
         match rhs{
-            MatchRhs::EXPR(e*) => return get_exit_type(e);,
-            MatchRhs::STMT(st*) => return get_exit_type(st);,
+            MatchRhs::EXPR(e*) => return get_exit_type(e),
+            MatchRhs::STMT(st*) => return get_exit_type(st),
         }
     }
 
     func get_exit_type(body: Body*): Exit{
         match body{
-            Body::Block(b*) => return get_exit_type(b);,
-            Body::Stmt(st*) => return get_exit_type(st);,
-            Body::If(st*) => return get_exit_type(st);,
-            Body::IfLet(st*) => return get_exit_type(st);,
+            Body::Block(b*) => return get_exit_type(b),
+            Body::Stmt(st*) => return get_exit_type(st),
+            Body::If(st*) => return get_exit_type(st),
+            Body::IfLet(st*) => return get_exit_type(st),
         }
     }
 

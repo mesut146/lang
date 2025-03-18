@@ -169,8 +169,8 @@ struct Resolver{
   scopes: List<Scope>;
   ctx: Context*;
   used_methods: HashMap<String, Method*>;
-  //used_methods: List<Method*>;
-  generated_methods: List<Box<Method>>;
+  generated_methods: HashMap<String, List<Box<Method>>>;
+  generated_methods_todo: List<Desc>;
   inLoop: i32;
   //used_types: HashSet<RType>;
   used_types: List<RType>;
@@ -215,8 +215,8 @@ impl Resolver{
       scopes: List<Scope>::new(),
       ctx: ctx,
       used_methods: HashMap<String, Method*>::new(),
-      //used_methods: List<Method*>::new(),
-      generated_methods: List<Box<Method>>::new(),
+      generated_methods: HashMap<String, List<Box<Method>>>::new(),
+      generated_methods_todo: List<Desc>::new(),
       inLoop: 0,
       //used_types: HashSet<RType>::new(),
       used_types: List<RType>::new(),
@@ -243,6 +243,7 @@ impl Drop for Resolver{
     self.scopes.drop();
     self.used_methods.drop();
     self.generated_methods.drop();
+    self.generated_methods_todo.drop();
     self.used_types.drop();
     self.generated_decl.drop();
     self.format_map.drop();
@@ -259,7 +260,7 @@ enum RtKind{
   None,//prim, ptr
   Method,//normal method in items
   MethodImpl(idx2: i32),//impl method
-  MethodGen,//generic method in resolver
+  MethodGen(name: String),//generic method in resolver
   MethodExtern(idx2: i32),
   Decl,//decl in items
   DeclGen,//generic decl in resolver
@@ -275,6 +276,14 @@ impl RtKind{
   }
   func is_trait(self): bool{
     return self is RtKind::Trait;
+  }
+}
+impl Clone for RtKind{
+  func clone(self): RtKind{
+    match self{
+      RtKind::MethodGen(name*) => RtKind::MethodGen{name.clone()},
+      _ => ptr::deref(self),//safe
+    }
   }
 }
 
@@ -294,7 +303,7 @@ impl Desc{
   }
   func clone(self): Desc{
     return Desc{
-      kind: self.kind,
+      kind: self.kind.clone(),
       path: self.path.clone(),
       idx: self.idx
     };
@@ -588,13 +597,19 @@ impl Resolver{
           print("resolve method done\n");
       }
     }
-    for(let j = 0;j < self.generated_methods.len();++j){
-      let gm = self.generated_methods.get_ptr(j).get();
-      self.visit_method(gm);
-      if(self.ctx.verbose_all){
-          print("resolve method done {}/{}\n", j+1,self.generated_methods.len());
-      }
+    while(!self.generated_methods_todo.empty()){
+      let desc = self.generated_methods_todo.pop_back();
+      let tmp = Type::new("?tmp?");
+      let gm = self.get_method(&desc, &tmp);
+      self.visit_method(gm.unwrap());
+      desc.drop();
+      tmp.drop();
     }
+    /*for pair in &self.generated_methods{
+      for gm in pair.b{
+        self.visit_method(gm.get());
+      }
+    }*/
     for lm in &self.lambdas{
         self.visit_method(lm.b);
     }
@@ -769,7 +784,7 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Decl){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(rt.desc.idx);
+      let item = unit.items.get(rt.desc.idx);
       if let Item::Decl(decl*) = (item){
         return Option::new(decl);
       }
@@ -777,7 +792,7 @@ impl Resolver{
     if(rt.desc.kind is RtKind::DeclGen){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       if(resolver.generated_decl.in_index(rt.desc.idx)){
-        let decl = resolver.generated_decl.get_ptr(rt.desc.idx).get();
+        let decl = resolver.generated_decl.get(rt.desc.idx).get();
         if(!decl.type.eq(rt.type.get_ptr())){
           panic("get_decl err {:?}={:?}", rt.type, rt.desc);
         }
@@ -793,7 +808,7 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Trait){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(rt.desc.idx);
+      let item = unit.items.get(rt.desc.idx);
       if let Item::Trait(tr*) = (item){
         return Option::new(tr);
       }
@@ -810,31 +825,32 @@ impl Resolver{
     if(desc.kind is RtKind::Method){
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(desc.idx);
+      let item = unit.items.get(desc.idx);
       if let Item::Method(m*) = (item){
         return Option::new(m);
       }
     }
-    if let RtKind::MethodImpl(idx2) = (desc.kind){
+    if let RtKind::MethodImpl(idx2) = (&desc.kind){
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(desc.idx);
+      let item = unit.items.get(desc.idx);
       if let Item::Impl(imp*) = (item){
-        let m = imp.methods.get_ptr(idx2);
+        let m = imp.methods.get(idx2);
         return Option::new(m);
       }
     }
-    if let RtKind::MethodGen = (desc.kind){
+    if let RtKind::MethodGen(name*) = (&desc.kind){
       let resolver = self.ctx.create_resolver(&desc.path);
-      let m = resolver.generated_methods.get_ptr(desc.idx);
+      let arr = resolver.generated_methods.get(name).unwrap();
+      let m = arr.get(desc.idx);
       return Option::new(m.get());
     }
-    if let RtKind::MethodExtern(idx2) = (desc.kind){
+    if let RtKind::MethodExtern(idx2) = (&desc.kind){
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get_ptr(desc.idx);
+      let item = unit.items.get(desc.idx);
       if let Item::Extern(methods*) = (item){
-        let m = methods.get_ptr(idx2);
+        let m = methods.get(idx2);
         return Option::new(m);
       }
     }
@@ -1409,6 +1425,11 @@ impl Resolver{
   }
 
   func add_generated(self, decl: Decl): Decl*{
+    for old in &self.generated_decl{
+      if(old.get().type.eq(&decl.type)){
+        panic("old decl");
+      }
+    }
     let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;

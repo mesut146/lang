@@ -381,8 +381,8 @@ impl AstCopier{
     }
     func visit(self, node: LambdaBody*): LambdaBody{
         match node{
-            LambdaBody::Expr(e*) => return LambdaBody::Expr{self.visit(e)};,
-            LambdaBody::Stmt(st*) => return LambdaBody::Stmt{self.visit(st)};
+            LambdaBody::Expr(e*) => return LambdaBody::Expr{self.visit(e)},
+            LambdaBody::Stmt(st*) => return LambdaBody::Stmt{self.visit(st)},
         }
     }
 

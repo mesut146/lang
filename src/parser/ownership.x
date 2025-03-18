@@ -496,7 +496,7 @@ impl Own{
             if let StateType::MOVED(mv_line) = (pair.b){
                 if let Rhs::FIELD(scp*, name*) = (pair.a){
                     if(scp.type.is_pointer()){
-                        self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}", mv_line));
+                        self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}, {:?}", mv_line, pair.a));
                     }
                 }
             }

@@ -239,9 +239,10 @@ impl Compiler{
   func get_all_methods(self): List<Method*>{
       let list = getMethods(self.unit());
       let resolver = self.get_resolver();
-      for (let i = 0;i < resolver.generated_methods.len();++i) {
-        let m = resolver.generated_methods.get_ptr(i).get();
-        list.add(m);
+      for pair in &resolver.generated_methods{
+        for m in pair.b{
+          list.add(m.get());
+        }
       }
       return list;
   }
@@ -276,12 +277,11 @@ impl Compiler{
       }
     }
     //generic methods from resolver
-    for (let i = 0;i < resolver.generated_methods.len();++i) {
-        let m = resolver.generated_methods.get_ptr(i).get();
-        self.genCode(m);
-        if(self.ctx.verbose_all){
-            print("gencode2 done {}/{}\n", i+1, resolver.generated_methods.len());
-        }
+
+    for pair in &resolver.generated_methods{
+      for m in pair.b{
+        self.genCode(m.get());
+      }
     }
     for p in &resolver.lambdas{
         self.genCode(p.b);
@@ -458,9 +458,10 @@ impl Compiler{
     //generic methods from resolver
     //print("gen m\n");
     let r = self.get_resolver();
-    for (let i = 0;i < r.generated_methods.len();++i) {
-        let m = r.generated_methods.get_ptr(i).get();
-        p.make_proto(m);
+    for pair in &r.generated_methods{
+        for m in pair.b{
+          p.make_proto(m.get());
+        }
     }
     //print("used m\n");
     for pr in &r.used_methods{

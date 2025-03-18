@@ -181,6 +181,14 @@ impl<K, V> HashMap<K, V>{
         }
         return Option<V*>::new();
     }
+
+    func get_or_insert(self, k: K*, vf: func() => V): V*{
+        let opt = self.get(k);
+        if(opt.is_some()) return opt.unwrap();
+        let v = vf();
+        self.insert(k, v);
+        return get.get(k).unwrap();
+    }
     
     func contains(self, key: K*): bool{
         return self.get(key).is_some();

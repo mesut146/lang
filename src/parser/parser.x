@@ -653,7 +653,7 @@ impl Parser{
         return Stmt::Ret{.id, Option<Expr>::new()};
       }else{
         let e = self.parse_expr();
-        if(force_semi){
+        if(force_semi || self.is(TokenType::SEMI)){
           self.consume(TokenType::SEMI);
         }
         return Stmt::Ret{.id, Option::new(e)};
@@ -870,7 +870,7 @@ impl Parser{
   func parse_match(self): Expr{
     self.consume(TokenType::MATCH);
     let id = self.node();
-    let expr = self.prim(false);
+    let expr = self.prim2(false);
     let res = Match{expr: expr, cases: List<MatchCase>::new()};
     self.consume(TokenType::LBRACE);
     while(!self.is(TokenType::RBRACE)){

@@ -15,6 +15,8 @@ impl DropHelper{
   func new(r: Resolver*): DropHelper{
     return DropHelper{r};
   }
+  //todo cache drop types
+  
   func is_drop_type(self, expr: Expr*): bool{
     let rt = self.r.visit(expr);
     let res = self.is_drop_type(&rt);

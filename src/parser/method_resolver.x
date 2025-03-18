@@ -126,6 +126,15 @@ impl Signature{
         map.drop();
         return res;
     }
+    func replace_self(typ: Type*, m: Method*): Type{
+        if(!typ.eq("Self")){
+            return typ.clone();
+        }
+        if let Parent::Impl(info*)=(&m.parent){
+            return info.type.clone();
+        }
+        panic("replace_self not impl method");
+    }
     func new(m: Method*, map: Map<String, Type>*, desc: Desc, r: Resolver*, origin: Resolver*): Signature{
         let res = Signature{mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
@@ -602,33 +611,41 @@ impl MethodResolver{
 
     func generateMethod(self, map: Map<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
         let mc = sig.mc.unwrap();
-        for (let i = 0;i < self.r.generated_methods.len();++i) {
-            let gm = self.r.generated_methods.get_ptr(i).get();
-            if(!m.name.eq(gm.name.str())) continue;
-            let sig2 = Signature::new(gm, Desc::new(), self.r, self.r);
-            let sig_res: SigResult = self.is_same(sig, &sig2);
-            let is_err = sig_res is SigResult::Err;
-            sig2.drop();
-            sig_res.drop();
-            if(!is_err){
-                let desc = Desc{
-                    kind: RtKind::MethodGen,
-                    path: self.r.unit.path.clone(),
-                    idx: i
-                };
-                return Pair::new(gm, desc);
+        let arr_opt = self.r.generated_methods.get(&m.name);
+        if(arr_opt.is_some()){
+            let i = 0;
+            for gm in arr_opt.unwrap(){
+                let sig2 = Signature::new(gm.get(), Desc::new(), self.r, self.r);
+                let sig_res: SigResult = self.is_same(sig, &sig2);
+                let is_err = sig_res is SigResult::Err;
+                sig2.drop();
+                sig_res.drop();
+                if(!is_err){
+                    let desc = Desc{
+                        kind: RtKind::MethodGen{m.name.clone()},
+                        path: self.r.unit.path.clone(),
+                        idx: i
+                    };
+                    return Pair::new(gm.get(), desc);
+                }
+                ++i;
             }
         }
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
         //print("add gen {} {}\n", printMethod(&res2), mc);
-        let res: Method* = self.r.generated_methods.add(Box::new(res2)).get();
+        if(arr_opt.is_none()){
+            self.r.generated_methods.add(m.name.clone(), List<Box<Method>>::new());
+            arr_opt = self.r.generated_methods.get(&m.name);
+        }
         let desc = Desc{
-            kind: RtKind::MethodGen,
+            kind: RtKind::MethodGen{m.name.clone()},
             path: self.r.unit.path.clone(),
-            idx: self.r.generated_methods.len() as i32 - 1
+            idx: arr_opt.unwrap().len() as i32
         };
+        self.r.generated_methods_todo.add(desc.clone());
+        let res: Method* = arr_opt.unwrap().add(Box::new(res2)).get();
         if(!(m.parent is Parent::Impl)){
             return Pair::new(res, desc);
         }
@@ -843,7 +860,7 @@ impl MethodResolver{
     }
 
     func is_compatible(arg: Type*, arg_str: String*, arg_val: Option<String>*, target: Type*, target_str: String*, typeParams: List<Type>*): Option<String>{
-        if (isGeneric2(target, typeParams)) return Option<String>::new();
+        if (typeParams.contains(target)) return Option<String>::new();
         if (arg_str.eq(target_str.str())) return Option<String>::new();
         if(arg.is_pointer()){
             if(target.is_pointer()){

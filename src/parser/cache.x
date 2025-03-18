@@ -1,4 +1,4 @@
-import std/map
+import std/hashmap
 import std/io
 import std/fs
 import parser/bridge
@@ -6,7 +6,7 @@ import parser/bridge
 static use_cache: bool = true;
 
 struct Cache{
-    map: Map<String, String>;
+    map: HashMap<String, String>;
     file: String;
 }
 
@@ -17,7 +17,7 @@ func CACHE_FILE(out_dir: str): String{
 impl Cache{
     func new(out_dir: str): Cache{
         return Cache{
-            map: Map<String, String>::new(),
+            map: HashMap<String, String>::new(),
             file: CACHE_FILE(out_dir)
         };
     }
@@ -64,7 +64,7 @@ impl Cache{
         let resolved = File::resolve(file);
         file = resolved.str();
         let file_s = file.str();
-        let old = self.map.get_ptr(&file_s);
+        let old = self.map.get(&file_s);
         file_s.drop();
         if(old.is_some()){
             let old_time = old.unwrap();
