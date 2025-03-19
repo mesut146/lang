@@ -45,9 +45,8 @@ impl VarScope{
         f.print(", line: ");
         f.print(&self.line);
         f.print("{");
-        for(let i = 0;i < self.vars.len();++i){
-            let var_id = *self.vars.get_ptr(i);
-            let var = own.get_var(var_id);
+        for var_id in &self.vars{
+            let var = own.get_var(*var_id);
             f.print("\n");
             f.print(indent);
             f.print("  let ");
@@ -57,8 +56,7 @@ impl VarScope{
             f.print(", line: ");
             f.print(&var.line);
         }
-        for(let i=0;i<self.objects.len();++i){
-            let obj = self.objects.get_ptr(i);
+        for obj in &self.objects{
             f.print("\n");
             f.print(indent);
             f.print("  obj line: ");

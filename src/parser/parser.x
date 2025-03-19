@@ -84,7 +84,7 @@ impl Parser{
   
   func get(self, pos: i32): Token*{
     if(pos >= self.tokens.len()) panic("eof pos={} len={}", pos, self.tokens.len());
-    return self.tokens.get_ptr(pos);
+    return self.tokens.get(pos);
   }
   
   func pop(self): Token*{

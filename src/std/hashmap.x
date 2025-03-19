@@ -31,6 +31,10 @@ impl<K, V> HashMap<K, V>{
     func len(self): i64{
         return self.count;
     }
+
+    func empty(self): bool{
+        return self.count == 0;
+    }
     
     func cap(self): i64{
         return self.buckets.len();
@@ -51,7 +55,7 @@ impl<K, V> HashMap<K, V>{
     
     func get_node(self, key: K*): Option<HashNode<K, V>>*{
         let idx = self.get_index(key);
-        return self.buckets.get_ptr(idx);
+        return self.buckets.get(idx);
     }
 
     func rehash(self){
@@ -86,7 +90,7 @@ impl<K, V> HashMap<K, V>{
     func insert(self, key: K, value: V): Option<V>{
         let hash = key.hash();
         let idx = self.get_index(hash);
-        let opt: Option<HashNode<K, V>>* = self.buckets.get_ptr(idx);
+        let opt: Option<HashNode<K, V>>* = self.buckets.get(idx);
         if(opt.is_none()){
             opt.set(HashNode{
                 key: key,
@@ -134,34 +138,11 @@ impl<K, V> HashMap<K, V>{
     func add(self, key: K, value: V): Option<V>{
         return self.insert(key, value);
     }
-    
-    func get2(self, key: K*){
-        let hash = key.hash();
-        let idx = self.get_index(hash);
-        for(let i = 0;i < self.buckets.len();++i){
-            let opt = self.buckets.get_ptr(i);
-            if(opt.is_none()) continue;
-            let node = opt.get();
-            if(node.key.eq(key)){
-                dbg(true, 967);
-                self.get(key);
-                panic("key={:?} h={} idx={} i={}\n", key, hash, idx, i);
-            }
-            while(node.next.is_some()){
-                node = node.next.get();
-                if(node.key.eq(key)){
-                    dbg(true, 967);
-                    self.get(key);
-                    panic("key={:?} h={} idx={} i={}\n", key, hash, idx, i);
-                }
-            }
-        }
-    }
 
     func get(self, key: K*): Option<V*> {
         let hash = key.hash();
         let idx = self.get_index(hash);
-        let opt: Option<HashNode<K, V>>* = self.buckets.get_ptr(idx);
+        let opt: Option<HashNode<K, V>>* = self.buckets.get(idx);
         if(opt.is_none()){
             return Option<V*>::new();
         }
@@ -212,7 +193,7 @@ impl<K, V> HashMap<K, V>{
     
     func dump(self){
         for(let i = 0;i < self.buckets.len();++i){
-            let opt = self.buckets.get_ptr(i);
+            let opt = self.buckets.get(i);
             if(opt.is_none()) continue;
             let node = opt.get();
             print("{:?}={:?} hash={} i={} idx={}\n\n", node.key, node.value, node.hash, i, self.get_index(node.hash));
@@ -241,7 +222,7 @@ impl<K, V> Debug for HashMap<K, V>{
         f.print("{");
         let cnt = 0;
         for(let i = 0;i < self.buckets.len();++i){
-            let opt = self.buckets.get_ptr(i);
+            let opt = self.buckets.get(i);
             if(opt.is_none()) continue;
             let node = opt.get();
             if(cnt > 0){
@@ -293,10 +274,10 @@ impl<K, V> Iterator<Pair<K*, V*>> for HashMapIter<K, V>{
       }
       return res;
     }
-    let node_opt: Option<HashNode<K, V>>* = self.map.buckets.get_ptr(self.pos);
+    let node_opt: Option<HashNode<K, V>>* = self.map.buckets.get(self.pos);
     while(node_opt.is_none() && self.pos < self.map.buckets.len() - 1){
         self.pos += 1;
-        node_opt = self.map.buckets.get_ptr(self.pos);
+        node_opt = self.map.buckets.get(self.pos);
     }
     if(node_opt.is_none()) return Option<Pair<K*, V*>>::none();
     
@@ -347,10 +328,10 @@ impl<K, V> Iterator<K*> for MapKeysIter<K, V>{
       }
       return res;
     }
-    let node_opt: Option<HashNode<K, V>>* = self.map.buckets.get_ptr(self.pos);
+    let node_opt: Option<HashNode<K, V>>* = self.map.buckets.get(self.pos);
     while(node_opt.is_none() && self.pos < self.map.buckets.len() - 1){
         self.pos += 1;
-        node_opt = self.map.buckets.get_ptr(self.pos);
+        node_opt = self.map.buckets.get(self.pos);
     }
     if(node_opt.is_none()) return Option<K*>::none();
     

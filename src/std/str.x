@@ -225,7 +225,7 @@ impl str{
     func join(self, arr: List<String>*): String{
       let res = String::new();
       for(let i = 0;i < arr.len();++i){
-        let s = arr.get_ptr(i);
+        let s = arr.get(i);
         res.append(s.str());
         if(i + 1 < arr.len()){
           res.append(*self);

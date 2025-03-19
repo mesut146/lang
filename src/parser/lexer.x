@@ -1,6 +1,6 @@
 import parser/token
 import parser/utils
-import std/map
+import std/hashmap
 import std/libc
 import std/io
 import std/fs
@@ -11,8 +11,9 @@ struct Lexer{
   pos: i32;
   line: i32;
   single_line: i32;//macro code is single lined
-  ops: Map<str, TokenType>;
 }
+
+static lexer_ops = HashMap<str, TokenType>::new();
 
 impl i8{
   func in(self, a: i32, b: i32): bool{ return *self <= b && *self >= a; }
@@ -33,11 +34,13 @@ impl i8{
 
 impl Lexer{
   func from_path(path: String): Lexer{
+    make_ops();
     let s = File::read_string(path.str());
-    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1, ops: make_ops()};
+    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1};
   }
   func from_string(path: String, buf: String, line: i32): Lexer{
-    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line, ops: make_ops()};
+    make_ops();
+    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line};
   }
   
   func peek(self): i8{
@@ -107,51 +110,52 @@ impl Lexer{
     panic("invalid escape: {}", c);
   }
   
-  func make_ops(): Map<str, TokenType>{
-    let ops = Map<str, TokenType>::new();
-    ops.add("{", TokenType::LBRACE);
-    ops.add("}", TokenType::RBRACE);
-    ops.add("(", TokenType::LPAREN);
-    ops.add(")", TokenType::RPAREN);
-    ops.add("[", TokenType::LBRACKET);
-    ops.add("]", TokenType::RBRACKET);
-    ops.add(":", TokenType::COLON);
-    ops.add("::", TokenType::COLON2);
-    ops.add(";", TokenType::SEMI);
-    ops.add(",", TokenType::COMMA);
-    ops.add(".", TokenType::DOT);
-    ops.add("<", TokenType::LT);
-    ops.add(">", TokenType::GT);
-    ops.add("<<", TokenType::LTLT);
-    //ops.add(">>", TokenType::GTGT);
-    ops.add("=", TokenType::EQ);
-    ops.add("+=", TokenType::PLUSEQ);
-    ops.add("-=", TokenType::MINUSEQ);
-    ops.add("*=", TokenType::MULEQ);
-    ops.add("/=", TokenType::DIVEQ);
-    ops.add("^=", TokenType::POWEQ);
-    ops.add("+", TokenType::PLUS);
-    ops.add("-", TokenType::MINUS);
-    ops.add("*", TokenType::STAR);
-    ops.add("/", TokenType::DIV);
-    ops.add("%", TokenType::PERCENT);
-    ops.add("^", TokenType::POW);
-    ops.add("~", TokenType::TILDE);
-    ops.add("&", TokenType::AND);
-    ops.add("|", TokenType::OR);
-    ops.add("&&", TokenType::ANDAND);
-    ops.add("||", TokenType::OROR);
-    ops.add("==", TokenType::EQEQ);
-    ops.add("!=", TokenType::NOTEQ);
-    ops.add("<=", TokenType::LTEQ);
-    ops.add(">=", TokenType::GTEQ);
-    ops.add("!", TokenType::BANG);
-    ops.add("#", TokenType::HASH);
-    ops.add("++", TokenType::PLUSPLUS);
-    ops.add("--", TokenType::MINUSMINUS);
-    ops.add("..", TokenType::DOTDOT);
-    ops.add("=>", TokenType::ARROW);
-    return ops;
+  func make_ops(){
+    if(!lexer_ops.empty()){
+      return;
+    }
+    lexer_ops.add("{", TokenType::LBRACE);
+    lexer_ops.add("}", TokenType::RBRACE);
+    lexer_ops.add("(", TokenType::LPAREN);
+    lexer_ops.add(")", TokenType::RPAREN);
+    lexer_ops.add("[", TokenType::LBRACKET);
+    lexer_ops.add("]", TokenType::RBRACKET);
+    lexer_ops.add(":", TokenType::COLON);
+    lexer_ops.add("::", TokenType::COLON2);
+    lexer_ops.add(";", TokenType::SEMI);
+    lexer_ops.add(",", TokenType::COMMA);
+    lexer_ops.add(".", TokenType::DOT);
+    lexer_ops.add("<", TokenType::LT);
+    lexer_ops.add(">", TokenType::GT);
+    lexer_ops.add("<<", TokenType::LTLT);
+    //lexer_ops.add(">>", TokenType::GTGT);
+    lexer_ops.add("=", TokenType::EQ);
+    lexer_ops.add("+=", TokenType::PLUSEQ);
+    lexer_ops.add("-=", TokenType::MINUSEQ);
+    lexer_ops.add("*=", TokenType::MULEQ);
+    lexer_ops.add("/=", TokenType::DIVEQ);
+    lexer_ops.add("^=", TokenType::POWEQ);
+    lexer_ops.add("+", TokenType::PLUS);
+    lexer_ops.add("-", TokenType::MINUS);
+    lexer_ops.add("*", TokenType::STAR);
+    lexer_ops.add("/", TokenType::DIV);
+    lexer_ops.add("%", TokenType::PERCENT);
+    lexer_ops.add("^", TokenType::POW);
+    lexer_ops.add("~", TokenType::TILDE);
+    lexer_ops.add("&", TokenType::AND);
+    lexer_ops.add("|", TokenType::OR);
+    lexer_ops.add("&&", TokenType::ANDAND);
+    lexer_ops.add("||", TokenType::OROR);
+    lexer_ops.add("==", TokenType::EQEQ);
+    lexer_ops.add("!=", TokenType::NOTEQ);
+    lexer_ops.add("<=", TokenType::LTEQ);
+    lexer_ops.add(">=", TokenType::GTEQ);
+    lexer_ops.add("!", TokenType::BANG);
+    lexer_ops.add("#", TokenType::HASH);
+    lexer_ops.add("++", TokenType::PLUSPLUS);
+    lexer_ops.add("--", TokenType::MINUSMINUS);
+    lexer_ops.add("..", TokenType::DOTDOT);
+    lexer_ops.add("=>", TokenType::ARROW);
   }
   
   func kw(s: str): TokenType{
@@ -199,7 +203,7 @@ impl Lexer{
           continue;
         }
         let s = self.str(self.pos, self.pos + i); 
-        let it = self.ops.get_ptr(&s);
+        let it = lexer_ops.get(&s);
         if (it.is_some()) {
             self.pos += i;
             let tok = it.unwrap(); 
@@ -327,7 +331,7 @@ impl Lexer{
     let os = String::new();
     os.append(c);
     let oss = os.str();
-    if(self.ops.get_ptr(&oss).is_some()){
+    if(lexer_ops.get(&oss).is_some()){
       os.drop();
       return self.read_op();
     }

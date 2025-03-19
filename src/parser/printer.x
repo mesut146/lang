@@ -30,7 +30,7 @@ func format_dir(dir: str, out: str){
 func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   for(let i = 0;i < arr.len();++i){
     if(i > 0) f.print(sep);
-    arr.get_ptr(i).debug(f);
+    arr.get(i).debug(f);
   }
 }
 
@@ -48,7 +48,7 @@ func body(node: Stmt*, f: Fmt*, skip_first: bool){
     if(j > 0 || !skip_first){
       f.print("    ");
     }
-    f.print(lines.get_ptr(j));
+    f.print(lines.get(j));
   }
   str.drop();
   lines.drop();
@@ -65,7 +65,7 @@ func body(node: Expr*, f: Fmt*, skip_first: bool){
     if(j > 0 || !skip_first){
       f.print("    ");
     }
-    f.print(lines.get_ptr(j));
+    f.print(lines.get(j));
     if(j < lines.len() - 1){
         f.print("\n");
     }
@@ -152,11 +152,11 @@ impl Debug for Impl{
         if(i>0){
             f.print("\n");
         }
-      let ms = Fmt::str(self.methods.get_ptr(i));
+      let ms = Fmt::str(self.methods.get(i));
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
         f.print("    ");
-        f.print(lines.get_ptr(j));
+        f.print(lines.get(j));
         f.print("\n");
       }
       ms.drop();
@@ -205,7 +205,7 @@ impl Debug for Decl{
         f.print("{\n");
         for(let i = 0;i < fields.len();++i){
           f.print("    ");
-          fields.get_ptr(i).debug(f);
+          fields.get(i).debug(f);
           f.print(";\n");
         }
         f.print("}");
@@ -215,14 +215,14 @@ impl Debug for Decl{
         decl.type.debug(f);
         f.print("{\n");
         for(let i = 0;i < variants.len();++i){
-          let ev = variants.get_ptr(i);
+          let ev = variants.get(i);
           f.print("    ");
           f.print(&ev.name);
           if(ev.fields.len()>0){
             f.print("(");
             for(let j = 0;j < ev.fields.len();++j){
               if(j > 0) f.print(", ");
-              ev.fields.get_ptr(j).debug(f);
+              ev.fields.get(j).debug(f);
             }
             f.print(")");
           }
@@ -325,7 +325,7 @@ impl Debug for Simple{
       f.print("<");
       for(let i = 0;i < self.args.len();++i){
         if(i>0) f.print(", ");
-        self.args.get_ptr(i).debug(f);
+        self.args.get(i).debug(f);
       }
       f.print(">");
     }
@@ -452,7 +452,7 @@ impl Debug for Block{
     f.print("{\n");
     for(let i = 0;i < self.list.len();++i){
         if(i>0) f.print("\n");
-       body(self.list.get_ptr(i), f);
+       body(self.list.get(i), f);
     }
     if(self.return_expr.is_some()){
         if(!self.list.empty()){
@@ -471,7 +471,7 @@ impl Debug for Block{
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
     for(let i=0;i<self.list.len();++i){
-      self.list.get_ptr(i).debug(f);
+      self.list.get(i).debug(f);
     }
   }
 }
@@ -637,7 +637,7 @@ impl Debug for Match{
         //f.print("    ,\n");
       }
       f.print("    ");
-      let case = self.cases.get_ptr(i);
+      let case = self.cases.get(i);
       if(case.lhs is MatchLhs::NONE){
         f.print("_");
       }

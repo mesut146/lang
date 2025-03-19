@@ -232,7 +232,7 @@ impl Compiler{
       SetInsertPoint(then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.own.get().do_move(&node.rhs);
-      let variant = decl.get_variants().get_ptr(index);
+      let variant = decl.get_variants().get(index);
       self.llvm.di.get().new_scope(line);
       if(!variant.fields.empty()){
         //declare vars
@@ -242,8 +242,8 @@ impl Compiler{
         let var_ty = self.get_variant_ty(decl, variant);
         for (let i = 0; i < fields.size(); ++i) {
             //regular var decl
-            let prm = fields.get_ptr(i);
-            let arg = node.args.get_ptr(i);
+            let prm = fields.get(i);
+            let arg = node.args.get(i);
             self.alloc_enum_arg(arg, variant, i, decl, rhs);
             /*let gep_idx = i;
             if(decl.base.is_some()){
@@ -399,7 +399,7 @@ impl Compiler{
       SetInsertPoint(updatebb);
       //self.llvm.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {
-        let u = node.updaters.get_ptr(i);
+        let u = node.updaters.get(i);
         self.visit(u);
       }
       self.llvm.di.get().exit_scope();
@@ -416,7 +416,7 @@ impl Compiler{
 
     func visit_var(self, node: VarExpr*){
       for(let i = 0;i < node.list.len();++i){
-        let f = node.list.get_ptr(i);
+        let f = node.list.get(i);
         let ptr = self.get_alloc(f.id);
         self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
@@ -445,7 +445,7 @@ impl Compiler{
 
     func visit_block(self, node: Block*): Option<Value*>{
       for(let i = 0;i < node.list.len();++i){
-        let st = node.list.get_ptr(i);
+        let st = node.list.get(i);
         self.visit(st);
       }
       if(node.return_expr.is_some()){

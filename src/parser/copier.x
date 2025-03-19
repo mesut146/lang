@@ -36,7 +36,7 @@ impl AstCopier{
     func visit_list<E>(self, list: List<E>*): List<E>{
         let res = List<E>::new();
         for(let i = 0;i < list.size();++i){
-            let arg = list.get_ptr(i);
+            let arg = list.get(i);
             res.add(self.visit(arg));
         }
         return res;
@@ -44,7 +44,7 @@ impl AstCopier{
 
     func visit_list<E>(self, list1: List<E>*, list2: List<E>*){
         for(let i = 0;i < list1.size();++i){
-            let arg = list1.get_ptr(i);
+            let arg = list1.get(i);
             list2.add(self.visit(arg));
         }
     }
@@ -156,14 +156,14 @@ impl AstCopier{
         }
         let smp = type.as_simple();
         if(self.map.contains(&smp.name)){
-            return self.map.get_ptr(&smp.name).unwrap().clone();
+            return self.map.get(&smp.name).unwrap().clone();
         }
         let res = Simple::new(smp.name.clone());
         if (smp.scope.is_some()) {
             res.scope = Ptr::new(self.visit(smp.scope.get()));
         }
         for (let i = 0; i < smp.args.size(); ++i) {
-            let ta = smp.args.get_ptr(i);
+            let ta = smp.args.get(i);
             res.args.add(self.visit(ta));
         }
         return res.into(type.line);
@@ -204,7 +204,7 @@ impl AstCopier{
     func visit(self, m: Method*): Method{
         let type_params = List<Type>::new();
         for(let i = 0;i < m.type_params.size();++i){
-            let ta = m.type_params.get_ptr(i);
+            let ta = m.type_params.get(i);
             type_params.add(self.visit(ta));
         }
         let selff = Option<Param>::new();

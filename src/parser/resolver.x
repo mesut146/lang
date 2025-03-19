@@ -433,7 +433,7 @@ impl Context{
     let suffix = is.str();
     suffix.append(".x");
     for(let i = 0;i < self.search_paths.len();++i){
-      let path = self.search_paths.get_ptr(i).clone();
+      let path = self.search_paths.get(i).clone();
       path.append("/");
       path.append(&suffix);
       if(File::is_file(path.str())){
@@ -459,7 +459,7 @@ impl Scope{
   }
   func find(self, name: String*): Option<VarHolder*>{
     for(let i = 0;i < self.list.len();++i){
-      let vh = self.list.get_ptr(i);
+      let vh = self.list.get(i);
       if(vh.name.eq(name)){
         return Option::new(vh);
       }
@@ -471,7 +471,7 @@ impl Scope{
 func join(list: List<String>*, sep: str): String{
   let s = String::new();
   for(let i = 0;i < list.len();++i){
-    let path = list.get_ptr(i);
+    let path = list.get(i);
     s.append(path.str());
   }
   return s;
@@ -480,7 +480,7 @@ func join(list: List<String>*, sep: str): String{
 func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
   let s2: String = join(&is.list, "/");
   for (let i = 0;i < arr.len();++i) {
-      let i1 = arr.get_ptr(i);
+      let i1 = arr.get(i);
       let s1: String = join(&i1.list, "/");
       let res = s1.eq(&s2);
       s1.drop();
@@ -528,7 +528,7 @@ impl Resolver{
     //add preludes
     if(self.ctx.std_path.is_some()){
       for (let i = 0;i < self.ctx.prelude.len();++i) {
-        let pre: String* = self.ctx.prelude.get_ptr(i);
+        let pre: String* = self.ctx.prelude.get(i);
         //skip self unit being prelude
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         let path2 = path.str();
@@ -545,7 +545,7 @@ impl Resolver{
     }
     //normal imports
     for (let i = 0;i < self.unit.imports.len();++i) {
-      let is = self.unit.imports.get_ptr(i);
+      let is = self.unit.imports.get(i);
       let path = self.ctx.get_path(is);
       if(!added.contains(&path.str())){
         let r = self.ctx.create_resolver(&path);
@@ -558,7 +558,7 @@ impl Resolver{
     if (self.curMethod.is_some() && !self.curMethod.unwrap_ptr().type_params.empty()) {
       let imports = &self.get_unit(&self.curMethod.unwrap_ptr().path).imports;
       for (let i = 0;i < imports.len();++i) {
-          let is = imports.get_ptr(i);
+          let is = imports.get(i);
           //skip self being cycle
           let path = self.ctx.get_path(is);
           if (!added.contains(&path.str())) {
@@ -591,7 +591,7 @@ impl Resolver{
     self.newScope();//globals
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
-      let item = self.unit.items.get_ptr(i);
+      let item = self.unit.items.get(i);
       self.visit_item(item);
       if(self.ctx.verbose_all && item is Item::Method){
           print("resolve method done\n");
@@ -623,7 +623,7 @@ impl Resolver{
   
   func init_globals(self){
     for (let i = 0;i < self.unit.globals.len();++i) {
-        let g = self.unit.globals.get_ptr(i);
+        let g = self.unit.globals.get(i);
         let rhs: RType = self.visit(&g.expr);
         if (g.type.is_some()) {
             let type = self.getType(g.type.get());
@@ -655,7 +655,7 @@ impl Resolver{
     self.is_init = true;
 
     for(let i = 0;i < self.unit.items.len();++i){
-      let it = self.unit.items.get_ptr(i);
+      let it = self.unit.items.get(i);
       //Fmt::str(it).dump();
       if let Item::Decl(decl*) = (it){
         let ty = decl.type.clone();
@@ -678,7 +678,7 @@ impl Resolver{
     //derives
     let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
-      let it = self.unit.items.get_ptr(i);
+      let it = self.unit.items.get(i);
       if let Item::Decl(decl*) = (it){
         self.handle_derive(decl, &newItems);
       }
@@ -688,7 +688,7 @@ impl Resolver{
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
     //derive
     for(let j = 0;j < decl.derives.len();++j){
-      let der: Type* = decl.derives.get_ptr(j);
+      let der: Type* = decl.derives.get(j);
       let der_str = der.print();
       if(der_str.eq("Drop")){
         der_str.drop();
@@ -776,7 +776,7 @@ impl Resolver{
       return Option<Decl*>::new();
     }
     if(rt.type.is_pointer()){
-      return self.get_decl(rt.type.get_ptr());
+      return self.get_decl(rt.type.deref_ptr());
     }
     if(rt.desc.kind is RtKind::Trait){
       return Option<Decl*>::new();
@@ -793,7 +793,7 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       if(resolver.generated_decl.in_index(rt.desc.idx)){
         let decl = resolver.generated_decl.get(rt.desc.idx).get();
-        if(!decl.type.eq(rt.type.get_ptr())){
+        if(!decl.type.eq(rt.type.deref_ptr())){
           panic("get_decl err {:?}={:?}", rt.type, rt.desc);
         }
         return Option::new(decl);
@@ -873,7 +873,7 @@ impl Resolver{
     }else if let Item::Trait(tr*) = (node){
     }else if let Item::Extern(methods*) = (node){
       for(let i = 0;i < methods.len();++i){
-        let m = methods.get_ptr(i);
+        let m = methods.get(i);
         if(m.is_generic) continue;
         self.visit_method(m);
       }
@@ -908,9 +908,9 @@ impl Resolver{
     }
     if let Decl::Enum(variants*)=(decl) {
       for (let i = 0;i < variants.len();++i) {
-        let ev = variants.get_ptr(i);
+        let ev = variants.get(i);
         for (let j = 0;j < ev.fields.len();++j) {
-          let f1 = ev.fields.get_ptr(j);
+          let f1 = ev.fields.get(j);
           if (self.is_cyclic(&f1.type, target)) {
               return true;
           }
@@ -918,7 +918,7 @@ impl Resolver{
       }
     } else if let Decl::Struct(fields*)=(decl){
       for (let j = 0;j < fields.len();++j) {
-        let f2: FieldDecl* = fields.get_ptr(j);
+        let f2: FieldDecl* = fields.get(j);
         if (self.is_cyclic(&f2.type, target)) {
             return true;
         }
@@ -931,7 +931,7 @@ impl Resolver{
     if(base_fields.is_some()){
       let base_f = base_fields.unwrap();
       for(let j = 0;j < base_f.len();++j){
-        let bf = base_f.get_ptr(j);
+        let bf = base_f.get(j);
         if(bf.name.eq(&fd.name)){
           self.err(node.line, format("field name '{}' already declared in base", fd.name));
         }
@@ -957,7 +957,7 @@ impl Resolver{
       }
     }
     for(let i = 0;i < fields.len();++i){
-      let fd = fields.get_ptr(i);
+      let fd = fields.get(i);
       self.is_valid_field(fd, node, base_fields);
     }
   }
@@ -974,9 +974,9 @@ impl Resolver{
       }
     }
     for(let i = 0;i < vars.len();++i){
-      let ev = vars.get_ptr(i);
+      let ev = vars.get(i);
       for(let j = 0;j < ev.fields.len();++j){
-        let fd = ev.fields.get_ptr(j);
+        let fd = ev.fields.get(j);
         self.is_valid_field(fd, node, base_fields);
       }
     }
@@ -996,14 +996,14 @@ impl Resolver{
       let trait_decl = self.get_trait(&trait_rt).unwrap();
       trait_rt.drop();
       for(let i = 0;i < trait_decl.methods.len();++i){
-        let m = trait_decl.methods.get_ptr(i);
+        let m = trait_decl.methods.get(i);
         if(m.body.is_none()){
           let mangled = mangle2(m, &imp.info.type);
           required.add(mangled, m);
         }
       }
       for(let i = 0;i < imp.methods.len();++i){
-        let m = imp.methods.get_ptr(i);
+        let m = imp.methods.get(i);
         if(!m.type_params.empty()) continue;
         self.visit_method(m);
         let mangled = mangle2(m, &imp.info.type);
@@ -1032,7 +1032,7 @@ impl Resolver{
       required.drop();
     }else{
       for(let i = 0;i < imp.methods.len();++i){
-        let m = imp.methods.get_ptr(i);
+        let m = imp.methods.get(i);
         if(!m.type_params.empty()) continue;
         self.visit_method(m);
       }
@@ -1063,7 +1063,7 @@ impl Resolver{
       self.addScope(self_prm.name.clone(), prm_rt, self_prm.id, VarKind::PARAM, self_prm.line);
     }
     for(let i = 0;i < node.params.len();++i){
-      let prm = node.params.get_ptr(i);
+      let prm = node.params.get(i);
       let prm_rt = self.visit_type(&prm.type);
       self.addScope(prm.name.clone(), prm_rt, prm.id, VarKind::PARAM, prm.line);
     }
@@ -1098,7 +1098,7 @@ impl Resolver{
     }
     //generic drop, local or extern
     let drop_impl = helper.find_drop_impl(decl);
-    let method = drop_impl.methods.get_ptr(0);
+    let method = drop_impl.methods.get(0);
     let drop_expr = parse_expr(format("{:?}::drop()", &decl.type), &self.unit, decl.line);
     let mc = unwrap_mc(&drop_expr);
     let sig = Signature::new("drop".str());
@@ -1110,8 +1110,8 @@ impl Resolver{
     let map = Map<String, Type>::new();
     let generic_type = &method.parent.as_impl().type;
     for(let i = 0;i < decl.type.get_args().len();++i){
-        let tp = generic_type.get_args().get_ptr(i);
-        map.add(tp.print(), decl.type.get_args().get_ptr(i).clone());
+        let tp = generic_type.get_args().get(i);
+        map.add(tp.print(), decl.type.get_args().get(i).clone());
     }
     let pair = mr.generateMethod(&map, method, &sig);
     //method = pair.a;
@@ -1176,15 +1176,15 @@ impl Resolver{
     if(decl is Decl::Struct){
       let fields = decl.get_fields();
       for(let i = 0;i < fields.len();++i){
-        let fd = fields.get_ptr(i);
+        let fd = fields.get(i);
         self.visit_type(&fd.type).drop();
       }
     }else{
       let variants = decl.get_variants();
       for(let i = 0;i < variants.len();++i){
-        let ev = variants.get_ptr(i);
+        let ev = variants.get(i);
         for(let j = 0;j < ev.fields.len();++j){
-          let f = ev.fields.get_ptr(j);
+          let f = ev.fields.get(j);
           self.visit_type(&f.type).drop();
         }
       }
@@ -1242,7 +1242,7 @@ impl Resolver{
       return res;
     }
     if(node.is_pointer()){
-      let inner = node.get_ptr();
+      let inner = node.deref_ptr();
       let res = self.visit_type(inner);
       let ptr = res.type.clone().toPtr();
       res.type.drop();
@@ -1349,7 +1349,7 @@ impl Resolver{
       if(list.empty()){
           self.err(node.line, format("type scope is not enum: {}", str));
       }
-      let sig = list.get_ptr(0);
+      let sig = list.get(0);
       let method = sig.m.unwrap();
       if(method.is_generic){
         //list.drop();
@@ -1444,8 +1444,8 @@ impl Resolver{
     let map = Map<String, Type>::new();
     let params = decl.type.get_args();
     for(let i = 0;i < type.args.len();++i){
-      let arg = type.args.get_ptr(i);
-      let prm = params.get_ptr(i);
+      let arg = type.args.get(i);
+      let prm = params.get(i);
       map.add(prm.name().clone(), arg.clone());
     }
     return map;
@@ -1454,7 +1454,7 @@ impl Resolver{
   func find_imports(self, type: Simple*, str: String*): Option<RType>{
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
-      let resolver: Resolver* = *arr.get_ptr(i);
+      let resolver: Resolver* = *arr.get(i);
       resolver.init();
       let cached = resolver.typeMap.get(&type.name);
       if (cached.is_some()) {
@@ -1475,7 +1475,7 @@ impl Resolver{
   func findVariant(decl: Decl*, name: String*): i32{
     let variants = decl.get_variants();
     for(let i=0;i<variants.len();++i){
-      let v = variants.get_ptr(i);
+      let v = variants.get(i);
       if(v.name.eq(name)){
         return i;
       }
@@ -1498,7 +1498,7 @@ impl Resolver{
             let fields = cur.get_fields();
             let idx = 0;
             for (let i = 0; i < fields.len();++i) {
-                let fd = fields.get_ptr(i);
+                let fd = fields.get(i);
                 if (fd.name.eq(name)) {
                     return Pair::new(cur, idx);
                 }
@@ -1529,14 +1529,14 @@ impl Resolver{
     }
     let decl = self.get_decl(&scp).unwrap();
     let pair = self.findField(node, name, decl, &scp.type);
-    let fd = pair.a.get_fields().get_ptr(pair.b);
+    let fd = pair.a.get_fields().get(pair.b);
     scp.drop();
     return self.visit_field(fd);
   }
   
   func fieldIndex(arr: List<FieldDecl>*, name: str, type: Type*): i32{
     for(let i=0;i<arr.len();++i){
-      let fd = arr.get_ptr(i);
+      let fd = arr.get(i);
       if(fd.name.eq(name)){
         return i;
       }
@@ -1549,7 +1549,7 @@ impl Resolver{
     let hasNonNamed = false;
     let base = Option<Expr*>::new();
     for (let i = 0;i < args.len();++i) {
-        let e = args.get_ptr(i);
+        let e = args.get(i);
         if (e.isBase) {
             if (base.is_some()) self.err(node, "base already set");
             base = Option::new(&e.expr);
@@ -1583,7 +1583,7 @@ impl Resolver{
     
     if let Decl::Enum(variants*)=(decl){
         let idx = findVariant(decl, type0.name());
-        let variant = variants.get_ptr(idx);
+        let variant = variants.get(idx);
         fields0 = Option::new(&variant.fields);
         type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
     }else if let Decl::Struct(f*)=(decl){
@@ -1604,7 +1604,7 @@ impl Resolver{
     let field_idx = 0;
     let names = List<String>::new();
     for (let i = 0; i < args.len(); ++i) {
-        let e: Entry* = args.get_ptr(i);
+        let e: Entry* = args.get(i);
         if (e.isBase) continue;
         let prm_idx = 0;
         if (hasNamed) {
@@ -1614,7 +1614,7 @@ impl Resolver{
             prm_idx = field_idx;
             ++field_idx;
         }
-        let prm = fields.get_ptr(prm_idx);
+        let prm = fields.get(prm_idx);
         //todo if we support unnamed fields, change this
         if (!hasNamed) {
             names.add(prm.name.clone());
@@ -1632,7 +1632,7 @@ impl Resolver{
     }
     //check non set fields
     for (let i = 0;i < fields.len();++i) {
-        let fd = fields.get_ptr(i);
+        let fd = fields.get(i);
         if (!names.contains(&fd.name)) {
             let msg = format("field not set: {}", fd.name);
             self.err(node, msg);
@@ -1647,7 +1647,7 @@ impl Resolver{
     let inferMap = Map<String, Type>::new();
     let type_params: List<Type>* = type.get_args();
     for (let i = 0; i < args.len(); ++i) {
-        let e = args.get_ptr(i);
+        let e = args.get(i);
         let prm_idx = 0;
         if (hasNamed) {
             prm_idx = fieldIndex(fields, e.name.get().str(), type);
@@ -1655,14 +1655,14 @@ impl Resolver{
             prm_idx = i;
         }
         let arg_type = self.visit(&e.expr);
-        let target_type = &fields.get_ptr(i).type;
+        let target_type = &fields.get(i).type;
         MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params);
         arg_type.drop();
     }
     let res = Simple::new(type.name().clone());
     for (let i = 0;i < type_params.len();++i) {
-        let tp = type_params.get_ptr(i);
-        let opt = inferMap.get_ptr(tp.name());
+        let tp = type_params.get(i);
+        let opt = inferMap.get(tp.name());
         if (opt.is_none()) {
             self.err(node, format("can't infer type parameter: {:?}", tp));
         }
@@ -1801,13 +1801,13 @@ impl Resolver{
         }
         not_covered.remove(idx).drop();
         let index = Resolver::findVariant(decl, &smp.name);
-        let variant = decl.get_variants().get_ptr(index);
+        let variant = decl.get_variants().get(index);
         if(args.len() != variant.fields.len()){
             self.err(expr, format("variant field count doesn't match got: {} expected: {}", args.len(), variant.fields.len()));
         }
         for(let i = 0;i < args.len();++i){
-          let arg = args.get_ptr(i);
-          let field = variant.fields.get_ptr(i);
+          let arg = args.get(i);
+          let field = variant.fields.get(i);
           let ty = field.type.clone();
           if (arg.is_ptr) {
               ty = ty.toPtr();
@@ -1863,7 +1863,7 @@ impl Resolver{
     if(!inner.type.is_pointer()){
       self.err(node, format("deref expr is not pointer: {:?}", inner.type));
     }
-    let tmp = inner.type.get_ptr().clone();
+    let tmp = inner.type.deref_ptr().clone();
     inner.type.drop();
     inner.type = tmp;
     return inner;
@@ -1874,7 +1874,7 @@ impl Resolver{
       return false;
     }
     let scope = self.getType(mc.scope.get());
-    let scope2 = scope.get_ptr();
+    let scope2 = scope.deref_ptr();
     let res = TypeKind::new(scope2) is kind;
     scope.drop();
     return res;
@@ -1953,14 +1953,14 @@ impl Resolver{
 
   func validate_printf(self, node: Expr*, mc: Call*){
     //check fmt literal
-    let fmt: Expr* = mc.args.get_ptr(0);
+    let fmt: Expr* = mc.args.get(0);
     if (is_str_lit(fmt).is_none()) {
         self.err(node, "format string is not a string literal");
     }
     self.visit(fmt).drop();
     //check rest
     for (let i = 1; i < mc.args.len(); ++i) {
-        let arg = self.getType(mc.args.get_ptr(i));
+        let arg = self.getType(mc.args.get(i));
         if (!(arg.is_prim() || arg.is_pointer() || arg.is_fpointer())) {
             self.err(node, "format arg is invalid");
         }
@@ -1970,18 +1970,18 @@ impl Resolver{
 
   func validate_sprintf(self, node: Expr*, mc: Call*){
     assert(mc.args.len() >= 2);
-    let ptr = mc.args.get_ptr(0);
+    let ptr = mc.args.get(0);
     let ptr_rt = self.visit(ptr);
     assert(ptr_rt.type.eq("i8*"));
     //check fmt literal
-    let fmt: Expr* = mc.args.get_ptr(1);
+    let fmt: Expr* = mc.args.get(1);
     if (is_str_lit(fmt).is_none()) {
         self.err(node, "format string is not a string literal");
     }
     self.visit(fmt).drop();
     //check rest
     for (let i = 2; i < mc.args.len(); ++i) {
-        let arg = self.getType(mc.args.get_ptr(i));
+        let arg = self.getType(mc.args.get(i));
         if (!(arg.is_prim() || arg.is_pointer())) {
             self.err(node, format("format arg is invalid: {:?}", arg));
         }
@@ -1991,7 +1991,7 @@ impl Resolver{
   }
 
   func handle_env(self, node: Expr*, mc: Call*){
-    let arg = mc.args.get_ptr(0);
+    let arg = mc.args.get(0);
     let arg_val = is_str_lit(arg).unwrap();
     let opt = getenv2(arg_val.str());
     let info = FormatInfo::new(node.line);
@@ -2011,7 +2011,7 @@ impl Resolver{
   }
   func handle_type_print(self, node: Expr*, mc: Call*){
     let info = FormatInfo::new(node.line);
-    let ta = mc.type_args.get_ptr(0);
+    let ta = mc.type_args.get(0);
     let tmp = parse_expr(format("\"{:?}\"", ta), &self.unit, node.line);
     info.unwrap_mc = Option::new(tmp);
     let rt = self.visit(info.unwrap_mc.get());
@@ -2022,8 +2022,8 @@ impl Resolver{
   func visit_mcall(self, node: Expr*, call: MacroCall*): RType{
       if(call.name.eq("debug_member")){
           assert(call.args.len() == 2);
-          let src = call.args.get_ptr(0);
-          let fmt = call.args.get_ptr(1);
+          let src = call.args.get(0);
+          let fmt = call.args.get(1);
           let rt1 = self.visit(src);
           let rt2 = self.visit(fmt);
           assert(rt2.type.eq("Fmt*"));
@@ -2054,8 +2054,8 @@ impl Resolver{
           self.err(node, format("arg count do not match {} vs {}", call.args.len(), ft.params.len()));
         }
         for (let i = 0; i < call.args.len(); ++i) {
-          let arg = self.visit(call.args.get_ptr(i));
-          let prm = ft.params.get_ptr(i);
+          let arg = self.visit(call.args.get(i));
+          let prm = ft.params.get(i);
           let cmp = MethodResolver::is_compatible(&arg.type, prm);
           if(cmp.is_some()){
             self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
@@ -2072,8 +2072,8 @@ impl Resolver{
               let res = self.visit_type(ret);
               res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
               for (let i = 0; i < call.args.len(); ++i) {
-                  let arg = self.visit(call.args.get_ptr(i));
-                  let prm = bx.get().params.get_ptr(i);
+                  let arg = self.visit(call.args.get(i));
+                  let prm = bx.get().params.get(i);
                   let cmp = MethodResolver::is_compatible(&arg.type, prm);
                   if(cmp.is_some()){
                       self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
@@ -2088,8 +2088,8 @@ impl Resolver{
     if(Resolver::is_call(call, "std", "debug") || Resolver::is_call(call, "std", "debug2")){
       assert(call.type_args.len() == 0);
       assert(call.args.len() == 2);
-      let src = call.args.get_ptr(0);
-      let fmt = call.args.get_ptr(1);
+      let src = call.args.get(0);
+      let fmt = call.args.get(1);
       let rt1 = self.visit(src);
       let rt2 = self.visit(fmt);
       //assert(rt1.type.is_pointer());
@@ -2121,7 +2121,7 @@ impl Resolver{
     }
     if(Resolver::is_call(call, "std", "internal_block")){
       assert(call.args.len() == 1);
-      let arg = call.args.get_ptr(0).print();
+      let arg = call.args.get(0).print();
       let id = i32::parse(arg.str());
       let blk: Block* = *self.block_map.get(&id).unwrap();
       self.visit_block(blk);
@@ -2131,7 +2131,7 @@ impl Resolver{
     if(Resolver::is_call(call, "std", "typeof")){
       assert(call.args.len() == 1);
       assert(call.type_args.len() == 0);
-      let arg = call.args.get_ptr(0);
+      let arg = call.args.get(0);
       let tmp = self.visit(arg);
       tmp.drop();
       return RType::new("str");
@@ -2139,14 +2139,14 @@ impl Resolver{
     if(Resolver::is_call(call, "std", "print_type")){
       assert(call.args.empty());
       assert(call.type_args.len() == 1);
-      let ta = call.type_args.get_ptr(0);
+      let ta = call.type_args.get(0);
       let tmp = self.visit_type(ta);
       tmp.drop();
       self.handle_type_print(node, call);
       return RType::new("str");
     }
     if(Resolver::is_call(call, "std", "env")){
-      let arg = call.args.get_ptr(0);
+      let arg = call.args.get(0);
       if(is_str_lit(arg).is_none()){
         self.err(node, "std::env expects str literal");
       }
@@ -2154,7 +2154,7 @@ impl Resolver{
       return RType::new(Type::parse("Option<str>"));
     }
     if(is_drop_call(call)){
-      let argt = self.visit(call.args.get_ptr(0));
+      let argt = self.visit(call.args.get(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){
         argt.drop();
         return RType::new("void");
@@ -2191,23 +2191,23 @@ impl Resolver{
     }
     if(std_size(call)){
       if(!call.args.empty()){
-        let tmp = self.visit(call.args.get_ptr(0));
+        let tmp = self.visit(call.args.get(0));
         tmp.drop();
       }else{
-        let tmp = self.visit_type(call.type_args.get_ptr(0));
+        let tmp = self.visit_type(call.type_args.get(0));
         tmp.drop();
       }
       return RType::new("i64");
     }
     if(std_is_ptr(call)){
-      self.visit_type(call.type_args.get_ptr(0)).drop();
+      self.visit_type(call.type_args.get(0)).drop();
       return RType::new("bool");
     }
     if(is_ptr_null(call)){
       if(call.type_args.len() != 1){
         self.err(node, "ptr::null() expects one type arg");
       }
-      let rt = self.visit_type(call.type_args.get_ptr(0));
+      let rt = self.visit_type(call.type_args.get(0));
       rt.type = rt.type.toPtr();
       return rt;
     }
@@ -2216,11 +2216,11 @@ impl Resolver{
       if (call.args.len() != 2) {
         self.err(node, "ptr access must have 2 args");
       }
-      let src = self.getType(call.args.get_ptr(0));
+      let src = self.getType(call.args.get(0));
       if (!src.is_pointer()) {
           self.err(node, "ptr src is not ptr");
       }
-      let idx = self.getType(call.args.get_ptr(1));
+      let idx = self.getType(call.args.get(1));
       if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
         let res = self.visit_type(&src);
         idx.drop();
@@ -2236,16 +2236,16 @@ impl Resolver{
         self.err(node, "ptr::copy() must have 3 args");
       }
       //ptr::copy(src_ptr, src_idx, elem)
-      let ptr_type = self.getType(call.args.get_ptr(0));
-      let idx_type = self.getType(call.args.get_ptr(1));
-      let elem_type = self.getType(call.args.get_ptr(2));
+      let ptr_type = self.getType(call.args.get(0));
+      let idx_type = self.getType(call.args.get(1));
+      let elem_type = self.getType(call.args.get(2));
       if (!ptr_type.is_pointer()) {
           self.err(node, "ptr arg is not ptr ");
       }
       if (!idx_type.eq("i32") && !idx_type.eq("i64") && !idx_type.eq("u32") && !idx_type.eq("u64") && !idx_type.eq("i8") && !idx_type.eq("i16")) {
         self.err(node, "ptr access index is not integer");
       }
-      if (!elem_type.eq(ptr_type.get_ptr())) {
+      if (!elem_type.eq(ptr_type.deref_ptr())) {
         self.err(node, "ptr elem type dont match val type");
       }
       ptr_type.drop();
@@ -2255,16 +2255,16 @@ impl Resolver{
     }
     if(is_ptr_deref(call)){
         //unsafe deref
-        let rt = self.getType(call.args.get_ptr(0));
+        let rt = self.getType(call.args.get(0));
         if (!rt.is_pointer()) {
             self.err(node, "ptr arg is not ptr ");
         }
-        let res = self.visit_type(rt.get_ptr());
+        let res = self.visit_type(rt.deref_ptr());
         rt.drop();
         return res;
     }
     if(is_std_no_drop(call)){
-      let rt = self.visit(call.args.get_ptr(0));
+      let rt = self.visit(call.args.get(0));
       rt.drop();
       return RType::new("void");
     }
@@ -2289,7 +2289,7 @@ impl Resolver{
       return RType::new(arr_type.unwrap_elem().toPtr());
     }
     if(call.scope.is_none() && call.name.eq("malloc")){
-      let argt = self.getType(call.args.get_ptr(0));
+      let argt = self.getType(call.args.get(0));
       if(!argt.is_prim()){
         self.err(node, "malloc arg is not integer");
       }
@@ -2297,7 +2297,7 @@ impl Resolver{
       if(call.type_args.empty()){
         return RType::new(Type::new("i8").toPtr());
       }else{
-        let arg = self.visit_type(call.type_args.get_ptr(0));
+        let arg = self.visit_type(call.type_args.get(0));
         return RType::new(arg.unwrap().toPtr());
       }
     }
@@ -2339,7 +2339,7 @@ impl Resolver{
       panic("");
     }
     idx2.drop();
-    let inner = arr.get_ptr();
+    let inner = arr.deref_ptr();
     if (inner.is_slice()) {
         let res = RType::new(inner.clone());
         arr.drop();
@@ -2359,12 +2359,12 @@ impl Resolver{
   }
   
   func visit_array(self, node: Expr*, list: List<Expr>*, size: Option<i32>*): RType{
-    let elemType = self.getType(list.get_ptr(0));
+    let elemType = self.getType(list.get(0));
     if (size.is_some()) {
         return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), *size.get()});
     }
     for (let i = 1; i < list.len(); ++i) {
-        let elem = list.get_ptr(i);
+        let elem = list.get(i);
         let cur = self.visit(elem);
         let cmp = MethodResolver::is_compatible(&cur.type, &cur.value, &elemType);
         if (cmp.is_some()) {
@@ -2387,8 +2387,8 @@ impl Resolver{
         let ft1 = left.type.get_ft();
         let ft2 = right.type.get_ft();
         if(ft1.params.len() == 1 && ft2.params.len() == 1){
-            if(ft1.params.get_ptr(0).is_pointer()&&
-            ft2.params.get_ptr(0).is_pointer()){
+            if(ft1.params.get(0).is_pointer()&&
+            ft2.params.get(0).is_pointer()){
                 return right;
             }
         }
@@ -2504,7 +2504,7 @@ impl Resolver{
 
   func visit_name_opt(self, node: Expr*, name: String*, err_multiple: bool): Option<RType>{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
-      let scope = self.scopes.get_ptr(i);
+      let scope = self.scopes.get(i);
       let vh_opt = scope.find(name);
       if(vh_opt.is_some()){
         let vh: VarHolder* = vh_opt.unwrap();
@@ -2533,9 +2533,9 @@ impl Resolver{
     //external globals
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
-      let res = *arr.get_ptr(i);
+      let res = *arr.get(i);
       for (let j = 0;j < res.unit.globals.len();++j) {
-        let glob = res.unit.globals.get_ptr(j);
+        let glob = res.unit.globals.get(j);
         if (glob.name.eq(name)) {
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
@@ -2570,9 +2570,9 @@ impl Resolver{
     //imported func
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
-      let res = *arr.get_ptr(i);
+      let res = *arr.get(i);
       for(let j = 0;j < res.unit.items.len();++j){
-        let item = res.unit.items.get_ptr(j);
+        let item = res.unit.items.get(j);
         if let Item::Method(m*)=(item){
           if(m.name.eq(name)){
             let desc = Desc{
@@ -2590,7 +2590,7 @@ impl Resolver{
       self.err(expr, format("multiple matching functions for '{}'\n{:?}", name, list));
     }
     if(list.len() == 1){
-      let sig = list.get_ptr(0);
+      let sig = list.get(0);
       let method = sig.m.unwrap();
       if(method.is_generic){
         list.drop();
@@ -2723,7 +2723,7 @@ impl Resolver{
     
       //res.vh.set();
       for(let i = plen;i < mptr.params.len();i += 1){
-          let prm = mptr.params.get_ptr(i);
+          let prm = mptr.params.get(i);
           self.err(expr, format("captured params not supported yet '{}'", prm.line));
           lt.captured.add(prm.type.clone());
           let c_id = Node::new(expr.line);
@@ -2834,7 +2834,7 @@ impl Resolver{
         c.drop();
       }
       for (let i = 0;i < f.updaters.len();++i) {
-        let tmp = self.visit(f.updaters.get_ptr(i));
+        let tmp = self.visit(f.updaters.get(i));
         tmp.drop();
       }
       self.inLoop += 1;
@@ -2958,7 +2958,7 @@ impl Resolver{
     //match variant
     let decl: Decl* = decl_opt.unwrap();
     let index = Resolver::findVariant(decl, is.type.name());
-    let variant = decl.get_variants().get_ptr(index);
+    let variant = decl.get_variants().get(index);
     if (variant.fields.len() != is.args.len()) {
         let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
         self.err(line, msg);
@@ -2966,8 +2966,8 @@ impl Resolver{
     //init arg variables
     self.newScope();
     for (let i = 0;i < is.args.len();++i) {
-        let arg = is.args.get_ptr(i);
-        let field = variant.fields.get_ptr(i);
+        let arg = is.args.get(i);
+        let field = variant.fields.get(i);
         let ty = field.type.clone();
         if (arg.is_ptr) {
             ty = ty.toPtr();
@@ -3003,15 +3003,15 @@ impl Resolver{
   func visit_block(self, node: Block*): RType{
     for(let i = 0;i < node.list.len();++i){
       if(i > 0){
-        let prev = Exit::get_exit_type(node.list.get_ptr(i - 1));
+        let prev = Exit::get_exit_type(node.list.get(i - 1));
         if(prev.is_jump() || prev.is_unreachable()){
           prev.drop();
-          self.err(node.list.get_ptr(i), "unreachable code");
+          self.err(node.list.get(i), "unreachable code");
         }else{
           prev.drop();
         }
       }
-      self.visit(node.list.get_ptr(i));
+      self.visit(node.list.get(i));
     }
     if(node.return_expr.is_some()){
       if(!node.list.empty()){
@@ -3028,7 +3028,7 @@ impl Resolver{
 
   func visit_var(self, node: VarExpr*){
     for(let i = 0;i < node.list.len();++i){
-      let f = node.list.get_ptr(i);
+      let f = node.list.get(i);
       let rt = self.visit_frag(f);
       self.addScope(f.name.clone(), rt, f.id, VarKind::LOCAL, f.line);
     }

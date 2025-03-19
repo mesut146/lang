@@ -28,7 +28,7 @@ impl RvalueHelper{
 
     func get_scope(mc: Call*): Expr*{
       if (mc.is_static) {
-        return mc.args.get_ptr(0);
+        return mc.args.get(0);
       } else {
         return mc.scope.get();
       }
@@ -103,7 +103,7 @@ func make_malloc(): Function*{
 
 func getTypes(unit: Unit*, list: List<Decl*>*){
     for (let i = 0;i < unit.items.len();++i) {
-        let item = unit.items.get_ptr(i);
+        let item = unit.items.get(i);
         if let Item::Decl(d*)=(item){
             if(d.is_generic) continue;
             list.add(d);
@@ -114,9 +114,9 @@ func getTypes(unit: Unit*, list: List<Decl*>*){
 func sort(list: List<Decl*>*, r: Resolver*){
   for (let i = 0; i < list.len(); ++i) {
     //find decl belongs to i'th index
-    let min: Decl* = *list.get_ptr(i);
+    let min: Decl* = *list.get(i);
     for (let j = i + 1; j < list.len(); ++j) {
-      let cur: Decl* = *list.get_ptr(j);
+      let cur: Decl* = *list.get(j);
       if (r.is_cyclic(&min.type, &cur.type)) {
         min = cur;
         swap(list, i, j);
@@ -150,16 +150,16 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
   if(decl.is_struct()){
     let fields = decl.get_fields();
     for (let j = 0; j < fields.len(); ++j) {
-      let fd = fields.get_ptr(j);
+      let fd = fields.get(j);
       //add_type(res, &fd.type);
       all_deps(&fd.type, r, res);
     }
   }else{
     let variants = decl.get_variants();
     for (let j = 0; j < variants.len(); ++j) {
-      let ev = variants.get_ptr(j);
+      let ev = variants.get(j);
       for (let k = 0; k < ev.fields.len(); ++k) {
-        let fd = ev.fields.get_ptr(k);
+        let fd = ev.fields.get(k);
         //add_type(res, &fd.type);
         all_deps(&fd.type, r, res);
       }
@@ -170,12 +170,12 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
 func sort4(list: List<Decl*>*, r: Resolver*){
   let index_map = Map<String, i32>::new(list.len());
   for (let i = 0; i < list.len(); ++i) {
-    let d: Decl* = *list.get_ptr(i);
+    let d: Decl* = *list.get(i);
     index_map.add(d.type.print(), 0);
     if(d.is_struct()){
       let fields = d.get_fields();
       for (let j = 0; j < fields.len(); ++j) {
-        let fd = fields.get_ptr(j);
+        let fd = fields.get(j);
         let key = fd.type.print();
       }
     }
@@ -188,7 +188,7 @@ func sort2(list: List<Decl*>*, r: Resolver*){
   //field -> parents
   //let map2 = Map<String, List<String>>::new();
   for (let i = 0; i < list.len(); ++i) {
-    let decl = *list.get_ptr(i);
+    let decl = *list.get(i);
     let arr = List<String>::new();
     all_deps(decl, r, &arr);
     /*for ch in &arr{
@@ -203,17 +203,17 @@ func sort2(list: List<Decl*>*, r: Resolver*){
   //let left_all = List<String>::new();
   let right_all = List<String>::new();
   for (let j = 0; j < list.len(); ++j) {
-    let d: Decl* = *list.get_ptr(j);
+    let d: Decl* = *list.get(j);
     right_all.add(d.type.print());
   }
   for (let i = 0; i < list.len() - 1; ++i) {
     //find decl for i
     //i place, have all fields on left, all parents on right
     for (let j = i + 1; j < list.len(); ++j) {
-      let d2: Decl* = *list.get_ptr(j);
+      let d2: Decl* = *list.get(j);
       let s2 = d2.type.print();
-      let fields: List<String>* = map.get_ptr(&s2).unwrap();
-      //let parents: List<String>* = map2.get_ptr(&s2).unwrap();
+      let fields: List<String>* = map.get(&s2).unwrap();
+      //let parents: List<String>* = map2.get(&s2).unwrap();
       let is_all_left = true;
       let is_all_right = true;
       for fd in fields{
@@ -240,7 +240,7 @@ func sort2(list: List<Decl*>*, r: Resolver*){
 func printlist(list: List<Decl*>*){
   print("list={\n");
   for (let i = 0; i < list.len(); ++i) {
-    let decl = *list.get_ptr(i);
+    let decl = *list.get(i);
     print("  {:?}", decl.type);
   }
   print("}\n\n");
@@ -252,22 +252,22 @@ func printlist(list: List<Decl*>*){
   //ch -> parents
   let map2 = Map<String, List<String>>::new();
   for (let i = 0; i < list.len(); ++i) {
-    let decl = *list.get_ptr(i);
+    let decl = *list.get(i);
     let tstr = decl.type.print();
     if(!map.contains(&tstr)){
       map.add(tstr.clone(), List<String>::new());
     }
-    let deps_arr = map.get_ptr(&tstr).unwrap();
+    let deps_arr = map.get(&tstr).unwrap();
     if(decl.is_struct()){
       let fields = decl.get_fields();
       for (let j = 0; j < fields.len(); ++j) {
-        let fd = fields.get_ptr(j);
+        let fd = fields.get(j);
         let field_str = fd.type.print();
         deps_arr.add(field_str.clone());
         let parents = &map2.get_pair_or(field_str.clone(), List<String>::new()).b;
         parents.add(tstr.clone());
         //find parent of decl & merge children
-        let p_arr = map2.get_ptr(&tstr).unwrap();
+        let p_arr = map2.get(&tstr).unwrap();
         for parent in p_arr{
           //let other_ch_arr = map.get_pair_or(parent);
         }
@@ -276,9 +276,9 @@ func printlist(list: List<Decl*>*){
     }else{
       let variants = decl.get_variants();
       for (let j = 0; j < variants.len(); ++j) {
-        let ev = variants.get_ptr(j);
+        let ev = variants.get(j);
         for (let k = 0; k < ev.fields.len(); ++k) {
-          let fd = ev.fields.get_ptr(k);
+          let fd = ev.fields.get(k);
           deps_arr.add(fd.type.print());
           
         }
@@ -289,12 +289,12 @@ func printlist(list: List<Decl*>*){
   for (let i = 0; i < list.len(); ++i) {
     //find decl belongs to i'th index
     for (let j = 0; j < list.len() - 1; ++j) {
-      let d1: Decl* = *list.get_ptr(j);
-      let d2: Decl* = *list.get_ptr(j + 1);
+      let d1: Decl* = *list.get(j);
+      let d2: Decl* = *list.get(j + 1);
       //is d1 is parent of d2, swap
       let s1 = d1.type.print();
       let s2 = d2.type.print();
-      let chs = map.get_ptr(&s2).unwrap();
+      let chs = map.get(&s2).unwrap();
       if(chs.contains(&s1)){
         swap(list, j, j + 1);
       }
@@ -305,8 +305,8 @@ func printlist(list: List<Decl*>*){
 }*/
 
 func swap(list: List<Decl*>*, i: i32, j: i32){
-  let a = *list.get_ptr(i);
-  let b = *list.get_ptr(j);
+  let a = *list.get(i);
+  let b = *list.get(j);
   list.set(j, a);
   list.set(i, b);
 }
@@ -314,18 +314,18 @@ func swap(list: List<Decl*>*, i: i32, j: i32){
 func getMethods(unit: Unit*): List<Method*>{
   let list = List<Method*>::new(100);
   for (let i = 0;i < unit.items.len();++i) {
-    let item = unit.items.get_ptr(i);
+    let item = unit.items.get(i);
     if let Item::Method(m*)=(item){
         if(m.is_generic) continue;
         list.add(m);
     }else if let Item::Impl(imp*)=(item){
       if(!imp.info.type_params.empty()) continue;
       for(let j = 0;j < imp.methods.len();++j){
-        list.add(imp.methods.get_ptr(j));
+        list.add(imp.methods.get(j));
       }
     }else if let Item::Extern(methods*)=(item){
       for(let j = 0;j < methods.len();++j){
-        list.add(methods.get_ptr(j));
+        list.add(methods.get(j));
       }
     }
   }
@@ -434,24 +434,24 @@ impl Compiler{
     sort2(&list, resolver);
     //first create just protos to fill later
     for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
+      let decl = *list.get(i);
       //print("decl proto {}\n", decl.type);
       self.make_decl_proto(decl);
     }
     //fill with elems
     for(let i = 0;i < list.len();++i){
-      let decl = *list.get_ptr(i);
+      let decl = *list.get(i);
       self.fill_decl(decl, p.get(decl) as StructType*);
     }
     if(self.llvm.di.get().debug){
       //di proto
       for(let i = 0;i < list.len();++i){
-        let decl = *list.get_ptr(i);
+        let decl = *list.get(i);
         self.llvm.di.get().map_di_proto(decl, self);
       }
       //di fill
       for(let i = 0;i < list.len();++i){
-        let decl = *list.get_ptr(i);
+        let decl = *list.get(i);
         self.llvm.di.get().map_di_fill(decl, self);
       }
     }
@@ -463,7 +463,7 @@ impl Compiler{
     if(decl.is_enum()){
       let vars = decl.get_variants();
       for(let i = 0;i < vars.len();++i){
-        let ev = vars.get_ptr(i);
+        let ev = vars.get(i);
         let name = format("{:?}::{}", decl.type, ev.name);
         let name_c = name.clone().cstr();
         let var_ty = make_struct_ty(name_c.ptr());
@@ -484,7 +484,7 @@ impl Compiler{
       //calc enum size
       let max = 0;
       for(let i = 0;i < variants.len();++i){
-        let ev = variants.get_ptr(i);
+        let ev = variants.get(i);
         let name = format("{:?}::{}", decl.type, ev.name.str());
         let var_ty = p.get(&name) as StructType*;
         self.make_variant_type(ev, decl, &name, var_ty);
@@ -501,7 +501,7 @@ impl Compiler{
         vector_Type_push(elems, self.mapType(decl.base.get()));
       }
       for(let i = 0;i < fields.len();++i){
-        let fd = fields.get_ptr(i);
+        let fd = fields.get(i);
         let ft = self.mapType(&fd.type);
         vector_Type_push(elems, ft);
       }
@@ -521,7 +521,7 @@ impl Compiler{
       vector_Type_push(elems, self.mapType(decl.base.get()));
     }
     for(let j = 0;j < ev.fields.len();++j){
-      let fd = ev.fields.get_ptr(j);
+      let fd = ev.fields.get(j);
       let ft = self.mapType(&fd.type);
       vector_Type_push(elems, ft);
     }
@@ -559,7 +559,7 @@ impl Compiler{
       vector_Type_push(args, self_ty);
     }
     for(let i = 0;i < m.params.len();++i){
-      let prm = m.params.get_ptr(i);
+      let prm = m.params.get(i);
       let pt = self.mapType(&prm.type);
       if(is_struct(&prm.type)){
         pt = getPointerTo(pt) as llvm_Type*;
@@ -807,7 +807,7 @@ impl Compiler{
     let decl = self.get_resolver().get_decl(&rt).unwrap();
     let tag_idx = get_tag_index(decl);
     let tag = self.get_obj_ptr(expr);
-    let mapped = self.mapType(rt.type.get_ptr());
+    let mapped = self.mapType(rt.type.deref_ptr());
     rt.drop();
     tag = self.gep2(tag, tag_idx, mapped);
     return CreateLoad(getInt(ENUM_TAG_BITS()), tag);

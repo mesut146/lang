@@ -73,7 +73,7 @@ impl CmdArgs{
     arg.drop();
   }
   func peek(self): String*{
-    return self.args.get_ptr(0);
+    return self.args.get(0);
   }
   func get(self): String{
     if(self.args.len() == 0){
@@ -86,7 +86,7 @@ impl CmdArgs{
     return self.args.len() > 0;
   }
   func is(self, arg: str): bool{
-    return self.args.get_ptr(0).eq(arg);
+    return self.args.get(0).eq(arg);
   }
   func end(self){
       if(self.args.empty()) return;
@@ -103,7 +103,7 @@ impl CmdArgs{
   }
   func consume_any(self, arg: str): bool{
     for(let i = 0; i < self.args.len(); ++i){
-      if(self.args.get_ptr(i).eq(arg)){
+      if(self.args.get(i).eq(arg)){
         let tmp = self.args.remove(i);
         tmp.drop();
         return true;
@@ -113,7 +113,7 @@ impl CmdArgs{
   }
   func get_val(self, arg: str): Option<String>{
     for(let i = 0; i < self.args.len(); ++i){
-      if(self.args.get_ptr(i).eq(arg)){
+      if(self.args.get(i).eq(arg)){
         let val = self.args.remove(i + 1);
         let key = self.args.remove(i);
         key.drop();

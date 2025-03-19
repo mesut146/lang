@@ -57,19 +57,15 @@ impl<K, V> Map<K, V>{
 
   func indexOf(self, k: K*): i64{
     for(let i = 0;i < self.arr.len();i += 1){
-      let pr =  self.arr.get_ptr(i);
+      let pr =  self.arr.get(i);
       if(Eq::eq(&pr.a, k)){
         return i as i64;
       }
     }
     return -1 as i64;
   }
-  
-  func get(self, k: K*): Option<V*>{
-      return self.get_ptr(k);
-  }
 
-  func get_ptr(self, k: K*): Option<V*>{
+  func get(self, k: K*): Option<V*>{
     let opt = self.get_pair(k);
     if(opt.is_some()){
       return Option<V*>::new(&opt.unwrap().b);
@@ -87,7 +83,7 @@ impl<K, V> Map<K, V>{
 
   func get_pair_str(self, key: str): Option<Pair<K, V>*>{
     for(let i = 0;i < self.arr.len();++i){
-      let pair = self.arr.get_ptr(i);
+      let pair = self.arr.get(i);
       let s1: str = String::str(&pair.a);
       if(Eq::eq(s1, key)){
         return Option::new(pair);
@@ -98,7 +94,7 @@ impl<K, V> Map<K, V>{
 
   func get_pair(self, k: K*): Option<Pair<K, V>*>{
     for(let i = 0;i < self.arr.len();++i){
-      let pair = self.arr.get_ptr(i);
+      let pair = self.arr.get(i);
       if(Eq::eq(&pair.a, k)){
         return Option::new(pair);
       }
@@ -107,7 +103,7 @@ impl<K, V> Map<K, V>{
   }
   func get_pair_or(self, key: K, def: V): Pair<K, V>*{
     for(let i = 0;i < self.arr.len();++i){
-      let pair = self.arr.get_ptr(i);
+      let pair = self.arr.get(i);
       if(Eq::eq(&pair.a, &key)){
         Drop::drop(key);
         Drop::drop(def);
@@ -118,7 +114,7 @@ impl<K, V> Map<K, V>{
   }
   func get_pair_idx(self, idx: i32): Option<Pair<K, V>*>{
     if(idx < self.len()){
-      return Option::new(self.arr.get_ptr(idx));
+      return Option::new(self.arr.get(idx));
     }
     return Option<Pair<K, V>*>::new();
   }
@@ -164,7 +160,7 @@ impl<K, V> Debug for Map<K, V>{
       if(i > 0){
         f.print(", ");
       }
-      Debug::debug(self.arr.get_ptr(i), f);
+      Debug::debug(self.arr.get(i), f);
     }
     f.print("}");
   }

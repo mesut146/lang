@@ -648,7 +648,7 @@ impl Own{
         outers.drop();
         //restore old scope
         for(let i = 0;i < visitor.scopes.len();++i){
-            let st = visitor.scopes.get_ptr(i);
+            let st = visitor.scopes.get(i);
             self.scope_map.remove(st);
         }
         if(verbose){
@@ -700,8 +700,7 @@ impl Own{
             rhs.drop();
         }
         let err = false;
-        for(let i = 0;i < fields.len();++i){
-            let fd = fields.get_ptr(i);
+        for fd in fields{
             if(!self.is_drop_type(&fd.type)){
                 continue;
             }

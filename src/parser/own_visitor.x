@@ -64,13 +64,13 @@ impl OwnVisitor{
     }
     func visit_block(self, block: Block*){
         for(let i = 0;i < block.list.len();++i){
-            let stmt = block.list.get_ptr(i);
+            let stmt = block.list.get(i);
             self.visit(stmt);
         }
     }
     func visit_var(self, ve: VarExpr*){
         for(let i = 0;i < ve.list.len();++i){
-            let fr = ve.list.get_ptr(i);
+            let fr = ve.list.get(i);
             self.own.add_var(fr, ptr::null<Value>());
             self.do_move(&fr.rhs);
         }
@@ -89,7 +89,7 @@ impl OwnVisitor{
     }
     func visit_call(self, expr: Expr*, mc: Call*){
         if(Resolver::is_std_no_drop(mc)){
-            let arg = mc.args.get_ptr(0);
+            let arg = mc.args.get(0);
             self.do_move(arg);
             return;
         }
@@ -111,20 +111,20 @@ impl OwnVisitor{
         if(target.self.is_some()){
             if(mc.is_static){
                 ++argIdx;
-                self.do_move(mc.args.get_ptr(0));
+                self.do_move(mc.args.get(0));
               }else if(target.self.get().is_deref){
                 self.do_move(mc.scope.get());
               }
         }
         for(;argIdx < mc.args.len();++argIdx){
-            let arg = mc.args.get_ptr(argIdx);
+            let arg = mc.args.get(argIdx);
             self.do_move(arg);
         }
     }
 
     func visit_obj(self, expr: Expr*, type: Type*, args: List<Entry>*){
         for(let i = 0;i < args.len();++i){
-            let arg = args.get_ptr(i);
+            let arg = args.get(i);
             self.do_move(&arg.expr);
         }
     }

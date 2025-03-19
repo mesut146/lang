@@ -247,14 +247,14 @@ impl Captures{
         return res;
     }
     func get(self, name: str): Capture*{
-        let opt = self.map.get_ptr(&name);
+        let opt = self.map.get(&name);
         if(opt.is_none()){
             panic("group {} not found", name);
         }
         return opt.unwrap();
     }
     func has(self, name: str): bool{
-        return self.map.get_ptr(&name).is_some();
+        return self.map.get(&name).is_some();
     }
 }
 #derive(Debug)
@@ -272,7 +272,7 @@ impl Capture{
         return self.buf;
     }
     func get(self, idx: i32): str{
-        return *self.arr.get_ptr(idx);
+        return *self.arr.get(idx);
     }
 }
 
@@ -303,7 +303,7 @@ impl MatchVisitor{
     }
     func visit_or(self, or: Or*, i: i32): Pair<bool, i32>{
         if(or.list.len() == 1){
-            return self.visit_seq(or.list.get_ptr(0), i);
+            return self.visit_seq(or.list.get(0), i);
         }
         let best = Pair::new(false, 0);
         for sq in &or.list{
@@ -319,14 +319,14 @@ impl MatchVisitor{
     func visit_seq(self, sq: Seq*, i: i32): Pair<bool, i32>{
         let total = 0;
         for(let idx=0;idx<sq.list.len();idx+=1){
-            let item = sq.list.get_ptr(idx);
+            let item = sq.list.get(idx);
             //print("idx={} item={} total={}\n", idx, to_string(item), total);
             let it_used = false;
             //prevent greedy match
             match item{
                 RegexItem::Op(ch*, kind*) => {
                     if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
-                        let next = sq.list.get_ptr(idx + 1);
+                        let next = sq.list.get(idx + 1);
                         //print("gr ch={} next={}\n", ch.get(), next);
                         //do non greedy  (ab)*a
                         //b*b => bb
@@ -359,7 +359,7 @@ impl MatchVisitor{
                          }
                         continue;
                     }else if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
-                        let next = sq.list.get_ptr(idx + 1);
+                        let next = sq.list.get(idx + 1);
                         //print("gr ch={} next={}\n", ch.get(), next);
                         let chr = self.visit_item(ch.get(), i+total);
                         if(!chr.a) continue;
@@ -421,7 +421,7 @@ impl MatchVisitor{
                 let tmp = self.visit_or(or, i);
                 if(tmp.a){
                     let s = self.s.substr(i, i + tmp.b);
-                    let c0 = self.cap.map.get_ptr(&name.str());
+                    let c0 = self.cap.map.get(&name.str());
                     if(c0.is_some()){
                         let c = c0.unwrap();
                         c.arr.add(s);

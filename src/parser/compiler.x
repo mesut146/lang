@@ -122,7 +122,7 @@ impl Protos{
     return *self.std.get(&nm).unwrap();
   }
   /*func get_func(self, mangled: String*): Function*{
-    let opt = self.funcMap.get_ptr(mangled);
+    let opt = self.funcMap.get(mangled);
     if(opt.is_none()){
       panic("no proto for {}, {}", mangled, demangle(mangled.str()));
     }
@@ -147,7 +147,7 @@ impl Protos{
 
 func has_main(unit: Unit*): bool{
   for (let i = 0;i < unit.items.len();++i) {
-    let it = unit.items.get_ptr(i);
+    let it = unit.items.get(i);
     if let Item::Method(m*) = (it){
       if(is_main(m)){
         return true;
@@ -269,7 +269,7 @@ impl Compiler{
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
-      let m = *methods.get_ptr(i);
+      let m = *methods.get(i);
       self.genCode(m);
       if(self.ctx.verbose_all){
           //pr.gencode_done(i, methods.len());
@@ -344,7 +344,7 @@ impl Compiler{
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
     for(let j = 0;j < resolv.unit.globals.len();++j){
-      let gl: Global* = resolv.unit.globals.get_ptr(j);
+      let gl: Global* = resolv.unit.globals.get(j);
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
       let init = ptr::null<Constant>();
@@ -451,7 +451,7 @@ impl Compiler{
     let methods: List<Method*> = getMethods(self.unit());
     //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
-      let m = *methods.get_ptr(i);
+      let m = *methods.get(i);
       p.make_proto(m);
     }
     methods.drop();
@@ -556,7 +556,7 @@ impl Compiler{
         self.alloc_prm(prm);
     }
     for (let i = 0;i < m.params.len();++i) {
-        let prm = m.params.get_ptr(i);
+        let prm = m.params.get(i);
         self.alloc_prm(prm);
     }
   }
@@ -600,7 +600,7 @@ impl Compiler{
       ++argNo;
     }
     for(let i = 0;i < m.params.len();++i){
-      let prm = m.params.get_ptr(i);
+      let prm = m.params.get(i);
       self.store_prm(prm, f, argIdx);
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
@@ -658,7 +658,7 @@ impl Compiler{
     cmd.append(&path);
     cmd.append(" ");
     for(let i = 0;i < compiled.len();++i){
-      let file = compiled.get_ptr(i);
+      let file = compiled.get(i);
       cmd.append(file.str());
       cmd.append(" ");
     }
@@ -685,7 +685,7 @@ impl Compiler{
     cmd.append(&path);
     cmd.append(" ");
     for(let i = 0;i < compiled.len();++i){
-      let obj_file = compiled.get_ptr(i);
+      let obj_file = compiled.get(i);
       cmd.append(obj_file.str());
       cmd.append(" ");
     }
@@ -749,7 +749,7 @@ impl Compiler{
     let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
-      let name = list.get_ptr(i).str();
+      let name = list.get(i).str();
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
       if(File::is_dir(file.str())) {
@@ -759,7 +759,7 @@ impl Compiler{
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
       ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
-        ctx.add_path(config.src_dirs.get_ptr(j).str());
+        ctx.add_path(config.src_dirs.get(j).str());
       }
       let cmp = Compiler::new(ctx);
       if(cmp.ctx.verbose){
@@ -789,7 +789,7 @@ impl Compiler{
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
-      let name = list.get_ptr(i).str();
+      let name = list.get(i).str();
       let file: String = format("{}/{}", src_dir, name);
       if(File::is_dir(file.str()) || !name.ends_with(".x")) {
         file.drop();
@@ -821,7 +821,7 @@ func make_compile_job2(arg: c_void*){
   let config = args.config;
   let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
   for(let j = 0;j < config.src_dirs.len();++j){
-    ctx.add_path(config.src_dirs.get_ptr(j).str());
+    ctx.add_path(config.src_dirs.get(j).str());
   }
   let cmp = Compiler::new(ctx);
   let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);

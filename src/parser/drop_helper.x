@@ -56,7 +56,7 @@ impl DropHelper{
     if(decl.is_struct()){
       let fields = decl.get_fields();
       for(let i = 0;i < fields.len();++i){
-        let fd = fields.get_ptr(i);
+        let fd = fields.get(i);
         if(self.is_drop_type(&fd.type)){
           return true;
         }
@@ -64,10 +64,10 @@ impl DropHelper{
     }else{
       let vars = decl.get_variants();
       for(let i = 0;i < vars.len();++i){
-        let variant = vars.get_ptr(i);
+        let variant = vars.get(i);
         let fields = &variant.fields;
         for(let j = 0;j < fields.len();++j){
-          let fd = fields.get_ptr(j);
+          let fd = fields.get(j);
           if(self.is_drop_type(&fd.type)){
             return true;
           }
@@ -104,7 +104,7 @@ impl DropHelper{
         r = r2;
     }
     for (let i = 0;i < r.unit.items.len();++i) {
-      let it: Item* = r.unit.items.get_ptr(i);
+      let it: Item* = r.unit.items.get(i);
       if(!(it is Item::Impl)){
         continue;
       }
@@ -124,7 +124,7 @@ impl DropHelper{
       r = r2;
     }
     for (let i = 0;i < r.unit.items.len();++i) {
-      let it: Item* = r.unit.items.get_ptr(i);
+      let it: Item* = r.unit.items.get(i);
       if(!(it is Item::Impl)){
         continue;
       }
@@ -142,7 +142,7 @@ impl DropHelper{
     let decl = self.r.get_decl(rt).unwrap();
     let drop_impl = self.find_drop_impl(decl);
     if(drop_impl.info.type_params.empty()){
-      return drop_impl.methods.get_ptr(0);
+      return drop_impl.methods.get(0);
     }
     let key = rt.type.print();
     let method_desc = self.r.drop_map.get(&key).unwrap();

@@ -73,7 +73,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
     list.sort();
     print("compile_dir '{}' -> {} elems\n", dir, list.len());
     for(let i = 0;i < list.len();++i){
-      let name: String* = list.get_ptr(i);
+      let name: String* = list.get(i);
       if(!name.str().ends_with(".x")) continue;
       if(exc.is_some() && name.eq(*exc.get())){
         continue;
@@ -143,7 +143,7 @@ func std_test_regex(pat: String){
     let dir = format("{}/tests/std_test", root.get());
     let files = File::list(dir.str());
     for(let i = 0;i < files.len();++i){
-        let fl = files.get_ptr(i);
+        let fl = files.get(i);
         let fl2 = fl.str();
         if(Regex::new(pat.str()).is_match(fl2)){
             std_test_single(fl.clone());
@@ -203,7 +203,7 @@ func normal_test_regex(pattern: String){
     let dir = format("{}/tests/normal", root.get());
     let files = File::list(dir.str());
     for(let i = 0;i < files.len();++i){
-        let fl = files.get_ptr(i);
+        let fl = files.get(i);
         let fl2 = fl.str();
         if(Regex::new(pattern.str()).is_match(fl2)){
             test_single(fl.clone());

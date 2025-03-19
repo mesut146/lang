@@ -26,7 +26,7 @@ impl<T> Stack<T>{
     }
 
     func top(self): T*{
-        return self.list.get_ptr(self.list.len() - 1);
+        return self.list.get(self.list.len() - 1);
     }
 
     func peek(self): T*{

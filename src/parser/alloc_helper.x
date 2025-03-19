@@ -174,7 +174,7 @@ impl AllocHelper{
   func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.c.get_resolver();
     if(Resolver::is_call(call, "std", "internal_block")){
-      let arg = call.args.get_ptr(0).print();
+      let arg = call.args.get(0).print();
       let id = i32::parse(arg.str());
       let blk: Block* = *resolver.block_map.get(&id).unwrap();
       self.visit(blk);
@@ -183,7 +183,7 @@ impl AllocHelper{
     }
     if(Resolver::is_printf(call)){
       for(let i = 1;i < call.args.len();++i){
-        let arg = call.args.get_ptr(i);
+        let arg = call.args.get(i);
         self.visit(arg);
       }
       return Option<Value*>::new();
@@ -348,7 +348,7 @@ impl AllocHelper{
       res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
       if(sz.is_some()){
-        let elem = list.get_ptr(0);
+        let elem = list.get(0);
         self.visit(elem);
       }else{
         for elem in list{
@@ -401,7 +401,7 @@ impl AllocHelper{
   func visit_child(self, node: Expr*){
     if let Expr::Array(list*,sz*)=(node){
       if(sz.is_some()){
-        let elem = list.get_ptr(0);
+        let elem = list.get(0);
         self.visit(elem);
       }else{
         for elem in list{

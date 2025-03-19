@@ -96,7 +96,7 @@ impl ImportStmt{
       let s = String::new();
       for(let i=0;i<self.list.len();i+=1){
           if(i>0) s.append("/");
-          s.append(self.list.get_ptr(i));
+          s.append(self.list.get(i));
       }
       return s;
   }
@@ -162,7 +162,7 @@ enum Decl: BaseDecl{
 impl Decl{
   func is_drop(self): bool{
     for(let i = 0;i < self.attr.len();++i){
-      let at = self.attr.get_ptr(i);
+      let at = self.attr.get(i);
       if(at.eq("drop")){
         return true;
       }
@@ -457,7 +457,7 @@ impl Type{
   func is_slice(self): bool{
     return self is Type::Slice;
   }
-  func get_ptr(self): Type*{
+  func deref_ptr(self): Type*{
     if let Type::Pointer(bx*) = (self){
       return bx.get();
     }

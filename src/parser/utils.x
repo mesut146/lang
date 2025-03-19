@@ -17,7 +17,7 @@ func ENUM_TAG_BITS(): i32{ return 64; }
 func join_list<T>(arr: List<T>*): String{
     let f = Fmt::new();
     for(let i = 0;i < arr.len();++i){
-        f.print(arr.get_ptr(i));
+        f.print(arr.get(i));
         if(i != arr.len() - 1){
             f.print(", ");
         }
@@ -52,12 +52,12 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
         Type::Simple(smp*) => {
             if (smp.args.empty()) {
                 for (let i = 0;i < typeParams.size();++i) {
-                    let tp = typeParams.get_ptr(i);
+                    let tp = typeParams.get(i);
                     if (tp.eq(type)) return true;
                 }
             } else {
                 for (let i = 0;i < smp.args.size();++i) {
-                    let ta = smp.args.get_ptr(i);
+                    let ta = smp.args.get(i);
                     if (hasGeneric(ta, typeParams)) return true;
                 }
             }
@@ -194,7 +194,7 @@ func mangle(m: Method*): String{
   if(m.type_params.len() > 0){
     f.print("$LT");
     for(let i = 0;i < m.type_params.len();++i){
-        let tp = m.type_params.get_ptr(i);
+        let tp = m.type_params.get(i);
         f.print("_");
         f.print(tp);
     }
@@ -205,7 +205,7 @@ func mangle(m: Method*): String{
     mangleType(&m.self.get().type, &f);
   }
   for(let i = 0;i < m.params.len();++i){
-    let prm = m.params.get_ptr(i);
+    let prm = m.params.get(i);
     f.print("_");
     mangleType(&prm.type, &f);
   }
@@ -231,7 +231,7 @@ func printMethod(m: Method*): String{
         s.print("self");
     }
     for(let i = 0;i < m.params.len();++i){
-        let prm = m.params.get_ptr(i);
+        let prm = m.params.get(i);
         if(i > 0 || m.self.is_some()) s.print(", ");
         s.print(&prm.type);
     }
@@ -254,7 +254,7 @@ func printMethod(m: Method*): String{
     let copier = AstCopier::new(&map);
     for(let i = 0;i < m.params.len();++i){
       s.print("_");
-      let prm_type = &m.params.get_ptr(i).type;
+      let prm_type = &m.params.get(i).type;
       let mapped: Type = copier.visit(prm_type);
       s.print(&mapped);
       mapped.drop();

@@ -192,7 +192,7 @@ impl Compiler{
           SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
           self.set_and_insert(bb);
           //alloc args
-          let variant = decl.get_variants().get_ptr(var_index);
+          let variant = decl.get_variants().get(var_index);
           let arg_idx = 0;
           for arg in args{
             self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
@@ -253,7 +253,7 @@ impl Compiler{
       let dataPtr = self.gep2(enum_ptr, data_index, self.mapType(&decl.type));
       let var_ty = self.get_variant_ty(decl, variant);
 
-      let field = variant.fields.get_ptr(arg_idx);
+      let field = variant.fields.get(arg_idx);
       let alloc_ptr = self.get_alloc(arg.id);
       self.NamedValues.add(arg.name.clone(), alloc_ptr);
       let gep_idx = arg_idx;
@@ -402,7 +402,7 @@ impl Compiler{
       arrt.drop();
       if(sz.is_none()){
         for(let i = 0;i < list.len();++i){
-          let e = list.get_ptr(i);
+          let e = list.get(i);
           let elem_target = gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
           self.setField(e, &et, elem_target);
@@ -411,9 +411,9 @@ impl Compiler{
         return ptr;
       }
       //repeated
-      let elem = list.get_ptr(0);
+      let elem = list.get(0);
       let elem_ptr = Option<Value*>::new();
-      let elem_type = self.getType(list.get_ptr(0));
+      let elem_type = self.getType(list.get(0));
       let elem_ty = self.mapType(&elem_type);
       if (doesAlloc(elem, self.get_resolver())) {
           elem_ptr = Option::new(self.visit(elem));
@@ -452,7 +452,7 @@ impl Compiler{
       }
       let i64t = Type::new("i64");
       let type = self.getType(node.arr.get());
-      let ty = type.get_ptr();
+      let ty = type.deref_ptr();
       let src = self.get_obj_ptr(node.arr.get());
       if(ty.is_array()){
           //regular array access
@@ -598,7 +598,7 @@ impl Compiler{
         list.drop();
       }
       if(Resolver::is_call(mc, "std", "internal_block")){
-        let arg = mc.args.get_ptr(0).print();
+        let arg = mc.args.get(0).print();
         let id = i32::parse(arg.str());
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit_block(blk);
@@ -615,7 +615,7 @@ impl Compiler{
         return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "typeof")){
-        let arg = mc.args.get_ptr(0);
+        let arg = mc.args.get(0);
         let ty = self.getType(arg);
         let str = ty.print();
         let ptr = self.get_alloc(expr);
@@ -634,7 +634,7 @@ impl Compiler{
       }
       if(Resolver::is_drop_call(mc)){
         //print("drop_call {} line: {}\n", expr, expr.line);
-        let argt = self.getType(mc.args.get_ptr(0));
+        let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
           argt.drop();
           return getVoidTy() as Value*;
@@ -647,24 +647,24 @@ impl Compiler{
         argt.drop();
       }
       if(Resolver::is_std_no_drop(mc)){
-        let arg = mc.args.get_ptr(0);
+        let arg = mc.args.get(0);
         self.own.get().do_move(arg);
         return getVoidTy() as Value*;
       }
       if(Resolver::std_size(mc)){
         if(!mc.args.empty()){
-          let ty = self.getType(mc.args.get_ptr(0));
+          let ty = self.getType(mc.args.get(0));
           let sz = self.getSize(&ty) / 8;
           ty.drop();
           return makeInt(sz, 32) as Value*;
         }else{
-          let ty = mc.type_args.get_ptr(0);
+          let ty = mc.type_args.get(0);
           let sz = self.getSize(ty) / 8;
           return makeInt(sz, 32) as Value*;
         }
       }    
       if(Resolver::std_is_ptr(mc)){
-        let ty = mc.type_args.get_ptr(0);
+        let ty = mc.type_args.get(0);
         if(ty.is_pointer()){
           return getTrue();
         }
@@ -701,10 +701,10 @@ impl Compiler{
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
-        let size = self.cast(mc.args.get_ptr(0), &i64_ty);
+        let size = self.cast(mc.args.get(0), &i64_ty);
         i64_ty.drop();
         if (!mc.type_args.empty()) {
-            let typeSize = self.getSize(mc.type_args.get_ptr(0)) / 8;
+            let typeSize = self.getSize(mc.type_args.get(0)) / 8;
             size = CreateNSWMul(size, makeInt(typeSize, 64) as Value*);
         }
         let proto = self.protos.get().libc("malloc");
@@ -715,11 +715,11 @@ impl Compiler{
         return res;
       }
       if(Resolver::is_ptr_null(mc)){
-        let ty = self.mapType(mc.type_args.get_ptr(0));
+        let ty = self.mapType(mc.type_args.get(0));
         return ConstantPointerNull_get(getPointerTo(ty));
       }
       if(Resolver::is_ptr_deref(mc)){
-        let arg_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
+        let arg_ptr = self.get_obj_ptr(mc.args.get(0));
         let type = self.getType(expr);
         if (!is_struct(&type)) {
             let res = CreateLoad(self.mapType(&type), arg_ptr);
@@ -731,20 +731,20 @@ impl Compiler{
       }
       if(Resolver::is_ptr_get(mc)){
         let elem_type = self.getType(expr);
-        let src = self.get_obj_ptr(mc.args.get_ptr(0));
-        let idx = self.loadPrim(mc.args.get_ptr(1));
-        let res = gep_ptr(self.mapType(elem_type.get_ptr()), src, idx);
+        let src = self.get_obj_ptr(mc.args.get(0));
+        let idx = self.loadPrim(mc.args.get(1));
+        let res = gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
         elem_type.drop();
         return res;
       }
       if(Resolver::is_ptr_copy(mc)){
         //ptr::copy(src_ptr, src_idx, elem)
-        let src_ptr = self.get_obj_ptr(mc.args.get_ptr(0));
+        let src_ptr = self.get_obj_ptr(mc.args.get(0));
         let i64_ty = Type::new("i64");
-        let idx = self.cast(mc.args.get_ptr(1), &i64_ty);
+        let idx = self.cast(mc.args.get(1), &i64_ty);
         i64_ty.drop();
-        let val = self.visit(mc.args.get_ptr(2));
-        let elem_type: Type = self.getType(mc.args.get_ptr(2));
+        let val = self.visit(mc.args.get(2));
+        let elem_type: Type = self.getType(mc.args.get(2));
         let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
         self.copy(trg_ptr, val, &elem_type);
         elem_type.drop();
@@ -752,7 +752,7 @@ impl Compiler{
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
-        let arr_type2 = arr_type.get_ptr();
+        let arr_type2 = arr_type.deref_ptr();
         if let Type::Array(elem*, sz)=(arr_type2){
           arr_type.drop();
           return makeInt(sz, 64) as Value*;
@@ -804,7 +804,7 @@ impl Compiler{
                 vector_Value_push(args, self.visit(arg));
               }
             } else {
-                let pt0 = ft.params.get_ptr(paramIdx);
+                let pt0 = ft.params.get(paramIdx);
                 let pt = resolver.visit_type(pt0).unwrap();
                 vector_Value_push(args, self.cast(arg, &pt));
                 pt.drop();
@@ -846,7 +846,7 @@ impl Compiler{
                 vector_Value_push(args, self.visit(arg));
               }
             } else {
-                let pt0 = ft.params.get_ptr(paramIdx);
+                let pt0 = ft.params.get(paramIdx);
                 let pt = resolver.visit_type(pt0).unwrap();
                 vector_Value_push(args, self.cast(arg, &pt));
                 pt.drop();
@@ -898,14 +898,14 @@ impl Compiler{
         rval.drop();
         if(mc.is_static){
           ++argIdx;
-          self.own.get().do_move(mc.args.get_ptr(0));
+          self.own.get().do_move(mc.args.get(0));
         }else if(target.self.get().is_deref){
           self.own.get().do_move(mc.scope.get());
         }
         //++paramIdx;
       }
       for(;argIdx < mc.args.len();++argIdx){
-        let arg: Expr* = mc.args.get_ptr(argIdx);
+        let arg: Expr* = mc.args.get(argIdx);
         let at = self.getType(arg);
         let lit: Option<String*> = is_str_lit(arg);
         if(target.is_vararg && lit.is_some()){
@@ -927,7 +927,7 @@ impl Compiler{
           if(target.is_vararg && paramIdx >= target.params.len()){
             vector_Value_push(args, self.loadPrim(arg));
           }else{
-            let prm = target.params.get_ptr(paramIdx);
+            let prm = target.params.get(paramIdx);
             let pt = self.get_resolver().getType(&prm.type);
             vector_Value_push(args, self.cast(arg, &pt));
             pt.drop();
@@ -952,7 +952,7 @@ impl Compiler{
     func visit_print(self, mc: Call*): Value*{
       let args = vector_Value_new();
       for(let i = 0;i < mc.args.len();++i){
-        let arg: Expr* = mc.args.get_ptr(i);
+        let arg: Expr* = mc.args.get(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
           let val: String = lit.unwrap().clone();
@@ -992,7 +992,7 @@ impl Compiler{
     func call_printf(self, mc: Call*){
       let args = vector_Value_new();
       for(let i = 0;i < mc.args.len();++i){
-        let arg: Expr* = mc.args.get_ptr(i);
+        let arg: Expr* = mc.args.get(i);
         let lit = is_str_lit(arg);
         if(lit.is_some()){
           let val: String = lit.unwrap().clone();
@@ -1038,7 +1038,7 @@ impl Compiler{
     func call_sprintf(self, mc: Call*): Value*{
       let args = vector_Value_new();
       for(let i = 0;i < mc.args.len();++i){
-        let arg: Expr* = mc.args.get_ptr(i);
+        let arg: Expr* = mc.args.get(i);
         let lit: Option<String*> = is_str_lit(arg);
         if(lit.is_some()){
           let val: String = lit.unwrap().clone();
@@ -1202,7 +1202,7 @@ impl Compiler{
     func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
       let field_idx = 0;
       for(let i = 0;i < args.len();++i){
-        let arg = args.get_ptr(i);
+        let arg = args.get(i);
         if(arg.isBase){
           continue;
         }
@@ -1213,7 +1213,7 @@ impl Compiler{
           prm_idx = field_idx;
           ++field_idx;
         }
-        let fd = fields.get_ptr(prm_idx);
+        let fd = fields.get(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
         let field_target_ptr = self.gep2(ptr, prm_idx, ty);
         self.setField(&arg.expr, &fd.type, field_target_ptr);
@@ -1232,7 +1232,7 @@ impl Compiler{
         let decl = self.get_resolver().get_decl(&rt).unwrap();
         //set base
         for(let i = 0;i < args.len();++i){
-          let arg = args.get_ptr(i);
+          let arg = args.get(i);
           if(!arg.isBase) continue;
           let base_index = 0;
           if(decl.is_enum()){
@@ -1248,7 +1248,7 @@ impl Compiler{
         if let Decl::Struct(fields*)=(decl){
           let field_idx = 0;
           for(let i = 0;i < args.len();++i){
-            let arg = args.get_ptr(i);
+            let arg = args.get(i);
             if(arg.isBase){
               continue;
             }
@@ -1259,7 +1259,7 @@ impl Compiler{
               prm_idx = field_idx;
               ++field_idx;
             }
-            let fd = fields.get_ptr(prm_idx);
+            let fd = fields.get(prm_idx);
             if(decl.base.is_some()) ++prm_idx;
             let field_target_ptr = self.gep2(ptr, prm_idx, ty);
             self.setField(&arg.expr, &fd.type, field_target_ptr);
@@ -1267,7 +1267,7 @@ impl Compiler{
           }
         }else{
           let variant_index = Resolver::findVariant(decl, type.name());
-          let variant = decl.get_variants().get_ptr(variant_index);
+          let variant = decl.get_variants().get(variant_index);
           //set tag
           let tag_ptr = self.gep2(ptr, get_tag_index(decl), ty);
           let tag_val = makeInt(variant_index, ENUM_TAG_BITS()) as Value*;

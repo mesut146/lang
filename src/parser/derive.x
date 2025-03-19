@@ -185,12 +185,12 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     }
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
-            let ev = variants.get_ptr(i);
+            let ev = variants.get(i);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
             let then = Block::new(line, line);
 
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 //Drop::drop({fd.name})
                 let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
                 then.list.add(drop_stmt);
@@ -208,7 +208,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 else_stmt: Ptr<Body>::new()
             };
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 let arg_id = unit.node(line);
                 iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
             }
@@ -217,7 +217,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     }else{
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
-            let fd = fields.get_ptr(i);
+            let fd = fields.get(i);
             if(!is_struct(&fd.type)) continue;
             //self.{fd.name}.drop();
             let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
@@ -247,7 +247,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(line, line);
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
-            let ev = variants.get_ptr(i);
+            let ev = variants.get(i);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
             let then = Block::new(line, line);
 
@@ -257,7 +257,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             if(ev.fields.len() > 0){
                 then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
                 for(let j = 0;j < ev.fields.len();++j){
-                    let fd = ev.fields.get_ptr(j);
+                    let fd = ev.fields.get(j);
                     if(j > 0){
                         then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
                     }
@@ -289,7 +289,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 else_stmt: Ptr<Body>::new()
             };
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 let arg_id = unit.node(line);
                 is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
             }
@@ -302,7 +302,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
         body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
-            let fd = fields.get_ptr(i);
+            let fd = fields.get(i);
             if(i > 0){
                 body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
             }
@@ -333,7 +333,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
     }
-    let fmt: Expr* = mc.args.get_ptr(0);
+    let fmt: Expr* = mc.args.get(0);
     r.visit(fmt).drop();
     let lit_opt = is_str_lit(fmt);
     if (lit_opt.is_none()) {
@@ -403,7 +403,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             sub2.drop();
             block.list.add(st);
         }
-        let arg = mc.args.get_ptr(arg_idx);
+        let arg = mc.args.get(arg_idx);
         let argt = r.visit(arg);
         if(fmt_str.get(br_pos+1)=='}'){
             //Display
@@ -528,7 +528,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     if(mc.args.len() != 1){
         r.err(node, format("assert expects one element got: {}", mc.args.len()));
     }
-    let arg = mc.args.get_ptr(0);
+    let arg = mc.args.get(0);
     if(!r.is_condition(arg)){
         r.err(node, format("assert expr is not bool: {:?}", node));
     }

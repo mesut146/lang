@@ -75,7 +75,7 @@ impl Signature{
             }
             res.scope.drop();
             if (scp.type.is_pointer()) {
-                let inner = scp.type.get_ptr();
+                let inner = scp.type.deref_ptr();
                 res.scope = Option::new(r.visit_type(inner));
                 scp.drop();
             } else {
@@ -88,7 +88,7 @@ impl Signature{
             str.drop();
         }
         for(let i = 0;i < mc.args.len();++i){
-            let arg = mc.args.get_ptr(i);
+            let arg = mc.args.get(i);
             let argt: RType = r.visit(arg);
             let type = argt.type.clone();
             argt.drop();
@@ -114,8 +114,8 @@ impl Signature{
             let args = decl.type.get_args();
             let args2 = type.get_args();
             for (let i = 0;i < args.len();++i) {
-                let tp = args.get_ptr(i);
-                map.add(tp.print(), args2.get_ptr(i).clone());
+                let tp = args.get(i);
+                map.add(tp.print(), args2.get(i).clone());
             }
         }
         return map;
@@ -153,7 +153,7 @@ impl Signature{
         }
         let copier = AstCopier::new(map);
         for(let i = 0;i < m.params.len();++i){
-            let prm = m.params.get_ptr(i);
+            let prm = m.params.get(i);
             //if m is generic, replace <T> with real type
             let mapped = copier.visit(&prm.type);
             let mapped2 = replace_self(&mapped, m);
@@ -194,7 +194,7 @@ impl Debug for Signature{
             if(i > 0){
                 f.print(", ");
             }
-            let arg: Type* = self.args.get_ptr(i);
+            let arg: Type* = self.args.get(i);
             arg.debug(f);
         }
         f.print(")");
@@ -209,7 +209,7 @@ impl MethodResolver{
     func collect(self, sig: Signature*): List<Signature>{
         let list = List<Signature>::new();
         if(sig.mc.unwrap().scope.is_some()){
-            let scope_type = sig.scope.get().type.get_ptr();
+            let scope_type = sig.scope.get().type.deref_ptr();
             self.collect_member(sig, scope_type, &list, true, self.r);
         }else{
             //static sibling
@@ -222,7 +222,7 @@ impl MethodResolver{
             self.collect_static(sig.name.str(), &list, self.r);
             let arr = self.r.get_resolvers();
             for (let i = 0;i < arr.len();++i) {
-                let resolver = *arr.get_ptr(i);
+                let resolver = *arr.get(i);
                 resolver.init();
                 let mr = MethodResolver::new(resolver);
                 mr.collect_static(sig.name.str(), &list, self.r);
@@ -246,7 +246,7 @@ impl MethodResolver{
         let list = List<Pair<Impl*, i32>>::new();
         let erased: String = print_erased(type);
         for(let i = 0;i < self.r.unit.items.len();++i){
-            let item: Item* = self.r.unit.items.get_ptr(i);
+            let item: Item* = self.r.unit.items.get(i);
             if(!(item is Item::Impl)) continue;
             let imp = item.as_impl();
             //print("imp {:?} {:?}\n", type, imp.info);
@@ -285,7 +285,7 @@ impl MethodResolver{
 
     func get_impl(self, sig: Signature*, scope_type: Type*): List<Pair<Impl*, i32>>{
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
-            let actual: Type* = sig.args.get_ptr(0).get_ptr();
+            let actual: Type* = sig.args.get(0).deref_ptr();
             return self.get_impl(actual, Option::new(&sig.scope.get().type));
         }else{
             return self.get_impl(scope_type, Option<Type*>::new());
@@ -298,10 +298,10 @@ impl MethodResolver{
 
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
-            let pair: Pair<Impl*, i32>* = imp_list.get_ptr(i);
+            let pair: Pair<Impl*, i32>* = imp_list.get(i);
             let imp: Impl* = pair.a;
             for(let j = 0;j < imp.methods.len();++j){
-                let m = imp.methods.get_ptr(j);       
+                let m = imp.methods.get(j);       
                 if(!m.name.eq(&sig.name)) continue;
                 let desc = Desc{
                     kind: RtKind::MethodImpl{j},
@@ -318,12 +318,12 @@ impl MethodResolver{
                 }else{
                   let typeMap = Map<String, Type>::new();
                   for(let k = 0;k < m.type_params.len();++k){
-                    let ta = m.type_params.get_ptr(k);
-                    typeMap.add(ta.name().clone(), scp_args.get_ptr(k).clone());
+                    let ta = m.type_params.get(k);
+                    typeMap.add(ta.name().clone(), scp_args.get(k).clone());
                   }
                   let sig2 = Signature::new(m, &map, desc, self.r, origin);
                   for (let k = 0;k < sig2.args.len();++k) {
-                    let arg = sig2.args.get_ptr(k);
+                    let arg = sig2.args.get(k);
                     let ac = AstCopier::new(&typeMap);
                     let mapped = ac.visit(arg);
                     let tmp = sig2.args.set(k, mapped);
@@ -337,7 +337,7 @@ impl MethodResolver{
         if (use_imports) {
           let arr: List<Resolver*> = self.r.get_resolvers();
           for (let i = 0;i < arr.len();++i) {
-            let resolver = *arr.get_ptr(i);
+            let resolver = *arr.get(i);
             resolver.init();
             let mr = MethodResolver::new(resolver);
             mr.collect_member(sig, scope_type, list, false, origin);
@@ -351,7 +351,7 @@ impl MethodResolver{
 
     func collect_static(self, name: str, list: List<Signature>*, origin: Resolver*){
         for (let i = 0;i < self.r.unit.items.len();++i) {
-            let item: Item* = self.r.unit.items.get_ptr(i);
+            let item: Item* = self.r.unit.items.get(i);
             if let Item::Method(m*) = (item){
                 if (m.name.eq(name)) {
                     let desc = Desc{kind: RtKind::Method,
@@ -363,7 +363,7 @@ impl MethodResolver{
             }
             else if let Item::Extern(arr*) = (item){
                 for (let j = 0;j < arr.len();++j) {
-                    let m = arr.get_ptr(j);
+                    let m = arr.get(j);
                     if (m.name.eq(name)) {
                         let desc = Desc{kind: RtKind::MethodExtern{j},
                             path: m.path.clone(),
@@ -389,7 +389,7 @@ impl MethodResolver{
         let errors = List<Pair<Signature*, String>>::new();
         let exact = Option<Signature*>::new();
         for(let i = 0;i < list.size();++i){
-            let sig2 = list.get_ptr(i);
+            let sig2 = list.get(i);
             let cmp_res: SigResult = self.is_same(sig, sig2);
             if let SigResult::Err(err) = (cmp_res){
                 errors.add(Pair::new(sig2, err));
@@ -405,7 +405,7 @@ impl MethodResolver{
         if(real.empty()){
             let f = Fmt::new(format("method {:?} not found from candidates\n", mc));
             for(let i = 0;i < errors.len();++i){
-                let err: Pair<Signature*, String>* = errors.get_ptr(i);
+                let err: Pair<Signature*, String>* = errors.get(i);
                 f.print(err.a);
                 f.print(" ");
                 f.print(&err.b);
@@ -420,7 +420,7 @@ impl MethodResolver{
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {:?} has {} candidates\n", mc, real.size());
             for(let i = 0;i < real.len();++i){
-                let err: Signature* = *real.get_ptr(i);
+                let err: Signature* = *real.get(i);
                 msg.append("\n  ");
                 msg.append(err.print());
                 msg.append(" ");
@@ -432,7 +432,7 @@ impl MethodResolver{
             self.r.err(expr, msg);
             panic("unreachable");
         }
-        let sig2 = *real.get_ptr(0);
+        let sig2 = *real.get(0);
         if(exact.is_some()){
             sig2 = exact.unwrap();
         }
@@ -462,13 +462,13 @@ impl MethodResolver{
                   scope_args = scp.get_args();
                 }
                 for (let i = 0; i < scope_args.size(); ++i) {
-                    typeMap.add(type_params.get_ptr(i).name().clone(), scope_args.get_ptr(i).clone());
+                    typeMap.add(type_params.get(i).name().clone(), scope_args.get(i).clone());
                 }
                 if (!mc.type_args.empty()) {
                     //panic("todo");
                     //place specified type args in order
                     for (let i = 0; i < mc.type_args.size(); ++i) {
-                        typeMap.add(type_params.get_ptr(i).name().clone(), self.r.getType(mc.type_args.get_ptr(i)));
+                        typeMap.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
                     }
                 }
             }
@@ -476,14 +476,14 @@ impl MethodResolver{
             if (!mc.type_args.empty()) {
                 //place specified type args in order
                 for (let i = 0; i < mc.type_args.size(); ++i) {
-                    typeMap.add(type_params.get_ptr(i).name().clone(), self.r.getType(mc.type_args.get_ptr(i)));
+                    typeMap.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
                 }
             }
         }
         //infer from args
         for (let k = 0; k < sig.args.size(); ++k) {
-            let arg_type = sig.args.get_ptr(k);
-            let target_type = sig2.args.get_ptr(k);
+            let arg_type = sig.args.get(k);
+            let target_type = sig2.args.get(k);
             //case for self coerced to ptr
             if(k == 0 && !mc.is_static && target.self.is_some() && target_type.is_pointer() && !arg_type.is_pointer()){
                 let arg2 = arg_type.clone().toPtr();
@@ -500,7 +500,7 @@ impl MethodResolver{
             }
         }
         for (let i = 0;i < type_params.len();++i) {
-            let tp = type_params.get_ptr(i);
+            let tp = type_params.get(i);
             if (!typeMap.contains(tp.name())) {
                 let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
                 type_params.drop();
@@ -561,8 +561,8 @@ impl MethodResolver{
             }
             infer(&ft1.return_type, &ft2.return_type, inferred, type_params);
             for(let i = 0;i < ft1.params.len();++i){
-                let a1 = ft1.params.get_ptr(i);
-                let a2 = ft2.params.get_ptr(i);
+                let a1 = ft1.params.get(i);
+                let a2 = ft2.params.get(i);
                 infer(a1, a2, inferred, type_params);
             }
             return Result<i32, String>::ok(0);
@@ -582,8 +582,8 @@ impl MethodResolver{
             }
             infer(ft1.return_type.get(), &ft2.return_type, inferred, type_params);
             for(let i = 0;i < ft1.params.len();++i){
-                let a1 = ft1.params.get_ptr(i);
-                let a2 = ft2.params.get_ptr(i);
+                let a1 = ft1.params.get(i);
+                let a2 = ft2.params.get(i);
                 infer(a1, a2, inferred, type_params);
             }
             return Result<i32, String>::ok(0);
@@ -601,8 +601,8 @@ impl MethodResolver{
             }
             if (!arg.name().eq(prm.name())) panic("cant infer");
             for (let i = 0; i < ta1.size(); ++i) {
-                let ta = ta1.get_ptr(i);
-                let tp = ta2.get_ptr(i);
+                let ta = ta1.get(i);
+                let tp = ta2.get(i);
                 infer(ta, tp, inferred, type_params);
             }
         }
@@ -658,16 +658,16 @@ impl MethodResolver{
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().is_trait()){
             st.drop();
-            st = sig.args.get_ptr(0).get_ptr().as_simple().clone();
+            st = sig.args.get(0).deref_ptr().as_simple().clone();
         }
         //put full type, Box::new(...) -> Box<...>::new()
         let imp_args = imp.type.get_args();
         if (mc.is_static && !imp_args.empty()) {
             st.args.clear();
             for (let i = 0;i < imp_args.size();++i) {
-                let ta = imp_args.get_ptr(i);
+                let ta = imp_args.get(i);
                 let ta_str = ta.print();
-                let resolved = map.get_ptr(&ta_str).unwrap();
+                let resolved = map.get(&ta_str).unwrap();
                 ta_str.drop();
                 st.args.add(resolved.clone());
             }
@@ -706,7 +706,7 @@ impl MethodResolver{
             return SigResult::Err{format("not same kind {:?} vs {:?}", type1, type2)};
         }
         if (scope_rt.is_trait()) {
-            let real_scope = sig.args.get_ptr(0).get_ptr();
+            let real_scope = sig.args.get(0).deref_ptr();
             if(info.trait_name.is_some()){
                 if(!info.trait_name.get().name().eq(type1.name().str())){
                     return SigResult::Err{"not same trait".str()};
@@ -741,8 +741,8 @@ impl MethodResolver{
             if (!m.is_generic) {
                 //check if args are compatible with generic type params
                 for (let i = 0; i < mc_targs.size(); ++i) {
-                    let ta1 = mc_targs.get_ptr(i);
-                    let ta2 = m.type_params.get_ptr(i);
+                    let ta1 = mc_targs.get(i);
+                    let ta2 = m.type_params.get(i);
                     if (!ta1.eq(ta2)) {
                         let err = format("type arg {:?} not compatible with {:?}", ta1, ta2);
                         return SigResult::Err{err};
@@ -783,9 +783,9 @@ impl MethodResolver{
         let all_exact = true;
       
         for (let i = 0; i < sig2.args.len(); ++i) {
-            let t1: Type = sig.args.get_ptr(i).clone();
-            let t1p: Type* = sig.args.get_ptr(i);
-            let t2: Type* = sig2.args.get_ptr(i);
+            let t1: Type = sig.args.get(i).clone();
+            let t1p: Type* = sig.args.get(i);
+            let t2: Type* = sig2.args.get(i);
             if(i == 0 && method.self.is_some()){
                 if (t2.is_pointer()) {
                     if (!t1.is_pointer()) {
@@ -811,7 +811,7 @@ impl MethodResolver{
                 arg.drop();
                 if(method.self.is_some()){
                     if(mc.is_static){
-                        arg = mc.args.get_ptr(i).print();
+                        arg = mc.args.get(i).print();
                     }else{
                         arg = mc.scope.get().print();
                     }
@@ -819,7 +819,7 @@ impl MethodResolver{
                     if(!mc.is_static && mc.scope.is_some()){
                         arg = mc.scope.get().print();
                     }else{
-                        arg = mc.args.get_ptr(i).print();
+                        arg = mc.args.get(i).print();
                     }
                 }
                 let res = SigResult::Err{format("arg '{:?}' is not compatible with param '{}' vs '{}'\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
@@ -886,7 +886,7 @@ impl MethodResolver{
                 return Option::new("arg count mismatch".str());
             }
             for(let i = 0;i < ft1.params.len();++i){
-                let cmp2 = MethodResolver::is_compatible(ft1.params.get_ptr(i), ft2.params.get_ptr(i), typeParams);
+                let cmp2 = MethodResolver::is_compatible(ft1.params.get(i), ft2.params.get(i), typeParams);
                 if(cmp2.is_some()){
                     return cmp2;
                 }
@@ -912,7 +912,7 @@ impl MethodResolver{
                     return Option::new("arg count mismatch".str());
                 }
                 for(let i = 0;i < ft.params.len();++i){
-                    let cmp2 = MethodResolver::is_compatible(lm.params.get_ptr(i), ft.params.get_ptr(i), typeParams);
+                    let cmp2 = MethodResolver::is_compatible(lm.params.get(i), ft.params.get(i), typeParams);
                     if(cmp2.is_some()){
                         return cmp2;
                     }
@@ -964,8 +964,8 @@ impl MethodResolver{
             }
             //A<i32> and A<i64> not compatible
             for (let i = 0; i < targs.len(); ++i) {
-                let ta = targs.get_ptr(i);
-                let tp = targs2.get_ptr(i);
+                let ta = targs.get(i);
+                let tp = targs2.get(i);
                 let cmp = is_compatible(ta, tp, typeParams);
                 if (cmp.is_some()) {
                     return cmp;
