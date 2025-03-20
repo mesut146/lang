@@ -902,7 +902,12 @@ impl Parser{
         res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt())});
       }else{
         let rhs_expr = self.parse_expr();
-        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr)});
+        if(self.is(TokenType::SEMI)){
+          self.consume(TokenType::SEMI);
+          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(Stmt::Expr{.id, rhs_expr})});
+        }else{
+          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr)});
+        }
       }
       if(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);

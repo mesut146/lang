@@ -320,8 +320,9 @@ impl Compiler{
   }
 
   func init_globals(self, config: CompilerConfig*){
+    //make init func for global's rhs 
     let resolv = self.get_resolver();
-    //external globals
+    //declare external globals
     for gl_info in &resolv.glob_map{
       let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Constant>();
@@ -343,46 +344,12 @@ impl Compiler{
     let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
+    //todo check is rhs depends another global
     for(let j = 0;j < resolv.unit.globals.len();++j){
       let gl: Global* = resolv.unit.globals.get(j);
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
-      let init = ptr::null<Constant>();
-      if(is_constexpr(&gl.expr)){
-        if(rt.type.is_prim()){
-          let rhs_str = gl.expr.print();
-          if(rhs_str.eq("true")){
-            init =  makeInt(1, 8) as Constant*;
-          }else if(rhs_str.eq("false")){
-            init =  makeInt(0, 8) as Constant*;
-          }else{
-            init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
-          }
-          rhs_str.drop();
-        }else if(rt.type.is_str()){
-          let val = is_str_lit(&gl.expr).unwrap().str();
-          let slice_ty = self.protos.get().std("slice");
-          let cons_elems = vector_Constant_new();
-          let cons_elems_slice = vector_Constant_new();
-          let ptr = self.get_global_string(val.str());
-          vector_Constant_push(cons_elems_slice, ptr as Constant*);
-          vector_Constant_push(cons_elems_slice, makeInt(val.len(), SLICE_LEN_BITS()) as Constant*);
-          let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
-          vector_Constant_push(cons_elems, cons_slice);
-          init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
-          
-          vector_Constant_delete(cons_elems);
-          vector_Constant_delete(cons_elems_slice);
-        }else{
-          panic("glob constexpr not supported: {:?}", gl);
-        }
-      }else{
-        if(is_struct(&rt.type)){
-          init = ConstantStruct_get(ty as StructType*);
-        }else{
-          init = makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
-        }
-      }
+      let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
       name_c.drop();
@@ -392,8 +359,33 @@ impl Compiler{
       }
       self.globals.add(gl.name.clone(), glob as Value*);
       //todo AllocHelper should visit rhs?
-      if let Expr::Call(mc*)=(&gl.expr){
-        AllocHelper::new(self).visit(&gl.expr);
+      //todo make allochelper visit only children
+      AllocHelper::new(self).visit(&gl.expr);
+      match &gl.expr{
+        Expr::Obj(obj_type*, entries*) => {
+          
+        },
+        Expr::Call(mc*) => {
+          if(is_struct(&rt.type)){
+            self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
+          }else{
+            let val = self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
+            CreateStore(val, glob as Value*);
+          }
+        },
+        _ => {
+          if(!is_constexpr(&gl.expr)){
+            if let Expr::Array(list*, size*)=(&gl.expr){
+              //AllocHelper::new(self).visit_child(&gl.expr);
+              self.visit_array(&gl.expr, list, size, glob as Value*);
+            }else{
+              panic("glob rhs '{:?}'", gl);
+            }
+          }
+        },
+      }
+      rt.drop();
+      /*if let Expr::Call(mc*)=(&gl.expr){
         if(is_struct(&rt.type)){
           self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
         }else{
@@ -403,14 +395,14 @@ impl Compiler{
       }else{
         if(!is_constexpr(&gl.expr)){
           if let Expr::Array(list*, size*)=(&gl.expr){
-            AllocHelper::new(self).visit_child(&gl.expr);
+            //AllocHelper::new(self).visit_child(&gl.expr);
             self.visit_array(&gl.expr, list, size, glob as Value*);
           }else{
-            panic("glob rhs {:?}", gl);
+            panic("glob rhs '{:?}'", gl);
           }
         }
         rt.drop();
-      }
+      }*/
     }
     if(self.llvm.di.get().debug){
       replaceGlobalVariables(self.llvm.di.get().cu, globs);
@@ -440,6 +432,48 @@ impl Compiler{
     vector_Metadata_delete(globs);
     vector_Type_delete(struct_elem_types);
     method.drop();
+  }
+
+  func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
+    let resolv = self.get_resolver();
+    let init = ptr::null<Constant>();
+    if(is_constexpr(&gl.expr)){
+      if(rt.type.is_prim()){
+        let rhs_str = gl.expr.print();
+        if(rhs_str.eq("true")){
+          init =  makeInt(1, 8) as Constant*;
+        }else if(rhs_str.eq("false")){
+          init =  makeInt(0, 8) as Constant*;
+        }else{
+          init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+        }
+        rhs_str.drop();
+      }else if(rt.type.is_str()){
+        let val = is_str_lit(&gl.expr).unwrap().str();
+        let slice_ty = self.protos.get().std("slice");
+        let cons_elems = vector_Constant_new();
+        let cons_elems_slice = vector_Constant_new();
+        let ptr = self.get_global_string(val.str());
+        vector_Constant_push(cons_elems_slice, ptr as Constant*);
+        vector_Constant_push(cons_elems_slice, makeInt(val.len(), SLICE_LEN_BITS()) as Constant*);
+        let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
+        vector_Constant_push(cons_elems, cons_slice);
+        init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
+        
+        vector_Constant_delete(cons_elems);
+        vector_Constant_delete(cons_elems_slice);
+      }else{
+        panic("glob constexpr not supported: {:?}", gl);
+      }
+    }else{
+      if(is_struct(&rt.type)){
+        init = ConstantStruct_get(ty as StructType*);
+      }else{
+        //prim or ptr
+        init = makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
+      }
+    }
+    return init;
   }
 
   //make all struct decl & method decl used by this module
@@ -619,10 +653,6 @@ impl Compiler{
     let ptr = self.allocMap.get(&id);
     return *ptr.unwrap();
   }
-  
-  func gep2(self, ptr: Value*, idx: i32, ty: llvm_Type*): Value*{
-    return CreateStructGEP(ptr, idx, ty);
-  }
 
   func cur_func(self): Function*{
     return self.protos.get().cur.unwrap();
@@ -642,73 +672,6 @@ impl Compiler{
     let res = rt.type.clone();
     rt.drop();
     return res;
-  }
-
-  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
-    File::create_dir(out_dir);
-    let cmd = "".str();
-    if(is_shared){
-      cmd.append(get_linker());
-      cmd.append("-shared -o ");
-    }else{
-      cmd.append("ar rcs ");
-    }
-    let path = format("{}/{}", out_dir, name);
-    print("linking {}\n", path);
-    cmd.append(&path);
-    cmd.append(" ");
-    for(let i = 0;i < compiled.len();++i){
-      let file = compiled.get(i);
-      cmd.append(file.str());
-      cmd.append(" ");
-    }
-
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      print("build library {}\n", path);
-    }else{
-      panic("link failed '{}'", cmd_s.get());
-    }
-    cmd_s.drop();
-    return path;
-  }
-
-  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
-    let path = format("{}/{}", out_dir, name);
-    print("linking {}\n", path);
-    if(File::exist(path.str())){
-      File::remove_file(path.str());
-    }
-    File::create_dir(out_dir);
-    let cmd = get_linker().str();
-    cmd.append(" -o ");
-    cmd.append(&path);
-    cmd.append(" ");
-    for(let i = 0;i < compiled.len();++i){
-      let obj_file = compiled.get(i);
-      cmd.append(obj_file.str());
-      cmd.append(" ");
-    }
-    cmd.append(args);
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      //run if linked
-      print("build binary {}\n", path);
-    }else{
-      panic("link failed '{}'", cmd_s);
-    }
-    cmd_s.drop();
-    return path;
-  }
-
-  func run(path: String){
-    let path_c: CStr = path.cstr();
-    let code = system(path_c.ptr());
-    if(code != 0){
-      print("error while running {} code={}\n", path_c, code);
-      exit(1);
-    }
-    path_c.drop();
   }
 
   func compile_single(config: CompilerConfig): String{
@@ -804,7 +767,7 @@ impl Compiler{
         idx: &idx,
         len: list.len() as i32
       };
-      worker.add_arg(make_compile_job2, args);
+      worker.add_arg(Compiler::make_compile_job2, args);
     }
     sleep(1);
     worker.join();
@@ -812,43 +775,108 @@ impl Compiler{
     cache.drop();
     let comp = compiled.unwrap();
     return config.link(&comp);
-  } 
+  }
+
+  func make_compile_job2(arg: c_void*){
+    let args = arg as CompileArgs*;
+    let config = args.config;
+    let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+    for dir in &config.src_dirs{
+      ctx.add_path(dir.str());
+    }
+    let cmp = Compiler::new(ctx);
+    let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
+    for inc in &args.config.src_dirs{
+        cmd.append(" -i ");
+        cmd.append(inc);
+    }
+    if(cmp.ctx.verbose){
+        let idx = args.idx.lock();
+        print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
+        *idx = *idx + 1;
+        args.idx.unlock();
+    }
+    let proc = Process::run(cmd.str());
+    proc.eat_close();
+    if(cmp.ctx.verbose){
+        let compiled = args.compiled.lock();
+        print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
+        args.compiled.unlock();
+    }
+    let compiled = args.compiled.lock();
+    compiled.add(format("{}", get_out_file(args.file.str(), &cmp)));
+    args.compiled.unlock();
+    sleep(1);
+    cmp.drop();
+    cmd.drop();
+  }
+
+  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
+    File::create_dir(out_dir);
+    let cmd = "".str();
+    if(is_shared){
+      cmd.append(get_linker());
+      cmd.append("-shared -o ");
+    }else{
+      cmd.append("ar rcs ");
+    }
+    let path = format("{}/{}", out_dir, name);
+    print("linking {}\n", path);
+    cmd.append(&path);
+    cmd.append(" ");
+    for file in compiled{
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+  
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      print("build library {}\n", path);
+    }else{
+      panic("link failed '{}'", cmd_s.get());
+    }
+    cmd_s.drop();
+    return path;
+  }
+  
+  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
+    let path = format("{}/{}", out_dir, name);
+    print("linking {}\n", path);
+    if(File::exist(path.str())){
+      File::remove_file(path.str());
+    }
+    File::create_dir(out_dir);
+    let cmd = get_linker().str();
+    cmd.append(" -o ");
+    cmd.append(&path);
+    cmd.append(" ");
+    for obj_file in compiled{
+      cmd.append(obj_file.str());
+      cmd.append(" ");
+    }
+    cmd.append(args);
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      //run if linked
+      print("build binary {}\n", path);
+    }else{
+      panic("link failed '{}'", cmd_s);
+    }
+    cmd_s.drop();
+    return path;
+  }
+  
+  func run(path: String){
+    let path_c: CStr = path.cstr();
+    let code = system(path_c.ptr());
+    if(code != 0){
+      print("error while running {} code={}\n", path_c, code);
+      exit(1);
+    }
+    path_c.drop();
+  }
 }//Compiler
 
-
-func make_compile_job2(arg: c_void*){
-  let args = arg as CompileArgs*;
-  let config = args.config;
-  let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-  for(let j = 0;j < config.src_dirs.len();++j){
-    ctx.add_path(config.src_dirs.get(j).str());
-  }
-  let cmp = Compiler::new(ctx);
-  let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
-  for inc in &args.config.src_dirs{
-      cmd.append(" -i ");
-      cmd.append(inc);
-  }
-  if(cmp.ctx.verbose){
-      let idx = args.idx.lock();
-      print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
-      *idx = *idx + 1;
-      args.idx.unlock();
-  }
-  let proc = Process::run(cmd.str());
-  proc.eat_close();
-  if(cmp.ctx.verbose){
-      let compiled = args.compiled.lock();
-      print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
-      args.compiled.unlock();
-  }
-  let compiled = args.compiled.lock();
-  compiled.add(format("{}", get_out_file(args.file.str(), &cmp)));
-  args.compiled.unlock();
-  sleep(1);
-  cmp.drop();
-  cmd.drop();
-}
 
 struct CompileArgs{
   file: String;
@@ -941,21 +969,21 @@ impl CompilerConfig{
     return self;
   }
   func link(self, compiled: List<String>*): String{
-    if(self.lt is LinkType::None){
-      return "".str();
-    }
-    if let LinkType::Binary(bin_name*, args*, run) = (&self.lt){
-      let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
-      if(run){
-        Compiler::run(path.clone());
-      }
-      return path;
-    }
-    else if let LinkType::Static(lib_name*) = (&self.lt){
-      let res = Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
-      return res;
-    }else{
-      panic("CompilerConfig::link");
+    match &self.lt{
+      LinkType::None => return "".owned(),
+      LinkType::Binary(bin_name*, args*, run) => {
+        let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
+        if(run){
+          Compiler::run(path.clone());
+        }
+        return path;
+      },
+      LinkType::Static(lib_name*) => {
+        return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
+      },
+      LinkType::Dynamic(lib_name*) => {
+        return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), true);
+      },
     }
   }
   func trim_by_root(self, path: str): str{

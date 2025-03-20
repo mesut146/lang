@@ -153,7 +153,7 @@ impl Compiler{
       let rhs_rt = self.get_resolver().visit(&node.expr);
       let decl = self.get_resolver().get_decl(&rhs_rt).unwrap();
       let rhs = self.get_obj_ptr(&node.expr);
-      let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
+      let tag_ptr = CreateStructGEP(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
 
       let next_name = format("next_{}", expr.line).cstr();
@@ -250,7 +250,7 @@ impl Compiler{
 
     func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*){
       let data_index = get_data_index(decl);
-      let dataPtr = self.gep2(enum_ptr, data_index, self.mapType(&decl.type));
+      let dataPtr = CreateStructGEP(enum_ptr, data_index, self.mapType(&decl.type));
       let var_ty = self.get_variant_ty(decl, variant);
 
       let field = variant.fields.get(arg_idx);
@@ -260,7 +260,7 @@ impl Compiler{
       if(decl.base.is_some()){
         ++gep_idx;
       }
-      let field_ptr = self.gep2(dataPtr, gep_idx, var_ty);
+      let field_ptr = CreateStructGEP(dataPtr, gep_idx, var_ty);
       if (arg.is_ptr) {
         CreateStore(field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
@@ -338,7 +338,7 @@ impl Compiler{
       if(lhs_rt.is_decl()){
         let decl = self.get_resolver().get_decl(&lhs_rt).unwrap();
         if(decl.is_enum() && rhs_rt.is_decl()){
-          val = self.gep2(val, get_data_index(decl), self.mapType(&decl.type));
+          val = CreateStructGEP(val, get_data_index(decl), self.mapType(&decl.type));
         }
       }
       lhs_rt.drop();
@@ -369,7 +369,7 @@ impl Compiler{
       let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
       let index = Resolver::findVariant(decl, &smp.name);
       let decl_ty = self.mapType(&decl.type);
-      let tag_ptr = self.gep2(ptr, get_tag_index(decl), decl_ty);
+      let tag_ptr = CreateStructGEP(ptr, get_tag_index(decl), decl_ty);
       CreateStore(makeInt(index, ENUM_TAG_BITS()) as Value*, tag_ptr);
       return ptr;
     }
@@ -381,14 +381,14 @@ impl Compiler{
       if(decl.is_enum()){
         //base field, skip tag
         let ty = self.mapType(&decl.type);
-        scope_ptr = self.gep2(scope_ptr, get_data_index(decl), ty);
+        scope_ptr = CreateStructGEP(scope_ptr, get_data_index(decl), ty);
       }
       let pair = self.get_resolver().findField(node, name, decl, &decl.type);
       let index = pair.b;
       if (pair.a.base.is_some()) ++index;
       let sd_ty = self.mapType(&pair.a.type);
       scope_rt.drop();
-      return self.gep2(scope_ptr, index, sd_ty);
+      return CreateStructGEP(scope_ptr, index, sd_ty);
     }
   
     func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
@@ -469,7 +469,7 @@ impl Compiler{
       let elemty = self.mapType(elem);
       //read array ptr
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
-      let arr = self.gep2(src, SLICE_PTR_INDEX(), sliceType);
+      let arr = CreateStructGEP(src, SLICE_PTR_INDEX(), sliceType);
       arr = CreateLoad(getPtr(), arr);
       let index = self.cast(node.idx.get(), &i64t);
       i64t.drop();
@@ -499,8 +499,8 @@ impl Compiler{
   
       let sliceType = self.protos.get().std("slice");
   
-      let trg_ptr = self.gep2(ptr, 0, sliceType as llvm_Type*);
-      let trg_len = self.gep2(ptr, 1, sliceType as llvm_Type*);
+      let trg_ptr = CreateStructGEP(ptr, 0, sliceType as llvm_Type*);
+      let trg_len = CreateStructGEP(ptr, 1, sliceType as llvm_Type*);
       //store ptr
       CreateStore(arr, trg_ptr);
       //set len
@@ -768,14 +768,14 @@ impl Compiler{
         //sl.len()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice") as llvm_Type*;
-        let len_ptr = self.gep2(sl, SLICE_LEN_INDEX(), sliceType);
+        let len_ptr = CreateStructGEP(sl, SLICE_LEN_INDEX(), sliceType);
         return CreateLoad(getInt(SLICE_LEN_BITS()), len_ptr);
       }
       if(resolver.is_slice_get_ptr(mc)){
         //sl.ptr()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice") as llvm_Type*;
-        let ptr = self.gep2(sl, SLICE_PTR_INDEX(), sliceType);
+        let ptr = CreateStructGEP(sl, SLICE_PTR_INDEX(), sliceType);
         return CreateLoad(getPtr(), ptr);
       }
       return self.visit_call2(expr, mc);
@@ -1187,9 +1187,9 @@ impl Compiler{
       let str_ty = Type::new("str");
       let stringType = self.mapType(&str_ty) as llvm_Type*;
       let sliceType = self.protos.get().std("slice") as llvm_Type*;
-      let slice_ptr = self.gep2(trg_ptr, 0, stringType);
-      let data_target = self.gep2(slice_ptr, SLICE_PTR_INDEX(), sliceType);
-      let len_target = self.gep2(slice_ptr, SLICE_LEN_INDEX(), sliceType);
+      let slice_ptr = CreateStructGEP(trg_ptr, 0, stringType);
+      let data_target = CreateStructGEP(slice_ptr, SLICE_PTR_INDEX(), sliceType);
+      let len_target = CreateStructGEP(slice_ptr, SLICE_LEN_INDEX(), sliceType);
       //set ptr
       CreateStore(src, data_target);
       //set len
@@ -1215,7 +1215,7 @@ impl Compiler{
         }
         let fd = fields.get(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
-        let field_target_ptr = self.gep2(ptr, prm_idx, ty);
+        let field_target_ptr = CreateStructGEP(ptr, prm_idx, ty);
         self.setField(&arg.expr, &fd.type, field_target_ptr);
         self.own.get().do_move(&arg.expr);
       }
@@ -1238,7 +1238,7 @@ impl Compiler{
           if(decl.is_enum()){
             base_index = 1;
           }
-          let base_ptr = self.gep2(ptr, base_index, ty);
+          let base_ptr = CreateStructGEP(ptr, base_index, ty);
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
@@ -1261,7 +1261,7 @@ impl Compiler{
             }
             let fd = fields.get(prm_idx);
             if(decl.base.is_some()) ++prm_idx;
-            let field_target_ptr = self.gep2(ptr, prm_idx, ty);
+            let field_target_ptr = CreateStructGEP(ptr, prm_idx, ty);
             self.setField(&arg.expr, &fd.type, field_target_ptr);
             self.own.get().do_move(&arg.expr);
           }
@@ -1269,11 +1269,11 @@ impl Compiler{
           let variant_index = Resolver::findVariant(decl, type.name());
           let variant = decl.get_variants().get(variant_index);
           //set tag
-          let tag_ptr = self.gep2(ptr, get_tag_index(decl), ty);
+          let tag_ptr = CreateStructGEP(ptr, get_tag_index(decl), ty);
           let tag_val = makeInt(variant_index, ENUM_TAG_BITS()) as Value*;
           CreateStore(tag_val, tag_ptr);
           //set data
-          let data_ptr = self.gep2(ptr, get_data_index(decl), ty);
+          let data_ptr = CreateStructGEP(ptr, get_data_index(decl), ty);
           let var_ty = self.get_variant_ty(decl, variant);
           self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
         }

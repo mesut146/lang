@@ -30,7 +30,7 @@ func test_iter_mut(){
     }
     let arr = [34, 45];
     for(let i = 0;i < list.len();++i){
-        assert_eq(*list.get_ptr(i), arr[i]);
+        assert_eq(*list.get(i), arr[i]);
     }
     list.drop();
 }

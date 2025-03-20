@@ -216,7 +216,7 @@ impl Compiler{
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
       let rhs_rt = self.get_resolver().visit(&node.rhs);
-      let tag_ptr = self.gep2(rhs, get_tag_index(decl), self.mapType(&decl.type));
+      let tag_ptr = CreateStructGEP(rhs, get_tag_index(decl), self.mapType(&decl.type));
       let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
       let index = Resolver::findVariant(decl, node.type.name());
       let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()) as Value*);
@@ -238,7 +238,7 @@ impl Compiler{
         //declare vars
         let fields = &variant.fields;
         let data_index = get_data_index(decl);
-        let dataPtr = self.gep2(rhs, data_index, self.mapType(&decl.type));
+        let dataPtr = CreateStructGEP(rhs, data_index, self.mapType(&decl.type));
         let var_ty = self.get_variant_ty(decl, variant);
         for (let i = 0; i < fields.size(); ++i) {
             //regular var decl
@@ -249,7 +249,7 @@ impl Compiler{
             if(decl.base.is_some()){
               ++gep_idx;
             }
-            let field_ptr = self.gep2(dataPtr, gep_idx, var_ty);
+            let field_ptr = CreateStructGEP(dataPtr, gep_idx, var_ty);
             let alloc_ptr = self.get_alloc(arg.id);
             self.NamedValues.add(arg.name.clone(), alloc_ptr);
             if (arg.is_ptr) {

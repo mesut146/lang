@@ -809,7 +809,7 @@ impl Compiler{
     let tag = self.get_obj_ptr(expr);
     let mapped = self.mapType(rt.type.deref_ptr());
     rt.drop();
-    tag = self.gep2(tag, tag_idx, mapped);
+    tag = CreateStructGEP(tag, tag_idx, mapped);
     return CreateLoad(getInt(ENUM_TAG_BITS()), tag);
   }
 

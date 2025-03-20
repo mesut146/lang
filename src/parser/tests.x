@@ -101,7 +101,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
     inc.drop();
 }
 
-func test_single(file: String){
+func test_single(file: String, args_extra: Option<String>){
     let rt_src = format("{}/src/std/rt.x", root.get());
     let config_rt = CompilerConfig::new(get_src_dir());
     config_rt
@@ -113,15 +113,20 @@ func test_single(file: String){
     let lib = Compiler::compile_single(config_rt);
     let dir = format("{}/tests/normal", root.get());
     let args = format("{} -lm", &lib);
+    if(args_extra.is_some()){
+        args.append(" ");
+        args.append(args_extra.get());
+    }
     
-      let config = CompilerConfig::new(get_src_dir());
-      config.set_file(format("{}/{}", dir, file));
-      config.set_out(get_out());
-      config.add_dir(get_src_dir());
-      config.set_link(LinkType::Binary{"a.out".str(), args, true});
-      config.root_dir.set(root.get().clone());
-      let bin = Compiler::compile_single(config);
-      bin.drop();
+    let config = CompilerConfig::new(get_src_dir());
+    config.set_file(format("{}/{}", dir, file));
+    config.set_out(get_out());
+    config.add_dir(get_src_dir());
+    config.set_link(LinkType::Binary{"a.out".str(), args, true});
+    config.root_dir.set(root.get().clone());
+    let bin = Compiler::compile_single(config);
+    bin.drop();
+    args_extra.drop();
 }
 
 func std_test(){
@@ -179,7 +184,7 @@ func std_test_single(file: String){
     args.drop();
 }
 
-func normal_test(){
+func normal_test(args_extra: Option<String>){
     print("normal_test\n");
     let rt_src = format("{}/src/std/rt.x", root.get());
     let config = CompilerConfig::new(get_src_dir());
@@ -192,13 +197,18 @@ func normal_test(){
     let lib = Compiler::compile_single(config);
     let dir = format("{}/tests/normal", root.get());
     let args = format("{} -lm", &lib);
+    if(args_extra.is_some()){
+        args.append(" ");
+        args.append(args_extra.get());
+    }
     compile_dir2(dir.str(), args.str());
     lib.drop();
     dir.drop();
     args.drop();
+    args_extra.drop();
 }
 
-func normal_test_regex(pattern: String){
+func normal_test_regex(pattern: String, args: Option<String>){
     print("normal_test\n");
     let dir = format("{}/tests/normal", root.get());
     let files = File::list(dir.str());
@@ -206,7 +216,7 @@ func normal_test_regex(pattern: String){
         let fl = files.get(i);
         let fl2 = fl.str();
         if(Regex::new(pattern.str()).is_match(fl2)){
-            test_single(fl.clone());
+            test_single(fl.clone(), args);
         }
     }
     pattern.drop();
@@ -271,10 +281,18 @@ func handle_tests(cmd: CmdArgs*): bool{
     }
     if(cmd.is("test")){
         cmd.consume();
+        let args = Option<String>::none();
+        if(cmd.has_any("-std")){
+            cmd.consume_any("-std");
+            let std_dir = get_std_path();
+            let out = get_out();
+            let lib = build_std(std_dir.str(), out.str(), true);
+            args.set(lib);
+        }
         if(cmd.has()){
-            normal_test_regex(cmd.get());
+            normal_test_regex(cmd.get(), args);
         }else{
-            normal_test();
+            normal_test(args);
         }
         cmd.end();
         return true;

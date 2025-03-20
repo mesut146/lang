@@ -40,6 +40,12 @@ impl Process{
     }
 }
 
+impl Drop for Process{
+    func drop(*self){
+        self.eat_close();
+    }
+}
+
 static root_exe = Option<String>::new();
 struct CmdArgs{
   args: List<String>;

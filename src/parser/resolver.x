@@ -2302,6 +2302,12 @@ impl Resolver{
       }
     }
     let sig = Signature::new(call, self);
+    if(call.scope.is_some() && !call.is_static){
+      let scp = sig.args.get(0);
+      if(scp.is_dpointer()){
+        self.err(node, format("method scope is double pointer '{:?}'", scp));
+      }
+    }
     let mr = MethodResolver::new(self);
     let res = mr.handle(node, &sig);
     sig.drop();
