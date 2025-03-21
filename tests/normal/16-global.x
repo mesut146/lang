@@ -1,6 +1,5 @@
 static x: i32 = 11;
 
-#derive(Debug)
 struct A{
   a: i32;
   b: i64;
@@ -14,8 +13,6 @@ func main(){
   x = 22;
   assert(x == 22);
 
-
-  print("a={:?}\n", a);
   assert(a.a == 10);
   assert(a.b == 20);
   assert(a.c == 30);

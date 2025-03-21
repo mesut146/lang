@@ -1438,7 +1438,46 @@ impl Compiler{
       type.drop();
       return lhs;
     }
-}//end impl
+
+    func emit_expr(self, expr: Expr*, ptr: Value*){
+      let rt = self.get_resolver().visit(expr);
+      match expr{
+        Expr::Obj(obj_type*, entries*) => {
+          let val = self.visit_obj(expr, obj_type, entries);
+          self.copy(ptr, val, &rt.type);
+        },
+        Expr::Lit(lit*) => {
+          let val = self.visit_lit(expr, lit);
+          if(lit.kind is LitKind::STR){
+            self.copy(ptr, val, &rt.type);
+          }else{
+            CreateStore(val, ptr);
+          }
+        },
+        Expr::Call(mc*) => {
+          if(is_struct(&rt.type)){
+            self.visit_call2(expr, mc, Option::new(ptr), rt);
+          }else{
+            let val = self.visit_call2(expr, mc, Option<Value*>::new(), rt);
+            CreateStore(val, ptr);
+          }
+          return;//rt is moved,return
+        },
+        Expr::Array(list*, size*) => {
+          if(!Compiler::is_constexpr(expr)){
+            //AllocHelper::new(self).visit_child(expr);
+            self.visit_array(expr, list, size, ptr);
+          }else{
+            panic("glob rhs arr '{:?}'", expr);
+          }
+        },
+        _ => {
+          panic("glob rhs '{:?}'", expr);
+        },
+      }
+      rt.drop();
+    }
+}//end impl Compiler
 
 
 func is_deref(expr: Expr*): Option<Expr*>{

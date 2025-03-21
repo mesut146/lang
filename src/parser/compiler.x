@@ -361,48 +361,8 @@ impl Compiler{
       //todo AllocHelper should visit rhs?
       //todo make allochelper visit only children
       AllocHelper::new(self).visit(&gl.expr);
-      match &gl.expr{
-        Expr::Obj(obj_type*, entries*) => {
-          
-        },
-        Expr::Call(mc*) => {
-          if(is_struct(&rt.type)){
-            self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
-          }else{
-            let val = self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
-            CreateStore(val, glob as Value*);
-          }
-        },
-        _ => {
-          if(!is_constexpr(&gl.expr)){
-            if let Expr::Array(list*, size*)=(&gl.expr){
-              //AllocHelper::new(self).visit_child(&gl.expr);
-              self.visit_array(&gl.expr, list, size, glob as Value*);
-            }else{
-              panic("glob rhs '{:?}'", gl);
-            }
-          }
-        },
-      }
+      self.emit_expr(&gl.expr,  glob as Value*);
       rt.drop();
-      /*if let Expr::Call(mc*)=(&gl.expr){
-        if(is_struct(&rt.type)){
-          self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
-        }else{
-          let val = self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
-          CreateStore(val, glob as Value*);
-        }
-      }else{
-        if(!is_constexpr(&gl.expr)){
-          if let Expr::Array(list*, size*)=(&gl.expr){
-            //AllocHelper::new(self).visit_child(&gl.expr);
-            self.visit_array(&gl.expr, list, size, glob as Value*);
-          }else{
-            panic("glob rhs '{:?}'", gl);
-          }
-        }
-        rt.drop();
-      }*/
     }
     if(self.llvm.di.get().debug){
       replaceGlobalVariables(self.llvm.di.get().cu, globs);

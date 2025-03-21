@@ -822,9 +822,11 @@ impl Compiler{
 
   func mangle_unit(path: str): String{
     let s1 = path.replace(".", "_");
-    let res = s1.replace("/", "_");
+    let s2 = s1.replace("/", "_");
+    let s3 = s2.replace("-", "_");
     s1.drop();
-    return res;
+    s2.drop();
+    return s3;
   }
 
   func mangle_static(path: str): String{
