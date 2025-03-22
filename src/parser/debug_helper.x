@@ -26,13 +26,11 @@ struct DebugInfo{
 }
 
 func method_parent(m: Method*): Type*{
-    if let Parent::Impl(info*)=(&m.parent){
-        return &info.type;
+    match &m.parent{
+      Parent::Impl(info*) => return &info.type,
+      Parent::Trait(type*) => return type,
+      _ => panic("method_parent"),
     }
-    if let Parent::Trait(type*)=(&m.parent){
-        return type;
-    }
-    panic("method_parent");
 }
 
 impl DebugInfo{

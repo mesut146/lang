@@ -34,10 +34,10 @@ func find_recompiles(file: str, old_file: str){
 func find_old_struct(unit: Unit*, d: Decl*): Option<Decl*>{
     for it in &unit.items{
         match it{
-            Item::Decl(decl*)=>{
+            Item::Decl(decl*) => {
                 if(decl.type.eq(&d.type)) return Option::new(decl);
             },
-            _=>{}
+            _ => {}
         }
     }
     return Option<Decl*>::none();
@@ -49,9 +49,12 @@ func compare_decl(d: Decl*, old: Decl*){
         Decl::Struct(fields*) => {
             match old{
                 Decl::Struct(fields2*) => {
-                    compare_struct(fields, fields2);
+                    if(compare_struct(fields, fields2)){
+                        //struct layout changed, now scan dependant files
+                        panic("dependant {:?}", d.type);
+                    }
                 },
-                _=> panic("was enum but now struct")
+                _=> panic("was enum but now struct {:?}", d.type)
             }
         },
         Decl::Enum(variants*)=>{
@@ -60,7 +63,7 @@ func compare_decl(d: Decl*, old: Decl*){
                     //compare_enum(variants, variants2);
                 },
                 _=> {
-                    panic("was struct but now enum");
+                    panic("was struct but now enum {:?}", d.type);
                 }
             }
         }

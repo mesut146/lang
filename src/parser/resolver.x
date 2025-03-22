@@ -656,23 +656,29 @@ impl Resolver{
 
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
-      //Fmt::str(it).dump();
-      if let Item::Decl(decl*) = (it){
-        let ty = decl.type.clone();
-        let res = RType::new(ty);
-        res.desc.drop();
-        res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
-        self.addType(decl.type.name().clone(), res);
-      }else if let Item::Trait(tr*) = (it){
-        let res = RType::new(tr.type.clone());
-        res.desc.drop();
-        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
-        self.addType(tr.type.name().clone(), res);
-      }else if let Item::Impl(imp*) = (it){
-        //pass
-      }else if let Item::Type(name*, rhs*) = (it){
-        let res = self.visit_type(rhs);
-        self.addType(name.clone(), res);
+      match it{
+        Item::Decl(decl*) => {
+          let ty = decl.type.clone();
+          let res = RType::new(ty);
+          res.desc.drop();
+          res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
+          self.addType(decl.type.name().clone(), res);
+        },
+        Item::Trait(tr*) => {
+          let res = RType::new(tr.type.clone());
+          res.desc.drop();
+          res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
+          self.addType(tr.type.name().clone(), res);
+        },
+        Item::Impl(imp*) => {
+          //pass
+        },
+        Item::Type(name*, rhs*) => {
+          let res = self.visit_type(rhs);
+          self.addType(name.clone(), res);
+        },
+        Item::Method(method*) => {},
+        Item::Extern(methods*) => {},
       }
     }
     //derives
@@ -1803,7 +1809,7 @@ impl Resolver{
         let index = Resolver::findVariant(decl, &smp.name);
         let variant = decl.get_variants().get(index);
         if(args.len() != variant.fields.len()){
-            self.err(expr, format("variant field count doesn't match got: {} expected: {}", args.len(), variant.fields.len()));
+            self.err(case.line, format("variant field count doesn't match got: {} expected: {} variant: {}", args.len(), variant.fields.len(), variant.name));
         }
         for(let i = 0;i < args.len();++i){
           let arg = args.get(i);
@@ -1840,14 +1846,16 @@ impl Resolver{
   }
 
   func visit_match_rhs(self, rhs: MatchRhs*): RType{
-    if let MatchRhs::EXPR(e*)=(rhs){
-      let res_type = self.visit(e);
-      return res_type;
-    }else if let MatchRhs::STMT(st*)=(rhs){
-      self.visit(st);
-      return RType::new("void");
+    match rhs{
+      MatchRhs::EXPR(e*) => {
+        let res_type = self.visit(e);
+        return res_type;
+      },
+      MatchRhs::STMT(st*) => {
+        self.visit(st);
+        return RType::new("void");
+      }
     }
-    panic("unr");
   }
 
   func visit_ref(self, node: Expr*, e: Expr*): RType{
@@ -2781,46 +2789,45 @@ impl Resolver{
     if(verbose_stmt()){
       print("visit stmt {:?}\n", node);
     }
-    if let Stmt::Expr(e*) = (node){
-      let tmp = self.visit(e);
-      tmp.drop();
-      return;
-    }else if let Stmt::Ret(e*) = (node){
-      if(e.is_some()){
-        let rt = self.visit(e.get());
-        self.check_return(&rt.type, node.line);
-        rt.drop();
-      }else{
-        if(!self.curMethod.unwrap().type.is_void()){
-          self.err(node, "non-void method returns void");
+    match node{
+      Stmt::Expr(e*) => {
+        let tmp = self.visit(e);
+        tmp.drop();
+      },
+      Stmt::Ret(e*) => {
+        if(e.is_some()){
+          let rt = self.visit(e.get());
+          self.check_return(&rt.type, node.line);
+          rt.drop();
+        }else{
+          if(!self.curMethod.unwrap().type.is_void()){
+            self.err(node, "non-void method returns void");
+          }
         }
+      },
+      Stmt::Var(ve*) => {
+        self.visit_var(ve);
+      },
+      Stmt::For(f*) => {
+        self.visit_for(node, f);
+      },
+      Stmt::While(e*, b*) => {
+        self.visit_while(node, e, b.get());
+      },
+      Stmt::Continue => {
+        if (self.inLoop == 0) {
+          self.err(node, "continue in outside of loop");
+        }
+      },
+      Stmt::Break => {
+        if (self.inLoop == 0) {
+          self.err(node, "break in outside of loop");
+        }
+      },
+      Stmt::ForEach(fe*) => {
+        self.visit_for_each(node, fe);
       }
-      return;
-    }else if let Stmt::Var(ve*) = (node){
-      self.visit_var(ve);
-      return;
-    }else if let Stmt::For(f*) = (node){
-      self.visit_for(node, f);
-      return;
-    }else if let Stmt::While(e*, b*) = (node){
-      self.visit_while(node, e, b.get());
-      return;
     }
-    else if let Stmt::Continue = (node){
-      if (self.inLoop == 0) {
-        self.err(node, "continue in outside of loop");
-      }
-      return;
-    }else if let Stmt::Break = (node){
-      if (self.inLoop == 0) {
-        self.err(node, "break in outside of loop");
-      }
-      return;
-    }else if let Stmt::ForEach(fe*) = (node){
-      self.visit_for_each(node, fe);
-      return;
-    }
-    panic("visit stmt {:?}", node);
   }
   
   func visit_for(self, node: Stmt*, f: ForStmt*){
@@ -2854,17 +2861,20 @@ impl Resolver{
       return self.cache.get(&node.id).unwrap().clone();
     }
     let res = Option<RType>::new();
-    if let Body::Block(b*)=(node){
-      res = Option::new(self.visit_block(b));
-    }else if let Body::Stmt(b*)=(node){
-      self.visit(b);
-      res = Option::new(RType::new("void"));
-    }else if let Body::If(b*)=(node){
-      res = Option::new(self.visit_if(b));
-    }else if let Body::IfLet(b*)=(node){
-      res = Option::new(self.visit_iflet(b));
-    }else{
-      panic("");
+    match node{
+      Body::Block(b*) => {
+        res = Option::new(self.visit_block(b));
+      },
+      Body::Stmt(b*) => {
+        self.visit(b);
+        res = Option::new(RType::new("void"));
+      },
+      Body::If(b*) => {
+        res = Option::new(self.visit_if(b));
+      },
+      Body::IfLet(b*) => {
+        res = Option::new(self.visit_iflet(b));
+      }
     }
     self.cache.add(node.id, res.get().clone());
     return res.unwrap();

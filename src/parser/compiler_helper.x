@@ -887,8 +887,26 @@ func can_inline(expr: Expr*, r: Resolver*): bool{
 }
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{
-  if(e is Expr::Obj) return true;
-  if let Expr::ArrAccess(aa*)=(e){
+  //if(e is Expr::Obj) return true;
+  match e{
+    Expr::ArrAccess(aa*) => return aa.idx2.is_some(),//slice creation
+    Expr::Lit(lit*) => return lit.kind is LitKind::STR,
+    Expr::Type(type*) => return true,
+    Expr::Array(elems*, size) => return true,
+    Expr::Obj(type*, args*) => return true,
+    Expr::Call(call*) => {
+      let rt = r.visit(e);
+      if(rt.is_method()){
+        let target = r.get_method(&rt).unwrap();
+        rt.drop();
+        return is_struct(&target.type);
+      }
+      rt.drop();
+      return false;
+    },
+    _ => return false,
+  }
+  /*if let Expr::ArrAccess(aa*)=(e){
     return aa.idx2.is_some();//slice creation
   }
   if let Expr::Lit(lit*)=(e){
@@ -910,7 +928,7 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     rt.drop();
     return false;
   }
-  return false;
+  return false;*/
 }
 
 func getPrimitiveSizeInBits2(val: Value*): i32{

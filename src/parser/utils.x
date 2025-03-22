@@ -298,10 +298,10 @@ struct Exit {
 impl Exit{
     func new(kind: ExitType): Exit{
         return Exit{
-                      kind: kind,
-                      if_kind: Ptr<Exit>::new(),
-                      else_kind: Ptr<Exit>::new(),
-                      cases: List<Exit>::new()
+            kind: kind,
+            if_kind: Ptr<Exit>::new(),
+            else_kind: Ptr<Exit>::new(),
+            cases: List<Exit>::new()
         };
     }
     func is_unreachable2(self): bool{

@@ -87,7 +87,6 @@ impl AstCopier{
 
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
-        //todo base type depends on map too
         let base = BaseDecl{line: node.line,path: node.path.clone(),type: type ,
             is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), 
             derives: node.derives.clone(), 
@@ -103,15 +102,7 @@ impl AstCopier{
                 let res = self.visit_list(variants);
                 return Decl::Enum{.base, res};
             }
-        }/*
-        if let Decl::Struct(fields*)=(node){
-            let res = self.visit_list(fields);
-            return Decl::Struct{.base, res};
-        }else if let Decl::Enum(variants*)=(node){
-            let res = self.visit_list(variants);
-            return Decl::Enum{.base, res};
         }
-        panic("unr");*/
     }
 
     func visit(self, node: FieldDecl*): FieldDecl{
@@ -124,49 +115,52 @@ impl AstCopier{
 
     func visit(self, type: Type*): Type{
         let id = Node::new(-1, type.line);
-        if let Type::Pointer(bx*) = (type){
-            let scope = self.visit(bx.get());
-            let res = Type::Pointer{.id, Box::new(scope)};
-            return res;
+        match type{
+            Type::Pointer(bx*) => {
+                let scope = self.visit(bx.get());
+                let res = Type::Pointer{.id, Box::new(scope)};
+                return res;
+            },
+            Type::Array(bx*, size) => {
+                let scope = self.visit(bx.get());
+                let res = Type::Array{.id, Box::new(scope), size};
+                return res;
+            },
+            Type::Slice(bx*) => {
+                let scope = self.visit(bx.get());
+                let res = Type::Slice{.id, Box::new(scope)};
+                return res;
+            },
+            Type::Function(bx*) => {
+                let ft = FunctionType{
+                    return_type: self.visit(&bx.get().return_type),
+                    params: self.visit_list(&bx.get().params)
+                };
+                return Type::Function{.id, type: Box::new(ft)};
+            },
+            Type::Lambda(bx*) => {
+                let lt = LambdaType{
+                    return_type: self.visit_opt(&bx.get().return_type),
+                    params: self.visit_list(&bx.get().params),
+                    captured: self.visit_list(&bx.get().captured),
+                };
+                return Type::Lambda{.id, Box::new(lt)};
+            },
+            Type::Simple(smp*) => {
+                if(self.map.contains(&smp.name)){
+                    return self.map.get(&smp.name).unwrap().clone();
+                }
+                let res = Simple::new(smp.name.clone());
+                if (smp.scope.is_some()) {
+                    res.scope = Ptr::new(self.visit(smp.scope.get()));
+                }
+                for (let i = 0; i < smp.args.size(); ++i) {
+                    let ta = smp.args.get(i);
+                    res.args.add(self.visit(ta));
+                }
+                return res.into(type.line);
+            }
         }
-        if let Type::Array(bx*, size) = (type){
-            let scope = self.visit(bx.get());
-            let res = Type::Array{.id, Box::new(scope), size};
-            return res;
-        }
-        if let Type::Slice(bx*) = (type){
-            let scope = self.visit(bx.get());
-            let res = Type::Slice{.id, Box::new(scope)};
-            return res;
-        }
-        if let Type::Function(bx*) = (type){
-            let ft = FunctionType{
-                       return_type: self.visit(&bx.get().return_type),
-                       params: self.visit_list(&bx.get().params)
-            };
-            return Type::Function{.id, type: Box::new(ft)};
-        }
-        if let Type::Lambda(bx*) = (type){
-            let lt = LambdaType{
-                       return_type: self.visit_opt(&bx.get().return_type),
-                       params: self.visit_list(&bx.get().params),
-                       captured: self.visit_list(&bx.get().captured),
-            };
-            return Type::Lambda{.id, Box::new(lt)};
-        }
-        let smp = type.as_simple();
-        if(self.map.contains(&smp.name)){
-            return self.map.get(&smp.name).unwrap().clone();
-        }
-        let res = Simple::new(smp.name.clone());
-        if (smp.scope.is_some()) {
-            res.scope = Ptr::new(self.visit(smp.scope.get()));
-        }
-        for (let i = 0; i < smp.args.size(); ++i) {
-            let ta = smp.args.get(i);
-            res.args.add(self.visit(ta));
-        }
-        return res.into(type.line);
     }
     
     /*func visit(self, node: CapturedInfo*): CapturedInfo{
@@ -267,32 +261,27 @@ impl AstCopier{
 
     func visit(self, node: Stmt*): Stmt{
         let id = self.node(node as Node*);
-        if let Stmt::Var(ve*)=(node){
-            return Stmt::Var{.id, self.visit(ve)};
+        match node{
+            Stmt::Break => return Stmt::Break{.id},
+            Stmt::Continue => return Stmt::Continue{.id},
+            Stmt::Var(ve*) => return Stmt::Var{.id, self.visit(ve)},
+            Stmt::Expr(e*) => return Stmt::Expr{.id, self.visit(e)},
+            Stmt::Ret(opt*) => return Stmt::Ret{.id, self.visit_opt(opt)},
+            Stmt::While(e*, body*) => return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)},
+            Stmt::For(fs*) => {
+                return Stmt::For{.id, ForStmt{
+                    var_decl: self.visit_opt(&fs.var_decl),
+                    cond: self.visit_opt(&fs.cond),
+                    updaters: self.visit_list(&fs.updaters),
+                    body: self.visit_box(&fs.body),
+                }};
+            },
+            Stmt::ForEach(fe*) => return Stmt::ForEach{.id, ForEach{
+                var_name: fe.var_name.clone(),
+                rhs: self.visit(&fe.rhs),
+                body: self.visit(&fe.body)
+            }},
         }
-        if let Stmt::Expr(e*)=(node){
-            return Stmt::Expr{.id, self.visit(e)};
-        }
-        if let Stmt::Ret(opt*)=(node){
-            return Stmt::Ret{.id, self.visit_opt(opt)};
-        }
-        if let Stmt::While(e*, body*)=(node){
-            return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)};
-        }
-        if let Stmt::For(fs*)=(node){
-            return Stmt::For{.id, ForStmt{var_decl: self.visit_opt(&fs.var_decl), cond: self.visit_opt(&fs.cond), updaters: self.visit_list(&fs.updaters), body: self.visit_box(&fs.body)}};
-        }
-        if let Stmt::ForEach(fe*)=(node){
-            return Stmt::ForEach{.id, ForEach{var_name: fe.var_name.clone(), rhs: self.visit(&fe.rhs), body: self.visit(&fe.body)}};
-        }
-        if let Stmt::Continue = (node){
-            return Stmt::Continue{.id};
-        }
-        if let Stmt::Break = (node){
-            return Stmt::Break{.id};
-        }
-        let msg = format("stmt {:?}", node);
-        panic("{}", msg.str());
     }
 
     func visit(self, is: IfStmt*): IfStmt{
@@ -315,64 +304,35 @@ impl AstCopier{
 
     func visit(self, node: Expr*): Expr{
         let id = self.node(node as Node*);
-        if let Expr::If(is0*)=(node){
-            let is = is0.get();
-            return Expr::If{.id, Box::new(self.visit(is))};
+        match node{
+            Expr::Name(name*) => return Expr::Name{.id, name.clone()},
+            Expr::Call(mc*) => return Expr::Call{.id, self.visit(mc)},
+            Expr::MacroCall(mc*) => return Expr::MacroCall{.id, self.visit(mc)},
+            Expr::If(is*) => return Expr::If{.id, Box::new(self.visit(is.get()))},
+            Expr::IfLet(is*) => return Expr::IfLet{.id, Box::new(self.visit(is.get()))},
+            Expr::Block(b*) => return Expr::Block{.id, Box::new(self.visit(b.get()))},
+            Expr::Lit(lit*) => return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}},
+            Expr::Par(e*) => return Expr::Par{.id, self.visit_box(e)},
+            Expr::Type(type*) => return Expr::Type{.id, self.visit(type)},
+            Expr::Unary(op*, e*) => return Expr::Unary{.id, op.clone(), self.visit_box(e)},
+            Expr::Infix(op*, l*, r*) => return Expr::Infix{.id, op.clone(), self.visit_box(l), self.visit_box(r)},
+            Expr::Access(scope*, name*) => return Expr::Access{.id, self.visit_box(scope), name.clone()},
+            Expr::Obj(type*, args*) => return Expr::Obj{.id, self.visit(type), self.visit_list(args)},
+            Expr::As(e*, type*) => return Expr::As{.id,  self.visit_box(e), self.visit(type)},
+            Expr::Is(e*, rhs*) => return Expr::Is{.id, self.visit_box(e), self.visit_box(rhs)},
+            Expr::Array(list*, size*) => return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)},
+            Expr::ArrAccess(aa*) => return Expr::ArrAccess{.id, ArrAccess{
+                arr: self.visit_box(&aa.arr),
+                idx: self.visit_box(&aa.idx),
+                idx2: self.visit_ptr(&aa.idx2)
+            }},
+            Expr::Lambda(lm*) => return Expr::Lambda{.id, Lambda{
+                params: self.visit_list(&lm.params),
+                return_type: self.visit_opt(&lm.return_type),
+                body: self.visit_box(&lm.body)
+            }},
+            Expr::Match(m*) => return Expr::Match{.id, Box::new(Match{expr: self.visit(&m.get().expr), cases: self.visit_list(&m.get().cases)})}
         }
-        if let Expr::IfLet(is0*)=(node){
-            let is = is0.get();
-            return Expr::IfLet{.id, Box::new(self.visit(is))};
-        }
-        if let Expr::Block(b*)=(node){
-            return Expr::Block{.id, Box::new(self.visit(b.get()))};
-        }
-        if let Expr::Lit(lit*)=(node){
-            return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}};
-        }
-        if let Expr::Name(name*)=(node){
-            return Expr::Name{.id, name.clone()};
-        }
-        if let Expr::Call(mc*)=(node){
-            return Expr::Call{.id, self.visit(mc)};
-        }
-        if let Expr::MacroCall(mc*)=(node){
-            return Expr::MacroCall{.id, self.visit(mc)};
-        }
-        if let Expr::Par(e*)=(node){
-            return Expr::Par{.id, self.visit_box(e)};
-        }
-        if let Expr::Type(type*)=(node){
-            return Expr::Type{.id, self.visit(type)};
-        }
-        if let Expr::Unary(op*, e*)=(node){
-            return Expr::Unary{.id, op.clone(), self.visit_box(e)};
-        }
-        if let Expr::Infix(op*, l*, r*)=(node){
-            return Expr::Infix{.id, op.clone(), self.visit_box(l), self.visit_box(r)};
-        }
-        if let Expr::Access(scope*, name*)=(node){
-            return Expr::Access{.id, self.visit_box(scope), name.clone()};
-        }
-        if let Expr::Obj(type*, args*)=(node){
-            return Expr::Obj{.id,self.visit(type), self.visit_list(args)};
-        }
-        if let Expr::As(e*, type*)=(node){
-            return Expr::As{.id,self.visit_box(e), self.visit(type)};
-        }
-        if let Expr::Is(e*, rhs*)=(node){
-            return Expr::Is{.id,self.visit_box(e), self.visit_box(rhs)};
-        }
-        if let Expr::Array(list*, size*)=(node){
-            return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)};
-        }
-        if let Expr::ArrAccess(aa*)=(node){
-            return Expr::ArrAccess{.id, ArrAccess{arr: self.visit_box(&aa.arr), idx: self.visit_box(&aa.idx), idx2: self.visit_ptr(&aa.idx2)}};
-        }
-        if let Expr::Lambda(lm*)=(node){
-            return Expr::Lambda{.id, Lambda{params: self.visit_list(&lm.params), return_type: self.visit_opt(&lm.return_type), body: self.visit_box(&lm.body)}};
-        }
-        let msg = format("Expr {:?}", node);
-        panic("{}", msg.str());
     }
     func visit(self, node: LambdaParam*): LambdaParam{
         let id = self.node(node as Node*);
@@ -388,6 +348,18 @@ impl AstCopier{
 
     func visit(self, node: Entry*): Entry{
         return Entry{name: self.visit_opt(&node.name), expr: self.visit(&node.expr), isBase: node.isBase};
+    }
+
+    func visit(self, node: MatchCase*): MatchCase{
+        let lhs = match &node.lhs{
+            MatchLhs::NONE => MatchLhs::NONE,
+            MatchLhs::ENUM(type*, args*) => MatchLhs::ENUM{self.visit(type), self.visit_list(args)},
+        };
+        let rhs = match &node.rhs{
+            MatchRhs::EXPR(expr*) => MatchRhs::EXPR{self.visit(expr)},
+            MatchRhs::STMT(stmt*) => MatchRhs::STMT{self.visit(stmt)},
+        };
+        return MatchCase{lhs: lhs, rhs: rhs, line: node.line};
     }
     
     func visit(self, node: Call*): Call{

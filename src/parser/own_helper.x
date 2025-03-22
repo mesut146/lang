@@ -110,37 +110,34 @@ impl Debug for Variable{
 }
 impl Debug for Rhs{
     func debug(self, f: Fmt*){
-        if let Rhs::EXPR(e)=(self){
-            f.print("Rhs::EXPR{");
-            f.print(e);
-            f.print("}");
-        }
-        else if let Rhs::VAR(v*)=(self){
-            //f.print("Rhs::VAR{");
-            f.print(v);
-            //f.print("}");
-        }
-        else if let Rhs::FIELD(scp*,name*)=(self){
-            f.print("Rhs::FIELD{");
-            f.print(scp);
-            f.print(", ");
-            f.print(name);
-            f.print("}");
+        match self{
+            Rhs::EXPR(e) => {
+                f.print("Rhs::EXPR{");
+                f.print(e);
+                f.print("}");
+            },
+            Rhs::VAR(v*) => {
+                //f.print("Rhs::VAR{");
+                f.print(v);
+                //f.print("}");
+            },
+            Rhs::FIELD(scp*,name*) => {
+                f.print("Rhs::FIELD{");
+                f.print(scp);
+                f.print(", ");
+                f.print(name);
+                f.print("}");
+            },
         }
     }
 }
 impl Clone for Rhs{
     func clone(self): Rhs{
-        if let Rhs::EXPR(e)=(self){
-            return Rhs::EXPR{e};
+        match self{
+            Rhs::EXPR(e) => return Rhs::EXPR{e},
+            Rhs::VAR(v*) => return Rhs::VAR{v.clone()},
+            Rhs::FIELD(scp*,name*) => return Rhs::FIELD{scp: scp.clone(), name: name.clone()},
         }
-        if let Rhs::VAR(v*)=(self){
-            return Rhs::VAR{v.clone()};
-        }
-        if let Rhs::FIELD(scp*, name*)=(self){
-            return Rhs::FIELD{scp: scp.clone(), name: name.clone()};
-        }
-        panic("{:?}", self);
     }
 }
 impl Eq for Rhs{

@@ -895,18 +895,21 @@ impl Parser{
         lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
       }
       self.consume(TokenType::ARROW);
+      let line = self.peek().line;
       if(self.is(TokenType::RETURN)){
-        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_ret(self.node(), false))});
+        let rhs = MatchRhs::new(self.parse_ret(self.node(), false));
+        res.cases.add(MatchCase{lhs.unwrap(), rhs, line});
       }
       else if(self.is_stmt_noexpr()){
-        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt())});
+        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt()), line});
       }else{
         let rhs_expr = self.parse_expr();
         if(self.is(TokenType::SEMI)){
           self.consume(TokenType::SEMI);
-          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(Stmt::Expr{.id, rhs_expr})});
+          let rhs = MatchRhs::new(Stmt::Expr{.id, rhs_expr});
+          res.cases.add(MatchCase{lhs.unwrap(), rhs, line});
         }else{
-          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr)});
+          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr), line});
         }
       }
       if(self.is(TokenType::COMMA)){

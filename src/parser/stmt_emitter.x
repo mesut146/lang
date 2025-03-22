@@ -17,7 +17,6 @@ impl Compiler{
     func visit(self, node: Stmt*){
       self.llvm.di.get().loc(node.line, node.pos);
       match node{
-        Stmt::Comment(str*) => panic("internal err"),
         Stmt::Ret(e*) => self.visit_ret(node, e),
         Stmt::Var(ve*) => self.visit_var(ve),
         Stmt::Expr(e*) => {

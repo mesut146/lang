@@ -133,7 +133,12 @@ impl File{
     return fp as u64 != 0;
   }*/
   
+  //todo deprecated
   func exist(path: str): bool{
+    return is_file(path) || is_dir(path);
+  }
+
+  func exists(path: str): bool{
     return is_file(path) || is_dir(path);
   }
   

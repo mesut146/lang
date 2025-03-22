@@ -39,11 +39,6 @@ impl Node{
   }
 }
 
-struct Comment{
-    str: String;
-    line: i32;
-}
-
 struct Unit{
   path: String;
   last_line: i32;
@@ -599,8 +594,7 @@ enum Stmt: Node{
     For(e: ForStmt),
     ForEach(e: ForEach),
     Continue,
-    Break,
-    Comment(node: Comment)
+    Break
 }
 
 impl Stmt{
@@ -802,7 +796,7 @@ impl Match{
 struct MatchCase{
   lhs: MatchLhs;
   rhs: MatchRhs;
-  //todo line: i32;
+  line: i32;
 }
 enum MatchLhs{
   NONE,

@@ -80,7 +80,7 @@ impl Compiler{
         return self.visit_call(node, mc);
       }
       if let Expr::MacroCall(mc*)=(node){
-        return self.visit_mcall(node, mc);
+        return self.visit_macrocall(node, mc);
       }
       if let Expr::ArrAccess(aa*)=(node){
         return self.visit_array_access(node, aa);
@@ -574,7 +574,7 @@ impl Compiler{
     func is_drop_call2(mc: Call*): bool{
       return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
     }
-    func visit_mcall(self, expr: Expr*, mc: MacroCall*): Value*{
+    func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
         let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
@@ -1140,7 +1140,31 @@ impl Compiler{
     }
     
     func visit_lit(self, expr: Expr*, node: Literal*): Value*{
-      if(node.kind is LitKind::INT){
+      match &node.kind{
+        LitKind::BOOL => {
+          if(node.val.eq("true")) return getTrue();
+          return getFalse();
+        },
+        LitKind::STR => {
+          let trg_ptr = self.get_alloc(expr);
+          return self.str_lit(node.val.str(), trg_ptr);
+        },
+        LitKind::CHAR => {
+          assert(node.val.len() == 1);
+          let chr: i8 = node.val.get(0);
+          return makeInt(chr, 32) as Value*;
+        },
+        LitKind::FLOAT => {
+          if(node.suffix.is_some()){
+            if(node.suffix.get().eq("f64")){
+              let valf: f64 = f64::parse(node.val.str());
+              return makeDouble(valf) as Value*;
+            }
+          }
+          let valf: f32 = f32::parse(node.val.str());
+          return makeFloat(valf) as Value*;
+        },
+        LitKind::INT => {
           let bits = 32;
           if (node.suffix.is_some()) {
               bits = self.getSize(node.suffix.get()) as i32;
@@ -1155,31 +1179,8 @@ impl Compiler{
           let val: i64 = i64::parse(normal.str());
           normal.drop();
           return makeInt(val, bits) as Value*;
+        },
       }
-      if(node.kind is LitKind::FLOAT){
-        if(node.suffix.is_some()){
-          if(node.suffix.get().eq("f64")){
-            let valf: f64 = f64::parse(node.val.str());
-            return makeDouble(valf) as Value*;
-          }
-        }
-        let valf: f32 = f32::parse(node.val.str());
-        return makeFloat(valf) as Value*;
-      }
-      if(node.kind is LitKind::BOOL){
-        if(node.val.eq("true")) return getTrue();
-        return getFalse();
-      }
-      if(node.kind is LitKind::STR){
-        let trg_ptr = self.get_alloc(expr);
-        return self.str_lit(node.val.str(), trg_ptr);
-      }
-      if(node.kind is LitKind::CHAR){
-        assert(node.val.len() == 1);
-        let chr: i8 = node.val.get(0);
-        return makeInt(chr, 32) as Value*;
-      }
-      panic("lit {}", node.val);
     }
 
     func str_lit(self, val: str, trg_ptr: Value*): Value*{
@@ -1439,34 +1440,33 @@ impl Compiler{
       return lhs;
     }
 
-    func emit_expr(self, expr: Expr*, ptr: Value*){
+    func emit_expr(self, expr: Expr*, trg_ptr: Value*){
       let rt = self.get_resolver().visit(expr);
       match expr{
         Expr::Obj(obj_type*, entries*) => {
-          let val = self.visit_obj(expr, obj_type, entries);
-          self.copy(ptr, val, &rt.type);
+          self.visit_obj(expr, obj_type, entries, trg_ptr);
         },
         Expr::Lit(lit*) => {
-          let val = self.visit_lit(expr, lit);
           if(lit.kind is LitKind::STR){
-            self.copy(ptr, val, &rt.type);
+            self.str_lit(lit.val.str(), trg_ptr);
           }else{
-            CreateStore(val, ptr);
+            let val = self.visit_lit(expr, lit);
+            CreateStore(val, trg_ptr);
           }
         },
         Expr::Call(mc*) => {
           if(is_struct(&rt.type)){
-            self.visit_call2(expr, mc, Option::new(ptr), rt);
+            self.visit_call2(expr, mc, Option::new(trg_ptr), rt);
           }else{
             let val = self.visit_call2(expr, mc, Option<Value*>::new(), rt);
-            CreateStore(val, ptr);
+            CreateStore(val, trg_ptr);
           }
           return;//rt is moved,return
         },
         Expr::Array(list*, size*) => {
           if(!Compiler::is_constexpr(expr)){
             //AllocHelper::new(self).visit_child(expr);
-            self.visit_array(expr, list, size, ptr);
+            self.visit_array(expr, list, size, trg_ptr);
           }else{
             panic("glob rhs arr '{:?}'", expr);
           }

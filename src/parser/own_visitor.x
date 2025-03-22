@@ -41,16 +41,19 @@ impl OwnVisitor{
         return id;
     }
     func visit(self, node: Body*){
-        if let Body::Block(b*)=(node){
-            self.visit_block(b);
-        }else if let Body::Stmt(b*)=(node){
-            self.visit(b);
-        }else if let Body::If(b*)=(node){
-            
-        }else if let Body::IfLet(b*)=(node){
-            
-        }else{
-            panic("");
+        match node{
+            Body::Block(b*) => {
+                self.visit_block(b);
+            },
+            Body::Stmt(b*) => {
+                self.visit(b);
+            },
+            Body::If(b*) => {
+                
+            },
+            Body::IfLet(b*) => {
+                
+            }
         }
     }
     func visit(self, node: Stmt*){

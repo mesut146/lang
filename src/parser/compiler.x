@@ -13,6 +13,7 @@ import parser/ownership
 import parser/own_model
 import parser/cache
 import parser/derive
+import parser/incremental
 import std/map
 import std/io
 import std/libc
@@ -286,7 +287,6 @@ impl Compiler{
     for p in &resolver.lambdas{
         self.genCode(p.b);
     }
-    methods.drop();
     
     let name = getName(path);
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
@@ -294,17 +294,27 @@ impl Compiler{
     emit_llvm(llvm_file_cstr.ptr());
     /*if(self.ctx.verbose){
       print("writing {}\n", llvm_file_cstr);
-    }*/
-    llvm_file_cstr.drop();
-    let outFile_cstr = CStr::new(outFile.clone());
-    emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
-    /*if(self.ctx.verbose){
+      }*/
+      let outFile_cstr = CStr::new(outFile.clone());
+      emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
+      /*if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
     }*/
-    outFile_cstr.drop();
+    let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
+    let olddata = File::read_string(path);
+    if(bootstrap && File::exists(oldpath.str())){
+      find_recompiles(path, oldpath.str());
+    }
+    File::write_string(olddata.str(), oldpath.str());
     self.cleanup();
     cache.update(path);
     cache.write_cache();
+
+    methods.drop();
+    llvm_file_cstr.drop();
+    outFile_cstr.drop();
+    oldpath.drop();
+    olddata.drop();
     return outFile;
   }
 

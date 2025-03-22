@@ -454,12 +454,7 @@ impl Own{
         self.check_ptr_field(scope, line);
         let drops: List<Droppable> = self.get_outer_vars(scope);
         for dr in &drops{
-            if let Droppable::OBJ(obj)=(dr){
-                self.drop_obj(obj, scope, line);
-            }
-            if let Droppable::VAR(var)=(dr){
-                self.drop_var(var, scope, line);
-            }
+            self.drop_any(dr, scope, line);
         }
         drops.drop();
         if(verbose){
@@ -471,17 +466,23 @@ impl Own{
         self.do_return(expr.line);
     }
 
+    func drop_any(self, dr: Droppable*, scope: VarScope*, line: i32){
+        match dr{
+            Droppable::OBJ(obj) => {
+                self.drop_obj(obj, scope, line);
+            },
+            Droppable::VAR(var) => {
+                self.drop_var(var, scope, line);
+            }
+        }
+    }
+
     func do_continue(self, line: i32){
         //drop vars & objs until the loop
         let scope = self.get_scope();
         let drops = self.get_outer_vars_loop(scope);
         for dr in &drops{
-            if let Droppable::OBJ(obj)=(dr){
-                self.drop_obj(obj, scope, line);
-            }
-            if let Droppable::VAR(var)=(dr){
-                self.drop_var(var, scope, line);
-            }
+            self.drop_any(dr, scope, line);
         }
         drops.drop();
     }
