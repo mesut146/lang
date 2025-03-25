@@ -75,11 +75,20 @@ int getDefaultTargetTriple(char *ptr) {
   return res.length();
 }
 
-void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
-void InitializeAllTargets() { llvm::InitializeAllTargets(); }
-void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
-void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
-void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
+//void InitializeAllTargets() { llvm::InitializeAllTargets(); }
+void llvm_LLVMInitializeX86Target() { LLVMInitializeX86Target(); }
+
+//void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
+void llvm_InitializeX86TargetInfo() { LLVMInitializeX86TargetInfo(); }
+
+//void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
+void llvm_InitializeX86TargetMC() { LLVMInitializeX86TargetMC(); }
+
+//void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
+void llvm_InitializeX86AsmParser() { LLVMInitializeX86AsmParser(); }
+
+//void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
+void llvm_InitializeX86AsmPrinter() { LLVMInitializeX86AsmPrinter(); }
 
 const llvm::Target *lookupTarget(const char *triple) {
   std::string TargetTriple(triple);
@@ -126,7 +135,8 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
   llvm::legacy::PassManager pass;
   if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr,
                                          llvm::CGFT_ObjectFile)) {
-    std::cerr << "TargetMachine can't emit a file of this type";
+    std::cerr << "TargetMachine can't emit a file of this type triple=" << triple << "\nfile=" << name;
+    std::cerr << std::endl;
     exit(1);
   }
   pass.run(*mod);

@@ -188,13 +188,22 @@ impl llvm_holder{
     self.di = Option::new(DebugInfo::new(path));
   }
 
+  func init_llvm(){
+    //InitializeAllTargetInfos();
+    // InitializeAllTargets();
+    // InitializeAllTargetMCs();
+    // InitializeAllAsmParsers();
+    // InitializeAllAsmPrinters();
+
+    llvm_InitializeX86TargetInfo();
+    llvm_LLVMInitializeX86Target();
+    llvm_InitializeX86TargetMC();
+    llvm_InitializeX86AsmParser();
+    llvm_InitializeX86AsmPrinter();
+  }
+
   func new(): llvm_holder{
-    InitializeAllTargetInfos();
-    InitializeAllTargets();
-    InitializeAllTargetMCs();
-    InitializeAllAsmParsers();
-    InitializeAllAsmPrinters();
-    
+    llvm_holder::init_llvm();
     //printDefaultTargetAndDetectedCPU();
     let target_triple = getDefaultTargetTriple2();
     let env_triple = getenv2("target_triple");
@@ -251,6 +260,7 @@ impl Compiler{
   func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
     let outFile: String = get_out_file(path, self);
     if(!cache.need_compile(path, outFile.str())){
+      //todo inc check
       return outFile;
     }
     let ext = Path::ext(path);
@@ -300,12 +310,16 @@ impl Compiler{
       /*if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
     }*/
-    let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
-    let olddata = File::read_string(path);
-    if(bootstrap && File::exists(oldpath.str())){
-      find_recompiles(path, oldpath.str());
+    if(config.incremental || bootstrap){
+      let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
+      let newdata = File::read_string(path);
+      if(File::exists(oldpath.str())){
+        find_recompiles(path, oldpath.str());
+      }
+      File::write_string(newdata.str(), oldpath.str());
+      oldpath.drop();
+      newdata.drop();
     }
-    File::write_string(olddata.str(), oldpath.str());
     self.cleanup();
     cache.update(path);
     cache.write_cache();
@@ -313,8 +327,6 @@ impl Compiler{
     methods.drop();
     llvm_file_cstr.drop();
     outFile_cstr.drop();
-    oldpath.drop();
-    olddata.drop();
     return outFile;
   }
 
@@ -874,6 +886,7 @@ struct CompilerConfig{
   root_dir: Option<String>;
   jobs: i32;
   verbose_all: bool;
+  incremental: bool;
 }
 
 impl CompilerConfig{
@@ -893,7 +906,8 @@ impl CompilerConfig{
       std_path: std_path,
       root_dir: Option<String>::new(),
       jobs: 1,
-      verbose_all: false
+      verbose_all: false,
+      incremental: false,
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{

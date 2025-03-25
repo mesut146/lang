@@ -38,6 +38,11 @@ impl Process{
         self.read().drop();
         self.close();
     }
+    func read_close(*self): String{
+        let res = self.read_str();
+        self.close();
+        return res;
+    }
 }
 
 impl Drop for Process{

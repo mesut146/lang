@@ -377,6 +377,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     block.list.add(var_stmt);
     let pos = 0;
     let arg_idx = 1;//skip fmt_str
+    //todo {name}
     while(pos < fmt_str.len()){
         let br_pos = fmt_str.indexOf("{", pos);
         if(br_pos == -1){
@@ -444,7 +445,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         argt.drop();
     }
     if(arg_idx < mc.args.len()){
-        r.err(node, "format arg not matched in specifier");
+        r.err(node, format("format arg not matched in specifier {:?}", mc.args.get(arg_idx)));
     }
     if(Resolver::is_print(mc)){
         //..f.buf.print();

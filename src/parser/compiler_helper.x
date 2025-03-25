@@ -849,36 +849,35 @@ impl Compiler{
   }
 
   func do_inline(self, expr: Expr*, ptr_ret: Value*){
-    if let Expr::Call(call*)=(expr){
-      let rt = self.get_resolver().visit(expr);
-      let method = self.get_resolver().get_method(&rt);
-      if(method.is_some()){
-        self.visit_call2(expr, call, Option::new(ptr_ret), rt);
-        return;
+    match expr{
+      Expr::Call(call*) => {
+        let rt = self.get_resolver().visit(expr);
+        let method = self.get_resolver().get_method(&rt);
+        if(method.is_some()){
+          self.visit_call2(expr, call, Option::new(ptr_ret), rt);
+          return;
+        }
+        rt.drop();
+      },
+      Expr::Type(type*) => {
+        self.simple_enum(type, ptr_ret);
+      },
+      Expr::Obj(type*, args*) => {
+        self.visit_obj(expr, type, args, ptr_ret);
+      },
+      Expr::ArrAccess(aa*) => {
+        self.visit_slice(expr, aa, ptr_ret);
+      },
+      Expr::Lit(lit*) => {
+        self.str_lit(lit.val.str(), ptr_ret);
+      },
+      Expr::Array(list*, sz*) => {
+        self.visit_array(expr, list, sz, ptr_ret);
+      },
+      _ => {
+        panic("inline {:?}", expr);
       }
-      rt.drop();
     }
-    if let Expr::Type(type*)=(expr){
-      self.simple_enum(type, ptr_ret);
-      return;
-    }
-    if let Expr::Obj(type*, args*)=(expr){
-      self.visit_obj(expr, type, args, ptr_ret);
-      return;
-    }
-    if let Expr::ArrAccess(aa*)=(expr){
-      self.visit_slice(expr, aa, ptr_ret);
-      return;
-    }
-    if let Expr::Lit(lit*)=(expr){
-      self.str_lit(lit.val.str(), ptr_ret);
-      return;
-    }
-    if let Expr::Array(list*, sz*)=(expr){
-      self.visit_array(expr, list, sz, ptr_ret);
-      return;
-    }
-    panic("inline {:?}", expr);
   }
 }
 
@@ -887,7 +886,6 @@ func can_inline(expr: Expr*, r: Resolver*): bool{
 }
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{
-  //if(e is Expr::Obj) return true;
   match e{
     Expr::ArrAccess(aa*) => return aa.idx2.is_some(),//slice creation
     Expr::Lit(lit*) => return lit.kind is LitKind::STR,
@@ -906,29 +904,6 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
     },
     _ => return false,
   }
-  /*if let Expr::ArrAccess(aa*)=(e){
-    return aa.idx2.is_some();//slice creation
-  }
-  if let Expr::Lit(lit*)=(e){
-    return lit.kind is LitKind::STR;
-  }
-  if (e is Expr::Type){
-    return true;//enum creation
-  }
-  if (e is Expr::Array){
-    return true;
-  }
-  if let Expr::Call(call*)=(e){
-    let rt = r.visit(e);
-    if(rt.is_method()){
-      let target = r.get_method(&rt).unwrap();
-      rt.drop();
-      return is_struct(&target.type);
-    }
-    rt.drop();
-    return false;
-  }
-  return false;*/
 }
 
 func getPrimitiveSizeInBits2(val: Value*): i32{

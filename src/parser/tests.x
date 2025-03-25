@@ -223,7 +223,7 @@ func normal_test_regex(pattern: String, args: Option<String>){
     files.drop();
 }
 
-func normal_test_dir(pat: String){
+func normal_test_dir(pat: String, incremental: bool){
     let dir = format("{}/{}", test_dir(), pat);
     let config = CompilerConfig::new(get_src_dir());
     config.set_file(dir);
@@ -232,6 +232,8 @@ func normal_test_dir(pat: String){
     config.add_dir(get_src_dir());
     config.add_dir(test_dir());
     config.set_link(LinkType::Binary{"a.out".str(), "".owned(), true});
+    config.incremental = incremental;
+    print("inc={}\n", incremental);
     Compiler::compile_dir(config);
 }
 
@@ -299,8 +301,9 @@ func handle_tests(cmd: CmdArgs*): bool{
     }
     else if(cmd.is("testd")){
         cmd.consume();
+        let inc = cmd.consume_any("-inc");
         let path = cmd.get();
-        normal_test_dir(path);
+        normal_test_dir(path, inc);
         cmd.end();
         return true;
     }

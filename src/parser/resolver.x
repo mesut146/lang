@@ -108,11 +108,12 @@ struct VarHolder{
 }
 impl VarHolder{
   func new(name: String, type: RType, id: i32, kind: VarKind, inLambda: i32): VarHolder{
-    return VarHolder{name: name,
-                  type: Box::new(type), 
-                  id: id, kind: kind, 
-                  inLambda: inLambda,
-                  //lambda_call: Option<LambdaCallInfo>::none(),
+    return VarHolder{
+      name: name,
+      type: Box::new(type), 
+      id: id, kind: kind, 
+      inLambda: inLambda,
+      //lambda_call: Option<LambdaCallInfo>::none(),
     };
   }
   func get_type(self): Type*{
@@ -230,28 +231,6 @@ impl Resolver{
       extra_imports: List<ImportStmt>::new(),
     };
     return res;
-  }
-}
-impl Drop for Resolver{
-  func drop(*self){
-    if(verbose_drop){
-      print("Resolver::drop {}\n", &self.unit.path);
-    }
-    self.unit.drop();
-    self.typeMap.drop();
-    self.cache.drop();
-    self.scopes.drop();
-    self.used_methods.drop();
-    self.generated_methods.drop();
-    self.generated_methods_todo.drop();
-    self.used_types.drop();
-    self.generated_decl.drop();
-    self.format_map.drop();
-    self.glob_map.drop();
-    self.drop_map.drop();
-    self.block_map.drop();
-    self.lambdas.drop();
-    self.inLambda.drop();
   }
 }
 
@@ -523,7 +502,7 @@ impl Resolver{
 
   func get_resolvers(self): List<Resolver*>{
     let res = List<Resolver*>::new();
-    let added = List<str>::new();
+    let added = HashSet<str>::new();
     added.add(self.unit.path.str());
     //add preludes
     if(self.ctx.std_path.is_some()){
@@ -1431,11 +1410,11 @@ impl Resolver{
   }
 
   func add_generated(self, decl: Decl): Decl*{
-    for old in &self.generated_decl{
+    /*for old in &self.generated_decl{
       if(old.get().type.eq(&decl.type)){
         panic("old decl");
       }
-    }
+    }*/
     let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;

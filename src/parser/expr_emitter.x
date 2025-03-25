@@ -139,14 +139,15 @@ impl Compiler{
     }
 
     func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
-      if let MatchRhs::EXPR(e*)=(rhs){
-        return Option<Value*>::new(self.visit(e));
+      match rhs{
+        MatchRhs::EXPR(e*)=>{
+          return Option<Value*>::new(self.visit(e));
+        },
+        MatchRhs::STMT(st*)=>{
+          self.visit(st);
+          return Option<Value*>::new();
+        }
       }
-      else if let MatchRhs::STMT(st*)=(rhs){
-        self.visit(st);
-        return Option<Value*>::new();
-      }
-      panic("unr");
     }
 
     func visit_match(self, expr: Expr*, node: Match*): Option<Value*>{

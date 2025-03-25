@@ -22,5 +22,27 @@ ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
 
 
-env
- target_triple, LD=clang-16
+#env
+ target_triple, LD=clang-16, TRACE
+
+#cmd config
+-cache //use cache
+-out <dir> //output dir
+-norun
+-nolink
+-static
+-shared
+-flags <flags> //sent to linker LD
+-name <name>
+-i <dir>
+-stdpath <dir>
+-std
+
+#bt config
+-j <num> //jobs
+-v //verbose
+-static //static link
+-sng <file> //single file compile, for testsing purposes
+-root <dir> //root dir
+-drop <name> //drop a specific object
+-ignore <name> //ignore a specific object

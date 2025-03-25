@@ -61,13 +61,19 @@ extern{
 
     func printDefaultTargetAndDetectedCPU();
     func getDefaultTargetTriple(ptr: i8*): i32;
-    func InitializeAllTargetInfos();
     func InitializeAllTargets();
+    func InitializeAllTargetInfos();
     func InitializeAllTargetMCs();
     func InitializeAllAsmParsers();
     func InitializeAllAsmPrinters();
     func lookupTarget(triple: i8*): Target*;
     func createTargetMachine(triple: i8*): TargetMachine*;
+    func llvm_InitializeX86TargetInfo();
+    func llvm_LLVMInitializeX86Target();
+    func llvm_InitializeX86TargetMC();
+    func llvm_InitializeX86AsmParser();
+    func llvm_InitializeX86AsmPrinter();
+
     func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;

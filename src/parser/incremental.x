@@ -51,7 +51,7 @@ func compare_decl(d: Decl*, old: Decl*){
                 Decl::Struct(fields2*) => {
                     if(compare_struct(fields, fields2)){
                         //struct layout changed, now scan dependant files
-                        panic("dependant {:?}", d.type);
+                        panic("scan dependant {:?}", d.type);
                     }
                 },
                 _=> panic("was enum but now struct {:?}", d.type)

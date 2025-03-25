@@ -106,6 +106,7 @@ extern{
   func putchar(chr: i32): i32;
 
   func stat(path: i8*, st: stat*): i32;
+  func fchmod(fildes: i32, mode: mode_t): i32;
   func getenv(name: i8*): i8*;
   func setenv(name: i8*, value: i8*, overwrite: i32): i32;
   func unsetenv(name: i8*): i32;

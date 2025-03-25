@@ -2,6 +2,18 @@
 
 struct File;
 
+struct Permissions{
+  mode: i32;
+}
+
+impl Permissions{
+  func from_mode(val: i32): Permissions{
+    return Permissions{
+      val,
+    };
+  }
+}
+
 impl File{
   func remove_file(path: str){
     let path_c = CStr::new(path);
@@ -175,6 +187,13 @@ impl File{
     let len = strlen(buf.ptr(), buf.len() as i32);
     let slice = buf[0..len];
     return String::new(slice);
+  }
+
+  func set_permissions(file: str, perm: Permissions){
+    let filec = CStr::new(file);
+    let fd = open(filec.ptr(), 0, 0);
+    fchmod(fd, 0);
+    Drop::drop(filec);
   }
 }
 

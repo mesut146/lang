@@ -57,6 +57,8 @@ func bootstrap(cmd: CmdArgs*){
   let jobs = cmd.get_val("-j");
   let verbose_all = cmd.consume_any("-v");
   let is_static = cmd.consume_any("-static");
+  let is_static2 = cmd.consume_any("-static2");
+  let sng = cmd.get_val("-sng");
   let root = root_opt.unwrap();
   let build = format("{}/build", root);
   let src_dir = format("{}/src", root);
@@ -73,22 +75,25 @@ func bootstrap(cmd: CmdArgs*){
   let config = CompilerConfig::new(src_dir.clone());
   config.verbose_all = verbose_all;
   let stdlib = build_std(std_dir.str(), out_dir.str());
-  if(is_static){
+  if(is_static2){
+    config.set_link(LinkType::Static{format("{}.a", name)});
+  }
+  else if(is_static){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }else{
     let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
     config.set_link(LinkType::Binary{name.owned(), args, false});
   }
-  stdlib.drop();
+  
   config
     .set_file(format("{}/parser", &src_dir))
-    .set_out(out_dir)
+    .set_out(out_dir.clone())
     .add_dir(src_dir.clone());
+  config.incremental = true;
   if(jobs.is_some()){
     config.set_jobs(i32::parse(jobs.get().str()));
   }
   config.root_dir.set(root.clone());
-  let sng = cmd.get_val("-sng");
   if(sng.is_some()){
       config.set_file(format("{}/parser/{}", &src_dir, sng.get()));
       Compiler::compile_single(config);
@@ -96,7 +101,27 @@ func bootstrap(cmd: CmdArgs*){
       return;
   }
   let bin = Compiler::compile_dir(config);
-  if(!is_static){
+  if(is_static2){
+    let linker = get_linker();
+    let llvm = Process::run("llvm-config-16 --link-static --libs core target aarch64 X86").read_close();
+    print("llvm={}\n", llvm);
+    let sys = "-lrt -ldl -lm -lz -lzstd -ltinfo -lxml2";
+    let bin_path = format("{}/{}-static", out_dir, name);
+    let cmd_link = format("{} -o {} {} -lstdc++ {} {} {}/cpp_bridge/build/libbridge.a -L/usr/lib/llvm-16/lib {}", linker, bin_path, bin, sys, stdlib, root, llvm);
+    print("cmd={}\n", cmd_link);
+    let proc = Process::run(cmd_link.str());
+    let proc_out = proc.read_close();
+    if(!proc_out.empty()){
+      panic("proc={}\n", proc_out);
+    }
+    let bin2 = format("{}/{}", build, name);
+    File::copy(bin_path.str(), bin2.str());
+    set_as_executable(bin2.cstr().ptr());
+    cmd_link.drop();
+    llvm.drop();
+    //binc.drop();
+  }
+  else if(!is_static){
     let bin2 = format("{}/{}", &build, name);
     File::copy(bin.str(), bin2.str());
     print("wrote {}\n", bin2);
@@ -109,6 +134,7 @@ func bootstrap(cmd: CmdArgs*){
   build.drop();
   src_dir.drop();
   std_dir.drop();
+  stdlib.drop();
 }
 
 func bin_name(path: str): String{
@@ -124,10 +150,11 @@ func handle_c(cmd: CmdArgs*){
   let compile_only = cmd.consume_any("-nolink");
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
-  let nostd = cmd.consume_any("-nostd");
   let flags = cmd.get_val_or("-flags", "".str());
-  let name = cmd.get_val("-name");
+  let name: Option<String> = cmd.get_val("-name");
+  let incremental = cmd.consume_any("-inc");
   let config = CompilerConfig::new();
+  config.incremental = incremental;
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);
