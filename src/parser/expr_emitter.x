@@ -283,6 +283,24 @@ impl Compiler{
 
     func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
       let rt = self.get_resolver().visit(node);
+      if(rt.desc.kind is RtKind::Const){
+        let cn = self.get_resolver().get_const(&rt);
+        match &cn.rhs{
+          Expr::Lit(lit*) => {
+            match &lit.kind{
+              LitKind::INT => {
+                return self.visit_lit(&cn.rhs, lit);
+              },
+              _ => {
+                panic("todo const rhs {:?}", cn.rhs);
+              }
+            }
+          },
+          _=>{
+            panic("todo const rhs {:?}", cn.rhs);
+          }
+        }
+      }
       if(rt.type.is_fpointer()){
         if(rt.method_desc.is_some()){
           let target: Method* = self.get_resolver().get_method(&rt).unwrap();
@@ -1232,6 +1250,8 @@ impl Compiler{
         self.own.get().add_obj(node, ptr, &rt.type);
         let ty = self.mapType(&rt.type);
         let decl = self.get_resolver().get_decl(&rt).unwrap();
+        self.inc.depends_decl(self.get_resolver().unit.path.str(), decl);
+        
         //set base
         for(let i = 0;i < args.len();++i){
           let arg = args.get(i);

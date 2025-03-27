@@ -13,6 +13,10 @@ type pthread_attr_t = c_void;
 type pthread_mutexattr_t = c_void;
 type suseconds_t = i32;
 
+const O_RDONLY: i32 = 0;
+const O_WRONLY: i32 = 1;
+const O_RDWR: i32 = 2;
+
 struct dirent {
     d_ino: ino_t;      /* inode number */
     d_off: off_t;      /* offset to the next dirent */

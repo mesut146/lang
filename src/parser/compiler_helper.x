@@ -531,40 +531,31 @@ impl Compiler{
 
   func make_proto(self, m: Method*): Option<Function*>{
     if(m.is_generic) return Option<Function*>::new();
-    if(m.name.eq("spawn") && m.line == 14){
-        let xx = 66;
-    }
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
       panic("already proto {}\n", mangled);
     }
+    let sig = MethodSig::new(m, self.get_resolver());
     let rvo = is_struct(&m.type);
     let ret = getVoidTy();
     if(is_main(m)){
       ret = getInt(32);
     }else if(!rvo){
-      ret = self.mapType(&m.type);
+      ret = self.mapType(&sig.ret);
     }
     let args = vector_Type_new();
     if(rvo){
-      let rvo_ty = getPointerTo(self.mapType(&m.type)) as llvm_Type*;
+      let rvo_ty = getPointerTo(self.mapType(&sig.ret)) as llvm_Type*;
       vector_Type_push(args, rvo_ty);
     }
-    if(m.self.is_some()){
-      let self_ty = self.mapType(&m.self.get().type);
-      if(is_struct(&m.self.get().type)){
-        self_ty = getPointerTo(self_ty) as llvm_Type*;
+    for prm_type in &sig.params{
+      let pt = self.mapType(prm_type);
+      if(is_struct(prm_type)){
+        vector_Type_push(args, getPointerTo(pt) as llvm_Type*);
+      }else{
+        vector_Type_push(args, pt);
       }
-      vector_Type_push(args, self_ty);
-    }
-    for(let i = 0;i < m.params.len();++i){
-      let prm = m.params.get(i);
-      let pt = self.mapType(&prm.type);
-      if(is_struct(&prm.type)){
-        pt = getPointerTo(pt) as llvm_Type*;
-      }
-      vector_Type_push(args, pt);
     }
     let ft = make_ft(ret, args, m.is_vararg);
     let linkage = ext();
@@ -580,11 +571,12 @@ impl Compiler{
     if(rvo){
       let arg = get_arg(f, 0);
       Argument_setname(arg, "ret".ptr());
-      Argument_setsret(arg, self.mapType(&m.type));
+      Argument_setsret(arg, self.mapType(&sig.ret));
     }
     self.protos.get().funcMap.add(mangled, f);
     vector_Type_delete(args);
     mangled_c.drop();
+    sig.drop();
     return Option::new(f);
   }
 

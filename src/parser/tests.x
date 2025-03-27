@@ -232,7 +232,7 @@ func normal_test_dir(pat: String, incremental: bool){
     config.add_dir(get_src_dir());
     config.add_dir(test_dir());
     config.set_link(LinkType::Binary{"a.out".str(), "".owned(), true});
-    config.incremental = incremental;
+    config.incremental_enabled = incremental;
     print("inc={}\n", incremental);
     Compiler::compile_dir(config);
 }

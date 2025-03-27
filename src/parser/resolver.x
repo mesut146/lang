@@ -245,6 +245,7 @@ enum RtKind{
   DeclGen,//generic decl in resolver
   Trait,//trait in items
   Lambda(id: i32),
+  Const,//const in items
 }
 impl RtKind{
   func is_method(self): bool{
@@ -658,6 +659,7 @@ impl Resolver{
         },
         Item::Method(method*) => {},
         Item::Extern(methods*) => {},
+        Item::Const(cn*) => {},
       }
     }
     //derives
@@ -842,30 +844,69 @@ impl Resolver{
     panic("get_method {:?}={:?}", type, desc);
   }
 
-  func visit_item(self, node: Item*){
-    if let Item::Method(m*) = (node){
-      self.visit_method(m);
-    }else if let Item::Type(name*, rhs*) = (node){
-      //pass
-    }else if let Item::Impl(imp*) = (node){
-      self.visit_impl(imp);
-    }else if let Item::Decl(decl*) = (node){
-      if let Decl::Struct(fields*) = (decl){
-        self.visit_decl(decl, fields);
-      }else if let Decl::Enum(variants*) = (decl){
-        self.visit_enum(decl, variants);
-      }
-    }else if let Item::Trait(tr*) = (node){
-    }else if let Item::Extern(methods*) = (node){
-      for(let i = 0;i < methods.len();++i){
-        let m = methods.get(i);
-        if(m.is_generic) continue;
-        self.visit_method(m);
+  func get_const(self, rt: RType*): Const*{
+    if(rt.desc.kind is RtKind::Const){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let item = resolver.unit.items.get(rt.desc.idx);
+      if let Item::Const(c*) = (item){
+        return c;
       }
     }
-    else{
-      Fmt::str(node).dump();
-      panic("visitItem");
+    panic("get_const {:?}={:?}", rt.type, rt.desc);
+  }
+
+  func visit_item(self, node: Item*){
+    match node{
+      Item::Method(m*) => {
+        self.visit_method(m);
+      },
+      Item::Type(name*, rhs*) => {
+        //pass
+      },
+      Item::Impl(imp*) => {
+        self.visit_impl(imp);
+      },
+      Item::Decl(decl*) => {
+        match decl{
+          Decl::Struct(fields*) => {
+            self.visit_decl(decl, fields);
+          },
+          Decl::Enum(variants*) => {
+            self.visit_enum(decl, variants);
+          }
+        }
+      },
+      Item::Trait(tr*) => {
+      },
+      Item::Extern(methods*) => {
+        for(let i = 0;i < methods.len();++i){
+          let m = methods.get(i);
+          if(m.is_generic) continue;
+          self.visit_method(m);
+        }
+      },
+      Item::Const(cn*) => {
+        let rhs_type = self.visit(&cn.rhs);
+        /*let is_valid = match rhs{
+          Expr::Lit(lit*) => {
+            //lit.kind is LitKind::STR
+            true
+          },
+          _ => {
+            false
+          }
+        };*/
+        let is_valid = cn.rhs is Expr::Lit; 
+        if(!is_valid){
+          panic("todo const rhs {:?}", cn.rhs);
+        }
+        if(cn.type.is_some()){
+          let ty = self.getType(cn.type.get());
+          if(!ty.eq(&rhs_type.type)){
+            panic("const rhs type mismatch {:?} -> {:?}", cn.type.get(), rhs_type.type);
+          }
+        }
+      }
     }
   }
 
@@ -2054,21 +2095,21 @@ impl Resolver{
         return res;
       }
       else if(fp.is_some()){
-          if let Type::Lambda(bx*)=(fp.get().type){
-              let ret = bx.get().return_type.get();
-              let res = self.visit_type(ret);
-              res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
-              for (let i = 0; i < call.args.len(); ++i) {
-                  let arg = self.visit(call.args.get(i));
-                  let prm = bx.get().params.get(i);
-                  let cmp = MethodResolver::is_compatible(&arg.type, prm);
-                  if(cmp.is_some()){
-                      self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
-                  }
+        if let Type::Lambda(bx*)=(fp.get().type){
+          let ret = bx.get().return_type.get();
+          let res = self.visit_type(ret);
+          res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
+          for (let i = 0; i < call.args.len(); ++i) {
+              let arg = self.visit(call.args.get(i));
+              let prm = bx.get().params.get(i);
+              let cmp = MethodResolver::is_compatible(&arg.type, prm);
+              if(cmp.is_some()){
+                  self.err(node, format("arg type do not match {:?} vs {:?} at {}", arg.type, prm, i + 1));
               }
-              return res;
-              //self.err(node, "todo call lambda");
           }
+          return res;
+          //self.err(node, "todo call lambda");
+        }
       }
       fp.drop();
     }
@@ -2495,6 +2536,26 @@ impl Resolver{
     panic("");
   }
 
+  func find_const(self, name: String*): Option<RType>{
+    for(let i = 0;i < self.unit.items.len();++i){
+      let item = self.unit.items.get(i);
+      if let Item::Const(cn*) = item{
+        if (cn.name.eq(name)) {
+          let rhs2 = AstCopier::clone(&cn.rhs, &self.unit);
+          let rt = self.visit(&rhs2);
+          rt.desc = Desc{
+            kind: RtKind::Const,
+            path: self.unit.path.clone(),
+            idx: i
+          };
+          rhs2.drop();
+          return Option::new(rt);
+        }
+      }
+    }
+    return Option<RType>::none();
+  }
+
   func visit_name_opt(self, node: Expr*, name: String*, err_multiple: bool): Option<RType>{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get(i);
@@ -2523,7 +2584,12 @@ impl Resolver{
         return Option::new(res);
       }
     }
-    //external globals
+    //local const
+    let cn = self.find_const(name);
+    if(cn.is_some()){
+      return cn;
+    }
+    //external globals and consts
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
       let res = *arr.get(i);
@@ -2545,6 +2611,10 @@ impl Resolver{
           arr.drop();
           return Option::new(rt);
         }
+      }
+      cn = res.find_const(name);
+      if(cn.is_some()){
+        return cn;
       }
     }
     arr.drop();
@@ -2628,53 +2698,72 @@ impl Resolver{
   }
   
   func visit_nc(self, node: Expr*): RType{
-    if let Expr::Lit(lit*)=(node){
-      return self.visit_lit(node, lit);
-    }else if let Expr::Type(type*) = (node){
-      let res = self.visit_type(type);
-      //if(res.is_decl()){
-        /*let decl = self.get_decl(&res).unwrap();
-        if(decl.base.is_some()){
-          self.err(node, "base is not initialized");
-        }*/
-      //}
-      return res;
-    }else if let Expr::Infix(op*, lhs*, rhs*) = (node){
-      return self.visit_infix(node, op, lhs.get(), rhs.get());
-    }else if let Expr::Call(call*) = (node){
-      return self.visit_call(node, call);
-    }else if let Expr::MacroCall(call*) = (node){
-      return self.visit_mcall(node, call);
-    }else if let Expr::Name(name*) = (node){
-      return self.visit_name(node, name);
-    }else if let Expr::Unary(op*, ebox*) = (node){
-      return self.visit_unary(node, op, ebox.get());
-    }else if let Expr::Par(expr*) = (node){
-      return self.visit(expr.get());
-    }else if let Expr::Access(scope*,name*) = (node){
-      return self.visit_access(node, scope.get(), name);
-    }else if let Expr::ArrAccess(aa*) = (node){
-      return self.visit_arr_access(node, aa);
-    }else if let Expr::Array(list*, size*) = (node){
-      return self.visit_array(node, list, size);
-    }else if let Expr::Obj(type*,args*) = (node){
-      return self.visit_obj(node, type, args);
-    }else if let Expr::As(lhs*, type*) = (node){
-      return self.visit_as(node, lhs.get(), type);
-    }else if let Expr::Is(lhs*, rhs*) = (node){
-      return self.visit_is(node, lhs.get(), rhs.get());
-    }else if let Expr::If(is*) = (node){
-      return self.visit_if(is.get());
-    }else if let Expr::IfLet(is*) = (node){
-      return self.visit_iflet(is.get());
-    }else if let Expr::Block(b*) = (node){
-      return self.visit_block(b.get());
-    }else if let Expr::Match(me*) = (node){
-      return self.visit_match(node, me.get());
-    }else if let Expr::Lambda(le*) = (node){
-      return self.visit_lambda(node, le);
+    match node{
+      Expr::Lit(lit*) => {
+        return self.visit_lit(node, lit);
+      },
+      Expr::Type(type*) => {
+        let res = self.visit_type(type);
+        //if(res.is_decl()){
+          /*let decl = self.get_decl(&res).unwrap();
+          if(decl.base.is_some()){
+            self.err(node, "base is not initialized");
+          }*/
+        //}
+        return res;
+      },
+      Expr::Infix(op*, lhs*, rhs*) => {
+        return self.visit_infix(node, op, lhs.get(), rhs.get());
+      },
+      Expr::Call(call*) => {
+        return self.visit_call(node, call);
+      },
+      Expr::MacroCall(call*) => {
+        return self.visit_mcall(node, call);
+      },
+      Expr::Name(name*) => {
+        return self.visit_name(node, name);
+      },
+      Expr::Unary(op*, ebox*) => {
+        return self.visit_unary(node, op, ebox.get());
+      },
+      Expr::Par(expr*) => {
+        return self.visit(expr.get());
+      },
+      Expr::Access(scope*,name*) => {
+        return self.visit_access(node, scope.get(), name);
+      },
+      Expr::ArrAccess(aa*) => {
+        return self.visit_arr_access(node, aa);
+      },
+      Expr::Array(list*, size*) => {
+        return self.visit_array(node, list, size);
+      },
+      Expr::Obj(type*,args*) => {
+        return self.visit_obj(node, type, args);
+      },
+      Expr::As(lhs*, type*) => {
+        return self.visit_as(node, lhs.get(), type);
+      },
+      Expr::Is(lhs*, rhs*) => {
+        return self.visit_is(node, lhs.get(), rhs.get());
+      },
+      Expr::If(is*) => {
+        return self.visit_if(is.get());
+      },
+      Expr::IfLet(is*) => {
+        return self.visit_iflet(is.get());
+      },
+      Expr::Block(b*) => {
+        return self.visit_block(b.get());
+      },
+      Expr::Match(me*) => {
+        return self.visit_match(node, me.get());
+      },
+      Expr::Lambda(le*) => {
+        return self.visit_lambda(node, le);
+      }
     }
-    panic("visit expr '{:?}'", node);
   }
   
   func visit_lambda(self, expr: Expr*, node: Lambda*): RType{

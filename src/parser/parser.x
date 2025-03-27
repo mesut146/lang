@@ -185,6 +185,18 @@ impl Parser{
           let rhs = self.parse_expr();
           self.consume(TokenType::SEMI);
           unit.globals.add(Global{.id, name, type, rhs});
+        }else if(self.is(TokenType::CONST)){
+          self.pop();
+          let name = self.name();
+          let type = Option<Type>::new();
+          if(self.is(TokenType::COLON)){
+            self.pop();
+            type = Option::new(self.parse_type());
+          }
+          self.consume(TokenType::EQ);
+          let rhs = self.parse_expr();
+          self.consume(TokenType::SEMI);
+          unit.items.add(Item::Const{Const{name, type, rhs}});
         }else{
           panic("invalid top level decl: {:?}", self.peek());
         }

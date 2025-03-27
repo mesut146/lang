@@ -9,6 +9,24 @@ import std/libc
 import std/stack
 import std/result
 
+struct MethodSig{
+    params: List<Type>;
+    ret: Type;
+}
+impl MethodSig{
+    func new(m: Method*, r: Resolver*): MethodSig{
+        let params = List<Type>::new();
+        let ret = r.getType(&m.type);
+        if(m.self.is_some()){
+            params.add(r.getType(&m.self.get().type));
+        }
+        for a in &m.params{
+            params.add(r.getType(&a.type));
+        }
+        return MethodSig{params: params, ret: ret};
+    }
+}
+
 struct Signature{
     mc: Option<Call*>;
     m: Option<Method*>;

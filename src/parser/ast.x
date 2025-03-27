@@ -101,13 +101,20 @@ impl ImportStmt{
   }
 }
 
+struct Const{
+  name: String;
+  type: Option<Type>;
+  rhs: Expr;
+}
+
 enum Item{
   Method(m: Method),
   Decl(decl: Decl),
   Impl(i: Impl),
   Trait(t: Trait),
   Type(name: String, rhs: Type),
-  Extern(methods: List<Method>)
+  Extern(methods: List<Method>),
+  Const(val: Const),
 }
 
 impl Item{

@@ -1,4 +1,5 @@
 
+import std/libc
 
 struct File;
 
@@ -72,6 +73,7 @@ impl File{
       panic("didn't write all");
     }
   }
+  
   func write_string(data: str, path: str){
     write_bytes(data.slice(), path);
   }
@@ -101,6 +103,7 @@ impl File{
     closedir(dp);
     return list;
   }
+
   func list(path: str): List<String>{
     let list = List<String>::new();
     let path_c = CStr::new(path);
@@ -191,8 +194,11 @@ impl File{
 
   func set_permissions(file: str, perm: Permissions){
     let filec = CStr::new(file);
-    let fd = open(filec.ptr(), 0, 0);
-    fchmod(fd, 0);
+    let fd = open(filec.ptr(), O_RDWR, 0);
+    let ret = fchmod(fd, perm.mode);
+    if(ret != 0){
+      panic("failed to set permissions for '{}', code={}", file, ret);
+    }
     Drop::drop(filec);
   }
 }

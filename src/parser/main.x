@@ -57,7 +57,7 @@ func bootstrap(cmd: CmdArgs*){
   let jobs = cmd.get_val("-j");
   let verbose_all = cmd.consume_any("-v");
   let is_static = cmd.consume_any("-static");
-  let is_static2 = cmd.consume_any("-static2");
+  let is_static_llvm = cmd.consume_any("-static-llvm");
   let sng = cmd.get_val("-sng");
   let root = root_opt.unwrap();
   let build = format("{}/build", root);
@@ -75,7 +75,7 @@ func bootstrap(cmd: CmdArgs*){
   let config = CompilerConfig::new(src_dir.clone());
   config.verbose_all = verbose_all;
   let stdlib = build_std(std_dir.str(), out_dir.str());
-  if(is_static2){
+  if(is_static_llvm){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }
   else if(is_static){
@@ -89,7 +89,7 @@ func bootstrap(cmd: CmdArgs*){
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir.clone())
     .add_dir(src_dir.clone());
-  config.incremental = true;
+  config.incremental_enabled = true;
   if(jobs.is_some()){
     config.set_jobs(i32::parse(jobs.get().str()));
   }
@@ -101,14 +101,14 @@ func bootstrap(cmd: CmdArgs*){
       return;
   }
   let bin = Compiler::compile_dir(config);
-  if(is_static2){
+  if(is_static_llvm){
     let linker = get_linker();
     let llvm = Process::run("llvm-config-16 --link-static --libs core target aarch64 X86").read_close();
-    print("llvm={}\n", llvm);
+    //print("llvm={}\n", llvm);
     let sys = "-lrt -ldl -lm -lz -lzstd -ltinfo -lxml2";
     let bin_path = format("{}/{}-static", out_dir, name);
     let cmd_link = format("{} -o {} {} -lstdc++ {} {} {}/cpp_bridge/build/libbridge.a -L/usr/lib/llvm-16/lib {}", linker, bin_path, bin, sys, stdlib, root, llvm);
-    print("cmd={}\n", cmd_link);
+    //print("cmd={}\n", cmd_link);
     let proc = Process::run(cmd_link.str());
     let proc_out = proc.read_close();
     if(!proc_out.empty()){
@@ -154,7 +154,7 @@ func handle_c(cmd: CmdArgs*){
   let name: Option<String> = cmd.get_val("-name");
   let incremental = cmd.consume_any("-inc");
   let config = CompilerConfig::new();
-  config.incremental = incremental;
+  config.incremental_enabled = incremental;
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);

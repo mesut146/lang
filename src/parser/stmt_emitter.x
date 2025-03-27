@@ -419,6 +419,7 @@ impl Compiler{
         let ptr = self.get_alloc(f.id);
         self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
+        self.inc.depends_decl(self.get_resolver(), &type);
         if(can_inline(&f.rhs, self.get_resolver())){
           self.do_inline(&f.rhs, ptr);
         }

@@ -46,6 +46,28 @@ struct Compiler{
   loopNext: List<BasicBlock*>;
   own: Option<Own>;
   string_map: HashMap<String, Value*>;
+  config: CompilerConfig*;
+  inc: Incremental*;
+}
+impl Compiler{
+  func new(ctx: Context, config: CompilerConfig*, inc: Incremental*): Compiler{
+    let vm = llvm_holder::new();
+    return Compiler{ctx: ctx,
+     resolver: Option<Resolver*>::new(),
+     llvm: vm,
+     protos: Option<Protos>::new(),
+     NamedValues: HashMap<String, Value*>::new(),
+     globals: HashMap<String, Value*>::new(),
+     allocMap: HashMap<i32, Value*>::new(),
+     curMethod: Option<Method*>::new(),
+     loops: List<BasicBlock*>::new(),
+     loopNext: List<BasicBlock*>::new(),
+     own: Option<Own>::new(),
+     string_map: HashMap<String, Value*>::new(),
+     config: config,
+     inc: inc,
+    };
+  }
 }
 
 struct llvm_holder{
@@ -221,22 +243,6 @@ impl llvm_holder{
 }
 
 impl Compiler{
-  func new(ctx: Context): Compiler{
-    let vm = llvm_holder::new();
-    return Compiler{ctx: ctx,
-     resolver: Option<Resolver*>::new(),
-     llvm: vm,
-     protos: Option<Protos>::new(),
-     NamedValues: HashMap<String, Value*>::new(),
-     globals: HashMap<String, Value*>::new(),
-     allocMap: HashMap<i32, Value*>::new(),
-     curMethod: Option<Method*>::new(),
-     loops: List<BasicBlock*>::new(),
-     loopNext: List<BasicBlock*>::new(),
-     own: Option<Own>::new(),
-     string_map: HashMap<String, Value*>::new()
-    };
-  }
 
   func get_resolver(self): Resolver*{
     return *self.resolver.get();
@@ -267,6 +273,7 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension for {}", path);
     }
+
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
@@ -310,11 +317,11 @@ impl Compiler{
       /*if(self.ctx.verbose){
       print("writing {}\n", outFile_cstr);
     }*/
-    if(config.incremental || bootstrap){
+    if(config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path);
       if(File::exists(oldpath.str())){
-        find_recompiles(path, oldpath.str());
+        Incremental::find_recompiles(self, config, path, oldpath.str());
       }
       File::write_string(newdata.str(), oldpath.str());
       oldpath.drop();
@@ -662,7 +669,8 @@ impl Compiler{
     for inc in &config.src_dirs{
       ctx.add_path(inc.str());
     }
-    let cmp = Compiler::new(ctx);
+    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
+    let cmp = Compiler::new(ctx, &config, &inc);
     let compiled = List<String>::new();
     use_cache = false;
     let cache = Cache::new(config.out_dir.str());
@@ -690,6 +698,8 @@ impl Compiler{
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
+    
+    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
     let src_dir = &config.file;
     let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
@@ -706,7 +716,7 @@ impl Compiler{
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get(j).str());
       }
-      let cmp = Compiler::new(ctx);
+      let cmp = Compiler::new(ctx, &config, &inc);
       if(cmp.ctx.verbose){
         print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
       }
@@ -717,6 +727,7 @@ impl Compiler{
     }
     list.drop();
     cache.drop();
+    inc.drop();
     return config.link(&compiled);
   }
  
@@ -729,6 +740,7 @@ impl Compiler{
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(config.out_dir.str());
     cache.read_cache();
+    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
     let src_dir = &config.file;
     let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = Mutex::new(List<String>::new());
@@ -747,7 +759,8 @@ impl Compiler{
         cache: &cache,
         compiled: &compiled,
         idx: &idx,
-        len: list.len() as i32
+        len: list.len() as i32,
+        inc: &inc,
       };
       worker.add_arg(Compiler::make_compile_job2, args);
     }
@@ -755,6 +768,7 @@ impl Compiler{
     worker.join();
     list.drop();
     cache.drop();
+    inc.drop();
     let comp = compiled.unwrap();
     return config.link(&comp);
   }
@@ -766,7 +780,7 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    let cmp = Compiler::new(ctx);
+    let cmp = Compiler::new(ctx, config, args.inc);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
     for inc in &args.config.src_dirs{
         cmd.append(" -i ");
@@ -867,6 +881,7 @@ struct CompileArgs{
   compiled: Mutex<List<String>>*;
   idx: Mutex<i32>*;
   len: i32;
+  inc: Incremental*;
 }
 
 enum LinkType{
@@ -886,7 +901,7 @@ struct CompilerConfig{
   root_dir: Option<String>;
   jobs: i32;
   verbose_all: bool;
-  incremental: bool;
+  incremental_enabled: bool;
 }
 
 impl CompilerConfig{
@@ -907,7 +922,7 @@ impl CompilerConfig{
       root_dir: Option<String>::new(),
       jobs: 1,
       verbose_all: false,
-      incremental: false,
+      incremental_enabled: false,
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{
