@@ -47,10 +47,10 @@ struct Compiler{
   own: Option<Own>;
   string_map: HashMap<String, Value*>;
   config: CompilerConfig*;
-  inc: Incremental*;
+  cache: Cache*;
 }
 impl Compiler{
-  func new(ctx: Context, config: CompilerConfig*, inc: Incremental*): Compiler{
+  func new(ctx: Context, config: CompilerConfig*, cache: Cache*): Compiler{
     let vm = llvm_holder::new();
     return Compiler{ctx: ctx,
      resolver: Option<Resolver*>::new(),
@@ -65,7 +65,7 @@ impl Compiler{
      own: Option<Own>::new(),
      string_map: HashMap<String, Value*>::new(),
      config: config,
-     inc: inc,
+     cache: cache,
     };
   }
 }
@@ -180,9 +180,9 @@ func has_main(unit: Unit*): bool{
   return false;
 }
 
-func get_out_file(path: str, c: Compiler*): String{
+func get_out_file(path: str, out_dir: str): String{
   let name = getName(path);
-  let res = format("{}/{}.o", c.ctx.out_dir, trimExtenstion(name));
+  let res = format("{}/{}.o", out_dir, trimExtenstion(name));
   return res;
 }
 
@@ -263,9 +263,9 @@ impl Compiler{
       return list;
   }
 
-  func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
-    let outFile: String = get_out_file(path, self);
-    if(!cache.need_compile(path, outFile.str())){
+  func compile(self, path: str): String{
+    let outFile: String = get_out_file(path, self.config.out_dir.str());
+    if(!self.cache.need_compile(path, outFile.str())){
       //todo inc check
       return outFile;
     }
@@ -278,21 +278,14 @@ impl Compiler{
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
-    if(self.ctx.verbose_all){
-        print("resolve done\n");
-    }
     self.llvm.initModule(path);
     self.createProtos();
-    self.init_globals(config);
+    self.init_globals(self.config);
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
       let m = *methods.get(i);
       self.genCode(m);
-      if(self.ctx.verbose_all){
-          //pr.gencode_done(i, methods.len());
-          print("gencode done {}/{}\n", i+1, methods.len());
-      }
     }
     //generic methods from resolver
 
@@ -309,27 +302,21 @@ impl Compiler{
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
-    /*if(self.ctx.verbose){
-      print("writing {}\n", llvm_file_cstr);
-      }*/
-      let outFile_cstr = CStr::new(outFile.clone());
-      emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
-      /*if(self.ctx.verbose){
-      print("writing {}\n", outFile_cstr);
-    }*/
-    if(config.incremental_enabled || bootstrap){
+    let outFile_cstr = CStr::new(outFile.clone());
+    emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
+    if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path);
       if(File::exists(oldpath.str())){
-        Incremental::find_recompiles(self, config, path, oldpath.str());
+        self.cache.inc.find_recompiles(self, path, oldpath.str());
       }
       File::write_string(newdata.str(), oldpath.str());
       oldpath.drop();
       newdata.drop();
     }
     self.cleanup();
-    cache.update(path);
-    cache.write_cache();
+    self.cache.update(path);
+    self.cache.write_cache();
 
     methods.drop();
     llvm_file_cstr.drop();
@@ -666,18 +653,17 @@ impl Compiler{
   func compile_single(config: CompilerConfig): String{
     File::create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-    for inc in &config.src_dirs{
-      ctx.add_path(inc.str());
+    for inc_dir in &config.src_dirs{
+      ctx.add_path(inc_dir.str());
     }
-    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
-    let cmp = Compiler::new(ctx, &config, &inc);
+    let cache = Cache::new(&config);
+    let cmp = Compiler::new(ctx, &config, &cache);
     let compiled = List<String>::new();
     use_cache = false;
-    let cache = Cache::new(config.out_dir.str());
     if(cmp.ctx.verbose){
       print("compiling {}\n", config.trim_by_root(config.file.str()));
     }
-    let obj = cmp.compile(config.file.str(), &cache, &config);
+    let obj = cmp.compile(config.file.str());
     compiled.add(obj);
     let res = config.link(&compiled);
     config.drop();
@@ -696,10 +682,10 @@ impl Compiler{
       print("triple={}\n", env_triple.get());
     }
     File::create_dir(config.out_dir.str());
-    let cache = Cache::new(config.out_dir.str());
+    let cache = Cache::new(&config);
     cache.read_cache();
     
-    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
+    let inc = Incremental::new(&config);
     let src_dir = &config.file;
     let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
@@ -716,12 +702,28 @@ impl Compiler{
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get(j).str());
       }
-      let cmp = Compiler::new(ctx, &config, &inc);
+      let cmp = Compiler::new(ctx, &config, &cache);
       if(cmp.ctx.verbose){
         print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
       }
-      let obj = cmp.compile(file.str(), &cache, &config);
+      let obj = cmp.compile(file.str());
       compiled.add(obj);
+      cmp.drop();
+      file.drop();
+    }
+    for rec_file in &cache.inc.recompiles{
+      let file: String = format("{}/{}", src_dir, rec_file);
+      print("recompiling {}\n", config.trim_by_root(file.str()));
+      //rem output to trigger recompiling
+      File::remove_file(get_out_file(file.str(), config.out_dir.str()).str());
+      let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.verbose_all = config.verbose_all;
+      for(let j = 0;j < config.src_dirs.len();++j){
+        ctx.add_path(config.src_dirs.get(j).str());
+      }
+      let cmp = Compiler::new(ctx, &config, &cache);
+      let obj = cmp.compile(file.str());
+      //compiled.add(obj);
       cmp.drop();
       file.drop();
     }
@@ -738,9 +740,8 @@ impl Compiler{
       print("triple={}\n", env_triple.get());
     }
     File::create_dir(config.out_dir.str());
-    let cache = Cache::new(config.out_dir.str());
+    let cache = Cache::new(&config);
     cache.read_cache();
-    let inc = Incremental::new(config.out_dir.str(), config.incremental_enabled);
     let src_dir = &config.file;
     let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = Mutex::new(List<String>::new());
@@ -760,7 +761,6 @@ impl Compiler{
         compiled: &compiled,
         idx: &idx,
         len: list.len() as i32,
-        inc: &inc,
       };
       worker.add_arg(Compiler::make_compile_job2, args);
     }
@@ -768,7 +768,6 @@ impl Compiler{
     worker.join();
     list.drop();
     cache.drop();
-    inc.drop();
     let comp = compiled.unwrap();
     return config.link(&comp);
   }
@@ -780,11 +779,12 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    let cmp = Compiler::new(ctx, config, args.inc);
+    //todo delete cmp?
+    let cmp = Compiler::new(ctx, config, args.cache);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
-    for inc in &args.config.src_dirs{
+    for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
-        cmd.append(inc);
+        cmd.append(inc_dir);
     }
     if(cmp.ctx.verbose){
         let idx = args.idx.lock();
@@ -800,7 +800,7 @@ impl Compiler{
         args.compiled.unlock();
     }
     let compiled = args.compiled.lock();
-    compiled.add(format("{}", get_out_file(args.file.str(), &cmp)));
+    compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
     args.compiled.unlock();
     sleep(1);
     cmp.drop();
@@ -881,7 +881,6 @@ struct CompileArgs{
   compiled: Mutex<List<String>>*;
   idx: Mutex<i32>*;
   len: i32;
-  inc: Incremental*;
 }
 
 enum LinkType{

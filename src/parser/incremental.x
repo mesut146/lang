@@ -12,46 +12,97 @@ struct Incremental{
     path: String;
     map: HashMap<String, HashMap<String, HashSet<String>>>;//file -> (desc -> list of dependants)
     enabled: bool;
+    config: CompilerConfig*;
+    recompiles: HashSet<String>;
 }
 impl Incremental{
-    func new(out_dir: str, enabled: bool): Incremental{
+    func new(config: CompilerConfig*): Incremental{
         //todo read
-        let path = format("{}/inc_map.txt", out_dir);
-        return Incremental{
+        let path = format("{}/inc_map.txt", config.out_dir);
+        let res = Incremental{
             path: path,
             map: HashMap<String, HashMap<String, HashSet<String>>>::new(), 
-            enabled: enabled
+            enabled: config.incremental_enabled,
+            config: config,
+            recompiles: HashSet<String>::new(),
         };
+        res.read();
+        return res;
     }
 
     func read(self){
         if(!self.enabled) return;
+        if(!File::exists(self.path.str())) return;
+        let buf = File::read_string(self.path.str());
+        let pos = 0;
+        while(pos < buf.len()){
+            if(buf.get(pos) == '#'){
+                let end = buf.str().indexOf('\n', pos);
+                let item_path = buf.substr(pos + 1, end);
+                pos = end + 1;
+                if(buf.get(pos) == '\n'){
+                    pos += 1;
+                    continue;
+                }
+                //read desc and set
+                let map = HashMap<String, HashSet<String>>::new();
+                while(pos < buf.len()){
+                    if(buf.get(pos) == '#'){
+                        break;
+                    }
+                    let arrow = buf.str().indexOf("<-", pos);
+                    let desc = buf.substr(pos, arrow);
+                    end = buf.str().indexOf('\n', arrow);
+                    let list_str = buf.substr(arrow + 2, end - 1);
+                    let set = HashSet<String>::new();
+                    let items = list_str.split(",");
+                    for item in &items{
+                        set.insert(item.owned());
+                    }
+                    map.insert(desc.owned(), set);
+                    pos = end + 1;
+                    if(buf.get(pos) == '\n'){
+                        pos += 1;
+                        continue;
+                    }
+                }
+                self.map.insert(item_path.owned(), map);
+            }
+        }
+        //print("read={:?}\n", self.map);
     }
 
-    func depends_decl(self, file: str, decl: Decl*){
-        if(!self.enabled) return;
-        if(decl.path.eq(file)) return;
-        print("file {} -> decl {:?},{}\n", file, decl.type, decl.path);
-        let map_opt = self.map.get(&decl.path);
+    func update(self, file: str, key: String, item_path: str){
+        item_path = Path::relativize(item_path, self.config.file.str());
+        let map_opt = self.map.get_str(item_path);
         if(map_opt.is_none()){
-            self.map.insert(decl.path.clone(), HashMap<String, HashSet<String>>::new());
-            map_opt = self.map.get(&decl.path);
+            self.map.insert(item_path.owned(), HashMap<String, HashSet<String>>::new());
+            map_opt = self.map.get_str(item_path);
         }
         let map = map_opt.unwrap();
-        let key = if(decl.is_struct()){
-            format("struct {}", decl.type.name())
-        }else{
-            format("enum {}", decl.type.name())
-        };
         let list_opt = map.get(&key);
         if(list_opt.is_none()){
             map.insert(key.clone(), HashSet<String>::new());
             list_opt = map.get(&key);
         }
-        //todo set
-        list_opt.unwrap().add(file.owned());
-        self.save();
+        list_opt.unwrap().add(Path::relativize(file, self.config.file.str()).owned());
         key.drop();
+    }
+
+    func get_key(decl: Decl*): String{
+        if(decl.is_struct()){
+            format("struct {}", decl.type.name())
+        }else{
+            format("enum {}", decl.type.name())
+        }
+    }
+
+    func depends_decl(self, file: str, decl: Decl*){
+        if(!self.enabled) return;
+        if(decl.path.eq(file)) return;
+        let key = get_key(decl);
+        self.update(file, key, decl.path.str());
+        self.save();
     }
 
     func depends_decl(self, r: Resolver*, type: Type*){
@@ -61,6 +112,15 @@ impl Incremental{
             return;
         }
         self.depends_decl(r.unit.path.str(), r.get_decl(&rt).unwrap());
+    }
+
+    func depends_func(self, r: Resolver*, m: Method*){
+        if(!self.enabled) return;
+        let file = r.unit.path.str();
+        if(file.eq(m.path.str())) return;
+        let key = format("func {}", printMethod(m));
+        self.update(file, key, m.path.str());
+        self.save();
     }
 
     func save(self){
@@ -81,12 +141,16 @@ impl Incremental{
             }
             buf.append("\n");
         }
-        print("map={:?}\n", buf);
+        //print("map={:?}\n", buf);
         File::write_string(buf.str(), self.path.str());
     }
 
     //file is modified, find other files that depend on the file
-    func find_recompiles(c: Compiler*, config: CompilerConfig*, file: str, old_file: str){
+    func find_recompiles(self, c: Compiler*, file: str, old_file: str){
+        if(!self.enabled) return;
+
+
+        
         let p = Parser::from_path(file.owned());
         let unit = p.parse_unit();
         
@@ -98,18 +162,19 @@ impl Incremental{
         
         for it in &unit.items{
             match it{
-                Item::Decl(decl*)=>{
+                Item::Decl(decl*) => {
                     let old_decl = find_old_struct(&unit2, decl);
                     if(old_decl.is_some()){
                         if(compare_decl(decl, old_decl.unwrap())){
                             //scan other dependant files
-                            /*let list: List<String> = File::list(config.file.str(), Option::new(".x"), true);
-                            for other_file in &list{
-                                let r = c.ctx.create_resolver(other_file);
-                                //check other_file depends on file
-
+                            let opt = self.map.get_str(Path::relativize(file, self.config.file.str()));
+                            if(opt.is_some()){
+                                let key = get_key(decl);
+                                let list = opt.unwrap().get(&key);
+                                for rec_file in list.unwrap(){
+                                    self.recompiles.insert(rec_file.clone());
+                                }
                             }
-                            list.drop();*/
                         }
                     }
                 },
@@ -119,7 +184,7 @@ impl Incremental{
                 Item::Impl(imp*)=>{
                     //todo cmp sig and methods
                 },
-                _=>{}
+                _ => {}
             }
         }
     }

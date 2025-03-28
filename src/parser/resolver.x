@@ -1627,6 +1627,11 @@ impl Resolver{
     }
     let type = type_opt.unwrap();
     let fields = fields0.unwrap();
+    let arg_cnt = args.len();
+    if (base.is_some()) { arg_cnt -= 1; }
+    if(fields.len() != arg_cnt){
+      self.err(node, format("field count mismatch {} vs {}", arg_cnt, fields.len()));
+    }
     let field_idx = 0;
     let names = List<String>::new();
     for (let i = 0; i < args.len(); ++i) {

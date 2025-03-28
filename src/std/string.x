@@ -121,18 +121,6 @@ impl String{
       self.arr.set(pos, c);
     }
     
-    func find(self, s: str): Option<i32>{
-      return self.find(s, 0);
-    }
-    
-    func find(self, s: str, start: i32): Option<i32>{
-      let i = self.str().indexOf(s, start);
-      if(i==-1){ 
-       return Option<i32>::None; 
-      }
-      return Option::new(i);
-    }
-    
     func replace(self, s1: str, s2: str): String{
       return self.str().replace(s1, s2);
     }

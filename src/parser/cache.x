@@ -2,12 +2,14 @@ import std/hashmap
 import std/io
 import std/fs
 import parser/bridge
+import parser/incremental
 
 static use_cache: bool = true;
 
 struct Cache{
     map: HashMap<String, String>;
     file: String;
+    inc: Incremental;
 }
 
 func CACHE_FILE(out_dir: str): String{
@@ -15,10 +17,11 @@ func CACHE_FILE(out_dir: str): String{
 }
 
 impl Cache{
-    func new(out_dir: str): Cache{
+    func new(config: CompilerConfig*): Cache{
         return Cache{
             map: HashMap<String, String>::new(),
-            file: CACHE_FILE(out_dir)
+            file: CACHE_FILE(config.out_dir.str()),
+            inc: Incremental::new(config),
         };
     }
 

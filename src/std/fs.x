@@ -269,4 +269,15 @@ impl Path{
     }
     return path.substr(0, i);
   }
+
+  func relativize(path: str, parent: str): str{
+    if(path.starts_with(parent)){
+      let start = parent.len() + 1;
+      if(start < path.len() && path.get(start) == '/'){
+        start += 1;
+      }
+      return path.substr(start);
+    }
+    return path;
+  }
 }

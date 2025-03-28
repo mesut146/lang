@@ -896,6 +896,7 @@ impl Compiler{
         self.own.get().add_obj(expr, ptr_ret.unwrap(), &rt.type);
       }
       let target: Method* = self.get_resolver().get_method(&rt).unwrap();
+      self.cache.inc.depends_func(self.get_resolver(), target);
       rt.drop();
       let proto = self.protos.get().get_func(target);
       let args = vector_Value_new();
@@ -1250,7 +1251,7 @@ impl Compiler{
         self.own.get().add_obj(node, ptr, &rt.type);
         let ty = self.mapType(&rt.type);
         let decl = self.get_resolver().get_decl(&rt).unwrap();
-        self.inc.depends_decl(self.get_resolver().unit.path.str(), decl);
+        self.cache.inc.depends_decl(self.get_resolver().unit.path.str(), decl);
         
         //set base
         for(let i = 0;i < args.len();++i){

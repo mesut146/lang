@@ -139,6 +139,14 @@ impl<K, V> HashMap<K, V>{
         return self.insert(key, value);
     }
 
+    func get_str(self, s: str): Option<V*>{
+        assert(std::print_type<K>().eq("String"));
+        let key_str = s.owned();
+        let res = self.get(&key_str);
+        key_str.drop();
+        return res;
+    }
+
     func get(self, key: K*): Option<V*> {
         let hash = key.hash();
         let idx = self.get_index(hash);
@@ -146,7 +154,6 @@ impl<K, V> HashMap<K, V>{
         if(opt.is_none()){
             return Option<V*>::new();
         }
-        //print("::get() key={:?} idx={} hash={}\n", key, idx, hash);
         let node: HashNode<K, V>* = opt.get();
         if(node.key.eq(key)){
             return Option::new(&node.value);

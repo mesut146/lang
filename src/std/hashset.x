@@ -15,6 +15,9 @@ impl<T> HashSet<T>{
     func add(self, e: T): bool{
         return self.map.add(e, true).is_none();
     }
+    func insert(self, e: T): bool{
+        return self.map.insert(e, true).is_none();
+    }
     func contains(self, k: T*): bool{
         return self.map.get(k).is_some();
     }
