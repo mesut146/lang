@@ -89,7 +89,7 @@ func bootstrap(cmd: CmdArgs*){
     .set_file(format("{}/parser", &src_dir))
     .set_out(out_dir.clone())
     .add_dir(src_dir.clone());
-  config.incremental_enabled = true;
+  config.incremental_enabled = false;
   if(jobs.is_some()){
     config.set_jobs(i32::parse(jobs.get().str()));
   }
@@ -104,10 +104,16 @@ func bootstrap(cmd: CmdArgs*){
   if(is_static_llvm){
     let linker = get_linker();
     let llvm = Process::run("llvm-config-16 --link-static --libs core target aarch64 X86").read_close();
+    if(llvm.str().ends_with("\n")){
+      llvm = llvm.substr(0, llvm.len() - 1).owned();
+    }
     //print("llvm={}\n", llvm);
-    let sys = "-lrt -ldl -lm -lz -lzstd -ltinfo -lxml2";
+    //let sys = "-lstdc++ -lrt -ldl -lz -lzstd -ltinfo -lxml2";
     let bin_path = format("{}/{}-static", out_dir, name);
-    let cmd_link = format("{} -o {} {} -lstdc++ {} {} {}/cpp_bridge/build/libbridge.a -L/usr/lib/llvm-16/lib {}", linker, bin_path, bin, sys, stdlib, root, llvm);
+    let cmd_link = format("{} -o {} -lstdc++ -lm {} {} {}/cpp_bridge/build/libbridge.a -L/usr/lib/llvm-16/lib {}", linker, bin_path, bin, stdlib, root, llvm);
+    cmd_link.append(" /lib/x86_64-linux-gnu/libtinfo.a");
+    cmd_link.append(" /lib/x86_64-linux-gnu/libzstd.a");
+    cmd_link.append(" /lib/x86_64-linux-gnu/libz.a");
     //print("cmd={}\n", cmd_link);
     let proc = Process::run(cmd_link.str());
     let proc_out = proc.read_close();

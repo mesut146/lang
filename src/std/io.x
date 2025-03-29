@@ -9,13 +9,11 @@ struct Process{
 impl Process{
     func run(cmd: str): Process{
         let cs = cmd.cstr();
-        let mode = "r".cstr();
-        let fp = popen(cs.ptr(), mode.ptr());
+        let fp = popen(cs.ptr(), "r".ptr());
         if(is_null(fp)){
             panic("failed to run {}", cmd);
         }
         cs.drop();
-        mode.drop();
         return Process{fp: fp};
     }
     func read_str(self): String{

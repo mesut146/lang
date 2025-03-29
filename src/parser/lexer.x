@@ -5,6 +5,69 @@ import std/libc
 import std/io
 import std/fs
 
+static lexer_keywords = make_keywords();
+static lexer_ops = HashMap<str, TokenType>::new();
+
+func make_keywords(): HashMap<str, TokenType>{
+  let map = HashMap<str, TokenType>::new(55);
+  map.insert("as", TokenType::AS);
+  map.insert("is", TokenType::IS);
+  map.insert("bool", TokenType::BOOLEAN);
+  map.insert("const",  TokenType::CONST);
+  map.insert("continue", TokenType::CONTINUE);
+  map.insert("enum", TokenType::ENUM);
+  map.insert("extern", TokenType::EXTERN);
+  map.insert("false", TokenType::FALSE);
+  map.insert("impl", TokenType::IMPL);
+  map.insert("import", TokenType::IMPORT);
+  map.insert("i8", TokenType::I8);
+  map.insert("i16", TokenType::I16);
+  map.insert("i32", TokenType::I32);
+  map.insert("i64", TokenType::I64);
+  map.insert("f32", TokenType::F32);
+  map.insert("f64", TokenType::F64);
+  map.insert("null", TokenType::NULL_LIT);
+  map.insert("return", TokenType::RETURN);
+  map.insert("true", TokenType::TRUE);
+  map.insert("if", TokenType::IF);
+  map.insert("else", TokenType::ELSE);
+  map.insert("for", TokenType::FOR);
+  map.insert("while", TokenType::WHILE);
+  map.insert("break", TokenType::BREAK);
+  map.insert("match", TokenType::MATCH);
+  map.insert("let", TokenType::LET);
+  map.insert("const", TokenType::CONST);
+  map.insert("true",  TokenType::TRUE);
+  map.insert("false",  TokenType::FALSE);
+  map.insert("i8",  TokenType::I8);
+  map.insert("i16",  TokenType::I16);
+  map.insert("i32",  TokenType::I32);
+  map.insert("i64",  TokenType::I64);
+  map.insert("f32",  TokenType::F32);
+  map.insert("f64",  TokenType::F64);
+  map.insert("null",  TokenType::NULL_LIT);
+  map.insert("as",  TokenType::AS);
+  map.insert("is",  TokenType::IS);
+  map.insert("return",  TokenType::RETURN);
+  map.insert("continue",  TokenType::CONTINUE);
+  map.insert("if",  TokenType::IF);
+  map.insert("else",  TokenType::ELSE);
+  map.insert("for",  TokenType::FOR);
+  map.insert("while",  TokenType::WHILE);
+  map.insert("do",  TokenType::DO);
+  map.insert("break",  TokenType::BREAK);
+  map.insert("func",  TokenType::FUNC);
+  map.insert("let",  TokenType::LET);
+  map.insert("new",  TokenType::NEW);
+  map.insert("match",  TokenType::MATCH);
+  map.insert("static", TokenType::STATIC);
+  map.insert("struct", TokenType::STRUCT);
+  map.insert("trait", TokenType::TRAIT);
+  map.insert("type", TokenType::TYPE);
+  map.insert("virtual", TokenType::VIRTUAL);
+  return map;
+}
+
 struct Lexer{
   path: String;
   buf: String;
@@ -12,8 +75,6 @@ struct Lexer{
   line: i32;
   single_line: i32;//macro code is single lined
 }
-
-static lexer_ops = HashMap<str, TokenType>::new();
 
 impl i8{
   func in(self, a: i32, b: i32): bool{ return *self <= b && *self >= a; }
@@ -159,7 +220,9 @@ impl Lexer{
   }
   
   func kw(s: str): TokenType{
-    if(s.eq("struct")) return TokenType::STRUCT;
+    let opt = lexer_keywords.get(&s);
+    if(opt.is_some()) return *opt.unwrap();
+    /*if(s.eq("struct")) return TokenType::STRUCT;
     if(s.eq("enum")) return TokenType::ENUM;
     if(s.eq("trait")) return TokenType::TRAIT;
     if(s.eq("impl")) return TokenType::IMPL;
@@ -192,7 +255,7 @@ impl Lexer{
     if(s.eq("let")) return TokenType::LET;
     if(s.eq("new")) return TokenType::NEW;
     if(s.eq("match")) return TokenType::MATCH;
-    if(s.eq("const")) return TokenType::CONST;
+    if(s.eq("const")) return TokenType::CONST;*/
     return TokenType::EOF_;
   }
   

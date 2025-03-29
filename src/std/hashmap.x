@@ -15,13 +15,18 @@ func default_cap(): i64{
 
 impl<K, V> HashMap<K, V>{
     func new(): HashMap<K, V> {
+        return HashMap<K, V>::new(default_cap());
+    }
+
+    func new(cap: i64): HashMap<K, V> {
         let res = HashMap<K, V> {
-            buckets: List<Option<HashNode<K, V>>>::new(default_cap()),
+            buckets: List<Option<HashNode<K, V>>>::new(cap),
             count: 0,
         };
-        res.init(default_cap());
+        res.init(cap);
         return res;
     }
+
     func init(self, len: i64){
         for(let i = 0;i < len;++i){
             self.buckets.add(Option<HashNode<K, V>>::new());

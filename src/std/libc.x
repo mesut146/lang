@@ -13,6 +13,17 @@ type pthread_attr_t = c_void;
 type pthread_mutexattr_t = c_void;
 type suseconds_t = i32;
 
+type dev_t = i64;
+type mode_t = i64;
+type nlink_t = i64;
+type uid_t = i32;
+type gid_t = i32;
+type dev_t = i64;
+type off_t = i64;
+type blksize_t = i64;
+type blkcnt_t = i64;
+type time_t = i64;
+
 const O_RDONLY: i32 = 0;
 const O_WRONLY: i32 = 1;
 const O_RDWR: i32 = 2;
@@ -64,6 +75,7 @@ func is_null<T>(ptr: T*): bool{
 
 func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }
+//func SEEK_CUR(): i32 { return 0; }
 
 func getenv2(name: str): Option<str>{
   let c_name = CStr::new(name);
@@ -93,7 +105,7 @@ extern{
   func open(name: i8*, flags: i32, mode: i32): i32;
   func fclose(file: FILE*): i32;
   //func fflush(file: FILE*): i32;
-  func fwrite(buf: i8*, size: i32, count: i32, target: FILE*): i32;
+  func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: FILE*): i32;
   func fread(buf: i8*, size: i32, count: i32, target: FILE*): i32;
   func fgets(s: i8*, size: i32, file: FILE*): i8*;
   func fseek(file: FILE*, offset: i64, origin: i32): i32;
@@ -133,6 +145,8 @@ extern{
   func pclose(fp: FILE*): i32;
   
   func gettimeofday(tv: timeval*, timezone: i8*): i32;
+
+  func strcmp(s1: i8*, s2: i8*): i32;
 }
 
 /*struct time{
@@ -154,17 +168,6 @@ func make_pthread_mutex_t(): pthread_mutex_t{
   let m: pthread_mutex_t = pthread_mutex_t{data: [0i8; 40]};
   return m;
 }
-
-type dev_t = i64;
-type mode_t = i64;
-type nlink_t = i64;
-type uid_t = i32;
-type gid_t = i32;
-type dev_t = i64;
-type off_t = i64;
-type blksize_t = i64;
-type blkcnt_t = i64;
-type time_t = i64;
 
 #derive(Debug)
 struct timespec{

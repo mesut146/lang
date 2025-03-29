@@ -292,7 +292,7 @@ impl Compiler{
                 return self.visit_lit(&cn.rhs, lit);
               },
               _ => {
-                panic("todo const rhs {:?}", cn.rhs);
+                panic("todo const lit rhs {:?}", cn.rhs);
               }
             }
           },

@@ -6,24 +6,28 @@ func file_name(): str{
   return "./test.txt";
 }
 
-func read_test(){
-  let path = file_name();
-  let str = File::read_string(path);
-  assert(str.len() == 5);
-  assert(str.eq("hello"));
-  str.drop();
+func read_write(){
+  let file_name = file_name();
+  let fp = fopen(file_name.ptr(), "w+".ptr());
+  if(is_null(fp)){
+    panic("Error opening file '{}'\n", file_name);
+  }
+  let s = "hello";
+  fwrite(s.ptr(), 1, 5, fp);
+  seek_test(fp, 5);
+  let buf = [0i8; 5];
+  let read_cnt = fread(buf.ptr(), 1, 5, fp);
+  assert(read_cnt == 5);
+  assert(strcmp(buf.ptr(), s.ptr()) == 0);
+
+  fclose(fp);
+  remove(file_name.ptr());
 }
 
-func seek_test(f: FILE*){
+func seek_test(f: FILE*, len: i32){
   fseek(f, 0, SEEK_END());
-  print("tell={}\n", ftell(f));
-}
-
-func write_test(){
-  let str = String::new("hello");
-  let path = file_name();
-  File::write_bytes(str.slice(), path);
-  str.drop();
+  assert(ftell(f) == len);
+  fseek(f, 0, SEEK_SET());
 }
 
 func list_test(){
@@ -63,11 +67,10 @@ func main(){
   parse_float();
   let cur = File::resolve(".");
   print("pwd = {}\n", cur);
-  cur.drop();
-  write_test();
-  read_test();
+  read_write();
   list_test();
   time_test();
   measure();
   print("libc_test done\n");
+  cur.drop();
 }
