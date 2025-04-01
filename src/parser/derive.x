@@ -372,12 +372,10 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         return;
     }
     let fmt_var_name = format("f_{}", node.id);
-    //..let f = Fmt::new();
     let var_stmt = parse_stmt(format("let {} = Fmt::new();", &fmt_var_name), &r.unit, line);
     block.list.add(var_stmt);
     let pos = 0;
     let arg_idx = 1;//skip fmt_str
-    //todo {name}
     while(pos < fmt_str.len()){
         let br_pos = fmt_str.indexOf("{", pos);
         if(br_pos == -1){
@@ -388,15 +386,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             sub2.drop();
             break;
         }
-        if(fmt_str.get(br_pos+1) != ':' && fmt_str.get(br_pos+1) != '}'){
-            let sub = fmt_str.substr(pos, br_pos + 1);
-            let sub2 = normalize_quotes(sub);
-            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
-            block.list.add(st);
-            pos = br_pos + 1;
-            sub2.drop();
-            continue;
-        }
         if(br_pos > pos){
             let sub = fmt_str.substr(pos, br_pos);
             let sub2 = normalize_quotes(sub);
@@ -404,45 +393,59 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             sub2.drop();
             block.list.add(st);
         }
-        let arg = mc.args.get(arg_idx);
-        let argt = r.visit(arg);
-        if(fmt_str.get(br_pos+1)=='}'){
-            //Display
+        if(fmt_str.get(br_pos + 1) == '{'){
+            let st = parse_stmt(format("{}.print(\"{{\");", &fmt_var_name), &r.unit, line);
+            block.list.add(st);
+            pos = br_pos + 2;
+            continue;
+        }
+        let br_end = fmt_str.indexOf("}", br_pos);
+        if(br_end == -1){
+            r.err(node, "invalid format no closing }");
+        }
+        let debug = false;
+        let func_name = "Display::fmt";
+        if(fmt_str.starts_with("{:?", br_pos)){
+            debug = true;
+            func_name = "Debug::debug";
+            pos = br_pos + 3;
+        }else{
+            pos = br_pos + 1;
+        }
+        if(pos < br_end){
+            //named arg
+            let arg_str = fmt_str.substr(pos, br_end);
+            let expr = parse_expr(arg_str.owned(), &r.unit, line);
+            let arg_rt = r.visit(&expr);
+            if(is_struct(&arg_rt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            arg_rt.drop();
+            expr.drop();
+        }else{
+            if(arg_idx >= mc.args.len()){
+                r.err(node, "format specifier not matched");
+            }
+            let arg = mc.args.get(arg_idx);
+            let argt = r.visit(arg);
             if(is_struct(&argt.type)){
                 //coerce automatically
-                let dbg_st = parse_stmt(format("Display::fmt(&{:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
                 block.list.add(dbg_st);
             }else{
-                let dbg_st = parse_stmt(format("Display::fmt({:?}, &{});", arg, fmt_var_name), &r.unit, line);
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
                 block.list.add(dbg_st);
             }
-            pos = br_pos + 2;
-        }else if(fmt_str.get(br_pos+1)==':'){
-            if(fmt_str.get(br_pos + 2) != '?'){
-                r.err(node, "invalid format expecting ques(?)");
-            }
-            if(fmt_str.get(br_pos + 3) != '}'){
-                r.err(node, "invalid format no closing }");
-            }
-            //Debug
-            //..<arg>.debug(&f);
-            if(is_struct(&argt.type)){
-                let dbg_st = parse_stmt(format("Debug::debug(&{:?}, &{});", arg, fmt_var_name), &r.unit, line);
-                block.list.add(dbg_st);
-            }else{
-                let dbg_st = parse_stmt(format("Debug::debug({:?}, &{});", arg, fmt_var_name), &r.unit, line);
-                block.list.add(dbg_st);
-            }
-            //{:?}
-            pos = br_pos + 4;
-        }else{
-            r.err(node, format("invalid format '{}'", fmt_str.get(br_pos+1)));
+            ++arg_idx;
+            argt.drop();
         }
-        if(!(arg_idx < mc.args.len())){
-            r.err(node, "format specifier not matched");
-        }
-        ++arg_idx;
-        argt.drop();
+        pos = br_end + 1;
+        // argt.drop();
     }
     if(arg_idx < mc.args.len()){
         r.err(node, format("format arg not matched in specifier {:?}", mc.args.get(arg_idx)));
@@ -455,7 +458,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
         r.visit_block(block);
-        r.format_map.add(node.id, info);
     }else if(Resolver::is_panic(mc)){
         //.."<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
@@ -471,20 +473,16 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
         //..print("block={}\n", block);
         r.visit_block(block);
-        r.format_map.add(node.id, info);
     }else if(Resolver::is_format(mc)){
         //..f.unwrap()
-        let unwrap_mc = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
-        info.unwrap_mc = Option::new(unwrap_mc);
-        r.visit_block(block);
-        let tmp = r.visit(info.unwrap_mc.get());
+        let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
+        block.return_expr.set(unwrap_expr);
+        let tmp = r.visit_block(block);
         tmp.drop();
-        r.format_map.add(node.id, info);
     }else{
-        info.drop();
         r.err(node, "generate_format");
     }
-    //print("block={:?}\n", block);
+    r.format_map.add(node.id, info);
     fmt_var_name.drop();
 }
 
@@ -540,7 +538,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let arg_norm: String = normalize_quotes(arg_str.str());
     let method_sig = printMethod(r.curMethod.unwrap());
     //let str = format("if(!({:?})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
-    let fm = Fmt::new(format("if(!({:?})){\n", arg));
+    let fm = Fmt::new(format("if(!({:?})){{\n", arg));
     fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.curMethod.unwrap().path, node.line, arg_norm, method_sig));
     fm.print("exit(1);\n}");
     let str = fm.unwrap();

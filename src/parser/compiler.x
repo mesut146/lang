@@ -218,10 +218,16 @@ impl llvm_holder{
     // InitializeAllAsmPrinters();
 
     llvm_InitializeX86TargetInfo();
-    llvm_LLVMInitializeX86Target();
+    llvm_InitializeX86Target();
     llvm_InitializeX86TargetMC();
     llvm_InitializeX86AsmParser();
     llvm_InitializeX86AsmPrinter();
+
+    llvm_InitializeAArch64TargetInfo();
+    llvm_InitializeAArch64Target();
+    llvm_InitializeAArch64TargetMC();
+    llvm_InitializeAArch64AsmParser();
+    llvm_InitializeAArch64AsmPrinter();
   }
 
   func new(): llvm_holder{

@@ -1037,7 +1037,7 @@ impl Parser{
         let args = self.exprList(TokenType::RPAREN);
         self.consume(TokenType::RPAREN);
         return Expr::MacroCall{.n, MacroCall{name: nm, args: args}};
-      }else if(self.isTypeArg(self.pos) != -1){
+      }else if(self.has() && self.isTypeArg(self.pos) != -1){
         let g = self.generics();
         if(self.is(TokenType::LPAREN)){
           return self.call(nm, g);

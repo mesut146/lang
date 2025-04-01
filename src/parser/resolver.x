@@ -135,11 +135,10 @@ impl Clone for VarHolder{
 
 struct FormatInfo {
   block: Block;
-  unwrap_mc: Option<Expr>;
 }
 impl FormatInfo{
   func new(line: i32): FormatInfo{
-    return FormatInfo{block: Block::new(line, line), unwrap_mc: Option<Expr>::new()};
+    return FormatInfo{block: Block::new(line, line)};
   }
 }
 
@@ -2028,26 +2027,25 @@ impl Resolver{
     let arg_val = is_str_lit(arg).unwrap();
     let opt = getenv2(arg_val.str());
     let info = FormatInfo::new(node.line);
-    if(opt.is_some()){
-      let str = format("Option::new(\"{}\")", opt.get());
-      let tmp = parse_expr(str, &self.unit, node.line);
-      info.unwrap_mc = Option::new(tmp);
+    let str = if(opt.is_some()){
+      format("Option::new(\"{}\")", opt.get())
     }else{
-      let str = "Option<str>::new()".str();
-      let tmp = parse_expr(str, &self.unit, node.line);
-      info.unwrap_mc = Option::new(tmp);
-    }
-    //print("{}=>{}\n", node, info.unwrap_mc.get());
-    let rt = self.visit(info.unwrap_mc.get());
+        "Option<str>::new()".str()
+    };
+    let tmp = parse_expr(str, &self.unit, node.line);
+    info.block.return_expr.set(tmp);
+    let rt = self.visit_block(&info.block);
     rt.drop();
     self.format_map.add(node.id, info);
   }
+
   func handle_type_print(self, node: Expr*, mc: Call*){
-    let info = FormatInfo::new(node.line);
+    //std::print_type<T>()
     let ta = mc.type_args.get(0);
     let tmp = parse_expr(format("\"{:?}\"", ta), &self.unit, node.line);
-    info.unwrap_mc = Option::new(tmp);
-    let rt = self.visit(info.unwrap_mc.get());
+    let info = FormatInfo::new(node.line);
+    info.block.return_expr.set(tmp);
+    let rt = self.visit_block(&info.block);
     rt.drop();
     self.format_map.add(node.id, info);
   }

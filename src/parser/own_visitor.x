@@ -99,7 +99,7 @@ impl OwnVisitor{
         if(Resolver::is_format(mc)){
             let info = self.get_resolver().format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);
-            self.do_move(info.unwrap_mc.get());
+            self.do_move(info.block.return_expr.get());
             return;
         }
         let rt = self.get_resolver().visit(expr);

@@ -197,7 +197,7 @@ impl AllocHelper{
     if(Resolver::is_call(call, "std", "print_type")){
       let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
-      self.visit(info.unwrap_mc.get());
+      self.visit(&info.block);
       let res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
       return res;
@@ -205,7 +205,7 @@ impl AllocHelper{
     if(Resolver::is_call(call, "std", "env")){
       let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
-      self.visit(info.unwrap_mc.get());
+      self.visit(&info.block);
       let res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
       return res;
@@ -224,7 +224,7 @@ impl AllocHelper{
       let info = resolver.get_macro(node);
       self.visit(&info.block);
       let str_ty = Type::new("String");
-      let res = Option::new(self.alloc_ty(&str_ty, info.unwrap_mc.get()));
+      let res = Option::new(self.alloc_ty(&str_ty, info.block.return_expr.get()));
       str_ty.drop();
       return res;
     }

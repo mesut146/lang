@@ -69,10 +69,15 @@ extern{
     func lookupTarget(triple: i8*): Target*;
     func createTargetMachine(triple: i8*): TargetMachine*;
     func llvm_InitializeX86TargetInfo();
-    func llvm_LLVMInitializeX86Target();
+    func llvm_InitializeX86Target();
     func llvm_InitializeX86TargetMC();
     func llvm_InitializeX86AsmParser();
     func llvm_InitializeX86AsmPrinter();
+    func llvm_InitializeAArch64TargetInfo();
+    func llvm_InitializeAArch64Target();
+    func llvm_InitializeAArch64TargetMC();
+    func llvm_InitializeAArch64AsmParser();
+    func llvm_InitializeAArch64AsmPrinter();
 
     func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
     func make_ctx(): LLVMContext*;

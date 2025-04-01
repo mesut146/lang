@@ -406,14 +406,17 @@ impl Lexer{
   }
   
   func read_ident(self): Token {
-    let a = self.pos;
-    self.pos+= 1;
-    let c = self.peek();
-    while (c.is_letter() || c == '_' || c.is_digit()) {
-        self.pos+=1;
-        c = self.peek();
+    let start = self.pos;
+    self.pos += 1;
+    while (self.has()) {
+      let c = self.peek();
+      if(c.is_letter() || c == '_' || c.is_digit()){
+        self.pos += 1;
+      }else{
+        break;
+      }
     }
-    let s = self.str(a, self.pos);
+    let s = self.str(start, self.pos);
     let type = kw(s);
     if (type is TokenType::EOF_) {
         type = TokenType::IDENT;

@@ -229,13 +229,11 @@ impl Parent{
     panic("as_impl");
   }
   func get_type(self): Type*{
-    if let Parent::Trait(type*)=(self){
-      return type;
+    match self{
+      Parent::Impl(info*) => return &info.type,
+      Parent::Trait(type*) => return type,
+      _ => panic("get_type"),
     }
-    if let Parent::Impl(info*)=(self){
-      return &info.type;
-    }
-    panic("get_type");
   }
   func clone(self): Parent{
     match self{
@@ -244,19 +242,6 @@ impl Parent{
       Parent::Trait(type*) => return Parent::Trait{type.clone()},
       Parent::Extern => return Parent::Extern,
     }
-    /*if let Parent::None=(self){
-      return Parent::None;
-    }
-    if let Parent::Impl(info*)=(self){
-      return Parent::Impl{info.clone()};
-    }
-    if let Parent::Trait(type*)=(self){
-      return Parent::Trait{type.clone()};
-    }
-    if let Parent::Extern=(self){
-      return Parent::Extern;
-    }
-    panic("Parent::clone");*/
   }
 }
 

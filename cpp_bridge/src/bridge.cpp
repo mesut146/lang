@@ -76,19 +76,20 @@ int getDefaultTargetTriple(char *ptr) {
 }
 
 //void InitializeAllTargets() { llvm::InitializeAllTargets(); }
-void llvm_LLVMInitializeX86Target() { LLVMInitializeX86Target(); }
-
 //void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
-void llvm_InitializeX86TargetInfo() { LLVMInitializeX86TargetInfo(); }
-
 //void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
-void llvm_InitializeX86TargetMC() { LLVMInitializeX86TargetMC(); }
-
 //void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
-void llvm_InitializeX86AsmParser() { LLVMInitializeX86AsmParser(); }
-
 //void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
+void llvm_InitializeX86Target() { LLVMInitializeX86Target(); }
+void llvm_InitializeX86TargetInfo() { LLVMInitializeX86TargetInfo(); }
+void llvm_InitializeX86TargetMC() { LLVMInitializeX86TargetMC(); }
+void llvm_InitializeX86AsmParser() { LLVMInitializeX86AsmParser(); }
 void llvm_InitializeX86AsmPrinter() { LLVMInitializeX86AsmPrinter(); }
+void llvm_InitializeAArch64Target() { LLVMInitializeAArch64Target(); }
+void llvm_InitializeAArch64TargetInfo() { LLVMInitializeAArch64TargetInfo(); }
+void llvm_InitializeAArch64TargetMC() { LLVMInitializeAArch64TargetMC(); }
+void llvm_InitializeAArch64AsmParser() { LLVMInitializeAArch64AsmParser(); }
+void llvm_InitializeAArch64AsmPrinter() { LLVMInitializeAArch64AsmPrinter(); }
 
 const llvm::Target *lookupTarget(const char *triple) {
   std::string TargetTriple(triple);

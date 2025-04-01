@@ -138,7 +138,7 @@ func is_main(m: Method*): bool{
 }
 
 
-func demangle(input: str): String{
+/*func demangle(input: str): String{
     let res = Fmt::new();
     let s = input.replace("$LT", "<");
     assign_eq(&s, s.replace("$GT", ">"));
@@ -147,7 +147,7 @@ func demangle(input: str): String{
     res.print(&s);
     s.drop();
     return res.unwrap();
-}
+}*/
 
 func mangleType(type: Type*): String{
   let s = type.print();

@@ -8,7 +8,7 @@ struct String{
 
 impl String{
     func dump(self){
-      print("String{len: {}, \"", self.len());
+      print("String{{len: {}, \"", self.len());
       self.print();
       print("\"}\n");
     }

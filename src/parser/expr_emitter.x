@@ -643,13 +643,9 @@ impl Compiler{
         ty.drop();
         return res;
       }
-      if(Resolver::is_call(mc, "std", "print_type")){
+      if(Resolver::is_call(mc, "std", "print_type") || Resolver::is_call(mc, "std", "env")){
         let info = resolver.format_map.get(&expr.id).unwrap();
-        return self.visit(info.unwrap_mc.get());
-      }
-      if(Resolver::is_call(mc, "std", "env")){
-        let info = resolver.format_map.get(&expr.id).unwrap();
-        return self.visit(info.unwrap_mc.get());
+        return self.visit_block(&info.block).unwrap();
       }
       if(Resolver::is_drop_call(mc)){
         //print("drop_call {} line: {}\n", expr, expr.line);
@@ -708,10 +704,9 @@ impl Compiler{
       }
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
-        self.visit_block(&info.block);
-        let res = self.visit(info.unwrap_mc.get());
-        self.own.get().do_move(info.unwrap_mc.get());
-        return res;
+        let res = self.visit_block(&info.block);
+        self.own.get().do_move(info.block.return_expr.get());
+        return res.unwrap();
       }
       if(Resolver::is_assert(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();

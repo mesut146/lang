@@ -64,11 +64,11 @@ impl str{
     }
 
     func starts_with(self, s: str): bool{
-      return self.indexOf(s, 0) == 0;
+      return self.starts_with(s, 0);
     }
 
     func starts_with(self, s: str, pos: i32): bool{
-      return self.indexOf(s, pos) == 0;
+      return self.indexOf(s, pos) == pos;
     }
     
     func ends_with(self, s: str): bool{
@@ -116,12 +116,9 @@ impl str{
       if(off < 0) panic("str::indexof off<0, {}", off);
       if((s.len() - off) > self.len()) return -1;
       //if(off == self.len()) return -1;
-      //self.check(off);
       let i = off;
       while (i < self.len()){
         //check first char
-        //is_valid(self.buf[i]);
-        //is_valid(s.buf[0]);
         if(self.buf[i] != s.buf[0]){
           ++i;
           continue;
@@ -129,8 +126,6 @@ impl str{
         //check rest
         let found = true;
         for(let j = 1;j < s.len() && (i + j) < self.len();++j){
-          //is_valid(self.buf[i + j]);
-          //is_valid(s.buf[j]);
           if(self.buf[i + j] != s.buf[j]){
             found = false;
             break;
