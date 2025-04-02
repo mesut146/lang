@@ -40,7 +40,7 @@ impl Progress{
             let parr = prog_map.pairs();
             parr.sort();
             for p in &parr{
-                print("{:?}=>{:?}\n\n", p.a, p.b);
+                print("{:?}=>{:?}\n", p.b, p.a);
             }
             parr.drop();
             prog_map.clear();
@@ -56,12 +56,13 @@ impl Progress{
         let beg = self.begin.unwrap();
         let end = gettime();
         let s = printMethod(m);
-        let sec = end.sec(&beg);
-        if(progress_print) print("resolve end {:?} time={}\n", s, sec);
+        let sec = end.ms(&beg) as i32;
+        if(progress_print) print("resolve end {:?} time={}ms\n", s, sec);
         if(prog_print_freq){
             let nm = "".owned();
             if let Parent::Impl(inf*)= (&m.parent){
-                nm.append(inf.type.name());
+                //nm.append(inf.type.name());
+                nm.append(inf.type.print());
                 nm.append("::");
             }
             nm.append(&m.name);

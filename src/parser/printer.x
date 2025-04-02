@@ -605,7 +605,7 @@ impl Debug for Expr{
       if(print_cst) f.print("Expr::Match{");
       me.get().debug(f);
     }else if let Expr::MacroCall(mc*)=(self){
-      panic("Expr::debug macro {}", self.line);
+      Debug::debug(mc, f); 
     }else if let Expr::Lambda(lc*)=(self){
         f.print("|");
         f.print("|");
@@ -700,6 +700,19 @@ impl Debug for IfLet{
       f.print("else ");
       self.else_stmt.get().debug(f);
     }
+  }
+}
+
+impl Debug for MacroCall{
+  func debug(self, f: Fmt*){
+    if(self.scope.is_some()){
+      Debug::debug(self.scope.get(), f);
+      f.print("::");
+    }
+    f.print(&self.name);
+    f.print("!(");
+    join(f, &self.args, ", ");
+    f.print(")");
   }
 }
 

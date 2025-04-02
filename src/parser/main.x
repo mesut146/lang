@@ -81,7 +81,8 @@ func bootstrap(cmd: CmdArgs*){
   else if(is_static){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }else{
-    let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm /usr/lib/llvm-16/lib/libLLVM.so", &stdlib, &root);
+    let libdir = getenv2("libdir").unwrap_or("/usr/lib/llvm-16/lib");
+    let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm {}/libLLVM.so", &stdlib, &root, libdir);
     config.set_link(LinkType::Binary{name.owned(), args, false});
   }
   
@@ -95,10 +96,11 @@ func bootstrap(cmd: CmdArgs*){
   }
   config.root_dir.set(root.clone());
   if(sng.is_some()){
-      config.set_file(format("{}/parser/{}", &src_dir, sng.get()));
-      Compiler::compile_single(config);
-      sng.drop();
-      return;
+    config.set_link(LinkType::None);
+    config.set_file(format("{}/parser/{}", &src_dir, sng.get()));
+    Compiler::compile_single(config);
+    sng.drop();
+    return;
   }
   let bin = Compiler::compile_dir(config);
   if(is_static_llvm){

@@ -296,7 +296,7 @@ impl Compiler{
               }
             }
           },
-          _=>{
+          _ => {
             panic("todo const rhs {:?}", cn.rhs);
           }
         }
@@ -474,13 +474,13 @@ impl Compiler{
       let ty = type.deref_ptr();
       let src = self.get_obj_ptr(node.arr.get());
       if(ty.is_array()){
-          //regular array access
-          let i1 = makeInt(0, 64) as Value*;
-          let i2 = self.cast(node.idx.get(), &i64t);
-          let res = gep_arr(self.mapType(ty), src, i1, i2);
-          type.drop();
-          i64t.drop();
-          return res;
+        //regular array access
+        let i1 = makeInt(0, 64) as Value*;
+        let i2 = self.cast(node.idx.get(), &i64t);
+        let res = gep_arr(self.mapType(ty), src, i1, i2);
+        type.drop();
+        i64t.drop();
+        return res;
       }
       
       //slice access
@@ -593,13 +593,77 @@ impl Compiler{
     func is_drop_call2(mc: Call*): bool{
       return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
     }
+
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
-        let info = resolver.format_map.get(&expr.id).unwrap();
-        let res = self.visit_block(&info.block);
+        if(Resolver::is_call(mc, "ptr", "deref")){
+          let arg_ptr = self.get_obj_ptr(mc.args.get(0));
+          let type = self.getType(expr);
+          if (!is_struct(&type)) {
+              let res = CreateLoad(self.mapType(&type), arg_ptr);
+              type.drop();
+              return res;
+          }
+          type.drop();
+          return arg_ptr;
+        }
+        if(Resolver::is_call(mc, "ptr", "get")){
+          let elem_type = self.getType(expr);
+          let src = self.get_obj_ptr(mc.args.get(0));
+          let idx = self.loadPrim(mc.args.get(1));
+          let res = gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
+          elem_type.drop();
+          return res;
+        }
+        if(Resolver::is_call(mc, "ptr", "copy")){
+          //ptr::copy(src_ptr, src_idx, elem)
+          let src_ptr = self.get_obj_ptr(mc.args.get(0));
+          let i64_ty = Type::new("i64");
+          let idx = self.cast(mc.args.get(1), &i64_ty);
+          i64_ty.drop();
+          let val = self.visit(mc.args.get(2));
+          let elem_type: Type = self.getType(mc.args.get(2));
+          let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
+          self.copy(trg_ptr, val, &elem_type);
+          elem_type.drop();
+          return getVoidTy() as Value*;
+        }
+        if(Resolver::is_call(mc, "std", "unreachable")){
+          CreateUnreachable();
+          return getVoidTy() as Value*;
+        }
+        if(Resolver::is_call(mc, "std", "internal_block")){
+          let arg = mc.args.get(0).print();
+          let id = i32::parse(arg.str());
+          let blk: Block* = *resolver.block_map.get(&id).unwrap();
+          self.visit_block(blk);
+          arg.drop();
+          return getVoidTy() as Value*;
+        }
+        if(Resolver::is_call(mc, "std", "typeof")){
+          let arg = mc.args.get(0);
+          let ty = self.getType(arg);
+          let str = ty.print();
+          let ptr = self.get_alloc(expr);
+          let res = self.str_lit(str.str(), ptr);
+          str.drop();
+          ty.drop();
+          return res;
+        }
+        if(Resolver::is_call(mc, "std", "no_drop")){
+          let arg = mc.args.get(0);
+          self.own.get().do_move(arg);
+          return getVoidTy() as Value*;
+        }
+        let info = resolver.format_map.get(&expr.id);
+        if(info.is_none()){
+          resolver.err(expr, "internal err no macro");
+        }
+        let res = self.visit_block(&info.unwrap().block);
         if(res.is_some()) return res.unwrap();
         return getVoidTy() as Value*;
     }
+
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let env = getenv2("ignore_drop");
@@ -616,21 +680,54 @@ impl Compiler{
         }
         list.drop();
       }
+      if(Resolver::is_call(mc, "std", "no_drop")){
+        let arg = mc.args.get(0);
+        self.own.get().do_move(arg);
+        return getVoidTy() as Value*;
+      }
+      //////////////////////////////////////
+      if(Resolver::is_call(mc, "ptr", "deref")){
+        let arg_ptr = self.get_obj_ptr(mc.args.get(0));
+        let type = self.getType(expr);
+        if (!is_struct(&type)) {
+            let res = CreateLoad(self.mapType(&type), arg_ptr);
+            type.drop();
+            return res;
+        }
+        type.drop();
+        return arg_ptr;
+      }
+      if(Resolver::is_call(mc, "ptr", "get")){
+        let elem_type = self.getType(expr);
+        let src = self.get_obj_ptr(mc.args.get(0));
+        let idx = self.loadPrim(mc.args.get(1));
+        let res = gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
+        elem_type.drop();
+        return res;
+      }
+      if(Resolver::is_call(mc, "ptr", "copy")){
+        //ptr::copy(src_ptr, src_idx, elem)
+        let src_ptr = self.get_obj_ptr(mc.args.get(0));
+        let i64_ty = Type::new("i64");
+        let idx = self.cast(mc.args.get(1), &i64_ty);
+        i64_ty.drop();
+        let val = self.visit(mc.args.get(2));
+        let elem_type: Type = self.getType(mc.args.get(2));
+        let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
+        self.copy(trg_ptr, val, &elem_type);
+        elem_type.drop();
+        return getVoidTy() as Value*;
+      }
+      if(Resolver::is_call(mc, "std", "unreachable")){
+        CreateUnreachable();
+        return getVoidTy() as Value*;
+      }
       if(Resolver::is_call(mc, "std", "internal_block")){
         let arg = mc.args.get(0).print();
         let id = i32::parse(arg.str());
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit_block(blk);
         arg.drop();
-        return getVoidTy() as Value*;
-      }
-      if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
-        let info = resolver.format_map.get(&expr.id).unwrap();
-        self.visit_block(&info.block);
-        return getVoidTy() as Value*;
-      }
-      if(Resolver::is_call(mc, "std", "unreachable")){
-        CreateUnreachable();
         return getVoidTy() as Value*;
       }
       if(Resolver::is_call(mc, "std", "typeof")){
@@ -643,7 +740,26 @@ impl Compiler{
         ty.drop();
         return res;
       }
-      if(Resolver::is_call(mc, "std", "print_type") || Resolver::is_call(mc, "std", "env")){
+      if(Resolver::is_call(mc, "std", "no_drop")){
+        let arg = mc.args.get(0);
+        self.own.get().do_move(arg);
+        return getVoidTy() as Value*;
+      }
+      /// /////////////////////////////
+      let mac = resolver.format_map.get(&expr.id);
+      if(mac.is_some()){
+        let res = self.visit_block(&mac.unwrap().block);
+        if(res.is_some()){
+          return res.unwrap();
+        }
+        return getVoidTy() as Value*;
+      }
+      if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
+        let info = resolver.format_map.get(&expr.id).unwrap();
+        self.visit_block(&info.block);
+        return getVoidTy() as Value*;
+      }
+      if(Resolver::is_call(mc, "std", "print_type")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         return self.visit_block(&info.block).unwrap();
       }
@@ -661,11 +777,7 @@ impl Compiler{
         }
         argt.drop();
       }
-      if(Resolver::is_std_no_drop(mc)){
-        let arg = mc.args.get(0);
-        self.own.get().do_move(arg);
-        return getVoidTy() as Value*;
-      }
+
       if(Resolver::std_size(mc)){
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get(0));
@@ -731,38 +843,6 @@ impl Compiler{
       if(Resolver::is_ptr_null(mc)){
         let ty = self.mapType(mc.type_args.get(0));
         return ConstantPointerNull_get(getPointerTo(ty));
-      }
-      if(Resolver::is_ptr_deref(mc)){
-        let arg_ptr = self.get_obj_ptr(mc.args.get(0));
-        let type = self.getType(expr);
-        if (!is_struct(&type)) {
-            let res = CreateLoad(self.mapType(&type), arg_ptr);
-            type.drop();
-            return res;
-        }
-        type.drop();
-        return arg_ptr;
-      }
-      if(Resolver::is_ptr_get(mc)){
-        let elem_type = self.getType(expr);
-        let src = self.get_obj_ptr(mc.args.get(0));
-        let idx = self.loadPrim(mc.args.get(1));
-        let res = gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
-        elem_type.drop();
-        return res;
-      }
-      if(Resolver::is_ptr_copy(mc)){
-        //ptr::copy(src_ptr, src_idx, elem)
-        let src_ptr = self.get_obj_ptr(mc.args.get(0));
-        let i64_ty = Type::new("i64");
-        let idx = self.cast(mc.args.get(1), &i64_ty);
-        i64_ty.drop();
-        let val = self.visit(mc.args.get(2));
-        let elem_type: Type = self.getType(mc.args.get(2));
-        let trg_ptr = gep_ptr(self.mapType(&elem_type), src_ptr, idx);
-        self.copy(trg_ptr, val, &elem_type);
-        elem_type.drop();
-        return getVoidTy() as Value*;
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
@@ -876,7 +956,7 @@ impl Compiler{
           //resolver.err(expr, "lambda");
       }
       if(!rt.is_method()){
-        resolver.err(expr, format("mc no method"));
+        resolver.err(expr, format("mc no method {:?}", expr));
       }
       //print("{}\n", expr);
       let ptr_ret = Option<Value*>::new();

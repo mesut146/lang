@@ -159,9 +159,34 @@ impl AllocHelper{
   
   func visit_macrocall(self, node: Expr*, call: MacroCall*): Option<Value*>{
       let resolver = self.c.get_resolver();
-      let info = resolver.get_macro(node);
+      if(Resolver::is_call(call, "std", "internal_block")){
+        let arg = call.args.get(0).print();
+        let id = i32::parse(arg.str());
+        let blk: Block* = *resolver.block_map.get(&id).unwrap();
+        self.visit(blk);
+        arg.drop();
+        return Option<Value*>::new();
+      }
+      if(Resolver::is_call(call, "std", "env")){
+        let info = resolver.get_macro(node);
+        let rt = resolver.visit(node);
+        self.visit(&info.block);
+        let res = Option::new(self.alloc_ty(&rt.type, node));
+        rt.drop();
+        return res;
+      }
+      if(Resolver::is_call(call, "std", "typeof")){
+        let rt = resolver.visit(node);
+        let res = Option::new(self.alloc_ty(&rt.type, node));
+        rt.drop();
+        return res;
+      }
+      
+      let info = resolver.format_map.get(&node.id);
+      if(info.is_some()){
+        self.visit(&info.unwrap().block);
+      }
       let rt = resolver.visit(node);
-      self.visit(&info.block);
       if(rt.type.is_void()){
           rt.drop();
           return Option<Value*>::new();
@@ -181,18 +206,26 @@ impl AllocHelper{
       arg.drop();
       return Option<Value*>::new();
     }
-    if(Resolver::is_printf(call)){
-      for(let i = 1;i < call.args.len();++i){
-        let arg = call.args.get(i);
-        self.visit(arg);
-      }
-      return Option<Value*>::new();
+    if(Resolver::is_call(call, "std", "env")){
+      let info = resolver.get_macro(node);
+      let rt = resolver.visit(node);
+      self.visit(&info.block);
+      let res = Option::new(self.alloc_ty(&rt.type, node));
+      rt.drop();
+      return res;
     }
     if(Resolver::is_call(call, "std", "typeof")){
       let rt = resolver.visit(node);
       let res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
       return res;
+    }
+    if(Resolver::is_printf(call)){
+      for(let i = 1;i < call.args.len();++i){
+        let arg = call.args.get(i);
+        self.visit(arg);
+      }
+      return Option<Value*>::new();
     }
     if(Resolver::is_call(call, "std", "print_type")){
       let info = resolver.get_macro(node);
@@ -202,14 +235,7 @@ impl AllocHelper{
       rt.drop();
       return res;
     }
-    if(Resolver::is_call(call, "std", "env")){
-      let info = resolver.get_macro(node);
-      let rt = resolver.visit(node);
-      self.visit(&info.block);
-      let res = Option::new(self.alloc_ty(&rt.type, node));
-      rt.drop();
-      return res;
-    }
+
     if(Resolver::is_print(call) || Resolver::is_panic(call)){
       let info = resolver.get_macro(node);
       self.visit(&info.block);

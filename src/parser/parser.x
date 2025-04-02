@@ -1023,7 +1023,14 @@ impl Parser{
         self.consume(TokenType::COLON2);
         let ty = self.parse_type();
         let ty_name = ty.name().clone();
-        if(self.is(TokenType::LPAREN)){
+        if(self.is(TokenType::BANG, TokenType::LPAREN)){
+          self.consume(TokenType::BANG);
+          self.consume(TokenType::LPAREN);
+          let args = self.exprList(TokenType::RPAREN);
+          self.consume(TokenType::RPAREN);
+          return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::new(Type::new(nm)), name: ty_name, args: args}};
+        }
+        else if(self.is(TokenType::LPAREN)){
           let ta = ty.as_simple().args.clone();
           ty.drop();
           return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
@@ -1036,7 +1043,7 @@ impl Parser{
         self.consume(TokenType::LPAREN);
         let args = self.exprList(TokenType::RPAREN);
         self.consume(TokenType::RPAREN);
-        return Expr::MacroCall{.n, MacroCall{name: nm, args: args}};
+        return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::none(), name: nm, args: args}};
       }else if(self.has() && self.isTypeArg(self.pos) != -1){
         let g = self.generics();
         if(self.is(TokenType::LPAREN)){

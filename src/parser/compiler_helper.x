@@ -763,7 +763,7 @@ impl Compiler{
       }
     }
     let val = self.visit(node);
-    if(node is Expr::Obj || node is Expr::Call || node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
+    if(node is Expr::Obj || node is Expr::Call || node is Expr::MacroCall || node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
       return val;
     }
     if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
@@ -791,7 +791,8 @@ impl Compiler{
     if let Expr::IfLet(il*)=(node){
         return val;
     }
-    panic("get_obj_ptr {:?}", node);
+    self.get_resolver().err(node, format("get_obj_ptr {:?}", node));
+    std::unreachable();
   }
 
   func getTag(self, expr: Expr*): Value*{

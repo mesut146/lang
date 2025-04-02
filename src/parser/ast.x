@@ -739,6 +739,7 @@ enum LambdaBody{
 }
 
 struct MacroCall{
+  scope: Option<Type>;
   name: String;
   args: List<Expr>;
 }

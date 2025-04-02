@@ -367,7 +367,9 @@ impl AstCopier{
         type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
     }
     func visit(self, node: MacroCall*): MacroCall{
-      return MacroCall{name: node.name.clone(),
+      return MacroCall{
+        scope: self.visit_opt(&node.scope),
+        name: node.name.clone(),
         args: self.visit_list(&node.args)
       };
     }

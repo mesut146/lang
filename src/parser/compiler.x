@@ -633,6 +633,9 @@ impl Compiler{
   }
   func get_alloc(self, id: i32): Value*{
     let ptr = self.allocMap.get(&id);
+    if(ptr.is_none()){
+      panic("get_alloc() not set");
+    }
     return *ptr.unwrap();
   }
 

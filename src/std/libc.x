@@ -180,11 +180,14 @@ struct timeval {
   tv_usec: suseconds_t;    /* microseconds */
 }
 impl timeval{
-    func ms(self): i64{
+    func as_ms(self): i64{
         return self.tv_sec * 1000 + self.tv_usec / 1000;
     }
     func sec(self, begin: timeval*): i32{
         return (self.tv_sec - begin.tv_sec) as i32;
+    }
+    func ms(self, begin: timeval*): i64{
+      return (self.tv_sec - begin.tv_sec) * 1000 + (self.tv_usec - begin.tv_usec) / 1000;
     }
 }
 

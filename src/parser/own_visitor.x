@@ -91,7 +91,7 @@ impl OwnVisitor{
         }
     }
     func visit_call(self, expr: Expr*, mc: Call*){
-        if(Resolver::is_std_no_drop(mc)){
+        if(Resolver::is_call(mc, "std", "no_drop")){
             let arg = mc.args.get(0);
             self.do_move(arg);
             return;
