@@ -138,8 +138,7 @@ impl AllocHelper{
       },
       Stmt::Continue=>{
         return;
-      },
-      _=> panic("alloc {:?}\n", node)
+      }
     }
   }
   func visit_ret(self, stmt: Stmt*, expr: Expr*){

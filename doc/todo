@@ -1,39 +1,33 @@
 
-trim debug paths
+//trim debug paths
 
-full macro support 
+//full macro support 
 asd!(5, "test");
 macro asd{
 }
 
-
-add ?()throw operator
-
-multiple types, methods mix up
+//multiple types, methods mix up
 
 
-%closures
+//closures
 let f = (a: i32, b: str): i32=>{
 };
-
 let f = ()=>5;
-
 f();
 
 
-inside format macro, call custom printer
+//inside format macro, call custom printer
 print("method is {::TraitName}", m);
 =TraitName::fmt(m, f);
 
 
-match expr complex
+//match expr complex
 
-
+//panic macro
 macro panic(e: Expr, s: String){
-
-
 }
 
+//add ?()throw operator
 let r = Result:Ok{}
 r?.get();
 {

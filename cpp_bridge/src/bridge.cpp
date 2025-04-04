@@ -809,9 +809,9 @@ void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
   st->setBody(*elems);
 }
 
-void Value_dump(llvm::Value *v) { v->dump(); }
+//void Value_dump(llvm::Value *v) { v->dump(); }
 
-void Type_dump(llvm::Type *v) { v->dump(); }
+//void Type_dump(llvm::Type *v) { v->dump(); }
 
 llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {
   return Builder->CreateSExt(val, type);

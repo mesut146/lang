@@ -1,12 +1,12 @@
 struct Regex{
     pat: str;
     i: i32;
-    node: Option<Node>;
+    node: Option<RegexNode>;
     group_cnt: i32;
 }
 
 #derive(Debug)
-struct Node{
+struct RegexNode{
     or: Or;
     begin: bool;
     end: bool;
@@ -23,8 +23,15 @@ struct Seq{
 }
 
 #derive(Debug)
+enum OpKind{
+    Opt,
+    Star,
+    Plus
+}
+
+#derive(Debug)
 struct Op{
-    node: Box<Op>;
+    RegexNode: Box<Op>;
     kind: OpKind;
 }
 #derive(Debug)
@@ -35,9 +42,9 @@ struct Bracket{
 
 #derive(Debug)
 enum RegexItem {
-    Group(node: Or, name: String),
-    Brac(node: Bracket),
-    Op(node: Box<RegexItem>, kind: OpKind),
+    Group(RegexNode: Or, name: String),
+    Brac(RegexNode: Bracket),
+    Op(RegexNode: Box<RegexItem>, kind: OpKind),
     Ch(val: i32),
     Escape(val: i32),
     Dot
@@ -49,20 +56,10 @@ struct Range{
     end: i32;
 }
 
-#derive(Debug)
-enum OpKind{
-    Opt,
-    Star,
-    Plus
-}
-
 impl Regex{
     func new(pat: str): Regex{
-        let res = Regex{pat: pat, i: 0, node: Option<Node>::new(), group_cnt: 0};
-        res.node = Option::new(res.parse());
-        let s = to_string(res.node.get());
-        //print("pat={}\n", res.node.get());
-        //print("pat={}\n", s);
+        let res = Regex{pat: pat, i: 0, node: Option<RegexNode>::new(), group_cnt: 0};
+        res.parse();
         return res;
     }
     func is(self, ch: i32): bool{
@@ -71,7 +68,7 @@ impl Regex{
     func has(self): bool{
         return self.i < self.pat.len();
     }
-    func parse(self): Node{
+    func parse(self){
         let start = false;
         let end = false;
         if(self.is('^')){
@@ -83,7 +80,8 @@ impl Regex{
             end = true;
             self.i += 1;
         }
-        return Node{or, start, end};
+        let res = RegexNode{or, start, end};
+        self.node = Option::new(res);
     }
     func parse_or(self): Or{
         let or = Or{list: List<Seq>::new()};
@@ -168,7 +166,7 @@ impl Regex{
             self.i += 1;
             let ch2 = self.pat.get(self.i);
             let val = 0;
-            if(ch2=='\\'){
+            if(ch2 == '\\'){
                 val = '\\';
             }else if(ch2=='n'){
                 val = '\n';
@@ -183,7 +181,6 @@ impl Regex{
             }
         }
         return RegexItem::Ch{self.parse_chr()};
-        //panic("{}", ch);
     }
 
     func parse_range(self): Range{
@@ -197,23 +194,9 @@ impl Regex{
     }
     func parse_chr(self): i32{
         let ch = self.pat.get(self.i);
-        if(ch=='\\') panic("escape ch={}", ch);
+        if(ch == '\\') panic("escape ch={}", ch);
         self.i += 1;
         return ch;
-        /*if(ch >= '0' && ch <= '9'){
-            self.i += 1;
-            return ch;
-        }
-        if(ch >= 'a' && ch <= 'z'){
-            self.i += 1;
-            return ch;
-        }
-        if(ch == '#' || ch == '-' || ch == '_' || ch=='/'){
-            self.i += 1;
-            return ch;
-        }
-        panic("ch={}", ch);
-        */
     }
 }
 
@@ -285,208 +268,186 @@ struct MatchState{
     is_match: bool;
     len: i32;
 }
+impl MatchState{
+    func new(is_match: bool, len: i32): MatchState{
+        return MatchState{is_match, len};
+    }
+
+}
 impl MatchVisitor{
     func has(self, i: i32): bool{
         return i < self.s.len();
     }
     func visit(self): bool{
-        //print("str={}\n", self.s);
         let res = self.visit_or(&self.r.node.get().or, 0);
-        if(res.a && res.b != self.s.len()){
-            if(res.b != self.s.len()){
-                //let pat = to_string(self.r);
-                //print("str not consumed {} len={} {} pat={}\n", res.b, self.s.len(), self.s, self.r.pat);   
-            }
+        if(res.is_match && res.len != self.s.len()){
             return false;
         }
-        return res.a;
+        return res.is_match;
     }
-    func visit_or(self, or: Or*, i: i32): Pair<bool, i32>{
+    func visit_or(self, or: Or*, i: i32): MatchState{
         if(or.list.len() == 1){
             return self.visit_seq(or.list.get(0), i);
         }
-        let best = Pair::new(false, 0);
+        let best = MatchState::new(false, 0);
         for sq in &or.list{
             let tmp = self.visit_seq(sq, i);
-            if(tmp.a){
-                if(!best.a || tmp.b > best.b){
-                    best = tmp;
-                }
+            if(tmp.is_match && (!best.is_match || tmp.len > best.len)){
+                best = tmp;
             }
         }
         return best;
     }
-    func visit_seq(self, sq: Seq*, i: i32): Pair<bool, i32>{
+    func visit_seq(self, sq: Seq*, i: i32): MatchState{
         let total = 0;
-        for(let idx=0;idx<sq.list.len();idx+=1){
+        for(let idx = 0;idx < sq.list.len();idx += 1){
             let item = sq.list.get(idx);
-            //print("idx={} item={} total={}\n", idx, to_string(item), total);
             let it_used = false;
             //prevent greedy match
-            match item{
-                RegexItem::Op(ch*, kind*) => {
-                    if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
-                        let next = sq.list.get(idx + 1);
-                        //print("gr ch={} next={}\n", ch.get(), next);
-                        //do non greedy  (ab)*a
-                        //b*b => bb
-                        let end2 = i + total;
-                        while(true){
-                            let chr = self.visit_item(ch.get(), end2);
-                            if(!chr.a) break;
-                            let nextr = self.visit_item(next, end2);
-                            if(nextr.a){
-                                let nextr2 = self.visit_item(next, end2 + chr.b);
-                                if(nextr2.a){
-                                    //use ch
-                                    //print("use ch\n");
-                                    end2 += chr.b;
-                                    total += chr.b;
-                                    it_used = true;
-                                }else{
-                                    //ignore ch
-                                    total = end2;
-                                    //print("ignore ch\n");
-                                    break;
-                                }
+            if let RegexItem::Op(ch*, kind*) = item{
+                if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
+                    let next = sq.list.get(idx + 1);
+                    //do non greedy  (ab)*a
+                    //b*b => bb
+                    let end2 = i + total;
+                    while(true){
+                        let chr = self.visit_item(ch.get(), end2);
+                        if(!chr.is_match) break;
+                        let nextr = self.visit_item(next, end2);
+                        if(nextr.is_match){
+                            let nextr2 = self.visit_item(next, end2 + chr.len);
+                            if(nextr2.is_match){
+                                //use ch
+                                end2 += chr.len;
+                                total += chr.len;
+                                it_used = true;
                             }else{
-                                //we must use ch
-                                //print("use ch\n");
-                                end2 += chr.b;
-                                total += chr.b;
-                                it_used = true;           
+                                //ignore ch
+                                total = end2;
+                                break;
                             }
-                         }
-                        continue;
-                    }else if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
-                        let next = sq.list.get(idx + 1);
-                        //print("gr ch={} next={}\n", ch.get(), next);
-                        let chr = self.visit_item(ch.get(), i+total);
-                        if(!chr.a) continue;
-                        let nextr = self.visit_item(next, i+total);
-                        //a?a, a?(ab|c) => a,a,ab,aab,ac
-                        if(nextr.a){
-                            let nextr2 = self.visit_item(next, i+total + chr.b);
-                                if(nextr2.a){
-                                    //use ch
-                                    //print("use ch\n");
-                                    total += chr.b;
-                                    it_used = true;
-                                }else{
-                                    //ignore ch                          
-                                    //print("ignore ch\n");
-                                    continue;
-                                }
                         }else{
-                            //use ch
-                            total += chr.b;
-                            it_used = true;        
+                            //we must use ch
+                            end2 += chr.len;
+                            total += chr.len;
+                            it_used = true;           
                         }
+                        }
+                    continue;
+                }else if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Opt && idx < sq.list.len() - 1){
+                    let next = sq.list.get(idx + 1);
+                    let chr = self.visit_item(ch.get(), i + total);
+                    if(!chr.is_match) continue;
+                    let nextr = self.visit_item(next, i + total);
+                    //a?a, a?(ab|c) => a,a,ab,aab,ac
+                    if(nextr.is_match){
+                        let nextr2 = self.visit_item(next, i + total + chr.len);
+                            if(nextr2.is_match){
+                                //use ch
+                                total += chr.len;
+                                it_used = true;
+                            }else{
+                                //ignore ch                          
+                                continue;
+                            }
+                    }else{
+                        //use ch
+                        total += chr.len;
+                        it_used = true;        
                     }
-                },
-                _=>{
-                    
                 }
             }
             if(!it_used){
                 let res = self.visit_item(item, i + total);
-                if(!res.a) return Pair::new(false, 0);
-                total += res.b;
+                if(!res.is_match) return MatchState::new(false, 0);
+                total += res.len;
             }
         }
-        return Pair::new(true, total);
+        return MatchState::new(true, total);
     }
     func is_dot(it: RegexItem*): bool{
         return it is RegexItem::Dot;
     }
     func is_empty(it: RegexItem*): bool{
         match it{
-            RegexItem::Op(node*, kind*) => {
-                return kind is OpKind::Opt || kind is OpKind::Star;
-            },
-            _=> { return false; }
+            RegexItem::Op(RegexNode*, kind*) => return kind is OpKind::Opt || kind is OpKind::Star,
+            _=> return false,
         }
     }
-    func visit_item(self, it: RegexItem*, i: i32): Pair<bool, i32>{
+    func visit_item(self, it: RegexItem*, i: i32): MatchState{
         if(!self.has(i)){
-            if(is_empty(it)) return Pair::new(true, 0);
-            return Pair::new(false, 0);
+            if(is_empty(it)) return MatchState::new(true, 0);
+            return MatchState::new(false, 0);
         }
-        //print("visit_item i={} s='{}' {}\n", i, self.s.substr(i), to_string(it));
         let res = match it{
-            RegexItem::Ch(ch) => 
-                Pair::new(self.s.get(i) == ch, 1)
-            ,
+            RegexItem::Ch(ch) => MatchState::new(self.s.get(i) == ch, 1),
+            RegexItem::Escape(val) => {
+                panic("todo escape");
+            },
             RegexItem::Group(or*, name*) => {
                 let tmp = self.visit_or(or, i);
-                if(tmp.a){
-                    let s = self.s.substr(i, i + tmp.b);
+                if(tmp.is_match){
+                    let s = self.s.substr(i, i + tmp.len);
                     let c0 = self.cap.map.get(&name.str());
                     if(c0.is_some()){
                         let c = c0.unwrap();
                         c.arr.add(s);
-                        c.buf = self.s.substr(c.start, c.end + tmp.b);
-                        c.end += tmp.b;
+                        c.buf = self.s.substr(c.start, c.end + tmp.len);
+                        c.end += tmp.len;
                     }else{
                         let c = Capture::new();
                         c.arr.add(s);
                         c.buf = s;
                         c.start = i;
-                        c.end = i + tmp.b;
+                        c.end = i + tmp.len;
                         self.cap.map.add(name.str(), c);
                     }
                 }
                 tmp
             },
-            RegexItem::Op(node*, kind*) => {
-                let tmp = self.visit_item(node.get(), i);
+            RegexItem::Op(RegexNode*, kind*) => {
+                let tmp = self.visit_item(RegexNode.get(), i);
                 match kind{
-                    OpKind::Opt=>{
-                        //print("node={} s='{}' tmp={} i={}\n", it, self.s.substr(i), tmp, i);
-                        let rr = Pair::new(true, 0);
-                        if(tmp.a){
-                            rr.b = tmp.b;
+                    OpKind::Opt => {
+                        let rr = MatchState::new(true, 0);
+                        if(tmp.is_match){
+                            rr.len = tmp.len;
                         }   
                         rr
                    },
-                   OpKind::Star=>{
-                       let rr = Pair::new(true, 0);
-                       if(tmp.a){
-                           rr.b = tmp.b;
+                   OpKind::Star => {
+                       let rr = MatchState::new(true, 0);
+                       if(tmp.is_match){
+                           rr.len = tmp.len;
                            while(true){
-                               let tt = self.visit_item(node.get(), i + tmp.b);
-                               if(!tt.a) break;
-                               tmp.b += tt.b;
-                               rr.b += tt.b;
+                               let tt = self.visit_item(RegexNode.get(), i + tmp.len);
+                               if(!tt.is_match) break;
+                               tmp.len += tt.len;
+                               rr.len += tt.len;
                            }
                        }
                        rr
                    },
-                   OpKind::Plus=>{
-                       let rr = Pair::new(false, 0);
-                       if(tmp.a){
-                           rr.a = true;
-                           rr.b = tmp.b;
+                   OpKind::Plus => {
+                       let rr = MatchState::new(false, 0);
+                       if(tmp.is_match){
+                           rr.is_match = true;
+                           rr.len = tmp.len;
                            while(true){
-                               let tt = self.visit_item(node.get(), i + tmp.b);
-                               if(!tt.a) break;
-                               tmp.b += tt.b;
-                               rr.b += tt.b;
+                               let tt = self.visit_item(RegexNode.get(), i + tmp.len);
+                               if(!tt.is_match) break;
+                               tmp.len += tt.len;
+                               rr.len += tt.len;
                            }
                        }
                        rr
                    },
-                   _=> panic("other kind")
                 }
             },
-            RegexItem::Dot=>{
-                Pair::new(true, 1)
-            },
-            RegexItem::Brac(br*)=>{
+            RegexItem::Dot => MatchState::new(true, 1),
+            RegexItem::Brac(br*) => {
                 let valid = false;
                 let ch = self.s.get(i);
-                if(br.negated){
-                }
                 for rng in &br.list{
                     if(ch >= rng.start && ch <= rng.end){
                         valid = true;
@@ -494,21 +455,19 @@ impl MatchVisitor{
                     }
                 }
                 if(br.negated){
-                    if(valid) return Pair::new(false, 0);
-                    else return Pair::new(true, 1);
+                    if(valid) return MatchState::new(false, 0);
+                    else return MatchState::new(true, 1);
                 }
-                Pair::new(valid, 1)
-            },
-            _=>  panic("it={}\n", it)
+                MatchState::new(valid, 1)
+            }
         };
-        //print("visit_item2 i={} s='{}' {} res={}\n", i, self.s.substr(i), to_string(it), res);
         return res;
     }
 }
 
 
 //-----------------------------------------------------
-impl Display for Node{
+impl Display for RegexNode{
     func fmt(self, f: Fmt*){
         if(self.begin) f.print("^");
         Display::fmt(&self.or, f);
@@ -548,19 +507,19 @@ impl Display for RegexItem{
     func fmt(self, f: Fmt*){
         match self{
             RegexItem::Dot => f.print("."), 
-            RegexItem::Group(node*, name*)=>{
+            RegexItem::Group(RegexNode*, name*)=>{
                 f.print("(");
                 f.print("?<");
                 f.print(name);
                 f.print(">");
-                Display::fmt(node, f);
+                Display::fmt(RegexNode, f);
                 f.print(")");
             },
-            RegexItem::Brac(node*)=>{
-                Display::fmt(node, f);
+            RegexItem::Brac(RegexNode*)=>{
+                Display::fmt(RegexNode, f);
             },
-            RegexItem::Op(node*, kind*)=>{
-                Display::fmt(node.get(), f);
+            RegexItem::Op(RegexNode*, kind*)=>{
+                Display::fmt(RegexNode.get(), f);
                 Display::fmt(kind, f);
             },
             RegexItem::Ch(val)=>{

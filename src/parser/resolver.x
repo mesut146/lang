@@ -1863,6 +1863,9 @@ impl Resolver{
     if(!not_covered.empty() && !has_none){
       self.err(expr, format("not covered variants: {:?}", not_covered));
     }
+    if(not_covered.empty() && has_none){
+      self.err(expr, "none case is unreachable");
+    }
     scp.drop();
     not_covered.drop();
     if(res.is_none()) return RType::new("void");

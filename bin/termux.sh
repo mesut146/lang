@@ -1,1 +1,3 @@
-clang -lstdc++ x-termux x-arm64.a std.a ../cpp_bridge/build/libbridge.a
+libdir=$(llvm-config --libdir)
+
+clang++ -lstdc++ -o x-termux x-termux.a std-termux.a ../cpp_bridge/build/libbridge.a $libdir/libLLVM.so

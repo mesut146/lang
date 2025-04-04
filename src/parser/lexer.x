@@ -6,7 +6,7 @@ import std/io
 import std/fs
 
 static lexer_keywords = make_keywords();
-static lexer_ops = HashMap<str, TokenType>::new();
+static lexer_ops = make_ops();
 
 func make_keywords(): HashMap<str, TokenType>{
   let map = HashMap<str, TokenType>::new(55);
@@ -68,6 +68,53 @@ func make_keywords(): HashMap<str, TokenType>{
   return map;
 }
 
+func make_ops(): HashMap<str, TokenType>{
+  let map = HashMap<str, TokenType>::new(55);
+  map.add("{", TokenType::LBRACE);
+  map.add("}", TokenType::RBRACE);
+  map.add("(", TokenType::LPAREN);
+  map.add(")", TokenType::RPAREN);
+  map.add("[", TokenType::LBRACKET);
+  map.add("]", TokenType::RBRACKET);
+  map.add(":", TokenType::COLON);
+  map.add("::", TokenType::COLON2);
+  map.add(";", TokenType::SEMI);
+  map.add(",", TokenType::COMMA);
+  map.add(".", TokenType::DOT);
+  map.add("<", TokenType::LT);
+  map.add(">", TokenType::GT);
+  map.add("<<", TokenType::LTLT);
+  //map.add(">>", TokenType::GTGT);
+  map.add("=", TokenType::EQ);
+  map.add("+=", TokenType::PLUSEQ);
+  map.add("-=", TokenType::MINUSEQ);
+  map.add("*=", TokenType::MULEQ);
+  map.add("/=", TokenType::DIVEQ);
+  map.add("^=", TokenType::POWEQ);
+  map.add("+", TokenType::PLUS);
+  map.add("-", TokenType::MINUS);
+  map.add("*", TokenType::STAR);
+  map.add("/", TokenType::DIV);
+  map.add("%", TokenType::PERCENT);
+  map.add("^", TokenType::POW);
+  map.add("~", TokenType::TILDE);
+  map.add("&", TokenType::AND);
+  map.add("|", TokenType::OR);
+  map.add("&&", TokenType::ANDAND);
+  map.add("||", TokenType::OROR);
+  map.add("==", TokenType::EQEQ);
+  map.add("!=", TokenType::NOTEQ);
+  map.add("<=", TokenType::LTEQ);
+  map.add(">=", TokenType::GTEQ);
+  map.add("!", TokenType::BANG);
+  map.add("#", TokenType::HASH);
+  map.add("++", TokenType::PLUSPLUS);
+  map.add("--", TokenType::MINUSMINUS);
+  map.add("..", TokenType::DOTDOT);
+  map.add("=>", TokenType::ARROW);
+  return map;
+}
+
 struct Lexer{
   path: String;
   buf: String;
@@ -95,12 +142,10 @@ impl i8{
 
 impl Lexer{
   func from_path(path: String): Lexer{
-    make_ops();
     let s = File::read_string(path.str());
     return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1};
   }
   func from_string(path: String, buf: String, line: i32): Lexer{
-    make_ops();
     return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line};
   }
   
@@ -171,91 +216,9 @@ impl Lexer{
     panic("invalid escape: {}", c);
   }
   
-  func make_ops(){
-    if(!lexer_ops.empty()){
-      return;
-    }
-    lexer_ops.add("{", TokenType::LBRACE);
-    lexer_ops.add("}", TokenType::RBRACE);
-    lexer_ops.add("(", TokenType::LPAREN);
-    lexer_ops.add(")", TokenType::RPAREN);
-    lexer_ops.add("[", TokenType::LBRACKET);
-    lexer_ops.add("]", TokenType::RBRACKET);
-    lexer_ops.add(":", TokenType::COLON);
-    lexer_ops.add("::", TokenType::COLON2);
-    lexer_ops.add(";", TokenType::SEMI);
-    lexer_ops.add(",", TokenType::COMMA);
-    lexer_ops.add(".", TokenType::DOT);
-    lexer_ops.add("<", TokenType::LT);
-    lexer_ops.add(">", TokenType::GT);
-    lexer_ops.add("<<", TokenType::LTLT);
-    //lexer_ops.add(">>", TokenType::GTGT);
-    lexer_ops.add("=", TokenType::EQ);
-    lexer_ops.add("+=", TokenType::PLUSEQ);
-    lexer_ops.add("-=", TokenType::MINUSEQ);
-    lexer_ops.add("*=", TokenType::MULEQ);
-    lexer_ops.add("/=", TokenType::DIVEQ);
-    lexer_ops.add("^=", TokenType::POWEQ);
-    lexer_ops.add("+", TokenType::PLUS);
-    lexer_ops.add("-", TokenType::MINUS);
-    lexer_ops.add("*", TokenType::STAR);
-    lexer_ops.add("/", TokenType::DIV);
-    lexer_ops.add("%", TokenType::PERCENT);
-    lexer_ops.add("^", TokenType::POW);
-    lexer_ops.add("~", TokenType::TILDE);
-    lexer_ops.add("&", TokenType::AND);
-    lexer_ops.add("|", TokenType::OR);
-    lexer_ops.add("&&", TokenType::ANDAND);
-    lexer_ops.add("||", TokenType::OROR);
-    lexer_ops.add("==", TokenType::EQEQ);
-    lexer_ops.add("!=", TokenType::NOTEQ);
-    lexer_ops.add("<=", TokenType::LTEQ);
-    lexer_ops.add(">=", TokenType::GTEQ);
-    lexer_ops.add("!", TokenType::BANG);
-    lexer_ops.add("#", TokenType::HASH);
-    lexer_ops.add("++", TokenType::PLUSPLUS);
-    lexer_ops.add("--", TokenType::MINUSMINUS);
-    lexer_ops.add("..", TokenType::DOTDOT);
-    lexer_ops.add("=>", TokenType::ARROW);
-  }
-  
   func kw(s: str): TokenType{
     let opt = lexer_keywords.get(&s);
     if(opt.is_some()) return *opt.unwrap();
-    /*if(s.eq("struct")) return TokenType::STRUCT;
-    if(s.eq("enum")) return TokenType::ENUM;
-    if(s.eq("trait")) return TokenType::TRAIT;
-    if(s.eq("impl")) return TokenType::IMPL;
-    if(s.eq("type")) return TokenType::TYPE;
-    if(s.eq("extern")) return TokenType::EXTERN;
-    if(s.eq("virtual")) return TokenType::VIRTUAL;
-    if(s.eq("static")) return TokenType::STATIC;
-    if(s.eq("bool")) return TokenType::BOOLEAN;
-    if(s.eq("import")) return TokenType::IMPORT;
-    if(s.eq("true")) return TokenType::TRUE;
-    if(s.eq("false")) return TokenType::FALSE;
-    if(s.eq("i8")) return TokenType::I8;
-    if(s.eq("i16")) return TokenType::I16;
-    if(s.eq("i32")) return TokenType::I32;
-    if(s.eq("i64")) return TokenType::I64;
-    if(s.eq("f32")) return TokenType::F32;
-    if(s.eq("f64")) return TokenType::F64;
-    if(s.eq("null")) return TokenType::NULL_LIT;
-    if(s.eq("as")) return TokenType::AS;
-    if(s.eq("is")) return TokenType::IS;
-    if(s.eq("return")) return TokenType::RETURN;
-    if(s.eq("continue")) return TokenType::CONTINUE;
-    if(s.eq("if")) return TokenType::IF;
-    if(s.eq("else")) return TokenType::ELSE;
-    if(s.eq("for")) return TokenType::FOR;
-    if(s.eq("while")) return TokenType::WHILE;
-    if(s.eq("do")) return TokenType::DO;
-    if(s.eq("break")) return TokenType::BREAK;
-    if(s.eq("func")) return TokenType::FUNC;
-    if(s.eq("let")) return TokenType::LET;
-    if(s.eq("new")) return TokenType::NEW;
-    if(s.eq("match")) return TokenType::MATCH;
-    if(s.eq("const")) return TokenType::CONST;*/
     return TokenType::EOF_;
   }
   

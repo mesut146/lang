@@ -24,7 +24,7 @@ ptr::deref(ptr): <*ptr>;
 
 
 #env
- target_triple, LD=clang-16, TRACE
+ target_triple, LD=clang-19, TRACE
 
 #cmd config
 -cache //use cache
@@ -43,6 +43,7 @@ ptr::deref(ptr): <*ptr>;
 -j <num> //jobs
 -v //verbose
 -static //static link
+-static-llvm //static llvm
 -sng <file> //single file compile, for testsing purposes
 -root <dir> //root dir
 -drop <name> //drop a specific object

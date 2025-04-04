@@ -1,0 +1,46 @@
+func get(): Result<i32, str>{
+    if(true){
+        return Ok(1);
+    }else{
+        return Err("error");
+    }
+}
+
+func use_get(): Result<i32, str>{
+    print("use_get\n");
+    get()?;
+    {
+        $a = get();
+        if($a.is_ok()){
+            return Ok($a.unwrap());
+        }else{
+            return Err("error");
+        }
+    }
+    print("use_get 2\n");
+}
+
+func use_get(): Result<i32, str>{
+    let a = get();
+    if(a.is_ok()){
+        return Ok(a.unwrap());
+    }else{
+        return Err("error");
+    }
+}
+
+
+
+impl A{
+    func get(self) -> Result<i32, str>{
+        if(true){
+            return Ok(1);
+        }else{
+            return Err("error");
+        }
+    }
+}
+
+func main(){
+    get();
+}
