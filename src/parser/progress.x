@@ -20,7 +20,7 @@ static prog_print_freq = false;
 static prog_map = HashMap<String, ProgInfo>::new();
 
 func init_prog(){
-    let opt = getenv2("prog");
+    let opt = std::getenv("prog");
     progress_print = opt.is_some() && opt.get().eq("1");
     prog_print_freq = opt.is_some() && opt.get().eq("2");
 }

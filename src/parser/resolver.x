@@ -55,7 +55,7 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        verbose_all: false,
-       stack_trace: getenv2("TRACE").is_some(),
+       stack_trace: std::getenv("TRACE").is_some(),
        prog: Progress::new(),
     };
     return res;
@@ -2029,7 +2029,7 @@ impl Resolver{
   func handle_env(self, node: Expr*, mc: MacroCall*){
     let arg = mc.args.get(0);
     let arg_val = is_str_lit(arg).unwrap();
-    let opt = getenv2(arg_val.str());
+    let opt = std::getenv(arg_val.str());
     let info = FormatInfo::new(node.line);
     let str = if(opt.is_some()){
       format("Option::new(\"{}\")", opt.get())
@@ -2046,7 +2046,7 @@ impl Resolver{
   func handle_env(self, node: Expr*, mc: Call*){
     let arg = mc.args.get(0);
     let arg_val = is_str_lit(arg).unwrap();
-    let opt = getenv2(arg_val.str());
+    let opt = std::getenv(arg_val.str());
     let info = FormatInfo::new(node.line);
     let str = if(opt.is_some()){
       format("Option::new(\"{}\")", opt.get())

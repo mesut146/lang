@@ -40,8 +40,8 @@ impl DebugInfo{
         let dir_c = CStr::new(".");
         let file = createFile(path_c.ptr(), dir_c.ptr());
         let cu = createCompileUnit(get_dwarf_cpp(), file);
-        let debug = !getenv2("DEBUG").unwrap_or("1").eq("0");
-        //print("debug={} env={}\n", debug, getenv2("DEBUG"));
+        let debug = !std::getenv("DEBUG").unwrap_or("1").eq("0");
+        
         path_c.drop();
         dir_c.drop();
         return DebugInfo{cu: cu, file: file,

@@ -666,7 +666,7 @@ impl Compiler{
 
     func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
-      let env = getenv2("ignore_drop");
+      let env = std::getenv("ignore_drop");
       //todo dont remove this until own is stable
       if(is_drop_call2(mc) && env.is_some()){
         let list = env.unwrap().split(",");

@@ -59,7 +59,7 @@ extern{
     func vector_Metadata_push(vec: vector_Metadata*, elem: Metadata*);
     func vector_Metadata_delete(vec: vector_Metadata*);
 
-    func printDefaultTargetAndDetectedCPU();
+    //func printDefaultTargetAndDetectedCPU();
     func getDefaultTargetTriple(ptr: i8*): i32;
     func InitializeAllTargets();
     func InitializeAllTargetInfos();

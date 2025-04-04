@@ -1,15 +1,13 @@
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include <llvm/IR/Attributes.h>
-#include <llvm/IR/Constants.h>
 #include <llvm/IR/DIBuilder.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include "llvm/IR/Module.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/FileSystem.h>
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
@@ -65,9 +63,9 @@ void setBuilder(llvm::IRBuilder<> *b) { Builder = b; }
 void setModule(llvm::Module *m) { mod = m; }
 void setCtx(llvm::LLVMContext *c) { ctx = c; }
 
-void printDefaultTargetAndDetectedCPU() {
+/*void printDefaultTargetAndDetectedCPU() {
   llvm::sys::printDefaultTargetAndDetectedCPU(llvm::outs());
-}
+}*/
 
 int getDefaultTargetTriple(char *ptr) {
   std::string res = llvm::sys::getDefaultTargetTriple();
@@ -134,8 +132,7 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
   }
 
   llvm::legacy::PassManager pass;
-  if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr,
-                                         llvm::CGFT_ObjectFile)) {
+  if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
     std::cerr << "TargetMachine can't emit a file of this type triple=" << triple << "\nfile=" << name;
     std::cerr << std::endl;
     exit(1);

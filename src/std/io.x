@@ -49,6 +49,26 @@ impl Drop for Process{
     }
 }
 
+struct std;
+impl std{
+  func getenv(name: str): Option<str>{
+    let c_name = CStr::new(name);
+    let c_env = getenv(c_name.ptr());
+    c_name.drop();
+    if(is_null(c_env)){
+      return Option<str>::new();
+    }
+    return Option::new(str::from_raw(c_env));
+  }
+  func setenv(name: str, val: str){
+    let c_name = CStr::new(name);
+    let c_val = CStr::new(val);
+    setenv(c_name.ptr(), c_val.ptr(), 1);
+    c_name.drop();
+    c_val.drop();
+  }
+}
+
 static root_exe = Option<String>::new();
 struct CmdArgs{
   args: List<String>;

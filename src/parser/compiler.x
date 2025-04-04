@@ -26,11 +26,12 @@ static bootstrap = false;
 static inline_rvo = false;
 
 func get_linker(): str{
-  let opt = getenv2("LD");
+  let opt = std::getenv("LD");
   if(opt.is_some()){
     return opt.unwrap();
   }
-  return "clang-16";
+  //return "clang-16";
+  return "clang-19";
 }
 
 struct Compiler{
@@ -234,7 +235,7 @@ impl llvm_holder{
     llvm_holder::init_llvm();
     //printDefaultTargetAndDetectedCPU();
     let target_triple = getDefaultTargetTriple2();
-    let env_triple = getenv2("target_triple");
+    let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       target_triple.drop();
       target_triple = env_triple.unwrap().owned().cstr();
@@ -686,7 +687,7 @@ impl Compiler{
     if(config.jobs > 1){
       return Compiler::compile_dir_thread2(config);
     }
-    let env_triple = getenv2("target_triple");
+    let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
     }
@@ -744,7 +745,7 @@ impl Compiler{
  
   
   func compile_dir_thread2(config: CompilerConfig): String{
-    let env_triple = getenv2("target_triple");
+    let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
     }

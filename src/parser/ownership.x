@@ -17,7 +17,7 @@ import std/hashmap
 import std/stack
 
 func hasenv(key: str): bool{
-    return getenv2(key).is_some();
+    return std::getenv(key).is_some();
 }
 
 static last_scope: i32 = 0;

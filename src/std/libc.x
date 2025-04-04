@@ -77,23 +77,6 @@ func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }
 //func SEEK_CUR(): i32 { return 0; }
 
-func getenv2(name: str): Option<str>{
-  let c_name = CStr::new(name);
-  let c_env = getenv(c_name.ptr());
-  c_name.drop();
-  if(is_null(c_env)){
-    return Option<str>::new();
-  }
-  return Option::new(str::from_raw(c_env));
-}
-func setenv2(name: str, val: str, overwrite: i32){
-  let c_name = CStr::new(name);
-  let c_val = CStr::new(val);
-  setenv(c_name.ptr(), c_val.ptr(), overwrite);
-  c_name.drop();
-  c_val.drop();
-}
-
 extern{
   //func printf(fmt: i8*, ...);
   func exit(code: i32);

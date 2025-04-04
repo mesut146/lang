@@ -68,21 +68,52 @@ func bootstrap(cmd: CmdArgs*){
     name = cmd.peek().str();
   }
   let vendor: str = Path::name(cmd.get_root());
-  setenv2("vendor", vendor, 1);
-  //setenv2("vendor", get_compiler_name(), 1);
-  setenv2("compiler_name", name, 1);
+  std::setenv("vendor", vendor);
+  //std::setenv("vendor", get_compiler_name());
+  std::setenv("compiler_name", name);
   let out_dir = format("{}/{}_out", &build, name);
   let config = CompilerConfig::new(src_dir.clone());
   config.verbose_all = verbose_all;
+
+  if(cmd.has_any("-target")){
+    let target = cmd.get_val("-target").unwrap();
+    if(target.eq("x86_64-unknown-linux-gnu") || target.eq("x86_64")){
+      std::setenv("target_triple", "x86_64-unknown-linux-gnu");
+    }
+    else if(target.eq("aarch64-linux-gnu") || target.eq("arm64")){
+      std::setenv("target_triple", "aarch64-linux-gnu");
+    }
+    else{
+      panic("unsupported target: {}", target);
+    }
+  }
+
   let stdlib = build_std(std_dir.str(), out_dir.str());
+  let libdir = std::getenv("libdir").unwrap_or("/usr/lib/llvm-19/lib");
+  let llvm_config = std::getenv("llvm_config").unwrap_or("llvm-config-19");
+
+  let libbridge = {
+    let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
+    if(!File::exists(lib.str())){
+      print("building libbridge\n");
+      let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
+      if(!out.empty()){
+        print("{}\n", out);
+      }
+      if(!File::exists(lib.str())){
+        panic("failed to build libbridge");
+      }
+    }
+    lib
+  };
+
   if(is_static_llvm){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }
   else if(is_static){
     config.set_link(LinkType::Static{format("{}.a", name)});
   }else{
-    let libdir = getenv2("libdir").unwrap_or("/usr/lib/llvm-16/lib");
-    let args = format("{} {}/cpp_bridge/build/libbridge.a -lstdc++ -lm {}/libLLVM.so", &stdlib, &root, libdir);
+    let args = format("{} {libbridge} -lstdc++ -lm {}/libLLVM.so", &stdlib, libdir);
     config.set_link(LinkType::Binary{name.owned(), args, false});
   }
   
@@ -105,14 +136,14 @@ func bootstrap(cmd: CmdArgs*){
   let bin = Compiler::compile_dir(config);
   if(is_static_llvm){
     let linker = get_linker();
-    let llvm = Process::run("llvm-config-16 --link-static --libs core target aarch64 X86").read_close();
+    let llvm = Process::run("{llvm_config} --link-static --libs core target aarch64 X86").read_close();
     if(llvm.str().ends_with("\n")){
       llvm = llvm.substr(0, llvm.len() - 1).owned();
     }
     //print("llvm={}\n", llvm);
     //let sys = "-lstdc++ -lrt -ldl -lz -lzstd -ltinfo -lxml2";
     let bin_path = format("{}/{}-static", out_dir, name);
-    let cmd_link = format("{} -o {} -lstdc++ -lm {} {} {}/cpp_bridge/build/libbridge.a -L/usr/lib/llvm-16/lib {}", linker, bin_path, bin, stdlib, root, llvm);
+    let cmd_link = format("{} -o {} -lstdc++ -lm {} {} {libbridge} -L{libdir} {}", linker, bin_path, bin, stdlib, llvm);
     cmd_link.append(" /lib/x86_64-linux-gnu/libtinfo.a");
     cmd_link.append(" /lib/x86_64-linux-gnu/libzstd.a");
     cmd_link.append(" /lib/x86_64-linux-gnu/libz.a");
@@ -127,7 +158,6 @@ func bootstrap(cmd: CmdArgs*){
     set_as_executable(bin2.cstr().ptr());
     cmd_link.drop();
     llvm.drop();
-    //binc.drop();
   }
   else if(!is_static){
     let bin2 = format("{}/{}", &build, name);
