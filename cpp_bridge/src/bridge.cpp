@@ -112,6 +112,12 @@ llvm::TargetMachine *createTargetMachine(const char *triple) {
 
 bool verifyModule() { return llvm::verifyModule(*mod, &llvm::outs()); }
 
+void emit_llvm(char *llvm_file) {
+  std::error_code ec;
+  llvm::raw_fd_ostream fd(llvm_file, ec);
+  mod->print(fd, nullptr);
+}
+
 void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
                  char *triple) {
   std::string TargetTriple(triple);
@@ -429,24 +435,6 @@ void finalizeSubprogram(llvm::DISubprogram *sp) {
   DBuilder->finalizeSubprogram(sp);
 }
 
-void emit_llvm(char *llvm_file) {
-  std::error_code ec;
-  llvm::raw_fd_ostream fd(llvm_file, ec);
-  mod->print(fd, nullptr);
-}
-
-llvm::Type *getVoidTy() { return Builder->getVoidTy(); }
-
-llvm::FunctionType *make_ft(llvm::Type *retType,
-                            std::vector<llvm::Type *> *argTypes, bool vararg) {
-  return llvm::FunctionType::get(retType, *argTypes, vararg);
-}
-
-llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name) {
-  return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes)linkage,
-                                name, *mod);
-}
-
 void setCallingConv(llvm::Function *f) {
   f->setCallingConv(llvm::CallingConv::C);
 }
@@ -459,6 +447,18 @@ int odr() { return llvm::Function::LinkOnceODRLinkage; }
 llvm::GlobalValue::LinkageTypes odr() {
     return llvm::Function::LinkOnceODRLinkage;
 }*/
+
+llvm::Type *getVoidTy() { return Builder->getVoidTy(); }
+
+llvm::FunctionType *make_ft(llvm::Type *retType,
+                            std::vector<llvm::Type *> *argTypes, bool vararg) {
+  return llvm::FunctionType::get(retType, *argTypes, vararg);
+}
+
+llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name) {
+  return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes)linkage,
+                                name, *mod);
+}
 
 llvm::Argument *get_arg(llvm::Function *f, int i) { return f->getArg(i); }
 
