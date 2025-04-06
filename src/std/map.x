@@ -13,6 +13,7 @@ impl<K, V> Pair<K, V>{
   }
 }
 
+//map with Eq::eq
 struct Map<K, V>{
   arr: List<Pair<K, V>>;
 }

@@ -17,6 +17,7 @@ import std/io
 import std/fs
 import std/libc
 import std/stack
+import std/result
 
 static __static_test_var = "test";
 static __static_func_test: i32 = static_func();
@@ -70,17 +71,7 @@ func bootstrap(cmd: CmdArgs*){
   let build = format("{}/build", root);
   let src_dir = format("{}/src", root);
   let std_dir = format("{}/src/std", root);
-  let name = "x2";
-  if(cmd.has()){
-    name = cmd.peek().str();
-  }
-  let vendor: str = Path::name(cmd.get_root());
-  std::setenv("vendor", vendor);
-  //std::setenv("vendor", get_compiler_name());
-  std::setenv("compiler_name", name);
-  let out_dir = format("{}/{}_out", &build, name);
-  let config = CompilerConfig::new(src_dir.clone());
-  config.verbose_all = verbose_all;
+  let llvm_only = cmd.consume_any("-llvm-only");
 
   if(cmd.has_any("-target")){
     let target = cmd.get_val("-target").unwrap();
@@ -95,17 +86,58 @@ func bootstrap(cmd: CmdArgs*){
     }
   }
 
+
+  let name = "x2";
+  if(cmd.has()){
+    name = cmd.peek().str();
+  }
+  let vendor: str = Path::name(cmd.get_root());
+  std::setenv("vendor", vendor);
+  //std::setenv("vendor", get_compiler_name());
+  std::setenv("compiler_name", name);
+  let out_dir = format("{}/{}_out", &build, name);
+  let config = CompilerConfig::new(src_dir.clone());
+  config.verbose_all = verbose_all;
+  config.llvm_only = llvm_only;
+
   let stdlib = build_std(std_dir.str(), out_dir.str());
-  let libdir = std::getenv("libdir").unwrap_or("/usr/lib/llvm-19/lib");
-  let llvm_config = std::getenv("llvm_config").unwrap_or("llvm-config-19");
+  let llvm_config = {
+    let opt = std::getenv("llvm_config");
+    if(opt.is_some()){
+      opt.unwrap()
+    }else{
+      let p = Process::run("llvm-config-19 2>&1");
+      let res = p.read_close();
+      if(res.is_ok()){
+        "llvm-config-19"
+      }else{
+        "llvm-config"
+      }
+    }
+  };
+  let libdir: String = {
+    let libdir_opt = std::getenv("libdir");
+    if(libdir_opt.is_none()){
+      let p = Process::run(format("{} --libdir 2>&1", llvm_config).str());
+      let res = p.read_close();
+      if(res.is_ok()){
+        res.unwrap()
+      }else{
+        //panic!("failed to get libdir: {}", res);
+        "/usr/lib/llvm-19/lib".owned()
+      }
+    }else{
+      libdir_opt.unwrap().owned()
+    }
+  };
 
   let libbridge = {
     let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
     if(!File::exists(lib.str())){
       print("building libbridge\n");
       let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
-      if(!out.empty()){
-        print("{}\n", out);
+      if(out.is_ok() && !out.get().empty()){
+        print("{}\n", out.unwrap());
       }
       if(!File::exists(lib.str())){
         panic("failed to build libbridge");
@@ -143,7 +175,7 @@ func bootstrap(cmd: CmdArgs*){
   let bin = Compiler::compile_dir(config);
   if(is_static_llvm){
     let linker = get_linker();
-    let llvm = Process::run("{llvm_config} --link-static --libs core target aarch64 X86").read_close();
+    let llvm = Process::run("{llvm_config} --link-static --libs core target aarch64 X86").read_close().unwrap();
     if(llvm.str().ends_with("\n")){
       llvm = llvm.substr(0, llvm.len() - 1).owned();
     }
@@ -157,12 +189,14 @@ func bootstrap(cmd: CmdArgs*){
     //print("cmd={}\n", cmd_link);
     let proc = Process::run(cmd_link.str());
     let proc_out = proc.read_close();
-    if(!proc_out.empty()){
-      panic("proc={}\n", proc_out);
+    if(proc_out.is_ok() && !proc_out.get().empty()){
+      panic("proc={}\n", proc_out.unwrap());
     }
-    let bin2 = format("{}/{}", build, name);
-    File::copy(bin_path.str(), bin2.str());
-    set_as_executable(bin2.cstr().ptr());
+    if(proc_out.is_ok()){
+      let bin2 = format("{}/{}", build, name);
+      File::copy(bin_path.str(), bin2.str());
+      set_as_executable(bin2.cstr().ptr());
+    }
     cmd_link.drop();
     llvm.drop();
   }
@@ -295,9 +329,9 @@ func handle(cmd: CmdArgs*){
     handle_c(cmd);
     return;
   }else if(cmd.is("f")){
-      let dir = format("{}/parser", get_src_dir());
-      let out = format("{}/parser2", get_src_dir());
-      format_dir(dir.str(), out.str());
+    let dir = format("{}/parser", get_src_dir());
+    let out = format("{}/parser2", get_src_dir());
+    format_dir(dir.str(), out.str());
   }else{
     panic("invalid cmd: {:?}", cmd.args);
   }

@@ -1,11 +1,22 @@
 import std/libc
 import std/any
+import std/result
 
-type FUNC_TYPE = func(c_void*) => void;
+//0 stdin
+//1 stdout
+//2 stderr
+
+
+struct Output{
+  exit_status: i32;
+  stdout: String;
+  stderr: String;
+}
 
 struct Process{
     fp: FILE*;
 }
+
 impl Process{
     func run(cmd: str): Process{
         let cs = cmd.cstr();
@@ -29,17 +40,20 @@ impl Process{
         }
         return res;
     }
-    func close(*self){
-        pclose(self.fp);
+    func close(*self): i32{
+        return pclose(self.fp);
     }
-    func eat_close(*self){
+    func eat_close(*self): i32{
         self.read().drop();
-        self.close();
+        return self.close();
     }
-    func read_close(*self): String{
+    func read_close(*self): Result<String, i32>{
         let res = self.read_str();
-        self.close();
-        return res;
+        let status = self.close();
+        if(status == 0){
+          return Result<String, i32>::ok(res);
+        }
+        return Result<String, i32>::err(status);
     }
 }
 

@@ -310,7 +310,9 @@ impl Compiler{
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     let outFile_cstr = CStr::new(outFile.clone());
-    emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
+    if(!self.config.llvm_only){
+      emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
+    }
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path);
@@ -911,6 +913,7 @@ struct CompilerConfig{
   jobs: i32;
   verbose_all: bool;
   incremental_enabled: bool;
+  llvm_only: bool;
 }
 
 impl CompilerConfig{
@@ -932,6 +935,7 @@ impl CompilerConfig{
       jobs: 1,
       verbose_all: false,
       incremental_enabled: false,
+      llvm_only: false,
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{

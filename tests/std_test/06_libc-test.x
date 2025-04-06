@@ -63,6 +63,18 @@ func measure(){
     print("diff={:?} sec={}\n", end.as_ms() - tp.as_ms(), end.tv_sec-tp.tv_sec);
 }
 
+func fork_test(){
+  let pid = fork();
+  print("pid={}\n", pid);
+  if(pid == 0) {
+      print("Child process\n");
+  } else if(pid < 0) {
+      print("Error: Failed to fork()\n");
+  } else {
+      print("Parent process\n");
+  }
+}
+
 func main(){
   parse_float();
   let cur = File::resolve(".");
@@ -71,6 +83,7 @@ func main(){
   list_test();
   time_test();
   measure();
-  print("libc_test done\n");
+  fork_test();
   cur.drop();
+  print("libc_test done\n");
 }

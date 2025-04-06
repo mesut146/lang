@@ -538,8 +538,8 @@ func assert_eq(s1: String, s2: str){
 }
 
 func assert2(c: bool, msg: String){
-    if(!c){
-        panic("{}\n", msg);
-    }
-    msg.drop();
+  if(!c){
+    panic("{}\n", msg);
+  }
+  msg.drop();
 }

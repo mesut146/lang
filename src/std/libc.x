@@ -24,6 +24,8 @@ type blksize_t = i64;
 type blkcnt_t = i64;
 type time_t = i64;
 
+type pid_t = i32;
+
 const O_RDONLY: i32 = 0;
 const O_WRONLY: i32 = 1;
 const O_RDWR: i32 = 2;
@@ -126,6 +128,7 @@ extern{
   
   func popen(cmd: i8*, mode: i8*): FILE*;
   func pclose(fp: FILE*): i32;
+  func fork(): i32; //pid_t;
   
   func gettimeofday(tv: timeval*, timezone: i8*): i32;
 
@@ -137,14 +140,14 @@ extern{
 }*/
 
 func gettime(): timeval{
-    let tv: timeval = timeval{0, 0};
-    gettimeofday(&tv, ptr::null<i8>());
-    return tv;
+  let tv: timeval = timeval{0, 0};
+  gettimeofday(&tv, ptr::null<i8>());
+  return tv;
 }
 
 func msleep(ms: i64){
-    let tm = timespec{ms/1000, ms%1000};
-    nanosleep(&tm, ptr::null<timespec>());
+  let tm = timespec{ms/1000, ms%1000};
+  nanosleep(&tm, ptr::null<timespec>());
 }
 
 func make_pthread_mutex_t(): pthread_mutex_t{
@@ -163,15 +166,15 @@ struct timeval {
   tv_usec: suseconds_t;    /* microseconds */
 }
 impl timeval{
-    func as_ms(self): i64{
-        return self.tv_sec * 1000 + self.tv_usec / 1000;
-    }
-    func sec(self, begin: timeval*): i32{
-        return (self.tv_sec - begin.tv_sec) as i32;
-    }
-    func ms(self, begin: timeval*): i64{
-      return (self.tv_sec - begin.tv_sec) * 1000 + (self.tv_usec - begin.tv_usec) / 1000;
-    }
+  func as_ms(self): i64{
+    return self.tv_sec * 1000 + self.tv_usec / 1000;
+  }
+  func sec(self, begin: timeval*): i32{
+    return (self.tv_sec - begin.tv_sec) as i32;
+  }
+  func ms(self, begin: timeval*): i64{
+    return (self.tv_sec - begin.tv_sec) * 1000 + (self.tv_usec - begin.tv_usec) / 1000;
+  }
 }
 
 #derive(Debug)

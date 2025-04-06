@@ -379,70 +379,62 @@ impl MatchVisitor{
             if(is_empty(it)) return MatchState::new(true, 0);
             return MatchState::new(false, 0);
         }
-        let res = match it{
+        return match it{
             RegexItem::Ch(ch) => MatchState::new(self.s.get(i) == ch, 1),
             RegexItem::Escape(val) => {
                 panic("todo escape");
             },
             RegexItem::Group(or*, name*) => {
                 let tmp = self.visit_or(or, i);
-                if(tmp.is_match){
-                    let s = self.s.substr(i, i + tmp.len);
-                    let c0 = self.cap.map.get(&name.str());
-                    if(c0.is_some()){
-                        let c = c0.unwrap();
-                        c.arr.add(s);
-                        c.buf = self.s.substr(c.start, c.end + tmp.len);
-                        c.end += tmp.len;
-                    }else{
-                        let c = Capture::new();
-                        c.arr.add(s);
-                        c.buf = s;
-                        c.start = i;
-                        c.end = i + tmp.len;
-                        self.cap.map.add(name.str(), c);
-                    }
+                if(!tmp.is_match) return MatchState::new(false, 0);
+                let cap_str: str = self.s.substr(i, i + tmp.len);
+                let cap_opt = self.cap.map.get(&name.str());
+                if(cap_opt.is_some()){
+                    //capture in loop, extend substring
+                    let cap: Capture* = cap_opt.unwrap();
+                    cap.arr.add(cap_str);
+                    cap.buf = self.s.substr(cap.start, cap.end + tmp.len);
+                    cap.end += tmp.len;
+                }else{
+                    let cap = Capture::new();
+                    cap.arr.add(cap_str);
+                    cap.buf = cap_str;
+                    cap.start = i;
+                    cap.end = i + tmp.len;
+                    self.cap.map.add(name.str(), cap);
                 }
                 tmp
             },
-            RegexItem::Op(RegexNode*, kind*) => {
-                let tmp = self.visit_item(RegexNode.get(), i);
+            RegexItem::Op(node*, kind*) => {
+                let node_st = self.visit_item(node.get(), i);
+                let res = MatchState::new(!(kind is OpKind::Plus), 0);
+                if(!node_st.is_match) return res;
+                
                 match kind{
                     OpKind::Opt => {
-                        let rr = MatchState::new(true, 0);
-                        if(tmp.is_match){
-                            rr.len = tmp.len;
-                        }   
-                        rr
-                   },
-                   OpKind::Star => {
-                       let rr = MatchState::new(true, 0);
-                       if(tmp.is_match){
-                           rr.len = tmp.len;
-                           while(true){
-                               let tt = self.visit_item(RegexNode.get(), i + tmp.len);
-                               if(!tt.is_match) break;
-                               tmp.len += tt.len;
-                               rr.len += tt.len;
-                           }
-                       }
-                       rr
-                   },
-                   OpKind::Plus => {
-                       let rr = MatchState::new(false, 0);
-                       if(tmp.is_match){
-                           rr.is_match = true;
-                           rr.len = tmp.len;
-                           while(true){
-                               let tt = self.visit_item(RegexNode.get(), i + tmp.len);
-                               if(!tt.is_match) break;
-                               tmp.len += tt.len;
-                               rr.len += tt.len;
-                           }
-                       }
-                       rr
-                   },
+                        res.len = node_st.len;
+                    },
+                    OpKind::Star => {
+                        res.len = node_st.len;
+                        while(true){
+                            let next_st = self.visit_item(node.get(), i + node_st.len);
+                            if(!next_st.is_match) break;
+                            node_st.len += next_st.len;
+                            res.len += next_st.len;
+                        }
+                    },
+                    OpKind::Plus => {
+                        res.is_match = true;
+                        res.len = node_st.len;
+                        while(true){
+                            let next_st = self.visit_item(node.get(), i + node_st.len);
+                            if(!next_st.is_match) break;
+                            node_st.len += next_st.len;
+                            res.len += next_st.len;
+                        }
+                    },
                 }
+                res
             },
             RegexItem::Dot => MatchState::new(true, 1),
             RegexItem::Brac(br*) => {
@@ -461,7 +453,6 @@ impl MatchVisitor{
                 MatchState::new(valid, 1)
             }
         };
-        return res;
     }
 }
 

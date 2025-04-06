@@ -37,6 +37,22 @@ impl<T> List<T>{
   func capacity(self): i64{
     return self.cap;
   }
+  func clear(self){
+    self.drop_elems();
+    self.count = 0;
+  }
+
+  func size(self): i64{
+    return self.count;
+  }
+
+  func len(self): i64{
+    return self.count;
+  }
+  
+  func empty(self): bool{
+    return self.count == 0;
+  }
 
   func expand(self){
     if(self.count < self.cap){
@@ -135,22 +151,6 @@ impl<T> List<T>{
     return ptr::get(self.ptr, pos);
   }
 
-  func clear(self){
-    self.drop_elems();
-    self.count = 0;
-  }
-
-  func size(self): i64{
-    return self.count;
-  }
-
-  func len(self): i64{
-    return self.count;
-  }
-  
-  func empty(self): bool{
-    return self.count == 0;
-  }
 
   func indexOf(self, e: T*): i32{
     return self.indexOf(e, 0);
