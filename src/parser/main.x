@@ -89,8 +89,9 @@ func bootstrap(cmd: CmdArgs*){
 
   let name = "x2";
   if(cmd.has()){
-    name = cmd.peek().str();
+    name = cmd.get().str();
   }
+  cmd.end();
   let vendor: str = Path::name(cmd.get_root());
   std::setenv("vendor", vendor);
   //std::setenv("vendor", get_compiler_name());
