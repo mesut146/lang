@@ -326,6 +326,8 @@ impl Compiler{
     self.cache.update(path);
     self.cache.write_cache();
 
+    self.ctx.prog.compile_done();
+
     methods.drop();
     llvm_file_cstr.drop();
     outFile_cstr.drop();

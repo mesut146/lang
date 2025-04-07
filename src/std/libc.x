@@ -169,11 +169,14 @@ impl timeval{
   func as_ms(self): i64{
     return self.tv_sec * 1000 + self.tv_usec / 1000;
   }
-  func sec(self, begin: timeval*): i32{
-    return (self.tv_sec - begin.tv_sec) as i32;
+  func as_sec(self): i64{
+    return self.as_ms() / 1000;
   }
-  func ms(self, begin: timeval*): i64{
-    return (self.tv_sec - begin.tv_sec) * 1000 + (self.tv_usec - begin.tv_usec) / 1000;
+  func sub(self, begin: timeval*): timeval{
+    return timeval{
+      tv_sec: self.tv_sec - begin.tv_sec,
+      tv_usec: self.tv_usec - begin.tv_usec
+    };
   }
 }
 

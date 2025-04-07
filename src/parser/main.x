@@ -54,6 +54,13 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
   return lib;
 }
 
+func trim_nl(s: String): String{
+  if(s.str().ends_with("\n")){
+    return s.substr(0, s.len() - 1).owned();
+  }
+  return s;
+}
+
 func bootstrap(cmd: CmdArgs*){
   print("main::bootstrap()\n");
   bootstrap = true;
@@ -125,7 +132,7 @@ func bootstrap(cmd: CmdArgs*){
       let p = Process::run(format("{} --libdir 2>&1", llvm_config).str());
       let res = p.read_close();
       if(res.is_ok()){
-        res.unwrap()
+        trim_nl(res.unwrap())
       }else{
         //panic!("failed to get libdir: {}", res);
         "/usr/lib/llvm-19/lib".owned()
@@ -180,9 +187,7 @@ func bootstrap(cmd: CmdArgs*){
   if(is_static_llvm){
     let linker = get_linker();
     let llvm = Process::run("{llvm_config} --link-static --libs core target aarch64 X86").read_close().unwrap();
-    if(llvm.str().ends_with("\n")){
-      llvm = llvm.substr(0, llvm.len() - 1).owned();
-    }
+    llvm = trim_nl(llvm);
     //print("llvm={}\n", llvm);
     //let sys = "-lstdc++ -lrt -ldl -lz -lzstd -ltinfo -lxml2";
     let bin_path = format("{}/{}-static", out_dir, name);
