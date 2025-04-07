@@ -4,12 +4,11 @@ import std/fs
 import parser/bridge
 import parser/incremental
 
-static use_cache: bool = true;
-
 struct Cache{
     map: HashMap<String, String>;
     file: String;
     inc: Incremental;
+    use_cache: bool;
 }
 
 func CACHE_FILE(out_dir: str): String{
@@ -22,11 +21,12 @@ impl Cache{
             map: HashMap<String, String>::new(),
             file: CACHE_FILE(config.out_dir.str()),
             inc: Incremental::new(config),
+            use_cache: config.use_cache,
         };
     }
 
     func read_cache(self){
-        if(!use_cache) return;
+        if(!self.use_cache) return;
         if(!File::exist(self.file.str())){
             return;
         }
@@ -47,7 +47,7 @@ impl Cache{
     }
     
     func write_cache(self){
-        if(!use_cache) return;
+        if(!self.use_cache) return;
         let str = String::new();
         for pair in &self.map{
             str.append(pair.a.str());
@@ -60,7 +60,7 @@ impl Cache{
     }
     
     func need_compile(self, file: str, out: str): bool{
-        if(!use_cache) return true;
+        if(!self.use_cache) return true;
         if(!File::is_file(out)){
             return true;
         }
@@ -82,7 +82,7 @@ impl Cache{
     }
     
     func update(self, file: str){
-        if(!use_cache) return;
+        if(!self.use_cache) return;
         let resolved = File::resolve(file);
         let time = self.get_time(resolved.str());
         self.map.add(resolved, time);

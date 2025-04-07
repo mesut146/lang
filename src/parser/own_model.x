@@ -119,6 +119,11 @@ enum Rhs{
     VAR(v: Variable),
     FIELD(scp: Variable, name: String)
 }
+enum Droppable{
+    VAR(var: Variable*),
+    OBJ(obj: Object*)
+}
+
 impl Hash for Rhs{
     func hash(self): i64{
         /*match self{
@@ -283,12 +288,6 @@ impl Move{
     }
 }
 
-
-
-enum Droppable{
-    VAR(var: Variable*),
-    OBJ(obj: Object*)
-}
 impl Droppable{
     func as_var(self): Variable*{
         match self{

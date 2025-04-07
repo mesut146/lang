@@ -40,10 +40,10 @@ func build_std(std_dir: str, out_dir: str): String{
   return build_std(std_dir, out_dir, true);
 }
 
-func build_std(std_dir: str, out_dir: str, use_cache0: bool): String{
-  use_cache = use_cache0;
+func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
   let src_dir = Path::parent(std_dir);
   let config = CompilerConfig::new(src_dir.str());
+  config.use_cache = use_cache;
   config
     .set_file(std_dir)
     .set_out(out_dir)
@@ -80,6 +80,9 @@ func bootstrap(cmd: CmdArgs*){
     }
     else if(target.eq("aarch64-linux-gnu") || target.eq("arm64")){
       std::setenv("target_triple", "aarch64-linux-gnu");
+    }
+    else if(target.eq("termux")){
+      std::setenv("target_triple", "aarch64-unknown-linux-android24");
     }
     else{
       panic("unsupported target: {}", target);
@@ -224,7 +227,6 @@ func bin_name(path: str): String{
 
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
-  use_cache = cmd.consume_any("-cache");
   let out_dir = cmd.get_val2("-out");
   let run = !cmd.consume_any("-norun");
   let compile_only = cmd.consume_any("-nolink");
@@ -234,6 +236,7 @@ func handle_c(cmd: CmdArgs*){
   let name: Option<String> = cmd.get_val("-name");
   let incremental = cmd.consume_any("-inc");
   let config = CompilerConfig::new();
+  config.use_cache = cmd.consume_any("-cache");
   config.incremental_enabled = incremental;
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();

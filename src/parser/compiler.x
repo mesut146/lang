@@ -30,8 +30,7 @@ func get_linker(): str{
   if(opt.is_some()){
     return opt.unwrap();
   }
-  //return "clang-16";
-  return "clang-19";
+  return "clang++-19";
 }
 
 struct Compiler{
@@ -663,6 +662,7 @@ impl Compiler{
   }
 
   func compile_single(config: CompilerConfig): String{
+    config.use_cache = false;
     File::create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for inc_dir in &config.src_dirs{
@@ -671,7 +671,6 @@ impl Compiler{
     let cache = Cache::new(&config);
     let cmp = Compiler::new(ctx, &config, &cache);
     let compiled = List<String>::new();
-    use_cache = false;
     if(cmp.ctx.verbose){
       print("compiling {}\n", config.trim_by_root(config.file.str()));
     }
@@ -828,9 +827,9 @@ impl Compiler{
     }else{
       cmd.append("ar rcs ");
     }
-    let path = format("{}/{}", out_dir, name);
-    print("linking {}\n", path);
-    cmd.append(&path);
+    let out_file = format("{}/{}", out_dir, name);
+    print("linking {}\n", out_file);
+    cmd.append(&out_file);
     cmd.append(" ");
     for file in compiled{
       cmd.append(file.str());
@@ -839,39 +838,40 @@ impl Compiler{
   
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
-      print("build library {}\n", path);
+      print("build library {}\n", out_file);
     }else{
       panic("link failed '{}'", cmd_s.get());
     }
     cmd_s.drop();
-    return path;
+    return out_file;
   }
   
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
-    let path = format("{}/{}", out_dir, name);
-    print("linking {}\n", path);
-    if(File::exist(path.str())){
-      File::remove_file(path.str());
+    let out_file = format("{}/{}", out_dir, name);
+    print("linking {}\n", out_file);
+    if(File::exist(out_file.str())){
+      File::remove_file(out_file.str());
     }
     File::create_dir(out_dir);
     let cmd = get_linker().str();
     cmd.append(" -o ");
-    cmd.append(&path);
+    cmd.append(&out_file);
     cmd.append(" ");
     for obj_file in compiled{
       cmd.append(obj_file.str());
       cmd.append(" ");
     }
     cmd.append(args);
+    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str());
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
       //run if linked
-      print("build binary {}\n", path);
+      print("build binary {}\n", out_file);
     }else{
       panic("link failed '{}'", cmd_s);
     }
     cmd_s.drop();
-    return path;
+    return out_file;
   }
   
   func run(path: String){
@@ -913,6 +913,7 @@ struct CompilerConfig{
   jobs: i32;
   verbose_all: bool;
   incremental_enabled: bool;
+  use_cache: bool;
   llvm_only: bool;
 }
 
@@ -935,6 +936,7 @@ impl CompilerConfig{
       jobs: 1,
       verbose_all: false,
       incremental_enabled: false,
+      use_cache: true,
       llvm_only: false,
     };
   }
@@ -981,6 +983,7 @@ impl CompilerConfig{
     return self;
   }
   func link(self, compiled: List<String>*): String{
+    if(self.llvm_only) return "".owned();
     match &self.lt{
       LinkType::None => return "".owned(),
       LinkType::Binary(bin_name*, args*, run) => {
