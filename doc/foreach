@@ -1,14 +1,33 @@
+list: List<T>
+
 for e in &list{
+    //e: T*
     stmt...
 }
-
-
 {
  let it = (&list).iter();
  while(true){
   let opt = it.next();
   if(opt.is_none()) break;
   let e = opt.unwrap();
+  //e: T*
+  stmt...
+ }
+ it.drop();
+}
+
+//into
+for e in list{
+    //e: T
+    stmt...
+}
+{
+ let it = (list).into_iter();
+ while(true){
+  let opt = it.next();
+  if(opt.is_none()) break;
+  let e = opt.unwrap();
+  //e: T
   stmt...
  }
  it.drop();
