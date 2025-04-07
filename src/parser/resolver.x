@@ -1947,27 +1947,7 @@ impl Resolver{
   func is_drop_call(mc: Call*): bool{
     return is_call(mc, "Drop", "drop");
   }
-  /*func is_ptr_get(mc: Call*): bool{
-    return is_call(mc, "ptr", "get");
-  }
-  func is_ptr_copy(mc: Call*): bool{
-    return is_call(mc, "ptr", "copy");
-  }
-  func is_ptr_deref(mc: Call*): bool{
-    return is_call(mc, "ptr", "deref");
-  }*/
-  func is_ptr_null(mc: Call*): bool{
-    return is_call(mc, "ptr", "null");
-  }
-  func std_size(mc: Call*): bool{
-    return is_call(mc, "std", "size");
-  }
-  func std_is_ptr(mc: Call*): bool{
-    return is_call(mc, "std", "is_ptr");
-  }
-  /*func is_std_no_drop(mc: Call*): bool{
-    return is_call(mc, "std", "no_drop");
-  }*/
+
   func is_print(mc: Call*): bool{
     return mc.name.eq("print") && mc.scope.is_none();
   }
@@ -2370,7 +2350,7 @@ impl Resolver{
       rt2.drop();
       return RType::new("void");
     }
-    if(is_drop_call(call)){
+    if(is_call(call, "Drop", "drop")){
       let argt = self.visit(call.args.get(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){
         argt.drop();
@@ -2406,7 +2386,7 @@ impl Resolver{
       generate_format(node, call, self);
       return RType::new("String");
     }
-    if(is_call(call, "std", "size")){
+    if(Resolver::is_call(call, "std", "size")){
       if(!call.args.empty()){
         let tmp = self.visit(call.args.get(0));
         tmp.drop();

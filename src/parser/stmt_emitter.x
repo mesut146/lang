@@ -28,11 +28,11 @@ impl Compiler{
         Stmt::While(cnd*, body*) => self.visit_while(node, cnd, body.get()),
         Stmt::Continue => {
           self.own.get().do_continue(node.line);
-          CreateBr(*self.loops.last());
+          CreateBr(self.loops.last().begin_bb);
         },
         Stmt::Break => {
           self.own.get().do_break(node.line);
-          CreateBr(*self.loopNext.last());
+          CreateBr(self.loops.last().next_bb);
         },
       }
     }
@@ -87,15 +87,13 @@ impl Compiler{
       SetInsertPoint(condbb);
       CreateCondBr(self.branch(cond), then, next);
       self.set_and_insert(then);
-      self.loops.add(condbb);
-      self.loopNext.add(next);
+      self.loops.add(LoopInfo{condbb, next});
       self.llvm.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
       self.visit_body(body);
       self.own.get().end_scope(get_end_line(body));
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
-      self.loopNext.pop_back();
       let exit_body = Exit::get_exit_type(body);
       if(!exit_body.is_jump()){
           CreateBr(condbb);
@@ -384,8 +382,7 @@ impl Compiler{
       }
       //self.llvm.di.get().exit_scope();
       self.set_and_insert(then);
-      self.loops.add(updatebb);
-      self.loopNext.add(next);
+      self.loops.add(LoopInfo{updatebb, next});
       //self.llvm.di.get().new_scope(node.body.get().line);
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit_body(node.body.get());
@@ -403,7 +400,6 @@ impl Compiler{
       }
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
-      self.loopNext.pop_back();
       CreateBr(condbb);
       self.set_and_insert(next);
 

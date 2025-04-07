@@ -778,7 +778,7 @@ impl Compiler{
         argt.drop();
       }
 
-      if(Resolver::std_size(mc)){
+      if(Resolver::is_call(mc, "std", "size")){
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get(0));
           let sz = self.getSize(&ty) / 8;
@@ -790,7 +790,7 @@ impl Compiler{
           return makeInt(sz, 32) as Value*;
         }
       }    
-      if(Resolver::std_is_ptr(mc)){
+      if(Resolver::is_call(mc, "std", "is_ptr")){
         let ty = mc.type_args.get(0);
         if(ty.is_pointer()){
           return getTrue();
@@ -840,7 +840,7 @@ impl Compiler{
         vector_Value_delete(args);
         return res;
       }
-      if(Resolver::is_ptr_null(mc)){
+      if(Resolver::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
         return ConstantPointerNull_get(getPointerTo(ty));
       }

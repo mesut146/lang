@@ -33,6 +33,11 @@ func get_linker(): str{
   return "clang++-19";
 }
 
+struct LoopInfo{
+  begin_bb: BasicBlock*;
+  next_bb: BasicBlock*;
+}
+
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
@@ -42,8 +47,7 @@ struct Compiler{
   globals: HashMap<String, Value*>;
   allocMap: HashMap<i32, Value*>;
   curMethod: Option<Method*>;
-  loops: List<BasicBlock*>;
-  loopNext: List<BasicBlock*>;
+  loops: List<LoopInfo>;
   own: Option<Own>;
   string_map: HashMap<String, Value*>;
   config: CompilerConfig*;
@@ -60,8 +64,7 @@ impl Compiler{
      globals: HashMap<String, Value*>::new(),
      allocMap: HashMap<i32, Value*>::new(),
      curMethod: Option<Method*>::new(),
-     loops: List<BasicBlock*>::new(),
-     loopNext: List<BasicBlock*>::new(),
+     loops: List<LoopInfo>::new(),
      own: Option<Own>::new(),
      string_map: HashMap<String, Value*>::new(),
      config: config,

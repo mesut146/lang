@@ -47,6 +47,6 @@ if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
 fi
-ar rcs $lib $obj
-/usr/bin/ranlib $lib
+
+ar rcs $lib $obj && /usr/bin/ranlib $lib
 echo "writing $lib"

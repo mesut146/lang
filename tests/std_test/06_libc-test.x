@@ -49,18 +49,17 @@ func parse_float(){
 func time_test(){
    let tp: timeval = timeval{0, 0};
    gettimeofday(&tp, ptr::null<i8>());
-   print("time={:?} ms={}\n", tp, tp.as_ms());
+   print("gettimeofday={:?} ms={}\n", tp, tp.as_ms());
 }
 
 func measure(){
-    let tp: timeval = timeval{0, 0};
-    gettimeofday(&tp, ptr::null<i8>());
-    print("time1={:?} ms={}\n", tp, tp.as_ms());
+    let begin: timeval = gettime();
+    print("time1={:?} ms={}\n", begin, begin.as_ms());
     sleep(2);
-    let end: timeval = timeval{0, 0};
-    gettimeofday(&end, ptr::null<i8>());
+    let end: timeval = gettime();
+    let diff = end.sub(&begin);
     print("time2={:?} ms={}\n", end, end.as_ms());
-    print("diff={:?} sec={}\n", end.as_ms() - tp.as_ms(), end.tv_sec-tp.tv_sec);
+    print("diff={:?} ms={}ms\n", diff, diff.as_ms());
 }
 
 func fork_test(){
