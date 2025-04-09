@@ -28,13 +28,21 @@ macro panic(e: Expr, s: String){
 }
 
 //add ?()throw operator
-let r = Result:Ok{}
+let r = Result<T, E>:Ok{}
 r?.get();
 {
-  if let Result::Ok{val}=r{
-    val.get();
-  }else{
-    panic or return depends on method return type
+  match r{
+    Result::Ok{val} => {
+      val.get();
+    },
+    Result::Err{err} => {
+      //panic or return depends on method return type
+      if(std::return_type!() == Result<V, E>){
+        return Result<V, E>::Err(err);
+      }else{
+        panic("unwrap Result::Err");
+      }
+    }
   }
 }
 

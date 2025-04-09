@@ -59,23 +59,26 @@ struct MethodResolver{
 
 impl Signature{
     func new(name: String): Signature{
-        return Signature{mc: Option<Call*>::new(),
-                    m: Option<Method*>::new(),
-                    name: name,
-                    args: List<Type>::new(),
-                    scope: Option<RType>::new(),
-                    r: Option<Resolver*>::new(),
-                    desc: Desc::new()
+        return Signature{
+            mc: Option<Call*>::new(),
+            m: Option<Method*>::new(),
+            name: name,
+            args: List<Type>::new(),
+            scope: Option<RType>::new(),
+            r: Option<Resolver*>::new(),
+            desc: Desc::new()
         };
     }
+    
     func new(mc: Call*, r: Resolver*): Signature{
-        let res = Signature{mc: Option::new(mc),
-                    m: Option<Method*>::new(),
-                    name: mc.name.clone(),
-                    args: List<Type>::new(),
-                    scope: Option<RType>::new(),
-                    r: Option::new(r),
-                    desc: Desc::new()
+        let res = Signature{
+            mc: Option::new(mc),
+            m: Option<Method*>::new(),
+            name: mc.name.clone(),
+            args: List<Type>::new(),
+            scope: Option<RType>::new(),
+            r: Option::new(r),
+            desc: Desc::new()
         };
         let is_trait = false;                            
         if(mc.scope.is_some()){
@@ -154,7 +157,8 @@ impl Signature{
         panic("replace_self not impl method");
     }
     func new(m: Method*, map: Map<String, Type>*, desc: Desc, r: Resolver*, origin: Resolver*): Signature{
-        let res = Signature{mc: Option<Call*>::new(),
+        let res = Signature{
+            mc: Option<Call*>::new(),
             m: Option<Method*>::new(m),
             name: m.name.clone(),
             args: List<Type>::new(),
@@ -537,10 +541,10 @@ impl MethodResolver{
             scp_rt.type = full_scope;
         }
         let gen_pair: Pair<Method*, Desc> = self.generateMethod(&typeMap, target, sig);
-        typeMap.drop();
         let res = self.r.visit_type(&gen_pair.a.type);
         res.method_desc = Option::new(gen_pair.b);
         type_params.drop();
+        typeMap.drop();
         list.drop();
         real.drop();
         errors.drop();

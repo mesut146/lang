@@ -44,12 +44,14 @@ impl DebugInfo{
         
         path_c.drop();
         dir_c.drop();
-        return DebugInfo{cu: cu, file: file,
-             sp: Option<DISubprogram*>::new(),
-             types: HashMap<String, DIType*>::new(),
-             incomplete_types: HashMap<String, DICompositeType*>::new(),
-             debug: debug,
-             scopes: Stack<DILexicalBlock*>::new()
+        return DebugInfo{
+          cu: cu,
+          file: file,
+          sp: Option<DISubprogram*>::new(),
+          types: HashMap<String, DIType*>::new(),
+          incomplete_types: HashMap<String, DICompositeType*>::new(),
+          debug: debug,
+          scopes: Stack<DILexicalBlock*>::new()
         };
     }
     
