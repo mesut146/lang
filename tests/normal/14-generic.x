@@ -12,6 +12,11 @@ enum Op<T>{
   Some(val: T)
 }
 
+impl<T> A<T>{
+  func use_self(self){
+  }
+}
+
 func one<T>(a: T, b: T): T{
   return a + b;
 }
@@ -31,8 +36,14 @@ func inferb<T, U>(b: B<A<T>, U>): i64{
 
 func no_infer(){
   //specified
-  assert(A<i32>{10}.val == 10);
-  assert(A<A<i32>>{A<i32>{20}}.val.val == 20);
+  let a = A<i32>{10};
+  assert(a.val == 10);
+  a.use_self();
+  
+  let a2 = A<A<i32>>{a};
+  assert(a2.val.val == 10);
+  A<i8>::use_self(&a);//should fail
+
   let b = B<i32, A<i32>>{5, A<i32>{15}};
   assert(b.a == 5);
   assert(b.b.val == 15);

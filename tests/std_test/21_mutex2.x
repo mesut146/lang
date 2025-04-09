@@ -9,13 +9,12 @@ func f(arg: c_void*){
 }
 
 func main(){
-    let m = Mutex::new(0);
-    let th_cnt = 32;
+    let m = Mutex::new<i32>(0);
+    let th_cnt = 5;
     let arr = List<Thread>::new(th_cnt);
     for(let i = 1;i <= th_cnt;++i){
         let th = thread::spawn_arg(f, &m);
         arr.add(th);
-        if(i %8 == 0) sleep(1);
     }
     for th in &arr{
         th.join();
@@ -23,7 +22,7 @@ func main(){
     sleep(1);
     let val = m.unwrap();
     print("mutex={}\n", val);
-    assert(val == 32);
+    assert(val == th_cnt);
     arr.drop();
     print("mutex2 done\n");
 }

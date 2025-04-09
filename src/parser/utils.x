@@ -437,43 +437,55 @@ impl Exit{
     }
 
     func get_exit_type(expr: Expr*): Exit{
-        if let Expr::Call(call*)=(expr){
-            if(call.name.eq("panic") && call.scope.is_none()){
-                return Exit::new(ExitType::PANIC);
-            }
-            if(call.name.eq("exit") && call.scope.is_none()){
-                return Exit::new(ExitType::EXITCALL);
-            }
-            if(Resolver::is_call(call, "std", "unreachable")){
-                return Exit::new(ExitType::UNREACHABLE);
-            }
+        match expr{
+            Expr::Block(block0*) => {
+                let block = block0.get();
+                return get_exit_type(block);
+            },
+            Expr::If(is0*) => {
+                let is = is0.get();
+                return get_exit_type(is);
+            },
+            Expr::IfLet(iflet0*) => {
+                let iflet = iflet0.get();
+                return get_exit_type(iflet);
+            },
+            Expr::Match(mt0*) => {
+                return get_exit_type(mt0.get());
+            },
+            Expr::Call(call*) => {
+                if(call.name.eq("panic") && call.scope.is_none()){
+                    return Exit::new(ExitType::PANIC);
+                }
+                if(call.name.eq("exit") && call.scope.is_none()){
+                    return Exit::new(ExitType::EXITCALL);
+                }
+                if(Resolver::is_call(call, "std", "unreachable")){
+                    return Exit::new(ExitType::UNREACHABLE);
+                }
+                return Exit::new(ExitType::NONE);
+            },
+            Expr::MacroCall(call*) => {
+                if(call.name.eq("panic") && call.scope.is_none()){
+                    return Exit::new(ExitType::PANIC);
+                }
+                if(Resolver::is_call(call, "std", "unreachable")){
+                    return Exit::new(ExitType::UNREACHABLE);
+                }
+                return Exit::new(ExitType::NONE);
+            },
+            _ => return Exit::new(ExitType::NONE)
         }
-        if let Expr::Block(block0*)=(expr){
-            let block = block0.get();
-            return get_exit_type(block);
-        }
-        if let Expr::If(is0*)=(expr){
-            let is = is0.get();
-            return get_exit_type(is);
-        }
-        if let Expr::IfLet(iflet0*)=(expr){
-            let iflet = iflet0.get();
-            return get_exit_type(iflet);
-        }
-        if let Expr::Match(mt0*)=(expr){
-            return get_exit_type(mt0.get());
-        }
-        return Exit::new(ExitType::NONE);
     }
 
     func get_exit_type(stmt: Stmt*): Exit{
-        if(stmt is Stmt::Ret) return Exit::new(ExitType::RETURN);
-        if(stmt is Stmt::Break) return Exit::new(ExitType::BREAK);
-        if(stmt is Stmt::Continue) return Exit::new(ExitType::CONTINE);
-        if let Stmt::Expr(expr*)=(stmt){
-            return get_exit_type(expr);
+        match stmt{
+            Stmt::Ret(expr*) => return Exit::new(ExitType::RETURN),
+            Stmt::Break => return Exit::new(ExitType::BREAK),
+            Stmt::Continue => return Exit::new(ExitType::CONTINE),
+            Stmt::Expr(expr*) => return get_exit_type(expr),
+            _ => return Exit::new(ExitType::NONE),
         }
-        return Exit::new(ExitType::NONE);
     }
 }
 

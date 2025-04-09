@@ -479,7 +479,7 @@ impl MethodResolver{
             let scope = &sig.scope.get().type;
             if(scope.is_simple()){
                 let scope_args = scope.get_args();
-                if let Expr::Type(scp*)=(mc.scope.get()){
+                if let Expr::Type(scp*) = mc.scope.get(){
                   scope = scp;
                   scope_args = scp.get_args();
                 }
@@ -525,12 +525,12 @@ impl MethodResolver{
             let tp = type_params.get(i);
             if (!typeMap.contains(tp.name())) {
                 let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
-                type_params.drop();
-                list.drop();
-                real.drop();
-                errors.drop();
+                //type_params.drop();
+                //list.drop();
+                //real.drop();
+                //errors.drop();
                 self.r.err(expr, msg);
-                panic("unreachable");
+                //std::unreachable();
             }
         }
         if(sig.scope.is_some()){
