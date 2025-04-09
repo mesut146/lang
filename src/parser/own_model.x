@@ -13,6 +13,7 @@ import parser/debug_helper
 import parser/printer
 import parser/derive
 import std/map
+import std/hashmap
 import std/stack
 
 //prm or var
@@ -54,7 +55,8 @@ enum ScopeType {
     IF,
     ELSE,
     WHILE,
-    FOR
+    FOR,
+    MATCH_CASE
 }
 struct VarScope{
     kind: ScopeType;
@@ -66,11 +68,29 @@ struct VarScope{
     parent: i32;
     sibling: i32;
     is_empty: bool;
-    state_map: Map<Rhs, StateType>; //var_id -> StateType
-    pending_parent: Map<i32, StateType>; //var_id -> StateType
+    state_map: HashMap<Rhs, StateType>; //var_id -> StateType
+    pending_parent: HashMap<i32, StateType>; //var_id -> StateType
+}
+impl VarScope{
+    func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
+        let scope = VarScope{
+            kind: kind,
+            id: ++last_scope,
+            line: line,
+            vars: List<i32>::new(),
+            objects: List<Object>::new(),
+            exit: exit,
+            parent: -1,
+            sibling: -1,
+            is_empty: false,
+            state_map: HashMap<Rhs, StateType>::new(),
+            pending_parent: HashMap<i32, StateType>::new()
+        };
+        return scope;
+    }
 }
 
-#derive(Debug)
+#derive(Debug, Clone)
 enum StateType {
     NONE,
     MOVED(line: i32),
@@ -98,6 +118,24 @@ enum Rhs{
     EXPR(e: Expr*),
     VAR(v: Variable),
     FIELD(scp: Variable, name: String)
+}
+enum Droppable{
+    VAR(var: Variable*),
+    OBJ(obj: Object*)
+}
+
+impl Hash for Rhs{
+    func hash(self): i64{
+        /*match self{
+            Rhs::EXPR(e) => e.id as i64,
+            Rhs::VAR(v*) => v.id as i64,
+            Rhs::FIELD(scp*,name*) => scp.id * 31 + name.hash()
+        }*/
+        let s = Fmt::str(self);
+        let h = s.hash();
+        s.drop();
+        return h;
+    }
 }
 
 impl State{
@@ -197,7 +235,7 @@ impl Rhs{
         if let Rhs::VAR(v*)=(self){
             return v.id;
         }
-        panic("{}", self);
+        panic("{:?}", self);
     }
     func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){
@@ -250,48 +288,29 @@ impl Move{
     }
 }
 
-impl VarScope{
-    func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
-        let scope = VarScope{
-            kind: kind,
-            id: ++last_scope,
-            line: line,
-            vars: List<i32>::new(),
-            objects: List<Object>::new(),
-            exit: exit,
-            parent: -1,
-            sibling: -1,
-            is_empty: false,
-            state_map: Map<Rhs, StateType>::new(),
-            pending_parent: Map<i32, StateType>::new()
-        };
-        return scope;
-    }
-}
-
-enum Droppable{
-    VAR(var: Variable*),
-    OBJ(obj: Object*)
-}
 impl Droppable{
     func as_var(self): Variable*{
-        if let Droppable::VAR(v)=(self){
-            return v;
+        match self{
+            Droppable::VAR(v) => return v,
+            _ => panic("");
         }
-        panic("");
     }
     func drop_local(self, scope: VarScope*, line: i32, own: Own*): bool{
-        if let Droppable::OBJ(obj) = (self){
-            if(obj.scope == scope.id){
-                own.drop_obj(obj, scope, line);
-                return true;
-            }
-        }else if let Droppable::VAR(var) = (self){
-            if(var.scope == scope.id){
-                own.drop_var(var, scope, line);
-                return true;
+        match self{
+            Droppable::OBJ(obj) => {
+                if(obj.scope == scope.id){
+                    own.drop_obj(obj, scope, line);
+                    return true;
+                }
+                return false;
+            },
+            Droppable::VAR(var) => {
+                if(var.scope == scope.id){
+                    own.drop_var(var, scope, line);
+                    return true;
+                }
+                return false;
             }
         }
-        return false;
     }
 }

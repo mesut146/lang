@@ -1,7 +1,119 @@
 import parser/token
-import std/map
+import parser/utils
+import std/hashmap
 import std/libc
 import std/io
+import std/fs
+
+static lexer_keywords = make_keywords();
+static lexer_ops = make_ops();
+
+func make_keywords(): HashMap<str, TokenType>{
+  let map = HashMap<str, TokenType>::new(55);
+  map.insert("as", TokenType::AS);
+  map.insert("is", TokenType::IS);
+  map.insert("bool", TokenType::BOOLEAN);
+  map.insert("const",  TokenType::CONST);
+  map.insert("continue", TokenType::CONTINUE);
+  map.insert("enum", TokenType::ENUM);
+  map.insert("extern", TokenType::EXTERN);
+  map.insert("false", TokenType::FALSE);
+  map.insert("impl", TokenType::IMPL);
+  map.insert("import", TokenType::IMPORT);
+  map.insert("i8", TokenType::I8);
+  map.insert("i16", TokenType::I16);
+  map.insert("i32", TokenType::I32);
+  map.insert("i64", TokenType::I64);
+  map.insert("f32", TokenType::F32);
+  map.insert("f64", TokenType::F64);
+  map.insert("null", TokenType::NULL_LIT);
+  map.insert("return", TokenType::RETURN);
+  map.insert("true", TokenType::TRUE);
+  map.insert("if", TokenType::IF);
+  map.insert("else", TokenType::ELSE);
+  map.insert("for", TokenType::FOR);
+  map.insert("while", TokenType::WHILE);
+  map.insert("break", TokenType::BREAK);
+  map.insert("match", TokenType::MATCH);
+  map.insert("let", TokenType::LET);
+  map.insert("const", TokenType::CONST);
+  map.insert("true",  TokenType::TRUE);
+  map.insert("false",  TokenType::FALSE);
+  map.insert("i8",  TokenType::I8);
+  map.insert("i16",  TokenType::I16);
+  map.insert("i32",  TokenType::I32);
+  map.insert("i64",  TokenType::I64);
+  map.insert("f32",  TokenType::F32);
+  map.insert("f64",  TokenType::F64);
+  map.insert("null",  TokenType::NULL_LIT);
+  map.insert("as",  TokenType::AS);
+  map.insert("is",  TokenType::IS);
+  map.insert("return",  TokenType::RETURN);
+  map.insert("continue",  TokenType::CONTINUE);
+  map.insert("if",  TokenType::IF);
+  map.insert("else",  TokenType::ELSE);
+  map.insert("for",  TokenType::FOR);
+  map.insert("while",  TokenType::WHILE);
+  map.insert("do",  TokenType::DO);
+  map.insert("break",  TokenType::BREAK);
+  map.insert("func",  TokenType::FUNC);
+  map.insert("let",  TokenType::LET);
+  map.insert("new",  TokenType::NEW);
+  map.insert("match",  TokenType::MATCH);
+  map.insert("static", TokenType::STATIC);
+  map.insert("struct", TokenType::STRUCT);
+  map.insert("trait", TokenType::TRAIT);
+  map.insert("type", TokenType::TYPE);
+  map.insert("virtual", TokenType::VIRTUAL);
+  return map;
+}
+
+func make_ops(): HashMap<str, TokenType>{
+  let map = HashMap<str, TokenType>::new(55);
+  map.add("{", TokenType::LBRACE);
+  map.add("}", TokenType::RBRACE);
+  map.add("(", TokenType::LPAREN);
+  map.add(")", TokenType::RPAREN);
+  map.add("[", TokenType::LBRACKET);
+  map.add("]", TokenType::RBRACKET);
+  map.add(":", TokenType::COLON);
+  map.add("::", TokenType::COLON2);
+  map.add(";", TokenType::SEMI);
+  map.add(",", TokenType::COMMA);
+  map.add(".", TokenType::DOT);
+  map.add("<", TokenType::LT);
+  map.add(">", TokenType::GT);
+  map.add("<<", TokenType::LTLT);
+  //map.add(">>", TokenType::GTGT);
+  map.add("=", TokenType::EQ);
+  map.add("+=", TokenType::PLUSEQ);
+  map.add("-=", TokenType::MINUSEQ);
+  map.add("*=", TokenType::MULEQ);
+  map.add("/=", TokenType::DIVEQ);
+  map.add("^=", TokenType::POWEQ);
+  map.add("+", TokenType::PLUS);
+  map.add("-", TokenType::MINUS);
+  map.add("*", TokenType::STAR);
+  map.add("/", TokenType::DIV);
+  map.add("%", TokenType::PERCENT);
+  map.add("^", TokenType::POW);
+  map.add("~", TokenType::TILDE);
+  map.add("&", TokenType::AND);
+  map.add("|", TokenType::OR);
+  map.add("&&", TokenType::ANDAND);
+  map.add("||", TokenType::OROR);
+  map.add("==", TokenType::EQEQ);
+  map.add("!=", TokenType::NOTEQ);
+  map.add("<=", TokenType::LTEQ);
+  map.add(">=", TokenType::GTEQ);
+  map.add("!", TokenType::BANG);
+  map.add("#", TokenType::HASH);
+  map.add("++", TokenType::PLUSPLUS);
+  map.add("--", TokenType::MINUSMINUS);
+  map.add("..", TokenType::DOTDOT);
+  map.add("=>", TokenType::ARROW);
+  return map;
+}
 
 struct Lexer{
   path: String;
@@ -9,7 +121,6 @@ struct Lexer{
   pos: i32;
   line: i32;
   single_line: i32;//macro code is single lined
-  ops: Map<str, TokenType>;
 }
 
 impl i8{
@@ -31,11 +142,11 @@ impl i8{
 
 impl Lexer{
   func from_path(path: String): Lexer{
-    let s = read_string(path.str());
-    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1, ops: make_ops()};
+    let s = File::read_string(path.str());
+    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1};
   }
   func from_string(path: String, buf: String, line: i32): Lexer{
-    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line, ops: make_ops()};
+    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line};
   }
   
   func peek(self): i8{
@@ -69,29 +180,6 @@ impl Lexer{
       return self.line;
     }
     return self.single_line;
-  }
-
-  func get_line(buf: str, line: i32): str{
-    let cur_line = 1;
-    let pos = 0;
-    while(pos < buf.len()){
-      if(cur_line == line){
-        let end = buf.indexOf("\n", pos);
-        if(end == -1){
-          end = buf.len() as i32;
-        }
-        return buf.substr(pos, end);
-      }else{
-        let i = buf.indexOf("\n", pos);
-        if(i == -1){
-    
-        }else{
-          cur_line += 1;
-          pos = i + 1;
-        }
-      }
-    }
-    panic("not possible");
   }
 
   func err(self, msg: str){
@@ -128,88 +216,9 @@ impl Lexer{
     panic("invalid escape: {}", c);
   }
   
-  func make_ops(): Map<str, TokenType>{
-    let ops = Map<str, TokenType>::new();
-    ops.add("{", TokenType::LBRACE);
-    ops.add("}", TokenType::RBRACE);
-    ops.add("(", TokenType::LPAREN);
-    ops.add(")", TokenType::RPAREN);
-    ops.add("[", TokenType::LBRACKET);
-    ops.add("]", TokenType::RBRACKET);
-    ops.add(":", TokenType::COLON);
-    ops.add("::", TokenType::COLON2);
-    ops.add(";", TokenType::SEMI);
-    ops.add(",", TokenType::COMMA);
-    ops.add(".", TokenType::DOT);
-    ops.add("<", TokenType::LT);
-    ops.add(">", TokenType::GT);
-    ops.add("<<", TokenType::LTLT);
-    //ops.add(">>", TokenType::GTGT);
-    ops.add("=", TokenType::EQ);
-    ops.add("+=", TokenType::PLUSEQ);
-    ops.add("-=", TokenType::MINUSEQ);
-    ops.add("*=", TokenType::MULEQ);
-    ops.add("/=", TokenType::DIVEQ);
-    ops.add("^=", TokenType::POWEQ);
-    ops.add("+", TokenType::PLUS);
-    ops.add("-", TokenType::MINUS);
-    ops.add("*", TokenType::STAR);
-    ops.add("/", TokenType::DIV);
-    ops.add("%", TokenType::PERCENT);
-    ops.add("^", TokenType::POW);
-    ops.add("~", TokenType::TILDE);
-    ops.add("&", TokenType::AND);
-    ops.add("|", TokenType::OR);
-    ops.add("&&", TokenType::ANDAND);
-    ops.add("||", TokenType::OROR);
-    ops.add("==", TokenType::EQEQ);
-    ops.add("!=", TokenType::NOTEQ);
-    ops.add("<=", TokenType::LTEQ);
-    ops.add(">=", TokenType::GTEQ);
-    ops.add("!", TokenType::BANG);
-    ops.add("#", TokenType::HASH);
-    ops.add("++", TokenType::PLUSPLUS);
-    ops.add("--", TokenType::MINUSMINUS);
-    ops.add("..", TokenType::DOTDOT);
-    ops.add("=>", TokenType::ARROW);
-    return ops;
-  }
-  
   func kw(s: str): TokenType{
-    if(s.eq("struct")) return TokenType::STRUCT;
-    if(s.eq("enum")) return TokenType::ENUM;
-    if(s.eq("trait")) return TokenType::TRAIT;
-    if(s.eq("impl")) return TokenType::IMPL;
-    if(s.eq("type")) return TokenType::TYPE;
-    if(s.eq("extern")) return TokenType::EXTERN;
-    if(s.eq("virtual")) return TokenType::VIRTUAL;
-    if(s.eq("static")) return TokenType::STATIC;
-    if(s.eq("bool")) return TokenType::BOOLEAN;
-    if(s.eq("import")) return TokenType::IMPORT;
-    if(s.eq("true")) return TokenType::TRUE;
-    if(s.eq("false")) return TokenType::FALSE;
-    if(s.eq("i8")) return TokenType::I8;
-    if(s.eq("i16")) return TokenType::I16;
-    if(s.eq("i32")) return TokenType::I32;
-    if(s.eq("i64")) return TokenType::I64;
-    if(s.eq("f32")) return TokenType::F32;
-    if(s.eq("f64")) return TokenType::F64;
-    if(s.eq("null")) return TokenType::NULL_LIT;
-    if(s.eq("as")) return TokenType::AS;
-    if(s.eq("is")) return TokenType::IS;
-    if(s.eq("return")) return TokenType::RETURN;
-    if(s.eq("continue")) return TokenType::CONTINUE;
-    if(s.eq("if")) return TokenType::IF;
-    if(s.eq("else")) return TokenType::ELSE;
-    if(s.eq("for")) return TokenType::FOR;
-    if(s.eq("while")) return TokenType::WHILE;
-    if(s.eq("do")) return TokenType::DO;
-    if(s.eq("break")) return TokenType::BREAK;
-    if(s.eq("func")) return TokenType::FUNC;
-    if(s.eq("let")) return TokenType::LET;
-    if(s.eq("new")) return TokenType::NEW;
-    if(s.eq("match")) return TokenType::MATCH;
-    if(s.eq("const")) return TokenType::CONST;
+    let opt = lexer_keywords.get(&s);
+    if(opt.is_some()) return *opt.unwrap();
     return TokenType::EOF_;
   }
   
@@ -220,7 +229,7 @@ impl Lexer{
           continue;
         }
         let s = self.str(self.pos, self.pos + i); 
-        let it = self.ops.get_ptr(&s);
+        let it = lexer_ops.get(&s);
         if (it.is_some()) {
             self.pos += i;
             let tok = it.unwrap(); 
@@ -348,23 +357,29 @@ impl Lexer{
     let os = String::new();
     os.append(c);
     let oss = os.str();
-    if(self.ops.get_ptr(&oss).is_some()){
+    if(lexer_ops.get(&oss).is_some()){
       os.drop();
       return self.read_op();
     }
     os.drop();
-    panic("in file {}\nunexpected char: {}({}) at {}", &self.path, c, c, start);
+    if(self.single_line!=-1){
+        print("buf='{}'\n", self.buf);
+    }
+    panic("in file {}\nunexpected char: {}({}) at {} line:{}", &self.path, c, c, start,self.line);
   }
   
   func read_ident(self): Token {
-    let a = self.pos;
-    self.pos+= 1;
-    let c = self.peek();
-    while (c.is_letter() || c == '_' || c.is_digit()) {
-        self.pos+=1;
-        c = self.peek();
+    let start = self.pos;
+    self.pos += 1;
+    while (self.has()) {
+      let c = self.peek();
+      if(c.is_letter() || c == '_' || c.is_digit()){
+        self.pos += 1;
+      }else{
+        break;
+      }
     }
-    let s = self.str(a, self.pos);
+    let s = self.str(start, self.pos);
     let type = kw(s);
     if (type is TokenType::EOF_) {
         type = TokenType::IDENT;

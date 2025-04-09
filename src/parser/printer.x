@@ -1,30 +1,95 @@
+
 import parser/ast
+import parser/parser
+import parser/token
+import std/fs
+
+static print_cst = false;
+//static pretty_print = true;
+
+func format_dir(dir: str, out: str){
+    File::create_dir(out);
+    let files = File::list(dir);
+    for file in &files{
+        let file2 = format("{}/{}", dir, file);
+        let outf = format("{}/{}", out, file);
+        if(File::is_dir(file2.str())) continue;
+        print("file={}\n", file2);
+        print("out={}\n", outf);
+        let p = Parser::from_path(file2);
+        let unit = p.parse_unit();
+        let str = Fmt::str(&unit);
+        File::write_string(str.str(), outf.str());
+        outf.drop();
+        str.drop();
+    }
+    files.drop();
+}
 
 //T: Debug
 func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   for(let i = 0;i < arr.len();++i){
     if(i > 0) f.print(sep);
-    arr.get_ptr(i).debug(f);
+    arr.get(i).debug(f);
   }
 }
 
 func body(node: Stmt*, f: Fmt*){
+    body(node, f, false);
+}
+
+func body(node: Stmt*, f: Fmt*, skip_first: bool){
   let str = Fmt::str(node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
-    f.print("  ");
-    f.print(lines.get_ptr(j));
-    f.print("\n");
+    if(j > 0){
+        f.print("\n");
+    }
+    if(j > 0 || !skip_first){
+      f.print("    ");
+    }
+    f.print(lines.get(j));
   }
   str.drop();
   lines.drop();
 }
 
+func body(node: Expr*, f: Fmt*){
+    body(node, f, false);
+}
+
+func body(node: Expr*, f: Fmt*, skip_first: bool){
+  let str = Fmt::str(node); 
+  let lines: List<str> = str.split("\n");
+  for(let j = 0;j < lines.len();++j){
+    if(j > 0 || !skip_first){
+      f.print("    ");
+    }
+    f.print(lines.get(j));
+    if(j < lines.len() - 1){
+        f.print("\n");
+    }
+  }
+  str.drop();
+  lines.drop();
+}
+func body(str: String, f: Fmt*){
+    for(let i=0;i<str.len();++i){
+        let ch = str.get(i);
+        if(ch=='\n'){
+        }
+        //f.print(ch);
+    }
+    str.drop();
+}
+
 impl Debug for Unit{
   func debug(self, f: Fmt*){
     join(f, &self.imports, "\n");
-    f.print("\n");
-    join(f, &self.items, "\n");
+    if(!self.imports.empty()){
+        f.print("\n\n");
+    }
+    join(f, &self.items, "\n\n");
   }
 }
 
@@ -39,7 +104,9 @@ impl Debug for ImportStmt{
 impl Debug for Item{
   func debug(self, f: Fmt*){
     if let Item::Decl(decl*) = (self){
+      if(print_cst) f.print("Item::Decl{\n");
       decl.debug(f);
+      if(print_cst) f.print("}");
     }else if let Item::Method(m*) = (self){
       m.debug(f);
     }else if let Item::Impl(i*) = (self){
@@ -82,11 +149,14 @@ impl Debug for Impl{
     self.info.debug(f);
     f.print("{\n");
     for(let i=0;i<self.methods.len();++i){
-      let ms = Fmt::str(self.methods.get_ptr(i));
+        if(i>0){
+            f.print("\n");
+        }
+      let ms = Fmt::str(self.methods.get(i));
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
-        f.print("  ");
-        f.print(lines.get_ptr(j));
+        f.print("    ");
+        f.print(lines.get(j));
         f.print("\n");
       }
       ms.drop();
@@ -128,34 +198,38 @@ impl Debug for Decl{
           f.print(": ");
           decl.base.get().debug(f);
         }
+        if(fields.empty()){
+            f.print(";");
+            return;
+        }
         f.print("{\n");
         for(let i = 0;i < fields.len();++i){
-          f.print("  ");
-          fields.get_ptr(i).debug(f);
+          f.print("    ");
+          fields.get(i).debug(f);
           f.print(";\n");
         }
-        f.print("}\n");
+        f.print("}");
     }
     func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
         f.print("enum ");
         decl.type.debug(f);
         f.print("{\n");
         for(let i = 0;i < variants.len();++i){
-          let ev = variants.get_ptr(i);
-          f.print("  ");
+          let ev = variants.get(i);
+          f.print("    ");
           f.print(&ev.name);
           if(ev.fields.len()>0){
             f.print("(");
             for(let j = 0;j < ev.fields.len();++j){
               if(j > 0) f.print(", ");
-              ev.fields.get_ptr(j).debug(f);
+              ev.fields.get(j).debug(f);
             }
             f.print(")");
           }
           if(i < variants.len() - 1) f.print(",");
           f.print("\n");
         }
-        f.print("}\n");
+        f.print("}");
     }
 }
 
@@ -180,8 +254,17 @@ impl Debug for Method{
       }
     }
     join(f, &self.params, ", ");
-    f.print("): ");
-    self.type.debug(f);
+    if(self.is_vararg){
+      if(!self.params.empty()){
+        f.print(", ");
+      }
+      f.print("...");
+    }
+    f.print(")");
+    if(!self.type.is_void()){
+        f.print(": ");
+        self.type.debug(f);
+    }
     if(self.body.is_some()){
       self.body.get().debug(f);
     }else{
@@ -204,28 +287,31 @@ impl Debug for Param{
 
 impl Debug for Type{
   func debug(self, f: Fmt*){
-    if let Type::Simple(smp*)=(self){
-     smp.debug(f);
+      match self{
+      Type::Simple(smp*) => smp.debug(f),
+      Type::Pointer(ty*) => {
+          ty.get().debug(f);
+          f.print("*");
+     },
+     Type::Array(box*, sz*) => {
+          f.print("[");
+          box.get().debug(f);
+          f.print("; ");
+          sz.debug(f);
+          f.print("]");
+      },
+      Type::Slice(box*) => {
+          f.print("[");
+          box.get().debug(f);
+          f.print("]");
+      },
+      Type::Function(ft*) => {
+          ft.get().debug(f);
+      },
+      Type::Lambda(lt*) =>{
+          lt.get().debug(f);
+      }
     }
-    else if let Type::Pointer(ty*) = (self){
-      ty.get().debug(f);
-      f.print("*");
-    }
-    else if let Type::Array(box*, sz*) = (self){
-      f.print("[");
-      box.get().debug(f);
-      f.print("; ");
-      sz.debug(f);
-      f.print("]");
-    }
-    else if let Type::Slice(box*) = (self){
-      f.print("[");
-      box.get().debug(f);
-      f.print("]");
-    }else if let Type::Function(ft*) = (self){
-      ft.debug(f);
-    }
-    else panic("Type::debug() corrupt");
   }
 }
 impl Debug for Simple{
@@ -239,7 +325,7 @@ impl Debug for Simple{
       f.print("<");
       for(let i = 0;i < self.args.len();++i){
         if(i>0) f.print(", ");
-        self.args.get_ptr(i).debug(f);
+        self.args.get(i).debug(f);
       }
       f.print(">");
     }
@@ -252,24 +338,39 @@ impl Debug for FunctionType{
     if(!self.params.empty()){
       join(f, &self.params, ", ");
     }
-    f.print(") -> ");
+    f.print(") => ");
     self.return_type.debug(f);
+  }
+}
+
+impl Debug for LambdaType{
+  func debug(self, f: Fmt*){
+    f.print("func2(");
+    if(!self.params.empty()){
+      join(f, &self.params, ", ");
+    }
+    f.print(")");
+    if(self.return_type.is_some()){
+        f.print(" => ");
+        self.return_type.get().debug(f);
+    }
   }
 }
 
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
-    if let Stmt::Block(b*)=(self){
-      b.debug(f);
-    }
-    else if let Stmt::Var(ve*)=(self){
+    if let Stmt::Var(ve*)=(self){
       f.print("let ");
       ve.debug(f);
       f.print(";");
     }else if let Stmt::Expr(e*) =(self){
+      if(print_cst) f.print("Stmt::Expr{\n");
       e.debug(f);
-      f.print(";");
+      if(!e.is_body()){
+        f.print(";");
+      }
+      if(print_cst) f.print("}\n");
     }else if let Stmt::Ret(e*) =(self){
       f.print("return");
       if(e.is_some()){
@@ -283,33 +384,7 @@ impl Debug for Stmt{
      f.print(")");
      b.get().debug(f);
     }
-    else if let Stmt::If(is*)=(self){
-     f.print("if(");
-     is.cond.debug(f);
-     f.print(")");
-     if(!(is.then.get() is Stmt::Block)){
-       f.print(" ");
-     }
-     is.then.get().debug(f);
-     if(is.else_stmt.is_some()){
-       f.print("\nelse ");
-       let els = is.else_stmt.get();
-       els.debug(f);
-     }
-    }else if let Stmt::IfLet(il*)=(self){
-      f.print("if let ");
-      il.type.debug(f);
-      f.print("(");
-      join(f, &il.args, ", ");
-      f.print(") = (");
-      il.rhs.debug(f);
-      f.print(")");
-      il.then.get().debug(f);
-      if(il.else_stmt.is_some()){
-        f.print("else ");
-        il.else_stmt.get().debug(f);
-      }
-    }else if let Stmt::For(fs*)=(self){
+    else if let Stmt::For(fs*)=(self){
       f.print("for(");
       if(fs.var_decl.is_some()){
         fs.var_decl.get().debug(f);
@@ -339,6 +414,30 @@ impl Debug for Stmt{
   }
 }
 
+impl Debug for Body{
+  func debug(self, f: Fmt*){
+    if let Body::Block(b*)=(self){
+      if(print_cst) f.print("Body::Block{\n");
+      b.debug(f);
+      if(print_cst) f.print("}\n");
+    }else if let Body::Stmt(b*)=(self){
+      if(print_cst) f.print("Body::Stmt{\n");
+      b.debug(f);
+      if(print_cst) f.print("}\n");
+    }else if let Body::If(b*)=(self){
+      if(print_cst) f.print("Body::If{\n");
+      b.debug(f);
+      if(print_cst) f.print("}\n");
+    }else if let Body::IfLet(b*)=(self){
+      if(print_cst) f.print("Body::IfLet{\n");
+      b.debug(f);
+      if(print_cst) f.print("}\n");
+    }else{
+      panic("");
+    }
+  }
+}
+
 impl Debug for ArgBind{
   func debug(self, f: Fmt*){
     f.print(&self.name);
@@ -352,16 +451,27 @@ impl Debug for Block{
   func debug(self, f: Fmt*){
     f.print("{\n");
     for(let i = 0;i < self.list.len();++i){
-       body(self.list.get_ptr(i), f);
+        if(i>0) f.print("\n");
+       body(self.list.get(i), f);
     }
-    f.print("}");
+    if(self.return_expr.is_some()){
+        if(!self.list.empty()){
+            f.print("\n");
+        }
+      if(print_cst) f.print("Block::return_expr{\n");
+      body(self.return_expr.get(), f);
+      //self.return_expr.get().debug(f);
+      //f.print("\n");
+      if(print_cst) f.print("}\n");
+    }
+    f.print("\n}");
   }
 }
 
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
     for(let i=0;i<self.list.len();++i){
-      self.list.get_ptr(i).debug(f);
+      self.list.get(i).debug(f);
     }
   }
 }
@@ -407,48 +517,60 @@ impl Debug for Literal{
 impl Debug for Expr{
   func debug(self, f: Fmt*){
     if let Expr::Lit(lit*)=(self){
+      if(print_cst) f.print("Expr::Lit{");
       lit.debug(f);
     }
     else if let Expr::Name(v*)=(self){
+      if(print_cst) f.print("Expr::Lit{");
       f.print(v.str());
     }
     else if let Expr::Call(call*)=(self){
+      if(print_cst) f.print("Expr::Call{");
       call.debug(f);
     }else if let Expr::Par(e*)=(self){
+      if(print_cst) f.print("Expr::Par{");
       f.print("(");
       e.get().debug(f);
       f.print(")");
     }
     else if let Expr::Type(t*)=(self){
+      if(print_cst) f.print("Expr::Type{");
       t.debug(f);
     }else if let Expr::Unary(op*, e*)=(self){
+      if(print_cst) f.print("Expr::Unary{");
       f.print(op);
       e.get().debug(f);
     }
     else if let Expr::Infix(op*, l*, r*)=(self){
+      if(print_cst) f.print("Expr::Infix{");
       l.get().debug(f);
       f.print(" ");
       f.print(op);
       f.print(" ");
       r.get().debug(f);
     }else if let Expr::Access(scp*, nm*)=(self){
+      if(print_cst) f.print("Expr::Access{");
       scp.get().debug(f);
       f.print(".");
       f.print(nm);
     }else if let Expr::Obj(ty*, args*)=(self){
+      if(print_cst) f.print("Expr::Obj{");
       ty.debug(f);
       f.print("{");
       join(f, args, ", ");
       f.print("}");
     }else if let Expr::As(e*, type*)=(self){
+      if(print_cst) f.print("Expr::As{");
       e.get().debug(f);
       f.print(" as ");
       type.debug(f);
     }else if let Expr::Is(e*, rhs*)=(self){
+      if(print_cst) f.print("Expr::Is{");
       e.get().debug(f);
       f.print(" is ");
       rhs.get().debug(f);
     }else if let Expr::Array(arr*, sz*)=(self){
+      if(print_cst) f.print("Expr::Array{");
       f.print("[");
       join(f, arr, ", ");
       if(sz.is_some()){
@@ -456,7 +578,9 @@ impl Debug for Expr{
         sz.get().debug(f);
       }
       f.print("]");
-    }else if let Expr::ArrAccess(aa*)=(self){
+    }
+    else if let Expr::ArrAccess(aa*)=(self){
+      if(print_cst) f.print("Expr::ArrAccess{");
       aa.arr.get().debug(f);
       f.print("[");
       aa.idx.get().debug(f);
@@ -466,9 +590,129 @@ impl Debug for Expr{
       }
       f.print("]");
     }
-    else{
-     panic("Expr::debug");
+    else if let Expr::Block(b*)=(self){
+      if(print_cst) f.print("Expr::Block{");
+      b.get().debug(f);
     }
+    else if let Expr::If(ife*)=(self){
+      if(print_cst) f.print("Expr::If{");
+      ife.get().debug(f);
+    }
+    else if let Expr::IfLet(il*)=(self){
+      if(print_cst) f.print("Expr::IfLet{");
+      il.get().debug(f);
+    }else if let Expr::Match(me*)=(self){
+      if(print_cst) f.print("Expr::Match{");
+      me.get().debug(f);
+    }else if let Expr::MacroCall(mc*)=(self){
+      Debug::debug(mc, f); 
+    }else if let Expr::Lambda(lc*)=(self){
+        f.print("|");
+        f.print("|");
+        if(lc.return_type.is_some()){
+            f.print(": ");
+            f.print(lc.return_type.get());
+        }
+        match (lc.body.get()){
+            LambdaBody::Expr(e*)=>{
+                body(e, f, true);
+            },
+            LambdaBody::Stmt(s*)=>{
+                body(s, f, true);
+            }
+        }
+    }else{
+      panic("Expr::debug");
+    }
+    if(print_cst) f.print("}");
+  }
+}
+impl Debug for Match{
+  func debug(self, f: Fmt*){
+    f.print("match ");
+    self.expr.debug(f);
+    f.print("{\n");
+    for(let i = 0;i < self.cases.len();++i){
+      if(i > 0){
+        //f.print("    ,\n");
+      }
+      f.print("    ");
+      let case = self.cases.get(i);
+      if(case.lhs is MatchLhs::NONE){
+        f.print("_");
+      }
+      else if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
+        type.debug(f);
+        if(!args.empty()){
+          f.print("(");
+          join(f, args, ", ");
+          f.print(")");
+        }
+      }else{
+        panic("unr");
+      }
+      f.print(" => ");
+      if let MatchRhs::EXPR(expr*)=(&case.rhs){
+        //expr.debug(f);
+        body(expr, f, true);
+      }else if let MatchRhs::STMT(stmt*)=(&case.rhs){
+        body(stmt, f, true);
+        //stmt.debug(f);
+      }else{
+        panic("unr");
+      }
+      if(i < self.cases.len() - 1){
+          f.print(",\n");
+      }
+    }
+    f.print("\n}\n");
+  } 
+}
+
+impl Debug for IfStmt{
+  func debug(self, f: Fmt*){
+    f.print("if(");
+    self.cond.debug(f);
+    f.print(")");
+    if(!(self.then.get() is Body::Block)){
+      f.print(" ");
+    }
+    self.then.get().debug(f);
+    if(self.else_stmt.is_some()){
+      f.print("\nelse ");
+      let els = self.else_stmt.get();
+      els.debug(f);
+    }
+  }
+}
+
+impl Debug for IfLet{
+  func debug(self, f: Fmt*){
+    f.print("if let ");
+    self.type.debug(f);
+    f.print("(");
+    join(f, &self.args, ", ");
+    f.print(") = (");
+    self.rhs.debug(f);
+    f.print(")");
+    self.then.get().debug(f);
+    if(self.else_stmt.is_some()){
+      f.print("else ");
+      self.else_stmt.get().debug(f);
+    }
+  }
+}
+
+impl Debug for MacroCall{
+  func debug(self, f: Fmt*){
+    if(self.scope.is_some()){
+      Debug::debug(self.scope.get(), f);
+      f.print("::");
+    }
+    f.print(&self.name);
+    f.print("!(");
+    join(f, &self.args, ", ");
+    f.print(")");
   }
 }
 

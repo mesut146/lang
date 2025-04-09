@@ -10,7 +10,11 @@ impl<T> Stack<T>{
     }
 
     func len(self): i64{
-        return self.list.len() as i64;
+        return self.list.len();
+    }
+    
+    func empty(self): bool{
+        return self.len() == 0;
     }
 
     func push(self, val: T){
@@ -22,10 +26,10 @@ impl<T> Stack<T>{
     }
 
     func top(self): T*{
-        return self.list.get_ptr(self.list.len() - 1);
+        return self.peek();
     }
 
     func peek(self): T*{
-        return self.top();
+        return self.list.get(self.list.len() - 1);
     }
 } 

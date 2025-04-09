@@ -1,11 +1,34 @@
-//type char = i8
-//type int i32
-type ino_t = u64;
-type off_t = u64;
+import std/str
 
 struct c_void;
 struct FILE;
 struct DIR;
+
+//type char = i8
+//type int i32
+type ino_t = u64;
+type off_t = u64;
+type pthread_t = i64;
+type pthread_attr_t = c_void;
+type pthread_mutexattr_t = c_void;
+type suseconds_t = i32;
+
+type dev_t = i64;
+type mode_t = i64;
+type nlink_t = i64;
+type uid_t = i32;
+type gid_t = i32;
+type dev_t = i64;
+type off_t = i64;
+type blksize_t = i64;
+type blkcnt_t = i64;
+type time_t = i64;
+
+type pid_t = i32;
+
+const O_RDONLY: i32 = 0;
+const O_WRONLY: i32 = 1;
+const O_RDWR: i32 = 2;
 
 struct dirent {
     d_ino: ino_t;      /* inode number */
@@ -15,9 +38,13 @@ struct dirent {
     d_name: [u8; 256]; /* filename */
 }
 
+struct pthread_mutex_t{
+  data: [i8; 40];
+}
+
 impl dirent{
   func len(self): i32{
-    for(let i = 0;i < 256;++i){
+    for(let i = 0;i < self.d_name.len();++i){
       if(self.d_name[i] == 0) return i;
     }
     panic("no eof");
@@ -31,13 +58,14 @@ func strlen(arr: [i8]): i32{
   for(let i = 0;i < arr.len();++i){
     if(arr[i] == 0) return i;
   }
-  panic("no eof");
+  panic("no eof sl_len={}", arr.len());
 }
 func strlen(arr: i8*, max: i32): i32{
   for(let i = 0;i < max;++i){
-    if(*ptr::get(arr, i) == 0) return i;
+    let chr = *ptr::get(arr, i);
+    if(chr == 0) return i;
   }
-  panic("no eof");
+  panic("no eof max={}", max);
 }
 func strlen(ptr: i8*): i32{
   return strlen(ptr, 100000);
@@ -49,26 +77,10 @@ func is_null<T>(ptr: T*): bool{
 
 func SEEK_END(): i32 { return 2; }
 func SEEK_SET(): i32 { return 0; }
-
-func getenv2(name: str): Option<str>{
-  let c_name = CStr::new(name);
-  let c_env = getenv(c_name.ptr());
-  c_name.drop();
-  if(is_null(c_env)){
-    return Option<str>::new();
-  }
-  return Option::new(str::from_raw(c_env));
-}
-func setenv2(name: str, val: str, overwrite: i32){
-  let c_name = CStr::new(name);
-  let c_val = CStr::new(val);
-  setenv(c_name.ptr(), c_val.ptr(), overwrite);
-  c_name.drop();
-  c_val.drop();
-}
+//func SEEK_CUR(): i32 { return 0; }
 
 extern{
-  //func printf(fmt: i8*);
+  //func printf(fmt: i8*, ...);
   func exit(code: i32);
   func free(ptr: i8*);
   //func malloc(size: i64): i8*;
@@ -78,8 +90,9 @@ extern{
   func open(name: i8*, flags: i32, mode: i32): i32;
   func fclose(file: FILE*): i32;
   //func fflush(file: FILE*): i32;
-  func fwrite(buf: i8*, size: i32, count: i32, target: FILE*): i32;
+  func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: FILE*): i32;
   func fread(buf: i8*, size: i32, count: i32, target: FILE*): i32;
+  func fgets(s: i8*, size: i32, file: FILE*): i8*;
   func fseek(file: FILE*, offset: i64, origin: i32): i32;
   func ftell(file: FILE*): i64;
   func remove(name: i8*): i32;
@@ -94,26 +107,77 @@ extern{
   func putchar(chr: i32): i32;
 
   func stat(path: i8*, st: stat*): i32;
+  func fchmod(fildes: i32, mode: mode_t): i32;
   func getenv(name: i8*): i8*;
   func setenv(name: i8*, value: i8*, overwrite: i32): i32;
   func unsetenv(name: i8*): i32;
+
+  func atof(ptr: i8*): f64;
+  //func sprintf(str: i8*, format: i8*, ...): i32;
+  //func pthread_create(th: pthread_t*, attr: pthread_attr_t*, fp: func() => void, arg: c_void*): i32;
+  func pthread_create(th: i64*, attr: c_void*, fp: func(c_void*) => void, arg: c_void*): i32;
+  //func pthread_join(th: pthread_t, value_ptr: c_void**): i32;
+  func pthread_join(th: i64, value_ptr: c_void**): i32;
+  func sleep(sec: i32): i32;
+  func nanosleep(req: timespec*, rem: timespec*): i32;
+  func pthread_mutex_init(mutex: pthread_mutex_t*, attr: pthread_mutexattr_t*): i32;
+  func pthread_mutex_destroy(mutex: pthread_mutex_t*): i32;
+  func pthread_mutex_lock(mutex: pthread_mutex_t*): i32;
+  func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
+  func strerror(err: i32): i8*;
+  
+  func popen(cmd: i8*, mode: i8*): FILE*;
+  func pclose(fp: FILE*): i32;
+  func fork(): i32; //pid_t;
+  
+  func gettimeofday(tv: timeval*, timezone: i8*): i32;
+
+  func strcmp(s1: i8*, s2: i8*): i32;
 }
 
-type dev_t = i64;
-type mode_t = i64;
-type nlink_t = i64;
-type uid_t = i32;
-type gid_t = i32;
-type dev_t = i64;
-type off_t = i64;
-type blksize_t = i64;
-type blkcnt_t = i64;
-type time_t = i64;
+/*struct time{
+    tv: timeval;
+}*/
+
+func gettime(): timeval{
+  let tv: timeval = timeval{0, 0};
+  gettimeofday(&tv, ptr::null<i8>());
+  return tv;
+}
+
+func msleep(ms: i64){
+  let tm = timespec{ms/1000, ms%1000};
+  nanosleep(&tm, ptr::null<timespec>());
+}
+
+func make_pthread_mutex_t(): pthread_mutex_t{
+  let m: pthread_mutex_t = pthread_mutex_t{data: [0i8; 40]};
+  return m;
+}
 
 #derive(Debug)
 struct timespec{
   tv_sec: time_t;
   tv_nsec: time_t;
+}
+#derive(Debug)
+struct timeval {
+  tv_sec: time_t;     /* seconds */
+  tv_usec: suseconds_t;    /* microseconds */
+}
+impl timeval{
+  func as_ms(self): i64{
+    return self.tv_sec * 1000 + self.tv_usec / 1000;
+  }
+  func as_sec(self): i64{
+    return self.as_ms() / 1000;
+  }
+  func sub(self, begin: timeval*): timeval{
+    return timeval{
+      tv_sec: self.tv_sec - begin.tv_sec,
+      tv_usec: self.tv_usec - begin.tv_usec
+    };
+  }
 }
 
 #derive(Debug)

@@ -29,7 +29,7 @@ impl<T> Box<T>{
 
     func set(self, e: T): T{
       let old = ptr::deref(self.val);
-      *self.val = e;
+      ptr::copy(self.val, 0, e);
       return old;
     }
 }
@@ -90,7 +90,7 @@ impl<T> Ptr<T>{
       return Option::new(self.val.get().set(e));
     }
     self.val = Option::new(Box::new(e));
-    return Option<Box<T>>::new();
+    return Option<T>::new();
   }
 }
 
@@ -100,6 +100,7 @@ impl<T> Clone for Ptr<T>{
   }
 }
 
+//c ptr
 struct RawPtr<T>{
   ptr: T*;
 }

@@ -1,3 +1,4 @@
+
 import std/map
 import std/libc
 import parser/copier
@@ -15,7 +16,7 @@ func prim_size(s: str): Option<u32>{
       return Option::new(sizes[i] as u32);
     }
   }
-  return Option<u32>::None;
+  return Option<u32>::new();
 }
 
 func prim_size(s: String): Option<u32>{
@@ -37,7 +38,6 @@ impl Node{
     return Node{line: line, pos: 0, id: id};
   }
 }
-
 
 struct Unit{
   path: String;
@@ -87,6 +87,24 @@ impl ImportStmt{
   func new(): ImportStmt{
     return ImportStmt{list: List<String>::new()};
   }
+  func str(self): String{
+      let s = String::new();
+      for(let i=0;i<self.list.len();i+=1){
+          if(i>0) s.append("/");
+          s.append(self.list.get(i));
+      }
+      return s;
+  }
+  func eq(self, is: ImportStmt*): bool{
+      if(self.list.len() != is.list.len()) return false;
+      return self.list.eq(&is.list);
+  }
+}
+
+struct Const{
+  name: String;
+  type: Option<Type>;
+  rhs: Expr;
 }
 
 enum Item{
@@ -95,7 +113,8 @@ enum Item{
   Impl(i: Impl),
   Trait(t: Trait),
   Type(name: String, rhs: Type),
-  Extern(methods: List<Method>)
+  Extern(methods: List<Method>),
+  Const(val: Const),
 }
 
 impl Item{
@@ -119,7 +138,7 @@ struct ImplInfo{
 }
 impl ImplInfo{
   func new(type: Type): ImplInfo{
-    return ImplInfo{List<Type>::new(), Option<Type>::None, type};
+    return ImplInfo{List<Type>::new(), Option<Type>::new(), type};
   }
   func clone(self): ImplInfo{
     return ImplInfo{self.type_params.clone(), self.trait_name.clone(), self.type.clone()};
@@ -145,7 +164,7 @@ enum Decl: BaseDecl{
 impl Decl{
   func is_drop(self): bool{
     for(let i = 0;i < self.attr.len();++i){
-      let at = self.attr.get_ptr(i);
+      let at = self.attr.get(i);
       if(at.eq("drop")){
         return true;
       }
@@ -162,7 +181,7 @@ impl Decl{
     if let Decl::Enum(variants*)=(self){
       return variants;
     }
-    panic("get_variants {}", self.type);
+    panic("get_variants {:?}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
     if let Decl::Struct(fields*)=(self){
@@ -172,12 +191,10 @@ impl Decl{
   }
 }
 
-
 struct FieldDecl{
   name: String;
   type: Type;
 }
-
 
 struct Variant{
   name: String;
@@ -212,28 +229,19 @@ impl Parent{
     panic("as_impl");
   }
   func get_type(self): Type*{
-    if let Parent::Trait(type*)=(self){
-      return type;
+    match self{
+      Parent::Impl(info*) => return &info.type,
+      Parent::Trait(type*) => return type,
+      _ => panic("get_type"),
     }
-    if let Parent::Impl(info*)=(self){
-      return &info.type;
-    }
-    panic("get_type");
   }
   func clone(self): Parent{
-    if let Parent::None=(self){
-      return Parent::None;
+    match self{
+      Parent::None => return Parent::None,
+      Parent::Impl(info*) => return Parent::Impl{info.clone()},
+      Parent::Trait(type*) => return Parent::Trait{type.clone()},
+      Parent::Extern => return Parent::Extern,
     }
-    if let Parent::Impl(info*)=(self){
-      return Parent::Impl{info.clone()};
-    }
-    if let Parent::Trait(type*)=(self){
-      return Parent::Trait{type.clone()};
-    }
-    if let Parent::Extern=(self){
-      return Parent::Extern;
-    }
-    panic("Parent::clone");
   }
 }
 
@@ -247,6 +255,7 @@ struct Method: Node{
   is_generic: bool;
   parent: Parent;
   path: String;
+  is_vararg: bool;
 }
 
 struct Param: Node{
@@ -265,13 +274,14 @@ impl Method{
       .node,
       type_params: List<Type>::new(),
       name: name,
-      self: Option<Param>::None,
+      self: Option<Param>::new(),
       params: List<Param>::new(),
       type: type,
-      body: Option<Block>::None,
+      body: Option<Block>::new(),
       is_generic: false,
       parent: Parent::None,
-      path: path
+      path: path,
+      is_vararg: false
     };
   }
   func print(self): String{
@@ -304,16 +314,20 @@ impl Simple{
     return Simple{scope: self.scope.clone(), name: self.name.clone(), args: self.args.clone()};
   }
 }
-
-/*enum Typex{
-  Basic(name: String),
-  Scoped(scope: Box<Type>, name: String)
-  Generic(scope: Box<Type>, name: String, args: List<Type>)
-}*/
-
+// (params)=>ret
 struct FunctionType{
   return_type: Type;
   params: List<Type>;
+}
+impl Clone for FunctionType{
+  func clone(self): FunctionType{
+    return FunctionType{return_type: self.return_type.clone(), params: self.params.clone()};
+  }
+}
+struct LambdaType{
+  return_type: Option<Type>;
+  params: List<Type>;
+  captured: List<Type>;
 }
 
 enum Type: Node{
@@ -321,7 +335,8 @@ enum Type: Node{
   Pointer(type: Box<Type>),
   Array(type: Box<Type>, size: i32),
   Slice(type: Box<Type>),
-  Function(type: Box<FunctionType>)
+  Function(type: Box<FunctionType>),
+  Lambda(type: Box<LambdaType>),
 }
 impl Type{
   func new(name: str): Type{
@@ -345,7 +360,7 @@ impl Type{
     if let Type::Simple(smp*)=(self){
       return &smp.name;
     }
-    panic("cant Type::name() {}", self);
+    panic("cant Type::name() {:?}", self);
   }
 
   func is_simple(self): bool{
@@ -381,6 +396,12 @@ impl Type{
     str.drop();
     return res;
   }
+  func is_float(self): bool{
+    let str = self.print();
+    let res = str.eq("f32") || str.eq("f64");
+    str.drop();
+    return res;
+  }
   func is_str(self): bool{
     return self.eq("str");
   }
@@ -400,7 +421,7 @@ impl Type{
     if let Type::Simple(smp*) = (self){
       return &smp.args;
     }
-    panic("get_args {}", self);
+    panic("get_args {:?}", self);
   }
   func is_pointer(self): bool{
     return self is Type::Pointer;
@@ -408,13 +429,22 @@ impl Type{
   func is_dpointer(self): bool{
     return self.is_pointer() && self.elem().is_pointer();
   }
+  func is_fpointer(self): bool{
+    return self is Type::Function;
+  }
+  func is_lambda(self): bool{
+      return self is Type::Lambda;
+  }
+  func is_any_pointer(self): bool{
+    return self.is_pointer() || self.is_fpointer() || self.is_lambda();
+  }
   func is_array(self): bool{
     return self is Type::Array;
   }
   func is_slice(self): bool{
     return self is Type::Slice;
   }
-  func get_ptr(self): Type*{
+  func deref_ptr(self): Type*{
     if let Type::Pointer(bx*) = (self){
       return bx.get();
     }
@@ -436,7 +466,7 @@ impl Type{
     if let Type::Slice(bx*) = (self){
       return bx.get();
     }
-    panic("elem {}", self);
+    panic("elem {:?}", self);
   }
   func unwrap_elem(*self): Type{
     if let Type::Pointer(bx) = (self){
@@ -448,7 +478,26 @@ impl Type{
     if let Type::Slice(bx) = (self){
       return bx.unwrap();
     }
-    panic("unwrap_elem {}", self);
+    panic("unwrap_elem {:?}", self);
+  }
+  func get_ft(self): FunctionType*{
+    if let Type::Function(bx*) = (self){
+      return bx.get();
+    }
+    panic("get_ft {:?}", self);
+  }
+  func unwrap_ft(*self): FunctionType{
+    if let Type::Function(bx) = (self){
+      return bx.unwrap();
+    }
+    panic("get_ft {:?}", self);
+  }
+  
+  func get_lambda(self): LambdaType*{
+    if let Type::Lambda(bx*) = (self){
+      return bx.get();
+    }
+    panic("get_lambda {:?}", self);
   }
 
   //get plain(generic)
@@ -460,7 +509,7 @@ impl Type{
         return Type::new(smp.name.clone());
       }
     }
-    panic("erase {}", self);
+    panic("erase {:?}", self);
   }
   
   func print(self): String{
@@ -498,24 +547,11 @@ impl Eq for Type{
   }
 }
 
-struct ArgBind: Node{
-  name: String;
-  is_ptr: bool;
-}
-
-struct IfLet{
-  type: Type;
-  args: List<ArgBind>;
-  rhs: Expr;
-  then: Block;
-  else_stmt: Ptr<Block>;
-}
-
 struct ForStmt{
   var_decl: Option<VarExpr>;
   cond: Option<Expr>;
   updaters: List<Expr>;
-  body: Box<Stmt>;
+  body: Box<Body>;
 }
 
 struct ForEach{
@@ -526,17 +562,27 @@ struct ForEach{
 
 struct IfStmt{
   cond: Expr;
-  then: Box<Stmt>;
-  else_stmt: Ptr<Stmt>;
+  then: Box<Body>;
+  else_stmt: Ptr<Body>;
+}
+
+struct ArgBind: Node{
+  name: String;
+  is_ptr: bool;
+}
+struct IfLet{
+  type: Type;
+  args: List<ArgBind>;
+  rhs: Expr;
+  then: Box<Body>;
+  else_stmt: Ptr<Body>;
 }
 
 enum Stmt: Node{
     Var(ve: VarExpr),
     Expr(e: Expr),
     Ret(e: Option<Expr>),
-    While(cond: Expr, then: Box<Stmt>),
-    If(e: IfStmt),
-    IfLet(e: IfLet),
+    While(cond: Expr, then: Box<Body>),
     For(e: ForStmt),
     ForEach(e: ForEach),
     Continue,
@@ -546,6 +592,24 @@ enum Stmt: Node{
 impl Stmt{
   func print(self): String{
     return Fmt::str(self);
+  }
+}
+
+enum Body: Node{
+  Block(val: Block),
+  Stmt(val: Stmt),
+  If(val: IfStmt),
+  IfLet(val: IfLet)
+}
+
+impl Body{
+  func line(self): i32{
+    match self{
+      Body::Block(b*) =>  return b.line,
+      Body::If(is*) => return is.cond.line,
+      Body::IfLet(il*) => return il.rhs.line,
+      Body::Stmt(val*) => return val.line,
+    }
   }
 }
 
@@ -611,6 +675,7 @@ struct ArrAccess{
   idx2: Ptr<Expr>;
 }
 
+//todo use this
 enum InfixOp{
   PLUS, MINUS, MUL, DIV, PERCENT, POW,
   AND, OR, XOR, NOT, LTLT, GTGT,
@@ -619,6 +684,7 @@ enum InfixOp{
   NOTEQ, LTEQ, GTEQ, LTLTEQ, GTGTEQ
 }
 
+//fix-sort
 enum Expr: Node{
   Lit(val: Literal),
   Name(val: String),
@@ -634,8 +700,11 @@ enum Expr: Node{
   Is(e: Box<Expr>, rhs: Box<Expr>),
   Array(list: List<Expr>, size: Option<i32>),
   ArrAccess(val: ArrAccess),
-  MatchExpr(val: Box<Match>),
-  Block(val: Box<Block>)
+  Match(val: Box<Match>),
+  Block(x: Box<Block>),
+  If(e: Box<IfStmt>),
+  IfLet(e: Box<IfLet>),
+  Lambda(val: Lambda)
 }
 impl Expr{
   func print(self): String{
@@ -645,11 +714,32 @@ impl Expr{
     if let Expr::Call(cx*) = (self){
       return cx;
     }
-    panic("get_call {}", self);
+    panic("get_call {:?}", self);
   }
+  func is_body(self): bool{
+    return self is Expr::Block || self is Expr::If || self is Expr::IfLet;
+  }
+  func into_stmt(*self): Stmt{
+    let id = *(self as Node*);
+    return Stmt::Expr{.id, self};
+  }
+}
+struct Lambda{
+    params: List<LambdaParam>;
+    return_type: Option<Type>;
+    body: Box<LambdaBody>;
+}
+struct LambdaParam: Node{
+    name: String;
+    type: Option<Type>;
+}
+enum LambdaBody{
+    Expr(node: Expr),
+    Stmt(node: Stmt)
 }
 
 struct MacroCall{
+  scope: Option<Type>;
   name: String;
   args: List<Expr>;
 }
@@ -678,31 +768,52 @@ struct Entry{
 }
 
 func print5(e: Expr*){
-  print("{}\n", e);
+  print("{:?}\n", e);
 }
 
 struct Match{
   expr: Expr;
   cases: List<MatchCase>;
 }
+impl Match{
+  func has_none(self): Option<MatchCase*>{
+    for case in &self.cases{
+      if(case.lhs is MatchLhs::NONE){
+        return Option::new(case);
+      }
+    }
+    return Option<MatchCase*>::new();
+  }
+}
 
 struct MatchCase{
   lhs: MatchLhs;
   rhs: MatchRhs;
+  line: i32;
 }
 enum MatchLhs{
   NONE,
   ENUM(type: Type, args: List<ArgBind>)
 }
+impl MatchLhs{
+  func get_type(self): Type*{
+    if let MatchLhs::ENUM(type*, args*)=(self){
+      return type;
+    }
+    panic("MatchLhs::get_type");
+  }
+}
+
 enum MatchRhs{
   EXPR(e: Expr),
-  STMT(stmt: Stmt*)
+  STMT(stmt: Stmt)
 }
 impl MatchRhs{
   func new(e: Expr): MatchRhs{
     return MatchRhs::EXPR{e};
   }
-  func new(stmt: Stmt*): MatchRhs{
+  func new(stmt: Stmt): MatchRhs{
     return MatchRhs::STMT{stmt};
   }
 }
+

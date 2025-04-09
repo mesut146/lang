@@ -11,7 +11,7 @@ struct StructType;
 struct llvm_Type;
 struct PointerType;
 struct ArrayType;
-struct FunctionType;
+struct llvm_FunctionType;
 struct LinkageTypes;
 struct Function;
 struct Argument;
@@ -19,7 +19,9 @@ struct AttrKind;
 struct Value;
 struct BasicBlock;
 struct PHINode;
+struct SwitchInst;
 struct Constant;
+struct ConstantInt;
 struct GlobalVariable;
 struct DIGlobalVariableExpression;
 
@@ -57,15 +59,26 @@ extern{
     func vector_Metadata_push(vec: vector_Metadata*, elem: Metadata*);
     func vector_Metadata_delete(vec: vector_Metadata*);
 
-    func printDefaultTargetAndDetectedCPU();
+    //func printDefaultTargetAndDetectedCPU();
     func getDefaultTargetTriple(ptr: i8*): i32;
-    func InitializeAllTargetInfos();
     func InitializeAllTargets();
+    func InitializeAllTargetInfos();
     func InitializeAllTargetMCs();
     func InitializeAllAsmParsers();
     func InitializeAllAsmPrinters();
     func lookupTarget(triple: i8*): Target*;
     func createTargetMachine(triple: i8*): TargetMachine*;
+    func llvm_InitializeX86TargetInfo();
+    func llvm_InitializeX86Target();
+    func llvm_InitializeX86TargetMC();
+    func llvm_InitializeX86AsmParser();
+    func llvm_InitializeX86AsmPrinter();
+    func llvm_InitializeAArch64TargetInfo();
+    func llvm_InitializeAArch64Target();
+    func llvm_InitializeAArch64TargetMC();
+    func llvm_InitializeAArch64AsmParser();
+    func llvm_InitializeAArch64AsmPrinter();
+
     func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
@@ -76,7 +89,7 @@ extern{
 
     func init_dbg();
     func createFile(file: i8*, dir: i8*): DIFile*;
-    func createCompileUnit(file: DIFile*): DICompileUnit*;
+    func createCompileUnit(lang: i32, file: DIFile*): DICompileUnit*;
     func SetCurrentDebugLocation(scope: DIScope*, line: i32, pos: i32);
     func createObjectPointerType(type: DIType*): DIType*;
     func createSubroutineType(tys: vector_Metadata*): DISubroutineType*;
@@ -107,6 +120,7 @@ extern{
     func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: u32, ty: DIType*): DIDerivedType*;
     func DIType_getSizeInBits(ty: DIType*): i64;
     func getStructLayout(st: StructType*): StructLayout*;
+    func DataLayout_getTypeSizeInBits(ty: llvm_Type*): i64;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
     func replaceElements(st: DICompositeType*, elems: vector_Metadata*);
     func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: vector_Metadata*): DICompositeType*;
@@ -115,32 +129,54 @@ extern{
     func createGlobalVariableExpression(scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
     func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
     func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
+    func get_dwarf_cpp(): i32;
+    func get_dwarf_cpp20(): i32;
+    func get_dwarf_c(): i32;
+    func get_dwarf_c17(): i32;
+    func get_dwarf_rust(): i32;
+    func get_dwarf_zig(): i32;
+    func get_dwarf_swift(): i32;
 
     func make_struct_ty(name: i8*): StructType*;
     func make_struct_ty2(name: i8*, elems: vector_Type*): StructType*;
     func make_struct_ty_noname(elems: vector_Type*): StructType*;
     func setBody(st: StructType*, elems: vector_Type*);
     func getSizeInBits(st: StructType*): i32;
+    func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func getInt(bits: i32): llvm_Type*;
-    func makeInt(val: i64, bits: i32): Value*;
+    func makeInt(val: i64, bits: i32): ConstantInt*;
+    func makeFloat(val: f32): Constant*;
+    func makeDouble(val: f64): Constant*;
+    func getFloatTy(): llvm_Type*;
+    func getDoubleTy(): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(): llvm_Type*;
+    func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;
     func ConstantPointerNull_get(ty: PointerType*): Value*;
+    func CreateFPCast(val: Value*, trg: llvm_Type*): Value*;
+    func CreateSIToFP(val: Value*, trg: llvm_Type*): Value*;
+    func CreateUIToFP(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToSI(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToUI(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPExt(val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPTrunc(val: Value*, trg: llvm_Type*): Value*;
     
-    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): FunctionType*;
+    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
     func odr(): i32;
-    func make_func(fr: FunctionType*, l: i32, name: i8*): Function*;
+    func make_func(fr: llvm_FunctionType*, l: i32, name: i8*): Function*;
     func get_arg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
+    func Function_print(f: Function*);
     func verifyFunction(f: Function*): bool;
+    func verifyModule(): bool;
     
     func make_stdout(): Value*;
     
@@ -154,8 +190,8 @@ extern{
     
     func Value_setName(v: Value*, name: i8*);
     func Value_getType(val: Value*): llvm_Type*;
-    func Value_dump(v: Value*);
-    func Type_dump(t: llvm_Type*);
+    //func Value_dump(v: Value*);
+    //func Type_dump(t: llvm_Type*);
     func CreateAlloca(ty: llvm_Type*): Value*;
     func CreateStore(val: Value*, ptr: Value*);
     func CreateMemCpy(trg: Value*, src: Value*, size: i64);
@@ -170,11 +206,13 @@ extern{
     func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
     func CreateCall(f: Function*, args: vector_Value*): Value*;
+    func CreateCall_ft(ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
     func CreateUnreachable();
     func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
     func CreateBr(bb: BasicBlock*);
     func CreateCmp(op: i32, l: Value*, r: Value*): Value*;
     func get_comp_op(op: i8*): i32;
+    func get_comp_op_float(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
     func getTrue(): Value*;
     func getFalse(): Value*;
@@ -187,18 +225,28 @@ extern{
     func ConstantArray_get(ty: ArrayType*, elems: vector_Constant*): Constant*;
     func GlobalValue_ext(): i32;
     func GlobalValue_appending(): i32;
+    func CreateSwitch(cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
+    func SwitchInst_addCase(node: SwitchInst*, OnVal: ConstantInt*, Dest: BasicBlock*);
 
     func CreateNSWAdd(l: Value*, r: Value*): Value*;
+    func CreateFAdd(l: Value*, r: Value*): Value*;
+    func CreateAdd(l: Value*, r: Value*): Value*;
     func CreateNSWSub(l: Value*, r: Value*): Value*;
-    func CreateNSWMul(l: Value*, r: Value*): Value*;
     func CreateSub(l: Value*, r: Value*): Value*;
+    func CreateFSub(l: Value*, r: Value*): Value*;
+    func CreateNSWMul(l: Value*, r: Value*): Value*;
+    func CreateFMul(l: Value*, r: Value*): Value*;
     func CreateSDiv(l: Value*, r: Value*): Value*;
+    func CreateFDiv(l: Value*, r: Value*): Value*;
     func CreateSRem(l: Value*, r: Value*): Value*;
+    func CreateFRem(l: Value*, r: Value*): Value*;
     func CreateAnd(l: Value*, r: Value*): Value*;
     func CreateOr(l: Value*, r: Value*): Value*;
     func CreateXor(l: Value*, r: Value*): Value*;
     func CreateShl(l: Value*, r: Value*): Value*;
     func CreateAShr(l: Value*, r: Value*): Value*;
+    func CreateNeg(l: Value*): Value*;
+    func CreateFNeg(l: Value*): Value*;
 
     func get_last_write_time(path: i8*): i64;
     func set_as_executable(path: i8*);

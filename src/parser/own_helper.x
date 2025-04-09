@@ -12,6 +12,7 @@ import parser/debug_helper
 import parser/printer
 import parser/derive
 import std/map
+import std/hashmap
 import std/stack
 
 func is_drop_method(method: Method*): bool{
@@ -44,9 +45,8 @@ impl VarScope{
         f.print(", line: ");
         f.print(&self.line);
         f.print("{");
-        for(let i = 0;i < self.vars.len();++i){
-            let var_id = *self.vars.get_ptr(i);
-            let var = own.get_var(var_id);
+        for var_id in &self.vars{
+            let var = own.get_var(*var_id);
             f.print("\n");
             f.print(indent);
             f.print("  let ");
@@ -56,8 +56,7 @@ impl VarScope{
             f.print(", line: ");
             f.print(&var.line);
         }
-        for(let i=0;i<self.objects.len();++i){
-            let obj = self.objects.get_ptr(i);
+        for obj in &self.objects{
             f.print("\n");
             f.print(indent);
             f.print("  obj line: ");
@@ -65,8 +64,7 @@ impl VarScope{
             f.print(", ");
             f.print(obj.expr);
         }
-        for(let i = 0;i < self.state_map.len();++i){
-            let pair = self.state_map.get_pair_idx(i).unwrap();
+        for pair in &self.state_map{
             f.print("\n");
             f.print(indent);
             f.print("  state(");
@@ -112,37 +110,34 @@ impl Debug for Variable{
 }
 impl Debug for Rhs{
     func debug(self, f: Fmt*){
-        if let Rhs::EXPR(e)=(self){
-            f.print("Rhs::EXPR{");
-            f.print(e);
-            f.print("}");
-        }
-        else if let Rhs::VAR(v*)=(self){
-            //f.print("Rhs::VAR{");
-            f.print(v);
-            //f.print("}");
-        }
-        else if let Rhs::FIELD(scp*,name*)=(self){
-            f.print("Rhs::FIELD{");
-            f.print(scp);
-            f.print(", ");
-            f.print(name);
-            f.print("}");
+        match self{
+            Rhs::EXPR(e) => {
+                f.print("Rhs::EXPR{");
+                f.print(e);
+                f.print("}");
+            },
+            Rhs::VAR(v*) => {
+                //f.print("Rhs::VAR{");
+                f.print(v);
+                //f.print("}");
+            },
+            Rhs::FIELD(scp*,name*) => {
+                f.print("Rhs::FIELD{");
+                f.print(scp);
+                f.print(", ");
+                f.print(name);
+                f.print("}");
+            },
         }
     }
 }
 impl Clone for Rhs{
     func clone(self): Rhs{
-        if let Rhs::EXPR(e)=(self){
-            return Rhs::EXPR{e};
+        match self{
+            Rhs::EXPR(e) => return Rhs::EXPR{e},
+            Rhs::VAR(v*) => return Rhs::VAR{v.clone()},
+            Rhs::FIELD(scp*,name*) => return Rhs::FIELD{scp: scp.clone(), name: name.clone()},
         }
-        if let Rhs::VAR(v*)=(self){
-            return Rhs::VAR{v.clone()};
-        }
-        if let Rhs::FIELD(scp*, name*)=(self){
-            return Rhs::FIELD{scp: scp.clone(), name: name.clone()};
-        }
-        panic("{}", self);
     }
 }
 impl Eq for Rhs{

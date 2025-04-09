@@ -32,7 +32,7 @@ impl OwnVisitor{
     func do_move(self, expr: Expr*){
         self.own.do_move(expr);
     }
-    func begin(self, node: Stmt*): i32{
+    func begin(self, node: Body*): i32{
         let prev = self.own.get_scope().id;
         let id = self.own.add_scope(ScopeType::ELSE, node);
         self.scopes.add(id);
@@ -40,30 +40,40 @@ impl OwnVisitor{
         self.own.set_current(prev);
         return id;
     }
+    func visit(self, node: Body*){
+        match node{
+            Body::Block(b*) => {
+                self.visit_block(b);
+            },
+            Body::Stmt(b*) => {
+                self.visit(b);
+            },
+            Body::If(b*) => {
+                
+            },
+            Body::IfLet(b*) => {
+                
+            }
+        }
+    }
     func visit(self, node: Stmt*){
-        if let Stmt::Block(b*)=(node){
-            self.visit_block(b);
-        }else if let Stmt::Var(ve*)=(node){
+        if let Stmt::Var(ve*)=(node){
             self.visit_var(ve);
         }else if let Stmt::Expr(expr*)=(node){
             self.visit_expr(expr);
-        }else if let Stmt::If(is*)=(node){
-            //todo
-        }else if let Stmt::IfLet(il*)=(node){
-            //todo
         }else{
             //panic("visit line: {} {}\n", node.line, node);
         }
     }
     func visit_block(self, block: Block*){
         for(let i = 0;i < block.list.len();++i){
-            let stmt = block.list.get_ptr(i);
+            let stmt = block.list.get(i);
             self.visit(stmt);
         }
     }
     func visit_var(self, ve: VarExpr*){
         for(let i = 0;i < ve.list.len();++i){
-            let fr = ve.list.get_ptr(i);
+            let fr = ve.list.get(i);
             self.own.add_var(fr, ptr::null<Value>());
             self.do_move(&fr.rhs);
         }
@@ -81,15 +91,15 @@ impl OwnVisitor{
         }
     }
     func visit_call(self, expr: Expr*, mc: Call*){
-        if(Resolver::is_std_no_drop(mc)){
-            let arg = mc.args.get_ptr(0);
+        if(Resolver::is_call(mc, "std", "no_drop")){
+            let arg = mc.args.get(0);
             self.do_move(arg);
             return;
         }
         if(Resolver::is_format(mc)){
-            let info = self.get_resolver().format_map.get_ptr(&expr.id).unwrap();
+            let info = self.get_resolver().format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);
-            self.do_move(info.unwrap_mc.get());
+            self.do_move(info.block.return_expr.get());
             return;
         }
         let rt = self.get_resolver().visit(expr);
@@ -104,20 +114,20 @@ impl OwnVisitor{
         if(target.self.is_some()){
             if(mc.is_static){
                 ++argIdx;
-                self.do_move(mc.args.get_ptr(0));
+                self.do_move(mc.args.get(0));
               }else if(target.self.get().is_deref){
                 self.do_move(mc.scope.get());
               }
         }
         for(;argIdx < mc.args.len();++argIdx){
-            let arg = mc.args.get_ptr(argIdx);
+            let arg = mc.args.get(argIdx);
             self.do_move(arg);
         }
     }
 
     func visit_obj(self, expr: Expr*, type: Type*, args: List<Entry>*){
         for(let i = 0;i < args.len();++i){
-            let arg = args.get_ptr(i);
+            let arg = args.get(i);
             self.do_move(&arg.expr);
         }
     }

@@ -1,0 +1,4 @@
+clear
+clang++-16 /usr/lib/llvm-16/lib/libLLVM.so -lstdc++ -o x-amd64 x-17mar-amd64.a \
+std.a \
+../cpp_bridge/build/libbridge.a

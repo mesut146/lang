@@ -1,12 +1,14 @@
-import std/map
+import std/hashmap
 import std/io
+import std/fs
 import parser/bridge
-
-static use_cache: bool = true;
+import parser/incremental
 
 struct Cache{
-    map: Map<String, String>;
+    map: HashMap<String, String>;
     file: String;
+    inc: Incremental;
+    use_cache: bool;
 }
 
 func CACHE_FILE(out_dir: str): String{
@@ -14,19 +16,21 @@ func CACHE_FILE(out_dir: str): String{
 }
 
 impl Cache{
-    func new(out_dir: str): Cache{
+    func new(config: CompilerConfig*): Cache{
         return Cache{
-            map: Map<String, String>::new(),
-            file: CACHE_FILE(out_dir)
+            map: HashMap<String, String>::new(),
+            file: CACHE_FILE(config.out_dir.str()),
+            inc: Incremental::new(config),
+            use_cache: config.use_cache,
         };
     }
 
     func read_cache(self){
-        if(!use_cache) return;
-        if(!exist(self.file.str())){
+        if(!self.use_cache) return;
+        if(!File::exist(self.file.str())){
             return;
         }
-        let buf = read_string(self.file.str());
+        let buf = File::read_string(self.file.str());
         let lines = buf.str().split("\n");
         for line in &lines{
             if(line.len() == 0){
@@ -41,8 +45,9 @@ impl Cache{
         buf.drop();
         //print("read_cache={}\n", self.map);
     }
+    
     func write_cache(self){
-        if(!use_cache) return;
+        if(!self.use_cache) return;
         let str = String::new();
         for pair in &self.map{
             str.append(pair.a.str());
@@ -50,18 +55,19 @@ impl Cache{
             str.append(pair.b.str());
             str.append("\n");
         }
-        write_string(str.str(), self.file.str());
+        File::write_string(str.str(), self.file.str());
         str.drop();
     }
+    
     func need_compile(self, file: str, out: str): bool{
-        if(!use_cache) return true;
-        if(!is_file(out)){
+        if(!self.use_cache) return true;
+        if(!File::is_file(out)){
             return true;
         }
-        let resolved = resolve(file);
+        let resolved = File::resolve(file);
         file = resolved.str();
         let file_s = file.str();
-        let old = self.map.get_ptr(&file_s);
+        let old = self.map.get(&file_s);
         file_s.drop();
         if(old.is_some()){
             let old_time = old.unwrap();
@@ -74,22 +80,25 @@ impl Cache{
         resolved.drop();
         return true;
     }
+    
     func update(self, file: str){
-        if(!use_cache) return;
-        let resolved = resolve(file);
+        if(!self.use_cache) return;
+        let resolved = File::resolve(file);
         let time = self.get_time(resolved.str());
         self.map.add(resolved, time);
     }
+    
     func get_time(self, file: str): String{
-        let resolved = resolve(file);
+        let resolved = File::resolve(file);
         let cs = CStr::new(resolved);
         let time = get_last_write_time(cs.ptr());
         cs.drop();
         return time.str();
     }
+    
     func delete_cache(out_dir: str){
         let file = CACHE_FILE(out_dir);
-        if(is_file(file.str())){
+        if(File::is_file(file.str())){
             File::remove_file(file.str());
         }
         file.drop();

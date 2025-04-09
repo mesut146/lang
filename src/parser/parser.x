@@ -2,34 +2,38 @@ import parser/lexer
 import parser/token
 import parser/ast
 import parser/printer
+import parser/utils
 import std/map
 import std/libc
 
 struct Parser{
-  path: String;
-  buf: String;
   tokens: List<Token>;
   pos: i32;
   unit: Option<Unit*>;
+  lexer: Lexer;
 }
 
 impl Parser{
   func from_path(path: String): Parser{
     let lexer = Lexer::from_path(path.clone());
-    let res = Parser{path, lexer.buf.clone(), List<Token>::new(), 0, Option<Unit*>::new()};
-    res.fill(lexer);
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    res.fill();
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf, line);
-    let res = Parser{lexer.path.clone(), lexer.buf.clone(),  List<Token>::new(), 0, Option<Unit*>::new()};
-    res.fill(lexer);
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    res.fill();
     return res;
   }
   
-  func fill(self, lexer: Lexer) {
+  func path(self): str{
+      return self.lexer.path.str();
+  }
+  
+  func fill(self) {
     while (true) {
-        let t = lexer.next();
+        let t = self.lexer.next();
         if (t.is(TokenType::EOF_)){
           t.drop();
           break;
@@ -40,7 +44,6 @@ impl Parser{
         }
         self.tokens.add(t);
     }
-    lexer.drop();
   }
     
   func has(self): bool{
@@ -81,7 +84,7 @@ impl Parser{
   
   func get(self, pos: i32): Token*{
     if(pos >= self.tokens.len()) panic("eof pos={} len={}", pos, self.tokens.len());
-    return self.tokens.get_ptr(pos);
+    return self.tokens.get(pos);
   }
   
   func pop(self): Token*{
@@ -97,18 +100,18 @@ impl Parser{
   func consume(self, tt: TokenType): Token*{
     let t: Token* = self.pop();
     if(t.type is tt) return t;
-    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, t.line, t, &tt);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, t.line, t, &tt);
   }
 
   func consume_ident(self, val: str): Token*{
     let tok = self.consume(TokenType::IDENT);
     if(tok.value.eq(val)) return tok;
-    panic("{}:{}\nunexpected token {} was expecting {}", &self.path, tok.line, tok, val);
+    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, tok.line, tok, val);
   }
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{} `{}`\n", &self.path, line, Lexer::get_line(self.buf.str(), line));
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line));
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -117,7 +120,7 @@ impl Parser{
   }
     
     func parse_unit(self): Unit{
-      let unit = Unit::new(self.path.clone());
+      let unit = Unit::new(self.lexer.path.clone());
       self.unit = Option::new(&unit);
       while(self.has() && self.is(TokenType::IMPORT)){
         unit.imports.add(self.parse_import());
@@ -173,7 +176,7 @@ impl Parser{
           let id = self.node();
         	self.pop();
           let name = self.name();
-          let type = Option<Type>::None;
+          let type = Option<Type>::new();
           if(self.is(TokenType::COLON)){
             self.pop();
             type = Option::new(self.parse_type());
@@ -182,8 +185,20 @@ impl Parser{
           let rhs = self.parse_expr();
           self.consume(TokenType::SEMI);
           unit.globals.add(Global{.id, name, type, rhs});
+        }else if(self.is(TokenType::CONST)){
+          self.pop();
+          let name = self.name();
+          let type = Option<Type>::new();
+          if(self.is(TokenType::COLON)){
+            self.pop();
+            type = Option::new(self.parse_type());
+          }
+          self.consume(TokenType::EQ);
+          let rhs = self.parse_expr();
+          self.consume(TokenType::SEMI);
+          unit.items.add(Item::Const{Const{name, type, rhs}});
         }else{
-          panic("invalid top level decl: {}", self.peek());
+          panic("invalid top level decl: {:?}", self.peek());
         }
       }
       return unit;
@@ -229,7 +244,7 @@ impl Parser{
             let parent = Parent::Impl{info.clone()};
             return Impl{info, self.parse_methods(parent)};
         }else{
-          let info = ImplInfo{type_params, Option<Type>::None, t1};
+          let info = ImplInfo{type_params, Option<Type>::new(), t1};
           let parent = Parent::Impl{info.clone()};
           return Impl{info, self.parse_methods(parent)};
         }
@@ -238,7 +253,7 @@ impl Parser{
     func parse_methods(self, parent: Parent): List<Method>{
         let arr = List<Method>::new();
         self.consume(TokenType::LBRACE);
-        while(!self.is(TokenType::RBRACE)){
+        while(self.has() && !self.is(TokenType::RBRACE)){
             arr.add(self.parse_method(parent.clone()));
         }
         self.consume(TokenType::RBRACE);
@@ -267,9 +282,15 @@ impl Parser{
       }
       self.consume(TokenType::LPAREN);
       let params = List<Param>::new();
-      let selfp = Option<Param>::None;
+      let selfp = Option<Param>::new();
+      let is_vararg = false;
       if(!self.is(TokenType::RPAREN)){
-        if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
+        if(self.is(TokenType::DOTDOT)){
+          self.consume(TokenType::DOTDOT);
+          self.consume(TokenType::DOT);
+          is_vararg = true;
+        }
+        else if(Parser::isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
           params.add(self.parse_param());
         }else{
           let is_deref = false;
@@ -287,6 +308,12 @@ impl Parser{
         }
         while (self.is(TokenType::COMMA)) {
             self.consume(TokenType::COMMA);
+            if(self.is(TokenType::DOTDOT)){
+              self.consume(TokenType::DOTDOT);
+              self.consume(TokenType::DOT);
+              is_vararg = true;
+              break;
+            }
             params.add(self.parse_param());
         }
       }
@@ -313,7 +340,8 @@ impl Parser{
          body: body,
          is_generic: is_generic,
          parent: parent,
-         path: self.path.clone()
+         path: self.lexer.path.clone(),
+         is_vararg: is_vararg
       };
     }
     
@@ -331,7 +359,7 @@ impl Parser{
       let type = self.parse_type();
       let is_generic = type.is_generic();
       //isgen
-      let base = Option<Type>::None;
+      let base = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         base = Option<Type>::Some{self.parse_type()};
@@ -346,7 +374,7 @@ impl Parser{
         }
         self.consume(TokenType::RBRACE);
       }
-      let path = self.path.clone();
+      let path = self.lexer.path.clone();
       return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, fields: fields};
     }
     
@@ -367,7 +395,7 @@ impl Parser{
       let type = self.parse_type();
       let is_generic = type.is_generic();
       //isgen
-      let base = Option<Type>::None;
+      let base = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         base = Option<Type>::Some{self.parse_type()};
@@ -377,10 +405,13 @@ impl Parser{
       variants.add(self.parse_variant());
       while(self.is(TokenType::COMMA)){
         self.pop();
+        if(self.is(TokenType::RBRACE)){
+          break;
+        }
         variants.add(self.parse_variant());
       }
       self.consume(TokenType::RBRACE);
-      let path = self.path.clone();
+      let path = self.lexer.path.clone();
       return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, derives, attr}, variants: variants};
     }
     
@@ -443,6 +474,7 @@ impl Parser{
       }
       return res;
     }
+
     func parse_func_type(self): Type{
       let id = self.node();
       self.consume(TokenType::FUNC);
@@ -508,7 +540,17 @@ impl Parser{
       self.consume(TokenType::LBRACE);
       let res = Block::new(self.line(), 0);
       while(!self.is(TokenType::RBRACE)){
-        if(self.is_stmt()){
+        if(self.is(TokenType::LBRACE) || self.is(TokenType::IF, TokenType::LET) || self.is(TokenType::IF) || self.is(TokenType::MATCH)){
+          let expr = self.parse_expr();
+          if(self.is(TokenType::RBRACE)){
+            res.return_expr.set(expr);
+            break;
+          }else{
+            let id = *(expr as Node*);
+            res.list.add(Stmt::Expr{.id, expr});
+          }
+        }
+        else if(self.is_stmt()){
           res.list.add(self.parse_stmt());
         }else{
           let id = self.node();
@@ -551,70 +593,100 @@ impl Parser{
     func is_stmt(self): bool{
       return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::IF) || self.is(TokenType::LBRACE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
     }
+
+    func parse_body(self): Body{
+      let id = self.node();
+      if(self.is(TokenType::LBRACE)){
+        return Body::Block{.id, self.parse_block()};
+      }
+      if(self.is(TokenType::IF, TokenType::LET)){
+        return Body::IfLet{.id, self.parse_iflet()};
+      }
+      if(self.is(TokenType::IF)){
+        return Body::If{.id, self.parse_if()};
+      }
+      return Body::Stmt{.id, self.parse_stmt()};
+    }
+
+    func parse_if(self): IfStmt{
+      self.pop();
+      self.consume(TokenType::LPAREN);
+      let e = self.parse_expr();
+      self.consume(TokenType::RPAREN);
+      let b = Box::new(self.parse_body());
+      if(self.is(TokenType::ELSE)){
+        self.pop();
+        let els = self.parse_body();
+        return IfStmt{e, b, Ptr::new(els)};
+      }
+      return IfStmt{e, b, Ptr<Body>::new()};
+    }
+
+    func parse_iflet(self): IfLet{
+      self.pop();
+      self.consume(TokenType::LET);
+      let ty = self.parse_type();
+      let args = List<ArgBind>::new();
+      if(self.is(TokenType::LPAREN)){
+        self.consume(TokenType::LPAREN);
+        args.add(self.parse_bind());
+        while(self.is(TokenType::COMMA)){
+          self.pop();
+          args.add(self.parse_bind());
+        }
+        self.consume(TokenType::RPAREN);
+      }
+      self.consume(TokenType::EQ);
+      let rhs_opt = Option<Expr>::none();
+      if(self.is(TokenType::LPAREN)){
+          self.consume(TokenType::LPAREN);
+          let rhs = self.parse_expr();
+          rhs_opt.set(rhs);
+          self.consume(TokenType::RPAREN);
+      }
+      else{
+          let rhs = self.prim2(false);
+          rhs_opt.set(rhs);
+      }
+      let rhs = rhs_opt.unwrap();
+      let then = self.parse_body();
+      let els = Ptr<Body>::new();
+      if(self.is(TokenType::ELSE)){
+          self.pop();
+          els = Ptr::new(self.parse_body());
+      }
+      return IfLet{ty, args, rhs, Box::new(then), els};
+    }
+
+    func parse_ret(self, id: Node, force_semi: bool): Stmt{
+      self.pop();
+      if(force_semi && self.is(TokenType::SEMI)){
+        self.consume(TokenType::SEMI);
+        return Stmt::Ret{.id, Option<Expr>::new()};
+      }else{
+        let e = self.parse_expr();
+        if(force_semi || self.is(TokenType::SEMI)){
+          self.consume(TokenType::SEMI);
+        }
+        return Stmt::Ret{.id, Option::new(e)};
+      }
+    }
     
     func parse_stmt(self): Stmt{
       let id = self.node();
-      /*if(self.is(TokenType::LBRACE)){
-        return Stmt::Block{.id, self.parse_block()};
-      }*/
       if(self.is(TokenType::LET)){
         let vd = self.var();
         self.consume(TokenType::SEMI);
         return Stmt::Var{.id, vd};
       }else if(self.is(TokenType::RETURN)){
-        self.pop();
-        if(self.is(TokenType::SEMI)){
-          self.consume(TokenType::SEMI);
-          return Stmt::Ret{.id, Option<Expr>::None};
-        }else{
-          let e = self.parse_expr();
-          self.consume(TokenType::SEMI);
-          return Stmt::Ret{.id, Option::new(e)};
-        }
+        return self.parse_ret(id, true);
       }else if(self.is(TokenType::WHILE)){
         self.pop();
         self.consume(TokenType::LPAREN);
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
-        let b = self.parse_stmt();
+        let b = self.parse_body();
         return Stmt::While{.id, e, Box::new(b)};
-      }else if(self.is(TokenType::IF, TokenType::LET)){
-        self.pop();
-        self.consume(TokenType::LET);
-        let ty = self.parse_type();
-        let args = List<ArgBind>::new();
-        if(self.is(TokenType::LPAREN)){
-          self.consume(TokenType::LPAREN);
-          args.add(self.parse_bind());
-          while(self.is(TokenType::COMMA)){
-            self.pop();
-            args.add(self.parse_bind());
-          }
-          self.consume(TokenType::RPAREN);
-        }
-        self.consume(TokenType::EQ);
-        self.consume(TokenType::LPAREN);
-        let rhs = self.parse_expr();
-        self.consume(TokenType::RPAREN);
-        let then = self.parse_stmt();
-        let els = Ptr<Stmt>::new();
-        if(self.is(TokenType::ELSE)){
-            self.pop();
-            els = Ptr::new(self.parse_stmt());
-        }
-        return Stmt::IfLet{.id, IfLet{ty, args, rhs, Box::new(then), els}};
-      }else if(self.is(TokenType::IF)){
-        self.pop();
-        self.consume(TokenType::LPAREN);
-        let e = self.parse_expr();
-        self.consume(TokenType::RPAREN);
-        let b = Box::new(self.parse_stmt());
-        if(self.is(TokenType::ELSE)){
-          self.pop();
-          let els = self.parse_stmt();
-          return Stmt::If{.id, IfStmt{e, b, Ptr::new(els)}};
-        }
-        return Stmt::If{.id, IfStmt{e, b, Ptr<Stmt>::new()}};
       }else if(self.is(TokenType::FOR)){
         return self.parse_for(id);
       }else if(self.is(TokenType::CONTINUE)){
@@ -627,7 +699,9 @@ impl Parser{
         return Stmt::Break{.id};
       }else{
         let e = self.parse_expr();
-        self.consume(TokenType::SEMI);
+        if(!e.is_body()){
+          self.consume(TokenType::SEMI);
+        }
         return Stmt::Expr{.id, e};
       }
     }
@@ -637,21 +711,22 @@ impl Parser{
       }
       self.pop();
       self.consume(TokenType::LPAREN);
-      let v = Option<VarExpr>::None;
+      let v = Option<VarExpr>::new();
       if(!self.is(TokenType::SEMI)){
         v = Option::new(self.var());
       }
       self.consume(TokenType::SEMI);
-      let e = Option<Expr>::None;
+      let e = Option<Expr>::new();
       if(!self.is(TokenType::SEMI)){
         e = Option::new(self.parse_expr());
       }
       self.consume(TokenType::SEMI);
       let u = self.exprList(TokenType::RPAREN);
       self.consume(TokenType::RPAREN);
-      let b = self.parse_stmt();
+      let b = self.parse_body();
       return Stmt::For{.id, ForStmt{v, e, u, Box::new(b)}};
     }
+
     func parse_for_each(self, id: Node): Stmt{
       self.consume(TokenType::FOR);
       let name = self.popv();
@@ -662,8 +737,8 @@ impl Parser{
     }
     
     func parse_frag(self): Fragment{
-      let nm = self.pop();
-      let type = Option<Type>::None;
+      let nm = self.popv();
+      let type = Option<Type>::new();
       if(self.is(TokenType::COLON)){
         self.pop();
         type = Option::new(self.parse_type());
@@ -671,7 +746,7 @@ impl Parser{
       self.consume(TokenType::EQ);
       let rhs = self.parse_expr();
       let n = self.node();
-      return Fragment{.n, nm.value.clone(), type, rhs};
+      return Fragment{.n, nm, type, rhs};
     }
 
 }
@@ -692,16 +767,16 @@ impl Parser{
     let open = 1;
     while (pos < self.tokens.len()) {
       if (self.get(pos).is(TokenType::LT)) {
-        pos+=1;
-        open+=1;
+        pos += 1;
+        open += 1;
       } else if (self.get(pos).is(TokenType::GT)) {
-        pos+=1;
-        open-=1;
+        pos += 1;
+        open -= 1;
         if (open == 0) {
            return pos;
         }
       } else {
-        let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2];
+        let valid_tokens = [TokenType::IDENT, TokenType::STAR, TokenType::QUES, TokenType::LBRACKET, TokenType::RBRACKET, TokenType::COMMA, TokenType::COLON2, TokenType::FUNC, TokenType::ARROW, TokenType::LPAREN, TokenType::RPAREN];
         let tok = self.get(pos);
         let any = false;
         for(let i = 0;i < valid_tokens.len();++i){
@@ -711,7 +786,7 @@ impl Parser{
           }
         }
         if(!any && !isPrim(tok)) return -1;
-        pos+=1;
+        pos += 1;
       }
     }
     return -1;
@@ -730,7 +805,7 @@ impl Parser{
     if(self.is(tt)) return arr;
     arr.add(self.parse_expr());
     while(self.is(TokenType::COMMA)){
-      self.pop();
+      self.consume(TokenType::COMMA);
       arr.add(self.parse_expr());
     }
     return arr;
@@ -750,7 +825,7 @@ impl Parser{
     }else if(self.is(TokenType::FALSE) || self.is(TokenType::TRUE)){
       kind = LitKind::BOOL;
     }else{
-      panic("invalid literal {}", self.peek());
+      panic("invalid literal {:?}", self.peek());
     }
     let arr = Lexer::get_suffix();
     let val = self.popv();
@@ -766,14 +841,16 @@ impl Parser{
           return Expr::Lit{.n, Literal{kind, val, Option<Type>::new(Type::new(sf))}};
       }
     }
-    return Expr::Lit{.n, Literal{kind, val, Option<Type>::None}};
+    return Expr::Lit{.n, Literal{kind, val, Option<Type>::new()}};
   }
   
   func name(self): String{
     if(isName(self.peek())){
       return self.popv();
     }
-    panic("expected name got {}", self.peek());
+    self.err(format("expected name got {:?}", self.peek()));
+    //std::unreachable();
+    panic("");
   }
   
   
@@ -781,42 +858,72 @@ impl Parser{
     if(isName(self.peek()) && self.peek(1).is(TokenType::COLON)){
       let name = self.popv();
       self.consume(TokenType::COLON);
-      let e = self.parse_expr();
-      return Entry{Option::new(name), e, false};
+      let expr = self.parse_expr();
+      return Entry{Option::new(name), expr, false};
     }
     let dot = false; 
     if(self.is(TokenType::DOT)){
-      self.pop();
+      self.consume(TokenType::DOT);
       dot = true;
     }
-    let e = self.parse_expr();
-    return Entry{Option<String>::None, e, dot};
+    let expr = self.parse_expr();
+    return Entry{Option<String>::new(), expr, dot};
+  }
+
+  func is_stmt_noexpr(self): bool{
+    return self.is(TokenType::LET)
+            || self.is(TokenType::RETURN)
+            || self.is(TokenType::WHILE)
+            || self.is(TokenType::FOR)
+            || self.is(TokenType::CONTINUE)
+            || self.is(TokenType::BREAK);
   }
 
   func parse_match(self): Expr{
     self.consume(TokenType::MATCH);
     let id = self.node();
-    let expr = self.prim(false);
-    let res = Match{expr, List<MatchCase>::new()};
+    let expr = self.prim2(false);
+    let res = Match{expr: expr, cases: List<MatchCase>::new()};
     self.consume(TokenType::LBRACE);
-    while(self.has()){
+    while(!self.is(TokenType::RBRACE)){
       let lhs = Option<MatchLhs>::new();
       if(self.is("_")){
         self.pop();
         lhs = Option::new(MatchLhs::NONE);
       }else{
         let type = self.parse_type();
-        lhs = Option::new(MatchLhs::ENUM{type, List<ArgBind>::new()});
+        let args = List<ArgBind>::new();
         //todo args
         if(self.is(TokenType::LPAREN)){
           self.consume(TokenType::LPAREN);
+          while(!self.is(TokenType::RPAREN)){
+            args.add(self.parse_bind());
+            if(self.is(TokenType::COMMA)){
+              self.pop();
+            }
+          }
           self.consume(TokenType::RPAREN);
         }
+        lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
       }
       self.consume(TokenType::ARROW);
-      let rhs = self.parse_expr();
-      //todo rhs stmt
-      res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs)});
+      let line = self.peek().line;
+      if(self.is(TokenType::RETURN)){
+        let rhs = MatchRhs::new(self.parse_ret(self.node(), false));
+        res.cases.add(MatchCase{lhs.unwrap(), rhs, line});
+      }
+      else if(self.is_stmt_noexpr()){
+        res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(self.parse_stmt()), line});
+      }else{
+        let rhs_expr = self.parse_expr();
+        if(self.is(TokenType::SEMI)){
+          self.consume(TokenType::SEMI);
+          let rhs = MatchRhs::new(Stmt::Expr{.id, rhs_expr});
+          res.cases.add(MatchCase{lhs.unwrap(), rhs, line});
+        }else{
+          res.cases.add(MatchCase{lhs.unwrap(), MatchRhs::new(rhs_expr), line});
+        }
+      }
       if(self.is(TokenType::COMMA)){
         self.consume(TokenType::COMMA);
       }else{
@@ -824,31 +931,80 @@ impl Parser{
       }
     }
     self.consume(TokenType::RBRACE);
-    return Expr::MatchExpr{.id, Box::new(res)};
+    return Expr::Match{.id, Box::new(res)};
+  }
+  
+  func parse_lambda(self): Expr{
+      let id = self.node();
+      let params = List<LambdaParam>::new();
+      if(self.is(TokenType::OROR)){
+          self.consume(TokenType::OROR);
+      }else{
+          self.consume(TokenType::OR);
+          while(!self.is(TokenType::OR)){
+              let nm = self.name();
+              if(self.is(TokenType::COLON)){
+                  self.consume(TokenType::COLON);
+                  let ty = self.parse_type();
+                  params.add(LambdaParam{.self.node(), nm, Option::new(ty)});
+              }else{
+                  params.add(LambdaParam{.self.node(), nm, Option<Type>::none()});
+              }
+              if(self.is(TokenType::COMMA)){
+                  self.consume(TokenType::COMMA);
+              }
+          }
+          self.consume(TokenType::OR);
+      }
+      let ret = Option<Type>::new();
+      if(self.is(TokenType::COLON)){
+          self.consume(TokenType::COLON);
+          let ty = self.parse_type();
+          ret.set(ty);
+      }
+      let body = Option<LambdaBody>::none();
+      if(self.is_stmt_noexpr()){
+          body = Option::new(LambdaBody::Stmt{self.parse_stmt()});
+      }else{
+          body = Option::new(LambdaBody::Expr{self.parse_expr()});
+      }
+      return Expr::Lambda{.id, Lambda{params, ret, Box::new(body.unwrap())}};
   }
 
   func prim(self, allow_obj: bool): Expr{
+    let tok = self.peek();
     let n = self.node();
+    if(self.is(TokenType::OR) || self.is(TokenType::OROR)){
+        return self.parse_lambda();
+    }
+    if(self.is(TokenType::FUNC)){
+      return Expr::Type{.n, self.parse_func_type()};
+    }
     if(self.is(TokenType::MATCH)){
       return self.parse_match();
     }
     if(self.is(TokenType::LBRACE)){
-      let block = self.parse_block();
-      return Expr::Block{.n, Box::new(block)};
+      return Expr::Block{.n, Box::new(self.parse_block())};
+    }
+    if(self.is(TokenType::IF, TokenType::LET)){
+      return Expr::IfLet{.n, Box::new(self.parse_iflet())};
+    }
+    if(self.is(TokenType::IF)){
+      return Expr::If{.n, Box::new(self.parse_if())};
     }
     if(isLit(self.peek())){
       return self.parseLit();
     }else if(self.is(TokenType::LPAREN)){
-        self.pop();
+        self.consume(TokenType::LPAREN);
         let e = self.parse_expr();
         self.consume(TokenType::RPAREN);
         return Expr::Par{.n, Box::new(e)};
     }else if(self.is(TokenType::LBRACKET)){
-        self.pop();
+        self.consume(TokenType::LBRACKET);
         let arr = self.exprList(TokenType::SEMI);
-        let sz = Option<i32>::None;
+        let sz = Option<i32>::new();
         if(self.is(TokenType::SEMI)){
-            self.pop();
+            self.consume(TokenType::SEMI);
             let s = self.consume(TokenType::INTEGER_LIT);
             sz = Option::new(i32::parse(s.value.str()));
         }
@@ -864,10 +1020,17 @@ impl Parser{
       if(self.is(TokenType::LPAREN)){
         return self.call(nm);
       }else if(self.is(TokenType::COLON2)){
-        self.pop();
+        self.consume(TokenType::COLON2);
         let ty = self.parse_type();
         let ty_name = ty.name().clone();
-        if(self.is(TokenType::LPAREN)){
+        if(self.is(TokenType::BANG, TokenType::LPAREN)){
+          self.consume(TokenType::BANG);
+          self.consume(TokenType::LPAREN);
+          let args = self.exprList(TokenType::RPAREN);
+          self.consume(TokenType::RPAREN);
+          return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::new(Type::new(nm)), name: ty_name, args: args}};
+        }
+        else if(self.is(TokenType::LPAREN)){
           let ta = ty.as_simple().args.clone();
           ty.drop();
           return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
@@ -880,8 +1043,8 @@ impl Parser{
         self.consume(TokenType::LPAREN);
         let args = self.exprList(TokenType::RPAREN);
         self.consume(TokenType::RPAREN);
-        return Expr::MacroCall{.n, MacroCall{name: nm, args: args}};
-      }else if(self.isTypeArg(self.pos) != -1){
+        return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::none(), name: nm, args: args}};
+      }else if(self.has() && self.isTypeArg(self.pos) != -1){
         let g = self.generics();
         if(self.is(TokenType::LPAREN)){
           return self.call(nm, g);
@@ -901,11 +1064,12 @@ impl Parser{
         return Expr::Name{.n, nm};
       }
     }
-    panic("invalid expr {}", self.peek());
+    self.err(format("invalid expr {:?}", self.peek()));
+    panic("");
   }
 
   func parse_obj(self, type_expr: Expr): Expr{
-    let ty = Option<Type>::None; 
+    let ty = Option<Type>::new(); 
     if let Expr::Name(nm)=(type_expr){
       ty = Option::new(Type::new(nm));
     }
@@ -914,7 +1078,7 @@ impl Parser{
         ty = Option::new(t);
       }
       else{
-        print("was expecting name got {}", &type_expr);
+        print("was expecting name got {:?}", &type_expr);
         type_expr.drop();
         panic("");
       }
@@ -924,7 +1088,10 @@ impl Parser{
     if(!self.is(TokenType::RBRACE)){
       args.add(self.entry());
       while(self.is(TokenType::COMMA)){
-        self.pop();
+        self.consume(TokenType::COMMA);
+        if(self.is(TokenType::RBRACE)){
+          break;
+        }
         args.add(self.entry());
       }
     }
@@ -941,7 +1108,7 @@ impl Parser{
     }
     while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
       if(self.is(TokenType::DOT)){
-        self.pop();
+        self.consume(TokenType::DOT);
         let nm = self.name();
         if(self.is(TokenType::LPAREN)){
           res = self.call(res, nm, false);
@@ -950,11 +1117,11 @@ impl Parser{
           res = Expr::Access{.n, Box::new(res), nm}; 
         }
       }else{
-          self.pop();
+          self.consume(TokenType::LBRACKET);
           let idx = self.parse_expr();
           let idx2 = Ptr<Expr>::new();
           if(self.is(TokenType::DOTDOT)){
-              self.pop();
+              self.consume(TokenType::DOTDOT);
               idx2 = Ptr::new(self.parse_expr());
           }
           self.consume(TokenType::RBRACKET);
@@ -969,12 +1136,12 @@ impl Parser{
     let e = self.prim2(true);
     let n = self.node();
     if(self.is(TokenType::AS)){
-      self.pop();
+      self.consume(TokenType::AS);
       let t = self.parse_type();
       e = Expr::As{.n, Box::new(e), t};
     }
     if(self.is(TokenType::IS)){
-      self.pop();
+      self.consume(TokenType::IS);
       let rhs = self.prim2(true);
       e = Expr::Is{.n,Box::new(e), Box::new(rhs)};
     }

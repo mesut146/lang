@@ -81,13 +81,18 @@ trait Debug{
   func debug(self, f: Fmt*);
 }
 trait Display{
-  func print(self, f: Fmt*);
+  func fmt(self, f: Fmt*);
+}
+
+func to_string<T>(node: T*): String{
+    let f = Fmt::new();
+    node.fmt(&f);
+    return f.unwrap();
 }
 
 struct Fmt{
   buf: String;
 }
-
 impl Fmt{
   func new(): Fmt{
     return Fmt{String::new()};
@@ -105,6 +110,10 @@ impl Fmt{
   }
   func print(self, s: str){
     self.buf.append(s); 
+  }
+  func print(self, s: String){
+    self.buf.append(&s);
+    s.drop();
   }
   func print<T>(self, node: T*){
     Debug::debug(node, self);
@@ -133,7 +142,6 @@ impl Debug for [i32]{
     f.print("]\n");
   }
 }
-
 impl Debug for bool{
   func debug(self, f: Fmt*){
     if(*self){
@@ -143,7 +151,11 @@ impl Debug for bool{
     }
   }
 }
-
+impl Display for bool{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for str{
   func debug(self, f: Fmt*){
     //f.print("\"");
@@ -151,21 +163,88 @@ impl Debug for str{
     //f.print("\"");
   }
 }
-
+impl Display for str{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for i8{
   func debug(self, f: Fmt*){
     f.print(*self);
   }
 }
-
+impl Display for i8{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for u8{
   func debug(self, f: Fmt*){
     f.print(*self);
   }
 }
+impl Display for u8{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+//prims
+impl Debug for i32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for i32{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for i64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for i64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for f32{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for f32{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
+impl Debug for f64{
+  func debug(self, f: Fmt*){
+    let str = self.str();
+    f.print(&str);
+    Drop::drop(str);
+  }
+}
+impl Display for f64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
+  }
+}
 impl Debug for u64{
   func debug(self, f: Fmt*){
     i64::debug(*self as i64, f);
+  }
+}
+impl Display for u64{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
   }
 }
 
@@ -186,10 +265,17 @@ impl Hash for i64{
 impl Hash for str{
   func hash(self): i64{
     let x: i64 = 0;
+    let m: i64 = 1i64 << 31;
     for(let i = 0;i < self.len();++i){
-      x = x * 31 + self.get(i);
+      x = (x * 31 + self.get(i)) % m;
     }
+    //print("hash {}={:?}\n", self, x);
     return x;
+  }
+}
+impl Hash for String{
+  func hash(self): i64{
+      return self.str().hash();
   }
 }
 
@@ -231,23 +317,6 @@ impl Drop for i64{
 }
 impl Drop for str{
   func drop(*self){
-    
-  }
-}
-
-//prims
-impl Debug for i32{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
-  }
-}
-impl Debug for i64{
-  func debug(self, f: Fmt*){
-    let str = self.str();
-    f.print(&str);
-    Drop::drop(str);
   }
 }
 
@@ -255,6 +324,9 @@ impl i32{
   func parse(s: str): i32{
     let x = i64::parse(s);
     return x as i32;
+  }
+  func parse_hex(s: str): i32{
+      return i64::parse_hex(s) as i32;
   }
   func print(x: i32): String{
     return x.str();
@@ -295,14 +367,13 @@ impl i64{
       neg = true;
       --len;
     }
-    if(len <= 2){
+    if(s.get(pos) == '0' && s.get(pos + 1) == 'x'){
+      pos += 2;
+    }
+    if(pos >= s.len()){
       panic("hex is too short {}", s);
     }
-    if(s.get(pos) != '0' || s.get(pos + 1) != 'x'){
-      panic("invalid hex {}", s);
-    }
     let x = 0_i64;
-    pos += 2;
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
       let y = 0;
@@ -379,6 +450,40 @@ impl i64{
     Drop::drop(str);
   }
 }
+
+impl f32{
+  func parse(s: str): f32{
+    let x = f64::parse(s);
+    return x as f32;
+  }
+  func print(x: f32): String{
+    return x.str();
+  }
+  func str(self): String{
+    return f64::print(*self as f64);
+  }
+}
+
+impl f64{
+  func str(self): String{
+    return f64::print(*self);
+  }
+  func parse(s: str): f64{
+    let cs = CStr::new(s);
+    let res: f64 = atof(cs.ptr());
+    cs.drop();
+    return res;
+  }
+
+  func print(x: f64): String{
+    let buf = [0_i8;100];
+    let len = sprintf(buf.ptr(), "%f", x);
+    let res = str::new(buf[0..len]).str();
+    return res;
+  }
+
+}
+
 trait Compare{
   //-1, 0, 1
   func compare(self, other: Self*): i32;
@@ -413,14 +518,28 @@ func assert_eq(s1: str, s2: str){
     panic("assertion failed: {}!= {}", s1, s2);
   }
 }
+func assert_eq(s1: i32, s2: i32){
+  if(s1 != s2){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+}
+func assert_eq(s1: String, s2: String){
+  if(!s1.eq(s2.str())){
+    panic("assertion failed: {}!= {}", s1, s2);
+  }
+  s1.drop();
+  s2.drop();
+}
 func assert_eq(s1: String, s2: str){
   if(!s1.eq(s2)){
     panic("assertion failed: {}!= {}", s1, s2);
   }
   s1.drop();
 }
-func assert_eq(s1: i32, s2: i32){
-  if(s1 != s2){
-    panic("assertion failed: {}!= {}", s1, s2);
+
+func assert2(c: bool, msg: String){
+  if(!c){
+    panic("{}\n", msg);
   }
+  msg.drop();
 }

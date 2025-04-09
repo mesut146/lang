@@ -64,7 +64,11 @@ impl str{
     }
 
     func starts_with(self, s: str): bool{
-      return self.indexOf(s, 0) == 0;
+      return self.starts_with(s, 0);
+    }
+
+    func starts_with(self, s: str, pos: i32): bool{
+      return self.indexOf(s, pos) == pos;
     }
     
     func ends_with(self, s: str): bool{
@@ -91,6 +95,19 @@ impl str{
       }
     }
 
+    func indexOf(self, ch: i32, off: i32): i32{
+      self.check(off);
+      let i = off;
+      while (i < self.len()){
+        //check first char
+        if(self.buf[i] == ch){
+          return i;
+        }
+        ++i;
+      }
+      return -1;
+    }
+
     func indexOf(self, s: str): i32{
       return self.indexOf(s, 0);
     }
@@ -99,12 +116,9 @@ impl str{
       if(off < 0) panic("str::indexof off<0, {}", off);
       if((s.len() - off) > self.len()) return -1;
       //if(off == self.len()) return -1;
-      //self.check(off);
       let i = off;
       while (i < self.len()){
         //check first char
-        is_valid(self.buf[i]);
-        is_valid(s.buf[0]);
         if(self.buf[i] != s.buf[0]){
           ++i;
           continue;
@@ -112,8 +126,6 @@ impl str{
         //check rest
         let found = true;
         for(let j = 1;j < s.len() && (i + j) < self.len();++j){
-          is_valid(self.buf[i + j]);
-          is_valid(s.buf[j]);
           if(self.buf[i + j] != s.buf[j]){
             found = false;
             break;
@@ -164,7 +176,7 @@ impl str{
     func substr(self, start: i64, end: i64): str{
       if(start < 0) panic("start index out of bounds {}", start);
       if(end > self.len()) panic("end index out of bounds {} of {}", end, self.len());
-      if(start >= end) panic("range is invalid {}, {}", start, end);
+      if(start > end) panic("range is invalid {}, {}", start, end);
       return str{self.buf[start..end]};
     }
     
@@ -225,7 +237,7 @@ impl str{
     func join(self, arr: List<String>*): String{
       let res = String::new();
       for(let i = 0;i < arr.len();++i){
-        let s = arr.get_ptr(i);
+        let s = arr.get(i);
         res.append(s.str());
         if(i + 1 < arr.len()){
           res.append(*self);

@@ -13,36 +13,64 @@ import parser/ownership
 import parser/own_model
 import parser/cache
 import parser/derive
+import parser/incremental
 import std/map
 import std/io
 import std/libc
 import std/stack
+import std/any
+import std/th
+import std/llist
 
 static bootstrap = false;
 static inline_rvo = false;
 
 func get_linker(): str{
-  let opt = getenv2("LD");
+  let opt = std::getenv("LD");
   if(opt.is_some()){
     return opt.unwrap();
   }
-  return "clang-16";
+  return "clang++-19";
+}
+
+struct LoopInfo{
+  begin_bb: BasicBlock*;
+  next_bb: BasicBlock*;
 }
 
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
-  main_file: Option<String>;
   llvm: llvm_holder;
   protos: Option<Protos>;
-  NamedValues: Map<String, Value*>;
-  globals: Map<String, Value*>;
-  allocMap: Map<i32, Value*>;
+  NamedValues: HashMap<String, Value*>;
+  globals: HashMap<String, Value*>;
+  allocMap: HashMap<i32, Value*>;
   curMethod: Option<Method*>;
-  loops: List<BasicBlock*>;
-  loopNext: List<BasicBlock*>;
+  loops: List<LoopInfo>;
   own: Option<Own>;
-  string_map: Map<String, Value*>;
+  string_map: HashMap<String, Value*>;
+  config: CompilerConfig*;
+  cache: Cache*;
+}
+impl Compiler{
+  func new(ctx: Context, config: CompilerConfig*, cache: Cache*): Compiler{
+    let vm = llvm_holder::new();
+    return Compiler{ctx: ctx,
+     resolver: Option<Resolver*>::new(),
+     llvm: vm,
+     protos: Option<Protos>::new(),
+     NamedValues: HashMap<String, Value*>::new(),
+     globals: HashMap<String, Value*>::new(),
+     allocMap: HashMap<i32, Value*>::new(),
+     curMethod: Option<Method*>::new(),
+     loops: List<LoopInfo>::new(),
+     own: Option<Own>::new(),
+     string_map: HashMap<String, Value*>::new(),
+     config: config,
+     cache: cache,
+    };
+  }
 }
 
 struct llvm_holder{
@@ -60,11 +88,11 @@ impl Drop for llvm_holder{
 }
 
 struct Protos{
-  classMap: Map<String, llvm_Type*>;
-  funcMap: Map<String, Function*>;
-  libc: Map<str, Function*>;
+  classMap: HashMap<String, llvm_Type*>;
+  funcMap: HashMap<String, Function*>;
+  libc: HashMap<str, Function*>;
   stdout_ptr: Value*;
-  std: Map<str, StructType*>;
+  std: HashMap<str, StructType*>;
   cur: Option<Function*>;
   compiler: Compiler*;
 }
@@ -84,11 +112,11 @@ impl Drop for Protos{
 impl Protos{
   func new(compiler: Compiler*): Protos{
     let res = Protos{
-      classMap: Map<String, llvm_Type*>::new(),
-      funcMap: Map<String, Function*>::new(),
-      libc: Map<str, Function*>::new(),
+      classMap: HashMap<String, llvm_Type*>::new(),
+      funcMap: HashMap<String, Function*>::new(),
+      libc: HashMap<str, Function*>::new(),
       stdout_ptr: make_stdout(),
-      std: Map<str, StructType*>::new(),
+      std: HashMap<str, StructType*>::new(),
       cur: Option<Function*>::new(),
       compiler: compiler
     };
@@ -98,8 +126,8 @@ impl Protos{
   func init(self){
       let sliceType = make_slice_type();
       self.std.add("slice", sliceType);
-      self.std.add("str", make_string_type(sliceType as llvm_Type*));
       self.libc.add("printf", make_printf());
+      self.libc.add("sprintf", make_sprintf());
       self.libc.add("fflush", make_fflush());
       self.libc.add("malloc", make_malloc());
   }
@@ -110,24 +138,17 @@ impl Protos{
     return res;
   }
   func get(self, name: String*): llvm_Type*{
-    let res = self.classMap.get_ptr(name);
+    let res = self.classMap.get(name);
     return *res.unwrap();
   }
-  func dump(self){
-    print("dump classmap\n");
-    for(let i=0;i<self.classMap.len();++i){
-      let e = self.classMap.get_pair_idx(i).unwrap();
-      print("{}\n", e.a);
-    }
-  }
   func libc(self, nm: str): Function*{
-    return *self.libc.get_ptr(&nm).unwrap();
+    return *self.libc.get(&nm).unwrap();
   }
   func std(self, nm: str): StructType*{
-    return *self.std.get_ptr(&nm).unwrap();
+    return *self.std.get(&nm).unwrap();
   }
   /*func get_func(self, mangled: String*): Function*{
-    let opt = self.funcMap.get_ptr(mangled);
+    let opt = self.funcMap.get(mangled);
     if(opt.is_none()){
       panic("no proto for {}, {}", mangled, demangle(mangled.str()));
     }
@@ -139,7 +160,7 @@ impl Protos{
   }
   func get_func(self, m: Method*): Function*{
     let mangled = mangle(m);
-    let opt = self.funcMap.get_ptr(&mangled);
+    let opt = self.funcMap.get(&mangled);
     if(opt.is_none()){
       mangled.drop();
       return self.compiler.make_proto(m).unwrap();
@@ -151,8 +172,8 @@ impl Protos{
 }
 
 func has_main(unit: Unit*): bool{
-  for (let i=0;i<unit.items.len();++i) {
-    let it = unit.items.get_ptr(i);
+  for (let i = 0;i < unit.items.len();++i) {
+    let it = unit.items.get(i);
     if let Item::Method(m*) = (it){
       if(is_main(m)){
         return true;
@@ -162,9 +183,9 @@ func has_main(unit: Unit*): bool{
   return false;
 }
 
-func get_out_file(path: str, c: Compiler*): String{
+func get_out_file(path: str, out_dir: str): String{
   let name = getName(path);
-  let res = format("{}/{}-bt.o", c.ctx.out_dir, trimExtenstion(name));
+  let res = format("{}/{}.o", out_dir, trimExtenstion(name));
   return res;
 }
 
@@ -189,19 +210,34 @@ impl llvm_holder{
     make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
     name_c.drop();
     make_builder();
-    self.di = Option::new(DebugInfo::new(path, true));
+    self.di = Option::new(DebugInfo::new(path));
+  }
+
+  func init_llvm(){
+    //InitializeAllTargetInfos();
+    // InitializeAllTargets();
+    // InitializeAllTargetMCs();
+    // InitializeAllAsmParsers();
+    // InitializeAllAsmPrinters();
+
+    llvm_InitializeX86TargetInfo();
+    llvm_InitializeX86Target();
+    llvm_InitializeX86TargetMC();
+    llvm_InitializeX86AsmParser();
+    llvm_InitializeX86AsmPrinter();
+
+    llvm_InitializeAArch64TargetInfo();
+    llvm_InitializeAArch64Target();
+    llvm_InitializeAArch64TargetMC();
+    llvm_InitializeAArch64AsmParser();
+    llvm_InitializeAArch64AsmPrinter();
   }
 
   func new(): llvm_holder{
-    InitializeAllTargetInfos();
-    InitializeAllTargets();
-    InitializeAllTargetMCs();
-    InitializeAllAsmParsers();
-    InitializeAllAsmPrinters();
-    
+    llvm_holder::init_llvm();
     //printDefaultTargetAndDetectedCPU();
     let target_triple = getDefaultTargetTriple2();
-    let env_triple = getenv2("target_triple");
+    let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       target_triple.drop();
       target_triple = env_triple.unwrap().owned().cstr();
@@ -216,23 +252,6 @@ impl llvm_holder{
 }
 
 impl Compiler{
-  func new(ctx: Context): Compiler{
-    let vm = llvm_holder::new();
-    return Compiler{ctx: ctx,
-     resolver: Option<Resolver*>::None,
-     main_file: Option<String>::new(),
-     llvm: vm,
-     protos: Option<Protos>::new(),
-     NamedValues: Map<String, Value*>::new(),
-     globals: Map<String, Value*>::new(),
-     allocMap: Map<i32, Value*>::new(),
-     curMethod: Option<Method*>::new(),
-     loops: List<BasicBlock*>::new(),
-     loopNext: List<BasicBlock*>::new(),
-     own: Option<Own>::new(),
-     string_map: Map<String, Value*>::new()
-    };
-  }
 
   func get_resolver(self): Resolver*{
     return *self.resolver.get();
@@ -241,63 +260,80 @@ impl Compiler{
   func unit(self): Unit*{
     return &self.get_resolver().unit;
   }
+  
+  func get_all_methods(self): List<Method*>{
+      let list = getMethods(self.unit());
+      let resolver = self.get_resolver();
+      for pair in &resolver.generated_methods{
+        for m in pair.b{
+          list.add(m.get());
+        }
+      }
+      return list;
+  }
 
-  func compile(self, path: str, cache: Cache*, config: CompilerConfig*): String{
-    /*if(bootstrap && path.ends_with("stmt_emitter.x")){
-      drop_enabled = true;
-    }*/
-    let outFile: String = get_out_file(path, self);
-    if(!cache.need_compile(path, outFile.str())){
+  func compile(self, path: str): String{
+    let outFile: String = get_out_file(path, self.config.out_dir.str());
+    if(!self.cache.need_compile(path, outFile.str())){
+      //todo inc check
       return outFile;
     }
     let ext = Path::ext(path);
     if (!ext.eq("x")) {
       panic("invalid extension for {}", path);
     }
+
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
-    if (has_main(self.unit())) {
-      self.main_file = Option::new(path.str());
-      if (!self.ctx.single_mode) {//compile last
-          print("skip main file\n");
-          return outFile;
-      }
-    }
     let resolver = self.get_resolver();
     resolver.resolve_all();
     self.llvm.initModule(path);
     self.createProtos();
-    self.init_globals(config);
+    self.init_globals(self.config);
     
     let methods = getMethods(self.unit());
     for (let i = 0;i < methods.len();++i) {
-      let m = *methods.get_ptr(i);
+      let m = *methods.get(i);
       self.genCode(m);
     }
     //generic methods from resolver
-    for (let i = 0;i < resolver.generated_methods.len();++i) {
-        let m = resolver.generated_methods.get_ptr(i).get();
-        self.genCode(m);
+
+    for pair in &resolver.generated_methods{
+      for m in pair.b{
+        self.genCode(m.get());
+      }
     }
-    methods.drop();
+    for p in &resolver.lambdas{
+        self.genCode(p.b);
+    }
     
     let name = getName(path);
-    let llvm_file = format("{}/{}-bt.ll", &self.ctx.out_dir, trimExtenstion(name));
+    let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
-    /*if(self.ctx.verbose){
-      print("writing {}\n", llvm_file_cstr);
-    }*/
-    llvm_file_cstr.drop();
     let outFile_cstr = CStr::new(outFile.clone());
-    emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
-    /*if(self.ctx.verbose){
-      print("writing {}\n", outFile_cstr);
-    }*/
-    outFile_cstr.drop();
+    if(!self.config.llvm_only){
+      emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
+    }
+    if(self.config.incremental_enabled || bootstrap){
+      let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
+      let newdata = File::read_string(path);
+      if(File::exists(oldpath.str())){
+        self.cache.inc.find_recompiles(self, path, oldpath.str());
+      }
+      File::write_string(newdata.str(), oldpath.str());
+      oldpath.drop();
+      newdata.drop();
+    }
     self.cleanup();
-    cache.update(path);
-    cache.write_cache();
+    self.cache.update(path);
+    self.cache.write_cache();
+
+    self.ctx.prog.compile_done();
+
+    methods.drop();
+    llvm_file_cstr.drop();
+    outFile_cstr.drop();
     return outFile;
   }
 
@@ -313,10 +349,10 @@ impl Compiler{
   }
 
   func init_globals(self, config: CompilerConfig*){
+    //make init func for global's rhs 
     let resolv = self.get_resolver();
-    //external globals
-    for(let i = 0;i < resolv.glob_map.len();++i){
-      let gl_info = resolv.glob_map.get_ptr(i);
+    //declare external globals
+    for gl_info in &resolv.glob_map{
       let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Constant>();
       let name_c = gl_info.name.clone().cstr();
@@ -324,7 +360,7 @@ impl Compiler{
       self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
-    if(self.get_resolver().unit.globals.empty()){
+    if(resolv.unit.globals.empty()){
       return;
     }
     let proto = self.make_init_proto(resolv.unit.path.str());
@@ -337,74 +373,29 @@ impl Compiler{
     let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
+    //todo check is rhs depends another global
     for(let j = 0;j < resolv.unit.globals.len();++j){
-      let gl: Global* = resolv.unit.globals.get_ptr(j);
+      let gl: Global* = resolv.unit.globals.get(j);
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
-      let init = ptr::null<Constant>();
-      if(is_constexpr(&gl.expr)){
-        if(rt.type.is_prim()){
-          let rhs_str = gl.expr.print();
-          if(rhs_str.eq("true")){
-            init =  makeInt(1, 8) as Constant*;
-          }else if(rhs_str.eq("false")){
-            init =  makeInt(0, 8) as Constant*;
-          }else{
-            init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
-          }
-          rhs_str.drop();
-        }else if(rt.type.is_str()){
-          let val = is_str_lit(&gl.expr).unwrap().str();
-          let slice_ty = self.protos.get().std("slice");
-          let cons_elems = vector_Constant_new();
-          let cons_elems_slice = vector_Constant_new();
-          let ptr = self.get_global_string(val.str());
-          vector_Constant_push(cons_elems_slice, ptr as Constant*);
-          vector_Constant_push(cons_elems_slice, makeInt(val.len(), SLICE_LEN_BITS()) as Constant*);
-          let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
-          vector_Constant_push(cons_elems, cons_slice);
-          init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
-          
-          vector_Constant_delete(cons_elems);
-          vector_Constant_delete(cons_elems_slice);
-        }else{
-          panic("glob constexpr not supported: {}", gl);
-        }
-      }else{
-        if(is_struct(&rt.type)){
-          init = ConstantStruct_get(ty as StructType*);
-        }else{
-          init = makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
-        }
-      }
+      let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
       let glob: GlobalVariable* = make_global(name_c.ptr(), ty, init);
       name_c.drop();
-      let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
-      vector_Metadata_push(globs, gve as Metadata*);
+      if(self.llvm.di.get().debug){
+        let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
+        vector_Metadata_push(globs, gve as Metadata*);
+      }
       self.globals.add(gl.name.clone(), glob as Value*);
       //todo AllocHelper should visit rhs?
-      if let Expr::Call(mc*)=(&gl.expr){
-        AllocHelper::new(self).visit(&gl.expr);
-        if(is_struct(&rt.type)){
-          self.visit_call2(&gl.expr, mc, Option::new(glob as Value*), rt);
-        }else{
-          let val = self.visit_call2(&gl.expr, mc, Option<Value*>::new(), rt);
-          CreateStore(val, glob as Value*);
-        }
-      }else{
-        if(!is_constexpr(&gl.expr)){
-          if let Expr::Array(list*, size*)=(&gl.expr){
-            AllocHelper::new(self).visit(&gl.expr);
-            self.visit_array(&gl.expr, list, size);
-          }else{
-            panic("glob rhs {}", gl);
-          }
-        }
-        rt.drop();
-      }
+      //todo make allochelper visit only children
+      AllocHelper::new(self).visit(&gl.expr);
+      self.emit_expr(&gl.expr,  glob as Value*);
+      rt.drop();
     }
-    replaceGlobalVariables(self.llvm.di.get().cu, globs);
+    if(self.llvm.di.get().debug){
+      replaceGlobalVariables(self.llvm.di.get().cu, globs);
+    }
     
     let struct_elem_types = vector_Type_new();
     vector_Type_push(struct_elem_types, getInt(32));
@@ -432,6 +423,48 @@ impl Compiler{
     method.drop();
   }
 
+  func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
+    let resolv = self.get_resolver();
+    let init = ptr::null<Constant>();
+    if(is_constexpr(&gl.expr)){
+      if(rt.type.is_prim()){
+        let rhs_str = gl.expr.print();
+        if(rhs_str.eq("true")){
+          init =  makeInt(1, 8) as Constant*;
+        }else if(rhs_str.eq("false")){
+          init =  makeInt(0, 8) as Constant*;
+        }else{
+          init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+        }
+        rhs_str.drop();
+      }else if(rt.type.is_str()){
+        let val = is_str_lit(&gl.expr).unwrap().str();
+        let slice_ty = self.protos.get().std("slice");
+        let cons_elems = vector_Constant_new();
+        let cons_elems_slice = vector_Constant_new();
+        let ptr = self.get_global_string(val.str());
+        vector_Constant_push(cons_elems_slice, ptr as Constant*);
+        vector_Constant_push(cons_elems_slice, makeInt(val.len(), SLICE_LEN_BITS()) as Constant*);
+        let cons_slice = ConstantStruct_get_elems(slice_ty, cons_elems_slice);
+        vector_Constant_push(cons_elems, cons_slice);
+        init = ConstantStruct_get_elems(ty as StructType*, cons_elems);
+        
+        vector_Constant_delete(cons_elems);
+        vector_Constant_delete(cons_elems_slice);
+      }else{
+        panic("glob constexpr not supported: {:?}", gl);
+      }
+    }else{
+      if(is_struct(&rt.type)){
+        init = ConstantStruct_get(ty as StructType*);
+      }else{
+        //prim or ptr
+        init = makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
+      }
+    }
+    return init;
+  }
+
   //make all struct decl & method decl used by this module
   func createProtos(self){
     self.protos = Option::new(Protos::new(self));
@@ -441,20 +474,24 @@ impl Compiler{
     let methods: List<Method*> = getMethods(self.unit());
     //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
-      let m = methods.get(i);
+      let m = *methods.get(i);
       p.make_proto(m);
     }
     methods.drop();
     //generic methods from resolver
     //print("gen m\n");
-    for (let i = 0;i < self.get_resolver().generated_methods.len();++i) {
-        let m = self.get_resolver().generated_methods.get_ptr(i).get();
-        p.make_proto(m);
+    let r = self.get_resolver();
+    for pair in &r.generated_methods{
+        for m in pair.b{
+          p.make_proto(m.get());
+        }
     }
     //print("used m\n");
-    for (let i = 0;i < self.get_resolver().used_methods.len();++i) {
-        let m = self.get_resolver().used_methods.get(i);
-        p.make_proto(m);
+    for pr in &r.used_methods{
+        p.make_proto(*pr.b);
+    }
+    for pair in &r.lambdas{
+        p.make_proto(pair.b);
     }
   }
   
@@ -494,13 +531,14 @@ impl Compiler{
     //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
+    self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
     self.own = Option::new(Own::new(self, m));
     let f = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(f);
-    let bb = create_bb2(f);
     self.NamedValues.clear();
+    let bb = create_bb2(f);
     SetInsertPoint(bb);
     self.llvm.di.get().dbg_func(m, f, self);
     AllocHelper::makeLocals(self, m.body.get());
@@ -508,15 +546,21 @@ impl Compiler{
     self.enter_frame();
     self.storeParams(m,f);
 
-    self.visit_block(m.body.get());
+    let blk_val = self.visit_block(m.body.get());
+    //dbg(m.name.eq("handle"), 51);
     let exit = Exit::get_exit_type(m.body.get());
-    if(!exit.is_exit() && m.type.is_void()){
-      self.own.get().do_return(m.body.get().end_line);
-      self.exit_frame();
-      if(is_main(m)){
-        CreateRet(makeInt(0, 32));
-      }else{
-        CreateRetVoid();
+    if(!exit.is_exit()){
+      if(m.type.is_void()){
+        self.own.get().do_return(m.body.get().end_line);
+        self.exit_frame();
+        if(is_main(m)){
+          CreateRet(makeInt(0, 32) as Value*);
+        }else{
+          CreateRetVoid();
+        }
+      }else if(blk_val.is_some() && !m.type.is_void()){
+        //setField(blk_val.unwrap(), &m.type, );
+        self.visit_ret(blk_val.unwrap());
       }
     }
     exit.drop();
@@ -524,6 +568,7 @@ impl Compiler{
     verifyFunction(f);
     self.own.drop();
     self.own = Option<Own>::new();
+    self.ctx.prog.compile_end(m);
   }
   
   func allocParams(self, m: Method*){
@@ -533,8 +578,8 @@ impl Compiler{
         let prm = m.self.get();
         self.alloc_prm(prm);
     }
-    for (let i=0;i<m.params.len();++i) {
-        let prm = m.params.get_ptr(i);
+    for (let i = 0;i < m.params.len();++i) {
+        let prm = m.params.get(i);
         self.alloc_prm(prm);
     }
   }
@@ -554,7 +599,7 @@ impl Compiler{
   }
 
   func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
-    let ptr = *self.NamedValues.get_ptr(&prm.name).unwrap();
+    let ptr = *self.NamedValues.get(&prm.name).unwrap();
     let val = get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
@@ -578,7 +623,7 @@ impl Compiler{
       ++argNo;
     }
     for(let i = 0;i < m.params.len();++i){
-      let prm = m.params.get_ptr(i);
+      let prm = m.params.get(i);
       self.store_prm(prm, f, argIdx);
       self.llvm.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
@@ -587,19 +632,18 @@ impl Compiler{
   }
   
   func get_alloc(self, e: Expr*): Value*{
-    let ptr = self.allocMap.get_ptr(&e.id);
+    let ptr = self.allocMap.get(&e.id);
     if(ptr.is_none()){
       self.get_resolver().err(e, "get_alloc() not set");
     }
     return *ptr.unwrap();
   }
   func get_alloc(self, id: i32): Value*{
-    let ptr = self.allocMap.get_ptr(&id);
+    let ptr = self.allocMap.get(&id);
+    if(ptr.is_none()){
+      panic("get_alloc() not set");
+    }
     return *ptr.unwrap();
-  }
-  
-  func gep2(self, ptr: Value*, idx: i32, ty: llvm_Type*): Value*{
-    return CreateStructGEP(ptr, idx, ty);
   }
 
   func cur_func(self): Function*{
@@ -622,86 +666,22 @@ impl Compiler{
     return res;
   }
 
-  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
-    create_dir(out_dir);
-    let cmd = "".str();
-    if(is_shared){
-      cmd.append(get_linker());
-      cmd.append("-shared -o ");
-    }else{
-      cmd.append("ar rcs ");
-    }
-    let path = format("{}/{}", out_dir, name);
-    cmd.append(&path);
-    cmd.append(" ");
-    for(let i = 0;i < compiled.len();++i){
-      let file = compiled.get_ptr(i);
-      cmd.append(file.str());
-      cmd.append(" ");
-    }
-
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      print("build library {}\n", path);
-    }else{
-      panic("link failed '{}'", cmd_s.get());
-    }
-    cmd_s.drop();
-    return path;
-  }
-
-  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
-    let path = format("{}/{}", out_dir, name);
-    if(exist(path.str())){
-      File::remove_file(path.str());
-    }
-    create_dir(out_dir);
-    let cmd = get_linker().str();
-    cmd.append(" -o ");
-    cmd.append(&path);
-    cmd.append(" ");
-    for(let i = 0;i < compiled.len();++i){
-      let obj_file = compiled.get_ptr(i);
-      cmd.append(obj_file.str());
-      cmd.append(" ");
-    }
-    cmd.append(args);
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      //run if linked
-      print("build binary {}\n", path);
-    }else{
-      panic("link failed '{}'", cmd_s);
-    }
-    cmd_s.drop();
-    return path;
-  }
-
-  func run(path: String){
-    let path_c: CStr = path.cstr();
-    let code = system(path_c.ptr());
-    if(code != 0){
-      panic("error while running {} code={}", path_c, code);
-    }
-    path_c.drop();
-  }
-
   func compile_single(config: CompilerConfig): String{
-    create_dir(config.out_dir.str());
+    config.use_cache = false;
+    File::create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
-    for inc in &config.src_dirs{
-      ctx.add_path(inc.str());
+    for inc_dir in &config.src_dirs{
+      ctx.add_path(inc_dir.str());
     }
-    let cmp = Compiler::new(ctx);
+    let cache = Cache::new(&config);
+    let cmp = Compiler::new(ctx, &config, &cache);
     let compiled = List<String>::new();
-    use_cache = false;
-    let cache = Cache::new(config.out_dir.str());
     if(cmp.ctx.verbose){
       print("compiling {}\n", config.trim_by_root(config.file.str()));
     }
-    let obj = cmp.compile(config.file.str(), &cache, &config);
+    let obj = cmp.compile(config.file.str());
     compiled.add(obj);
-    let res = config.link(&compiled, &cmp);
+    let res = config.link(&compiled);
     config.drop();
     cmp.drop();
     compiled.drop();
@@ -710,63 +690,218 @@ impl Compiler{
   }
 
   func compile_dir(config: CompilerConfig): String{
-    let env_triple = getenv2("target_triple");
+    if(config.jobs > 1){
+      return Compiler::compile_dir_thread2(config);
+    }
+    let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
     }
-    create_dir(config.out_dir.str());
-    let cache = Cache::new(config.out_dir.str());
+    File::create_dir(config.out_dir.str());
+    let cache = Cache::new(&config);
     cache.read_cache();
+    
+    let inc = Incremental::new(&config);
     let src_dir = &config.file;
-    let list: List<String> = list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
-      let name = list.get_ptr(i).str();
+      let name = list.get(i).str();
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
-      if(is_dir(file.str())) {
+      if(File::is_dir(file.str())) {
         file.drop();
         continue;
       }
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
-        ctx.add_path(config.src_dirs.get_ptr(j).str());
+        ctx.add_path(config.src_dirs.get(j).str());
       }
-      let cmp = Compiler::new(ctx);
+      let cmp = Compiler::new(ctx, &config, &cache);
       if(cmp.ctx.verbose){
         print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
       }
-      let obj = cmp.compile(file.str(), &cache, &config);
+      let obj = cmp.compile(file.str());
       compiled.add(obj);
+      cmp.drop();
+      file.drop();
+    }
+    for rec_file in &cache.inc.recompiles{
+      let file: String = format("{}/{}", src_dir, rec_file);
+      print("recompiling {}\n", config.trim_by_root(file.str()));
+      //rem output to trigger recompiling
+      File::remove_file(get_out_file(file.str(), config.out_dir.str()).str());
+      let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.verbose_all = config.verbose_all;
+      for(let j = 0;j < config.src_dirs.len();++j){
+        ctx.add_path(config.src_dirs.get(j).str());
+      }
+      let cmp = Compiler::new(ctx, &config, &cache);
+      let obj = cmp.compile(file.str());
+      //compiled.add(obj);
       cmp.drop();
       file.drop();
     }
     list.drop();
     cache.drop();
-    if let LinkType::Binary(bin_name, args, run) = (&config.lt){
-      let path = link(&compiled, config.out_dir.str(), bin_name, args);
-      compiled.drop();
-      if(run){
-        Compiler::run(path.clone());
-      }
-      config.drop();
-      return path;
-    }
-    else if let LinkType::Static(lib_name*) = (&config.lt){
-      let res = Compiler::build_library(&compiled, lib_name.str(), config.out_dir.str(), false);
-      compiled.drop();
-      config.drop();
-      return res;
-    }else{
-      config.drop();
-      panic("compile_dir");
-    }
+    inc.drop();
+    return config.link(&compiled);
   }
  
+  
+  func compile_dir_thread2(config: CompilerConfig): String{
+    let env_triple = std::getenv("target_triple");
+    if(env_triple.is_some()){
+      print("triple={}\n", env_triple.get());
+    }
+    File::create_dir(config.out_dir.str());
+    let cache = Cache::new(&config);
+    cache.read_cache();
+    let src_dir = &config.file;
+    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
+    let compiled = Mutex::new(List<String>::new());
+    let worker = Worker::new(config.jobs);
+    for(let i = 0;i < list.len();++i){
+      let name = list.get(i).str();
+      let file: String = format("{}/{}", src_dir, name);
+      if(File::is_dir(file.str()) || !name.ends_with(".x")) {
+        file.drop();
+        continue;
+      }
+      let idx = Mutex::new(0);
+      let args = CompileArgs{
+        file: file.clone(),
+        config: &config,
+        cache: &cache,
+        compiled: &compiled,
+        idx: &idx,
+        len: list.len() as i32,
+      };
+      worker.add_arg(Compiler::make_compile_job2, args);
+    }
+    sleep(1);
+    worker.join();
+    list.drop();
+    cache.drop();
+    let comp = compiled.unwrap();
+    return config.link(&comp);
+  }
+
+  func make_compile_job2(arg: c_void*){
+    let args = arg as CompileArgs*;
+    let config = args.config;
+    let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+    for dir in &config.src_dirs{
+      ctx.add_path(dir.str());
+    }
+    //todo delete cmp?
+    let cmp = Compiler::new(ctx, config, args.cache);
+    let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
+    for inc_dir in &args.config.src_dirs{
+        cmd.append(" -i ");
+        cmd.append(inc_dir);
+    }
+    if(cmp.ctx.verbose){
+        let idx = args.idx.lock();
+        print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
+        *idx = *idx + 1;
+        args.idx.unlock();
+    }
+    let proc = Process::run(cmd.str());
+    proc.eat_close();
+    if(cmp.ctx.verbose){
+        let compiled = args.compiled.lock();
+        print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
+        args.compiled.unlock();
+    }
+    let compiled = args.compiled.lock();
+    compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
+    args.compiled.unlock();
+    sleep(1);
+    cmp.drop();
+    cmd.drop();
+  }
+
+  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
+    File::create_dir(out_dir);
+    let cmd = "".str();
+    if(is_shared){
+      cmd.append(get_linker());
+      cmd.append("-shared -o ");
+    }else{
+      cmd.append("ar rcs ");
+    }
+    let out_file = format("{}/{}", out_dir, name);
+    print("linking {}\n", out_file);
+    cmd.append(&out_file);
+    cmd.append(" ");
+    for file in compiled{
+      cmd.append(file.str());
+      cmd.append(" ");
+    }
+  
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      print("build library {}\n", out_file);
+    }else{
+      panic("link failed '{}'", cmd_s.get());
+    }
+    cmd_s.drop();
+    return out_file;
+  }
+  
+  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
+    let out_file = format("{}/{}", out_dir, name);
+    print("linking {}\n", out_file);
+    if(File::exist(out_file.str())){
+      File::remove_file(out_file.str());
+    }
+    File::create_dir(out_dir);
+    let cmd = get_linker().str();
+    cmd.append(" -o ");
+    cmd.append(&out_file);
+    cmd.append(" ");
+    for obj_file in compiled{
+      cmd.append(obj_file.str());
+      cmd.append(" ");
+    }
+    cmd.append(args);
+    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str());
+    let cmd_s = cmd.cstr();
+    if(system(cmd_s.ptr()) == 0){
+      //run if linked
+      print("build binary {}\n", out_file);
+    }else{
+      panic("link failed '{}'", cmd_s);
+    }
+    cmd_s.drop();
+    return out_file;
+  }
+  
+  func run(path: String){
+    let path_c: CStr = path.cstr();
+    let code = system(path_c.ptr());
+    if(code != 0){
+      print("error while running {} code={}\n", path_c, code);
+      exit(1);
+    }
+    path_c.drop();
+  }
 }//Compiler
 
+
+struct CompileArgs{
+  file: String;
+  config: CompilerConfig*;
+  cache: Cache*;
+  compiled: Mutex<List<String>>*;
+  idx: Mutex<i32>*;
+  len: i32;
+}
+
 enum LinkType{
-  Binary(name: str, args: str, run: bool),
+  Binary(name: String, args: String, run: bool),
   Static(name: String),
   Dynamic(name: String),
   None
@@ -780,6 +915,11 @@ struct CompilerConfig{
   lt: LinkType;
   std_path: Option<String>;
   root_dir: Option<String>;
+  jobs: i32;
+  verbose_all: bool;
+  incremental_enabled: bool;
+  use_cache: bool;
+  llvm_only: bool;
 }
 
 impl CompilerConfig{
@@ -797,12 +937,22 @@ impl CompilerConfig{
       args: "".str(),
       lt: LinkType::None,
       std_path: std_path,
-      root_dir: Option<String>::new()
+      root_dir: Option<String>::new(),
+      jobs: 1,
+      verbose_all: false,
+      incremental_enabled: false,
+      use_cache: true,
+      llvm_only: false,
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{
     self.std_path.drop();
     self.std_path = Option::new(std_path);
+    return self;
+  }
+  func set_std_path(self, std_path: str): CompilerConfig*{
+    self.std_path.drop();
+    self.std_path = Option::new(std_path.str());
     return self;
   }
   func set_out(self, out: str): CompilerConfig*{
@@ -833,30 +983,27 @@ impl CompilerConfig{
     self.file = file;
     return self;
   }
-  func set_std_path(self, std_path: str): CompilerConfig*{
-    self.std_path.drop();
-    self.std_path = Option::new(std_path.str());
+  func set_jobs(self, j: i32): CompilerConfig*{
+    self.jobs = j;
     return self;
   }
-  func link(self, compiled: List<String>*, cmp: Compiler*): String{
-    if(self.lt is LinkType::None){
-      return "".str();
-    }
-    if let LinkType::Binary(bin_name, args, run) = (&self.lt){
-      if(cmp.main_file.is_none()){
-        return "".str();
-      }
-      let path = Compiler::link(compiled, self.out_dir.str(), bin_name, args);
-      if(run){
-        Compiler::run(path.clone());
-      }
-      return path;
-    }
-    else if let LinkType::Static(lib_name*) = (&self.lt){
-      let res = Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
-      return res;
-    }else{
-      panic("CompilerConfig::link");
+  func link(self, compiled: List<String>*): String{
+    if(self.llvm_only) return "".owned();
+    match &self.lt{
+      LinkType::None => return "".owned(),
+      LinkType::Binary(bin_name*, args*, run) => {
+        let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
+        if(run){
+          Compiler::run(path.clone());
+        }
+        return path;
+      },
+      LinkType::Static(lib_name*) => {
+        return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
+      },
+      LinkType::Dynamic(lib_name*) => {
+        return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), true);
+      },
     }
   }
   func trim_by_root(self, path: str): str{

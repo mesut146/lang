@@ -8,7 +8,7 @@ struct String{
 
 impl String{
     func dump(self){
-      print("String{len: {}, \"", self.len());
+      print("String{{len: {}, \"", self.len());
       self.print();
       print("\"}\n");
     }
@@ -73,7 +73,7 @@ impl String{
     }
     
     func get(self, i: i64): i8{
-         return *self.arr.get_ptr(i);
+         return *self.arr.get(i);
     }
 
     func str(self): str{
@@ -121,18 +121,6 @@ impl String{
       self.arr.set(pos, c);
     }
     
-    func find(self, s: str): Option<i32>{
-      return self.find(s, 0);
-    }
-    
-    func find(self, s: str, start: i32): Option<i32>{
-      let i = self.str().indexOf(s, start);
-      if(i==-1){ 
-       return Option<i32>::None; 
-      }
-      return Option::new(i);
-    }
-    
     func replace(self, s1: str, s2: str): String{
       return self.str().replace(s1, s2);
     }
@@ -166,6 +154,12 @@ impl Clone for String{
 
 impl Debug for String{
   func debug(self, f: Fmt*){
+    self.str().debug(f);
+    //f.print(self.str());
+  }
+}
+impl Display for String{
+  func fmt(self, f: Fmt*){
     self.str().debug(f);
     //f.print(self.str());
   }
@@ -238,5 +232,10 @@ impl CStr{
 impl Debug for CStr{
   func debug(self, f: Fmt*){
     f.print(self.val.str());
+  }
+}
+impl Display for CStr{
+  func fmt(self, f: Fmt*){
+      Debug::debug(self, f);
   }
 }

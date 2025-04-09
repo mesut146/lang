@@ -1,0 +1,52 @@
+
+//trim debug paths
+
+//full macro support 
+asd!(5, "test");
+macro asd{
+}
+
+//multiple types, methods mix up
+
+
+//closures
+let f = (a: i32, b: str): i32=>{
+};
+let f = ()=>5;
+f();
+
+
+//inside format macro, call custom printer
+print("method is {::TraitName}", m);
+=TraitName::fmt(m, f);
+
+
+//match expr complex
+
+//panic macro
+macro panic(e: Expr, s: String){
+}
+
+//add ?()throw operator
+let r = Result<T, E>:Ok{}
+r?.get();
+{
+  match r{
+    Result::Ok{val} => {
+      val.get();
+    },
+    Result::Err{err} => {
+      //panic or return depends on method return type
+      if(std::return_type!() == Result<V, E>){
+        return Result<V, E>::Err(err);
+      }else{
+        panic("unwrap Result::Err");
+      }
+    }
+  }
+}
+
+func to_list<E, T>(it: T): List<E>
+call like to_list<i32>(..) should work
+
+self.len() < self.buckets.len() * 0.75, emit as mul 0

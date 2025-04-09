@@ -9,6 +9,7 @@ import parser/token
 import parser/ownership
 import std/libc
 import std/map
+import std/stack
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
@@ -34,7 +35,7 @@ func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
     if(der.eq("Clone")){
         return generate_clone(decl, unit);
     }
-    panic("generate_derive decl: {} der: '{}'", decl.type, der);
+    panic("generate_derive decl: {:?} der: '{}'", decl.type, der);
 }
 
 func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
@@ -65,7 +66,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(decl.line, decl.line);
     if(decl.base.is_some()){
         //clone::clone(ptr::deref(self as <Base>*));
-        body.list.add(parse_stmt(format("Clone::clone(self as {}*);", decl.base.get()), unit, decl.line));
+        body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
     }
     
     if let Decl::Enum(variants*)=(decl){
@@ -111,13 +112,19 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
             let self_id = unit.node(line);
             let block_id = unit.node(line);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
-            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
+            let is = IfLet{
+                type: vt,
+                args: List<ArgBind>::new(),
+                rhs: Expr::Name{.self_id, "self".str()},
+                then: Box::new(Body::Block{.block_id, then}),
+                else_stmt: Ptr<Body>::new()
+            };
             for fd in &ev.fields{
                 let arg_id = unit.node(line);
                 is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
             }
             let iflet_id = unit.node(line);
-            body.list.add(Stmt::IfLet{.iflet_id, is});
+            body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
         }
         body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
     }else{
@@ -174,16 +181,16 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(line, line);
     if(decl.base.is_some()){
         //Drop::drop(ptr::deref(self as <Base>*));
-        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {}*));", decl.base.get()), unit, line));
+        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
     }
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
-            let ev = variants.get_ptr(i);
+            let ev = variants.get(i);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
             let then = Block::new(line, line);
 
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 //Drop::drop({fd.name})
                 let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
                 then.list.add(drop_stmt);
@@ -197,20 +204,20 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 type: vt,
                 args: List<ArgBind>::new(),
                 rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Stmt::Block{.block_id, then}),
-                else_stmt: Ptr<Stmt>::new()
+                then: Box::new(Body::Block{.block_id, then}),
+                else_stmt: Ptr<Body>::new()
             };
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 let arg_id = unit.node(line);
-                iflet.args.add(ArgBind{.arg_id, fd.name.clone(), false});
+                iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
             }
-            body.list.add(Stmt::IfLet{.iflet_id, iflet});
+            body.list.add(Expr::IfLet{.iflet_id, Box::new(iflet)}.into_stmt());
         }
     }else{
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
-            let fd = fields.get_ptr(i);
+            let fd = fields.get(i);
             if(!is_struct(&fd.type)) continue;
             //self.{fd.name}.drop();
             let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
@@ -240,16 +247,17 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     let body = Block::new(line, line);
     if let Decl::Enum(variants*)=(decl){
         for(let i = 0;i < variants.len();++i){
-            let ev = variants.get_ptr(i);
+            let ev = variants.get(i);
             let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
             let then = Block::new(line, line);
 
             //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &vt), unit, line));
+            then.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
+            then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
             if(ev.fields.len() > 0){
                 then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
                 for(let j = 0;j < ev.fields.len();++j){
-                    let fd = ev.fields.get_ptr(j);
+                    let fd = ev.fields.get(j);
                     if(j > 0){
                         then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
                     }
@@ -260,31 +268,41 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                         //i64::debug_hex(<fd.name> as u64, f);
                         then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
                     }else{
-                        //{fd.name}.debug(f);
-                        //already ptr from if let arg
-                        then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                        if(decl.is_generic){
+                            then.list.add(parse_stmt(format("std::debug({}, f);", fd.name), unit, line));
+                        }else{
+                            //{fd.name}.debug(f);
+                            //already ptr from if let arg
+                            then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                        }
                     }
                 }
                 then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
             }
             let self_id = unit.node(line);
             let block_id = unit.node(line);
-            let is = IfLet{vt, List<ArgBind>::new(), Expr::Name{.self_id, "self".str()}, Box::new(Stmt::Block{.block_id, then}), Ptr<Stmt>::new()};
+            let is = IfLet{
+                type: vt,
+                args: List<ArgBind>::new(),
+                rhs: Expr::Name{.self_id, "self".str()},
+                then: Box::new(Body::Block{.block_id, then}),
+                else_stmt: Ptr<Body>::new()
+            };
             for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get_ptr(j);
+                let fd = ev.fields.get(j);
                 let arg_id = unit.node(line);
-                is.args.add(ArgBind{.arg_id,fd.name.clone(), true});
+                is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
             }
             let iflet_id = unit.node(line);
-            body.list.add(Stmt::IfLet{.iflet_id, is});
+            body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
         }
     }else{
         //f.print(<decl.type.print()>)
-        body.list.add(parse_stmt(format("f.print(std::print_type<{}>());", &decl.type), unit, line));
+        body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
         body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
         let fields = decl.get_fields();
         for(let i = 0;i < fields.len();++i){
-            let fd = fields.get_ptr(i);
+            let fd = fields.get(i);
             if(i > 0){
                 body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
             }
@@ -295,8 +313,12 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 //i64::debug_hex(fd.name as u64, f);
                 body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
             }else{
-                //self.{fd.name}.debug(f);
-                body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                if(decl.is_generic){
+                    body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name), unit, line));
+                }else{
+                    //self.{fd.name}.debug(f);
+                    body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                }
             }
         }
         body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
@@ -311,7 +333,8 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
     }
-    let fmt: Expr* = mc.args.get_ptr(0);
+    let fmt: Expr* = mc.args.get(0);
+    r.visit(fmt).drop();
     let lit_opt = is_str_lit(fmt);
     if (lit_opt.is_none()) {
         r.err(node, "format arg not str literal");
@@ -327,7 +350,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     let line = node.line;
     let info = FormatInfo::new(line);
     let block = &info.block;
-    //print("gen {} id={} {}\n", node, node.id, r.unit.path);
+    //print("macro {} id={} {}\n", node, node.id, r.unit.path);
     if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
         //optimized print, no heap alloc, no fmt
         //printf("..")
@@ -344,85 +367,123 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
             msg.drop();
         }
-        r.visit(block);
+        r.visit_block(block);
         r.format_map.add(node.id, info);
         return;
     }
-    let var_name = format("f_{}", node.id);
-    //let f = Fmt::new();
-    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &var_name), &r.unit, line);
+    let fmt_var_name = format("f_{}", node.id);
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &fmt_var_name), &r.unit, line);
     block.list.add(var_stmt);
     let pos = 0;
-    let arg_idx = 1;
+    let arg_idx = 1;//skip fmt_str
     while(pos < fmt_str.len()){
-        let br_pos = fmt_str.indexOf("{}", pos);
-        if(br_pos == -1 || br_pos > pos){
-            let sub = "";
-            if(br_pos == -1){
-                sub = fmt_str.substr(pos);
-            }else{
-                sub = fmt_str.substr(pos, br_pos);
-            }
+        let br_pos = fmt_str.indexOf("{", pos);
+        if(br_pos == -1){
+            let sub = fmt_str.substr(pos);
             let sub2 = normalize_quotes(sub);
-            let st = parse_stmt(format("{}.print(\"{}\");", &var_name, sub2), &r.unit, line);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            block.list.add(st);
+            sub2.drop();
+            break;
+        }
+        if(br_pos > pos){
+            let sub = fmt_str.substr(pos, br_pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
             sub2.drop();
             block.list.add(st);
-            if(br_pos == -1){
-                break;
+        }
+        if(fmt_str.get(br_pos + 1) == '{'){
+            let st = parse_stmt(format("{}.print(\"{{\");", &fmt_var_name), &r.unit, line);
+            block.list.add(st);
+            pos = br_pos + 2;
+            continue;
+        }
+        let br_end = fmt_str.indexOf("}", br_pos);
+        if(br_end == -1){
+            r.err(node, "invalid format no closing }");
+        }
+        let debug = false;
+        let func_name = "Display::fmt";
+        if(fmt_str.starts_with("{:?", br_pos)){
+            debug = true;
+            func_name = "Debug::debug";
+            pos = br_pos + 3;
+        }else{
+            pos = br_pos + 1;
+        }
+        if(pos < br_end){
+            //named arg
+            let arg_str = fmt_str.substr(pos, br_end);
+            let expr = parse_expr(arg_str.owned(), &r.unit, line);
+            let arg_rt = r.visit(&expr);
+            if(is_struct(&arg_rt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
             }
+            arg_rt.drop();
+            expr.drop();
+        }else{
+            if(arg_idx >= mc.args.len()){
+                r.err(node, "format specifier not matched");
+            }
+            let arg = mc.args.get(arg_idx);
+            let argt = r.visit(arg);
+            if(is_struct(&argt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            ++arg_idx;
+            argt.drop();
         }
-        pos = br_pos + 2;
-        if(!(arg_idx < mc.args.len())){
-            r.err(node, "format specifier not matched");
-        }
-        let arg = mc.args.get_ptr(arg_idx);
-        ++arg_idx;
-        //<arg>.debug(&f);
-        let dbg_st = parse_stmt(format("({}).debug(&{});", arg, &var_name), &r.unit, line);
-        block.list.add(dbg_st);
+        pos = br_end + 1;
+        // argt.drop();
     }
     if(arg_idx < mc.args.len()){
-        r.err(node, "format arg not matched in specifier");
+        r.err(node, format("format arg not matched in specifier {:?}", mc.args.get(arg_idx)));
     }
     if(Resolver::is_print(mc)){
-        //f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.print();", &var_name), &r.unit, line);
+        //..f.buf.print();
+        let print_st = parse_stmt(format("String::print(&{}.buf);", &fmt_var_name), &r.unit, line);
         block.list.add(print_st);
-        //Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
-        //print("block={}\n", block);
-        r.visit(block);
-        r.format_map.add(node.id, info);
+        r.visit_block(block);
     }else if(Resolver::is_panic(mc)){
-        //"<method:line>".print();
+        //.."<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
         pos_info.drop();
         block.list.add(pos_info_st);
-        //f.buf.print();
-        let print_st = parse_stmt(format("{}.buf.println();", &var_name), &r.unit, line);
+        //..f.buf.print();
+        let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
         block.list.add(print_st);
-        //Drop::drop(f);
-        let drop_st = parse_stmt(format("Drop::drop({});", &var_name), &r.unit, line);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
-        //print("block={}\n", block);
-        r.visit(block);
-        r.format_map.add(node.id, info);
+        //..print("block={}\n", block);
+        r.visit_block(block);
     }else if(Resolver::is_format(mc)){
-        //f.unwrap()
-        let unwrap_mc = parse_expr(format("{}.unwrap()", &var_name), &r.unit, line);
-        info.unwrap_mc = Option::new(unwrap_mc);
-        r.visit(block);
-        let tmp = r.visit(info.unwrap_mc.get());
+        //..f.unwrap()
+        let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
+        block.return_expr.set(unwrap_expr);
+        let tmp = r.visit_block(block);
         tmp.drop();
-        r.format_map.add(node.id, info);
     }else{
-        info.drop();
         r.err(node, "generate_format");
     }
-    var_name.drop();
+    r.format_map.add(node.id, info);
+    fmt_var_name.drop();
 }
 
 //replace non escaped quotes into escaped ones
@@ -466,21 +527,27 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     if(mc.args.len() != 1){
         r.err(node, format("assert expects one element got: {}", mc.args.len()));
     }
-    let arg = mc.args.get_ptr(0);
+    let arg = mc.args.get(0);
     if(!r.is_condition(arg)){
-        r.err(node, format("assert expr is not bool: {}", node));
+        r.err(node, format("assert expr is not bool: {:?}", node));
     }
     let line = node.line;
     let info = FormatInfo::new(line);
     let block = &info.block;
     let arg_str = arg.print();
-    let arg_norm = normalize_quotes(arg_str.str());
-    arg_str.drop();
+    let arg_norm: String = normalize_quotes(arg_str.str());
     let method_sig = printMethod(r.curMethod.unwrap());
-    let str = format("if(!({})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
+    //let str = format("if(!({:?})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
+    let fm = Fmt::new(format("if(!({:?})){{\n", arg));
+    fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.curMethod.unwrap().path, node.line, arg_norm, method_sig));
+    fm.print("exit(1);\n}");
+    let str = fm.unwrap();
+    //print("assert='{}'", str);
+    block.list.add(parse_stmt(str, &r.unit, line));
+    r.format_map.add(node.id, info);
+    //print("assert {} id={} path={}\nblock={}\n", node, node.id, r.unit.path, block);
+    r.visit_block(block);
+    arg_str.drop();
     arg_norm.drop();
     method_sig.drop();
-    block.list.add(parse_stmt(str, &r.unit, line));
-    r.visit(block);
-    r.format_map.add(node.id, info);
 }
