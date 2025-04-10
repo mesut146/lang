@@ -160,11 +160,14 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     }
     let m = Method::new(unit.node(decl.line), "clone".str(), decl.type.clone());
     m.is_generic = decl.is_generic;
-    m.self = Option::new(Param{.unit.node(decl.line),
-                                name: "self".str(),
-                                type: decl.type.clone().toPtr(),
-                                is_self: true,
-                                is_deref: false});
+    let prm = Param{
+        .unit.node(decl.line),
+        name: "self".str(),
+        type: decl.type.clone().toPtr(),
+        is_self: true,
+        is_deref: false
+    };
+    m.self = Option::new(prm);
     m.parent = Parent::Impl{make_info(decl, "Clone")};
     m.path.drop();
     m.path = unit.path.clone();

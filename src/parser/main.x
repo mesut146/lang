@@ -186,20 +186,21 @@ func bootstrap(cmd: CmdArgs*){
   let bin = Compiler::compile_dir(config);
   if(is_static_llvm){
     let linker = get_linker();
-    let llvm = Process::run("{llvm_config} --link-static --libs core target aarch64 X86").read_close().unwrap();
+    let llvm = Process::run(format("{llvm_config} --link-static --libs core target aarch64 X86").str()).read_close().unwrap();
     llvm = trim_nl(llvm);
     //print("llvm={}\n", llvm);
     //let sys = "-lstdc++ -lrt -ldl -lz -lzstd -ltinfo -lxml2";
     let bin_path = format("{}/{}-static", out_dir, name);
-    let cmd_link = format("{} -o {} -lstdc++ -lm {} {} {libbridge} -L{libdir} {}", linker, bin_path, bin, stdlib, llvm);
-    cmd_link.append(" /lib/x86_64-linux-gnu/libtinfo.a");
-    cmd_link.append(" /lib/x86_64-linux-gnu/libzstd.a");
-    cmd_link.append(" /lib/x86_64-linux-gnu/libz.a");
+    let sys = "-Wl,-Bstatic -lz -lzstd ltinfo";
+    let cmd_link = format("{linker} -o {bin_path} -lstdc++ -lm {bin} {stdlib} {libbridge} -L{libdir} {llvm} {sys}");
+    //cmd_link.append(" /lib/x86_64-linux-gnu/libtinfo.a");
+    //cmd_link.append(" /lib/x86_64-linux-gnu/libzstd.a");
+    //cmd_link.append(" /lib/x86_64-linux-gnu/libz.a");
     //print("cmd={}\n", cmd_link);
     let proc = Process::run(cmd_link.str());
     let proc_out = proc.read_close();
     if(proc_out.is_ok() && !proc_out.get().empty()){
-      panic("proc={}\n", proc_out.unwrap());
+      panic("proc={}\ncmd={}\n", proc_out.unwrap(), cmd_link);
     }
     if(proc_out.is_ok()){
       let bin2 = format("{}/{}", build, name);

@@ -21,7 +21,7 @@ func read_write(){
   assert(strcmp(buf.ptr(), s.ptr()) == 0);
 
   fclose(fp);
-  remove(file_name.ptr());
+  printf("remove result=%d\n", remove(file_name.ptr()));
 }
 
 func seek_test(f: FILE*, len: i32){
