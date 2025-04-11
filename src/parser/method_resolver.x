@@ -1010,7 +1010,7 @@ impl MethodResolver{
                 }
                 //check range
             } else {
-                if (max_for(target) >= i64::parse(v.str())) {
+                if (max_for(target) >= i64::parse(v.str()).unwrap()) {
                     return Option<String>::new();
                 } else {
                     return Option::new(format("{} can't fit into {}", v.str(), target_str.str()));

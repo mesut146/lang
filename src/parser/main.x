@@ -173,7 +173,7 @@ func bootstrap(cmd: CmdArgs*){
     .add_dir(src_dir.clone());
   config.incremental_enabled = false;
   if(jobs.is_some()){
-    config.set_jobs(i32::parse(jobs.get().str()));
+    config.set_jobs(i32::parse(jobs.get().str()).unwrap());
   }
   config.root_dir.set(root.clone());
   if(sng.is_some()){

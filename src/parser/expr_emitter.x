@@ -634,7 +634,7 @@ impl Compiler{
         }
         if(Resolver::is_call(mc, "std", "internal_block")){
           let arg = mc.args.get(0).print();
-          let id = i32::parse(arg.str());
+          let id = i32::parse(arg.str()).unwrap();
           let blk: Block* = *resolver.block_map.get(&id).unwrap();
           self.visit_block(blk);
           arg.drop();
@@ -724,7 +724,7 @@ impl Compiler{
       }
       if(Resolver::is_call(mc, "std", "internal_block")){
         let arg = mc.args.get(0).print();
-        let id = i32::parse(arg.str());
+        let id = i32::parse(arg.str()).unwrap();
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit_block(blk);
         arg.drop();
@@ -1267,11 +1267,11 @@ impl Compiler{
           let trimmed = node.trim_suffix();
           let normal = trimmed.replace("_", "");
           if (normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
-            let val: i64 = i64::parse_hex(normal.str());
+            let val: i64 = i64::parse_hex(normal.str()).unwrap();
             normal.drop();
             return makeInt(val, bits) as Value*;
           }
-          let val: i64 = i64::parse(normal.str());
+          let val: i64 = i64::parse(normal.str()).unwrap();
           normal.drop();
           return makeInt(val, bits) as Value*;
         },

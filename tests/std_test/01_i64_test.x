@@ -1,17 +1,19 @@
+import std/result
+
 func parse_test(){
-  let x: i64 = i64::parse("112233");
+  let x: i64 = i64::parse("112233").unwrap();
   assert(x == 112233_i64);
 
-  let y: i64 = i64::parse("-112233");
+  let y: i64 = i64::parse("-112233").unwrap();
   assert(y == -112233_i64);
 }
 
 func print_test(){
-  let x: i64 = i64::parse("112233");
+  let x: i64 = i64::parse("112233").unwrap();
   let str = i64::print(x);
   assert_eq(str.str(), "112233");
 
-  let y: i64 = i64::parse("-112233");
+  let y: i64 = i64::parse("-112233").unwrap();
   let str2 = i64::print(y);
   assert_eq(str2.str(), "-112233");
 
@@ -20,10 +22,10 @@ func print_test(){
 }
 
 func hex_parse(){
-  let x = i64::parse_hex("0xab");
+  let x = i64::parse_hex("0xab").unwrap();
   assert(x == 171_i64);
 
-  let y = i64::parse_hex("-0xab");
+  let y = i64::parse_hex("-0xab").unwrap();
   assert(y == -171_i64);
 }
 

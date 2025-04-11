@@ -1,4 +1,5 @@
 import std/libc
+import std/result
 
 func dbg(c: bool, id: i32){
   if(c){
@@ -321,25 +322,38 @@ impl Drop for str{
 }
 
 impl i32{
-  func parse(s: str): i32{
-    let x = i64::parse(s);
-    return x as i32;
+  func parse(s: str): Result<i32, String>{
+    let res = i64::parse(s);
+    if(res.is_ok()){
+      return Result<i32, String>::ok(res.unwrap() as i32);
+    }else{
+      return Result<i32, String>::err(res.unwrap_err());
+    }
   }
-  func parse_hex(s: str): i32{
-      return i64::parse_hex(s) as i32;
+
+  func parse_hex(s: str): Result<i32, String>{
+      let res = i64::parse_hex(s);
+      if(res.is_ok()){
+        return Result<i32, String>::ok(res.unwrap() as i32);
+      }else{
+        return Result<i32, String>::err(res.unwrap_err());
+      }
   }
+
   func print(x: i32): String{
     return x.str();
   }
+
   func str(self): String{
     return i64::print(*self as i64);
   }
 }
+
 impl i64{
   func str(self): String{
     return i64::print(*self);
   }
-  func parse(s: str): i64{
+  func parse(s: str): Result<i64, String>{
     let x: i64 = 0;
     let neg = false;
     let pos = 0;
@@ -347,18 +361,23 @@ impl i64{
       ++pos;
       neg = true;
     }
+    if(pos == s.len()){
+      return Result<i64, String>::err(format("number is too short {}", s));
+    }
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
-      assert(ch >= '0' && ch <= '9');
+      if(ch <= '0' || ch >= '9'){
+        return Result<i64, String>::err(format("invalid digit '{}' at pos {}", ch as u8, pos));
+      }
       x = 10 * x + (ch as i64 - ('0' as i64));
       ++pos;
     }
     if(neg){
-      return -x;
+      return Result<i64, String>::ok(-x);
     }
-    return x;  
+    return Result<i64, String>::ok(x);
   }
-  func parse_hex(s: str): i64{
+  func parse_hex(s: str): Result<i64, String>{
     let neg = false;
     let len = s.len();
     let pos = 0;
@@ -371,24 +390,33 @@ impl i64{
       pos += 2;
     }
     if(pos >= s.len()){
-      panic("hex is too short {}", s);
+      return Result<i64, String>::err(format("hex is too short {}", s));
     }
     let x = 0_i64;
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
       let y = 0;
-      if(ch >= '0' && ch <= '9') y = ch - ('0' as i32);
-      else if(ch >= 'a' && ch <= 'f') y = ch - ('a' as i32) + 10;
-      else if(ch >= 'A' && ch <= 'F') y = ch - ('A' as i32) + 10;
-      else panic("invalid hex char: {}({}) in {}", ch as i8, ch, s);
+      if(ch >= '0' && ch <= '9'){
+        y = ch - ('0' as i32);
+      }
+      else if(ch >= 'a' && ch <= 'f'){
+        y = ch - ('a' as i32) + 10;
+      }
+      else if(ch >= 'A' && ch <= 'F'){
+        y = ch - ('A' as i32) + 10;
+      }
+      else{
+        return Result<i64, String>::err(format("invalid hex char: {}({}) in {}", ch as i8, ch, s));
+      }
       x = 16 * x + y;
       ++pos;
     }
     if(neg){
-      return -x;
+      return Result<i64, String>::ok(-x);
     }
-    return x;
+    return Result<i64, String>::ok(x);
   }
+
   func print(x: i64): String{
     let len = i64::str_size(x, 10);
     let list = List<u8>::new(len);

@@ -85,9 +85,9 @@ func map_str(){
 }
 
 func to_color(s: str): str{
-    let r = i32::parse_hex(s.substr(0, 2));
-    let g = i32::parse_hex(s.substr(2, 4));
-    let b = i32::parse_hex(s.substr(4, 6));
+    let r = i32::parse_hex(s.substr(0, 2)).unwrap();
+    let g = i32::parse_hex(s.substr(2, 4)).unwrap();
+    let b = i32::parse_hex(s.substr(4, 6)).unwrap();
     if(r >= g){
         if(r >= b){
             return "red";

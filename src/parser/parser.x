@@ -440,7 +440,7 @@ impl Parser{
           let size = self.consume(TokenType::INTEGER_LIT);
           self.consume(TokenType::RBRACKET);
           let bx: Box<Type> = Box::new(type);
-          return Type::Array{.id, bx,  i32::parse(size.value.str())};
+          return Type::Array{.id, bx,  i32::parse(size.value.str()).unwrap()};
         }else{
           self.consume(TokenType::RBRACKET);
           return Type::Slice{.id, Box::new(type)};
@@ -450,7 +450,7 @@ impl Parser{
         while(self.is(TokenType::COLON2)){
           self.pop();
           let part = self.gen_part();
-          if let Type::Simple(smp*) = (&part){
+          if let Type::Simple(smp*) = &part{
             let id = self.node();
             let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
             res = tmp;
@@ -1006,7 +1006,7 @@ impl Parser{
         if(self.is(TokenType::SEMI)){
             self.consume(TokenType::SEMI);
             let s = self.consume(TokenType::INTEGER_LIT);
-            sz = Option::new(i32::parse(s.value.str()));
+            sz = Option::new(i32::parse(s.value.str()).unwrap());
         }
         self.consume(TokenType::RBRACKET);
         return Expr::Array{.n, arr, sz};
