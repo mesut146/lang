@@ -120,6 +120,15 @@ impl Attributes{
   func new(): Attributes{
     return Attributes{list: List<Attribute>::new()};
   }
+  func has_attr(self, name: str): bool{
+    for(let i = 0;i < self.list.len();++i){
+      let at = self.list.get(i);
+      if(at.is_simple(name)){
+        return true;
+      }
+    }
+    return false;
+  }
 }
 struct Attribute{
   name: String;
@@ -199,13 +208,7 @@ enum Decl: BaseDecl{
 
 impl Decl{
   func is_drop(self): bool{
-    for(let i = 0;i < self.attr.list.len();++i){
-      let at = self.attr.list.get(i);
-      if(at.name.eq("drop")){
-        return true;
-      }
-    }
-    return false;
+    return self.attr.has_attr("drop");
   }
   func is_struct(self): bool{
     return self is Decl::Struct;

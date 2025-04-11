@@ -404,7 +404,6 @@ impl MethodResolver{
         if(list.empty()){
             let msg = format("no such method {:?}", sig);
             self.r.err(expr, msg.str());
-            panic("unreachable");
         }
         //test candidates and get errors
         let real = List<Signature*>::new();
@@ -433,11 +432,11 @@ impl MethodResolver{
                 f.print(&err.b);
                 f.print("\n");
             }
-            list.drop();
-            real.drop();
-            errors.drop();
+            //list.drop();
+            //real.drop();
+            //errors.drop();
             self.r.err(expr, f.unwrap());
-            panic("unreachable");
+            //std::unreachable();
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {:?} has {} candidates\n", mc, real.size());
@@ -448,74 +447,63 @@ impl MethodResolver{
                 msg.append(" ");
                 msg.append(&err.m.unwrap_ptr().path);
             }
-            list.drop();
-            real.drop();
-            errors.drop();
+            //list.drop();
+            //real.drop();
+            //errors.drop();
             self.r.err(expr, msg);
-            panic("unreachable");
+            //std::unreachable();
         }
-        let sig2 = *real.get(0);
+        let target_sig = *real.get(0);
         if(exact.is_some()){
-            sig2 = exact.unwrap();
+            target_sig = exact.unwrap();
         }
-        let target: Method* = sig2.m.unwrap();
+        let target: Method* = target_sig.m.unwrap();
         if (!target.is_generic) {
             if (!target.path.eq(&self.r.unit.path)) {
                 self.r.addUsed(target);
             }
             let res = self.r.visit_type(&target.type);
-            res.method_desc = Option::new(sig2.desc.clone());
+            res.method_desc = Option::new(target_sig.desc.clone());
             list.drop();
             real.drop();
             errors.drop();
             return res;
         }
-        let typeMap = Map<String, Type>::new();
+        let inferred_map = Map<String, Type>::new();
         let type_params = get_type_params(target);
         //place user given type args
-        if (mc.scope.is_some()) {
+        if (mc.scope.is_some() && mc.is_static) {
             //todo trait
             //is static & have type args
-            let scope = &sig.scope.get().type;
-            if(scope.is_simple()){
-                let scope_args = scope.get_args();
-                if let Expr::Type(scp*) = mc.scope.get(){
-                  scope = scp;
-                  scope_args = scp.get_args();
-                }
-                for (let i = 0; i < scope_args.size(); ++i) {
-                    typeMap.add(type_params.get(i).name().clone(), scope_args.get(i).clone());
-                }
-                if (!mc.type_args.empty()) {
-                    //panic("todo");
-                    //place specified type args in order
-                    for (let i = 0; i < mc.type_args.size(); ++i) {
-                        typeMap.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
-                    }
-                }
+            let scope_args = sig.scope.get().type.get_args();
+            if(scope_args.len() != type_params.len()){
+                self.r.err(expr, format("type args size mismatch {} vs {}", scope_args.len(), type_params.len()));
             }
-        } else {
-            if (!mc.type_args.empty()) {
-                //place specified type args in order
-                for (let i = 0; i < mc.type_args.size(); ++i) {
-                    typeMap.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
-                }
+            for (let i = 0; i < scope_args.size(); ++i) {
+                inferred_map.add(type_params.get(i).name().clone(), scope_args.get(i).clone());
+            }
+            //todo check type args if they compat with inferred ones
+        }
+        if (!mc.type_args.empty()) {
+            //place specified type args in order
+            for (let i = 0; i < mc.type_args.size(); ++i) {
+                inferred_map.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
             }
         }
         //infer from args
         for (let k = 0; k < sig.args.size(); ++k) {
             let arg_type = sig.args.get(k);
-            let target_type = sig2.args.get(k);
+            let target_type = target_sig.args.get(k);
             //case for self coerced to ptr
             if(k == 0 && !mc.is_static && target.self.is_some() && target_type.is_pointer() && !arg_type.is_pointer()){
                 let arg2 = arg_type.clone().toPtr();
-                let err = MethodResolver::infer(&arg2, target_type, &typeMap, &type_params);
+                let err = MethodResolver::infer(&arg2, target_type, &inferred_map, &type_params);
                 if(err.is_err()){
                     self.r.err(expr, err.unwrap_err());
                 }
                 arg2.drop();
             }else{
-                let err = MethodResolver::infer(arg_type, target_type, &typeMap, &type_params);
+                let err = MethodResolver::infer(arg_type, target_type, &inferred_map, &type_params);
                 if(err.is_err()){
                     self.r.err(expr, err.unwrap_err());
                 }
@@ -523,7 +511,7 @@ impl MethodResolver{
         }
         for (let i = 0;i < type_params.len();++i) {
             let tp = type_params.get(i);
-            if (!typeMap.contains(tp.name())) {
+            if (!inferred_map.contains(tp.name())) {
                 let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
                 //type_params.drop();
                 //list.drop();
@@ -534,17 +522,17 @@ impl MethodResolver{
             }
         }
         if(sig.scope.is_some()){
-            let ac = AstCopier::new(&typeMap);
+            let ac = AstCopier::new(&inferred_map);
             let full_scope = ac.visit(&sig.scope.get().type);
             let scp_rt = sig.scope.get();
-            //print("{} -> {} map={}\n", scp_rt.type, full_scope, typeMap);
             scp_rt.type = full_scope;
         }
-        let gen_pair: Pair<Method*, Desc> = self.generateMethod(&typeMap, target, sig);
+        let gen_pair: Pair<Method*, Desc> = self.generateMethod(&inferred_map, target, sig);
+        print("{:?} map={:?} prms={:?} sig={:?} gen={:?}\n", expr, &inferred_map, &type_params, sig, gen_pair.a);
         let res = self.r.visit_type(&gen_pair.a.type);
         res.method_desc = Option::new(gen_pair.b);
         type_params.drop();
-        typeMap.drop();
+        inferred_map.drop();
         list.drop();
         real.drop();
         errors.drop();
@@ -552,12 +540,6 @@ impl MethodResolver{
     }
 
     func infer(arg: Type*, prm: Type*, inferred: Map<String, Type>*, type_params: List<Type>*): Result<i32, String>{
-        if(type_params.contains(prm)){
-            if(!inferred.contains(prm.name())){
-                inferred.add(prm.name().clone(), arg.clone());
-            }
-            return Result<i32, String>::ok(0);
-        }
         if (arg.is_pointer()) {
             if (!prm.is_pointer()){
                 return Result<i32, String>::err("prm is not ptr".owned());
@@ -612,6 +594,12 @@ impl MethodResolver{
         }
         if(!prm.is_simple()){
             panic("prm is not simple {:?} -> {:?}", arg, prm);
+        }
+        if(type_params.contains(prm)){
+            if(!inferred.contains(prm.name())){
+                inferred.add(prm.name().clone(), arg.clone());
+            }
+            return Result<i32, String>::ok(0);
         }
         if(!prm.get_args().empty()){
             //prm: A<T>

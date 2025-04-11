@@ -674,7 +674,7 @@ impl Resolver{
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
     //derive
     for attr in &decl.attr.list{
-      if(attr.is_simple("drop")){
+      if(attr.is_simple("drop") || attr.is_simple("proc_macro")){
         continue;
       }
       else if(attr.is_call("derive")){

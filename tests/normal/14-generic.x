@@ -68,8 +68,10 @@ func no_infer(){
 }
 
 func infer_struct(){
-  assert(A{5}.val == 5);
-  assert(A{A{10}}.val.val == 10);
+  let a = A{5};
+  assert(a.val == 5);
+  assert(A{a}.val.val == 5);
+  A::use_self(&a);
 
   let b = B{15, A{20}};
   assert(b.a == 15);
