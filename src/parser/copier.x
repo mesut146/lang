@@ -10,6 +10,17 @@ struct AstCopier{
     unit: Option<Unit*>;
 }
 
+impl Clone for Attributes{
+    func clone(self): Attributes{
+      return Attributes{list: self.list.clone()};
+    }
+}
+impl Clone for Attribute{
+    func clone(self): Attribute{
+      return Attribute{name: self.name.clone(), args: self.args.clone(), is_call: self.is_call};
+    }
+}
+
 impl AstCopier{
     func new(map: Map<String, Type>*, unit: Unit*): AstCopier{
         return AstCopier{map: map, unit: Option::new(unit)};
@@ -87,9 +98,13 @@ impl AstCopier{
 
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
-        let base = BaseDecl{line: node.line,path: node.path.clone(),type: type ,
-            is_resolved: false, is_generic: false, base: self.visit_opt(&node.base), 
-            derives: node.derives.clone(), 
+        let base = BaseDecl{
+            line: node.line,
+            path: node.path.clone(),
+            type: type ,
+            is_resolved: false,
+            is_generic: false,
+            base: self.visit_opt(&node.base), 
             attr: node.attr.clone()
         };
         match node{
@@ -217,7 +232,8 @@ impl AstCopier{
             is_generic: m.is_generic,
             parent: self.visit(&m.parent),
             path: m.path.clone(),
-            is_vararg: m.is_vararg
+            is_vararg: m.is_vararg,
+            attr: m.attr.clone(),
         };
     }
 

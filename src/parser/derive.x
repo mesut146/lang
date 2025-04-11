@@ -25,17 +25,21 @@ func make_impl(decl: Decl*, trait_name: str): Impl{
     return Impl{info: info, methods: List<Method>::new()};
 }
 
-func generate_derive(decl: Decl*, unit: Unit*, der: str): Impl{
-    if(der.eq("Debug")){
+func generate_derive(r: Resolver*, decl: Decl*, unit: Unit*, name: str): Impl{
+    if(name.eq("Debug")){
         return generate_debug(decl, unit);
     }
-    if(der.eq("Drop")){
+    if(name.eq("Drop")){
         return generate_drop(decl, unit);
     }
-    if(der.eq("Clone")){
+    if(name.eq("Clone")){
         return generate_clone(decl, unit);
     }
-    panic("generate_derive decl: {:?} der: '{}'", decl.type, der);
+    if(name.eq("Drop")){
+        r.err(decl.line, "drop is auto impl");
+    }
+    r.err(decl.line, format("generate_derive decl: {:?} der: '{}'", decl.type, name));
+    std::unreachable();
 }
 
 func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{

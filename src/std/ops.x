@@ -366,7 +366,7 @@ impl i64{
     }
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
-      if(ch <= '0' || ch >= '9'){
+      if(!(ch >= '0' && ch <= '9')){
         return Result<i64, String>::err(format("invalid digit '{}' at pos {}", ch as u8, pos));
       }
       x = 10 * x + (ch as i64 - ('0' as i64));

@@ -434,7 +434,7 @@ impl Compiler{
         }else if(rhs_str.eq("false")){
           init =  makeInt(0, 8) as Constant*;
         }else{
-          init = makeInt(i64::parse(rhs_str.str()), self.getSize(&rt.type) as i32) as Constant*;
+          init = makeInt(i64::parse(rhs_str.str()).unwrap(), self.getSize(&rt.type) as i32) as Constant*;
         }
         rhs_str.drop();
       }else if(rt.type.is_str()){

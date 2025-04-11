@@ -665,7 +665,7 @@ impl Resolver{
     let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
-      if let Item::Decl(decl*) = (it){
+      if let Item::Decl(decl*) = it{
         self.handle_derive(decl, &newItems);
       }
     }
@@ -673,23 +673,24 @@ impl Resolver{
   }
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
     //derive
-    for(let j = 0;j < decl.derives.len();++j){
-      let der: Type* = decl.derives.get(j);
-      let der_str = der.print();
-      if(der_str.eq("Drop")){
-        der_str.drop();
-        self.err(decl.line, "drop is auto impl");
+    for attr in &decl.attr.list{
+      if(attr.is_simple("drop")){
+        continue;
+      }
+      else if(attr.is_call("derive")){
+        for arg in &attr.args{
+          let imp = generate_derive(self, decl, &self.unit, arg.str());
+          newItems.add(Item::Impl{imp});
+        }
       }else{
-        let imp = generate_derive(decl, &self.unit, der_str.str());
-        der_str.drop();
-        newItems.add(Item::Impl{imp});
+        self.err(decl.line, format("invalid attribute '{}'", attr.name));
       }
     }
     let helper = DropHelper{self};
     //improve decl.is_generic, this way all generic types derives drop but dont need to
     if (!DropHelper::has_drop_impl(decl, self)) {
       if(decl.is_generic || helper.is_drop_decl(decl)){
-        newItems.add(Item::Impl{generate_derive(decl, &self.unit, "Drop")});
+        newItems.add(Item::Impl{generate_derive(self, decl, &self.unit, "Drop")});
       }
     }
   }
@@ -2098,7 +2099,7 @@ impl Resolver{
     if(Resolver::is_call(call, "std", "internal_block")){
       assert(call.args.len() == 1);
       let arg = call.args.get(0).print();
-      let id = i32::parse(arg.str());
+      let id = i32::parse(arg.str()).unwrap();
       let blk: Block* = *self.block_map.get(&id).unwrap();
       self.visit_block(blk);
       arg.drop();
@@ -2248,7 +2249,7 @@ impl Resolver{
     if(Resolver::is_call(call, "std", "internal_block")){
       assert(call.args.len() == 1);
       let arg = call.args.get(0).print();
-      let id = i32::parse(arg.str());
+      let id = i32::parse(arg.str()).unwrap();
       let blk: Block* = *self.block_map.get(&id).unwrap();
       self.visit_block(blk);
       arg.drop();
@@ -2604,7 +2605,7 @@ impl Resolver{
     let value: str = lit.trim_suffix();
     if(kind is LitKind::INT){
       if(lit.suffix.is_some()){
-        if(i64::parse(value) > max_for(lit.suffix.get())){
+        if(i64::parse(value).unwrap() > max_for(lit.suffix.get())){
           self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
         }
         return self.visit_type(lit.suffix.get());

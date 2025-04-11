@@ -8,6 +8,18 @@ import parser/token
 
 static print_drops = false;
 
+struct TokenStream{
+  tokens: List<Token>;
+}
+impl TokenStream{
+  func new(): TokenStream{
+    return TokenStream{tokens: List<Token>::new()};
+  }
+  func add(self, tok: Token){
+    self.tokens.add(tok);
+  }
+}
+
 func prim_size(s: str): Option<u32>{
   let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
   let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
@@ -101,6 +113,31 @@ impl ImportStmt{
   }
 }
 
+struct Attributes{
+  list: List<Attribute>;
+}
+impl Attributes{
+  func new(): Attributes{
+    return Attributes{list: List<Attribute>::new()};
+  }
+}
+struct Attribute{
+  name: String;
+  args: List<String>;
+  is_call: bool;
+}
+impl Attribute{
+  func new(name: String): Attribute{
+    return Attribute{name: name, args: List<String>::new(), is_call: false};
+  }
+  func is_simple(self, name: str): bool{
+    return !self.is_call && self.name.eq(name);
+  }
+  func is_call(self, name: str): bool{
+    return self.is_call && self.name.eq(name);
+  }
+}
+
 struct Const{
   name: String;
   type: Option<Type>;
@@ -119,7 +156,7 @@ enum Item{
 
 impl Item{
   func as_impl(self): Impl*{
-    if let Item::Impl(imp*)=(self){
+    if let Item::Impl(imp*) = self{
       return imp;
     }
     panic("Item::as_impl()");
@@ -152,8 +189,7 @@ struct BaseDecl{
   is_resolved: bool;
   is_generic: bool;
   base: Option<Type>;
-  derives: List<Type>;
-  attr: List<String>;
+  attr: Attributes;
 }
 
 enum Decl: BaseDecl{
@@ -163,9 +199,9 @@ enum Decl: BaseDecl{
 
 impl Decl{
   func is_drop(self): bool{
-    for(let i = 0;i < self.attr.len();++i){
-      let at = self.attr.get(i);
-      if(at.eq("drop")){
+    for(let i = 0;i < self.attr.list.len();++i){
+      let at = self.attr.list.get(i);
+      if(at.name.eq("drop")){
         return true;
       }
     }
@@ -256,6 +292,7 @@ struct Method: Node{
   parent: Parent;
   path: String;
   is_vararg: bool;
+  attr: Attributes;
 }
 
 struct Param: Node{
@@ -281,7 +318,8 @@ impl Method{
       is_generic: false,
       parent: Parent::None,
       path: path,
-      is_vararg: false
+      is_vararg: false,
+      attr: Attributes::new(),
     };
   }
   func print(self): String{

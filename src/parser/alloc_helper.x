@@ -12,6 +12,7 @@ import parser/own_model
 import std/map
 import std/libc
 import std/stack
+import std/result
 
 struct AllocHelper{
   c: Compiler*;
@@ -160,7 +161,7 @@ impl AllocHelper{
       let resolver = self.c.get_resolver();
       if(Resolver::is_call(call, "std", "internal_block")){
         let arg = call.args.get(0).print();
-        let id = i32::parse(arg.str());
+        let id = i32::parse(arg.str()).unwrap();
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit(blk);
         arg.drop();
@@ -199,7 +200,7 @@ impl AllocHelper{
     let resolver = self.c.get_resolver();
     if(Resolver::is_call(call, "std", "internal_block")){
       let arg = call.args.get(0).print();
-      let id = i32::parse(arg.str());
+      let id = i32::parse(arg.str()).unwrap();
       let blk: Block* = *resolver.block_map.get(&id).unwrap();
       self.visit(blk);
       arg.drop();
