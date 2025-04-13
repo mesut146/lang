@@ -9,6 +9,16 @@ struct HashNode<K, V>{
     next: Ptr<HashNode<K, V>>;
 }
 
+impl<K, V> HashNode<K, V>{
+    func unwrap(*self): Pair<K, V>{
+        if(self.next.is_some()){
+            panic("next must be empty");
+        }
+        std::no_drop(self.next);
+        return Pair::new(self.key, self.value);
+    }
+}
+
 func default_cap(): i64{
     return 16;
 }
@@ -223,11 +233,11 @@ impl<K, V> HashMap<K, V>{
             if(node.next.is_none()){
                 //shift next to left
                 let old: HashNode<K, V> = self.buckets.set(idx, Option<HashNode<K, V>>::new()).unwrap();
-                return Option::new(Pair::new(old.key, old.value));
+                return Option::new(old.unwrap());
             }else{
                 let next: HashNode<K, V> = node.next.unwrap();
                 let old = self.buckets.set(idx, Option::new(next)).unwrap();
-                return Option::new(Pair::new(old.key, old.value));
+                return Option::new(old.unwrap());
             }
         }
         while(node.next.is_some()){
@@ -239,11 +249,11 @@ impl<K, V> HashMap<K, V>{
                     let next: HashNode<K, V> = node.next.unwrap();
                     prev.next = Ptr<HashNode<K, V>>::new();
                     let old = ptr::deref(node);
-                    return Option::new(Pair::new(old.key, old.value));
+                    return Option::new(old.unwrap());
                 }else{
                     //end of bucket
                     let old = ptr::deref(node);
-                    return Option::new(Pair::new(old.key, old.value));
+                    return Option::new(old.unwrap());
                 }
             }
         }

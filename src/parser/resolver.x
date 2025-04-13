@@ -2874,6 +2874,9 @@ impl Resolver{
       },
       Expr::Lambda(le*) => {
         return self.visit_lambda(node, le);
+      },
+      Expr::Ques(bx*) => {
+        panic("todo");
       }
     }
   }
