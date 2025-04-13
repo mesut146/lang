@@ -1,12 +1,12 @@
+import std/libc
+import std/hashmap
+
 import parser/ast
 import parser/printer
-import std/map
-import std/libc
-
 import parser/token
 
 struct AstCopier{
-    map: Map<String, Type>*;
+    type_map: HashMap<String, Type>*;
     unit: Option<Unit*>;
 }
 
@@ -22,25 +22,25 @@ impl Clone for Attribute{
 }
 
 impl AstCopier{
-    func new(map: Map<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{map: map, unit: Option::new(unit)};
+    func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
+        return AstCopier{type_map: type_map, unit: Option::new(unit)};
     }
-    func new(map: Map<String, Type>*): AstCopier{
-        return AstCopier{map: map, unit: Option<Unit*>::new()};
+    func new(type_map: HashMap<String, Type>*): AstCopier{
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new()};
     }
 
     func clone<T>(node: T*, unit: Unit*): T{
-        let map = Map<String, Type>::new();
-        let copier = AstCopier::new(&map, unit);
+        let type_map = HashMap<String, Type>::new();
+        let copier = AstCopier::new(&type_map, unit);
         let res = copier.visit(node);
-        map.drop();
+        type_map.drop();
         return res;
     }
     func clone<T>(node: T*): T{
-        let map = Map<String, Type>::new();
-        let copier = AstCopier::new(&map);
+        let type_map = HashMap<String, Type>::new();
+        let copier = AstCopier::new(&type_map);
         let res = copier.visit(node);
-        map.drop();
+        type_map.drop();
         return res;
     }
 
@@ -162,8 +162,8 @@ impl AstCopier{
                 return Type::Lambda{.id, Box::new(lt)};
             },
             Type::Simple(smp*) => {
-                if(self.map.contains(&smp.name)){
-                    return self.map.get(&smp.name).unwrap().clone();
+                if(self.type_map.contains(&smp.name)){
+                    return self.type_map.get(&smp.name).unwrap().clone();
                 }
                 let res = Simple::new(smp.name.clone());
                 if (smp.scope.is_some()) {
@@ -260,18 +260,10 @@ impl AstCopier{
     func visit(self, node: Body*): Body{
         let id = self.node(node as Node*);
         match node{
-            Body::Block(b*)=>{
-                return Body::Block{.id, self.visit(b)};
-            },
-            Body::Stmt(b*)=>{
-                return Body::Stmt{.id, self.visit(b)};
-            },
-            Body::If(b*)=>{
-                return Body::If{.id, self.visit(b)};
-            },
-            Body::IfLet(b*)=>{
-                return Body::IfLet{.id, self.visit(b)};
-            }
+            Body::Block(b*) => return Body::Block{.id, self.visit(b)},
+            Body::Stmt(b*) => return Body::Stmt{.id, self.visit(b)},
+            Body::If(b*) => return Body::If{.id, self.visit(b)},
+            Body::IfLet(b*) => return Body::IfLet{.id, self.visit(b)},
         }     
     }
 
@@ -382,6 +374,7 @@ impl AstCopier{
       return Call{scope: self.visit_ptr(&node.scope), name: node.name.clone(),
         type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
     }
+
     func visit(self, node: MacroCall*): MacroCall{
       return MacroCall{
         scope: self.visit_opt(&node.scope),

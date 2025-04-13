@@ -64,9 +64,10 @@ impl<K, V> HashMap<K, V>{
     }
 
     func rehash(self){
-        if(self.len()*4 < self.buckets.len() * 3){
+        if(self.len() * 4 < self.buckets.len() * 3){
             return;
         }
+        print("rehash {:?}\n", std::print_type<HashMap<K, V>>());
         let new_cap = self.buckets.len() * 2;
         let new_buckets = List<Option<HashNode<K, V>>>::new(new_cap);
         let old = self.buckets;
@@ -190,6 +191,10 @@ impl<K, V> HashMap<K, V>{
     func iter(self): HashMapIter<K, V>{
         return HashMapIter<K, V>{self, 0, Option<HashNode<K, V>*>::none()};
     }
+
+    /*func into_iter(self){
+        //todo
+    }*/
     
     func keys(self): MapKeysIter<K, V>{
         return MapKeysIter{self, 0, Option<HashNode<K, V>*>::none()};
@@ -203,6 +208,54 @@ impl<K, V> HashMap<K, V>{
         return res;
     }
     
+    func remove(self, key: K*): Option<Pair<K, V>>{
+        let hash = key.hash();
+        let idx = self.get_index(hash);
+        let opt: Option<HashNode<K, V>>* = self.buckets.get(idx);
+        if(opt.is_none()){
+            return Option<Pair<K, V>>::none();
+        }
+        self.count -= 1;
+        let node: HashNode<K, V>* = opt.get();
+        let prev: HashNode<K, V>* = opt.get();
+        if(key.eq(&node.key)){
+            //head of bucket
+            if(node.next.is_none()){
+                //shift next to left
+                let old: HashNode<K, V> = self.buckets.set(idx, Option<HashNode<K, V>>::new()).unwrap();
+                return Option::new(Pair::new(old.key, old.value));
+            }else{
+                let next: HashNode<K, V> = node.next.unwrap();
+                let old = self.buckets.set(idx, Option::new(next)).unwrap();
+                return Option::new(Pair::new(old.key, old.value));
+            }
+        }
+        while(node.next.is_some()){
+            prev = node;
+            node = node.next.get();
+            if(key.eq(&node.key)){
+                //middle of bucket
+                if(node.next.is_some()){
+                    let next: HashNode<K, V> = node.next.unwrap();
+                    prev.next = Ptr<HashNode<K, V>>::new();
+                    let old = ptr::deref(node);
+                    return Option::new(Pair::new(old.key, old.value));
+                }else{
+                    //end of bucket
+                    let old = ptr::deref(node);
+                    return Option::new(Pair::new(old.key, old.value));
+                }
+            }
+        }
+        return Option<Pair<K, V>>::none();
+    }
+    
+    func clear(self){
+        self.buckets.clear();
+        self.count = 0;
+        self.init(default_cap());
+    }
+
     func dump(self){
         for(let i = 0;i < self.buckets.len();++i){
             let opt = self.buckets.get(i);
@@ -215,17 +268,6 @@ impl<K, V> HashMap<K, V>{
                 print("{:?}={:?} hash={} i={} idx={}\n\n", node.key, node.value, node.hash, i, self.get_index(node.hash));
             }
         }
-    }
-    
-    func remove(self, key: K*): Option<Pair<K, V>>{
-        panic("todo");
-        //return Option<Pair<K, V>>::none();
-    }
-    
-    func clear(self){
-        self.buckets.clear();
-        self.count = 0;
-        self.init(default_cap());
     }
 }
 

@@ -2,7 +2,7 @@ import parser/ast
 import parser/copier
 import parser/printer
 import parser/resolver
-import std/map
+import std/hashmap
 import std/libc
 import std/io
 import std/fs
@@ -249,7 +249,7 @@ func printMethod(m: Method*): String{
       s.print(type);
       s.print("*");
     }
-    let map = Map<String, Type>::new();
+    let map = HashMap<String, Type>::new();
     map.add("Self".str(), type.clone());
     let copier = AstCopier::new(&map);
     for(let i = 0;i < m.params.len();++i){

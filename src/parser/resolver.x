@@ -1017,7 +1017,7 @@ impl Resolver{
     //resolve non generic type args
     if(imp.info.trait_name.is_some()){
       //todo
-      let required = Map<String, Method*>::new();
+      let required = HashMap<String, Method*>::new();
       let trait_rt = self.visit_type(imp.info.trait_name.get());
       let trait_decl = self.get_trait(&trait_rt).unwrap();
       trait_rt.drop();
@@ -1033,20 +1033,18 @@ impl Resolver{
         if(!m.type_params.empty()) continue;
         self.visit_method(m);
         let mangled = mangle2(m, &imp.info.type);
-        let idx = required.indexOf(&mangled);
-        mangled.drop();
-        if(idx != -1){
-          required.remove_idx(idx).drop();
+        if(required.contains(&mangled)){
+          required.remove(&mangled).drop();
         }
+        mangled.drop();
       }
       if(!required.empty()){
         let msg = Fmt::new();
-        for(let i = 0;i < required.len();++i){
-          let p: Pair<String, Method*>* = required.get_pair_idx(i).unwrap();
+        for pair in &required{
           msg.print("method ");
-          msg.print(p.a.str());
+          msg.print(pair.a.str());
           msg.print(" ");
-          let tmp = printMethod(p.b);
+          let tmp = printMethod(*pair.b);
           msg.print(tmp.str());
           tmp.drop();
           msg.print(" not implemented for ");
@@ -1133,7 +1131,7 @@ impl Resolver{
     sig.mc = Option::new(mc);
     sig.r = Option::new(self);
     let mr = MethodResolver::new(self);
-    let map = Map<String, Type>::new();
+    let map = HashMap<String, Type>::new();
     let generic_type = &method.parent.as_impl().type;
     for(let i = 0;i < decl.type.get_args().len();++i){
         let tp = generic_type.get_args().get(i);
@@ -1343,12 +1341,12 @@ impl Resolver{
           self.err(node.line, "generic func ptr");
       }
       let mr = MethodResolver::new(self);
-      let arr = mr.get_impl(simp.scope.get(), Option<Type*>::new());
+      let arr = mr.get_impl(simp.scope.get(), Option<Type*>::new()).unwrap();
       for resolv in self.get_resolvers(){
           resolv.init();
           mr = MethodResolver::new(resolv);
           let arr2 = mr.get_impl(simp.scope.get(), Option<Type*>::new());
-          arr.add_list(arr2);
+          arr.add_list(arr2.unwrap());
       }
       if(arr.empty()){
           self.err(node.line, format("type scope is not enum: {} {:?}", str, arr));
@@ -1466,8 +1464,8 @@ impl Resolver{
     return res;
   }
   //A<T1, T2>=A<B, C> -> (T1: B), (T2: C) 
-  func make_type_map(type: Simple*, decl: Decl*): Map<String, Type>{
-    let map = Map<String, Type>::new();
+  func make_type_map(type: Simple*, decl: Decl*): HashMap<String, Type>{
+    let map = HashMap<String, Type>::new();
     let params = decl.type.get_args();
     for(let i = 0;i < type.args.len();++i){
       let arg = type.args.get(i);
@@ -1675,7 +1673,7 @@ impl Resolver{
   }
 
   func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>*, args: List<Entry>*): Type{
-    let inferMap = Map<String, Type>::new();
+    let inferMap = HashMap<String, Type>::new();
     let type_params: List<Type>* = type.get_args();
     for (let i = 0; i < args.len(); ++i) {
         let e = args.get(i);

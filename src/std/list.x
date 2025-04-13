@@ -34,9 +34,11 @@ impl<T> List<T>{
   func ptr(self): T*{
     return self.ptr;
   }
+
   func capacity(self): i64{
     return self.cap;
   }
+
   func clear(self){
     self.drop_elems();
     self.count = 0;
@@ -106,6 +108,27 @@ impl<T> List<T>{
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
     return self.get(self.count - 1);
+  }
+
+  func add(self, val: T, pos: i32){
+    //add val to desired position
+    self.expand();
+    if(pos < 0 || pos >= self.len()){
+      panic("index {} out of bounds ({}, {})", pos, 0, self.len());
+    }
+
+    //shift rhs of pos to 1 right
+    //pos will be empty after this
+    for(let i = self.count - 1;i >= pos;i = i - 1){
+      let lhs: T* = ptr::get(self.ptr, i);
+      let rhs: T* = ptr::get(self.ptr, i + 1);
+      std::no_drop(*rhs);
+      *rhs = ptr::deref(lhs);
+    }
+    //place value to cleared spot
+    ptr::copy(self.ptr, pos, val);
+    std::no_drop(val);
+    self.count += 1;
   }
 
   func add_not_exist(self, e: T){

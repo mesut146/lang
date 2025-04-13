@@ -745,7 +745,8 @@ enum Expr: Node{
   Block(x: Box<Block>),
   If(e: Box<IfStmt>),
   IfLet(e: Box<IfLet>),
-  Lambda(val: Lambda)
+  Lambda(val: Lambda),
+  Ques(e: Box<Expr>),
 }
 impl Expr{
   func print(self): String{

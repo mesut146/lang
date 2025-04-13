@@ -170,11 +170,11 @@ impl<K, V> Debug for Map<K, V>{
 impl<A, B> Debug for Pair<A, B>{
   func debug(self, f: Fmt*){
     f.print("{");
-    //debug_member!(self.a, f);
-    Debug::debug(&self.a, f);
+    debug_member!(self.a, f);
+    //Debug::debug(&self.a, f);
     f.print(", ");
-    Debug::debug(&self.b, f);
-    //debug_member!(self.b, f);
+    //Debug::debug(&self.b, f);
+    debug_member!(self.b, f);
     f.print("}");
   }
 }
