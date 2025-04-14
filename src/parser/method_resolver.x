@@ -566,9 +566,15 @@ impl MethodResolver{
     }
 
     func infer(arg: Type*, prm: Type*, inferred: HashMap<String, Type>*, type_params: List<Type>*): Result<i32, String>{
+        if(type_params.contains(prm)){
+            if(!inferred.contains(prm.name())){
+                inferred.add(prm.name().clone(), arg.clone());
+            }
+            return Result<i32, String>::ok(0);
+        }
         if (arg.is_pointer()) {
             if (!prm.is_pointer()){
-                return Result<i32, String>::err("prm is not ptr".owned());
+                return Result<i32, String>::err(format("prm is not ptr {:?} vs {:?}", arg, prm));
             }
             return infer(arg.elem(), prm.elem(), inferred, type_params);
         }
@@ -621,12 +627,12 @@ impl MethodResolver{
         if(!prm.is_simple()){
             panic("prm is not simple {:?} -> {:?}", arg, prm);
         }
-        if(type_params.contains(prm)){
+        /*if(type_params.contains(prm)){
             if(!inferred.contains(prm.name())){
                 inferred.add(prm.name().clone(), arg.clone());
             }
             return Result<i32, String>::ok(0);
-        }
+        }*/
         if(!prm.get_args().empty()){
             //prm: A<T>
             let ta1 = arg.get_args();

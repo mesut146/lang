@@ -21,13 +21,6 @@ func f2(arg: c_void*){
     print("f2 end\n");
 }
 
-func f3(arg: c_void*){
-    let a = arg as A*;
-    print("f3 {} {} {}\n", a.a, a.b, a.c);
-    msleep(a.a);
-    print("f3 end\n");
-}
-
 func test_arg(){
     let worker = Worker::new(1);
     worker.add_arg(f2, A{a: 1, b: 2, c: 3});
@@ -40,15 +33,21 @@ func test_arg(){
     worker.join();
 }
 
+func f3(arg: c_void*){
+    let a = arg as A*;
+    print("f3 {} {} {}\n", a.a, a.b, a.c);
+    msleep(a.a);
+    print("f3 end {}\n", a.a);
+}
 func test_arg2(){
     let worker = Worker::new(2);
-    worker.add_arg(f3, A{a: 1000, b: 2, c: 3});
-    worker.add_arg(f3, A{a: 5000, b: 20, c: 30});
-    worker.add_arg(f3, A{a: 3000, b: 200, c: 300});
-    worker.add_arg(f3, A{a: 1000, b: 2000, c: 3000});
-    worker.add_arg(f3, A{a: 2000, b: 234, c: 345});
-    worker.add_arg(f3, A{a: 4000, b: 345, c: 456});
-    worker.add_arg(f3, A{a: 2000, b: 88, c: 99});
+    worker.add_arg(f3, A{a: 100, b: 2, c: 3});
+    worker.add_arg(f3, A{a: 200, b: 20, c: 30});
+    worker.add_arg(f3, A{a: 300, b: 200, c: 300});
+    worker.add_arg(f3, A{a: 400, b: 2000, c: 3000});
+    worker.add_arg(f3, A{a: 500, b: 234, c: 345});
+    worker.add_arg(f3, A{a: 400, b: 345, c: 456});
+    worker.add_arg(f3, A{a: 300, b: 88, c: 99});
     worker.join();
 }
 

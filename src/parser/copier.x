@@ -339,7 +339,11 @@ impl AstCopier{
                 return_type: self.visit_opt(&lm.return_type),
                 body: self.visit_box(&lm.body)
             }},
-            Expr::Match(m*) => return Expr::Match{.id, Box::new(Match{expr: self.visit(&m.get().expr), cases: self.visit_list(&m.get().cases)})}
+            Expr::Match(m*) => return Expr::Match{.id, Box::new(Match{
+                expr: self.visit(&m.get().expr),
+                cases: self.visit_list(&m.get().cases)
+            })},
+            Expr::Ques(bx*) => return Expr::Ques{.id, self.visit_box(bx)},
         }
     }
     func visit(self, node: LambdaParam*): LambdaParam{

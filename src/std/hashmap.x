@@ -10,7 +10,7 @@ struct HashNode<K, V>{
 }
 
 impl<K, V> HashNode<K, V>{
-    func unwrap(*self): Pair<K, V>{
+    func unwrap_pair(*self): Pair<K, V>{
         if(self.next.is_some()){
             panic("next must be empty");
         }
@@ -77,7 +77,7 @@ impl<K, V> HashMap<K, V>{
         if(self.len() * 4 < self.buckets.len() * 3){
             return;
         }
-        print("rehash {:?}\n", std::print_type<HashMap<K, V>>());
+        //print("rehash {:?} {},{}\n", std::print_type<HashMap<K, V>>(), self.len(), self.buckets.len());
         let new_cap = self.buckets.len() * 2;
         let new_buckets = List<Option<HashNode<K, V>>>::new(new_cap);
         let old = self.buckets;
@@ -226,36 +226,39 @@ impl<K, V> HashMap<K, V>{
             return Option<Pair<K, V>>::none();
         }
         self.count -= 1;
-        let node: HashNode<K, V>* = opt.get();
-        let prev: HashNode<K, V>* = opt.get();
-        if(key.eq(&node.key)){
+        let node_ptr: HashNode<K, V>* = opt.get();
+        if(key.eq(&node_ptr.key)){
             //head of bucket
+            //take ownership of node
+            let node: HashNode<K, V> = self.buckets.set(idx, Option<HashNode<K, V>>::new()).unwrap();
             if(node.next.is_none()){
-                //shift next to left
-                let old: HashNode<K, V> = self.buckets.set(idx, Option<HashNode<K, V>>::new()).unwrap();
-                return Option::new(old.unwrap());
+                return Option::new(node.unwrap_pair());
             }else{
+                //extract elems & shift next to left
                 let next: HashNode<K, V> = node.next.unwrap();
-                let old = self.buckets.set(idx, Option::new(next)).unwrap();
-                return Option::new(old.unwrap());
+                let key0 = node.key;
+                let val0 = node.value;
+                self.buckets.get(idx).set(next);
+                return Option::new(Pair::new(key0, val0));
             }
         }
-        while(node.next.is_some()){
-            prev = node;
-            node = node.next.get();
-            if(key.eq(&node.key)){
+        let prev: HashNode<K, V>* = node_ptr;
+        while(prev.next.is_some()){
+            if(key.eq(&prev.next.get().key)){
                 //middle of bucket
-                if(node.next.is_some()){
-                    let next: HashNode<K, V> = node.next.unwrap();
-                    prev.next = Ptr<HashNode<K, V>>::new();
-                    let old = ptr::deref(node);
-                    return Option::new(old.unwrap());
+                let next: HashNode<K, V> = prev.next.unwrap();
+                if(next.next.is_some()){
+                    let key0 = next.key;
+                    let val0 = next.value;
+                    prev.next = next.next;
+                    return Option::new(Pair::new(key0, val0));
                 }else{
-                    //end of bucket
-                    let old = ptr::deref(node);
-                    return Option::new(old.unwrap());
+                    //next is at end of bucket
+                    prev.next = Ptr<HashNode<K, V>>::new();
+                    return Option::new(next.unwrap_pair());
                 }
             }
+            prev = prev.next.get();
         }
         return Option<Pair<K, V>>::none();
     }

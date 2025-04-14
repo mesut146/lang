@@ -110,9 +110,23 @@ func same_hash(){
     print("map={:?}\n", map);
 }
 
+func remove_test(){
+    let map = HashMap<str, i32>::new();
+    map.add("foo", 10);
+    map.add("bar", 20);
+    map.add("baz", 30);
+    assert(map.len() == 3);
+    map.remove(&"foo");
+    assert(map.len() == 2);
+    assert(map.get(&"foo").is_none());
+    assert(map.get(&"bar").is_some());
+    assert(map.get(&"baz").is_some());
+}
+
 func main(){
     map_i32();
     map_str();
     same_hash();
+    remove_test();
     print("hashmap test done\n");
 }

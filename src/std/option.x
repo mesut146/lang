@@ -57,6 +57,7 @@ impl<T> Option<T>{
     }
     std::no_drop(*self);
     *self = Option::new(val);
+    //todo *std::enum_data!(self) = val;
   }
 
   func unwrap_or(*self, def: T): T{
