@@ -33,6 +33,28 @@ func get_linker(): str{
   return "clang++-19";
 }
 
+enum LinkType{
+  Binary(name: String, args: String, run: bool),
+  Static(name: String),
+  Dynamic(name: String),
+  None
+}
+
+struct CompilerConfig{
+  file: String;
+  src_dirs: List<String>;
+  out_dir: String;
+  args: String;
+  lt: LinkType;
+  std_path: Option<String>;
+  root_dir: Option<String>;
+  jobs: i32;
+  verbose_all: bool;
+  incremental_enabled: bool;
+  use_cache: bool;
+  llvm_only: bool;
+}
+
 struct LoopInfo{
   begin_bb: BasicBlock*;
   next_bb: BasicBlock*;
@@ -898,28 +920,6 @@ struct CompileArgs{
   compiled: Mutex<List<String>>*;
   idx: Mutex<i32>*;
   len: i32;
-}
-
-enum LinkType{
-  Binary(name: String, args: String, run: bool),
-  Static(name: String),
-  Dynamic(name: String),
-  None
-}
-
-struct CompilerConfig{
-  file: String;
-  src_dirs: List<String>;
-  out_dir: String;
-  args: String;
-  lt: LinkType;
-  std_path: Option<String>;
-  root_dir: Option<String>;
-  jobs: i32;
-  verbose_all: bool;
-  incremental_enabled: bool;
-  use_cache: bool;
-  llvm_only: bool;
 }
 
 impl CompilerConfig{

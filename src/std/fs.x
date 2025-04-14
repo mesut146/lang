@@ -210,7 +210,7 @@ func open_checked(path: str, mode: str): FILE*{
   path_c.drop();
   mode_c.drop();
   if(fp as u64 == 0){
-    panic("no such file {}", path);
+    panic("no such file '{}'", path);
   }
   return fp;
 }
