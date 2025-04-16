@@ -2956,15 +2956,15 @@ func infix_result(l: str, r: str): str{
 //statements-------------------------------------
 impl Resolver{
   func check_return(self, type: Type*, line: i32){
-    let ex = Option<Type*>::none();
+    let expected_type = Option<Type*>::none();
     if(!self.inLambda.empty()){
-        ex = Option::new(&self.lambdas.get(self.inLambda.top()).unwrap().type);
+        expected_type = Option::new(&self.lambdas.get(self.inLambda.top()).unwrap().type);
     }else{
-        ex = Option::new(&self.curMethod.unwrap().type);
+        expected_type = Option::new(&self.curMethod.unwrap().type);
     }
-    let cmp = MethodResolver::is_compatible(type, ex.unwrap());
+    let cmp = MethodResolver::is_compatible(type, expected_type.unwrap());
     if(cmp.is_some()){
-      self.err(line, format("return type mismatch {:?} -> {:?}", type, ex.unwrap()));
+      self.err(line, format("return type mismatch {:?} -> {:?}", type, expected_type.unwrap()));
     }
   }
 

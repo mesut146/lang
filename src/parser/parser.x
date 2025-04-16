@@ -1123,19 +1123,25 @@ impl Parser{
           res = Expr::Access{.n, Box::new(res), nm}; 
         }
       }else{
-          self.consume(TokenType::LBRACKET);
-          let idx = self.parse_expr();
-          let idx2 = Ptr<Expr>::new();
-          if(self.is(TokenType::DOTDOT)){
-              self.consume(TokenType::DOTDOT);
-              idx2 = Ptr::new(self.parse_expr());
-          }
-          self.consume(TokenType::RBRACKET);
-          let n = self.node();
-          res = Expr::ArrAccess{.n, ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
+        self.consume(TokenType::LBRACKET);
+        let idx = self.parse_expr();
+        let idx2 = Ptr<Expr>::new();
+        if(self.is(TokenType::DOTDOT)){
+            self.consume(TokenType::DOTDOT);
+            idx2 = Ptr::new(self.parse_expr());
+        }
+        self.consume(TokenType::RBRACKET);
+        let n = self.node();
+        res = Expr::ArrAccess{.n, ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
       }
     }
     return res; 
+  }
+
+  func parse_ques(self): Expr{
+    let n = self.node();
+    let expr = self.parse_expr();
+    return Expr::Ques{.n, Box::new(expr)};
   }
   
   func as_is(self): Expr{

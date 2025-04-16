@@ -1,51 +1,31 @@
-include "Lexer.g"
+include "Lexer.g";
 
-unit: 
-  importStmt* topStmt*;
+unit: importStmt* item*;
 
-importName: name ("as" name)?;
-
-importStmt: 
-  "import" importName ("," importName)* "from" STRING_LIT
-| "import" "*" ("as" name)? "from" STRING_LIT;
+importStmt: "import" name ("/" name)*;
 
 name: IDENT;
 
-topStmt:
-  stmt | methodDecl | typeDecl | enumDecl;
+item: global | decl | metho | impl | trait | externBlock | constDecl | typeAlias;
 
-enumDecl:
-  "enum" name generic? "{" enumEntry ("," enumEntry)* "}";
+global: "static" name (":" type)? "=" expr;
 
-enumEntry: name | namedEnumEntry | valuedEnumEntry;
+decl: structDecl | enumDecl;
+structDecl: "struct" type "{" field* "}";
+field: name ":" type;
+enumDecl: "enum" type "{" enumVariant ("," enumVariant)* "}";
+enumVariant: name "(" field ("," field)* ")";
 
-namedEnumEntry: name "{" param ("," param)* "}";
-
-valuedEnumEntry: "(" type ("," type)* ")";
-
-type: qname generic? arraySuffix?
-        | prim arraySuffix?;
-
-
+qname: name ( "." name)*;
+type: qname generic? arraySuffix? | prim_type arraySuffix?;
 generic: "<" type ("," type)* ">";
-
 arraySuffix: ("[" expr? "]")+;
-
-prim: "int" | "long" | "byte" | "char" | "short" | "float" | "double" | "i8" | "i16" | "i32" | "i64" | u8 u16 u32 u64;
-
+prim_type: "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64";
 refType: name generic? ("::" name generic?)*;
 
-typeDecl:
-  ("class" | "interface") name generic? "{" classMember* "}";
-
-classMember:
-  field | methodDecl | typeDecl | enumDecl;
-
-field:
-  name ":" type ("=" expr)?;
 
 methodDecl:
-  "func" name generic? "(" params* ")" block;
+  "func" name generic? "(" (name ","?)? params* ")" (":" type)? block;
 
 params: param ("," param)*;
 
@@ -54,7 +34,7 @@ param:
 
 //statements-------------------------------------------
 block:
-  "{" stmt* "}";
+  "{" stmt* expr? "}";
 
 stmt:
   ifStmt | whileStmt | forStmt | forEachStmt | exprStmt | varDecl;
@@ -84,7 +64,7 @@ varDeclFrag:
 
 expr: "import";
 
-/*
+
 expr:
 "(" expr ")" | literal | "[" expr*"]" | "new" obj | obj |
  prim "::" name (generics? "(" args? ")")? |
@@ -110,7 +90,7 @@ expr:
 | expr "&&" expr %left
 | expr "||" expr %left
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
-;*/
+;
 
 PRIM: literal | refType | "(" expr ")" | methodCall;
 
@@ -122,8 +102,6 @@ args:
 exprs:
   expr ("," expr)*;
 
-
-qname: name ( "." name)*;
 
 
 literal:

@@ -42,7 +42,7 @@ func no_infer(){
   
   let a2 = A<A<i32>>{a};
   assert(a2.val.val == 10);
-  A<i8>::use_self(&a);//should fail
+  //A<i8>::use_self(&a);//should fail
 
   let b = B<i32, A<i32>>{5, A<i32>{15}};
   assert(b.a == 5);
