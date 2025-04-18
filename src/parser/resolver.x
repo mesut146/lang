@@ -2876,9 +2876,43 @@ impl Resolver{
         return self.visit_lambda(node, le);
       },
       Expr::Ques(bx*) => {
-        panic("todo");
+        return self.visit_ques(node, bx.get());
       }
     }
+  }
+
+  func visit_ques(self, expr: Expr*, inner: Expr*): RType{
+    let ty = self.visit(inner);
+    if(!ty.type.is_simple() || !ty.type.name().eq("Result")){
+      self.err(expr, format("? operator on non std::Result type '{:?}'", ty.type));
+    }
+    let targs = ty.type.get_args();
+    let ok_type = targs.get(0);
+    let err_type = targs.get(1);
+    let info = FormatInfo::new(expr.line);
+    let ret_type = &self.curMethod.unwrap().type;
+    let err_str = Option<String>::new();
+    
+    if(ret_type.is_simple() && ret_type.name().eq("Result")){
+      let ret_ok = ret_type.get_args().get(0);
+      let ret_err = ret_type.get_args().get(1);
+      if(err_type.eq(ret_err)){
+        err_str.set(format("return Result<{:?},{:?}>::Err{{err{expr.id}}", ret_ok, err_type));
+      }
+      else{
+        err_str.set("panic(\"unwrap on Result::Err\")\n".owned());
+      }
+    }else{
+      err_str.set("panic(\"unwrap on Result::Err\")\n".owned());
+    }
+    let result_ty = format("Result<{:?},{:?}>", ok_type, err_type);
+    let expr_str = format("match {:?}{{\n{result_ty}::Ok(ok{expr.id})=>ok{expr.id},{result_ty}::Err(err{expr.id})=>{}\n}", inner, err_str.get());
+    info.block.return_expr.set(parse_expr(expr_str, &self.unit, expr.line));
+    self.visit_block(&info.block).drop();
+    self.format_map.add(expr.id, info);
+    err_str.drop();
+    return self.visit_type(ok_type);
+
   }
   
   func visit_lambda(self, expr: Expr*, node: Lambda*): RType{

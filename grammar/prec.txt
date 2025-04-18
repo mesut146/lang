@@ -1,9 +1,7 @@
 Other 0
-FieldAccess
-ArrAccess
+
+FieldAccess | ArrAccess | Ques
 
 Unary
-Infix As
-Is
-Ques
+Infix | As |Is
 

@@ -139,9 +139,9 @@ impl Debug for Token{
         f.print("line: ");
         self.line.debug(f);
         f.print(", ");
-        f.print("value: ");
+        f.print("value: '");
         f.print(&self.value);
-        f.print(", ");
+        f.print("', ");
         f.print("type: ");
         self.type.debug(f);
         f.print("}");

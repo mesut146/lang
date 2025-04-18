@@ -516,113 +516,128 @@ impl Debug for Literal{
 //expr---------------------------------
 impl Debug for Expr{
   func debug(self, f: Fmt*){
-    if let Expr::Lit(lit*)=(self){
-      if(print_cst) f.print("Expr::Lit{");
-      lit.debug(f);
-    }
-    else if let Expr::Name(v*)=(self){
-      if(print_cst) f.print("Expr::Lit{");
-      f.print(v.str());
-    }
-    else if let Expr::Call(call*)=(self){
-      if(print_cst) f.print("Expr::Call{");
-      call.debug(f);
-    }else if let Expr::Par(e*)=(self){
-      if(print_cst) f.print("Expr::Par{");
-      f.print("(");
-      e.get().debug(f);
-      f.print(")");
-    }
-    else if let Expr::Type(t*)=(self){
-      if(print_cst) f.print("Expr::Type{");
-      t.debug(f);
-    }else if let Expr::Unary(op*, e*)=(self){
-      if(print_cst) f.print("Expr::Unary{");
-      f.print(op);
-      e.get().debug(f);
-    }
-    else if let Expr::Infix(op*, l*, r*)=(self){
-      if(print_cst) f.print("Expr::Infix{");
-      l.get().debug(f);
-      f.print(" ");
-      f.print(op);
-      f.print(" ");
-      r.get().debug(f);
-    }else if let Expr::Access(scp*, nm*)=(self){
-      if(print_cst) f.print("Expr::Access{");
-      scp.get().debug(f);
-      f.print(".");
-      f.print(nm);
-    }else if let Expr::Obj(ty*, args*)=(self){
-      if(print_cst) f.print("Expr::Obj{");
-      ty.debug(f);
-      f.print("{");
-      join(f, args, ", ");
-      f.print("}");
-    }else if let Expr::As(e*, type*)=(self){
-      if(print_cst) f.print("Expr::As{");
-      e.get().debug(f);
-      f.print(" as ");
-      type.debug(f);
-    }else if let Expr::Is(e*, rhs*)=(self){
-      if(print_cst) f.print("Expr::Is{");
-      e.get().debug(f);
-      f.print(" is ");
-      rhs.get().debug(f);
-    }else if let Expr::Array(arr*, sz*)=(self){
-      if(print_cst) f.print("Expr::Array{");
-      f.print("[");
-      join(f, arr, ", ");
-      if(sz.is_some()){
-        f.print("; ");
-        sz.get().debug(f);
-      }
-      f.print("]");
-    }
-    else if let Expr::ArrAccess(aa*)=(self){
-      if(print_cst) f.print("Expr::ArrAccess{");
-      aa.arr.get().debug(f);
-      f.print("[");
-      aa.idx.get().debug(f);
-      if(aa.idx2.is_some()){
-        f.print("..");
-        aa.idx2.get().debug(f);
-      }
-      f.print("]");
-    }
-    else if let Expr::Block(b*)=(self){
-      if(print_cst) f.print("Expr::Block{");
-      b.get().debug(f);
-    }
-    else if let Expr::If(ife*)=(self){
-      if(print_cst) f.print("Expr::If{");
-      ife.get().debug(f);
-    }
-    else if let Expr::IfLet(il*)=(self){
-      if(print_cst) f.print("Expr::IfLet{");
-      il.get().debug(f);
-    }else if let Expr::Match(me*)=(self){
-      if(print_cst) f.print("Expr::Match{");
-      me.get().debug(f);
-    }else if let Expr::MacroCall(mc*)=(self){
-      Debug::debug(mc, f); 
-    }else if let Expr::Lambda(lc*)=(self){
-        f.print("|");
-        f.print("|");
-        if(lc.return_type.is_some()){
-            f.print(": ");
-            f.print(lc.return_type.get());
+    match self{
+      Expr::Lit(lit*) => {
+        if(print_cst) f.print("Expr::Lit{");
+        lit.debug(f);
+      },
+      Expr::Name(v*) => {
+        if(print_cst) f.print("Expr::Lit{");
+        f.print(v.str());
+      },
+      Expr::Call(call*) => {
+        if(print_cst) f.print("Expr::Call{");
+        call.debug(f);
+      },
+      Expr::Par(e*) => {
+        if(print_cst) f.print("Expr::Par{");
+        f.print("(");
+        e.get().debug(f);
+        f.print(")");
+      },
+      Expr::Type(t*) => {
+        if(print_cst) f.print("Expr::Type{");
+        t.debug(f);
+      },
+      Expr::Unary(op*, e*) => {
+        if(print_cst) f.print("Expr::Unary{");
+        f.print(op);
+        e.get().debug(f);
+      },
+      Expr::Infix(op*, l*, r*) => {
+        if(print_cst) f.print("Expr::Infix{");
+        l.get().debug(f);
+        f.print(" ");
+        f.print(op);
+        f.print(" ");
+        r.get().debug(f);
+      },
+      Expr::Access(scp*, nm*) => {
+        if(print_cst) f.print("Expr::Access{");
+        scp.get().debug(f);
+        f.print(".");
+        f.print(nm);
+      },
+      Expr::Obj(ty*, args*) => {
+        if(print_cst) f.print("Expr::Obj{");
+        ty.debug(f);
+        f.print("{");
+        join(f, args, ", ");
+        f.print("}");
+      },
+      Expr::As(e*, type*) => {
+        if(print_cst) f.print("Expr::As{");
+        e.get().debug(f);
+        f.print(" as ");
+        type.debug(f);
+      },
+      Expr::Is(e*, rhs*) => {
+        if(print_cst) f.print("Expr::Is{");
+        e.get().debug(f);
+        f.print(" is ");
+        rhs.get().debug(f);
+      },
+      Expr::Array(arr*, sz*) => {
+        if(print_cst) f.print("Expr::Array{");
+        f.print("[");
+        join(f, arr, ", ");
+        if(sz.is_some()){
+          f.print("; ");
+          sz.get().debug(f);
         }
-        match (lc.body.get()){
-            LambdaBody::Expr(e*)=>{
-                body(e, f, true);
-            },
-            LambdaBody::Stmt(s*)=>{
-                body(s, f, true);
-            }
+        f.print("]");
+      },
+      Expr::ArrAccess(aa*) => {
+        if(print_cst) f.print("Expr::ArrAccess{");
+        aa.arr.get().debug(f);
+        f.print("[");
+        aa.idx.get().debug(f);
+        if(aa.idx2.is_some()){
+          f.print("..");
+          aa.idx2.get().debug(f);
         }
-    }else{
-      panic("Expr::debug");
+        f.print("]");
+      },
+      Expr::Block(b*) => {
+        if(print_cst) f.print("Expr::Block{");
+        b.get().debug(f);
+      },
+      Expr::If(ife*) => {
+        if(print_cst) f.print("Expr::If{");
+        ife.get().debug(f);
+      },
+      Expr::IfLet(il*) => {
+        if(print_cst) f.print("Expr::IfLet{");
+        il.get().debug(f);
+      },
+      Expr::Match(me*) => {
+        if(print_cst) f.print("Expr::Match{");
+        me.get().debug(f);
+      },
+      Expr::MacroCall(mc*) => {
+        Debug::debug(mc, f); 
+      },
+      Expr::Lambda(lc*) => {
+          f.print("|");
+          f.print("|");
+          if(lc.return_type.is_some()){
+              f.print(": ");
+              f.print(lc.return_type.get());
+          }
+          match (lc.body.get()){
+              LambdaBody::Expr(e*)=>{
+                  body(e, f, true);
+              },
+              LambdaBody::Stmt(s*)=>{
+                  body(s, f, true);
+              }
+          }
+      },
+      Expr::Ques(bx*) => {
+        if(print_cst) f.print("Expr::Ques{");
+        Debug::debug(bx.get(), f);
+        f.print("?");
+      }
     }
     if(print_cst) f.print("}");
   }

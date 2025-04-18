@@ -1112,7 +1112,7 @@ impl Parser{
     if(allow_obj && self.is(TokenType::LBRACE)){
       res = self.parse_obj(res);
     }
-    while(self.is(TokenType::DOT) || self.is(TokenType::LBRACKET)){
+    while(self.has()){
       if(self.is(TokenType::DOT)){
         self.consume(TokenType::DOT);
         let nm = self.name();
@@ -1122,7 +1122,7 @@ impl Parser{
           let n = self.node();
           res = Expr::Access{.n, Box::new(res), nm}; 
         }
-      }else{
+      }else if(self.is(TokenType::LBRACKET)){
         self.consume(TokenType::LBRACKET);
         let idx = self.parse_expr();
         let idx2 = Ptr<Expr>::new();
@@ -1133,15 +1133,15 @@ impl Parser{
         self.consume(TokenType::RBRACKET);
         let n = self.node();
         res = Expr::ArrAccess{.n, ArrAccess{Box::new(res), Box::new(idx), idx2}}; 
+      }else if(self.is(TokenType::QUES)){
+        self.consume(TokenType::QUES);
+        let n = self.node();
+        res = Expr::Ques{.n, Box::new(res)};
+      }else{
+        break;
       }
     }
     return res; 
-  }
-
-  func parse_ques(self): Expr{
-    let n = self.node();
-    let expr = self.parse_expr();
-    return Expr::Ques{.n, Box::new(expr)};
   }
   
   func as_is(self): Expr{

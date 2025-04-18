@@ -123,6 +123,11 @@ impl Compiler{
           
           return proto as Value*;
       }
+      if let Expr::Ques(bx*) = node{
+        let r = self.get_resolver();
+        let info = r.get_macro(node);
+        return self.visit_block(&info.block).unwrap();
+      }
       panic("expr {:?}", node);
     }
 

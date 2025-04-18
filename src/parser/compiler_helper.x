@@ -791,6 +791,10 @@ impl Compiler{
     if let Expr::IfLet(il*)=(node){
         return val;
     }
+    if let Expr::Ques(bx*)=(node){
+      //todo load prim
+      return val;
+  }
     self.get_resolver().err(node, format("get_obj_ptr {:?}", node));
     std::unreachable();
   }

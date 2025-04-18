@@ -403,7 +403,12 @@ impl AllocHelper{
           return res;
       },
       Expr::Ques(bx*) => {
-        panic("todo");
+        let r = self.c.get_resolver();
+        let info = r.get_macro(node);
+        self.visit(&info.block);
+        let ty = r.getType(node);
+        res.set(self.alloc_ty(&ty, node));
+        return res;
       }
     }
   }

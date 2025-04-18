@@ -69,7 +69,7 @@ func make_keywords(): HashMap<str, TokenType>{
 }
 
 func make_ops(): HashMap<str, TokenType>{
-  let map = HashMap<str, TokenType>::new(55);
+  let map = HashMap<str, TokenType>::new(56);
   map.add("{", TokenType::LBRACE);
   map.add("}", TokenType::RBRACE);
   map.add("(", TokenType::LPAREN);
@@ -96,6 +96,7 @@ func make_ops(): HashMap<str, TokenType>{
   map.add("*", TokenType::STAR);
   map.add("/", TokenType::DIV);
   map.add("%", TokenType::PERCENT);
+  map.add("?", TokenType::QUES);
   map.add("^", TokenType::POW);
   map.add("~", TokenType::TILDE);
   map.add("&", TokenType::AND);
