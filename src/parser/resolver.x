@@ -1808,44 +1808,46 @@ impl Resolver{
     for case in &node.cases{
       self.newScope();
       let case_lhs_type = "".owned();
-      if(case.lhs is MatchLhs::NONE){
-        if(has_none){
-          self.err(expr, "multiple 'none' case");
-        }
-        has_none = true;
-        case_lhs_type = "_".owned();
-        //continue;
-      }
-      //self.newScope();
-      else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
-        let smp = type.as_simple();
-        case_lhs_type = type.print();
-        //todo check type
-        if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
-            self.err(expr, format("invalid variant {:?} {:?}!={:?}", type, smp.scope.get(), decl.type));
-        }
-        let idx = not_covered.indexOf(&smp.name);
-        if(idx == -1){
-          self.err(expr, format("invalid variant {}", smp.name));
-        }
-        not_covered.remove(idx).drop();
-        let index = Resolver::findVariant(decl, &smp.name);
-        let variant = decl.get_variants().get(index);
-        if(args.len() != variant.fields.len()){
-            self.err(case.line, format("variant field count doesn't match got: {} expected: {} variant: {}", args.len(), variant.fields.len(), variant.name));
-        }
-        for(let i = 0;i < args.len();++i){
-          let arg = args.get(i);
-          let field = variant.fields.get(i);
-          let ty = field.type.clone();
-          if (arg.is_ptr) {
-              ty = ty.toPtr();
+      match &case.lhs{
+        MatchLhs::NONE => {
+          if(has_none){
+            self.err(expr, "multiple 'none' case");
           }
-          self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::MATCH, arg.line);
-          self.cache.add(arg.id, RType::new(ty));
+          has_none = true;
+          case_lhs_type = "_".owned();
+          //continue;
+        },
+        MatchLhs::ENUM(type*, args*) => {
+          let smp = type.as_simple();
+          case_lhs_type = type.print();
+          //todo check type
+          if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
+              self.err(expr, format("invalid variant {:?} {:?}!={:?}", type, smp.scope.get(), decl.type));
+          }
+          let idx = not_covered.indexOf(&smp.name);
+          if(idx == -1){
+            self.err(expr, format("invalid variant {}", smp.name));
+          }
+          not_covered.remove(idx).drop();
+          let index = Resolver::findVariant(decl, &smp.name);
+          let variant = decl.get_variants().get(index);
+          if(args.len() != variant.fields.len()){
+              self.err(case.line, format("variant field count doesn't match got: {} expected: {} variant: {}", args.len(), variant.fields.len(), variant.name));
+          }
+          for(let i = 0;i < args.len();++i){
+            let arg = args.get(i);
+            let field = variant.fields.get(i);
+            let ty = field.type.clone();
+            if (arg.is_ptr) {
+                ty = ty.toPtr();
+            }
+            self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::MATCH, arg.line);
+            self.cache.add(arg.id, RType::new(ty));
+          }
+        },
+        MatchLhs::UNION(types*) => {
+          self.err(expr, "todo union");
         }
-      }else{
-        panic("unr");
       }
       let res_type = self.visit_match_rhs(&case.rhs);
       let rhs_exit = Exit::get_exit_type(&case.rhs);

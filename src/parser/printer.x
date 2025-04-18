@@ -653,18 +653,19 @@ impl Debug for Match{
       }
       f.print("    ");
       let case = self.cases.get(i);
-      if(case.lhs is MatchLhs::NONE){
-        f.print("_");
-      }
-      else if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
-        type.debug(f);
-        if(!args.empty()){
-          f.print("(");
-          join(f, args, ", ");
-          f.print(")");
+      match &case.lhs{
+        MatchLhs::NONE => f.print("_"),
+        MatchLhs::ENUM(type*, args*) => {
+          type.debug(f);
+          if(!args.empty()){
+            f.print("(");
+            join(f, args, ", ");
+            f.print(")");
+          }
+        },
+        MatchLhs::UNION(types*) => {
+          join(f, types, " | ");
         }
-      }else{
-        panic("unr");
       }
       f.print(" => ");
       if let MatchRhs::EXPR(expr*)=(&case.rhs){

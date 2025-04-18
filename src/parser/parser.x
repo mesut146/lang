@@ -896,11 +896,11 @@ impl Parser{
       if(self.is("_")){
         self.pop();
         lhs = Option::new(MatchLhs::NONE);
-      }else{
+      }
+      else{
         let type = self.parse_type();
-        let args = List<ArgBind>::new();
-        //todo args
         if(self.is(TokenType::LPAREN)){
+          let args = List<ArgBind>::new();
           self.consume(TokenType::LPAREN);
           while(!self.is(TokenType::RPAREN)){
             args.add(self.parse_bind());
@@ -909,8 +909,16 @@ impl Parser{
             }
           }
           self.consume(TokenType::RPAREN);
+          lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
+        }else{
+          let types = List<Type>::new();
+          types.add(type);
+          while(self.is(TokenType::OR)){
+            self.pop();
+            types.add(self.parse_type());
+          }
+          lhs = Option::new(MatchLhs::UNION{types: types});
         }
-        lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
       }
       self.consume(TokenType::ARROW);
       let line = self.peek().line;

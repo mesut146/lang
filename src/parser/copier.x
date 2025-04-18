@@ -366,6 +366,7 @@ impl AstCopier{
         let lhs = match &node.lhs{
             MatchLhs::NONE => MatchLhs::NONE,
             MatchLhs::ENUM(type*, args*) => MatchLhs::ENUM{self.visit(type), self.visit_list(args)},
+            MatchLhs::UNION(types*) => MatchLhs::UNION{self.visit_list(types)},
         };
         let rhs = match &node.rhs{
             MatchRhs::EXPR(expr*) => MatchRhs::EXPR{self.visit(expr)},

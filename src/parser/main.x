@@ -89,7 +89,7 @@ func bootstrap(cmd: CmdArgs*){
       std::setenv("target_triple", "aarch64-linux-gnu");
     }
     else if(target.eq("termux")){
-      std::setenv("target_triple", "aarch64-unknown-linux-android24");
+      std::setenv("target_triple", "aarch64-linux-android");
     }
     else{
       panic("unsupported target: {}", target);

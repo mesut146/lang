@@ -131,16 +131,16 @@ impl Compiler{
       panic("expr {:?}", node);
     }
 
-    func get_variant_index_match(case: MatchCase*, decl: Decl*): i32{
+    func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
       let idx = 0;
-      let name: String* = case.lhs.get_type().name();
+      let name: String* = lhs_ty.name();
       for ev in decl.get_variants(){
         if(ev.name.eq(name)){
           return idx;
         }
         ++idx;
       }
-      panic("idx {:?} {:?}", case.lhs.get_type(), decl.type);
+      panic("idx {:?} {:?}", lhs_ty, decl.type);
     }
 
     func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
@@ -194,7 +194,7 @@ impl Compiler{
         }else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
           let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
           let bb = create_bb_named(name_c.ptr());
-          let var_index = get_variant_index_match(case, decl);
+          let var_index = get_variant_index_match(type, decl);
           SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
           self.set_and_insert(bb);
           //alloc args
@@ -1023,7 +1023,8 @@ impl Compiler{
           else {
             vector_Value_push(args, self.visit(arg));
           }
-        } else {
+        }
+        else {
           if(target.is_vararg && paramIdx >= target.params.len()){
             vector_Value_push(args, self.loadPrim(arg));
           }else{

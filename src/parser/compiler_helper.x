@@ -753,6 +753,72 @@ impl Compiler{
     return CreateLoad(mapped, val);
   }
 
+  func emit_as_arg(self, node: Expr*):Value*{
+    match node{
+      Lit(val*)=>{
+        return self.visit(node);
+      },
+      Name(val*)=>{
+        
+      },
+      Call(mc*) => {
+
+      },
+      MacroCall(mc*) => {
+
+      },
+      Par(e*) => {
+
+      },
+      Type(val*) => {
+
+      },
+      Unary(op*, e*) => {
+
+      },
+      Infix(op*, l*, r*) => {
+
+      },
+      Access(scope*, name*) => {
+
+      },
+      Obj(type*, args*) => {
+
+      },
+      As(e*, type*) => {
+
+      },
+      Is(e*, rhs*) => {
+
+      },
+      Array(list*, size) => {
+
+      },
+      ArrAccess(val*) => {
+
+      },
+      Match(val*) => {
+
+      },
+      Block(x*) => {
+
+      },
+      If(is*) => {
+
+      },
+      IfLet(il*) => {
+
+      },
+      Lambda(val*) => {
+
+      },
+      Ques(e*) => {
+
+      },
+    }
+    panic("todo");
+  }
+
   func get_obj_ptr(self, node: Expr*): Value*{
     if let Expr::Par(e*)=(node){
       return self.get_obj_ptr(e.get());

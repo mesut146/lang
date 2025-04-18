@@ -810,10 +810,6 @@ struct Entry{
   isBase: bool;
 }
 
-func print5(e: Expr*){
-  print("{:?}\n", e);
-}
-
 struct Match{
   expr: Expr;
   cases: List<MatchCase>;
@@ -836,15 +832,8 @@ struct MatchCase{
 }
 enum MatchLhs{
   NONE,
-  ENUM(type: Type, args: List<ArgBind>)
-}
-impl MatchLhs{
-  func get_type(self): Type*{
-    if let MatchLhs::ENUM(type*, args*)=(self){
-      return type;
-    }
-    panic("MatchLhs::get_type");
-  }
+  ENUM(type: Type, args: List<ArgBind>),
+  UNION(types: List<Type>)
 }
 
 enum MatchRhs{
