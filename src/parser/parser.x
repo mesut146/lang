@@ -910,7 +910,12 @@ impl Parser{
           }
           self.consume(TokenType::RPAREN);
           lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
-        }else{
+        }
+        else if(self.is(TokenType::ARROW)){
+          let args = List<ArgBind>::new();
+          lhs = Option::new(MatchLhs::ENUM{type: type, args: args});
+        }
+        else if(self.is(TokenType::OR)){
           let types = List<Type>::new();
           types.add(type);
           while(self.is(TokenType::OR)){
@@ -918,6 +923,8 @@ impl Parser{
             types.add(self.parse_type());
           }
           lhs = Option::new(MatchLhs::UNION{types: types});
+        }else{
+          self.err("invalid match case lhs");
         }
       }
       self.consume(TokenType::ARROW);

@@ -1807,22 +1807,17 @@ impl Resolver{
     let has_none = false;
     for case in &node.cases{
       self.newScope();
-      let case_lhs_type = "".owned();
       match &case.lhs{
         MatchLhs::NONE => {
           if(has_none){
             self.err(expr, "multiple 'none' case");
           }
           has_none = true;
-          case_lhs_type = "_".owned();
-          //continue;
         },
         MatchLhs::ENUM(type*, args*) => {
           let smp = type.as_simple();
-          case_lhs_type = type.print();
-          //todo check type
           if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
-              self.err(expr, format("invalid variant {:?} {:?}!={:?}", type, smp.scope.get(), decl.type));
+              self.err(expr, format("invalid variant {:?} of {:?}", type, decl.type));
           }
           let idx = not_covered.indexOf(&smp.name);
           if(idx == -1){
@@ -1846,7 +1841,20 @@ impl Resolver{
           }
         },
         MatchLhs::UNION(types*) => {
-          self.err(expr, "todo union");
+          for uty in types{
+            if(!uty.is_simple()){
+              self.err(expr, format("invalid variant {:?} of {:?}", uty, decl.type));
+            }
+            let smp = uty.as_simple();
+            if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
+              self.err(expr, format("invalid variant {:?} of {:?}", uty, decl.type));
+            }
+            let idx = not_covered.indexOf(&smp.name);
+            if(idx == -1){
+              self.err(expr, format("invalid variant {}", smp.name));
+            }
+            not_covered.remove(idx).drop();
+          }
         }
       }
       let res_type = self.visit_match_rhs(&case.rhs);
@@ -1855,11 +1863,10 @@ impl Resolver{
         if(res.is_none()){
           res.set(res_type);
         }else if(!res.get().type.eq(&res_type.type)){
-          self.err(expr, format("invalid match result type: {:?}!= {:?} for case {:?}", res.get().type, res_type.type, case_lhs_type));
+          self.err(expr, format("invalid match result type: {:?}!= {:?} for case {:?}", res.get().type, res_type.type, case.lhs));
         }
       }
       self.dropScope();
-      case_lhs_type.drop();
     }
     if(!not_covered.empty() && !has_none){
       self.err(expr, format("not covered variants: {:?}", not_covered));

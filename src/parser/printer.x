@@ -642,6 +642,24 @@ impl Debug for Expr{
     if(print_cst) f.print("}");
   }
 }
+impl Debug for MatchLhs{
+  func debug(self, f: Fmt*){
+    match self{
+      MatchLhs::NONE => f.print("_"),
+      MatchLhs::ENUM(type*, args*) => {
+        type.debug(f);
+        if(!args.empty()){
+          f.print("(");
+          join(f, args, ", ");
+          f.print(")");
+        }
+      },
+      MatchLhs::UNION(types*) => {
+        join(f, types, " | ");
+      }
+    }
+  }
+}
 impl Debug for Match{
   func debug(self, f: Fmt*){
     f.print("match ");
@@ -653,20 +671,7 @@ impl Debug for Match{
       }
       f.print("    ");
       let case = self.cases.get(i);
-      match &case.lhs{
-        MatchLhs::NONE => f.print("_"),
-        MatchLhs::ENUM(type*, args*) => {
-          type.debug(f);
-          if(!args.empty()){
-            f.print("(");
-            join(f, args, ", ");
-            f.print(")");
-          }
-        },
-        MatchLhs::UNION(types*) => {
-          join(f, types, " | ");
-        }
-      }
+      Debug::debug(&case.lhs, f);
       f.print(" => ");
       if let MatchRhs::EXPR(expr*)=(&case.rhs){
         //expr.debug(f);

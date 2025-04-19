@@ -753,52 +753,52 @@ impl Compiler{
     return CreateLoad(mapped, val);
   }
 
-  func emit_as_arg(self, node: Expr*):Value*{
+  func emit_as_arg(self, node: Expr*): Value*{
     match node{
       Lit(val*)=>{
         return self.visit(node);
       },
       Name(val*)=>{
-        
+        //todo
       },
       Call(mc*) => {
-
+        return self.visit(node);
       },
       MacroCall(mc*) => {
-
+        return self.visit(node);
       },
       Par(e*) => {
-
+        return self.visit(node);
       },
       Type(val*) => {
-
+        return self.visit(node);
       },
       Unary(op*, e*) => {
-
+        return self.visit(node);
       },
       Infix(op*, l*, r*) => {
-
+        return self.visit(node);
       },
       Access(scope*, name*) => {
-
+        //todo
       },
       Obj(type*, args*) => {
-
+        return self.visit(node);
       },
       As(e*, type*) => {
 
       },
       Is(e*, rhs*) => {
-
+        return self.visit(node);
       },
       Array(list*, size) => {
-
+        return self.visit(node);
       },
       ArrAccess(val*) => {
 
       },
       Match(val*) => {
-
+        //todo
       },
       Block(x*) => {
 
@@ -810,10 +810,10 @@ impl Compiler{
 
       },
       Lambda(val*) => {
-
+        return self.visit(node);
       },
       Ques(e*) => {
-
+        return self.visit(node);
       },
     }
     panic("todo");

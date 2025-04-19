@@ -179,54 +179,90 @@ impl Compiler{
       let infos = List<MatchInfo>::new();
       let use_next = false;
       for case in &node.cases{
-        if(case.lhs is MatchLhs::NONE){
-          self.set_and_insert(def_bb);
-          let rhs_val = self.visit_match_rhs(&none_case.unwrap().rhs);
-          let exit = Exit::get_exit_type(&none_case.unwrap().rhs);
-          if(!exit.is_jump()){
-              CreateBr(nextbb);
-              use_next = true;
+        match &case.lhs{
+          MatchLhs::NONE => {
+            self.set_and_insert(def_bb);
+            let rhs_val = self.visit_match_rhs(&case.rhs);
+            let exit = Exit::get_exit_type(&case.rhs);
+            if(!exit.is_jump()){
+                CreateBr(nextbb);
+                use_next = true;
+                if(!match_type.is_void()){
+                  let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
+                  infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), def_bb});
+                }
+            }
+          },
+          MatchLhs::ENUM(type*, args*) => {
+            let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
+            let bb = create_bb_named(name_c.ptr());
+            let var_index = get_variant_index_match(type, decl);
+            SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
+            self.set_and_insert(bb);
+            //alloc args
+            let variant = decl.get_variants().get(var_index);
+            let arg_idx = 0;
+            for arg in args{
+              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
+              ++arg_idx;
+            }
+            self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
+            let rhs_val = self.visit_match_rhs(&case.rhs);
+            self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
+            let rhs_end_bb = GetInsertBlock();
+            let exit = Exit::get_exit_type(&case.rhs);
+            if(!exit.is_jump()){
               if(!match_type.is_void()){
                 let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
-                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), def_bb});
+                let val = rhs_val.unwrap();
+                if(!is_struct(&match_type)){
+                    //fix
+                    if(match_type.is_prim() && Value_isPointerTy(val)){
+                        val = CreateLoad(self.mapType(&match_type), val);
+                    }
+                    val = self.cast2(val, &rt2.type, &match_type);
+                }
+                rhs_val.set(val);
+                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
               }
-          }
-        }else if let MatchLhs::ENUM(type*, args*) = (&case.lhs){
-          let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
-          let bb = create_bb_named(name_c.ptr());
-          let var_index = get_variant_index_match(type, decl);
-          SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
-          self.set_and_insert(bb);
-          //alloc args
-          let variant = decl.get_variants().get(var_index);
-          let arg_idx = 0;
-          for arg in args{
-            self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
-            ++arg_idx;
-          }
-          self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
-          let rhs_val = self.visit_match_rhs(&case.rhs);
-          self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
-          let rhs_end_bb = GetInsertBlock();
-          let exit = Exit::get_exit_type(&case.rhs);
-          if(!exit.is_jump()){
-            if(!match_type.is_void()){
-              let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
-              let val = rhs_val.unwrap();
-              if(!is_struct(&match_type)){
-                  //fix
-                  if(match_type.is_prim() && Value_isPointerTy(val)){
-                      val = CreateLoad(self.mapType(&match_type), val);
-                  }
-                  val = self.cast2(val, &rt2.type, &match_type);
-              }
-              rhs_val.set(val);
-              infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
+              CreateBr(nextbb);
+              use_next = true;
             }
-            CreateBr(nextbb);
-            use_next = true;
+            name_c.drop();
+          },
+          MatchLhs::UNION(types*) => {
+            let name_c = format("{:?}__$union_{}", decl.type, expr.line).cstr();
+            let bb = create_bb_named(name_c.ptr());
+            for uty in types{
+              //all variants go to bb
+              let var_index = get_variant_index_match(uty, decl);
+              SwitchInst_addCase(sw, makeInt(var_index, 64), bb);
+            }
+            self.set_and_insert(bb);
+
+            self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
+            let rhs_val = self.visit_match_rhs(&case.rhs);
+            self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
+            let rhs_end_bb = GetInsertBlock();
+            let exit = Exit::get_exit_type(&case.rhs);
+            if(!exit.is_jump()){
+              if(!match_type.is_void()){
+                let rt2 = self.get_resolver().visit_match_rhs(&case.rhs);
+                let val = rhs_val.unwrap();
+                if(!is_struct(&match_type)){
+                    //fix
+                    if(match_type.is_prim() && Value_isPointerTy(val)){
+                        val = CreateLoad(self.mapType(&match_type), val);
+                    }
+                    val = self.cast2(val, &rt2.type, &match_type);
+                }
+                rhs_val.set(val);
+                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
+              }
+              CreateBr(nextbb);
+              use_next = true;
+            }
           }
-          name_c.drop();
         }
       }
       if(use_next){
@@ -239,11 +275,7 @@ impl Compiler{
           phi_type = getPointerTo(phi_type) as llvm_Type*;
         }
         let phi = CreatePHI(phi_type, infos.len() as i32);
-        //print("phi ty=\n");
-        //Type_dump(phi_type);
         for info in &infos{
-          //print("val=\n");
-          //Value_dump(info.val);
           phi_addIncoming(phi, info.val, info.bb);
         }
         res = Option::new(phi as Value*);
