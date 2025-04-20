@@ -24,20 +24,31 @@ static last_scope: i32 = 0;
 static verbose: bool = hasenv("own_verbose");
 static print_check: bool = hasenv("print_check");
 
-func print_drop_none(): i32{ return 0; }
-func print_drop_valid(): i32{ return 1; }
-func print_drop_any(): i32{ return 2; }
+#derive(Debug)
+enum PrintKind{
+    None,
+    Valid,
+    Any,
+}
 
-static print_kind: i32 = print_drop_none();
+static print_kind: PrintKind = init_print();
 static print_drop_real: bool = hasenv("print_drop_real");
 static print_drop_lhs: bool = hasenv("print_drop_lhs");
 
 static drop_enabled: bool = hasenv("drop_enabled");
-static drop_lhs_enabled: bool = hasenv("drop_lhs_enabled");
+static drop_lhs_enabled: bool =  hasenv("drop_lhs_enabled");
 static move_ptr_field = true;
 static allow_else_move = true;
 
 static logger = Logger::new();
+
+func init_print(): PrintKind{
+    let opt = std::getenv("own_print");
+    if(opt.is_none()) return PrintKind::None;
+    if(opt.get().eq("any")) return PrintKind::Any;
+    if(opt.get().eq("valid")) return PrintKind::Valid;
+    panic("Invalid value for own_print: {}", opt.get());
+}
 
 struct Logger{
     list: List<String>;
@@ -53,14 +64,14 @@ impl Logger{
         if(logger.list.empty()){
             return;
         }
-        let m = printMethod(own.method);
-        print("in {}\n", &m);
+        let mstr = printMethod(own.method);
+        print("in {}\n{}\n", &own.method.path, &mstr);
         for msg in &logger.list{
             print("  {}", msg);
         }
         print("\n");
         logger.list.clear();
-        m.drop();
+        mstr.drop();
     }
 }
 
@@ -83,6 +94,7 @@ impl Drop for Own{
 
 impl Own{
     func new(c: Compiler*, m: Method*): Own{
+        //print("print_kind={:?}\n", print_kind);
         let exit = Exit::get_exit_type(m.body.get());
         let main_scope = VarScope::new(ScopeType::MAIN, m.line, exit);
         let res = Own{
@@ -239,6 +251,9 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(expr, self), StateType::NONE);
     }
 
+    // func do_move(self, block: Block*){
+    // }
+
     func do_move(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
@@ -262,6 +277,12 @@ impl Own{
         }
         let scope = self.get_scope();
         self.update_state(rhs, StateType::MOVED{expr.line}, scope);
+        match expr{
+            Expr::Par(bx*) => {
+                self.do_move(bx.get());
+            },
+            _ => {}
+        }
         rt.drop();
     }
     //move rhs
@@ -726,7 +747,7 @@ impl Own{
         }
         let rhs = Rhs::new(var.clone());
         let state = self.get_state(&rhs, scope);
-        if(print_kind == print_drop_any()){
+        if(print_kind is PrintKind::Any){
             let info = scope.print_info();
             Logger::add(format("drop_var {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, info));
             info.drop();
@@ -742,7 +763,7 @@ impl Own{
             rhs.drop();
             return;
         }
-        if(print_kind == print_drop_valid()){
+        if(print_kind is PrintKind::Valid){
             let tmp = scope.print_info();
             Logger::add(format("drop_var_real {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, tmp));
             tmp.drop();
@@ -753,7 +774,7 @@ impl Own{
         rhs.drop();
     }
     func drop_var_real(self, var: Variable*, line: i32){
-        if(print_kind == print_drop_valid()){
+        if(print_kind is PrintKind::Valid){
             Logger::add(format("drop_var_real {:?}\n", var));
         }
         let rt = self.compiler.get_resolver().visit_type(&var.type);
@@ -765,14 +786,14 @@ impl Own{
     func drop_obj(self, obj: Object*, scope: VarScope*, line: i32){
         let rhs = Rhs::new(obj.expr, self);
         let state = self.get_state(&rhs, scope);
-        if(print_kind == print_drop_any()){
+        if(print_kind is PrintKind::Any){
             Logger::add(format("drop_obj {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         if(state.is_moved()){
             rhs.drop();
             return;
         }
-        if(print_kind == print_drop_valid()){
+        if(print_kind is PrintKind::Valid){
             Logger::add(format("drop_obj_real {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         let resolver = self.compiler.get_resolver();

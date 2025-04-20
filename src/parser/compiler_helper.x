@@ -899,16 +899,16 @@ impl Compiler{
     return res;
   }
 
-  func make_init_proto(self, path: str): Function*{
+  func make_init_proto(self, path: str): Pair<Function*, String>{
     let ret = getVoidTy();
     let args = vector_Type_new();
     let ft = make_ft(ret, args, false);
     let linkage = ext();
-    let mangled = mangle_static(path).cstr();
+    //let mangled = mangle_static(path).cstr();
+    let mangled = "__cxx_global_var_init".owned();
     let res = make_func(ft, linkage, mangled.ptr());
-    mangled.drop();
     vector_Type_delete(args);
-    return res;
+    return Pair::new(res, mangled);
   }
 
   func do_inline(self, expr: Expr*, ptr_ret: Value*){

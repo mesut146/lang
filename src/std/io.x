@@ -53,6 +53,7 @@ impl Process{
         if(status == 0){
           return Result<String, i32>::ok(res);
         }
+        res.drop();
         return Result<String, i32>::err(status);
     }
 }

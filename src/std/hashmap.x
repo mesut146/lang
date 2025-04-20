@@ -140,12 +140,13 @@ impl<K, V> HashMap<K, V>{
             }
         }
         //collision, insert at end
-        node.next.set(HashNode{
+        let old = node.next.set(HashNode{
             key: key,
             value: value,
             hash: hash,
             next: Ptr<HashNode<K,V>>::new()
         });
+        old.drop();
         self.count += 1;
         self.rehash();
         return Option<V>::none();

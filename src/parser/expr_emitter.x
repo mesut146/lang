@@ -31,104 +31,81 @@ impl Compiler{
 
     func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
-      if let Expr::If(is*)=(node){
-        let res = self.visit_if(is.get());
-        if(res.is_none()){
-          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
-        }
-        return res.unwrap();
-      }
-      else if let Expr::IfLet(is*)=(node){
-        let res = self.visit_iflet(node.line, is.get());
-        if(res.is_none()){
-          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
-        }
-        return res.unwrap();
-      }
-      else if let Expr::Block(b*)=(node){
-        let res = self.visit_block(b.get());
-        if(res.is_none()){
-          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
-        }
-        return res.unwrap();
-      }
-      else if let Expr::Par(e*)=(node){
-        return self.visit(e.get());
-      }
-      if let Expr::Obj(type*, args*)=(node){
-        return self.visit_obj(node, type, args);
-      }
-      if let Expr::Lit(lit*)=(node){
-        return self.visit_lit(node, lit);
-      }
-      if let Expr::Infix(op*, l*, r*)=(node){
-        return self.visit_infix(node, op, l.get(), r.get());
-      }
-      if let Expr::Name(name*)=(node){
-        return self.visit_name(node, name, true);
-      }
-      if let Expr::Unary(op*, e*)=(node){
-        if(op.eq("&")){
-          return self.visit_ref(node, e.get());
-        }
-        if(op.eq("*")){
-          return self.visit_deref(node, e.get());
-        }
-        return self.visit_unary(op, e.get());
-      }
-      if let Expr::Call(mc*)=(node){
-        return self.visit_call(node, mc);
-      }
-      if let Expr::MacroCall(mc*)=(node){
-        return self.visit_macrocall(node, mc);
-      }
-      if let Expr::ArrAccess(aa*)=(node){
-        return self.visit_array_access(node, aa);
-      }
-      if let Expr::Array(list*, sz*)=(node){
-        return self.visit_array(node, list, sz);
-      }
-      if let Expr::Access(scope*, name*)=(node){
-        return self.visit_access(node, scope.get(), name);
-      }
-      if let Expr::Type(type*)=(node){
-          let r = self.get_resolver();
-          let rt = r.visit(node);
-          if(rt.type.is_fpointer() && rt.method_desc.is_some()){
-              let target: Method* = r.get_method(&rt).unwrap();
-              let proto = self.protos.get().get_func(target);
-              rt.drop();
-              return proto as Value*;
+      match node{
+        Expr::Call(mc*) => return self.visit_call(node, mc),
+        Expr::MacroCall(mc*) => return self.visit_macrocall(node, mc),
+        Expr::ArrAccess(aa*) => return self.visit_array_access(node, aa),
+        Expr::Array(list*, sz*) => return self.visit_array(node, list, sz),
+        Expr::Access(scope*, name*) => return self.visit_access(node, scope.get(), name),
+        Expr::Par(e*) => return self.visit(e.get()),
+        Expr::Obj(type*, args*) => return self.visit_obj(node, type, args),
+        Expr::Lit(lit*) => return self.visit_lit(node, lit),
+        Expr::Infix(op*, l*, r*) => return self.visit_infix(node, op, l.get(), r.get()),
+        Expr::Name(name*) => return self.visit_name(node, name, true),
+        Expr::Is(lhs*, rhs*) => return self.visit_is(lhs.get(), rhs.get()),
+        Expr::As(lhs*, rhs*) => return self.visit_as(lhs.get(), rhs),
+        Expr::If(is*) => {
+          let res = self.visit_if(is.get());
+          if(res.is_none()){
+            return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
-          rt.drop();
-          return self.simple_enum(node, type);
-      }
-      if let Expr::Is(lhs*, rhs*)=(node){
-        return self.visit_is(lhs.get(), rhs.get());
-      }
-      if let Expr::As(lhs*, rhs*)=(node){
-        return self.visit_as(lhs.get(), rhs);
-      }
-      if let Expr::Match(me*)=(node){
-        let res = self.visit_match(node, me.get());
-        if(res.is_none()){
-          return ConstantPointerNull_get(getPointerTo(getVoidTy()));
-        }
-        return res.unwrap();
-      }
-      if let Expr::Lambda(le*)=(node){
+          return res.unwrap();
+        },
+        Expr::IfLet(is*) => {
+          let res = self.visit_iflet(node.line, is.get());
+          if(res.is_none()){
+            return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+          }
+          return res.unwrap();
+        },
+        Expr::Block(b*) => {
+          let res = self.visit_block(b.get());
+          if(res.is_none()){
+            return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+          }
+          return res.unwrap();
+        },
+        Expr::Unary(op*, e*) => {
+          if(op.eq("&")){
+            return self.visit_ref(node, e.get());
+          }
+          if(op.eq("*")){
+            return self.visit_deref(node, e.get());
+          }
+          return self.visit_unary(op, e.get());
+        },
+        Expr::Type(type*) => {
+            let r = self.get_resolver();
+            let rt = r.visit(node);
+            if(rt.type.is_fpointer() && rt.method_desc.is_some()){
+                let target: Method* = r.get_method(&rt).unwrap();
+                let proto = self.protos.get().get_func(target);
+                rt.drop();
+                return proto as Value*;
+            }
+            rt.drop();
+            return self.simple_enum(node, type);
+        },
+        Expr::Match(me*) => {
+          let res = self.visit_match(node, me.get());
+          if(res.is_none()){
+            return ConstantPointerNull_get(getPointerTo(getVoidTy()));
+          }
+          return res.unwrap();
+        },
+        Expr::Lambda(le*) => {
+            let r = self.get_resolver();
+            let m = r.lambdas.get(&node.id).unwrap();
+            let proto = self.protos.get().get_func(m);
+            
+            return proto as Value*;
+        },
+        Expr::Ques(bx*) => {
           let r = self.get_resolver();
-          let m = r.lambdas.get(&node.id).unwrap();
-          let proto = self.protos.get().get_func(m);
-          
-          return proto as Value*;
+          let info = r.get_macro(node);
+          return self.visit_block(&info.block).unwrap();
+        }
       }
-      if let Expr::Ques(bx*) = node{
-        let r = self.get_resolver();
-        let info = r.get_macro(node);
-        return self.visit_block(&info.block).unwrap();
-      }
-      panic("expr {:?}", node);
     }
 
     func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
@@ -854,7 +831,7 @@ impl Compiler{
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
-        self.own.get().do_move(info.block.return_expr.get());
+        //self.own.get().do_move(info.block.return_expr.get());
         return res.unwrap();
       }
       if(Resolver::is_assert(mc)){

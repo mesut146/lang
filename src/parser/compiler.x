@@ -385,11 +385,12 @@ impl Compiler{
     if(resolv.unit.globals.empty()){
       return;
     }
-    let proto = self.make_init_proto(resolv.unit.path.str());
+    let proto_pr = self.make_init_proto(resolv.unit.path.str());
+    let proto = proto_pr.a;
     setSection(proto, ".text.startup".ptr());
     let bb = create_bb2(proto);
     SetInsertPoint(bb);
-    let method = Method::new(Node::new(0), Compiler::mangle_static(resolv.unit.path.str()), Type::new("void"));
+    let method = Method::new(Node::new(0), proto_pr.b, Type::new("void"));
     method.body = Option::new(Block::new(0, 0));
     self.own = Option::new(Own::new(self, &method));
     let globs = vector_Metadata_new();
@@ -583,6 +584,7 @@ impl Compiler{
       }else if(blk_val.is_some() && !m.type.is_void()){
         //setField(blk_val.unwrap(), &m.type, );
         self.visit_ret(blk_val.unwrap());
+        self.own.get().do_move(m.body.get().return_expr.get());
       }
     }
     exit.drop();

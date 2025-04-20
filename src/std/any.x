@@ -12,7 +12,8 @@ impl Any{
         let b = Box<T>::new(val);
         let b2 = ptr::deref(&b as Box<i8>*);
         std::no_drop(b);
-        //Drop::drop as func(T): void  T::drop
+        //Drop::drop as func(T): void
+        //let drop_f = T::drop;
         return Any{box: b2, type: std::print_type<T>().owned()};
     }
 

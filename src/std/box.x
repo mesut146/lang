@@ -30,6 +30,7 @@ impl<T> Box<T>{
     func set(self, e: T): T{
       let old = ptr::deref(self.val);
       ptr::copy(self.val, 0, e);
+      std::no_drop(e);
       return old;
     }
 }
@@ -89,6 +90,7 @@ impl<T> Ptr<T>{
     if(self.is_some()){
       return Option::new(self.val.get().set(e));
     }
+    std::no_drop(self.val);
     self.val = Option::new(Box::new(e));
     return Option<T>::new();
   }

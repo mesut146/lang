@@ -377,7 +377,7 @@ impl AllocHelper{
         }
         self.visit(&me.get().expr);
         for case in &me.get().cases{
-          if let MatchLhs::ENUM(type*, args*)=(&case.lhs){
+          if let MatchLhs::ENUM(type*, args*) = &case.lhs{
             for arg in args{
               let ty = self.c.get_resolver().cache.get(&arg.id);
               let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);

@@ -450,6 +450,7 @@ impl Compiler{
         if(is_loadable(&rt.type)){
           val = self.loadPrim(val, &rt.type);
         }
+        self.own.get().do_move(node.return_expr.get());
         rt.drop();
         return Option<Value*>::new(val);
       }

@@ -260,8 +260,8 @@ impl RtKind{
 impl Clone for RtKind{
   func clone(self): RtKind{
     match self{
-      RtKind::MethodGen(name*) => RtKind::MethodGen{name.clone()},
-      _ => ptr::deref(self),//safe
+      RtKind::MethodGen(name*) => return RtKind::MethodGen{name.clone()},
+      _ => return ptr::deref(self),//safe,other variants are Copy type
     }
   }
 }
@@ -905,6 +905,7 @@ impl Resolver{
           if(!ty.eq(&rhs_type.type)){
             panic("const rhs type mismatch {:?} -> {:?}", cn.type.get(), rhs_type.type);
           }
+          ty.drop();
         }
       }
     }
@@ -1168,22 +1169,23 @@ impl Resolver{
       }*/
     for used in &self.used_types{
       if(used.type.eq(&decl.type)){
+        rt.drop();
         return;
       }
     }
     if(!decl.path.eq(&self.unit.path)){
-        let r = self.ctx.create_resolver(&decl.path);
-        for is in &r.unit.imports{
-            let has = false;
-            for ex in &self.extra_imports{
-                if(ex.eq(is)){
-                    has = true;
-                }
-            }
-            if(!has){
-                self.extra_imports.add(is.clone());
+      let r = self.ctx.create_resolver(&decl.path);
+      for is in &r.unit.imports{
+        let has = false;
+        for ex in &self.extra_imports{
+            if(ex.eq(is)){
+                has = true;
             }
         }
+        if(!has){
+            self.extra_imports.add(is.clone());
+        }
+      }
     }
     //todo use its imports to resolve
     
@@ -1320,7 +1322,8 @@ impl Resolver{
       let scope = self.visit_type(simple.scope.get());
       let decl = self.get_decl(&scope).unwrap();
       if (!(decl is Decl::Enum)) {
-          return self.member_func_ptr(node, str);
+        scope.drop();
+        return self.member_func_ptr(node, str);
       }
       findVariant(decl, &simple.name);
       let ds = decl.type.print();
@@ -3130,6 +3133,9 @@ impl Resolver{
     let stmt = parse_stmt(whl, &self.unit, node.line);
     body.list.add(stmt);
     body.list.add(parse_stmt(format("{}.drop();", &it_name), &self.unit, node.line));
+    /*if(fe.var_name.eq("bucket_op")){
+      print("bucket={:?}\n", body);
+    }*/
     let tmp = self.visit_block(body);
 
     self.format_map.add(node.id, info);
