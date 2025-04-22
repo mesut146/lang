@@ -904,9 +904,10 @@ impl Compiler{
     let args = vector_Type_new();
     let ft = make_ft(ret, args, false);
     let linkage = ext();
-    //let mangled = mangle_static(path).cstr();
-    let mangled = "__cxx_global_var_init".owned();
-    let res = make_func(ft, linkage, mangled.ptr());
+    let mangled = mangle_static(path);
+    //let mangled = "__cxx_global_var_init".owned();
+    let mangled_c = mangled.clone().cstr();
+    let res = make_func(ft, linkage, mangled_c.ptr());
     vector_Type_delete(args);
     return Pair::new(res, mangled);
   }

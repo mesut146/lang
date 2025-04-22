@@ -8,9 +8,8 @@ func derive_clone(ts: TokenStream): TokenStream{
 }
 
 //#derive_macro
-func derive_debug(ts: TokenStream): TokenStream{
+func derive_debug(it: Item): TokenStream{
     /*let res = TokenStream::new();
-    let it = parse_item(ts);
     if let Item::Decl(d*) = it{
         res.add("impl");
         //todo generic args

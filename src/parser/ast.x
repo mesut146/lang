@@ -56,7 +56,6 @@ struct Unit{
   last_line: i32;
   imports: List<ImportStmt>;
   items: List<Item>;
-  globals: List<Global>;
   last_id: i32;
 }
 
@@ -68,7 +67,6 @@ impl Unit{
       last_line: 0,
       imports: List<ImportStmt>::new(),
       items: List<Item>::new(),
-      globals: List<Global>::new(),
       last_id: -1
     };
   }
@@ -77,12 +75,16 @@ impl Unit{
     let id = ++self.last_id;
     return Node::new(id, line);
   }
-}
 
-struct Global: Node{
-  name: String;
-  type: Option<Type>;
-  expr: Expr;
+  func get_globals(self): List<Global*>{
+    let res = List<Global*>::new();
+    for item in &self.items{
+      if let Item::Glob(g*) = item{
+        res.add(g);
+      }
+    }
+    return res;
+  }
 }
 
 struct ImportStmt{
@@ -147,12 +149,6 @@ impl Attribute{
   }
 }
 
-struct Const{
-  name: String;
-  type: Option<Type>;
-  rhs: Expr;
-}
-
 enum Item{
   Method(m: Method),
   Decl(decl: Decl),
@@ -161,6 +157,7 @@ enum Item{
   Type(name: String, rhs: Type),
   Extern(methods: List<Method>),
   Const(val: Const),
+  Glob(gl: Global),
 }
 
 impl Item{
@@ -170,6 +167,18 @@ impl Item{
     }
     panic("Item::as_impl()");
   }
+}
+
+struct Global: Node{
+  name: String;
+  type: Option<Type>;
+  expr: Expr;
+}
+
+struct Const{
+  name: String;
+  type: Option<Type>;
+  rhs: Expr;
 }
 
 struct Impl{

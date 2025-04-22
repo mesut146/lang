@@ -21,9 +21,14 @@ import std/stack
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
-static print_unit: bool = false;
+static print_unit: bool = true; //init_prunit();
 
 static lambdaCnt = 0;
+
+func init_prunit(): bool{
+  return true;
+  //return std::getenv("print_unit").is_some();
+}
 
 func verbose_stmt(): bool{
   return false;
@@ -566,8 +571,8 @@ impl Resolver{
     if(self.is_resolved) return;
     //print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
-    self.init();
     self.newScope();//globals
+    self.init();
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
@@ -601,8 +606,7 @@ impl Resolver{
   }
   
   func init_globals(self){
-    for (let i = 0;i < self.unit.globals.len();++i) {
-        let g = self.unit.globals.get(i);
+    for g in self.unit.get_globals() {
         let rhs: RType = self.visit(&g.expr);
         if (g.type.is_some()) {
             let type = self.getType(g.type.get());
@@ -659,6 +663,24 @@ impl Resolver{
         Item::Method(method*) => {},
         Item::Extern(methods*) => {},
         Item::Const(cn*) => {},
+        Item::Glob(g*) => {
+          /*let rhs: RType = self.visit(&g.expr);
+          if (g.type.is_some()) {
+              let type = self.getType(g.type.get());
+              let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
+              if (err_opt.is_some()) {
+                  let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
+                  rhs.drop();
+                  err_opt.drop();
+                  type.drop();
+                  self.err(g.line, msg);
+                  panic("");
+              }
+              err_opt.drop();
+              type.drop();
+          }
+          self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);*/
+        },
       }
     }
     //derives
@@ -765,9 +787,6 @@ impl Resolver{
     if(rt.type.is_pointer()){
       return self.get_decl(rt.type.deref_ptr());
     }
-    if(rt.desc.kind is RtKind::Trait){
-      return Option<Decl*>::new();
-    }
     if(rt.desc.kind is RtKind::Decl){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
@@ -775,6 +794,7 @@ impl Resolver{
       if let Item::Decl(decl*) = (item){
         return Option::new(decl);
       }
+      panic("get_decl() item not decl it={:?} {:?}={:?}", item, rt.type, rt.desc);
     }
     if(rt.desc.kind is RtKind::DeclGen){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
@@ -785,8 +805,9 @@ impl Resolver{
         }
         return Option::new(decl);
       }
+      panic("get_decl() gen_decl idx {:?}={:?}", rt.type, rt.desc);
     }
-    if(rt.desc.kind is RtKind::None || rt.desc.kind is RtKind::MethodImpl || rt.desc.kind is RtKind::MethodGen){
+    if(rt.desc.kind is RtKind::None || rt.desc.kind is RtKind::Trait || rt.desc.kind is RtKind::MethodImpl || rt.desc.kind is RtKind::MethodGen){
       return Option<Decl*>::new();
     }
     panic("get_decl() {:?}={:?}", rt.type, rt.desc);
@@ -907,7 +928,8 @@ impl Resolver{
           }
           ty.drop();
         }
-      }
+      },
+      Item::Glob(g*) => {}
     }
   }
 
@@ -2717,8 +2739,7 @@ impl Resolver{
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
       let res = *arr.get(i);
-      for (let j = 0;j < res.unit.globals.len();++j) {
-        let glob = res.unit.globals.get(j);
+      for glob in res.unit.get_globals() {
         if (glob.name.eq(name)) {
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);

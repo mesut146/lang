@@ -103,29 +103,47 @@ impl Debug for ImportStmt{
 
 impl Debug for Item{
   func debug(self, f: Fmt*){
-    if let Item::Decl(decl*) = (self){
-      if(print_cst) f.print("Item::Decl{\n");
-      decl.debug(f);
-      if(print_cst) f.print("}");
-    }else if let Item::Method(m*) = (self){
-      m.debug(f);
-    }else if let Item::Impl(i*) = (self){
-      i.debug(f);
-    }else if let Item::Type(name*, rhs*)=(self){
-      f.print("type ");
-      f.print(name.str());
-      f.print(" = ");
-      rhs.debug(f);
-      f.print(";");
-    }else if let Item::Trait(tr*)=(self){
-      f.print("trait ");
-      tr.type.debug(f);
-    }else if let Item::Extern(methods*)=(self){
-      f.print("extern{\n");
-      join(f, methods, "\n");
-      f.print("\n}");
-    }else{
-      panic("Item::debug()");
+    match self{
+      Item::Decl(decl*) => {
+        if(print_cst) f.print("Item::Decl{\n");
+        decl.debug(f);
+        if(print_cst) f.print("}");
+      },
+      Item::Method(m*) => {
+        m.debug(f);
+      },
+      Item::Impl(i*) => {
+        i.debug(f);
+      },
+      Item::Type(name*, rhs*) => {
+        f.print("type ");
+        f.print(name.str());
+        f.print(" = ");
+        rhs.debug(f);
+        f.print(";");
+      },
+      Item::Trait(tr*) => {
+        f.print("trait ");
+        tr.type.debug(f);
+      },
+      Item::Extern(methods*) => {
+        f.print("extern{\n");
+        join(f, methods, "\n");
+        f.print("\n}");
+      },
+      Item::Const(cn*) => {
+        f.print("const ");
+        f.print(&cn.name);
+        if(cn.type.is_some()){
+          f.print(": ");
+          cn.type.get().debug(f);
+        }
+        f.print(" = ");
+        f.print(&cn.rhs);
+      },
+      Item::Glob(gl*) => {
+        gl.debug(f);
+      }
     }
   }
 }

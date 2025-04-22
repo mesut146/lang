@@ -147,29 +147,39 @@ impl Parser{
       unit.imports.add(self.parse_import());
     }
     while(self.has()){
-      let attr = self.parse_attrs();
+      unit.items.add(self.parse_item());
+    }
+    return unit;
+  }
+
+  func parse_item(self): Item{
+    let attr = self.parse_attrs();
       if(self.is(TokenType::STRUCT)){
-        unit.items.add(Item::Decl{self.parse_struct(attr)});
-      }else if(self.is(TokenType::ENUM)){
-        unit.items.add(Item::Decl{self.parse_enum(attr)});
+        return Item::Decl{self.parse_struct(attr)};
+      }
+      else if(self.is(TokenType::ENUM)){
+        return Item::Decl{self.parse_enum(attr)};
       }
       else if(self.is(TokenType::IMPL)){
-        unit.items.add(Item::Impl{self.parse_impl()});
-      }else if(self.is(TokenType::TRAIT)){
-        unit.items.add(Item::Trait{self.parse_trait()});
-      }else if(self.is(TokenType::FUNC)){
-        unit.items.add(Item::Method{self.parse_method(Parent::None, attr)});
-      }else if(self.is(TokenType::TYPE)){
+        return Item::Impl{self.parse_impl()};
+      }
+      else if(self.is(TokenType::TRAIT)){
+        return Item::Trait{self.parse_trait()};
+      }
+      else if(self.is(TokenType::FUNC)){
+        return Item::Method{self.parse_method(Parent::None, attr)};
+      }
+      else if(self.is(TokenType::TYPE)){
         self.pop();
         let name = self.name();
         self.consume(TokenType::EQ);
         let rhs = self.parse_type();
         self.consume(TokenType::SEMI);
-        unit.items.add(Item::Type{name: name, rhs: rhs});
+        return Item::Type{name: name, rhs: rhs};
       }else if(self.is(TokenType::EXTERN)){
         self.pop();
         let list = self.parse_methods(Parent::Extern);
-        unit.items.add(Item::Extern{methods: list});
+        return Item::Extern{methods: list};
       }else if(self.is(TokenType::STATIC)){
         let id = self.node();
         self.pop();
@@ -182,7 +192,7 @@ impl Parser{
         self.consume(TokenType::EQ);
         let rhs = self.parse_expr();
         self.consume(TokenType::SEMI);
-        unit.globals.add(Global{.id, name, type, rhs});
+        return Item::Glob{Global{.id, name, type, rhs}};
       }else if(self.is(TokenType::CONST)){
         self.pop();
         let name = self.name();
@@ -194,12 +204,10 @@ impl Parser{
         self.consume(TokenType::EQ);
         let rhs = self.parse_expr();
         self.consume(TokenType::SEMI);
-        unit.items.add(Item::Const{Const{name, type, rhs}});
+        return Item::Const{Const{name, type, rhs}};
       }else{
         panic("invalid top level decl: {:?}", self.peek());
       }
-    }
-    return unit;
   }
 
   func parse_trait(self): Trait{
@@ -1016,21 +1024,21 @@ impl Parser{
     if(isLit(self.peek())){
       return self.parseLit();
     }else if(self.is(TokenType::LPAREN)){
-        self.consume(TokenType::LPAREN);
-        let e = self.parse_expr();
-        self.consume(TokenType::RPAREN);
-        return Expr::Par{.n, Box::new(e)};
+      self.consume(TokenType::LPAREN);
+      let e = self.parse_expr();
+      self.consume(TokenType::RPAREN);
+      return Expr::Par{.n, Box::new(e)};
     }else if(self.is(TokenType::LBRACKET)){
-        self.consume(TokenType::LBRACKET);
-        let arr = self.exprList(TokenType::SEMI);
-        let sz = Option<i32>::new();
-        if(self.is(TokenType::SEMI)){
-            self.consume(TokenType::SEMI);
-            let s = self.consume(TokenType::INTEGER_LIT);
-            sz = Option::new(i32::parse(s.value.str()).unwrap());
-        }
-        self.consume(TokenType::RBRACKET);
-        return Expr::Array{.n, arr, sz};
+      self.consume(TokenType::LBRACKET);
+      let arr = self.exprList(TokenType::SEMI);
+      let sz = Option<i32>::new();
+      if(self.is(TokenType::SEMI)){
+          self.consume(TokenType::SEMI);
+          let s = self.consume(TokenType::INTEGER_LIT);
+          sz = Option::new(i32::parse(s.value.str()).unwrap());
+      }
+      self.consume(TokenType::RBRACKET);
+      return Expr::Array{.n, arr, sz};
     }
     else if(self.is(TokenType::AND) || self.is(TokenType::BANG) || self.is(TokenType::MINUS) || self.is(TokenType::STAR) || self.is(TokenType::PLUSPLUS) || self.is(TokenType::MINUSMINUS)){
       let op = self.popv();

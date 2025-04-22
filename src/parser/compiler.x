@@ -382,7 +382,8 @@ impl Compiler{
       self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
-    if(resolv.unit.globals.empty()){
+    let globals = resolv.unit.get_globals();
+    if(globals.empty()){
       return;
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
@@ -397,8 +398,8 @@ impl Compiler{
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
     //todo check is rhs depends another global
-    for(let j = 0;j < resolv.unit.globals.len();++j){
-      let gl: Global* = resolv.unit.globals.get(j);
+    for(let j = 0;j < globals.len();++j){
+      let gl: Global* = *globals.get(j);
       let rt = resolv.visit(&gl.expr);
       let ty = self.mapType(&rt.type);
       let init = self.make_global_init(gl, &rt, ty);
