@@ -106,6 +106,7 @@ extern{
     func createExpression(): DIExpression*;
     func insertDeclare(value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
     func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*): DICompositeType*;
+    func createStructType_ident(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*, ident: i8*): DICompositeType*;
     func get_di_null(): DIType*;
     func get_null_scope(): DIScope*;
     func createBasicType(name: i8*, size: i64, enco: i32): DIType*;

@@ -21,14 +21,9 @@ import std/stack
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
-static print_unit: bool = true; //init_prunit();
+static print_unit: bool = std::getenv("print_unit").is_some();
 
 static lambdaCnt = 0;
-
-func init_prunit(): bool{
-  return true;
-  //return std::getenv("print_unit").is_some();
-}
 
 func verbose_stmt(): bool{
   return false;

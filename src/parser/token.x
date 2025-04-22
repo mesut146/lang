@@ -105,20 +105,20 @@ struct Token {
 }
 
 impl Token{
-    func new(t: TokenType): Token{
-      return Token::new(t, String::new());
+    func new(tt: TokenType): Token{
+      return Token::new(tt, String::new());
     }
 
-    func new(t: TokenType, s: String): Token{
-        return Token{s, t, 0, 0, 0};
+    func new(tt: TokenType, val: String): Token{
+        return Token{val, tt, 0, 0, 0};
     }
     
-    func new(t: TokenType, s: str): Token{
-        return Token{String::new(s), t, 0, 0, 0};
+    func new(tt: TokenType, val: str): Token{
+        return Token{String::new(val), tt, 0, 0, 0};
     }
 
-   func is(self, t: TokenType): bool {
-        return self.type is t;
+   func is(self, tt: TokenType): bool {
+        return self.type is tt;
     }
 
     func is(self, arr: [TokenType]): bool {

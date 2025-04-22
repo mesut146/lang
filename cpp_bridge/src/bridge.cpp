@@ -325,8 +325,20 @@ llvm::DICompositeType *createStructType(llvm::DIScope *scope, char *name,
                                         llvm::DIFile *file, int line, int size,
                                         std::vector<llvm::Metadata *> *elems) {
   auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
-  return DBuilder->createStructType(scope, name, file, line, size, 0,
+  auto align = 0;
+  return DBuilder->createStructType(scope, name, file, line, size, align,
                                     llvm::DINode::FlagZero, nullptr, arr);
+}
+
+llvm::DICompositeType *createStructType_ident(llvm::DIScope *scope, char *name,
+  llvm::DIFile *file, int line, int size,
+  std::vector<llvm::Metadata *> *elems, char* ident) {
+auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+auto align = 0;
+auto RunTimeLang = 0;
+llvm::DIType *VTableHolder = nullptr;
+return DBuilder->createStructType(scope, name, file, line, size, align,
+llvm::DINode::FlagZero, nullptr, arr, RunTimeLang, VTableHolder, ident);
 }
 
 const llvm::StructLayout *getStructLayout(llvm::StructType *st) {
@@ -408,7 +420,8 @@ llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name,
                                       llvm::DIFile *file, int line,
                                       int64_t size, int64_t off, uint32_t flags,
                                       llvm::DIType *ty) {
-  return DBuilder->createMemberType(scope, name, file, line, size, 0, off,
+  int align = 0;                                      
+  return DBuilder->createMemberType(scope, name, file, line, size, align, off,
                                     (llvm::DINode::DIFlags)flags, ty);
 }
 

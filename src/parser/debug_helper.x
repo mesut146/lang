@@ -12,7 +12,7 @@ import std/libc
 import std/stack
 
 func base_class_name(): str{
-  return "<super>";
+  return "super_";
 }
 
 struct DebugInfo{
@@ -75,17 +75,17 @@ impl DebugInfo{
         let tys = vector_Metadata_new();
         vector_Metadata_push(tys, self.map_di(&m.type, c) as Metadata*);
         if(m.self.is_some()){
-            let st = self.map_di(&m.self.get().type, c);
-            vector_Metadata_push(tys, createObjectPointerType(st) as Metadata*);
+          let st = self.map_di(&m.self.get().type, c);
+          vector_Metadata_push(tys, createObjectPointerType(st) as Metadata*);
         }
         for prm in &m.params{
-            let pt = self.map_di(&prm.type, c);
-            vector_Metadata_push(tys, pt as Metadata*);
+          let pt = self.map_di(&prm.type, c);
+          vector_Metadata_push(tys, pt as Metadata*);
         }
         let linkage_name = "".str();
         if(!is_main(m)){
-            linkage_name.drop();
-            linkage_name = mangle(m);
+          linkage_name.drop();
+          linkage_name = mangle(m);
         }
         let path_c = m.path.clone().cstr();
         let file = createFile(path_c.ptr(), ".".ptr());
@@ -93,8 +93,8 @@ impl DebugInfo{
         //self.file = file;
         let scope = file as DIScope*;
         if(!m.parent.is_none()){
-            let parent = method_parent(m);
-            scope = self.map_di(parent, c) as DIScope*;
+          let parent = method_parent(m);
+          scope = self.map_di(parent, c) as DIScope*;
         }
         let ft = createSubroutineType(tys);
         let flags = make_spflags(is_main(m));
@@ -217,6 +217,10 @@ impl DebugInfo{
       name.drop();
       vector_Metadata_delete(elems);
       return res;
+    }
+
+    func fill_funcs_member(self, decl: Decl*, c: Compiler*, vec: vector_Metadata){
+      //vector_Metadata_push(elems, mem as Metadata*);
     }
 
     func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
@@ -342,7 +346,7 @@ impl DebugInfo{
         return createPointerType(sp as DIType*, 64);
         //return sp as DIType*;
       }
-      if let Type::Lambda(ft_box*)=(type){
+      if let Type::Lambda(ft_box*) = type{
         let tys = vector_Metadata_new();
         vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
         for prm in & ft_box.get().params{

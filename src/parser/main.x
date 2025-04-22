@@ -315,7 +315,6 @@ func handle(cmd: CmdArgs*){
   if(!__static_test_var.eq("test") && __static_func_test != 42){
     panic("static variables not working");
   }
-  print_unit = false;
   //print_version();
   if(!cmd.has()){
     print("enter a command\n");

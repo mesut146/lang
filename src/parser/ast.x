@@ -5,6 +5,7 @@ import parser/copier
 import parser/printer
 import parser/parser
 import parser/token
+import parser/lexer
 
 static print_drops = false;
 
@@ -17,6 +18,30 @@ impl TokenStream{
   }
   func add(self, tok: Token){
     self.tokens.add(tok);
+  }
+  func add(self, tt: TokenType, val: str){
+    self.tokens.add(Token::new(tt, val));
+  }
+  func add(self, tt: TokenType, val: String){
+    self.tokens.add(Token::new(tt, val));
+  }
+  func add(self, val: str){
+    let line = 0;
+    let lexer = Lexer::from_string("<path>".owned(), val.owned(), line);
+    let tok = lexer.next();
+    if(!tok.value.eq(val)){
+      panic("Invalid token: {}", val);
+    }
+    self.tokens.add(tok);
+  }
+  func add_all(self, val: String){
+    let line = 0;
+    let lexer = Lexer::from_string("<path>".owned(), val, line);
+    while(true){
+      let tok = lexer.next();
+      if(tok.is(TokenType::EOF_)) break;
+      self.tokens.add(tok);
+    }
   }
 }
 
