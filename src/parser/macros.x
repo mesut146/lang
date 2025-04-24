@@ -17,28 +17,21 @@ func derive_debug(it: Item): TokenStream{
             let i = 0;
             for ta in d.type.get_args(){
                 if(i > 0) res.add(", ");
-                res.add_all(ta.print());
+                res.add(ta.print());
                 i += 1;
             }
             res.add(">");
         }
-        res.add("Debug");
-        res.add("for");
-        res.add_all(d.type.print());
-        res.add("{");
-        res.add("func");
-        res.add("debug");
-        res.add("(");
-        res.add("self");
-        res.add(",");
-        res.add("Fmt");
-        res.add("*");
-        res.add(")");
+        res.add(format("Debug for {:?}{{", d.type));
+        res.add("func debug(self, f: Fmt*){{");
         match d{
-            Decl::Struct(fields*) =>{
+            Decl::Struct(fields*) => {
 
             },
-            Decl::Enum(vars*)=>{
+            Decl::Enum(vars*) => {
+
+            },
+            Decl::TupleStruct(fields) => {
 
             }
         }

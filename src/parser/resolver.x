@@ -889,6 +889,9 @@ impl Resolver{
           },
           Decl::Enum(variants*) => {
             self.visit_enum(decl, variants);
+          },
+          Decl::TupleStruct(fields*) => {
+            self.visit_decl_tuple(decl, fields);
           }
         }
       },
@@ -950,23 +953,34 @@ impl Resolver{
         return true;
       }
     }
-    if let Decl::Enum(variants*)=(decl) {
-      for (let i = 0;i < variants.len();++i) {
-        let ev = variants.get(i);
-        for (let j = 0;j < ev.fields.len();++j) {
-          let f1 = ev.fields.get(j);
-          if (self.is_cyclic(&f1.type, target)) {
+    match decl{
+      Decl::Enum(variants*) => {
+        for (let i = 0;i < variants.len();++i) {
+          let ev = variants.get(i);
+          for (let j = 0;j < ev.fields.len();++j) {
+            let f1 = ev.fields.get(j);
+            if (self.is_cyclic(&f1.type, target)) {
+                return true;
+            }
+          }
+        }
+      },
+      Decl::Struct(fields*) => {
+        for (let j = 0;j < fields.len();++j) {
+          let f2: FieldDecl* = fields.get(j);
+          if (self.is_cyclic(&f2.type, target)) {
               return true;
           }
         }
-      }
-    } else if let Decl::Struct(fields*)=(decl){
-      for (let j = 0;j < fields.len();++j) {
-        let f2: FieldDecl* = fields.get(j);
-        if (self.is_cyclic(&f2.type, target)) {
-            return true;
+      },
+      Decl::TupleStruct(fields*) => {
+        for (let j = 0;j < fields.len();++j) {
+          let f2: Type* = fields.get(j);
+          if (self.is_cyclic(f2, target)) {
+              return true;
+          }
         }
-      }
+      },
     }
     return false;
   }
@@ -1003,6 +1017,23 @@ impl Resolver{
     for(let i = 0;i < fields.len();++i){
       let fd = fields.get(i);
       self.is_valid_field(fd, node, base_fields);
+    }
+  }
+  func visit_decl_tuple(self, node: Decl*, fields: List<Type>*){
+    if(node.is_generic) return;
+    node.is_resolved = true;
+    let base_fields = Option<List<FieldDecl>*>::new();
+    if(node.base.is_some()){
+      let base_rt = self.visit_type(node.base.get());
+      let base_decl = self.get_decl(&base_rt).unwrap();
+      base_rt.drop();
+      if(base_decl.is_struct()){
+        base_fields = Option::new(base_decl.get_fields());
+      }
+    }
+    for(let i = 0;i < fields.len();++i){
+      let ty = fields.get(i);
+      //self.is_valid_field(ty, node, base_fields);
     }
   }
   func visit_enum(self, node: Decl*, vars: List<Variant>*){
@@ -1216,19 +1247,26 @@ impl Resolver{
     if(decl.base.is_some()){
       self.visit_type(decl.base.get()).drop();
     }
-    if(decl is Decl::Struct){
-      let fields = decl.get_fields();
-      for(let i = 0;i < fields.len();++i){
-        let fd = fields.get(i);
-        self.visit_type(&fd.type).drop();
-      }
-    }else{
-      let variants = decl.get_variants();
-      for(let i = 0;i < variants.len();++i){
-        let ev = variants.get(i);
-        for(let j = 0;j < ev.fields.len();++j){
-          let f = ev.fields.get(j);
-          self.visit_type(&f.type).drop();
+    match decl{
+      Decl::Struct(fields*) => {
+        for(let i = 0;i < fields.len();++i){
+          let fd = fields.get(i);
+          self.visit_type(&fd.type).drop();
+        }
+      },
+      Decl::TupleStruct(fields*) => {
+        for(let i = 0;i < fields.len();++i){
+          let fd = fields.get(i);
+          self.visit_type(fd).drop();
+        }
+      },
+      Decl::Enum(variants*)=>{
+        for(let i = 0;i < variants.len();++i){
+          let ev = variants.get(i);
+          for(let j = 0;j < ev.fields.len();++j){
+            let f = ev.fields.get(j);
+            self.visit_type(&f.type).drop();
+          }
         }
       }
     }
@@ -1623,12 +1661,14 @@ impl Resolver{
     let fields0 = Option<List<FieldDecl>*>::new();
     let type_opt = Option<Type>::new();
     
-    if let Decl::Enum(variants*)=(decl){
+    match decl{
+      Decl::Enum(variants*)=>{
         let idx = findVariant(decl, type0.name());
         let variant = variants.get(idx);
         fields0 = Option::new(&variant.fields);
         type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
-    }else if let Decl::Struct(f*)=(decl){
+      },
+      Decl::Struct(f*)=>{
         fields0 = Option::new(f);
         type_opt = Option::new(decl.type.clone());
         if (decl.is_generic) {
@@ -1640,6 +1680,10 @@ impl Resolver{
             let gen_decl = self.get_decl(&res).unwrap();
             fields0 = Option::new(gen_decl.get_fields());
         }
+      },
+      Decl::TupleStruct(types*)=>{
+        self.err(node, "todo");
+      }
     }
     let type = type_opt.unwrap();
     let fields = fields0.unwrap();

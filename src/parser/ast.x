@@ -26,15 +26,9 @@ impl TokenStream{
     self.tokens.add(Token::new(tt, val));
   }
   func add(self, val: str){
-    let line = 0;
-    let lexer = Lexer::from_string("<path>".owned(), val.owned(), line);
-    let tok = lexer.next();
-    if(!tok.value.eq(val)){
-      panic("Invalid token: {}", val);
-    }
-    self.tokens.add(tok);
+    self.add(val.owned());
   }
-  func add_all(self, val: String){
+  func add(self, val: String){
     let line = 0;
     let lexer = Lexer::from_string("<path>".owned(), val, line);
     while(true){
@@ -237,7 +231,8 @@ struct BaseDecl{
 
 enum Decl: BaseDecl{
   Struct(fields: List<FieldDecl>),
-  Enum(variants: List<Variant>)
+  Enum(variants: List<Variant>),
+  TupleStruct(fields: List<Type>),
 }
 
 impl Decl{
@@ -251,13 +246,13 @@ impl Decl{
     return self is Decl::Enum;
   }
   func get_variants(self): List<Variant>*{
-    if let Decl::Enum(variants*)=(self){
+    if let Decl::Enum(variants*) = self{
       return variants;
     }
     panic("get_variants {:?}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
-    if let Decl::Struct(fields*)=(self){
+    if let Decl::Struct(fields*) = self{
       return fields;
     }
     panic("get_fields");

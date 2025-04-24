@@ -112,6 +112,10 @@ impl AstCopier{
                 let res = self.visit_list(fields);
                 return Decl::Struct{.base, res};
             },
+            Decl::TupleStruct(fields*)=>{
+                let res = self.visit_list(fields);
+                return Decl::TupleStruct{.base, res};
+            },
             Decl::Enum(variants*)=>{
                 //enum
                 let res = self.visit_list(variants);

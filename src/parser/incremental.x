@@ -218,6 +218,9 @@ impl Incremental{
                     }
                 }
             },
+            Decl::TupleStruct(fields*) => {
+                //todo
+            },
             Decl::Enum(variants*)=>{
                 match old{
                     Decl::Enum(variants2*) => {

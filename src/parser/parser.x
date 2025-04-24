@@ -374,18 +374,36 @@ impl Parser{
       self.pop();
       base = Option<Type>::Some{self.parse_type()};
     }
-    let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
       self.pop();
-    }else{
+      let path = self.lexer.path.clone();
+      let fields = List<FieldDecl>::new();
+      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+    }
+    if(self.is(TokenType::LBRACE)){
       self.consume(TokenType::LBRACE);
+      let fields = List<FieldDecl>::new();
       while(!self.is(TokenType::RBRACE)){
         fields.add(self.parse_field(true));
       }
       self.consume(TokenType::RBRACE);
+      let path = self.lexer.path.clone();
+      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
     }
-    let path = self.lexer.path.clone();
-    return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+    else if(self.is(TokenType::LPAREN)){
+      self.consume(TokenType::LBRACE);
+      let fields = List<Type>::new();
+      while(!self.is(TokenType::RBRACE)){
+        fields.add(self.parse_type());
+      }
+      self.consume(TokenType::RBRACE);
+      let path = self.lexer.path.clone();
+      return Decl::TupleStruct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+    }
+    else{
+      self.err(format("invalid struct body {:?} '{:?}'", type, self.peek()));
+      panic("");
+    }
   }
   
   func parse_field(self, semi: bool): FieldDecl{
