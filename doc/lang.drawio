@@ -1,0 +1,57 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/26.2.2 Chrome/134.0.6998.178 Electron/35.1.2 Safari/537.36" version="26.2.2" pages="2">
+  <diagram name="Page-1" id="OK7e9cFLewT-lpPaoDde">
+    <mxGraphModel dx="868" dy="414" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-1" value="Compiler::compile_single" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="30" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-2" value="&lt;div&gt;Resolve::resolve_all&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="170" y="210" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-3" value="Compile::compile" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="120" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-4" value="Compile::genCode" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="320" y="210" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-5" value="emit_object" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="210" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cxjNEl8WWFiTbFQZqASw-6" value="emit_llvm" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="460" y="210" width="120" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="nQRoGNzo60LcifkFIDJ-" name="files">
+    <mxGraphModel dx="868" dy="528" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-2" value="main.x&lt;div&gt;resolver.x&lt;/div&gt;&lt;div&gt;compiler.x&lt;/div&gt;&lt;div&gt;expr_emitter.x&lt;/div&gt;&lt;div&gt;stmt_emitter.x&lt;/div&gt;&lt;div&gt;alloc_helper.x&lt;/div&gt;&lt;div&gt;bridge.x&lt;/div&gt;&lt;div&gt;cache.x&lt;/div&gt;&lt;div&gt;copier.x&lt;/div&gt;&lt;div&gt;debug_helper.x&lt;/div&gt;&lt;div&gt;derive.x&lt;/div&gt;&lt;div&gt;drop_helper.x&lt;/div&gt;&lt;div&gt;incremental.x&lt;/div&gt;&lt;div&gt;macros.x&lt;/div&gt;&lt;div&gt;method_resolver.x&lt;/div&gt;&lt;div&gt;own_helper.x&lt;/div&gt;&lt;div&gt;own_model.x&lt;/div&gt;&lt;div&gt;own_visitor.x&lt;/div&gt;&lt;div&gt;ownership.x&lt;/div&gt;&lt;div&gt;progress.x&lt;/div&gt;&lt;div&gt;tests.x&lt;/div&gt;&lt;div&gt;utils.x&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="230" y="60" width="120" height="380" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-4" value="" style="group" vertex="1" connectable="0" parent="1">
+          <mxGeometry x="80" y="10" width="120" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-1" value="lexer.x&lt;br&gt;parser.x&lt;br&gt;token.x&lt;br&gt;ast.x&lt;br&gt;printer.x&lt;br&gt;&lt;br&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=center;" vertex="1" parent="vwHzp-LSS8bpZhgjOPth-4">
+          <mxGeometry y="50" width="120" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="vwHzp-LSS8bpZhgjOPth-4" source="vwHzp-LSS8bpZhgjOPth-3" target="vwHzp-LSS8bpZhgjOPth-1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-3" value="&lt;b&gt;parser&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="vwHzp-LSS8bpZhgjOPth-4">
+          <mxGeometry x="30" width="60" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-7" value="resolver.x&lt;div&gt;method_resolver.x&lt;/div&gt;&lt;div&gt;copier.x&lt;/div&gt;&lt;div&gt;derive.x&lt;/div&gt;&lt;div&gt;macros.x&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="60" width="120" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="vwHzp-LSS8bpZhgjOPth-8" value="compiler.x&lt;div&gt;alloc_helper.x&lt;/div&gt;&lt;div&gt;expr_emitter.x&lt;/div&gt;&lt;div&gt;stmt_emitter.x&lt;/div&gt;&lt;div&gt;debug_helper.x&lt;/div&gt;&lt;div&gt;drop_helper.x&lt;/div&gt;&lt;div&gt;ownnership.x&lt;/div&gt;&lt;div&gt;own_model.x&lt;/div&gt;&lt;div&gt;own_helper.x&lt;/div&gt;&lt;div&gt;own_visitor.x&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="60" width="150" height="210" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
