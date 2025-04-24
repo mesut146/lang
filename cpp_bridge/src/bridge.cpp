@@ -298,9 +298,14 @@ void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
 llvm::DILocalVariable *createParameterVariable(llvm::DIScope *scope, char *name,
                                                int idx, llvm::DIFile *file,
                                                int line, llvm::DIType *type,
-                                               bool preserve) {
+                                               bool preserve, bool is_self) {
+                                                auto flags = llvm::DINode::DIFlags::FlagZero;
+                                                if(is_self){
+                                                   flags |= llvm::DINode::DIFlags::FlagArtificial;
+                                                   flags |= llvm::DINode::DIFlags::FlagObjectPointer;
+                                                }
   return DBuilder->createParameterVariable(scope, name, idx, file, line, type,
-                                           preserve);
+                                           preserve, flags);
 }
 
 llvm::DILocalVariable *createAutoVariable(llvm::DIScope *scope, char *name,

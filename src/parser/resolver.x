@@ -1360,12 +1360,10 @@ impl Resolver{
       if(!simp.args.empty()){
           self.err(node.line, "generic func ptr");
       }
-      let mr = MethodResolver::new(self);
-      let arr = mr.get_impl(simp.scope.get(), Option<Type*>::new()).unwrap();
+      let arr = MethodResolver::get_impl(self, simp.scope.get(), Option<Type*>::new()).unwrap();
       for resolv in self.get_resolvers(){
           resolv.init();
-          mr = MethodResolver::new(resolv);
-          let arr2 = mr.get_impl(simp.scope.get(), Option<Type*>::new());
+          let arr2 = MethodResolver::get_impl(resolv, simp.scope.get(), Option<Type*>::new());
           arr.add_list(arr2.unwrap());
       }
       if(arr.empty()){

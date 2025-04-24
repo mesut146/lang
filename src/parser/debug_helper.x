@@ -23,6 +23,7 @@ struct DebugInfo{
     incomplete_types: HashMap<String, DICompositeType*>;
     debug: bool;
     scopes: Stack<DILexicalBlock*>;
+    func_map: HashMap<String, DISubprogram*>;
 }
 
 func method_parent(m: Method*): Type*{
@@ -51,7 +52,8 @@ impl DebugInfo{
           types: HashMap<String, DIType*>::new(),
           incomplete_types: HashMap<String, DICompositeType*>::new(),
           debug: debug,
-          scopes: Stack<DILexicalBlock*>::new()
+          scopes: Stack<DILexicalBlock*>::new(),
+          func_map: HashMap<String, DISubprogram*>::new(),
         };
     }
     
@@ -70,8 +72,23 @@ impl DebugInfo{
         SetCurrentDebugLocation(self.get_scope(), line, pos);        
     }
 
-    func dbg_func(self, m: Method*, f: Function*, c: Compiler*){
-        if (!self.debug) return;
+    func dbg_func(self, m: Method*, f: Function*, c: Compiler*): Option<DISubprogram*>{
+      let sp = self.dbg_func_proto(m, c).unwrap();
+      setSubprogram(f, sp);
+      self.sp = Option<DISubprogram*>::new(sp);
+      self.loc(m.line, 0);
+      return Option::new(sp);
+    }
+
+    func dbg_func_proto(self, m: Method*, c: Compiler*): Option<DISubprogram*>{
+        if (!self.debug) return Option<DISubprogram*>::new();
+        let linkage_name = "".str();
+        if(!is_main(m)){
+          linkage_name.drop();
+          linkage_name = mangle(m);
+        }
+        let opt = self.func_map.get(&linkage_name);
+        if(opt.is_some()) return Option::new(*opt.unwrap());
         let tys = vector_Metadata_new();
         vector_Metadata_push(tys, self.map_di(&m.type, c) as Metadata*);
         if(m.self.is_some()){
@@ -81,11 +98,6 @@ impl DebugInfo{
         for prm in &m.params{
           let pt = self.map_di(&prm.type, c);
           vector_Metadata_push(tys, pt as Metadata*);
-        }
-        let linkage_name = "".str();
-        if(!is_main(m)){
-          linkage_name.drop();
-          linkage_name = mangle(m);
         }
         let path_c = m.path.clone().cstr();
         let file = createFile(path_c.ptr(), ".".ptr());
@@ -99,22 +111,25 @@ impl DebugInfo{
         let ft = createSubroutineType(tys);
         let flags = make_spflags(is_main(m));
         let name_c = m.name.clone().cstr();
+        let linkage_name2 = linkage_name.clone();
         let linkage_c = linkage_name.cstr();
         let sp = createFunction(scope, name_c.ptr(), linkage_c.ptr(), file, m.line, ft, flags);
-        setSubprogram(f, sp);
-        self.sp = Option<DISubprogram*>::new(sp);
-        self.loc(m.line, 0);
+        self.func_map.add(linkage_name2, sp);
         name_c.drop();
         linkage_c.drop();
         vector_Metadata_delete(tys);
+        return Option::new(sp);
     }
     
     func dbg_prm(self, p: Param*, idx: i32, c: Compiler*) {
         if (!self.debug) return;
         let dt = self.map_di(&p.type, c);
+        if(p.is_self && p.is_deref){
+          dt = createPointerType(dt, 64);
+        }
         let scope = self.sp.unwrap() as DIScope*;
         let name_c = p.name.clone().cstr();
-        let v = createParameterVariable(scope, name_c.ptr(), idx, self.file, p.line, dt, true);
+        let v = createParameterVariable(scope, name_c.ptr(), idx, self.file, p.line, dt, true, p.is_self);
         let val = *c.NamedValues.get(&p.name).unwrap();
         let lc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
@@ -219,8 +234,28 @@ impl DebugInfo{
       return res;
     }
 
-    func fill_funcs_member(self, decl: Decl*, c: Compiler*, vec: vector_Metadata){
-      //vector_Metadata_push(elems, mem as Metadata*);
+    func find_impl(ty: Type*, r: Resolver*): List<Impl*>{
+      let res = List<Impl*>::new();
+      for it in &r.unit.items{
+        if let Item::Impl(imp*) = it{
+          if(imp.info.type.eq(ty)){
+            res.add(imp);
+          }
+        }
+      }
+      return res;
+    }
+
+    func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: vector_Metadata*){
+      if(decl.type.is_generic()) return;
+      let imps: List<Pair<Impl*, i32>> = MethodResolver::get_impl(c.get_resolver(), &decl.type, Option<Type*>::new()).unwrap();
+      for pr in imps{
+        for fun in &pr.a.methods{
+          if(fun.is_generic) continue;
+          let proto = self.dbg_func_proto(fun, c).unwrap();
+          vector_Metadata_push(elems, proto as Metadata*);
+        }
+      }
     }
 
     func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
@@ -260,6 +295,7 @@ impl DebugInfo{
           ++idx;
           name_c.drop();
         }
+        self.fill_funcs_member(decl, c, elems);
       }else if let Decl::Enum(variants*)=(decl){
         let data_size = c.getSize(decl) - ENUM_TAG_BITS();
         let tag_off = 0i64;

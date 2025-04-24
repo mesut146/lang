@@ -268,14 +268,14 @@ impl MethodResolver{
       return type.print();
     }
     
-    func get_impl(self, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
+    func get_impl(resolver: Resolver*, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
         if(type.is_simple() && type.as_simple().scope.is_some()){
             return Result<List<Pair<Impl*, i32>>, String>::err("get_impl scoped type".owned());
         }
         let list = List<Pair<Impl*, i32>>::new();
         let erased: String = print_erased(type);
-        for(let i = 0;i < self.r.unit.items.len();++i){
-            let item: Item* = self.r.unit.items.get(i);
+        for(let i = 0;i < resolver.unit.items.len();++i){
+            let item: Item* = resolver.unit.items.get(i);
             if(!(item is Item::Impl)) continue;
             let imp = item.as_impl();
             //print("imp {:?} {:?}\n", type, imp.info);
@@ -315,9 +315,9 @@ impl MethodResolver{
     func get_impl(self, sig: Signature*, scope_type: Type*): Result<List<Pair<Impl*, i32>>, String>{
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
             let actual: Type* = sig.args.get(0).deref_ptr();
-            return self.get_impl(actual, Option::new(&sig.scope.get().type));
+            return get_impl(self.r, actual, Option::new(&sig.scope.get().type));
         }else{
-            return self.get_impl(scope_type, Option<Type*>::new());
+            return get_impl(self.r, scope_type, Option<Type*>::new());
         }
     }
 

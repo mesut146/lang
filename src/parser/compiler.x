@@ -319,7 +319,6 @@ impl Compiler{
       self.genCode(m);
     }
     //generic methods from resolver
-
     for pair in &resolver.generated_methods{
       for m in pair.b{
         self.genCode(m.get());
@@ -559,16 +558,16 @@ impl Compiler{
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
     self.own = Option::new(Own::new(self, m));
-    let f = self.protos.get().get_func(m);
-    self.protos.get().cur = Option::new(f);
+    let proto = self.protos.get().get_func(m);
+    self.protos.get().cur = Option::new(proto);
     self.NamedValues.clear();
-    let bb = create_bb2(f);
+    let bb = create_bb2(proto);
     SetInsertPoint(bb);
-    self.llvm.di.get().dbg_func(m, f, self);
+    self.llvm.di.get().dbg_func(m, proto, self);
     AllocHelper::makeLocals(self, m.body.get());
     self.allocParams(m);
     self.enter_frame();
-    self.storeParams(m,f);
+    self.storeParams(m, proto);
 
     let blk_val = self.visit_block(m.body.get());
     //dbg(m.name.eq("handle"), 51);
@@ -588,12 +587,12 @@ impl Compiler{
         self.own.get().do_move(m.body.get().return_expr.get());
       }
     }
-    exit.drop();
     self.llvm.di.get().finalize();
-    verifyFunction(f);
+    verifyFunction(proto);
     self.own.drop();
     self.own = Option<Own>::new();
     self.ctx.prog.compile_end(m);
+    exit.drop();
   }
   
   func allocParams(self, m: Method*){

@@ -100,7 +100,7 @@ extern{
     func setSubprogram(f: Function*, sp: DISubprogram*);
     func finalizeSubprogram(sp: DISubprogram*);
     func createLexicalBlock(scope: DIScope*, file: DIFile*, line: i32, col: i32): DILexicalBlock*;
-    func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool): DILocalVariable*;
+    func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool, is_self: bool): DILocalVariable*;
     func createAutoVariable(scope :DIScope*, name: i8*, file: DIFile *, line: i32, ty: DIType*): DILocalVariable*;
     func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
     func createExpression(): DIExpression*;
