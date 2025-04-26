@@ -1,6 +1,6 @@
-#suffix="-19"
-suffix=""
-libdir=$(llvm-config$suffix --libdir)
+suffix=$(./find_llvm.sh)
+llvm_config="llvm-config$suffix"
+libdir=$($llvm_config --libdir)
 dir=x-termux_out
 objs=""
 
@@ -29,6 +29,8 @@ done
 cmd="clang++$suffix -lstdc++ -o x-termux $objs ../cpp_bridge/build/libbridge.a $libdir/libLLVM.so"
 echo "$cmd"
 $cmd
+
+rm -rf $dir
 
 if [ "$?" -eq "0" ]; then
   echo "Build successful"
