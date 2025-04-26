@@ -488,10 +488,30 @@ impl Parser{
       return res;
     }
   }
+
+  func parse_tuple_type(self): Type{
+    let id = self.node();
+    self.consume(TokenType::LPAREN);
+    let types = List<Type>::new();
+    while(!self.is(TokenType::RPAREN)){
+      types.add(self.parse_type());
+      if(self.is(TokenType::COMMA)){
+        self.pop();
+        if(self.is(TokenType::RPAREN)){
+          break;
+        }
+      }
+    }
+    self.consume(TokenType::RPAREN);
+    return Type::Tuple{.id, TupleType{types: types}};
+  }
   
   func parse_type(self): Type{
     if(self.is(TokenType::FUNC)){
       return self.parse_func_type();
+    }
+    if(self.is(TokenType::LPAREN)){
+      return self.parse_tuple_type();
     }
     let res = self.parse_type_prim();
     while (self.is(TokenType::STAR)) {
@@ -1041,11 +1061,28 @@ impl Parser{
     }
     if(isLit(self.peek())){
       return self.parseLit();
-    }else if(self.is(TokenType::LPAREN)){
+    }
+    else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LPAREN);
       let e = self.parse_expr();
-      self.consume(TokenType::RPAREN);
-      return Expr::Par{.n, Box::new(e)};
+      if(self.is(TokenType::COMMA)){
+        self.pop();
+        let elems = List<Expr>::new();
+        elems.add(e);
+        while(!self.is(TokenType::RPAREN)){
+          elems.add(self.parse_expr());
+          if(self.is(TokenType::COMMA)){
+            self.pop();
+          }else if(!self.is(TokenType::RPAREN)){
+            self.err("expected [',' or ')'] after tuple elem");
+          }
+        }
+        self.consume(TokenType::RPAREN);
+        return Expr::Tuple{.n, elems};
+      }else{
+        self.consume(TokenType::RPAREN);
+        return Expr::Par{.n, Box::new(e)};
+      }
     }else if(self.is(TokenType::LBRACKET)){
       self.consume(TokenType::LBRACKET);
       let arr = self.exprList(TokenType::SEMI);
@@ -1156,12 +1193,18 @@ impl Parser{
     while(self.has()){
       if(self.is(TokenType::DOT)){
         self.consume(TokenType::DOT);
-        let nm = self.name();
-        if(self.is(TokenType::LPAREN)){
-          res = self.call(res, nm, false);
-        }else{
+        if(self.is(TokenType::INTEGER_LIT)){
+          let idx = self.pop();
           let n = self.node();
-          res = Expr::Access{.n, Box::new(res), nm}; 
+          res = Expr::Access{.n, Box::new(res), idx.value.clone()}; 
+        }else{
+          let nm = self.name();
+          if(self.is(TokenType::LPAREN)){
+            res = self.call(res, nm, false);
+          }else{
+            let n = self.node();
+            res = Expr::Access{.n, Box::new(res), nm}; 
+          }
         }
       }else if(self.is(TokenType::LBRACKET)){
         self.consume(TokenType::LBRACKET);

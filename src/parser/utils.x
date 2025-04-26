@@ -62,6 +62,14 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
                 }
             }
             return false;
+        },
+        Type::Tuple(tt*) => {
+            for ty in &tt.types{
+                if(hasGeneric(ty, typeParams)){
+                    return true;
+                }
+            }
+            return false;
         }
 
     }
@@ -150,26 +158,41 @@ func is_main(m: Method*): bool{
 }*/
 
 func mangleType(type: Type*): String{
-  let s = type.print();
-  let s2 = s.replace("*", "$P");
-  let s3 = s2.replace("<", "$LT");
-  let s4 = s3.replace(">", "$GT");
-  let s5 = s4.replace("::", "__");
-  let s6 = s5.replace("(", "$LP");
-  let s7 = s6.replace(")", "$RP");
-  let s8 = s7.replace("=", "$EQ");
-  let s9 = s8.replace(" ", "");
-  let s10 = s9.replace(",", "");
-  s.drop();
-  s2.drop();
-  s3.drop();
-  s4.drop();
-  s5.drop();
-  s6.drop();
-  s7.drop();
-  s8.drop();
-  s9.drop();
-  return s10;
+    match type{
+        Type::Pointer(elem*) => return format("{}$P", mangleType(elem.get())),
+        Type::Tuple(tt*) => {
+            let res = String::new();
+            res.append("tuple");
+            for ty in &tt.types{
+                res.append("_");
+                res.append(mangleType(ty));
+            }
+            return res;
+        },
+        _ => {
+            //todo
+        }
+    }
+    let s = type.print();
+    let s2 = s.replace("*", "$P");
+    let s3 = s2.replace("<", "$LT");
+    let s4 = s3.replace(">", "$GT");
+    let s5 = s4.replace("::", "__");
+    let s6 = s5.replace("(", "$LP");
+    let s7 = s6.replace(")", "$RP");
+    let s8 = s7.replace("=", "$EQ");
+    let s9 = s8.replace(" ", "");
+    let s10 = s9.replace(",", "");
+    s.drop();
+    s2.drop();
+    s3.drop();
+    s4.drop();
+    s5.drop();
+    s6.drop();
+    s7.drop();
+    s8.drop();
+    s9.drop();
+    return s10;
 }
 func mangleType(type: Type*, f: Fmt*){
     let s = mangleType(type);

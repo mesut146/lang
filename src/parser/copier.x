@@ -177,6 +177,9 @@ impl AstCopier{
                     res.args.add(self.visit(ta));
                 }
                 return res.into(type.line);
+            },
+            Type::Tuple(tt*) => {
+                return Type::Tuple{.id, TupleType{types: self.visit_list(&tt.types)}};
             }
         }
     }
@@ -347,6 +350,7 @@ impl AstCopier{
                 cases: self.visit_list(&m.get().cases)
             })},
             Expr::Ques(bx*) => return Expr::Ques{.id, self.visit_box(bx)},
+            Expr::Tuple(elems*) => return Expr::Tuple{.id, self.visit_list(elems)},
         }
     }
     func visit(self, node: LambdaParam*): LambdaParam{

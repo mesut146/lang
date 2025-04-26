@@ -398,6 +398,30 @@ impl Compiler{
     if(prim_size.is_some()){
       return getInt(prim_size.unwrap());
     }
+    match type{
+      Type::Tuple(tt*)=>{
+        let elems = vector_Type_new();
+        for elem in &tt.types{
+          vector_Type_push(elems, self.mapType(elem));
+        }
+        let name = mangleType(type).cstr();
+        let p = self.protos.get();
+        let opt = p.classMap.get_str(name.get());
+        if(opt.is_some()){
+          let res = *opt.unwrap();
+          name.drop();
+          return res;
+        }
+        let res = make_struct_ty2(name.ptr(), elems) as llvm_Type*;
+        p.classMap.add(name.get().owned(), res);
+        vector_Type_delete(elems);
+        name.drop();
+        return res;
+      },
+      _ => {
+        //todo
+      }
+    }
     if let Type::Array(elem*,size)=(type){
       let elem_ty = self.mapType(elem.get());
       return getArrTy(elem_ty, size) as llvm_Type*;
@@ -608,6 +632,16 @@ impl Compiler{
     if let Type::Slice(elem*)=(type){
       let st = self.protos.get().std("slice");
       return getSizeInBits(st);
+    }
+    match type{
+      Type::Tuple(tt*) => {
+        let rt = self.get_resolver().visit_type(type);
+        let mapped = self.mapType(&rt.type);
+        return getSizeInBits(mapped as StructType*);
+      },
+      _ => {
+        //todo
+      }
     }
     let rt = self.get_resolver().visit_type(type);
     if(rt.is_decl()){
@@ -831,6 +865,9 @@ impl Compiler{
       Ques(e*) => {
         return self.visit(node);
       },
+      Tuple(elems*) => {
+        return self.visit(node);
+      }
     }
     panic("todo");
   }

@@ -400,6 +400,10 @@ struct LambdaType{
   captured: List<Type>;
 }
 
+struct TupleType{
+  types: List<Type>;
+}
+
 enum Type: Node{
   Simple(type: Simple),
   Pointer(type: Box<Type>),
@@ -407,6 +411,7 @@ enum Type: Node{
   Slice(type: Box<Type>),
   Function(type: Box<FunctionType>),
   Lambda(type: Box<LambdaType>),
+  Tuple(type: TupleType),
 }
 impl Type{
   func new(name: str): Type{
@@ -776,7 +781,7 @@ enum Expr: Node{
   IfLet(e: Box<IfLet>),
   Lambda(val: Lambda),
   Ques(e: Box<Expr>),
-  //Tuple(elems: List<Expr>),
+  Tuple(elems: List<Expr>),
 }
 impl Expr{
   func print(self): String{

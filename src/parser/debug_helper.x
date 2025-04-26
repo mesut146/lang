@@ -436,6 +436,33 @@ impl DebugInfo{
         vector_Metadata_delete(elems);
         return res;
       }
+      match type{
+        Type::Tuple(tt*) => {
+          let name_c = mangleType(type).cstr();
+          let line = 0;
+          let size = c.getSize(type);
+          let elems = vector_Metadata_new();
+          let idx = 0;
+          let sl = getStructLayout(c.mapType(type) as StructType*);
+          for elem in &tt.types{
+            let elem_di = self.map_di(elem, c);
+            let off = getElementOffsetInBits(sl, idx);
+            let flags = make_di_flags(false);
+            let elem_name = format("_{}", idx).cstr();
+            let mem = createMemberType(get_null_scope(), elem_name.ptr(), self.file, line, size, off, flags, elem_di);
+            vector_Metadata_push(elems, mem as Metadata*);
+            ++idx;
+            elem_name.drop();
+          }
+          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
+          name_c.drop();
+          vector_Metadata_delete(elems);
+          return res;
+        },
+        _=>{
+          //todo
+        }
+      }
       panic("map di {}\n", name);
     }
 }

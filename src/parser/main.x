@@ -88,7 +88,7 @@ func bootstrap(cmd: CmdArgs*){
     else if(target.eq("aarch64-linux-gnu") || target.eq("arm64")){
       std::setenv("target_triple", "aarch64-linux-gnu");
     }
-    else if(target.eq("termux")){
+    else if(target.eq("android")){
       std::setenv("target_triple", "aarch64-linux-android");
     }
     else{
@@ -206,7 +206,7 @@ func bootstrap(cmd: CmdArgs*){
       let bin2 = format("{}/{}", build, name);
       File::copy(bin_path.str(), bin2.str());
       //set_as_executable(bin2.cstr().ptr());
-      File::set_permissions(bin2.str(), Permissions::from_mode(777));
+      File::set_permissions(bin2.str(), Permissions::from_mode(/*777*/511));
       bin2.drop();
     }
     cmd_link.drop();
@@ -218,7 +218,7 @@ func bootstrap(cmd: CmdArgs*){
     print("wrote {}\n", bin2);
     //let binc = bin2.cstr();
     // set_as_executable(binc.ptr());
-    File::set_permissions(bin2.str(), Permissions::from_mode(777));
+    File::set_permissions(bin2.str(), Permissions::from_mode(511));
     //bin2.drop();
   }
   root.drop();

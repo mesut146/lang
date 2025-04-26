@@ -1317,6 +1317,18 @@ impl Resolver{
       return cached.unwrap().clone();
     }
     //print("visit_type {}\n", str);
+    match node{
+      Type::Tuple(tt*) => {
+        let types = List<Type>::new();
+        for t in &tt.types{
+          types.add(self.visit_type(t).unwrap());
+        }
+        let res = RType::new(Type::Tuple{.Node::new(-1, node.line), TupleType{types}});
+        self.addType(str.clone(), res.clone());
+        return res;
+      },
+      _=>{}
+    }
     if(node.is_prim() || node.is_void()){
       let res = RType::new(str.str());
       self.addType(str.clone(), res.clone());
@@ -1600,9 +1612,20 @@ impl Resolver{
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
-    /*let scp2 = self.visit_type(&scp.type);
-    scp.drop();
-    scp = scp2;*/
+    if let Type::Tuple(tt*) = &scp.type{
+      let idx0 = i32::parse(name.str());
+      if(idx0.is_err()){
+        let msg = format("tuple index not int {}", name); 
+        self.err(node, msg);
+      }
+      let idx = idx0.unwrap();
+      if (idx < 0 || idx >= tt.types.len()) {
+        let msg = format("tuple index out of bounds {}, max: {}", name, tt.types.len()); 
+        self.err(node, msg);
+      }
+      let elem = tt.types.get(idx);
+      return self.visit_type(elem);
+    }
     if (!scp.is_decl() || scp.type.is_dpointer()) {
       let msg = format("invalid field {:?}.{}", scp.type, name); 
       self.err(node, msg);
@@ -2947,8 +2970,21 @@ impl Resolver{
       },
       Expr::Ques(bx*) => {
         return self.visit_ques(node, bx.get());
+      },
+      Expr::Tuple(elems*) => {
+        return self.visit_tuple(node, elems);
       }
     }
+  }
+
+  func visit_tuple(self, expr: Expr*, elems: List<Expr>*): RType{
+    let types = List<Type>::new();
+    for elem in elems{
+      let ty = self.visit(elem);
+      types.add(ty.type.clone());
+      ty.drop();
+    }
+    return RType::new(Type::Tuple{.self.unit.node(expr.line), TupleType{types}});
   }
 
   func visit_ques(self, expr: Expr*, inner: Expr*): RType{

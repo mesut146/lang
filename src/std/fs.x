@@ -8,6 +8,7 @@ struct Permissions{
 }
 
 impl Permissions{
+  //todo add more ctor
   func from_mode(val: i32): Permissions{
     return Permissions{
       val,

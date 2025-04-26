@@ -104,6 +104,21 @@ impl Compiler{
           let r = self.get_resolver();
           let info = r.get_macro(node);
           return self.visit_block(&info.block).unwrap();
+        },
+        Expr::Tuple(elems*) => {
+          let r = self.get_resolver();
+          let node_type = r.getType(node);
+          let ty = self.mapType(&node_type);
+          let ptr = self.get_alloc(node);
+          for(let i = 0;i < elems.len();++i){
+            let elem = elems.get(i);
+            let elem_ty = r.getType(elem);
+            let field_target_ptr = CreateStructGEP(ptr, i, ty);
+            self.setField(elem, &elem_ty, field_target_ptr);
+            elem_ty.drop();
+          }
+          node_type.drop();
+          return ptr;
         }
       }
     }
@@ -410,6 +425,13 @@ impl Compiler{
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
+      if let Type::Tuple(tt*) = &scope_rt.type {
+        let idx = i32::parse(name.str()).unwrap();
+        let scope_ty = self.mapType(&scope_rt.type);
+        let res = CreateStructGEP(scope_ptr, idx, scope_ty);
+        scope_rt.drop();
+        return res;
+      }
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
       if(decl.is_enum()){
         //base field, skip tag

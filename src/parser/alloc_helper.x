@@ -409,7 +409,16 @@ impl AllocHelper{
         let ty = r.getType(node);
         res.set(self.alloc_ty(&ty, node));
         return res;
-      }
+      },
+      Expr::Tuple(elems*) => {
+        let r = self.c.get_resolver();
+        let ty = r.getType(node);
+        res.set(self.alloc_ty(&ty, node));
+        for elem in elems{
+          self.visit(elem);
+        }
+        return res;
+      },
     }
   }
 }

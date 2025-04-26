@@ -306,29 +306,34 @@ impl Debug for Param{
 impl Debug for Type{
   func debug(self, f: Fmt*){
       match self{
-      Type::Simple(smp*) => smp.debug(f),
-      Type::Pointer(ty*) => {
+        Type::Simple(smp*) => smp.debug(f),
+        Type::Pointer(ty*) => {
           ty.get().debug(f);
           f.print("*");
-     },
-     Type::Array(box*, sz*) => {
+        },
+        Type::Array(box*, sz*) => {
           f.print("[");
           box.get().debug(f);
           f.print("; ");
           sz.debug(f);
           f.print("]");
-      },
-      Type::Slice(box*) => {
+        },
+        Type::Slice(box*) => {
           f.print("[");
           box.get().debug(f);
           f.print("]");
-      },
-      Type::Function(ft*) => {
+        },
+        Type::Function(ft*) => {
           ft.get().debug(f);
-      },
-      Type::Lambda(lt*) =>{
+        },
+        Type::Lambda(lt*) =>{
           lt.get().debug(f);
-      }
+        },
+        Type::Tuple(tt*) => {
+          f.print("(");
+          join(f, &tt.types, ", ");
+          f.print(")");
+        }
     }
   }
 }
@@ -551,6 +556,12 @@ impl Debug for Expr{
         if(print_cst) f.print("Expr::Par{");
         f.print("(");
         e.get().debug(f);
+        f.print(")");
+      },
+      Expr::Tuple(elems*) => {
+        if(print_cst) f.print("Expr::Tuple{");
+        f.print("(");
+        join(f, elems, ",");
         f.print(")");
       },
       Expr::Type(t*) => {

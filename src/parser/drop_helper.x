@@ -43,6 +43,19 @@ impl DropHelper{
         let elem = type.elem();
         return self.is_drop_type(elem);
     }
+    match &rt.type{
+      Type::Tuple(tt*) => {
+        for elem in &tt.types{
+          if(self.is_drop_type(elem)){
+            return true;
+          }
+        }
+        return false;
+      },
+      _ => {
+
+      }
+    }
     let decl = self.r.get_decl(rt).unwrap();
     return self.is_drop_decl(decl);
   }

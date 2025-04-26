@@ -653,7 +653,7 @@ impl MethodResolver{
                         panic("{}", msg);
                     }
                     if (!arg.name().eq(prm.name())) panic("cant infer");
-                    for (let i = 0; i < ta1.size(); ++i) {
+                    for (let i = 0; i < ta1.len(); ++i) {
                         let ta = ta1.get(i);
                         let tp = ta2.get(i);
                         let tmp = infer(ta, tp, inferred, type_params);
@@ -661,6 +661,25 @@ impl MethodResolver{
                     }
                 }
                 return Result<i32, String>::ok(0);
+            },
+            Type::Tuple(tt*) => {
+                match prm{
+                    Type::Tuple(tt2*) => {
+                        if (tt.types.len() != tt2.types.len()) {
+                            return Result<i32, String>::err(format("type count mismatch {:?} vs {:?}", tt.types.len(), tt2.types.len()));
+                        }
+                        for (let i = 0; i < tt.types.len(); ++i) {
+                            let t1 = tt.types.get(i);
+                            let t2 = tt2.types.get(i);
+                            let tmp = infer(t1, t2, inferred, type_params);
+                            if(tmp.is_err()) return tmp;
+                        }
+                    },
+                    _ => {
+                        return Result<i32, String>::err(format("prm is not tuple {:?} vs {:?}", arg, prm));
+                    }
+                }
+                return infer(arg.elem(), prm.elem(), inferred, type_params);
             }
         }
     }
@@ -1014,6 +1033,24 @@ impl MethodResolver{
             Type::Simple(smp*) =>{
                 if (!arg.is_simple()) {
                     return Option::new("arg is not simple".str());
+                }
+            },
+            Type::Tuple(tt2*) => {
+                match arg{
+                    Type::Tuple(tt*) => {
+                        if (tt.types.len()!= tt2.types.len()) {
+                            return Option::new("tuple size mismatch".str());
+                        }
+                        for(let i = 0;i < tt.types.len();++i){
+                            let cmp = MethodResolver::is_compatible(tt.types.get(i), tt2.types.get(i), typeParams);
+                            if(cmp.is_some()){
+                                return cmp;
+                            }
+                        }
+                    },
+                    _ => {
+                        return Option::new("arg is not tuple".str());
+                    }
                 }
             }
         }
