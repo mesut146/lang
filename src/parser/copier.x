@@ -117,7 +117,6 @@ impl AstCopier{
                 return Decl::TupleStruct{.base, res};
             },
             Decl::Enum(variants*)=>{
-                //enum
                 let res = self.visit_list(variants);
                 return Decl::Enum{.base, res};
             }

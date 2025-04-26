@@ -275,48 +275,65 @@ impl DebugInfo{
       //Type_dump(st_real);
       let sl = getStructLayout(st_real as StructType*);
       //print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
-      if let Decl::Struct(fields*)=(decl){
-        let idx = 0;
-        if(decl.base.is_some()){
-          let ty = *base_ty.get();
-          let size = DIType_getSizeInBits(ty);
-          let off = 0;
-          let mem = createMemberType(scope, base_class_name().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-          vector_Metadata_push(elems, mem as Metadata*);
-          ++idx;
-        }
-        for fd in fields{
-          let ty = self.map_di(&fd.type, c);
-          let size = DIType_getSizeInBits(ty);
-          let off = getElementOffsetInBits(sl, idx);
-          let name_c = fd.name.clone().cstr();
-          let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-          vector_Metadata_push(elems, mem as Metadata*);
-          ++idx;
-          name_c.drop();
-        }
-        self.fill_funcs_member(decl, c, elems);
-      }else if let Decl::Enum(variants*)=(decl){
-        let data_size = c.getSize(decl) - ENUM_TAG_BITS();
-        let tag_off = 0i64;
-        //create empty variant
-        let tag_ty0: Type = as_type(ENUM_TAG_BITS());
-        let tag = self.map_di(&tag_ty0, c);
-        tag_ty0.drop();
-        let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
-        let elems2 = vector_Metadata_new();
-        let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
-        //fill variant
-        let var_idx = 1;
-        let var_off = getElementOffsetInBits(sl, var_idx);
-        for(let i = 0;i < variants.len();++i){
-          let ev = variants.get(i);
-          let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
-          vector_Metadata_push(elems2, var_type as Metadata*);
-        }
-        replaceElements(var_part, elems2);
-        vector_Metadata_push(elems, var_part as Metadata*);
-        vector_Metadata_delete(elems2);
+      match decl{
+        Decl::Struct(fields*)=>{
+          let idx = 0;
+          if(decl.base.is_some()){
+            let ty = *base_ty.get();
+            let size = DIType_getSizeInBits(ty);
+            let off = 0;
+            let mem = createMemberType(scope, base_class_name().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+            vector_Metadata_push(elems, mem as Metadata*);
+            ++idx;
+          }
+          for fd in fields{
+            let ty = self.map_di(&fd.type, c);
+            let size = DIType_getSizeInBits(ty);
+            let off = getElementOffsetInBits(sl, idx);
+            let name_c = fd.name.clone().cstr();
+            let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+            vector_Metadata_push(elems, mem as Metadata*);
+            ++idx;
+            name_c.drop();
+          }
+          self.fill_funcs_member(decl, c, elems);
+        },
+        Decl::TupleStruct(fields*)=>{
+          let idx = 0;
+          for ft in fields{
+            let ty = self.map_di(ft, c);
+            let size = DIType_getSizeInBits(ty);
+            let off = getElementOffsetInBits(sl, idx);
+            let name_c = format("_{}", idx).cstr();
+            let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
+            vector_Metadata_push(elems, mem as Metadata*);
+            ++idx;
+            name_c.drop();
+          }
+          self.fill_funcs_member(decl, c, elems);
+        },
+        Decl::Enum(variants*)=>{
+          let data_size = c.getSize(decl) - ENUM_TAG_BITS();
+          let tag_off = 0i64;
+          //create empty variant
+          let tag_ty0: Type = as_type(ENUM_TAG_BITS());
+          let tag = self.map_di(&tag_ty0, c);
+          tag_ty0.drop();
+          let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
+          let elems2 = vector_Metadata_new();
+          let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
+          //fill variant
+          let var_idx = 1;
+          let var_off = getElementOffsetInBits(sl, var_idx);
+          for(let i = 0;i < variants.len();++i){
+            let ev = variants.get(i);
+            let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
+            vector_Metadata_push(elems2, var_type as Metadata*);
+          }
+          replaceElements(var_part, elems2);
+          vector_Metadata_push(elems, var_part as Metadata*);
+          vector_Metadata_delete(elems2);
+        },
       }
       replaceElements(st, elems);
       self.types.add(s, st as DIType*);

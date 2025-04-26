@@ -53,22 +53,30 @@ impl DropHelper{
         return true;
       }
     }
-    if(decl.is_struct()){
-      let fields = decl.get_fields();
-      for(let i = 0;i < fields.len();++i){
-        let fd = fields.get(i);
-        if(self.is_drop_type(&fd.type)){
-          return true;
-        }
-      }
-    }else{
-      let vars = decl.get_variants();
-      for(let i = 0;i < vars.len();++i){
-        let variant = vars.get(i);
-        let fields = &variant.fields;
-        for(let j = 0;j < fields.len();++j){
-          let fd = fields.get(j);
+    match decl{
+      Decl::Struct(fields*)=>{
+        for(let i = 0;i < fields.len();++i){
+          let fd = fields.get(i);
           if(self.is_drop_type(&fd.type)){
+            return true;
+          }
+        }
+      },
+      Decl::Enum(variants*)=> {
+        for(let i = 0;i < variants.len();++i){
+          let variant = variants.get(i);
+          let fields = &variant.fields;
+          for(let j = 0;j < fields.len();++j){
+            let fd = fields.get(j);
+            if(self.is_drop_type(&fd.type)){
+              return true;
+            }
+          }
+        }
+      },
+      Decl::TupleStruct(fields*)=>{
+        for ft in fields{
+          if(self.is_drop_type(ft)){
             return true;
           }
         }

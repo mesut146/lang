@@ -459,6 +459,7 @@ void setCallingConv(llvm::Function *f) {
 
 int ext() { return llvm::Function::ExternalLinkage; }
 int odr() { return llvm::Function::LinkOnceODRLinkage; }
+int internal() { return llvm::Function::InternalLinkage; }
 /*llvm::GlobalValue::LinkageTypes ext() {
     return llvm::Function::ExternalLinkage;
 }
@@ -876,11 +877,11 @@ int64_t get_last_write_time(const char *path) {
   return time;
 }
 
-void set_as_executable(const char *path) {
+/*void set_as_executable(const char *path) {
   std::filesystem::permissions(path,
                                std::filesystem::perms::owner_all |
                                    std::filesystem::perms::group_read |
                                    std::filesystem::perms::others_read,
                                std::filesystem::perm_options::add);
-}
+}*/
 }

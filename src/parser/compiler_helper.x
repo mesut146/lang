@@ -147,21 +147,28 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
   if(decl.base.is_some()){
     all_deps(decl.base.get(), r, res);
   }
-  if(decl.is_struct()){
-    let fields = decl.get_fields();
-    for (let j = 0; j < fields.len(); ++j) {
-      let fd = fields.get(j);
-      //add_type(res, &fd.type);
-      all_deps(&fd.type, r, res);
-    }
-  }else{
-    let variants = decl.get_variants();
-    for (let j = 0; j < variants.len(); ++j) {
-      let ev = variants.get(j);
-      for (let k = 0; k < ev.fields.len(); ++k) {
-        let fd = ev.fields.get(k);
+  match decl{
+    Decl::Struct(fields*)=>{
+      for (let j = 0; j < fields.len(); ++j) {
+        let fd = fields.get(j);
         //add_type(res, &fd.type);
         all_deps(&fd.type, r, res);
+      }
+    },
+    Decl::Enum(variants*)=>{
+      for (let j = 0; j < variants.len(); ++j) {
+        let ev = variants.get(j);
+        for (let k = 0; k < ev.fields.len(); ++k) {
+          let fd = ev.fields.get(k);
+          //add_type(res, &fd.type);
+          all_deps(&fd.type, r, res);
+        }
+      }
+    },
+    Decl::TupleStruct(fields*)=>{
+      for ft in fields{
+        //add_type(res, &ft);
+        all_deps(ft, r, res);
       }
     }
   }
@@ -172,7 +179,7 @@ func sort4(list: List<Decl*>*, r: Resolver*){
   for (let i = 0; i < list.len(); ++i) {
     let d: Decl* = *list.get(i);
     index_map.add(d.type.print(), 0);
-    if(d.is_struct()){
+    if(d is Decl::Struct){
       let fields = d.get_fields();
       for (let j = 0; j < fields.len(); ++j) {
         let fd = fields.get(j);
@@ -480,30 +487,39 @@ impl Compiler{
   func fill_decl(self, decl: Decl*, st: StructType*){
     let p = self.protos.get();
     let elems = vector_Type_new();
-    if let Decl::Enum(variants*)=(decl){
-      //calc enum size
-      let max = 0;
-      for(let i = 0;i < variants.len();++i){
-        let ev = variants.get(i);
-        let name = format("{:?}::{}", decl.type, ev.name.str());
-        let var_ty = p.get(&name) as StructType*;
-        self.make_variant_type(ev, decl, &name, var_ty);
-        let variant_size = getSizeInBits(var_ty);
-        if(variant_size > max){
-          max = variant_size;
+    match decl{
+      Decl::Enum(variants*)=>{
+        //calc enum size
+        let max = 0;
+        for(let i = 0;i < variants.len();++i){
+          let ev = variants.get(i);
+          let name = format("{:?}::{}", decl.type, ev.name.str());
+          let var_ty = p.get(&name) as StructType*;
+          self.make_variant_type(ev, decl, &name, var_ty);
+          let variant_size = getSizeInBits(var_ty);
+          if(variant_size > max){
+            max = variant_size;
+          }
+          name.drop();
         }
-        name.drop();
-      }
-      vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
-      vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
-    }else if let Decl::Struct(fields*)=(decl){
-      if(decl.base.is_some()){
-        vector_Type_push(elems, self.mapType(decl.base.get()));
-      }
-      for(let i = 0;i < fields.len();++i){
-        let fd = fields.get(i);
-        let ft = self.mapType(&fd.type);
-        vector_Type_push(elems, ft);
+        vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
+        vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
+      },
+      Decl::Struct(fields*)=>{
+        if(decl.base.is_some()){
+          vector_Type_push(elems, self.mapType(decl.base.get()));
+        }
+        for(let i = 0;i < fields.len();++i){
+          let fd = fields.get(i);
+          let ft = self.mapType(&fd.type);
+          vector_Type_push(elems, ft);
+        }
+      },
+      Decl::TupleStruct(fields*)=>{
+        for ft in fields{
+          let ft2 = self.mapType(ft);
+          vector_Type_push(elems, ft2);
+        }
       }
     }
     setBody(st, elems);
@@ -905,11 +921,36 @@ impl Compiler{
     let ft = make_ft(ret, args, false);
     let linkage = ext();
     let mangled = mangle_static(path);
-    //let mangled = "__cxx_global_var_init".owned();
+    if(std::getenv("cxx_global").is_some()){
+      mangled = "__cxx_global_var_init".owned();
+      linkage = internal();
+    }
     let mangled_c = mangled.clone().cstr();
-    let res = make_func(ft, linkage, mangled_c.ptr());
+    let proto = make_func(ft, linkage, mangled_c.ptr());
+    setSection(proto, ".text.startup".ptr());
+    if(std::getenv("cxx_global").is_some()){
+      handle_cxx_global(proto, path);
+    }
     vector_Type_delete(args);
-    return Pair::new(res, mangled);
+    return Pair::new(proto, mangled);
+  }
+
+  func handle_cxx_global(f: Function*, path: str){
+    //_GLOBAL__sub_I_glob.cpp
+    let args_ft = vector_Type_new();
+    let ft = make_ft(getVoidTy(), args_ft, false);
+    let linkage = internal();
+    let mangled_c = mangle_static(path).cstr();
+    let caller_proto = make_func(ft, linkage, mangled_c.ptr());
+    setSection(caller_proto, ".text.startup".ptr());
+    let bb = create_bb2(caller_proto);
+    SetInsertPoint(bb);
+    let args = vector_Value_new();
+    CreateCall(f, args);
+    CreateRetVoid();
+    vector_Type_delete(args_ft);
+    vector_Value_delete(args);
+    mangled_c.drop();
   }
 
   func do_inline(self, expr: Expr*, ptr_ret: Value*){

@@ -239,9 +239,9 @@ impl Decl{
   func is_drop(self): bool{
     return self.attr.has_attr("drop");
   }
-  func is_struct(self): bool{
+  /*func is_struct(self): bool{
     return self is Decl::Struct;
-  }
+  }*/
   func is_enum(self): bool{
     return self is Decl::Enum;
   }

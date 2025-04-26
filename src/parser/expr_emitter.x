@@ -1358,37 +1358,43 @@ impl Compiler{
           base_ty.drop();
           self.own.get().do_move(&arg.expr);
         }
-        if let Decl::Struct(fields*)=(decl){
-          let field_idx = 0;
-          for(let i = 0;i < args.len();++i){
-            let arg = args.get(i);
-            if(arg.isBase){
-              continue;
+        match decl{
+          Decl::Struct(fields*)=>{
+            let field_idx = 0;
+            for(let i = 0;i < args.len();++i){
+              let arg = args.get(i);
+              if(arg.isBase){
+                continue;
+              }
+              let prm_idx = 0;
+              if(arg.name.is_some()){
+                prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &rt.type);
+              }else{
+                prm_idx = field_idx;
+                ++field_idx;
+              }
+              let fd = fields.get(prm_idx);
+              if(decl.base.is_some()) ++prm_idx;
+              let field_target_ptr = CreateStructGEP(ptr, prm_idx, ty);
+              self.setField(&arg.expr, &fd.type, field_target_ptr);
+              self.own.get().do_move(&arg.expr);
             }
-            let prm_idx = 0;
-            if(arg.name.is_some()){
-              prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &rt.type);
-            }else{
-              prm_idx = field_idx;
-              ++field_idx;
-            }
-            let fd = fields.get(prm_idx);
-            if(decl.base.is_some()) ++prm_idx;
-            let field_target_ptr = CreateStructGEP(ptr, prm_idx, ty);
-            self.setField(&arg.expr, &fd.type, field_target_ptr);
-            self.own.get().do_move(&arg.expr);
+          },
+          Decl::TupleStruct(fields*)=>{
+            panic("todo");
+          },
+          Decl::Enum(variants*)=>{
+            let variant_index = Resolver::findVariant(decl, type.name());
+            let variant = decl.get_variants().get(variant_index);
+            //set tag
+            let tag_ptr = CreateStructGEP(ptr, get_tag_index(decl), ty);
+            let tag_val = makeInt(variant_index, ENUM_TAG_BITS()) as Value*;
+            CreateStore(tag_val, tag_ptr);
+            //set data
+            let data_ptr = CreateStructGEP(ptr, get_data_index(decl), ty);
+            let var_ty = self.get_variant_ty(decl, variant);
+            self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
           }
-        }else{
-          let variant_index = Resolver::findVariant(decl, type.name());
-          let variant = decl.get_variants().get(variant_index);
-          //set tag
-          let tag_ptr = CreateStructGEP(ptr, get_tag_index(decl), ty);
-          let tag_val = makeInt(variant_index, ENUM_TAG_BITS()) as Value*;
-          CreateStore(tag_val, tag_ptr);
-          //set data
-          let data_ptr = CreateStructGEP(ptr, get_data_index(decl), ty);
-          let var_ty = self.get_variant_ty(decl, variant);
-          self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
         }
         rt.drop();
         return ptr;

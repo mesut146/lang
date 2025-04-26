@@ -205,7 +205,9 @@ func bootstrap(cmd: CmdArgs*){
     if(proc_out.is_ok()){
       let bin2 = format("{}/{}", build, name);
       File::copy(bin_path.str(), bin2.str());
-      set_as_executable(bin2.cstr().ptr());
+      //set_as_executable(bin2.cstr().ptr());
+      File::set_permissions(bin2.str(), Permissions::from_mode(777));
+      bin2.drop();
     }
     cmd_link.drop();
     llvm.drop();
@@ -214,9 +216,10 @@ func bootstrap(cmd: CmdArgs*){
     let bin2 = format("{}/{}", &build, name);
     File::copy(bin.str(), bin2.str());
     print("wrote {}\n", bin2);
-    let binc = bin2.cstr();
-    set_as_executable(binc.ptr());
-    binc.drop();
+    //let binc = bin2.cstr();
+    // set_as_executable(binc.ptr());
+    File::set_permissions(bin2.str(), Permissions::from_mode(777));
+    //bin2.drop();
   }
   root.drop();
   bin.drop();

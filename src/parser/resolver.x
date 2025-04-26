@@ -1010,7 +1010,7 @@ impl Resolver{
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
       base_rt.drop();
-      if(base_decl.is_struct()){
+      if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
     }
@@ -1027,7 +1027,7 @@ impl Resolver{
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
       base_rt.drop();
-      if(base_decl.is_struct()){
+      if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
     }
@@ -1044,7 +1044,7 @@ impl Resolver{
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
       base_rt.drop();
-      if(base_decl.is_struct()){
+      if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
     }

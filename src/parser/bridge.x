@@ -170,6 +170,7 @@ extern{
     func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
     func odr(): i32;
+    func internal(): i32;
     func make_func(fr: llvm_FunctionType*, l: i32, name: i8*): Function*;
     func get_arg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
@@ -250,7 +251,7 @@ extern{
     func CreateFNeg(l: Value*): Value*;
 
     func get_last_write_time(path: i8*): i64;
-    func set_as_executable(path: i8*);
+    //func set_as_executable(path: i8*);
 }
 
 func getDefaultTargetTriple2(): CStr{

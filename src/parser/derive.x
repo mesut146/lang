@@ -69,98 +69,101 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     let line = decl.line;
     let body = Block::new(decl.line, decl.line);
     if(decl.base.is_some()){
-        //clone::clone(ptr::deref(self as <Base>*));
         body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
     }
-    
-    if let Decl::Enum(variants*)=(decl){
-        for ev in variants{
-            let then = Block::new(line, line);
-            for fd in &ev.fields{
-                if(fd.type.is_pointer()){
-                    //then.list.add(parse_stmt(format("printf(\"{}=%p *=%d\\n\", *&fd.name);", &fd.name, &fd.name, &fd.name), unit, line));
-                    //then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
+    match decl{
+        Decl::Enum(variants*)=>{
+            for ev in variants{
+                let then = Block::new(line, line);
+                for fd in &ev.fields{
+                    if(fd.type.is_pointer()){
+                        //then.list.add(parse_stmt(format("printf(\"{}=%p *=%d\\n\", *&fd.name);", &fd.name, &fd.name, &fd.name), unit, line));
+                        //then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
+                    }else{
+                        then.list.add(parse_stmt(format("let __{} = {}.clone();", &fd.name, &fd.name), unit, line));
+                    }
+                }
+                let str = Fmt::new();
+                str.print("return ");
+                str.print(&decl.type);
+                str.print("::");
+                str.print(&ev.name);
+                if(!ev.fields.empty()){
+                    str.print("{");
+                    let i = 0;
+                    for fd in &ev.fields{
+                        if(i > 0){
+                            str.print(", ");
+                        }
+                        str.print(&fd.name);
+                        str.print(": ");
+                        if(fd.type.is_pointer()){
+                            str.print(&fd.name);
+                        }else{
+                            str.print("__");
+                            str.print(&fd.name);
+                        }
+                        ++i;
+                    }
+                    str.print("};");
                 }else{
-                    then.list.add(parse_stmt(format("let __{} = {}.clone();", &fd.name, &fd.name), unit, line));
+                    str.print(";");
+                }
+                let return_stmt = parse_stmt(str.unwrap(), unit, line);
+                then.list.add(return_stmt);
+
+                let self_id = unit.node(line);
+                let block_id = unit.node(line);
+                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+                let is = IfLet{
+                    type: vt,
+                    args: List<ArgBind>::new(),
+                    rhs: Expr::Name{.self_id, "self".str()},
+                    then: Box::new(Body::Block{.block_id, then}),
+                    else_stmt: Ptr<Body>::new()
+                };
+                for fd in &ev.fields{
+                    let arg_id = unit.node(line);
+                    is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
+                }
+                let iflet_id = unit.node(line);
+                body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
+            }
+            body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
+        },
+        Decl::Struct(fields*)=>{
+            for fd in fields{
+                if(fd.type.is_pointer()){
+                    //let <name> = self.<name>;
+                    let clone_stmt = parse_stmt(format("let {} = self.{};", &fd.name, &fd.name), unit, line);
+                    body.list.add(clone_stmt);
+                }else{
+                    //let <name> = self.<name>.clone();
+                    let clone_stmt = parse_stmt(format("let {} = self.{}.clone();", &fd.name, &fd.name), unit, line);
+                    body.list.add(clone_stmt);
                 }
             }
             let str = Fmt::new();
             str.print("return ");
             str.print(&decl.type);
-            str.print("::");
-            str.print(&ev.name);
-            if(!ev.fields.empty()){
-                str.print("{");
-                let i = 0;
-                for fd in &ev.fields{
-                    if(i > 0){
-                        str.print(", ");
-                    }
-                    str.print(&fd.name);
-                    str.print(": ");
-                    if(fd.type.is_pointer()){
-                        str.print(&fd.name);
-                    }else{
-                        str.print("__");
-                        str.print(&fd.name);
-                    }
-                    ++i;
+            str.print("{");
+            let i = 0;
+            for fd in fields{
+                if(i > 0){
+                    str.print(", ");
                 }
-                str.print("};");
-            }else{
-                str.print(";");
+                str.print(&fd.name);
+                str.print(": ");
+                str.print(&fd.name);
+                ++i;
             }
+            str.print("};");
             let return_stmt = parse_stmt(str.unwrap(), unit, line);
-            then.list.add(return_stmt);
-
-            let self_id = unit.node(line);
-            let block_id = unit.node(line);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
-            let is = IfLet{
-                type: vt,
-                args: List<ArgBind>::new(),
-                rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{.block_id, then}),
-                else_stmt: Ptr<Body>::new()
-            };
-            for fd in &ev.fields{
-                let arg_id = unit.node(line);
-                is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
-            }
-            let iflet_id = unit.node(line);
-            body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
+            body.list.add(return_stmt);
+        },
+        Decl::TupleStruct(fields*)=>{
+            panic("todo");
         }
-        body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
-    }else{
-        let fields = decl.get_fields();
-        for fd in fields{
-            if(fd.type.is_pointer()){
-                //let <name> = self.<name>;
-                let clone_stmt = parse_stmt(format("let {} = self.{};", &fd.name, &fd.name), unit, line);
-                body.list.add(clone_stmt);
-            }else{
-                //let <name> = self.<name>.clone();
-                let clone_stmt = parse_stmt(format("let {} = self.{}.clone();", &fd.name, &fd.name), unit, line);
-                body.list.add(clone_stmt);
-            }
-        }
-        let str = Fmt::new();
-        str.print("return ");
-        str.print(&decl.type);
-        str.print("{");
-        let i = 0;
-        for fd in fields{
-            if(i > 0){
-                str.print(", ");
-            }
-            str.print(&fd.name);
-            str.print(": ");
-            str.print(&fd.name);
-            ++i;
-        }
-        str.print("};");
-        let return_stmt = parse_stmt(str.unwrap(), unit, line);
-        body.list.add(return_stmt);
     }
     let m = Method::new(unit.node(decl.line), "clone".str(), decl.type.clone());
     m.is_generic = decl.is_generic;
@@ -190,45 +193,50 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         //Drop::drop(ptr::deref(self as <Base>*));
         body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
     }
-    if let Decl::Enum(variants*)=(decl){
-        for(let i = 0;i < variants.len();++i){
-            let ev = variants.get(i);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
-            let then = Block::new(line, line);
+    match decl{
+        Decl::Enum(variants*)=>{
+            for(let i = 0;i < variants.len();++i){
+                let ev = variants.get(i);
+                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+                let then = Block::new(line, line);
 
-            for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get(j);
-                //Drop::drop({fd.name})
-                let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
-                then.list.add(drop_stmt);
-            }
-            then.list.add(parse_stmt("return;".str(), unit, line));
+                for(let j = 0;j < ev.fields.len();++j){
+                    let fd = ev.fields.get(j);
+                    //Drop::drop({fd.name})
+                    let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
+                    then.list.add(drop_stmt);
+                }
+                then.list.add(parse_stmt("return;".str(), unit, line));
 
-            let self_id = unit.node(line);
-            let block_id = unit.node(line);
-            let iflet_id = unit.node(line);
-            let iflet = IfLet{
-                type: vt,
-                args: List<ArgBind>::new(),
-                rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{.block_id, then}),
-                else_stmt: Ptr<Body>::new()
-            };
-            for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get(j);
-                let arg_id = unit.node(line);
-                iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
+                let self_id = unit.node(line);
+                let block_id = unit.node(line);
+                let iflet_id = unit.node(line);
+                let iflet = IfLet{
+                    type: vt,
+                    args: List<ArgBind>::new(),
+                    rhs: Expr::Name{.self_id, "self".str()},
+                    then: Box::new(Body::Block{.block_id, then}),
+                    else_stmt: Ptr<Body>::new()
+                };
+                for(let j = 0;j < ev.fields.len();++j){
+                    let fd = ev.fields.get(j);
+                    let arg_id = unit.node(line);
+                    iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
+                }
+                body.list.add(Expr::IfLet{.iflet_id, Box::new(iflet)}.into_stmt());
             }
-            body.list.add(Expr::IfLet{.iflet_id, Box::new(iflet)}.into_stmt());
-        }
-    }else{
-        let fields = decl.get_fields();
-        for(let i = 0;i < fields.len();++i){
-            let fd = fields.get(i);
-            if(!is_struct(&fd.type)) continue;
-            //self.{fd.name}.drop();
-            let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
-            body.list.add(drop_stmt);
+        },
+        Decl::Struct(fields*)=>{
+            for(let i = 0;i < fields.len();++i){
+                let fd = fields.get(i);
+                if(!is_struct(&fd.type)) continue;
+                //self.{fd.name}.drop();
+                let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
+                body.list.add(drop_stmt);
+            }
+        },
+        Decl::TupleStruct(fields*)=>{
+            panic("todo");
         }
     }
     let m = Method::new(unit.node(line), "drop".str(), Type::new("void"));
@@ -252,83 +260,88 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     m.parent = Parent::Impl{make_info(decl, "Debug")};
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);
-    if let Decl::Enum(variants*)=(decl){
-        for(let i = 0;i < variants.len();++i){
-            let ev = variants.get(i);
-            let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
-            let then = Block::new(line, line);
+    match decl{
+        Decl::Enum(variants*)=>{
+            for(let i = 0;i < variants.len();++i){
+                let ev = variants.get(i);
+                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
+                let then = Block::new(line, line);
 
-            //f.print({decl.type}::{ev.name})
-            then.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
-            then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
-            if(ev.fields.len() > 0){
-                then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
-                for(let j = 0;j < ev.fields.len();++j){
-                    let fd = ev.fields.get(j);
-                    if(j > 0){
-                        then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
-                    }
-                    //f.print("<fd.name>: ")
-                    then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
-                    if(fd.type.is_pointer()){
-                        //print hex based address
-                        //i64::debug_hex(<fd.name> as u64, f);
-                        then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
-                    }else{
-                        if(decl.is_generic){
-                            then.list.add(parse_stmt(format("std::debug({}, f);", fd.name), unit, line));
+                //f.print({decl.type}::{ev.name})
+                then.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
+                then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
+                if(ev.fields.len() > 0){
+                    then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
+                    for(let j = 0;j < ev.fields.len();++j){
+                        let fd = ev.fields.get(j);
+                        if(j > 0){
+                            then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
+                        }
+                        //f.print("<fd.name>: ")
+                        then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
+                        if(fd.type.is_pointer()){
+                            //print hex based address
+                            //i64::debug_hex(<fd.name> as u64, f);
+                            then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
                         }else{
-                            //{fd.name}.debug(f);
-                            //already ptr from if let arg
-                            then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                            if(decl.is_generic){
+                                then.list.add(parse_stmt(format("std::debug({}, f);", fd.name), unit, line));
+                            }else{
+                                //{fd.name}.debug(f);
+                                //already ptr from if let arg
+                                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                            }
                         }
                     }
+                    then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
                 }
-                then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
+                let self_id = unit.node(line);
+                let block_id = unit.node(line);
+                let is = IfLet{
+                    type: vt,
+                    args: List<ArgBind>::new(),
+                    rhs: Expr::Name{.self_id, "self".str()},
+                    then: Box::new(Body::Block{.block_id, then}),
+                    else_stmt: Ptr<Body>::new()
+                };
+                for(let j = 0;j < ev.fields.len();++j){
+                    let fd = ev.fields.get(j);
+                    let arg_id = unit.node(line);
+                    is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
+                }
+                let iflet_id = unit.node(line);
+                body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
             }
-            let self_id = unit.node(line);
-            let block_id = unit.node(line);
-            let is = IfLet{
-                type: vt,
-                args: List<ArgBind>::new(),
-                rhs: Expr::Name{.self_id, "self".str()},
-                then: Box::new(Body::Block{.block_id, then}),
-                else_stmt: Ptr<Body>::new()
-            };
-            for(let j = 0;j < ev.fields.len();++j){
-                let fd = ev.fields.get(j);
-                let arg_id = unit.node(line);
-                is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
-            }
-            let iflet_id = unit.node(line);
-            body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
-        }
-    }else{
-        //f.print(<decl.type.print()>)
-        body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
-        body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
-        let fields = decl.get_fields();
-        for(let i = 0;i < fields.len();++i){
-            let fd = fields.get(i);
-            if(i > 0){
-                body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
-            }
-            //f.print("<fd.name>: ");
-            body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
-            if(fd.type.is_pointer()){
-                //print hex based address
-                //i64::debug_hex(fd.name as u64, f);
-                body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
-            }else{
-                if(decl.is_generic){
-                    body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name), unit, line));
+        },
+        Decl::Struct(fields*)=>{
+            //f.print(<decl.type.print()>)
+            body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
+            body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
+            for(let i = 0;i < fields.len();++i){
+                let fd = fields.get(i);
+                if(i > 0){
+                    body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
+                }
+                //f.print("<fd.name>: ");
+                body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
+                if(fd.type.is_pointer()){
+                    //print hex based address
+                    //i64::debug_hex(fd.name as u64, f);
+                    body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
                 }else{
-                    //self.{fd.name}.debug(f);
-                    body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                    if(decl.is_generic){
+                        body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name), unit, line));
+                    }else{
+                        //self.{fd.name}.debug(f);
+                        body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                    }
                 }
             }
+            body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
+        },
+        Decl::TupleStruct(fields*)=>{
+            panic("todo");
         }
-        body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
     }
     m.body = Option::new(body);
     imp.methods.add(m);

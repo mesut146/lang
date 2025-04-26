@@ -90,7 +90,7 @@ impl Incremental{
     }
 
     func get_key(decl: Decl*): String{
-        if(decl.is_struct()){
+        if(decl is Decl::Struct || decl is Decl::TupleStruct){
             format("struct {}", decl.type.name())
         }else{
             format("enum {}", decl.type.name())
