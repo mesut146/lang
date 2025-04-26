@@ -433,7 +433,7 @@ llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name,
 llvm::DIScope *get_null_scope() { return nullptr; }
 
 llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
-  return DBuilder->createObjectPointerType(ty);
+  return llvm::DIBuilder::createObjectPointerType(ty);
 }
 
 llvm::DIGlobalVariableExpression *

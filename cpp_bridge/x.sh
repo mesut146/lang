@@ -42,7 +42,7 @@ find_clang(){
 find_clang
 
 
-$clang_bin -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
+$clang_bin -Werror -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
