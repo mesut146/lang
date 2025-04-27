@@ -12,17 +12,11 @@ jobs:
         lang-version: [ '1.5' ]
 
     steps:
-      - uses: robinraju/release-downloader@v1
-        with:
-          tag: 'llvm19'
-          fileName: 'libLLVM.so.19.1'
-          token: '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@github.com'
-      
       - uses: actions/checkout@v4
       - name: myname
         run: |
           ls
           # bash cpp_bridge/x.sh
           cd bin
-          # wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
+          wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           x86-64/x-x64 bt x2-x64
