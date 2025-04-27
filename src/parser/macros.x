@@ -26,7 +26,9 @@ func derive_debug(it: Item): TokenStream{
         res.add("func debug(self, f: Fmt*){{");
         match d{
             Decl::Struct(fields*) => {
-
+                for fd in fields{
+                    res.add(format("debug_member!({}, f);", &fd.name));
+                }
             },
             Decl::Enum(vars*) => {
 
@@ -39,6 +41,7 @@ func derive_debug(it: Item): TokenStream{
     }else{
         panic("derive_debug can only be applied to structs");
     }
+    //parse_ts(ts);
     if(true) panic("todo");
     return res;
 }

@@ -13,13 +13,15 @@ jobs:
 
     steps:
       - name: Install LLVM and Clang
-        run: wget https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz
-      - run: tar xf LLVM-19.1.7-Linux-X64.tar.xz && export PATH=$PATH:LLVM-19.1.7-Linux-X64/bin
+        run: |
+             wget https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz
+             tar xf LLVM-19.1.7-Linux-X64.tar.xz && export PATH=$PATH:LLVM-19.1.7-Linux-X64/bin
       
       - uses: actions/checkout@v4
       - name: myname
         run: |
-          ls && cd bin
-          : # wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
+          ls
           bash cpp_bridge/x.sh
+          cd bin
+          : # wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           x86-64/x-x64 bt x2-x64

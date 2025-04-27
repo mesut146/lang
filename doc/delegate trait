@@ -1,4 +1,4 @@
-#derive(Debug, MyDebugTrait)
+#derive(Debug = MyDebugTrait)
 struct A{}
 
 trait MyDebugTrait{

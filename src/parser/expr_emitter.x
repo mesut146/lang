@@ -1621,7 +1621,7 @@ impl Compiler{
 
 
 func is_deref(expr: Expr*): Option<Expr*>{
-  if let Expr::Unary(op*, e*)=(expr){
+  if let Expr::Unary(op*, e*) = expr{
       if(op.eq("*")) return Option::new(e.get());
   }
   return Option<Expr*>::new();
