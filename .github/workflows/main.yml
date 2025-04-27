@@ -13,9 +13,8 @@ jobs:
 
     steps:
       - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "19"
+        run: wget https://github.com/llvm/llvm-project/releases/download/llvmorg-19.1.7/LLVM-19.1.7-Linux-X64.tar.xz
+      - run: tar xf LLVM-19.1.7-Linux-X64.tar.xz && export PATH=$PATH:LLVM-19.1.7-Linux-X64/bin
       
       - uses: actions/checkout@v4
       - name: myname
