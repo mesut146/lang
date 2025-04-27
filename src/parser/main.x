@@ -73,6 +73,8 @@ func bootstrap(cmd: CmdArgs*){
   let std_dir = format("{}/src/std", root);
   let llvm_only = cmd.consume_any("-llvm-only");
 
+  File::create_dir(build.str());
+
   if(cmd.has_any("-target")){
     let target = cmd.get_val("-target").unwrap();
     if(target.eq("x86_64-unknown-linux-gnu") || target.eq("x86_64")){
