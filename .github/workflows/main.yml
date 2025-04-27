@@ -12,11 +12,15 @@ jobs:
         lang-version: [ '1.5' ]
 
     steps:
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "19"
+      
       - uses: actions/checkout@v4
       - name: myname
         run: |
           ls && cd bin
-          wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh
-          sudo  ./llvm.sh 19
+          : # wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           bash cpp_bridge/x.sh
           x86-64/x-x64 bt x2-x64
