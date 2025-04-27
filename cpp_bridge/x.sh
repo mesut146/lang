@@ -1,6 +1,8 @@
 clear
 dir=$(dirname $0)
 
+mkdir -p $dir/build
+
 lib=$dir/build/libbridge.a
 obj=$dir/build/bridge.o
 
