@@ -157,9 +157,11 @@ func is_main(m: Method*): bool{
     return res.unwrap();
 }*/
 
-func mangleType(type: Type*): String{
+/*func mangleType(type: Type*): String{
+    //todo mem leak
     match type{
         Type::Pointer(elem*) => return format("{}$P", mangleType(elem.get())),
+        Type::Slice(elem*) => return format("[{}]", mangleType(elem.get())),
         Type::Tuple(tt*) => {
             let res = String::new();
             res.append("tuple");
@@ -193,11 +195,73 @@ func mangleType(type: Type*): String{
     s8.drop();
     s9.drop();
     return s10;
-}
+}*/
 func mangleType(type: Type*, f: Fmt*){
-    let s = mangleType(type);
-    f.print(&s);
-    s.drop();
+    match type{
+        Type::Pointer(elem*) => {
+            mangleType(elem.get(), f);
+            f.print("$P");
+        },
+        Type::Slice(elem*) => {
+            f.print("[");
+            mangleType(elem.get(), f);
+            f.print("]");
+        },
+        Type::Array(elem*, size*) => {
+            f.print("[");
+            mangleType(elem.get(), f);
+            f.print(";");
+            Debug::debug(size, f);
+            f.print("]");
+        },
+        Type::Function(ft0*) => {
+            let ft = ft0.get();
+            f.print("func$LP");
+            for prm in &ft.params{
+                mangleType(prm, f);
+            }
+            f.print("$RP$AW");
+            mangleType(&ft.return_type, f);  
+        },
+        Type::Lambda(lt0*) =>{
+            let lt = lt0.get();
+            f.print("lambda$LP");
+            for prm in &lt.params{
+                mangleType(prm, f);
+            }
+            f.print("$RP");
+            if(lt.return_type.is_some()){
+                f.print("$AW");
+                mangleType(lt.return_type.get(), f);
+            }
+        },
+        Type::Tuple(tt*) => {
+            f.print("tuple");
+            for ty in &tt.types{
+                f.print("_");
+                mangleType(ty, f);
+            }
+        },
+        Type::Simple(smp*) => {
+            if(smp.scope.is_some()){
+                mangleType(smp.scope.get(), f);
+                f.print("__");
+            }
+            f.print(&smp.name);
+            if(!smp.args.empty()){
+                f.print("$LT");
+                for ta in &smp.args{
+                    mangleType(ta, f);
+                }
+                f.print("$GT");
+            }
+        }
+    }
+}
+func mangleType(type: Type*): String{
+    let f = Fmt::new();
+    mangleType(type, &f);
+    return f.unwrap();
 }
 
 func mangle(m: Method*): String{

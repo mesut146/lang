@@ -396,7 +396,6 @@ impl Compiler{
     let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
-    //todo check is rhs depends another global
     for(let j = 0;j < globals.len();++j){
       let gl: Global* = *globals.get(j);
       let rt = resolv.visit(&gl.expr);
@@ -410,7 +409,6 @@ impl Compiler{
         vector_Metadata_push(globs, gve as Metadata*);
       }
       self.globals.add(gl.name.clone(), glob as Value*);
-      //todo AllocHelper should visit rhs?
       //todo make allochelper visit only children
       AllocHelper::new(self).visit(&gl.expr);
       self.emit_expr(&gl.expr,  glob as Value*);
@@ -819,7 +817,6 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    //todo delete cmp?
     let cmp = Compiler::new(ctx, config, args.cache);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
     for inc_dir in &args.config.src_dirs{

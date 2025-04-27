@@ -520,25 +520,25 @@ impl Type{
     return self is Type::Slice;
   }
   func deref_ptr(self): Type*{
-    if let Type::Pointer(bx*) = (self){
+    if let Type::Pointer(bx*) = self{
       return bx.get();
     }
     return self;
   }
   func unwrap_ptr(*self): Type{
-    if let Type::Pointer(bx) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.unwrap();
     }
     return self;
   }
   func elem(self): Type*{
-    if let Type::Pointer(bx*) = (self){
+    if let Type::Pointer(bx*) = self{
       return bx.get();
     }
-    if let Type::Array(bx*, sz) = (self){
+    if let Type::Array(bx*, sz) = self{
       return bx.get();
     }
-    if let Type::Slice(bx*) = (self){
+    if let Type::Slice(bx*) = self{
       return bx.get();
     }
     panic("elem {:?}", self);
@@ -589,13 +589,6 @@ impl Type{
   
   func print(self): String{
     return Fmt::str(self);
-  }
-
-  func scope(self): Type*{
-    if let Type::Simple(smp*) = (self){
-      return smp.scope.get();
-    }
-    panic("Type::scope");
   }
 
   func parse(input: str): Type{

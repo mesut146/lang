@@ -19,13 +19,6 @@ import std/libc
 import std/stack
 import std/result
 
-static __static_test_var = "test";
-static __static_func_test: i32 = static_func();
-
-func static_func(): i32{
-  return 42;
-}
-
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");
 }
@@ -315,9 +308,6 @@ func print_version(){
 
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
-  if(!__static_test_var.eq("test") && __static_func_test != 42){
-    panic("static variables not working");
-  }
   //print_version();
   if(!cmd.has()){
     print("enter a command\n");

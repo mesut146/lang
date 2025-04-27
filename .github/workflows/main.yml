@@ -1,0 +1,17 @@
+
+name: test
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lang-version: [ '1.5' ]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: myname
+        run: ls

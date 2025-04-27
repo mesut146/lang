@@ -426,7 +426,7 @@ impl Compiler{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
       if let Type::Tuple(tt*) = &scope_rt.type {
-        let idx = i32::parse(name.str()).unwrap();
+        let idx = i32::parse(name.str()).expect("tuple index parse error");
         let scope_ty = self.mapType(&scope_rt.type);
         let res = CreateStructGEP(scope_ptr, idx, scope_ty);
         scope_rt.drop();

@@ -39,11 +39,10 @@ impl DropHelper{
     let type = &rt.type;
     if (type.is_str() || type.is_slice()) return false;
     if (!is_struct(type)) return false;
-    if (type.is_array()) {
-        let elem = type.elem();
-        return self.is_drop_type(elem);
-    }
     match &rt.type{
+      Type::Array(elem*, size)=>{
+        return self.is_drop_type(elem.get());
+      },
       Type::Tuple(tt*) => {
         for elem in &tt.types{
           if(self.is_drop_type(elem)){

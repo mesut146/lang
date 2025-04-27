@@ -12,6 +12,8 @@ import std/map
 import std/libc
 import std/stack
 
+const POINTER_SIZE: i32 = 64;
+
 struct RvalueHelper {
   rvalue: bool;
   scope: Option<Expr*>;
@@ -387,18 +389,29 @@ impl Compiler{
     return res;
   }
   func mapType(self, type: Type*, s: String*): llvm_Type*{
-    if(type.is_void()) return getVoidTy();
-    if(type.eq("f32")){
-      return getFloatTy();
-    }
-    if(type.eq("f64")){
-      return getDoubleTy();
-    }
-    let prim_size = prim_size(s.str());
-    if(prim_size.is_some()){
-      return getInt(prim_size.unwrap());
-    }
     match type{
+      Type::Pointer(elem*) =>{
+        let elem_ty = self.mapType(elem.get());
+        return getPointerTo(elem_ty) as llvm_Type*;
+      },
+      Type::Array(elem*, size) =>{
+        let elem_ty = self.mapType(elem.get());
+        return getArrTy(elem_ty, size) as llvm_Type*;
+      },
+      Type::Slice(elem*) =>{
+        let p = self.protos.get();
+        return p.std("slice") as llvm_Type*;
+      },
+      Type::Function(elem_bx*)=>{
+        let res = self.make_proto(elem_bx.get());
+        //return res as llvm_Type*;
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+      },
+      Type::Lambda(elem_bx*)=>{
+        let res = self.make_proto(elem_bx.get());
+        //return res as llvm_Type*;
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+      },
       Type::Tuple(tt*)=>{
         let elems = vector_Type_new();
         for elem in &tt.types{
@@ -418,36 +431,22 @@ impl Compiler{
         name.drop();
         return res;
       },
-      _ => {
-        //todo
+      Type::Simple(smp*) => {
+        if(type.is_void()) return getVoidTy();
+        if(type.eq("f32")) return getFloatTy();
+        if(type.eq("f64")) return getDoubleTy();
+        
+        let prim_size = prim_size(s.str());
+        if(prim_size.is_some()){
+          return getInt(prim_size.unwrap());
+        }
+        let p = self.protos.get();
+        if(!p.classMap.contains(s)){
+          panic("mapType {}\n", s);
+        }
+        return p.get(s);
       }
     }
-    if let Type::Array(elem*,size)=(type){
-      let elem_ty = self.mapType(elem.get());
-      return getArrTy(elem_ty, size) as llvm_Type*;
-    }
-    if let Type::Pointer(elem*)=(type){
-      let elem_ty = self.mapType(elem.get());
-      return getPointerTo(elem_ty) as llvm_Type*;
-    }
-    if let Type::Function(elem_bx*)=(type){
-      let res = self.make_proto(elem_bx.get());
-      //return res as llvm_Type*;
-      return getPointerTo(res as llvm_Type*) as llvm_Type*;
-    }
-    if let Type::Lambda(elem_bx*)=(type){
-      let res = self.make_proto(elem_bx.get());
-      //return res as llvm_Type*;
-      return getPointerTo(res as llvm_Type*) as llvm_Type*;
-    }
-    let p = self.protos.get();
-    if let Type::Slice(elem*)=(type){
-      return p.std("slice") as llvm_Type*;
-    }
-    if(!p.classMap.contains(s)){
-      panic("mapType {}\n", s);
-    }
-    return p.get(s);
   }
 
   //normal decl protos and di protos
@@ -621,36 +620,37 @@ impl Compiler{
   }
 
   func getSize(self, type: Type*): i64{
-    if(type.is_prim()){
-      return prim_size(type.name().str()).unwrap();
-    }
-    if(type.is_any_pointer()) return 64;
-    if(type is Type::Lambda) return 64;
-    if let Type::Array(elem*, sz)=(type){
-      return self.getSize(elem.get()) * sz;
-    }
-    if let Type::Slice(elem*)=(type){
-      let st = self.protos.get().std("slice");
-      return getSizeInBits(st);
-    }
     match type{
+      Type::Pointer(bx*) => return POINTER_SIZE,
+      Type::Function(bx*) => return POINTER_SIZE,
+      Type::Lambda(bx*) => return POINTER_SIZE,
+      Type::Slice(bx*) => {
+        let st = self.protos.get().std("slice");
+        return getSizeInBits(st);
+      },
+      Type::Array(elem*, size) => {
+        return self.getSize(elem.get()) * size;
+      },
       Type::Tuple(tt*) => {
         let rt = self.get_resolver().visit_type(type);
         let mapped = self.mapType(&rt.type);
+        rt.drop();
         return getSizeInBits(mapped as StructType*);
       },
-      _ => {
-        //todo
+      Type::Simple(smp*) => {
+        if(type.is_prim()){
+          return prim_size(type.name().str()).unwrap();
+        }
+        let rt = self.get_resolver().visit_type(type);
+        if(rt.is_decl()){
+          let decl = self.get_resolver().get_decl(&rt).unwrap();
+          rt.drop();
+          return self.getSize(decl);
+        }
+        rt.drop();
+        panic("no decl");
       }
     }
-    let rt = self.get_resolver().visit_type(type);
-    if(rt.is_decl()){
-      let decl = self.get_resolver().get_decl(&rt).unwrap();
-      rt.drop();
-      return self.getSize(decl);
-    }
-    rt.drop();
-    panic("getSize {:?}", type);
   }
 
   func getSize(self, decl: Decl*): i64{

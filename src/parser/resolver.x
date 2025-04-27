@@ -182,6 +182,7 @@ struct Resolver{
   lambdas: HashMap<i32, Method>;
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
+  in_global_rhs: bool;
 }
 
 func dump(r: Resolver*){
@@ -228,6 +229,7 @@ impl Resolver{
       lambdas: HashMap<i32, Method>::new(),
       inLambda: Stack<i32>::new(),
       extra_imports: List<ImportStmt>::new(),
+      in_global_rhs: false,
     };
     return res;
   }
@@ -602,22 +604,21 @@ impl Resolver{
   
   func init_globals(self){
     for g in self.unit.get_globals() {
-        let rhs: RType = self.visit(&g.expr);
-        if (g.type.is_some()) {
-            let type = self.getType(g.type.get());
-            let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
-            if (err_opt.is_some()) {
-                let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
-                rhs.drop();
-                err_opt.drop();
-                type.drop();
-                self.err(g.line, msg);
-                panic("");
-            }
-            err_opt.drop();
-            type.drop();
+      self.in_global_rhs = true;
+      let rhs: RType = self.visit(&g.expr);
+      self.in_global_rhs = false;
+      if (g.type.is_some()) {
+        let type = self.getType(g.type.get());
+        let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
+        if (err_opt.is_some()) {
+          let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
+          self.err(g.line, msg);
+          panic("");
         }
-        self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
+        err_opt.drop();
+        type.drop();
+      }
+      self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
     }
   }
 
@@ -658,24 +659,7 @@ impl Resolver{
         Item::Method(method*) => {},
         Item::Extern(methods*) => {},
         Item::Const(cn*) => {},
-        Item::Glob(g*) => {
-          /*let rhs: RType = self.visit(&g.expr);
-          if (g.type.is_some()) {
-              let type = self.getType(g.type.get());
-              let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
-              if (err_opt.is_some()) {
-                  let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
-                  rhs.drop();
-                  err_opt.drop();
-                  type.drop();
-                  self.err(g.line, msg);
-                  panic("");
-              }
-              err_opt.drop();
-              type.drop();
-          }
-          self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);*/
-        },
+        Item::Glob(g*) => {},
       }
     }
     //derives
@@ -2766,29 +2750,33 @@ impl Resolver{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get(i);
       let vh_opt = scope.find(name);
-      if(vh_opt.is_some()){
-        let vh: VarHolder* = vh_opt.unwrap();
-        let res = self.visit_type(vh.get_type());
-        res.vh.drop();
-        res.vh = Option::new(vh.clone());
-        if(!self.inLambda.empty()){
-            if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
-                //reference to outer variable
-                let m = self.lambdas.get(self.inLambda.top()).unwrap();
-                let has = false;
-                for prm in &m.params{
-                    if(prm.name.eq(&vh.name)){
-                        has = true;
-                        break;
-                    }
-                }
-                if(!has){
-                    m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
-                }
-            }
-        }
-        return Option::new(res);
+      if(vh_opt.is_none()){
+        continue;
       }
+      let vh: VarHolder* = vh_opt.unwrap();
+      if(self.in_global_rhs && vh.kind is VarKind::GLOBAL){
+        self.err(node ,"can't reference from global to another global");
+      }
+      let res = self.visit_type(vh.get_type());
+      res.vh.drop();
+      res.vh = Option::new(vh.clone());
+      if(!self.inLambda.empty()){
+        if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
+          //reference to outer variable
+          let m = self.lambdas.get(self.inLambda.top()).unwrap();
+          let has = false;
+          for prm in &m.params{
+              if(prm.name.eq(&vh.name)){
+                  has = true;
+                  break;
+              }
+          }
+          if(!has){
+              m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
+          }
+        }
+      }
+      return Option::new(res);
     }
     //local const
     let cn = self.find_const(name);
@@ -2801,6 +2789,9 @@ impl Resolver{
       let res = *arr.get(i);
       for glob in res.unit.get_globals() {
         if (glob.name.eq(name)) {
+          if(self.in_global_rhs){
+            self.err(node ,"can't reference from global to another global");
+          }
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
@@ -2841,7 +2832,7 @@ impl Resolver{
       let res = *arr.get(i);
       for(let j = 0;j < res.unit.items.len();++j){
         let item = res.unit.items.get(j);
-        if let Item::Method(m*)=(item){
+        if let Item::Method(m*) = item{
           if(m.name.eq(name)){
             let desc = Desc{
               kind: RtKind::Method,
