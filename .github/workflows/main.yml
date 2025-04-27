@@ -12,8 +12,11 @@ jobs:
         lang-version: [ '1.5' ]
 
     steps:
-      - name: Install LLVM and Clang
-        run: wget https://github.com/mesut146/lang/releases/download/llvm19/libLLVM.so.19.1
+      - uses: robinraju/release-downloader@v1
+        with:
+          tag: 'llvm19'
+          fileName: 'libLLVM.so.19.1'
+          token: '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@github.com'
       
       - uses: actions/checkout@v4
       - name: myname
