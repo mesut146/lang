@@ -136,18 +136,24 @@ func bootstrap(cmd: CmdArgs*){
   };
 
   let libbridge = {
-    let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
-    if(!File::exists(lib.str())){
-      print("building libbridge\n");
-      let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
-      if(out.is_ok() && !out.get().empty()){
-        print("{}\n", out.unwrap());
-      }
-      if(!File::exists(lib.str())){
-        panic("failed to build libbridge");
-      }
+    let libbridge_opt = std::getenv("libbridge");
+    if(libbridge_opt.is_some()){
+      libbridge_opt.unwrap().owned()
     }
-    lib
+    else{
+      let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
+      if(!File::exists(lib.str())){
+        print("building libbridge\n");
+        let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
+        if(out.is_ok() && !out.get().empty()){
+          print("{}\n", out.unwrap());
+        }
+        if(!File::exists(lib.str())){
+          panic("failed to build libbridge");
+        }
+      }
+      lib
+    }
   };
 
   if(is_static_llvm){
@@ -317,9 +323,6 @@ func handle(cmd: CmdArgs*){
     print_version();
     return;
   }
-  if(handle_tests(cmd)){
-    return;
-  }
   if(cmd.is("std")){
     handle_std(cmd);
     return;
@@ -334,6 +337,10 @@ func handle(cmd: CmdArgs*){
     let dir = format("{}/parser", get_src_dir());
     let out = format("{}/parser2", get_src_dir());
     format_dir(dir.str(), out.str());
+    return;
+  }
+  else if(handle_tests(cmd)){
+    return;
   }else{
     panic("invalid cmd: {:?}", cmd.args);
   }

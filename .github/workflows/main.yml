@@ -19,4 +19,4 @@ jobs:
           # bash cpp_bridge/x.sh
           cd bin
           wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
-          x86-64/x-x64 bt x2-x64
+          x86-64/x-x64 bt x2-x64 -root ../
