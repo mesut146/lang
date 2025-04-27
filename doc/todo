@@ -27,24 +27,6 @@ print("method is {::TraitName}", m);
 macro panic(e: Expr, s: String){
 }
 
-//add ?()throw operator
-let r = Result<T, E>:Ok{}
-r?.get();
-{
-  match r{
-    Result::Ok{val} => {
-      val.get();
-    },
-    Result::Err{err} => {
-      //panic or return depends on method return type
-      if(std::return_type!() == Result<V, E>){
-        return Result<V, E>::Err(err);
-      }else{
-        panic("unwrap Result::Err");
-      }
-    }
-  }
-}
 
 func to_list<E, T>(it: T): List<E>
 call like to_list<i32>(..) should work

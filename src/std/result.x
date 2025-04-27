@@ -21,23 +21,41 @@ impl<R, E> Result<R, E>{
   }
 
   func unwrap(*self): R{
+    match self{
+      Result<R, E>::Ok(val) => {
+        return val;
+      },
+      Result<R, E>::Err(val) => {
+        panic("unwrap on empty Result, err='{:?}'", val);
+      }
+    }
+  }
+
+  func get(self): R*{
     if let Result<R, E>::Ok(val) = self{
       return val;
     }
     panic("unwrap on empty Result");
   }
 
-  func get(self): R*{
-    if let Result<R, E>::Ok(val*) = (self){
+  func unwrap_err(*self): E{
+    if let Result<R, E>::Err(val) = self{
       return val;
     }
     panic("unwrap on empty Result");
   }
 
-  func unwrap_err(*self): E{
-    if let Result<R, E>::Err(val) = (self){
+  func get_err(self): E*{
+    if let Result<R, E>::Err(val) = self{
       return val;
     }
     panic("unwrap on empty Result");
+  }
+
+  func expect(*self, msg: str): R{
+    if let Result<R, E>::Ok(val) = self{
+      return val;
+    }
+    panic("{:?}", msg);
   }
 }

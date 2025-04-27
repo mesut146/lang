@@ -196,7 +196,7 @@ impl Protos{
 func has_main(unit: Unit*): bool{
   for (let i = 0;i < unit.items.len();++i) {
     let it = unit.items.get(i);
-    if let Item::Method(m*) = (it){
+    if let Item::Method(m) = it{
       if(is_main(m)){
         return true;
       }
@@ -338,11 +338,11 @@ impl Compiler{
     }
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
-      let newdata = File::read_string(path);
+      let newdata = File::read_string(path)?;
       if(File::exists(oldpath.str())){
         self.cache.inc.find_recompiles(self, path, oldpath.str());
       }
-      File::write_string(newdata.str(), oldpath.str());
+      File::write_string(newdata.str(), oldpath.str())?;
       oldpath.drop();
       newdata.drop();
     }
@@ -363,7 +363,7 @@ impl Compiler{
   }
 
   func is_constexpr(expr: Expr*): bool{
-    if let Expr::Lit(lit*)=(expr){
+    if let Expr::Lit(lit)=expr{
       return true;
     }
     return false;
@@ -383,6 +383,7 @@ impl Compiler{
     }
     let globals = resolv.unit.get_globals();
     if(globals.empty()){
+      globals.drop();
       return;
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
@@ -396,7 +397,6 @@ impl Compiler{
     let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
     self.llvm.di.get().dbg_func(&method, proto, self);
-    //todo check is rhs depends another global
     for(let j = 0;j < globals.len();++j){
       let gl: Global* = *globals.get(j);
       let rt = resolv.visit(&gl.expr);
@@ -410,7 +410,6 @@ impl Compiler{
         vector_Metadata_push(globs, gve as Metadata*);
       }
       self.globals.add(gl.name.clone(), glob as Value*);
-      //todo AllocHelper should visit rhs?
       //todo make allochelper visit only children
       AllocHelper::new(self).visit(&gl.expr);
       self.emit_expr(&gl.expr,  glob as Value*);
@@ -444,6 +443,7 @@ impl Compiler{
     vector_Metadata_delete(globs);
     vector_Type_delete(struct_elem_types);
     method.drop();
+    globals.drop();
   }
 
   func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
@@ -727,7 +727,7 @@ impl Compiler{
     
     let inc = Incremental::new(&config);
     let src_dir = &config.file;
-    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get(i).str();
@@ -783,7 +783,7 @@ impl Compiler{
     let cache = Cache::new(&config);
     cache.read_cache();
     let src_dir = &config.file;
-    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
@@ -819,22 +819,24 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    //todo delete cmp?
-    let cmp = Compiler::new(ctx, config, args.cache);
+    //let cmp = Compiler::new(ctx, config, args.cache);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
     }
-    if(cmp.ctx.verbose){
+    if(ctx.verbose){
         let idx = args.idx.lock();
         print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
         *idx = *idx + 1;
         args.idx.unlock();
     }
     let proc = Process::run(cmd.str());
-    proc.eat_close();
-    if(cmp.ctx.verbose){
+    let code = proc.eat_close();
+    if(code != 0){
+      panic("failed to compile {}", args.file);
+    }
+    if(ctx.verbose){
         let compiled = args.compiled.lock();
         print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
         args.compiled.unlock();
@@ -843,7 +845,7 @@ impl Compiler{
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
     args.compiled.unlock();
     sleep(1);
-    cmp.drop();
+    ctx.drop();
     cmd.drop();
   }
 
@@ -878,8 +880,8 @@ impl Compiler{
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
     let out_file = format("{}/{}", out_dir, name);
     print("linking {}\n", out_file);
-    if(File::exist(out_file.str())){
-      File::remove_file(out_file.str());
+    if(File::exists(out_file.str())){
+      File::remove_file(out_file.str())?;
     }
     File::create_dir(out_dir);
     let cmd = get_linker().str();
@@ -891,7 +893,7 @@ impl Compiler{
       cmd.append(" ");
     }
     cmd.append(args);
-    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str());
+    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str())?;
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
       //run if linked
@@ -993,17 +995,17 @@ impl CompilerConfig{
     if(self.llvm_only) return "".owned();
     match &self.lt{
       LinkType::None => return "".owned(),
-      LinkType::Binary(bin_name*, args*, run) => {
+      LinkType::Binary(bin_name, args, run) => {
         let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
-        if(run){
+        if(*run){
           Compiler::run(path.clone());
         }
         return path;
       },
-      LinkType::Static(lib_name*) => {
+      LinkType::Static(lib_name) => {
         return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
       },
-      LinkType::Dynamic(lib_name*) => {
+      LinkType::Dynamic(lib_name) => {
         return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), true);
       },
     }

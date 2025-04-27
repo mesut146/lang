@@ -34,11 +34,11 @@ func as_type(bits: i32): Type{
 
 func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
     match type{
-        Type::Pointer(elem*) => return hasGeneric(elem.get(), typeParams),
-        Type::Array(elem*, size) => return hasGeneric(elem.get(), typeParams),
-        Type::Slice(elem*) => return hasGeneric(elem.get(), typeParams),
-        Type::Lambda(lt*) => panic("internal err"),
-        Type::Function(ft*) => {
+        Type::Pointer(elem) => return hasGeneric(elem.get(), typeParams),
+        Type::Array(elem, size) => return hasGeneric(elem.get(), typeParams),
+        Type::Slice(elem) => return hasGeneric(elem.get(), typeParams),
+        Type::Lambda(lt) => panic("internal err"),
+        Type::Function(ft) => {
             if(hasGeneric(&ft.get().return_type, typeParams)){
                 return true;
             }
@@ -49,7 +49,7 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
             }
             return false;
         },
-        Type::Simple(smp*) => {
+        Type::Simple(smp) => {
             if (smp.args.empty()) {
                 for (let i = 0;i < typeParams.size();++i) {
                     let tp = typeParams.get(i);
@@ -63,7 +63,7 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
             }
             return false;
         },
-        Type::Tuple(tt*) => {
+        Type::Tuple(tt) => {
             for ty in &tt.types{
                 if(hasGeneric(ty, typeParams)){
                     return true;
@@ -157,9 +157,11 @@ func is_main(m: Method*): bool{
     return res.unwrap();
 }*/
 
-func mangleType(type: Type*): String{
+/*func mangleType(type: Type*): String{
+    //todo mem leak
     match type{
         Type::Pointer(elem*) => return format("{}$P", mangleType(elem.get())),
+        Type::Slice(elem*) => return format("[{}]", mangleType(elem.get())),
         Type::Tuple(tt*) => {
             let res = String::new();
             res.append("tuple");
@@ -193,11 +195,73 @@ func mangleType(type: Type*): String{
     s8.drop();
     s9.drop();
     return s10;
-}
+}*/
 func mangleType(type: Type*, f: Fmt*){
-    let s = mangleType(type);
-    f.print(&s);
-    s.drop();
+    match type{
+        Type::Pointer(elem) => {
+            mangleType(elem.get(), f);
+            f.print("$P");
+        },
+        Type::Slice(elem) => {
+            f.print("[");
+            mangleType(elem.get(), f);
+            f.print("]");
+        },
+        Type::Array(elem, size) => {
+            f.print("[");
+            mangleType(elem.get(), f);
+            f.print(";");
+            Debug::debug(size, f);
+            f.print("]");
+        },
+        Type::Function(ft0) => {
+            let ft = ft0.get();
+            f.print("func$LP");
+            for prm in &ft.params{
+                mangleType(prm, f);
+            }
+            f.print("$RP$AW");
+            mangleType(&ft.return_type, f);  
+        },
+        Type::Lambda(lt0) =>{
+            let lt = lt0.get();
+            f.print("lambda$LP");
+            for prm in &lt.params{
+                mangleType(prm, f);
+            }
+            f.print("$RP");
+            if(lt.return_type.is_some()){
+                f.print("$AW");
+                mangleType(lt.return_type.get(), f);
+            }
+        },
+        Type::Tuple(tt) => {
+            f.print("__tuple");
+            for ty in &tt.types{
+                f.print("_");
+                mangleType(ty, f);
+            }
+        },
+        Type::Simple(smp) => {
+            if(smp.scope.is_some()){
+                mangleType(smp.scope.get(), f);
+                f.print("__");
+            }
+            f.print(&smp.name);
+            if(!smp.args.empty()){
+                f.print("$LT");
+                for ta in &smp.args{
+                    mangleType(ta, f);
+                }
+                f.print("$GT");
+            }
+        }
+    }
+}
+func mangleType(type: Type*): String{
+    let f = Fmt::new();
+    mangleType(type, &f);
+    return f.unwrap();
 }
 
 func mangle(m: Method*): String{
@@ -206,10 +270,10 @@ func mangle(m: Method*): String{
     return m.name.clone();
   }
   let f = Fmt::new();
-  if let Parent::Impl(info*) = (&m.parent){
+  if let Parent::Impl(info) = &m.parent{
     mangleType(&info.type, &f);
     f.print("__");
-  }else if let Parent::Trait(ty*) = (&m.parent){
+  }else if let Parent::Trait(ty) = &m.parent{
     mangleType(ty, &f);
     f.print("__");
   }
@@ -237,12 +301,20 @@ func mangle(m: Method*): String{
 
 func printMethod(m: Method*): String{
     let s = Fmt::new();
-    if let Parent::Impl(info*)=(&m.parent){
-      s.print(&info.type);
-      s.print("::");
-    }else if let Parent::Trait(type*)=(&m.parent){
-      s.print(type);
-      s.print("::");
+    match &m.parent{
+        Parent::Impl(info)=>{
+            s.print(&info.type);
+            s.print("::");
+        },
+        Parent::Trait(type)=>{
+            s.print(type);
+            s.print("::");
+        },
+        Parent::Module(name) => {
+            s.print(name);
+            s.print("::");
+        },
+        _=>{}
     }
     s.print(&m.name);
     s.print("(");
@@ -292,7 +364,7 @@ func is_comp(s: str): bool{
 }
 
 func is_str_lit(e: Expr*): Option<String*>{
-    if let Expr::Lit(lit*)=(e){
+    if let Expr::Lit(lit)=e{
         if(lit.kind is LitKind::STR){
             return Option::new(&lit.val);
         }
@@ -403,17 +475,17 @@ impl Exit{
 
     func get_exit_type(rhs: MatchRhs*): Exit{
         match rhs{
-            MatchRhs::EXPR(e*) => return get_exit_type(e),
-            MatchRhs::STMT(st*) => return get_exit_type(st),
+            MatchRhs::EXPR(e) => return get_exit_type(e),
+            MatchRhs::STMT(st) => return get_exit_type(st),
         }
     }
 
     func get_exit_type(body: Body*): Exit{
         match body{
-            Body::Block(b*) => return get_exit_type(b),
-            Body::Stmt(st*) => return get_exit_type(st),
-            Body::If(st*) => return get_exit_type(st),
-            Body::IfLet(st*) => return get_exit_type(st),
+            Body::Block(b) => return get_exit_type(b),
+            Body::Stmt(st) => return get_exit_type(st),
+            Body::If(st) => return get_exit_type(st),
+            Body::IfLet(st) => return get_exit_type(st),
         }
     }
 
@@ -461,22 +533,20 @@ impl Exit{
 
     func get_exit_type(expr: Expr*): Exit{
         match expr{
-            Expr::Block(block0*) => {
-                let block = block0.get();
-                return get_exit_type(block);
+            Expr::Block(blk) => {
+                return get_exit_type(blk.get());
             },
-            Expr::If(is0*) => {
-                let is = is0.get();
-                return get_exit_type(is);
+            Expr::If(is) => {
+                return get_exit_type(is.get());
             },
-            Expr::IfLet(iflet0*) => {
+            Expr::IfLet(iflet0) => {
                 let iflet = iflet0.get();
                 return get_exit_type(iflet);
             },
-            Expr::Match(mt0*) => {
+            Expr::Match(mt0) => {
                 return get_exit_type(mt0.get());
             },
-            Expr::Call(call*) => {
+            Expr::Call(call) => {
                 if(call.name.eq("panic") && call.scope.is_none()){
                     return Exit::new(ExitType::PANIC);
                 }
@@ -488,7 +558,7 @@ impl Exit{
                 }
                 return Exit::new(ExitType::NONE);
             },
-            Expr::MacroCall(call*) => {
+            Expr::MacroCall(call) => {
                 if(call.name.eq("panic") && call.scope.is_none()){
                     return Exit::new(ExitType::PANIC);
                 }
@@ -503,10 +573,10 @@ impl Exit{
 
     func get_exit_type(stmt: Stmt*): Exit{
         match stmt{
-            Stmt::Ret(expr*) => return Exit::new(ExitType::RETURN),
+            Stmt::Ret(expr) => return Exit::new(ExitType::RETURN),
             Stmt::Break => return Exit::new(ExitType::BREAK),
             Stmt::Continue => return Exit::new(ExitType::CONTINE),
-            Stmt::Expr(expr*) => return get_exit_type(expr),
+            Stmt::Expr(expr) => return get_exit_type(expr),
             _ => return Exit::new(ExitType::NONE),
         }
     }

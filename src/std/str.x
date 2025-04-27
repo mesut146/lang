@@ -14,14 +14,14 @@ struct str{
 impl str{
   func new(buf: [u8]): str{
     let res = str{buf: buf};
-    res.check_all();
+    //res.check_all();
     return res;
   }
   func new(buf: [i8]): str{
     let ptr2 = buf.ptr() as u8*;
     let buf2 = ptr2[0..buf.len()];
     let res = str{buf: buf2};
-    res.check_all();
+    //res.check_all();
     return res;
   }
   func from_raw(ptr: i8*): str{
@@ -267,6 +267,22 @@ impl str{
         }
       }
       return res;
+    }
+
+    func is_ws(ch: i32): bool{
+      return ch == 0x20 || ch == 0x09 || ch == 0x0A || ch == 0x0D;
+    }
+
+    func trim(self): str{
+      let start = 0;
+      let end = self.len() - 1;
+      while(start <= end && is_ws(self.get(start))){
+        ++start;
+      }
+      while(end >= start && is_ws(self.get(end))){
+        --end;
+      }
+      return self.substr(start, end + 1);
     }
 }
 

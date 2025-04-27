@@ -1,0 +1,57 @@
+
+name: test
+
+on: [push]
+
+env: 
+  last_version: '1.00'
+  new_version: '1.00'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "set env"
+        run: echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+      - name: "download toolchain"
+        run: |
+          gh auth status
+          gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
+          unzip $toolchain_dir.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: bootstrap
+        run: |
+          bin/build.sh $toolchain_dir $new_version
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain
+          path: x-toolchain-${{ env.new_version }}-x86_64.zip
+
+      - name: Create Release
+        if: ${{ env.new_version != env.last_version }}
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v${{ env.new_version }}
+          release_name: toolchain for v${{ env.new_version }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        if: ${{ env.new_version != env.last_version }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
+          asset_name: x-toolchain-${{ env.new_version }}-x86_64.zip
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

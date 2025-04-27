@@ -72,7 +72,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
         body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
     }
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for ev in variants{
                 let then = Block::new(line, line);
                 for fd in &ev.fields{
@@ -80,7 +80,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                         //then.list.add(parse_stmt(format("printf(\"{}=%p *=%d\\n\", *&fd.name);", &fd.name, &fd.name, &fd.name), unit, line));
                         //then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
                     }else{
-                        then.list.add(parse_stmt(format("let __{} = {}.clone();", &fd.name, &fd.name), unit, line));
+                        then.list.add(parse_stmt(format("let __{} = {}.clone();", fd.name.get(), fd.name.get()), unit, line));
                     }
                 }
                 let str = Fmt::new();
@@ -95,13 +95,14 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                         if(i > 0){
                             str.print(", ");
                         }
-                        str.print(&fd.name);
+                        str.print(fd.name.get());
                         str.print(": ");
                         if(fd.type.is_pointer()){
-                            str.print(&fd.name);
+                            str.print("*");
+                            str.print(fd.name.get());
                         }else{
                             str.print("__");
-                            str.print(&fd.name);
+                            str.print(fd.name.get());
                         }
                         ++i;
                     }
@@ -124,22 +125,22 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                 };
                 for fd in &ev.fields{
                     let arg_id = unit.node(line);
-                    is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
+                    is.args.add(ArgBind{.arg_id, name: fd.name.get().clone()});
                 }
                 let iflet_id = unit.node(line);
                 body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
             }
             body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             for fd in fields{
                 if(fd.type.is_pointer()){
                     //let <name> = self.<name>;
-                    let clone_stmt = parse_stmt(format("let {} = self.{};", &fd.name, &fd.name), unit, line);
+                    let clone_stmt = parse_stmt(format("let {} = self.{};", fd.name.get(), fd.name.get()), unit, line);
                     body.list.add(clone_stmt);
                 }else{
                     //let <name> = self.<name>.clone();
-                    let clone_stmt = parse_stmt(format("let {} = self.{}.clone();", &fd.name, &fd.name), unit, line);
+                    let clone_stmt = parse_stmt(format("let {} = self.{}.clone();", fd.name.get(), fd.name.get()), unit, line);
                     body.list.add(clone_stmt);
                 }
             }
@@ -152,16 +153,16 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                 if(i > 0){
                     str.print(", ");
                 }
-                str.print(&fd.name);
+                str.print(fd.name.get());
                 str.print(": ");
-                str.print(&fd.name);
+                str.print(fd.name.get());
                 ++i;
             }
             str.print("};");
             let return_stmt = parse_stmt(str.unwrap(), unit, line);
             body.list.add(return_stmt);
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
@@ -179,6 +180,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
+    //print("mlone={:?}\n", &m);
     let imp = make_impl(decl, "Clone");
     imp.methods.add(m);
     //print("clone={}\n", &imp);
@@ -194,7 +196,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
     }
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
                 let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
@@ -203,7 +205,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 for(let j = 0;j < ev.fields.len();++j){
                     let fd = ev.fields.get(j);
                     //Drop::drop({fd.name})
-                    let drop_stmt = parse_stmt(format("Drop::drop({});", &fd.name), unit, line);
+                    let drop_stmt = parse_stmt(format("Drop::drop({});", fd.name.get()), unit, line);
                     then.list.add(drop_stmt);
                 }
                 then.list.add(parse_stmt("return;".str(), unit, line));
@@ -221,21 +223,26 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 for(let j = 0;j < ev.fields.len();++j){
                     let fd = ev.fields.get(j);
                     let arg_id = unit.node(line);
-                    iflet.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: false});
+                    iflet.args.add(ArgBind{.arg_id, name: fd.name.get().clone()});
                 }
                 body.list.add(Expr::IfLet{.iflet_id, Box::new(iflet)}.into_stmt());
             }
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             for(let i = 0;i < fields.len();++i){
                 let fd = fields.get(i);
                 if(!is_struct(&fd.type)) continue;
                 //self.{fd.name}.drop();
-                let drop_stmt = parse_stmt(format("Drop::drop(self.{});", &fd.name), unit, line);
-                body.list.add(drop_stmt);
+                if(fd.name.is_some()){
+                    let drop_stmt = parse_stmt(format("Drop::drop(self.{});", fd.name.get()), unit, line);
+                    body.list.add(drop_stmt);
+                }else{
+                    let drop_stmt = parse_stmt(format("Drop::drop(self.{});", i), unit, line);
+                    body.list.add(drop_stmt);
+                }
             }
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
@@ -261,7 +268,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
                 let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
@@ -271,29 +278,44 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 then.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
                 then.list.add(parse_stmt(format("f.print(\"::{}\");", &ev.name), unit, line));
                 if(ev.fields.len() > 0){
-                    then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
+                    if(ev.is_tuple){
+                        then.list.add(parse_stmt("f.print(\"(\");".str(), unit, line));
+                    }else{
+                        then.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
+                    }
                     for(let j = 0;j < ev.fields.len();++j){
                         let fd = ev.fields.get(j);
                         if(j > 0){
                             then.list.add(parse_stmt("f.print(\", \");".str(), unit, line));
                         }
-                        //f.print("<fd.name>: ")
-                        then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
+                        /*if(fd.name.is_some()){
+                            then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name.get()), unit, line));
+                            then.list.add(parse_stmt(format("debug_member!(*{}, f);", fd.name.get()), unit, line));
+                        }else{
+                            //then.list.add(parse_stmt(format("f.print(\"{}: \");", j), unit, line));
+                            then.list.add(parse_stmt(format("debug_member!(*_{}, f);", j), unit, line));
+                        }*/
+                        //print("then={:?}\n", then.list.last());
+                        then.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name.get()), unit, line));
                         if(fd.type.is_pointer()){
                             //print hex based address
                             //i64::debug_hex(<fd.name> as u64, f);
-                            then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name), unit, line));
+                            then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name.get()), unit, line));
                         }else{
                             if(decl.is_generic){
-                                then.list.add(parse_stmt(format("std::debug({}, f);", fd.name), unit, line));
+                                then.list.add(parse_stmt(format("std::debug({}, f);", fd.name.get()), unit, line));
                             }else{
                                 //{fd.name}.debug(f);
                                 //already ptr from if let arg
-                                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name), unit, line));
+                                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name.get()), unit, line));
                             }
                         }
                     }
-                    then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
+                    if(ev.is_tuple){
+                        then.list.add(parse_stmt("f.print(\")\");".str(), unit, line));
+                    }else{
+                        then.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
+                    }
                 }
                 let self_id = unit.node(line);
                 let block_id = unit.node(line);
@@ -307,13 +329,17 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 for(let j = 0;j < ev.fields.len();++j){
                     let fd = ev.fields.get(j);
                     let arg_id = unit.node(line);
-                    is.args.add(ArgBind{.arg_id, name: fd.name.clone(), is_ptr: is_struct(&fd.type)});
+                    if(fd.name.is_some()){
+                        is.args.add(ArgBind{.arg_id, name: fd.name.get().clone()});
+                    }else{
+                        is.args.add(ArgBind{.arg_id, name: format("_{}", i)});
+                    }
                 }
                 let iflet_id = unit.node(line);
                 body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
             }
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             //f.print(<decl.type.print()>)
             body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
             body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
@@ -323,23 +349,23 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                     body.list.add(parse_stmt(format("f.print(\", \");"), unit, line));
                 }
                 //f.print("<fd.name>: ");
-                body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name), unit, line));
+                body.list.add(parse_stmt(format("f.print(\"{}: \");", fd.name.get()), unit, line));
                 if(fd.type.is_pointer()){
                     //print hex based address
                     //i64::debug_hex(fd.name as u64, f);
-                    body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name), unit, line));
+                    body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name.get()), unit, line));
                 }else{
                     if(decl.is_generic){
-                        body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name), unit, line));
+                        body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name.get()), unit, line));
                     }else{
                         //self.{fd.name}.debug(f);
-                        body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name), unit, line));
+                        body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name.get()), unit, line));
                     }
                 }
             }
             body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
@@ -350,6 +376,162 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
 }
 
 func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
+    if (mc.args.empty()) {
+        r.err(node, "format no arg");
+    }
+    let fmt: Expr* = mc.args.get(0);
+    r.visit(fmt).drop();
+    let lit_opt = is_str_lit(fmt);
+    if (lit_opt.is_none()) {
+        r.err(node, "format arg not str literal");
+    }
+    let fmt_str: str = lit_opt.unwrap().str();
+    /*let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
+    for (let i = 0;i < format_specs.len();++i) {
+        let fs = format_specs[i];
+        if (fmt_str.contains(fs)) {
+            r.err(node, format("invalid format specifier: {}", fs));
+        }
+    }*/
+    let line = node.line;
+    let info = FormatInfo::new(line);
+    let block = &info.block;
+    //print("macro {} id={} {}\n", node, node.id, r.unit.path);
+    if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
+        //optimized print, no heap alloc, no fmt
+        //printf("..")
+        if (Resolver::is_panic(mc)) {
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
+            let tmp = normalize_quotes(msg.str());
+            msg.drop();
+            msg = tmp;
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
+            msg.drop();
+        }else{
+            let msg = normalize_quotes(fmt_str);
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            msg.drop();
+        }
+        r.visit_block(block);
+        r.format_map.add(node.id, info);
+        return;
+    }
+    let fmt_var_name = format("f_{}", node.id);
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &fmt_var_name), &r.unit, line);
+    block.list.add(var_stmt);
+    let pos = 0;
+    let arg_idx = 1;//skip fmt_str
+    while(pos < fmt_str.len()){
+        let br_pos = fmt_str.indexOf("{", pos);
+        if(br_pos == -1){
+            let sub = fmt_str.substr(pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            block.list.add(st);
+            sub2.drop();
+            break;
+        }
+        if(br_pos > pos){
+            let sub = fmt_str.substr(pos, br_pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            sub2.drop();
+            block.list.add(st);
+        }
+        if(fmt_str.get(br_pos + 1) == '{'){
+            let st = parse_stmt(format("{}.print(\"{{\");", &fmt_var_name), &r.unit, line);
+            block.list.add(st);
+            pos = br_pos + 2;
+            continue;
+        }
+        let br_end = fmt_str.indexOf("}", br_pos);
+        if(br_end == -1){
+            r.err(node, "invalid format no closing }");
+        }
+        let debug = false;
+        let func_name = "Display::fmt";
+        if(fmt_str.starts_with("{:?", br_pos)){
+            debug = true;
+            func_name = "Debug::debug";
+            pos = br_pos + 3;
+        }else{
+            pos = br_pos + 1;
+        }
+        if(pos < br_end){
+            //named arg
+            let arg_str = fmt_str.substr(pos, br_end);
+            let expr = parse_expr(arg_str.owned(), &r.unit, line);
+            let arg_rt = r.visit(&expr);
+            if(is_struct(&arg_rt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            arg_rt.drop();
+            expr.drop();
+        }else{
+            if(arg_idx >= mc.args.len()){
+                r.err(node, "format specifier not matched");
+            }
+            let arg = mc.args.get(arg_idx);
+            let argt = r.visit(arg);
+            if(is_struct(&argt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            ++arg_idx;
+            argt.drop();
+        }
+        pos = br_end + 1;
+        // argt.drop();
+    }
+    if(arg_idx < mc.args.len()){
+        r.err(node, format("format arg not matched in specifier {:?}", mc.args.get(arg_idx)));
+    }
+    if(Resolver::is_print(mc)){
+        //..f.buf.print();
+        let print_st = parse_stmt(format("String::print(&{}.buf);", &fmt_var_name), &r.unit, line);
+        block.list.add(print_st);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
+        block.list.add(drop_st);
+        r.visit_block(block);
+    }else if(Resolver::is_panic(mc)){
+        //.."<method:line>".print();
+        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
+        let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
+        pos_info.drop();
+        block.list.add(pos_info_st);
+        //..f.buf.print();
+        let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
+        block.list.add(print_st);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
+        block.list.add(drop_st);
+        block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
+        //..print("block={}\n", block);
+        r.visit_block(block);
+    }else if(Resolver::is_format(mc)){
+        //..f.unwrap()
+        let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
+        block.return_expr.set(unwrap_expr);
+        let tmp = r.visit_block(block);
+        tmp.drop();
+    }else{
+        r.err(node, "generate_format");
+    }
+    r.format_map.add(node.id, info);
+    fmt_var_name.drop();
+}
+func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
     }

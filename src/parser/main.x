@@ -19,13 +19,6 @@ import std/libc
 import std/stack
 import std/result
 
-static __static_test_var = "test";
-static __static_func_test: i32 = static_func();
-
-func static_func(): i32{
-  return 42;
-}
-
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");
 }
@@ -79,6 +72,8 @@ func bootstrap(cmd: CmdArgs*){
   let src_dir = format("{}/src", root);
   let std_dir = format("{}/src/std", root);
   let llvm_only = cmd.consume_any("-llvm-only");
+
+  File::create_dir(build.str());
 
   if(cmd.has_any("-target")){
     let target = cmd.get_val("-target").unwrap();
@@ -143,18 +138,24 @@ func bootstrap(cmd: CmdArgs*){
   };
 
   let libbridge = {
-    let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
-    if(!File::exists(lib.str())){
-      print("building libbridge\n");
-      let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
-      if(out.is_ok() && !out.get().empty()){
-        print("{}\n", out.unwrap());
-      }
-      if(!File::exists(lib.str())){
-        panic("failed to build libbridge");
-      }
+    let libbridge_opt = std::getenv("libbridge");
+    if(libbridge_opt.is_some()){
+      libbridge_opt.unwrap().owned()
     }
-    lib
+    else{
+      let lib = format("{}/cpp_bridge/build/libbridge.a", &root);
+      if(!File::exists(lib.str())){
+        print("building libbridge\n");
+        let out = Process::run(format("{root}/cpp_bridge/x.sh").str()).read_close();
+        if(out.is_ok() && !out.get().empty()){
+          print("{}\n", out.unwrap());
+        }
+        if(!File::exists(lib.str())){
+          panic("failed to build libbridge");
+        }
+      }
+      lib
+    }
   };
 
   if(is_static_llvm){
@@ -204,9 +205,9 @@ func bootstrap(cmd: CmdArgs*){
     }
     if(proc_out.is_ok()){
       let bin2 = format("{}/{}", build, name);
-      File::copy(bin_path.str(), bin2.str());
+      File::copy(bin_path.str(), bin2.str())?;
       //set_as_executable(bin2.cstr().ptr());
-      File::set_permissions(bin2.str(), Permissions::from_mode(/*777*/511));
+      File::set_permissions(bin2.str(), Permissions::from_mode(/*777*/511))?;
       bin2.drop();
     }
     cmd_link.drop();
@@ -214,11 +215,11 @@ func bootstrap(cmd: CmdArgs*){
   }
   else if(!is_static){
     let bin2 = format("{}/{}", &build, name);
-    File::copy(bin.str(), bin2.str());
+    File::copy(bin.str(), bin2.str())?;
     print("wrote {}\n", bin2);
     //let binc = bin2.cstr();
     // set_as_executable(binc.ptr());
-    File::set_permissions(bin2.str(), Permissions::from_mode(511));
+    File::set_permissions(bin2.str(), Permissions::from_mode(511))?;
     //bin2.drop();
   }
   root.drop();
@@ -263,6 +264,23 @@ func handle_c(cmd: CmdArgs*){
     }
     std_path.drop();
   }
+  if(cmd.has_any("-target")){
+    let target = cmd.get_val("-target").unwrap();
+    if(target.eq("x86_64-unknown-linux-gnu") || target.eq("x86_64")){
+      std::setenv("target_triple", "x86_64-unknown-linux-gnu");
+    }
+    else if(target.eq("aarch64-linux-gnu") || target.eq("arm64")){
+      std::setenv("target_triple", "aarch64-linux-gnu");
+    }
+    else if(target.eq("android")){
+      std::setenv("target_triple", "aarch64-linux-android");
+    }
+    else{
+      panic("unsupported target: {}", target);
+    }
+  }
+
+
   let path: String = cmd.get();
   
   config.set_file(path.str());
@@ -282,6 +300,7 @@ func handle_c(cmd: CmdArgs*){
       name.drop();
     }
   }
+  
   if(File::is_dir(path.str())){
     let out = Compiler::compile_dir(config);
     out.drop();
@@ -315,9 +334,6 @@ func print_version(){
 
 func handle(cmd: CmdArgs*){
   print("##########running##########\n");
-  if(!__static_test_var.eq("test") && __static_func_test != 42){
-    panic("static variables not working");
-  }
   //print_version();
   if(!cmd.has()){
     print("enter a command\n");
@@ -325,9 +341,6 @@ func handle(cmd: CmdArgs*){
   }
   if(cmd.is("-v")){
     print_version();
-    return;
-  }
-  if(handle_tests(cmd)){
     return;
   }
   if(cmd.is("std")){
@@ -344,6 +357,10 @@ func handle(cmd: CmdArgs*){
     let dir = format("{}/parser", get_src_dir());
     let out = format("{}/parser2", get_src_dir());
     format_dir(dir.str(), out.str());
+    return;
+  }
+  else if(handle_tests(cmd)){
+    return;
   }else{
     panic("invalid cmd: {:?}", cmd.args);
   }

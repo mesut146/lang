@@ -24,7 +24,7 @@ func read_write(){
   printf("remove result=%d\n", remove(file_name.ptr()));
 }
 
-func seek_test(f: FILE*, len: i32){
+func seek_test(f: cFILE*, len: i32){
   fseek(f, 0, SEEK_END());
   assert(ftell(f) == len);
   fseek(f, 0, SEEK_SET());
@@ -32,7 +32,7 @@ func seek_test(f: FILE*, len: i32){
 
 func list_test(){
   let dir = ".";
-  let arr: List<String> = File::list(dir);
+  let arr: List<String> = File::read_dir(dir).unwrap();
   print("{} files in '{}'\n", arr.len(), dir);
   /*for(let i = 0;i < arr.len();++i){
     let file = arr.get_ptr(i);
@@ -76,7 +76,7 @@ func fork_test(){
 
 func main(){
   parse_float();
-  let cur = File::resolve(".");
+  let cur = File::resolve(".").unwrap();
   print("pwd = {}\n", cur);
   read_write();
   list_test();

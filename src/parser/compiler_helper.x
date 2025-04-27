@@ -12,6 +12,8 @@ import std/map
 import std/libc
 import std/stack
 
+const POINTER_SIZE: i32 = 64;
+
 struct RvalueHelper {
   rvalue: bool;
   scope: Option<Expr*>;
@@ -20,8 +22,13 @@ struct RvalueHelper {
 
 impl RvalueHelper{
     func is_rvalue(e: Expr*): bool{
-      if let Expr::Par(inner*) = (e){
+      if let Expr::Par(inner) = e{
         return is_rvalue(inner.get());
+      }
+      if let Expr::Unary(op, inner) = e{
+        if(op.eq("*")){
+          return true;
+        }
       }
       return e is Expr::Call || e is Expr::Lit || e is Expr::As || e is Expr::Infix;
     }
@@ -101,12 +108,18 @@ func make_malloc(): Function*{
     return f;
 }
 
-func getTypes(unit: Unit*, list: List<Decl*>*){
-    for (let i = 0;i < unit.items.len();++i) {
-        let item = unit.items.get(i);
-        if let Item::Decl(d*)=(item){
-            if(d.is_generic) continue;
-            list.add(d);
+func getTypes(items: List<Item>*, list: List<Decl*>*){
+    for (let i = 0;i < items.len();++i) {
+        let item = items.get(i);
+        match item{
+          Item::Decl(d)=>{
+              if(d.is_generic) continue;
+              list.add(d);
+          },
+          Item::Module(md)=>{
+              getTypes(&md.items, list);
+          },
+          _=>{}
         }
     }
 }
@@ -148,14 +161,14 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
     all_deps(decl.base.get(), r, res);
   }
   match decl{
-    Decl::Struct(fields*)=>{
+    Decl::Struct(fields)=>{
       for (let j = 0; j < fields.len(); ++j) {
         let fd = fields.get(j);
         //add_type(res, &fd.type);
         all_deps(&fd.type, r, res);
       }
     },
-    Decl::Enum(variants*)=>{
+    Decl::Enum(variants)=>{
       for (let j = 0; j < variants.len(); ++j) {
         let ev = variants.get(j);
         for (let k = 0; k < ev.fields.len(); ++k) {
@@ -165,10 +178,10 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
         }
       }
     },
-    Decl::TupleStruct(fields*)=>{
-      for ft in fields{
+    Decl::TupleStruct(fields)=>{
+      for fd in fields{
         //add_type(res, &ft);
-        all_deps(ft, r, res);
+        all_deps(&fd.type, r, res);
       }
     }
   }
@@ -322,18 +335,26 @@ func getMethods(unit: Unit*): List<Method*>{
   let list = List<Method*>::new(100);
   for (let i = 0;i < unit.items.len();++i) {
     let item = unit.items.get(i);
-    if let Item::Method(m*)=(item){
-        if(m.is_generic) continue;
-        list.add(m);
-    }else if let Item::Impl(imp*)=(item){
-      if(!imp.info.type_params.empty()) continue;
-      for(let j = 0;j < imp.methods.len();++j){
-        list.add(imp.methods.get(j));
-      }
-    }else if let Item::Extern(methods*)=(item){
-      for(let j = 0;j < methods.len();++j){
-        list.add(methods.get(j));
-      }
+    match item{
+      Item::Method(m)=>{
+          if(m.is_generic) continue;
+          list.add(m);
+      },
+      Item::Impl(imp)=>{
+        if(!imp.info.type_params.empty()) continue;
+        for(let j = 0;j < imp.methods.len();++j){
+          list.add(imp.methods.get(j));
+        }
+      },
+      Item::Extern(methods)=>{
+        for(let j = 0;j < methods.len();++j){
+          list.add(methods.get(j));
+        }
+      },
+      Item::Module(md) => {
+        //todo
+      },
+      _ => {}
     }
   }
   //broken after expand, ptr
@@ -387,19 +408,30 @@ impl Compiler{
     return res;
   }
   func mapType(self, type: Type*, s: String*): llvm_Type*{
-    if(type.is_void()) return getVoidTy();
-    if(type.eq("f32")){
-      return getFloatTy();
-    }
-    if(type.eq("f64")){
-      return getDoubleTy();
-    }
-    let prim_size = prim_size(s.str());
-    if(prim_size.is_some()){
-      return getInt(prim_size.unwrap());
-    }
     match type{
-      Type::Tuple(tt*)=>{
+      Type::Pointer(elem) =>{
+        let elem_ty = self.mapType(elem.get());
+        return getPointerTo(elem_ty) as llvm_Type*;
+      },
+      Type::Array(elem, size) =>{
+        let elem_ty = self.mapType(elem.get());
+        return getArrTy(elem_ty, *size) as llvm_Type*;
+      },
+      Type::Slice(elem) =>{
+        let p = self.protos.get();
+        return p.std("slice") as llvm_Type*;
+      },
+      Type::Function(elem_bx)=>{
+        let res = self.make_proto(elem_bx.get());
+        //return res as llvm_Type*;
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+      },
+      Type::Lambda(elem_bx)=>{
+        let res = self.make_proto(elem_bx.get());
+        //return res as llvm_Type*;
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+      },
+      Type::Tuple(tt)=>{
         let elems = vector_Type_new();
         for elem in &tt.types{
           vector_Type_push(elems, self.mapType(elem));
@@ -418,36 +450,22 @@ impl Compiler{
         name.drop();
         return res;
       },
-      _ => {
-        //todo
+      Type::Simple(smp) => {
+        if(type.is_void()) return getVoidTy();
+        if(type.eq("f32")) return getFloatTy();
+        if(type.eq("f64")) return getDoubleTy();
+        
+        let prim_size = prim_size(s.str());
+        if(prim_size.is_some()){
+          return getInt(prim_size.unwrap());
+        }
+        let p = self.protos.get();
+        if(!p.classMap.contains(s)){
+          panic("mapType {}\n", s);
+        }
+        return p.get(s);
       }
     }
-    if let Type::Array(elem*,size)=(type){
-      let elem_ty = self.mapType(elem.get());
-      return getArrTy(elem_ty, size) as llvm_Type*;
-    }
-    if let Type::Pointer(elem*)=(type){
-      let elem_ty = self.mapType(elem.get());
-      return getPointerTo(elem_ty) as llvm_Type*;
-    }
-    if let Type::Function(elem_bx*)=(type){
-      let res = self.make_proto(elem_bx.get());
-      //return res as llvm_Type*;
-      return getPointerTo(res as llvm_Type*) as llvm_Type*;
-    }
-    if let Type::Lambda(elem_bx*)=(type){
-      let res = self.make_proto(elem_bx.get());
-      //return res as llvm_Type*;
-      return getPointerTo(res as llvm_Type*) as llvm_Type*;
-    }
-    let p = self.protos.get();
-    if let Type::Slice(elem*)=(type){
-      return p.std("slice") as llvm_Type*;
-    }
-    if(!p.classMap.contains(s)){
-      panic("mapType {}\n", s);
-    }
-    return p.get(s);
   }
 
   //normal decl protos and di protos
@@ -455,7 +473,7 @@ impl Compiler{
     let p = self.protos.get();
     let resolver = self.get_resolver();
     let list = List<Decl*>::new();
-    getTypes(self.unit(), &list);
+    getTypes(&self.unit().items, &list);
     //print("used={}\n", resolver.used_types);
     for rt in &resolver.used_types{
       let decl = resolver.get_decl(rt).unwrap();
@@ -512,7 +530,7 @@ impl Compiler{
     let p = self.protos.get();
     let elems = vector_Type_new();
     match decl{
-      Decl::Enum(variants*)=>{
+      Decl::Enum(variants)=>{
         //calc enum size
         let max = 0;
         for(let i = 0;i < variants.len();++i){
@@ -529,7 +547,7 @@ impl Compiler{
         vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
         vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
       },
-      Decl::Struct(fields*)=>{
+      Decl::Struct(fields)=>{
         if(decl.base.is_some()){
           vector_Type_push(elems, self.mapType(decl.base.get()));
         }
@@ -539,9 +557,9 @@ impl Compiler{
           vector_Type_push(elems, ft);
         }
       },
-      Decl::TupleStruct(fields*)=>{
-        for ft in fields{
-          let ft2 = self.mapType(ft);
+      Decl::TupleStruct(fields)=>{
+        for fd in fields{
+          let ft2 = self.mapType(&fd.type);
           vector_Type_push(elems, ft2);
         }
       }
@@ -601,7 +619,7 @@ impl Compiler{
     let linkage = ext();
     if(!m.type_params.empty()){
       linkage = odr();
-    }else if let Parent::Impl(info*)=(&m.parent){
+    }else if let Parent::Impl(info)=&m.parent{
       if(info.type.is_simple() && !info.type.get_args().empty()){
         linkage = odr();
       }
@@ -621,36 +639,37 @@ impl Compiler{
   }
 
   func getSize(self, type: Type*): i64{
-    if(type.is_prim()){
-      return prim_size(type.name().str()).unwrap();
-    }
-    if(type.is_any_pointer()) return 64;
-    if(type is Type::Lambda) return 64;
-    if let Type::Array(elem*, sz)=(type){
-      return self.getSize(elem.get()) * sz;
-    }
-    if let Type::Slice(elem*)=(type){
-      let st = self.protos.get().std("slice");
-      return getSizeInBits(st);
-    }
     match type{
-      Type::Tuple(tt*) => {
+      Type::Pointer(bx) => return POINTER_SIZE,
+      Type::Function(bx) => return POINTER_SIZE,
+      Type::Lambda(bx) => return POINTER_SIZE,
+      Type::Slice(bx) => {
+        let st = self.protos.get().std("slice");
+        return getSizeInBits(st);
+      },
+      Type::Array(elem, size) => {
+        return self.getSize(elem.get()) * (*size);
+      },
+      Type::Tuple(tt) => {
         let rt = self.get_resolver().visit_type(type);
         let mapped = self.mapType(&rt.type);
+        rt.drop();
         return getSizeInBits(mapped as StructType*);
       },
-      _ => {
-        //todo
+      Type::Simple(smp) => {
+        if(type.is_prim()){
+          return prim_size(type.name().str()).unwrap();
+        }
+        let rt = self.get_resolver().visit_type(type);
+        if(rt.is_decl()){
+          let decl = self.get_resolver().get_decl(&rt).unwrap();
+          rt.drop();
+          return self.getSize(decl);
+        }
+        rt.drop();
+        panic("no decl");
       }
     }
-    let rt = self.get_resolver().visit_type(type);
-    if(rt.is_decl()){
-      let decl = self.get_resolver().get_decl(&rt).unwrap();
-      rt.drop();
-      return self.getSize(decl);
-    }
-    rt.drop();
-    panic("getSize {:?}", type);
   }
 
   func getSize(self, decl: Decl*): i64{
@@ -805,67 +824,67 @@ impl Compiler{
 
   func emit_as_arg(self, node: Expr*): Value*{
     match node{
-      Lit(val*)=>{
+      Lit(val)=>{
         return self.visit(node);
       },
-      Name(val*)=>{
+      Name(val)=>{
         //todo
       },
-      Call(mc*) => {
+      Call(mc) => {
         return self.visit(node);
       },
-      MacroCall(mc*) => {
+      MacroCall(mc) => {
         return self.visit(node);
       },
-      Par(e*) => {
+      Par(e) => {
         return self.visit(node);
       },
-      Type(val*) => {
+      Type(val) => {
         return self.visit(node);
       },
-      Unary(op*, e*) => {
+      Unary(op, e) => {
         return self.visit(node);
       },
-      Infix(op*, l*, r*) => {
+      Infix(op, l, r) => {
         return self.visit(node);
       },
-      Access(scope*, name*) => {
+      Access(scope, name) => {
         //todo
       },
-      Obj(type*, args*) => {
+      Obj(type, args) => {
         return self.visit(node);
       },
-      As(e*, type*) => {
+      As(e, type) => {
 
       },
-      Is(e*, rhs*) => {
+      Is(e, rhs) => {
         return self.visit(node);
       },
-      Array(list*, size) => {
+      Array(list, size) => {
         return self.visit(node);
       },
-      ArrAccess(val*) => {
+      ArrAccess(val) => {
 
       },
-      Match(val*) => {
+      Match(val) => {
         //todo
       },
-      Block(x*) => {
+      Block(x) => {
 
       },
-      If(is*) => {
+      If(is) => {
 
       },
-      IfLet(il*) => {
+      IfLet(il) => {
 
       },
-      Lambda(val*) => {
+      Lambda(val) => {
         return self.visit(node);
       },
-      Ques(e*) => {
+      Ques(e) => {
         return self.visit(node);
       },
-      Tuple(elems*) => {
+      Tuple(elems) => {
         return self.visit(node);
       }
     }
@@ -873,10 +892,10 @@ impl Compiler{
   }
 
   func get_obj_ptr(self, node: Expr*): Value*{
-    if let Expr::Par(e*)=(node){
+    if let Expr::Par(e)=node{
       return self.get_obj_ptr(e.get());
     }
-    if let Expr::Unary(op*,e*)=(node){
+    if let Expr::Unary(op, e)=node{
       if(op.eq("*")){
         return self.visit(node);
       }
@@ -894,10 +913,10 @@ impl Compiler{
       ty.drop();
       return val;
     }
-    if let Expr::Lambda(le*)=(node){
+    if let Expr::Lambda(le)=node{
         return val;
     }
-    if let Expr::Type(type*)=(node){
+    if let Expr::Type(type)=node{
         //ptr to member func
         let rt = self.get_resolver().visit(node);
         if(rt.type.is_fpointer() && rt.method_desc.is_some()){
@@ -907,10 +926,10 @@ impl Compiler{
             return val;
         }
     }
-    if let Expr::IfLet(il*)=(node){
+    if let Expr::IfLet(il)=node{
         return val;
     }
-    if let Expr::Ques(bx*)=(node){
+    if let Expr::Ques(bx)=node{
       //todo load prim
       return val;
   }
@@ -992,7 +1011,7 @@ impl Compiler{
 
   func do_inline(self, expr: Expr*, ptr_ret: Value*){
     match expr{
-      Expr::Call(call*) => {
+      Expr::Call(call) => {
         let rt = self.get_resolver().visit(expr);
         let method = self.get_resolver().get_method(&rt);
         if(method.is_some()){
@@ -1001,19 +1020,19 @@ impl Compiler{
         }
         rt.drop();
       },
-      Expr::Type(type*) => {
+      Expr::Type(type) => {
         self.simple_enum(type, ptr_ret);
       },
-      Expr::Obj(type*, args*) => {
+      Expr::Obj(type, args) => {
         self.visit_obj(expr, type, args, ptr_ret);
       },
-      Expr::ArrAccess(aa*) => {
+      Expr::ArrAccess(aa) => {
         self.visit_slice(expr, aa, ptr_ret);
       },
-      Expr::Lit(lit*) => {
+      Expr::Lit(lit) => {
         self.str_lit(lit.val.str(), ptr_ret);
       },
-      Expr::Array(list*, sz*) => {
+      Expr::Array(list, sz) => {
         self.visit_array(expr, list, sz, ptr_ret);
       },
       _ => {
@@ -1029,12 +1048,12 @@ func can_inline(expr: Expr*, r: Resolver*): bool{
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{
   match e{
-    Expr::ArrAccess(aa*) => return aa.idx2.is_some(),//slice creation
-    Expr::Lit(lit*) => return lit.kind is LitKind::STR,
-    Expr::Type(type*) => return true,
-    Expr::Array(elems*, size) => return true,
-    Expr::Obj(type*, args*) => return true,
-    Expr::Call(call*) => {
+    Expr::ArrAccess(aa) => return aa.idx2.is_some(),//slice creation
+    Expr::Lit(lit) => return lit.kind is LitKind::STR,
+    Expr::Type(type) => return true,
+    Expr::Array(elems, size) => return true,
+    Expr::Obj(type, args) => return true,
+    Expr::Call(call) => {
       let rt = r.visit(e);
       if(rt.is_method()){
         let target = r.get_method(&rt).unwrap();

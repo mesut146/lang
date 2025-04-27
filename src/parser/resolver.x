@@ -18,6 +18,7 @@ import std/libc
 import std/io
 import std/fs
 import std/stack
+import std/result
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
@@ -28,6 +29,13 @@ static lambdaCnt = 0;
 func verbose_stmt(): bool{
   return false;
 }
+
+#derive(Debug)
+struct Error{
+  msg: String;
+  line: i32;
+}
+
 
 struct Context{
   map: HashMap<String, Box<Resolver>>;
@@ -47,6 +55,7 @@ impl Context{
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
+    let prog = Progress::new(out_dir.str());
     let res = Context{
        map: HashMap<String, Box<Resolver>>::new(),
        prelude: pre,
@@ -56,7 +65,7 @@ impl Context{
        verbose: true,
        verbose_all: false,
        stack_trace: std::getenv("TRACE").is_some(),
-       prog: Progress::new(),
+       prog: prog,
     };
     return res;
   }
@@ -182,6 +191,8 @@ struct Resolver{
   lambdas: HashMap<i32, Method>;
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
+  in_global_rhs: bool;
+  use_items: List<Type>;
 }
 
 func dump(r: Resolver*){
@@ -205,7 +216,8 @@ impl Resolver{
       print("unit={:?}\n", unit);
     }
     
-    let res = Resolver{unit: unit,
+    return Resolver{
+      unit: unit,
       is_resolved: false,
       is_init: false,
       typeMap: HashMap<String, RType>::new(),
@@ -228,8 +240,9 @@ impl Resolver{
       lambdas: HashMap<i32, Method>::new(),
       inLambda: Stack<i32>::new(),
       extra_imports: List<ImportStmt>::new(),
+      in_global_rhs: false,
+      use_items: List<Type>::new(),
     };
-    return res;
   }
 }
 
@@ -244,7 +257,8 @@ enum RtKind{
   DeclGen,//generic decl in resolver
   Trait,//trait in items
   Lambda(id: i32),
-  Const,//const in items
+  Const,//const in items,
+  Module,//module in items
 }
 impl RtKind{
   func is_method(self): bool{
@@ -256,11 +270,14 @@ impl RtKind{
   func is_trait(self): bool{
     return self is RtKind::Trait;
   }
+  func is_module(self): bool{
+    return self is RtKind::Module;
+  }
 }
 impl Clone for RtKind{
   func clone(self): RtKind{
     match self{
-      RtKind::MethodGen(name*) => return RtKind::MethodGen{name.clone()},
+      RtKind::MethodGen(name) => return RtKind::MethodGen{name.clone()},
       _ => return ptr::deref(self),//safe,other variants are Copy type
     }
   }
@@ -271,20 +288,23 @@ struct Desc{
   kind: RtKind;
   path: String;
   idx: i32;
+  scope: Option<Type>;
 }
 impl Desc{
   func new(): Desc{
     return Desc{
       kind: RtKind::None,
       path: "".str(),
-      idx: -1
+      idx: -1,
+      scope: Option<Type>::new(),
     };
   }
   func clone(self): Desc{
     return Desc{
       kind: self.kind.clone(),
       path: self.path.clone(),
-      idx: self.idx
+      idx: self.idx,
+      scope: self.scope.clone(),
     };
   }
 }
@@ -299,6 +319,9 @@ struct RType{
   fp_info: Option<FunctionType>;
   lambda_call: Option<LambdaCallInfo>;
 }
+
+type Result2 = Result<RType, Error>;
+
 impl RType{
   func new(s: str): RType{
     return RType::new(Type::new(s.str()));
@@ -447,30 +470,6 @@ impl Scope{
   }
 }
 
-func join(list: List<String>*, sep: str): String{
-  let s = String::new();
-  for(let i = 0;i < list.len();++i){
-    let path = list.get(i);
-    s.append(path.str());
-  }
-  return s;
-}
-
-func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
-  let s2: String = join(&is.list, "/");
-  for (let i = 0;i < arr.len();++i) {
-      let i1 = arr.get(i);
-      let s1: String = join(&i1.list, "/");
-      let res = s1.eq(&s2);
-      s1.drop();
-      s2.drop();
-      if (res) {
-          return true;
-      }
-  }
-  return false;
-}
-
 impl Resolver{
 
   func newScope(self){
@@ -569,9 +568,13 @@ impl Resolver{
     self.newScope();//globals
     self.init();
     self.init_globals();
+    let scope = Option<Type>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
-      self.visit_item(item);
+      match self.visit_item(item, &scope){
+        Err(err) => self.err(err.line, err.msg),
+        _ => {}
+      }
       if(self.ctx.verbose_all && item is Item::Method){
           print("resolve method done\n");
       }
@@ -602,22 +605,21 @@ impl Resolver{
   
   func init_globals(self){
     for g in self.unit.get_globals() {
-        let rhs: RType = self.visit(&g.expr);
-        if (g.type.is_some()) {
-            let type = self.getType(g.type.get());
-            let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
-            if (err_opt.is_some()) {
-                let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
-                rhs.drop();
-                err_opt.drop();
-                type.drop();
-                self.err(g.line, msg);
-                panic("");
-            }
-            err_opt.drop();
-            type.drop();
+      self.in_global_rhs = true;
+      let rhs: RType = self.visit(&g.expr);
+      self.in_global_rhs = false;
+      if (g.type.is_some()) {
+        let type = self.getType(g.type.get());
+        let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
+        if (err_opt.is_some()) {
+          let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
+          self.err(g.line, msg);
+          panic("");
         }
-        self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
+        err_opt.drop();
+        type.drop();
+      }
+      self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
     }
   }
 
@@ -631,63 +633,135 @@ impl Resolver{
       //print("Resolver::init {}\n", &self.unit.path);
     }
     self.is_init = true;
-
+    let empty_scope = Option<Type>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
-      match it{
-        Item::Decl(decl*) => {
-          let ty = decl.type.clone();
-          let res = RType::new(ty);
-          res.desc.drop();
-          res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
-          self.addType(decl.type.name().clone(), res);
-        },
-        Item::Trait(tr*) => {
-          let res = RType::new(tr.type.clone());
-          res.desc.drop();
-          res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
-          self.addType(tr.type.name().clone(), res);
-        },
-        Item::Impl(imp*) => {
-          //pass
-        },
-        Item::Type(name*, rhs*) => {
-          let res = self.visit_type(rhs);
-          self.addType(name.clone(), res);
-        },
-        Item::Method(method*) => {},
-        Item::Extern(methods*) => {},
-        Item::Const(cn*) => {},
-        Item::Glob(g*) => {
-          /*let rhs: RType = self.visit(&g.expr);
-          if (g.type.is_some()) {
-              let type = self.getType(g.type.get());
-              let err_opt = MethodResolver::is_compatible(&rhs.type, &type);
-              if (err_opt.is_some()) {
-                  let msg = format("variable type mismatch {}\nexpected: {:?} got {:?}\n{}'", g.name, type, rhs.type, err_opt.get());
-                  rhs.drop();
-                  err_opt.drop();
-                  type.drop();
-                  self.err(g.line, msg);
-                  panic("");
-              }
-              err_opt.drop();
-              type.drop();
-          }
-          self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);*/
-        },
-      }
+      self.init_item(it, i, &empty_scope);
     }
+    self.init_type_items();
     //derives
     let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
-      if let Item::Decl(decl*) = it{
+      if let Item::Decl(decl) = it{
         self.handle_derive(decl, &newItems);
       }
     }
     self.unit.items.add_list(newItems);
+    empty_scope.drop();
   }
+
+  func init_type_items(self){
+    //called after init_item so that struct & enum initialized
+    //todo recursive type references not supported
+    let empty_scope = Option<Type>::new();
+    for(let i = 0;i < self.unit.items.len();++i){
+      let it = self.unit.items.get(i);
+      self.init_type_item(it, i, &empty_scope);
+    }
+  }
+
+  func init_type_item(self, it: Item*, idx: i32, scope: Option<Type>*){
+    match it{
+      Item::Type(name, rhs) => {
+        let res = self.visit_type(rhs);
+        self.addType(name.clone(), res);
+      },
+      Item::Module(md) => {
+        let j = 0;
+        for it2 in &md.items{
+          if(scope.is_some()){
+            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            self.init_type_item(it2, j, &scope2);
+            scope2.drop();
+          }else{
+            let scope2 = Option::new(Type::new(md.name.clone()));
+            self.init_type_item(it2, j, &scope2);
+            scope2.drop();
+          }
+          j += 1;
+        }
+      },
+      _ => {}
+    }
+  }
+
+  func merge_scope(scope: Option<Type>*, name: String): Type{
+    if(scope.is_some()){
+      return Type::new(scope.get().clone(), name);
+    }else{
+      return Type::new(name);
+    }
+  }
+
+  func init_item(self, it: Item*, idx: i32, scope: Option<Type>*){
+    match it{
+      Item::Decl(decl) => {
+        //todo module item
+        let desc = Desc{RtKind::Decl, self.unit.path.clone(), idx, Option<Type>::new()};
+        if(scope.is_some()){
+          let qname = format("{:?}::{:?}", scope.get(), decl.type.name());
+          let ty = Type::new(scope.get().clone(), decl.type.name().clone());
+          let res = RType::new(ty);
+          desc.scope.set(scope.get().clone());
+          res.desc.drop();
+          res.desc = desc;
+          self.addType(qname, res);
+        }else{
+          let res = RType::new(decl.type.clone());
+          res.desc.drop();
+          res.desc = desc;
+          self.addType(decl.type.name().clone(), res);
+        }
+      },
+      Item::Trait(tr) => {
+        let res = RType::new(tr.type.clone());
+        res.desc.drop();
+        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), idx, Option<Type>::new()};
+        self.addType(tr.type.name().clone(), res);
+      },
+      Item::Impl(imp) => {
+        //pass
+      },
+      Item::Type(name, rhs) => {
+        /*let res = self.visit_type(rhs);
+        self.addType(name.clone(), res);*/
+      },
+      Item::Method(method) => {},
+      Item::Extern(methods) => {},
+      Item::Const(cn) => {},
+      Item::Glob(g) => {},
+      Item::Module(md) => {
+        let res = RType::new(md.name.str());
+        //res.desc.drop();
+        let scp = if(scope.is_some()){
+          Option::new(scope.get().clone())
+        }else{
+          Option<Type>::new()
+        };
+        res.desc = Desc{RtKind::Module, self.unit.path.clone(), idx, scp};
+        self.addType(md.name.clone(), res.clone());
+        let j = 0;
+        for it2 in &md.items{
+          let scope2 = Option::new(merge_scope(scope, md.name.clone()));
+          if(scope.is_some()){
+            //let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            self.init_item(it2, j, &scope2);
+            //scope2.drop();
+          }else{
+            //let scope2 = Option::new(Type::new(md.name.clone()));
+            self.init_item(it2, j, &scope2);
+            //scope2.drop();
+          }
+          scope2.drop();
+          j += 1;
+        }
+        res.drop();
+      },
+      Item::Use(ty) => {},
+    }
+  }
+
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
     //derive
     for attr in &decl.attr.list{
@@ -785,11 +859,24 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Decl){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get(rt.desc.idx);
-      if let Item::Decl(decl*) = (item){
-        return Option::new(decl);
+      if(rt.desc.scope.is_some()){
+        let scope = self.visit_type(rt.desc.scope.get());
+        if(scope.desc.kind.is_module()){
+          let md = self.get_module(&scope).unwrap();
+          let item = md.items.get(rt.desc.idx);
+          if let Item::Decl(decl) = item{
+            scope.drop();
+            return Option::new(decl);
+          }
+        }
+        scope.drop();
+      }else{
+        let item = unit.items.get(rt.desc.idx);
+        if let Item::Decl(decl) = item{
+          return Option::new(decl);
+        }
       }
-      panic("get_decl() item not decl it={:?} {:?}={:?}", item, rt.type, rt.desc);
+      panic("get_decl() failed {:?}={:?}", rt.type, rt.desc);
     }
     if(rt.desc.kind is RtKind::DeclGen){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
@@ -812,7 +899,7 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(rt.desc.idx);
-      if let Item::Trait(tr*) = (item){
+      if let Item::Trait(tr) = item{
         return Option::new(tr);
       }
     }
@@ -829,31 +916,31 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Method(m*) = (item){
+      if let Item::Method(m) = item{
         return Option::new(m);
       }
     }
-    if let RtKind::MethodImpl(idx2) = (&desc.kind){
+    if let RtKind::MethodImpl(idx2) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Impl(imp*) = (item){
-        let m = imp.methods.get(idx2);
+      if let Item::Impl(imp) = item{
+        let m = imp.methods.get(*idx2);
         return Option::new(m);
       }
     }
-    if let RtKind::MethodGen(name*) = (&desc.kind){
+    if let RtKind::MethodGen(name) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let arr = resolver.generated_methods.get(name).unwrap();
       let m = arr.get(desc.idx);
       return Option::new(m.get());
     }
-    if let RtKind::MethodExtern(idx2) = (&desc.kind){
+    if let RtKind::MethodExtern(idx2) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Extern(methods*) = (item){
-        let m = methods.get(idx2);
+      if let Item::Extern(methods) = item{
+        let m = methods.get(*idx2);
         return Option::new(m);
       }
     }
@@ -864,57 +951,61 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Const){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let item = resolver.unit.items.get(rt.desc.idx);
-      if let Item::Const(c*) = (item){
+      if let Item::Const(c) = item{
         return c;
       }
     }
     panic("get_const {:?}={:?}", rt.type, rt.desc);
   }
 
-  func visit_item(self, node: Item*){
+  func get_module(self, rt: RType*): Option<Module*>{
+    if(rt.desc.kind is RtKind::Module){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get(rt.desc.idx);
+      if let Item::Module(m) = item{
+        return Option::new(m);
+      }
+    }
+    //panic("get_module {:?}={:?}", rt.type, rt.desc);
+    return Option<Module*>::new();
+  }
+
+  func visit_item(self, node: Item*, scope: Option<Type>*): Result<(), Error>{
     match node{
-      Item::Method(m*) => {
+      Item::Method(m) => {
         self.visit_method(m);
       },
-      Item::Type(name*, rhs*) => {
+      Item::Type(name, rhs) => {
         //pass
       },
-      Item::Impl(imp*) => {
-        self.visit_impl(imp);
+      Item::Impl(imp) => {
+        return self.visit_impl(imp);
       },
-      Item::Decl(decl*) => {
+      Item::Decl(decl) => {
         match decl{
-          Decl::Struct(fields*) => {
+          Decl::Struct(fields) => {
             self.visit_decl(decl, fields);
           },
-          Decl::Enum(variants*) => {
+          Decl::Enum(variants) => {
             self.visit_enum(decl, variants);
           },
-          Decl::TupleStruct(fields*) => {
+          Decl::TupleStruct(fields) => {
             self.visit_decl_tuple(decl, fields);
           }
         }
       },
-      Item::Trait(tr*) => {
+      Item::Trait(tr) => {
       },
-      Item::Extern(methods*) => {
+      Item::Extern(methods) => {
         for(let i = 0;i < methods.len();++i){
           let m = methods.get(i);
           if(m.is_generic) continue;
           self.visit_method(m);
         }
       },
-      Item::Const(cn*) => {
+      Item::Const(cn) => {
         let rhs_type = self.visit(&cn.rhs);
-        /*let is_valid = match rhs{
-          Expr::Lit(lit*) => {
-            //lit.kind is LitKind::STR
-            true
-          },
-          _ => {
-            false
-          }
-        };*/
         let is_valid = cn.rhs is Expr::Lit; 
         if(!is_valid){
           panic("todo const rhs {:?}", cn.rhs);
@@ -927,8 +1018,17 @@ impl Resolver{
           ty.drop();
         }
       },
-      Item::Glob(g*) => {}
+      Item::Glob(g) => {},
+      Item::Module(md) => {
+        let scope2 = Option::new(merge_scope(scope, md.name.clone()));
+        self.use_items.add(scope2.get().clone());
+        for it2 in &md.items{
+          self.visit_item(it2, &scope2)?;
+        }
+      },
+      Item::Use(ty) => {},
     }
+    return Result<(), Error>::ok(());
   }
 
   func is_cyclic(self, type: Type*, target: Type*): bool{
@@ -954,7 +1054,7 @@ impl Resolver{
       }
     }
     match decl{
-      Decl::Enum(variants*) => {
+      Decl::Enum(variants) => {
         for (let i = 0;i < variants.len();++i) {
           let ev = variants.get(i);
           for (let j = 0;j < ev.fields.len();++j) {
@@ -965,7 +1065,7 @@ impl Resolver{
           }
         }
       },
-      Decl::Struct(fields*) => {
+      Decl::Struct(fields) => {
         for (let j = 0;j < fields.len();++j) {
           let f2: FieldDecl* = fields.get(j);
           if (self.is_cyclic(&f2.type, target)) {
@@ -973,10 +1073,10 @@ impl Resolver{
           }
         }
       },
-      Decl::TupleStruct(fields*) => {
+      Decl::TupleStruct(fields) => {
         for (let j = 0;j < fields.len();++j) {
-          let f2: Type* = fields.get(j);
-          if (self.is_cyclic(f2, target)) {
+          let f2: FieldDecl* = fields.get(j);
+          if (self.is_cyclic(&f2.type, target)) {
               return true;
           }
         }
@@ -990,8 +1090,8 @@ impl Resolver{
       let base_f = base_fields.unwrap();
       for(let j = 0;j < base_f.len();++j){
         let bf = base_f.get(j);
-        if(bf.name.eq(&fd.name)){
-          self.err(node.line, format("field name '{}' already declared in base", fd.name));
+        if(bf.name.get().eq(fd.name.get())){
+          self.err(node.line, format("field name '{}' already declared in base", fd.name.get()));
         }
       }
     }
@@ -1004,7 +1104,6 @@ impl Resolver{
 
   func visit_decl(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1019,9 +1118,8 @@ impl Resolver{
       self.is_valid_field(fd, node, base_fields);
     }
   }
-  func visit_decl_tuple(self, node: Decl*, fields: List<Type>*){
+  func visit_decl_tuple(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1032,13 +1130,12 @@ impl Resolver{
       }
     }
     for(let i = 0;i < fields.len();++i){
-      let ty = fields.get(i);
+      let fd = fields.get(i);
       //self.is_valid_field(ty, node, base_fields);
     }
   }
   func visit_enum(self, node: Decl*, vars: List<Variant>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1057,12 +1154,13 @@ impl Resolver{
     }
   }
 
-  func visit_impl(self, imp: Impl*){
+  func visit_impl(self, imp: Impl*): Result<(), Error>{
     if(!imp.info.type_params.empty()){
       //generic
-      return;
+      return Result<(), Error>::ok(());
     }
     self.curImpl = Option::new(imp);
+    self.visit_type0(&imp.info.type)?.drop();
     //resolve non generic type args
     if(imp.info.trait_name.is_some()){
       //todo
@@ -1111,6 +1209,7 @@ impl Resolver{
       }
     }
     self.curImpl = Option<Impl*>::new();
+    return Result<(), Error>::ok(());
   }
 
   func visit_method(self, node: Method*){
@@ -1154,7 +1253,7 @@ impl Resolver{
   }
 
   func unwrap_mc(expr: Expr*): Call*{
-    if let Expr::Call(mc*) = (expr){
+    if let Expr::Call(mc) = expr{
         return mc;
     }
     panic("unwrap_mc {:?}", expr);
@@ -1248,19 +1347,19 @@ impl Resolver{
       self.visit_type(decl.base.get()).drop();
     }
     match decl{
-      Decl::Struct(fields*) => {
+      Decl::Struct(fields) => {
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
           self.visit_type(&fd.type).drop();
         }
       },
-      Decl::TupleStruct(fields*) => {
+      Decl::TupleStruct(fields) => {
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
-          self.visit_type(fd).drop();
+          self.visit_type(&fd.type).drop();
         }
       },
-      Decl::Enum(variants*)=>{
+      Decl::Enum(variants)=>{
         for(let i = 0;i < variants.len();++i){
           let ev = variants.get(i);
           for(let j = 0;j < ev.fields.len();++j){
@@ -1299,212 +1398,229 @@ impl Resolver{
     return res;
   }
 
-  func clone_op(op: Option<Decl*>*): Option<Decl*>{
+  /*func clone_op(op: Option<Decl*>*): Option<Decl*>{
     if(op.is_none()) return Option<Decl*>::new();
     return Option<Decl*>::new(*op.get());
-  }
+  }*/
 
   func visit_type(self, node: Type*): RType{
+    return self.visit_type0(node).unwrap();
+  }
+
+  func visit_type0(self, node: Type*): Result<RType, Error>{
     let str = node.print();
-    let res = self.visit_type_str(node, &str);
+    let res = self.visit_type_str0(node, &str);
     str.drop();
     return res;
   }
 
   func visit_type_str(self, node: Type*, str: String*): RType{
+    return self.visit_type_str0(node, str).unwrap();
+  }
+
+  func visit_type_str0(self, node: Type*, str: String*): Result<RType, Error>{
     let cached = self.typeMap.get(str);
     if(cached.is_some()){
-      return cached.unwrap().clone();
+      return Result<RType, Error>::ok(cached.unwrap().clone());
+    }
+    //try using items as prefix
+    for prefix in &self.use_items{
+      let str2 = format("{:?}::{:?}", prefix, node);
+      cached = self.typeMap.get(&str2);
+      if(cached.is_some()){
+        str2.drop();
+        return Result<RType, Error>::ok(cached.unwrap().clone());
+      }
+      str2.drop();
     }
     //print("visit_type {}\n", str);
     match node{
-      Type::Tuple(tt*) => {
+      Type::Tuple(tt) => {
         let types = List<Type>::new();
         for t in &tt.types{
           types.add(self.visit_type(t).unwrap());
         }
         let res = RType::new(Type::Tuple{.Node::new(-1, node.line), TupleType{types}});
         self.addType(str.clone(), res.clone());
-        return res;
+        return Result<RType, Error>::ok(res);
       },
-      _=>{}
-    }
-    if(node.is_prim() || node.is_void()){
-      let res = RType::new(str.str());
-      self.addType(str.clone(), res.clone());
-      return res;
-    }
-    if(node.is_pointer()){
-      let inner = node.deref_ptr();
-      let res = self.visit_type(inner);
-      let ptr = res.type.clone().toPtr();
-      res.type.drop();
-      res.type = ptr;
-      return res;
-    }
-    if(node.is_slice()){
-      let inner = node.elem();
-      let elem: RType = self.visit_type(inner);
-      return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())});      
-    }
-    if let Type::Array(inner*, size) = (node){
-      let elem: RType = self.visit_type(inner.get());
-      return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), size});      
-    }
-    if let Type::Function(ft_box*) = (node){
-      let ft = FunctionType{
-        return_type: self.visit_type(&ft_box.get().return_type).unwrap(),
-        params: List<Type>::new()
-      };
-      for prm in &ft_box.get().params{
-        ft.params.add(self.visit_type(prm).unwrap());
-      }
-      return RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)});      
-    }
-    if let Type::Lambda(ft_box*) = (node){
+      Type::Pointer(bx) => {
+        let res = self.visit_type(bx.get());
+        let ptr = res.type.clone().toPtr();
+        res.type.drop();
+        res.type = ptr;
+        return Result<RType, Error>::ok(res);
+      },
+      Type::Slice(bx) => {
+        let elem: RType = self.visit_type(bx.get());
+        return Result<RType, Error>::ok(RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())})); 
+      },
+      Type::Array(inner, size) => {
+        let elem: RType = self.visit_type(inner.get());
+        return Result<RType, Error>::ok(RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), *size}));
+      },
+      Type::Function(ft_box) => {
+        let ft = FunctionType{
+          return_type: self.visit_type(&ft_box.get().return_type).unwrap(),
+          params: List<Type>::new()
+        };
+        for prm in &ft_box.get().params{
+          ft.params.add(self.visit_type(prm).unwrap());
+        }
+        return Result<RType, Error>::ok(RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)}));
+      },
+      Type::Lambda(ft_box) => {
         let ret = Option<Type>::new();
-      if(ft_box.get().return_type.is_some()){
-          ret.set(self.visit_type(ft_box.get().return_type.get()).unwrap());
-      }
-      let ft = LambdaType{
-        return_type: ret,
-        params: List<Type>::new(),
-        captured: List<Type>::new(),
-      };
-      for prm in &ft_box.get().params{
-        ft.params.add(self.visit_type(prm).unwrap());
-      }
-      for prm in &ft_box.get().captured{
-        ft.captured.add(self.visit_type(prm).unwrap());
-      }
-      return RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)});      
-    }
-    if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
-      let imp = self.curMethod.unwrap().parent.as_impl();
-      return self.visit_type(&imp.type);
-    }
-    let simple: Simple* = node.as_simple();
-    if (simple.scope.is_some()) {
-      //simple enum variant
-      let scope = self.visit_type(simple.scope.get());
-      let decl = self.get_decl(&scope).unwrap();
-      if (!(decl is Decl::Enum)) {
+        if(ft_box.get().return_type.is_some()){
+            ret.set(self.visit_type(ft_box.get().return_type.get()).unwrap());
+        }
+        let ft = LambdaType{
+          return_type: ret,
+          params: List<Type>::new(),
+          captured: List<Type>::new(),
+        };
+        for prm in &ft_box.get().params{
+          ft.params.add(self.visit_type(prm).unwrap());
+        }
+        for prm in &ft_box.get().captured{
+          ft.captured.add(self.visit_type(prm).unwrap());
+        }
+        return Result<RType, Error>::ok(RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)}));
+      },
+      Type::Simple(simple) => {
+        if(node.is_prim() || node.is_void()){
+          let res = RType::new(str.str());
+          self.addType(str.clone(), res.clone());
+          return Result<RType, Error>::ok(res);
+        }
+        if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
+          let imp = self.curMethod.unwrap().parent.as_impl();
+          return Result<RType, Error>::ok(self.visit_type(&imp.type));
+        }
+        if(simple.scope.is_none()){
+          return self.visit_type2(node, simple, str);
+        }
+        //enum variant or member func
+        let scope = self.visit_type(simple.scope.get());
+        if(scope.desc.kind is RtKind::Module){
+          let md = self.get_module(&scope);
+          panic("todo rt module {:?} '{:?}'", node, md.unwrap());
+        }
+        let decl = self.get_decl(&scope).unwrap();
+        if (!(decl is Decl::Enum)) {
+          scope.drop();
+          return Result<RType, Error>::ok(self.member_func_ptr(node, str));
+        }
+        findVariant(decl, &simple.name);
+        let ds = decl.type.print();
+        let res = self.getTypeCached(&ds);
+        self.addType(str.clone(), res.clone());
+        ds.drop();
         scope.drop();
-        return self.member_func_ptr(node, str);
+        return Result<RType, Error>::ok(res);
       }
-      findVariant(decl, &simple.name);
-      let ds = decl.type.print();
-      let res = self.getTypeCached(&ds);
-      self.addType(str.clone(), res.clone());
-      ds.drop();
-      scope.drop();
-      return res;
     }
-    let res = self.visit_type2(node, simple, str);
-    //print("visit_type2 {} -> {}\n", node, res.desc);
-    return res;
   }
   
   func member_func_ptr(self, node: Type*, str: String*): RType{
-      let simp = node.as_simple();
-      if(!simp.args.empty()){
-          self.err(node.line, "generic func ptr");
+    let simp = node.as_simple();
+    if(!simp.args.empty()){
+      self.err(node.line, "generic func ptr");
+    }
+    let arr = MethodResolver::get_impl(self, simp.scope.get(), Option<Type*>::new()).unwrap();
+    for resolv in self.get_resolvers(){
+      resolv.init();
+      let arr2 = MethodResolver::get_impl(resolv, simp.scope.get(), Option<Type*>::new());
+      arr.add_list(arr2.unwrap());
+    }
+    if(arr.empty()){
+      self.err(node.line, format("type scope is not enum: {} {:?}", str, arr));
+    }
+    let list = List<Signature>::new();
+    for pair in &arr{
+      let i = 0;
+      for m in &pair.a.methods{
+        if(m.name.eq(&simp.name)){
+          let desc = Desc{
+            kind: RtKind::MethodImpl{i},
+            path: m.path.clone(),
+            idx: pair.b,
+            scope: Option<Type>::new(),
+          };
+          list.add(Signature::new(m, desc, self, self));
+        }
+        i+=1;
       }
-      let arr = MethodResolver::get_impl(self, simp.scope.get(), Option<Type*>::new()).unwrap();
-      for resolv in self.get_resolvers(){
-          resolv.init();
-          let arr2 = MethodResolver::get_impl(resolv, simp.scope.get(), Option<Type*>::new());
-          arr.add_list(arr2.unwrap());
-      }
-      if(arr.empty()){
-          self.err(node.line, format("type scope is not enum: {} {:?}", str, arr));
-      }
-      let list = List<Signature>::new();
-      for pair in &arr{
-          let i = 0;
-          for m in &pair.a.methods{
-              if(m.name.eq(&simp.name)){
-                  let desc = Desc{
-                    kind: RtKind::MethodImpl{i},
-                    path: m.path.clone(),
-                    idx: pair.b
-                  };
-                  list.add(Signature::new(m, desc, self, self));
-              }
-              i+=1;
-          }
-      }
-      if(list.len()>1){
-          //not
-          self.err(node.line, "multiple func ptr");
-      }
-      if(list.empty()){
-          self.err(node.line, format("type scope is not enum: {}", str));
-      }
-      let sig = list.get(0);
-      let method = sig.m.unwrap();
-      if(method.is_generic){
-        //list.drop();
-        self.err(node.line, format("func ptr is generic: {}", str));
-      }
-      let ret = self.visit_type(&method.type).unwrap();
-      let ft = FunctionType{return_type: ret, params: List<Type>::new()};
-      for prm in &sig.args{
-        let prm_rt = self.visit_type(prm);
-        ft.params.add(prm_rt.unwrap());
-      }
-      let id = Node::new(-1, node.line);
-      let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
-      rt.method_desc = Option::new(sig.desc.clone());
-      list.drop();
-      return rt;
+    }
+    if(list.len() > 1){
+      //not
+      self.err(node.line, "multiple func ptr");
+    }
+    if(list.empty()){
+      self.err(node.line, format("type scope is not enum: {}", str));
+    }
+    let sig = list.get(0);
+    let method = sig.m.unwrap();
+    if(method.is_generic){
+      //list.drop();
+      self.err(node.line, format("func ptr is generic: {}", str));
+    }
+    let ret = self.visit_type(&method.type).unwrap();
+    let ft = FunctionType{return_type: ret, params: List<Type>::new()};
+    for prm in &sig.args{
+      let prm_rt = self.visit_type(prm);
+      ft.params.add(prm_rt.unwrap());
+    }
+    let id = Node::new(-1, node.line);
+    let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
+    rt.method_desc = Option::new(sig.desc.clone());
+    list.drop();
+    return rt;
   }
 
-  func find_type(self, node: Type*, simple: Simple*): RType{
+  func find_type(self, node: Type*, simple: Simple*): Result<RType, Error>{
     let name = &simple.name;
-    if(node.line == 188 && name.eq("nlink_t")){
-        let x = 10;
-    }
     let opt = self.typeMap.get(name);
     if (opt.is_some()) {
       let rt: RType* = opt.unwrap();
-      return rt.clone();
-    }else{
-      //self.typeMap.get2(name);
+      return Result<RType, Error>::ok(rt.clone());
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
-      self.err(node.line, format("couldn't find type: {:?}", node));
+      return Result<RType, Error>::err(Error{format("couldn't find type: {:?}", node), node.line});
     }
     let tmp: RType = imp_result.unwrap();
-    return tmp;
+    return Result<RType, Error>::ok(tmp);
   }
 
-  func visit_type2(self, node: Type*, simple: Simple*, str: String*): RType{
-    let target_rt: RType = self.find_type(node, simple);
-    if(!target_rt.is_decl()){
+  func visit_type2(self, node: Type*, simple: Simple*, str: String*): Result<RType, Error>{
+    let tmp = self.find_type(node, simple);
+    if(tmp.is_err()) return tmp;
+    if(!tmp.get().is_decl()){
       //add used
-      return target_rt;
+      return tmp;
     }
     if (!simple.args.empty()) {
       //local gen or foreign gen, place targs, gen decl, return
     }else{
       //local gen root, foreign gen root, foreign alias; find & return
     }
+    let target_rt = tmp.unwrap();
     let target: Decl* = self.get_decl(&target_rt).unwrap();
     //generic
     if (simple.args.empty() || !target.is_generic) {
-        //inferred later
-        let res = RType::new(target.type.clone());
-        res.desc.drop();
-        res.desc = target_rt.desc.clone();
-        self.addType(str.clone(), res.clone());
-        target_rt.drop();
-        return res;
+      //inferred later
+      let res = RType::new(target.type.clone());
+      res.desc.drop();
+      res.desc = target_rt.desc.clone();
+      self.addType(str.clone(), res.clone());
+      target_rt.drop();
+      return Result<RType, Error>::ok(res);
     }
     target_rt.drop();
     if (simple.args.len() != target.type.get_args().len()) {
-      self.err(node.line, "type arguments size not matched");
+      let err = Error{format("type arguments size not matched {} vs {}", simple.args.len(), target.type.get_args().len()), node.line};
+      return Result<RType, Error>::err(err);
     }
     let map = make_type_map(simple, target);
     let copier = AstCopier::new(&map);
@@ -1513,7 +1629,7 @@ impl Resolver{
     self.add_used_decl(decl);//fields may be foreign
     let res = self.getTypeCached(str);
     map.drop();
-    return res;
+    return Result<RType, Error>::ok(res);
   }
 
   func add_generated(self, decl: Decl): Decl*{
@@ -1526,7 +1642,7 @@ impl Resolver{
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
     rt.desc.drop();
-    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32};
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, Option<Type>::new()};
     //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
     return res;
@@ -1591,7 +1707,7 @@ impl Resolver{
             let idx = 0;
             for (let i = 0; i < fields.len();++i) {
                 let fd = fields.get(i);
-                if (fd.name.eq(name)) {
+                if (fd.name.get().eq(name)) {
                     return Pair::new(cur, idx);
                 }
                 ++idx;
@@ -1612,7 +1728,7 @@ impl Resolver{
   
   func visit_access(self, node: Expr*, scope: Expr*, name: String*): RType{
     let scp = self.visit(scope);
-    if let Type::Tuple(tt*) = &scp.type{
+    if let Type::Tuple(tt) = &scp.type{
       let idx0 = i32::parse(name.str());
       if(idx0.is_err()){
         let msg = format("tuple index not int {}", name); 
@@ -1640,7 +1756,7 @@ impl Resolver{
   func fieldIndex(arr: List<FieldDecl>*, name: str, type: Type*): i32{
     for(let i=0;i<arr.len();++i){
       let fd = arr.get(i);
-      if(fd.name.eq(name)){
+      if(fd.name.get().eq(name)){
         return i;
       }
     }
@@ -1685,13 +1801,13 @@ impl Resolver{
     let type_opt = Option<Type>::new();
     
     match decl{
-      Decl::Enum(variants*)=>{
+      Decl::Enum(variants)=>{
         let idx = findVariant(decl, type0.name());
         let variant = variants.get(idx);
         fields0 = Option::new(&variant.fields);
         type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
       },
-      Decl::Struct(f*)=>{
+      Decl::Struct(f)=>{
         fields0 = Option::new(f);
         type_opt = Option::new(decl.type.clone());
         if (decl.is_generic) {
@@ -1704,7 +1820,7 @@ impl Resolver{
             fields0 = Option::new(gen_decl.get_fields());
         }
       },
-      Decl::TupleStruct(types*)=>{
+      Decl::TupleStruct(types)=>{
         self.err(node, "todo");
       }
     }
@@ -1728,12 +1844,12 @@ impl Resolver{
             prm_idx = field_idx;
             ++field_idx;
         }
-        let prm = fields.get(prm_idx);
+        let fd = fields.get(prm_idx);
         //todo if we support unnamed fields, change this
         if (!hasNamed) {
-            names.add(prm.name.clone());
+            names.add(fd.name.get().clone());
         }
-        let pt = self.getType(&prm.type);
+        let pt = self.getType(&fd.type);
         let arg = self.visit(&e.expr);
         let opt = MethodResolver::is_compatible(&arg.type, &pt);
         if (opt.is_some()) {
@@ -1747,8 +1863,8 @@ impl Resolver{
     //check non set fields
     for (let i = 0;i < fields.len();++i) {
         let fd = fields.get(i);
-        if (!names.contains(&fd.name)) {
-            let msg = format("field not set: {}", fd.name);
+        if (!names.contains(fd.name.get())) {
+            let msg = format("field not set: {}", fd.name.get());
             self.err(node, msg);
         }
     }
@@ -1899,7 +2015,7 @@ impl Resolver{
           }
           has_none = true;
         },
-        MatchLhs::ENUM(type*, args*) => {
+        MatchLhs::ENUM(type, args) => {
           let smp = type.as_simple();
           if(smp.scope.is_some() && !smp.scope.get().eq(&decl.type)){
               self.err(expr, format("invalid variant {:?} of {:?}", type, decl.type));
@@ -1918,14 +2034,14 @@ impl Resolver{
             let arg = args.get(i);
             let field = variant.fields.get(i);
             let ty = field.type.clone();
-            if (arg.is_ptr) {
+            if (scp.type.is_pointer()) {
                 ty = ty.toPtr();
             }
             self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::MATCH, arg.line);
             self.cache.add(arg.id, RType::new(ty));
           }
         },
-        MatchLhs::UNION(types*) => {
+        MatchLhs::UNION(types) => {
           for uty in types{
             if(!uty.is_simple()){
               self.err(expr, format("invalid variant {:?} of {:?}", uty, decl.type));
@@ -1967,11 +2083,11 @@ impl Resolver{
 
   func visit_match_rhs(self, rhs: MatchRhs*): RType{
     match rhs{
-      MatchRhs::EXPR(e*) => {
+      MatchRhs::EXPR(e) => {
         let res_type = self.visit(e);
         return res_type;
       },
-      MatchRhs::STMT(st*) => {
+      MatchRhs::STMT(st) => {
         self.visit(st);
         return RType::new("void");
       }
@@ -2036,6 +2152,10 @@ impl Resolver{
   func is_call(mc: MacroCall*, scope: str, name: str): bool{
     return mc.scope.is_some() && mc.scope.get().eq(scope) && mc.name.eq(name);
   }
+
+  func is_call(mc: MacroCall*, name: str): bool{
+    return mc.scope.is_none() && mc.name.eq(name);
+  }
   
   func is_drop_call(mc: Call*): bool{
     return is_call(mc, "Drop", "drop");
@@ -2043,12 +2163,6 @@ impl Resolver{
 
   func is_print(mc: Call*): bool{
     return mc.name.eq("print") && mc.scope.is_none();
-  }
-  func is_printf(mc: Call*): bool{
-    return mc.name.eq("printf") && mc.scope.is_none();
-  }
-  func is_sprintf(mc: Call*): bool{
-    return mc.name.eq("sprintf") && mc.scope.is_none();
   }
   func is_format(mc: Call*): bool{
     return mc.name.eq("format") && mc.scope.is_none();
@@ -2059,8 +2173,25 @@ impl Resolver{
   func is_assert(mc: Call*): bool{
     return mc.name.eq("assert") && mc.scope.is_none();
   }
+
+  func is_print(mc: MacroCall*): bool{
+    return mc.name.eq("print") && mc.scope.is_none();
+  }
+  func is_format(mc: MacroCall*): bool{
+    return mc.name.eq("format") && mc.scope.is_none();
+  }
+  func is_panic(mc: MacroCall*): bool{
+    return mc.name.eq("panic") && mc.scope.is_none();
+  } 
+
   func is_exit(mc: Call*): bool{
     return mc.name.eq("exit") && mc.scope.is_none();
+  }
+    func is_printf(mc: Call*): bool{
+    return mc.name.eq("printf") && mc.scope.is_none();
+  }
+  func is_sprintf(mc: Call*): bool{
+    return mc.name.eq("sprintf") && mc.scope.is_none();
   }
 
   func validate_printf(self, node: Expr*, mc: Call*){
@@ -2163,6 +2294,7 @@ impl Resolver{
           //todo take ref of it?
           info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
       }
+      //print("info={:?} {:?} {:?}\n", node, &rt1.type, &info.block);
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);
       rt1.drop();
@@ -2254,6 +2386,18 @@ impl Resolver{
       rt.drop();
       return RType::new("void");
     }
+    if(is_format(call)){
+      generate_format(node, call, self);
+      return RType::new("String");
+    }
+    if(is_print(call) || is_panic(call)){
+      generate_format(node, call, self);
+      return RType::new("void");
+    }
+    /*if(Resolver::is_assert(call)){
+      generate_assert(node, call, self);
+      return RType::new("void");
+    }*/
     panic("resolve macro {:?}", node);
   }
 
@@ -2280,7 +2424,7 @@ impl Resolver{
         return res;
       }
       else if(fp.is_some()){
-        if let Type::Lambda(bx*)=(fp.get().type){
+        if let Type::Lambda(bx)=fp.get().type{
           let ret = bx.get().return_type.get();
           let res = self.visit_type(ret);
           res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
@@ -2686,7 +2830,7 @@ impl Resolver{
     if (!decl1.type.eq(&decl2.type)) {
         self.err(node, format("rhs is not same type with lhs {:?} vs {:?}", decl1.type, decl2.type));
     }
-    if let Expr::Type(ty*) = (rhs){
+    if let Expr::Type(ty) = rhs{
         findVariant(decl1, ty.name());
     }
     return RType::new("bool");
@@ -2745,14 +2889,16 @@ impl Resolver{
   func find_const(self, name: String*): Option<RType>{
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
-      if let Item::Const(cn*) = item{
+      //todo scope
+      if let Item::Const(cn) = item{
         if (cn.name.eq(name)) {
           let rhs2 = AstCopier::clone(&cn.rhs, &self.unit);
           let rt = self.visit(&rhs2);
           rt.desc = Desc{
             kind: RtKind::Const,
             path: self.unit.path.clone(),
-            idx: i
+            idx: i,
+            scope: Option<Type>::new(),
           };
           rhs2.drop();
           return Option::new(rt);
@@ -2766,29 +2912,33 @@ impl Resolver{
     for(let i = self.scopes.len() - 1;i >= 0;--i){
       let scope = self.scopes.get(i);
       let vh_opt = scope.find(name);
-      if(vh_opt.is_some()){
-        let vh: VarHolder* = vh_opt.unwrap();
-        let res = self.visit_type(vh.get_type());
-        res.vh.drop();
-        res.vh = Option::new(vh.clone());
-        if(!self.inLambda.empty()){
-            if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
-                //reference to outer variable
-                let m = self.lambdas.get(self.inLambda.top()).unwrap();
-                let has = false;
-                for prm in &m.params{
-                    if(prm.name.eq(&vh.name)){
-                        has = true;
-                        break;
-                    }
-                }
-                if(!has){
-                    m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
-                }
-            }
-        }
-        return Option::new(res);
+      if(vh_opt.is_none()){
+        continue;
       }
+      let vh: VarHolder* = vh_opt.unwrap();
+      if(self.in_global_rhs && vh.kind is VarKind::GLOBAL){
+        self.err(node ,"can't reference from global to another global");
+      }
+      let res = self.visit_type(vh.get_type());
+      res.vh.drop();
+      res.vh = Option::new(vh.clone());
+      if(!self.inLambda.empty()){
+        if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
+          //reference to outer variable
+          let m = self.lambdas.get(self.inLambda.top()).unwrap();
+          let has = false;
+          for prm in &m.params{
+              if(prm.name.eq(&vh.name)){
+                  has = true;
+                  break;
+              }
+          }
+          if(!has){
+              m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
+          }
+        }
+      }
+      return Option::new(res);
     }
     //local const
     let cn = self.find_const(name);
@@ -2801,6 +2951,9 @@ impl Resolver{
       let res = *arr.get(i);
       for glob in res.unit.get_globals() {
         if (glob.name.eq(name)) {
+          if(self.in_global_rhs){
+            self.err(node ,"can't reference from global to another global");
+          }
           //clone to have unique id
           let expr2 = AstCopier::clone(&glob.expr, &self.unit);
           let rt = self.visit(&expr2);
@@ -2841,12 +2994,13 @@ impl Resolver{
       let res = *arr.get(i);
       for(let j = 0;j < res.unit.items.len();++j){
         let item = res.unit.items.get(j);
-        if let Item::Method(m*)=(item){
+        if let Item::Method(m) = item{
           if(m.name.eq(name)){
             let desc = Desc{
               kind: RtKind::Method,
               path: m.path.clone(),
-              idx: j
+              idx: j,
+              scope: Option<Type>::new(),
             };
             list.add(Signature::new(m, desc, self, self));
           }
@@ -2904,10 +3058,10 @@ impl Resolver{
   
   func visit_nc(self, node: Expr*): RType{
     match node{
-      Expr::Lit(lit*) => {
+      Expr::Lit(lit) => {
         return self.visit_lit(node, lit);
       },
-      Expr::Type(type*) => {
+      Expr::Type(type) => {
         let res = self.visit_type(type);
         //if(res.is_decl()){
           /*let decl = self.get_decl(&res).unwrap();
@@ -2917,61 +3071,61 @@ impl Resolver{
         //}
         return res;
       },
-      Expr::Infix(op*, lhs*, rhs*) => {
+      Expr::Infix(op, lhs, rhs) => {
         return self.visit_infix(node, op, lhs.get(), rhs.get());
       },
-      Expr::Call(call*) => {
+      Expr::Call(call) => {
         return self.visit_call(node, call);
       },
-      Expr::MacroCall(call*) => {
+      Expr::MacroCall(call) => {
         return self.visit_mcall(node, call);
       },
-      Expr::Name(name*) => {
+      Expr::Name(name) => {
         return self.visit_name(node, name);
       },
-      Expr::Unary(op*, ebox*) => {
+      Expr::Unary(op, ebox) => {
         return self.visit_unary(node, op, ebox.get());
       },
-      Expr::Par(expr*) => {
+      Expr::Par(expr) => {
         return self.visit(expr.get());
       },
-      Expr::Access(scope*,name*) => {
+      Expr::Access(scope,name) => {
         return self.visit_access(node, scope.get(), name);
       },
-      Expr::ArrAccess(aa*) => {
+      Expr::ArrAccess(aa) => {
         return self.visit_arr_access(node, aa);
       },
-      Expr::Array(list*, size*) => {
+      Expr::Array(list, size) => {
         return self.visit_array(node, list, size);
       },
-      Expr::Obj(type*,args*) => {
+      Expr::Obj(type, args) => {
         return self.visit_obj(node, type, args);
       },
-      Expr::As(lhs*, type*) => {
+      Expr::As(lhs, type) => {
         return self.visit_as(node, lhs.get(), type);
       },
-      Expr::Is(lhs*, rhs*) => {
+      Expr::Is(lhs, rhs) => {
         return self.visit_is(node, lhs.get(), rhs.get());
       },
-      Expr::If(is*) => {
+      Expr::If(is) => {
         return self.visit_if(is.get());
       },
-      Expr::IfLet(is*) => {
+      Expr::IfLet(is) => {
         return self.visit_iflet(is.get());
       },
-      Expr::Block(b*) => {
+      Expr::Block(b) => {
         return self.visit_block(b.get());
       },
-      Expr::Match(me*) => {
+      Expr::Match(me) => {
         return self.visit_match(node, me.get());
       },
-      Expr::Lambda(le*) => {
+      Expr::Lambda(le) => {
         return self.visit_lambda(node, le);
       },
-      Expr::Ques(bx*) => {
+      Expr::Ques(bx) => {
         return self.visit_ques(node, bx.get());
       },
-      Expr::Tuple(elems*) => {
+      Expr::Tuple(elems) => {
         return self.visit_tuple(node, elems);
       }
     }
@@ -3026,32 +3180,31 @@ impl Resolver{
           self.err(expr, "todo lambda infer");
       }
       let ret = self.visit_type(node.return_type.get());
-      let m = Method::new(Node::new(expr.line), format("lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
+      let method = Method::new(Node::new(expr.line), format("__lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
       self.newScope();
       let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<Type>::new()};
       for prm in &node.params{
           let rt = self.visit_type(prm.type.get());
-          m.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
+          method.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
           lt.params.add(rt.type.clone());
           self.addScope(prm.name.clone(), rt, prm.id, VarKind::PARAM, expr.line);
       }
       self.inLambda.push(expr.id);
-      
-      self.lambdas.add(expr.id, m);
+      self.lambdas.add(expr.id, method);
       
       let mptr = self.lambdas.get(&expr.id).unwrap();
       let plen = mptr.params.len();
       match (node.body.get()){
-          LambdaBody::Expr(ex*)=>{
+          LambdaBody::Expr(ex)=>{
               self.visit(ex);
-              if let Expr::Block(b*)=(ex){
+              if let Expr::Block(b)=ex{
                   mptr.body = Option::new(AstCopier::clone(b.get(), &self.unit));
               }else{
                   mptr.body = Option::new(Block::new(expr.line, expr.line));
                   mptr.body.get().list.add(Stmt::Expr{.Node::new(expr.line), AstCopier::clone(ex, &self.unit)});
               }
           },
-          LambdaBody::Stmt(st*)=>{
+          LambdaBody::Stmt(st)=>{
               mptr.body = Option::new(Block::new(expr.line, expr.line));
               self.visit(st);
               mptr.body.get().list.add(AstCopier::clone(st, &self.unit));
@@ -3068,7 +3221,12 @@ impl Resolver{
       }
       let id = Node::new(-1, expr.line);
       let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
-      let desc = Desc{RtKind::Lambda{expr.id}, self.unit.path.clone(), -1};
+      let desc = Desc{
+        RtKind::Lambda{expr.id},
+        self.unit.path.clone(),
+        -1,
+        Option<Type>::new()
+      };
       res.method_desc = Option::new(desc);
       //print("lambda={:?}\n", mptr);
       lambdaCnt += 1;
@@ -3102,10 +3260,13 @@ impl Resolver{
     }else{
         expected_type = Option::new(&self.curMethod.unwrap().type);
     }
+    let tmp = self.visit_type(expected_type.unwrap()).unwrap();
+    expected_type = Option::new(&tmp);
     let cmp = MethodResolver::is_compatible(type, expected_type.unwrap());
     if(cmp.is_some()){
       self.err(line, format("return type mismatch {:?} -> {:?}", type, expected_type.unwrap()));
     }
+    tmp.drop();
   }
 
   func visit(self, node: Stmt*){
@@ -3113,11 +3274,11 @@ impl Resolver{
       print("visit stmt {:?}\n", node);
     }
     match node{
-      Stmt::Expr(e*) => {
+      Stmt::Expr(e) => {
         let tmp = self.visit(e);
         tmp.drop();
       },
-      Stmt::Ret(e*) => {
+      Stmt::Ret(e) => {
         if(e.is_some()){
           let rt = self.visit(e.get());
           self.check_return(&rt.type, node.line);
@@ -3128,13 +3289,13 @@ impl Resolver{
           }
         }
       },
-      Stmt::Var(ve*) => {
+      Stmt::Var(ve) => {
         self.visit_var(ve);
       },
-      Stmt::For(f*) => {
+      Stmt::For(f) => {
         self.visit_for(node, f);
       },
-      Stmt::While(e*, b*) => {
+      Stmt::While(e, b) => {
         self.visit_while(node, e, b.get());
       },
       Stmt::Continue => {
@@ -3147,7 +3308,7 @@ impl Resolver{
           self.err(node, "break in outside of loop");
         }
       },
-      Stmt::ForEach(fe*) => {
+      Stmt::ForEach(fe) => {
         self.visit_for_each(node, fe);
       }
     }
@@ -3185,17 +3346,17 @@ impl Resolver{
     }
     let res = Option<RType>::new();
     match node{
-      Body::Block(b*) => {
+      Body::Block(b) => {
         res = Option::new(self.visit_block(b));
       },
-      Body::Stmt(b*) => {
+      Body::Stmt(b) => {
         self.visit(b);
         res = Option::new(RType::new("void"));
       },
-      Body::If(b*) => {
+      Body::If(b) => {
         res = Option::new(self.visit_if(b));
       },
-      Body::IfLet(b*) => {
+      Body::IfLet(b) => {
         res = Option::new(self.visit_iflet(b));
       }
     }
@@ -3296,7 +3457,6 @@ impl Resolver{
       let msg = format("if let rhs is not enum: {:?}", rhs.type);
       self.err(line, msg);
     }
-    rhs.drop();
     //match variant
     let decl: Decl* = decl_opt.unwrap();
     let index = Resolver::findVariant(decl, is.type.name());
@@ -3311,7 +3471,7 @@ impl Resolver{
         let arg = is.args.get(i);
         let field = variant.fields.get(i);
         let ty = field.type.clone();
-        if (arg.is_ptr) {
+        if (rhs.type.is_pointer()) {
             ty = ty.toPtr();
         } 
         self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
@@ -3332,6 +3492,7 @@ impl Resolver{
         self.err(line, "then returns a non-void but no else");
       }
     }
+    rhs.drop();
     return rt1;
   }
   

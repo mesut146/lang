@@ -32,40 +32,40 @@ impl Compiler{
     func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
       match node{
-        Expr::Call(mc*) => return self.visit_call(node, mc),
-        Expr::MacroCall(mc*) => return self.visit_macrocall(node, mc),
-        Expr::ArrAccess(aa*) => return self.visit_array_access(node, aa),
-        Expr::Array(list*, sz*) => return self.visit_array(node, list, sz),
-        Expr::Access(scope*, name*) => return self.visit_access(node, scope.get(), name),
-        Expr::Par(e*) => return self.visit(e.get()),
-        Expr::Obj(type*, args*) => return self.visit_obj(node, type, args),
-        Expr::Lit(lit*) => return self.visit_lit(node, lit),
-        Expr::Infix(op*, l*, r*) => return self.visit_infix(node, op, l.get(), r.get()),
-        Expr::Name(name*) => return self.visit_name(node, name, true),
-        Expr::Is(lhs*, rhs*) => return self.visit_is(lhs.get(), rhs.get()),
-        Expr::As(lhs*, rhs*) => return self.visit_as(lhs.get(), rhs),
-        Expr::If(is*) => {
+        Expr::Call(mc) => return self.visit_call(node, mc),
+        Expr::MacroCall(mc) => return self.visit_macrocall(node, mc),
+        Expr::ArrAccess(aa) => return self.visit_array_access(node, aa),
+        Expr::Array(list, sz) => return self.visit_array(node, list, sz),
+        Expr::Access(scope, name) => return self.visit_access(node, scope.get(), name),
+        Expr::Par(e) => return self.visit(e.get()),
+        Expr::Obj(type, args) => return self.visit_obj(node, type, args),
+        Expr::Lit(lit) => return self.visit_lit(node, lit),
+        Expr::Infix(op, l, r) => return self.visit_infix(node, op, l.get(), r.get()),
+        Expr::Name(name) => return self.visit_name(node, name, true),
+        Expr::Is(lhs, rhs) => return self.visit_is(lhs.get(), rhs.get()),
+        Expr::As(lhs, rhs) => return self.visit_as(lhs.get(), rhs),
+        Expr::If(is) => {
           let res = self.visit_if(is.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::IfLet(is*) => {
+        Expr::IfLet(is) => {
           let res = self.visit_iflet(node.line, is.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Block(b*) => {
+        Expr::Block(b) => {
           let res = self.visit_block(b.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Unary(op*, e*) => {
+        Expr::Unary(op, e) => {
           if(op.eq("&")){
             return self.visit_ref(node, e.get());
           }
@@ -74,7 +74,7 @@ impl Compiler{
           }
           return self.visit_unary(op, e.get());
         },
-        Expr::Type(type*) => {
+        Expr::Type(type) => {
             let r = self.get_resolver();
             let rt = r.visit(node);
             if(rt.type.is_fpointer() && rt.method_desc.is_some()){
@@ -86,26 +86,26 @@ impl Compiler{
             rt.drop();
             return self.simple_enum(node, type);
         },
-        Expr::Match(me*) => {
+        Expr::Match(me) => {
           let res = self.visit_match(node, me.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Lambda(le*) => {
+        Expr::Lambda(le) => {
             let r = self.get_resolver();
             let m = r.lambdas.get(&node.id).unwrap();
             let proto = self.protos.get().get_func(m);
             
             return proto as Value*;
         },
-        Expr::Ques(bx*) => {
+        Expr::Ques(bx) => {
           let r = self.get_resolver();
           let info = r.get_macro(node);
           return self.visit_block(&info.block).unwrap();
         },
-        Expr::Tuple(elems*) => {
+        Expr::Tuple(elems) => {
           let r = self.get_resolver();
           let node_type = r.getType(node);
           let ty = self.mapType(&node_type);
@@ -137,10 +137,10 @@ impl Compiler{
 
     func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
       match rhs{
-        MatchRhs::EXPR(e*)=>{
+        MatchRhs::EXPR(e)=>{
           return Option<Value*>::new(self.visit(e));
         },
-        MatchRhs::STMT(st*)=>{
+        MatchRhs::STMT(st)=>{
           self.visit(st);
           return Option<Value*>::new();
         }
@@ -185,7 +185,7 @@ impl Compiler{
                 }
             }
           },
-          MatchLhs::ENUM(type*, args*) => {
+          MatchLhs::ENUM(type, args) => {
             let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
             let bb = create_bb_named(name_c.ptr());
             let var_index = get_variant_index_match(type, decl);
@@ -195,7 +195,7 @@ impl Compiler{
             let variant = decl.get_variants().get(var_index);
             let arg_idx = 0;
             for arg in args{
-              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
+              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type);
               ++arg_idx;
             }
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
@@ -222,7 +222,7 @@ impl Compiler{
             }
             name_c.drop();
           },
-          MatchLhs::UNION(types*) => {
+          MatchLhs::UNION(types) => {
             let name_c = format("{:?}__$union_{}", decl.type, expr.line).cstr();
             let bb = create_bb_named(name_c.ptr());
             for uty in types{
@@ -278,7 +278,7 @@ impl Compiler{
       return res;
     }
 
-    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*){
+    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*){
       let data_index = get_data_index(decl);
       let dataPtr = CreateStructGEP(enum_ptr, data_index, self.mapType(&decl.type));
       let var_ty = self.get_variant_ty(decl, variant);
@@ -291,12 +291,12 @@ impl Compiler{
         ++gep_idx;
       }
       let field_ptr = CreateStructGEP(dataPtr, gep_idx, var_ty);
-      if (arg.is_ptr) {
+      if (rhs_ty.is_pointer()) {
         CreateStore(field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
         self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
         ty_ptr.drop();
-      } else {
+      }else {
         //deref
         if (field.type.is_prim() || field.type.is_any_pointer()) {
             let field_val = CreateLoad(self.mapType(&field.type), field_ptr);
@@ -304,10 +304,229 @@ impl Compiler{
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
             self.copy(alloc_ptr, field_ptr, &field.type);
-            self.own.get().add_iflet_var(arg, field, alloc_ptr, &decl.type);
+            self.own.get().add_iflet_var(arg, field, alloc_ptr);
         }
         self.llvm.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
       }      
+    }
+
+    func is_nested_if(body: Body*): bool{
+      if(body is Body::If || body is Body::IfLet) return true;
+      if let Body::Block(blk) = body{
+        if(blk.return_expr.is_some()){
+          return is_if(blk.return_expr.get());
+        }
+      }
+      return false;
+    }
+    func is_if(expr: Expr*): bool{
+      return expr is Expr::If || expr is Expr::IfLet;
+    }
+
+    func visit_if(self, node: IfStmt*): Option<Value*>{
+      let cond = self.branch(&node.cond);
+      let line = node.cond.line;
+      let then_name = CStr::new(format("if_then_{}", line));
+      let else_name = CStr::new(format("if_else_{}", line));
+      let next_name = CStr::new(format("if_next_{}", line));
+      let thenbb = create_bb_named(then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let nextbb = create_bb_named(next_name.ptr());
+      CreateCondBr(cond, thenbb, elsebb);
+      self.set_and_insert(thenbb);
+      self.llvm.di.get().new_scope(node.then.get().line());
+      let exit_then = Exit::get_exit_type(node.then.get());
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      let then_val = self.visit_body(node.then.get());
+      let then_end = GetInsertBlock();
+      let else_end = GetInsertBlock();
+      //else move aware end_scope
+      if(node.else_stmt.is_some()){
+        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+      }else{
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+      }
+      self.llvm.di.get().exit_scope();
+      if(!exit_then.is_jump()){
+        CreateBr(nextbb);
+      }
+      self.set_and_insert(elsebb);
+      let else_jump = false;
+      let else_val = Option<Value*>::new();
+      
+      if(node.else_stmt.is_some()){
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        //this will restore if, bc we did fake end_scope
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
+        else_val = self.visit_body(node.else_stmt.get());
+        else_end = GetInsertBlock();
+        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.llvm.di.get().exit_scope();
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
+        else_jump = exit_else.is_jump();
+        if(!else_jump){
+          CreateBr(nextbb);
+        }
+        exit_else.drop();
+      }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        CreateBr(nextbb);
+      }
+      let res = Option<Value*>::new();
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(nextbb);
+        self.add_bb(nextbb);
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
+            //self.get_resolver().err(line, "nested if expr not allowed");
+          //}
+          if(exit_then.is_jump() && !else_jump){
+            res = else_val;
+          }
+          else if(!exit_then.is_jump() && else_jump){
+            res = then_val;
+          }else{
+            let phi_type = self.mapType(&then_rt.type);
+            if(is_struct(&then_rt.type)){
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
+            }
+            let phi = CreatePHI(phi_type, 2);
+            if(is_struct(&then_rt.type)){
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
+            }else{
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+            }
+            res = Option::new(phi as Value*);
+          }
+        }
+        then_rt.drop();
+      }
+      exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
+      return res;
+    }
+
+    func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
+      let rt = self.get_resolver().visit_type(&node.type);
+      let decl = self.get_resolver().get_decl(&rt).unwrap();
+      let rhs = self.get_obj_ptr(&node.rhs);
+      let rhs_rt = self.get_resolver().visit(&node.rhs);
+      let tag_ptr = CreateStructGEP(rhs, get_tag_index(decl), self.mapType(&decl.type));
+      let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
+      let index = Resolver::findVariant(decl, node.type.name());
+      let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()) as Value*);
+  
+      let then_name = CStr::new(format("iflet_then_{}", line));
+      let else_name = CStr::new(format("iflet_else_{}", line));
+      let next_name = CStr::new(format("iflet_next_{}", line));
+      let then_bb = create_bb2_named(self.cur_func(), then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+      
+      CreateCondBr(self.branch(cmp), then_bb, elsebb);
+      SetInsertPoint(then_bb);
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      self.own.get().do_move(&node.rhs);
+      let variant = decl.get_variants().get(index);
+      self.llvm.di.get().new_scope(line);
+      if(!variant.fields.empty()){
+        //declare vars
+        let fields = &variant.fields;
+        let data_index = get_data_index(decl);
+        let dataPtr = CreateStructGEP(rhs, data_index, self.mapType(&decl.type));
+        let var_ty = self.get_variant_ty(decl, variant);
+        for (let i = 0; i < fields.size(); ++i) {
+            //regular var decl
+            let prm = fields.get(i);
+            let arg = node.args.get(i);
+            self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type);
+        }
+      }
+      let then_val = self.visit_body(node.then.get());
+      let then_end = GetInsertBlock();
+      let else_end = GetInsertBlock();
+      //else move aware end_scope
+      if(node.else_stmt.is_some()){
+        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+      }else{
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+      }
+      self.llvm.di.get().exit_scope();
+      let exit_then = Exit::get_exit_type(node.then.get());
+      if (!exit_then.is_jump()) {
+        CreateBr(next);
+      }
+      self.set_and_insert(elsebb);
+      let else_jump = false;
+      let else_val = Option<Value*>::new();
+      if (node.else_stmt.is_some()) {
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
+        else_val = self.visit_body(node.else_stmt.get());
+        else_end = GetInsertBlock();
+        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.llvm.di.get().exit_scope();
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
+        else_jump = exit_else.is_jump();
+        if (!else_jump) {
+          CreateBr(next);
+        }
+        exit_else.drop();
+      }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        CreateBr(next);
+      }
+      let res = Option<Value*>::new();
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(next);
+        self.add_bb(next);
+
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
+            //self.get_resolver().err(line, "nested if expr not allowed");
+          //}
+          if(exit_then.is_jump() && !else_jump){
+            res = else_val;
+          }
+          else if(!exit_then.is_jump() && else_jump){
+            res = then_val;
+          }else{
+            let phi_type = self.mapType(&then_rt.type);
+            if(is_struct(&then_rt.type)){
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
+            }
+            let phi = CreatePHI(phi_type, 2);
+            if(is_struct(&then_rt.type)){
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
+            }else{
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+            }
+            res = Option::new(phi as Value*);
+          }
+        }
+        then_rt.drop();
+      }
+      exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
+      rt.drop();
+      rhs_rt.drop();
+      return res;
     }
 
     func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
@@ -315,7 +534,7 @@ impl Compiler{
       if(rt.desc.kind is RtKind::Const){
         let cn = self.get_resolver().get_const(&rt);
         match &cn.rhs{
-          Expr::Lit(lit*) => {
+          Expr::Lit(lit) => {
             match &lit.kind{
               LitKind::INT => {
                 return self.visit_lit(&cn.rhs, lit);
@@ -397,7 +616,7 @@ impl Compiler{
     func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
       let tag1 = self.getTag(lhs);
       let op = get_comp_op("==".ptr());
-      if let Expr::Type(rhs_ty*)=(rhs){
+      if let Expr::Type(rhs_ty)=rhs{
         let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
         let index = Resolver::findVariant(decl, rhs_ty.name());
         let tag2 = makeInt(index, ENUM_TAG_BITS()) as Value*;
@@ -425,8 +644,8 @@ impl Compiler{
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
-      if let Type::Tuple(tt*) = &scope_rt.type {
-        let idx = i32::parse(name.str()).unwrap();
+      if let Type::Tuple(tt) = &scope_rt.type {
+        let idx = i32::parse(name.str()).expect("tuple index parse error");
         let scope_ty = self.mapType(&scope_rt.type);
         let res = CreateStructGEP(scope_ptr, idx, scope_ty);
         scope_rt.drop();
@@ -883,11 +1102,12 @@ impl Compiler{
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
         let arr_type2 = arr_type.deref_ptr();
-        if let Type::Array(elem*, sz)=(arr_type2){
+        if let Type::Array(elem, sz)=arr_type2{
           arr_type.drop();
-          return makeInt(sz, 64) as Value*;
+          return makeInt(*sz, 64) as Value*;
         }
         arr_type.drop();
+        //std::unreachable();
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){
@@ -952,7 +1172,7 @@ impl Compiler{
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
           let ft0 = Option<LambdaType*>::none();
-          if let Type::Lambda(bx*)=(&rt.lambda_call.get().type){
+          if let Type::Lambda(bx)=&rt.lambda_call.get().type{
               ft0.set(bx.get());
           }else{
               panic("impossible");
@@ -1217,15 +1437,18 @@ impl Compiler{
     }
   
     func is_logic(expr: Expr*): bool{
-      if let Expr::Par(e*)=(expr){
-        return is_logic(e.get());
+      match expr{
+        Expr::Par(e)=>{
+          return is_logic(e.get());
+        },
+        Expr::Infix(op, l, r)=>{
+          if(op.eq("&&") || op.eq("||")){
+            return true;
+          }
+          return false;
+        },
+        _=> return false,
       }
-      if let Expr::Infix(op*, l*, r*)=(expr){
-        if(op.eq("&&") || op.eq("||")){
-          return true;
-        }
-      }
-      return false;
     }
   
     func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<Value*, BasicBlock*>{
@@ -1245,10 +1468,10 @@ impl Compiler{
       let rv = Option<Value*>::new();
       if(is_logic(r)){
         let r_inner = r;
-        if let Expr::Par(e*)=(r){
+        if let Expr::Par(e)=r{
           r_inner = e.get();
         }
-        if let Expr::Infix(op2*,l2*,r2*)=(r_inner){
+        if let Expr::Infix(op2, l2, r2)=r_inner{
           let pair = self.andOr(op2, l2.get(), r2.get());
           then = pair.b;
           rv = Option::new(pair.a);
@@ -1381,7 +1604,7 @@ impl Compiler{
           self.own.get().do_move(&arg.expr);
         }
         match decl{
-          Decl::Struct(fields*)=>{
+          Decl::Struct(fields)=>{
             let field_idx = 0;
             for(let i = 0;i < args.len();++i){
               let arg = args.get(i);
@@ -1402,10 +1625,10 @@ impl Compiler{
               self.own.get().do_move(&arg.expr);
             }
           },
-          Decl::TupleStruct(fields*)=>{
+          Decl::TupleStruct(fields)=>{
             panic("todo");
           },
-          Decl::Enum(variants*)=>{
+          Decl::Enum(variants)=>{
             let variant_index = Resolver::findVariant(decl, type.name());
             let variant = decl.get_variants().get(variant_index);
             //set tag
@@ -1547,13 +1770,13 @@ impl Compiler{
     }
     
     func get_lhs(self, expr: Expr*): Value*{
-      if let Expr::Unary(op*, l2*)=(expr){
+      if let Expr::Unary(op, l2)=expr{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           return lhs;
         }
       }
-      if let Expr::Name(name*)=(expr){
+      if let Expr::Name(name)=expr{
         return self.visit_name(expr, name, false);
       }
       return self.visit(expr);
@@ -1563,7 +1786,7 @@ impl Compiler{
       if(l is Expr::Infix) panic("assign lhs");
       //let lhs = Option<Value*>::new();
       let type = self.getType(l);
-      if let Expr::Unary(op*,l2*)=(l){
+      if let Expr::Unary(op,l2)=l{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           self.setField(r, &type, lhs, Option::new(l));
@@ -1583,10 +1806,10 @@ impl Compiler{
     func emit_expr(self, expr: Expr*, trg_ptr: Value*){
       let rt = self.get_resolver().visit(expr);
       match expr{
-        Expr::Obj(obj_type*, entries*) => {
+        Expr::Obj(obj_type, entries) => {
           self.visit_obj(expr, obj_type, entries, trg_ptr);
         },
-        Expr::Lit(lit*) => {
+        Expr::Lit(lit) => {
           if(lit.kind is LitKind::STR){
             self.str_lit(lit.val.str(), trg_ptr);
           }else{
@@ -1594,7 +1817,7 @@ impl Compiler{
             CreateStore(val, trg_ptr);
           }
         },
-        Expr::Call(mc*) => {
+        Expr::Call(mc) => {
           if(is_struct(&rt.type)){
             self.visit_call2(expr, mc, Option::new(trg_ptr), rt);
           }else{
@@ -1603,7 +1826,7 @@ impl Compiler{
           }
           return;//rt is moved,return
         },
-        Expr::Array(list*, size*) => {
+        Expr::Array(list, size) => {
           if(!Compiler::is_constexpr(expr)){
             //AllocHelper::new(self).visit_child(expr);
             self.visit_array(expr, list, size, trg_ptr);
@@ -1621,7 +1844,7 @@ impl Compiler{
 
 
 func is_deref(expr: Expr*): Option<Expr*>{
-  if let Expr::Unary(op*, e*)=(expr){
+  if let Expr::Unary(op, e) = expr{
       if(op.eq("*")) return Option::new(e.get());
   }
   return Option<Expr*>::new();

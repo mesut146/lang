@@ -28,8 +28,8 @@ struct DebugInfo{
 
 func method_parent(m: Method*): Type*{
     match &m.parent{
-      Parent::Impl(info*) => return &info.type,
-      Parent::Trait(type*) => return type,
+      Parent::Impl(info) => return &info.type,
+      Parent::Trait(type) => return type,
       _ => panic("method_parent"),
     }
 }
@@ -215,15 +215,21 @@ impl DebugInfo{
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
       }
+      let fi = 0;
       for fd in &ev.fields{
         let fd_ty = self.map_di(&fd.type, c);
         let off = getElementOffsetInBits(sl, idx);
         let fd_size = DIType_getSizeInBits(fd_ty);
-        let fdname_c = fd.name.clone().cstr();
+        let fdname_c = if (fd.name.is_some()){
+          fd.name.get().clone().cstr()
+        }else{
+          format("_{}", fi).cstr()
+        };
         let mem = createMemberType(st as DIScope*, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
         fdname_c.drop();
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
+        ++fi;
       }
       replaceElements(st, elems);
       let evname_c = ev.name.clone().cstr();
@@ -237,7 +243,7 @@ impl DebugInfo{
     func find_impl(ty: Type*, r: Resolver*): List<Impl*>{
       let res = List<Impl*>::new();
       for it in &r.unit.items{
-        if let Item::Impl(imp*) = it{
+        if let Item::Impl(imp) = it{
           if(imp.info.type.eq(ty)){
             res.add(imp);
           }
@@ -248,6 +254,10 @@ impl DebugInfo{
 
     func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: vector_Metadata*){
       if(decl.type.is_generic()) return;
+      if(decl.type.is_simple() && decl.type.as_simple().scope.is_some()){
+        //todo
+        return;
+      }
       let imps: List<Pair<Impl*, i32>> = MethodResolver::get_impl(c.get_resolver(), &decl.type, Option<Type*>::new()).unwrap();
       for pr in imps{
         for fun in &pr.a.methods{
@@ -276,7 +286,7 @@ impl DebugInfo{
       let sl = getStructLayout(st_real as StructType*);
       //print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
       match decl{
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
           let idx = 0;
           if(decl.base.is_some()){
             let ty = *base_ty.get();
@@ -286,22 +296,28 @@ impl DebugInfo{
             vector_Metadata_push(elems, mem as Metadata*);
             ++idx;
           }
+          let fi = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
             let size = DIType_getSizeInBits(ty);
             let off = getElementOffsetInBits(sl, idx);
-            let name_c = fd.name.clone().cstr();
+            let name_c = if(fd.name.is_some()){
+              fd.name.get().clone().cstr()
+            }else{
+              format("_{}", fi).cstr()
+            };
             let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
             vector_Metadata_push(elems, mem as Metadata*);
             ++idx;
+            ++fi;
             name_c.drop();
           }
           self.fill_funcs_member(decl, c, elems);
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
           let idx = 0;
-          for ft in fields{
-            let ty = self.map_di(ft, c);
+          for fd in fields{
+            let ty = self.map_di(&fd.type, c);
             let size = DIType_getSizeInBits(ty);
             let off = getElementOffsetInBits(sl, idx);
             let name_c = format("_{}", idx).cstr();
@@ -312,7 +328,7 @@ impl DebugInfo{
           }
           self.fill_funcs_member(decl, c, elems);
         },
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
           let data_size = c.getSize(decl) - ENUM_TAG_BITS();
           let tag_off = 0i64;
           //create empty variant
@@ -359,85 +375,67 @@ impl DebugInfo{
       if(opt2.is_some()){
         return *opt2.unwrap() as DIType*;
       }
-      if(name.eq("void")) return get_di_null();
-      if(name.eq("bool")){
-        return createBasicType(name, 8, DW_ATE_boolean());
-      }
-      if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
-        let size = c.getSize(type);
-        return createBasicType(name, size, DW_ATE_signed());
-      }
-      if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
-        let size = c.getSize(type);
-        return createBasicType(name, size, DW_ATE_unsigned());
-      }
-      if(name.eq("f32") || name.eq("f64")){
-        let size = c.getSize(type);
-        return createBasicType(name, size, DW_ATE_float());
-      }
-      if(type.is_pointer()){
-        let elem = type.elem();
-        return createPointerType(self.map_di(elem, c), 64);
-      }
-      if let Type::Array(elem*, count)=(type){
-        let elems = vector_Metadata_new();
-        vector_Metadata_push(elems, getOrCreateSubrange(0, count));
-        let elem_ty = self.map_di(elem.get(), c);
-        let size = c.getSize(type);
-        let res = createArrayType(size, elem_ty, elems);
-        vector_Metadata_delete(elems);
-        return res;
-      }
-      if let Type::Function(ft_box*)=(type){
-        let tys = vector_Metadata_new();
-        vector_Metadata_push(tys, self.map_di(&ft_box.get().return_type, c) as Metadata*);
-        for prm in & ft_box.get().params{
-          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
-        }
-        let sp = createSubroutineType(tys);
-        vector_Metadata_delete(tys);
-        return createPointerType(sp as DIType*, 64);
-        //return sp as DIType*;
-      }
-      if let Type::Lambda(ft_box*) = type{
-        let tys = vector_Metadata_new();
-        vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
-        for prm in & ft_box.get().params{
-          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
-        }
-        for prm in & ft_box.get().captured{
-          vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
-        }
-        let sp = createSubroutineType(tys);
-        vector_Metadata_delete(tys);
-        return createPointerType(sp as DIType*, 64);
-        //return sp as DIType*;
-      }
-      if(type.is_slice()){
-        let elem = type.elem();
-        let size = c.getSize(type);
-        let elems = vector_Metadata_new();
-        let line = 0;
-        //ptr
-        let ptr_ty = createPointerType(self.map_di(elem, c), 64);
-        let off = 0;
-        let flags = make_di_flags(false);
-        let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
-        vector_Metadata_push(elems, ptr_mem as Metadata*);
-        //len
-        let bits: Type = as_type(SLICE_LEN_BITS());
-        let len_ty = self.map_di(&bits, c);
-        bits.drop();
-        let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
-        vector_Metadata_push(elems, len_mem as Metadata*);
-        let name_c = name.clone().cstr();
-        let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
-        name_c.drop();
-        vector_Metadata_delete(elems);
-        return res;
-      }
       match type{
-        Type::Tuple(tt*) => {
+        Type::Pointer(elem) => {
+          return createPointerType(self.map_di(elem.get(), c), 64);
+        },
+        Type::Array(elem, count)=>{
+          let elems = vector_Metadata_new();
+          vector_Metadata_push(elems, getOrCreateSubrange(0, *count));
+          let elem_ty = self.map_di(elem.get(), c);
+          let size = c.getSize(type);
+          let res = createArrayType(size, elem_ty, elems);
+          vector_Metadata_delete(elems);
+          return res;
+        },
+        Type::Function(ft_box)=>{
+          let tys = vector_Metadata_new();
+          vector_Metadata_push(tys, self.map_di(&ft_box.get().return_type, c) as Metadata*);
+          for prm in & ft_box.get().params{
+            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+          }
+          let sp = createSubroutineType(tys);
+          vector_Metadata_delete(tys);
+          return createPointerType(sp as DIType*, 64);
+          //return sp as DIType*;
+        },
+        Type::Lambda(ft_box) => {
+          let tys = vector_Metadata_new();
+          vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
+          for prm in & ft_box.get().params{
+            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+          }
+          for prm in & ft_box.get().captured{
+            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+          }
+          let sp = createSubroutineType(tys);
+          vector_Metadata_delete(tys);
+          return createPointerType(sp as DIType*, 64);
+          //return sp as DIType*;
+        },
+        Type::Slice(elem)=>{
+          let size = c.getSize(type);
+          let elems = vector_Metadata_new();
+          let line = 0;
+          //ptr
+          let ptr_ty = createPointerType(self.map_di(elem.get(), c), 64);
+          let off = 0;
+          let flags = make_di_flags(false);
+          let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
+          vector_Metadata_push(elems, ptr_mem as Metadata*);
+          //len
+          let bits: Type = as_type(SLICE_LEN_BITS());
+          let len_ty = self.map_di(&bits, c);
+          bits.drop();
+          let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
+          vector_Metadata_push(elems, len_mem as Metadata*);
+          let name_c = name.clone().cstr();
+          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
+          name_c.drop();
+          vector_Metadata_delete(elems);
+          return res;
+        },
+        Type::Tuple(tt) => {
           let name_c = mangleType(type).cstr();
           let line = 0;
           let size = c.getSize(type);
@@ -459,11 +457,27 @@ impl DebugInfo{
           vector_Metadata_delete(elems);
           return res;
         },
-        _=>{
-          //todo
+        Type::Simple(smp)=>{
+          if(name.eq("void")) return get_di_null();
+          if(name.eq("bool")){
+            return createBasicType(name, 8, DW_ATE_boolean());
+          }
+          if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
+            let size = c.getSize(type);
+            return createBasicType(name, size, DW_ATE_signed());
+          }
+          if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
+            let size = c.getSize(type);
+            return createBasicType(name, size, DW_ATE_unsigned());
+          }
+          if(name.eq("f32") || name.eq("f64")){
+            let size = c.getSize(type);
+            return createBasicType(name, size, DW_ATE_float());
+          }
+          //already mapped
+          panic("map di {}\n", name);
         }
       }
-      panic("map di {}\n", name);
     }
 }
 

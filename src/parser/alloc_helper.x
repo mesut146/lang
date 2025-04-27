@@ -61,17 +61,17 @@ impl AllocHelper{
   }
   func visit_body(self, body: Body*): Option<Value*>{
     match body{
-        Body::Block(b*)=>{
+        Body::Block(b)=>{
             return self.visit(b);
         },
-        Body::Stmt(b*)=>{
+        Body::Stmt(b)=>{
             self.visit(b);
             return Option<Value*>::new();
         },
-        Body::If(b*)=>{
+        Body::If(b)=>{
             return self.visit_if(b);
         },
-        Body::IfLet(b*)=>{
+        Body::IfLet(b)=>{
             return self.visit_iflet(b);
         }
     }
@@ -103,34 +103,34 @@ impl AllocHelper{
   }
   func visit(self, node: Stmt*){
     match node{
-      Stmt::Var(ve*)=>{
+      Stmt::Var(ve)=>{
         self.visit(ve);
         return;
       },
-      Stmt::For(fs*)=>{
+      Stmt::For(fs)=>{
         if(fs.var_decl.is_some()){
           self.visit(fs.var_decl.get());
         }
         self.visit_body(fs.body.get());
         return;
       },
-      Stmt::ForEach(fe*)=>{
+      Stmt::ForEach(fe)=>{
         let info = self.c.get_resolver().format_map.get(&node.id).unwrap();
         self.visit(&info.block);
         return;
       },
-      Stmt::While(e*, b*)=>{
+      Stmt::While(e, b)=>{
         self.visit(e);
         self.visit_body(b.get());
         return;
       },
-      Stmt::Ret(e*)=>{
+      Stmt::Ret(e)=>{
         if(e.is_some()){
           self.visit_ret(node, e.get());
         }
         return;
       },
-      Stmt::Expr(e*)=>{
+      Stmt::Expr(e)=>{
         self.visit(e);
         return;
       },
@@ -281,22 +281,22 @@ impl AllocHelper{
   func visit(self, node: Expr*): Option<Value*>{
     let res = Option<Value*>::new();
     match node{
-      Expr::Name(name*) => return res,
-      Expr::Par(e*) => return self.visit(e.get()),
-      Expr::Block(blk*) => return self.visit(blk.get()),
-      Expr::If(is*) => return self.visit_if(is.get()),
-      Expr::IfLet(is*) => return self.visit_iflet(is.get()),
-      Expr::Call(call*) => return self.visit_call(node, call),
-      Expr::MacroCall(call*) => return self.visit_macrocall(node, call),
-      Expr::As(e*, type*) => {
+      Expr::Name(name) => return res,
+      Expr::Par(e) => return self.visit(e.get()),
+      Expr::Block(blk) => return self.visit(blk.get()),
+      Expr::If(is) => return self.visit_if(is.get()),
+      Expr::IfLet(is) => return self.visit_iflet(is.get()),
+      Expr::Call(call) => return self.visit_call(node, call),
+      Expr::MacroCall(call) => return self.visit_macrocall(node, call),
+      Expr::As(e, type) => {
         self.visit(e.get());
         return res;
       },
-      Expr::Is(e*, rhs*) => {
+      Expr::Is(e, rhs) => {
         self.visit(e.get());
         return res;
       },
-      Expr::Type(ty*) => {
+      Expr::Type(ty) => {
         if(ty.is_simple()){
           let smp = ty.as_simple();
           if(smp.scope.is_some()){
@@ -306,7 +306,7 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::Lit(lit*) => {
+      Expr::Lit(lit) => {
         if(lit.kind is LitKind::STR){
           let ty = Type::new("str");
           res.set(self.alloc_ty(&ty, node));
@@ -314,12 +314,12 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::Infix(op*, l*, r*) => {
+      Expr::Infix(op, l, r) => {
         self.visit(l.get());
         self.visit(r.get());
         return res;
       },
-      Expr::Unary(op*, e*) => {
+      Expr::Unary(op, e) => {
         self.visit(e.get());
         if(op.eq("&")){
           if(RvalueHelper::is_rvalue(e.get())){
@@ -330,7 +330,7 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::ArrAccess(aa*) => {
+      Expr::ArrAccess(aa) => {
         self.visit(aa.arr.get());
         self.visit(aa.idx.get());
         if(aa.idx2.is_some()){
@@ -341,11 +341,11 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::Access(scope*,name*) => {
+      Expr::Access(scope, name) => {
         self.visit(scope.get());
         return res;
       },
-      Expr::Obj(type*, args*) => {
+      Expr::Obj(type, args) => {
         //get full type
         let rt = self.c.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
@@ -356,7 +356,7 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::Array(list*, sz*) => {
+      Expr::Array(list, sz) => {
         let rt = self.c.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
         rt.drop();
@@ -370,14 +370,14 @@ impl AllocHelper{
         }
         return res;
       },
-      Expr::Match(me*) => {
+      Expr::Match(me) => {
         let rt = self.c.get_resolver().visit(node);
         if(!rt.type.is_void()){
           res = Option::new(self.alloc_ty(&rt.type, node));
         }
         self.visit(&me.get().expr);
         for case in &me.get().cases{
-          if let MatchLhs::ENUM(type*, args*) = &case.lhs{
+          if let MatchLhs::ENUM(type, args) = &case.lhs{
             for arg in args{
               let ty = self.c.get_resolver().cache.get(&arg.id);
               let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
@@ -388,21 +388,21 @@ impl AllocHelper{
             }
           }
           match &case.rhs{
-            MatchRhs::EXPR(e*) => { self.visit(e); },
-            MatchRhs::STMT(st*) => { self.visit(st); }
+            MatchRhs::EXPR(e) => { self.visit(e); },
+            MatchRhs::STMT(st) => { self.visit(st); }
           }
         }
         rt.drop();
         return res;
       },
-      Expr::Lambda(le*) => {
+      Expr::Lambda(le) => {
           let r = self.c.get_resolver();
           let m = r.lambdas.get(&node.id).unwrap();
           let ty = r.getType(node);
           res.set(self.alloc_ty(&ty, node));
           return res;
       },
-      Expr::Ques(bx*) => {
+      Expr::Ques(bx) => {
         let r = self.c.get_resolver();
         let info = r.get_macro(node);
         self.visit(&info.block);
@@ -410,7 +410,7 @@ impl AllocHelper{
         res.set(self.alloc_ty(&ty, node));
         return res;
       },
-      Expr::Tuple(elems*) => {
+      Expr::Tuple(elems) => {
         let r = self.c.get_resolver();
         let ty = r.getType(node);
         res.set(self.alloc_ty(&ty, node));
@@ -425,7 +425,7 @@ impl AllocHelper{
 
 impl AllocHelper{
   func visit_child(self, node: Expr*){
-    if let Expr::Array(list*,sz*)=(node){
+    if let Expr::Array(list, sz)=node{
       if(sz.is_some()){
         let elem = list.get(0);
         self.visit(elem);

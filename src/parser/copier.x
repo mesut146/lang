@@ -102,21 +102,20 @@ impl AstCopier{
             line: node.line,
             path: node.path.clone(),
             type: type ,
-            is_resolved: false,
             is_generic: false,
             base: self.visit_opt(&node.base), 
             attr: node.attr.clone()
         };
         match node{
-            Decl::Struct(fields*)=>{
+            Decl::Struct(fields)=>{
                 let res = self.visit_list(fields);
                 return Decl::Struct{.base, res};
             },
-            Decl::TupleStruct(fields*)=>{
+            Decl::TupleStruct(fields)=>{
                 let res = self.visit_list(fields);
                 return Decl::TupleStruct{.base, res};
             },
-            Decl::Enum(variants*)=>{
+            Decl::Enum(variants)=>{
                 let res = self.visit_list(variants);
                 return Decl::Enum{.base, res};
             }
@@ -128,35 +127,35 @@ impl AstCopier{
     }
 
     func visit(self, node: Variant*): Variant{
-        return Variant{name: node.name.clone(), fields: self.visit_list(&node.fields)};
+        return Variant{name: node.name.clone(), fields: self.visit_list(&node.fields), is_tuple: node.is_tuple};
     }
 
     func visit(self, type: Type*): Type{
         let id = Node::new(-1, type.line);
         match type{
-            Type::Pointer(bx*) => {
+            Type::Pointer(bx) => {
                 let scope = self.visit(bx.get());
                 let res = Type::Pointer{.id, Box::new(scope)};
                 return res;
             },
-            Type::Array(bx*, size) => {
+            Type::Array(bx, size) => {
                 let scope = self.visit(bx.get());
-                let res = Type::Array{.id, Box::new(scope), size};
+                let res = Type::Array{.id, Box::new(scope), *size};
                 return res;
             },
-            Type::Slice(bx*) => {
+            Type::Slice(bx) => {
                 let scope = self.visit(bx.get());
                 let res = Type::Slice{.id, Box::new(scope)};
                 return res;
             },
-            Type::Function(bx*) => {
+            Type::Function(bx) => {
                 let ft = FunctionType{
                     return_type: self.visit(&bx.get().return_type),
                     params: self.visit_list(&bx.get().params)
                 };
                 return Type::Function{.id, type: Box::new(ft)};
             },
-            Type::Lambda(bx*) => {
+            Type::Lambda(bx) => {
                 let lt = LambdaType{
                     return_type: self.visit_opt(&bx.get().return_type),
                     params: self.visit_list(&bx.get().params),
@@ -164,7 +163,7 @@ impl AstCopier{
                 };
                 return Type::Lambda{.id, Box::new(lt)};
             },
-            Type::Simple(smp*) => {
+            Type::Simple(smp) => {
                 if(self.type_map.contains(&smp.name)){
                     return self.type_map.get(&smp.name).unwrap().clone();
                 }
@@ -178,7 +177,7 @@ impl AstCopier{
                 }
                 return res.into(type.line);
             },
-            Type::Tuple(tt*) => {
+            Type::Tuple(tt) => {
                 return Type::Tuple{.id, TupleType{types: self.visit_list(&tt.types)}};
             }
         }
@@ -199,20 +198,17 @@ impl AstCopier{
 
     func visit(self, p: Parent*): Parent{
         match p{
-            Parent::Impl(info*) => {
-               return Parent::Impl{ImplInfo{type_params: self.visit_list(&info.type_params),
-                trait_name: self.visit_opt(&info.trait_name),
-                type: self.visit(&info.type)}};
+            Parent::Impl(info) => {
+                return Parent::Impl{
+                    ImplInfo{type_params: self.visit_list(&info.type_params),
+                    trait_name: self.visit_opt(&info.trait_name),
+                    type: self.visit(&info.type)}
+                };
             },
-            Parent::Trait(ty*) => {
-                return Parent::Trait{self.visit(ty)};
-            },
-            Parent::None=>{
-                return Parent::None;
-            },
-            Parent::Extern=>{
-                return Parent::Extern;
-            }
+            Parent::Trait(ty) => return Parent::Trait{self.visit(ty)},
+            Parent::None => return Parent::None,
+            Parent::Extern => return Parent::Extern,
+            Parent::Module(name) => return Parent::Module{name.clone()},
         }
     }
 
@@ -261,15 +257,15 @@ impl AstCopier{
 
     func visit(self, node: ArgBind*): ArgBind{
         let id = self.node(node as Node*);
-        return ArgBind{.id, node.name.clone(), node.is_ptr};
+        return ArgBind{.id, node.name.clone()};
     }
     func visit(self, node: Body*): Body{
         let id = self.node(node as Node*);
         match node{
-            Body::Block(b*) => return Body::Block{.id, self.visit(b)},
-            Body::Stmt(b*) => return Body::Stmt{.id, self.visit(b)},
-            Body::If(b*) => return Body::If{.id, self.visit(b)},
-            Body::IfLet(b*) => return Body::IfLet{.id, self.visit(b)},
+            Body::Block(b) => return Body::Block{.id, self.visit(b)},
+            Body::Stmt(b) => return Body::Stmt{.id, self.visit(b)},
+            Body::If(b) => return Body::If{.id, self.visit(b)},
+            Body::IfLet(b) => return Body::IfLet{.id, self.visit(b)},
         }     
     }
 
@@ -278,11 +274,11 @@ impl AstCopier{
         match node{
             Stmt::Break => return Stmt::Break{.id},
             Stmt::Continue => return Stmt::Continue{.id},
-            Stmt::Var(ve*) => return Stmt::Var{.id, self.visit(ve)},
-            Stmt::Expr(e*) => return Stmt::Expr{.id, self.visit(e)},
-            Stmt::Ret(opt*) => return Stmt::Ret{.id, self.visit_opt(opt)},
-            Stmt::While(e*, body*) => return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)},
-            Stmt::For(fs*) => {
+            Stmt::Var(ve) => return Stmt::Var{.id, self.visit(ve)},
+            Stmt::Expr(e) => return Stmt::Expr{.id, self.visit(e)},
+            Stmt::Ret(opt) => return Stmt::Ret{.id, self.visit_opt(opt)},
+            Stmt::While(e, body) => return Stmt::While{.id, cond: self.visit(e), then: self.visit(body)},
+            Stmt::For(fs) => {
                 return Stmt::For{.id, ForStmt{
                     var_decl: self.visit_opt(&fs.var_decl),
                     cond: self.visit_opt(&fs.cond),
@@ -290,7 +286,7 @@ impl AstCopier{
                     body: self.visit_box(&fs.body),
                 }};
             },
-            Stmt::ForEach(fe*) => return Stmt::ForEach{.id, ForEach{
+            Stmt::ForEach(fe) => return Stmt::ForEach{.id, ForEach{
                 var_name: fe.var_name.clone(),
                 rhs: self.visit(&fe.rhs),
                 body: self.visit(&fe.body)
@@ -319,38 +315,38 @@ impl AstCopier{
     func visit(self, node: Expr*): Expr{
         let id = self.node(node as Node*);
         match node{
-            Expr::Name(name*) => return Expr::Name{.id, name.clone()},
-            Expr::Call(mc*) => return Expr::Call{.id, self.visit(mc)},
-            Expr::MacroCall(mc*) => return Expr::MacroCall{.id, self.visit(mc)},
-            Expr::If(is*) => return Expr::If{.id, Box::new(self.visit(is.get()))},
-            Expr::IfLet(is*) => return Expr::IfLet{.id, Box::new(self.visit(is.get()))},
-            Expr::Block(b*) => return Expr::Block{.id, Box::new(self.visit(b.get()))},
-            Expr::Lit(lit*) => return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}},
-            Expr::Par(e*) => return Expr::Par{.id, self.visit_box(e)},
-            Expr::Type(type*) => return Expr::Type{.id, self.visit(type)},
-            Expr::Unary(op*, e*) => return Expr::Unary{.id, op.clone(), self.visit_box(e)},
-            Expr::Infix(op*, l*, r*) => return Expr::Infix{.id, op.clone(), self.visit_box(l), self.visit_box(r)},
-            Expr::Access(scope*, name*) => return Expr::Access{.id, self.visit_box(scope), name.clone()},
-            Expr::Obj(type*, args*) => return Expr::Obj{.id, self.visit(type), self.visit_list(args)},
-            Expr::As(e*, type*) => return Expr::As{.id,  self.visit_box(e), self.visit(type)},
-            Expr::Is(e*, rhs*) => return Expr::Is{.id, self.visit_box(e), self.visit_box(rhs)},
-            Expr::Array(list*, size*) => return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)},
-            Expr::ArrAccess(aa*) => return Expr::ArrAccess{.id, ArrAccess{
+            Expr::Name(name) => return Expr::Name{.id, name.clone()},
+            Expr::Call(mc) => return Expr::Call{.id, self.visit(mc)},
+            Expr::MacroCall(mc) => return Expr::MacroCall{.id, self.visit(mc)},
+            Expr::If(is) => return Expr::If{.id, Box::new(self.visit(is.get()))},
+            Expr::IfLet(is) => return Expr::IfLet{.id, Box::new(self.visit(is.get()))},
+            Expr::Block(b) => return Expr::Block{.id, Box::new(self.visit(b.get()))},
+            Expr::Lit(lit) => return Expr::Lit{.id, Literal{lit.kind, lit.val.clone(), self.visit_opt(&lit.suffix)}},
+            Expr::Par(e) => return Expr::Par{.id, self.visit_box(e)},
+            Expr::Type(type) => return Expr::Type{.id, self.visit(type)},
+            Expr::Unary(op, e) => return Expr::Unary{.id, op.clone(), self.visit_box(e)},
+            Expr::Infix(op, l, r) => return Expr::Infix{.id, op.clone(), self.visit_box(l), self.visit_box(r)},
+            Expr::Access(scope, name) => return Expr::Access{.id, self.visit_box(scope), name.clone()},
+            Expr::Obj(type, args) => return Expr::Obj{.id, self.visit(type), self.visit_list(args)},
+            Expr::As(e, type) => return Expr::As{.id,  self.visit_box(e), self.visit(type)},
+            Expr::Is(e, rhs) => return Expr::Is{.id, self.visit_box(e), self.visit_box(rhs)},
+            Expr::Array(list, size) => return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)},
+            Expr::ArrAccess(aa) => return Expr::ArrAccess{.id, ArrAccess{
                 arr: self.visit_box(&aa.arr),
                 idx: self.visit_box(&aa.idx),
                 idx2: self.visit_ptr(&aa.idx2)
             }},
-            Expr::Lambda(lm*) => return Expr::Lambda{.id, Lambda{
+            Expr::Lambda(lm) => return Expr::Lambda{.id, Lambda{
                 params: self.visit_list(&lm.params),
                 return_type: self.visit_opt(&lm.return_type),
                 body: self.visit_box(&lm.body)
             }},
-            Expr::Match(m*) => return Expr::Match{.id, Box::new(Match{
+            Expr::Match(m) => return Expr::Match{.id, Box::new(Match{
                 expr: self.visit(&m.get().expr),
                 cases: self.visit_list(&m.get().cases)
             })},
-            Expr::Ques(bx*) => return Expr::Ques{.id, self.visit_box(bx)},
-            Expr::Tuple(elems*) => return Expr::Tuple{.id, self.visit_list(elems)},
+            Expr::Ques(bx) => return Expr::Ques{.id, self.visit_box(bx)},
+            Expr::Tuple(elems) => return Expr::Tuple{.id, self.visit_list(elems)},
         }
     }
     func visit(self, node: LambdaParam*): LambdaParam{
@@ -360,8 +356,8 @@ impl AstCopier{
     }
     func visit(self, node: LambdaBody*): LambdaBody{
         match node{
-            LambdaBody::Expr(e*) => return LambdaBody::Expr{self.visit(e)},
-            LambdaBody::Stmt(st*) => return LambdaBody::Stmt{self.visit(st)},
+            LambdaBody::Expr(e) => return LambdaBody::Expr{self.visit(e)},
+            LambdaBody::Stmt(st) => return LambdaBody::Stmt{self.visit(st)},
         }
     }
 
@@ -372,12 +368,12 @@ impl AstCopier{
     func visit(self, node: MatchCase*): MatchCase{
         let lhs = match &node.lhs{
             MatchLhs::NONE => MatchLhs::NONE,
-            MatchLhs::ENUM(type*, args*) => MatchLhs::ENUM{self.visit(type), self.visit_list(args)},
-            MatchLhs::UNION(types*) => MatchLhs::UNION{self.visit_list(types)},
+            MatchLhs::ENUM(type, args) => MatchLhs::ENUM{self.visit(type), self.visit_list(args)},
+            MatchLhs::UNION(types) => MatchLhs::UNION{self.visit_list(types)},
         };
         let rhs = match &node.rhs{
-            MatchRhs::EXPR(expr*) => MatchRhs::EXPR{self.visit(expr)},
-            MatchRhs::STMT(stmt*) => MatchRhs::STMT{self.visit(stmt)},
+            MatchRhs::EXPR(expr) => MatchRhs::EXPR{self.visit(expr)},
+            MatchRhs::STMT(stmt) => MatchRhs::STMT{self.visit(stmt)},
         };
         return MatchCase{lhs: lhs, rhs: rhs, line: node.line};
     }

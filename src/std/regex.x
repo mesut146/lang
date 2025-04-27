@@ -304,7 +304,7 @@ impl MatchVisitor{
             let item = sq.list.get(idx);
             let it_used = false;
             //prevent greedy match
-            if let RegexItem::Op(ch*, kind*) = item{
+            if let RegexItem::Op(ch, kind) = item{
                 if((ch.get() is RegexItem::Dot || ch.get() is RegexItem::Ch) && kind is OpKind::Star && idx < sq.list.len() - 1){
                     let next = sq.list.get(idx + 1);
                     //do non greedy  (ab)*a
@@ -370,7 +370,7 @@ impl MatchVisitor{
     }
     func is_empty(it: RegexItem*): bool{
         match it{
-            RegexItem::Op(RegexNode*, kind*) => return kind is OpKind::Opt || kind is OpKind::Star,
+            RegexItem::Op(RegexNode, kind) => return kind is OpKind::Opt || kind is OpKind::Star,
             _=> return false,
         }
     }
@@ -380,11 +380,11 @@ impl MatchVisitor{
             return MatchState::new(false, 0);
         }
         return match it{
-            RegexItem::Ch(ch) => MatchState::new(self.s.get(i) == ch, 1),
+            RegexItem::Ch(ch) => MatchState::new(self.s.get(i) == *ch, 1),
             RegexItem::Escape(val) => {
                 panic("todo escape");
             },
-            RegexItem::Group(or*, name*) => {
+            RegexItem::Group(or, name) => {
                 let tmp = self.visit_or(or, i);
                 if(!tmp.is_match) return MatchState::new(false, 0);
                 let cap_str: str = self.s.substr(i, i + tmp.len);
@@ -405,7 +405,7 @@ impl MatchVisitor{
                 }
                 tmp
             },
-            RegexItem::Op(node*, kind*) => {
+            RegexItem::Op(node, kind) => {
                 let node_st = self.visit_item(node.get(), i);
                 let res = MatchState::new(!(kind is OpKind::Plus), 0);
                 if(!node_st.is_match) return res;
@@ -437,7 +437,7 @@ impl MatchVisitor{
                 res
             },
             RegexItem::Dot => MatchState::new(true, 1),
-            RegexItem::Brac(br*) => {
+            RegexItem::Brac(br) => {
                 let valid = false;
                 let ch = self.s.get(i);
                 for rng in &br.list{
@@ -498,25 +498,25 @@ impl Display for RegexItem{
     func fmt(self, f: Fmt*){
         match self{
             RegexItem::Dot => f.print("."), 
-            RegexItem::Group(RegexNode*, name*)=>{
+            RegexItem::Group(ch, name)=>{
                 f.print("(");
                 f.print("?<");
                 f.print(name);
                 f.print(">");
-                Display::fmt(RegexNode, f);
+                Display::fmt(ch, f);
                 f.print(")");
             },
-            RegexItem::Brac(RegexNode*)=>{
-                Display::fmt(RegexNode, f);
+            RegexItem::Brac(ch)=>{
+                Display::fmt(ch, f);
             },
-            RegexItem::Op(RegexNode*, kind*)=>{
-                Display::fmt(RegexNode.get(), f);
+            RegexItem::Op(ch, kind)=>{
+                Display::fmt(ch.get(), f);
                 Display::fmt(kind, f);
             },
             RegexItem::Ch(val)=>{
-                f.print(&(val as i8));
+                f.print(&(*val as i8));
             },
-            RegexItem::Escape(val*)=>{
+            RegexItem::Escape(val)=>{
                 f.print("\\");
                 f.print(val);
             }

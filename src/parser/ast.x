@@ -7,7 +7,7 @@ import parser/parser
 import parser/token
 import parser/lexer
 
-static print_drops = false;
+//static print_drops = false;
 
 struct TokenStream{
   tokens: List<Token>;
@@ -40,11 +40,12 @@ impl TokenStream{
 }
 
 func prim_size(s: str): Option<u32>{
-  let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
-  let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
+  //let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
+  //let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
+  let prims = [("bool", 8), ("i8", 8), ("i16", 16), ("i32", 32), ("i64", 64), ("u8", 8), ("u16", 16), ("u32", 32), ("u64", 64), ("f32", 32), ("f64", 64)];
   for(let i = 0;i < prims.len();++i){
-    if(prims[i].eq(s)){
-      return Option::new(sizes[i] as u32);
+    if(prims[i].0.eq(s)){
+      return Option::new(prims[i].1 as u32);
     }
   }
   return Option<u32>::new();
@@ -98,7 +99,7 @@ impl Unit{
   func get_globals(self): List<Global*>{
     let res = List<Global*>::new();
     for item in &self.items{
-      if let Item::Glob(g*) = item{
+      if let Item::Glob(g) = item{
         res.add(g);
       }
     }
@@ -177,15 +178,28 @@ enum Item{
   Extern(methods: List<Method>),
   Const(val: Const),
   Glob(gl: Global),
+  Module(m: Module),
+  Use{us: UseItem},
 }
 
 impl Item{
   func as_impl(self): Impl*{
-    if let Item::Impl(imp*) = self{
+    if let Item::Impl(imp) = self{
       return imp;
     }
     panic("Item::as_impl()");
   }
+}
+
+struct UseItem{
+  path: List<String>;
+  list: List<String>;
+  has_multiple: bool;
+}
+
+struct Module{
+  name: String;
+  items: List<Item>;
 }
 
 struct Global: Node{
@@ -223,7 +237,6 @@ struct BaseDecl{
   line: i32;
   path: String;
   type: Type;
-  is_resolved: bool;
   is_generic: bool;
   base: Option<Type>;
   attr: Attributes;
@@ -232,27 +245,24 @@ struct BaseDecl{
 enum Decl: BaseDecl{
   Struct(fields: List<FieldDecl>),
   Enum(variants: List<Variant>),
-  TupleStruct(fields: List<Type>),
+  TupleStruct(fields: List<FieldDecl>),
 }
 
 impl Decl{
   func is_drop(self): bool{
     return self.attr.has_attr("drop");
   }
-  /*func is_struct(self): bool{
-    return self is Decl::Struct;
-  }*/
   func is_enum(self): bool{
     return self is Decl::Enum;
   }
   func get_variants(self): List<Variant>*{
-    if let Decl::Enum(variants*) = self{
+    if let Decl::Enum(variants) = self{
       return variants;
     }
     panic("get_variants {:?}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
-    if let Decl::Struct(fields*) = self{
+    if let Decl::Struct(fields) = self{
       return fields;
     }
     panic("get_fields");
@@ -260,13 +270,14 @@ impl Decl{
 }
 
 struct FieldDecl{
-  name: String;
+  name: Option<String>;
   type: Type;
 }
 
 struct Variant{
   name: String;
   fields: List<FieldDecl>;
+  is_tuple: bool;
 }
 
 
@@ -280,7 +291,8 @@ enum Parent{
   None,
   Impl(info: ImplInfo),
   Trait(type: Type),
-  Extern
+  Extern,
+  Module(name: String),
 }
 
 impl Parent{
@@ -291,24 +303,25 @@ impl Parent{
     return self is Parent::Impl;
   }
   func as_impl(self): ImplInfo*{
-    if let Parent::Impl(info*)=(self){
+    if let Parent::Impl(info)=self{
       return info;
     }
     panic("as_impl");
   }
   func get_type(self): Type*{
     match self{
-      Parent::Impl(info*) => return &info.type,
-      Parent::Trait(type*) => return type,
+      Parent::Impl(info) => return &info.type,
+      Parent::Trait(type) => return type,
       _ => panic("get_type"),
     }
   }
   func clone(self): Parent{
     match self{
       Parent::None => return Parent::None,
-      Parent::Impl(info*) => return Parent::Impl{info.clone()},
-      Parent::Trait(type*) => return Parent::Trait{type.clone()},
+      Parent::Impl(info) => return Parent::Impl{info.clone()},
+      Parent::Trait(type) => return Parent::Trait{type.clone()},
       Parent::Extern => return Parent::Extern,
+      Parent::Module(name) => return Parent::Module{name.clone()},
     }
   }
 }
@@ -423,8 +436,14 @@ impl Type{
   func new(name: String, args: List<Type>): Type{
     return Simple::new(name, args).into(0);
   }
-  func new(scp: Type, name: String): Type{
-    return Simple::new(scp, name).into(0);
+  func new(scope: Type, name: String): Type{
+    return Simple::new(scope, name).into(0);
+  }
+  func new(scope: Option<Type>*, name: String): Type{
+    if(scope.is_some()){
+      return Type::new(scope.get().clone(), name);
+     }
+    return Type::new(name);
   }
   func toPtr(*self): Type{
     let id = Node::new(-1, self.line);
@@ -432,7 +451,7 @@ impl Type{
   }
   
   func name(self): String*{
-    if let Type::Simple(smp*)=(self){
+    if let Type::Simple(smp)=self{
       return &smp.name;
     }
     panic("cant Type::name() {:?}", self);
@@ -442,13 +461,13 @@ impl Type{
     return self is Type::Simple;
   }
   func as_simple(self): Simple*{
-    if let Type::Simple(simple*) = (self){
+    if let Type::Simple(simple) = self{
       return simple;
     }
     panic("as_simple");
   }
   func unwrap_simple(*self): Simple{
-    if let Type::Simple(simple) = (self){
+    if let Type::Simple(simple) = self{
       std::no_drop(self);
       return simple;
     }
@@ -487,13 +506,13 @@ impl Type{
     return res;
   }
   func is_generic(self): bool{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = self{
       return !smp.args.empty();
     }
     return false;
   }
   func get_args(self): List<Type>*{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = self{
       return &smp.args;
     }
     panic("get_args {:?}", self);
@@ -520,56 +539,56 @@ impl Type{
     return self is Type::Slice;
   }
   func deref_ptr(self): Type*{
-    if let Type::Pointer(bx*) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.get();
     }
     return self;
   }
   func unwrap_ptr(*self): Type{
-    if let Type::Pointer(bx) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.unwrap();
     }
     return self;
   }
   func elem(self): Type*{
-    if let Type::Pointer(bx*) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.get();
     }
-    if let Type::Array(bx*, sz) = (self){
+    if let Type::Array(bx, sz) = self{
       return bx.get();
     }
-    if let Type::Slice(bx*) = (self){
+    if let Type::Slice(bx) = self{
       return bx.get();
     }
     panic("elem {:?}", self);
   }
   func unwrap_elem(*self): Type{
-    if let Type::Pointer(bx) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.unwrap();
     }
-    if let Type::Array(bx, sz) = (self){
+    if let Type::Array(bx, sz) = self{
       return bx.unwrap();
     }
-    if let Type::Slice(bx) = (self){
+    if let Type::Slice(bx) = self{
       return bx.unwrap();
     }
     panic("unwrap_elem {:?}", self);
   }
   func get_ft(self): FunctionType*{
-    if let Type::Function(bx*) = (self){
+    if let Type::Function(bx) = self{
       return bx.get();
     }
     panic("get_ft {:?}", self);
   }
   func unwrap_ft(*self): FunctionType{
-    if let Type::Function(bx) = (self){
+    if let Type::Function(bx) = self{
       return bx.unwrap();
     }
     panic("get_ft {:?}", self);
   }
   
   func get_lambda(self): LambdaType*{
-    if let Type::Lambda(bx*) = (self){
+    if let Type::Lambda(bx) = self{
       return bx.get();
     }
     panic("get_lambda {:?}", self);
@@ -577,7 +596,7 @@ impl Type{
 
   //get plain(generic)
   func erase(self): Type{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = self{
       if(smp.scope.has()){
         return Type::new(smp.scope.get().clone(), smp.name.clone());
       }else{
@@ -589,13 +608,6 @@ impl Type{
   
   func print(self): String{
     return Fmt::str(self);
-  }
-
-  func scope(self): Type*{
-    if let Type::Simple(smp*) = (self){
-      return smp.scope.get();
-    }
-    panic("Type::scope");
   }
 
   func parse(input: str): Type{
@@ -643,7 +655,6 @@ struct IfStmt{
 
 struct ArgBind: Node{
   name: String;
-  is_ptr: bool;
 }
 struct IfLet{
   type: Type;
@@ -680,10 +691,10 @@ enum Body: Node{
 impl Body{
   func line(self): i32{
     match self{
-      Body::Block(b*) =>  return b.line,
-      Body::If(is*) => return is.cond.line,
-      Body::IfLet(il*) => return il.rhs.line,
-      Body::Stmt(val*) => return val.line,
+      Body::Block(b) =>  return b.line,
+      Body::If(is) => return is.cond.line,
+      Body::IfLet(il) => return il.rhs.line,
+      Body::Stmt(val) => return val.line,
     }
   }
 }
@@ -788,7 +799,7 @@ impl Expr{
     return Fmt::str(self);
   }
   func get_call(self): Call*{
-    if let Expr::Call(cx*) = (self){
+    if let Expr::Call(cx) = self{
       return cx;
     }
     panic("get_call {:?}", self);

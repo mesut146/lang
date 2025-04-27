@@ -3,13 +3,14 @@ import parser/ast
 import parser/parser
 import parser/token
 import std/fs
+import std/result
 
 static print_cst = false;
 //static pretty_print = true;
 
 func format_dir(dir: str, out: str){
     File::create_dir(out);
-    let files = File::list(dir);
+    let files = File::read_dir(dir).unwrap();
     for file in &files{
         let file2 = format("{}/{}", dir, file);
         let outf = format("{}/{}", out, file);
@@ -19,7 +20,7 @@ func format_dir(dir: str, out: str){
         let p = Parser::from_path(file2);
         let unit = p.parse_unit();
         let str = Fmt::str(&unit);
-        File::write_string(str.str(), outf.str());
+        File::write_string(str.str(), outf.str())?;
         outf.drop();
         str.drop();
     }
@@ -104,34 +105,34 @@ impl Debug for ImportStmt{
 impl Debug for Item{
   func debug(self, f: Fmt*){
     match self{
-      Item::Decl(decl*) => {
+      Item::Decl(decl) => {
         if(print_cst) f.print("Item::Decl{\n");
         decl.debug(f);
         if(print_cst) f.print("}");
       },
-      Item::Method(m*) => {
+      Item::Method(m) => {
         m.debug(f);
       },
-      Item::Impl(i*) => {
+      Item::Impl(i) => {
         i.debug(f);
       },
-      Item::Type(name*, rhs*) => {
+      Item::Type(name, rhs) => {
         f.print("type ");
         f.print(name.str());
         f.print(" = ");
         rhs.debug(f);
         f.print(";");
       },
-      Item::Trait(tr*) => {
+      Item::Trait(tr) => {
         f.print("trait ");
         tr.type.debug(f);
       },
-      Item::Extern(methods*) => {
+      Item::Extern(methods) => {
         f.print("extern{\n");
         join(f, methods, "\n");
         f.print("\n}");
       },
-      Item::Const(cn*) => {
+      Item::Const(cn) => {
         f.print("const ");
         f.print(&cn.name);
         if(cn.type.is_some()){
@@ -141,10 +142,41 @@ impl Debug for Item{
         f.print(" = ");
         f.print(&cn.rhs);
       },
-      Item::Glob(gl*) => {
+      Item::Glob(gl) => {
         gl.debug(f);
+      },
+      Item::Module(md) => {
+        Debug::debug(md, f);
+      },
+      Item::Use(uit) => {
+        Debug::debug(uit, f);
       }
     }
+  }
+}
+impl Debug for UseItem{
+  func debug(self, f: Fmt*){
+    f.print("use ");
+    join(f, &self.path, "::");
+    if(self.has_multiple){
+      f.print("::{");
+      join(f, &self.list, ",");
+      f.print("}");
+    }else{
+      f.print("::");
+      Debug::debug(self.list.get(0), f);
+    }
+    f.print(";");
+  }
+}
+
+impl Debug for Module{
+  func debug(self, f: Fmt*){
+    f.print("mod ");
+    Debug::debug(&self.name, f);
+    f.print("{\n");
+    join(f, &self.items, "    \n");
+    f.print("\n}");
   }
 }
 
@@ -203,11 +235,17 @@ impl Debug for ImplInfo{
 
 impl Debug for Decl{
     func debug(self, f: Fmt*){
-        if let Decl::Struct(fields*) = (self){
+      match self{
+        Decl::Struct(fields) => {
             debug_struct(self, fields, f);
-        }else if let Decl::Enum(variants*) = (self){
+        },
+        Decl::Enum(variants) => {
             debug_enum(self, variants, f);
+        },
+        Decl::TupleStruct(fields) => {
+          debug_struct_tuple(self, fields, f);
         }
+      }
     }
     func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
         f.print("struct ");
@@ -228,33 +266,59 @@ impl Debug for Decl{
         }
         f.print("}");
     }
-    func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
-        f.print("enum ");
-        decl.type.debug(f);
-        f.print("{\n");
-        for(let i = 0;i < variants.len();++i){
-          let ev = variants.get(i);
-          f.print("    ");
-          f.print(&ev.name);
-          if(ev.fields.len()>0){
-            f.print("(");
-            for(let j = 0;j < ev.fields.len();++j){
-              if(j > 0) f.print(", ");
-              ev.fields.get(j).debug(f);
-            }
-            f.print(")");
-          }
-          if(i < variants.len() - 1) f.print(",");
-          f.print("\n");
+
+    func debug_struct_tuple(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+      f.print("struct ");
+      decl.type.debug(f);
+      if(decl.base.is_some()){
+        f.print(": ");
+        decl.base.get().debug(f);
+      }
+      if(fields.empty()){
+          f.print(";");
+          return;
+      }
+      f.print("(\n");
+      for(let i = 0;i < fields.len();++i){
+        if(i > 0){
+          f.print(", ");
         }
-        f.print("}");
-    }
+        fields.get(i).type.debug(f);
+      }
+      f.print(")");
+  }
+
+
+  func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
+      f.print("enum ");
+      decl.type.debug(f);
+      f.print("{\n");
+      for(let i = 0;i < variants.len();++i){
+        let ev = variants.get(i);
+        f.print("    ");
+        f.print(&ev.name);
+        if(ev.fields.len() > 0){
+          //todo ev.is_tuple
+          f.print("(");
+          for(let j = 0;j < ev.fields.len();++j){
+            if(j > 0) f.print(", ");
+            ev.fields.get(j).debug(f);
+          }
+          f.print(")");
+        }
+        if(i < variants.len() - 1) f.print(",");
+        f.print("\n");
+      }
+      f.print("}");
+  }
 }
 
 impl Debug for FieldDecl{
   func debug(self, f: Fmt*){
-    f.print(&self.name);
-    f.print(": ");
+    if(self.name.is_some()){
+      f.print(self.name.get());
+      f.print(": ");
+    }
     self.type.debug(f);
     //f.print(";\n");
   }
@@ -306,30 +370,30 @@ impl Debug for Param{
 impl Debug for Type{
   func debug(self, f: Fmt*){
       match self{
-        Type::Simple(smp*) => smp.debug(f),
-        Type::Pointer(ty*) => {
+        Type::Simple(smp) => smp.debug(f),
+        Type::Pointer(ty) => {
           ty.get().debug(f);
           f.print("*");
         },
-        Type::Array(box*, sz*) => {
+        Type::Array(box, sz) => {
           f.print("[");
           box.get().debug(f);
           f.print("; ");
           sz.debug(f);
           f.print("]");
         },
-        Type::Slice(box*) => {
+        Type::Slice(box) => {
           f.print("[");
           box.get().debug(f);
           f.print("]");
         },
-        Type::Function(ft*) => {
+        Type::Function(ft) => {
           ft.get().debug(f);
         },
-        Type::Lambda(lt*) =>{
+        Type::Lambda(lt) =>{
           lt.get().debug(f);
         },
-        Type::Tuple(tt*) => {
+        Type::Tuple(tt) => {
           f.print("(");
           join(f, &tt.types, ", ");
           f.print(")");
@@ -383,80 +447,88 @@ impl Debug for LambdaType{
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
-    if let Stmt::Var(ve*)=(self){
-      f.print("let ");
-      ve.debug(f);
-      f.print(";");
-    }else if let Stmt::Expr(e*) =(self){
-      if(print_cst) f.print("Stmt::Expr{\n");
-      e.debug(f);
-      if(!e.is_body()){
+    match self{
+      Stmt::Var(ve)=>{
+        f.print("let ");
+        ve.debug(f);
         f.print(";");
+      },
+      Stmt::Expr(e) => {
+        if(print_cst) f.print("Stmt::Expr{\n");
+        e.debug(f);
+        if(!e.is_body()){
+          f.print(";");
+        }
+        if(print_cst) f.print("}\n");
+      },
+      Stmt::Ret(e) =>{
+        f.print("return");
+        if(e.is_some()){
+          f.print(" ");
+          e.get().debug(f);
+        }
+        f.print(";");
+      },
+      Stmt::While(e, b)=>{
+        f.print("while(");
+        e.debug(f);
+        f.print(")");
+        b.get().debug(f);
+      },
+      Stmt::For(fs)=>{
+        f.print("for(");
+        if(fs.var_decl.is_some()){
+          fs.var_decl.get().debug(f);
+        }
+        f.print(";");
+        if(fs.cond.is_some()){
+          fs.cond.get().debug(f);
+        }
+        f.print(";");
+        join(f, &fs.updaters, ", ");
+        f.print(")");
+        fs.body.get().debug(f);
+      },
+      Stmt::Continue =>{
+        f.print("continue;");
+      },
+      Stmt::Break =>{
+        f.print("break;");
+      },
+      Stmt::ForEach(fe) => {
+        f.print("for ");
+        f.print(&fe.var_name);
+        f.print(" in ");
+        fe.rhs.debug(f);
+        fe.body.debug(f);
       }
-      if(print_cst) f.print("}\n");
-    }else if let Stmt::Ret(e*) =(self){
-      f.print("return");
-      if(e.is_some()){
-        f.print(" ");
-        e.get().debug(f);
-      }
-      f.print(";");
-    }else if let Stmt::While(e*, b*)=(self){
-     f.print("while(");
-     e.debug(f);
-     f.print(")");
-     b.get().debug(f);
-    }
-    else if let Stmt::For(fs*)=(self){
-      f.print("for(");
-      if(fs.var_decl.is_some()){
-        fs.var_decl.get().debug(f);
-      }
-      f.print(";");
-      if(fs.cond.is_some()){
-        fs.cond.get().debug(f);
-      }
-      f.print(";");
-      join(f, &fs.updaters, ", ");
-      f.print(")");
-      fs.body.get().debug(f);
-    }else if let Stmt::Continue = (self){
-      f.print("continue;");
-    }else if let Stmt::Break = (self){
-      f.print("break;");
-    }else if let Stmt::ForEach(fe*)=(self){
-      f.print("for ");
-      f.print(&fe.var_name);
-      f.print(" in ");
-      fe.rhs.debug(f);
-      fe.body.debug(f);
-    }
-    else{
-      panic("Stmt::debug");
     }
   }
 }
 
 impl Debug for Body{
   func debug(self, f: Fmt*){
-    if let Body::Block(b*)=(self){
-      if(print_cst) f.print("Body::Block{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::Stmt(b*)=(self){
-      if(print_cst) f.print("Body::Stmt{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::If(b*)=(self){
-      if(print_cst) f.print("Body::If{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::IfLet(b*)=(self){
-      if(print_cst) f.print("Body::IfLet{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else{
-      panic("");
+    match self{
+      Body::Block(b)=>{
+        if(print_cst) f.print("Body::Block{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::Stmt(b)=>{
+        if(print_cst) f.print("Body::Stmt{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::If(b)=>{
+        if(print_cst) f.print("Body::If{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::IfLet(b)=>{
+        if(print_cst) f.print("Body::IfLet{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      }
     }
   }
 }
@@ -464,9 +536,9 @@ impl Debug for Body{
 impl Debug for ArgBind{
   func debug(self, f: Fmt*){
     f.print(&self.name);
-    if(self.is_ptr){
-      f.print("*");
-    }
+    // if(self.is_ptr){
+    //   f.print("*");
+    // }
   }
 }
 
@@ -540,40 +612,40 @@ impl Debug for Literal{
 impl Debug for Expr{
   func debug(self, f: Fmt*){
     match self{
-      Expr::Lit(lit*) => {
+      Expr::Lit(lit) => {
         if(print_cst) f.print("Expr::Lit{");
         lit.debug(f);
       },
-      Expr::Name(v*) => {
+      Expr::Name(v) => {
         if(print_cst) f.print("Expr::Lit{");
         f.print(v.str());
       },
-      Expr::Call(call*) => {
+      Expr::Call(call) => {
         if(print_cst) f.print("Expr::Call{");
         call.debug(f);
       },
-      Expr::Par(e*) => {
+      Expr::Par(e) => {
         if(print_cst) f.print("Expr::Par{");
         f.print("(");
         e.get().debug(f);
         f.print(")");
       },
-      Expr::Tuple(elems*) => {
+      Expr::Tuple(elems) => {
         if(print_cst) f.print("Expr::Tuple{");
         f.print("(");
         join(f, elems, ",");
         f.print(")");
       },
-      Expr::Type(t*) => {
+      Expr::Type(t) => {
         if(print_cst) f.print("Expr::Type{");
         t.debug(f);
       },
-      Expr::Unary(op*, e*) => {
+      Expr::Unary(op, e) => {
         if(print_cst) f.print("Expr::Unary{");
         f.print(op);
         e.get().debug(f);
       },
-      Expr::Infix(op*, l*, r*) => {
+      Expr::Infix(op, l, r) => {
         if(print_cst) f.print("Expr::Infix{");
         l.get().debug(f);
         f.print(" ");
@@ -581,32 +653,32 @@ impl Debug for Expr{
         f.print(" ");
         r.get().debug(f);
       },
-      Expr::Access(scp*, nm*) => {
+      Expr::Access(scp, nm) => {
         if(print_cst) f.print("Expr::Access{");
         scp.get().debug(f);
         f.print(".");
         f.print(nm);
       },
-      Expr::Obj(ty*, args*) => {
+      Expr::Obj(ty, args) => {
         if(print_cst) f.print("Expr::Obj{");
         ty.debug(f);
         f.print("{");
         join(f, args, ", ");
         f.print("}");
       },
-      Expr::As(e*, type*) => {
+      Expr::As(e, type) => {
         if(print_cst) f.print("Expr::As{");
         e.get().debug(f);
         f.print(" as ");
         type.debug(f);
       },
-      Expr::Is(e*, rhs*) => {
+      Expr::Is(e, rhs) => {
         if(print_cst) f.print("Expr::Is{");
         e.get().debug(f);
         f.print(" is ");
         rhs.get().debug(f);
       },
-      Expr::Array(arr*, sz*) => {
+      Expr::Array(arr, sz) => {
         if(print_cst) f.print("Expr::Array{");
         f.print("[");
         join(f, arr, ", ");
@@ -616,7 +688,7 @@ impl Debug for Expr{
         }
         f.print("]");
       },
-      Expr::ArrAccess(aa*) => {
+      Expr::ArrAccess(aa) => {
         if(print_cst) f.print("Expr::ArrAccess{");
         aa.arr.get().debug(f);
         f.print("[");
@@ -627,26 +699,26 @@ impl Debug for Expr{
         }
         f.print("]");
       },
-      Expr::Block(b*) => {
+      Expr::Block(b) => {
         if(print_cst) f.print("Expr::Block{");
         b.get().debug(f);
       },
-      Expr::If(ife*) => {
+      Expr::If(ife) => {
         if(print_cst) f.print("Expr::If{");
         ife.get().debug(f);
       },
-      Expr::IfLet(il*) => {
+      Expr::IfLet(il) => {
         if(print_cst) f.print("Expr::IfLet{");
         il.get().debug(f);
       },
-      Expr::Match(me*) => {
+      Expr::Match(me) => {
         if(print_cst) f.print("Expr::Match{");
         me.get().debug(f);
       },
-      Expr::MacroCall(mc*) => {
+      Expr::MacroCall(mc) => {
         Debug::debug(mc, f); 
       },
-      Expr::Lambda(lc*) => {
+      Expr::Lambda(lc) => {
           f.print("|");
           f.print("|");
           if(lc.return_type.is_some()){
@@ -654,15 +726,15 @@ impl Debug for Expr{
               f.print(lc.return_type.get());
           }
           match (lc.body.get()){
-              LambdaBody::Expr(e*)=>{
+              LambdaBody::Expr(e)=>{
                   body(e, f, true);
               },
-              LambdaBody::Stmt(s*)=>{
+              LambdaBody::Stmt(s)=>{
                   body(s, f, true);
               }
           }
       },
-      Expr::Ques(bx*) => {
+      Expr::Ques(bx) => {
         if(print_cst) f.print("Expr::Ques{");
         Debug::debug(bx.get(), f);
         f.print("?");
@@ -675,7 +747,7 @@ impl Debug for MatchLhs{
   func debug(self, f: Fmt*){
     match self{
       MatchLhs::NONE => f.print("_"),
-      MatchLhs::ENUM(type*, args*) => {
+      MatchLhs::ENUM(type, args) => {
         type.debug(f);
         if(!args.empty()){
           f.print("(");
@@ -683,7 +755,7 @@ impl Debug for MatchLhs{
           f.print(")");
         }
       },
-      MatchLhs::UNION(types*) => {
+      MatchLhs::UNION(types) => {
         join(f, types, " | ");
       }
     }
@@ -702,14 +774,15 @@ impl Debug for Match{
       let case = self.cases.get(i);
       Debug::debug(&case.lhs, f);
       f.print(" => ");
-      if let MatchRhs::EXPR(expr*)=(&case.rhs){
-        //expr.debug(f);
-        body(expr, f, true);
-      }else if let MatchRhs::STMT(stmt*)=(&case.rhs){
-        body(stmt, f, true);
-        //stmt.debug(f);
-      }else{
-        panic("unr");
+      match &case.rhs{
+        MatchRhs::EXPR(expr)=>{
+          //expr.debug(f);
+          body(expr, f, true);
+        },
+        MatchRhs::STMT(stmt)=>{
+          body(stmt, f, true);
+          //stmt.debug(f);
+        }
       }
       if(i < self.cases.len() - 1){
           f.print(",\n");
@@ -742,9 +815,8 @@ impl Debug for IfLet{
     self.type.debug(f);
     f.print("(");
     join(f, &self.args, ", ");
-    f.print(") = (");
+    f.print(") = ");
     self.rhs.debug(f);
-    f.print(")");
     self.then.get().debug(f);
     if(self.else_stmt.is_some()){
       f.print("else ");
@@ -771,7 +843,7 @@ impl Debug for Call{
     if(self.scope.is_some()){
       //scope: Option<Box<Expr>>
       let scp: Expr* = self.scope.get();
-      if let Expr::Type(t*)=(scp){
+      if let Expr::Type(t)=scp{
         t.debug(f);
         f.print("::");
       }else{

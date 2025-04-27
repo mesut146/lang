@@ -4,7 +4,7 @@ struct vector_Constant;//std::vector<llvm::Constant*>
 struct vector_Metadata;
 struct Target;
 struct TargetMachine;
-struct Module;
+struct LLVMModule;
 struct LLVMContext;
 struct IRBuilder;
 struct StructType;
@@ -79,7 +79,7 @@ extern{
     func llvm_InitializeAArch64AsmParser();
     func llvm_InitializeAArch64AsmPrinter();
 
-    func make_module(name: i8*, tm: TargetMachine*, triple: i8*): Module*;
+    func make_module(name: i8*, tm: TargetMachine*, triple: i8*): LLVMModule*;
     func make_ctx(): LLVMContext*;
     func make_builder(): IRBuilder*;
     func destroy_ctx();

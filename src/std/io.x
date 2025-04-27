@@ -14,7 +14,7 @@ struct Output{
 }
 
 struct Process{
-    fp: FILE*;
+    fp: cFILE*;
 }
 
 impl Process{

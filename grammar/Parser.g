@@ -6,7 +6,7 @@ importStmt: "import" name ("/" name)*;
 
 name: IDENT;
 
-item: global | decl | metho | impl | trait | externBlock | constDecl | typeAlias;
+item: global | decl | methodDecl | implDecl | traitDecl | externBlock | constDecl | typeAlias;
 
 global: "static" name (":" type)? "=" expr;
 
@@ -16,16 +16,16 @@ field: name ":" type;
 enumDecl: "enum" type "{" enumVariant ("," enumVariant)* "}";
 enumVariant: name "(" field ("," field)* ")";
 
-qname: name ( "." name)*;
-type: qname generic? arraySuffix? | prim_type arraySuffix?;
-generic: "<" type ("," type)* ">";
-arraySuffix: ("[" expr? "]")+;
+type: prim_type | arrayType | sliceType | refType;
 prim_type: "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64";
-refType: name generic? ("::" name generic?)*;
+arrayType: "[" type ";" INTEGER_LIT "]";
+sliceType: "[" type "]";
+refType: name generics? ("::" name generics?)*;
+generics: "<" type ("," type)* ">";
 
 
 methodDecl:
-  "func" name generic? "(" (name ","?)? params* ")" (":" type)? block;
+  "func" name generics? "(" (name ","?)? params* ")" (":" type)? block;
 
 params: param ("," param)*;
 
@@ -37,19 +37,18 @@ block:
   "{" stmt* expr? "}";
 
 stmt:
-  ifStmt | whileStmt | forStmt | forEachStmt | exprStmt | varDecl;
+  whileStmt | forStmt | forEachStmt | exprStmt | varDecl | returnStmt | continueStmt | breakStmt;
 
 exprStmt:
   expr ";";
-
-ifStmt:
-  "if" "(" expr ")" stmt ("else" stmt)?;
 
 whileStmt:
   "while" "(" expr ")" stmt;
 
 forStmt:
   "for" "(" varDecl? ";" expr? ";" exprs? ")" stmt;
+exprs:
+  expr ("," expr)*;  
   
 forEachStmt:
   "for" "(" "let" name ":" expr ")" stmt;  
@@ -62,23 +61,39 @@ varDeclFrag:
   name ("=" expr | "?")?;
   
 
-expr: "import";
 
+tuple_or_paren: "(" expr ")" #paren
+  | "(" ")" #unit
+  | "(" expr "," ")" #single
+  | "(" expr ("," expr)+ ","? ")" #multi
+;
+
+lambda: "|" lambda_args? "|" (":" type)? (stmt | expr);
+lambda_args: name (":" type)? ("," name (":" type)?)*;
+
+prim: 
+    literal
+  | lambda
+  | "func" "(" (type ("," type)*)? ")"
+  | match_expr | if_expr | iflet_expr | block_expr
+  | tuple_or_paren
+  | "[" expr* "]" #array
+  | ("+" | "-" | "++" | "--" | "!" | "*" | "&") expr #unary
+  | methodCall | macroCall | type | name
+;
+
+prim_name: type (callTail | "!" callTail)?;
+
+methodCall: expr "." name generics? callTail;
+callTail: "(" args? ")";
+args: expr ("," expr)*;
+
+macroCall: type "." name callTail;
+
+prim2: res=prim res=obj(res) ("." INTEGER_LIT | "." IDENT | "." IDENT callTail | "[" expr (".." expr)? "]" | "?")*;
 
 expr:
-"(" expr ")" | literal | "[" expr*"]" | "new" obj | obj |
- prim "::" name (generics? "(" args? ")")? |
- name |
- name generics "::" name
- name generics "(" args ")"
- name "(" args? ")" |
- name "::" name "(" args ")")?
-| expr ("." IDENT (generics? "(" args? ")")? |
- "[" expr (".." expr)? "]")*
-| ("*" | "&") expr
-| expr "as" type
-| expr ("++" | "--") #post
-| ("+" | "-" | "++" | "--" | "!" | "~") expr #unary
+| prim2 "as" type | prim2 "is" prim2
 | expr ("*" | "/" | "%") expr %left
 | expr ("+" | "-") expr %left
 | expr ("<<" | ">" ">" | ">" ">" ">") expr %left
@@ -92,36 +107,19 @@ expr:
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
 ;
 
-PRIM: literal | refType | "(" expr ")" | methodCall;
-
-methodCall: name "(" args? ")";
-
-args:
-  expr ("," expr)*;
-  
-exprs:
-  expr ("," expr)*;
-
-
-
 literal:
   STRING_LIT | CHAR_LIT | INTEGER_LIT | FLOAT_LIT | BOOLEAN_LIT | NULL_LIT;
 
-creation:
-  type "(" args? ")" | objInit | type objInit;
-  
+creation: objInit | type objInit;
 objInit: "{" pair ("," pair)* "}";
-
 pair: name ":" expr;
 
 arrowFunc:
   names? "=>" (stmt | expr)
 | "(" names? ")" "=>" (stmt | expr);
-
 names:
   name ("," name)*;
 
-array:
-  "[" exprs? "]";
 
-methodReference: type "::" name;
+if_expr:
+  "if" "(" expr ")" stmt ("else" stmt)?;

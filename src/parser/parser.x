@@ -33,16 +33,16 @@ impl Parser{
   
   func fill(self) {
     while (true) {
-        let t = self.lexer.next();
-        if (t.is(TokenType::EOF_)){
-          t.drop();
-          break;
-        }
-        else if (t.is(TokenType::COMMENT)){
-          t.drop();
-          continue;
-        }
-        self.tokens.add(t);
+      let t = self.lexer.next();
+      if (t.is(TokenType::EOF_)){
+        t.drop();
+        break;
+      }
+      else if (t.is(TokenType::COMMENT)){
+        t.drop();
+        continue;
+      }
+      self.tokens.add(t);
     }
   }
     
@@ -58,7 +58,7 @@ impl Parser{
     return self.has() && self.peek().type is tt1 && self.peek(1).type is tt2;
   }
 
-  func is(self, val: str): bool{
+  func is_val(self, val: str): bool{
     return self.has() && self.peek().value.eq(val);
   }
   
@@ -100,7 +100,11 @@ impl Parser{
   func consume(self, tt: TokenType): Token*{
     let t: Token* = self.pop();
     if(t.type is tt) return t;
-    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, t.line, t, &tt);
+    print("{}:{}\nunexpected token {:?} was expecting {:?}\n", &self.lexer.path, t.line, t, &tt);
+    if(self.lexer.path.eq("<buf>")){
+      print("buf={}\n", self.lexer.buf);
+    }
+    panic("");
   }
 
   func consume_ident(self, val: str): Token*{
@@ -111,12 +115,16 @@ impl Parser{
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line));
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line).trim());
     panic("{}", msg);
   }
   func err(self, msg: String){
     self.err(msg.str());
     msg.drop();
+  }
+  func err(self, line: i32, msg: String){
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line).trim());
+    panic("{}", msg);
   }
 
   func parse_attrs(self): Attributes{
@@ -146,68 +154,117 @@ impl Parser{
     while(self.has() && self.is(TokenType::IMPORT)){
       unit.imports.add(self.parse_import());
     }
+    let scope = Option<Type>::new();
     while(self.has()){
-      unit.items.add(self.parse_item());
+      unit.items.add(self.parse_item(&scope));
     }
+    scope.drop();
     return unit;
   }
 
-  func parse_item(self): Item{
+  func parse_item(self, scope: Option<Type>*): Item{
     let attr = self.parse_attrs();
-      if(self.is(TokenType::STRUCT)){
-        return Item::Decl{self.parse_struct(attr)};
-      }
-      else if(self.is(TokenType::ENUM)){
-        return Item::Decl{self.parse_enum(attr)};
-      }
-      else if(self.is(TokenType::IMPL)){
-        return Item::Impl{self.parse_impl()};
-      }
-      else if(self.is(TokenType::TRAIT)){
-        return Item::Trait{self.parse_trait()};
-      }
-      else if(self.is(TokenType::FUNC)){
-        return Item::Method{self.parse_method(Parent::None, attr)};
-      }
-      else if(self.is(TokenType::TYPE)){
+    if(self.is(TokenType::STRUCT)){
+      return Item::Decl{self.parse_struct(attr, scope)};
+    }
+    else if(self.is(TokenType::ENUM)){
+      return Item::Decl{self.parse_enum(attr, scope)};
+    }
+    else if(self.is(TokenType::IMPL)){
+      return Item::Impl{self.parse_impl()};
+    }
+    else if(self.is(TokenType::TRAIT)){
+      return Item::Trait{self.parse_trait()};
+    }
+    else if(self.is(TokenType::FUNC)){
+      return Item::Method{self.parse_method(Parent::None, attr)};
+    }
+    else if(self.is(TokenType::TYPE)){
+      self.pop();
+      let name = self.name();
+      self.consume(TokenType::EQ);
+      let rhs = self.parse_type();
+      self.consume(TokenType::SEMI);
+      return Item::Type{name: name, rhs: rhs};
+    }
+    else if(self.is(TokenType::EXTERN)){
+      self.pop();
+      let list = self.parse_methods(Parent::Extern);
+      return Item::Extern{methods: list};
+    }
+    else if(self.is(TokenType::STATIC)){
+      let id = self.node();
+      self.pop();
+      let name = self.name();
+      let type = Option<Type>::new();
+      if(self.is(TokenType::COLON)){
         self.pop();
-        let name = self.name();
-        self.consume(TokenType::EQ);
-        let rhs = self.parse_type();
-        self.consume(TokenType::SEMI);
-        return Item::Type{name: name, rhs: rhs};
-      }else if(self.is(TokenType::EXTERN)){
-        self.pop();
-        let list = self.parse_methods(Parent::Extern);
-        return Item::Extern{methods: list};
-      }else if(self.is(TokenType::STATIC)){
-        let id = self.node();
-        self.pop();
-        let name = self.name();
-        let type = Option<Type>::new();
-        if(self.is(TokenType::COLON)){
-          self.pop();
-          type = Option::new(self.parse_type());
-        }
-        self.consume(TokenType::EQ);
-        let rhs = self.parse_expr();
-        self.consume(TokenType::SEMI);
-        return Item::Glob{Global{.id, name, type, rhs}};
-      }else if(self.is(TokenType::CONST)){
-        self.pop();
-        let name = self.name();
-        let type = Option<Type>::new();
-        if(self.is(TokenType::COLON)){
-          self.pop();
-          type = Option::new(self.parse_type());
-        }
-        self.consume(TokenType::EQ);
-        let rhs = self.parse_expr();
-        self.consume(TokenType::SEMI);
-        return Item::Const{Const{name, type, rhs}};
-      }else{
-        panic("invalid top level decl: {:?}", self.peek());
+        type = Option::new(self.parse_type());
       }
+      self.consume(TokenType::EQ);
+      let rhs = self.parse_expr();
+      self.consume(TokenType::SEMI);
+      return Item::Glob{Global{.id, name, type, rhs}};
+    }
+    else if(self.is(TokenType::CONST)){
+      self.pop();
+      let name = self.name();
+      let type = Option<Type>::new();
+      if(self.is(TokenType::COLON)){
+        self.pop();
+        type = Option::new(self.parse_type());
+      }
+      self.consume(TokenType::EQ);
+      let rhs = self.parse_expr();
+      self.consume(TokenType::SEMI);
+      return Item::Const{Const{name, type, rhs}};
+    }
+    else if(self.is(TokenType::MOD)){
+      self.pop();
+      let name = self.name();
+      self.consume(TokenType::LBRACE);
+      let items = List<Item>::new();
+      let scope2 = Option::new(Type::new(scope, name.clone()));
+      while(!self.is(TokenType::RBRACE)){
+        items.add(self.parse_item(&scope2));
+      }
+      self.consume(TokenType::RBRACE);
+      scope2.drop();
+      return Item::Module{Module{name, items}};
+    }else if(self.is_val("use")){
+      return self.parse_use();
+    }
+    else{
+      panic("invalid top level decl: {:?}", self.peek());
+    }
+  }
+
+  func parse_use(self): Item{
+    //use id ("::" id)* ("::" "{" id ("," id)* "}")? ";"
+    self.pop();
+    let path = List<String>::new();
+    let list = List<String>::new();
+    let has_multiple = false;
+    path.add(self.name());
+    while(self.is(TokenType::COLON2)){
+      if(self.peek(1).is(TokenType::LBRACE)){
+        break;
+      }
+      self.consume(TokenType::COLON2);
+      path.add(self.name());
+    }
+    if(self.is(TokenType::COLON2, TokenType::LBRACE)){
+      self.consume(TokenType::COLON2);
+      self.consume(TokenType::LBRACE);
+      list.add(self.name());
+      while (self.is(TokenType::COMMA)) {
+        self.pop();
+        list.add(self.name());
+      }
+      self.consume(TokenType::RBRACE);
+    }
+    self.consume(TokenType::SEMI);
+    return Item::Use{UseItem{path, list, has_multiple}};
   }
 
   func parse_trait(self): Trait{
@@ -284,7 +341,7 @@ impl Parser{
       type_args = self.type_params();
       is_generic = true;
     }
-    if let Parent::Impl(info*)=(&parent){
+    if let Parent::Impl(info) = &parent{
       if(!info.type_params.empty()){
         is_generic = true;
       }
@@ -362,43 +419,49 @@ impl Parser{
     let type = self.parse_type();
     return Param{.id, name: name.value.clone(), type: type, is_self: false, is_deref: false};
   }
+
+  func scope_merge(scope: Option<Type>*, type: Type): Type{
+    if(scope.is_some()){
+      type.as_simple().scope.set(scope.get().clone());
+    }
+    return type;
+  }
   
-  func parse_struct(self, attr: Attributes): Decl{
+  func parse_struct(self, attr: Attributes, scope: Option<Type>*): Decl{
     let line = self.line();
     self.consume(TokenType::STRUCT);
     let type = self.parse_type();
     let is_generic = type.is_generic();
+    type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
       self.pop();
       base = Option<Type>::Some{self.parse_type()};
     }
+    let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
       self.pop();
       let path = self.lexer.path.clone();
-      let fields = List<FieldDecl>::new();
-      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
-    if(self.is(TokenType::LBRACE)){
+    else if(self.is(TokenType::LBRACE)){
       self.consume(TokenType::LBRACE);
-      let fields = List<FieldDecl>::new();
       while(!self.is(TokenType::RBRACE)){
         fields.add(self.parse_field(true));
       }
       self.consume(TokenType::RBRACE);
       let path = self.lexer.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
     else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LBRACE);
-      let fields = List<Type>::new();
       while(!self.is(TokenType::RBRACE)){
-        fields.add(self.parse_type());
+        fields.add(FieldDecl{Option<String>::new(), self.parse_type()});
       }
       self.consume(TokenType::RBRACE);
       let path = self.lexer.path.clone();
-      return Decl::TupleStruct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::TupleStruct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
     else{
       self.err(format("invalid struct body {:?} '{:?}'", type, self.peek()));
@@ -410,18 +473,19 @@ impl Parser{
     let line = self.line();
     let name = self.popv();
     self.consume(TokenType::COLON);
-    let type=self.parse_type();
+    let type = self.parse_type();
     if(semi){
       self.consume(TokenType::SEMI);
     }
-    return FieldDecl{name, type};
+    return FieldDecl{Option::new(name), type};
   }
   
-  func parse_enum(self, attr: Attributes): Decl{
+  func parse_enum(self, attr: Attributes, scope: Option<Type>*): Decl{
     let line = self.line();
     self.consume(TokenType::ENUM);
     let type = self.parse_type();
     let is_generic = type.is_generic();
+    type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
@@ -440,14 +504,17 @@ impl Parser{
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();
-    return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, attr}, variants: variants};
+    return Decl::Enum{.BaseDecl{line, path, type, is_generic, base, attr}, variants: variants};
   }
   
   func parse_variant(self): Variant{
     let name = self.name();
     let fields = List<FieldDecl>::new();
+    let is_tuple = false;
     if(self.is(TokenType::LPAREN)){
       self.pop();
+      //is_tuple = true;
+      //todo tuple -> tuple variant
       fields.add(self.parse_field(false));
       while(self.is(TokenType::COMMA)){
         self.pop();
@@ -455,30 +522,39 @@ impl Parser{
       }
       self.consume(TokenType::RPAREN);
     }
-    return Variant{name, fields};
+    else if(self.is(TokenType::LBRACE)){
+      self.pop();
+      fields.add(self.parse_field(false));
+      while(self.is(TokenType::COMMA)){
+        self.pop();
+        fields.add(self.parse_field(false));
+      }
+      self.consume(TokenType::RBRACE);
+    }
+    return Variant{name, fields, is_tuple};
   }
 
-  func parse_type_prim(self): Type{
+  func parse_type_prim(self, check_closing: bool): Type{
     if(self.is(TokenType::LBRACKET)){
       let id = self.node();
       self.pop();
-      let type = self.parse_type();
+      let elem_type = self.parse_type(check_closing, true);
       if(self.is(TokenType::SEMI)){
         self.pop();
         let size = self.consume(TokenType::INTEGER_LIT);
         self.consume(TokenType::RBRACKET);
-        let bx: Box<Type> = Box::new(type);
+        let bx: Box<Type> = Box::new(elem_type);
         return Type::Array{.id, bx,  i32::parse(size.value.str()).unwrap()};
       }else{
         self.consume(TokenType::RBRACKET);
-        return Type::Slice{.id, Box::new(type)};
+        return Type::Slice{.id, Box::new(elem_type)};
       }
     }else{
-      let res: Type = self.gen_part();
+      let res: Type = self.gen_part(check_closing);
       while(self.is(TokenType::COLON2)){
         self.pop();
-        let part = self.gen_part();
-        if let Type::Simple(smp*) = &part{
+        let part = self.gen_part(check_closing);
+        if let Type::Simple(smp) = &part{
           let id = self.node();
           let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           res = tmp;
@@ -489,12 +565,37 @@ impl Parser{
     }
   }
 
+  func gen_part(self, check_closing: bool): Type{
+    //a<b>
+    let line = self.line();
+    let name = self.popv();
+    let res = Simple::new(name);
+    if(self.is(TokenType::LT)){
+      if(!check_closing || self.isTypeArg(self.pos) != -1){
+        res.args.add_list(self.generics());
+      }
+    }
+    return res.into(line);
+  }
+  
+  func generics(self): List<Type>{
+    let res = List<Type>::new();
+    self.consume(TokenType::LT);
+    res.add(self.parse_type(false, true));
+    while(self.is(TokenType::COMMA)){
+      self.pop();
+      res.add(self.parse_type(false, true));
+    }
+    self.consume(TokenType::GT);
+    return res;
+  }
+
   func parse_tuple_type(self): Type{
     let id = self.node();
     self.consume(TokenType::LPAREN);
     let types = List<Type>::new();
     while(!self.is(TokenType::RPAREN)){
-      types.add(self.parse_type());
+      types.add(self.parse_type(false, true));
       if(self.is(TokenType::COMMA)){
         self.pop();
         if(self.is(TokenType::RPAREN)){
@@ -505,16 +606,20 @@ impl Parser{
     self.consume(TokenType::RPAREN);
     return Type::Tuple{.id, TupleType{types: types}};
   }
-  
+
   func parse_type(self): Type{
+    return self.parse_type(false, true);
+  }
+  
+  func parse_type(self, check_closing: bool, allow_ptr: bool): Type{
     if(self.is(TokenType::FUNC)){
       return self.parse_func_type();
     }
     if(self.is(TokenType::LPAREN)){
       return self.parse_tuple_type();
     }
-    let res = self.parse_type_prim();
-    while (self.is(TokenType::STAR)) {
+    let res = self.parse_type_prim(check_closing);
+    while (self.is(TokenType::STAR) && allow_ptr) {
       let id = self.node();
       self.consume(TokenType::STAR);
       let tmp = Type::Pointer{.id, Box::new(res)};
@@ -540,29 +645,7 @@ impl Parser{
     let ret = self.parse_type();
     return Type::Function{.id, Box::new(FunctionType{return_type: ret, params: params})};
   }
-  
-  func gen_part(self): Type{
-    //a<b>
-    let line = self.line();
-    let name = self.popv();
-    let res = Simple::new(name);
-    if(self.is(TokenType::LT)){
-      res.args.add_list(self.generics());
-    }
-    return res.into(line);
-  }
-  
-  func generics(self): List<Type>{
-    let res = List<Type>::new();
-    self.consume(TokenType::LT);
-    res.add(self.parse_type());
-    while(self.is(TokenType::COMMA)){
-      self.pop();
-      res.add(self.parse_type());
-    }
-    self.consume(TokenType::GT);
-    return res;
-  }
+
   
   func type_params(self): List<Type>{
     let res = List<Type>::new();
@@ -631,11 +714,7 @@ func parse_block(self): Block{
   func parse_bind(self): ArgBind{
     let name = self.name();
     let id = self.node();
-    if(self.is(TokenType::STAR)){
-      self.pop();
-      return ArgBind{.id, name, true};
-    }
-    return ArgBind{.id, name, false};
+    return ArgBind{.id, name};
   }
 
   func is_stmt(self): bool{
@@ -809,7 +888,7 @@ impl Parser{
         || t is TokenType::AS
         || t is TokenType::TYPE
         || t is TokenType::TRAIT
-        || t is TokenType::NEW;
+        || t is TokenType::MOD;
   }
   func name(self): String{
     if(isName(self.peek())){
@@ -854,7 +933,7 @@ impl Parser{
   }
   
   func isLit(t: Token *): bool{
-    return t.is([TokenType::FLOAT_LIT, TokenType::INTEGER_LIT, TokenType::CHAR_LIT, TokenType::STRING_LIT, TokenType::TRUE, TokenType::TokenType::FALSE][0..6]);
+    return t.is([TokenType::FLOAT_LIT, TokenType::INTEGER_LIT, TokenType::CHAR_LIT, TokenType::STRING_LIT, TokenType::TRUE, TokenType::FALSE][0..6]);
   }
 
   func isPrim(t: Token*): bool{
@@ -939,7 +1018,7 @@ impl Parser{
     self.consume(TokenType::LBRACE);
     while(!self.is(TokenType::RBRACE)){
       let lhs = Option<MatchLhs>::new();
-      if(self.is("_")){
+      if(self.is_val("_")){
         self.pop();
         lhs = Option::new(MatchLhs::NONE);
       }
@@ -1038,9 +1117,41 @@ impl Parser{
       return Expr::Lambda{.id, Lambda{params, ret, Box::new(body.unwrap())}};
   }
 
+  func tuple_or_par(self): Expr{
+    let n = self.node();
+    self.consume(TokenType::LPAREN);
+    if(self.is(TokenType::RPAREN)){
+      //empty tuple
+      self.consume(TokenType::RPAREN);
+      let elems = List<Expr>::new();
+      return Expr::Tuple{.n, elems};
+    }
+    let e = self.parse_expr();
+    if(self.is(TokenType::RPAREN)){
+      self.consume(TokenType::RPAREN);
+      return Expr::Par{.n, Box::new(e)};
+    }
+    self.consume(TokenType::COMMA);
+    let elems = List<Expr>::new();
+    elems.add(e);
+    while(!self.is(TokenType::RPAREN)){
+      elems.add(self.parse_expr());
+      if(self.is(TokenType::COMMA)){
+        self.consume(TokenType::COMMA);
+      }else if(!self.is(TokenType::RPAREN)){
+        self.err("expected [',' or ')'] after tuple elem");
+      }
+    }
+    self.consume(TokenType::RPAREN);
+    return Expr::Tuple{.n, elems};
+  }
+
   func prim(self, allow_obj: bool): Expr{
     let tok = self.peek();
     let n = self.node();
+    if(isLit(self.peek())){
+      return self.parseLit();
+    }
     if(self.is(TokenType::OR) || self.is(TokenType::OROR)){
         return self.parse_lambda();
     }
@@ -1059,30 +1170,8 @@ impl Parser{
     if(self.is(TokenType::IF)){
       return Expr::If{.n, Box::new(self.parse_if())};
     }
-    if(isLit(self.peek())){
-      return self.parseLit();
-    }
     else if(self.is(TokenType::LPAREN)){
-      self.consume(TokenType::LPAREN);
-      let e = self.parse_expr();
-      if(self.is(TokenType::COMMA)){
-        self.pop();
-        let elems = List<Expr>::new();
-        elems.add(e);
-        while(!self.is(TokenType::RPAREN)){
-          elems.add(self.parse_expr());
-          if(self.is(TokenType::COMMA)){
-            self.pop();
-          }else if(!self.is(TokenType::RPAREN)){
-            self.err("expected [',' or ')'] after tuple elem");
-          }
-        }
-        self.consume(TokenType::RPAREN);
-        return Expr::Tuple{.n, elems};
-      }else{
-        self.consume(TokenType::RPAREN);
-        return Expr::Par{.n, Box::new(e)};
-      }
+      return self.tuple_or_par();
     }else if(self.is(TokenType::LBRACKET)){
       self.consume(TokenType::LBRACKET);
       let arr = self.exprList(TokenType::SEMI);
@@ -1100,52 +1189,58 @@ impl Parser{
       let e = self.prim2(allow_obj);
       return Expr::Unary{.n, op, Box::new(e)};
     }else if(isName(self.peek()) || isPrim(self.peek())){
-      let nm = self.popv();
+      //todo expr < expr breaks generics
+      //todo ptr type breaks a*b
+      let ty = self.parse_type(true, false);
       if(self.is(TokenType::LPAREN)){
-        return self.call(nm);
-      }else if(self.is(TokenType::COLON2)){
-        self.consume(TokenType::COLON2);
-        let ty = self.parse_type();
-        let ty_name = ty.name().clone();
-        if(self.is(TokenType::BANG, TokenType::LPAREN)){
-          self.consume(TokenType::BANG);
+        if let Type::Simple(smp) = &ty{
+          if(smp.scope.is_some()){
+            let scp = Expr::Type{.n, smp.scope.get().clone()};
+            let is_static = true;
+            let res = self.call(scp, smp.name.clone(), is_static, smp.args.clone());
+            ty.drop();
+            return res;
+          }else{
+            let res = self.call(smp.name.clone(), smp.args.clone());
+            ty.drop();
+            return res;
+          }
+        }else{
+          self.err(format("invalid expr '{:?}'", ty));
+        }
+      }
+      else if(self.is(TokenType::BANG, TokenType::LPAREN)){
+        self.consume(TokenType::BANG);
+        if let Type::Simple(smp) = &ty{
+          if(!smp.args.empty()){
+            self.err("macro call can't have type args");
+          }
+          let scp = if(smp.scope.is_some()){
+            Option::new(smp.scope.get().clone())
+          }else{
+            Option<Type>::new()
+          };
           self.consume(TokenType::LPAREN);
           let args = self.exprList(TokenType::RPAREN);
           self.consume(TokenType::RPAREN);
-          return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::new(Type::new(nm)), name: ty_name, args: args}};
-        }
-        else if(self.is(TokenType::LPAREN)){
-          let ta = ty.as_simple().args.clone();
+          let res = Expr::MacroCall{.n, MacroCall{scope: scp, name: smp.name.clone(), args: args}};
           ty.drop();
-          return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
+          return res;
         }else{
-          ty.drop();
-          return Expr::Type{.n, Type::new(Type::new(nm), ty_name)};
-        }
-      }else if(self.is(TokenType::BANG, TokenType::LPAREN)){
-        self.consume(TokenType::BANG);
-        self.consume(TokenType::LPAREN);
-        let args = self.exprList(TokenType::RPAREN);
-        self.consume(TokenType::RPAREN);
-        return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::none(), name: nm, args: args}};
-      }else if(self.has() && self.isTypeArg(self.pos) != -1){
-        let g = self.generics();
-        if(self.is(TokenType::LPAREN)){
-          return self.call(nm, g);
-        }
-        else if(self.is(TokenType::COLON2)){
-          self.consume(TokenType::COLON2);
-          let ty = Type::new(nm, g);
-          let nm2 = self.name();
-          if(self.is(TokenType::LPAREN)){
-            return self.call(Expr::Type{.n, ty}, nm2, true);
-          }
-          return Expr::Type{.n, Type::new(ty, nm2)};
-        }else {
-          return Expr::Type{.n, Type::new(nm, g)};
+          self.err(format("macro scope is invalid '{:?}'", ty));
         }
       }else{
-        return Expr::Name{.n, nm};
+        if let Type::Simple(smp) = &ty{
+          if(smp.scope.is_none() && smp.args.empty()){
+            let name = smp.name.clone();
+            //smp.drop();
+            return Expr::Name{.n, name};
+          }else{
+            return Expr::Type{.n, ty};
+          }
+        }else{
+          return Expr::Type{.n, ty};
+        }
       }
     }
     self.err(format("invalid expr {:?}", self.peek()));
@@ -1153,18 +1248,16 @@ impl Parser{
   }
 
   func parse_obj(self, type_expr: Expr): Expr{
-    let ty = Option<Type>::new(); 
-    if let Expr::Name(nm)=(type_expr){
-      ty = Option::new(Type::new(nm));
-    }
-    else{
-      if let Expr::Type(t)=(type_expr){
+    let ty = Option<Type>::new();
+    match type_expr{
+      Expr::Name(nm) => {
+        ty = Option::new(Type::new(nm));
+      },
+      Expr::Type(t) => {
         ty = Option::new(t);
-      }
-      else{
-        print("was expecting name got {:?}", &type_expr);
-        type_expr.drop();
-        panic("");
+      },
+      _ => {
+        self.err(type_expr.line, format("was expecting name got {:?}", &type_expr));
       }
     }
     let args = List<Entry>::new();
@@ -1194,6 +1287,7 @@ impl Parser{
       if(self.is(TokenType::DOT)){
         self.consume(TokenType::DOT);
         if(self.is(TokenType::INTEGER_LIT)){
+          //tuple index
           let idx = self.pop();
           let n = self.node();
           res = Expr::Access{.n, Box::new(res), idx.value.clone()}; 

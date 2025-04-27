@@ -8,6 +8,9 @@ struct A{
 
 static a: A = A{a: 10, b: 20, c: 30};
 
+//err ref to global
+//static y = x;
+
 func main(){
   assert(x == 11);
   x = 22;

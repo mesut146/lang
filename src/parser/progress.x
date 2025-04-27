@@ -37,12 +37,13 @@ func init_prog(){
 
 struct Progress{
     begin: Option<timeval>;
+    logfile: String;
 }
 
 impl Progress{
-    func new(): Progress{
+    func new(out_dir: str): Progress{
         init_prog();
-        Progress{begin: Option<timeval>::none()}
+        Progress{begin: Option<timeval>::none(), logfile: Path::concat(out_dir, "log.txt")}
     }
 
     func resolve_done(self){
@@ -70,16 +71,19 @@ impl Progress{
         let end = gettime();
         let s = printMethod(m);
         let ms = end.sub(&beg);
-        if(progress_print) print("resolve end {:?} time={}ms\n", s, ms.as_ms());
+        let msg = format("resolve end {:?} time={}ms\n", s, ms.as_ms());
+        if(progress_print) print("{}", msg);
+        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append)?;
         if(prog_print_freq){
             self.update(m, &prog_map, ms);
         }
         s.drop();
+        msg.drop();
     }
 
     func update(self, m: Method*, map: HashMap<String, ProgInfo>*, ms: timeval){
         let nm = "".owned();
-        if let Parent::Impl(inf*)= (&m.parent){
+        if let Parent::Impl(inf)= &m.parent{
             //nm.append(inf.type.name());
             nm.append(inf.type.print());
             nm.append("::");
@@ -109,7 +113,9 @@ impl Progress{
         let end = gettime();
         let s = printMethod(m);
         let ms = end.sub(&beg);
-        if(progress_print) print("compile end {:?} time={}ms\n", s, ms.as_ms());
+        let msg = format("compile end {:?} time={}ms\n", s, ms.as_ms());
+        if(progress_print) print("{}", msg);
+        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append)?;
         self.update(m, &compile_map, ms);
         s.drop();
     }

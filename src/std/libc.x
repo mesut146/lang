@@ -1,8 +1,8 @@
 import std/str
 
 struct c_void;
-struct FILE;
-struct DIR;
+struct cFILE;
+struct cDIR;
 
 //type char = i8
 //type int i32
@@ -85,22 +85,22 @@ extern{
   func free(ptr: i8*);
   //func malloc(size: i64): i8*;
   func memcpy(dest: i8*, src: i8*, cnt: i64);
-  func fopen(name: i8*, mode: i8*): FILE*;
-  func fdopen(fd: i32, mode: i8*): FILE*;
+  func fopen(name: i8*, mode: i8*): cFILE*;
+  func fdopen(fd: i32, mode: i8*): cFILE*;
   func open(name: i8*, flags: i32, mode: i32): i32;
-  func fclose(file: FILE*): i32;
-  //func fflush(file: FILE*): i32;
-  func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: FILE*): i32;
-  func fread(buf: i8*, size: i32, count: i32, target: FILE*): i32;
-  func fgets(s: i8*, size: i32, file: FILE*): i8*;
-  func fseek(file: FILE*, offset: i64, origin: i32): i32;
-  func ftell(file: FILE*): i64;
+  func fclose(file: cFILE*): i32;
+  //func fflush(file: cFILE*): i32;
+  func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: cFILE*): i32;
+  func fread(buf: i8*, size: i32, count: i32, target: cFILE*): i32;
+  func fgets(s: i8*, size: i32, file: cFILE*): i8*;
+  func fseek(file: cFILE*, offset: i64, origin: i32): i32;
+  func ftell(file: cFILE*): i64;
   func remove(name: i8*): i32;
   func rmdir(path: i8*): i32; /* return 0=ok,1=err */
   func rename(old_name: i8*, new_name: i8*): i32;
-  func opendir(dir: i8*): DIR*;
-  func readdir(dp: DIR*): dirent*;
-  func closedir(dp: DIR*): i32;
+  func opendir(dir: i8*): cDIR*;
+  func readdir(dp: cDIR*): dirent*;
+  func closedir(dp: cDIR*): i32;
   func mkdir(path: i8*, mode: i32): i32;
   func realpath(path: i8*, resolved: i8*): i8*;
   func system(cmd: i8*): i32;
@@ -126,8 +126,8 @@ extern{
   func pthread_mutex_unlock(mutex: pthread_mutex_t*): i32;
   func strerror(err: i32): i8*;
   
-  func popen(cmd: i8*, mode: i8*): FILE*;
-  func pclose(fp: FILE*): i32;
+  func popen(cmd: i8*, mode: i8*): cFILE*;
+  func pclose(fp: cFILE*): i32;
   func fork(): i32; //pid_t;
   
   func gettimeofday(tv: timeval*, timezone: i8*): i32;
