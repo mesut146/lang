@@ -41,11 +41,12 @@ func find_root(bin_path: str): String*{
     panic("can't find root");
 }
 
-func get_build(): String{
+/*func get_build(): String{
     return format("{}/build", root.get());
-}
+}*/
 
 func get_out(): String{
+    File::create_dir(format("{}/build", root.get()).str());
     return format("{}/build/test_out", root.get());
 }
 

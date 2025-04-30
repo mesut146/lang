@@ -21,3 +21,12 @@ jobs:
           mkdir ../build
           wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           x86-64/x-x64 bt x2-x64 -root ..
+          c
+          make_tool.sh .
+
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+              x-toolchain-x64

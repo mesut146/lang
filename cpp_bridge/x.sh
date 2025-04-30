@@ -5,13 +5,10 @@ mkdir -p $dir/build
 
 lib=$dir/build/libbridge.a
 obj=$dir/build/bridge.o
+shared=$dir/build/libbridge.so
 
-if [ -f $lib ]; then
-    rm $lib
-fi
-if [ -f $obj ]; then
-    rm $obj
-fi
+
+rm -f $lib $obj $shared
 
 llvm_suffix="-19"
 llvm_config_bin=llvm-config$llvm_suffix
@@ -44,11 +41,13 @@ find_clang(){
 find_clang
 
 
-$clang_bin -Werror -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
+$clang_bin -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
 fi
 
-ar rcs $lib $obj && /usr/bin/ranlib $lib
-echo "writing $lib"
+ar rcs $lib $obj && /usr/bin/ranlib $lib && echo "writing $lib"
+
+#$clang_bin -I$llvm_dir -shared -o $shared $dir/src/bridge.cpp && echo "writing $shared"
+$clang_bin -I$llvm_dir -shared -o $shared $obj && echo "writing $shared"
