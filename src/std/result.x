@@ -28,7 +28,7 @@ impl<R, E> Result<R, E>{
   }
 
   func get(self): R*{
-    if let Result<R, E>::Ok(val*) = self{
+    if let Result<R, E>::Ok(val) = self{
       return val;
     }
     panic("unwrap on empty Result");

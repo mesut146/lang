@@ -8,6 +8,7 @@ enum TokenType {
     IMPL,
     STATIC,
     TYPE,
+    MOD,
     I8,
     I16,
     I32,
@@ -37,7 +38,6 @@ enum TokenType {
     FUNC,
     LET,
     CONST,
-    NEW,
     IF,
     IS,
     ELSE,
@@ -94,6 +94,7 @@ enum TokenType {
     RBRACE,
     ARROW,//=>
     HASH,
+    //NEW,
 }
 
 struct Token {

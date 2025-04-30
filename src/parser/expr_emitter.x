@@ -195,7 +195,7 @@ impl Compiler{
             let variant = decl.get_variants().get(var_index);
             let arg_idx = 0;
             for arg in args{
-              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs);
+              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type);
               ++arg_idx;
             }
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
@@ -278,7 +278,7 @@ impl Compiler{
       return res;
     }
 
-    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*){
+    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*){
       let data_index = get_data_index(decl);
       let dataPtr = CreateStructGEP(enum_ptr, data_index, self.mapType(&decl.type));
       let var_ty = self.get_variant_ty(decl, variant);
@@ -291,12 +291,12 @@ impl Compiler{
         ++gep_idx;
       }
       let field_ptr = CreateStructGEP(dataPtr, gep_idx, var_ty);
-      if (arg.is_ptr) {
+      if (rhs_ty.is_pointer()) {
         CreateStore(field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
         self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
         ty_ptr.drop();
-      } else {
+      }else {
         //deref
         if (field.type.is_prim() || field.type.is_any_pointer()) {
             let field_val = CreateLoad(self.mapType(&field.type), field_ptr);
@@ -304,7 +304,7 @@ impl Compiler{
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
             self.copy(alloc_ptr, field_ptr, &field.type);
-            self.own.get().add_iflet_var(arg, field, alloc_ptr, &decl.type);
+            self.own.get().add_iflet_var(arg, field, alloc_ptr);
         }
         self.llvm.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
       }      

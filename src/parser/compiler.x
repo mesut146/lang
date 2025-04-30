@@ -383,6 +383,7 @@ impl Compiler{
     }
     let globals = resolv.unit.get_globals();
     if(globals.empty()){
+      globals.drop();
       return;
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
@@ -442,6 +443,7 @@ impl Compiler{
     vector_Metadata_delete(globs);
     vector_Type_delete(struct_elem_types);
     method.drop();
+    globals.drop();
   }
 
   func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{

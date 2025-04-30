@@ -40,8 +40,8 @@ func if_let(){
   let e = E::E2{.A{a: 50}, c: 60};
   assert(e is E::E2);
   assert(e.a == 50);
-  if let E::E2(c) = (&e) {
-    assert(c == 60);
+  if let E::E2(c) = &e {
+    assert(*c == 60);
   }else{
     panic("if_let");
   }

@@ -242,7 +242,7 @@ impl Incremental{
         for(let i = 0;i < fields.len();i += 1){
             let fd = fields.get(i);
             let fd2 = fields2.get(i);
-            if(!fd.name.eq(&fd2.name)) return true;
+            if(!fd.name.get().eq(fd2.name.get())) return true;
             if(!fd.type.eq(&fd2.type)) return true;
         }
         return false;

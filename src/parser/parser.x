@@ -100,7 +100,11 @@ impl Parser{
   func consume(self, tt: TokenType): Token*{
     let t: Token* = self.pop();
     if(t.type is tt) return t;
-    panic("{}:{}\nunexpected token {:?} was expecting {:?}", &self.lexer.path, t.line, t, &tt);
+    print("{}:{}\nunexpected token {:?} was expecting {:?}\n", &self.lexer.path, t.line, t, &tt);
+    if(self.lexer.path.eq("<buf>")){
+      print("buf={}\n", self.lexer.buf);
+    }
+    panic("");
   }
 
   func consume_ident(self, val: str): Token*{
@@ -205,6 +209,16 @@ impl Parser{
         let rhs = self.parse_expr();
         self.consume(TokenType::SEMI);
         return Item::Const{Const{name, type, rhs}};
+      }else if(self.is(TokenType::MOD)){
+        self.pop();
+        let name = self.name();
+        self.consume(TokenType::LBRACE);
+        let items = List<Item>::new();
+        while(!self.is(TokenType::RBRACE)){
+          items.add(self.parse_item());
+        }
+        self.consume(TokenType::RBRACE);
+        return Item::Module{Module{name, items}};
       }else{
         panic("invalid top level decl: {:?}", self.peek());
       }
@@ -374,15 +388,14 @@ impl Parser{
       self.pop();
       base = Option<Type>::Some{self.parse_type()};
     }
+    let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
       self.pop();
       let path = self.lexer.path.clone();
-      let fields = List<FieldDecl>::new();
       return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
     }
-    if(self.is(TokenType::LBRACE)){
+    else if(self.is(TokenType::LBRACE)){
       self.consume(TokenType::LBRACE);
-      let fields = List<FieldDecl>::new();
       while(!self.is(TokenType::RBRACE)){
         fields.add(self.parse_field(true));
       }
@@ -392,9 +405,8 @@ impl Parser{
     }
     else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LBRACE);
-      let fields = List<Type>::new();
       while(!self.is(TokenType::RBRACE)){
-        fields.add(self.parse_type());
+        fields.add(FieldDecl{Option<String>::new(), self.parse_type()});
       }
       self.consume(TokenType::RBRACE);
       let path = self.lexer.path.clone();
@@ -414,7 +426,7 @@ impl Parser{
     if(semi){
       self.consume(TokenType::SEMI);
     }
-    return FieldDecl{name, type};
+    return FieldDecl{Option::new(name), type};
   }
   
   func parse_enum(self, attr: Attributes): Decl{
@@ -446,8 +458,11 @@ impl Parser{
   func parse_variant(self): Variant{
     let name = self.name();
     let fields = List<FieldDecl>::new();
+    let is_tuple = false;
     if(self.is(TokenType::LPAREN)){
       self.pop();
+      //is_tuple = true;
+      //todo tuple -> tuple variant
       fields.add(self.parse_field(false));
       while(self.is(TokenType::COMMA)){
         self.pop();
@@ -455,7 +470,16 @@ impl Parser{
       }
       self.consume(TokenType::RPAREN);
     }
-    return Variant{name, fields};
+    else if(self.is(TokenType::LBRACE)){
+      self.pop();
+      fields.add(self.parse_field(false));
+      while(self.is(TokenType::COMMA)){
+        self.pop();
+        fields.add(self.parse_field(false));
+      }
+      self.consume(TokenType::RBRACE);
+    }
+    return Variant{name, fields, is_tuple};
   }
 
   func parse_type_prim(self): Type{
@@ -631,11 +655,7 @@ func parse_block(self): Block{
   func parse_bind(self): ArgBind{
     let name = self.name();
     let id = self.node();
-    if(self.is(TokenType::STAR)){
-      self.pop();
-      return ArgBind{.id, name, true};
-    }
-    return ArgBind{.id, name, false};
+    return ArgBind{.id, name};
   }
 
   func is_stmt(self): bool{
@@ -809,7 +829,7 @@ impl Parser{
         || t is TokenType::AS
         || t is TokenType::TYPE
         || t is TokenType::TRAIT
-        || t is TokenType::NEW;
+        || t is TokenType::MOD;
   }
   func name(self): String{
     if(isName(self.peek())){

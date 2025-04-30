@@ -660,6 +660,9 @@ impl Resolver{
         Item::Extern(methods*) => {},
         Item::Const(cn*) => {},
         Item::Glob(g*) => {},
+        Item::Module(md*) => {
+          self.err(1, "todo");
+        },
       }
     }
     //derives
@@ -911,7 +914,10 @@ impl Resolver{
           ty.drop();
         }
       },
-      Item::Glob(g*) => {}
+      Item::Glob(g*) => {},
+      Item::Module(g*) => {
+        panic("todo");
+      }
     }
   }
 
@@ -959,8 +965,8 @@ impl Resolver{
       },
       Decl::TupleStruct(fields*) => {
         for (let j = 0;j < fields.len();++j) {
-          let f2: Type* = fields.get(j);
-          if (self.is_cyclic(f2, target)) {
+          let f2: FieldDecl* = fields.get(j);
+          if (self.is_cyclic(&f2.type, target)) {
               return true;
           }
         }
@@ -974,8 +980,8 @@ impl Resolver{
       let base_f = base_fields.unwrap();
       for(let j = 0;j < base_f.len();++j){
         let bf = base_f.get(j);
-        if(bf.name.eq(&fd.name)){
-          self.err(node.line, format("field name '{}' already declared in base", fd.name));
+        if(bf.name.get().eq(fd.name.get())){
+          self.err(node.line, format("field name '{}' already declared in base", fd.name.get()));
         }
       }
     }
@@ -1003,7 +1009,7 @@ impl Resolver{
       self.is_valid_field(fd, node, base_fields);
     }
   }
-  func visit_decl_tuple(self, node: Decl*, fields: List<Type>*){
+  func visit_decl_tuple(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
     node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
@@ -1016,7 +1022,7 @@ impl Resolver{
       }
     }
     for(let i = 0;i < fields.len();++i){
-      let ty = fields.get(i);
+      let fd = fields.get(i);
       //self.is_valid_field(ty, node, base_fields);
     }
   }
@@ -1241,7 +1247,7 @@ impl Resolver{
       Decl::TupleStruct(fields*) => {
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
-          self.visit_type(fd).drop();
+          self.visit_type(&fd.type).drop();
         }
       },
       Decl::Enum(variants*)=>{
@@ -1575,7 +1581,7 @@ impl Resolver{
             let idx = 0;
             for (let i = 0; i < fields.len();++i) {
                 let fd = fields.get(i);
-                if (fd.name.eq(name)) {
+                if (fd.name.get().eq(name)) {
                     return Pair::new(cur, idx);
                 }
                 ++idx;
@@ -1624,7 +1630,7 @@ impl Resolver{
   func fieldIndex(arr: List<FieldDecl>*, name: str, type: Type*): i32{
     for(let i=0;i<arr.len();++i){
       let fd = arr.get(i);
-      if(fd.name.eq(name)){
+      if(fd.name.get().eq(name)){
         return i;
       }
     }
@@ -1712,12 +1718,12 @@ impl Resolver{
             prm_idx = field_idx;
             ++field_idx;
         }
-        let prm = fields.get(prm_idx);
+        let fd = fields.get(prm_idx);
         //todo if we support unnamed fields, change this
         if (!hasNamed) {
-            names.add(prm.name.clone());
+            names.add(fd.name.get().clone());
         }
-        let pt = self.getType(&prm.type);
+        let pt = self.getType(&fd.type);
         let arg = self.visit(&e.expr);
         let opt = MethodResolver::is_compatible(&arg.type, &pt);
         if (opt.is_some()) {
@@ -1731,8 +1737,8 @@ impl Resolver{
     //check non set fields
     for (let i = 0;i < fields.len();++i) {
         let fd = fields.get(i);
-        if (!names.contains(&fd.name)) {
-            let msg = format("field not set: {}", fd.name);
+        if (!names.contains(fd.name.get())) {
+            let msg = format("field not set: {}", fd.name.get());
             self.err(node, msg);
         }
     }
@@ -1902,7 +1908,7 @@ impl Resolver{
             let arg = args.get(i);
             let field = variant.fields.get(i);
             let ty = field.type.clone();
-            if (arg.is_ptr) {
+            if (scp.type.is_pointer()) {
                 ty = ty.toPtr();
             }
             self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::MATCH, arg.line);
@@ -2147,6 +2153,7 @@ impl Resolver{
           //todo take ref of it?
           info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
       }
+      //print("info={:?} {:?} {:?}\n", node, &rt1.type, &info.block);
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);
       rt1.drop();
@@ -3287,7 +3294,6 @@ impl Resolver{
       let msg = format("if let rhs is not enum: {:?}", rhs.type);
       self.err(line, msg);
     }
-    rhs.drop();
     //match variant
     let decl: Decl* = decl_opt.unwrap();
     let index = Resolver::findVariant(decl, is.type.name());
@@ -3302,7 +3308,7 @@ impl Resolver{
         let arg = is.args.get(i);
         let field = variant.fields.get(i);
         let ty = field.type.clone();
-        if (arg.is_ptr) {
+        if (rhs.type.is_pointer()) {
             ty = ty.toPtr();
         } 
         self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
@@ -3323,6 +3329,7 @@ impl Resolver{
         self.err(line, "then returns a non-void but no else");
       }
     }
+    rhs.drop();
     return rt1;
   }
   

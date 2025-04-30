@@ -219,12 +219,11 @@ impl Own{
         self.var_map.add(var.id, var);
         self.do_move(&f.rhs);
     }
-    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*, rhs_type: Type*){
-        if(arg.is_ptr) return;
+    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
         if(!self.is_drop_type(&fd.type)) return;
-        if(rhs_type.is_pointer()){
+        /*if(rhs_ty.is_pointer()){
             self.get_resolver().err(arg.line, format("can't deref member from ptr '{}'", arg.name));
-        }
+        }*/
         let var = Variable{
             name: arg.name.clone(),
             type: fd.type.clone(),
@@ -712,10 +711,10 @@ impl Own{
         let fields = decl.get_fields();
         let moved_fields = List<String>::new();
         for fd in fields{
-            let rhs = Rhs::new(var.clone(), fd.name.clone());
+            let rhs = Rhs::new(var.clone(), fd.name.get().clone());
             let state = self.get_state(&rhs, scope);
             if(state.kind is StateType::MOVED){
-                moved_fields.add(fd.name.clone());
+                moved_fields.add(fd.name.get().clone());
             }else if(state.kind is StateType::MOVED_PARTIAL){
                 self.get_resolver().err(var.line, "move of partial of partial");
             }
@@ -726,8 +725,8 @@ impl Own{
             if(!self.is_drop_type(&fd.type)){
                 continue;
             }
-            if(!moved_fields.contains(&fd.name)){
-                print("field '{}.{}' vline: {} not moved at: {}\n", var.name, fd.name, var.line, line);
+            if(!moved_fields.contains(fd.name.get())){
+                print("field '{:?}.{:?}' vline: {} not moved at: {}\n", var.name, fd.name, var.line, line);
                 err = true;
             }
         }

@@ -22,8 +22,13 @@ struct RvalueHelper {
 
 impl RvalueHelper{
     func is_rvalue(e: Expr*): bool{
-      if let Expr::Par(inner*) = (e){
+      if let Expr::Par(inner*) = e{
         return is_rvalue(inner.get());
+      }
+      if let Expr::Unary(op*, inner*) = e{
+        if(op.eq("*")){
+          return true;
+        }
       }
       return e is Expr::Call || e is Expr::Lit || e is Expr::As || e is Expr::Infix;
     }
@@ -168,9 +173,9 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
       }
     },
     Decl::TupleStruct(fields*)=>{
-      for ft in fields{
+      for fd in fields{
         //add_type(res, &ft);
-        all_deps(ft, r, res);
+        all_deps(&fd.type, r, res);
       }
     }
   }
@@ -539,8 +544,8 @@ impl Compiler{
         }
       },
       Decl::TupleStruct(fields*)=>{
-        for ft in fields{
-          let ft2 = self.mapType(ft);
+        for fd in fields{
+          let ft2 = self.mapType(&fd.type);
           vector_Type_push(elems, ft2);
         }
       }

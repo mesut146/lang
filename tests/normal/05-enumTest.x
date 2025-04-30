@@ -31,7 +31,7 @@ func main(){
     assert(p3 == 100);
   }
   assert(d is E::D);
-  if let E::D(p4*) = (d){
+  if let E::D(p4) = d{
     isD = true;
     assert(p4.a == 100 && p4.b == 200);
   }
@@ -48,7 +48,7 @@ func test_mut(){
   //let b: E = E::B{a: 5, b: 6};//random order
   assert(b is E::B);
 
-  if let E::B(p1, p2) = (b){
+  if let E::B(p1, p2) = b{
     isB = true;
     assert(p1 == 5);
     assert(p2 == 6);
@@ -58,13 +58,13 @@ func test_mut(){
     assert(p2 == 6);
   }
   //mutate real
-  if let E::B(p1*, p2*) = (b){
+  if let E::B(p1, p2) = &b{
     assert(*p1 == 5 && *p2 == 6);
     *p1 = 10;
     assert(*p1 == 10 && *p2 == 6);
   }
   //check mutate
-  if let E::B(p100, p200) = (b){
+  if let E::B(p100, p200) = b{
     assert(p100 == 10 && p200 == 6);
   }else{
     panic("mut");

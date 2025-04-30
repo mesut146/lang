@@ -32,6 +32,7 @@ func make_keywords(): HashMap<str, TokenType>{
   map.insert("if", TokenType::IF);
   map.insert("else", TokenType::ELSE);
   map.insert("for", TokenType::FOR);
+  map.insert("mod", TokenType::MOD);
   map.insert("while", TokenType::WHILE);
   map.insert("break", TokenType::BREAK);
   map.insert("match", TokenType::MATCH);
@@ -58,12 +59,12 @@ func make_keywords(): HashMap<str, TokenType>{
   map.insert("break",  TokenType::BREAK);
   map.insert("func",  TokenType::FUNC);
   map.insert("let",  TokenType::LET);
-  map.insert("new",  TokenType::NEW);
   map.insert("match",  TokenType::MATCH);
   map.insert("static", TokenType::STATIC);
   map.insert("struct", TokenType::STRUCT);
   map.insert("trait", TokenType::TRAIT);
   map.insert("type", TokenType::TYPE);
+  //map.insert("new",  TokenType::NEW);
   map.insert("virtual", TokenType::VIRTUAL);
   return map;
 }

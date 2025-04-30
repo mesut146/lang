@@ -215,15 +215,21 @@ impl DebugInfo{
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
       }
+      let fi = 0;
       for fd in &ev.fields{
         let fd_ty = self.map_di(&fd.type, c);
         let off = getElementOffsetInBits(sl, idx);
         let fd_size = DIType_getSizeInBits(fd_ty);
-        let fdname_c = fd.name.clone().cstr();
+        let fdname_c = if (fd.name.is_some()){
+          fd.name.get().clone().cstr()
+        }else{
+          format("_{}", fi).cstr()
+        };
         let mem = createMemberType(st as DIScope*, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
         fdname_c.drop();
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
+        ++fi;
       }
       replaceElements(st, elems);
       let evname_c = ev.name.clone().cstr();
@@ -286,22 +292,28 @@ impl DebugInfo{
             vector_Metadata_push(elems, mem as Metadata*);
             ++idx;
           }
+          let fi = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
             let size = DIType_getSizeInBits(ty);
             let off = getElementOffsetInBits(sl, idx);
-            let name_c = fd.name.clone().cstr();
+            let name_c = if(fd.name.is_some()){
+              fd.name.get().clone().cstr()
+            }else{
+              format("_{}", fi).cstr()
+            };
             let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
             vector_Metadata_push(elems, mem as Metadata*);
             ++idx;
+            ++fi;
             name_c.drop();
           }
           self.fill_funcs_member(decl, c, elems);
         },
         Decl::TupleStruct(fields*)=>{
           let idx = 0;
-          for ft in fields{
-            let ty = self.map_di(ft, c);
+          for fd in fields{
+            let ty = self.map_di(&fd.type, c);
             let size = DIType_getSizeInBits(ty);
             let off = getElementOffsetInBits(sl, idx);
             let name_c = format("_{}", idx).cstr();

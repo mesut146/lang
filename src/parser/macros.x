@@ -27,7 +27,7 @@ func derive_debug(it: Item): TokenStream{
         match d{
             Decl::Struct(fields*) => {
                 for fd in fields{
-                    res.add(format("debug_member!({}, f);", &fd.name));
+                    res.add(format("debug_member!({}, f);", fd.name.get()));
                 }
             },
             Decl::Enum(vars*) => {

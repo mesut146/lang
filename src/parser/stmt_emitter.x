@@ -241,34 +241,7 @@ impl Compiler{
             //regular var decl
             let prm = fields.get(i);
             let arg = node.args.get(i);
-            self.alloc_enum_arg(arg, variant, i, decl, rhs);
-            /*let gep_idx = i;
-            if(decl.base.is_some()){
-              ++gep_idx;
-            }
-            let field_ptr = CreateStructGEP(dataPtr, gep_idx, var_ty);
-            let alloc_ptr = self.get_alloc(arg.id);
-            self.NamedValues.add(arg.name.clone(), alloc_ptr);
-            if (arg.is_ptr) {
-                CreateStore(field_ptr, alloc_ptr);
-                let ty_ptr = prm.type.clone().toPtr();
-                self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
-                ty_ptr.drop();
-            } else {
-                //deref
-                if (prm.type.is_prim() || prm.type.is_pointer()) {
-                    let field_val = CreateLoad(self.mapType(&prm.type), field_ptr);
-                    CreateStore(field_val, alloc_ptr);
-                } else {
-                    //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
-                    if(rhs_rt.type.is_pointer() && !prm.type.is_str()){
-                      self.get_resolver().err(&node.rhs, "can't deref member from ptr rhs");
-                    }
-                    self.copy(alloc_ptr, field_ptr, &prm.type);
-                    self.own.get().add_iflet_var(arg, prm, alloc_ptr, &rhs_rt.type);
-                }
-                self.llvm.di.get().dbg_var(&arg.name, &prm.type, arg.line, self);
-            }*/
+            self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type);
         }
       }
       let then_val = self.visit_body(node.then.get());

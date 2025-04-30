@@ -87,8 +87,8 @@ impl DropHelper{
         }
       },
       Decl::TupleStruct(fields*)=>{
-        for ft in fields{
-          if(self.is_drop_type(ft)){
+        for fd in fields{
+          if(self.is_drop_type(&fd.type)){
             return true;
           }
         }

@@ -17,14 +17,13 @@ jobs:
         run: |
           ls
           # bash cpp_bridge/x.sh
-          cd bin
-          mkdir ../build
+          # cd bin
+          mkdir build
           wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
-          x86-64/x-x64 bt x2-x64 -root ..
-          c
-          make_tool.sh .
+          bin/x86-64/x-x64 bt x2-x64 -root .
+          make_tool.sh build/x2-x64 .
 
-      - name: Archive production artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist

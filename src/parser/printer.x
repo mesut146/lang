@@ -143,8 +143,20 @@ impl Debug for Item{
       },
       Item::Glob(gl*) => {
         gl.debug(f);
+      },
+      Item::Module(md*) => {
+        Debug::debug(md, f);
       }
     }
+  }
+}
+impl Debug for Module{
+  func debug(self, f: Fmt*){
+    f.print("mod ");
+    Debug::debug(&self.name, f);
+    f.print("{\n");
+    join(f, &self.items, "\n");
+    f.print("\n}");
   }
 }
 
@@ -464,9 +476,9 @@ impl Debug for Body{
 impl Debug for ArgBind{
   func debug(self, f: Fmt*){
     f.print(&self.name);
-    if(self.is_ptr){
-      f.print("*");
-    }
+    // if(self.is_ptr){
+    //   f.print("*");
+    // }
   }
 }
 

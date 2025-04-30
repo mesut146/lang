@@ -177,6 +177,7 @@ enum Item{
   Extern(methods: List<Method>),
   Const(val: Const),
   Glob(gl: Global),
+  Module(m: Module)
 }
 
 impl Item{
@@ -186,6 +187,11 @@ impl Item{
     }
     panic("Item::as_impl()");
   }
+}
+
+struct Module{
+  name: String;
+  items: List<Item>;
 }
 
 struct Global: Node{
@@ -232,16 +238,13 @@ struct BaseDecl{
 enum Decl: BaseDecl{
   Struct(fields: List<FieldDecl>),
   Enum(variants: List<Variant>),
-  TupleStruct(fields: List<Type>),
+  TupleStruct(fields: List<FieldDecl>),
 }
 
 impl Decl{
   func is_drop(self): bool{
     return self.attr.has_attr("drop");
   }
-  /*func is_struct(self): bool{
-    return self is Decl::Struct;
-  }*/
   func is_enum(self): bool{
     return self is Decl::Enum;
   }
@@ -260,13 +263,14 @@ impl Decl{
 }
 
 struct FieldDecl{
-  name: String;
+  name: Option<String>;
   type: Type;
 }
 
 struct Variant{
   name: String;
   fields: List<FieldDecl>;
+  is_tuple: bool;
 }
 
 
@@ -636,7 +640,6 @@ struct IfStmt{
 
 struct ArgBind: Node{
   name: String;
-  is_ptr: bool;
 }
 struct IfLet{
   type: Type;
