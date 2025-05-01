@@ -21,7 +21,7 @@ jobs:
           mkdir build
           wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           bin/x86-64/x bt x2-x64 -root .
-          make_tool.sh build/x2-x64 .
+          make_toolchain.sh build/x2-x64 . -zip
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -29,3 +29,12 @@ jobs:
           name: dist
           path: |
               x-toolchain-x64
+
+      - name: "test gh"
+        run: |
+          echo "Testing GitHub Actions"
+          echo "Issue: $ISSUE"
+          echo "Token: $GH_TOKEN"
+          gh auth status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

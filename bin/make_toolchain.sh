@@ -8,6 +8,11 @@ if [ ! -d "$2" ]; then
   exit
 fi
 
+do_zip=false
+if [ "$3" = "-zip" ]; then
+  do_zip=true
+fi
+
 bin="$1"
 out="$2"
 dir=$out/x-toolchain-x64
@@ -23,3 +28,8 @@ cp ../cpp_bridge/build/libbridge.a $dir/lib
 #todo llvm
 cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib
 cp -r ../src/std $dir/src
+
+if [ "$3" = "-zip" ]; then
+ zip -r x-toolchain-x64.zip $dir
+ rm -r $dir
+fi
