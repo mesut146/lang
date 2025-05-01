@@ -8,12 +8,9 @@ if [ ! -d "$2" ]; then
   exit
 fi
 
-do_zip=false
-if [ "$3" = "-zip" ]; then
-  do_zip=true
-fi
+cur=$(dirname $0)
 
-bin="$1"
+binary="$1"
 out="$2"
 dir=$out/x-toolchain-x64
 
@@ -22,12 +19,12 @@ mkdir -p $dir/bin
 mkdir -p $dir/lib
 mkdir -p $dir/src
 
-cp $bin $dir/bin/x
-cp ../cpp_bridge/build/libbridge.so $dir/lib
-cp ../cpp_bridge/build/libbridge.a $dir/lib
+cp $binary $dir/bin/x
+cp $cur/../cpp_bridge/build/libbridge.so $dir/lib
+cp $cur/../cpp_bridge/build/libbridge.a $dir/lib
 #todo llvm
 cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib
-cp -r ../src/std $dir/src
+cp -r $cur/../src/std $dir/src
 
 if [ "$3" = "-zip" ]; then
  zip -r x-toolchain-x64.zip $dir

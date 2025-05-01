@@ -26,15 +26,12 @@ jobs:
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist
-          path: |
-              x-toolchain-x64.zip
+          name: toolchain
+          path: x-toolchain-x64.zip
 
       - name: "test gh"
         run: |
           echo "Testing GitHub Actions"
-          echo "Issue: $ISSUE"
-          echo "Token: $GH_TOKEN"
           gh auth status
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
