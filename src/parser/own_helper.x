@@ -113,15 +113,15 @@ impl Debug for Rhs{
         match self{
             Rhs::EXPR(e) => {
                 f.print("Rhs::EXPR{");
-                f.print(e);
+                f.print(*e);
                 f.print("}");
             },
-            Rhs::VAR(v*) => {
+            Rhs::VAR(v) => {
                 //f.print("Rhs::VAR{");
                 f.print(v);
                 //f.print("}");
             },
-            Rhs::FIELD(scp*,name*) => {
+            Rhs::FIELD(scp, name) => {
                 f.print("Rhs::FIELD{");
                 f.print(scp);
                 f.print(", ");
@@ -134,9 +134,9 @@ impl Debug for Rhs{
 impl Clone for Rhs{
     func clone(self): Rhs{
         match self{
-            Rhs::EXPR(e) => return Rhs::EXPR{e},
-            Rhs::VAR(v*) => return Rhs::VAR{v.clone()},
-            Rhs::FIELD(scp*,name*) => return Rhs::FIELD{scp: scp.clone(), name: name.clone()},
+            Rhs::EXPR(e) => return Rhs::EXPR{*e},
+            Rhs::VAR(v) => return Rhs::VAR{v.clone()},
+            Rhs::FIELD(scp, name) => return Rhs::FIELD{scp: scp.clone(), name: name.clone()},
         }
     }
 }

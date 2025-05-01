@@ -42,24 +42,24 @@ impl OwnVisitor{
     }
     func visit(self, node: Body*){
         match node{
-            Body::Block(b*) => {
+            Body::Block(b) => {
                 self.visit_block(b);
             },
-            Body::Stmt(b*) => {
+            Body::Stmt(b) => {
                 self.visit(b);
             },
-            Body::If(b*) => {
+            Body::If(b) => {
                 
             },
-            Body::IfLet(b*) => {
+            Body::IfLet(b) => {
                 
             }
         }
     }
     func visit(self, node: Stmt*){
-        if let Stmt::Var(ve*)=(node){
+        if let Stmt::Var(ve)=(node){
             self.visit_var(ve);
-        }else if let Stmt::Expr(expr*)=(node){
+        }else if let Stmt::Expr(expr)=(node){
             self.visit_expr(expr);
         }else{
             //panic("visit line: {} {}\n", node.line, node);
@@ -79,11 +79,11 @@ impl OwnVisitor{
         }
     }
     func visit_expr(self, expr: Expr*){
-        if let Expr::Call(call*)=(expr){
+        if let Expr::Call(call)=(expr){
             self.visit_call(expr, call);
-        }else if let Expr::Obj(type*, args*)=(expr){
+        }else if let Expr::Obj(type, args)=(expr){
             self.visit_obj(expr, type, args);
-        }else if let Expr::Infix(op*, l*, r*)=(expr){
+        }else if let Expr::Infix(op, l, r)=(expr){
             if(op.eq("=")){
                 self.visit_expr(r.get());
                 self.own.do_assign(l.get(), r.get());

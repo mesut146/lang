@@ -298,7 +298,7 @@ impl Parser{
       type_args = self.type_params();
       is_generic = true;
     }
-    if let Parent::Impl(info*)=(&parent){
+    if let Parent::Impl(info)=(&parent){
       if(!info.type_params.empty()){
         is_generic = true;
       }
@@ -502,7 +502,7 @@ impl Parser{
       while(self.is(TokenType::COLON2)){
         self.pop();
         let part = self.gen_part();
-        if let Type::Simple(smp*) = &part{
+        if let Type::Simple(smp) = &part{
           let id = self.node();
           let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           res = tmp;

@@ -18,7 +18,7 @@ enum E{
 
 impl E{
   func dump(self){
-    if let E::E1(a, b, c*)=(self){
+    if let E::E1(a, b, c) = self{
       let b2 = b;
       printf("E::E1{a: %d, b: %p, c: %d} b2=%p\n", a, b, c.d, b2);
       return;

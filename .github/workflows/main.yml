@@ -20,7 +20,7 @@ jobs:
           # cd bin
           mkdir build
           wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
-          bin/x86-64/x-x64 bt x2-x64 -root .
+          bin/x86-64/x bt x2-x64 -root .
           make_tool.sh build/x2-x64 .
 
       - name: Upload Artifacts

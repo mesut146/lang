@@ -47,7 +47,7 @@ enum SigResult{
 
 impl SigResult{
     func get_err(self): str{
-        if let SigResult::Err(s*)=(self){
+        if let SigResult::Err(s)=(self){
             return s.str();
         }
         panic("SigResult::get_err");
@@ -152,7 +152,7 @@ impl Signature{
         if(!typ.eq("Self")){
             return typ.clone();
         }
-        if let Parent::Impl(info*)=(&m.parent){
+        if let Parent::Impl(info)=(&m.parent){
             return info.type.clone();
         }
         panic("replace_self not impl method");
@@ -167,7 +167,7 @@ impl Signature{
             r: Option<Resolver*>::new(r),
             desc: desc
         };
-        if let Parent::Impl(info*) = (&m.parent){
+        if let Parent::Impl(info) = (&m.parent){
             let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);
         }
@@ -241,7 +241,7 @@ impl MethodResolver{
             //static sibling
             if(self.r.curMethod.is_some()){
                 let cur = self.r.curMethod.unwrap();
-                if let Parent::Impl(info*)=(&cur.parent){
+                if let Parent::Impl(info)=(&cur.parent){
                     let r = self.collect_member(sig, &info.type, &list, false, self.r);
                     if(r.is_err()){
                         return Result<List<Signature>, String>::err(r.unwrap_err());
@@ -388,7 +388,7 @@ impl MethodResolver{
     func collect_static(self, name: str, list: List<Signature>*, origin: Resolver*){
         for (let i = 0;i < self.r.unit.items.len();++i) {
             let item: Item* = self.r.unit.items.get(i);
-            if let Item::Method(m*) = (item){
+            if let Item::Method(m) = (item){
                 if (m.name.eq(name)) {
                     let desc = Desc{
                         kind: RtKind::Method,
@@ -398,7 +398,7 @@ impl MethodResolver{
                     list.add(Signature::new(m, desc, self.r, origin));
                 }
             }
-            else if let Item::Extern(arr*) = (item){
+            else if let Item::Extern(arr) = (item){
                 for (let j = 0;j < arr.len();++j) {
                     let m = arr.get(j);
                     if (m.name.eq(name)) {
@@ -498,7 +498,7 @@ impl MethodResolver{
         }
         //place user given type args
         if (mc.scope.is_some() && mc.is_static) {
-            if let Expr::Type(scp_type*) = mc.scope.get(){
+            if let Expr::Type(scp_type) = mc.scope.get(){
                 if(scp_type.is_generic()){
                     //todo trait
                     //is static & have type args
@@ -584,23 +584,23 @@ impl MethodResolver{
             return Result<i32, String>::ok(0);
         }
         match arg{
-            Type::Pointer(bx*) => {
+            Type::Pointer(bx) => {
                 if (!prm.is_pointer()){
                     return Result<i32, String>::err(format("prm is not ptr {:?} vs {:?}", arg, prm));
                 }
                 return infer(arg.elem(), prm.elem(), inferred, type_params);
             },
-            Type::Slice(bx*) => {
+            Type::Slice(bx) => {
                 if (!prm.is_slice()){
                     return Result<i32, String>::err("prm is not slice".owned());
                 }
                 return infer(arg.elem(), prm.elem(), inferred, type_params);
             },
-            Type::Array(bx*, size) => {
+            Type::Array(bx, size) => {
                 if (!prm.is_array()) return Result<i32, String>::err("prm is not array".owned());
                 return infer(arg.elem(), prm.elem(), inferred, type_params);
             },
-            Type::Function(ft*) => {
+            Type::Function(ft) => {
                 if (!prm.is_fpointer()) return Result<i32, String>::err("prm is not func-ptr".owned());
                 let ft1 = arg.get_ft();
                 let ft2 = prm.get_ft();
@@ -617,7 +617,7 @@ impl MethodResolver{
                 }
                 return Result<i32, String>::ok(0);
             },
-            Type::Lambda(lt*) => {
+            Type::Lambda(lt) => {
                 if (!prm.is_fpointer()) panic("prm is not fptr");
                 let ft1 = arg.get_lambda();
                 let ft2 = prm.get_ft();
@@ -640,7 +640,7 @@ impl MethodResolver{
                 }
                 return Result<i32, String>::ok(0);
             },
-            Type::Simple(smp*) => {
+            Type::Simple(smp) => {
                 if(!prm.is_simple()){
                     panic("prm is not simple {:?} -> {:?}", arg, prm);
                 }
@@ -662,9 +662,9 @@ impl MethodResolver{
                 }
                 return Result<i32, String>::ok(0);
             },
-            Type::Tuple(tt*) => {
+            Type::Tuple(tt) => {
                 match prm{
-                    Type::Tuple(tt2*) => {
+                    Type::Tuple(tt2) => {
                         if (tt.types.len() != tt2.types.len()) {
                             return Result<i32, String>::err(format("type count mismatch {:?} vs {:?}", tt.types.len(), tt2.types.len()));
                         }
@@ -955,7 +955,7 @@ impl MethodResolver{
         if (typeParams.contains(target)) return Option<String>::new();
         if (arg.eq(target)) return Option<String>::new();
         match target{
-            Type::Pointer(bx*) => {
+            Type::Pointer(bx) => {
                 if(!arg.is_pointer()){
                     return Option::new("arg is not pointer".str());
                 }
@@ -965,9 +965,9 @@ impl MethodResolver{
                 }
                 return Option::new("target is not pointer".str());
             },
-            Type::Array(bx2*, size2) => {
+            Type::Array(bx2, size2) => {
                 if let Type::Array(bx, size) = arg{
-                    if(size != size2){
+                    if(*size != *size2){
                         return Option::new(format("element size mismatch {} vs {}", size, size2));
                     }
                     // return Option::new(format("todo {:?} vs {:?}", arg, target));
@@ -976,13 +976,13 @@ impl MethodResolver{
                     return Option::new("arg is not array".str());
                 }
             },
-            Type::Slice(bx*) => {
+            Type::Slice(bx) => {
                 if(!arg.is_slice()){
                     return Option::new("arg is not slice".str());
                 }
                 return is_compatible(arg.elem(), target.elem(), typeParams);
             },
-            Type::Function(ft_bx*) => {
+            Type::Function(ft_bx) => {
                 let ft2 = ft_bx.get();
                 if(arg.is_lambda()){
                     let lm = arg.get_lambda();
@@ -1027,17 +1027,17 @@ impl MethodResolver{
                     return Option::new("arg is not fpointer or lambda".str());
                 }
             },
-            Type::Lambda(lt*) => {
+            Type::Lambda(lt) => {
                 return Option::new("lambda parameter is not supported".owned());
             },
-            Type::Simple(smp*) =>{
+            Type::Simple(smp) =>{
                 if (!arg.is_simple()) {
                     return Option::new("arg is not simple".str());
                 }
             },
-            Type::Tuple(tt2*) => {
+            Type::Tuple(tt2) => {
                 match arg{
-                    Type::Tuple(tt*) => {
+                    Type::Tuple(tt) => {
                         if (tt.types.len()!= tt2.types.len()) {
                             return Option::new("tuple size mismatch".str());
                         }
@@ -1212,7 +1212,7 @@ func get_type_params(m: Method*): List<Type>{
     if (!m.is_generic) {
         return res;
     }
-    if let Parent::Impl(info*) = (&m.parent){
+    if let Parent::Impl(info) = (&m.parent){
         res.drop();
         res = info.type_params.clone();
     }

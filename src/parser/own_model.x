@@ -195,7 +195,7 @@ impl Rhs{
         return Rhs::FIELD{scope, name};
     }
     func new(expr: Expr*, own: Own*): Rhs{
-        if let Expr::Access(scp*, name*)=(expr){
+        if let Expr::Access(scp, name)=(expr){
             let scp_rt = own.compiler.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
@@ -217,29 +217,29 @@ impl Rhs{
         return Rhs::VAR{var};
     }
     func get_var(self): Variable*{
-        if let Rhs::VAR(v*)=(self){
+        if let Rhs::VAR(v)=(self){
             return v;
         }
         panic("");
     }
     func get_expr(self): Expr*{
         if let Rhs::EXPR(e)=(self){
-            return e;
+            return *e;
         }
         panic("");
     }
     func get_id(self): i32{
         if let Rhs::EXPR(e)=(self){
-            return e.id;
+            return (*e).id;
         }
-        if let Rhs::VAR(v*)=(self){
+        if let Rhs::VAR(v)=(self){
             return v.id;
         }
         panic("{:?}", self);
     }
     func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){
-            let rt = resolver.visit(e);
+            let rt = resolver.visit(*e);
             if(rt.vh.is_some()){
                 let res = rt.vh.get().id == vh.id;
                 rt.drop();
@@ -252,7 +252,7 @@ impl Rhs{
     }
     func eq(self, other: Moved*, resolver: Resolver*): bool{
         if let Rhs::EXPR(e)=(self){
-            if(e.id == other.expr.id){
+            if((*e).id == other.expr.id){
                 return true;
             }
             return false;
@@ -291,22 +291,22 @@ impl Move{
 impl Droppable{
     func as_var(self): Variable*{
         match self{
-            Droppable::VAR(v) => return v,
+            Droppable::VAR(v) => return *v,
             _ => panic("");
         }
     }
     func drop_local(self, scope: VarScope*, line: i32, own: Own*): bool{
         match self{
             Droppable::OBJ(obj) => {
-                if(obj.scope == scope.id){
-                    own.drop_obj(obj, scope, line);
+                if((*obj).scope == scope.id){
+                    own.drop_obj(*obj, scope, line);
                     return true;
                 }
                 return false;
             },
             Droppable::VAR(var) => {
-                if(var.scope == scope.id){
-                    own.drop_var(var, scope, line);
+                if((*var).scope == scope.id){
+                    own.drop_var(*var, scope, line);
                     return true;
                 }
                 return false;

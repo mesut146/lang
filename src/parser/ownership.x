@@ -269,7 +269,7 @@ impl Own{
             mv.drop();
         }
         let rhs = Rhs::new(expr, self);
-        if let Rhs::FIELD(scp*, name*)=(&rhs){
+        if let Rhs::FIELD(scp, name)=(&rhs){
             if(!move_ptr_field && scp.type.is_pointer()){
                 self.get_resolver().err(expr, "move out of pointer");
             }
@@ -277,7 +277,7 @@ impl Own{
         let scope = self.get_scope();
         self.update_state(rhs, StateType::MOVED{expr.line}, scope);
         match expr{
-            Expr::Par(bx*) => {
+            Expr::Par(bx) => {
                 self.do_move(bx.get());
             },
             _ => {}
@@ -398,8 +398,8 @@ impl Own{
         }
     }
     func check_field(self, expr: Expr*){
-        if let Expr::Access(scp*,name*)=(expr){
-            //scope could be partially moved, check right right field is valid
+        if let Expr::Access(scp, name)=(expr){
+            //scope could be partially moved, check right field is valid
         }else{
             panic("check_field not field access {:?}", expr);
         }
@@ -416,7 +416,7 @@ impl Own{
             panic("no state {:?} from {:?}", rhs, scope.kind);
         }
         let state: StateType = *opt.unwrap();
-        if let Rhs::FIELD(scp*, name*) = (rhs){
+        if let Rhs::FIELD(scp, name) = rhs{
             return State::new(state, scope);
             //let scp_state = self.get_state(Rhs::new(scp));
         }
@@ -429,7 +429,7 @@ impl Own{
                 if(!(pair.b is StateType::MOVED)){
                     continue;
                 }
-                if let Rhs::FIELD(scp*, name*) = (pair.a){
+                if let Rhs::FIELD(scp, name) = (pair.a){
                     if(scp.id == rhs.get_id()){
                         return State::new(StateType::MOVED_PARTIAL, scope);
                     }
@@ -489,10 +489,10 @@ impl Own{
     func drop_any(self, dr: Droppable*, scope: VarScope*, line: i32){
         match dr{
             Droppable::OBJ(obj) => {
-                self.drop_obj(obj, scope, line);
+                self.drop_obj(*obj, scope, line);
             },
             Droppable::VAR(var) => {
-                self.drop_var(var, scope, line);
+                self.drop_var(*var, scope, line);
             }
         }
     }
@@ -515,7 +515,7 @@ impl Own{
         if(!move_ptr_field) return;
         for pair in &scope.state_map{
             if let StateType::MOVED(mv_line) = (pair.b){
-                if let Rhs::FIELD(scp*, name*) = (pair.a){
+                if let Rhs::FIELD(scp, name) = (pair.a){
                     if(scp.type.is_pointer()){
                         self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}, {:?}", mv_line, pair.a));
                     }
@@ -541,8 +541,8 @@ impl Own{
         for dr in &outers{
             if let Droppable::OBJ(obj)=(dr){
                 //local obj, drop it
-                if(obj.scope == scope.id){
-                    self.drop_obj(obj, scope, line);
+                if((*obj).scope == scope.id){
+                    self.drop_obj(*obj, scope, line);
                 }
                 continue;
             }
@@ -628,8 +628,8 @@ impl Own{
         for out in &outers{
             if let Droppable::OBJ(obj) = (out){
                 //local obj, drop it
-                if(obj.scope == if_scope.id){
-                    self.drop_obj(obj, if_scope, line);
+                if((*obj).scope == if_scope.id){
+                    self.drop_obj(*obj, if_scope, line);
                 }
                 continue;
             }

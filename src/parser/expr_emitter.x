@@ -32,40 +32,40 @@ impl Compiler{
     func visit_expr(self, node: Expr*): Value*{
       self.llvm.di.get().loc(node.line, node.pos);
       match node{
-        Expr::Call(mc*) => return self.visit_call(node, mc),
-        Expr::MacroCall(mc*) => return self.visit_macrocall(node, mc),
-        Expr::ArrAccess(aa*) => return self.visit_array_access(node, aa),
-        Expr::Array(list*, sz*) => return self.visit_array(node, list, sz),
-        Expr::Access(scope*, name*) => return self.visit_access(node, scope.get(), name),
-        Expr::Par(e*) => return self.visit(e.get()),
-        Expr::Obj(type*, args*) => return self.visit_obj(node, type, args),
-        Expr::Lit(lit*) => return self.visit_lit(node, lit),
-        Expr::Infix(op*, l*, r*) => return self.visit_infix(node, op, l.get(), r.get()),
-        Expr::Name(name*) => return self.visit_name(node, name, true),
-        Expr::Is(lhs*, rhs*) => return self.visit_is(lhs.get(), rhs.get()),
-        Expr::As(lhs*, rhs*) => return self.visit_as(lhs.get(), rhs),
-        Expr::If(is*) => {
+        Expr::Call(mc) => return self.visit_call(node, mc),
+        Expr::MacroCall(mc) => return self.visit_macrocall(node, mc),
+        Expr::ArrAccess(aa) => return self.visit_array_access(node, aa),
+        Expr::Array(list, sz) => return self.visit_array(node, list, sz),
+        Expr::Access(scope, name) => return self.visit_access(node, scope.get(), name),
+        Expr::Par(e) => return self.visit(e.get()),
+        Expr::Obj(type, args) => return self.visit_obj(node, type, args),
+        Expr::Lit(lit) => return self.visit_lit(node, lit),
+        Expr::Infix(op, l, r) => return self.visit_infix(node, op, l.get(), r.get()),
+        Expr::Name(name) => return self.visit_name(node, name, true),
+        Expr::Is(lhs, rhs) => return self.visit_is(lhs.get(), rhs.get()),
+        Expr::As(lhs, rhs) => return self.visit_as(lhs.get(), rhs),
+        Expr::If(is) => {
           let res = self.visit_if(is.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::IfLet(is*) => {
+        Expr::IfLet(is) => {
           let res = self.visit_iflet(node.line, is.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Block(b*) => {
+        Expr::Block(b) => {
           let res = self.visit_block(b.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Unary(op*, e*) => {
+        Expr::Unary(op, e) => {
           if(op.eq("&")){
             return self.visit_ref(node, e.get());
           }
@@ -74,7 +74,7 @@ impl Compiler{
           }
           return self.visit_unary(op, e.get());
         },
-        Expr::Type(type*) => {
+        Expr::Type(type) => {
             let r = self.get_resolver();
             let rt = r.visit(node);
             if(rt.type.is_fpointer() && rt.method_desc.is_some()){
@@ -86,26 +86,26 @@ impl Compiler{
             rt.drop();
             return self.simple_enum(node, type);
         },
-        Expr::Match(me*) => {
+        Expr::Match(me) => {
           let res = self.visit_match(node, me.get());
           if(res.is_none()){
             return ConstantPointerNull_get(getPointerTo(getVoidTy()));
           }
           return res.unwrap();
         },
-        Expr::Lambda(le*) => {
+        Expr::Lambda(le) => {
             let r = self.get_resolver();
             let m = r.lambdas.get(&node.id).unwrap();
             let proto = self.protos.get().get_func(m);
             
             return proto as Value*;
         },
-        Expr::Ques(bx*) => {
+        Expr::Ques(bx) => {
           let r = self.get_resolver();
           let info = r.get_macro(node);
           return self.visit_block(&info.block).unwrap();
         },
-        Expr::Tuple(elems*) => {
+        Expr::Tuple(elems) => {
           let r = self.get_resolver();
           let node_type = r.getType(node);
           let ty = self.mapType(&node_type);
@@ -137,10 +137,10 @@ impl Compiler{
 
     func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
       match rhs{
-        MatchRhs::EXPR(e*)=>{
+        MatchRhs::EXPR(e)=>{
           return Option<Value*>::new(self.visit(e));
         },
-        MatchRhs::STMT(st*)=>{
+        MatchRhs::STMT(st)=>{
           self.visit(st);
           return Option<Value*>::new();
         }
@@ -185,7 +185,7 @@ impl Compiler{
                 }
             }
           },
-          MatchLhs::ENUM(type*, args*) => {
+          MatchLhs::ENUM(type, args) => {
             let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
             let bb = create_bb_named(name_c.ptr());
             let var_index = get_variant_index_match(type, decl);
@@ -222,7 +222,7 @@ impl Compiler{
             }
             name_c.drop();
           },
-          MatchLhs::UNION(types*) => {
+          MatchLhs::UNION(types) => {
             let name_c = format("{:?}__$union_{}", decl.type, expr.line).cstr();
             let bb = create_bb_named(name_c.ptr());
             for uty in types{
@@ -315,7 +315,7 @@ impl Compiler{
       if(rt.desc.kind is RtKind::Const){
         let cn = self.get_resolver().get_const(&rt);
         match &cn.rhs{
-          Expr::Lit(lit*) => {
+          Expr::Lit(lit) => {
             match &lit.kind{
               LitKind::INT => {
                 return self.visit_lit(&cn.rhs, lit);
@@ -397,7 +397,7 @@ impl Compiler{
     func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
       let tag1 = self.getTag(lhs);
       let op = get_comp_op("==".ptr());
-      if let Expr::Type(rhs_ty*)=(rhs){
+      if let Expr::Type(rhs_ty)=(rhs){
         let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
         let index = Resolver::findVariant(decl, rhs_ty.name());
         let tag2 = makeInt(index, ENUM_TAG_BITS()) as Value*;
@@ -425,7 +425,7 @@ impl Compiler{
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
-      if let Type::Tuple(tt*) = &scope_rt.type {
+      if let Type::Tuple(tt) = &scope_rt.type {
         let idx = i32::parse(name.str()).expect("tuple index parse error");
         let scope_ty = self.mapType(&scope_rt.type);
         let res = CreateStructGEP(scope_ptr, idx, scope_ty);
@@ -883,11 +883,12 @@ impl Compiler{
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
         let arr_type2 = arr_type.deref_ptr();
-        if let Type::Array(elem*, sz)=(arr_type2){
+        if let Type::Array(elem, sz)=(arr_type2){
           arr_type.drop();
-          return makeInt(sz, 64) as Value*;
+          return makeInt(*sz, 64) as Value*;
         }
         arr_type.drop();
+        //std::unreachable();
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){
@@ -952,7 +953,7 @@ impl Compiler{
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
           let ft0 = Option<LambdaType*>::none();
-          if let Type::Lambda(bx*)=(&rt.lambda_call.get().type){
+          if let Type::Lambda(bx)=(&rt.lambda_call.get().type){
               ft0.set(bx.get());
           }else{
               panic("impossible");
@@ -1217,10 +1218,10 @@ impl Compiler{
     }
   
     func is_logic(expr: Expr*): bool{
-      if let Expr::Par(e*)=(expr){
+      if let Expr::Par(e)=(expr){
         return is_logic(e.get());
       }
-      if let Expr::Infix(op*, l*, r*)=(expr){
+      if let Expr::Infix(op, l, r)=expr{
         if(op.eq("&&") || op.eq("||")){
           return true;
         }
@@ -1245,10 +1246,10 @@ impl Compiler{
       let rv = Option<Value*>::new();
       if(is_logic(r)){
         let r_inner = r;
-        if let Expr::Par(e*)=(r){
+        if let Expr::Par(e)=(r){
           r_inner = e.get();
         }
-        if let Expr::Infix(op2*,l2*,r2*)=(r_inner){
+        if let Expr::Infix(op2, l2, r2)=(r_inner){
           let pair = self.andOr(op2, l2.get(), r2.get());
           then = pair.b;
           rv = Option::new(pair.a);
@@ -1381,7 +1382,7 @@ impl Compiler{
           self.own.get().do_move(&arg.expr);
         }
         match decl{
-          Decl::Struct(fields*)=>{
+          Decl::Struct(fields)=>{
             let field_idx = 0;
             for(let i = 0;i < args.len();++i){
               let arg = args.get(i);
@@ -1402,10 +1403,10 @@ impl Compiler{
               self.own.get().do_move(&arg.expr);
             }
           },
-          Decl::TupleStruct(fields*)=>{
+          Decl::TupleStruct(fields)=>{
             panic("todo");
           },
-          Decl::Enum(variants*)=>{
+          Decl::Enum(variants)=>{
             let variant_index = Resolver::findVariant(decl, type.name());
             let variant = decl.get_variants().get(variant_index);
             //set tag
@@ -1547,13 +1548,13 @@ impl Compiler{
     }
     
     func get_lhs(self, expr: Expr*): Value*{
-      if let Expr::Unary(op*, l2*)=(expr){
+      if let Expr::Unary(op, l2)=(expr){
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           return lhs;
         }
       }
-      if let Expr::Name(name*)=(expr){
+      if let Expr::Name(name)=(expr){
         return self.visit_name(expr, name, false);
       }
       return self.visit(expr);
@@ -1563,7 +1564,7 @@ impl Compiler{
       if(l is Expr::Infix) panic("assign lhs");
       //let lhs = Option<Value*>::new();
       let type = self.getType(l);
-      if let Expr::Unary(op*,l2*)=(l){
+      if let Expr::Unary(op,l2)=(l){
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           self.setField(r, &type, lhs, Option::new(l));
@@ -1583,10 +1584,10 @@ impl Compiler{
     func emit_expr(self, expr: Expr*, trg_ptr: Value*){
       let rt = self.get_resolver().visit(expr);
       match expr{
-        Expr::Obj(obj_type*, entries*) => {
+        Expr::Obj(obj_type, entries) => {
           self.visit_obj(expr, obj_type, entries, trg_ptr);
         },
-        Expr::Lit(lit*) => {
+        Expr::Lit(lit) => {
           if(lit.kind is LitKind::STR){
             self.str_lit(lit.val.str(), trg_ptr);
           }else{
@@ -1594,7 +1595,7 @@ impl Compiler{
             CreateStore(val, trg_ptr);
           }
         },
-        Expr::Call(mc*) => {
+        Expr::Call(mc) => {
           if(is_struct(&rt.type)){
             self.visit_call2(expr, mc, Option::new(trg_ptr), rt);
           }else{
@@ -1603,7 +1604,7 @@ impl Compiler{
           }
           return;//rt is moved,return
         },
-        Expr::Array(list*, size*) => {
+        Expr::Array(list, size) => {
           if(!Compiler::is_constexpr(expr)){
             //AllocHelper::new(self).visit_child(expr);
             self.visit_array(expr, list, size, trg_ptr);
@@ -1621,7 +1622,7 @@ impl Compiler{
 
 
 func is_deref(expr: Expr*): Option<Expr*>{
-  if let Expr::Unary(op*, e*) = expr{
+  if let Expr::Unary(op, e) = expr{
       if(op.eq("*")) return Option::new(e.get());
   }
   return Option<Expr*>::new();

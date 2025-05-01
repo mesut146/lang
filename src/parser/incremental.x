@@ -162,7 +162,7 @@ impl Incremental{
         
         for it in &unit.items{
             match it{
-                Item::Decl(decl*) => {
+                Item::Decl(decl) => {
                     let old_decl = find_old_struct(&unit2, decl);
                     if(old_decl.is_some()){
                         if(compare_decl(decl, old_decl.unwrap())){
@@ -178,10 +178,10 @@ impl Incremental{
                         }
                     }
                 },
-                Item::Method(m*)=>{
+                Item::Method(m)=>{
                     //todo
                 },
-                Item::Impl(imp*)=>{
+                Item::Impl(imp)=>{
                     //todo cmp sig and methods
                 },
                 _ => {}
@@ -192,7 +192,7 @@ impl Incremental{
     func find_old_struct(unit: Unit*, d: Decl*): Option<Decl*>{
         for it in &unit.items{
             match it{
-                Item::Decl(decl*) => {
+                Item::Decl(decl) => {
                     if(decl.type.eq(&d.type)) return Option::new(decl);
                 },
                 _ => {}
@@ -204,9 +204,9 @@ impl Incremental{
     func compare_decl(d: Decl*, old: Decl*): bool{
         assert(d.type.eq(&old.type));
         match d{
-            Decl::Struct(fields*) => {
+            Decl::Struct(fields) => {
                 match old{
-                    Decl::Struct(fields2*) => {
+                    Decl::Struct(fields2) => {
                         if(compare_struct(fields, fields2)){
                             //struct layout changed, now scan dependant files
                             return true;
@@ -218,12 +218,12 @@ impl Incremental{
                     }
                 }
             },
-            Decl::TupleStruct(fields*) => {
+            Decl::TupleStruct(fields) => {
                 //todo
             },
-            Decl::Enum(variants*)=>{
+            Decl::Enum(variants)=>{
                 match old{
-                    Decl::Enum(variants2*) => {
+                    Decl::Enum(variants2) => {
                         //compare_enum(variants, variants2);
                     },
                     _=> {

@@ -17,15 +17,15 @@ impl Compiler{
     func visit(self, node: Stmt*){
       self.llvm.di.get().loc(node.line, node.pos);
       match node{
-        Stmt::Ret(e*) => self.visit_ret(node, e),
-        Stmt::Var(ve*) => self.visit_var(ve),
-        Stmt::Expr(e*) => {
+        Stmt::Ret(e) => self.visit_ret(node, e),
+        Stmt::Var(ve) => self.visit_var(ve),
+        Stmt::Expr(e) => {
           self.visit(e);
           return;
         },
-        Stmt::For(fs*) => self.visit_for(node, fs),
-        Stmt::ForEach(fe*) => self.visit_for_each(node, fe),
-        Stmt::While(cnd*, body*) => self.visit_while(node, cnd, body.get()),
+        Stmt::For(fs) => self.visit_for(node, fs),
+        Stmt::ForEach(fe) => self.visit_for_each(node, fe),
+        Stmt::While(cnd, body) => self.visit_while(node, cnd, body.get()),
         Stmt::Continue => {
           self.own.get().do_continue(node.line);
           CreateBr(self.loops.last().begin_bb);
@@ -48,28 +48,28 @@ impl Compiler{
 
     func get_end_line(body: Body*): i32{
       match body{
-        Body::Block(b*) => return b.end_line,
-        Body::Stmt(s*) => return s.line,
-        Body::If(b*) => return b.cond.line,
-        Body::IfLet(b*) => return b.rhs.line,
+        Body::Block(b) => return b.end_line,
+        Body::Stmt(s) => return s.line,
+        Body::If(b) => return b.cond.line,
+        Body::IfLet(b) => return b.rhs.line,
       }
     }
     func get_end_line(rhs: MatchRhs*): i32{
       match rhs{
-        MatchRhs::STMT(stmt*) => return get_end_line(stmt),
-        MatchRhs::EXPR(expr*) => return get_end_line(expr),
+        MatchRhs::STMT(stmt) => return get_end_line(stmt),
+        MatchRhs::EXPR(expr) => return get_end_line(expr),
       }
     }
 
     func visit_body(self, body: Body*): Option<Value*>{
       match body{
-        Body::Block(b*) => return self.visit_block(b),
-        Body::Stmt(s*) => {
+        Body::Block(b) => return self.visit_block(b),
+        Body::Stmt(s) => {
           self.visit(s);
           return Option<Value*>::new();
         },
-        Body::If(b*) => return self.visit_if(b),
-        Body::IfLet(b*) => {
+        Body::If(b) => return self.visit_if(b),
+        Body::IfLet(b) => {
           return self.visit_iflet(b.rhs.line, b);
         },
       }
@@ -106,7 +106,7 @@ impl Compiler{
 
     func is_nested_if(body: Body*): bool{
       if(body is Body::If || body is Body::IfLet) return true;
-      if let Body::Block(blk*) = (body){
+      if let Body::Block(blk) = (body){
         if(blk.return_expr.is_some()){
           return is_if(blk.return_expr.get());
         }

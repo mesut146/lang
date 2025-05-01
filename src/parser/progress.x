@@ -79,7 +79,7 @@ impl Progress{
 
     func update(self, m: Method*, map: HashMap<String, ProgInfo>*, ms: timeval){
         let nm = "".owned();
-        if let Parent::Impl(inf*)= (&m.parent){
+        if let Parent::Impl(inf)= (&m.parent){
             //nm.append(inf.type.name());
             nm.append(inf.type.print());
             nm.append("::");

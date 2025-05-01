@@ -28,8 +28,8 @@ struct DebugInfo{
 
 func method_parent(m: Method*): Type*{
     match &m.parent{
-      Parent::Impl(info*) => return &info.type,
-      Parent::Trait(type*) => return type,
+      Parent::Impl(info) => return &info.type,
+      Parent::Trait(type) => return type,
       _ => panic("method_parent"),
     }
 }
@@ -243,7 +243,7 @@ impl DebugInfo{
     func find_impl(ty: Type*, r: Resolver*): List<Impl*>{
       let res = List<Impl*>::new();
       for it in &r.unit.items{
-        if let Item::Impl(imp*) = it{
+        if let Item::Impl(imp) = it{
           if(imp.info.type.eq(ty)){
             res.add(imp);
           }
@@ -282,7 +282,7 @@ impl DebugInfo{
       let sl = getStructLayout(st_real as StructType*);
       //print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
       match decl{
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
           let idx = 0;
           if(decl.base.is_some()){
             let ty = *base_ty.get();
@@ -310,7 +310,7 @@ impl DebugInfo{
           }
           self.fill_funcs_member(decl, c, elems);
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
           let idx = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
@@ -324,7 +324,7 @@ impl DebugInfo{
           }
           self.fill_funcs_member(decl, c, elems);
         },
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
           let data_size = c.getSize(decl) - ENUM_TAG_BITS();
           let tag_off = 0i64;
           //create empty variant
@@ -372,19 +372,19 @@ impl DebugInfo{
         return *opt2.unwrap() as DIType*;
       }
       match type{
-        Type::Pointer(elem*) => {
+        Type::Pointer(elem) => {
           return createPointerType(self.map_di(elem.get(), c), 64);
         },
-        Type::Array(elem*, count)=>{
+        Type::Array(elem, count)=>{
           let elems = vector_Metadata_new();
-          vector_Metadata_push(elems, getOrCreateSubrange(0, count));
+          vector_Metadata_push(elems, getOrCreateSubrange(0, *count));
           let elem_ty = self.map_di(elem.get(), c);
           let size = c.getSize(type);
           let res = createArrayType(size, elem_ty, elems);
           vector_Metadata_delete(elems);
           return res;
         },
-        Type::Function(ft_box*)=>{
+        Type::Function(ft_box)=>{
           let tys = vector_Metadata_new();
           vector_Metadata_push(tys, self.map_di(&ft_box.get().return_type, c) as Metadata*);
           for prm in & ft_box.get().params{
@@ -395,7 +395,7 @@ impl DebugInfo{
           return createPointerType(sp as DIType*, 64);
           //return sp as DIType*;
         },
-        Type::Lambda(ft_box*) => {
+        Type::Lambda(ft_box) => {
           let tys = vector_Metadata_new();
           vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
           for prm in & ft_box.get().params{
@@ -409,7 +409,7 @@ impl DebugInfo{
           return createPointerType(sp as DIType*, 64);
           //return sp as DIType*;
         },
-        Type::Slice(elem*)=>{
+        Type::Slice(elem)=>{
           let size = c.getSize(type);
           let elems = vector_Metadata_new();
           let line = 0;
@@ -431,7 +431,7 @@ impl DebugInfo{
           vector_Metadata_delete(elems);
           return res;
         },
-        Type::Tuple(tt*) => {
+        Type::Tuple(tt) => {
           let name_c = mangleType(type).cstr();
           let line = 0;
           let size = c.getSize(type);
@@ -453,7 +453,7 @@ impl DebugInfo{
           vector_Metadata_delete(elems);
           return res;
         },
-        Type::Simple(smp*)=>{
+        Type::Simple(smp)=>{
           if(name.eq("void")) return get_di_null();
           if(name.eq("bool")){
             return createBasicType(name, 8, DW_ATE_boolean());

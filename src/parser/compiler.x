@@ -196,7 +196,7 @@ impl Protos{
 func has_main(unit: Unit*): bool{
   for (let i = 0;i < unit.items.len();++i) {
     let it = unit.items.get(i);
-    if let Item::Method(m*) = (it){
+    if let Item::Method(m) = (it){
       if(is_main(m)){
         return true;
       }
@@ -363,7 +363,7 @@ impl Compiler{
   }
 
   func is_constexpr(expr: Expr*): bool{
-    if let Expr::Lit(lit*)=(expr){
+    if let Expr::Lit(lit)=(expr){
       return true;
     }
     return false;
@@ -992,17 +992,17 @@ impl CompilerConfig{
     if(self.llvm_only) return "".owned();
     match &self.lt{
       LinkType::None => return "".owned(),
-      LinkType::Binary(bin_name*, args*, run) => {
+      LinkType::Binary(bin_name, args, run) => {
         let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
-        if(run){
+        if(*run){
           Compiler::run(path.clone());
         }
         return path;
       },
-      LinkType::Static(lib_name*) => {
+      LinkType::Static(lib_name) => {
         return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
       },
-      LinkType::Dynamic(lib_name*) => {
+      LinkType::Dynamic(lib_name) => {
         return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), true);
       },
     }

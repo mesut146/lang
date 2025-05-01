@@ -98,7 +98,7 @@ impl Unit{
   func get_globals(self): List<Global*>{
     let res = List<Global*>::new();
     for item in &self.items{
-      if let Item::Glob(g*) = item{
+      if let Item::Glob(g) = item{
         res.add(g);
       }
     }
@@ -182,7 +182,7 @@ enum Item{
 
 impl Item{
   func as_impl(self): Impl*{
-    if let Item::Impl(imp*) = self{
+    if let Item::Impl(imp) = self{
       return imp;
     }
     panic("Item::as_impl()");
@@ -249,13 +249,13 @@ impl Decl{
     return self is Decl::Enum;
   }
   func get_variants(self): List<Variant>*{
-    if let Decl::Enum(variants*) = self{
+    if let Decl::Enum(variants) = self{
       return variants;
     }
     panic("get_variants {:?}", self.type);
   }
   func get_fields(self): List<FieldDecl>*{
-    if let Decl::Struct(fields*) = self{
+    if let Decl::Struct(fields) = self{
       return fields;
     }
     panic("get_fields");
@@ -295,23 +295,23 @@ impl Parent{
     return self is Parent::Impl;
   }
   func as_impl(self): ImplInfo*{
-    if let Parent::Impl(info*)=(self){
+    if let Parent::Impl(info)=(self){
       return info;
     }
     panic("as_impl");
   }
   func get_type(self): Type*{
     match self{
-      Parent::Impl(info*) => return &info.type,
-      Parent::Trait(type*) => return type,
+      Parent::Impl(info) => return &info.type,
+      Parent::Trait(type) => return type,
       _ => panic("get_type"),
     }
   }
   func clone(self): Parent{
     match self{
       Parent::None => return Parent::None,
-      Parent::Impl(info*) => return Parent::Impl{info.clone()},
-      Parent::Trait(type*) => return Parent::Trait{type.clone()},
+      Parent::Impl(info) => return Parent::Impl{info.clone()},
+      Parent::Trait(type) => return Parent::Trait{type.clone()},
       Parent::Extern => return Parent::Extern,
     }
   }
@@ -436,7 +436,7 @@ impl Type{
   }
   
   func name(self): String*{
-    if let Type::Simple(smp*)=(self){
+    if let Type::Simple(smp)=(self){
       return &smp.name;
     }
     panic("cant Type::name() {:?}", self);
@@ -446,13 +446,13 @@ impl Type{
     return self is Type::Simple;
   }
   func as_simple(self): Simple*{
-    if let Type::Simple(simple*) = (self){
+    if let Type::Simple(simple) = (self){
       return simple;
     }
     panic("as_simple");
   }
   func unwrap_simple(*self): Simple{
-    if let Type::Simple(simple) = (self){
+    if let Type::Simple(simple) = self{
       std::no_drop(self);
       return simple;
     }
@@ -491,13 +491,13 @@ impl Type{
     return res;
   }
   func is_generic(self): bool{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = (self){
       return !smp.args.empty();
     }
     return false;
   }
   func get_args(self): List<Type>*{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = (self){
       return &smp.args;
     }
     panic("get_args {:?}", self);
@@ -524,7 +524,7 @@ impl Type{
     return self is Type::Slice;
   }
   func deref_ptr(self): Type*{
-    if let Type::Pointer(bx*) = self{
+    if let Type::Pointer(bx) = self{
       return bx.get();
     }
     return self;
@@ -536,13 +536,13 @@ impl Type{
     return self;
   }
   func elem(self): Type*{
-    if let Type::Pointer(bx*) = self{
+    if let Type::Pointer(bx) = self{
       return bx.get();
     }
-    if let Type::Array(bx*, sz) = self{
+    if let Type::Array(bx, sz) = self{
       return bx.get();
     }
-    if let Type::Slice(bx*) = self{
+    if let Type::Slice(bx) = self{
       return bx.get();
     }
     panic("elem {:?}", self);
@@ -560,7 +560,7 @@ impl Type{
     panic("unwrap_elem {:?}", self);
   }
   func get_ft(self): FunctionType*{
-    if let Type::Function(bx*) = (self){
+    if let Type::Function(bx) = (self){
       return bx.get();
     }
     panic("get_ft {:?}", self);
@@ -573,7 +573,7 @@ impl Type{
   }
   
   func get_lambda(self): LambdaType*{
-    if let Type::Lambda(bx*) = (self){
+    if let Type::Lambda(bx) = (self){
       return bx.get();
     }
     panic("get_lambda {:?}", self);
@@ -581,7 +581,7 @@ impl Type{
 
   //get plain(generic)
   func erase(self): Type{
-    if let Type::Simple(smp*) = (self){
+    if let Type::Simple(smp) = (self){
       if(smp.scope.has()){
         return Type::new(smp.scope.get().clone(), smp.name.clone());
       }else{
@@ -676,10 +676,10 @@ enum Body: Node{
 impl Body{
   func line(self): i32{
     match self{
-      Body::Block(b*) =>  return b.line,
-      Body::If(is*) => return is.cond.line,
-      Body::IfLet(il*) => return il.rhs.line,
-      Body::Stmt(val*) => return val.line,
+      Body::Block(b) =>  return b.line,
+      Body::If(is) => return is.cond.line,
+      Body::IfLet(il) => return il.rhs.line,
+      Body::Stmt(val) => return val.line,
     }
   }
 }
@@ -784,7 +784,7 @@ impl Expr{
     return Fmt::str(self);
   }
   func get_call(self): Call*{
-    if let Expr::Call(cx*) = (self){
+    if let Expr::Call(cx) = (self){
       return cx;
     }
     panic("get_call {:?}", self);

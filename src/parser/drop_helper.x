@@ -40,10 +40,10 @@ impl DropHelper{
     if (type.is_str() || type.is_slice()) return false;
     if (!is_struct(type)) return false;
     match &rt.type{
-      Type::Array(elem*, size)=>{
+      Type::Array(elem, size)=>{
         return self.is_drop_type(elem.get());
       },
-      Type::Tuple(tt*) => {
+      Type::Tuple(tt) => {
         for elem in &tt.types{
           if(self.is_drop_type(elem)){
             return true;
@@ -66,7 +66,7 @@ impl DropHelper{
       }
     }
     match decl{
-      Decl::Struct(fields*)=>{
+      Decl::Struct(fields)=>{
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
           if(self.is_drop_type(&fd.type)){
@@ -74,7 +74,7 @@ impl DropHelper{
           }
         }
       },
-      Decl::Enum(variants*)=> {
+      Decl::Enum(variants)=> {
         for(let i = 0;i < variants.len();++i){
           let variant = variants.get(i);
           let fields = &variant.fields;
@@ -86,7 +86,7 @@ impl DropHelper{
           }
         }
       },
-      Decl::TupleStruct(fields*)=>{
+      Decl::TupleStruct(fields)=>{
         for fd in fields{
           if(self.is_drop_type(&fd.type)){
             return true;

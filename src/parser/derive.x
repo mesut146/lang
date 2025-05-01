@@ -72,7 +72,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
         body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
     }
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for ev in variants{
                 let then = Block::new(line, line);
                 for fd in &ev.fields{
@@ -98,6 +98,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                         str.print(fd.name.get());
                         str.print(": ");
                         if(fd.type.is_pointer()){
+                            str.print("*");
                             str.print(fd.name.get());
                         }else{
                             str.print("__");
@@ -131,7 +132,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
             }
             body.list.add(parse_stmt("panic(\"unreacheable\");".str(), unit, line));
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             for fd in fields{
                 if(fd.type.is_pointer()){
                     //let <name> = self.<name>;
@@ -161,7 +162,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
             let return_stmt = parse_stmt(str.unwrap(), unit, line);
             body.list.add(return_stmt);
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
@@ -179,6 +180,7 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
+    //print("mlone={:?}\n", &m);
     let imp = make_impl(decl, "Clone");
     imp.methods.add(m);
     //print("clone={}\n", &imp);
@@ -194,7 +196,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
     }
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
                 let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
@@ -226,7 +228,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 body.list.add(Expr::IfLet{.iflet_id, Box::new(iflet)}.into_stmt());
             }
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             for(let i = 0;i < fields.len();++i){
                 let fd = fields.get(i);
                 if(!is_struct(&fd.type)) continue;
@@ -240,7 +242,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
                 }
             }
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
@@ -266,7 +268,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);
     match decl{
-        Decl::Enum(variants*)=>{
+        Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
                 let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
@@ -337,7 +339,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                 body.list.add(Expr::IfLet{.iflet_id, Box::new(is)}.into_stmt());
             }
         },
-        Decl::Struct(fields*)=>{
+        Decl::Struct(fields)=>{
             //f.print(<decl.type.print()>)
             body.list.add(parse_stmt(format("f.print(std::print_type<{:?}>());", &decl.type), unit, line));
             body.list.add(parse_stmt("f.print(\"{\");".str(), unit, line));
@@ -363,7 +365,7 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
             }
             body.list.add(parse_stmt("f.print(\"}\");".str(), unit, line));
         },
-        Decl::TupleStruct(fields*)=>{
+        Decl::TupleStruct(fields)=>{
             panic("todo");
         }
     }
