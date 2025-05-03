@@ -21,10 +21,14 @@ impl<R, E> Result<R, E>{
   }
 
   func unwrap(*self): R{
-    if let Result<R, E>::Ok(val) = self{
-      return val;
+    match self{
+      Result<R, E>::Ok(val) => {
+        return val;
+      },
+      Result<R, E>::Err(val) => {
+        panic("unwrap on empty Result, err='{:?}'", val);
+      }
     }
-    panic("unwrap on empty Result");
   }
 
   func get(self): R*{

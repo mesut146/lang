@@ -47,7 +47,7 @@ enum SigResult{
 
 impl SigResult{
     func get_err(self): str{
-        if let SigResult::Err(s)=(self){
+        if let SigResult::Err(s)=self{
             return s.str();
         }
         panic("SigResult::get_err");
@@ -152,7 +152,7 @@ impl Signature{
         if(!typ.eq("Self")){
             return typ.clone();
         }
-        if let Parent::Impl(info)=(&m.parent){
+        if let Parent::Impl(info)=&m.parent{
             return info.type.clone();
         }
         panic("replace_self not impl method");
@@ -167,7 +167,7 @@ impl Signature{
             r: Option<Resolver*>::new(r),
             desc: desc
         };
-        if let Parent::Impl(info) = (&m.parent){
+        if let Parent::Impl(info) = &m.parent{
             let scp = RType::new(info.type.clone());
             res.scope = Option::new(scp);
         }
@@ -241,7 +241,7 @@ impl MethodResolver{
             //static sibling
             if(self.r.curMethod.is_some()){
                 let cur = self.r.curMethod.unwrap();
-                if let Parent::Impl(info)=(&cur.parent){
+                if let Parent::Impl(info)=&cur.parent{
                     let r = self.collect_member(sig, &info.type, &list, false, self.r);
                     if(r.is_err()){
                         return Result<List<Signature>, String>::err(r.unwrap_err());
@@ -339,7 +339,8 @@ impl MethodResolver{
                 let desc = Desc{
                     kind: RtKind::MethodImpl{j},
                     path: m.path.clone(),
-                    idx: pair.b
+                    idx: pair.b,
+                    scope: Option<Type>::new(),
                 };
                 if(!scope_type.is_simple()){
                   list.add(Signature::new(m, desc, self.r, origin));
@@ -388,24 +389,26 @@ impl MethodResolver{
     func collect_static(self, name: str, list: List<Signature>*, origin: Resolver*){
         for (let i = 0;i < self.r.unit.items.len();++i) {
             let item: Item* = self.r.unit.items.get(i);
-            if let Item::Method(m) = (item){
+            if let Item::Method(m) = item{
                 if (m.name.eq(name)) {
                     let desc = Desc{
                         kind: RtKind::Method,
                         path: m.path.clone(),
-                        idx: i
+                        idx: i,
+                        scope: Option<Type>::new(),
                     };
                     list.add(Signature::new(m, desc, self.r, origin));
                 }
             }
-            else if let Item::Extern(arr) = (item){
+            else if let Item::Extern(arr) = item{
                 for (let j = 0;j < arr.len();++j) {
                     let m = arr.get(j);
                     if (m.name.eq(name)) {
                         let desc = Desc{
                             kind: RtKind::MethodExtern{j},
                             path: m.path.clone(),
-                            idx: i
+                            idx: i,
+                            scope: Option<Type>::new(),
                         };
                         list.add(Signature::new(m, desc, self.r, origin));
                     }
@@ -434,7 +437,7 @@ impl MethodResolver{
         for(let i = 0;i < list.size();++i){
             let sig2 = list.get(i);
             let cmp_res: SigResult = self.is_same(sig, sig2);
-            if let SigResult::Err(err) = (cmp_res){
+            if let SigResult::Err(err) = cmp_res{
                 errors.add(Pair::new(sig2, err));
                 //std::no_drop(cmp_res);
             }else{
@@ -699,7 +702,8 @@ impl MethodResolver{
                     let desc = Desc{
                         kind: RtKind::MethodGen{m.name.clone()},
                         path: self.r.unit.path.clone(),
-                        idx: i
+                        idx: i,
+                        scope: Option<Type>::new(),
                     };
                     return Pair::new(gm.get(), desc);
                 }
@@ -717,7 +721,8 @@ impl MethodResolver{
         let desc = Desc{
             kind: RtKind::MethodGen{m.name.clone()},
             path: self.r.unit.path.clone(),
-            idx: arr_opt.unwrap().len() as i32
+            idx: arr_opt.unwrap().len() as i32,
+            scope: Option<Type>::new(),
         };
         self.r.generated_methods_todo.add(desc.clone());
         let res: Method* = arr_opt.unwrap().add(Box::new(res2)).get();
@@ -1212,7 +1217,7 @@ func get_type_params(m: Method*): List<Type>{
     if (!m.is_generic) {
         return res;
     }
-    if let Parent::Impl(info) = (&m.parent){
+    if let Parent::Impl(info) = &m.parent{
         res.drop();
         res = info.type_params.clone();
     }

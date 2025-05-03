@@ -206,7 +206,8 @@ impl Resolver{
       print("unit={:?}\n", unit);
     }
     
-    let res = Resolver{unit: unit,
+    return Resolver{
+      unit: unit,
       is_resolved: false,
       is_init: false,
       typeMap: HashMap<String, RType>::new(),
@@ -231,7 +232,6 @@ impl Resolver{
       extra_imports: List<ImportStmt>::new(),
       in_global_rhs: false,
     };
-    return res;
   }
 }
 
@@ -246,7 +246,8 @@ enum RtKind{
   DeclGen,//generic decl in resolver
   Trait,//trait in items
   Lambda(id: i32),
-  Const,//const in items
+  Const,//const in items,
+  Module,//module in items
 }
 impl RtKind{
   func is_method(self): bool{
@@ -257,6 +258,9 @@ impl RtKind{
   }
   func is_trait(self): bool{
     return self is RtKind::Trait;
+  }
+  func is_module(self): bool{
+    return self is RtKind::Module;
   }
 }
 impl Clone for RtKind{
@@ -273,20 +277,23 @@ struct Desc{
   kind: RtKind;
   path: String;
   idx: i32;
+  scope: Option<Type>;
 }
 impl Desc{
   func new(): Desc{
     return Desc{
       kind: RtKind::None,
       path: "".str(),
-      idx: -1
+      idx: -1,
+      scope: Option<Type>::new(),
     };
   }
   func clone(self): Desc{
     return Desc{
       kind: self.kind.clone(),
       path: self.path.clone(),
-      idx: self.idx
+      idx: self.idx,
+      scope: self.scope.clone(),
     };
   }
 }
@@ -449,16 +456,16 @@ impl Scope{
   }
 }
 
-func join(list: List<String>*, sep: str): String{
+/*func join(list: List<String>*, sep: str): String{
   let s = String::new();
   for(let i = 0;i < list.len();++i){
     let path = list.get(i);
     s.append(path.str());
   }
   return s;
-}
+}*/
 
-func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
+/*func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
   let s2: String = join(&is.list, "/");
   for (let i = 0;i < arr.len();++i) {
       let i1 = arr.get(i);
@@ -471,7 +478,7 @@ func has(arr: List<ImportStmt>*, is: ImportStmt*): bool{
       }
   }
   return false;
-}
+}*/
 
 impl Resolver{
 
@@ -632,38 +639,10 @@ impl Resolver{
       //print("Resolver::init {}\n", &self.unit.path);
     }
     self.is_init = true;
-
+    let empty_scope = Option<Type>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
-      match it{
-        Item::Decl(decl) => {
-          let ty = decl.type.clone();
-          let res = RType::new(ty);
-          res.desc.drop();
-          res.desc = Desc{RtKind::Decl, self.unit.path.clone(), i};
-          self.addType(decl.type.name().clone(), res);
-        },
-        Item::Trait(tr) => {
-          let res = RType::new(tr.type.clone());
-          res.desc.drop();
-          res.desc = Desc{RtKind::Trait, self.unit.path.clone(), i};
-          self.addType(tr.type.name().clone(), res);
-        },
-        Item::Impl(imp) => {
-          //pass
-        },
-        Item::Type(name, rhs) => {
-          let res = self.visit_type(rhs);
-          self.addType(name.clone(), res);
-        },
-        Item::Method(method) => {},
-        Item::Extern(methods) => {},
-        Item::Const(cn) => {},
-        Item::Glob(g) => {},
-        Item::Module(md) => {
-          self.err(1, "todo");
-        },
-      }
+      self.init_item(it, i, &empty_scope);
     }
     //derives
     let newItems = List<Item>::new();
@@ -674,7 +653,74 @@ impl Resolver{
       }
     }
     self.unit.items.add_list(newItems);
+    empty_scope.drop();
   }
+
+  func init_item(self, it: Item*, idx: i32, scope: Option<Type>*){
+    match it{
+      Item::Decl(decl) => {
+        //todo module item
+        let desc = Desc{RtKind::Decl, self.unit.path.clone(), idx, Option<Type>::new()};
+        if(scope.is_some()){
+          let qname = format("{:?}::{:?}", scope.get(), decl.type.name());
+          let ty = Type::new(scope.get().clone(), decl.type.name().clone());
+          let res = RType::new(ty);
+          desc.scope.set(scope.get().clone());
+          res.desc.drop();
+          res.desc = desc;
+          self.addType(qname, res);
+        }else{
+          let res = RType::new(decl.type.clone());
+          res.desc.drop();
+          res.desc = desc;
+          self.addType(decl.type.name().clone(), res);
+        }
+      },
+      Item::Trait(tr) => {
+        let res = RType::new(tr.type.clone());
+        res.desc.drop();
+        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), idx, Option<Type>::new()};
+        self.addType(tr.type.name().clone(), res);
+      },
+      Item::Impl(imp) => {
+        //pass
+      },
+      Item::Type(name, rhs) => {
+        let res = self.visit_type(rhs);
+        self.addType(name.clone(), res);
+      },
+      Item::Method(method) => {},
+      Item::Extern(methods) => {},
+      Item::Const(cn) => {},
+      Item::Glob(g) => {},
+      Item::Module(md) => {
+        let res = RType::new(md.name.str());
+        //res.desc.drop();
+        let scp = if(scope.is_some()){
+          Option::new(scope.get().clone())
+        }else{
+          Option<Type>::new()
+        };
+        res.desc = Desc{RtKind::Module, self.unit.path.clone(), idx, scp};
+        self.addType(md.name.clone(), res.clone());
+        let j = 0;
+        for it2 in &md.items{
+          if(scope.is_some()){
+            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            self.init_item(it2, j, &scope2);
+            scope2.drop();
+          }else{
+            let scope2 = Option::new(Type::new(md.name.clone()));
+            self.init_item(it2, j, &scope2);
+            scope2.drop();
+          }
+          j += 1;
+        }
+        res.drop();
+      },
+    }
+  }
+
   func handle_derive(self, decl: Decl*, newItems: List<Item>*){
     //derive
     for attr in &decl.attr.list{
@@ -772,11 +818,24 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Decl){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get(rt.desc.idx);
-      if let Item::Decl(decl) = (item){
-        return Option::new(decl);
+      if(rt.desc.scope.is_some()){
+        let scope = self.visit_type(rt.desc.scope.get());
+        if(scope.desc.kind.is_module()){
+          let md = self.get_module(&scope).unwrap();
+          let item = md.items.get(rt.desc.idx);
+          if let Item::Decl(decl) = item{
+            scope.drop();
+            return Option::new(decl);
+          }
+        }
+        scope.drop();
+      }else{
+        let item = unit.items.get(rt.desc.idx);
+        if let Item::Decl(decl) = item{
+          return Option::new(decl);
+        }
       }
-      panic("get_decl() item not decl it={:?} {:?}={:?}", item, rt.type, rt.desc);
+      panic("get_decl() failed {:?}={:?}", rt.type, rt.desc);
     }
     if(rt.desc.kind is RtKind::DeclGen){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
@@ -799,7 +858,7 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(rt.desc.idx);
-      if let Item::Trait(tr) = (item){
+      if let Item::Trait(tr) = item{
         return Option::new(tr);
       }
     }
@@ -816,30 +875,30 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Method(m) = (item){
+      if let Item::Method(m) = item{
         return Option::new(m);
       }
     }
-    if let RtKind::MethodImpl(idx2) = (&desc.kind){
+    if let RtKind::MethodImpl(idx2) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Impl(imp) = (item){
+      if let Item::Impl(imp) = item{
         let m = imp.methods.get(*idx2);
         return Option::new(m);
       }
     }
-    if let RtKind::MethodGen(name) = (&desc.kind){
+    if let RtKind::MethodGen(name) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let arr = resolver.generated_methods.get(name).unwrap();
       let m = arr.get(desc.idx);
       return Option::new(m.get());
     }
-    if let RtKind::MethodExtern(idx2) = (&desc.kind){
+    if let RtKind::MethodExtern(idx2) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Extern(methods) = (item){
+      if let Item::Extern(methods) = item{
         let m = methods.get(*idx2);
         return Option::new(m);
       }
@@ -851,11 +910,24 @@ impl Resolver{
     if(rt.desc.kind is RtKind::Const){
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let item = resolver.unit.items.get(rt.desc.idx);
-      if let Item::Const(c) = (item){
+      if let Item::Const(c) = item{
         return c;
       }
     }
     panic("get_const {:?}={:?}", rt.type, rt.desc);
+  }
+
+  func get_module(self, rt: RType*): Option<Module*>{
+    if(rt.desc.kind is RtKind::Module){
+      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let unit = &resolver.unit;
+      let item = unit.items.get(rt.desc.idx);
+      if let Item::Module(m) = item{
+        return Option::new(m);
+      }
+    }
+    //panic("get_module {:?}={:?}", rt.type, rt.desc);
+    return Option<Module*>::new();
   }
 
   func visit_item(self, node: Item*){
@@ -906,8 +978,11 @@ impl Resolver{
         }
       },
       Item::Glob(g) => {},
-      Item::Module(g) => {
-        panic("todo");
+      Item::Module(md) => {
+        for it2 in &md.items{
+          self.visit_item(it2);
+        }
+        //panic("visit_item todo module {:?}", md);
       }
     }
   }
@@ -985,7 +1060,6 @@ impl Resolver{
 
   func visit_decl(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1002,7 +1076,6 @@ impl Resolver{
   }
   func visit_decl_tuple(self, node: Decl*, fields: List<FieldDecl>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1019,7 +1092,6 @@ impl Resolver{
   }
   func visit_enum(self, node: Decl*, vars: List<Variant>*){
     if(node.is_generic) return;
-    node.is_resolved = true;
     let base_fields = Option<List<FieldDecl>*>::new();
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
@@ -1135,7 +1207,7 @@ impl Resolver{
   }
 
   func unwrap_mc(expr: Expr*): Call*{
-    if let Expr::Call(mc) = (expr){
+    if let Expr::Call(mc) = expr{
         return mc;
     }
     panic("unwrap_mc {:?}", expr);
@@ -1308,82 +1380,82 @@ impl Resolver{
         self.addType(str.clone(), res.clone());
         return res;
       },
-      _=>{}
-    }
-    if(node.is_prim() || node.is_void()){
-      let res = RType::new(str.str());
-      self.addType(str.clone(), res.clone());
-      return res;
-    }
-    if(node.is_pointer()){
-      let inner = node.deref_ptr();
-      let res = self.visit_type(inner);
-      let ptr = res.type.clone().toPtr();
-      res.type.drop();
-      res.type = ptr;
-      return res;
-    }
-    if(node.is_slice()){
-      let inner = node.elem();
-      let elem: RType = self.visit_type(inner);
-      return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())});      
-    }
-    if let Type::Array(inner, size) = (node){
-      let elem: RType = self.visit_type(inner.get());
-      return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), *size});      
-    }
-    if let Type::Function(ft_box) = (node){
-      let ft = FunctionType{
-        return_type: self.visit_type(&ft_box.get().return_type).unwrap(),
-        params: List<Type>::new()
-      };
-      for prm in &ft_box.get().params{
-        ft.params.add(self.visit_type(prm).unwrap());
-      }
-      return RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)});      
-    }
-    if let Type::Lambda(ft_box) = (node){
+      Type::Pointer(bx) => {
+        let res = self.visit_type(bx.get());
+        let ptr = res.type.clone().toPtr();
+        res.type.drop();
+        res.type = ptr;
+        return res;
+      },
+      Type::Slice(bx) => {
+        let elem: RType = self.visit_type(bx.get());
+        return RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())});     
+      },
+      Type::Array(inner, size) => {
+        let elem: RType = self.visit_type(inner.get());
+        return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), *size});      
+      },
+      Type::Function(ft_box) => {
+        let ft = FunctionType{
+          return_type: self.visit_type(&ft_box.get().return_type).unwrap(),
+          params: List<Type>::new()
+        };
+        for prm in &ft_box.get().params{
+          ft.params.add(self.visit_type(prm).unwrap());
+        }
+        return RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)});      
+      },
+      Type::Lambda(ft_box) => {
         let ret = Option<Type>::new();
-      if(ft_box.get().return_type.is_some()){
-          ret.set(self.visit_type(ft_box.get().return_type.get()).unwrap());
-      }
-      let ft = LambdaType{
-        return_type: ret,
-        params: List<Type>::new(),
-        captured: List<Type>::new(),
-      };
-      for prm in &ft_box.get().params{
-        ft.params.add(self.visit_type(prm).unwrap());
-      }
-      for prm in &ft_box.get().captured{
-        ft.captured.add(self.visit_type(prm).unwrap());
-      }
-      return RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)});      
-    }
-    if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
-      let imp = self.curMethod.unwrap().parent.as_impl();
-      return self.visit_type(&imp.type);
-    }
-    let simple: Simple* = node.as_simple();
-    if (simple.scope.is_some()) {
-      //simple enum variant
-      let scope = self.visit_type(simple.scope.get());
-      let decl = self.get_decl(&scope).unwrap();
-      if (!(decl is Decl::Enum)) {
+        if(ft_box.get().return_type.is_some()){
+            ret.set(self.visit_type(ft_box.get().return_type.get()).unwrap());
+        }
+        let ft = LambdaType{
+          return_type: ret,
+          params: List<Type>::new(),
+          captured: List<Type>::new(),
+        };
+        for prm in &ft_box.get().params{
+          ft.params.add(self.visit_type(prm).unwrap());
+        }
+        for prm in &ft_box.get().captured{
+          ft.captured.add(self.visit_type(prm).unwrap());
+        }
+        return RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)});      
+      },
+      Type::Simple(simple) => {
+        if(node.is_prim() || node.is_void()){
+          let res = RType::new(str.str());
+          self.addType(str.clone(), res.clone());
+          return res;
+        }
+        if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
+          let imp = self.curMethod.unwrap().parent.as_impl();
+          return self.visit_type(&imp.type);
+        }
+        if(simple.scope.is_none()){
+          return self.visit_type2(node, simple, str);
+        }
+        //enum variant or member func
+        let scope = self.visit_type(simple.scope.get());
+        if(scope.desc.kind is RtKind::Module){
+          let md = self.get_module(&scope);
+          panic("todo rt module {:?} '{:?}'", node, md.unwrap());
+        }
+        let decl = self.get_decl(&scope).unwrap();
+        if (!(decl is Decl::Enum)) {
+          scope.drop();
+          return self.member_func_ptr(node, str);
+        }
+        findVariant(decl, &simple.name);
+        let ds = decl.type.print();
+        let res = self.getTypeCached(&ds);
+        self.addType(str.clone(), res.clone());
+        ds.drop();
         scope.drop();
-        return self.member_func_ptr(node, str);
+        return res;
       }
-      findVariant(decl, &simple.name);
-      let ds = decl.type.print();
-      let res = self.getTypeCached(&ds);
-      self.addType(str.clone(), res.clone());
-      ds.drop();
-      scope.drop();
-      return res;
     }
-    let res = self.visit_type2(node, simple, str);
-    //print("visit_type2 {} -> {}\n", node, res.desc);
-    return res;
   }
   
   func member_func_ptr(self, node: Type*, str: String*): RType{
@@ -1408,7 +1480,8 @@ impl Resolver{
                   let desc = Desc{
                     kind: RtKind::MethodImpl{i},
                     path: m.path.clone(),
-                    idx: pair.b
+                    idx: pair.b,
+                    scope: Option<Type>::new(),
                   };
                   list.add(Signature::new(m, desc, self, self));
               }
@@ -1507,7 +1580,7 @@ impl Resolver{
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
     rt.desc.drop();
-    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32};
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, Option<Type>::new()};
     //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
     return res;
@@ -2262,7 +2335,7 @@ impl Resolver{
         return res;
       }
       else if(fp.is_some()){
-        if let Type::Lambda(bx)=(fp.get().type){
+        if let Type::Lambda(bx)=fp.get().type{
           let ret = bx.get().return_type.get();
           let res = self.visit_type(ret);
           res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
@@ -2668,7 +2741,7 @@ impl Resolver{
     if (!decl1.type.eq(&decl2.type)) {
         self.err(node, format("rhs is not same type with lhs {:?} vs {:?}", decl1.type, decl2.type));
     }
-    if let Expr::Type(ty) = (rhs){
+    if let Expr::Type(ty) = rhs{
         findVariant(decl1, ty.name());
     }
     return RType::new("bool");
@@ -2727,6 +2800,7 @@ impl Resolver{
   func find_const(self, name: String*): Option<RType>{
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
+      //todo scope
       if let Item::Const(cn) = item{
         if (cn.name.eq(name)) {
           let rhs2 = AstCopier::clone(&cn.rhs, &self.unit);
@@ -2734,7 +2808,8 @@ impl Resolver{
           rt.desc = Desc{
             kind: RtKind::Const,
             path: self.unit.path.clone(),
-            idx: i
+            idx: i,
+            scope: Option<Type>::new(),
           };
           rhs2.drop();
           return Option::new(rt);
@@ -2835,7 +2910,8 @@ impl Resolver{
             let desc = Desc{
               kind: RtKind::Method,
               path: m.path.clone(),
-              idx: j
+              idx: j,
+              scope: Option<Type>::new(),
             };
             list.add(Signature::new(m, desc, self, self));
           }
@@ -3033,7 +3109,7 @@ impl Resolver{
       match (node.body.get()){
           LambdaBody::Expr(ex)=>{
               self.visit(ex);
-              if let Expr::Block(b)=(ex){
+              if let Expr::Block(b)=ex{
                   mptr.body = Option::new(AstCopier::clone(b.get(), &self.unit));
               }else{
                   mptr.body = Option::new(Block::new(expr.line, expr.line));
@@ -3057,7 +3133,12 @@ impl Resolver{
       }
       let id = Node::new(-1, expr.line);
       let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
-      let desc = Desc{RtKind::Lambda{expr.id}, self.unit.path.clone(), -1};
+      let desc = Desc{
+        RtKind::Lambda{expr.id},
+        self.unit.path.clone(),
+        -1,
+        Option<Type>::new()
+      };
       res.method_desc = Option::new(desc);
       //print("lambda={:?}\n", mptr);
       lambdaCnt += 1;

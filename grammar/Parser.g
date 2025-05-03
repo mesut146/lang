@@ -62,23 +62,30 @@ varDeclFrag:
   name ("=" expr | "?")?;
   
 
-expr: "import";
+generics: "<" type ("," type)* ">";
 
+prim: literal | "(" expr ")" | methodCall 
+ | "func" "(" (type ("," type)*)? ")"
+ | match_expr | if_expr | iflet_expr | block_expr
+ | tuple_or_paren
+ | "[" expr*"]"
+ | ("+" | "-" | "++" | "--" | "!" | "*" | "&") expr #unary
+;
+
+lambda: "|" lambda_args? "|" (":" type)? (stmt | expr);
+lambda_args: name (":" type)? ("," name (":" type)?)*;
 
 expr:
-"(" expr ")" | literal | "[" expr*"]" | "new" obj | obj |
+ | obj |
  prim "::" name (generics? "(" args? ")")? |
  name |
  name generics "::" name
  name generics "(" args ")"
  name "(" args? ")" |
- name "::" name "(" args ")")?
+ name "::" name ("(" args ")")?
 | expr ("." IDENT (generics? "(" args? ")")? |
  "[" expr (".." expr)? "]")*
-| ("*" | "&") expr
 | expr "as" type
-| expr ("++" | "--") #post
-| ("+" | "-" | "++" | "--" | "!" | "~") expr #unary
 | expr ("*" | "/" | "%") expr %left
 | expr ("+" | "-") expr %left
 | expr ("<<" | ">" ">" | ">" ">" ">") expr %left
@@ -92,7 +99,7 @@ expr:
 | expr ("=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|=" | "<<=" | ">>=" | ">>>=") expr %rhs
 ;
 
-PRIM: literal | refType | "(" expr ")" | methodCall;
+
 
 methodCall: name "(" args? ")";
 

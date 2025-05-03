@@ -57,12 +57,16 @@ impl OwnVisitor{
         }
     }
     func visit(self, node: Stmt*){
-        if let Stmt::Var(ve)=(node){
-            self.visit_var(ve);
-        }else if let Stmt::Expr(expr)=(node){
-            self.visit_expr(expr);
-        }else{
-            //panic("visit line: {} {}\n", node.line, node);
+        match node{
+            Stmt::Var(ve)=>{
+                self.visit_var(ve);
+            },
+            Stmt::Expr(expr)=>{
+                self.visit_expr(expr);
+            },
+            _=>{
+                //panic("visit line: {} {}\n", node.line, node);
+            }
         }
     }
     func visit_block(self, block: Block*){
@@ -79,15 +83,20 @@ impl OwnVisitor{
         }
     }
     func visit_expr(self, expr: Expr*){
-        if let Expr::Call(call)=(expr){
-            self.visit_call(expr, call);
-        }else if let Expr::Obj(type, args)=(expr){
-            self.visit_obj(expr, type, args);
-        }else if let Expr::Infix(op, l, r)=(expr){
-            if(op.eq("=")){
-                self.visit_expr(r.get());
-                self.own.do_assign(l.get(), r.get());
-            }
+        match expr{
+            Expr::Call(call)=>{
+                self.visit_call(expr, call);
+            },
+            Expr::Obj(type, args)=>{
+                self.visit_obj(expr, type, args);
+            },
+            Expr::Infix(op, l, r)=>{
+                if(op.eq("=")){
+                    self.visit_expr(r.get());
+                    self.own.do_assign(l.get(), r.get());
+                }
+            },
+            _=>{}
         }
     }
     func visit_call(self, expr: Expr*, mc: Call*){

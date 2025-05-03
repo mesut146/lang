@@ -150,19 +150,21 @@ impl Parser{
     while(self.has() && self.is(TokenType::IMPORT)){
       unit.imports.add(self.parse_import());
     }
+    let scope = Option<Type>::new();
     while(self.has()){
-      unit.items.add(self.parse_item());
+      unit.items.add(self.parse_item(&scope));
     }
+    scope.drop();
     return unit;
   }
 
-  func parse_item(self): Item{
+  func parse_item(self, scope: Option<Type>*): Item{
     let attr = self.parse_attrs();
       if(self.is(TokenType::STRUCT)){
-        return Item::Decl{self.parse_struct(attr)};
+        return Item::Decl{self.parse_struct(attr, scope)};
       }
       else if(self.is(TokenType::ENUM)){
-        return Item::Decl{self.parse_enum(attr)};
+        return Item::Decl{self.parse_enum(attr, scope)};
       }
       else if(self.is(TokenType::IMPL)){
         return Item::Impl{self.parse_impl()};
@@ -180,11 +182,13 @@ impl Parser{
         let rhs = self.parse_type();
         self.consume(TokenType::SEMI);
         return Item::Type{name: name, rhs: rhs};
-      }else if(self.is(TokenType::EXTERN)){
+      }
+      else if(self.is(TokenType::EXTERN)){
         self.pop();
         let list = self.parse_methods(Parent::Extern);
         return Item::Extern{methods: list};
-      }else if(self.is(TokenType::STATIC)){
+      }
+      else if(self.is(TokenType::STATIC)){
         let id = self.node();
         self.pop();
         let name = self.name();
@@ -197,7 +201,8 @@ impl Parser{
         let rhs = self.parse_expr();
         self.consume(TokenType::SEMI);
         return Item::Glob{Global{.id, name, type, rhs}};
-      }else if(self.is(TokenType::CONST)){
+      }
+      else if(self.is(TokenType::CONST)){
         self.pop();
         let name = self.name();
         let type = Option<Type>::new();
@@ -209,17 +214,21 @@ impl Parser{
         let rhs = self.parse_expr();
         self.consume(TokenType::SEMI);
         return Item::Const{Const{name, type, rhs}};
-      }else if(self.is(TokenType::MOD)){
+      }
+      else if(self.is(TokenType::MOD)){
         self.pop();
         let name = self.name();
         self.consume(TokenType::LBRACE);
         let items = List<Item>::new();
+        let scope2 = Option::new(Type::new(scope, name.clone()));
         while(!self.is(TokenType::RBRACE)){
-          items.add(self.parse_item());
+          items.add(self.parse_item(&scope2));
         }
         self.consume(TokenType::RBRACE);
+        scope2.drop();
         return Item::Module{Module{name, items}};
-      }else{
+      }
+      else{
         panic("invalid top level decl: {:?}", self.peek());
       }
   }
@@ -298,7 +307,7 @@ impl Parser{
       type_args = self.type_params();
       is_generic = true;
     }
-    if let Parent::Impl(info)=(&parent){
+    if let Parent::Impl(info)=&parent{
       if(!info.type_params.empty()){
         is_generic = true;
       }
@@ -376,12 +385,20 @@ impl Parser{
     let type = self.parse_type();
     return Param{.id, name: name.value.clone(), type: type, is_self: false, is_deref: false};
   }
+
+  func scope_merge(scope: Option<Type>*, type: Type): Type{
+    if(scope.is_some()){
+      type.as_simple().scope.set(scope.get().clone());
+    }
+    return type;
+  }
   
-  func parse_struct(self, attr: Attributes): Decl{
+  func parse_struct(self, attr: Attributes, scope: Option<Type>*): Decl{
     let line = self.line();
     self.consume(TokenType::STRUCT);
     let type = self.parse_type();
     let is_generic = type.is_generic();
+    type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
@@ -392,7 +409,7 @@ impl Parser{
     if(self.is(TokenType::SEMI)){
       self.pop();
       let path = self.lexer.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
     else if(self.is(TokenType::LBRACE)){
       self.consume(TokenType::LBRACE);
@@ -401,7 +418,7 @@ impl Parser{
       }
       self.consume(TokenType::RBRACE);
       let path = self.lexer.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
     else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LBRACE);
@@ -410,7 +427,7 @@ impl Parser{
       }
       self.consume(TokenType::RBRACE);
       let path = self.lexer.path.clone();
-      return Decl::TupleStruct{.BaseDecl{line, path, type, false, is_generic, base, attr}, fields: fields};
+      return Decl::TupleStruct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
     }
     else{
       self.err(format("invalid struct body {:?} '{:?}'", type, self.peek()));
@@ -429,11 +446,12 @@ impl Parser{
     return FieldDecl{Option::new(name), type};
   }
   
-  func parse_enum(self, attr: Attributes): Decl{
+  func parse_enum(self, attr: Attributes, scope: Option<Type>*): Decl{
     let line = self.line();
     self.consume(TokenType::ENUM);
     let type = self.parse_type();
     let is_generic = type.is_generic();
+    type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
@@ -452,7 +470,7 @@ impl Parser{
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();
-    return Decl::Enum{.BaseDecl{line, path, type, false, is_generic, base, attr}, variants: variants};
+    return Decl::Enum{.BaseDecl{line, path, type, is_generic, base, attr}, variants: variants};
   }
   
   func parse_variant(self): Variant{
@@ -1174,11 +1192,11 @@ impl Parser{
 
   func parse_obj(self, type_expr: Expr): Expr{
     let ty = Option<Type>::new(); 
-    if let Expr::Name(nm)=(type_expr){
+    if let Expr::Name(nm)=type_expr{
       ty = Option::new(Type::new(nm));
     }
     else{
-      if let Expr::Type(t)=(type_expr){
+      if let Expr::Type(t)=type_expr{
         ty = Option::new(t);
       }
       else{

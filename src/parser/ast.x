@@ -229,7 +229,6 @@ struct BaseDecl{
   line: i32;
   path: String;
   type: Type;
-  is_resolved: bool;
   is_generic: bool;
   base: Option<Type>;
   attr: Attributes;
@@ -284,7 +283,8 @@ enum Parent{
   None,
   Impl(info: ImplInfo),
   Trait(type: Type),
-  Extern
+  Extern,
+  Module(name: String),
 }
 
 impl Parent{
@@ -295,7 +295,7 @@ impl Parent{
     return self is Parent::Impl;
   }
   func as_impl(self): ImplInfo*{
-    if let Parent::Impl(info)=(self){
+    if let Parent::Impl(info)=self{
       return info;
     }
     panic("as_impl");
@@ -313,6 +313,7 @@ impl Parent{
       Parent::Impl(info) => return Parent::Impl{info.clone()},
       Parent::Trait(type) => return Parent::Trait{type.clone()},
       Parent::Extern => return Parent::Extern,
+      Parent::Module(name) => return Parent::Module{name.clone()},
     }
   }
 }
@@ -427,8 +428,14 @@ impl Type{
   func new(name: String, args: List<Type>): Type{
     return Simple::new(name, args).into(0);
   }
-  func new(scp: Type, name: String): Type{
-    return Simple::new(scp, name).into(0);
+  func new(scope: Type, name: String): Type{
+    return Simple::new(scope, name).into(0);
+  }
+  func new(scope: Option<Type>*, name: String): Type{
+    if(scope.is_some()){
+      return Type::new(scope.get().clone(), name);
+     }
+    return Type::new(name);
   }
   func toPtr(*self): Type{
     let id = Node::new(-1, self.line);
@@ -436,7 +443,7 @@ impl Type{
   }
   
   func name(self): String*{
-    if let Type::Simple(smp)=(self){
+    if let Type::Simple(smp)=self{
       return &smp.name;
     }
     panic("cant Type::name() {:?}", self);
@@ -446,7 +453,7 @@ impl Type{
     return self is Type::Simple;
   }
   func as_simple(self): Simple*{
-    if let Type::Simple(simple) = (self){
+    if let Type::Simple(simple) = self{
       return simple;
     }
     panic("as_simple");
@@ -491,13 +498,13 @@ impl Type{
     return res;
   }
   func is_generic(self): bool{
-    if let Type::Simple(smp) = (self){
+    if let Type::Simple(smp) = self{
       return !smp.args.empty();
     }
     return false;
   }
   func get_args(self): List<Type>*{
-    if let Type::Simple(smp) = (self){
+    if let Type::Simple(smp) = self{
       return &smp.args;
     }
     panic("get_args {:?}", self);
@@ -548,32 +555,32 @@ impl Type{
     panic("elem {:?}", self);
   }
   func unwrap_elem(*self): Type{
-    if let Type::Pointer(bx) = (self){
+    if let Type::Pointer(bx) = self{
       return bx.unwrap();
     }
-    if let Type::Array(bx, sz) = (self){
+    if let Type::Array(bx, sz) = self{
       return bx.unwrap();
     }
-    if let Type::Slice(bx) = (self){
+    if let Type::Slice(bx) = self{
       return bx.unwrap();
     }
     panic("unwrap_elem {:?}", self);
   }
   func get_ft(self): FunctionType*{
-    if let Type::Function(bx) = (self){
+    if let Type::Function(bx) = self{
       return bx.get();
     }
     panic("get_ft {:?}", self);
   }
   func unwrap_ft(*self): FunctionType{
-    if let Type::Function(bx) = (self){
+    if let Type::Function(bx) = self{
       return bx.unwrap();
     }
     panic("get_ft {:?}", self);
   }
   
   func get_lambda(self): LambdaType*{
-    if let Type::Lambda(bx) = (self){
+    if let Type::Lambda(bx) = self{
       return bx.get();
     }
     panic("get_lambda {:?}", self);
@@ -581,7 +588,7 @@ impl Type{
 
   //get plain(generic)
   func erase(self): Type{
-    if let Type::Simple(smp) = (self){
+    if let Type::Simple(smp) = self{
       if(smp.scope.has()){
         return Type::new(smp.scope.get().clone(), smp.name.clone());
       }else{
@@ -784,7 +791,7 @@ impl Expr{
     return Fmt::str(self);
   }
   func get_call(self): Call*{
-    if let Expr::Call(cx) = (self){
+    if let Expr::Call(cx) = self{
       return cx;
     }
     panic("get_call {:?}", self);

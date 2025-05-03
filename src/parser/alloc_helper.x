@@ -425,7 +425,7 @@ impl AllocHelper{
 
 impl AllocHelper{
   func visit_child(self, node: Expr*){
-    if let Expr::Array(list, sz)=(node){
+    if let Expr::Array(list, sz)=node{
       if(sz.is_some()){
         let elem = list.get(0);
         self.visit(elem);

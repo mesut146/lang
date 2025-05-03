@@ -29,7 +29,7 @@ flags="$flags $out_dir/std.a"
 flags="$flags $libs"
 flags="$flags -lstdc++"
 
-#$dir/../cpp_bridge/x.sh
+$dir/../cpp_bridge/x.sh
 
 #compile std
 $compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std

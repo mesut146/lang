@@ -155,7 +155,7 @@ impl Debug for Module{
     f.print("mod ");
     Debug::debug(&self.name, f);
     f.print("{\n");
-    join(f, &self.items, "\n");
+    join(f, &self.items, "    \n");
     f.print("\n}");
   }
 }
@@ -215,11 +215,17 @@ impl Debug for ImplInfo{
 
 impl Debug for Decl{
     func debug(self, f: Fmt*){
-        if let Decl::Struct(fields) = (self){
+      match self{
+        Decl::Struct(fields) => {
             debug_struct(self, fields, f);
-        }else if let Decl::Enum(variants) = (self){
+        },
+        Decl::Enum(variants) => {
             debug_enum(self, variants, f);
+        },
+        Decl::TupleStruct(fields) => {
+          debug_struct_tuple(self, fields, f);
         }
+      }
     }
     func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
         f.print("struct ");
@@ -240,33 +246,59 @@ impl Debug for Decl{
         }
         f.print("}");
     }
-    func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
-        f.print("enum ");
-        decl.type.debug(f);
-        f.print("{\n");
-        for(let i = 0;i < variants.len();++i){
-          let ev = variants.get(i);
-          f.print("    ");
-          f.print(&ev.name);
-          if(ev.fields.len()>0){
-            f.print("(");
-            for(let j = 0;j < ev.fields.len();++j){
-              if(j > 0) f.print(", ");
-              ev.fields.get(j).debug(f);
-            }
-            f.print(")");
-          }
-          if(i < variants.len() - 1) f.print(",");
-          f.print("\n");
+
+    func debug_struct_tuple(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+      f.print("struct ");
+      decl.type.debug(f);
+      if(decl.base.is_some()){
+        f.print(": ");
+        decl.base.get().debug(f);
+      }
+      if(fields.empty()){
+          f.print(";");
+          return;
+      }
+      f.print("(\n");
+      for(let i = 0;i < fields.len();++i){
+        if(i > 0){
+          f.print(", ");
         }
-        f.print("}");
-    }
+        fields.get(i).type.debug(f);
+      }
+      f.print(")");
+  }
+
+
+  func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
+      f.print("enum ");
+      decl.type.debug(f);
+      f.print("{\n");
+      for(let i = 0;i < variants.len();++i){
+        let ev = variants.get(i);
+        f.print("    ");
+        f.print(&ev.name);
+        if(ev.fields.len() > 0){
+          //todo ev.is_tuple
+          f.print("(");
+          for(let j = 0;j < ev.fields.len();++j){
+            if(j > 0) f.print(", ");
+            ev.fields.get(j).debug(f);
+          }
+          f.print(")");
+        }
+        if(i < variants.len() - 1) f.print(",");
+        f.print("\n");
+      }
+      f.print("}");
+  }
 }
 
 impl Debug for FieldDecl{
   func debug(self, f: Fmt*){
-    f.print(&self.name);
-    f.print(": ");
+    if(self.name.is_some()){
+      f.print(self.name.get());
+      f.print(": ");
+    }
     self.type.debug(f);
     //f.print(";\n");
   }
@@ -395,80 +427,88 @@ impl Debug for LambdaType{
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
-    if let Stmt::Var(ve)=(self){
-      f.print("let ");
-      ve.debug(f);
-      f.print(";");
-    }else if let Stmt::Expr(e) =(self){
-      if(print_cst) f.print("Stmt::Expr{\n");
-      e.debug(f);
-      if(!e.is_body()){
+    match self{
+      Stmt::Var(ve)=>{
+        f.print("let ");
+        ve.debug(f);
         f.print(";");
+      },
+      Stmt::Expr(e) => {
+        if(print_cst) f.print("Stmt::Expr{\n");
+        e.debug(f);
+        if(!e.is_body()){
+          f.print(";");
+        }
+        if(print_cst) f.print("}\n");
+      },
+      Stmt::Ret(e) =>{
+        f.print("return");
+        if(e.is_some()){
+          f.print(" ");
+          e.get().debug(f);
+        }
+        f.print(";");
+      },
+      Stmt::While(e, b)=>{
+        f.print("while(");
+        e.debug(f);
+        f.print(")");
+        b.get().debug(f);
+      },
+      Stmt::For(fs)=>{
+        f.print("for(");
+        if(fs.var_decl.is_some()){
+          fs.var_decl.get().debug(f);
+        }
+        f.print(";");
+        if(fs.cond.is_some()){
+          fs.cond.get().debug(f);
+        }
+        f.print(";");
+        join(f, &fs.updaters, ", ");
+        f.print(")");
+        fs.body.get().debug(f);
+      },
+      Stmt::Continue =>{
+        f.print("continue;");
+      },
+      Stmt::Break =>{
+        f.print("break;");
+      },
+      Stmt::ForEach(fe) => {
+        f.print("for ");
+        f.print(&fe.var_name);
+        f.print(" in ");
+        fe.rhs.debug(f);
+        fe.body.debug(f);
       }
-      if(print_cst) f.print("}\n");
-    }else if let Stmt::Ret(e) =(self){
-      f.print("return");
-      if(e.is_some()){
-        f.print(" ");
-        e.get().debug(f);
-      }
-      f.print(";");
-    }else if let Stmt::While(e, b)=(self){
-     f.print("while(");
-     e.debug(f);
-     f.print(")");
-     b.get().debug(f);
-    }
-    else if let Stmt::For(fs)=(self){
-      f.print("for(");
-      if(fs.var_decl.is_some()){
-        fs.var_decl.get().debug(f);
-      }
-      f.print(";");
-      if(fs.cond.is_some()){
-        fs.cond.get().debug(f);
-      }
-      f.print(";");
-      join(f, &fs.updaters, ", ");
-      f.print(")");
-      fs.body.get().debug(f);
-    }else if let Stmt::Continue = (self){
-      f.print("continue;");
-    }else if let Stmt::Break = (self){
-      f.print("break;");
-    }else if let Stmt::ForEach(fe)=(self){
-      f.print("for ");
-      f.print(&fe.var_name);
-      f.print(" in ");
-      fe.rhs.debug(f);
-      fe.body.debug(f);
-    }
-    else{
-      panic("Stmt::debug");
     }
   }
 }
 
 impl Debug for Body{
   func debug(self, f: Fmt*){
-    if let Body::Block(b)=(self){
-      if(print_cst) f.print("Body::Block{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::Stmt(b)=(self){
-      if(print_cst) f.print("Body::Stmt{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::If(b)=(self){
-      if(print_cst) f.print("Body::If{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else if let Body::IfLet(b)=(self){
-      if(print_cst) f.print("Body::IfLet{\n");
-      b.debug(f);
-      if(print_cst) f.print("}\n");
-    }else{
-      panic("");
+    match self{
+      Body::Block(b)=>{
+        if(print_cst) f.print("Body::Block{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::Stmt(b)=>{
+        if(print_cst) f.print("Body::Stmt{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::If(b)=>{
+        if(print_cst) f.print("Body::If{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      },
+      Body::IfLet(b)=>{
+        if(print_cst) f.print("Body::IfLet{\n");
+        b.debug(f);
+        if(print_cst) f.print("}\n");
+      }
     }
   }
 }
@@ -714,14 +754,15 @@ impl Debug for Match{
       let case = self.cases.get(i);
       Debug::debug(&case.lhs, f);
       f.print(" => ");
-      if let MatchRhs::EXPR(expr)=(&case.rhs){
-        //expr.debug(f);
-        body(expr, f, true);
-      }else if let MatchRhs::STMT(stmt)=(&case.rhs){
-        body(stmt, f, true);
-        //stmt.debug(f);
-      }else{
-        panic("unr");
+      match &case.rhs{
+        MatchRhs::EXPR(expr)=>{
+          //expr.debug(f);
+          body(expr, f, true);
+        },
+        MatchRhs::STMT(stmt)=>{
+          body(stmt, f, true);
+          //stmt.debug(f);
+        }
       }
       if(i < self.cases.len() - 1){
           f.print(",\n");
@@ -782,7 +823,7 @@ impl Debug for Call{
     if(self.scope.is_some()){
       //scope: Option<Box<Expr>>
       let scp: Expr* = self.scope.get();
-      if let Expr::Type(t)=(scp){
+      if let Expr::Type(t)=scp{
         t.debug(f);
         f.print("::");
       }else{

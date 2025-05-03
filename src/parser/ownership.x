@@ -16,6 +16,8 @@ import std/map
 import std/hashmap
 import std/stack
 
+//todo endscope incorrectly warns 'field not moved at...' but that scope is irrevelant with var.field
+
 func hasenv(key: str): bool{
     return std::getenv(key).is_some();
 }
@@ -269,7 +271,7 @@ impl Own{
             mv.drop();
         }
         let rhs = Rhs::new(expr, self);
-        if let Rhs::FIELD(scp, name)=(&rhs){
+        if let Rhs::FIELD(scp, name)=&rhs{
             if(!move_ptr_field && scp.type.is_pointer()){
                 self.get_resolver().err(expr, "move out of pointer");
             }
@@ -310,7 +312,7 @@ impl Own{
     }
     func update_state(self, rhs: Rhs, kind: StateType, scope: VarScope*){
         //set parent partially moved
-        /*if let Rhs::FIELD(scp*, name*) = (&rhs){
+        /*if let Rhs::FIELD(scp*, name*) = &rhs{
             let scp_rhs = Rhs::new(scp.clone());
             self.update_state(scp_rhs, StateType::MOVED_PARTIAL, scope);
         }*/
@@ -388,7 +390,7 @@ impl Own{
         let rhs = Rhs::new(expr, self);
         let state = self.get_state(&rhs, scope);
         rhs.drop();
-        if let StateType::MOVED(line)=(state.kind){
+        if let StateType::MOVED(line)=state.kind{
             // let scope_str = self.get_scope(self.main_scope).print(self);
             // print("{}\n", scope_str);
             // scope_str.drop();
@@ -398,7 +400,7 @@ impl Own{
         }
     }
     func check_field(self, expr: Expr*){
-        if let Expr::Access(scp, name)=(expr){
+        if let Expr::Access(scp, name)=expr{
             //scope could be partially moved, check right field is valid
         }else{
             panic("check_field not field access {:?}", expr);
@@ -429,7 +431,7 @@ impl Own{
                 if(!(pair.b is StateType::MOVED)){
                     continue;
                 }
-                if let Rhs::FIELD(scp, name) = (pair.a){
+                if let Rhs::FIELD(scp, name) = pair.a{
                     if(scp.id == rhs.get_id()){
                         return State::new(StateType::MOVED_PARTIAL, scope);
                     }
@@ -514,8 +516,8 @@ impl Own{
     func check_ptr_field(self, scope: VarScope*, line: i32){
         if(!move_ptr_field) return;
         for pair in &scope.state_map{
-            if let StateType::MOVED(mv_line) = (pair.b){
-                if let Rhs::FIELD(scp, name) = (pair.a){
+            if let StateType::MOVED(mv_line) = pair.b{
+                if let Rhs::FIELD(scp, name) = pair.a{
                     if(scp.type.is_pointer()){
                         self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}, {:?}", mv_line, pair.a));
                     }
@@ -539,7 +541,7 @@ impl Own{
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);
         for dr in &outers{
-            if let Droppable::OBJ(obj)=(dr){
+            if let Droppable::OBJ(obj)=dr{
                 //local obj, drop it
                 if((*obj).scope == scope.id){
                     self.drop_obj(*obj, scope, line);
@@ -626,7 +628,7 @@ impl Own{
             print("end_scope_if_after line: {}\n", if_scope.line);
         }
         for out in &outers{
-            if let Droppable::OBJ(obj) = (out){
+            if let Droppable::OBJ(obj) = out{
                 //local obj, drop it
                 if((*obj).scope == if_scope.id){
                     self.drop_obj(*obj, if_scope, line);
@@ -726,7 +728,7 @@ impl Own{
                 continue;
             }
             if(!moved_fields.contains(fd.name.get())){
-                print("field '{:?}.{:?}' vline: {} not moved at: {}\n", var.name, fd.name, var.line, line);
+                print("field '{:?}.{:?}' vline: {} not moved at: {}\n", var.name, fd.name.get(), var.line, line);
                 err = true;
             }
         }

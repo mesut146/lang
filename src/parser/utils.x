@@ -301,12 +301,20 @@ func mangle(m: Method*): String{
 
 func printMethod(m: Method*): String{
     let s = Fmt::new();
-    if let Parent::Impl(info)=(&m.parent){
-      s.print(&info.type);
-      s.print("::");
-    }else if let Parent::Trait(type)=(&m.parent){
-      s.print(type);
-      s.print("::");
+    match &m.parent{
+        Parent::Impl(info)=>{
+            s.print(&info.type);
+            s.print("::");
+        },
+        Parent::Trait(type)=>{
+            s.print(type);
+            s.print("::");
+        },
+        Parent::Module(name) => {
+            s.print(name);
+            s.print("::");
+        },
+        _=>{}
     }
     s.print(&m.name);
     s.print("(");
@@ -356,7 +364,7 @@ func is_comp(s: str): bool{
 }
 
 func is_str_lit(e: Expr*): Option<String*>{
-    if let Expr::Lit(lit)=(e){
+    if let Expr::Lit(lit)=e{
         if(lit.kind is LitKind::STR){
             return Option::new(&lit.val);
         }

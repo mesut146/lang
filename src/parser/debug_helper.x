@@ -254,6 +254,10 @@ impl DebugInfo{
 
     func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: vector_Metadata*){
       if(decl.type.is_generic()) return;
+      if(decl.type.is_simple() && decl.type.as_simple().scope.is_some()){
+        //todo
+        return;
+      }
       let imps: List<Pair<Impl*, i32>> = MethodResolver::get_impl(c.get_resolver(), &decl.type, Option<Type*>::new()).unwrap();
       for pr in imps{
         for fun in &pr.a.methods{

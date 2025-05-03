@@ -310,6 +310,225 @@ impl Compiler{
       }      
     }
 
+    func is_nested_if(body: Body*): bool{
+      if(body is Body::If || body is Body::IfLet) return true;
+      if let Body::Block(blk) = body{
+        if(blk.return_expr.is_some()){
+          return is_if(blk.return_expr.get());
+        }
+      }
+      return false;
+    }
+    func is_if(expr: Expr*): bool{
+      return expr is Expr::If || expr is Expr::IfLet;
+    }
+
+    func visit_if(self, node: IfStmt*): Option<Value*>{
+      let cond = self.branch(&node.cond);
+      let line = node.cond.line;
+      let then_name = CStr::new(format("if_then_{}", line));
+      let else_name = CStr::new(format("if_else_{}", line));
+      let next_name = CStr::new(format("if_next_{}", line));
+      let thenbb = create_bb_named(then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let nextbb = create_bb_named(next_name.ptr());
+      CreateCondBr(cond, thenbb, elsebb);
+      self.set_and_insert(thenbb);
+      self.llvm.di.get().new_scope(node.then.get().line());
+      let exit_then = Exit::get_exit_type(node.then.get());
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      let then_val = self.visit_body(node.then.get());
+      let then_end = GetInsertBlock();
+      let else_end = GetInsertBlock();
+      //else move aware end_scope
+      if(node.else_stmt.is_some()){
+        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+      }else{
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+      }
+      self.llvm.di.get().exit_scope();
+      if(!exit_then.is_jump()){
+        CreateBr(nextbb);
+      }
+      self.set_and_insert(elsebb);
+      let else_jump = false;
+      let else_val = Option<Value*>::new();
+      
+      if(node.else_stmt.is_some()){
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        //this will restore if, bc we did fake end_scope
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
+        else_val = self.visit_body(node.else_stmt.get());
+        else_end = GetInsertBlock();
+        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.llvm.di.get().exit_scope();
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
+        else_jump = exit_else.is_jump();
+        if(!else_jump){
+          CreateBr(nextbb);
+        }
+        exit_else.drop();
+      }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        CreateBr(nextbb);
+      }
+      let res = Option<Value*>::new();
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(nextbb);
+        self.add_bb(nextbb);
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
+            //self.get_resolver().err(line, "nested if expr not allowed");
+          //}
+          if(exit_then.is_jump() && !else_jump){
+            res = else_val;
+          }
+          else if(!exit_then.is_jump() && else_jump){
+            res = then_val;
+          }else{
+            let phi_type = self.mapType(&then_rt.type);
+            if(is_struct(&then_rt.type)){
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
+            }
+            let phi = CreatePHI(phi_type, 2);
+            if(is_struct(&then_rt.type)){
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
+            }else{
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+            }
+            res = Option::new(phi as Value*);
+          }
+        }
+        then_rt.drop();
+      }
+      exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
+      return res;
+    }
+
+    func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
+      let rt = self.get_resolver().visit_type(&node.type);
+      let decl = self.get_resolver().get_decl(&rt).unwrap();
+      let rhs = self.get_obj_ptr(&node.rhs);
+      let rhs_rt = self.get_resolver().visit(&node.rhs);
+      let tag_ptr = CreateStructGEP(rhs, get_tag_index(decl), self.mapType(&decl.type));
+      let tag = CreateLoad(getInt(ENUM_TAG_BITS()), tag_ptr);
+      let index = Resolver::findVariant(decl, node.type.name());
+      let cmp = CreateCmp(get_comp_op("==".ptr()), tag, makeInt(index, ENUM_TAG_BITS()) as Value*);
+  
+      let then_name = CStr::new(format("iflet_then_{}", line));
+      let else_name = CStr::new(format("iflet_else_{}", line));
+      let next_name = CStr::new(format("iflet_next_{}", line));
+      let then_bb = create_bb2_named(self.cur_func(), then_name.ptr());
+      let elsebb = create_bb_named(else_name.ptr());
+      let next = create_bb_named(next_name.ptr());
+      
+      CreateCondBr(self.branch(cmp), then_bb, elsebb);
+      SetInsertPoint(then_bb);
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      self.own.get().do_move(&node.rhs);
+      let variant = decl.get_variants().get(index);
+      self.llvm.di.get().new_scope(line);
+      if(!variant.fields.empty()){
+        //declare vars
+        let fields = &variant.fields;
+        let data_index = get_data_index(decl);
+        let dataPtr = CreateStructGEP(rhs, data_index, self.mapType(&decl.type));
+        let var_ty = self.get_variant_ty(decl, variant);
+        for (let i = 0; i < fields.size(); ++i) {
+            //regular var decl
+            let prm = fields.get(i);
+            let arg = node.args.get(i);
+            self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type);
+        }
+      }
+      let then_val = self.visit_body(node.then.get());
+      let then_end = GetInsertBlock();
+      let else_end = GetInsertBlock();
+      //else move aware end_scope
+      if(node.else_stmt.is_some()){
+        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+      }else{
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+      }
+      self.llvm.di.get().exit_scope();
+      let exit_then = Exit::get_exit_type(node.then.get());
+      if (!exit_then.is_jump()) {
+        CreateBr(next);
+      }
+      self.set_and_insert(elsebb);
+      let else_jump = false;
+      let else_val = Option<Value*>::new();
+      if (node.else_stmt.is_some()) {
+        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        self.own.get().get_scope(else_id).sibling = if_id;
+        else_val = self.visit_body(node.else_stmt.get());
+        else_end = GetInsertBlock();
+        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.llvm.di.get().exit_scope();
+        let exit_else = Exit::get_exit_type(node.else_stmt.get());
+        else_jump = exit_else.is_jump();
+        if (!else_jump) {
+          CreateBr(next);
+        }
+        exit_else.drop();
+      }else{
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
+        self.own.get().get_scope(else_id).sibling = if_id;
+        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        CreateBr(next);
+      }
+      let res = Option<Value*>::new();
+      if(!(exit_then.is_jump() && else_jump)){
+        SetInsertPoint(next);
+        self.add_bb(next);
+
+        let then_rt = self.get_resolver().visit_body(node.then.get());
+        if(!then_rt.type.is_void()){
+          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
+            //self.get_resolver().err(line, "nested if expr not allowed");
+          //}
+          if(exit_then.is_jump() && !else_jump){
+            res = else_val;
+          }
+          else if(!exit_then.is_jump() && else_jump){
+            res = then_val;
+          }else{
+            let phi_type = self.mapType(&then_rt.type);
+            if(is_struct(&then_rt.type)){
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
+            }
+            let phi = CreatePHI(phi_type, 2);
+            if(is_struct(&then_rt.type)){
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
+            }else{
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+            }
+            res = Option::new(phi as Value*);
+          }
+        }
+        then_rt.drop();
+      }
+      exit_then.drop();
+      then_name.drop();
+      else_name.drop();
+      next_name.drop();
+      rt.drop();
+      rhs_rt.drop();
+      return res;
+    }
+
     func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
       let rt = self.get_resolver().visit(node);
       if(rt.desc.kind is RtKind::Const){
@@ -397,7 +616,7 @@ impl Compiler{
     func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
       let tag1 = self.getTag(lhs);
       let op = get_comp_op("==".ptr());
-      if let Expr::Type(rhs_ty)=(rhs){
+      if let Expr::Type(rhs_ty)=rhs{
         let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
         let index = Resolver::findVariant(decl, rhs_ty.name());
         let tag2 = makeInt(index, ENUM_TAG_BITS()) as Value*;
@@ -883,7 +1102,7 @@ impl Compiler{
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
         let arr_type2 = arr_type.deref_ptr();
-        if let Type::Array(elem, sz)=(arr_type2){
+        if let Type::Array(elem, sz)=arr_type2{
           arr_type.drop();
           return makeInt(*sz, 64) as Value*;
         }
@@ -953,7 +1172,7 @@ impl Compiler{
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
           let ft0 = Option<LambdaType*>::none();
-          if let Type::Lambda(bx)=(&rt.lambda_call.get().type){
+          if let Type::Lambda(bx)=&rt.lambda_call.get().type{
               ft0.set(bx.get());
           }else{
               panic("impossible");
@@ -1218,15 +1437,18 @@ impl Compiler{
     }
   
     func is_logic(expr: Expr*): bool{
-      if let Expr::Par(e)=(expr){
-        return is_logic(e.get());
+      match expr{
+        Expr::Par(e)=>{
+          return is_logic(e.get());
+        },
+        Expr::Infix(op, l, r)=>{
+          if(op.eq("&&") || op.eq("||")){
+            return true;
+          }
+          return false;
+        },
+        _=> return false,
       }
-      if let Expr::Infix(op, l, r)=expr{
-        if(op.eq("&&") || op.eq("||")){
-          return true;
-        }
-      }
-      return false;
     }
   
     func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<Value*, BasicBlock*>{
@@ -1246,10 +1468,10 @@ impl Compiler{
       let rv = Option<Value*>::new();
       if(is_logic(r)){
         let r_inner = r;
-        if let Expr::Par(e)=(r){
+        if let Expr::Par(e)=r{
           r_inner = e.get();
         }
-        if let Expr::Infix(op2, l2, r2)=(r_inner){
+        if let Expr::Infix(op2, l2, r2)=r_inner{
           let pair = self.andOr(op2, l2.get(), r2.get());
           then = pair.b;
           rv = Option::new(pair.a);
@@ -1548,13 +1770,13 @@ impl Compiler{
     }
     
     func get_lhs(self, expr: Expr*): Value*{
-      if let Expr::Unary(op, l2)=(expr){
+      if let Expr::Unary(op, l2)=expr{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           return lhs;
         }
       }
-      if let Expr::Name(name)=(expr){
+      if let Expr::Name(name)=expr{
         return self.visit_name(expr, name, false);
       }
       return self.visit(expr);
@@ -1564,7 +1786,7 @@ impl Compiler{
       if(l is Expr::Infix) panic("assign lhs");
       //let lhs = Option<Value*>::new();
       let type = self.getType(l);
-      if let Expr::Unary(op,l2)=(l){
+      if let Expr::Unary(op,l2)=l{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
           self.setField(r, &type, lhs, Option::new(l));

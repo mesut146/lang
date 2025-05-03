@@ -1,13 +1,13 @@
 import parser/ast
 import parser/parser
 
-//#derive_macro
-func derive_clone(ts: TokenStream): TokenStream{
+//#derive_macro(Clone)
+func derive_clone(it: Item): TokenStream{
     
     panic("todo");
 }
 
-//#derive_macro
+//#derive_macro(Debug)
 func derive_debug(it: Item): TokenStream{
     let res = TokenStream::new();
     if let Item::Decl(d) = it{

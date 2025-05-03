@@ -152,7 +152,7 @@ impl State{
         return self.kind is StateType::NONE;
     }
     func get_line(self): i32{
-        if let StateType::MOVED(line)=(self.kind){
+        if let StateType::MOVED(line)=self.kind{
             return line;
         }
         panic("not move");
@@ -172,7 +172,7 @@ impl StateType{
 
 impl Moved{
     func new(expr: Expr*, own: Own*): Moved{
-        /*if let Expr::Access(scp*, name*)=(expr){
+        /*if let Expr::Access(scp*, name*)=expr{
             let scp_rt = own.compiler.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
@@ -195,7 +195,7 @@ impl Rhs{
         return Rhs::FIELD{scope, name};
     }
     func new(expr: Expr*, own: Own*): Rhs{
-        if let Expr::Access(scp, name)=(expr){
+        if let Expr::Access(scp, name)=expr{
             let scp_rt = own.compiler.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
@@ -217,28 +217,28 @@ impl Rhs{
         return Rhs::VAR{var};
     }
     func get_var(self): Variable*{
-        if let Rhs::VAR(v)=(self){
+        if let Rhs::VAR(v)=self{
             return v;
         }
         panic("");
     }
     func get_expr(self): Expr*{
-        if let Rhs::EXPR(e)=(self){
+        if let Rhs::EXPR(e)=self{
             return *e;
         }
         panic("");
     }
     func get_id(self): i32{
-        if let Rhs::EXPR(e)=(self){
+        if let Rhs::EXPR(e)=self{
             return (*e).id;
         }
-        if let Rhs::VAR(v)=(self){
+        if let Rhs::VAR(v)=self{
             return v.id;
         }
         panic("{:?}", self);
     }
     func is_vh(self, vh: VarHolder*, resolver: Resolver*): bool{
-        if let Rhs::EXPR(e)=(self){
+        if let Rhs::EXPR(e)=self{
             let rt = resolver.visit(*e);
             if(rt.vh.is_some()){
                 let res = rt.vh.get().id == vh.id;
@@ -251,7 +251,7 @@ impl Rhs{
         return self.get_var().id == vh.id;
     }
     func eq(self, other: Moved*, resolver: Resolver*): bool{
-        if let Rhs::EXPR(e)=(self){
+        if let Rhs::EXPR(e)=self{
             if((*e).id == other.expr.id){
                 return true;
             }

@@ -108,12 +108,18 @@ func make_malloc(): Function*{
     return f;
 }
 
-func getTypes(unit: Unit*, list: List<Decl*>*){
-    for (let i = 0;i < unit.items.len();++i) {
-        let item = unit.items.get(i);
-        if let Item::Decl(d)=(item){
-            if(d.is_generic) continue;
-            list.add(d);
+func getTypes(items: List<Item>*, list: List<Decl*>*){
+    for (let i = 0;i < items.len();++i) {
+        let item = items.get(i);
+        match item{
+          Item::Decl(d)=>{
+              if(d.is_generic) continue;
+              list.add(d);
+          },
+          Item::Module(md)=>{
+              getTypes(&md.items, list);
+          },
+          _=>{}
         }
     }
 }
@@ -329,18 +335,26 @@ func getMethods(unit: Unit*): List<Method*>{
   let list = List<Method*>::new(100);
   for (let i = 0;i < unit.items.len();++i) {
     let item = unit.items.get(i);
-    if let Item::Method(m)=(item){
-        if(m.is_generic) continue;
-        list.add(m);
-    }else if let Item::Impl(imp)=(item){
-      if(!imp.info.type_params.empty()) continue;
-      for(let j = 0;j < imp.methods.len();++j){
-        list.add(imp.methods.get(j));
-      }
-    }else if let Item::Extern(methods)=(item){
-      for(let j = 0;j < methods.len();++j){
-        list.add(methods.get(j));
-      }
+    match item{
+      Item::Method(m)=>{
+          if(m.is_generic) continue;
+          list.add(m);
+      },
+      Item::Impl(imp)=>{
+        if(!imp.info.type_params.empty()) continue;
+        for(let j = 0;j < imp.methods.len();++j){
+          list.add(imp.methods.get(j));
+        }
+      },
+      Item::Extern(methods)=>{
+        for(let j = 0;j < methods.len();++j){
+          list.add(methods.get(j));
+        }
+      },
+      Item::Module(md) => {
+        //todo
+      },
+      _ => {}
     }
   }
   //broken after expand, ptr
@@ -459,7 +473,7 @@ impl Compiler{
     let p = self.protos.get();
     let resolver = self.get_resolver();
     let list = List<Decl*>::new();
-    getTypes(self.unit(), &list);
+    getTypes(&self.unit().items, &list);
     //print("used={}\n", resolver.used_types);
     for rt in &resolver.used_types{
       let decl = resolver.get_decl(rt).unwrap();
@@ -605,7 +619,7 @@ impl Compiler{
     let linkage = ext();
     if(!m.type_params.empty()){
       linkage = odr();
-    }else if let Parent::Impl(info)=(&m.parent){
+    }else if let Parent::Impl(info)=&m.parent{
       if(info.type.is_simple() && !info.type.get_args().empty()){
         linkage = odr();
       }
@@ -878,10 +892,10 @@ impl Compiler{
   }
 
   func get_obj_ptr(self, node: Expr*): Value*{
-    if let Expr::Par(e)=(node){
+    if let Expr::Par(e)=node{
       return self.get_obj_ptr(e.get());
     }
-    if let Expr::Unary(op, e)=(node){
+    if let Expr::Unary(op, e)=node{
       if(op.eq("*")){
         return self.visit(node);
       }
@@ -899,10 +913,10 @@ impl Compiler{
       ty.drop();
       return val;
     }
-    if let Expr::Lambda(le)=(node){
+    if let Expr::Lambda(le)=node{
         return val;
     }
-    if let Expr::Type(type)=(node){
+    if let Expr::Type(type)=node{
         //ptr to member func
         let rt = self.get_resolver().visit(node);
         if(rt.type.is_fpointer() && rt.method_desc.is_some()){
@@ -912,10 +926,10 @@ impl Compiler{
             return val;
         }
     }
-    if let Expr::IfLet(il)=(node){
+    if let Expr::IfLet(il)=node{
         return val;
     }
-    if let Expr::Ques(bx)=(node){
+    if let Expr::Ques(bx)=node{
       //todo load prim
       return val;
   }

@@ -102,7 +102,6 @@ impl AstCopier{
             line: node.line,
             path: node.path.clone(),
             type: type ,
-            is_resolved: false,
             is_generic: false,
             base: self.visit_opt(&node.base), 
             attr: node.attr.clone()
@@ -200,19 +199,16 @@ impl AstCopier{
     func visit(self, p: Parent*): Parent{
         match p{
             Parent::Impl(info) => {
-               return Parent::Impl{ImplInfo{type_params: self.visit_list(&info.type_params),
-                trait_name: self.visit_opt(&info.trait_name),
-                type: self.visit(&info.type)}};
+                return Parent::Impl{
+                    ImplInfo{type_params: self.visit_list(&info.type_params),
+                    trait_name: self.visit_opt(&info.trait_name),
+                    type: self.visit(&info.type)}
+                };
             },
-            Parent::Trait(ty) => {
-                return Parent::Trait{self.visit(ty)};
-            },
-            Parent::None=>{
-                return Parent::None;
-            },
-            Parent::Extern=>{
-                return Parent::Extern;
-            }
+            Parent::Trait(ty) => return Parent::Trait{self.visit(ty)},
+            Parent::None => return Parent::None,
+            Parent::Extern => return Parent::Extern,
+            Parent::Module(name) => return Parent::Module{name.clone()},
         }
     }
 

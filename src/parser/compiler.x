@@ -196,7 +196,7 @@ impl Protos{
 func has_main(unit: Unit*): bool{
   for (let i = 0;i < unit.items.len();++i) {
     let it = unit.items.get(i);
-    if let Item::Method(m) = (it){
+    if let Item::Method(m) = it{
       if(is_main(m)){
         return true;
       }
@@ -363,7 +363,7 @@ impl Compiler{
   }
 
   func is_constexpr(expr: Expr*): bool{
-    if let Expr::Lit(lit)=(expr){
+    if let Expr::Lit(lit)=expr{
       return true;
     }
     return false;
