@@ -500,26 +500,26 @@ impl Parser{
     return Variant{name, fields, is_tuple};
   }
 
-  func parse_type_prim(self): Type{
+  func parse_type_prim(self, check_closing: bool): Type{
     if(self.is(TokenType::LBRACKET)){
       let id = self.node();
       self.pop();
-      let type = self.parse_type();
+      let elem_type = self.parse_type(check_closing, true);
       if(self.is(TokenType::SEMI)){
         self.pop();
         let size = self.consume(TokenType::INTEGER_LIT);
         self.consume(TokenType::RBRACKET);
-        let bx: Box<Type> = Box::new(type);
+        let bx: Box<Type> = Box::new(elem_type);
         return Type::Array{.id, bx,  i32::parse(size.value.str()).unwrap()};
       }else{
         self.consume(TokenType::RBRACKET);
-        return Type::Slice{.id, Box::new(type)};
+        return Type::Slice{.id, Box::new(elem_type)};
       }
     }else{
-      let res: Type = self.gen_part();
+      let res: Type = self.gen_part(check_closing);
       while(self.is(TokenType::COLON2)){
         self.pop();
-        let part = self.gen_part();
+        let part = self.gen_part(check_closing);
         if let Type::Simple(smp) = &part{
           let id = self.node();
           let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
@@ -531,12 +531,37 @@ impl Parser{
     }
   }
 
+  func gen_part(self, check_closing: bool): Type{
+    //a<b>
+    let line = self.line();
+    let name = self.popv();
+    let res = Simple::new(name);
+    if(self.is(TokenType::LT)){
+      if(!check_closing || self.isTypeArg(self.pos) != -1){
+        res.args.add_list(self.generics());
+      }
+    }
+    return res.into(line);
+  }
+  
+  func generics(self): List<Type>{
+    let res = List<Type>::new();
+    self.consume(TokenType::LT);
+    res.add(self.parse_type(false, true));
+    while(self.is(TokenType::COMMA)){
+      self.pop();
+      res.add(self.parse_type(false, true));
+    }
+    self.consume(TokenType::GT);
+    return res;
+  }
+
   func parse_tuple_type(self): Type{
     let id = self.node();
     self.consume(TokenType::LPAREN);
     let types = List<Type>::new();
     while(!self.is(TokenType::RPAREN)){
-      types.add(self.parse_type());
+      types.add(self.parse_type(false, true));
       if(self.is(TokenType::COMMA)){
         self.pop();
         if(self.is(TokenType::RPAREN)){
@@ -547,16 +572,20 @@ impl Parser{
     self.consume(TokenType::RPAREN);
     return Type::Tuple{.id, TupleType{types: types}};
   }
-  
+
   func parse_type(self): Type{
+    return self.parse_type(false, true);
+  }
+  
+  func parse_type(self, check_closing: bool, allow_ptr: bool): Type{
     if(self.is(TokenType::FUNC)){
       return self.parse_func_type();
     }
     if(self.is(TokenType::LPAREN)){
       return self.parse_tuple_type();
     }
-    let res = self.parse_type_prim();
-    while (self.is(TokenType::STAR)) {
+    let res = self.parse_type_prim(check_closing);
+    while (self.is(TokenType::STAR) && allow_ptr) {
       let id = self.node();
       self.consume(TokenType::STAR);
       let tmp = Type::Pointer{.id, Box::new(res)};
@@ -582,29 +611,7 @@ impl Parser{
     let ret = self.parse_type();
     return Type::Function{.id, Box::new(FunctionType{return_type: ret, params: params})};
   }
-  
-  func gen_part(self): Type{
-    //a<b>
-    let line = self.line();
-    let name = self.popv();
-    let res = Simple::new(name);
-    if(self.is(TokenType::LT)){
-      res.args.add_list(self.generics());
-    }
-    return res.into(line);
-  }
-  
-  func generics(self): List<Type>{
-    let res = List<Type>::new();
-    self.consume(TokenType::LT);
-    res.add(self.parse_type());
-    while(self.is(TokenType::COMMA)){
-      self.pop();
-      res.add(self.parse_type());
-    }
-    self.consume(TokenType::GT);
-    return res;
-  }
+
   
   func type_params(self): List<Type>{
     let res = List<Type>::new();
@@ -892,7 +899,7 @@ impl Parser{
   }
   
   func isLit(t: Token *): bool{
-    return t.is([TokenType::FLOAT_LIT, TokenType::INTEGER_LIT, TokenType::CHAR_LIT, TokenType::STRING_LIT, TokenType::TRUE, TokenType::TokenType::FALSE][0..6]);
+    return t.is([TokenType::FLOAT_LIT, TokenType::INTEGER_LIT, TokenType::CHAR_LIT, TokenType::STRING_LIT, TokenType::TRUE, TokenType::FALSE][0..6]);
   }
 
   func isPrim(t: Token*): bool{
@@ -1079,6 +1086,9 @@ impl Parser{
   func prim(self, allow_obj: bool): Expr{
     let tok = self.peek();
     let n = self.node();
+    if(isLit(self.peek())){
+      return self.parseLit();
+    }
     if(self.is(TokenType::OR) || self.is(TokenType::OROR)){
         return self.parse_lambda();
     }
@@ -1096,9 +1106,6 @@ impl Parser{
     }
     if(self.is(TokenType::IF)){
       return Expr::If{.n, Box::new(self.parse_if())};
-    }
-    if(isLit(self.peek())){
-      return self.parseLit();
     }
     else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LPAREN);
@@ -1138,7 +1145,60 @@ impl Parser{
       let e = self.prim2(allow_obj);
       return Expr::Unary{.n, op, Box::new(e)};
     }else if(isName(self.peek()) || isPrim(self.peek())){
-      let nm = self.popv();
+      //todo expr < expr breaks generics
+      //todo ptr type breaks a*b
+      let ty = self.parse_type(true, false);
+      if(self.is(TokenType::LPAREN)){
+        if let Type::Simple(smp) = &ty{
+          if(smp.scope.is_some()){
+            let scp = Expr::Type{.n, smp.scope.get().clone()};
+            let is_static = true;
+            let res = self.call(scp, smp.name.clone(), is_static, smp.args.clone());
+            ty.drop();
+            return res;
+          }else{
+            let res = self.call(smp.name.clone(), smp.args.clone());
+            ty.drop();
+            return res;
+          }
+        }else{
+          self.err(format("invalid expr '{:?}'", ty));
+        }
+      }
+      else if(self.is(TokenType::BANG, TokenType::LPAREN)){
+        self.consume(TokenType::BANG);
+        if let Type::Simple(smp) = &ty{
+          if(!smp.args.empty()){
+            self.err("macro call can't have type args");
+          }
+          let scp = if(smp.scope.is_some()){
+            Option::new(smp.scope.get().clone())
+          }else{
+            Option<Type>::new()
+          };
+          self.consume(TokenType::LPAREN);
+          let args = self.exprList(TokenType::RPAREN);
+          self.consume(TokenType::RPAREN);
+          let res = Expr::MacroCall{.n, MacroCall{scope: scp, name: smp.name.clone(), args: args}};
+          ty.drop();
+          return res;
+        }else{
+          self.err(format("macro scope is invalid '{:?}'", ty));
+        }
+      }else{
+        if let Type::Simple(smp) = &ty{
+          if(smp.scope.is_none() && smp.args.empty()){
+            let name = smp.name.clone();
+            //smp.drop();
+            return Expr::Name{.n, name};
+          }else{
+            return Expr::Type{.n, ty};
+          }
+        }else{
+          return Expr::Type{.n, ty};
+        }
+      }
+      /*let nm = self.popv();
       if(self.is(TokenType::LPAREN)){
         return self.call(nm);
       }else if(self.is(TokenType::COLON2)){
@@ -1184,7 +1244,7 @@ impl Parser{
         }
       }else{
         return Expr::Name{.n, nm};
-      }
+      }*/
     }
     self.err(format("invalid expr {:?}", self.peek()));
     panic("");
@@ -1232,6 +1292,7 @@ impl Parser{
       if(self.is(TokenType::DOT)){
         self.consume(TokenType::DOT);
         if(self.is(TokenType::INTEGER_LIT)){
+          //tuple index
           let idx = self.pop();
           let n = self.node();
           res = Expr::Access{.n, Box::new(res), idx.value.clone()}; 

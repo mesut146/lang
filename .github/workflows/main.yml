@@ -35,5 +35,6 @@ jobs:
           echo "Testing GitHub Actions"
           gh auth status
           gh release download toolchain
+          ls
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
