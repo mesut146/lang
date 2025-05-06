@@ -12,7 +12,8 @@ cur=$(dirname $0)
 
 binary="$1"
 out="$2"
-dir=$out/x-toolchain-x64
+name=x-toolchain-$(uname -m)
+dir=$out/$name
 
 mkdir -p $dir
 mkdir -p $dir/bin
@@ -33,6 +34,6 @@ cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib
 cp -r $cur/../src/std $dir/src
 
 if [ "$3" = "-zip" ]; then
- zip -r x-toolchain-x64.zip $dir
+ zip -r ${name}.zip $dir
  rm -r $dir
 fi

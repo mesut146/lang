@@ -22,8 +22,8 @@ for file in $dir/*.ll; do
     echo "Compilation failed for $file"
     exit 1
   fi
-  name="${file%.*}"
-  objs="$objs $name.o"
+  nm="${file%.*}"
+  objs="$objs ${nm}.o"
 done
 
 #link .o files
@@ -31,10 +31,10 @@ cmd="clang++$suffix -lstdc++ -o $name $objs ../cpp_bridge/build/libbridge.a $lib
 echo "$cmd"
 $cmd
 
-rm -rf $dir
+#rm -rf $dir
 
 if [ "$?" -eq "0" ]; then
-  echo "Build successful"
+  echo "Build successful ${name}"
   rm -r $dir
   exit 0
 else

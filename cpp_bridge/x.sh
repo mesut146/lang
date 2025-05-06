@@ -25,12 +25,10 @@ echo "llvm_dir=$llvm_dir"
 
 
 find_clang(){
-  if command -v clang++ 2>&1 >/dev/null; then
-    clang_bin="clang++"
-  elif command -v clang++-19 2>&1 >/dev/null; then
+  if command -v clang++-19 2>&1 >/dev/null; then
     clang_bin="clang++-19"
-  elif command -v clang++-16 2>&1 >/dev/null; then
-    clang_bin="clang++-16"
+  elif command -v clang++ 2>&1 >/dev/null; then
+    clang_bin="clang++"
   else
     echo "can't find clang++"
     exit 1
