@@ -20,7 +20,9 @@ jobs:
         run: |
           gh auth status
           gh release download v$last_version
-          unzip ${toolchain_dir}.zip
+          unzip ${toolchain_dir}.zip,
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v4
       - name: myname
@@ -35,6 +37,3 @@ jobs:
         with:
           name: toolchain
           path: x-toolchain-x64.zip
-
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
