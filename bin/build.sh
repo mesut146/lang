@@ -5,26 +5,21 @@ if [ -z "$1" ]; then
  exit
 fi
 
-cur=$(dirname $0)
-
 compiler="$1"
-
-echo "compiler=$1"
-
-#name=$(basename $compiler)2
 name="x2"
-
 build=$dir/../build
+mkdir -p $build
 out_dir=$build/${name}_out
 
+echo "compiler=$1"
+echo "out=$out_dir"
 
-bridge=$dir/../cpp_bridge/build/libbridge.a
-#bridge=$dir/../cpp_bridge/build/libbridge.so
+bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 
-sf=$($cur/find_llvm.sh)
-libdir=$(llvm-config${sf} --libdir)
+llvm_config_bin=$(${dir}/find_llvm.sh config)
+libdir=$(${llvm_config_bin} --libdir)
 libs="$libdir/libLLVM.so"
-flags="$bridge"
+flags="$bridge_lib"
 flags="$flags $out_dir/std.a"
 flags="$flags $libs"
 flags="$flags -lstdc++"

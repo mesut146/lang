@@ -3,26 +3,32 @@ name: test
 
 on: [push]
 
+env: 
+  last_version: '1.0'
+  toolchain_dir: x-toolchain-${last_version}-$(uname -m)
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        lang-version: [ '1.5' ]
+        lang-version: [ '1.0' ]
 
     steps:
+      - name: "download toolchain"
+        run: |
+          gh auth status
+          gh release download v$last_version
+          unzip ${toolchain_dir}.zip
+
       - uses: actions/checkout@v4
       - name: myname
         run: |
-          ls
-          # bash cpp_bridge/x.sh
-          # cd bin
-          mkdir build
-          wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
+          #wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           #bin/x86-64/x bt x2-x64 -root .
-          bin/build.sh bin/x86-64/x
-          bin/make_toolchain.sh build/x2-x64 . -zip
+          bin/build.sh toolchain_dir/bin/x
+          #bin/make_toolchain.sh build/x2-x64 . -zip
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -30,11 +36,5 @@ jobs:
           name: toolchain
           path: x-toolchain-x64.zip
 
-      - name: "test gh"
-        run: |
-          echo "Testing GitHub Actions"
-          gh auth status
-          gh release download toolchain
-          ls
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -30,7 +30,7 @@ get_llvm(){
   mv llvm-tmp/usr/lib/aarch64-linux-gnu/libLLVM.so.19 $dir/lib
 }
 #todo llvm
-cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib
+cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib/libLLVM.so.19
 cp -r $cur/../src/std $dir/src
 
 if [ "$3" = "-zip" ]; then
