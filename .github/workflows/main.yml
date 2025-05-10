@@ -24,10 +24,7 @@ jobs:
 
       - name: bootstrap
         run: |
-          #wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
-          #bin/x86-64/x bt x2-x64 -root .
           bin/build.sh $toolchain_dir
-          #bin/make_toolchain.sh build/x2-x64 . -zip
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

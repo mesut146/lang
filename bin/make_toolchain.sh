@@ -3,7 +3,12 @@ if [ ! -f "$1" ]; then
   exit
 fi
 
-if [ ! -d "$2" ]; then
+if [ ! -f "$2" ]; then
+  echo "enter old toolchain"
+  exit
+fi
+
+if [ ! -d "$3" ]; then
   echo "enter output dir"
   exit
 fi
@@ -11,7 +16,8 @@ fi
 cur=$(dirname $0)
 
 binary="$1"
-out="$2"
+old_toolchain="$2"
+out="$3"
 name=x-toolchain-$(uname -m)
 dir=$out/$name
 
@@ -30,10 +36,11 @@ get_llvm(){
   mv llvm-tmp/usr/lib/aarch64-linux-gnu/libLLVM.so.19 $dir/lib
 }
 #todo llvm
-cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib/libLLVM.so.19
+#cp /usr/lib/llvm-19/lib/libLLVM.so $dir/lib/libLLVM.so.19
+cp $old_toolchain/lib/libLLVM.so $dir/lib
 cp -r $cur/../src/std $dir/src
 
-if [ "$3" = "-zip" ]; then
+if [ "$4" = "-zip" ]; then
  zip -r ${name}.zip $dir
  rm -r $dir
 fi

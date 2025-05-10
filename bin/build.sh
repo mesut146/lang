@@ -32,3 +32,5 @@ $compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../sr
 LD=clang $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 cp ${out_dir}/${name} $build
+
+$dir/make_toolchain.sh ${out_dir}/${name} $toolchain . -zip
