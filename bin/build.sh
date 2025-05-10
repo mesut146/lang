@@ -18,7 +18,7 @@ echo "out=$out_dir"
 bridge_lib=$toolchain/lib/libbridge.a
 llvm_lib="$toolchain/lib/libLLVM.so"
 
-libs+=llvm_lib
+libs+=$llvm_lib
 flags="$bridge_lib"
 flags="$flags $out_dir/std.a"
 flags="$flags $libs"
