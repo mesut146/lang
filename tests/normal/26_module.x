@@ -3,6 +3,11 @@ mod M{
     struct A{
         a: i32;
     }
+    impl M::A{
+        func get(self): i32 {
+            return self.a;
+        }
+    }
 }
 
 impl M::A{
@@ -16,4 +21,5 @@ func main(){
     assert(a.a == 5);
 
     a = M::A::new(10);
+    assert(a.get() == 10);
 }

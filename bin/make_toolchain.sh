@@ -3,7 +3,7 @@ if [ ! -f "$1" ]; then
   exit
 fi
 
-if [ ! -f "$2" ]; then
+if [ ! -d "$2" ]; then
   echo "enter old toolchain"
   exit
 fi

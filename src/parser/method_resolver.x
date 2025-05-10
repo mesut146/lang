@@ -270,7 +270,7 @@ impl MethodResolver{
     
     func get_impl(resolver: Resolver*, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
         if(type.is_simple() && type.as_simple().scope.is_some()){
-            return Result<List<Pair<Impl*, i32>>, String>::err("get_impl scoped type".owned());
+            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl scoped type '{:?}'", type));
         }
         let list = List<Pair<Impl*, i32>>::new();
         let erased: String = print_erased(type);
