@@ -5,31 +5,28 @@ on: [push]
 
 env: 
   last_version: '1.0'
-  toolchain_dir: x-toolchain-${last_version}-$(uname -m)
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        lang-version: [ '1.0' ]
-
     steps:
+      - name: "set env"
+        run: echo "toolchain_dir=x-toolchain-$last_version-$(uname -m)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
       - name: "download toolchain"
         run: |
           gh auth status
-          gh release download v$last_version
-          unzip ${toolchain_dir}.zip,
+          gh release download v$last_version&&echo "download toolchain '$toolchain_dir'"
+          unzip $toolchain_dir.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/checkout@v4
-      - name: myname
+      - name: bootstrap
         run: |
           #wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && sudo  ./llvm.sh 19
           #bin/x86-64/x bt x2-x64 -root .
-          bin/build.sh toolchain_dir/bin/x
+          bin/build.sh $toolchain_dir
           #bin/make_toolchain.sh build/x2-x64 . -zip
 
       - name: Upload Artifacts

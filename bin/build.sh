@@ -1,35 +1,34 @@
 dir=$(dirname $0)
 
 if [ -z "$1" ]; then
- echo "provide compiler"
+ echo "provide toolchain dir"
  exit
 fi
 
-compiler="$1"
-name="x2"
+toolchain=$1
+compiler="$toolchain/bin/x"
 build=$dir/../build
 mkdir -p $build
+name="x2"
 out_dir=$build/${name}_out
 
-echo "compiler=$1"
+echo "compiler=$compiler"
 echo "out=$out_dir"
 
-bridge_lib=$dir/../cpp_bridge/build/libbridge.a
+bridge_lib=$toolchain/lib/libbridge.a
+llvm_lib="$toolchain/lib/libLLVM.so"
 
-llvm_config_bin=$(${dir}/find_llvm.sh config)
-libdir=$(${llvm_config_bin} --libdir)
-libs="$libdir/libLLVM.so"
+libs+=llvm_lib
 flags="$bridge_lib"
 flags="$flags $out_dir/std.a"
 flags="$flags $libs"
 flags="$flags -lstdc++"
 
-$dir/../cpp_bridge/x.sh
-
 #compile std
 $compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
+#todo use toolchain's std dir
 #vendor=x4 compiler_name=$name version=1.7 \
-$compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+LD=clang $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 cp ${out_dir}/${name} $build
