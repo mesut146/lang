@@ -177,7 +177,8 @@ enum Item{
   Extern(methods: List<Method>),
   Const(val: Const),
   Glob(gl: Global),
-  Module(m: Module)
+  Module(m: Module),
+  Use(ty: Type),
 }
 
 impl Item{

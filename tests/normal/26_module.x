@@ -1,4 +1,6 @@
 mod M{
+    //use M;
+    
     //#derive(Debug)
     struct A{
         a: i32;
