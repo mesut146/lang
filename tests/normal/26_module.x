@@ -8,6 +8,9 @@ mod M{
             return self.a;
         }
     }
+    /*impl A{
+
+    }*/
 }
 
 impl M::A{
