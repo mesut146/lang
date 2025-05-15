@@ -178,7 +178,7 @@ enum Item{
   Const(val: Const),
   Glob(gl: Global),
   Module(m: Module),
-  Use(ty: Type),
+  Use{us: UseItem},
 }
 
 impl Item{
@@ -188,6 +188,12 @@ impl Item{
     }
     panic("Item::as_impl()");
   }
+}
+
+struct UseItem{
+  path: List<String>;
+  list: List<String>;
+  has_multiple: bool;
 }
 
 struct Module{

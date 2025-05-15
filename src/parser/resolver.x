@@ -694,6 +694,7 @@ impl Resolver{
         }
         res.drop();
       },
+      Item::Use(ty) => {},
     }
   }
 
@@ -959,7 +960,8 @@ impl Resolver{
           self.visit_item(it2);
         }
         //panic("visit_item todo module {:?}", md);
-      }
+      },
+      Item::Use(ty) => {},
     }
   }
 
@@ -1328,16 +1330,13 @@ impl Resolver{
     return res;
   }
 
-  func clone_op(op: Option<Decl*>*): Option<Decl*>{
+  /*func clone_op(op: Option<Decl*>*): Option<Decl*>{
     if(op.is_none()) return Option<Decl*>::new();
     return Option<Decl*>::new(*op.get());
-  }
+  }*/
 
   func visit_type(self, node: Type*): RType{
-    let str = node.print();
-    let res = self.visit_type_str(node, &str);
-    str.drop();
-    return res;
+    return self.visit_type0(node).unwrap();
   }
 
   func visit_type0(self, node: Type*): Result<RType, String>{

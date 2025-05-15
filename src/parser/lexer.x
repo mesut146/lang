@@ -11,61 +11,43 @@ static lexer_ops = make_ops();
 func make_keywords(): HashMap<str, TokenType>{
   let map = HashMap<str, TokenType>::new(55);
   map.insert("as", TokenType::AS);
-  map.insert("is", TokenType::IS);
   map.insert("bool", TokenType::BOOLEAN);
+  map.insert("break",  TokenType::BREAK);
   map.insert("const",  TokenType::CONST);
   map.insert("continue", TokenType::CONTINUE);
+  map.insert("do",  TokenType::DO);
+  map.insert("else",  TokenType::ELSE);
   map.insert("enum", TokenType::ENUM);
   map.insert("extern", TokenType::EXTERN);
-  map.insert("false", TokenType::FALSE);
-  map.insert("impl", TokenType::IMPL);
-  map.insert("import", TokenType::IMPORT);
+  map.insert("f32", TokenType::F32);
+  map.insert("f64", TokenType::F64);
+  map.insert("false",  TokenType::FALSE);
+  map.insert("for",  TokenType::FOR);
+  map.insert("func",  TokenType::FUNC);
   map.insert("i8", TokenType::I8);
   map.insert("i16", TokenType::I16);
   map.insert("i32", TokenType::I32);
   map.insert("i64", TokenType::I64);
-  map.insert("f32", TokenType::F32);
-  map.insert("f64", TokenType::F64);
+  map.insert("if",  TokenType::IF);
+  map.insert("impl", TokenType::IMPL);
+  map.insert("import", TokenType::IMPORT);
+  map.insert("is", TokenType::IS);
+  map.insert("let", TokenType::LET);
+  map.insert("match",  TokenType::MATCH);
+  map.insert("mod", TokenType::MOD);
   map.insert("null", TokenType::NULL_LIT);
   map.insert("return", TokenType::RETURN);
-  map.insert("true", TokenType::TRUE);
-  map.insert("if", TokenType::IF);
-  map.insert("else", TokenType::ELSE);
-  map.insert("for", TokenType::FOR);
-  map.insert("mod", TokenType::MOD);
-  map.insert("while", TokenType::WHILE);
-  map.insert("break", TokenType::BREAK);
-  map.insert("match", TokenType::MATCH);
-  map.insert("let", TokenType::LET);
-  map.insert("const", TokenType::CONST);
-  map.insert("true",  TokenType::TRUE);
-  map.insert("false",  TokenType::FALSE);
-  map.insert("i8",  TokenType::I8);
-  map.insert("i16",  TokenType::I16);
-  map.insert("i32",  TokenType::I32);
-  map.insert("i64",  TokenType::I64);
-  map.insert("f32",  TokenType::F32);
-  map.insert("f64",  TokenType::F64);
-  map.insert("null",  TokenType::NULL_LIT);
-  map.insert("as",  TokenType::AS);
-  map.insert("is",  TokenType::IS);
-  map.insert("return",  TokenType::RETURN);
-  map.insert("continue",  TokenType::CONTINUE);
-  map.insert("if",  TokenType::IF);
-  map.insert("else",  TokenType::ELSE);
-  map.insert("for",  TokenType::FOR);
-  map.insert("while",  TokenType::WHILE);
-  map.insert("do",  TokenType::DO);
-  map.insert("break",  TokenType::BREAK);
-  map.insert("func",  TokenType::FUNC);
-  map.insert("let",  TokenType::LET);
-  map.insert("match",  TokenType::MATCH);
   map.insert("static", TokenType::STATIC);
   map.insert("struct", TokenType::STRUCT);
   map.insert("trait", TokenType::TRAIT);
+  map.insert("true",  TokenType::TRUE);
   map.insert("type", TokenType::TYPE);
-  //map.insert("new",  TokenType::NEW);
+  map.insert("u8", TokenType::U8);
+  map.insert("u16", TokenType::U16);
+  map.insert("u32", TokenType::U32);
+  map.insert("u64", TokenType::U64);
   map.insert("virtual", TokenType::VIRTUAL);
+  map.insert("while",  TokenType::WHILE);
   return map;
 }
 
@@ -184,13 +166,12 @@ impl Lexer{
     return self.single_line;
   }
 
-  func err(self, msg: str){
-    print("in file {}:{} `{}`\n", &self.path, self.line(), get_line(self.buf.str(), self.line()));
-    panic("{}", msg);
-  }
-  func err(self, msg: String){
-    self.err(msg.str());
-    msg.drop();
+  func make_err_header(self, print_line: bool): String{
+    if(print_line){
+      return format("lexer error in file {}:{} `{}`", &self.path, self.line(), get_line(self.buf.str(), self.line()));
+    }else{
+      return format("lexer error in file {}:{}", &self.path, self.line());
+    }
   }
   
   func line_comment(self): Token{
@@ -207,15 +188,15 @@ impl Lexer{
     return Token::new(TokenType::COMMENT, self.str(start, self.pos));
   }
   
-  func checkEscape(c: i8): i32 {
-    if (c == 'n') return '\n';
-    if (c == 'r') return '\r';
-    if (c == 't') return '\t';
-    if (c == '\\') return '\\';
-    if (c == '"') return '"';
-    if (c == '\'') return '\'';
-    if (c == '0') return '\0';
-    panic("invalid escape: {}", c);
+  func checkEscape(c: i8): Result<i32, String> {
+    if (c == 'n') return Result<i32, String>::ok('\n');
+    if (c == 'r') return Result<i32, String>::ok('\r');
+    if (c == 't') return Result<i32, String>::ok('\t');
+    if (c == '\\') return Result<i32, String>::ok('\\');
+    if (c == '"') return Result<i32, String>::ok('"');
+    if (c == '\'') return Result<i32, String>::ok('\'');
+    if (c == '0') return Result<i32, String>::ok('\0');
+    return Result<i32, String>::err(format("invalid escape: {} val: {}", c, c as i32));
   }
   
   func kw(s: str): TokenType{
@@ -224,7 +205,7 @@ impl Lexer{
     return TokenType::EOF_;
   }
   
-  func read_op(self): Token{
+  func read_op(self): Result<Token, String>{
     //can be length of 1 to 3
     for (let i = 3; i > 0; i-=1) {
         if(self.pos + i > self.buf.len()){
@@ -235,11 +216,11 @@ impl Lexer{
         if (it.is_some()) {
             self.pos += i;
             let tok = it.unwrap(); 
-            return Token::new(*tok, s);
+            return Result<Token, String>::ok(Token::new(*tok, s));
         }
     }
     //never
-    panic("readOp() failed with buffer: {}", self.peek());
+    return Result<Token, String>::err(format("readOp() failed with buffer: {:?}", self.peek()));
 }
 
   func skip_ws(self){
@@ -261,77 +242,30 @@ impl Lexer{
   
   func next(self): Token{
     let start = self.pos;
-    let res = self.next0();
+    //todo err propagate
+    let tmp = self.next0();
+    if(tmp.is_err()){
+      let err = self.make_err_header(true);
+      err.append("\n");
+      err.append(tmp.get_err());
+      panic("{}", err);
+    }
+    let res = tmp.unwrap();
     res.line = self.line();
     res.start = start;
     res.end = self.pos;
     return res;
   }
-  
-  func block_comment(self): Token{
-    let start = self.pos;
-    self.pos += 2;
-    while (self.has()) {
-      if (self.peek() == '*') {
-        self.pos+=1;
-        if (self.has() && self.peek() == '/') {
-          self.pos+=1;
-          return Token::new(TokenType::COMMENT, self.str(start, self.pos));                        
-        }
-      } else {
-        if (self.peek() == '\r') {
-          self.pos+=1;
-          self.line += 1;
-          if (self.peek() == '\n') {
-           self.pos+=1;
-          }
-        } else if (self.peek() == '\n') {
-          self.pos+=1;
-          self.line+=1;
-        } else {
-          self.pos+=1;
-        }
-      }
-    }            
-    panic("unclosed block comment at line {}" , self.line());
-  }
 
-  func read_string(self): Token{
-    let c = self.peek();
-    let open = c;
-    let kind = TokenType::STRING_LIT;
-    if(c == '\''){
-      kind = TokenType::CHAR_LIT;
-    }
-    let str = String::new();
-    //s.append(c);
-    self.pos += 1;
-    while (self.pos < self.buf.len()) {
-        c = self.read();
-        if (c == '\\') {
-            //s.append("\\");
-            str.append(checkEscape(self.peek()) as i8);
-            self.pos += 1;
-        } else if (c == open) {
-            //s.append(c);
-            return Token::new(kind, str);
-        } else {
-          str.append(c);
-        }
-    }
-    self.err("unterminated string literal");
-    panic("");
-  }
-  
-  func next0(self): Token{
-    if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
-    if(self.peek() == 0) return Token::new(TokenType::EOF_);
+  func next0(self): Result<Token, String>{
+    if(self.pos == self.buf.len()) return Result<Token, String>::ok(Token::new(TokenType::EOF_));
+    if(self.peek() == 0) return Result<Token, String>::ok(Token::new(TokenType::EOF_));
     self.skip_ws();
-    if(self.pos == self.buf.len()) return Token::new(TokenType::EOF_);
+    if(self.pos == self.buf.len()) return Result<Token, String>::ok(Token::new(TokenType::EOF_));
     let c = self.peek();
     let start = self.pos;
     if(c.is_letter() || c == '_'){
-      return self.read_ident();
+      return Result<Token, String>::ok(self.read_ident());
     }
     if(c.is_digit()){
       return self.read_number();
@@ -346,7 +280,7 @@ impl Lexer{
     if (c == '/') {
         let c2 = self.peek(1);
         if (c2 == '/') {
-            return self.line_comment();
+            return Result<Token, String>::ok(self.line_comment());
         } else if (c2 == '*') {
             return self.block_comment();
         } else {
@@ -364,10 +298,67 @@ impl Lexer{
       return self.read_op();
     }
     os.drop();
-    if(self.single_line!=-1){
-        print("buf='{}'\n", self.buf);
+    let err = String::new();
+    if(self.single_line != -1){
+      err.append("buf='");
+      err.append(&self.buf);
+      err.append("'\n");
     }
-    panic("in file {}\nunexpected char: {}({}) at {} line:{}", &self.path, c, c, start,self.line);
+    return Result<Token, String>::err(format("unexpected char: '{}' val: {} pos: {}", c, c as i32, start));
+  }
+  
+  func block_comment(self): Result<Token, String>{
+    let start = self.pos;
+    self.pos += 2;
+    while (self.has()) {
+      if (self.peek() == '*') {
+        self.pos += 1;
+        if (self.has() && self.peek() == '/') {
+          self.pos += 1;
+          return Result<Token, String>::ok(Token::new(TokenType::COMMENT, self.str(start, self.pos)));
+        }
+      }
+      else if (self.peek() == '\r') {
+        self.pos += 1;
+        self.line += 1;
+        if (self.has() && self.peek() == '\n') {
+          self.pos += 1;
+        }
+      } else if (self.peek() == '\n') {
+        self.pos += 1;
+        self.line += 1;
+      } else {
+        self.pos += 1;
+      }
+    }            
+    return Result<Token, String>::err(format("unclosed block comment at line {}" , self.line()));
+  }
+
+  func read_string(self): Result<Token, String>{
+    let c = self.peek();
+    let open = c;
+    let kind = TokenType::STRING_LIT;
+    if(c == '\''){
+      kind = TokenType::CHAR_LIT;
+    }
+    let str = String::new();
+    //s.append(c);
+    self.pos += 1;
+    while (self.pos < self.buf.len()) {
+        c = self.read();
+        if (c == '\\') {
+            //s.append("\\");
+            let escp = checkEscape(self.peek());
+            str.append(escp.unwrap() as i8);
+            self.pos += 1;
+        } else if (c == open) {
+            //s.append(c);
+            return Result<Token, String>::ok(Token::new(kind, str));
+        } else {
+          str.append(c);
+        }
+    }
+    return Result<Token, String>::err("unterminated string literal".owned());
   }
   
   func read_ident(self): Token {
@@ -381,16 +372,16 @@ impl Lexer{
         break;
       }
     }
-    let s = self.str(start, self.pos);
-    let type = kw(s);
-    if (type is TokenType::EOF_) {
-        type = TokenType::IDENT;
+    let val = self.str(start, self.pos);
+    let ty = kw(val);
+    if (ty is TokenType::EOF_) {
+        ty = TokenType::IDENT;
     }
-    return Token::new(type, s);
+    return Token::new(ty, val);
   }
   
   //[0-9] ('_'? [0-9])* ('.' [0-9]+)? ('_' suffix)?
-  func read_number(self):Token {
+  func read_number(self): Result<Token, String> {
     let start = self.pos;
     let off = 0;
     if(self.peek() == '-'){
@@ -404,7 +395,7 @@ impl Lexer{
         self.pos += 1;
       }
       let type = TokenType::INTEGER_LIT;
-      return Token::new(type, self.str(start, self.pos));
+      return Result<Token, String>::ok(Token::new(type, self.str(start, self.pos)));
     }
     self.pos += 1;
     while (true){
@@ -440,10 +431,12 @@ impl Lexer{
         break;
       }
     }
-    if(mustSuffix && !has) self.err(format("expected literal suffix got: {}", self.peek()));
+    if(mustSuffix && !has){
+      return Result<Token, String>::err(format("expected literal suffix got: {}", self.peek()));
+    }
     let type = TokenType::INTEGER_LIT;
     if(dot) type = TokenType::FLOAT_LIT;
-    return Token::new(type, self.str(start, self.pos));
+    return Result<Token, String>::ok(Token::new(type, self.str(start, self.pos)));
   }
 
   func get_suffix(): [str; 10]{

@@ -146,10 +146,29 @@ impl Debug for Item{
       },
       Item::Module(md) => {
         Debug::debug(md, f);
+      },
+      Item::Use(uit) => {
+        Debug::debug(uit, f);
       }
     }
   }
 }
+impl Debug for UseItem{
+  func debug(self, f: Fmt*){
+    f.print("use ");
+    join(f, &self.path, "::");
+    if(self.has_multiple){
+      f.print("::{");
+      join(f, &self.list, ",");
+      f.print("}");
+    }else{
+      f.print("::");
+      Debug::debug(self.list.get(0), f);
+    }
+    f.print(";");
+  }
+}
+
 impl Debug for Module{
   func debug(self, f: Fmt*){
     f.print("mod ");

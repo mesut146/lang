@@ -1,5 +1,5 @@
 mod M{
-    //use M;
+    use M;
     
     //#derive(Debug)
     struct A{
