@@ -819,21 +819,24 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    let cmp = Compiler::new(ctx, config, args.cache);
+    //let cmp = Compiler::new(ctx, config, args.cache);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
     }
-    if(cmp.ctx.verbose){
+    if(ctx.verbose){
         let idx = args.idx.lock();
         print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
         *idx = *idx + 1;
         args.idx.unlock();
     }
     let proc = Process::run(cmd.str());
-    proc.eat_close();
-    if(cmp.ctx.verbose){
+    let code = proc.eat_close();
+    if(code != 0){
+      panic("failed to compile {}", args.file);
+    }
+    if(ctx.verbose){
         let compiled = args.compiled.lock();
         print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
         args.compiled.unlock();
@@ -842,7 +845,7 @@ impl Compiler{
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
     args.compiled.unlock();
     sleep(1);
-    cmp.drop();
+    ctx.drop();
     cmd.drop();
   }
 

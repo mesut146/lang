@@ -236,7 +236,7 @@ func mangleType(type: Type*, f: Fmt*){
             }
         },
         Type::Tuple(tt) => {
-            f.print("tuple");
+            f.print("__tuple");
             for ty in &tt.types{
                 f.print("_");
                 mangleType(ty, f);

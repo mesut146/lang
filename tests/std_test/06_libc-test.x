@@ -32,7 +32,7 @@ func seek_test(f: FILE*, len: i32){
 
 func list_test(){
   let dir = ".";
-  let arr: List<String> = File::list(dir);
+  let arr: List<String> = File::read_dir(dir).unwrap();
   print("{} files in '{}'\n", arr.len(), dir);
   /*for(let i = 0;i < arr.len();++i){
     let file = arr.get_ptr(i);

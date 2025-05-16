@@ -18,6 +18,7 @@ import std/libc
 import std/io
 import std/fs
 import std/stack
+import std/result
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
@@ -28,6 +29,13 @@ static lambdaCnt = 0;
 func verbose_stmt(): bool{
   return false;
 }
+
+#derive(Debug)
+struct Error{
+  msg: String;
+  line: i32;
+}
+
 
 struct Context{
   map: HashMap<String, Box<Resolver>>;
@@ -308,6 +316,9 @@ struct RType{
   fp_info: Option<FunctionType>;
   lambda_call: Option<LambdaCallInfo>;
 }
+
+type Result2 = Result<RType, Error>;
+
 impl RType{
   func new(s: str): RType{
     return RType::new(Type::new(s.str()));
@@ -556,7 +567,10 @@ impl Resolver{
     self.init_globals();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
-      self.visit_item(item);
+      match self.visit_item(item){
+        Err(err) => self.err(err.line, err.msg),
+        _ => {}
+      }
       if(self.ctx.verbose_all && item is Item::Method){
           print("resolve method done\n");
       }
@@ -907,7 +921,7 @@ impl Resolver{
     return Option<Module*>::new();
   }
 
-  func visit_item(self, node: Item*){
+  func visit_item(self, node: Item*): Result<(), Error>{
     match node{
       Item::Method(m) => {
         self.visit_method(m);
@@ -916,7 +930,7 @@ impl Resolver{
         //pass
       },
       Item::Impl(imp) => {
-        self.visit_impl(imp);
+        return self.visit_impl(imp);
       },
       Item::Decl(decl) => {
         match decl{
@@ -957,12 +971,13 @@ impl Resolver{
       Item::Glob(g) => {},
       Item::Module(md) => {
         for it2 in &md.items{
-          self.visit_item(it2);
+          self.visit_item(it2)?;
         }
         //panic("visit_item todo module {:?}", md);
       },
       Item::Use(ty) => {},
     }
+    return Result<(), Error>::ok(());
   }
 
   func is_cyclic(self, type: Type*, target: Type*): bool{
@@ -1088,12 +1103,13 @@ impl Resolver{
     }
   }
 
-  func visit_impl(self, imp: Impl*){
+  func visit_impl(self, imp: Impl*): Result<(), Error>{
     if(!imp.info.type_params.empty()){
       //generic
-      return;
+      return Result<(), Error>::ok(());
     }
     self.curImpl = Option::new(imp);
+    self.visit_type0(&imp.info.type)?.drop();
     //resolve non generic type args
     if(imp.info.trait_name.is_some()){
       //todo
@@ -1142,6 +1158,7 @@ impl Resolver{
       }
     }
     self.curImpl = Option<Impl*>::new();
+    return Result<(), Error>::ok(());
   }
 
   func visit_method(self, node: Method*){
@@ -1339,7 +1356,7 @@ impl Resolver{
     return self.visit_type0(node).unwrap();
   }
 
-  func visit_type0(self, node: Type*): Result<RType, String>{
+  func visit_type0(self, node: Type*): Result<RType, Error>{
     let str = node.print();
     let res = self.visit_type_str0(node, &str);
     str.drop();
@@ -1350,10 +1367,10 @@ impl Resolver{
     return self.visit_type_str0(node, str).unwrap();
   }
 
-  func visit_type_str0(self, node: Type*, str: String*): Result<RType, String>{
+  func visit_type_str0(self, node: Type*, str: String*): Result<RType, Error>{
     let cached = self.typeMap.get(str);
     if(cached.is_some()){
-      return Result<RType, String>::ok(cached.unwrap().clone());
+      return Result<RType, Error>::ok(cached.unwrap().clone());
     }
     //print("visit_type {}\n", str);
     match node{
@@ -1364,22 +1381,22 @@ impl Resolver{
         }
         let res = RType::new(Type::Tuple{.Node::new(-1, node.line), TupleType{types}});
         self.addType(str.clone(), res.clone());
-        return Result<RType, String>::ok(res);
+        return Result<RType, Error>::ok(res);
       },
       Type::Pointer(bx) => {
         let res = self.visit_type(bx.get());
         let ptr = res.type.clone().toPtr();
         res.type.drop();
         res.type = ptr;
-        return Result<RType, String>::ok(res);
+        return Result<RType, Error>::ok(res);
       },
       Type::Slice(bx) => {
         let elem: RType = self.visit_type(bx.get());
-        return Result<RType, String>::ok(RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())})); 
+        return Result<RType, Error>::ok(RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(elem.unwrap())})); 
       },
       Type::Array(inner, size) => {
         let elem: RType = self.visit_type(inner.get());
-        return Result<RType, String>::ok(RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), *size}));
+        return Result<RType, Error>::ok(RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elem.unwrap()), *size}));
       },
       Type::Function(ft_box) => {
         let ft = FunctionType{
@@ -1389,7 +1406,7 @@ impl Resolver{
         for prm in &ft_box.get().params{
           ft.params.add(self.visit_type(prm).unwrap());
         }
-        return Result<RType, String>::ok(RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)}));
+        return Result<RType, Error>::ok(RType::new(Type::Function{.Node::new(-1, node.line), Box::new(ft)}));
       },
       Type::Lambda(ft_box) => {
         let ret = Option<Type>::new();
@@ -1407,17 +1424,17 @@ impl Resolver{
         for prm in &ft_box.get().captured{
           ft.captured.add(self.visit_type(prm).unwrap());
         }
-        return Result<RType, String>::ok(RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)}));
+        return Result<RType, Error>::ok(RType::new(Type::Lambda{.Node::new(-1, node.line), Box::new(ft)}));
       },
       Type::Simple(simple) => {
         if(node.is_prim() || node.is_void()){
           let res = RType::new(str.str());
           self.addType(str.clone(), res.clone());
-          return Result<RType, String>::ok(res);
+          return Result<RType, Error>::ok(res);
         }
         if (str.eq("Self") && !self.curMethod.unwrap().parent.is_none()) {
           let imp = self.curMethod.unwrap().parent.as_impl();
-          return Result<RType, String>::ok(self.visit_type(&imp.type));
+          return Result<RType, Error>::ok(self.visit_type(&imp.type));
         }
         if(simple.scope.is_none()){
           return self.visit_type2(node, simple, str);
@@ -1431,7 +1448,7 @@ impl Resolver{
         let decl = self.get_decl(&scope).unwrap();
         if (!(decl is Decl::Enum)) {
           scope.drop();
-          return Result<RType, String>::ok(self.member_func_ptr(node, str));
+          return Result<RType, Error>::ok(self.member_func_ptr(node, str));
         }
         findVariant(decl, &simple.name);
         let ds = decl.type.print();
@@ -1439,7 +1456,7 @@ impl Resolver{
         self.addType(str.clone(), res.clone());
         ds.drop();
         scope.drop();
-        return Result<RType, String>::ok(res);
+        return Result<RType, Error>::ok(res);
       }
     }
   }
@@ -1500,22 +1517,22 @@ impl Resolver{
     return rt;
   }
 
-  func find_type(self, node: Type*, simple: Simple*): Result<RType, String>{
+  func find_type(self, node: Type*, simple: Simple*): Result<RType, Error>{
     let name = &simple.name;
     let opt = self.typeMap.get(name);
     if (opt.is_some()) {
       let rt: RType* = opt.unwrap();
-      return Result<RType, String>::ok(rt.clone());
+      return Result<RType, Error>::ok(rt.clone());
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
-      return Result<RType, String>::err(format("couldn't find type: {:?}", node));
+      return Result<RType, Error>::err(Error{format("couldn't find type: {:?}", node), node.line});
     }
     let tmp: RType = imp_result.unwrap();
-    return Result<RType, String>::ok(tmp);
+    return Result<RType, Error>::ok(tmp);
   }
 
-  func visit_type2(self, node: Type*, simple: Simple*, str: String*): Result<RType, String>{
+  func visit_type2(self, node: Type*, simple: Simple*, str: String*): Result<RType, Error>{
     let tmp = self.find_type(node, simple);
     if(tmp.is_err()) return tmp;
     if(!tmp.get().is_decl()){
@@ -1537,11 +1554,12 @@ impl Resolver{
       res.desc = target_rt.desc.clone();
       self.addType(str.clone(), res.clone());
       target_rt.drop();
-      return Result<RType, String>::ok(res);
+      return Result<RType, Error>::ok(res);
     }
     target_rt.drop();
     if (simple.args.len() != target.type.get_args().len()) {
-      return Result<RType, String>::err(format("type arguments size not matched {} vs {}", simple.args.len(), target.type.get_args().len()));
+      let err = Error{format("type arguments size not matched {} vs {}", simple.args.len(), target.type.get_args().len()), node.line};
+      return Result<RType, Error>::err(err);
     }
     let map = make_type_map(simple, target);
     let copier = AstCopier::new(&map);
@@ -1550,7 +1568,7 @@ impl Resolver{
     self.add_used_decl(decl);//fields may be foreign
     let res = self.getTypeCached(str);
     map.drop();
-    return Result<RType, String>::ok(res);
+    return Result<RType, Error>::ok(res);
   }
 
   func add_generated(self, decl: Decl): Decl*{
@@ -3155,10 +3173,13 @@ impl Resolver{
     }else{
         expected_type = Option::new(&self.curMethod.unwrap().type);
     }
+    let tmp = self.visit_type(expected_type.unwrap()).unwrap();
+    expected_type = Option::new(&tmp);
     let cmp = MethodResolver::is_compatible(type, expected_type.unwrap());
     if(cmp.is_some()){
       self.err(line, format("return type mismatch {:?} -> {:?}", type, expected_type.unwrap()));
     }
+    tmp.drop();
   }
 
   func visit(self, node: Stmt*){

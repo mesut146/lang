@@ -115,7 +115,7 @@ impl Parser{
 
   func err(self, msg: str){
     let line = self.line();
-    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line));
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line).trim());
     panic("{}", msg);
   }
   func err(self, msg: String){
@@ -1113,6 +1113,35 @@ impl Parser{
       return Expr::Lambda{.id, Lambda{params, ret, Box::new(body.unwrap())}};
   }
 
+  func tuple_or_par(self): Expr{
+    let n = self.node();
+    self.consume(TokenType::LPAREN);
+    if(self.is(TokenType::RPAREN)){
+      //empty tuple
+      self.consume(TokenType::RPAREN);
+      let elems = List<Expr>::new();
+      return Expr::Tuple{.n, elems};
+    }
+    let e = self.parse_expr();
+    if(self.is(TokenType::RPAREN)){
+      self.consume(TokenType::RPAREN);
+      return Expr::Par{.n, Box::new(e)};
+    }
+    self.consume(TokenType::COMMA);
+    let elems = List<Expr>::new();
+    elems.add(e);
+    while(!self.is(TokenType::RPAREN)){
+      elems.add(self.parse_expr());
+      if(self.is(TokenType::COMMA)){
+        self.consume(TokenType::COMMA);
+      }else if(!self.is(TokenType::RPAREN)){
+        self.err("expected [',' or ')'] after tuple elem");
+      }
+    }
+    self.consume(TokenType::RPAREN);
+    return Expr::Tuple{.n, elems};
+  }
+
   func prim(self, allow_obj: bool): Expr{
     let tok = self.peek();
     let n = self.node();
@@ -1138,26 +1167,7 @@ impl Parser{
       return Expr::If{.n, Box::new(self.parse_if())};
     }
     else if(self.is(TokenType::LPAREN)){
-      self.consume(TokenType::LPAREN);
-      let e = self.parse_expr();
-      if(self.is(TokenType::COMMA)){
-        self.pop();
-        let elems = List<Expr>::new();
-        elems.add(e);
-        while(!self.is(TokenType::RPAREN)){
-          elems.add(self.parse_expr());
-          if(self.is(TokenType::COMMA)){
-            self.pop();
-          }else if(!self.is(TokenType::RPAREN)){
-            self.err("expected [',' or ')'] after tuple elem");
-          }
-        }
-        self.consume(TokenType::RPAREN);
-        return Expr::Tuple{.n, elems};
-      }else{
-        self.consume(TokenType::RPAREN);
-        return Expr::Par{.n, Box::new(e)};
-      }
+      return self.tuple_or_par();
     }else if(self.is(TokenType::LBRACKET)){
       self.consume(TokenType::LBRACKET);
       let arr = self.exprList(TokenType::SEMI);

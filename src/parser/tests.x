@@ -70,7 +70,7 @@ func compile_dir2(dir: str, args: str, exc: Option<str>){
     compile_dir2(dir, args, exc, Option<String>::new());
 }
 func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
-    let list: List<String> = File::list(dir);
+    let list: List<String> = File::read_dir(dir).unwrap();
     list.sort();
     print("compile_dir '{}' -> {} elems\n", dir, list.len());
     for(let i = 0;i < list.len();++i){
@@ -147,7 +147,7 @@ func std_test(){
 
 func std_test_regex(pat: String){
     let dir = format("{}/tests/std_test", root.get());
-    let files = File::list(dir.str());
+    let files = File::read_dir(dir.str()).unwrap();
     for(let i = 0;i < files.len();++i){
         let fl = files.get(i);
         let fl2 = fl.str();
@@ -212,7 +212,7 @@ func normal_test(args_extra: Option<String>){
 func normal_test_regex(pattern: String, args: Option<String>){
     print("normal_test\n");
     let dir = format("{}/tests/normal", root.get());
-    let files = File::list(dir.str());
+    let files = File::read_dir(dir.str()).unwrap();
     for(let i = 0;i < files.len();++i){
         let fl = files.get(i);
         let fl2 = fl.str();

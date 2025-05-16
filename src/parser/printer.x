@@ -3,13 +3,14 @@ import parser/ast
 import parser/parser
 import parser/token
 import std/fs
+import std/result
 
 static print_cst = false;
 //static pretty_print = true;
 
 func format_dir(dir: str, out: str){
     File::create_dir(out);
-    let files = File::list(dir);
+    let files = File::read_dir(dir).unwrap();
     for file in &files{
         let file2 = format("{}/{}", dir, file);
         let outf = format("{}/{}", out, file);

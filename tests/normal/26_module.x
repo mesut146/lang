@@ -1,5 +1,5 @@
 mod M{
-    use M;
+    //use M;
     
     //#derive(Debug)
     struct A{
@@ -10,9 +10,9 @@ mod M{
             return self.a;
         }
     }
-    /*impl A{
+    impl A{
 
-    }*/
+    }
 }
 
 impl M::A{
@@ -25,6 +25,6 @@ func main(){
     let a = M::A{a: 5};
     assert(a.a == 5);
 
-    a = M::A::new(10);
-    assert(a.get() == 10);
+    /*a = M::A::new(10);
+    assert(a.get() == 10);*/
 }

@@ -716,7 +716,7 @@ impl MethodResolver{
                         return Result<i32, String>::err(format("prm is not tuple {:?} vs {:?}", arg, prm));
                     }
                 }
-                return infer(arg.elem(), prm.elem(), inferred, type_params);
+                return Result<i32, String>::ok(0);
             }
         }
     }

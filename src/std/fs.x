@@ -105,12 +105,14 @@ impl File{
     return list;
   }
 
-  func list(path: str): List<String>{
+  func read_dir(path: str): Result<List<String>, String>{
     let list = List<String>::new();
     let path_c = CStr::new(path);
     let dp = opendir(path_c.ptr());
     path_c.drop();
-    if(dp as u64 == 0) panic("no such dir {}", path);
+    if(dp as u64 == 0) {
+      return Result<List<String>, String>::err(format("no such dir {}", path));
+    }
     while(true){
       let ep: dirent* = readdir(dp);
       if(ep as u64 == 0) break;
@@ -118,7 +120,7 @@ impl File{
       list.add(entry.str());
     }
     closedir(dp);
-    return list;
+    return Result<List<String>, String>::ok(list);
   }
   
   func is_dir(path: str): bool{
@@ -167,17 +169,17 @@ impl File{
     Drop::drop(path_c);
   }
   
-  func create_dir(path: str){
+  func create_dir(path: str): Result<(), String>{
     if(exist(path)){
-      return;
+      return Result<(), String>::ok(());
     }
     let path_c = CStr::new(path);
     let rc = mkdir(path_c.ptr(), /*0777*/ /*511*/ 511);
     Drop::drop(path_c);
     if(rc != 0){
-      print("code='{}'\n", rc);
-      panic("failed to create dir '{}', code={}", path, &rc);
+      return Result<(), String>::err(format("failed to create dir '{}', code={}", path, &rc));
     }
+    return Result<(), String>::ok(());
   }
   
   func resolve(path: str): String{
