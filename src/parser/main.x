@@ -264,6 +264,23 @@ func handle_c(cmd: CmdArgs*){
     }
     std_path.drop();
   }
+  if(cmd.has_any("-target")){
+    let target = cmd.get_val("-target").unwrap();
+    if(target.eq("x86_64-unknown-linux-gnu") || target.eq("x86_64")){
+      std::setenv("target_triple", "x86_64-unknown-linux-gnu");
+    }
+    else if(target.eq("aarch64-linux-gnu") || target.eq("arm64")){
+      std::setenv("target_triple", "aarch64-linux-gnu");
+    }
+    else if(target.eq("android")){
+      std::setenv("target_triple", "aarch64-linux-android");
+    }
+    else{
+      panic("unsupported target: {}", target);
+    }
+  }
+
+
   let path: String = cmd.get();
   
   config.set_file(path.str());
@@ -283,6 +300,7 @@ func handle_c(cmd: CmdArgs*){
       name.drop();
     }
   }
+  
   if(File::is_dir(path.str())){
     let out = Compiler::compile_dir(config);
     out.drop();
