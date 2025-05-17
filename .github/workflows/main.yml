@@ -5,7 +5,7 @@ on: [push]
 
 env: 
   last_version: '1.01'
-  new_version: '1.02'
+  new_version: '1.01'
 
 jobs:
   build:
