@@ -122,6 +122,10 @@ impl Parser{
     self.err(msg.str());
     msg.drop();
   }
+  func err(self, line: i32, msg: String){
+    print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line).trim());
+    panic("{}", msg);
+  }
 
   func parse_attrs(self): Attributes{
     let res = Attributes::new();
@@ -1238,71 +1242,22 @@ impl Parser{
           return Expr::Type{.n, ty};
         }
       }
-      /*let nm = self.popv();
-      if(self.is(TokenType::LPAREN)){
-        return self.call(nm);
-      }else if(self.is(TokenType::COLON2)){
-        self.consume(TokenType::COLON2);
-        let ty = self.parse_type();
-        let ty_name = ty.name().clone();
-        if(self.is(TokenType::BANG, TokenType::LPAREN)){
-          self.consume(TokenType::BANG);
-          self.consume(TokenType::LPAREN);
-          let args = self.exprList(TokenType::RPAREN);
-          self.consume(TokenType::RPAREN);
-          return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::new(Type::new(nm)), name: ty_name, args: args}};
-        }
-        else if(self.is(TokenType::LPAREN)){
-          let ta = ty.as_simple().args.clone();
-          ty.drop();
-          return self.call(Expr::Type{.n, Type::new(nm)}, ty_name, true, ta);
-        }else{
-          ty.drop();
-          return Expr::Type{.n, Type::new(Type::new(nm), ty_name)};
-        }
-      }else if(self.is(TokenType::BANG, TokenType::LPAREN)){
-        self.consume(TokenType::BANG);
-        self.consume(TokenType::LPAREN);
-        let args = self.exprList(TokenType::RPAREN);
-        self.consume(TokenType::RPAREN);
-        return Expr::MacroCall{.n, MacroCall{scope: Option<Type>::none(), name: nm, args: args}};
-      }else if(self.has() && self.isTypeArg(self.pos) != -1){
-        let g = self.generics();
-        if(self.is(TokenType::LPAREN)){
-          return self.call(nm, g);
-        }
-        else if(self.is(TokenType::COLON2)){
-          self.consume(TokenType::COLON2);
-          let ty = Type::new(nm, g);
-          let nm2 = self.name();
-          if(self.is(TokenType::LPAREN)){
-            return self.call(Expr::Type{.n, ty}, nm2, true);
-          }
-          return Expr::Type{.n, Type::new(ty, nm2)};
-        }else {
-          return Expr::Type{.n, Type::new(nm, g)};
-        }
-      }else{
-        return Expr::Name{.n, nm};
-      }*/
     }
     self.err(format("invalid expr {:?}", self.peek()));
     panic("");
   }
 
   func parse_obj(self, type_expr: Expr): Expr{
-    let ty = Option<Type>::new(); 
-    if let Expr::Name(nm)=type_expr{
-      ty = Option::new(Type::new(nm));
-    }
-    else{
-      if let Expr::Type(t)=type_expr{
+    let ty = Option<Type>::new();
+    match type_expr{
+      Expr::Name(nm) => {
+        ty = Option::new(Type::new(nm));
+      },
+      Expr::Type(t) => {
         ty = Option::new(t);
-      }
-      else{
-        print("was expecting name got {:?}", &type_expr);
-        type_expr.drop();
-        panic("");
+      },
+      _ => {
+        self.err(type_expr.line, format("was expecting name got {:?}", &type_expr));
       }
     }
     let args = List<Entry>::new();

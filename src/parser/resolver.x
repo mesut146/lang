@@ -191,6 +191,7 @@ struct Resolver{
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
   in_global_rhs: bool;
+  use_items: List<Type>;
 }
 
 func dump(r: Resolver*){
@@ -239,6 +240,7 @@ impl Resolver{
       inLambda: Stack<i32>::new(),
       extra_imports: List<ImportStmt>::new(),
       in_global_rhs: false,
+      use_items: List<Type>::new(),
     };
   }
 }
@@ -565,9 +567,10 @@ impl Resolver{
     self.newScope();//globals
     self.init();
     self.init_globals();
+    let scope = Option<Type>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
-      match self.visit_item(item){
+      match self.visit_item(item, &scope){
         Err(err) => self.err(err.line, err.msg),
         _ => {}
       }
@@ -634,6 +637,7 @@ impl Resolver{
       let it = self.unit.items.get(i);
       self.init_item(it, i, &empty_scope);
     }
+    self.init_type_items();
     //derives
     let newItems = List<Item>::new();
     for(let i = 0;i < self.unit.items.len();++i){
@@ -644,6 +648,49 @@ impl Resolver{
     }
     self.unit.items.add_list(newItems);
     empty_scope.drop();
+  }
+
+  func init_type_items(self){
+    //called after init_item so that struct & enum initialized
+    //todo recursive type references not supported
+    let empty_scope = Option<Type>::new();
+    for(let i = 0;i < self.unit.items.len();++i){
+      let it = self.unit.items.get(i);
+      self.init_type_item(it, i, &empty_scope);
+    }
+  }
+
+  func init_type_item(self, it: Item*, idx: i32, scope: Option<Type>*){
+    match it{
+      Item::Type(name, rhs) => {
+        let res = self.visit_type(rhs);
+        self.addType(name.clone(), res);
+      },
+      Item::Module(md) => {
+        let j = 0;
+        for it2 in &md.items{
+          if(scope.is_some()){
+            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            self.init_type_item(it2, j, &scope2);
+            scope2.drop();
+          }else{
+            let scope2 = Option::new(Type::new(md.name.clone()));
+            self.init_type_item(it2, j, &scope2);
+            scope2.drop();
+          }
+          j += 1;
+        }
+      },
+      _ => {}
+    }
+  }
+
+  func merge_scope(scope: Option<Type>*, name: String): Type{
+    if(scope.is_some()){
+      return Type::new(scope.get().clone(), name);
+    }else{
+      return Type::new(name);
+    }
   }
 
   func init_item(self, it: Item*, idx: i32, scope: Option<Type>*){
@@ -676,8 +723,8 @@ impl Resolver{
         //pass
       },
       Item::Type(name, rhs) => {
-        let res = self.visit_type(rhs);
-        self.addType(name.clone(), res);
+        /*let res = self.visit_type(rhs);
+        self.addType(name.clone(), res);*/
       },
       Item::Method(method) => {},
       Item::Extern(methods) => {},
@@ -695,15 +742,17 @@ impl Resolver{
         self.addType(md.name.clone(), res.clone());
         let j = 0;
         for it2 in &md.items{
+          let scope2 = Option::new(merge_scope(scope, md.name.clone()));
           if(scope.is_some()){
-            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            //let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
             self.init_item(it2, j, &scope2);
-            scope2.drop();
+            //scope2.drop();
           }else{
-            let scope2 = Option::new(Type::new(md.name.clone()));
+            //let scope2 = Option::new(Type::new(md.name.clone()));
             self.init_item(it2, j, &scope2);
-            scope2.drop();
+            //scope2.drop();
           }
+          scope2.drop();
           j += 1;
         }
         res.drop();
@@ -921,7 +970,7 @@ impl Resolver{
     return Option<Module*>::new();
   }
 
-  func visit_item(self, node: Item*): Result<(), Error>{
+  func visit_item(self, node: Item*, scope: Option<Type>*): Result<(), Error>{
     match node{
       Item::Method(m) => {
         self.visit_method(m);
@@ -970,10 +1019,11 @@ impl Resolver{
       },
       Item::Glob(g) => {},
       Item::Module(md) => {
+        let scope2 = Option::new(merge_scope(scope, md.name.clone()));
+        self.use_items.add(scope2.get().clone());
         for it2 in &md.items{
-          self.visit_item(it2)?;
+          self.visit_item(it2, &scope2)?;
         }
-        //panic("visit_item todo module {:?}", md);
       },
       Item::Use(ty) => {},
     }
@@ -1371,6 +1421,16 @@ impl Resolver{
     let cached = self.typeMap.get(str);
     if(cached.is_some()){
       return Result<RType, Error>::ok(cached.unwrap().clone());
+    }
+    //try using items as prefix
+    for prefix in &self.use_items{
+      let str2 = format("{:?}::{:?}", prefix, node);
+      cached = self.typeMap.get(&str2);
+      if(cached.is_some()){
+        str2.drop();
+        return Result<RType, Error>::ok(cached.unwrap().clone());
+      }
+      str2.drop();
     }
     //print("visit_type {}\n", str);
     match node{

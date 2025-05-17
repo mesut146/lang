@@ -9,7 +9,7 @@ toolchain=$1
 compiler="$toolchain/bin/x"
 build=$dir/../build
 mkdir -p $build
-name="x2"
+name="xx2"
 out_dir=$build/${name}_out
 
 echo "compiler=$compiler"
@@ -28,7 +28,6 @@ flags="$flags -lstdc++"
 $compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
 #todo use toolchain's std dir?
-#vendor=x4 compiler_name=$name version=1.7 \
 LD=clang $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 cp ${out_dir}/${name} $build

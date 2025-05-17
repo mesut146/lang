@@ -201,6 +201,9 @@ impl Lexer{
   
   func kw(s: str): TokenType{
     let opt = lexer_keywords.get(&s);
+    /*if let Option::Some(val) = opt{
+
+    }*/
     if(opt.is_some()) return *opt.unwrap();
     return TokenType::EOF_;
   }

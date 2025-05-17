@@ -7,7 +7,7 @@ import parser/parser
 import parser/token
 import parser/lexer
 
-static print_drops = false;
+//static print_drops = false;
 
 struct TokenStream{
   tokens: List<Token>;
@@ -40,11 +40,12 @@ impl TokenStream{
 }
 
 func prim_size(s: str): Option<u32>{
-  let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
-  let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
+  //let prims = ["bool", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64"];
+  //let sizes = [8, 8, 16, 32, 64, 8, 16, 32, 64, 32, 64];
+  let prims = [("bool", 8), ("i8", 8), ("i16", 16), ("i32", 32), ("i64", 64), ("u8", 8), ("u16", 16), ("u32", 32), ("u64", 64), ("f32", 32), ("f64", 64)];
   for(let i = 0;i < prims.len();++i){
-    if(prims[i].eq(s)){
-      return Option::new(sizes[i] as u32);
+    if(prims[i].0.eq(s)){
+      return Option::new(prims[i].1 as u32);
     }
   }
   return Option<u32>::new();
