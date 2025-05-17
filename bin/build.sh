@@ -1,11 +1,17 @@
 dir=$(dirname $0)
 
-if [ -z "$1" ]; then
+if [ ! -d "$1" ]; then
  echo "provide toolchain dir"
  exit
 fi
 
+if [ -z "$2" ]; then
+ echo "provide version"
+ exit
+fi
+
 toolchain=$1
+version=$2
 compiler="$toolchain/bin/x"
 build=$dir/../build
 mkdir -p $build

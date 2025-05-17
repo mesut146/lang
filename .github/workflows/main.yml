@@ -37,8 +37,8 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: v$new_version
-          release_name: Release v$new_version
+          tag_name: v${{ env.new_version }}
+          release_name: toolchain for v${{ env.new_version }}
           draft: false
           prerelease: false
         env:

@@ -1,27 +1,37 @@
 if [ ! -f "$1" ]; then
-  echo "enter binary"
+  echo "provide compiler binary \$1"
   exit
 fi
 
 if [ ! -d "$2" ]; then
-  echo "enter old toolchain"
+  echo "provide old toolchain dir \$2"
   exit
 fi
 
 if [ ! -d "$3" ]; then
-  echo "enter output dir"
+  echo "provide output dir \$3"
   exit
+fi
+
+if [ -z "$4" ]; then
+  echo "enter version \$4"
+  exit
+fi
+
+is_zip=false
+
+if [ "$5" == "-zip" ]; then
+  is_zip=true
 fi
 
 cur=$(dirname $0)
 
-version=""
-#version="-1.0"
 binary="$1"
 old_toolchain="$2"
 out="$3"
+version="$4"
 arch=$(uname -m)
-name="x-toolchain${version}-${arch}"
+name="x-toolchain-${version}-${arch}"
 dir=$out/$name
 
 mkdir -p $dir
@@ -35,7 +45,7 @@ cp $old_toolchain/lib/libbridge.a $dir/lib
 cp $old_toolchain/lib/libLLVM.so $dir/lib
 cp -r $cur/../src/std $dir/src
 
-if [ "$4" = "-zip" ]; then
- zip -r ${name}.zip $dir
+if [ is_zip = true ]; then
+ zip -r ${name}.zip $dir && echo "built toolchain ${name}.zip"
  rm -r $dir
 fi
