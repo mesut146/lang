@@ -37,12 +37,13 @@ func init_prog(){
 
 struct Progress{
     begin: Option<timeval>;
+    logfile: String;
 }
 
 impl Progress{
-    func new(): Progress{
+    func new(out_dir: str): Progress{
         init_prog();
-        Progress{begin: Option<timeval>::none()}
+        Progress{begin: Option<timeval>::none(), logfile: Path::concat(out_dir, "log.txt")}
     }
 
     func resolve_done(self){

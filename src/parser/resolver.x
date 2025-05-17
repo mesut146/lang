@@ -55,6 +55,7 @@ impl Context{
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
     }
+    let prog = Progress::new(out_dir.str());
     let res = Context{
        map: HashMap<String, Box<Resolver>>::new(),
        prelude: pre,
@@ -64,7 +65,7 @@ impl Context{
        verbose: true,
        verbose_all: false,
        stack_trace: std::getenv("TRACE").is_some(),
-       prog: Progress::new(),
+       prog: prog,
     };
     return res;
   }

@@ -283,4 +283,11 @@ impl Path{
     }
     return path;
   }
+
+  func concat(path: str, name: str): String{
+    if(path.ends_with("/")){
+      path = path.substr(0, path.len() - 1);
+    }
+    return format("{}/{}", path, name);
+  }
 }

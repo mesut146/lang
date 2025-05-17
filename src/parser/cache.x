@@ -12,7 +12,7 @@ struct Cache{
 }
 
 func CACHE_FILE(out_dir: str): String{
-    return format("{}/cache.txt", out_dir);
+    return Path::concat(out_dir, "cache.txt");
 }
 
 impl Cache{

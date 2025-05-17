@@ -52,3 +52,5 @@ jobs:
           asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
           asset_name: x-toolchain-${{ env.new_version }}-x86_64.zip
           asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
