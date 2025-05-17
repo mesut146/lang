@@ -31,14 +31,15 @@ flags="$flags $libs"
 flags="$flags -lstdc++"
 
 #compile std
-$compiler c -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
+$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
 fi
 #todo use toolchain's std dir?
-LD=clang $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+linker=$($dir/find_llvm.sh clang)
+LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1

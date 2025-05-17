@@ -3,6 +3,8 @@ find_clang(){
     echo "clang++-19"
   elif command -v clang++ 2>&1 >/dev/null; then
     echo "clang++"
+  elif command -v g++ 2>&1 >/dev/null; then
+    echo "g++"
   else
     echo "can't find clang++"
     exit 1
@@ -37,5 +39,8 @@ elif [ "$1" == "suffix" ]; then
   find_suffix
 elif [ "$1" == "clang" ]; then
   find_clang
+else
+  echo "invalid call to $0, $1"
+  exit 1
 fi
 

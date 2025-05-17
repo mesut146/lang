@@ -16,6 +16,31 @@ impl Permissions{
   }
 }
 
+enum OpenMode{
+  Read,
+  Write,
+  ReadWrite,
+  Append,
+}
+impl OpenMode{
+  func from(s: str): OpenMode{
+    if(s.eq("r")) return OpenMode::Read;
+    if(s.eq("w")) return OpenMode::Write;
+    if(s.eq("rw")) return OpenMode::ReadWrite;
+    if(s.eq("a")) return OpenMode::Append;
+    panic("invalid mode {}", s);
+  }
+  func as_c_str(self): i8*{
+    match self{
+      //because str literals are consts this works without dropping
+      OpenMode::Read => return "r".ptr(),
+      OpenMode::Write => return "w".ptr(),
+      OpenMode::ReadWrite => return "rw".ptr(),
+      OpenMode::Append => return "a".ptr(),
+    }
+  }
+}
+
 impl File{
   func remove_file(path: str){
     let path_c = CStr::new(path);
@@ -65,9 +90,13 @@ impl File{
     let data: List<u8> = read_bytes(path);
     return String::new(data);
   }
-  
+
   func write_bytes(data: [u8], path: str){
-    let f = open_checked(path, "w");
+    write_bytes(data, path, OpenMode::Write)
+  }
+  
+  func write_bytes(data: [u8], path: str, mode: OpenMode){
+    let f = open_checked(path, mode);
     let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
     fclose(f);
     if(cnt != data.len()){
@@ -76,7 +105,11 @@ impl File{
   }
   
   func write_string(data: str, path: str){
-    write_bytes(data.slice(), path);
+    write_bytes(data.slice(), path, OpenMode::Write);
+  }
+
+  func write_string(data: str, path: str, mode: OpenMode){
+    write_bytes(data.slice(), path, mode);
   }
   
   func list(path: str, ext: Option<str>, file_only: bool): List<String>{
@@ -207,11 +240,13 @@ impl File{
 }
 
 func open_checked(path: str, mode: str): FILE*{
+  return open_checked(path, OpenMode::from(mode));
+}
+
+func open_checked(path: str, mode: OpenMode): FILE*{
   let path_c = CStr::new(path);
-  let mode_c = CStr::new(mode);
-  let fp = fopen(path_c.ptr(), mode_c.ptr());
+  let fp = fopen(path_c.ptr(), mode.as_c_str());
   path_c.drop();
-  mode_c.drop();
   if(fp as u64 == 0){
     panic("no such file '{}'", path);
   }
