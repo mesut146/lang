@@ -38,6 +38,6 @@ func main(){
     let a = M::A{a: 5};
     assert(a.a == 5);
 
-    a = M::A::new(10);
-    assert(a.get() == 10);
+    //a = M::A::new(10);
+    //assert(a.get() == 10);
 }

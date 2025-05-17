@@ -46,4 +46,4 @@ fi
 
 cp ${out_dir}/${name} $build
 
-$dir/make_toolchain.sh ${out_dir}/${name} $toolchain . -zip
+$dir/make_toolchain.sh ${out_dir}/${name} $toolchain . ${version} -zip

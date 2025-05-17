@@ -273,77 +273,74 @@ impl MethodResolver{
     }
     
     func get_impl(resolver: Resolver*, items: List<Item>*, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
-        match type{
-            Type::Slice(sl) => {},
-            Type::Simple(sl) => {},
-            _ => {
-                return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+      match type{
+        Type::Slice(sl) => {},
+        Type::Simple(sl) => {},
+        _ => {
+            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+        }
+      }
+      if(type.is_simple()){
+        let smp = type.as_simple();
+        if(smp.scope.is_some()){
+          //scope can be module
+          let tmp = resolver.visit_type0(smp.scope.get());
+          if(tmp.is_ok()){
+            let rt = tmp.unwrap();
+            let md = resolver.get_module(&rt);
+            rt.drop();
+            if(md.is_none()) return Result<List<Pair<Impl*, i32>>, String>::err(format("scope is not module {:?}", type));
+            let smp2 = smp.clone();
+            smp2.scope = Ptr<Type>::new();
+            let type2 = smp2.into(type.line);
+            return MethodResolver::get_impl(resolver, &md.unwrap().items, &type2, tr);
+          }
+        }
+      }
+      let list = List<Pair<Impl*, i32>>::new();
+      let erased: String = print_erased(type);
+      //todo generated impl too
+      for(let i = 0;i < items.len();++i){
+        let item: Item* = items.get(i);
+        if(!(item is Item::Impl)) continue;
+        let imp = item.as_impl();
+        //print("imp {:?} {:?}\n", type, imp.info);
+        if(tr.is_some()){
+            if(imp.info.trait_name.is_none()){
+                continue;
+            }
+            if(!imp.info.trait_name.get().eq(*tr.get())){
+                continue;
             }
         }
-        /*if(type.is_simple() && type.as_simple().scope.is_some()){
-            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl scoped type '{:?}'", type));
-        }*/
         if(type.is_simple()){
             let smp = type.as_simple();
             if(smp.scope.is_some()){
                 //scope can be module
-                let tmp = resolver.visit_type0(smp.scope.get());
-                if(tmp.is_ok()){
-                    let rt = tmp.unwrap();
-                    let md = resolver.get_module(&rt);
-                    rt.drop();
-                    if(md.is_none()) return Result<List<Pair<Impl*, i32>>, String>::err(format("scope is not module {:?}", type));
-                    let smp2 = smp.clone();
-                    smp2.scope = Ptr<Type>::new();
-                    let type2 = smp2.into(type.line);
-                    return MethodResolver::get_impl(resolver, &md.unwrap().items, &type2, tr);
-                }
-            }
-        }
-        let list = List<Pair<Impl*, i32>>::new();
-        let erased: String = print_erased(type);
-        //todo generated impl too
-        for(let i = 0;i < items.len();++i){
-            let item: Item* = items.get(i);
-            if(!(item is Item::Impl)) continue;
-            let imp = item.as_impl();
-            //print("imp {:?} {:?}\n", type, imp.info);
-            if(tr.is_some()){
-                if(imp.info.trait_name.is_none()){
-                    continue;
-                }
-                if(!imp.info.trait_name.get().eq(*tr.get())){
-                    continue;
-                }
-            }
-            if(type.is_simple()){
-                let smp = type.as_simple();
-                if(smp.scope.is_some()){
-                    //scope can be module
-                }else{
-                    let imp_erased: String = print_erased(&imp.info.type);
-                    if(imp_erased.eq(&erased)){
-                        list.add(Pair::new(imp, i));
-                    }
-                    imp_erased.drop();
-                }
-            }else if(type.is_slice()){
-                if(!imp.info.type.is_slice()){
-                    continue;
-                }
-                let val = Option<String>::new();
-                let cmp = is_compatible(type, &val, &imp.info.type, &imp.info.type_params);
-                if(cmp.is_none()){
+            }else{
+                let imp_erased: String = print_erased(&imp.info.type);
+                if(imp_erased.eq(&erased)){
                     list.add(Pair::new(imp, i));
                 }
-                cmp.drop();
-                val.drop();
-            }else{
-                return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+                imp_erased.drop();
             }
+        }else if(type.is_slice()){
+            if(!imp.info.type.is_slice()){
+                continue;
+            }
+            let val = Option<String>::new();
+            let cmp = is_compatible(type, &val, &imp.info.type, &imp.info.type_params);
+            if(cmp.is_none()){
+                list.add(Pair::new(imp, i));
+            }
+            cmp.drop();
+            val.drop();
+        }else{
+            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
         }
-        erased.drop();
-        return Result<List<Pair<Impl*, i32>>, String>::ok(list);
+      }
+      erased.drop();
+      return Result<List<Pair<Impl*, i32>>, String>::ok(list);
     }
 
     func get_impl(self, sig: Signature*, scope_type: Type*): Result<List<Pair<Impl*, i32>>, String>{
