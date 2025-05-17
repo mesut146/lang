@@ -25,7 +25,7 @@ jobs:
 
       - name: bootstrap
         run: |
-          bin/build.sh $toolchain_dir
+          bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -34,6 +34,7 @@ jobs:
           path: x-toolchain-$new_version-x86_64.zip
 
       - name: Create Release
+        if: ${{ env.new_version != env.last_version }}
         id: create_release
         uses: actions/create-release@v1
         with:
