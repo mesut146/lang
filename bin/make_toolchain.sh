@@ -20,7 +20,8 @@ version=""
 binary="$1"
 old_toolchain="$2"
 out="$3"
-name="x-toolchain${version}-$(uname -m)"
+arch=$(uname -m)
+name="x-toolchain${version}-${arch}"
 dir=$out/$name
 
 mkdir -p $dir

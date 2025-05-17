@@ -4,7 +4,8 @@ name: test
 on: [push]
 
 env: 
-  last_version: '1.0'
+  last_version: '1.01'
+  new_version: '1.01'
 
 jobs:
   build:
@@ -30,4 +31,23 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: toolchain
-          path: x-toolchain-x64.zip
+          path: x-toolchain-$new_version-x86_64.zip
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: v$new_version
+          release_name: Release v$new_version
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: x-toolchain-$new_version-x86_64.zip
+          asset_name: x-toolchain-$new_version-x86_64.zip
+          asset_content_type: application/zip
