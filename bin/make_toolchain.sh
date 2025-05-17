@@ -45,7 +45,9 @@ cp $old_toolchain/lib/libbridge.a $dir/lib
 cp $old_toolchain/lib/libLLVM.so $dir/lib
 cp -r $cur/../src/std $dir/src
 
-if [ is_zip = true ]; then
+if [ $is_zip = true ]; then
  zip -r ${name}.zip $dir && echo "built toolchain ${name}.zip"
  rm -r $dir
+else
+ echo "built toolchain ${name}/"
 fi
