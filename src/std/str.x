@@ -14,14 +14,14 @@ struct str{
 impl str{
   func new(buf: [u8]): str{
     let res = str{buf: buf};
-    res.check_all();
+    //res.check_all();
     return res;
   }
   func new(buf: [i8]): str{
     let ptr2 = buf.ptr() as u8*;
     let buf2 = ptr2[0..buf.len()];
     let res = str{buf: buf2};
-    res.check_all();
+    //res.check_all();
     return res;
   }
   func from_raw(ptr: i8*): str{

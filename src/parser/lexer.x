@@ -126,7 +126,7 @@ impl i8{
 
 impl Lexer{
   func from_path(path: String): Lexer{
-    let s = File::read_string(path.str());
+    let s = File::read_string(path.str())?;
     return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1};
   }
   func from_string(path: String, buf: String, line: i32): Lexer{

@@ -2152,6 +2152,10 @@ impl Resolver{
   func is_call(mc: MacroCall*, scope: str, name: str): bool{
     return mc.scope.is_some() && mc.scope.get().eq(scope) && mc.name.eq(name);
   }
+
+  func is_call(mc: MacroCall*, name: str): bool{
+    return mc.scope.is_none() && mc.name.eq(name);
+  }
   
   func is_drop_call(mc: Call*): bool{
     return is_call(mc, "Drop", "drop");
@@ -2159,12 +2163,6 @@ impl Resolver{
 
   func is_print(mc: Call*): bool{
     return mc.name.eq("print") && mc.scope.is_none();
-  }
-  func is_printf(mc: Call*): bool{
-    return mc.name.eq("printf") && mc.scope.is_none();
-  }
-  func is_sprintf(mc: Call*): bool{
-    return mc.name.eq("sprintf") && mc.scope.is_none();
   }
   func is_format(mc: Call*): bool{
     return mc.name.eq("format") && mc.scope.is_none();
@@ -2175,8 +2173,25 @@ impl Resolver{
   func is_assert(mc: Call*): bool{
     return mc.name.eq("assert") && mc.scope.is_none();
   }
+
+  func is_print(mc: MacroCall*): bool{
+    return mc.name.eq("print") && mc.scope.is_none();
+  }
+  func is_format(mc: MacroCall*): bool{
+    return mc.name.eq("format") && mc.scope.is_none();
+  }
+  func is_panic(mc: MacroCall*): bool{
+    return mc.name.eq("panic") && mc.scope.is_none();
+  } 
+
   func is_exit(mc: Call*): bool{
     return mc.name.eq("exit") && mc.scope.is_none();
+  }
+    func is_printf(mc: Call*): bool{
+    return mc.name.eq("printf") && mc.scope.is_none();
+  }
+  func is_sprintf(mc: Call*): bool{
+    return mc.name.eq("sprintf") && mc.scope.is_none();
   }
 
   func validate_printf(self, node: Expr*, mc: Call*){
@@ -2371,6 +2386,18 @@ impl Resolver{
       rt.drop();
       return RType::new("void");
     }
+    if(is_format(call)){
+      generate_format(node, call, self);
+      return RType::new("String");
+    }
+    if(is_print(call) || is_panic(call)){
+      generate_format(node, call, self);
+      return RType::new("void");
+    }
+    /*if(Resolver::is_assert(call)){
+      generate_assert(node, call, self);
+      return RType::new("void");
+    }*/
     panic("resolve macro {:?}", node);
   }
 
@@ -3153,18 +3180,17 @@ impl Resolver{
           self.err(expr, "todo lambda infer");
       }
       let ret = self.visit_type(node.return_type.get());
-      let m = Method::new(Node::new(expr.line), format("lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
+      let method = Method::new(Node::new(expr.line), format("lambda_{}_{}", expr.line, lambdaCnt), ret.type.clone(), self.unit.path.clone());
       self.newScope();
       let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<Type>::new()};
       for prm in &node.params{
           let rt = self.visit_type(prm.type.get());
-          m.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
+          method.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
           lt.params.add(rt.type.clone());
           self.addScope(prm.name.clone(), rt, prm.id, VarKind::PARAM, expr.line);
       }
       self.inLambda.push(expr.id);
-      
-      self.lambdas.add(expr.id, m);
+      self.lambdas.add(expr.id, method);
       
       let mptr = self.lambdas.get(&expr.id).unwrap();
       let plen = mptr.params.len();

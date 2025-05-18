@@ -8,7 +8,7 @@ func file_name(): str{
 
 func read_test(){
   let path = file_name();
-  let str = File::read_string(path);
+  let str = File::read_string(path)?;
   assert(str.len() == 5);
   assert(str.eq("hello"));
   str.drop();
@@ -16,9 +16,10 @@ func read_test(){
 
 func write_test(){
   let str = String::new("hello");
-  let path = file_name();
-  File::write_bytes(str.slice(), path);
+  let file = File::create(file_name())?;
+  file.write_bytes(str.slice())?;
   str.drop();
+  file.close();
 }
 
 func main(){

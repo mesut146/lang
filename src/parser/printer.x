@@ -20,7 +20,7 @@ func format_dir(dir: str, out: str){
         let p = Parser::from_path(file2);
         let unit = p.parse_unit();
         let str = Fmt::str(&unit);
-        File::write_string(str.str(), outf.str());
+        File::write_string(str.str(), outf.str())?;
         outf.drop();
         str.drop();
     }

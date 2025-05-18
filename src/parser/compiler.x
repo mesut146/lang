@@ -338,11 +338,11 @@ impl Compiler{
     }
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
-      let newdata = File::read_string(path);
+      let newdata = File::read_string(path)?;
       if(File::exists(oldpath.str())){
         self.cache.inc.find_recompiles(self, path, oldpath.str());
       }
-      File::write_string(newdata.str(), oldpath.str());
+      File::write_string(newdata.str(), oldpath.str())?;
       oldpath.drop();
       newdata.drop();
     }
@@ -727,7 +727,7 @@ impl Compiler{
     
     let inc = Incremental::new(&config);
     let src_dir = &config.file;
-    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get(i).str();
@@ -783,7 +783,7 @@ impl Compiler{
     let cache = Cache::new(&config);
     cache.read_cache();
     let src_dir = &config.file;
-    let list: List<String> = File::list(src_dir.str(), Option::new(".x"), true);
+    let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
@@ -880,8 +880,8 @@ impl Compiler{
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
     let out_file = format("{}/{}", out_dir, name);
     print("linking {}\n", out_file);
-    if(File::exist(out_file.str())){
-      File::remove_file(out_file.str());
+    if(File::exists(out_file.str())){
+      File::remove_file(out_file.str())?;
     }
     File::create_dir(out_dir);
     let cmd = get_linker().str();
@@ -893,7 +893,7 @@ impl Compiler{
       cmd.append(" ");
     }
     cmd.append(args);
-    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str());
+    File::write_string(cmd.str(), format("{}/link.sh", out_dir).str())?;
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
       //run if linked

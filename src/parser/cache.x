@@ -1,6 +1,7 @@
 import std/hashmap
 import std/io
 import std/fs
+import std/result
 import parser/bridge
 import parser/incremental
 
@@ -27,10 +28,10 @@ impl Cache{
 
     func read_cache(self){
         if(!self.use_cache) return;
-        if(!File::exist(self.file.str())){
+        if(!File::exists(self.file.str())){
             return;
         }
-        let buf = File::read_string(self.file.str());
+        let buf = File::read_string(self.file.str())?;
         let lines = buf.str().split("\n");
         for line in &lines{
             if(line.len() == 0){
@@ -55,7 +56,7 @@ impl Cache{
             str.append(pair.b.str());
             str.append("\n");
         }
-        File::write_string(str.str(), self.file.str());
+        File::write_string(str.str(), self.file.str())?;
         str.drop();
     }
     
@@ -64,7 +65,7 @@ impl Cache{
         if(!File::is_file(out)){
             return true;
         }
-        let resolved = File::resolve(file);
+        let resolved = File::resolve(file).unwrap();
         file = resolved.str();
         let file_s = file.str();
         let old = self.map.get(&file_s);
@@ -83,13 +84,13 @@ impl Cache{
     
     func update(self, file: str){
         if(!self.use_cache) return;
-        let resolved = File::resolve(file);
+        let resolved = File::resolve(file).unwrap();
         let time = self.get_time(resolved.str());
         self.map.add(resolved, time);
     }
     
     func get_time(self, file: str): String{
-        let resolved = File::resolve(file);
+        let resolved = File::resolve(file).unwrap();
         let cs = CStr::new(resolved);
         let time = get_last_write_time(cs.ptr());
         cs.drop();
@@ -99,7 +100,7 @@ impl Cache{
     func delete_cache(out_dir: str){
         let file = CACHE_FILE(out_dir);
         if(File::is_file(file.str())){
-            File::remove_file(file.str());
+            File::remove_file(file.str())?;
         }
         file.drop();
     }

@@ -33,7 +33,7 @@ impl Incremental{
     func read(self){
         if(!self.enabled) return;
         if(!File::exists(self.path.str())) return;
-        let buf = File::read_string(self.path.str());
+        let buf = File::read_string(self.path.str())?;
         let pos = 0;
         while(pos < buf.len()){
             if(buf.get(pos) == '#'){
@@ -142,7 +142,7 @@ impl Incremental{
             buf.append("\n");
         }
         //print("map={:?}\n", buf);
-        File::write_string(buf.str(), self.path.str());
+        File::write_string(buf.str(), self.path.str())?;
     }
 
     //file is modified, find other files that depend on the file

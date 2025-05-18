@@ -73,7 +73,7 @@ impl Progress{
         let ms = end.sub(&beg);
         let msg = format("resolve end {:?} time={}ms\n", s, ms.as_ms());
         if(progress_print) print("{}", msg);
-        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append);
+        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append)?;
         if(prog_print_freq){
             self.update(m, &prog_map, ms);
         }
@@ -115,7 +115,7 @@ impl Progress{
         let ms = end.sub(&beg);
         let msg = format("compile end {:?} time={}ms\n", s, ms.as_ms());
         if(progress_print) print("{}", msg);
-        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append);
+        File::write_string(msg.str(), self.logfile.str(), OpenMode::Append)?;
         self.update(m, &compile_map, ms);
         s.drop();
     }

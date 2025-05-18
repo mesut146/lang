@@ -1,7 +1,16 @@
 
 import std/libc
+import std/result
 
-struct File;
+struct File{
+  fp: cFILE*;
+}
+
+impl Drop for File{
+  func drop(*self){
+    fclose(self.fp);
+  }
+}
 
 struct Permissions{
   mode: i32;
@@ -23,12 +32,12 @@ enum OpenMode{
   Append,
 }
 impl OpenMode{
-  func from(s: str): OpenMode{
-    if(s.eq("r")) return OpenMode::Read;
-    if(s.eq("w")) return OpenMode::Write;
-    if(s.eq("rw")) return OpenMode::ReadWrite;
-    if(s.eq("a")) return OpenMode::Append;
-    panic("invalid mode {}", s);
+  func from(s: str): Result<OpenMode, String>{
+    if(s.eq("r")) return Result<OpenMode, String>::ok(OpenMode::Read);
+    if(s.eq("w")) return Result<OpenMode, String>::ok(OpenMode::Write);
+    if(s.eq("rw")) return Result<OpenMode, String>::ok(OpenMode::ReadWrite);
+    if(s.eq("a")) return Result<OpenMode, String>::ok(OpenMode::Append);
+    return Result<OpenMode, String>::err(format("invalid mode {}", s));
   }
   func as_c_str(self): i8*{
     match self{
@@ -42,100 +51,94 @@ impl OpenMode{
 }
 
 impl File{
-  func remove_file(path: str){
+  func open(path: str, mode: OpenMode): Result<File, String>{
     let path_c = CStr::new(path);
-    remove(path_c.ptr());
+    let fp = fopen(path_c.ptr(), mode.as_c_str());
     path_c.drop();
-  }
-  func copy(from: str, to: str): bool{
-    let data = read_bytes(from);
-    write_bytes(data.slice(), to);
-    data.drop();
-    return true;
+    if(fp as u64 == 0){
+      return Result<File, String>::err(format("no such file '{}'", path));
+    }
+    return Result<File, String>::ok(File{fp});
   }
 
-  func read_bytes(path: str): List<u8>{
-    let f = open_checked(path, "r");
-    fseek(f, 0, SEEK_END());
-    let size = ftell(f);
-    fseek(f, 0, SEEK_SET());
+  func create(path: str): Result<File, String>{
+    let path_c = CStr::new(path);
+    let fp = fopen(path_c.ptr(), "w".cptr());
+    if(fp as u64 == 0){
+      return Result<File, String>::err(format("failed to create file '{}'", path));
+    }
+    Drop::drop(path_c);
+    return Result<File, String>::ok(File{fp});
+  }
+
+  func close(*self){
+    fclose(self.fp);
+  }
+
+  func remove_file(path: str): Result<(), String>{
+    let path_c = CStr::new(path);
+    let code = remove(path_c.ptr());
+    path_c.drop();
+    if(code == 0){
+      return Result<(), String>::ok(());
+    }
+    return Result<(), String>::err(format("failed to remove file '{}'", path));
+  }
+
+  func copy(from: str, to: str): Result<(), String>{
+    let src_file = File::open(from, OpenMode::Read)?;
+    let target_file = File::open(to, OpenMode::Write)?;
+    let bytes = src_file.read_bytes();
+    target_file.write_bytes(bytes.slice())?;
+    src_file.close();
+    target_file.close();
+    bytes.drop();
+    return Result<(), String>::ok(());
+  }
+
+  func read_bytes(self): List<u8>{
+    fseek(self.fp, 0, SEEK_END());
+    let size = ftell(self.fp);
+    fseek(self.fp, 0, SEEK_SET());
     let res = List<u8>::new(size);
     let buf = [0u8; 1024];
     while(true){
-        let rcnt = fread(&buf[0], 1, 1024, f);
+        let rcnt = fread(&buf[0], 1, 1024, self.fp);
         if(rcnt <= 0){ break; }
         res.add_slice(buf[0..rcnt]);
     }
-    fclose(f);
     return res;
   }
-  
-  func read_bytes_i8(path: str): List<i8>{
-    let f = open_checked(path, "r");
-    fseek(f, 0, SEEK_END());
-    let size = ftell(f);
-    fseek(f, 0, SEEK_SET());
-    let res = List<i8>::new(size);
-    let buf = [0i8; 1024];
-    while(true){
-        let rcnt = fread(&buf[0], 1, 1024, f);
-        if(rcnt <= 0){ break; }
-        res.add_slice(buf[0..rcnt]);
-    }
-    fclose(f);
-    return res;
-  }
-  
-  func read_string(path: str): String{
-    let data: List<u8> = read_bytes(path);
+
+  func read_string(self): String{
+    let data: List<u8> = self.read_bytes();
     return String::new(data);
   }
 
-  func write_bytes(data: [u8], path: str){
-    write_bytes(data, path, OpenMode::Write)
-  }
-  
-  func write_bytes(data: [u8], path: str, mode: OpenMode){
-    let f = open_checked(path, mode);
-    let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, f);
-    fclose(f);
-    if(cnt != data.len()){
-      panic("didn't write all");
-    }
-  }
-  
-  func write_string(data: str, path: str){
-    write_bytes(data.slice(), path, OpenMode::Write);
+  func read_string(path: str): Result<String, String>{
+    let f = File::open(path, OpenMode::Read)?;
+    let res = f.read_string();
+    f.drop();
+    return Result<String, String>::ok(res);
   }
 
-  func write_string(data: str, path: str, mode: OpenMode){
-    write_bytes(data.slice(), path, mode);
+  func write_bytes(self, data: [u8]): Result<(), String>{
+    let cnt = fwrite(data.ptr() as i8*, 1, data.len() as i32, self.fp);
+    if(cnt != data.len()){
+      return Result<(), String>::err("didn't write all data to file".owned());
+    }
+    return Result<(), String>::ok(());
   }
   
-  func list(path: str, ext: Option<str>, file_only: bool): List<String>{
-    let list = List<String>::new();
-    let path_c = CStr::new(path);
-    let dp = opendir(path_c.ptr());
-    path_c.drop();
-    if(dp as u64 == 0) panic("no such dir '{}'", path);
-    while(true){
-      let ep: dirent* = readdir(dp);
-      if(ep as u64 == 0) break;
-      let name = ep.str();
-      if(ext.is_some() && name.ends_with(*ext.get())){
-        if(file_only){
-          let full_path = format("{}/{}", path, name);
-          if(is_file(full_path.str())){
-            list.add(name.str());
-          }
-          full_path.drop();
-        }else{
-          list.add(name.str());
-        }
-      }
-    }
-    closedir(dp);
-    return list;
+  func write_string(data: str, path: str): Result<(), String>{
+    return write_string(data, path, OpenMode::Write);
+  }
+
+  func write_string(data: str, path: str, mode: OpenMode): Result<(), String>{
+    let file = File::open(path, mode)?;
+    file.write_bytes(data.slice())?;
+    file.close();
+    return Result<(), String>::ok(());
   }
 
   func read_dir(path: str): Result<List<String>, String>{
@@ -180,30 +183,16 @@ impl File{
     return false;
   }
   
-  /*func is_valid(fp: FILE*): bool{
+  /*func is_valid(fp: cFILE*): bool{
     return fp as u64 != 0;
   }*/
-  
-  //todo deprecated
-  func exist(path: str): bool{
-    return is_file(path) || is_dir(path);
-  }
 
   func exists(path: str): bool{
     return is_file(path) || is_dir(path);
   }
   
-  func create_file(path: str){
-    let path_c = CStr::new(path);
-    let fp = fopen(path_c.ptr(), "w".cptr());
-    if(fp as u64 != 0){
-      fclose(fp);
-    }
-    Drop::drop(path_c);
-  }
-  
   func create_dir(path: str): Result<(), String>{
-    if(exist(path)){
+    if(exists(path)){
       return Result<(), String>::ok(());
     }
     let path_c = CStr::new(path);
@@ -215,42 +204,29 @@ impl File{
     return Result<(), String>::ok(());
   }
   
-  func resolve(path: str): String{
+  func resolve(path: str): Result<String, String>{
     let buf = [0i8; 256];
     let path_c = CStr::new(path);
     let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
     Drop::drop(path_c);
     if(ptr as u64 == 0){
-      panic("resolving path is null '{}'\n", path);
+      return Result<String, String>::err(format("resolving path is null '{}'\n", path));
     }
     let len = strlen(buf.ptr(), buf.len() as i32);
     let slice = buf[0..len];
-    return String::new(slice);
+    return Result<String, String>::ok(String::new(slice));
   }
 
-  func set_permissions(file: str, perm: Permissions){
+  func set_permissions(file: str, perm: Permissions): Result<(), String>{
     let filec = CStr::new(file);
     let fd = open(filec.ptr(), O_RDWR, 0);
     let ret = fchmod(fd, perm.mode);
     if(ret != 0){
-      panic("failed to set permissions for '{}', code={}", file, ret);
+      return Result<(), String>::err(format("failed to set permissions for '{}', code={}", file, ret));
     }
     Drop::drop(filec);
+    return Result<(), String>::ok(());
   }
-}
-
-func open_checked(path: str, mode: str): FILE*{
-  return open_checked(path, OpenMode::from(mode));
-}
-
-func open_checked(path: str, mode: OpenMode): FILE*{
-  let path_c = CStr::new(path);
-  let fp = fopen(path_c.ptr(), mode.as_c_str());
-  path_c.drop();
-  if(fp as u64 == 0){
-    panic("no such file '{}'", path);
-  }
-  return fp;
 }
 
 struct Path{

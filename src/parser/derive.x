@@ -531,6 +531,162 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     r.format_map.add(node.id, info);
     fmt_var_name.drop();
 }
+func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
+    if (mc.args.empty()) {
+        r.err(node, "format no arg");
+    }
+    let fmt: Expr* = mc.args.get(0);
+    r.visit(fmt).drop();
+    let lit_opt = is_str_lit(fmt);
+    if (lit_opt.is_none()) {
+        r.err(node, "format arg not str literal");
+    }
+    let fmt_str: str = lit_opt.unwrap().str();
+    /*let format_specs = ["%s", "%d", "%c", "%f", "%u", "%ld", "%lld", "%lu", "%llu", "%x", "%X"];
+    for (let i = 0;i < format_specs.len();++i) {
+        let fs = format_specs[i];
+        if (fmt_str.contains(fs)) {
+            r.err(node, format("invalid format specifier: {}", fs));
+        }
+    }*/
+    let line = node.line;
+    let info = FormatInfo::new(line);
+    let block = &info.block;
+    //print("macro {} id={} {}\n", node, node.id, r.unit.path);
+    if (mc.args.len() == 1 && (Resolver::is_print(mc) || Resolver::is_panic(mc))) {
+        //optimized print, no heap alloc, no fmt
+        //printf("..")
+        if (Resolver::is_panic(mc)) {
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
+            let tmp = normalize_quotes(msg.str());
+            msg.drop();
+            msg = tmp;
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
+            msg.drop();
+        }else{
+            let msg = normalize_quotes(fmt_str);
+            block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            msg.drop();
+        }
+        r.visit_block(block);
+        r.format_map.add(node.id, info);
+        return;
+    }
+    let fmt_var_name = format("f_{}", node.id);
+    let var_stmt = parse_stmt(format("let {} = Fmt::new();", &fmt_var_name), &r.unit, line);
+    block.list.add(var_stmt);
+    let pos = 0;
+    let arg_idx = 1;//skip fmt_str
+    while(pos < fmt_str.len()){
+        let br_pos = fmt_str.indexOf("{", pos);
+        if(br_pos == -1){
+            let sub = fmt_str.substr(pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            block.list.add(st);
+            sub2.drop();
+            break;
+        }
+        if(br_pos > pos){
+            let sub = fmt_str.substr(pos, br_pos);
+            let sub2 = normalize_quotes(sub);
+            let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
+            sub2.drop();
+            block.list.add(st);
+        }
+        if(fmt_str.get(br_pos + 1) == '{'){
+            let st = parse_stmt(format("{}.print(\"{{\");", &fmt_var_name), &r.unit, line);
+            block.list.add(st);
+            pos = br_pos + 2;
+            continue;
+        }
+        let br_end = fmt_str.indexOf("}", br_pos);
+        if(br_end == -1){
+            r.err(node, "invalid format no closing }");
+        }
+        let debug = false;
+        let func_name = "Display::fmt";
+        if(fmt_str.starts_with("{:?", br_pos)){
+            debug = true;
+            func_name = "Debug::debug";
+            pos = br_pos + 3;
+        }else{
+            pos = br_pos + 1;
+        }
+        if(pos < br_end){
+            //named arg
+            let arg_str = fmt_str.substr(pos, br_end);
+            let expr = parse_expr(arg_str.owned(), &r.unit, line);
+            let arg_rt = r.visit(&expr);
+            if(is_struct(&arg_rt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            arg_rt.drop();
+            expr.drop();
+        }else{
+            if(arg_idx >= mc.args.len()){
+                r.err(node, "format specifier not matched");
+            }
+            let arg = mc.args.get(arg_idx);
+            let argt = r.visit(arg);
+            if(is_struct(&argt.type)){
+                //coerce automatically
+                let dbg_st = parse_stmt(format("{}(&{:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }else{
+                let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg, fmt_var_name), &r.unit, line);
+                block.list.add(dbg_st);
+            }
+            ++arg_idx;
+            argt.drop();
+        }
+        pos = br_end + 1;
+        // argt.drop();
+    }
+    if(arg_idx < mc.args.len()){
+        r.err(node, format("format arg not matched in specifier {:?}", mc.args.get(arg_idx)));
+    }
+    if(Resolver::is_print(mc)){
+        //..f.buf.print();
+        let print_st = parse_stmt(format("String::print(&{}.buf);", &fmt_var_name), &r.unit, line);
+        block.list.add(print_st);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
+        block.list.add(drop_st);
+        r.visit_block(block);
+    }else if(Resolver::is_panic(mc)){
+        //.."<method:line>".print();
+        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
+        let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
+        pos_info.drop();
+        block.list.add(pos_info_st);
+        //..f.buf.print();
+        let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
+        block.list.add(print_st);
+        //..Drop::drop(f);
+        let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
+        block.list.add(drop_st);
+        block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
+        //..print("block={}\n", block);
+        r.visit_block(block);
+    }else if(Resolver::is_format(mc)){
+        //..f.unwrap()
+        let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
+        block.return_expr.set(unwrap_expr);
+        let tmp = r.visit_block(block);
+        tmp.drop();
+    }else{
+        r.err(node, "generate_format");
+    }
+    r.format_map.add(node.id, info);
+    fmt_var_name.drop();
+}
 
 //replace non escaped quotes into escaped ones
 func normalize_quotes(s: str): String{

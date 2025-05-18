@@ -18,11 +18,12 @@ import std/fs
 import std/libc
 import std/stack
 import std/regex
+import std/result
 
 static root = Option<String>::new();
 
 func find_root(bin_path: str): String*{
-    let full = File::resolve(bin_path);
+    let full = File::resolve(bin_path).unwrap();
     let dir = Path::parent(full.str());
     if(dir.ends_with("build") || dir.ends_with("bin")){
         let res = Path::parent(dir).str();
