@@ -101,7 +101,6 @@ impl CmdArgs{
   }
   func new(argc: i32, args: i8**): CmdArgs{
     let root = CmdArgs::get_arg(args, 0).str();
-    print("root={}\n", root);
     root_exe.set(root.clone());
     let res = CmdArgs{args: List<String>::new(), root: root};
     for(let i = 1; i < argc;++i){

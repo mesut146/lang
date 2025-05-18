@@ -1,3 +1,4 @@
+#derive(Debug)
 enum Result<R, E>{
   Ok(val: R),
   Err(e: E)

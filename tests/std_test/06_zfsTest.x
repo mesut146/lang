@@ -25,4 +25,5 @@ func write_test(){
 func main(){
     write_test();
     read_test();
+    print("cwd={:?}\n", current_dir());
 }

@@ -2,6 +2,8 @@
 import std/libc
 import std/result
 
+const PATH_MAX: i32 = 4096;
+
 struct File{
   fp: cFILE*;
 }
@@ -302,3 +304,16 @@ impl Path{
     return format("{}/{}", path, name);
   }
 }
+
+//mod env{
+  func current_dir(): Result<String, String>{
+    let buf = [0u8; 4096/*PATH_MAX*/];
+    let ptr = getcwd(buf.ptr() as i8*, buf.len());
+    if(ptr as u64 == 0){
+      return Result<String, String>::err("getcwd failed".owned());
+    }
+    let len = strlen(buf.ptr(), buf.len() as i32);
+    let slice = buf[0..len];
+    return Result<String, String>::ok(String::new(slice));
+  }
+//}

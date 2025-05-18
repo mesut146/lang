@@ -6,6 +6,7 @@ struct cDIR;
 
 //type char = i8
 //type int i32
+type size_t = i64;
 type ino_t = u64;
 type off_t = u64;
 type pthread_t = i64;
@@ -103,6 +104,7 @@ extern{
   func closedir(dp: cDIR*): i32;
   func mkdir(path: i8*, mode: i32): i32;
   func realpath(path: i8*, resolved: i8*): i8*;
+  func getcwd(buf: i8*, size: size_t): i8*;
   func system(cmd: i8*): i32;
   func putchar(chr: i32): i32;
 
