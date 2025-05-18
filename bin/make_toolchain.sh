@@ -42,7 +42,7 @@ mkdir -p $dir/src
 cp $binary $dir/bin/x
 cp $old_toolchain/lib/libbridge.so $dir/lib
 cp $old_toolchain/lib/libbridge.a $dir/lib
-cp $old_toolchain/lib/libLLVM.so $dir/lib
+cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
 cp -r $cur/../src/std $dir/src
 
 if [ $is_zip = true ]; then

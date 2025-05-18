@@ -22,7 +22,7 @@ echo "compiler=$compiler"
 echo "out=$out_dir"
 
 bridge_lib=$toolchain/lib/libbridge.a
-llvm_lib="$toolchain/lib/libLLVM.so"
+llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 
 libs+=$llvm_lib
 flags="$bridge_lib"
