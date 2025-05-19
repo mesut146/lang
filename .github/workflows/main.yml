@@ -3,7 +3,7 @@ name: test
 
 on: [push]
 
-env: 
+env:
   last_version: '1.00'
   new_version: '1.00'
 
@@ -12,7 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "set env"
-        run: echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> "$GITHUB_ENV"
+        run: |
+          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> "$GITHUB_ENV"
+          echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v4
       - name: "download toolchain"
@@ -32,6 +34,9 @@ jobs:
         with:
           name: toolchain
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
+
+      - name: arm64 build
+        run: unzip $toolchain_arm64_dir.zip && docker build ./bin --platform=linux/arm64
 
       - name: Create Release
         if: ${{ env.new_version != env.last_version }}
