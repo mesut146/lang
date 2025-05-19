@@ -36,7 +36,7 @@ jobs:
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
 
       - name: arm64 build
-        run: unzip $toolchain_arm64_dir.zip && cd bin && docker build . --platform=linux/arm64
+        run: unzip $toolchain_arm64_dir.zip && docker build -t cross -f ./bin/Dockerfile . --platform=linux/arm64
 
       - name: Create Release
         if: ${{ env.new_version != env.last_version }}
