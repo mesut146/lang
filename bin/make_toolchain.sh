@@ -47,7 +47,7 @@ cp -r $cur/../src/std $dir/src
 
 if [ $is_zip = true ]; then
  zip -r ${name}.zip $dir && echo "built toolchain ${name}.zip"
- rm -r $dir
+ #rm -r $dir
 else
  echo "built toolchain ${name}/"
 fi
