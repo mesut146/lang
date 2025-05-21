@@ -1,5 +1,6 @@
 dir=$(dirname $0)
 
+echo "$@"
 if [ ! -d "$1" ]; then
  echo "provide host toolchain dir"
  exit
