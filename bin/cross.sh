@@ -1,6 +1,8 @@
 dir=$(dirname $0)
 
-echo "$@"
+echo "$1,$2"
+pwd
+
 if [ ! -d "$1" ]; then
  echo "provide host toolchain dir"
  exit
