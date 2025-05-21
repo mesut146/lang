@@ -36,7 +36,7 @@ jobs:
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
 
       - name: arm64 build
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
         run: |
           unzip $toolchain_arm64_dir.zip
           #docker build -t cross -f ./bin/Dockerfile . --platform=linux/arm64
