@@ -25,7 +25,7 @@ out_dir=$build/${name}_out
 
 sudo dpkg --add-architecture arm64
 sudo apt update
-sudo apt install -y g++-13-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
+sudo apt install -y g++--aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
 target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
