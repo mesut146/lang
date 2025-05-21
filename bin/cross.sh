@@ -2,9 +2,11 @@ dir=$(dirname $0)
 
 echo "$1,$2"
 pwd
-ls/x
+ls
+ls $1
+ls $2
 
-if [ ! -d "$1" ]; then
+if [ -z "$1" ]; then
  echo "provide host toolchain dir"
  exit
 fi
