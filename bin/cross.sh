@@ -2,6 +2,7 @@ dir=$(dirname $0)
 
 echo "$1,$2"
 pwd
+ls/x
 
 if [ ! -d "$1" ]; then
  echo "provide host toolchain dir"
