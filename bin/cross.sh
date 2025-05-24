@@ -23,7 +23,7 @@ if command -v sudo 2>&1 >/dev/null; then
 fi
 $sudo dpkg --add-architecture arm64
 $sudo apt update
-$sudo apt install -y g++--aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
+$sudo apt install -y g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
 target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
@@ -33,7 +33,7 @@ if [ ! "$?" -eq "0" ]; then
 fi
 #todo use toolchain's std dir?
 #linker=$($dir/find_llvm.sh clang)
-linker="aarch64-linux-gnu-g++-13"
+linker="aarch64-linux-gnu-g++"
 target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -nolink -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 if [ ! "$?" -eq "0" ]; then

@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM debian
 
 COPY . /home/lang
 #COPY ../x-toolchain-1.00-aarch64/ /home/lang/
