@@ -39,7 +39,7 @@ jobs:
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
 
       - name: arm64 build
-        if: false
+        if: true
         run: |
           unzip $toolchain_arm64_dir.zip
           #bin/cross.sh $toolchain_dir $toolchain_arm64_dir
@@ -72,7 +72,20 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: build
     steps:
+      - name: "set env"
+        run: |
+          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> "$GITHUB_ENV"
+          echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+      - name: "download toolchain"
+        run: |
+          gh auth status
+          gh release download v${last_version}&&echo "download toolchain '$toolchain_arm64_dir'"
+          unzip $toolchain_arm64_dir.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}      
       - uses: actions/checkout@v4
       - name: "build-arm64"
         run: | 
-          bin/build.sh $toolchain_dir $new_version
+          bin/build.sh $toolchain_arm64_dir $new_version
