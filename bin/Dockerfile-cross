@@ -6,7 +6,4 @@ COPY . /home/lang
 #ARG DEBIAN_FRONTEND=noninteractive
 
 RUN uname -m
-RUN cd /home/lang
-RUN ls ./bin
-RUN ./bin/cross.sh ./x-toolchain-1.00-x86_64./x-toolchain-1.00-aarch64
-
+RUN /home/lang && ./bin/cross.sh ./x-toolchain-1.00-x86_64./x-toolchain-1.00-aarch64
