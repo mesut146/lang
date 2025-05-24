@@ -1,4 +1,4 @@
-FROM debian
+FROM debian:sid
 
 COPY . /home/lang
 #COPY ../x-toolchain-1.00-aarch64/ /home/lang/
@@ -6,4 +6,5 @@ COPY . /home/lang
 #ARG DEBIAN_FRONTEND=noninteractive
 
 RUN uname -m
-RUN cd /home/lang && ./bin/cross.sh ./x-toolchain-1.00-x86_64 ./x-toolchain-1.00-aarch64
+WORKDIR /home/lang
+RUN /bin/cross.sh ./x-toolchain-1.00-x86_64 ./x-toolchain-1.00-aarch64
