@@ -1,3 +1,12 @@
+import std/map
+import std/hashmap
+import std/hashset
+import std/libc
+import std/io
+import std/fs
+import std/stack
+import std/result
+
 import parser/parser
 import parser/lexer
 import parser/ast
@@ -11,14 +20,7 @@ import parser/derive
 import parser/ownership
 import parser/drop_helper
 import parser/progress
-import std/map
-import std/hashmap
-import std/hashset
-import std/libc
-import std/io
-import std/fs
-import std/stack
-import std/result
+import parser/exit
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
@@ -1829,7 +1831,7 @@ impl Resolver{
     let arg_cnt = args.len();
     if (base.is_some()) { arg_cnt -= 1; }
     if(fields.len() != arg_cnt){
-      self.err(node, format("field count mismatch {} vs {}", arg_cnt, fields.len()));
+      self.err(node, format("field count mismatch {:?} {} vs {}", decl.type, arg_cnt, fields.len()));
     }
     let field_idx = 0;
     let names = List<String>::new();

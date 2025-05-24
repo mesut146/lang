@@ -1,3 +1,7 @@
+import std/map
+import std/hashmap
+import std/stack
+
 import parser/ast
 import parser/bridge
 import parser/utils
@@ -12,9 +16,7 @@ import parser/method_resolver
 import parser/debug_helper
 import parser/printer
 import parser/derive
-import std/map
-import std/hashmap
-import std/stack
+import parser/exit
 
 //prm or var
 struct Variable {

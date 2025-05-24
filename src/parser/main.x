@@ -246,9 +246,13 @@ func handle_c(cmd: CmdArgs*){
   let flags = cmd.get_val_or("-flags", "".str());
   let name: Option<String> = cmd.get_val("-name");
   let incremental = cmd.consume_any("-inc");
+  let jobs = cmd.get_val("-j");
   let config = CompilerConfig::new();
   config.use_cache = cmd.consume_any("-cache");
   config.incremental_enabled = incremental;
+  if(jobs.is_some()){
+    config.set_jobs(i32::parse(jobs.get().str()).unwrap());
+  }
   while(cmd.has_any("-i")){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);
@@ -265,6 +269,7 @@ func handle_c(cmd: CmdArgs*){
     }
     std_path.drop();
   }else{
+    //in <toolchain_dir>/{src/std, lib/std.a}
     let std_dir = "../src";
     config.add_dir(std_dir.owned());
     config.set_std(std_dir.owned());

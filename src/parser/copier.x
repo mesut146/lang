@@ -101,7 +101,8 @@ impl AstCopier{
         let base = BaseDecl{
             line: node.line,
             path: node.path.clone(),
-            type: type ,
+            type: type,
+            name: node.name.clone(),
             is_generic: false,
             base: self.visit_opt(&node.base), 
             attr: node.attr.clone(),
@@ -366,7 +367,11 @@ impl AstCopier{
     }
 
     func visit(self, node: Entry*): Entry{
-        return Entry{name: self.visit_opt(&node.name), expr: self.visit(&node.expr), isBase: node.isBase};
+        return Entry{
+            name: self.visit_opt(&node.name), 
+            expr: self.visit(&node.expr), 
+            isBase: node.isBase
+        };
     }
 
     func visit(self, node: MatchCase*): MatchCase{
@@ -383,8 +388,13 @@ impl AstCopier{
     }
     
     func visit(self, node: Call*): Call{
-      return Call{scope: self.visit_ptr(&node.scope), name: node.name.clone(),
-        type_args: self.visit_list(&node.type_args), args: self.visit_list(&node.args), is_static: node.is_static};
+        return Call{
+            scope: self.visit_ptr(&node.scope), 
+            name: node.name.clone(),
+            type_args: self.visit_list(&node.type_args), 
+            args: self.visit_list(&node.args), 
+            is_static: node.is_static
+        };
     }
 
     func visit(self, node: MacroCall*): MacroCall{

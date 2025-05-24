@@ -441,7 +441,8 @@ impl Parser{
       base = Option<Type>::Some{self.parse_type()};
     }
     let path0 = self.lexer.path.clone();
-    let based = BaseDecl{line, path0, type, is_generic, base, attr, Option<QPath>::new()};
+    let name = type.name().clone();
+    let based = BaseDecl{line, path0, type, name, is_generic, base, attr, Option<QPath>::new()};
     let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
       self.pop();
@@ -504,7 +505,8 @@ impl Parser{
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();
-    return Decl::Enum{.BaseDecl{line, path, type, is_generic, base, attr, Option<QPath>::new()}, variants: variants};
+    let name = type.name().clone();
+    return Decl::Enum{.BaseDecl{line, path, type, name, is_generic, base, attr, Option<QPath>::new()}, variants: variants};
   }
   
   func parse_variant(self): Variant{

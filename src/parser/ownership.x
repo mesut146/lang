@@ -12,6 +12,7 @@ import parser/debug_helper
 import parser/printer
 import parser/derive
 import parser/drop_helper
+import parser/exit
 import std/map
 import std/hashmap
 import std/stack

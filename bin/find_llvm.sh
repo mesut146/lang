@@ -40,7 +40,7 @@ elif [ "$1" == "suffix" ]; then
 elif [ "$1" == "clang" ]; then
   find_clang
 else
-  echo "invalid call to $0, $1"
+  echo "invalid call to $0, arg=$1"
   exit 1
 fi
 

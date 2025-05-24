@@ -1,6 +1,7 @@
 
 import std/map
 import std/libc
+
 import parser/copier
 import parser/printer
 import parser/parser
@@ -261,6 +262,7 @@ struct BaseDecl{
   line: i32;
   path: String;
   type: Type;
+  name: String;
   is_generic: bool;
   base: Option<Type>;
   attr: Attributes;

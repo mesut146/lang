@@ -27,18 +27,19 @@ jobs:
 
       - name: bootstrap
         id: bootstrap
-        if: false
+        if: true
         run: |
           bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts
-        if: false
+        if: true
         uses: actions/upload-artifact@v4
         with:
           name: toolchain
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
 
       - name: arm64 build
+        if: false
         run: |
           unzip $toolchain_arm64_dir.zip
           #bin/cross.sh $toolchain_dir $toolchain_arm64_dir
