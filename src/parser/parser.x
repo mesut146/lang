@@ -171,7 +171,8 @@ impl Parser{
       return Item::Decl{self.parse_enum(attr, scope)};
     }
     else if(self.is(TokenType::IMPL)){
-      return Item::Impl{self.parse_impl()};
+      let p = QPath::new();
+      return Item::Impl{self.parse_impl(Option::new(p))};
     }
     else if(self.is(TokenType::TRAIT)){
       return Item::Trait{self.parse_trait()};
@@ -293,7 +294,7 @@ impl Parser{
     return res;
   }
   
-  func parse_impl(self): Impl{
+  func parse_impl(self, path: Option<QPath>): Impl{
       self.consume(TokenType::IMPL);
       let type_params = List<Type>::new();
       if (self.is(TokenType::LT)) {
@@ -304,11 +305,11 @@ impl Parser{
       if(self.is(TokenType::FOR)){
           self.pop();
           let target = self.parse_type();
-          let info = ImplInfo{type_params, Option::new(t1), target};
+          let info = ImplInfo{type_params, Option::new(t1), target, path};
           let parent = Parent::Impl{info.clone()};
           return Impl{info, self.parse_methods(parent)};
       }else{
-        let info = ImplInfo{type_params, Option<Type>::new(), t1};
+        let info = ImplInfo{type_params, Option<Type>::new(), t1, path};
         let parent = Parent::Impl{info.clone()};
         return Impl{info, self.parse_methods(parent)};
       }
@@ -432,18 +433,19 @@ impl Parser{
     self.consume(TokenType::STRUCT);
     let type = self.parse_type();
     let is_generic = type.is_generic();
-    type = Parser::scope_merge(scope, type);
+    //type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
       self.pop();
       base = Option<Type>::Some{self.parse_type()};
     }
+    let path0 = self.lexer.path.clone();
+    let based = BaseDecl{line, path0, type, is_generic, base, attr, Option<QPath>::new()};
     let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
       self.pop();
-      let path = self.lexer.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.based, fields: fields};
     }
     else if(self.is(TokenType::LBRACE)){
       self.consume(TokenType::LBRACE);
@@ -451,8 +453,7 @@ impl Parser{
         fields.add(self.parse_field(true));
       }
       self.consume(TokenType::RBRACE);
-      let path = self.lexer.path.clone();
-      return Decl::Struct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
+      return Decl::Struct{.based, fields: fields};
     }
     else if(self.is(TokenType::LPAREN)){
       self.consume(TokenType::LBRACE);
@@ -460,11 +461,10 @@ impl Parser{
         fields.add(FieldDecl{Option<String>::new(), self.parse_type()});
       }
       self.consume(TokenType::RBRACE);
-      let path = self.lexer.path.clone();
-      return Decl::TupleStruct{.BaseDecl{line, path, type, is_generic, base, attr}, fields: fields};
+      return Decl::TupleStruct{.based, fields: fields};
     }
     else{
-      self.err(format("invalid struct body {:?} '{:?}'", type, self.peek()));
+      self.err(format("invalid struct body {:?} '{:?}'", based.type, self.peek()));
       panic("");
     }
   }
@@ -485,7 +485,7 @@ impl Parser{
     self.consume(TokenType::ENUM);
     let type = self.parse_type();
     let is_generic = type.is_generic();
-    type = Parser::scope_merge(scope, type);
+    //type = Parser::scope_merge(scope, type);
     //isgen
     let base = Option<Type>::new();
     if(self.is(TokenType::COLON)){
@@ -504,7 +504,7 @@ impl Parser{
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();
-    return Decl::Enum{.BaseDecl{line, path, type, is_generic, base, attr}, variants: variants};
+    return Decl::Enum{.BaseDecl{line, path, type, is_generic, base, attr, Option<QPath>::new()}, variants: variants};
   }
   
   func parse_variant(self): Variant{

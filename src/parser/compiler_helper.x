@@ -333,8 +333,12 @@ func swap(list: List<Decl*>*, i: i32, j: i32){
 
 func getMethods(unit: Unit*): List<Method*>{
   let list = List<Method*>::new(100);
-  for (let i = 0;i < unit.items.len();++i) {
-    let item = unit.items.get(i);
+  getMethods(&unit.items, &list);
+  return list;
+}
+
+func getMethods(items: List<Item>*, list: List<Method*>*){
+  for item in items{
     match item{
       Item::Method(m)=>{
           if(m.is_generic) continue;
@@ -353,12 +357,11 @@ func getMethods(unit: Unit*): List<Method*>{
       },
       Item::Module(md) => {
         //todo
+        getMethods(&md.items, list);
       },
       _ => {}
     }
   }
-  //broken after expand, ptr
-  return list;
 }
 
 impl Compiler{

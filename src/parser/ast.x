@@ -71,6 +71,20 @@ impl Node{
   }
 }
 
+struct QPath{
+  list: List<String>;
+}
+impl QPath{
+  func new(): QPath{
+    return QPath{list: List<String>::new()};
+  }
+}
+impl Clone for QPath{
+  func clone(self): QPath{
+    return QPath{self.list.clone()};
+  }
+}
+
 struct Unit{
   path: String;
   last_line: i32;
@@ -223,13 +237,24 @@ struct ImplInfo{
   type_params: List<Type>;
   trait_name: Option<Type>;
   type: Type;
+  parent: Option<QPath>;
 }
 impl ImplInfo{
   func new(type: Type): ImplInfo{
-    return ImplInfo{List<Type>::new(), Option<Type>::new(), type};
+    return ImplInfo{
+      type_params: List<Type>::new(),
+      trait_name: Option<Type>::new(),
+      type: type,
+      parent: Option<QPath>::new(),
+    };
   }
   func clone(self): ImplInfo{
-    return ImplInfo{self.type_params.clone(), self.trait_name.clone(), self.type.clone()};
+    return ImplInfo{
+      type_params: self.type_params.clone(),
+      trait_name: self.trait_name.clone(),
+      type: self.type.clone(),
+      parent: self.parent.clone(),
+    };
   }
 }
 
@@ -240,6 +265,7 @@ struct BaseDecl{
   is_generic: bool;
   base: Option<Type>;
   attr: Attributes;
+  parent: Option<QPath>;
 }
 
 enum Decl: BaseDecl{
@@ -280,7 +306,6 @@ struct Variant{
   is_tuple: bool;
 }
 
-
 struct Trait{
   type: Type;
   methods: List<Method>;
@@ -292,7 +317,7 @@ enum Parent{
   Impl(info: ImplInfo),
   Trait(type: Type),
   Extern,
-  Module(name: String),
+  Module(name: QPath),
 }
 
 impl Parent{

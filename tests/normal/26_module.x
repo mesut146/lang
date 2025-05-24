@@ -5,19 +5,22 @@ mod M{
     struct A{
         a: i32;
     }
+    func useA(): A{
+      return A{10};
+    }
     impl M::A{
         func get(self): i32 {
             return self.a;
         }
     }
-    impl A{
+    impl A{//M::A
 
     }
     mod N{
         struct B{
             b: i32;
         }
-        impl A{
+        impl A{//M::A
 
         }
     }
@@ -35,6 +38,7 @@ impl M::A{
 }*/
 
 func main(){
+    A{10};
     let a = M::A{a: 5};
     assert(a.a == 5);
 

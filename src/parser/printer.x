@@ -84,6 +84,12 @@ func body(str: String, f: Fmt*){
     str.drop();
 }
 
+impl Debug for QPath{
+  func debug(self, f: Fmt*){
+    join(f, &self.list, "::");
+  }
+}
+
 impl Debug for Unit{
   func debug(self, f: Fmt*){
     join(f, &self.imports, "\n");

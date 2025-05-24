@@ -581,7 +581,7 @@ impl Resolver{
     }
     while(!self.generated_methods_todo.empty()){
       let desc = self.generated_methods_todo.pop_back();
-      let tmp = Type::new("?tmp?");
+      let tmp = Type::new("?tmp?");//todo?
       let gm = self.get_method(&desc, &tmp);
       self.visit_method(gm.unwrap());
       desc.drop();
@@ -3565,5 +3565,39 @@ impl Resolver{
       self.err(node, format("no macro id={} node={:?} path={}", node.id, node, self.unit.path));
     }
     return opt.unwrap();
+  }
+  
+  func list_impl(self, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
+    let scope = Option<Type>::none();
+    return self.list_impl(&self.unit.items, type, tr, &scope);
+  }
+  
+  func list_impl(self, items: List<Item>*, type: Type*, tr: Option<Type*>, scope: Option<Type>*): Result<List<Pair<Impl*, i32>>, String>{
+    match type{
+        Type::Slice(sl) => {},
+        Type::Simple(sl) => {},
+        _ => {
+            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+        }
+    }
+    let list = List<Pair<Impl*, i32>>::new();
+    for(let i = 0;i < items.len();++i){
+        let item: Item* = items.get(i);
+        match item{
+          Item::Module(md)=>{
+            let scope2 = if(scope.is_some()){
+              Option::new(Type::new(scope.get().clone(), md.name.clone()))
+            }else{
+              Option::new(Type::new(md.name.clone()))
+            };
+            return self.list_impl(&md.items, type, tr, scope);
+          },
+          Item::Impl(imp)=>{
+            let ity = &imp.info.type;
+          },
+          _=>{}
+        }
+     }
+     return Result<List<Pair<Impl*, i32>>, String>::ok(list);
   }
 }

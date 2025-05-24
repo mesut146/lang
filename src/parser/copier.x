@@ -104,7 +104,8 @@ impl AstCopier{
             type: type ,
             is_generic: false,
             base: self.visit_opt(&node.base), 
-            attr: node.attr.clone()
+            attr: node.attr.clone(),
+            parent: node.parent.clone(),
         };
         match node{
             Decl::Struct(fields)=>{
@@ -200,9 +201,12 @@ impl AstCopier{
         match p{
             Parent::Impl(info) => {
                 return Parent::Impl{
-                    ImplInfo{type_params: self.visit_list(&info.type_params),
-                    trait_name: self.visit_opt(&info.trait_name),
-                    type: self.visit(&info.type)}
+                    ImplInfo{
+                      type_params: self.visit_list(&info.type_params),
+                      trait_name: self.visit_opt(&info.trait_name),
+                      type: self.visit(&info.type),
+                      parent: info.parent.clone(),
+                  }
                 };
             },
             Parent::Trait(ty) => return Parent::Trait{self.visit(ty)},
