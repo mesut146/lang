@@ -23,7 +23,7 @@ if command -v sudo 2>&1 >/dev/null; then
 fi
 $sudo dpkg --add-architecture arm64
 $sudo apt update
-$sudo apt install -y libedit2 libxml2
+$sudo apt install -y libffi8 libedit2 libzstd1 libxml2
 $sudo apt-get install -y --only-upgrade libstdc++6
 $sudo apt install -y g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
