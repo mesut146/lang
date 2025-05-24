@@ -259,7 +259,8 @@ func handle_c(cmd: CmdArgs*){
   }
   if(cmd.has_any("-stdpath")){
     let std_path = cmd.get_val2("-stdpath");
-    config.add_dir(Path::parent(std_path.str()).owned());
+    //config.add_dir(Path::parent(std_path.str()).owned());
+    config.add_dir(std_path.clone());
     config.set_std(std_path.clone());
     if(cmd.consume_any("-std")){
       let lib = build_std(std_path.str(), out_dir.str());
