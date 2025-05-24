@@ -228,6 +228,7 @@ func bootstrap(cmd: CmdArgs*){
   src_dir.drop();
   std_dir.drop();
   stdlib.drop();
+  cmd.end();
 }
 
 func bin_name(path: str): String{
@@ -280,7 +281,6 @@ func handle_c(cmd: CmdArgs*){
     }
   }
 
-
   let path: String = cmd.get();
   
   config.set_file(path.str());
@@ -310,6 +310,7 @@ func handle_c(cmd: CmdArgs*){
   }
   path.drop();
   out_dir.drop();
+  cmd.end();
 }
 
 func handle_std(cmd: CmdArgs*){
@@ -333,7 +334,7 @@ func print_version(){
 }
 
 func handle(cmd: CmdArgs*){
-  print("##########running##########\n");
+  //print("##########running##########\n");
   //print_version();
   if(!cmd.has()){
     print("enter a command\n");

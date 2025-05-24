@@ -148,8 +148,6 @@ impl Incremental{
     //file is modified, find other files that depend on the file
     func find_recompiles(self, c: Compiler*, file: str, old_file: str){
         if(!self.enabled) return;
-
-
         
         let p = Parser::from_path(file.owned());
         let unit = p.parse_unit();

@@ -55,7 +55,7 @@ func time_test(){
 func measure(){
     let begin: timeval = gettime();
     print("time1={:?} ms={}\n", begin, begin.as_ms());
-    sleep(2);
+    sleep(1);
     let end: timeval = gettime();
     let diff = end.sub(&begin);
     print("time2={:?} ms={}\n", end, end.as_ms());

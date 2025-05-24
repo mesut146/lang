@@ -95,7 +95,6 @@ struct Unit{
 
 impl Unit{
   func new(path: String): Unit{
-    //print("Unit::new() {}\n", path);
     return Unit{
       path: path,
       last_line: 0,
@@ -136,12 +135,12 @@ impl ImportStmt{
     return ImportStmt{list: List<String>::new()};
   }
   func str(self): String{
-      let s = String::new();
-      for(let i=0;i<self.list.len();i+=1){
-          if(i>0) s.append("/");
-          s.append(self.list.get(i));
+      let res = String::new();
+      for(let i = 0;i < self.list.len();i += 1){
+          if(i > 0) res.append("/");
+          res.append(self.list.get(i));
       }
-      return s;
+      return res;
   }
   func eq(self, is: ImportStmt*): bool{
       if(self.list.len() != is.list.len()) return false;
@@ -870,7 +869,13 @@ impl Call{
     return Fmt::str(self);
   }
   func new(name: String): Call{
-    return Call{scope: Ptr<Expr>::new(), name: name, type_args: List<Type>::new(), args: List<Expr>::new(), is_static: false};
+    return Call{
+      scope: Ptr<Expr>::new(),
+      name: name, 
+      type_args: List<Type>::new(), 
+      args: List<Expr>::new(), 
+      is_static: false
+    };
   }
 }
 

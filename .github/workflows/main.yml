@@ -63,3 +63,11 @@ jobs:
           asset_content_type: application/zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-arm:
+    runs-on: ubuntu-24.04-arm
+    needs: build
+    steps:
+      - name: "build-arm64"
+        run: | 
+          bin/build.sh $toolchain_dir $new_version
