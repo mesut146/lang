@@ -7,4 +7,4 @@ COPY . /home/lang
 
 RUN uname -m
 WORKDIR /home/lang
-RUN /bin/cross.sh ./x-toolchain-1.00-x86_64 ./x-toolchain-1.00-aarch64
+RUN ./bin/cross.sh ./x-toolchain-1.00-x86_64 ./x-toolchain-1.00-aarch64
