@@ -26,10 +26,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: bootstrap
+        id: bootstrap
+        if: false
         run: |
           bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts
+        if: false
         uses: actions/upload-artifact@v4
         with:
           name: toolchain
