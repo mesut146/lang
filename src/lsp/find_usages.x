@@ -9,8 +9,8 @@ func main(){
 }
 
 func find_usage(dir: str){
-    for file in File::read_dir(dir).unwrap(){
+    /*for file in File::read_dir(dir).unwrap(){
         let p = Parser::from_path(file);
         let unit = p.parse_unit();
-    }
+    }*/
 }

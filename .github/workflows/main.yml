@@ -38,8 +38,8 @@ jobs:
       - name: arm64 build
         run: |
           unzip $toolchain_arm64_dir.zip
-          bin/cross.sh $toolchain_dir $toolchain_arm64_dir
-          #docker build -t cross -f ./bin/Dockerfile . --platform=linux/arm64
+          #bin/cross.sh $toolchain_dir $toolchain_arm64_dir
+          docker build -t cross -f ./bin/Dockerfile-cross .
 
       - name: Create Release
         if: ${{ env.new_version != env.last_version }}

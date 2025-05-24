@@ -28,11 +28,11 @@ cur=$(dirname $0)
 
 binary="$1"
 old_toolchain="$2"
-out="$3"
+out_dir="$3"
 version="$4"
 arch=$(uname -m)
 name="x-toolchain-${version}-${arch}"
-dir=$out/$name
+dir=$out_dir/$name
 
 mkdir -p $dir
 mkdir -p $dir/bin
@@ -43,6 +43,7 @@ cp $binary $dir/bin/x
 cp $old_toolchain/lib/libbridge.so $dir/lib
 cp $old_toolchain/lib/libbridge.a $dir/lib
 cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
+cp $dirname($binary)/std.a $dir/lib
 cp -r $cur/../src/std $dir/src
 
 if [ $is_zip = true ]; then

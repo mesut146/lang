@@ -255,7 +255,7 @@ func handle_c(cmd: CmdArgs*){
   }
   if(cmd.has_any("-stdpath")){
     let std_path = cmd.get_val2("-stdpath");
-    config.add_dir(std_path.clone());
+    config.add_dir(Path::parent(std_path.str()).owned());
     config.set_std(std_path.clone());
     if(cmd.consume_any("-std")){
       let lib = build_std(std_path.str(), out_dir.str());
@@ -264,6 +264,13 @@ func handle_c(cmd: CmdArgs*){
       lib.drop();
     }
     std_path.drop();
+  }else{
+    let std_dir = "../src";
+    config.add_dir(std_dir.owned());
+    config.set_std(std_dir.owned());
+    if(cmd.consume_any("-std")){
+      flags.append(" ../lib/std.a");
+    }
   }
   if(cmd.has_any("-target")){
     let target = cmd.get_val("-target").unwrap();
