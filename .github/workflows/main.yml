@@ -71,6 +71,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     needs: build
     steps:
+      - uses: actions/checkout@v4
       - name: "build-arm64"
         run: | 
           bin/build.sh $toolchain_dir $new_version
