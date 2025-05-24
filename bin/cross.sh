@@ -23,7 +23,7 @@ if command -v sudo 2>&1 >/dev/null; then
 fi
 $sudo dpkg --add-architecture arm64
 $sudo apt update
-$sudo apt innstall -y libedit2 libxml2
+$sudo apt install -y libedit2 libxml2
 $sudo apt install -y g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
 target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
