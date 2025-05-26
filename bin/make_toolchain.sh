@@ -1,3 +1,4 @@
+
 if [ ! -f "$1" ]; then
   echo "provide compiler binary \$1"
   exit
@@ -20,7 +21,7 @@ fi
 
 is_zip=false
 
-if [ "$5" == "-zip" ]; then
+if [ "$5" = "-zip" ]; then
   is_zip=true
 fi
 
@@ -31,6 +32,9 @@ old_toolchain="$2"
 out_dir="$3"
 version="$4"
 arch=$(uname -m)
+if [ ! -z $ARCH ]; then
+ arch=$ARCH
+fi
 name="x-toolchain-${version}-${arch}"
 dir=$out_dir/$name
 

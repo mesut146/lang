@@ -10,22 +10,30 @@ if [ ! -d "$2" ]; then
  exit
 fi
 
+if [ -z "$3" ]; then
+ echo "provide version"
+ exit
+fi
+
 toolchain=$1
 toolchain_target=$2
+version=$3
 compiler="$toolchain/bin/x"
 build=$dir/../build
 name="x_arm64"
 out_dir=$build/${name}_out
+
+mkdir -p $out_dir
 
 sudo=""
 if command -v sudo 2>&1 >/dev/null; then
   sudo="sudo"
 fi
 $sudo dpkg --add-architecture arm64
-$sudo apt update
-$sudo apt install -y libffi8 libedit2 libzstd1 libxml2
+$sudo apt-get update
+$sudo apt-get install -y zip unzip libffi8 libedit2 libzstd1 libxml2
 $sudo apt-get install -y --only-upgrade libstdc++6
-$sudo apt install -y binutils g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
+$sudo apt-get install -y binutils g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
 target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
@@ -51,15 +59,17 @@ for file in $out_dir/*.o; do
 done
 
 #link .o files
-cmd="$linker -lstdc++ -o $name $objs $toolchain_target/lib/libbridge.a $toolchain_target/lib/libLLVM.so.19.1"
-echo "$cmd"
+cmd="$linker -lstdc++ -o $out_dir/x $objs $toolchain_target/lib/libbridge.a $toolchain_target/lib/libLLVM.so.19.1"
+#echo "$cmd"
 $cmd
 
 #rm -rf $dir
 
 if [ "$?" -eq "0" ]; then
   echo "Build successful ${name}"
-  rm -r $dir
+  #rm -r $dir
+  export ARCH=aarch64
+  $dir/make_toolchain.sh $out_dir/x $toolchain_target $dir/.. $version -zip
   exit 0
 else
   echo "Build failed"

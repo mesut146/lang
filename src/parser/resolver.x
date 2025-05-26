@@ -503,22 +503,23 @@ impl Resolver{
 
   func get_resolvers(self): List<Resolver*>{
     let res = List<Resolver*>::new();
-    let added = HashSet<str>::new();
-    added.add(self.unit.path.str());
+    let added = HashSet<String>::new();
+    added.add(File::resolve(self.unit.path.str())?);
     //add preludes
     if(self.ctx.std_path.is_some()){
       for (let i = 0;i < self.ctx.prelude.len();++i) {
         let pre: String* = self.ctx.prelude.get(i);
         //skip self unit being prelude
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
-        let path2 = path.str();
-        if(!added.contains(&path2)){
+        path = File::resolve(path.str())?;
+        //let path2 = path.str();
+        if(!added.contains(&path)){
           if(!File::is_file(path.str())){
             panic("can't resolve import: import std/{}\npath={}", pre, &path);
           }
           let r = self.ctx.create_resolver(&path);
           res.add(r);
-          added.add(r.unit.path.str());
+          added.add(path.clone());
         }
         path.drop();
       }
@@ -527,10 +528,11 @@ impl Resolver{
     for (let i = 0;i < self.unit.imports.len();++i) {
       let is = self.unit.imports.get(i);
       let path = self.ctx.get_path(is);
-      if(!added.contains(&path.str())){
+      path=File::resolve(path.str())?;
+      if(!added.contains(&path)){
         let r = self.ctx.create_resolver(&path);
         res.add(r);
-        added.add(r.unit.path.str());
+        added.add(path.clone());
       }
       path.drop();
     }
@@ -541,20 +543,21 @@ impl Resolver{
           let is = imports.get(i);
           //skip self being cycle
           let path = self.ctx.get_path(is);
-          if (!added.contains(&path.str())) {
+          path=File::resolve(path.str())?;
+          if (!added.contains(&path)) {
             let r = self.ctx.create_resolver(&path);
             res.add(r);
-            added.add(r.unit.path.str());
+            added.add(path.clone());
           }
           path.drop();
       }
     }
     for is in &self.extra_imports{
         let path = self.ctx.get_path(is);
-        if (!added.contains(&path.str())) {
+        if (!added.contains(&path)) {
             let r = self.ctx.create_resolver(&path);
             res.add(r);
-            added.add(r.unit.path.str());
+            added.add(path.clone());
         }
         path.drop();
     }
