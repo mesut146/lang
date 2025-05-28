@@ -1,9 +1,9 @@
-import parser/resolver
-import parser/ast
-
 import std/map
 import std/libc
 import std/stack
+
+import parser/resolver
+import parser/ast
 import parser/utils
 import parser/printer
 

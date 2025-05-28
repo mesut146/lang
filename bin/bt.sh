@@ -1,12 +1,7 @@
 dir=$(dirname $0)
 
-if [ ! -d "$1" ]; then
- echo "provide toolchain dir"
- exit
-fi
-
-if [ -z "$2" ]; then
- echo "provide version"
+if [ -z "$1" ]; then
+ echo "provide name"
  exit
 fi
 
@@ -15,7 +10,7 @@ version=$2
 compiler="$toolchain/bin/x"
 build=$dir/../build
 mkdir -p $build
-name="xx2"
+name="$1"
 out_dir=$build/${name}_out
 
 echo "compiler=$compiler"
@@ -53,5 +48,3 @@ fi
 patchelf --set-rpath '$ORIGIN/../lib' ${out_dir}/${name}
 
 cp ${out_dir}/${name} $build
-
-$dir/make_toolchain.sh ${out_dir}/${name} $toolchain . ${version} -zip

@@ -1,3 +1,7 @@
+import std/map
+import std/hashmap
+import std/stack
+import std/io
 import parser/ast
 import parser/bridge
 import parser/utils
@@ -13,9 +17,6 @@ import parser/printer
 import parser/derive
 import parser/drop_helper
 import parser/exit
-import std/map
-import std/hashmap
-import std/stack
 
 //todo endscope incorrectly warns 'field not moved at...' but that scope is irrevelant with var.field
 

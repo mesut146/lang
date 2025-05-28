@@ -1,3 +1,6 @@
+import std/libc
+import std/map
+import std/stack
 import parser/ast
 import parser/utils
 import parser/printer
@@ -7,9 +10,6 @@ import parser/parser
 import parser/lexer
 import parser/token
 import parser/ownership
-import std/libc
-import std/map
-import std/stack
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{
     let info = ImplInfo::new(decl.type.clone());
@@ -439,6 +439,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             sub2.drop();
             block.list.add(st);
         }
+        // '{' escaped as '{{'
         if(fmt_str.get(br_pos + 1) == '{'){
             let st = parse_stmt(format("{}.print(\"{{\");", &fmt_var_name), &r.unit, line);
             block.list.add(st);

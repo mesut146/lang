@@ -1,3 +1,9 @@
+import std/map
+import std/io
+import std/fs
+import std/libc
+import std/stack
+import std/result
 import parser/lexer
 import parser/token
 import parser/parser
@@ -12,12 +18,6 @@ import parser/ownership
 import parser/own_model
 import parser/cache
 import parser/tests
-import std/map
-import std/io
-import std/fs
-import std/libc
-import std/stack
-import std/result
 
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");

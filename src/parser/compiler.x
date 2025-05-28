@@ -1,3 +1,10 @@
+import std/map
+import std/io
+import std/libc
+import std/stack
+import std/any
+import std/th
+//import std/llist
 import parser/resolver
 import parser/ast
 import parser/printer
@@ -14,13 +21,6 @@ import parser/own_model
 import parser/cache
 import parser/derive
 import parser/incremental
-import std/map
-import std/io
-import std/libc
-import std/stack
-import std/any
-import std/th
-import std/llist
 
 static bootstrap = false;
 static inline_rvo = false;

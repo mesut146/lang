@@ -1,3 +1,10 @@
+import std/map
+import std/io
+import std/fs
+import std/libc
+import std/stack
+import std/regex
+import std/result
 import parser/lexer
 import parser/token
 import parser/parser
@@ -12,13 +19,6 @@ import parser/ownership
 import parser/own_model
 import parser/cache
 import parser/main
-import std/map
-import std/io
-import std/fs
-import std/libc
-import std/stack
-import std/regex
-import std/result
 
 static root = Option<String>::new();
 

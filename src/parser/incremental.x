@@ -1,8 +1,8 @@
+import std/hashmap
+import std/hashset
 import parser/ast
 import parser/parser
 import parser/compiler
-import std/hashmap
-import std/hashset
 
 struct Incremental{
     //a.x:struct C <- main.x, b.x

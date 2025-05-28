@@ -1,3 +1,6 @@
+import std/map
+import std/hashmap
+import std/stack
 import parser/ast
 import parser/bridge
 import parser/utils
@@ -12,9 +15,6 @@ import parser/debug_helper
 import parser/printer
 import parser/derive
 import parser/exit
-import std/map
-import std/hashmap
-import std/stack
 
 func is_drop_method(method: Method*): bool{
     if(method.name.eq("drop") && method.parent.is_impl()){

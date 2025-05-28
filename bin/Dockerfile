@@ -6,6 +6,6 @@ COPY . /home/lang
 #ARG DEBIAN_FRONTEND=noninteractive
 
 RUN uname -m
-RUN cd /home/lang
-RUN ./bin/build.sh ./x-toolchain-1.00-aarch64 v-arm64
+WORKDIR /home/lang
+RUN ./bin/build.sh ./x-toolchain-1.00-aarch64 v1.01-arm64
 

@@ -52,7 +52,7 @@ struct Context{
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
-    let arr = ["box", "list", "str", "string", "option", "ops", "libc", "io", "fs", "map", "rt"];
+    let arr = ["box", "list", "str", "string", "option", "ops", "rt", "libc"];
     let pre = List<String>::new(arr.len());
     for(let i = 0;i < arr.len();++i){
       pre.add(arr[i].str());
@@ -502,25 +502,22 @@ impl Resolver{
   }
 
   func get_resolvers(self): List<Resolver*>{
+    return self.get_resolvers(false);
+  }
+
+  func get_resolvers(self, include_cur: bool): List<Resolver*>{
     let res = List<Resolver*>::new();
     let added = HashSet<String>::new();
-    added.add(File::resolve(self.unit.path.str())?);
+    let list = List<String>::new();
+    //added.add(File::resolve(self.unit.path.str())?);
     //add preludes
     if(self.ctx.std_path.is_some()){
       for (let i = 0;i < self.ctx.prelude.len();++i) {
         let pre: String* = self.ctx.prelude.get(i);
         //skip self unit being prelude
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
-        path = File::resolve(path.str())?;
-        //let path2 = path.str();
-        if(!added.contains(&path)){
-          if(!File::is_file(path.str())){
-            panic("can't resolve import: import std/{}\npath={}", pre, &path);
-          }
-          let r = self.ctx.create_resolver(&path);
-          res.add(r);
-          added.add(path.clone());
-        }
+        //added.add(File::resolve(path.str())?);
+        list.add(path.clone());
         path.drop();
       }
     }
@@ -528,39 +525,53 @@ impl Resolver{
     for (let i = 0;i < self.unit.imports.len();++i) {
       let is = self.unit.imports.get(i);
       let path = self.ctx.get_path(is);
-      path=File::resolve(path.str())?;
-      if(!added.contains(&path)){
-        let r = self.ctx.create_resolver(&path);
-        res.add(r);
-        added.add(path.clone());
-      }
+      // added.add(File::resolve(path.str())?);
+      list.add(path.clone());
       path.drop();
     }
     //generic method, transitive imports
     if (self.curMethod.is_some() && !self.curMethod.unwrap_ptr().type_params.empty()) {
       let imports = &self.get_unit(&self.curMethod.unwrap_ptr().path).imports;
       for (let i = 0;i < imports.len();++i) {
+        //skip self being cycle
           let is = imports.get(i);
-          //skip self being cycle
           let path = self.ctx.get_path(is);
-          path=File::resolve(path.str())?;
-          if (!added.contains(&path)) {
-            let r = self.ctx.create_resolver(&path);
-            res.add(r);
-            added.add(path.clone());
-          }
+          // added.add(File::resolve(path.str())?);
+          list.add(path.clone());
           path.drop();
       }
     }
     for is in &self.extra_imports{
         let path = self.ctx.get_path(is);
-        if (!added.contains(&path)) {
-            let r = self.ctx.create_resolver(&path);
-            res.add(r);
-            added.add(path.clone());
-        }
+        // added.add(File::resolve(path.str())?);
+        list.add(path.clone());
         path.drop();
     }
+    let cur_path = File::resolve(self.unit.path.str())?;
+    let cur_added = false;
+    for path in &list{
+      if(!File::is_file(path.str())){
+        panic("can't resolve import: {:?}", path);
+      }
+      let fpath = File::resolve(path.str())?;
+      if(!added.add(path.clone())){
+        continue;
+      }
+      if(!include_cur && fpath.eq(cur_path.str())){
+        //ignore current
+        continue;
+      }
+      if(fpath.eq(cur_path.str())){
+        cur_added = true;
+      }
+      //print("get_resolvers {}\n", path);
+      let r = self.ctx.create_resolver(path);
+      res.add(r);
+    }
+    if(!cur_added && include_cur){
+      res.add(self);
+    }
+    //print("----------\n\n");
     added.drop();
     return res;
   }
@@ -3165,10 +3176,10 @@ impl Resolver{
         err_str.set(format("return Result<{:?},{:?}>::Err{{err{expr.id}}", ret_ok, err_type));
       }
       else{
-        err_str.set("panic(\"unwrap on Result::Err\")\n".owned());
+        err_str.set(format("panic(\"unwrap on Result<>::Err err=err{}\")\n", expr.id));
       }
     }else{
-      err_str.set("panic(\"unwrap on Result::Err\")\n".owned());
+        err_str.set(format("panic(\"unwrap on Result<>::Err err=err{}\")\n", expr.id));
     }
     let result_ty = format("Result<{:?},{:?}>", ok_type, err_type);
     let expr_str = format("match {:?}{{\n{result_ty}::Ok(ok{expr.id})=>ok{expr.id},{result_ty}::Err(err{expr.id})=>{}\n}", inner, err_str.get());

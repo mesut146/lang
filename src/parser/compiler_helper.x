@@ -1,3 +1,6 @@
+import std/map
+import std/libc
+import std/stack
 import parser/bridge
 import parser/ast
 import parser/resolver
@@ -8,9 +11,6 @@ import parser/printer
 import parser/expr_emitter
 import parser/ownership
 import parser/own_model
-import std/map
-import std/libc
-import std/stack
 
 const POINTER_SIZE: i32 = 64;
 

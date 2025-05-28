@@ -1,3 +1,5 @@
+import std/libc
+
 func f(arg: c_void*){
     printf("th started\n");
     sleep(1);

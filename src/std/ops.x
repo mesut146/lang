@@ -176,7 +176,7 @@ impl Debug for i8{
 }
 impl Display for i8{
   func fmt(self, f: Fmt*){
-      Debug::debug(self, f);
+    f.print(*self);
   }
 }
 impl Debug for u8{
@@ -186,7 +186,7 @@ impl Debug for u8{
 }
 impl Display for u8{
   func fmt(self, f: Fmt*){
-      Debug::debug(self, f);
+    f.print(*self);
   }
 }
 //prims

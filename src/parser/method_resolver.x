@@ -1,14 +1,14 @@
+import std/map
+import std/hashmap
+import std/libc
+import std/stack
+import std/result
 import parser/resolver
 import parser/ast
 import parser/printer
 import parser/utils
 import parser/copier
 import parser/ownership
-import std/map
-import std/hashmap
-import std/libc
-import std/stack
-import std/result
 
 struct MethodSig{
     params: List<Type>;
@@ -364,6 +364,7 @@ impl MethodResolver{
         for(let i = 0;i < imp_list.len();++i){
             let pair: Pair<Impl*, i32>* = imp_list.get(i);
             let imp: Impl* = pair.a;
+            //print("mc={:?} i={:?} imp={:?}\n", sig.mc.unwrap(), i, imp);
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get(j);       
                 if(!m.name.eq(&sig.name)) continue;
@@ -400,7 +401,7 @@ impl MethodResolver{
             }
         }
         if (use_imports) {
-          let arr: List<Resolver*> = self.r.get_resolvers();
+          let arr: List<Resolver*> = self.r.get_resolvers(false);
           for (let i = 0;i < arr.len();++i) {
             let resolver = *arr.get(i);
             resolver.init();
@@ -451,6 +452,7 @@ impl MethodResolver{
     func handle(self, expr: Expr*, sig: Signature*): RType{
         let mc = sig.mc.unwrap();
         let list_res = self.collect(sig);
+        //print("---------\n\n");
         if(list_res.is_err()){
             self.r.err(expr, list_res.unwrap_err());
             //std::unreachable();

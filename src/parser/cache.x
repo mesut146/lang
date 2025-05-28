@@ -96,12 +96,4 @@ impl Cache{
         cs.drop();
         return time.str();
     }
-    
-    func delete_cache(out_dir: str){
-        let file = CACHE_FILE(out_dir);
-        if(File::is_file(file.str())){
-            File::remove_file(file.str())?;
-        }
-        file.drop();
-    }
 }

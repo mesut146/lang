@@ -1,3 +1,6 @@
+import std/libc
+import std/stack
+import std/hashmap
 import parser/bridge
 import parser/ast
 import parser/compiler
@@ -7,9 +10,6 @@ import parser/utils
 import parser/printer
 import parser/ownership
 import parser/own_model
-import std/hashmap
-import std/libc
-import std/stack
 
 func base_class_name(): str{
   return "super_";

@@ -1,3 +1,5 @@
+import std/map
+
 struct Regex{
     pat: str;
     i: i32;

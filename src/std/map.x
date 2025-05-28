@@ -13,7 +13,7 @@ impl<K, V> Pair<K, V>{
   }
 }
 
-//map with Eq::eq
+//map with Eq::eq and insertion order
 struct Map<K, V>{
   arr: List<Pair<K, V>>;
 }

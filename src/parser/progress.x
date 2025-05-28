@@ -1,7 +1,7 @@
+import std/hashmap
 import parser/ast
 import parser/resolver
 import parser/utils
-import std/hashmap
 
 struct ProgInfo{
     cnt: i32;

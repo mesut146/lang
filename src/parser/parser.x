@@ -1,10 +1,10 @@
+import std/map
+import std/libc
 import parser/lexer
 import parser/token
 import parser/ast
 import parser/printer
 import parser/utils
-import std/map
-import std/libc
 
 struct Parser{
   tokens: List<Token>;

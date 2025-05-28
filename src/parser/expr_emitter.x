@@ -1,3 +1,5 @@
+import std/map
+import std/stack
 import parser/compiler
 import parser/stmt_emitter
 import parser/resolver
@@ -11,8 +13,6 @@ import parser/ownership
 import parser/own_model
 import parser/derive
 import parser/drop_helper
-import std/map
-import std/stack
 
 struct MatchInfo{
   type: Type;

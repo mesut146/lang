@@ -1,3 +1,7 @@
+import std/map
+import std/libc
+import std/stack
+import std/result
 import parser/bridge
 import parser/compiler
 import parser/compiler_helper
@@ -9,10 +13,6 @@ import parser/debug_helper
 import parser/printer
 import parser/ownership
 import parser/own_model
-import std/map
-import std/libc
-import std/stack
-import std/result
 
 struct AllocHelper{
   c: Compiler*;

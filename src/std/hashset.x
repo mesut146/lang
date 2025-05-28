@@ -12,6 +12,7 @@ impl<T> HashSet<T>{
     func len(self): i64{
         return self.map.len();
     }
+    //true if not added
     func add(self, e: T): bool{
         return self.map.add(e, true).is_none();
     }
@@ -31,19 +32,9 @@ impl<T> HashSet<T>{
     func iter(self): HashSetIter<T>{
         return HashSetIter<T>{self.map.iter()};
     }
-}
-
-struct HashSetIter<T>{
-    it: HashMapIter<T, bool>;
-}
-impl<T> Iterator<T*> for HashSetIter<T>{
-  func next(self): Option<T*>{
-      let op = self.it.next();
-      if(op.is_some()){
-          return Option::new(op.unwrap().a);
-      }
-      return Option<T*>::none();
-  }
+    /*func into_iter(*self): HashSetIter<T>{
+        return HashSetIntoIter<T>{self.map.iter()};
+    }*/
 }
 
 impl<T> Debug for HashSet<T>{
@@ -59,3 +50,28 @@ impl<T> Debug for HashSet<T>{
     }
     
 }
+
+struct HashSetIter<T>{
+    it: HashMapIter<T, bool>;
+}
+impl<T> Iterator<T*> for HashSetIter<T>{
+  func next(self): Option<T*>{
+      let op = self.it.next();
+      if(op.is_some()){
+          return Option::new(op.unwrap().a);
+      }
+      return Option<T*>::none();
+  }
+}
+/*struct HashSetIntoIter<T>{
+    it: HashMapIter<T, bool>;
+}
+impl<T> Iterator<T> for HashSetIntoIter<T>{
+  func next(self): Option<T>{
+      let op = self.it.next();
+      if(op.is_some()){
+          return Option::new(op.unwrap().a);
+      }
+      return Option<T*>::none();
+  }
+}*/
