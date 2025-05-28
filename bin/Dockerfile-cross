@@ -13,6 +13,6 @@ RUN uname -m
 WORKDIR /home/lang
 RUN rm -rf ./build
 #RUN ./bin/cross.sh ${host_tool} ${target_tool} ${version2}>>log.txt
-RUN ./bin/cross2.sh>>log.txt
+RUN ./bin/cross2.sh
 RUN cat log.txt
 #COPY ./x-toolchain-1.01-aarch64.zip .
