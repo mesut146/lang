@@ -1,4 +1,5 @@
 import std/hashmap
+import std/map //Pair<>
 import parser/ast
 import parser/resolver
 import parser/utils
