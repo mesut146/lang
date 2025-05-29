@@ -1,6 +1,7 @@
 import std/libc
 import std/stack
 import std/hashmap
+import std/io
 import parser/bridge
 import parser/ast
 import parser/compiler
