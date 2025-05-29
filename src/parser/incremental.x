@@ -1,5 +1,6 @@
 import std/hashmap
 import std/hashset
+import std/fs
 import parser/ast
 import parser/parser
 import parser/compiler
