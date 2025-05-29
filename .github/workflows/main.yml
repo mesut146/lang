@@ -1,11 +1,10 @@
 
 name: test
-
 on: [push]
 
 env:
   last_version: '1.00'
-  new_version: '1.00'
+  new_version: '1.01'
 
 jobs:
   build:
@@ -35,7 +34,7 @@ jobs:
         if: true
         uses: actions/upload-artifact@v4
         with:
-          name: toolchain
+          name: toolchain-x86_64
           path: x-toolchain-${{ env.new_version }}-x86_64.zip
 
       - name: arm64 build
@@ -45,8 +44,16 @@ jobs:
           #bin/cross.sh $toolchain_dir $toolchain_arm64_dir
           ./bin/docker.sh
 
+      - name: Upload Artifacts arm64
+        if: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: toolchain-aarch64
+          path: x-toolchain-${{ env.new_version }}-aarch64.zip
+
+
       - name: Create Release
-        if: ${{ env.new_version != env.last_version }}
+        if: false && ${{ env.new_version != env.last_version }}
         id: create_release
         uses: actions/create-release@v1
         with:
@@ -59,7 +66,7 @@ jobs:
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: ${{ env.new_version != env.last_version }}
+        if: false && ${{ env.new_version != env.last_version }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
@@ -84,8 +91,8 @@ jobs:
           gh release download v${last_version}&&echo "download toolchain '$toolchain_arm64_dir'"
           unzip $toolchain_arm64_dir.zip
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}      
-      - uses: actions/checkout@v4
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: "build-arm64"
-        run: | 
+        run: |
           bin/build.sh $toolchain_arm64_dir $new_version
