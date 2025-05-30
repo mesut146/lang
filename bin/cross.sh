@@ -41,10 +41,19 @@ if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
 fi
+
+bridge_lib=$toolchain_target/lib/libbridge.a
+llvm_lib=$toolchain_target/lib/libLLVM.so.19.1
+
+flags="$bridge_lib"
+flags="$flags $out_dir/std.a"
+flags="$flags $llvm_lib"
+flags="$flags -lstdc++"
+
 #todo use toolchain's std dir?
 #linker=$($dir/find_llvm.sh clang)
 linker="aarch64-linux-gnu-g++"
-target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -nolink -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
@@ -53,21 +62,15 @@ fi
 
 
 objs=""
-#compile .ll to .o
 for file in $out_dir/*.o; do
   objs="$objs $file"
 done
 
 #link .o files
-cmd="$linker -lstdc++ -o $out_dir/x $objs $toolchain_target/lib/libbridge.a $toolchain_target/lib/libLLVM.so.19.1"
-#echo "$cmd"
-$cmd
-
-#rm -rf $dir
+#$linker -lstdc++ -o $out_dir/x $objs $toolchain_target/lib/libbridge.a $llvm_lib
 
 if [ "$?" -eq "0" ]; then
   echo "Build successful ${name}"
-  #rm -r $dir
   export ARCH=aarch64
   $dir/make_toolchain.sh $out_dir/x $toolchain_target $dir/.. $version -zip
   exit 0
