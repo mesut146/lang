@@ -1,5 +1,5 @@
 dir=$(dirname $0)
-
+echo "cross.sh='$@'"
 if [ -z "$1" ]; then
  echo "provide host toolchain dir"
  exit

@@ -42,7 +42,7 @@ jobs:
         run: |
           unzip $toolchain_arm64_dir.zip
           #bin/cross.sh $toolchain_dir $toolchain_arm64_dir
-          ./bin/docker.sh
+          ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
         if: true
@@ -53,7 +53,7 @@ jobs:
 
 
       - name: Create Release
-        if: false && ${{ env.new_version != env.last_version }}
+        if: ${{ false && env.new_version != env.last_version }}
         id: create_release
         uses: actions/create-release@v1
         with:
@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: false && ${{ env.new_version != env.last_version }}
+        if: ${{ false && env.new_version != env.last_version }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
