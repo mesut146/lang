@@ -31,12 +31,12 @@ jobs:
         run: |
           bin/build.sh $toolchain_dir $new_version
 
-      - name: Upload Artifacts
+      - name: Upload Artifacts x86_64
         if: true
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-x86_64
-          path: tool_x86_64_zip
+          path: $tool_x86_64_zip
           compression-level: 0
 
       - name: build-arm64
@@ -50,7 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-aarch64
-          path: $
+          path: $tool_arm64_zip
           compression-level: 0
 
 

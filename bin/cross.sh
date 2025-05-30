@@ -72,7 +72,7 @@ done
 if [ "$?" -eq "0" ]; then
   echo "Build successful ${name}"
   export ARCH=aarch64
-  $dir/make_toolchain.sh $out_dir/x $toolchain_target $dir/.. $version -zip
+  $dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip
   exit 0
 else
   echo "Build failed"
