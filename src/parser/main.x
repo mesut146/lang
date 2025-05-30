@@ -26,7 +26,7 @@ func get_compiler_name(): str{
   return std::env("compiler_name").unwrap_or("x");
 }
 func get_version(): str{
-  return std::env("version").unwrap_or("1.6");
+  return std::env("version").unwrap_or("1.00");
 }
 
 func build_std(std_dir: str, out_dir: str): String{

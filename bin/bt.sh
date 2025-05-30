@@ -1,14 +1,13 @@
 dir=$(dirname $0)
 
 if [ -z "$1" ]; then
- echo "provide name"
+ echo "provide binary"
  exit
 fi
 
-name="$1"
-toolchain=$1
-version=$2
-compiler="$toolchain/bin/x"
+compiler=$1
+name="x2"
+toolchain=$2
 build=$dir/../build
 mkdir -p $build
 out_dir=$build/${name}_out
