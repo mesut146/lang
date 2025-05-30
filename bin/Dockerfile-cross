@@ -1,8 +1,8 @@
 FROM debian:sid AS build
 
+ARG host_tool
+ARG target_tool
 ARG version
-ARG host_tool="./x-toolchain-1.00-x86_64"
-ARG target_tool="./x-toolchain-1.00-aarch64"
 
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -12,7 +12,4 @@ COPY . /home/lang
 RUN uname -m
 WORKDIR /home/lang
 RUN rm -rf ./build
-RUN ./bin/cross.sh $host_tool ${target_tool} ${version}>>log.txt
-#RUN ./bin/cross2.sh
-#RUN cat log.txt
-#COPY ./x-toolchain-1.01-aarch64.zip .
+RUN ./bin/cross.sh $host_tool $target_tool $version

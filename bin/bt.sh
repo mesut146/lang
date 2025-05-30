@@ -5,12 +5,12 @@ if [ -z "$1" ]; then
  exit
 fi
 
+name="$1"
 toolchain=$1
 version=$2
 compiler="$toolchain/bin/x"
 build=$dir/../build
 mkdir -p $build
-name="$1"
 out_dir=$build/${name}_out
 
 echo "compiler=$compiler"
