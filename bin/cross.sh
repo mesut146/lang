@@ -55,20 +55,6 @@ flags="$flags -lstdc++"
 linker="aarch64-linux-gnu-g++"
 target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
-if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling"
-  exit 1
-fi
-
-
-objs=""
-for file in $out_dir/*.o; do
-  objs="$objs $file"
-done
-
-#link .o files
-#$linker -lstdc++ -o $out_dir/x $objs $toolchain_target/lib/libbridge.a $llvm_lib
-
 if [ "$?" -eq "0" ]; then
   echo "Build successful ${name}"
   export ARCH=aarch64

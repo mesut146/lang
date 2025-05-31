@@ -27,13 +27,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: build-x86_64
-        id: build-x86_64
+        id: build_x86_64
         if: true
         run: |
           bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts x86_64
-        if: ${{ steps.build-x86_64.outcome == 'success' }}
+        if: ${{ steps.build_x86_64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-x86_64
@@ -41,18 +41,18 @@ jobs:
           compression-level: 0
 
       - name: build-arm64
-        id: build-arm64
+        id: build_arm64
         if: true
         run: |
           unzip $toolchain_arm64_dir.zip
           ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
-        if: ${{ steps.build-arm64.outcome == 'success' }}
+        if: ${{ steps.build_arm64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-aarch64
-          path: $tool_arm64_zip
+          path: ${{ env.tool_arm64_zip }}
           compression-level: 0
 
 
