@@ -21,21 +21,17 @@ out_dir=$build/${name}_out
 echo "compiler=$compiler"
 echo "out=$out_dir"
 
-#compile std
-$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
-if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling"
-  exit 1
-fi
+$dir/build_std.sh $compiler || exit 1
+LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-$dir/build_ast.sh $compiler lib || exit 1
+$dir/build_ast.sh $compiler || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 bridge_lib=$toolchain/lib/libbridge.a
 llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 flags="$bridge_lib"
-flags="$flags $out_dir/std.a"
 flags="$flags $LIB_AST"
+flags="$flags $LIB_STD"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 #todo use toolchain's std dir?
