@@ -55,12 +55,12 @@ flags="$flags -lstdc++"
 linker="aarch64-linux-gnu-g++"
 target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 
-if [ "$?" -eq "0" ]; then
-  echo "Build successful ${name}"
-  export ARCH=aarch64
-  $dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip
-  exit 0
-else
+if [ ! "$?" -eq "0" ]; then
   echo "Build failed"
   exit 1
 fi
+
+export ARCH=aarch64
+$dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip
+exit 0
+

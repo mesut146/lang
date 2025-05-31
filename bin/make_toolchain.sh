@@ -33,7 +33,7 @@ out_dir="$3"
 version="$4"
 arch=$(uname -m)
 if [ ! -z $ARCH ]; then
- arch=$ARCH
+  arch=$ARCH
 fi
 name="x-toolchain-${version}-${arch}"
 dir=$out_dir/$name
@@ -51,8 +51,8 @@ cp $(dirname $binary)/std.a $dir/lib
 cp -r $cur/../src/std $dir/src
 
 if [ $is_zip = true ]; then
- zip -r ${name}.zip $dir && echo "built toolchain ${name}.zip"
- #rm -r $dir
+  cd $out_dir
+  zip -r ${name}.zip "./$name" && echo "built toolchain ${name}.zip"
 else
- echo "built toolchain ${name}/"
+  echo "built toolchain ${name}/"
 fi
