@@ -5,11 +5,11 @@ import std/stack
 import std/any
 import std/th
 //import std/llist
+import ast/ast
+import ast/printer
+import ast/utils
+import ast/copier
 import parser/resolver
-import parser/ast
-import parser/printer
-import parser/utils
-import parser/copier
 import parser/bridge
 import parser/compiler_helper
 import parser/alloc_helper

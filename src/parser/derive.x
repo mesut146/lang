@@ -1,14 +1,16 @@
 import std/libc
 import std/map
 import std/stack
-import parser/ast
-import parser/utils
-import parser/printer
+
+import ast/ast
+import ast/utils
+import ast/printer
+import ast/copier
+import ast/parser
+import ast/lexer
+import ast/token
+
 import parser/resolver
-import parser/copier
-import parser/parser
-import parser/lexer
-import parser/token
 import parser/ownership
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{

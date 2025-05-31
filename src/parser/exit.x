@@ -1,4 +1,4 @@
-import parser/ast
+import ast/ast
 import parser/resolver
 
 enum ExitType {

@@ -5,16 +5,18 @@ import std/libc
 import std/stack
 import std/regex
 import std/result
-import parser/lexer
-import parser/token
-import parser/parser
-import parser/ast
-import parser/printer
+
+import ast/lexer
+import ast/token
+import ast/parser
+import ast/ast
+import ast/printer
+import ast/utils
+
 import parser/resolver
 import parser/compiler
 import parser/debug_helper
 import parser/bridge
-import parser/utils
 import parser/ownership
 import parser/own_model
 import parser/cache

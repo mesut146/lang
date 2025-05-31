@@ -2,9 +2,9 @@ import std/hashmap
 import std/map //Pair<>
 import std/io
 import std/fs
-import parser/ast
+import ast/ast
+import ast/utils
 import parser/resolver
-import parser/utils
 
 struct ProgInfo{
     cnt: i32;

@@ -1,9 +1,9 @@
 import std/libc
 import std/hashmap
 
-import parser/ast
-import parser/printer
-import parser/token
+import ast/ast
+import ast/printer
+import ast/token
 
 struct AstCopier{
     type_map: HashMap<String, Type>*;

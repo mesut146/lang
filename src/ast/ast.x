@@ -2,11 +2,11 @@
 import std/map
 import std/libc
 
-import parser/copier
-import parser/printer
-import parser/parser
-import parser/token
-import parser/lexer
+import ast/copier
+import ast/printer
+import ast/parser
+import ast/token
+import ast/lexer
 
 //static print_drops = false;
 

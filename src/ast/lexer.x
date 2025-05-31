@@ -2,8 +2,8 @@ import std/hashmap
 import std/libc
 import std/io
 import std/fs
-import parser/token
-import parser/utils
+import ast/token
+import ast/utils
 
 static lexer_keywords = make_keywords();
 static lexer_ops = make_ops();

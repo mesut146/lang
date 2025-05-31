@@ -4,9 +4,9 @@ import std/io
 import std/fs
 import std/stack
 
-import parser/ast
-import parser/copier
-import parser/printer
+import ast/ast
+import ast/copier
+import ast/printer
 
 func SLICE_PTR_INDEX(): i32{ return 0; }
 func SLICE_LEN_INDEX(): i32{ return 1; }

@@ -2,15 +2,15 @@ import std/map
 import std/libc
 import std/stack
 import std/result
+import ast/ast
+import ast/utils
+import ast/printer
 import parser/bridge
 import parser/compiler
 import parser/compiler_helper
-import parser/ast
 import parser/resolver
 import parser/method_resolver
-import parser/utils
 import parser/debug_helper
-import parser/printer
 import parser/ownership
 import parser/own_model
 
