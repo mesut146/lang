@@ -12,10 +12,10 @@ jobs:
     steps:
       - name: "set env"
         run: |
-          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> "$GITHUB_ENV"
-          echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> "$GITHUB_ENV"
-          echo "tool_x86_64_zip=x-toolchain-${new_version}-x86_64.zip >> $GITHUB_ENV"
-          echo "tool_arm64_zip=x-toolchain-${new_version}-aarch64.zip >> $GITHUB_ENV"
+          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
+          echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> $GITHUB_ENV
+          echo "tool_x86_64_zip=x-toolchain-${new_version}-x86_64.zip" >> $GITHUB_ENV
+          echo "tool_arm64_zip=x-toolchain-${new_version}-aarch64.zip" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
       - name: "download toolchain"
@@ -27,26 +27,28 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: build-x86_64
+        id: build-x86_64
         if: true
         run: |
           bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts x86_64
-        if: true
+        if: ${{ steps.build-x86_64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-x86_64
-          path: $tool_x86_64_zip
+          path: ${{ env.tool_x86_64_zip }}
           compression-level: 0
 
       - name: build-arm64
+        id: build-arm64
         if: true
         run: |
           unzip $toolchain_arm64_dir.zip
           ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
-        if: true
+        if: ${{ steps.build-arm64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: toolchain-aarch64
