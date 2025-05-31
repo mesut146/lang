@@ -12,7 +12,7 @@ out_dir=$build/${name}_out
 
 mkdir -p $build
 
-$dir/build_std.sh $compiler lib || exit 1
+$dir/build_std.sh $compiler || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 $dir/build_ast.sh $compiler || exit 1
