@@ -34,10 +34,16 @@ linker=$($dir/find_llvm.sh clang)
 $dir/build_ast.sh $compiler lib || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
+bin=$(dirname $compiler)
+
+
 #bridge_lib=$toolchain/lib/libbridge.a
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
-#llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 llvm_lib="/usr/lib/llvm-19/lib/libLLVM.so.19.1"
+if [[ "$bin" == */bin ]]; then
+  toolchain=$bin/..
+  llvm_lib="$toolchain/lib/libLLVM.so.19.1"
+fi
 
 flags="$bridge_lib"
 #flags="$flags $out_dir/std.a"
