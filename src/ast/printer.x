@@ -2,9 +2,9 @@
 import std/result
 import std/fs
 
-import parser/ast
-import parser/parser
-import parser/token
+import ast/ast
+import ast/parser
+import ast/token
 
 static print_cst = false;
 //static pretty_print = true;

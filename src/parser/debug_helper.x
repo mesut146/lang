@@ -2,13 +2,15 @@ import std/libc
 import std/stack
 import std/hashmap
 import std/io
+
+import ast/ast
+import ast/utils
+import ast/printer
+
 import parser/bridge
-import parser/ast
 import parser/compiler
 import parser/compiler_helper
 import parser/resolver
-import parser/utils
-import parser/printer
 import parser/ownership
 import parser/own_model
 

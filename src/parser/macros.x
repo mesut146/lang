@@ -1,5 +1,5 @@
-import parser/ast
-import parser/parser
+import ast/ast
+import ast/parser
 
 //#derive_macro(Clone)
 func derive_clone(it: Item): TokenStream{

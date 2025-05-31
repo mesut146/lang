@@ -1,14 +1,14 @@
 import std/map
 import std/stack
+import ast/ast
+import ast/utils
+import ast/printer
 import parser/compiler
 import parser/stmt_emitter
 import parser/resolver
-import parser/ast
 import parser/bridge
 import parser/debug_helper
 import parser/compiler_helper
-import parser/utils
-import parser/printer
 import parser/ownership
 import parser/own_model
 import parser/derive

@@ -7,15 +7,15 @@ import std/fs
 import std/stack
 import std/result
 
-import parser/parser
-import parser/lexer
-import parser/ast
-import parser/printer
+import ast/parser
+import ast/lexer
+import ast/ast
+import ast/printer
+import ast/token
+import ast/utils
+import ast/copier
 import parser/method_resolver
 import parser/compiler_helper
-import parser/utils
-import parser/token
-import parser/copier
 import parser/derive
 import parser/ownership
 import parser/drop_helper

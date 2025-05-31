@@ -2,6 +2,37 @@ struct vector_Type;
 struct vector_Value;
 struct vector_Constant;//std::vector<llvm::Constant*>
 struct vector_Metadata;
+
+struct LLVMTarget;
+struct LLVMOpaqueTargetMachine;
+struct LLVMOpaqueTargetMachineOptions;
+type LLVMTargetRef = LLVMTarget*;
+type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
+enum LLVMCodeGenOptLevel{
+    LLVMCodeGenLevelNone,
+    LLVMCodeGenLevelLess,
+    LLVMCodeGenLevelDefault,
+    LLVMCodeGenLevelAggressive
+}
+enum LLVMRelocMode{
+    LLVMRelocDefault,
+    LLVMRelocStatic,
+    LLVMRelocPIC,
+    LLVMRelocDynamicNoPic,
+    LLVMRelocROPI,
+    LLVMRelocRWPI,
+    LLVMRelocROPI_RWPI
+}
+enum LLVMCodeModel{
+    LLVMCodeModelDefault,
+    LLVMCodeModelJITDefault,
+    LLVMCodeModelTiny,
+    LLVMCodeModelSmall,
+    LLVMCodeModelKernel,
+    LLVMCodeModelMedium,
+    LLVMCodeModelLarge
+}
+
 struct Target;
 struct TargetMachine;
 struct LLVMModule;
@@ -40,6 +71,84 @@ struct DIExpression;
 struct DILocation;
 struct StructLayout;
 
+func llvm_ctest(){
+  LLVMInitializeAllTargetInfos();
+  LLVMInitializeAllTargets();
+  LLVMInitializeAllTargetMCs();
+  LLVMInitializeAllAsmPrinters();
+  LLVMInitializeAllAsmParsers();
+
+  let triple = LLVMGetDefaultTargetTriple();
+  printf("triple=%s\n", triple);
+  let target = ptr::null<LLVMTarget>();
+  let err = ptr::null<i8>();
+  let code = LLVMGetTargetFromTriple(triple, &target, &err);
+  print("code={}\n", code);
+  printf("err=%s\n", err);
+  print("ref is null={:?}\n", target as u64 == 0);
+
+  let opt = LLVMCreateTargetMachineOptions();
+  LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
+  let machine = LLVMCreateTargetMachineWithOptions(target, triple, opt);
+  printf("machine=%p cpu='%s'\n", machine, LLVMGetTargetMachineCPU(machine));
+}
+
+func LLVMInitializeAllTargets(){
+    LLVMInitializeX86Target();
+    LLVMInitializeAArch64Target();
+}
+func LLVMInitializeAllTargetInfos(){
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeAArch64TargetInfo();
+}
+func LLVMInitializeAllTargetMCs(){
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeAArch64TargetMC();
+}
+func LLVMInitializeAllAsmParsers(){
+    LLVMInitializeX86AsmParser();
+    LLVMInitializeAArch64AsmParser();
+}
+func LLVMInitializeAllAsmPrinters(){
+    LLVMInitializeX86AsmPrinter();
+    LLVMInitializeAArch64AsmPrinter();
+}
+extern{
+    //func LLVMInitializeAllTargets();
+    //func LLVMInitializeAllTargetInfos();
+    //func LLVMInitializeAllTargetMCs();
+    //func LLVMInitializeAllAsmParsers();
+    //func LLVMInitializeAllAsmPrinters();
+    func LLVMInitializeAllDisassemblers();
+
+    func LLVMInitializeX86Target();
+    func LLVMInitializeX86TargetInfo();
+    func LLVMInitializeX86TargetMC();
+    func LLVMInitializeX86AsmParser();
+    func LLVMInitializeX86AsmPrinter();
+
+    func LLVMInitializeAArch64Target();
+    func LLVMInitializeAArch64TargetInfo();
+    func LLVMInitializeAArch64TargetMC();
+    func LLVMInitializeAArch64AsmParser();
+    func LLVMInitializeAArch64AsmPrinter();
+
+    func LLVMGetDefaultTargetTriple(): i8*;
+    func LLVMGetTargetFromName(name: i8*): LLVMTarget*;
+    func LLVMGetTargetFromTriple(triple: i8*, target: LLVMTarget**, err: i8**): i32;
+    func LLVMCreateTargetMachineOptions(): LLVMOpaqueTargetMachineOptions*;
+    func LLVMCreateTargetMachineWithOptions (T: LLVMTarget*, Triple: i8*, Options: LLVMOpaqueTargetMachineOptions*): LLVMOpaqueTargetMachine*;
+    func LLVMCreateTargetMachine(T: LLVMTarget*, Triple: i8*, CPU: i8*, Features: i8*, Level: LLVMCodeGenOptLevel, Reloc: LLVMRelocMode, CodeModel: LLVMCodeModel): LLVMOpaqueTargetMachine*;
+    func LLVMTargetMachineOptionsSetCPU(Options: LLVMOpaqueTargetMachineOptions*, CPU: i8*);
+    func LLVMTargetMachineOptionsSetFeatures(Options: LLVMOpaqueTargetMachineOptions*, Features: i8*);
+    func LLVMTargetMachineOptionsSetABI(Options: LLVMOpaqueTargetMachineOptions*, ABI: i8*);
+    func LLVMTargetMachineOptionsSetCodeGenOptLevel(Options: LLVMOpaqueTargetMachineOptions*, Level: LLVMCodeGenOptLevel);
+    func LLVMTargetMachineOptionsSetRelocMode(Options: LLVMOpaqueTargetMachineOptions*, Reloc: LLVMRelocMode);
+    func LLVMTargetMachineOptionsSetCodeModel(Options: LLVMOpaqueTargetMachineOptions*, CodeModel: LLVMCodeModel);
+    func LLVMGetTargetMachineCPU(T: LLVMOpaqueTargetMachine*): i8*;
+
+}
+
 extern{
     func vector_Type_new(): vector_Type*;
     func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
@@ -67,7 +176,9 @@ extern{
     func InitializeAllAsmParsers();
     func InitializeAllAsmPrinters();
     func lookupTarget(triple: i8*): Target*;
+
     func createTargetMachine(triple: i8*): TargetMachine*;
+
     func llvm_InitializeX86TargetInfo();
     func llvm_InitializeX86Target();
     func llvm_InitializeX86TargetMC();

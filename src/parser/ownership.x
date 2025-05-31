@@ -2,9 +2,12 @@ import std/map
 import std/hashmap
 import std/stack
 import std/io
-import parser/ast
+
+import ast/ast
+import ast/utils
+import ast/printer
+
 import parser/bridge
-import parser/utils
 import parser/own_visitor
 import parser/own_helper
 import parser/own_model
@@ -13,7 +16,6 @@ import parser/resolver
 import parser/compiler_helper
 import parser/method_resolver
 import parser/debug_helper
-import parser/printer
 import parser/derive
 import parser/drop_helper
 import parser/exit

@@ -2,10 +2,10 @@ import std/map
 import std/libc
 import std/stack
 
+import ast/ast
+import ast/utils
+import ast/printer
 import parser/resolver
-import parser/ast
-import parser/utils
-import parser/printer
 
 struct DropHelper {
   r: Resolver*;
