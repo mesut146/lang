@@ -6,17 +6,19 @@ if [ -z "$1" ]; then
 fi
 
 compiler=$1
-name="x2"
 toolchain=$2
 build=$dir/../build
 mkdir -p $build
+name="xx2"
 out_dir=$build/${name}_out
 
 echo "compiler=$compiler"
 echo "out=$out_dir"
 
-bridge_lib=$toolchain/lib/libbridge.a
-llvm_lib="$toolchain/lib/libLLVM.so.19.1"
+#bridge_lib=$toolchain/lib/libbridge.a
+bridge_lib=$dir/../cpp_bridge/build/libbridge.a
+#llvm_lib="$toolchain/lib/libLLVM.so.19.1"
+llvm_lib="/usr/lib/llvm-19/lib/libLLVM.so.19.1"
 
 libs+=$llvm_lib
 flags="$bridge_lib"
@@ -43,7 +45,7 @@ fi
 if ! command -v patchelf 2>&1 >/dev/null; then
   sudo apt install -y patchelf
 fi
-#patchelf --replace-needed libLLVM.so.19.1 ../lib/libLLVM.so.19.1 ${out_dir}/${name}
-patchelf --set-rpath '$ORIGIN/../lib' ${out_dir}/${name}
+
+#patchelf --set-rpath '$ORIGIN/../lib' ${out_dir}/${name}
 
 cp ${out_dir}/${name} $build
