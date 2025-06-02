@@ -188,8 +188,9 @@ impl Compare for String{
 }
 
 
-struct CStr{
-  val: String;
+enum CStr{
+  Str(val: String),
+  Ptr(ptr: i8*)
 }
 
 impl CStr{
@@ -205,7 +206,7 @@ impl CStr{
       }
       --s.arr.count;
     }
-    return CStr{val: s};
+    return CStr::Str{val: s};
   }
   func new(arr: [u8]): CStr{
     let s = String::new(arr);
@@ -218,20 +219,35 @@ impl CStr{
   func new(s: str): CStr{
     return CStr::new(s.str());
   }
+  func new(ptr: i8*): CStr{
+    return CStr::Ptr{ptr};
+  }
   func ptr(self): i8*{
-    return self.val.ptr();
+    match self{
+      CStr::Str(val) =>  return val.ptr(),
+      CStr::Ptr(ptr) => return *ptr,
+    }
   }
   func get(self): str{
-    return self.val.str();
+    match self{
+      CStr::Str(val) =>  return val.str(),
+      CStr::Ptr(ptr) => return str::from_raw(*ptr),
+    }
   }
   func get_heap(self): String{
-    return self.val.clone();
+    match self{
+      CStr::Str(val) =>  return val.clone(),
+      CStr::Ptr(ptr) => return str::from_raw(*ptr).owned(),
+    }
   }
 }
 
 impl Debug for CStr{
   func debug(self, f: Fmt*){
-    f.print(self.val.str());
+    match self{
+      CStr::Str(val) =>  f.print(val),
+      CStr::Ptr(ptr) => f.print(str::from_raw(*ptr)),
+    }
   }
 }
 impl Display for CStr{

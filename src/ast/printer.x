@@ -109,6 +109,15 @@ impl Debug for ImportStmt{
   }
 }
 
+impl Debug for ExternItem {
+  func debug(self, f: Fmt*){
+    match self{
+      ExternItem::Method(m) => m.debug(f),
+      ExternItem::Global(gl) => gl.debug(f),
+    }
+  }
+}
+
 impl Debug for Item{
   func debug(self, f: Fmt*){
     match self{

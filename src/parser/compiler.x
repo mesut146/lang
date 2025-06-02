@@ -236,13 +236,13 @@ impl llvm_holder{
   }
 
   func init_llvm(){
-    //InitializeAllTargetInfos();
-    // InitializeAllTargets();
-    // InitializeAllTargetMCs();
-    // InitializeAllAsmParsers();
-    // InitializeAllAsmPrinters();
+    LLVMInitializeAllTargetInfos();
+    LLVMInitializeAllTargets();
+    LLVMInitializeAllTargetMCs();
+    LLVMInitializeAllAsmPrinters();
+    LLVMInitializeAllAsmParsers();
 
-    llvm_InitializeX86TargetInfo();
+    /*llvm_InitializeX86TargetInfo();
     llvm_InitializeX86Target();
     llvm_InitializeX86TargetMC();
     llvm_InitializeX86AsmParser();
@@ -252,20 +252,32 @@ impl llvm_holder{
     llvm_InitializeAArch64Target();
     llvm_InitializeAArch64TargetMC();
     llvm_InitializeAArch64AsmParser();
-    llvm_InitializeAArch64AsmPrinter();
+    llvm_InitializeAArch64AsmPrinter();*/
+  }
+  
+  func createTargetMachine2(triple: i8*): LLVMOpaqueTargetMachine*{
+    let target = ptr::null<LLVMTarget>();
+    let err = ptr::null<i8>();
+    let code = LLVMGetTargetFromTriple(triple, &target, &err);
+    let opt = LLVMCreateTargetMachineOptions();
+    LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
+    LLVMTargetMachineOptionsSetRelocMode(opt, LLVMRelocMode::LLVMRelocPIC);
+    let machine = LLVMCreateTargetMachineWithOptions(target, triple, opt);
+    return machine; 
   }
 
   func new(): llvm_holder{
     llvm_holder::init_llvm();
     //printDefaultTargetAndDetectedCPU();
-    let target_triple = getDefaultTargetTriple2();
+    let target_triple = CStr::new(LLVMGetDefaultTargetTriple());
+    //let target_triple: CStr = getDefaultTargetTriple2();
     let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       target_triple.drop();
       target_triple = env_triple.unwrap().owned().cstr();
     }
-    //print("target_triple2={}\n", target_triple);
     let target_machine = createTargetMachine(target_triple.ptr());
+    //let target_machine = createTargetMachine2(target_triple.ptr()) as TargetMachine*;
     return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
 
     //todo cache
@@ -381,7 +393,7 @@ impl Compiler{
       self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
-    let globals = resolv.unit.get_globals();
+    let globals = resolv.unit.get_globals(true);
     if(globals.empty()){
       globals.drop();
       return;
@@ -399,7 +411,17 @@ impl Compiler{
     self.llvm.di.get().dbg_func(&method, proto, self);
     for(let j = 0;j < globals.len();++j){
       let gl: Global* = *globals.get(j);
-      let rt = resolv.visit(&gl.expr);
+      if(gl.expr.is_none()){
+        //local extern
+        let ty = self.mapType(gl.type.get());
+        let init = ptr::null<Constant>();
+        let name_c = gl.name.clone().cstr();
+        let glob = make_global(name_c.ptr(), ty, init);
+        self.globals.add(gl.name.clone(), glob as Value*);
+        name_c.drop();
+        continue;
+      }
+      let rt = resolv.visit(gl.expr.get());
       let ty = self.mapType(&rt.type);
       let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
@@ -411,8 +433,10 @@ impl Compiler{
       }
       self.globals.add(gl.name.clone(), glob as Value*);
       //todo make allochelper visit only children
-      AllocHelper::new(self).visit(&gl.expr);
-      self.emit_expr(&gl.expr,  glob as Value*);
+      if(gl.expr.is_some()){
+        AllocHelper::new(self).visit(gl.expr.get());
+        self.emit_expr(gl.expr.get(),  glob as Value*);
+      }
       rt.drop();
     }
     if(self.llvm.di.get().debug){
@@ -449,9 +473,10 @@ impl Compiler{
   func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
     let resolv = self.get_resolver();
     let init = ptr::null<Constant>();
-    if(is_constexpr(&gl.expr)){
+    if(gl.expr.is_none()) return init;
+    if(is_constexpr(gl.expr.get())){
       if(rt.type.is_prim()){
-        let rhs_str = gl.expr.print();
+        let rhs_str = gl.expr.get().print();
         if(rhs_str.eq("true")){
           init =  makeInt(1, 8) as Constant*;
         }else if(rhs_str.eq("false")){
@@ -461,7 +486,7 @@ impl Compiler{
         }
         rhs_str.drop();
       }else if(rt.type.is_str()){
-        let val = is_str_lit(&gl.expr).unwrap().str();
+        let val = is_str_lit(gl.expr.get()).unwrap().str();
         let slice_ty = self.protos.get().std("slice");
         let cons_elems = vector_Constant_new();
         let cons_elems_slice = vector_Constant_new();

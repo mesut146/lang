@@ -350,9 +350,11 @@ func getMethods(items: List<Item>*, list: List<Method*>*){
           list.add(imp.methods.get(j));
         }
       },
-      Item::Extern(methods)=>{
-        for(let j = 0;j < methods.len();++j){
-          list.add(methods.get(j));
+      Item::Extern(items2)=>{
+        for ei in items2{
+          if let ExternItem::Method(m)=ei{
+            list.add(m);
+          }
         }
       },
       Item::Module(md) => {

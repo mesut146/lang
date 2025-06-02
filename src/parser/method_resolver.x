@@ -434,15 +434,17 @@ impl MethodResolver{
             }
             else if let Item::Extern(arr) = item{
                 for (let j = 0;j < arr.len();++j) {
-                    let m = arr.get(j);
-                    if (m.name.eq(name)) {
-                        let desc = Desc{
-                            kind: RtKind::MethodExtern{j},
-                            path: m.path.clone(),
-                            idx: i,
-                            scope: Option<Type>::new(),
-                        };
-                        list.add(Signature::new(m, desc, self.r, origin));
+                    let exi = arr.get(j);
+                    if let ExternItem::Method(m)=exi{
+                      if (m.name.eq(name)) {
+                          let desc = Desc{
+                              kind: RtKind::MethodExtern{j},
+                              path: m.path.clone(),
+                              idx: i,
+                              scope: Option<Type>::new(),
+                          };
+                          list.add(Signature::new(m, desc, self.r, origin));
+                      }
                     }
                 }
             }

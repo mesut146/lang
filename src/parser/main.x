@@ -350,7 +350,7 @@ func handle(cmd: CmdArgs*){
   //print("##########running##########\n");
   //print_version();
 
-  llvm_ctest();
+  // llvm_ctest();
 
   if(!cmd.has()){
     print("enter a command\n");

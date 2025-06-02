@@ -620,9 +620,12 @@ impl Resolver{
   }
   
   func init_globals(self){
-    for g in self.unit.get_globals() {
+    for g in self.unit.get_globals(false) {
       self.in_global_rhs = true;
-      let rhs: RType = self.visit(&g.expr);
+      if(g.expr.is_none()){
+        self.err(g.line, "global variable must have initializer");
+      }
+      let rhs = self.visit(g.expr.get());
       self.in_global_rhs = false;
       if (g.type.is_some()) {
         let type = self.getType(g.type.get());
@@ -634,6 +637,7 @@ impl Resolver{
         }
         err_opt.drop();
         type.drop();
+      }else{
       }
       self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
     }
@@ -955,9 +959,11 @@ impl Resolver{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
-      if let Item::Extern(methods) = item{
-        let m = methods.get(*idx2);
-        return Option::new(m);
+      if let Item::Extern(items) = item{
+        let ei = items.get(*idx2);
+        if let ExternItem::Method(m)=ei{
+          return Option::new(m);
+        }
       }
     }
     panic("get_method {:?}={:?}", type, desc);
@@ -1013,11 +1019,25 @@ impl Resolver{
       },
       Item::Trait(tr) => {
       },
-      Item::Extern(methods) => {
-        for(let i = 0;i < methods.len();++i){
-          let m = methods.get(i);
-          if(m.is_generic) continue;
-          self.visit_method(m);
+      Item::Extern(items) => {
+        for(let i = 0;i < items.len();++i){
+          let ei = items.get(i);
+          match ei{
+            ExternItem::Method(m)=>{
+              if(m.is_generic) continue;
+              self.visit_method(m);
+            },
+            ExternItem::Global(gl)=>{
+              if(gl.expr.is_some()){
+                self.err(gl.line, "extern global must not have initializer");
+              }
+              if(gl.type.is_none()){
+                self.err(gl.line, "extern global must have type");
+              }
+              let rt = self.visit_type(gl.type.get());
+              self.addScope(gl.name.clone(), rt, gl.id, VarKind::GLOBAL, gl.line);
+            }
+          }
         }
       },
       Item::Const(cn) => {
@@ -1163,6 +1183,9 @@ impl Resolver{
     }
     for(let i = 0;i < vars.len();++i){
       let ev = vars.get(i);
+      if(ev.disc.is_some()){
+        self.err(node.line, "todo enum discriminant");
+      }
       for(let j = 0;j < ev.fields.len();++j){
         let fd = ev.fields.get(j);
         self.is_valid_field(fd, node, base_fields);
@@ -2965,15 +2988,20 @@ impl Resolver{
     let arr = self.get_resolvers();
     for (let i = 0;i < arr.len();++i) {
       let res = *arr.get(i);
-      for glob in res.unit.get_globals() {
+      for glob in res.unit.get_globals(true) {
         if (glob.name.eq(name)) {
           if(self.in_global_rhs){
             self.err(node ,"can't reference from global to another global");
           }
           //clone to have unique id
-          let expr2 = AstCopier::clone(&glob.expr, &self.unit);
-          let rt = self.visit(&expr2);
-          expr2.drop();
+          let rt = if(glob.expr.is_some()){
+            let expr2 = AstCopier::clone(glob.expr.get(), &self.unit);
+            let tmp = self.visit(&expr2);
+            expr2.drop();
+            tmp
+          }else{
+            self.visit_type(glob.type.get())
+          };
           for old in &self.glob_map{
             if(old.name.eq(name)){
               //already have

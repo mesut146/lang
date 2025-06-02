@@ -129,7 +129,12 @@ impl AstCopier{
     }
 
     func visit(self, node: Variant*): Variant{
-        return Variant{name: node.name.clone(), fields: self.visit_list(&node.fields), is_tuple: node.is_tuple};
+        return Variant{
+          name: node.name.clone(),
+          fields: self.visit_list(&node.fields),
+          is_tuple: node.is_tuple, 
+          disc: self.visit_opt(&node.disc)
+        };
     }
 
     func visit(self, type: Type*): Type{

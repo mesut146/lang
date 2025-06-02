@@ -81,6 +81,9 @@ func SEEK_SET(): i32 { return 0; }
 //func SEEK_CUR(): i32 { return 0; }
 
 extern{
+  //static stdout: cFILE*;
+  
+  
   //func printf(fmt: i8*, ...);
   func exit(code: i32);
   func free(ptr: i8*);

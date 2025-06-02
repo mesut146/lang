@@ -1,17 +1,26 @@
 dir=$(dirname $0)
 
-if [ ! -d "$1" ]; then
- echo "provide toolchain dir"
- exit
-fi
-
 toolchain=$1
 compiler="$toolchain/bin/x"
+
+if [ -f "$1" ]; then
+  compiler="$1"
+  toolchain=$dir/..
+elif [ -d "$1" ]; then
+  toolchain="$1"
+  compiler="$toolchain/bin/x"
+else
+  echo "provide toolchain dir or compiler"
+  exit 1
+fi
+
 pat=$2
 build=$dir/../build
 mkdir -p $build
 out_dir=$build/test_out
 testd=$dir/../tests
+stdpath=$toolchain/src
+linker=$($dir/find_llvm.sh clang)
 
 check(){
   if [ ! "$?" -eq "0" ]; then
@@ -22,7 +31,7 @@ check(){
 
 normal(){
   for f in $testd/normal/*.x; do
-    $compiler c -out $out_dir -stdpath $toolchain/src $f
+    LD=$linker $compiler c -out $out_dir -stdpath $stdpath $f
     check $f
   done
 }
@@ -31,7 +40,7 @@ normal_regex(){
   has_match=false
   for f in $testd/normal/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $toolchain/src $f
+      $compiler c -out $out_dir -stdpath $stdpath $f
       check $f
       has_match=true
     fi
@@ -45,7 +54,7 @@ normal_regex(){
 std_all(){
   $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
   for f in $testd/std_test/*.x; do
-    $compiler c -out $out_dir -stdpath $toolchain/src -flags $out_dir/std.a $f
+    $compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a $f
     check $f
   done
 }
@@ -54,7 +63,7 @@ std_regex(){
   has_match=false
   for f in $testd/std_test/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $toolchain/src -flags $out_dir/std.a  $f
+      $compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a  $f
       check $f
       has_match=true
     fi

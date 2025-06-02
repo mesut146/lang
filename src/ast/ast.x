@@ -110,11 +110,18 @@ impl Unit{
     return Node::new(id, line);
   }
 
-  func get_globals(self): List<Global*>{
+  func get_globals(self, ext: bool): List<Global*>{
     let res = List<Global*>::new();
     for item in &self.items{
       if let Item::Glob(g) = item{
         res.add(g);
+      }
+      if let Item::Extern(items)=item{
+        for ei in items{
+          if let ExternItem::Global(g)=ei{
+            res.add(g);
+          }
+        }
       }
     }
     return res;
@@ -184,13 +191,19 @@ impl Attribute{
   }
 }
 
+
+enum ExternItem{
+  Method(m: Method),
+  Global(gl: Global),
+}
+
 enum Item{
   Method(m: Method),
   Decl(decl: Decl),
   Impl(i: Impl),
   Trait(t: Trait),
   Type(name: String, rhs: Type),
-  Extern(methods: List<Method>),
+  Extern(items: List<ExternItem>),
   Const(val: Const),
   Glob(gl: Global),
   Module(m: Module),
@@ -220,7 +233,7 @@ struct Module{
 struct Global: Node{
   name: String;
   type: Option<Type>;
-  expr: Expr;
+  expr: Option<Expr>;
 }
 
 struct Const{
@@ -306,6 +319,7 @@ struct Variant{
   name: String;
   fields: List<FieldDecl>;
   is_tuple: bool;
+  disc: Option<i32>;
 }
 
 struct Trait{
