@@ -19,7 +19,7 @@ llvm_dir=$($llvm_config_bin --includedir)
 
 echo "llvm_dir=$llvm_dir"
 
-$clang_bin -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
+$clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1

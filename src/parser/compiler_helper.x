@@ -375,7 +375,8 @@ impl Compiler{
     }
     let val2 = val.clone();
     let val_c = val.cstr();
-    let ptr = CreateGlobalStringPtr(val_c.ptr());
+    //let ptr = CreateGlobalStringPtr(val_c.ptr());
+    let ptr = CreateGlobalString(val_c.ptr()) as Constant*;
     self.string_map.add(val2, ptr);
     val_c.drop();
     return ptr;
