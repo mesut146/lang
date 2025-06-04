@@ -33,11 +33,11 @@ find_suffix(){
   fi
 }
 
-if [ "$1" == "config" ]; then
+if [ "$1" = "config" ]; then
   find_config
-elif [ "$1" == "suffix" ]; then
+elif [ "$1" = "suffix" ]; then
   find_suffix
-elif [ "$1" == "clang" ]; then
+elif [ "$1" = "clang" ]; then
   find_clang
 else
   echo "invalid call to $0, arg=$1"

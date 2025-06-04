@@ -255,3 +255,12 @@ impl Display for CStr{
       Debug::debug(self, f);
   }
 }
+
+impl Drop for CStr{
+  func drop(*self){
+     match self{
+      CStr::Str(val) =>  Drop::drop(val),
+      CStr::Ptr(ptr) => free(ptr),
+    }
+  }
+}

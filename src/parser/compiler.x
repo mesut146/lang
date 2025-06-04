@@ -21,6 +21,7 @@ import parser/own_model
 import parser/cache
 import parser/derive
 import parser/incremental
+import parser/llvm
 
 static bootstrap = false;
 static inline_rvo = false;
@@ -64,6 +65,7 @@ struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
   llvm: llvm_holder;
+  ll: Emitter;
   protos: Option<Protos>;
   NamedValues: HashMap<String, Value*>;
   globals: HashMap<String, Value*>;
@@ -78,19 +80,21 @@ struct Compiler{
 impl Compiler{
   func new(ctx: Context, config: CompilerConfig*, cache: Cache*): Compiler{
     let vm = llvm_holder::new();
-    return Compiler{ctx: ctx,
-     resolver: Option<Resolver*>::new(),
-     llvm: vm,
-     protos: Option<Protos>::new(),
-     NamedValues: HashMap<String, Value*>::new(),
-     globals: HashMap<String, Value*>::new(),
-     allocMap: HashMap<i32, Value*>::new(),
-     curMethod: Option<Method*>::new(),
-     loops: List<LoopInfo>::new(),
-     own: Option<Own>::new(),
-     string_map: HashMap<String, Value*>::new(),
-     config: config,
-     cache: cache,
+    return Compiler{
+      ctx: ctx,
+      resolver: Option<Resolver*>::new(),
+      llvm: vm,
+      ll: Emitter::new("module_name"/*getName(path)*/),
+      protos: Option<Protos>::new(),
+      NamedValues: HashMap<String, Value*>::new(),
+      globals: HashMap<String, Value*>::new(),
+      allocMap: HashMap<i32, Value*>::new(),
+      curMethod: Option<Method*>::new(),
+      loops: List<LoopInfo>::new(),
+      own: Option<Own>::new(),
+      string_map: HashMap<String, Value*>::new(),
+      config: config,
+      cache: cache,
     };
   }
 }
@@ -228,6 +232,7 @@ impl llvm_holder{
   func initModule(self, path: str){
     let name = getName(path);
     make_ctx();
+    
     let name_c = name.str().cstr();
     make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
     name_c.drop();
@@ -342,8 +347,10 @@ impl Compiler{
     
     let name = getName(path);
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
+    //self.ll.emit_module(format("{}.2", llvm_file).str());
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
+    //self.ll.dump();
     let outFile_cstr = CStr::new(outFile.clone());
     if(!self.config.llvm_only){
       emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
@@ -397,6 +404,14 @@ impl Compiler{
     if(globals.empty()){
       globals.drop();
       return;
+    }
+    if(std::getenv("TERMUX").is_some()){
+      let globfiles = format("{}/globals.txt", config.out_dir);
+      let tmp = File::open(globfiles.str(), OpenMode::Append)?;
+      tmp.write_string(resolv.unit.path.str())?;
+      tmp.write_string("\n")?;
+      tmp.close();
+      globfiles.drop();
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
     let proto = proto_pr.a;

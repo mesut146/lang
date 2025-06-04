@@ -131,6 +131,11 @@ impl File{
     }
     return Result<(), String>::ok(());
   }
+
+  func write_string(self, data: str): Result<(), String>{
+    self.write_bytes(data.slice())?;
+    return Result<(), String>::ok(());
+  }
   
   func write_string(data: str, path: str): Result<(), String>{
     return write_string(data, path, OpenMode::Write);

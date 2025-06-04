@@ -1,11 +1,11 @@
-struct vector_Type;
-struct vector_Value;
-struct vector_Constant;//std::vector<llvm::Constant*>
-struct vector_Metadata;
-
+struct LLVMOpaqueContext;
+struct LLVMOpaqueModule;
 struct LLVMTarget;
 struct LLVMOpaqueTargetMachine;
 struct LLVMOpaqueTargetMachineOptions;
+struct LLVMOpaqueTargetData;
+struct LLVMOpaqueBuilder;
+
 type LLVMTargetRef = LLVMTarget*;
 type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
 enum LLVMCodeGenOptLevel{
@@ -32,6 +32,20 @@ enum LLVMCodeModel{
     LLVMCodeModelMedium,
     LLVMCodeModelLarge
 }
+enum LLVMVerifierFailureAction{
+    LLVMAbortProcessAction,/* verifier will print to stderr and abort() */
+    LLVMPrintMessageAction,/* verifier will print to stderr and return 1 */
+    LLVMReturnStatusAction /* verifier will just return 1 */
+}
+enum LLVMCodeGenFileType{
+    LLVMAssemblyFile, 	
+    LLVMObjectFile
+}
+
+struct vector_Type;
+struct vector_Value;
+struct vector_Constant;//std::vector<llvm::Constant*>
+struct vector_Metadata;
 
 struct Target;
 struct TargetMachine;
@@ -147,6 +161,21 @@ extern{
     func LLVMTargetMachineOptionsSetCodeModel(Options: LLVMOpaqueTargetMachineOptions*, CodeModel: LLVMCodeModel);
     func LLVMGetTargetMachineCPU(T: LLVMOpaqueTargetMachine*): i8*;
 
+    func LLVMContextCreate(): LLVMOpaqueContext*;
+    func LLVMContextDispose(c: LLVMOpaqueContext*);
+    func LLVMModuleCreateWithNameInContext(name: i8*, c: LLVMOpaqueContext*): LLVMOpaqueModule*;
+    func LLVMDisposeModule(m: LLVMOpaqueModule*);
+    func LLVMSetTarget(m: LLVMOpaqueModule*, triple: i8*);
+    func LLVMSetDataLayout(m: LLVMOpaqueModule*, DataLayoutStr: i8*);
+    func LLVMSetModuleDataLayout (m: LLVMOpaqueModule*, DL: LLVMOpaqueTargetData*);
+    func LLVMCreateTargetDataLayout(T: LLVMOpaqueTargetMachine*): LLVMOpaqueTargetData*;
+    func LLVMDumpModule(m: LLVMOpaqueModule*);
+    func LLVMPrintModuleToFile(m: LLVMOpaqueModule*, Filename: i8*, ErrorMessage: i8**): i32;
+    func LLVMVerifyModule(m: LLVMOpaqueModule*, action: LLVMVerifierFailureAction, msg: i8**): i32;
+    func LLVMTargetMachineEmitToFile (T: LLVMOpaqueTargetMachine*, M: LLVMOpaqueModule*, Filename: i8*, codegen: LLVMCodeGenFileType, ErrorMessage: i8**): i32;
+
+    //builder
+    func LLVMCreateBuilderInContext(C: LLVMOpaqueContext*): LLVMOpaqueBuilder*;
 }
 
 extern{
@@ -318,6 +347,7 @@ extern{
     func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(s: i8*): Value*;
+    func CreateGlobalString(s: i8*): GlobalVariable*;
     func CreateCall(f: Function*, args: vector_Value*): Value*;
     func CreateCall_ft(ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
     func CreateUnreachable();
