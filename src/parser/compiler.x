@@ -65,7 +65,7 @@ struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
   llvm: llvm_holder;
-  ll: Emitter;
+  ll: Option<Emitter>;
   protos: Option<Protos>;
   NamedValues: HashMap<String, Value*>;
   globals: HashMap<String, Value*>;
@@ -84,7 +84,7 @@ impl Compiler{
       ctx: ctx,
       resolver: Option<Resolver*>::new(),
       llvm: vm,
-      ll: Emitter::new("module_name"/*getName(path)*/),
+      ll: Option<Emitter>::new(),
       protos: Option<Protos>::new(),
       NamedValues: HashMap<String, Value*>::new(),
       globals: HashMap<String, Value*>::new(),
@@ -229,14 +229,17 @@ func getName(path: str): str{
 }
 
 impl llvm_holder{
-  func initModule(self, path: str){
+  func initModule(self, path: str, c: Compiler*){
     let name = getName(path);
-    make_ctx();
-    
+    c.ll = Option::new(Emitter::new(getName(path)));
+    setModule(c.ll.get().module as LLVMModule*);
+    setCtx(c.ll.get().ctx as LLVMContext*);
+
+    //make_ctx();
     let name_c = name.str().cstr();
-    make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
+    //make_module(name_c.ptr(), self.target_machine, self.target_triple.ptr());
     name_c.drop();
-    make_builder();
+    //make_builder();
     self.di = Option::new(DebugInfo::new(path));
   }
 
@@ -321,12 +324,14 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension for {}", path);
     }
-
+    
+    
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
-    self.llvm.initModule(path);
+    self.llvm.initModule(path, self);
+
     self.createProtos();
     self.init_globals(self.config);
     
@@ -347,10 +352,10 @@ impl Compiler{
     
     let name = getName(path);
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
-    //self.ll.emit_module(format("{}.2", llvm_file).str());
+    //self.ll.get().emit_module(format("{}.2", llvm_file).str());
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
-    //self.ll.dump();
+    //self.ll.get().dump();
     let outFile_cstr = CStr::new(outFile.clone());
     if(!self.config.llvm_only){
       emit_object(outFile_cstr.ptr(), self.llvm.target_machine, self.llvm.target_triple.ptr());
@@ -933,6 +938,7 @@ impl Compiler{
       cmd.append(" ");
     }
     cmd.append(args);
+    cmd.append(" -Wl,-rpath=$ORIGIN/../lib");
     File::write_string(cmd.str(), format("{}/link.sh", out_dir).str())?;
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){

@@ -51,9 +51,12 @@ flags="$flags $LIB_STD"
 flags="$flags $LIB_AST"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
-LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser -j 1
+cmd="LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser -j 1"
+eval $cmd
+
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
+  echo $cmd
   exit 1
 fi
 
