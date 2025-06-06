@@ -1172,7 +1172,7 @@ impl Compiler{
           let val = self.visit_name(expr, &mc.name, false);
           val = CreateLoad(getPtr(), val);
           let ft0 = Option<LambdaType*>::none();
-          if let Type::Lambda(bx)=&rt.lambda_call.get().type{
+          if let Type::Lambda(bx) = &rt.lambda_call.get().type{
               ft0.set(bx.get());
           }else{
               panic("impossible");
@@ -1497,8 +1497,8 @@ impl Compiler{
     func visit_lit(self, expr: Expr*, node: Literal*): Value*{
       match &node.kind{
         LitKind::BOOL => {
-          if(node.val.eq("true")) return getTrue();
-          return getFalse();
+          if(node.val.eq("true")) return /*getTrue()*/ self.ll.get().getTrue() as Value*;
+          return /*getFalse()*/ self.ll.get().getFalse() as Value*;
         },
         LitKind::STR => {
           let trg_ptr = self.get_alloc(expr);
@@ -1526,14 +1526,15 @@ impl Compiler{
           }
           let trimmed = node.trim_suffix();
           let normal = trimmed.replace("_", "");
+          let val: i64 = 0;
           if (normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
-            let val: i64 = i64::parse_hex(normal.str()).unwrap();
-            normal.drop();
-            return makeInt(val, bits) as Value*;
+            val = i64::parse_hex(normal.str()).unwrap();
+          }else{
+            val = i64::parse(normal.str()).unwrap();
           }
-          let val: i64 = i64::parse(normal.str()).unwrap();
           normal.drop();
-          return makeInt(val, bits) as Value*;
+          //return makeInt(val, bits) as Value*;
+          return self.ll.get().makeInt(val, bits) as Value*;
         },
       }
     }
@@ -1712,12 +1713,17 @@ impl Compiler{
       if(is_comp(op.str())){
         //todo remove redundant cast
         let op_c = op.clone().cstr();
+        /*printf("lhs=%s\n", LLVMPrintValueToString(lv as LLVMOpaqueValue*));
+        printf("rhs=%s\n", LLVMPrintValueToString(rv as LLVMOpaqueValue*));
+        printf("lhsty=%s\n", LLVMPrintTypeToString(LLVMTypeOf(lv as LLVMOpaqueValue*)));
+        printf("rhsty=%s\n", LLVMPrintTypeToString(LLVMTypeOf(rv as LLVMOpaqueValue*)));*/
         if(type.is_float()){
           let res = CreateCmp(get_comp_op_float(op_c.ptr()), lv, rv);
           op_c.drop();
           return res;
         }
-        let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
+        //let res = CreateCmp(get_comp_op(op_c.ptr()), lv, rv);
+        let res = LLVMBuildICmp(self.ll.get().builder, LLVMIntPredicate::from(op.str()), lv as LLVMOpaqueValue*, rv as LLVMOpaqueValue*, "".ptr()) as Value*;
         op_c.drop();
         return res;
       }

@@ -29,9 +29,13 @@ check(){
   fi
 }
 
+run(){
+  eval $1 || (echo "error '$1'" && exit 1)
+}
+
 normal(){
   for f in $testd/normal/*.x; do
-    LD=$linker $compiler c -out $out_dir -stdpath $stdpath $f
+    LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath $f"
     check $f
   done
 }
@@ -83,5 +87,5 @@ elif [ "$pat" == "std" ]; then
     std_regex $3
   fi
 elif [ ! -z "$pat" ]; then
-  normal_regex $2
+  normal_regex $pat
 fi

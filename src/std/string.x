@@ -228,7 +228,7 @@ impl CStr{
       CStr::Ptr(ptr) => return *ptr,
     }
   }
-  func get(self): str{
+  func str(self): str{
     match self{
       CStr::Str(val) =>  return val.str(),
       CStr::Ptr(ptr) => return str::from_raw(*ptr),

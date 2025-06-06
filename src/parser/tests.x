@@ -154,7 +154,7 @@ func own_test(id: i32){
 }
 
 func handle_tests(cmd: CmdArgs*): bool{
-    find_root(cmd.get_root());
+    find_root(CmdArgs::get_root());
     if(cmd.is("own")){
         own_test(1);
         return true;

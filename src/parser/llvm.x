@@ -1,4 +1,5 @@
 import parser/bridge
+import ast/ast
 
 struct LLVMOpaqueContext;
 struct LLVMOpaqueModule;
@@ -7,9 +8,14 @@ struct LLVMOpaqueTargetMachine;
 struct LLVMOpaqueTargetMachineOptions;
 struct LLVMOpaqueTargetData;
 struct LLVMOpaqueBuilder;
+struct LLVMOpaqueValue;
+struct LLVMOpaqueType;
 
 type LLVMTargetRef = LLVMTarget*;
 type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
+type LLVMValueRef = LLVMOpaqueValue*;
+type LLVMTypeRef = LLVMOpaqueType*;
+
 enum LLVMCodeGenOptLevel{
     LLVMCodeGenLevelNone,
     LLVMCodeGenLevelLess,
@@ -42,6 +48,59 @@ enum LLVMVerifierFailureAction{
 enum LLVMCodeGenFileType{
     LLVMAssemblyFile, 	
     LLVMObjectFile
+}
+enum AddressSpace{
+    ADDRESS_SPACE_GENERIC,
+    ADDRESS_SPACE_GLOBAL,
+    ADDRESS_SPACE_SHARED,
+    ADDRESS_SPACE_CONST,
+    ADDRESS_SPACE_LOCAL,
+    ADDRESS_SPACE_PARAM
+}
+enum LLVMIntPredicate{
+    LLVMIntEQ /* = 32*/, 	/*equal*/
+    LLVMIntNE, 	/*not equal*/
+    LLVMIntUGT, /*unsigned greater than*/
+    LLVMIntUGE, /*unsigned greater or equal*/
+    LLVMIntULT, /*unsigned less than*/
+    LLVMIntULE, /*unsigned less or equal*/
+    LLVMIntSGT, /*signed greater than*/
+    LLVMIntSGE, /*signed greater or equal*/
+    LLVMIntSLT, /*signed less than*/
+    LLVMIntSLE, /*signed less or equal */
+}
+impl LLVMIntPredicate{
+    func from(s: str): i32{
+        if(s.eq("==")) return 32; //LLVMIntPredicate::LLVMIntEQ;
+        if(s.eq("!=")) return 33; //LLVMIntPredicate::LLVMIntNE;
+        if(s.eq(">")) return 38; //LLVMIntPredicate::LLVMIntSGT;
+        if(s.eq(">=")) return 39; //LLVMIntPredicate::LLVMIntSGE;
+        if(s.eq("<")) return 40; //LLVMIntPredicate::LLVMIntSLT;
+        if(s.eq("<=")) return 41; //LLVMIntPredicate::LLVMIntSLE;
+        if(s.eq(">")) return 34; //LLVMIntPredicate::LLVMIntUGT;
+        if(s.eq(">=")) return 35; //LLVMIntPredicate::LLVMIntUGE;
+        if(s.eq("<")) return 36; //LLVMIntPredicate::LLVMIntULT;
+        if(s.eq("<=")) return 37; //LLVMIntPredicate::LLVMIntULE;
+        panic("op='{}'", s);
+    }
+}
+enum LLVMRealPredicate{
+    LLVMRealPredicateFalse, /**< Always false (always folded) */
+    LLVMRealOEQ,            /**< True if ordered and equal */
+    LLVMRealOGT,            /**< True if ordered and greater than */
+    LLVMRealOGE,            /**< True if ordered and greater than or equal */
+    LLVMRealOLT,            /**< True if ordered and less than */
+    LLVMRealOLE,            /**< True if ordered and less than or equal */
+    LLVMRealONE,            /**< True if ordered and operands are unequal */
+    LLVMRealORD,            /**< True if ordered (no nans) */
+    LLVMRealUNO,            /**< True if unordered: isnan(X) | isnan(Y) */
+    LLVMRealUEQ,            /**< True if unordered or equal */
+    LLVMRealUGT,            /**< True if unordered or greater than */
+    LLVMRealUGE,            /**< True if unordered, greater than, or equal */
+    LLVMRealULT,            /**< True if unordered or less than */
+    LLVMRealULE,            /**< True if unordered, less than, or equal */
+    LLVMRealUNE,            /**< True if unordered or not equal */
+    LLVMRealPredicateTrue   /**< Always true (always folded) */
 }
 
 func LLVMInitializeAllTargets(){
@@ -111,9 +170,30 @@ extern{
     func LLVMVerifyModule(m: LLVMOpaqueModule*, action: LLVMVerifierFailureAction, msg: i8**): i32;
     func LLVMTargetMachineEmitToFile (T: LLVMOpaqueTargetMachine*, M: LLVMOpaqueModule*, Filename: i8*, codegen: LLVMCodeGenFileType, ErrorMessage: i8**): i32;
 
+    
+    //types
+    func LLVMPointerType(elem: LLVMOpaqueType*, addrspace: i32): LLVMOpaqueType*;
+    func LLVMArrayType(elem: LLVMOpaqueType*, count: u32): LLVMOpaqueType*;
+    func LLVMStructCreateNamed(C: LLVMOpaqueContext*, Name: i8*): LLVMOpaqueType*;
+    func LLVMStructSetBody(StructTy: LLVMOpaqueType*, ElementTypes: LLVMOpaqueType**, ElementCount: i32, Packed: i32);
+    func LLVMVoidTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
+    func LLVMFloatTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
+    func LLVMDoubleTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
+    func LLVMIntTypeInContext(c: LLVMOpaqueContext*, bits: i32): LLVMOpaqueType*;
+    func LLVMDumpValue(val: LLVMOpaqueValue*);
+    func LLVMPrintValueToString(val: LLVMOpaqueValue*): i8*;
+    func LLVMPrintTypeToString(val: LLVMOpaqueType*): i8*;
+    func LLVMTypeOf(val: LLVMOpaqueValue*): LLVMOpaqueType*;
+
     //builder
     func LLVMCreateBuilderInContext(C: LLVMOpaqueContext*): LLVMOpaqueBuilder*;
+    func LLVMAddGlobal(md: LLVMOpaqueModule*, ty: LLVMOpaqueType*, name: i8*): LLVMValueRef;
+    func LLVMBuildICmp(B: LLVMOpaqueBuilder*, Op: i32, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFCmp(B: LLVMOpaqueBuilder*, Op: LLVMRealPredicate, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMConstInt(IntTy: LLVMOpaqueType*, N: i64, SignExtend: i32): LLVMOpaqueValue*;
+    
 }
+
 
 func llvm_ctest(){
   LLVMInitializeAllTargetInfos();
@@ -175,6 +255,8 @@ impl Emitter{
         LLVMSetModuleDataLayout(md, dl);
 
         let builder = LLVMCreateBuilderInContext(ctx);
+        setModule(md as LLVMModule*);
+        setCtx(ctx as LLVMContext*);
         setBuilder(builder as IRBuilder*);
 
         name.drop();
@@ -202,4 +284,30 @@ impl Emitter{
         let code2 = LLVMTargetMachineEmitToFile(self.tm, self.module, file_c.ptr(), LLVMCodeGenFileType::LLVMObjectFile, &err);
     }
 
+    func make_struct_ty_new(self, name: str): LLVMOpaqueType*{
+        let name_c = name.cstr();
+        let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
+        name_c.drop();
+        return ty;
+    }
+    func make_struct_ty_new(self, name: str, elems: List<Type>*): LLVMOpaqueType*{
+        let name_c = name.cstr();
+        let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
+        //LLVMStructSetBody(ty, elemptr, elems.len() as i32, 0);
+        name_c.drop();
+        return ty;
+    }
+
+    func getTrue(self): LLVMOpaqueValue*{
+        let boolType = LLVMIntTypeInContext(self.ctx, 1);
+        return LLVMConstInt(boolType, 1, 0);
+    }
+    func getFalse(self): LLVMOpaqueValue*{
+        let boolType = LLVMIntTypeInContext(self.ctx, 1);
+        return LLVMConstInt(boolType, 0, 0);
+    }
+    func makeInt(self, val: i64, bits: i32): LLVMOpaqueValue*{
+        let ty = LLVMIntTypeInContext(self.ctx, bits);
+        return LLVMConstInt(ty, val, 0);
+    }
 }

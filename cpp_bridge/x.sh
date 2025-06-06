@@ -16,6 +16,9 @@ llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
 clang_bin=$(${dir}/../bin/find_llvm.sh clang)
 llvm_dir=$($llvm_config_bin --includedir)
 
+if [ ! -z "$CC" ]; then
+  clang_bin="$CC"
+fi
 
 echo "llvm_dir=$llvm_dir"
 

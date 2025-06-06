@@ -234,8 +234,6 @@ impl llvm_holder{
   func initModule(self, path: str, c: Compiler*){
     let name = getName(path);
     c.ll = Option::new(Emitter::new(getName(path)));
-    setModule(c.ll.get().module as LLVMModule*);
-    setCtx(c.ll.get().ctx as LLVMContext*);
 
     //make_ctx();
     let name_c = name.str().cstr();
@@ -288,9 +286,11 @@ impl llvm_holder{
     }
     let target_machine = createTargetMachine(target_triple.ptr());
     //let target_machine = createTargetMachine2(target_triple.ptr()) as TargetMachine*;
-    return llvm_holder{target_triple: target_triple, target_machine: target_machine, di: Option<DebugInfo>::new()};
-
-    //todo cache
+    return llvm_holder{
+      target_triple: target_triple,
+      target_machine: target_machine,
+      di: Option<DebugInfo>::new()
+    };
   }
 
 }
@@ -354,7 +354,7 @@ impl Compiler{
     
     let name = getName(path);
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
-    //self.ll.get().emit_module(format("{}.2", llvm_file).str());
+    self.ll.get().emit_module(format("{}.2", llvm_file).str());
     let llvm_file_cstr = llvm_file.cstr();
     emit_llvm(llvm_file_cstr.ptr());
     //self.ll.get().dump();
@@ -404,6 +404,7 @@ impl Compiler{
       let init = ptr::null<Constant>();
       let name_c = gl_info.name.clone().cstr();
       let glob = make_global(name_c.ptr(), ty, init);
+      //let glob = LLVMAddGlobal(self.ll.get().module, gl_info.name);
       self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
@@ -413,6 +414,7 @@ impl Compiler{
       return;
     }
     if(std::getenv("TERMUX").is_some()){
+      //todo fix and remove this
       let globfiles = format("{}/globals.txt", config.out_dir);
       let tmp = File::open(globfiles.str(), OpenMode::Append)?;
       tmp.write_string(resolv.unit.path.str())?;
@@ -764,10 +766,6 @@ impl Compiler{
     if(config.jobs > 1){
       return Compiler::compile_dir_thread2(config);
     }
-    let env_triple = std::getenv("target_triple");
-    if(env_triple.is_some()){
-      print("triple={}\n", env_triple.get());
-    }
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(&config);
     cache.read_cache();
@@ -822,10 +820,6 @@ impl Compiler{
  
   
   func compile_dir_thread2(config: CompilerConfig): Result<String, CompilerError>{
-    let env_triple = std::getenv("target_triple");
-    if(env_triple.is_some()){
-      print("triple={}\n", env_triple.get());
-    }
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(&config);
     cache.read_cache();

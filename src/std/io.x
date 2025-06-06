@@ -108,8 +108,11 @@ impl CmdArgs{
     }
     return res;
   }
-  func get_root(self): str{
-    return self.root.str();
+  func get_root(): str{
+    return root_exe.get().str();
+  }
+  func get_name(): str{
+    return Path::name(root_exe.get().str());
   }
   func consume(self){
     let arg = self.get();

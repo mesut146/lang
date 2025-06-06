@@ -414,62 +414,124 @@ impl Compiler{
     return res;
   }
   func mapType(self, type: Type*, s: String*): llvm_Type*{
+    return self.mapType2(type) as llvm_Type*;
+    // match type{
+    //   Type::Pointer(elem) =>{
+    //     let elem_ty = self.mapType(elem.get());
+    //     return getPointerTo(elem_ty) as llvm_Type*;
+    //   },
+    //   Type::Array(elem, size) =>{
+    //     let elem_ty = self.mapType(elem.get());
+    //     return getArrTy(elem_ty, *size) as llvm_Type*;
+    //   },
+    //   Type::Slice(elem) =>{
+    //     let p = self.protos.get();
+    //     return p.std("slice") as llvm_Type*;
+    //   },
+    //   Type::Function(elem_bx)=>{
+    //     let res = self.make_proto(elem_bx.get());
+    //     //return res as llvm_Type*;
+    //     return getPointerTo(res as llvm_Type*) as llvm_Type*;
+    //   },
+    //   Type::Lambda(elem_bx)=>{
+    //     let res = self.make_proto(elem_bx.get());
+    //     //return res as llvm_Type*;
+    //     return getPointerTo(res as llvm_Type*) as llvm_Type*;
+    //   },
+    //   Type::Tuple(tt)=>{
+    //     let name = mangleType(type).cstr();
+    //     let p = self.protos.get();
+    //     let opt = p.classMap.get_str(name.str());
+    //     if(opt.is_some()){
+    //       let res = *opt.unwrap();
+    //       name.drop();
+    //       return res;
+    //     }
+    //     let elems = vector_Type_new();
+    //     for elem in &tt.types{
+    //       vector_Type_push(elems, self.mapType(elem));
+    //     }
+    //     let res = make_struct_ty2(name.ptr(), elems) as llvm_Type*;
+    //     p.classMap.add(name.str().owned(), res);
+    //     vector_Type_delete(elems);
+    //     name.drop();
+    //     return res;
+    //   },
+    //   Type::Simple(smp) => {
+    //     if(type.is_void()) return getVoidTy();
+    //     if(type.eq("f32")) return getFloatTy();
+    //     if(type.eq("f64")) return getDoubleTy();
+        
+    //     let prim_size = prim_size(s.str());
+    //     if(prim_size.is_some()){
+    //       return getInt(prim_size.unwrap());
+    //     }
+    //     let p = self.protos.get();
+    //     if(!p.classMap.contains(s)){
+    //       panic("mapType {}\n", s);
+    //     }
+    //     return p.get(s);
+    //   }
+    // }
+  }
+
+  func mapType2(self, type: Type*): LLVMOpaqueType*{
     match type{
       Type::Pointer(elem) =>{
-        let elem_ty = self.mapType(elem.get());
-        return getPointerTo(elem_ty) as llvm_Type*;
+        let elem_ty = self.mapType2(elem.get());
+        return LLVMPointerType(elem_ty, 0);
       },
       Type::Array(elem, size) =>{
-        let elem_ty = self.mapType(elem.get());
-        return getArrTy(elem_ty, *size) as llvm_Type*;
+        let elem_ty = self.mapType2(elem.get());
+        return LLVMArrayType(elem_ty, *size as u32);
       },
       Type::Slice(elem) =>{
         let p = self.protos.get();
-        return p.std("slice") as llvm_Type*;
+        return p.std("slice") as LLVMOpaqueType*;
       },
       Type::Function(elem_bx)=>{
         let res = self.make_proto(elem_bx.get());
-        //return res as llvm_Type*;
-        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+        return LLVMPointerType(res as LLVMOpaqueType*, 0);
       },
       Type::Lambda(elem_bx)=>{
         let res = self.make_proto(elem_bx.get());
-        //return res as llvm_Type*;
-        return getPointerTo(res as llvm_Type*) as llvm_Type*;
+        return LLVMPointerType(res as LLVMOpaqueType*, 0);
       },
       Type::Tuple(tt)=>{
-        let elems = vector_Type_new();
-        for elem in &tt.types{
-          vector_Type_push(elems, self.mapType(elem));
-        }
         let name = mangleType(type).cstr();
         let p = self.protos.get();
-        let opt = p.classMap.get_str(name.get());
+        let opt = p.classMap.get_str(name.str());
         if(opt.is_some()){
           let res = *opt.unwrap();
           name.drop();
-          return res;
+          return res as LLVMOpaqueType*;
         }
-        let res = make_struct_ty2(name.ptr(), elems) as llvm_Type*;
-        p.classMap.add(name.get().owned(), res);
-        vector_Type_delete(elems);
+        let res = self.ll.get().make_struct_ty_new(name.str());
+        let elems = List<LLVMOpaqueType*>::new(tt.types.len());
+        for elem in &tt.types{
+          elems.add(self.mapType2(elem));
+        }
+        LLVMStructSetBody(res, elems.ptr(), elems.len() as i32, 0);
+        p.classMap.add(name.str().owned(), res as llvm_Type*);
         name.drop();
         return res;
       },
       Type::Simple(smp) => {
-        if(type.is_void()) return getVoidTy();
-        if(type.eq("f32")) return getFloatTy();
-        if(type.eq("f64")) return getDoubleTy();
-        
-        let prim_size = prim_size(s.str());
+        if(type.is_void()) return LLVMVoidTypeInContext(self.ll.get().ctx);
+        if(type.eq("f32")) return LLVMFloatTypeInContext(self.ll.get().ctx);
+        if(type.eq("f64")) return LLVMDoubleTypeInContext(self.ll.get().ctx);
+        let prim_size = prim_size(smp.name.str());
         if(prim_size.is_some()){
-          return getInt(prim_size.unwrap());
+          return LLVMIntTypeInContext(self.ll.get().ctx, prim_size.unwrap());
         }
         let p = self.protos.get();
-        if(!p.classMap.contains(s)){
-          panic("mapType {}\n", s);
+        let s = type.print();
+        if(!p.classMap.contains(&s)){
+          panic("mapType2 {}\n", s);
         }
-        return p.get(s);
+        let res = p.get(&s);
+        s.drop();
+        return res as LLVMOpaqueType*;
       }
     }
   }

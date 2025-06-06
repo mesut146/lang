@@ -60,7 +60,7 @@ func bootstrap(cmd: CmdArgs*){
   cmd.consume();
   let root_opt = cmd.get_val("-root");
   if(root_opt.is_none()){
-    root_opt.set(find_root(cmd.get_root()).clone());
+    root_opt.set(find_root(CmdArgs::get_root()).clone());
   }
   let jobs = cmd.get_val("-j");
   let verbose_all = cmd.consume_any("-v");
@@ -97,7 +97,7 @@ func bootstrap(cmd: CmdArgs*){
     name = cmd.get().str();
   }
   cmd.end();
-  let vendor: str = Path::name(cmd.get_root());
+  let vendor: str = Path::name(CmdArgs::get_root());
   std::setenv("vendor", vendor);
   //std::setenv("vendor", get_compiler_name());
   std::setenv("compiler_name", name);
@@ -270,12 +270,14 @@ func handle_c(cmd: CmdArgs*){
     }
     std_path.drop();
   }else{
-    //in <toolchain_dir>/{src/std, lib/std.a}
-    let std_dir = "../src";
-    config.add_dir(std_dir.owned());
-    config.set_std(std_dir.owned());
+    //in <toolchain_dir>/{bin/x, src/std, lib/std.a}
+    let binary = CmdArgs::get_root();
+    let tool_dir = Path::parent(Path::parent(binary));
+    let std_dir = format("{}/src", tool_dir);
+    config.add_dir(std_dir.clone());
+    config.set_std(std_dir);
     if(cmd.consume_any("-std")){
-      flags.append(" ../lib/std.a");
+      flags.append(format("{}/lib/std.a", tool_dir));
     }
   }
   if(cmd.has_any("-target")){
@@ -347,10 +349,10 @@ func print_version(){
 }
 
 func handle(cmd: CmdArgs*){
-  //print("##########running##########\n");
-  //print_version();
-
-  // llvm_ctest();
+  let env_triple = std::getenv("target_triple");
+  if(env_triple.is_some()){
+    print("triple={}\n", env_triple.get());
+  }
 
   if(!cmd.has()){
     print("enter a command\n");
