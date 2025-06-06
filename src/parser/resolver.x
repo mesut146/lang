@@ -1181,10 +1181,17 @@ impl Resolver{
         base_fields = Option::new(base_decl.get_fields());
       }
     }
+    let has_disc = false;
+    let last_disc = -1;
     for(let i = 0;i < vars.len();++i){
       let ev = vars.get(i);
       if(ev.disc.is_some()){
-        self.err(node.line, "todo enum discriminant");
+        //self.err(node.line, "todo enum discriminant");
+        has_disc = true;
+        last_disc = *ev.disc.get();
+      }else{
+        //auto disc
+        let disc = last_disc + 1;
       }
       for(let j = 0;j < ev.fields.len();++j){
         let fd = ev.fields.get(j);
