@@ -61,7 +61,11 @@ flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 
 #todo use toolchain's std dir?
-target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+if [[ "$4" = "-termux" ]]; then
+  target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name -static $dir/../src/parser
+else
+  target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+fi
 
 if [ ! "$?" -eq "0" ]; then
   echo "Build failed"

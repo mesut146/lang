@@ -19,11 +19,13 @@ fi
 host_tool=$1
 target_tool=$2
 version=$3
+termux=$4
 
 docker build -t cross -f ./bin/Dockerfile-cross \
 --build-arg host_tool=$host_tool \
 --build-arg target_tool=$target_tool \
---build-arg version=$version .
+--build-arg version=$version \
+--build-arg termux=$termux .
 
 docker create --name cross cross
 docker cp cross:/home/lang/x-toolchain-$version-aarch64.zip .
