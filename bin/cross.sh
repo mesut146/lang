@@ -1,18 +1,15 @@
 dir=$(dirname $0)
-echo "cross.sh='$@'"
+echo "cross.sh 1=$1 2=$2 3=$3"
 if [ -z "$1" ]; then
- echo "provide host toolchain dir"
- exit
+ echo "provide host toolchain dir" && exit 1
 fi
 
 if [ ! -d "$2" ]; then
- echo "provide target toolchain dir"
- exit
+ echo "provide target toolchain dir" && exit 1
 fi
 
 if [ -z "$3" ]; then
- echo "provide version"
- exit
+ echo "provide version" && exit 1
 fi
 
 toolchain=$1
@@ -36,13 +33,11 @@ $sudo apt-get install -y --only-upgrade libstdc++6
 $sudo apt-get install -y binutils g++-aarch64-linux-gnu libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64
 
 
-#linker=$($dir/find_llvm.sh clang)
 linker="aarch64-linux-gnu-g++"
 
 target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling"
-  exit 1
+  echo "error while compiling" && exit 1
 fi
 
 target_triple="aarch64-linux-gnu" LD=$linker $dir/build_ast.sh $compiler || exit 1
@@ -60,19 +55,17 @@ flags="$flags $LIB_STD"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 
-#todo use toolchain's std dir?
+static_flag=""
 if [[ "$4" = "-termux" ]]; then
-  target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name -static $dir/../src/parser
-else
-  target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+  static_flag="-static"
 fi
 
+target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $static_flag $dir/../src/parser
 if [ ! "$?" -eq "0" ]; then
   echo "Build failed"
   exit 1
 fi
 
 export ARCH=aarch64
-$dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip
-exit 0
+$dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip || exit 1
 

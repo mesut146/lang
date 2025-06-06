@@ -1,19 +1,14 @@
-#set -- "./x-toolchain-1.00-x86_64" "./x-toolchain-1.00-aarch64" "1.01"
+dir=$(dirname $0)
 #run from github workflow
 
 if [ ! -d "$1" ]; then
- echo "provide host toolchain"
- exit
+ echo "provide host toolchain" && exit 1
 fi
-
 if [ ! -d "$2" ]; then
- echo "provide target toolchain"
- exit
+ echo "provide target toolchain" && exit 1
 fi
-
 if [ -z "$3" ]; then
- echo "provide version"
- exit
+ echo "provide version" && exit 1
 fi
 
 host_tool=$1
@@ -21,7 +16,15 @@ target_tool=$2
 version=$3
 termux=$4
 
-docker build -t cross -f ./bin/Dockerfile-cross \
+#move tools inside project dir otherwise docker cant access them
+root=$(realpath $dir/..)
+host_real=$(realpath $host_tool)
+if [[ ! "$host_real" = $root/* ]]; then
+    cp -r $host_tool $root && host_tool=$root/$(basename $host_tool)
+    cp -r $target_tool $root && target_tool=$root/$(basename $target_tool)
+fi
+
+docker build --progress=plain -t cross -f ./bin/Dockerfile \
 --build-arg host_tool=$host_tool \
 --build-arg target_tool=$target_tool \
 --build-arg version=$version \
