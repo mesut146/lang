@@ -43,7 +43,7 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
     .add_dir(src_dir)
     .set_link(LinkType::Static{"std.a".str()});
   config.root_dir.set(std_dir.str());
-  let lib = Compiler::compile_dir(config);
+  let lib = Compiler::compile_dir(config)?;
   return lib;
 }
 
@@ -180,11 +180,11 @@ func bootstrap(cmd: CmdArgs*){
   if(sng.is_some()){
     config.set_link(LinkType::None);
     config.set_file(format("{}/parser/{}", &src_dir, sng.get()));
-    Compiler::compile_single(config);
+    Compiler::compile_single(config)?;
     sng.drop();
     return;
   }
-  let bin = Compiler::compile_dir(config);
+  let bin = Compiler::compile_dir(config)?;
   if(is_static_llvm){
     let linker = get_linker();
     let llvm = Process::run(format("{llvm_config} --link-static --libs core target aarch64 X86").str()).read_close().unwrap();
@@ -315,10 +315,10 @@ func handle_c(cmd: CmdArgs*){
   }
   
   if(File::is_dir(path.str())){
-    let out = Compiler::compile_dir(config);
+    let out = Compiler::compile_dir(config)?;
     out.drop();
   }else{
-    let out = Compiler::compile_single(config);
+    let out = Compiler::compile_single(config)?;
     out.drop();
   }
   path.drop();
@@ -367,10 +367,11 @@ func handle(cmd: CmdArgs*){
     bootstrap(cmd);
     return;
   }
-  else if(cmd.is("c")){
+  else if(cmd.is("c") || cmd.is("compile")){
+    //todo should be default
     handle_c(cmd);
     return;
-  }else if(cmd.is("f")){
+  }else if(cmd.is("f") || cmd.is("format")){
     let dir = format("{}/parser", get_src_dir());
     let out = format("{}/parser2", get_src_dir());
     format_dir(dir.str(), out.str());

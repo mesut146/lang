@@ -2,16 +2,6 @@
 //import std/Option
 import std/ops
 
-struct Pair<K, V>{
-  a: K;
-  b: V;
-}
-
-impl<K, V> Pair<K, V>{
-  func new(a: K, b: V): Pair<K, V>{
-    return Pair{a, b};
-  }
-}
 
 //map with Eq::eq and insertion order
 struct Map<K, V>{

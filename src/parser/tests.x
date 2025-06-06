@@ -98,133 +98,11 @@ func compile_dir2(dir: str, args: str, exc: Option<str>, inc: Option<String>){
         config.add_dir(inc.get().clone());
       }
       config.root_dir.set(root.get().clone());
-      let bin = Compiler::compile_single(config);
+      let bin = Compiler::compile_single(config)?;
       bin.drop();
     }
     list.drop();
     inc.drop();
-}
-
-func test_single(file: String, args_extra: Option<String>){
-    let rt_src = format("{}/src/std/rt.x", root.get());
-    let config_rt = CompilerConfig::new(get_src_dir());
-    config_rt
-    .set_file(rt_src)
-    .set_out(get_out())
-    .add_dir(get_src_dir())
-    .set_link(LinkType::Static{"rt.a".str()});
-    config_rt.root_dir.set(root.get().clone());
-    let lib = Compiler::compile_single(config_rt);
-    let dir = format("{}/tests/normal", root.get());
-    let args = format("{} -lm", &lib);
-    if(args_extra.is_some()){
-        args.append(" ");
-        args.append(args_extra.get());
-    }
-    
-    let config = CompilerConfig::new(get_src_dir());
-    config.set_file(format("{}/{}", dir, file));
-    config.set_out(get_out());
-    config.add_dir(get_src_dir());
-    config.set_link(LinkType::Binary{"a.out".str(), args, true});
-    config.root_dir.set(root.get().clone());
-    let bin = Compiler::compile_single(config);
-    bin.drop();
-    args_extra.drop();
-}
-
-func std_test(){
-    print("std_test\n");
-    let std_dir = get_std_path();
-    let out = get_out();
-    let lib = build_std(std_dir.str(), out.str(), true);
-    let dir = format("{}/tests/std_test", root.get());
-    let args = format("{} -lm", &lib);
-    compile_dir2(dir.str(), args.str());
-    std_dir.drop();
-    out.drop();
-    lib.drop();
-    dir.drop();
-    args.drop();
-}
-
-func std_test_regex(pat: String){
-    let dir = format("{}/tests/std_test", root.get());
-    let files = File::read_dir(dir.str()).unwrap();
-    for(let i = 0;i < files.len();++i){
-        let fl = files.get(i);
-        let fl2 = fl.str();
-        if(Regex::new(pat.str()).is_match(fl2)){
-            std_test_single(fl.clone());
-        }
-    }
-    files.drop();
-}
-
-func std_test_single(file: String){
-    print("std_test\n");
-    let std_dir = get_std_path();
-    let out = get_out();
-    let lib = build_std(std_dir.str(), out.str(), true);
-    let dir = format("{}/tests/std_test", root.get());
-    let args = format("{} -lm", &lib);
-    
-    let config = CompilerConfig::new(get_src_dir());
-    config.set_file(format("{}/{}", dir, file));
-    config.set_out(get_out());
-    config.add_dir(get_src_dir());
-    config.set_link(LinkType::Binary{"a.out".str(), args.clone(), true});
-    /*if(inc.is_some()){
-      config.add_dir(inc.get().clone());
-    }*/
-    config.root_dir.set(root.get().clone());
-    let bin = Compiler::compile_single(config);
-    bin.drop();
-
-    std_dir.drop();
-    out.drop();
-    lib.drop();
-    dir.drop();
-    args.drop();
-}
-
-func normal_test(args_extra: Option<String>){
-    print("normal_test\n");
-    let rt_src = format("{}/src/std/rt.x", root.get());
-    let config = CompilerConfig::new(get_src_dir());
-    config
-    .set_file(rt_src)
-    .set_out(get_out())
-    .add_dir(get_src_dir())
-    .set_link(LinkType::Static{"rt.a".str()});
-    config.root_dir.set(root.get().clone());
-    let lib = Compiler::compile_single(config);
-    let dir = format("{}/tests/normal", root.get());
-    let args = format("{} -lm", &lib);
-    if(args_extra.is_some()){
-        args.append(" ");
-        args.append(args_extra.get());
-    }
-    compile_dir2(dir.str(), args.str());
-    lib.drop();
-    dir.drop();
-    args.drop();
-    args_extra.drop();
-}
-
-func normal_test_regex(pattern: String, args: Option<String>){
-    print("normal_test\n");
-    let dir = format("{}/tests/normal", root.get());
-    let files = File::read_dir(dir.str()).unwrap();
-    for(let i = 0;i < files.len();++i){
-        let fl = files.get(i);
-        let fl2 = fl.str();
-        if(Regex::new(pattern.str()).is_match(fl2)){
-            test_single(fl.clone(), args);
-        }
-    }
-    pattern.drop();
-    files.drop();
 }
 
 func normal_test_dir(pat: String, incremental: bool){
@@ -238,7 +116,7 @@ func normal_test_dir(pat: String, incremental: bool){
     config.set_link(LinkType::Binary{"a.out".str(), "".owned(), true});
     config.incremental_enabled = incremental;
     print("inc={}\n", incremental);
-    Compiler::compile_dir(config);
+    Compiler::compile_dir(config)?;
 }
 
 func own_test(id: i32){
@@ -254,7 +132,7 @@ func own_test(id: i32){
       .add_dir(get_src_dir())
       .set_link(LinkType::Static{"common.a".str()});
 
-    let common_lib = Compiler::compile_single(config);
+    let common_lib = Compiler::compile_single(config)?;
     let stdlib = build_std(std_dir.str(), out.str());
     
     let args = format("{} {}", &common_lib, &stdlib);
@@ -276,7 +154,6 @@ func own_test(id: i32){
 }
 
 func handle_tests(cmd: CmdArgs*): bool{
-    //print("root={}\n", find_root(cmd.get_root()));
     find_root(cmd.get_root());
     if(cmd.is("own")){
         own_test(1);
@@ -284,24 +161,6 @@ func handle_tests(cmd: CmdArgs*): bool{
     }
     if(cmd.is("own2")){
         own_test(2);
-        return true;
-    }
-    if(cmd.is("test")){
-        cmd.consume();
-        let args = Option<String>::none();
-        if(cmd.has_any("-std")){
-            cmd.consume_any("-std");
-            let std_dir = get_std_path();
-            let out = get_out();
-            let lib = build_std(std_dir.str(), out.str(), true);
-            args.set(lib);
-        }
-        if(cmd.has()){
-            normal_test_regex(cmd.get(), args);
-        }else{
-            normal_test(args);
-        }
-        cmd.end();
         return true;
     }
     else if(cmd.is("testd")){
@@ -312,16 +171,7 @@ func handle_tests(cmd: CmdArgs*): bool{
         cmd.end();
         return true;
     }
-    else if(cmd.is("test2")){
-        cmd.consume();
-        if(cmd.has()){
-            let path = cmd.get();
-            std_test_regex(path);
-        }else{
-            std_test();
-        }
-        return true;
-    }else if(cmd.is("p")){
+    else if(cmd.is("p")){
         //parse test
         cmd.consume();
         print_cst = cmd.consume_any("-cst");

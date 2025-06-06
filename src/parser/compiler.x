@@ -34,6 +34,15 @@ func get_linker(): str{
   return "clang++-19";
 }
 
+struct CompilerError{
+  msg: String;
+}
+impl CompilerError{
+  func new(msg: String): CompilerError{
+    return CompilerError{msg};
+  }
+}
+
 enum LinkType{
   Binary(name: String, args: String, run: bool),
   Static(name: String),
@@ -173,13 +182,6 @@ impl Protos{
   func std(self, nm: str): StructType*{
     return *self.std.get(&nm).unwrap();
   }
-  /*func get_func(self, mangled: String*): Function*{
-    let opt = self.funcMap.get(mangled);
-    if(opt.is_none()){
-      panic("no proto for {}, {}", mangled, demangle(mangled.str()));
-    }
-    return *opt.unwrap();
-  }*/
   func make_proto(self, m: Method*){
     if(m.is_generic) return;
     self.get_func(m);
@@ -735,7 +737,7 @@ impl Compiler{
     return res;
   }
 
-  func compile_single(config: CompilerConfig): String{
+  func compile_single(config: CompilerConfig): Result<String, CompilerError>{
     config.use_cache = false;
     File::create_dir(config.out_dir.str());
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
@@ -758,7 +760,7 @@ impl Compiler{
     return res;
   }
 
-  func compile_dir(config: CompilerConfig): String{
+  func compile_dir(config: CompilerConfig): Result<String, CompilerError>{
     if(config.jobs > 1){
       return Compiler::compile_dir_thread2(config);
     }
@@ -819,7 +821,7 @@ impl Compiler{
   }
  
   
-  func compile_dir_thread2(config: CompilerConfig): String{
+  func compile_dir_thread2(config: CompilerConfig): Result<String, CompilerError>{
     let env_triple = std::getenv("target_triple");
     if(env_triple.is_some()){
       print("triple={}\n", env_triple.get());
@@ -894,7 +896,7 @@ impl Compiler{
     cmd.drop();
   }
 
-  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): String{
+  func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): Result<String, CompilerError>{
     File::create_dir(out_dir);
     let cmd = "".str();
     if(is_shared){
@@ -911,18 +913,18 @@ impl Compiler{
       cmd.append(file.str());
       cmd.append(" ");
     }
-  
-    let cmd_s = cmd.cstr();
-    if(system(cmd_s.ptr()) == 0){
-      print("build library {}\n", out_file);
-    }else{
-      panic("link failed '{}'", cmd_s.get());
+
+    let cmd_res = Process::run(cmd.str()).read_close();
+    if(cmd_res.is_err()){
+      let res = Result<String, CompilerError>::err(CompilerError::new(format("link failed '{}'", cmd)));
+      cmd.drop();
+      return res;
     }
-    cmd_s.drop();
-    return out_file;
+    print("build library {}\n", out_file);
+    return Result<String, CompilerError>::ok(out_file);
   }
   
-  func link(compiled: List<String>*, out_dir: str, name: str, args: str): String{
+  func link(compiled: List<String>*, out_dir: str, name: str, args: str): Result<String, CompilerError>{
     let out_file = format("{}/{}", out_dir, name);
     //print("linking {}\n", out_file);
     if(File::exists(out_file.str())){
@@ -945,10 +947,10 @@ impl Compiler{
       //run if linked
       print("build binary {}\n", out_file);
     }else{
-      panic("link failed '{}'", cmd_s);
+      return Result<String, CompilerError>::err(CompilerError::new(format("link failed '{}'", cmd_s)));
     }
     cmd_s.drop();
-    return out_file;
+    return Result<String, CompilerError>::ok(out_file);
   }
   
   func run(path: String){
@@ -1037,14 +1039,14 @@ impl CompilerConfig{
     self.jobs = j;
     return self;
   }
-  func link(self, compiled: List<String>*): String{
-    if(self.llvm_only) return "".owned();
+  func link(self, compiled: List<String>*): Result<String, CompilerError>{
+    if(self.llvm_only) return Result<String, CompilerError>::ok("".owned());
     match &self.lt{
-      LinkType::None => return "".owned(),
+      LinkType::None => return Result<String, CompilerError>::ok("".owned()),
       LinkType::Binary(bin_name, args, run) => {
         let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
-        if(*run){
-          Compiler::run(path.clone());
+        if(path.is_ok() && *run){
+          Compiler::run(path.get().clone());
         }
         return path;
       },
