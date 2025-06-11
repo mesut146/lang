@@ -21,20 +21,19 @@ impl Compiler{
       match node{
         Stmt::Ret(e) => self.visit_ret(node, e),
         Stmt::Var(ve) => self.visit_var(ve),
-        Stmt::Expr(e) => {
-          self.visit(e);
-          return;
-        },
+        Stmt::Expr(e) => self.visit(e);,
         Stmt::For(fs) => self.visit_for(node, fs),
         Stmt::ForEach(fe) => self.visit_for_each(node, fe),
         Stmt::While(cnd, body) => self.visit_while(node, cnd, body.get()),
         Stmt::Continue => {
           self.own.get().do_continue(node.line);
-          CreateBr(self.loops.last().begin_bb);
+          //CreateBr(self.loops.last().begin_bb);
+          LLVMBuildBr(self.ll.get().builder, self.loops.last().begin_bb as LLVMOpaqueBasicBlock*);
         },
         Stmt::Break => {
           self.own.get().do_break(node.line);
-          CreateBr(self.loops.last().next_bb);
+          //CreateBr(self.loops.last().next_bb);
+          LLVMBuildBr(self.ll.get().builder, self.loops.last().next_bb as LLVMOpaqueBasicBlock*);
         },
       }
     }
@@ -89,18 +88,32 @@ impl Compiler{
       }
     }
     
+    func visit_for_each(self, stmt: Stmt*, node: ForEach*){
+      let info = self.get_resolver().format_map.get(&stmt.id).unwrap();
+      //todo own doesnt move rhs
+      self.visit_block(&info.block);
+    }
+    
     func visit_while(self, stmt: Stmt*, cond: Expr*, body: Body*){
       let line = stmt.line;
       let cond_name = CStr::new(format("while_cond_{}", line));
       let then_name = CStr::new(format("while_then_{}", line));
       let next_name = CStr::new(format("while_next_{}", line));
-      let then = create_bb_named(then_name.ptr());
-      let condbb = create_bb2_named(self.cur_func(), cond_name.ptr());
-      let next = create_bb_named(next_name.ptr());
-      CreateBr(condbb);
-      SetInsertPoint(condbb);
-      CreateCondBr(self.branch(cond), then, next);
-      self.set_and_insert(then);
+      let ll = self.ll.get();
+      //let then = create_bb_named(then_name.ptr());
+      //let condbb = create_bb2_named(self.cur_func(), cond_name.ptr());
+      //let next = create_bb_named(next_name.ptr());
+      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, then_name.ptr()) as BasicBlock*;
+      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, cond_name.ptr()) as BasicBlock*;
+      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, next_name.ptr()) as BasicBlock*;
+      //CreateBr(condbb);
+      //SetInsertPoint(condbb);
+      //CreateCondBr(self.branch(cond), then, next);
+      //self.set_and_insert(then);
+      LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
+      LLVMPositionBuilderAtEnd(ll.builder, condbb as LLVMOpaqueBasicBlock*);
+      LLVMBuildCondBr(ll.builder, self.branch(cond) as LLVMOpaqueValue*, then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
+      LLVMPositionBuilderAtEnd(ll.builder, then as LLVMOpaqueBasicBlock*);
       self.loops.add(LoopInfo{condbb, next});
       self.llvm.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
@@ -110,47 +123,53 @@ impl Compiler{
       self.loops.pop_back();
       let exit_body = Exit::get_exit_type(body);
       if(!exit_body.is_jump()){
-          CreateBr(condbb);
+          //CreateBr(condbb);
+          LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       }
-      self.set_and_insert(next);
+      //self.set_and_insert(next);
+      LLVMPositionBuilderAtEnd(ll.builder, next as LLVMOpaqueBasicBlock*);
       cond_name.drop();
       then_name.drop();
       next_name.drop();
-    }
-
-    func visit_for_each(self, stmt: Stmt*, node: ForEach*){
-      let info = self.get_resolver().format_map.get(&stmt.id).unwrap();
-      //todo own doesnt move rhs
-      self.visit_block(&info.block);
     }
   
     func visit_for(self, stmt: Stmt*, node: ForStmt*){
       if(node.var_decl.is_some()){
         self.visit_var(node.var_decl.get());
       }
+      let ll = self.ll.get();
       let f = self.cur_func();
       let line = stmt.line;
       let then_name = CStr::new(format("for_then_{}", line));
       let cond_name = CStr::new(format("for_cond_{}", line));
       let update_name = CStr::new(format("for_update_{}", line));
       let next_name = CStr::new(format("for_next_{}", line));
-      let then = create_bb_named(then_name.ptr());
+      /*let then = create_bb_named(then_name.ptr());
       let condbb = create_bb2_named(f, cond_name.ptr());
       let updatebb = create_bb2_named(f, update_name.ptr());
-      let next = create_bb_named(next_name.ptr());
+      let next = create_bb_named(next_name.ptr());*/
+      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, then_name.ptr());
+      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, cond_name.ptr());
+      let updatebb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, update_name.ptr());
+      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, next_name.ptr());
   
-      CreateBr(condbb);
-      SetInsertPoint(condbb);
+      //CreateBr(condbb);
+      //SetInsertPoint(condbb);
+      LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
+      LLVMPositionBuilderAtEnd(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       
       /*let di_scope =*/ self.llvm.di.get().new_scope(stmt.line);
       if (node.cond.is_some()) {
-        CreateCondBr(self.branch(node.cond.get()), then, next);
+        //CreateCondBr(self.branch(node.cond.get()), then, next);
+        LLVMBuildCondBr(ll.builder, self.branch(node.cond.get()) as LLVMOpaqueValue*, then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
       } else {
-        CreateBr(then);
+        //CreateBr(then);
+        LLVMBuildBr(ll.builder, then as LLVMOpaqueBasicBlock*);
       }
       //self.llvm.di.get().exit_scope();
-      self.set_and_insert(then);
-      self.loops.add(LoopInfo{updatebb, next});
+      //self.set_and_insert(then);
+      LLVMPositionBuilderAtEnd(ll.builder, then as LLVMOpaqueBasicBlock*);
+      self.loops.add(LoopInfo{updatebb as BasicBlock*, next as BasicBlock*});
       //self.llvm.di.get().new_scope(node.body.get().line);
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit_body(node.body.get());
@@ -158,9 +177,11 @@ impl Compiler{
       //self.llvm.di.get().exit_scope();
       let exit = Exit::get_exit_type(node.body.get());
       if(!exit.is_jump()){
-        CreateBr(updatebb);
+        //CreateBr(updatebb);
+        LLVMBuildBr(ll.builder, updatebb); 
       }
-      SetInsertPoint(updatebb);
+      //SetInsertPoint(updatebb);
+      LLVMPositionBuilderAtEnd(ll.builder, updatebb);
       //self.llvm.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {
         let u = node.updaters.get(i);
@@ -168,8 +189,10 @@ impl Compiler{
       }
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
-      CreateBr(condbb);
-      self.set_and_insert(next);
+      //CreateBr(condbb);
+      LLVMBuildBr(ll.builder, condbb);
+      //self.set_and_insert(next);
+      LLVMPositionBuilderAtEnd(ll.builder, next);
 
       then_name.drop();
       cond_name.drop();
@@ -178,6 +201,7 @@ impl Compiler{
     }
 
     func visit_var(self, node: VarExpr*){
+      let ll = self.ll.get();
       for(let i = 0;i < node.list.len();++i){
         let f = node.list.get(i);
         let ptr = self.get_alloc(f.id);
@@ -189,17 +213,21 @@ impl Compiler{
         }
         else if(is_struct(&type)){
           let val = self.visit(&f.rhs);
-          if(Value_isPointerTy(val)){
+          let tyy = LLVMTypeOf(val as LLVMOpaqueValue*);
+          if(/*Value_isPointerTy(val)*/ LLVMGetTypeKind(tyy) == LLVMTypeKind::LLVMPointerTypeKind{}.int()){
             self.copy(ptr, val, &type);
           }else{
-            CreateStore(val, ptr);
+            //CreateStore(val, ptr);
+            LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
           }
         }else if(type.is_pointer() || type.is_fpointer() || type.is_lambda()){
           let val = self.get_obj_ptr(&f.rhs);
-          CreateStore(val, ptr);
+          //CreateStore(val, ptr);
+          LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
         } else{
           let val = self.cast(&f.rhs, &type);
-          CreateStore(val, ptr);
+          //CreateStore(val, ptr);
+          LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
         }
         self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
@@ -226,13 +254,16 @@ impl Compiler{
     }
 
     func visit_ret(self, node: Stmt*, val: Option<Expr>*){
+      let ll = self.ll.get();
       if(val.is_none()){
         self.own.get().do_return(node.line);
         self.exit_frame();
         if(is_main(self.curMethod.unwrap())){
-          CreateRet(makeInt(0, 32) as Value*);
+          //CreateRet(makeInt(0, 32) as Value*);
+          LLVMBuildRet(ll.builder, ll.makeInt(0, 32));
         }else{
-          CreateRetVoid();
+          //CreateRetVoid();
+          LLVMBuildRetVoid(ll.builder);
         }
       }else{
         self.visit_ret(val.get());
@@ -240,35 +271,41 @@ impl Compiler{
     }
 
     func visit_ret(self, val: Value*){
+      let ll = self.ll.get();
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
       if(type.is_pointer() || type.is_fpointer()){
         self.exit_frame();
-        CreateRet(val);
+        //CreateRet(val);
+        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
         type.drop();
         return;
       }
       if(!is_struct(&type)){
         self.exit_frame();
-        CreateRet(val);
+        //CreateRet(val);
+        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
         type.drop();
         return;
       }
       let sret_ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
       self.copy(sret_ptr, val, &type);
       self.exit_frame();
-      CreateRetVoid();
+      //CreateRetVoid();
+      LLVMBuildRetVoid(ll.builder);
       type.drop();
     }
 
     func visit_ret(self, expr: Expr*){
+      let ll = self.ll.get();
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
       if(type.is_pointer() || type.is_fpointer()){
         let val = self.get_obj_ptr(expr);
         self.own.get().do_return(expr);
         self.exit_frame();
-        CreateRet(val);
+        //CreateRet(val);
+        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
         type.drop();
         return;
       }
@@ -276,7 +313,8 @@ impl Compiler{
         let val = self.cast(expr, &type);
         self.own.get().do_return(expr);
         self.exit_frame();
-        CreateRet(val);
+        //CreateRet(val);
+        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
         type.drop();
         return;
       }
@@ -289,7 +327,8 @@ impl Compiler{
       }
       self.own.get().do_return(expr);
       self.exit_frame();
-      CreateRetVoid();
+      //CreateRetVoid();
+      LLVMBuildRetVoid(ll.builder);
       type.drop();
     }
 }//end impl

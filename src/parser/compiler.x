@@ -159,12 +159,13 @@ impl Protos{
     return res;
   }
   func init(self){
-      let sliceType = make_slice_type();
+      let ll = self.compiler.ll.get();
+      let sliceType = make_slice_type(ll);
       self.std.add("slice", sliceType);
-      self.libc.add("printf", make_printf());
-      self.libc.add("sprintf", make_sprintf());
-      self.libc.add("fflush", make_fflush());
-      self.libc.add("malloc", make_malloc());
+      self.libc.add("printf", make_printf(ll));
+      self.libc.add("sprintf", make_sprintf(ll));
+      self.libc.add("fflush", make_fflush(ll));
+      self.libc.add("malloc", make_malloc(ll));
   }
   func get(self, d: Decl*): llvm_Type*{
     let name = d.type.print();
@@ -263,7 +264,7 @@ impl llvm_holder{
     llvm_InitializeAArch64AsmPrinter();*/
   }
   
-  func createTargetMachine2(triple: i8*): LLVMOpaqueTargetMachine*{
+  /*func createTargetMachine2(triple: i8*): LLVMOpaqueTargetMachine*{
     let target = ptr::null<LLVMTarget>();
     let err = ptr::null<i8>();
     let code = LLVMGetTargetFromTriple(triple, &target, &err);
@@ -272,7 +273,7 @@ impl llvm_holder{
     LLVMTargetMachineOptionsSetRelocMode(opt, LLVMRelocMode::LLVMRelocPIC);
     let machine = LLVMCreateTargetMachineWithOptions(target, triple, opt);
     return machine; 
-  }
+  }*/
 
   func new(): llvm_holder{
     llvm_holder::init_llvm();
@@ -610,8 +611,11 @@ impl Compiler{
     let proto = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(proto);
     self.NamedValues.clear();
-    let bb = create_bb2(proto);
-    SetInsertPoint(bb);
+    let ll = self.ll.get();
+    let bb = LLVMAppendBasicBlockInContext(ll.ctx, proto as LLVMOpaqueValue*, "entry".ptr());
+    LLVMPositionBuilderAtEnd(ll.builder, bb);
+    //let bb = create_bb2(proto);
+    //SetInsertPoint(bb);
     self.llvm.di.get().dbg_func(m, proto, self);
     AllocHelper::makeLocals(self, m.body.get());
     self.allocParams(m);
@@ -626,9 +630,11 @@ impl Compiler{
         self.own.get().do_return(m.body.get().end_line);
         self.exit_frame();
         if(is_main(m)){
-          CreateRet(makeInt(0, 32) as Value*);
+          //CreateRet(makeInt(0, 32) as Value*);
+          LLVMBuildRet(ll.builder, ll.makeInt(0, 32));
         }else{
-          CreateRetVoid();
+          //CreateRetVoid();
+          LLVMBuildRetVoid(ll.builder);
         }
       }else if(blk_val.is_some() && !m.type.is_void()){
         //setField(blk_val.unwrap(), &m.type, );
@@ -659,16 +665,18 @@ impl Compiler{
 
   func alloc_prm(self, prm: Param*){
     let ty = self.mapType(&prm.type);
-    let ptr = CreateAlloca(ty);
     let name_c = prm.name.clone().cstr();
-    Value_setName(ptr, name_c.ptr());
+    //let ptr = CreateAlloca(ty);
+    //Value_setName(ptr, name_c.ptr());
+    let ptr = LLVMBuildAlloca(self.ll.get().builder, ty as LLVMOpaqueType*, name_c.ptr());
     name_c.drop();
-    self.NamedValues.add(prm.name.clone(), ptr);
+    self.NamedValues.add(prm.name.clone(), ptr as Value*);
   }
 
   func copy(self, trg: Value*, src: Value*, type: Type*){
     let size = self.getSize(type) / 8;
-    CreateMemCpy(trg, src, size);
+    //CreateMemCpy(trg, src, size);
+    LLVMBuildMemCpy(self.ll.get().builder, trg as LLVMOpaqueValue*, 0, src as LLVMOpaqueValue*, 0, self.ll.get().makeInt(size, 64));
   }
 
   func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
@@ -677,7 +685,8 @@ impl Compiler{
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
     }else{
-      CreateStore(val, ptr);
+      //CreateStore(val, ptr);
+      LLVMBuildStore(self.ll.get().builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
     }
     self.own.get().add_prm(prm, ptr);
   }

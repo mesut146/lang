@@ -1,6 +1,15 @@
 import parser/bridge
 import ast/ast
 
+type LLVMBool = i32;
+func LLVMBoolTrue(): i32{ return 1; }
+func LLVMBoolFalse(): i32{ return 0; }
+func toLLVMBool(b: bool): i32{
+  if(b) return 1;
+  return 0;
+}
+
+
 struct LLVMOpaqueContext;
 struct LLVMOpaqueModule;
 struct LLVMTarget;
@@ -10,6 +19,8 @@ struct LLVMOpaqueTargetData;
 struct LLVMOpaqueBuilder;
 struct LLVMOpaqueValue;
 struct LLVMOpaqueType;
+struct LLVMOpaqueBasicBlock;
+struct LLVMOpaqueAttributeRef;
 
 type LLVMTargetRef = LLVMTarget*;
 type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
@@ -103,6 +114,106 @@ enum LLVMRealPredicate{
     LLVMRealPredicateTrue   /**< Always true (always folded) */
 }
 
+enum LLVMCallConv{
+  LLVMCCallConv             /*= 0*/,
+  LLVMFastCallConv          /*= 8*/,
+  LLVMColdCallConv          /*= 9*/,
+  LLVMGHCCallConv           /*= 10*/,
+  LLVMHiPECallConv          /*= 11*/,
+  LLVMAnyRegCallConv        /*= 13*/,
+  LLVMPreserveMostCallConv  /*= 14*/,
+  LLVMPreserveAllCallConv   /*= 15*/,
+  LLVMSwiftCallConv         /*= 16*/,
+  LLVMCXXFASTTLSCallConv    /*= 17*/,
+  LLVMX86StdcallCallConv    /*= 64*/,
+  LLVMX86FastcallCallConv   /*= 65*/,
+  LLVMARMAPCSCallConv       /*= 66*/,
+  LLVMARMAAPCSCallConv      /*= 67*/,
+  LLVMARMAAPCSVFPCallConv   /*= 68*/,
+  LLVMMSP430INTRCallConv    /*= 69*/,
+  LLVMX86ThisCallCallConv   /*= 70*/,
+  LLVMPTXKernelCallConv     /*= 71*/,
+  LLVMPTXDeviceCallConv     /*= 72*/,
+  LLVMSPIRFUNCCallConv      /*= 75*/,
+  LLVMSPIRKERNELCallConv    /*= 76*/,
+  LLVMIntelOCLBICallConv    /*= 77*/,
+  LLVMX8664SysVCallConv     /*= 78*/,
+  LLVMWin64CallConv         /*= 79*/,
+  LLVMX86VectorCallCallConv /*= 80*/,
+  LLVMHHVMCallConv          /*= 81*/,
+  LLVMHHVMCCallConv         /*= 82*/,
+  LLVMX86INTRCallConv       /*= 83*/,
+  LLVMAVRINTRCallConv       /*= 84*/,
+  LLVMAVRSIGNALCallConv     /*= 85*/,
+  LLVMAVRBUILTINCallConv    /*= 86*/,
+  LLVMAMDGPUVSCallConv      /*= 87*/,
+  LLVMAMDGPUGSCallConv      /*= 88*/,
+  LLVMAMDGPUPSCallConv      /*= 89*/,
+  LLVMAMDGPUCSCallConv      /*= 90*/,
+  LLVMAMDGPUKERNELCallConv  /*= 91*/,
+  LLVMX86RegCallCallConv    /*= 92*/,
+  LLVMAMDGPUHSCallConv      /*= 93*/,
+  LLVMMSP430BUILTINCallConv /*= 94*/,
+  LLVMAMDGPULSCallConv      /*= 95*/,
+  LLVMAMDGPUESCallConv      /*= 96*/,
+}
+enum LLVMLinkage{
+  LLVMExternalLinkage,    /**< Externally visible function */
+  LLVMAvailableExternallyLinkage,
+  LLVMLinkOnceAnyLinkage, /**< Keep one copy of function when linking (inline)*/
+  LLVMLinkOnceODRLinkage, /**< Same, but only replaced by something
+                            equivalent. */
+  LLVMLinkOnceODRAutoHideLinkage, /**< Obsolete */
+  LLVMWeakAnyLinkage,     /**< Keep one copy of function when linking (weak) */
+  LLVMWeakODRLinkage,     /**< Same, but only replaced by something
+                            equivalent. */
+  LLVMAppendingLinkage,   /**< Special purpose, only applies to global arrays */
+  LLVMInternalLinkage,    /**< Rename collisions when linking (static
+                               functions) */
+  LLVMPrivateLinkage,     /**< Like Internal, but omit from symbol table */
+  LLVMDLLImportLinkage,   /**< Obsolete */
+  LLVMDLLExportLinkage,   /**< Obsolete */
+  LLVMExternalWeakLinkage,/**< ExternalWeak linkage description */
+  LLVMGhostLinkage,       /**< Obsolete */
+  LLVMCommonLinkage,      /**< Tentative definitions */
+  LLVMLinkerPrivateLinkage, /**< Like Private, but linker removes. */
+  LLVMLinkerPrivateWeakLinkage /**< Like LinkerPrivate, but is weak. */
+}
+impl LLVMLinkage{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
+
+enum LLVMTypeKind{
+  LLVMVoidTypeKind ,/*= 0,*/     /**< type with no size */
+  LLVMHalfTypeKind ,/*= 1,*/     /**< 16 bit floating point type */
+  LLVMFloatTypeKind ,/*= 2,*/    /**< 32 bit floating point type */
+  LLVMDoubleTypeKind ,/*= 3,*/   /**< 64 bit floating point type */
+  LLVMX86_FP80TypeKind ,/*= 4,*/ /**< 80 bit floating point type (X87) */
+  LLVMFP128TypeKind ,/*= 5,*/ /**< 128 bit floating point type (112-bit mantissa)*/
+  LLVMPPC_FP128TypeKind ,/*= 6,*/ /**< 128 bit floating point type (two 64-bits) */
+  LLVMLabelTypeKind ,/*= 7,*/     /**< Labels */
+  LLVMIntegerTypeKind ,/*= 8,*/   /**< Arbitrary bit width integers */
+  LLVMFunctionTypeKind ,/*= 9,*/  /**< Functions */
+  LLVMStructTypeKind ,/*= 10,*/   /**< Structures */
+  LLVMArrayTypeKind ,/*= 11,*/    /**< Arrays */
+  LLVMPointerTypeKind ,/*= 12,*/  /**< Pointers */
+  LLVMVectorTypeKind ,/*= 13,*/   /**< Fixed width SIMD vector type */
+  LLVMMetadataTypeKind ,/*= 14,*/ /**< Metadata */
+                             /* 15 previously used by LLVMX86_MMXTypeKind */
+  LLVMTokenTypeKind ,/*= 16,*/    /**< Tokens */
+  LLVMScalableVectorTypeKind ,/*= 17,*/ /**< Scalable SIMD vector type */
+  LLVMBFloatTypeKind ,/*= 18,*/         /**< 16 bit brain floating point type */
+  LLVMX86_AMXTypeKind ,/*= 19,*/        /**< X86 AMX */
+  LLVMTargetExtTypeKind ,/*= 20,*/      /**< Target extension type */
+}
+impl LLVMTypeKind{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
+
 func LLVMInitializeAllTargets(){
     LLVMInitializeX86Target();
     LLVMInitializeAArch64Target();
@@ -129,7 +240,7 @@ extern{
     //func LLVMInitializeAllTargetMCs();
     //func LLVMInitializeAllAsmParsers();
     //func LLVMInitializeAllAsmPrinters();
-    func LLVMInitializeAllDisassemblers();
+    //func LLVMInitializeAllDisassemblers();
 
     func LLVMInitializeX86Target();
     func LLVMInitializeX86TargetInfo();
@@ -156,7 +267,9 @@ extern{
     func LLVMTargetMachineOptionsSetRelocMode(Options: LLVMOpaqueTargetMachineOptions*, Reloc: LLVMRelocMode);
     func LLVMTargetMachineOptionsSetCodeModel(Options: LLVMOpaqueTargetMachineOptions*, CodeModel: LLVMCodeModel);
     func LLVMGetTargetMachineCPU(T: LLVMOpaqueTargetMachine*): i8*;
+    func LLVMGetTargetMachineTarget(tm: LLVMOpaqueTargetMachine*): LLVMTarget*;
 
+    //ctx, module, func
     func LLVMContextCreate(): LLVMOpaqueContext*;
     func LLVMContextDispose(c: LLVMOpaqueContext*);
     func LLVMModuleCreateWithNameInContext(name: i8*, c: LLVMOpaqueContext*): LLVMOpaqueModule*;
@@ -169,28 +282,58 @@ extern{
     func LLVMPrintModuleToFile(m: LLVMOpaqueModule*, Filename: i8*, ErrorMessage: i8**): i32;
     func LLVMVerifyModule(m: LLVMOpaqueModule*, action: LLVMVerifierFailureAction, msg: i8**): i32;
     func LLVMTargetMachineEmitToFile (T: LLVMOpaqueTargetMachine*, M: LLVMOpaqueModule*, Filename: i8*, codegen: LLVMCodeGenFileType, ErrorMessage: i8**): i32;
-
+    func LLVMAddFunction(m: LLVMOpaqueModule*, name: i8*, ft: LLVMOpaqueType*): LLVMOpaqueValue*;
+    func LLVMSetFunctionCallConv(fn: LLVMOpaqueValue*, cc: i32);
+    func LLVMSetLinkage(val: LLVMOpaqueValue*, linkage: i32 /*LLVMLinkage*/);
+    func LLVMGetParam(fn: LLVMOpaqueValue*, idx: i32): LLVMOpaqueValue*;
     
     //types
     func LLVMPointerType(elem: LLVMOpaqueType*, addrspace: i32): LLVMOpaqueType*;
-    func LLVMArrayType(elem: LLVMOpaqueType*, count: u32): LLVMOpaqueType*;
+    func LLVMArrayType(elem: LLVMOpaqueType*, count: i32): LLVMOpaqueType*;
     func LLVMStructCreateNamed(C: LLVMOpaqueContext*, Name: i8*): LLVMOpaqueType*;
     func LLVMStructSetBody(StructTy: LLVMOpaqueType*, ElementTypes: LLVMOpaqueType**, ElementCount: i32, Packed: i32);
     func LLVMVoidTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
     func LLVMFloatTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
     func LLVMDoubleTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
     func LLVMIntTypeInContext(c: LLVMOpaqueContext*, bits: i32): LLVMOpaqueType*;
+    func LLVMInt8TypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
+    func LLVMInt32TypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
     func LLVMDumpValue(val: LLVMOpaqueValue*);
     func LLVMPrintValueToString(val: LLVMOpaqueValue*): i8*;
     func LLVMPrintTypeToString(val: LLVMOpaqueType*): i8*;
+    func LLVMSizeOfTypeInBits(trg: LLVMTarget*, ty: LLVMOpaqueType*): i64;
     func LLVMTypeOf(val: LLVMOpaqueValue*): LLVMOpaqueType*;
+    func LLVMFunctionType(ret: LLVMOpaqueType*, params: LLVMOpaqueType**, cnt: i32, vararg: LLVMBool): LLVMOpaqueType*;
+    func LLVMGetTypeKind(ty: LLVMOpaqueType*): i32;
 
+    //global
+    func LLVMAddGlobal(md: LLVMOpaqueModule*, ty: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMConstStringInContext(C: LLVMOpaqueContext*, str: i8*, len: i32, nll: LLVMBool): LLVMOpaqueValue*;
+    func LLVMSetInitializer(var: LLVMOpaqueValue*, val: LLVMOpaqueValue*);
+    func LLVMSetGlobalConstant(var: LLVMOpaqueValue*, iscons: LLVMBool);
+    
+    //basic block
+    func LLVMCreateBasicBlockInContext(B: LLVMOpaqueBuilder*, name: i8*): LLVMOpaqueBasicBlock*;
+    func LLVMAppendBasicBlockInContext(C: LLVMOpaqueContext*, fn: LLVMOpaqueValue*, name: i8*): LLVMOpaqueBasicBlock*;
+    func LLVMPositionBuilderAtEnd(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*);
+    
     //builder
     func LLVMCreateBuilderInContext(C: LLVMOpaqueContext*): LLVMOpaqueBuilder*;
-    func LLVMAddGlobal(md: LLVMOpaqueModule*, ty: LLVMOpaqueType*, name: i8*): LLVMValueRef;
+    func LLVMSetValueName2(val: LLVMOpaqueValue*, name: i8*, len: i64 /*size_t*/);
+    func LLVMCreateTypeAttribute(c: LLVMOpaqueContext*, kind: i32, ty: LLVMOpaqueType*): LLVMOpaqueAttributeRef*;
+    func LLVMGetEnumAttributeKindForName(name: i8*, len: i64): i32;
+      
     func LLVMBuildICmp(B: LLVMOpaqueBuilder*, Op: i32, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildFCmp(B: LLVMOpaqueBuilder*, Op: LLVMRealPredicate, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildBr(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*): LLVMOpaqueValue*;
+    func LLVMBuildCondBr(B: LLVMOpaqueBuilder*, cond: LLVMOpaqueValue*, then: LLVMOpaqueBasicBlock*, els: LLVMOpaqueBasicBlock*): LLVMOpaqueValue*;
+    func LLVMBuildRetVoid(B: LLVMOpaqueBuilder*): LLVMOpaqueValue*;
+    func LLVMBuildRet(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*): LLVMOpaqueValue*;
     func LLVMConstInt(IntTy: LLVMOpaqueType*, N: i64, SignExtend: i32): LLVMOpaqueValue*;
+    func LLVMBuildAlloca(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildStore(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*;
+    func LLVMBuildMemCpy(B: LLVMOpaqueBuilder*, dst: LLVMOpaqueValue*, da: i32, src: LLVMOpaqueValue*, sa: i32, size: LLVMOpaqueValue*): LLVMOpaqueValue*;
+    func LLVMConstGEP2(ty: LLVMOpaqueType*, val: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32): LLVMOpaqueValue*;
     
 }
 
@@ -255,7 +398,7 @@ impl Emitter{
         LLVMSetModuleDataLayout(md, dl);
 
         let builder = LLVMCreateBuilderInContext(ctx);
-        setModule(md as LLVMModule*);
+        setModule(md as LLVMModule*);//todo remove these
         setCtx(ctx as LLVMContext*);
         setBuilder(builder as IRBuilder*);
 
@@ -271,7 +414,9 @@ impl Emitter{
     func emit_module(self, file: str){
         let file_c = file.cstr();
         let error = ptr::null<i8>();
-        LLVMPrintModuleToFile(self.module, file_c.ptr(), &error);
+        if(LLVMPrintModuleToFile(self.module, file_c.ptr(), &error) != 0){
+          panic("cant emit file {:?}, err: {:?}", file, CStr::new(error));
+        }
         file_c.drop();
     }
 
@@ -284,16 +429,9 @@ impl Emitter{
         let code2 = LLVMTargetMachineEmitToFile(self.tm, self.module, file_c.ptr(), LLVMCodeGenFileType::LLVMObjectFile, &err);
     }
 
-    func make_struct_ty_new(self, name: str): LLVMOpaqueType*{
+    func make_struct_ty(self, name: str): LLVMOpaqueType*{
         let name_c = name.cstr();
         let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
-        name_c.drop();
-        return ty;
-    }
-    func make_struct_ty_new(self, name: str, elems: List<Type>*): LLVMOpaqueType*{
-        let name_c = name.cstr();
-        let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
-        //LLVMStructSetBody(ty, elemptr, elems.len() as i32, 0);
         name_c.drop();
         return ty;
     }
@@ -309,5 +447,39 @@ impl Emitter{
     func makeInt(self, val: i64, bits: i32): LLVMOpaqueValue*{
         let ty = LLVMIntTypeInContext(self.ctx, bits);
         return LLVMConstInt(ty, val, 0);
+    }
+    func intTy(self, bits: i32): LLVMOpaqueType*{
+      return LLVMIntTypeInContext(self.ctx, bits);
+    }
+    func intPtr(self, bits: i32): LLVMOpaqueType*{
+      return LLVMPointerType(LLVMIntTypeInContext(self.ctx, bits), 0);
+    }
+    
+    func sizeOf(self, ty: LLVMOpaqueType*): i64{
+      let target = LLVMGetTargetMachineTarget(self.tm);
+      return LLVMSizeOfTypeInBits(target, ty);
+    }
+    
+    func glob_str(self, str: str): LLVMOpaqueValue*{
+      let len = str.len() as i32;
+      let i8t = LLVMIntTypeInContext(self.ctx, 8);
+      let ty = LLVMArrayType(i8t, len + 1);
+      let cs = str.cstr();
+      let cons = LLVMConstStringInContext(self.ctx, cs.ptr(), len + 1, 1 /* addNull */);
+      let res = LLVMAddGlobal(self.module, ty, "".ptr());
+      LLVMSetInitializer(res, cons);
+      LLVMSetGlobalConstant(res, LLVMBoolTrue());
+      LLVMSetLinkage(res, LLVMLinkage::LLVMPrivateLinkage{}.int());
+      
+      let indices = [ptr::null<LLVMOpaqueValue>(); 2];
+      indices[0] = LLVMConstInt(LLVMInt32TypeInContext(self.ctx), 0, 0);
+      indices[1] = LLVMConstInt(LLVMInt32TypeInContext(self.ctx), 0, 0);
+      res = LLVMConstGEP2(
+        LLVMPointerType(LLVMInt8TypeInContext(self.ctx), 0), // Pointer to i8
+        res,
+        indices.ptr(),
+        2
+      );
+      return res;
     }
 }

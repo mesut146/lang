@@ -16,7 +16,7 @@ func main(){
   let c: E = E::C{100};
   let d: E = E::D{A{a: 100, b: 200}};
 
-  let ss = a as i32;
+  //let ss = a as i32;
   
   assert(a is E::A);
   assert(c is E::C);

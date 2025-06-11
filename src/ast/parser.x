@@ -388,6 +388,9 @@ impl Parser{
           is_deref = true;
         }
         let self_name = self.name();
+        if(!(parent is Parent::Impl || parent is Parent::Trait)){
+          self.err("self param inside non impl");
+        }
         let self_ty = parent.get_type().clone();
         if(!is_deref){
           self_ty = self_ty.toPtr();

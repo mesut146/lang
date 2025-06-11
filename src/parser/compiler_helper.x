@@ -5,6 +5,7 @@ import ast/ast
 import ast/printer
 import ast/utils
 import parser/bridge
+import parser/llvm
 import parser/resolver
 import parser/compiler
 import parser/debug_helper
@@ -61,51 +62,77 @@ impl RvalueHelper{
 }
 
 
-func make_slice_type(): StructType*{
-    let elems = vector_Type_new();
+func make_slice_type(ll: Emitter*): StructType*{
+    /*let elems = vector_Type_new();
     vector_Type_push(elems, getPointerTo(getInt(8)) as llvm_Type*);
     vector_Type_push(elems, getInt(SLICE_LEN_BITS()));
     let res = make_struct_ty2("__slice".ptr(), elems);
-    vector_Type_delete(elems);
-    return res;
+    vector_Type_delete(elems);*/
+    let res = LLVMStructCreateNamed(ll.ctx, "__slice".ptr());
+    let elems = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0), LLVMIntTypeInContext(ll.ctx, SLICE_LEN_BITS())];
+    LLVMStructSetBody(res, elems.ptr(), 2, 0);
+    return res as StructType*;
 }
 
-func make_printf(): Function*{
-    let args = vector_Type_new();
-    vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
-    let ft = make_ft(getInt(32), args, true);
-    let f = make_func(ft, ext(), "printf".ptr());
-    setCallingConv(f);
-    vector_Type_delete(args);
-    return f;
+func make_printf(ll: Emitter*): Function*{
+    //let args = vector_Type_new();
+    //vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
+    //let ft = make_ft(getInt(32), args, true);
+    //let f = make_func(ft, ext(), "printf".ptr());
+    //setCallingConv(f);
+    //vector_Type_delete(args);
+    let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
+    let ret = LLVMIntTypeInContext(ll.ctx, 32);
+    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolTrue());
+    let f = LLVMAddFunction(ll.module, "printf".ptr(), ft);
+    LLVMSetFunctionCallConv(f, 0);
+    return f as Function*;
 }
-func make_sprintf(): Function*{
-  let args = vector_Type_new();
+func make_sprintf(ll: Emitter*): Function*{
+  /*let args = vector_Type_new();
   vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
   vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
   let ft = make_ft(getInt(32), args, true);
   let f = make_func(ft, ext(), "sprintf".ptr());
   setCallingConv(f);
-  vector_Type_delete(args);
-  return f;
+  vector_Type_delete(args);*/
+  
+  let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0), LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
+  let ret = LLVMIntTypeInContext(ll.ctx, 32);
+  let ft = LLVMFunctionType(ret, args.ptr(), 2, LLVMBoolTrue());
+  let f = LLVMAddFunction(ll.module, "sprintf".ptr(), ft);
+  LLVMSetFunctionCallConv(f, 0);
+  return f as Function*;
 }
-func make_fflush(): Function*{
-    let args = vector_Type_new();
+func make_fflush(ll: Emitter*): Function*{
+    /*let args = vector_Type_new();
     vector_Type_push(args, getPointerTo(getInt(8)) as llvm_Type*);
     let ft = make_ft(getInt(32), args, false);
     let f = make_func(ft, ext(), "fflush".ptr());
     setCallingConv(f);
     vector_Type_delete(args);
-    return f;
+    return f;*/
+    let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
+    let ret = LLVMIntTypeInContext(ll.ctx, 32);
+    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
+    let f = LLVMAddFunction(ll.module, "fflush".ptr(), ft);
+    LLVMSetFunctionCallConv(f, 0);
+    return f as Function*;
 }
-func make_malloc(): Function*{
-    let args = vector_Type_new();
+func make_malloc(ll: Emitter*): Function*{
+    /*let args = vector_Type_new();
     vector_Type_push(args, getInt(64));
     let ft = make_ft(getPointerTo(getInt(8)) as llvm_Type*, args, false);
     let f = make_func(ft, ext(), "malloc".ptr());
     setCallingConv(f);
     vector_Type_delete(args);
-    return f;
+    return f;*/
+    let args = [LLVMIntTypeInContext(ll.ctx, 64)];
+    let ret = LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0);
+    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
+    let f = LLVMAddFunction(ll.module, "malloc".ptr(), ft);
+    LLVMSetFunctionCallConv(f, 0);
+    return f as Function*;
 }
 
 func getTypes(items: List<Item>*, list: List<Decl*>*){
@@ -266,64 +293,6 @@ func printlist(list: List<Decl*>*){
   print("}\n\n");
 }
 
-/*func sort3(list: List<Decl*>*, r: Resolver*){
-  //parent -> fields
-  let map = Map<String, List<String>>::new();
-  //ch -> parents
-  let map2 = Map<String, List<String>>::new();
-  for (let i = 0; i < list.len(); ++i) {
-    let decl = *list.get(i);
-    let tstr = decl.type.print();
-    if(!map.contains(&tstr)){
-      map.add(tstr.clone(), List<String>::new());
-    }
-    let deps_arr = map.get(&tstr).unwrap();
-    if(decl.is_struct()){
-      let fields = decl.get_fields();
-      for (let j = 0; j < fields.len(); ++j) {
-        let fd = fields.get(j);
-        let field_str = fd.type.print();
-        deps_arr.add(field_str.clone());
-        let parents = &map2.get_pair_or(field_str.clone(), List<String>::new()).b;
-        parents.add(tstr.clone());
-        //find parent of decl & merge children
-        let p_arr = map2.get(&tstr).unwrap();
-        for parent in p_arr{
-          //let other_ch_arr = map.get_pair_or(parent);
-        }
-        field_str.drop();
-      }
-    }else{
-      let variants = decl.get_variants();
-      for (let j = 0; j < variants.len(); ++j) {
-        let ev = variants.get(j);
-        for (let k = 0; k < ev.fields.len(); ++k) {
-          let fd = ev.fields.get(k);
-          deps_arr.add(fd.type.print());
-          
-        }
-      }
-    }
-    tstr.drop();
-  }
-  for (let i = 0; i < list.len(); ++i) {
-    //find decl belongs to i'th index
-    for (let j = 0; j < list.len() - 1; ++j) {
-      let d1: Decl* = *list.get(j);
-      let d2: Decl* = *list.get(j + 1);
-      //is d1 is parent of d2, swap
-      let s1 = d1.type.print();
-      let s2 = d2.type.print();
-      let chs = map.get(&s2).unwrap();
-      if(chs.contains(&s1)){
-        swap(list, j, j + 1);
-      }
-      s2.drop();
-    }
-  }
-  map.drop();
-}*/
-
 func swap(list: List<Decl*>*, i: i32, j: i32){
   let a = *list.get(i);
   let b = *list.get(j);
@@ -332,7 +301,7 @@ func swap(list: List<Decl*>*, i: i32, j: i32){
 }
 
 func getMethods(unit: Unit*): List<Method*>{
-  let list = List<Method*>::new(100);
+  let list = List<Method*>::new();
   getMethods(&unit.items, &list);
   return list;
 }
@@ -375,34 +344,42 @@ impl Compiler{
     }
     let val2 = val.clone();
     let val_c = val.cstr();
-    //let ptr = CreateGlobalStringPtr(val_c.ptr());
-    let ptr = CreateGlobalString(val_c.ptr()) as Value*;
+    //let ptr = CreateGlobalString(val_c.ptr()) as Value*;
+    let ptr = self.ll.get().glob_str(val2.str()) as Value*;
     self.string_map.add(val2, ptr);
     val_c.drop();
     return ptr;
   }
   func make_proto(self, ft: FunctionType*): llvm_FunctionType*{
-    let ret = self.mapType(&ft.return_type);
-    let args = vector_Type_new();
+    let ret = self.mapType2(&ft.return_type);
+    //let args = vector_Type_new();
+    let args = List<LLVMOpaqueType*>::new();
     for prm in &ft.params{
-      vector_Type_push(args, self.mapType(prm));
+      args.add(self.mapType2(prm));
     }
-    let res = make_ft(ret, args, false);
-    vector_Type_delete(args);
-    return res;
+    //let res = make_ft(ret, args, false);
+    let res = LLVMFunctionType(ret, args.ptr(), ft.params.len() as i32, LLVMBoolFalse());
+    //vector_Type_delete(args);
+    args.drop();
+    return res as llvm_FunctionType*;
   }
   func make_proto(self, ft: LambdaType*): llvm_FunctionType*{
-    let ret = self.mapType(ft.return_type.get());
-    let args = vector_Type_new();
+    let ret = self.mapType2(ft.return_type.get());
+    //let args = vector_Type_new();
+    let args = List<LLVMOpaqueType*>::new();
     for prm in &ft.params{
-      vector_Type_push(args, self.mapType(prm));
+      //vector_Type_push(args, self.mapType(prm));
+      args.add(self.mapType2(prm));
     }
     for prm in &ft.captured{
-      vector_Type_push(args, self.mapType(prm));
+      //vector_Type_push(args, self.mapType(prm));
+      args.add(self.mapType2(prm));
     }
-    let res = make_ft(ret, args, false);
-    vector_Type_delete(args);
-    return res;
+    //let res = make_ft(ret, args, false);
+    let res = LLVMFunctionType(ret, args.ptr(), args.len() as i32, LLVMBoolFalse());
+    //vector_Type_delete(args);
+    args.drop();
+    return res as llvm_FunctionType*;
   }
   func mapType(self, type: Type*): llvm_Type*{
     let r = self.get_resolver();
@@ -506,7 +483,7 @@ impl Compiler{
           name.drop();
           return res as LLVMOpaqueType*;
         }
-        let res = self.ll.get().make_struct_ty_new(name.str());
+        let res = self.ll.get().make_struct_ty(name.str());
         let elems = List<LLVMOpaqueType*>::new(tt.types.len());
         for elem in &tt.types{
           elems.add(self.mapType2(elem));
@@ -583,20 +560,24 @@ impl Compiler{
         let ev = vars.get(i);
         let name = format("{:?}::{}", decl.type, ev.name);
         let name_c = name.clone().cstr();
-        let var_ty = make_struct_ty(name_c.ptr());
+        //let var_ty = make_struct_ty(name_c.ptr());
+        let var_ty = LLVMStructCreateNamed(self.ll.get().ctx,name_c.ptr());
         name_c.drop();
         p.classMap.add(name, var_ty as llvm_Type*);
       }
     }
     let type_c = decl.type.print().cstr();
-    let st = make_struct_ty(type_c.ptr());
+    //let st = make_struct_ty(type_c.ptr());
+    let st = LLVMStructCreateNamed(self.ll.get().ctx, type_c.ptr());
     type_c.drop();
     p.classMap.add(decl.type.print(), st as llvm_Type*);
   }
 
   func fill_decl(self, decl: Decl*, st: StructType*){
     let p = self.protos.get();
-    let elems = vector_Type_new();
+    let ll = self.ll.get();
+    //let elems = vector_Type_new();
+    let elems = List<LLVMOpaqueType*>::new();
     match decl{
       Decl::Enum(variants)=>{
         //calc enum size
@@ -612,28 +593,36 @@ impl Compiler{
           }
           name.drop();
         }
-        vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
-        vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
+        //vector_Type_push(elems, getInt(ENUM_TAG_BITS()));
+        //vector_Type_push(elems, getArrTy(getInt(8), max / 8) as llvm_Type*);
+        elems.add(ll.intTy(ENUM_TAG_BITS()));
+        elems.add(LLVMArrayType(ll.intTy(8), max/8));
       },
       Decl::Struct(fields)=>{
         if(decl.base.is_some()){
-          vector_Type_push(elems, self.mapType(decl.base.get()));
+          //vector_Type_push(elems, self.mapType(decl.base.get()));
+          elems.add(self.mapType2(decl.base.get()));
         }
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
-          let ft = self.mapType(&fd.type);
-          vector_Type_push(elems, ft);
+          let ft = self.mapType2(&fd.type);
+          //vector_Type_push(elems, ft);
+          elems.add(ft);
         }
       },
       Decl::TupleStruct(fields)=>{
+        //tofo base
         for fd in fields{
-          let ft2 = self.mapType(&fd.type);
-          vector_Type_push(elems, ft2);
+          let ft2 = self.mapType2(&fd.type);
+          //vector_Type_push(elems, ft2);
+          elems.add(ft2);
         }
       }
     }
-    setBody(st, elems);
-    vector_Type_delete(elems);
+    //setBody(st, elems);
+    LLVMStructSetBody(st as LLVMOpaqueType*, elems.ptr(), elems.len() as i32, 0);
+    //vector_Type_delete(elems);
+    elems.drop();
     //print("fill_decl {}\n", &decl.type);
     //Type_dump(st as llvm_Type*);
     //let size = getSizeInBits(st);
@@ -656,6 +645,7 @@ impl Compiler{
   }
 
   func make_proto(self, m: Method*): Option<Function*>{
+    if(true) return self.make_proto2(m);
     if(m.is_generic) return Option<Function*>::new();
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
@@ -705,6 +695,60 @@ impl Compiler{
     sig.drop();
     return Option::new(f);
   }
+  
+  func make_proto2(self, m: Method*): Option<Function*>{
+    if(m.is_generic) return Option<Function*>::new();
+    let mangled = mangle(m);
+    //print("proto {}\n", mangled);
+    if(self.protos.get().funcMap.contains(&mangled)){
+      panic("already proto {}\n", mangled);
+    }
+    let ll = self.ll.get();
+    let sig = MethodSig::new(m, self.get_resolver());
+    let rvo = is_struct(&m.type);
+    let ret = LLVMVoidTypeInContext(ll.ctx);
+    if(is_main(m)){
+      ret = LLVMIntTypeInContext(ll.ctx, 32);
+    }else if(!rvo){
+      ret = self.mapType2(&sig.ret);
+    }
+    let args = List<LLVMOpaqueType*>::new();
+    if(rvo){
+      let rvo_ty = LLVMPointerType(self.mapType2(&sig.ret), 0);
+      args.add(rvo_ty);
+    }
+    for prm_type in &sig.params{
+      let pt = self.mapType2(prm_type);
+      if(is_struct(prm_type)){
+        args.add(LLVMPointerType(pt, 0));
+      }else{
+        args.add(pt);
+      }
+    }
+    let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
+    let linkage = LLVMLinkage::LLVMExternalLinkage{}.int();
+    if(!m.type_params.empty()){
+      linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
+    }else if let Parent::Impl(info)=&m.parent{
+      if(info.type.is_simple() && !info.type.get_args().empty()){
+        linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
+      }
+    }
+    let mangled_c = mangled.clone().cstr();
+    let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+    LLVMSetLinkage(f, linkage);
+    if(rvo){
+      let arg = LLVMGetParam(f, 0);
+      LLVMSetValueName2(arg, "ret".ptr(), 3);
+      let sret = LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
+      LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType2(&sig.ret));
+    }
+    self.protos.get().funcMap.add(mangled, f as Function*);
+    args.drop();
+    mangled_c.drop();
+    sig.drop();
+    return Option::new(f as Function*);
+  }
 
   func getSize(self, type: Type*): i64{
     match type{
@@ -714,6 +758,7 @@ impl Compiler{
       Type::Slice(bx) => {
         let st = self.protos.get().std("slice");
         return getSizeInBits(st);
+        //return self.ll.get().sizeOf(st as LLVMOpaqueType*);
       },
       Type::Array(elem, size) => {
         return self.getSize(elem.get()) * (*size);

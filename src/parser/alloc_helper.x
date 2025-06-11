@@ -37,9 +37,11 @@ impl AllocHelper{
     check_type(ty);
     let mapped = self.c.mapType(ty);
     if(ty.is_fpointer()){
-      mapped = getPointerTo(getInt(8)) as llvm_Type*;
+      //mapped = getPointerTo(getInt(8)) as llvm_Type*;
+      mapped = self.c.ll.get().intPtr(8) as llvm_Type*;
     }
-    let ptr = CreateAlloca(mapped);
+    //let ptr = CreateAlloca(mapped);
+    let ptr = LLVMBuildAlloca(self.c.ll.get().builder, mapped as LLVMOpaqueType*, "".ptr()) as Value*;
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
@@ -90,7 +92,8 @@ impl AllocHelper{
       let ty = self.c.get_resolver().cache.get(&arg.id);
       let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
       let name_c = arg.name.clone().cstr();
-      Value_setName(arg_ptr, name_c.ptr());
+      //Value_setName(arg_ptr, name_c.ptr());
+      LLVMSetValueName2(arg_ptr as LLVMOpaqueValue*, name_c.ptr(), arg.name.len());
       name_c.drop();
       self.c.allocMap.add(arg.id, arg_ptr);
     }

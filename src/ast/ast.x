@@ -353,7 +353,7 @@ impl Parent{
     match self{
       Parent::Impl(info) => return &info.type,
       Parent::Trait(type) => return type,
-      _ => panic("get_type"),
+      _ => panic("get_type {:?}", self),
     }
   }
   func clone(self): Parent{
