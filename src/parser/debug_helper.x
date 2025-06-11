@@ -7,7 +7,7 @@ import ast/ast
 import ast/utils
 import ast/printer
 
-import parser/bridge
+import parser/llvm
 import parser/compiler
 import parser/compiler_helper
 import parser/resolver
@@ -19,14 +19,15 @@ func base_class_name(): str{
 }
 
 struct DebugInfo{
-    cu: DICompileUnit*;
-    file: DIFile*;
-    sp: Option<DISubprogram*>;
-    types: HashMap<String, DIType*>;
-    incomplete_types: HashMap<String, DICompositeType*>;
+    cu: LLVMOpaqueMetadata*;
+    file: LLVMOpaqueMetadata*;
+    sp: Option<LLVMOpaqueMetadata*>;
+    types: HashMap<String, LLVMOpaqueMetadata*>;
+    incomplete_types: HashMap<String, LLVMOpaqueMetadata*>;
     debug: bool;
-    scopes: Stack<DILexicalBlock*>;
-    func_map: HashMap<String, DISubprogram*>;
+    scopes: Stack<LLVMOpaqueMetadata*>;
+    func_map: HashMap<String, LLVMOpaqueMetadata*>;
+    builder: LLVMOpaqueDIBuilder*;
 }
 
 func method_parent(m: Method*): Type*{
@@ -43,7 +44,14 @@ impl DebugInfo{
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
         let file = createFile(path_c.ptr(), dir_c.ptr());
+        let file = LLVMDIBuilderCreateFile(self.builder, path_c.ptr(), path_c.len(), dir_c.ptr(), dir_c.len());
         let cu = createCompileUnit(get_dwarf_cpp(), file);
+        let flags = "";
+        let split = "";
+        let DWOId = 0;
+        let sysroot = "";
+        let sdk = "";
+        let cu = LLVMDIBuilderCreateCompileUnit(self.builder, LLVMDIBuilderCreateCompileUnit::LLVMDWARFSourceLanguageC_plus_plus{}.int(), file, "".ptr(), 0, LLVMBoolFalse(), flags.ptr(), flags.len(), 1, split.ptr(), split.len(), LLVMDWARFEmissionKind::LLVMDWARFEmissionFull{}.int(), DWOId, LLVMBoolFalse(), LLVMBoolFalse(), sysroot.ptr(), sysroot.len(), sdk.ptr(), sdk.len());
         let debug = !std::getenv("DEBUG").unwrap_or("1").eq("0");
         
         path_c.drop();
@@ -51,19 +59,19 @@ impl DebugInfo{
         return DebugInfo{
           cu: cu,
           file: file,
-          sp: Option<DISubprogram*>::new(),
-          types: HashMap<String, DIType*>::new(),
+          sp: Option<LLVMOpaqueMetadata*>::new(),
+          types: HashMap<String, LLVMOpaqueMetadata*>::new(),
           incomplete_types: HashMap<String, DICompositeType*>::new(),
           debug: debug,
-          scopes: Stack<DILexicalBlock*>::new(),
-          func_map: HashMap<String, DISubprogram*>::new(),
+          scopes: Stack<LLVMOpaqueMetadata*>::new(),
+          func_map: HashMap<String, LLVMOpaqueMetadata*>::new(),
         };
     }
     
     func finalize(self){
         if (!self.debug) return;
         finalizeSubprogram(self.sp.unwrap());
-        self.sp = Option<DISubprogram*>::new();
+        self.sp = Option<LLVMOpaqueMetadata*>::new();
     }
 
     func loc(self, line: i32, pos: i32) {
@@ -75,16 +83,16 @@ impl DebugInfo{
         SetCurrentDebugLocation(self.get_scope(), line, pos);        
     }
 
-    func dbg_func(self, m: Method*, f: Function*, c: Compiler*): Option<DISubprogram*>{
+    func dbg_func(self, m: Method*, f: LLVMOpaqueValue*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
       let sp = self.dbg_func_proto(m, c).unwrap();
       setSubprogram(f, sp);
-      self.sp = Option<DISubprogram*>::new(sp);
+      self.sp = Option<LLVMOpaqueMetadata*>::new(sp);
       self.loc(m.line, 0);
       return Option::new(sp);
     }
 
-    func dbg_func_proto(self, m: Method*, c: Compiler*): Option<DISubprogram*>{
-        if (!self.debug) return Option<DISubprogram*>::new();
+    func dbg_func_proto(self, m: Method*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
+        if (!self.debug) return Option<LLVMOpaqueMetadata*>::new();
         let linkage_name = "".str();
         if(!is_main(m)){
           linkage_name.drop();
@@ -151,7 +159,7 @@ impl DebugInfo{
       name_c.drop();
     }
 
-    func dbg_glob(self, gl: Global*, ty: Type*, gv: GlobalVariable*, c: Compiler*): DIGlobalVariableExpression*{
+    func dbg_glob(self, gl: Global*, ty: Type*, gv: LLVMOpaqueValue*, c: Compiler*): DIGlobalVariableExpression*{
       let scope = self.cu as DIScope*;
       let di_type = self.map_di(ty, c);
       let name_c = gl.name.clone().cstr();
@@ -168,9 +176,9 @@ impl DebugInfo{
       return *self.scopes.top() as DIScope*;
     }
 
-    func new_scope(self, line: i32)/*: DILexicalBlock**/{
+    func new_scope(self, line: i32)/*: LLVMOpaqueMetadata*/{
       if(!self.debug) return;
-      let scope = createLexicalBlock(self.get_scope(), self.file, line, 0);
+      let scope = LLVMDIBuilderCreateLexicalBlock(self.builder, self.get_scope(), self.file, line, 0);
       self.scopes.push(scope);
       //return scope;
     }
@@ -178,7 +186,7 @@ impl DebugInfo{
       if(!self.debug) return;
       self.scopes.pop();
     }
-    func new_scope(self, scope: DILexicalBlock*){
+    func new_scope(self, scope: LLVMOpaqueMetadata*){
       if(!self.debug) return;
       self.scopes.push(scope);
     }
@@ -198,7 +206,7 @@ impl DebugInfo{
         return st;
     }
 
-    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: DIFile*, var_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
+    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: LLVMOpaqueMetadata*, var_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
       let ev = decl.get_variants().get(var_idx);
       let name: String = format("{:?}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
@@ -236,7 +244,7 @@ impl DebugInfo{
       }
       replaceElements(st, elems);
       let evname_c = ev.name.clone().cstr();
-      let res = createVariantMemberType(var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st as DIType*);
+      let res = createVariantMemberType(var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st);
       evname_c.drop();
       name.drop();
       vector_Metadata_delete(elems);
@@ -271,18 +279,18 @@ impl DebugInfo{
       }
     }
 
-    func map_di_fill(self, decl: Decl*, c: Compiler*): DIType*{
+    func map_di_fill(self, decl: Decl*, c: Compiler*): LLVMOpaqueMetadata*{
       let s = decl.type.print();
       let st = *self.incomplete_types.get(&s).unwrap();
       let path_c = decl.path.clone().cstr();
       let file = createFile(path_c.ptr(), ".".ptr());
       path_c.drop();
       let elems = vector_Metadata_new();
-      let base_ty = Option<DIType*>::new();
+      let base_ty = Option<LLVMOpaqueMetadata*>::new();
       let scope = st as DIScope*;
       if(decl.base.is_some()){
         let ty = self.map_di(decl.base.get(), c);
-        base_ty = Option<DIType*>::new(ty);
+        base_ty = Option<LLVMOpaqueMetadata*>::new(ty);
       }
       let st_real = c.mapType(&decl.type);
       //Type_dump(st_real);
@@ -355,12 +363,12 @@ impl DebugInfo{
         },
       }
       replaceElements(st, elems);
-      self.types.add(s, st as DIType*);
+      self.types.add(s, st);
       vector_Metadata_delete(elems);
-      return st as DIType*;
+      return st;
     }
 
-    func map_di(self, type: Type*, c: Compiler*): DIType*{
+    func map_di(self, type: Type*, c: Compiler*): LLVMOpaqueMetadata*{
       let rt = c.get_resolver().visit_type(type);
       let name = rt.type.print();
       let res = self.map_di_resolved(&rt.type, &name, c);
@@ -369,14 +377,14 @@ impl DebugInfo{
       return res;
     }
 
-    func map_di_resolved(self, type: Type*, name: String*, c: Compiler*): DIType*{
+    func map_di_resolved(self, type: Type*, name: String*, c: Compiler*): LLVMOpaqueMetadata*{
       let opt1 = self.types.get(name);
       if(opt1.is_some()){
         return *opt1.unwrap();
       }
       let opt2 = self.incomplete_types.get(name);
       if(opt2.is_some()){
-        return *opt2.unwrap() as DIType*;
+        return *opt2.unwrap();
       }
       match type{
         Type::Pointer(elem) => {
@@ -399,8 +407,7 @@ impl DebugInfo{
           }
           let sp = createSubroutineType(tys);
           vector_Metadata_delete(tys);
-          return createPointerType(sp as DIType*, 64);
-          //return sp as DIType*;
+          return createPointerType(sp, 64);
         },
         Type::Lambda(ft_box) => {
           let tys = vector_Metadata_new();
@@ -413,8 +420,7 @@ impl DebugInfo{
           }
           let sp = createSubroutineType(tys);
           vector_Metadata_delete(tys);
-          return createPointerType(sp as DIType*, 64);
-          //return sp as DIType*;
+          return createPointerType(sp, 64);
         },
         Type::Slice(elem)=>{
           let size = c.getSize(type);
@@ -433,7 +439,7 @@ impl DebugInfo{
           let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
           vector_Metadata_push(elems, len_mem as Metadata*);
           let name_c = name.clone().cstr();
-          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
+          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems);
           name_c.drop();
           vector_Metadata_delete(elems);
           return res;
@@ -455,7 +461,7 @@ impl DebugInfo{
             ++idx;
             elem_name.drop();
           }
-          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems) as DIType*;
+          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems);
           name_c.drop();
           vector_Metadata_delete(elems);
           return res;
@@ -482,11 +488,13 @@ impl DebugInfo{
         }
       }
     }
-}
 
-func createBasicType(name: String*, size: i64, enc: i32): DIType*{
-  let name_c = name.clone().cstr();
-  let res = createBasicType(name_c.ptr(), size, enc);
-  name_c.drop();
-  return res;
+    func createBasicType(self, name: String*, size: i64, enc: i32): LLVMOpaqueMetadata*{
+      let name_c = name.clone().cstr();
+      //let flags = LLVMDIFlags::LLVMDIFlagZero;
+      let flags = 0;
+      let res = LLVMDIBuilderCreateBasicType(self.builder, name_c.ptr(), name.len(), size, enc, flags);
+      name_c.drop();
+      return res;
+    }
 }

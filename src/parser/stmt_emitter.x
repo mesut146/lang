@@ -8,7 +8,6 @@ import ast/printer
 import parser/compiler
 import parser/expr_emitter
 import parser/resolver
-import parser/bridge
 import parser/debug_helper
 import parser/compiler_helper
 import parser/ownership
@@ -74,12 +73,12 @@ impl Compiler{
       }
     }
 
-    func visit_body(self, body: Body*): Option<Value*>{
+    func visit_body(self, body: Body*): Option<LLVMOpaqueValue*>{
       match body{
         Body::Block(b) => return self.visit_block(b),
         Body::Stmt(s) => {
           self.visit(s);
-          return Option<Value*>::new();
+          return Option<LLVMOpaqueValue*>::new();
         },
         Body::If(b) => return self.visit_if(b),
         Body::IfLet(b) => {
@@ -100,20 +99,13 @@ impl Compiler{
       let then_name = CStr::new(format("while_then_{}", line));
       let next_name = CStr::new(format("while_next_{}", line));
       let ll = self.ll.get();
-      //let then = create_bb_named(then_name.ptr());
-      //let condbb = create_bb2_named(self.cur_func(), cond_name.ptr());
-      //let next = create_bb_named(next_name.ptr());
-      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, then_name.ptr()) as BasicBlock*;
-      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, cond_name.ptr()) as BasicBlock*;
-      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, next_name.ptr()) as BasicBlock*;
-      //CreateBr(condbb);
-      //SetInsertPoint(condbb);
-      //CreateCondBr(self.branch(cond), then, next);
-      //self.set_and_insert(then);
-      LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
-      LLVMPositionBuilderAtEnd(ll.builder, condbb as LLVMOpaqueBasicBlock*);
-      LLVMBuildCondBr(ll.builder, self.branch(cond) as LLVMOpaqueValue*, then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
-      LLVMPositionBuilderAtEnd(ll.builder, then as LLVMOpaqueBasicBlock*);
+      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), then_name.ptr());
+      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), cond_name.ptr());
+      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), next_name.ptr());
+      LLVMBuildBr(ll.builder, condbb);
+      LLVMPositionBuilderAtEnd(ll.builder, condbb);
+      LLVMBuildCondBr(ll.builder, self.branch(cond), then, next);
+      LLVMPositionBuilderAtEnd(ll.builder, then);
       self.loops.add(LoopInfo{condbb, next});
       self.llvm.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
@@ -123,11 +115,9 @@ impl Compiler{
       self.loops.pop_back();
       let exit_body = Exit::get_exit_type(body);
       if(!exit_body.is_jump()){
-          //CreateBr(condbb);
-          LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
+          LLVMBuildBr(ll.builder, condbb);
       }
-      //self.set_and_insert(next);
-      LLVMPositionBuilderAtEnd(ll.builder, next as LLVMOpaqueBasicBlock*);
+      LLVMPositionBuilderAtEnd(ll.builder, next);
       cond_name.drop();
       then_name.drop();
       next_name.drop();
@@ -144,43 +134,30 @@ impl Compiler{
       let cond_name = CStr::new(format("for_cond_{}", line));
       let update_name = CStr::new(format("for_update_{}", line));
       let next_name = CStr::new(format("for_next_{}", line));
-      /*let then = create_bb_named(then_name.ptr());
-      let condbb = create_bb2_named(f, cond_name.ptr());
-      let updatebb = create_bb2_named(f, update_name.ptr());
-      let next = create_bb_named(next_name.ptr());*/
-      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, then_name.ptr());
-      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, cond_name.ptr());
-      let updatebb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, update_name.ptr());
-      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func() as LLVMOpaqueValue*, next_name.ptr());
+      let then = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), then_name.ptr());
+      let condbb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), cond_name.ptr());
+      let updatebb = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), update_name.ptr());
+      let next = LLVMAppendBasicBlockInContext(self.ll.get().ctx, self.cur_func(), next_name.ptr());
   
-      //CreateBr(condbb);
-      //SetInsertPoint(condbb);
       LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       LLVMPositionBuilderAtEnd(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       
       /*let di_scope =*/ self.llvm.di.get().new_scope(stmt.line);
       if (node.cond.is_some()) {
-        //CreateCondBr(self.branch(node.cond.get()), then, next);
-        LLVMBuildCondBr(ll.builder, self.branch(node.cond.get()) as LLVMOpaqueValue*, then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
+        LLVMBuildCondBr(ll.builder, self.branch(node.cond.get()), then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
       } else {
-        //CreateBr(then);
         LLVMBuildBr(ll.builder, then as LLVMOpaqueBasicBlock*);
       }
-      //self.llvm.di.get().exit_scope();
-      //self.set_and_insert(then);
       LLVMPositionBuilderAtEnd(ll.builder, then as LLVMOpaqueBasicBlock*);
-      self.loops.add(LoopInfo{updatebb as BasicBlock*, next as BasicBlock*});
-      //self.llvm.di.get().new_scope(node.body.get().line);
+      self.loops.add(LoopInfo{updatebb, next});
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit_body(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
       //self.llvm.di.get().exit_scope();
       let exit = Exit::get_exit_type(node.body.get());
       if(!exit.is_jump()){
-        //CreateBr(updatebb);
         LLVMBuildBr(ll.builder, updatebb); 
       }
-      //SetInsertPoint(updatebb);
       LLVMPositionBuilderAtEnd(ll.builder, updatebb);
       //self.llvm.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {
@@ -189,9 +166,7 @@ impl Compiler{
       }
       self.llvm.di.get().exit_scope();
       self.loops.pop_back();
-      //CreateBr(condbb);
       LLVMBuildBr(ll.builder, condbb);
-      //self.set_and_insert(next);
       LLVMPositionBuilderAtEnd(ll.builder, next);
 
       then_name.drop();
@@ -213,21 +188,20 @@ impl Compiler{
         }
         else if(is_struct(&type)){
           let val = self.visit(&f.rhs);
-          let tyy = LLVMTypeOf(val as LLVMOpaqueValue*);
+          let tyy = LLVMTypeOf(val);
           if(/*Value_isPointerTy(val)*/ LLVMGetTypeKind(tyy) == LLVMTypeKind::LLVMPointerTypeKind{}.int()){
             self.copy(ptr, val, &type);
           }else{
             //CreateStore(val, ptr);
-            LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
+            LLVMBuildStore(ll.builder, val, ptr);
           }
         }else if(type.is_pointer() || type.is_fpointer() || type.is_lambda()){
           let val = self.get_obj_ptr(&f.rhs);
           //CreateStore(val, ptr);
-          LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
+          LLVMBuildStore(ll.builder, val, ptr);
         } else{
           let val = self.cast(&f.rhs, &type);
-          //CreateStore(val, ptr);
-          LLVMBuildStore(ll.builder, val as LLVMOpaqueValue*, ptr as LLVMOpaqueValue*);
+          LLVMBuildStore(ll.builder, val, ptr);
         }
         self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
@@ -235,7 +209,7 @@ impl Compiler{
       }
     }
 
-    func visit_block(self, node: Block*): Option<Value*>{
+    func visit_block(self, node: Block*): Option<LLVMOpaqueValue*>{
       for(let i = 0;i < node.list.len();++i){
         let st = node.list.get(i);
         self.visit(st);
@@ -248,9 +222,9 @@ impl Compiler{
         }
         self.own.get().do_move(node.return_expr.get());
         rt.drop();
-        return Option<Value*>::new(val);
+        return Option<LLVMOpaqueValue*>::new(val);
       }
-      return Option<Value*>::new();
+      return Option<LLVMOpaqueValue*>::new();
     }
 
     func visit_ret(self, node: Stmt*, val: Option<Expr>*){
@@ -259,10 +233,8 @@ impl Compiler{
         self.own.get().do_return(node.line);
         self.exit_frame();
         if(is_main(self.curMethod.unwrap())){
-          //CreateRet(makeInt(0, 32) as Value*);
           LLVMBuildRet(ll.builder, ll.makeInt(0, 32));
         }else{
-          //CreateRetVoid();
           LLVMBuildRetVoid(ll.builder);
         }
       }else{
@@ -270,25 +242,25 @@ impl Compiler{
       }
     }
 
-    func visit_ret(self, val: Value*){
+    func visit_ret(self, val: LLVMOpaqueValue*){
       let ll = self.ll.get();
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
       if(type.is_pointer() || type.is_fpointer()){
         self.exit_frame();
         //CreateRet(val);
-        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
+        LLVMBuildRet(ll.builder, val);
         type.drop();
         return;
       }
       if(!is_struct(&type)){
         self.exit_frame();
         //CreateRet(val);
-        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
+        LLVMBuildRet(ll.builder, val);
         type.drop();
         return;
       }
-      let sret_ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
+      let sret_ptr = LLVMGetParam(self.protos.get().cur.unwrap(), 0);
       self.copy(sret_ptr, val, &type);
       self.exit_frame();
       //CreateRetVoid();
@@ -305,7 +277,7 @@ impl Compiler{
         self.own.get().do_return(expr);
         self.exit_frame();
         //CreateRet(val);
-        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
+        LLVMBuildRet(ll.builder, val);
         type.drop();
         return;
       }
@@ -314,11 +286,11 @@ impl Compiler{
         self.own.get().do_return(expr);
         self.exit_frame();
         //CreateRet(val);
-        LLVMBuildRet(ll.builder, val as LLVMOpaqueValue*);
+        LLVMBuildRet(ll.builder, val);
         type.drop();
         return;
       }
-      let sret_ptr = get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
+      let sret_ptr = LLVMGetParam(self.protos.get().cur.unwrap(), 0);
       if(can_inline(expr, self.get_resolver())){
         self.do_inline(expr, sret_ptr);
       }else{

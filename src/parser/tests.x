@@ -16,7 +16,7 @@ import ast/utils
 import parser/resolver
 import parser/compiler
 import parser/debug_helper
-import parser/bridge
+import parser/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache

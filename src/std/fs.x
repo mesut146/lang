@@ -234,6 +234,10 @@ impl File{
     Drop::drop(filec);
     return Result<(), String>::ok(());
   }
+
+  func get_last_write_time(file: str): i64{
+    panic("todo");
+  }
 }
 
 struct Path{

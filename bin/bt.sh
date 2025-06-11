@@ -1,8 +1,7 @@
 dir=$(dirname $0)
 
 if [ -z "$1" ]; then
- echo "provide binary"
- exit
+ echo "provide binary" && exit 1
 fi
 
 name="xx2"
@@ -10,23 +9,27 @@ if [ ! -z "$2" ]; then
  name=$2
 fi
 
+if [ "$3" = "-stage2" ]; then
+ echo "todo"
+fi
+
 compiler=$1
 build=$dir/../build
 mkdir -p $build
 out_dir=$build/${name}_out
 
+if [ -d "$1" ]; then
+  compiler="$1/bin/x"
+fi
+
 echo "compiler=$compiler"
 echo "out=$out_dir"
-
-#compile std
-#$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 
 $dir/build_std.sh $compiler || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling"
-  exit 1
+  echo "error while compiling" && exit 1
 fi
 #todo use toolchain's std dir?
 linker=$($dir/find_llvm.sh clang)

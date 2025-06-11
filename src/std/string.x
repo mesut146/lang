@@ -224,20 +224,26 @@ impl CStr{
   }
   func ptr(self): i8*{
     match self{
-      CStr::Str(val) =>  return val.ptr(),
+      CStr::Str(val) => return val.ptr(),
       CStr::Ptr(ptr) => return *ptr,
     }
   }
   func str(self): str{
     match self{
-      CStr::Str(val) =>  return val.str(),
+      CStr::Str(val) => return val.str(),
       CStr::Ptr(ptr) => return str::from_raw(*ptr),
     }
   }
   func get_heap(self): String{
     match self{
-      CStr::Str(val) =>  return val.clone(),
+      CStr::Str(val) => return val.clone(),
       CStr::Ptr(ptr) => return str::from_raw(*ptr).owned(),
+    }
+  }
+  func len(self): i64{
+    match self{
+      CStr::Str(val) => return val.len(),
+      CStr::Ptr(ptr) => return str::from_raw(*ptr).len(),
     }
   }
 }
@@ -245,7 +251,7 @@ impl CStr{
 impl Debug for CStr{
   func debug(self, f: Fmt*){
     match self{
-      CStr::Str(val) =>  f.print(val),
+      CStr::Str(val) => f.print(val),
       CStr::Ptr(ptr) => f.print(str::from_raw(*ptr)),
     }
   }
@@ -259,7 +265,7 @@ impl Display for CStr{
 impl Drop for CStr{
   func drop(*self){
      match self{
-      CStr::Str(val) =>  Drop::drop(val),
+      CStr::Str(val) => Drop::drop(val),
       CStr::Ptr(ptr) => free(ptr),
     }
   }

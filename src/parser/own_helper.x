@@ -4,7 +4,7 @@ import std/stack
 import ast/ast
 import ast/utils
 import ast/printer
-import parser/bridge
+
 import parser/own_visitor
 import parser/own_model
 import parser/ownership

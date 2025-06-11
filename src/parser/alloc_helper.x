@@ -5,7 +5,7 @@ import std/result
 import ast/ast
 import ast/utils
 import ast/printer
-import parser/bridge
+import parser/llvm
 import parser/compiler
 import parser/compiler_helper
 import parser/resolver
@@ -33,15 +33,13 @@ impl AllocHelper{
       panic("internal err: alloc of void");
     }
   }
-  func alloc_ty(self, ty: Type*, node: Node*): Value*{
+  func alloc_ty(self, ty: Type*, node: Node*): LLVMOpaqueValue*{
     check_type(ty);
     let mapped = self.c.mapType(ty);
     if(ty.is_fpointer()){
-      //mapped = getPointerTo(getInt(8)) as llvm_Type*;
-      mapped = self.c.ll.get().intPtr(8) as llvm_Type*;
+      mapped = self.c.ll.get().intPtr(8);
     }
-    //let ptr = CreateAlloca(mapped);
-    let ptr = LLVMBuildAlloca(self.c.ll.get().builder, mapped as LLVMOpaqueType*, "".ptr()) as Value*;
+    let ptr = LLVMBuildAlloca(self.c.ll.get().builder, mapped, "".ptr());
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }

@@ -2,7 +2,7 @@ import std/hashmap
 import std/io
 import std/fs
 import std/result
-import parser/bridge
+import parser/llvm
 import parser/incremental
 
 struct Cache{
@@ -84,16 +84,15 @@ impl Cache{
     
     func update(self, file: str){
         if(!self.use_cache) return;
-        let resolved = File::resolve(file).unwrap();
+        let resolved = File::resolve(file)?;
         let time = self.get_time(resolved.str());
         self.map.add(resolved, time);
     }
     
     func get_time(self, file: str): String{
-        let resolved = File::resolve(file).unwrap();
-        let cs = CStr::new(resolved);
-        let time = get_last_write_time(cs.ptr());
-        cs.drop();
+        let resolved = File::resolve(file)?;
+        let time = File::get_last_write_time(resolved.str());
+        resolved.drop();
         return time.str();
     }
 }

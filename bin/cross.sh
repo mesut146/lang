@@ -66,6 +66,13 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
+if [[ "$4" = "-termux" ]]; then
+ for obj in $out_dir/*.o; do
+   #dump=$(objdump -r --section=".ctors" $obj)
+   #dump["*tatic_init"]
+ done
+fi
+
 export ARCH=aarch64
 $dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip || exit 1
 

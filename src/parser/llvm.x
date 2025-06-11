@@ -1,5 +1,5 @@
-import parser/bridge
 import ast/ast
+import std/io
 
 type LLVMBool = i32;
 func LLVMBoolTrue(): i32{ return 1; }
@@ -9,6 +9,7 @@ func toLLVMBool(b: bool): i32{
   return 0;
 }
 
+type LLVMDWARFTypeEncoding = i32;
 
 struct LLVMOpaqueContext;
 struct LLVMOpaqueModule;
@@ -21,6 +22,8 @@ struct LLVMOpaqueValue;
 struct LLVMOpaqueType;
 struct LLVMOpaqueBasicBlock;
 struct LLVMOpaqueAttributeRef;
+struct LLVMOpaqueMetadata;
+struct LLVMOpaqueDIBuilder;
 
 type LLVMTargetRef = LLVMTarget*;
 type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
@@ -112,6 +115,12 @@ enum LLVMRealPredicate{
     LLVMRealULE,            /**< True if unordered, less than, or equal */
     LLVMRealUNE,            /**< True if unordered or not equal */
     LLVMRealPredicateTrue   /**< Always true (always folded) */
+}
+impl LLVMRealPredicate{
+  func from(s: str): i32{
+    if(s.eq("==")) return 1;
+    panic("op='{}'", s);
+  }
 }
 
 enum LLVMCallConv{
@@ -213,6 +222,141 @@ impl LLVMTypeKind{
     return *(self as i32*);
   }
 }
+#derive(Debug)
+enum LLVMDIFlags{
+  LLVMDIFlagZero /*= 0*/,
+  LLVMDIFlagPrivate /* = 1*/,
+  LLVMDIFlagProtected /* = 2*/,
+  LLVMDIFlagPublic /* = 3*/,
+  LLVMDIFlagFwdDecl /*= 1 << 2*/,
+  LLVMDIFlagAppleBlock /*= 1 << 3*/,
+  LLVMDIFlagReservedBit4 /*= 1 << 4*/,
+  LLVMDIFlagVirtual /*= 1 << 5*/,
+  LLVMDIFlagArtificial /*= 1 << 6*/,
+  LLVMDIFlagExplicit /*= 1 << 7*/,
+  LLVMDIFlagPrototyped /*= 1 << 8*/,
+  LLVMDIFlagObjcClassComplete /*= 1 << 9*/,
+  LLVMDIFlagObjectPointer /*= 1 << 10*/,
+  LLVMDIFlagVector /*= 1 << 11*/,
+  LLVMDIFlagStaticMember /*= 1 << 12*/,
+  LLVMDIFlagLValueReference /*= 1 << 13*/,
+  LLVMDIFlagRValueReference /*= 1 << 14*/,
+  LLVMDIFlagReserved /*= 1 << 15*/,
+  LLVMDIFlagSingleInheritance /*= 1 << 16*/,
+  LLVMDIFlagMultipleInheritance /*= 2 << 16*/,
+  LLVMDIFlagVirtualInheritance /*= 3 << 16*/,
+  LLVMDIFlagIntroducedVirtual /*= 1 << 18*/,
+  LLVMDIFlagBitField /*= 1 << 19*/,
+  LLVMDIFlagNoReturn /*= 1 << 20*/,
+  LLVMDIFlagTypePassByValue /*= 1 << 22*/,
+  LLVMDIFlagTypePassByReference /*= 1 << 23*/,
+  LLVMDIFlagEnumClass /*= 1 << 24*/,
+  LLVMDIFlagFixedEnum /*= 1 << 24*//*LLVMDIFlagEnumClass*/, // Deprecated.
+  LLVMDIFlagThunk /*= 1 << 25*/,
+  LLVMDIFlagNonTrivial /*= 1 << 26*/,
+  LLVMDIFlagBigEndian /*= 1 << 27*/,
+  LLVMDIFlagLittleEndian /*= 1 << 28*/,
+  LLVMDIFlagIndirectVirtualBase /* = (1 << 2) | (1 << 5)*/,
+  LLVMDIFlagAccessibility /* = LLVMDIFlagPrivate | LLVMDIFlagProtected |
+                            LLVMDIFlagPublic*/,
+  LLVMDIFlagPtrToMemberRep /* = LLVMDIFlagSingleInheritance |
+                             LLVMDIFlagMultipleInheritance |
+                             LLVMDIFlagVirtualInheritance*/
+}
+impl LLVMDIFlags{
+  func int(self): i32{
+    match self{
+      _=>panic("{:?}")
+    }
+  }
+}
+
+enum LLVMDWARFSourceLanguage{
+  LLVMDWARFSourceLanguageC89,
+  LLVMDWARFSourceLanguageC,
+  LLVMDWARFSourceLanguageAda83,
+  LLVMDWARFSourceLanguageC_plus_plus,
+  LLVMDWARFSourceLanguageCobol74,
+  LLVMDWARFSourceLanguageCobol85,
+  LLVMDWARFSourceLanguageFortran77,
+  LLVMDWARFSourceLanguageFortran90,
+  LLVMDWARFSourceLanguagePascal83,
+  LLVMDWARFSourceLanguageModula2,
+  // New in DWARF v3:
+  LLVMDWARFSourceLanguageJava,
+  LLVMDWARFSourceLanguageC99,
+  LLVMDWARFSourceLanguageAda95,
+  LLVMDWARFSourceLanguageFortran95,
+  LLVMDWARFSourceLanguagePLI,
+  LLVMDWARFSourceLanguageObjC,
+  LLVMDWARFSourceLanguageObjC_plus_plus,
+  LLVMDWARFSourceLanguageUPC,
+  LLVMDWARFSourceLanguageD,
+  // New in DWARF v4:
+  LLVMDWARFSourceLanguagePython,
+  // New in DWARF v5:
+  LLVMDWARFSourceLanguageOpenCL,
+  LLVMDWARFSourceLanguageGo,
+  LLVMDWARFSourceLanguageModula3,
+  LLVMDWARFSourceLanguageHaskell,
+  LLVMDWARFSourceLanguageC_plus_plus_03,
+  LLVMDWARFSourceLanguageC_plus_plus_11,
+  LLVMDWARFSourceLanguageOCaml,
+  LLVMDWARFSourceLanguageRust,
+  LLVMDWARFSourceLanguageC11,
+  LLVMDWARFSourceLanguageSwift,
+  LLVMDWARFSourceLanguageJulia,
+  LLVMDWARFSourceLanguageDylan,
+  LLVMDWARFSourceLanguageC_plus_plus_14,
+  LLVMDWARFSourceLanguageFortran03,
+  LLVMDWARFSourceLanguageFortran08,
+  LLVMDWARFSourceLanguageRenderScript,
+  LLVMDWARFSourceLanguageBLISS,
+  LLVMDWARFSourceLanguageKotlin,
+  LLVMDWARFSourceLanguageZig,
+  LLVMDWARFSourceLanguageCrystal,
+  LLVMDWARFSourceLanguageC_plus_plus_17,
+  LLVMDWARFSourceLanguageC_plus_plus_20,
+  LLVMDWARFSourceLanguageC17,
+  LLVMDWARFSourceLanguageFortran18,
+  LLVMDWARFSourceLanguageAda2005,
+  LLVMDWARFSourceLanguageAda2012,
+  LLVMDWARFSourceLanguageHIP,
+  LLVMDWARFSourceLanguageAssembly,
+  LLVMDWARFSourceLanguageC_sharp,
+  LLVMDWARFSourceLanguageMojo,
+  LLVMDWARFSourceLanguageGLSL,
+  LLVMDWARFSourceLanguageGLSL_ES,
+  LLVMDWARFSourceLanguageHLSL,
+  LLVMDWARFSourceLanguageOpenCL_CPP,
+  LLVMDWARFSourceLanguageCPP_for_OpenCL,
+  LLVMDWARFSourceLanguageSYCL,
+  LLVMDWARFSourceLanguageRuby,
+  LLVMDWARFSourceLanguageMove,
+  LLVMDWARFSourceLanguageHylo,
+  LLVMDWARFSourceLanguageMetal,
+ 
+  // Vendor extensions:
+  LLVMDWARFSourceLanguageMips_Assembler,
+  LLVMDWARFSourceLanguageGOOGLE_RenderScript,
+  LLVMDWARFSourceLanguageBORLAND_Delphi
+}
+impl LLVMDWARFSourceLanguage{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
+
+enum LLVMDWARFEmissionKind{
+    LLVMDWARFEmissionNone /* = 0*/,
+    LLVMDWARFEmissionFull,
+    LLVMDWARFEmissionLineTablesOnly
+}
+impl LLVMDWARFEmissionKind{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
 
 func LLVMInitializeAllTargets(){
     LLVMInitializeX86Target();
@@ -284,13 +428,14 @@ extern{
     func LLVMTargetMachineEmitToFile (T: LLVMOpaqueTargetMachine*, M: LLVMOpaqueModule*, Filename: i8*, codegen: LLVMCodeGenFileType, ErrorMessage: i8**): i32;
     func LLVMAddFunction(m: LLVMOpaqueModule*, name: i8*, ft: LLVMOpaqueType*): LLVMOpaqueValue*;
     func LLVMSetFunctionCallConv(fn: LLVMOpaqueValue*, cc: i32);
-    func LLVMSetLinkage(val: LLVMOpaqueValue*, linkage: i32 /*LLVMLinkage*/);
     func LLVMGetParam(fn: LLVMOpaqueValue*, idx: i32): LLVMOpaqueValue*;
     
     //types
     func LLVMPointerType(elem: LLVMOpaqueType*, addrspace: i32): LLVMOpaqueType*;
+    func LLVMPointerTypeInContext(ctx: LLVMOpaqueContext*, addrspace: i32): LLVMOpaqueType*;
     func LLVMArrayType(elem: LLVMOpaqueType*, count: i32): LLVMOpaqueType*;
     func LLVMStructCreateNamed(C: LLVMOpaqueContext*, Name: i8*): LLVMOpaqueType*;
+    func LLVMStructTypeInContext(C: LLVMOpaqueContext*, ElementTypes: LLVMOpaqueType**, ElementCount: i32, Packed: LLVMBool): LLVMOpaqueType*;
     func LLVMStructSetBody(StructTy: LLVMOpaqueType*, ElementTypes: LLVMOpaqueType**, ElementCount: i32, Packed: i32);
     func LLVMVoidTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
     func LLVMFloatTypeInContext(c: LLVMOpaqueContext*): LLVMOpaqueType*;
@@ -302,20 +447,27 @@ extern{
     func LLVMPrintValueToString(val: LLVMOpaqueValue*): i8*;
     func LLVMPrintTypeToString(val: LLVMOpaqueType*): i8*;
     func LLVMSizeOfTypeInBits(trg: LLVMTarget*, ty: LLVMOpaqueType*): i64;
+    func LLVMGetIntTypeWidth(ty: LLVMOpaqueType*): i32;
     func LLVMTypeOf(val: LLVMOpaqueValue*): LLVMOpaqueType*;
     func LLVMFunctionType(ret: LLVMOpaqueType*, params: LLVMOpaqueType**, cnt: i32, vararg: LLVMBool): LLVMOpaqueType*;
-    func LLVMGetTypeKind(ty: LLVMOpaqueType*): i32;
+    func LLVMGetTypeKind(ty: LLVMOpaqueType*): /*LLVMTypeKind*/i32;
 
     //global
     func LLVMAddGlobal(md: LLVMOpaqueModule*, ty: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMConstStringInContext(C: LLVMOpaqueContext*, str: i8*, len: i32, nll: LLVMBool): LLVMOpaqueValue*;
+    func LLVMConstStructInContext(C: LLVMOpaqueContext*, ConstantVals: LLVMOpaqueValue**, Count: i32, Packed: LLVMBool): LLVMOpaqueValue*;
+    func LLVMConstNull(ty: LLVMOpaqueType*): LLVMOpaqueValue*;
+    func LLVMConstArray(ElementTy: LLVMOpaqueType*, ConstantVals: LLVMOpaqueValue**, Length: i32): LLVMOpaqueValue*;
     func LLVMSetInitializer(var: LLVMOpaqueValue*, val: LLVMOpaqueValue*);
     func LLVMSetGlobalConstant(var: LLVMOpaqueValue*, iscons: LLVMBool);
+    func LLVMSetLinkage(val: LLVMOpaqueValue*, linkage: i32 /*LLVMLinkage*/);
+    func LLVMSetSection(Global: LLVMOpaqueValue*, Section: i8*);
     
     //basic block
     func LLVMCreateBasicBlockInContext(B: LLVMOpaqueBuilder*, name: i8*): LLVMOpaqueBasicBlock*;
     func LLVMAppendBasicBlockInContext(C: LLVMOpaqueContext*, fn: LLVMOpaqueValue*, name: i8*): LLVMOpaqueBasicBlock*;
     func LLVMPositionBuilderAtEnd(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*);
+    func LLVMGetInsertBlock(B: LLVMOpaqueBuilder*): LLVMOpaqueBasicBlock*;
     
     //builder
     func LLVMCreateBuilderInContext(C: LLVMOpaqueContext*): LLVMOpaqueBuilder*;
@@ -323,6 +475,10 @@ extern{
     func LLVMCreateTypeAttribute(c: LLVMOpaqueContext*, kind: i32, ty: LLVMOpaqueType*): LLVMOpaqueAttributeRef*;
     func LLVMGetEnumAttributeKindForName(name: i8*, len: i64): i32;
       
+    func LLVMConstGEP2(ty: LLVMOpaqueType*, val: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32): LLVMOpaqueValue*;
+    func LLVMBuildGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildInBoundsGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildStructGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: i32, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildICmp(B: LLVMOpaqueBuilder*, Op: i32, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildFCmp(B: LLVMOpaqueBuilder*, Op: LLVMRealPredicate, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildBr(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*): LLVMOpaqueValue*;
@@ -330,34 +486,79 @@ extern{
     func LLVMBuildRetVoid(B: LLVMOpaqueBuilder*): LLVMOpaqueValue*;
     func LLVMBuildRet(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*): LLVMOpaqueValue*;
     func LLVMConstInt(IntTy: LLVMOpaqueType*, N: i64, SignExtend: i32): LLVMOpaqueValue*;
+    func LLVMConstReal(ty: LLVMOpaqueType*, N: f64): LLVMOpaqueValue*;
     func LLVMBuildAlloca(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildStore(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*;
+    func LLVMBuildLoad2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildMemCpy(B: LLVMOpaqueBuilder*, dst: LLVMOpaqueValue*, da: i32, src: LLVMOpaqueValue*, sa: i32, size: LLVMOpaqueValue*): LLVMOpaqueValue*;
-    func LLVMConstGEP2(ty: LLVMOpaqueType*, val: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32): LLVMOpaqueValue*;
+    func LLVMBuildCall2(B: LLVMOpaqueBuilder*, ft: LLVMOpaqueType*, Fn: LLVMOpaqueValue*, args: LLVMOpaqueValue**, NumArgs: i32, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSwitch(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, Else: LLVMOpaqueBasicBlock*, numcases: i32): LLVMOpaqueValue*;
+    func LLVMAddCase(Switch: LLVMOpaqueValue*, OnVal: LLVMOpaqueValue*, Dest: LLVMOpaqueBasicBlock*);
+    func LLVMBuildUnreachable(B: LLVMOpaqueBuilder*): LLVMOpaqueValue*;
+    func LLVMBuildPhi(B: LLVMOpaqueBuilder*, Ty: LLVMOpaqueType*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMAddIncoming(phi: LLVMOpaqueValue*, vals: LLVMOpaqueValue**, bbs: LLVMOpaqueBasicBlock**, count: i32);
+    func LLVMBuildPtrToInt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildZExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildTrunc(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     
+    func LLVMBuildAdd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSub(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildMul(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildAnd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildOr(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildXor(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
 }
 
+//debug
+extern{
+  func LLVMCreateDIBuilder(M: LLVMOpaqueModule*): LLVMOpaqueDIBuilder*;
+  func LLVMGetSubprogram(fn: LLVMOpaqueValue*): LLVMOpaqueMetadata*;
 
-func llvm_ctest(){
-  LLVMInitializeAllTargetInfos();
-  LLVMInitializeAllTargets();
-  LLVMInitializeAllTargetMCs();
-  LLVMInitializeAllAsmPrinters();
-  LLVMInitializeAllAsmParsers();
+  func LLVMDIBuilderCreateFunction( B: LLVMOpaqueDIBuilder*,
+                                    scope: LLVMOpaqueMetadata*,
+                                    name: i8*, namelen: i64,
+                                    link: i8*, linkagelen: i64,
+                                    file: LLVMOpaqueMetadata*,
+                                    line: i32,
+                                    ty: LLVMOpaqueMetadata*,
+                                    IsLocalToUnit: LLVMBool,
+                                    IsDefinition: LLVMBool,
+                                    ScopeLine: i32,
+                                    Flags: i32 /*LLVMDIFlags*/,
+                                    IsOptimized: LLVMBool): LLVMOpaqueMetadata*;
 
-  let triple = LLVMGetDefaultTargetTriple();
-  printf("triple=%s\n", triple);
-  let target = ptr::null<LLVMTarget>();
-  let err = ptr::null<i8>();
-  let code = LLVMGetTargetFromTriple(triple, &target, &err);
-  print("code={}\n", code);
-  printf("err=%s\n", err);
-  print("ref is null={:?}\n", target as u64 == 0);
+  func LLVMDIBuilderCreateBasicType(B: LLVMOpaqueDIBuilder*,
+                                    name: i8*, namelen: i64, bits: i64,
+                                    encoding: LLVMDWARFTypeEncoding,
+                                    flags: i32/*LLVMDIFlags*/);
 
-  let opt = LLVMCreateTargetMachineOptions();
-  LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
-  let machine = LLVMCreateTargetMachineWithOptions(target, triple, opt);
-  printf("machine=%p cpu='%s'\n", machine, LLVMGetTargetMachineCPU(machine));
+  func LLVMDIBuilderCreateCompileUnit(Builder: LLVMOpaqueDIBuilder*,
+		  	                              Lang: i32/*LLVMDWARFSourceLanguage*/,
+                                      FileRef: LLVMOpaqueMetadata,
+                                      Producer: i32,
+                                      ProducerLen: i64,
+                                      isOptimized: LLVMBool,
+                                      Flags: i8*,
+                                      FlagsLen: i64,
+                                      RuntimeVer: i32,
+                                      SplitName: i8*,
+                                      SplitNameLen: i64,
+                                      Kind: i32/*LLVMDWARFEmissionKind*/,
+                                      DWOId: i32,
+                                      SplitDebugInlining: LLVMBool,
+                                      DebugInfoForProfiling: LLVMBool,
+                                      SysRoot: i8*,
+                                      SysRootLen: i64,
+                                      SDK: i8*,
+                                      SDKLen: i64): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreateFile( Builder: LLVMOpaqueDIBuilder*,
+                                Filename: i8*,
+                                FilenameLen: i64,
+                                Directory: i8*,
+                                DirectoryLen: i64): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderCreateLexicalBlock(builder: LLVMOpaqueDIBuilder*, scope: LLVMOpaqueMetadata*, file: LLVMOpaqueMetadata, line: i32, column: i32): LLVMOpaqueMetadata*;
 }
 
 struct Emitter{
@@ -398,9 +599,9 @@ impl Emitter{
         LLVMSetModuleDataLayout(md, dl);
 
         let builder = LLVMCreateBuilderInContext(ctx);
-        setModule(md as LLVMModule*);//todo remove these
+        /*setModule(md as LLVMModule*);//todo remove these
         setCtx(ctx as LLVMContext*);
-        setBuilder(builder as IRBuilder*);
+        setBuilder(builder as IRBuilder*);*/
 
         name.drop();
         target_triple.drop();
@@ -430,29 +631,42 @@ impl Emitter{
     }
 
     func make_struct_ty(self, name: str): LLVMOpaqueType*{
-        let name_c = name.cstr();
-        let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
-        name_c.drop();
-        return ty;
+      let name_c = name.cstr();
+      let ty = LLVMStructCreateNamed(self.ctx, name_c.ptr());
+      name_c.drop();
+      return ty;
     }
 
     func getTrue(self): LLVMOpaqueValue*{
-        let boolType = LLVMIntTypeInContext(self.ctx, 1);
-        return LLVMConstInt(boolType, 1, 0);
+      let boolType = LLVMIntTypeInContext(self.ctx, 1);
+      return LLVMConstInt(boolType, 1, 0);
     }
     func getFalse(self): LLVMOpaqueValue*{
-        let boolType = LLVMIntTypeInContext(self.ctx, 1);
-        return LLVMConstInt(boolType, 0, 0);
+      let boolType = LLVMIntTypeInContext(self.ctx, 1);
+      return LLVMConstInt(boolType, 0, 0);
     }
     func makeInt(self, val: i64, bits: i32): LLVMOpaqueValue*{
-        let ty = LLVMIntTypeInContext(self.ctx, bits);
-        return LLVMConstInt(ty, val, 0);
+      let ty = LLVMIntTypeInContext(self.ctx, bits);
+      return LLVMConstInt(ty, val, 0);
     }
+    func makeFloat(self, val: f64): LLVMOpaqueValue*{
+      let ty = LLVMFloatTypeInContext(self.ctx);
+      return LLVMConstReal(ty, val);
+    }
+    func makeDouble(self, val: f64): LLVMOpaqueValue*{
+      let ty = LLVMDoubleTypeInContext(self.ctx);
+      return LLVMConstReal(ty, val);
+    }    
     func intTy(self, bits: i32): LLVMOpaqueType*{
       return LLVMIntTypeInContext(self.ctx, bits);
     }
     func intPtr(self, bits: i32): LLVMOpaqueType*{
       return LLVMPointerType(LLVMIntTypeInContext(self.ctx, bits), 0);
+    }
+
+    func sizeOf(self, val: LLVMOpaqueValue*): i64{
+      let ty = LLVMTypeOf(val);
+      return self.sizeOf(ty);
     }
     
     func sizeOf(self, ty: LLVMOpaqueType*): i64{
@@ -480,6 +694,37 @@ impl Emitter{
         indices.ptr(),
         2
       );
+      cs.drop();
       return res;
+    }
+
+    func make_stdout(self): LLVMOpaqueValue*{
+       let ty = LLVMPointerTypeInContext(self.ctx, 0);
+       let res = LLVMAddGlobal(self.module, ty, "stdout".ptr());
+       LLVMSetLinkage(res, LLVMLinkage::LLVMExternalLinkage{}.int());
+       return res;
+    }
+
+    func gep_ptr(self, type: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, i1: LLVMOpaqueValue*): LLVMOpaqueValue*{
+      let idx = [i1 as LLVMOpaqueValue*];
+      return LLVMBuildGEP2(self.builder, type, ptr, idx.ptr(), 1, "".ptr());
+    }
+
+    func gep_arr(self, type: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, i1: i32, i2: i32): LLVMOpaqueValue*{
+      return self.gep_arr(type, ptr, self.makeInt(i1, 64), self.makeInt(i2, 64));
+    }
+
+    func gep_arr(self, type: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, i1: LLVMOpaqueValue*, i2: LLVMOpaqueValue*): LLVMOpaqueValue*{
+      let args = [i1, i2];
+      return LLVMBuildInBoundsGEP2(self.builder, type, ptr, args.ptr(), 2, "".ptr());
+    }
+
+    func isPtr(self, val: LLVMOpaqueValue*): bool{
+      let ty = LLVMTypeOf(val);
+      return LLVMGetTypeKind(ty) == LLVMTypeKind::LLVMPointerTypeKind{}.int();
+    }
+
+    func loadPtr(self, val: LLVMOpaqueValue*): LLVMOpaqueValue*{
+      return LLVMBuildLoad2(self.builder, LLVMPointerTypeInContext(self.ctx, 0), val, "".ptr());
     }
 }
