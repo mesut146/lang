@@ -480,7 +480,7 @@ extern{
     func LLVMBuildInBoundsGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildStructGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: i32, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildICmp(B: LLVMOpaqueBuilder*, Op: i32, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
-    func LLVMBuildFCmp(B: LLVMOpaqueBuilder*, Op: LLVMRealPredicate, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFCmp(B: LLVMOpaqueBuilder*, Op: i32 /*LLVMRealPredicate*/, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildBr(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*): LLVMOpaqueValue*;
     func LLVMBuildCondBr(B: LLVMOpaqueBuilder*, cond: LLVMOpaqueValue*, then: LLVMOpaqueBasicBlock*, els: LLVMOpaqueBasicBlock*): LLVMOpaqueValue*;
     func LLVMBuildRetVoid(B: LLVMOpaqueBuilder*): LLVMOpaqueValue*;
@@ -500,8 +500,10 @@ extern{
     func LLVMBuildPtrToInt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildSExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildZExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFPExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildTrunc(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     
+    //infix
     func LLVMBuildAdd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildFAdd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildNSWAdd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
@@ -509,10 +511,20 @@ extern{
     func LLVMBuildFSub(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildNSWSub(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildMul(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFMul(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildNSWMul(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFDiv(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSDiv(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildUDiv(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFRem(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildURem(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSRem(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildAnd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildOr(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildXor(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildShl(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildAShr(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
+    
     func LLVMBuildFNeg(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildNeg(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
     func LLVMBuildNot(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
@@ -567,6 +579,19 @@ extern{
                                 Directory: i8*,
                                 DirectoryLen: i64): LLVMOpaqueMetadata*;
   func LLVMDIBuilderCreateLexicalBlock(builder: LLVMOpaqueDIBuilder*, scope: LLVMOpaqueMetadata*, file: LLVMOpaqueMetadata, line: i32, column: i32): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderCreateGlobalVariableExpression( Builder: LLVMOpaqueDIBuilder*,
+                                                    Scope: LLVMOpaqueMetadata*,
+                                                    Name: i8*,
+                                                    NameLen: i64,
+                                                    Linkage: i8*,
+                                                    LinkLen: i64, 
+                                                    File: LLVMOpaqueMetadata*,
+                                                    LineNo: i32,
+                                                    Ty: LLVMOpaqueMetadata*,
+                                                    LocalToUnit: LLVMBool,
+                                                    Expr: LLVMOpaqueMetadata*,
+                                                    Decl: LLVMOpaqueMetadata*,
+                                                    AlignInBits: i32): LLVMOpaqueMetadata*;
 }
 
 struct Emitter{

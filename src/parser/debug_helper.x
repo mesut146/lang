@@ -159,11 +159,11 @@ impl DebugInfo{
       name_c.drop();
     }
 
-    func dbg_glob(self, gl: Global*, ty: Type*, gv: LLVMOpaqueValue*, c: Compiler*): DIGlobalVariableExpression*{
+    func dbg_glob(self, gl: Global*, ty: Type*, gv: LLVMOpaqueValue*, c: Compiler*): LLVMOpaqueMetadata*{
       let scope = self.cu as DIScope*;
       let di_type = self.map_di(ty, c);
       let name_c = gl.name.clone().cstr();
-      let gve = createGlobalVariableExpression(scope, name_c.ptr(), name_c.ptr(), self.file, gl.line, di_type);
+      let gve = LLVMDIBuilderCreateGlobalVariableExpression(self.builder, scope, name_c.ptr(), name_c.len(), name_c.ptr(), name_c.len(), self.file, gl.line, di_type, LLVMBoolFalse(), expr,decl, 0);
       name_c.drop();
       addDebugInfo(gv, gve);
       return gve;
