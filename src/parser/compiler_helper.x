@@ -726,7 +726,7 @@ impl Compiler{
     if(src_size < trg_size){
       if(is_unsigned){
         src_type.drop();
-        return CreateZExt(val, trg_ty);
+        return LLVMBuildZExt(ll.builder, val, trg_ty, "".ptr());
       }else{
         src_type.drop();
         return LLVMBuildSExt(ll.builder, val, trg_ty, "".ptr());

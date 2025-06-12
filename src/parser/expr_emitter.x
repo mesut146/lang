@@ -811,43 +811,43 @@ impl Compiler{
       if(op.eq("+")) return val;
       if(op.eq("!")){
         val = LLVMBuildTrunc(ll.builder, val, ll.intTy(1), "".ptr());
-        val = LLVMBuildXor(ll.builder, val, getTrue(), "".ptr());
-        return CreateZExt(val, ll.intTy(8));
+        val = LLVMBuildXor(ll.builder, val, ll.getTrue(), "".ptr());
+        return LLVMBuildZExt(ll.builder, val, ll.intTy(8), "".ptr());
       }
       let bits = self.ll.get().sizeOf(val) as i32;
       let type = self.getType(e);
       if(op.eq("-")){
         if(type.is_float()){
           type.drop();
-          return CreateFNeg(val);
+          return LLVMBuildFNeg(ll.builder, val, "".ptr());
         }
         type.drop();
-        return CreateNSWSub(ll.makeInt(0, bits) , val);
+        return LLVMBuildNSWSub(ll.builder, ll.makeInt(0, bits) , val, "".ptr());
       }
       if(op.eq("++")){
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
-          let res = CreateFAdd(val, makeFloat_one(&type, ll));
+          let res = LLVMBuildFAdd(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
           LLVMBuildStore(ll.builder, res, var_ptr);
           return res;
         }
         if(type.is_unsigned()){
-          let res = CreateAdd(val, ll.makeInt(1, bits) );
+          let res = LLVMBuildAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
           LLVMBuildStore(ll.builder, res, var_ptr);
           return res;
         }
-        let res = CreateNSWAdd(val, ll.makeInt(1, bits) );
+        let res = LLVMBuildNSWAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
         LLVMBuildStore(ll.builder, res, var_ptr);
         return res;
       }
       if(op.eq("--")){
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
-          let res = CreateFSub(val, makeFloat_one(&type, ll));
+          let res = LLVMBuildFSub(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
           LLVMBuildStore(ll.builder, res, var_ptr);
           return res;
         }
-        let res = CreateNSWSub(val, ll.makeInt(1, bits) );
+        let res = LLVMBuildNSWSub(ll.builder, val, ll.makeInt(1, bits), "".ptr());
         LLVMBuildStore(ll.builder, res, var_ptr);
         return res;
       }
@@ -863,6 +863,7 @@ impl Compiler{
 
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): LLVMOpaqueValue*{
         let resolver = self.get_resolver();
+        let ll = self.ll.get();
         if(Resolver::is_call(mc, "ptr", "deref")){
           let arg_ptr = self.get_obj_ptr(mc.args.get(0));
           let type = self.getType(expr);
@@ -893,11 +894,11 @@ impl Compiler{
           let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
           self.copy(trg_ptr, val, &elem_type);
           elem_type.drop();
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         if(Resolver::is_call(mc, "std", "unreachable")){
           LLVMBuildUnreachable(ll.builder);
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         if(Resolver::is_call(mc, "std", "internal_block")){
           let arg = mc.args.get(0).print();
@@ -905,7 +906,7 @@ impl Compiler{
           let blk: Block* = *resolver.block_map.get(&id).unwrap();
           self.visit_block(blk);
           arg.drop();
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         if(Resolver::is_call(mc, "std", "typeof")){
           let arg = mc.args.get(0);
@@ -920,7 +921,7 @@ impl Compiler{
         if(Resolver::is_call(mc, "std", "no_drop")){
           let arg = mc.args.get(0);
           self.own.get().do_move(arg);
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         let info = resolver.format_map.get(&expr.id);
         if(info.is_none()){
@@ -928,7 +929,7 @@ impl Compiler{
         }
         let res = self.visit_block(&info.unwrap().block);
         if(res.is_some()) return res.unwrap();
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
     }
 
     func visit_call(self, expr: Expr*, mc: Call*): LLVMOpaqueValue*{
@@ -944,14 +945,14 @@ impl Compiler{
           //let arg = mc.scope.get();
           //self.own.get().do_move(arg);
           list.drop();
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         list.drop();
       }
       if(Resolver::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       //////////////////////////////////////
       if(Resolver::is_call(mc, "ptr", "deref")){
@@ -984,11 +985,11 @@ impl Compiler{
         let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
         self.copy(trg_ptr, val, &elem_type);
         elem_type.drop();
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_call(mc, "std", "unreachable")){
         LLVMBuildUnreachable(ll.builder);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_call(mc, "std", "internal_block")){
         let arg = mc.args.get(0).print();
@@ -996,7 +997,7 @@ impl Compiler{
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit_block(blk);
         arg.drop();
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_call(mc, "std", "typeof")){
         let arg = mc.args.get(0);
@@ -1011,7 +1012,7 @@ impl Compiler{
       if(Resolver::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       /// /////////////////////////////
       let mac = resolver.format_map.get(&expr.id);
@@ -1020,12 +1021,12 @@ impl Compiler{
         if(res.is_some()){
           return res.unwrap();
         }
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_call(mc, "std", "print_type")){
         let info = resolver.format_map.get(&expr.id).unwrap();
@@ -1036,12 +1037,12 @@ impl Compiler{
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
           argt.drop();
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         let helper = DropHelper{resolver};
         if(!helper.is_drop_type(&argt)){
           argt.drop();
-          return LLVMVoidTypeInContext(ll.ctx);
+          return ptr::null<LLVMOpaqueValue>();
         }
         argt.drop();
       }
@@ -1061,13 +1062,13 @@ impl Compiler{
       if(Resolver::is_call(mc, "std", "is_ptr")){
         let ty = mc.type_args.get(0);
         if(ty.is_pointer()){
-          return getTrue();
+          return ll.getTrue();
         }
-        return getFalse();
+        return ll.getFalse();
       }
       if(Resolver::is_printf(mc)){
         self.call_printf(mc);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_sprintf(mc)){
         return self.call_sprintf(mc);
@@ -1075,12 +1076,12 @@ impl Compiler{
       if(Resolver::is_print(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_panic(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
@@ -1091,7 +1092,7 @@ impl Compiler{
       if(Resolver::is_assert(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return LLVMVoidTypeInContext(ll.ctx);
+        return ptr::null<LLVMOpaqueValue>();
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
@@ -1099,18 +1100,17 @@ impl Compiler{
         i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get(0)) / 8;
-            size = CreateNSWMul(size, ll.makeInt(typeSize, 64) );
+            size = LLVMBuildNSWMul(ll.builder, size, ll.makeInt(typeSize, 64), "".ptr());
         }
         let proto = self.protos.get().libc("malloc");
-        let args = vector_Value_new();
-        vector_Value_push(args, size);
-        let res = CreateCall(proto, args);
-        vector_Value_delete(args);
+        let args = [size];
+        let ft = LLVMTypeOf(proto);
+        let res = LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), 1, "".ptr());
         return res;
       }
       if(Resolver::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
-        return ConstantPointerNull_get(LLVMPointerType(ty, 0));
+        return LLVMConstNull(LLVMPointerType(ty, 0));
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
@@ -1139,12 +1139,13 @@ impl Compiler{
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
         let ptr = LLVMBuildStructGEP2(ll.builder,  sliceType, sl,  SLICE_PTR_INDEX(), "".ptr());
-        return LLVMBuildLoad2(ll.builder, getPtr(), ptr, "".ptr());
+        return ll.loadPtr(ptr);
       }
       return self.visit_call2(expr, mc);
     }
     func visit_call2(self, expr: Expr*, mc: Call*): LLVMOpaqueValue*{
       let resolver = self.get_resolver();
+      let ll = self.ll.get();
       let rt = resolver.visit(expr);
       if(rt.fp_info.is_some()){
           let ft = rt.fp_info.get();
@@ -1495,7 +1496,7 @@ impl Compiler{
       }else{
         rv = Option::new(self.loadPrim(r));
       }
-      let rbit = CreateZExt(rv.unwrap(), ll.intTy(8));
+      let rbit = LLVMBuildZExt(ll.builder, rv.unwrap(), ll.intTy(8), "".ptr());
       LLVMBuildBr(ll.builder, next);
       LLVMPositionBuilderAtEnd(ll.builder, next);
       let phi = LLVMBuildPhi(ll.builder, ll.intTy(8), "".ptr());
@@ -1505,7 +1506,7 @@ impl Compiler{
       }
       LLVMAddIncoming(phi, &ll.makeInt(i8val, 8), &bb, "");
       LLVMAddIncoming(phi, &rbit, &then, 1);
-      return Pair::new(CreateZExt(phi , ll.intTy(8)), next);
+      return Pair::new(LLVMBuildZExt(ll.builder, phi , ll.intTy(8), "".ptr()), next);
     }
     
     func visit_lit(self, expr: Expr*, node: Literal*): LLVMOpaqueValue*{
