@@ -323,7 +323,7 @@ impl Compiler{
     }
     let res = LLVMFunctionType(ret, args.ptr(), ft.params.len() as i32, LLVMBoolFalse());
     args.drop();
-    return res as llvm_FunctionType*;
+    return res;
   }
   func make_proto(self, ft: LambdaType*): LLVMOpaqueType*{
     let ret = self.mapType(ft.return_type.get());
@@ -336,13 +336,13 @@ impl Compiler{
     }
     let res = LLVMFunctionType(ret, args.ptr(), args.len() as i32, LLVMBoolFalse());
     args.drop();
-    return res as llvm_FunctionType*;
+    return res;
   }
   func mapType(self, type: Type*): LLVMOpaqueType*{
     let r = self.get_resolver();
     let rt = r.visit_type(type);
     let str = rt.type.print();
-    let res = self.mapType(&rt);
+    let res = self.mapType2(&rt);
     rt.drop();
     str.drop();
     return res;
@@ -406,7 +406,6 @@ impl Compiler{
         }
         let res = p.get(&s);
         s.drop();
-        type2.drop();
         return res as LLVMOpaqueType*;
       }
     }
@@ -434,7 +433,7 @@ impl Compiler{
     //fill with elems
     for(let i = 0;i < list.len();++i){
       let decl = *list.get(i);
-      self.fill_decl(decl, p.get(decl) as StructType*);
+      self.fill_decl(decl, p.get(decl));
     }
     if(self.llvm.di.get().debug){
       //di proto
@@ -484,11 +483,11 @@ impl Compiler{
         for(let i = 0;i < variants.len();++i){
           let ev = variants.get(i);
           let name = format("{:?}::{}", decl.type, ev.name.str());
-          let var_ty = p.get(&name) as StructType*;
+          let var_ty = p.get(&name);
           self.make_variant_type(ev, decl, &name, var_ty);
-          let variant_size = getSizeInBits(var_ty);
+          let variant_size = ll.sizeOf(var_ty);
           if(variant_size > max){
-            max = variant_size;
+            max = variant_size as i32;
           }
           name.drop();
         }
@@ -513,7 +512,7 @@ impl Compiler{
         }
       }
     }
-    LLVMStructSetBody(st as LLVMOpaqueType*, elems.ptr(), elems.len() as i32, 0);
+    LLVMStructSetBody(st, elems.ptr(), elems.len() as i32, 0);
     elems.drop();
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: LLVMOpaqueType*){
@@ -526,12 +525,13 @@ impl Compiler{
       let ft = self.mapType(&fd.type);
       elems.add(ft);
     }
-    setBody(ty, elems);
+    LLVMStructSetBody(ty, elems.ptr(), elems.len() as i32, 0);
     elems.drop();
   }
 
   func make_proto(self, m: Method*): Option<LLVMOpaqueValue*>{
     if(true) return self.make_proto2(m);
+    let ll = self.ll.get();
     if(m.is_generic) return Option<LLVMOpaqueValue*>::new();
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
@@ -540,43 +540,47 @@ impl Compiler{
     }
     let sig = MethodSig::new(m, self.get_resolver());
     let rvo = is_struct(&m.type);
-    let ret = getVoidTy();
+    let ret = LLVMVoidTypeInContext(ll.ctx);
     if(is_main(m)){
       ret = ll.intTy(32);
     }else if(!rvo){
       ret = self.mapType(&sig.ret);
     }
-    let args = vector_Type_new();
+    let args = List<LLVMOpaqueType*>::new();
     if(rvo){
-      let rvo_ty = getPointerTo(self.mapType(&sig.ret));
-      vector_Type_push(args, rvo_ty);
+      let rvo_ty = LLVMPointerType(self.mapType(&sig.ret), 0);
+      args.add(rvo_ty);
     }
     for prm_type in &sig.params{
       let pt = self.mapType(prm_type);
       if(is_struct(prm_type)){
-        vector_Type_push(args, getPointerTo(pt));
+        args.add(LLVMPointerType(pt, 0));
       }else{
-        vector_Type_push(args, pt);
+        args.add(pt);
       }
     }
-    let ft = make_ft(ret, args, m.is_vararg);
-    let linkage = ext();
+    let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
+    let linkage = LLVMLinkage::LLVMExternalLinkage;
     if(!m.type_params.empty()){
-      linkage = odr();
+      linkage = LLVMLinkage::LLVMLinkOnceODRLinkage;
     }else if let Parent::Impl(info)=&m.parent{
       if(info.type.is_simple() && !info.type.get_args().empty()){
-        linkage = odr();
+        linkage = LLVMLinkage::LLVMLinkOnceODRLinkage;
       }
     }
     let mangled_c = mangled.clone().cstr();
-    let f = make_func(ft, linkage, mangled_c.ptr());
+    let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+    LLVMSetLinkage(f, linkage.int());
     if(rvo){
-      let arg = get_arg(f, 0);
-      Argument_setname(arg, "ret".ptr());
-      Argument_setsret(arg, self.mapType(&sig.ret));
+      let arg = LLVMGetParam(f, 0);
+      LLVMSetValueName2(arg, "_ret".ptr(), 3);
+      //Argument_setsret(arg, self.mapType(&sig.ret));
+      let kind= LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
+      let attr = LLVMCreateTypeAttribute(ll.ctx, kind, self.mapType(&sig.ret));
+      LLVMAddAttributeAtIndex(f, 1, attr);
     }
     self.protos.get().funcMap.add(mangled, f);
-    vector_Type_delete(args);
+    args.drop();
     mangled_c.drop();
     sig.drop();
     return Option::new(f);
@@ -627,7 +631,8 @@ impl Compiler{
       let arg = LLVMGetParam(f, 0);
       LLVMSetValueName2(arg, "ret".ptr(), 3);
       let sret = LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
-      LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
+      let attr = LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
+      LLVMAddAttributeAtIndex(f, 1, attr);
     }
     self.protos.get().funcMap.add(mangled, f);
     args.drop();
@@ -637,13 +642,14 @@ impl Compiler{
   }
 
   func getSize(self, type: Type*): i64{
+    let ll = self.ll.get();
     match type{
       Type::Pointer(bx) => return POINTER_SIZE,
       Type::Function(bx) => return POINTER_SIZE,
       Type::Lambda(bx) => return POINTER_SIZE,
       Type::Slice(bx) => {
         let st = self.protos.get().std("slice");
-        return getSizeInBits(st);
+        return ll.sizeOf(st);
         //return self.ll.get().sizeOf(st as LLVMOpaqueType*);
       },
       Type::Array(elem, size) => {
@@ -653,7 +659,7 @@ impl Compiler{
         let rt = self.get_resolver().visit_type(type);
         let mapped = self.mapType(&rt.type);
         rt.drop();
-        return getSizeInBits(mapped as StructType*);
+        return ll.sizeOf(mapped);
       },
       Type::Simple(smp) => {
         if(type.is_prim()){
@@ -673,19 +679,13 @@ impl Compiler{
 
   func getSize(self, decl: Decl*): i64{
     let mapped = self.mapType(&decl.type);
-    return getSizeInBits(mapped as StructType*);
+    return self.ll.get().sizeOf(mapped);
   }
 
   func cast(self, expr: Expr*, target_type: Type*): LLVMOpaqueValue*{
+    let ll = self.ll.get();
     let src_type = self.get_resolver().getType(expr);
     let val = self.loadPrim(expr);
-    /*if(src_type.eq(target_type)){
-      if(src_type.eq("bool")){
-
-      }
-      src_type.drop();
-      return val;
-    }*/
     let is_unsigned = isUnsigned(&src_type);
     let target_ty = self.mapType(target_type);
 
@@ -694,33 +694,33 @@ impl Compiler{
         if(src_type.eq("f32")){
           //f32 -> f64
           src_type.drop();
-          return CreateFPExt(val, target_ty);
+          return LLVMBuildFPExt(ll.builder, val, target_ty, "".ptr());
         }else{
           //f64 -> f32
           src_type.drop();
-          return CreateFPTrunc(val, target_ty);
+          return LLVMBuildFPTrunc(ll.builder, val, target_ty, "".ptr());
         }
       }else{
         if(is_unsigned){
           src_type.drop();
-          return CreateUIToFP(val, target_ty);
+          return LLVMBuildUIToFP(ll.builder, val, target_ty, "".ptr());
         }else{
           src_type.drop();
-          return CreateSIToFP(val, target_ty);
+          return LLVMBuildSIToFP(ll.builder, val, target_ty, "".ptr());
         }
       }
     }
     if(src_type.is_float()){
       if(is_unsigned){
         src_type.drop();
-        return CreateFPToUI(val, target_ty);
+        return LLVMBuildFPToUI(ll.builder, val, target_ty, "".ptr());
       }else{
         src_type.drop();
-        return CreateFPToSI(val, target_ty);
+        return LLVMBuildFPToSI(ll.builder, val, target_ty, "".ptr());
       }
     }
-    let val_ty = Value_getType(val);
-    let src_size = getPrimitiveSizeInBits(val_ty);
+    let val_ty = LLVMTypeOf(val);
+    let src_size = ll.sizeOf(val_ty);
     let trg_size = self.getSize(target_type);
     let trg_ty = ll.intTy(trg_size as i32);
     if(src_size < trg_size){
@@ -741,8 +741,9 @@ impl Compiler{
   
   func cast2(self, val: LLVMOpaqueValue*, src_type: Type*, target_type: Type*): LLVMOpaqueValue*{
     let is_unsigned = isUnsigned(src_type);
-    let val_ty = Value_getType(val);
-    let src_size = getPrimitiveSizeInBits(val_ty);
+    let ll = self.ll.get();
+    let val_ty = LLVMTypeOf(val);
+    let src_size = ll.sizeOf(val_ty);
     let trg_size = self.getSize(target_type);
     let trg_ty = ll.intTy(trg_size as i32);
     if(src_size < trg_size){
@@ -759,20 +760,22 @@ impl Compiler{
 
   func loadPrim(self, expr: Expr*): LLVMOpaqueValue*{
     let val = self.visit(expr);
-    let ty = Value_getType(val);
-    if(!isPointerTy(ty)) return val;
+    let ll = self.ll.get();
+    let ty = LLVMTypeOf(val);
+    if(!Emitter::isPtr(ty)) return val;
     let type = self.getType(expr);
     assert(is_loadable(&type));
-    let res = CreateLoad(self.mapType(&type), val);//local var
+    let res = LLVMBuildLoad2(ll.builder, self.mapType(&type), val, "".ptr());//local var
     type.drop();
     return res;
   }
 
   func loadPrim(self, val: LLVMOpaqueValue*, type: Type*): LLVMOpaqueValue*{
     assert(is_loadable(type));
-    let ty = Value_getType(val);
-    if(!isPointerTy(ty)) return val;
-    let res = CreateLoad(self.mapType(type), val);//local var
+    let ll = self.ll.get();
+    let ty = LLVMTypeOf(val);
+    if(!Emitter::isPtr(ty)) return val;
+    let res = LLVMBuildLoad2(ll.builder, self.mapType(type), val, "".ptr());//local var
     return res;
   }
 
@@ -786,6 +789,7 @@ impl Compiler{
   }
   func setField(self, expr: Expr*, rt: RType*, trg: LLVMOpaqueValue*, lhs: Option<Expr*>){
       let type = &rt.type;
+      let ll = self.ll.get();
       if(is_struct(type)){
         if(can_inline(expr, self.get_resolver())){
           //todo own drop_lhs
@@ -799,26 +803,29 @@ impl Compiler{
         self.copy(trg, val, type);
       }else if(type.is_any_pointer()){
         let val = self.get_obj_ptr(expr);
-        CreateStore(val, trg);
+        LLVMBuildStore(ll.builder, val, trg);
       }else{
         let val = self.cast(expr, type);
-        CreateStore(val, trg); 
+        LLVMBuildStore(ll.builder, val, trg); 
       }
   }
 
   //returns 1 bit for br
   func branch(self, expr: Expr*): LLVMOpaqueValue*{
     let val = self.loadPrim(expr);
+    let ll = self.ll.get();
     return LLVMBuildTrunc(ll.builder, val, ll.intTy(1), "".ptr());
   }
   //returns 1 bit for br
   func branch(self, val: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    let ll = self.ll.get();
     return LLVMBuildTrunc(ll.builder, val, ll.intTy(1), "".ptr());
   }
 
   func load(self, val: LLVMOpaqueValue*, ty: Type*): LLVMOpaqueValue*{
     let mapped = self.mapType(ty);
-    return CreateLoad(mapped, val);
+    let ll = self.ll.get();
+    return LLVMBuildLoad2(ll.builder, mapped, val, "".ptr());
   }
 
   func emit_as_arg(self, node: Expr*): LLVMOpaqueValue*{
@@ -907,7 +914,7 @@ impl Compiler{
       let ty = self.get_resolver().visit(node);
       if(ty.type.is_any_pointer() && !ty.is_method()){
         ty.drop();
-        return CreateLoad(getPtr(), val);
+        return self.ll.get().loadPtr(val);
       }
       ty.drop();
       return val;
@@ -938,13 +945,14 @@ impl Compiler{
 
   func getTag(self, expr: Expr*): LLVMOpaqueValue*{
     let rt = self.get_resolver().visit(expr);
+    let ll = self.ll.get();
     let decl = self.get_resolver().get_decl(&rt).unwrap();
     let tag_idx = get_tag_index(decl);
     let tag = self.get_obj_ptr(expr);
     let mapped = self.mapType(rt.type.deref_ptr());
     rt.drop();
-    tag = CreateStructGEP(tag, tag_idx, mapped);
-    return CreateLoad(ll.intTy(ENUM_TAG_BITS()), tag);
+    tag = LLVMBuildStructGEP2(ll.builder, mapped, tag, tag_idx, "".ptr());
+    return LLVMBuildLoad2(ll.builder, ll.intTy(ENUM_TAG_BITS()), tag, "".ptr());
   }
 
   func get_variant_ty(self, decl: Decl*, variant: Variant*): LLVMOpaqueType*{

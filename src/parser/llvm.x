@@ -59,6 +59,12 @@ enum LLVMVerifierFailureAction{
     LLVMPrintMessageAction,/* verifier will print to stderr and return 1 */
     LLVMReturnStatusAction /* verifier will just return 1 */
 }
+impl LLVMVerifierFailureAction{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
+
 enum LLVMCodeGenFileType{
     LLVMAssemblyFile, 	
     LLVMObjectFile
@@ -425,6 +431,7 @@ extern{
     func LLVMDumpModule(m: LLVMOpaqueModule*);
     func LLVMPrintModuleToFile(m: LLVMOpaqueModule*, Filename: i8*, ErrorMessage: i8**): i32;
     func LLVMVerifyModule(m: LLVMOpaqueModule*, action: LLVMVerifierFailureAction, msg: i8**): i32;
+    func LLVMVerifyFunction(fn: LLVMOpaqueValue*, act: i32/*LLVMVerifierFailureAction*/): i32 /*LLVMBool*/;
     func LLVMTargetMachineEmitToFile (T: LLVMOpaqueTargetMachine*, M: LLVMOpaqueModule*, Filename: i8*, codegen: LLVMCodeGenFileType, ErrorMessage: i8**): i32;
     func LLVMAddFunction(m: LLVMOpaqueModule*, name: i8*, ft: LLVMOpaqueType*): LLVMOpaqueValue*;
     func LLVMSetFunctionCallConv(fn: LLVMOpaqueValue*, cc: i32);
@@ -474,6 +481,7 @@ extern{
     func LLVMSetValueName2(val: LLVMOpaqueValue*, name: i8*, len: i64 /*size_t*/);
     func LLVMCreateTypeAttribute(c: LLVMOpaqueContext*, kind: i32, ty: LLVMOpaqueType*): LLVMOpaqueAttributeRef*;
     func LLVMGetEnumAttributeKindForName(name: i8*, len: i64): i32;
+    func LLVMAddAttributeAtIndex(f: LLVMOpaqueValue*, idx: i32, attr: LLVMOpaqueAttributeRef*);
       
     func LLVMConstGEP2(ty: LLVMOpaqueType*, val: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32): LLVMOpaqueValue*;
     func LLVMBuildGEP2(B: LLVMOpaqueBuilder*, ty: LLVMOpaqueType*, ptr: LLVMOpaqueValue*, idx: LLVMOpaqueValue**, cnt: i32, name: i8*): LLVMOpaqueValue*;
@@ -502,6 +510,11 @@ extern{
     func LLVMBuildZExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildFPExt(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     func LLVMBuildTrunc(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFPTrunc(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildUIToFP(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildSIToFP(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFPToUI(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
+    func LLVMBuildFPToSI(B: LLVMOpaqueBuilder*, val: LLVMOpaqueValue*, dest: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
     
     //infix
     func LLVMBuildAdd(B: LLVMOpaqueBuilder*, LHS: LLVMOpaqueValue*, RHS: LLVMOpaqueValue*, Name: i8*): LLVMOpaqueValue*;
@@ -534,7 +547,8 @@ extern{
 extern{
   func LLVMCreateDIBuilder(M: LLVMOpaqueModule*): LLVMOpaqueDIBuilder*;
   func LLVMGetSubprogram(fn: LLVMOpaqueValue*): LLVMOpaqueMetadata*;
-
+  
+  func LLVMDIBuilderCreateSubroutineType(B: LLVMOpaqueDIBuilder*, file: LLVMOpaqueMetadata*, params: LLVMOpaqueMetadata**, cnt: i32, flags: i32/*LLVMDIFlags*/): LLVMOpaqueMetadata*;
   func LLVMDIBuilderCreateFunction( B: LLVMOpaqueDIBuilder*,
                                     scope: LLVMOpaqueMetadata*,
                                     name: i8*, namelen: i64,
@@ -555,8 +569,8 @@ extern{
 
   func LLVMDIBuilderCreateCompileUnit(Builder: LLVMOpaqueDIBuilder*,
 		  	                              Lang: i32/*LLVMDWARFSourceLanguage*/,
-                                      FileRef: LLVMOpaqueMetadata,
-                                      Producer: i32,
+                                      FileRef: LLVMOpaqueMetadata*,
+                                      Producer: i8*,
                                       ProducerLen: i64,
                                       isOptimized: LLVMBool,
                                       Flags: i8*,
@@ -592,6 +606,9 @@ extern{
                                                     Expr: LLVMOpaqueMetadata*,
                                                     Decl: LLVMOpaqueMetadata*,
                                                     AlignInBits: i32): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderFinalizeSubprogram(B: LLVMOpaqueDIBuilder*, sp: LLVMOpaqueMetadata*);
+  func LLVMDIBuilderCreateDebugLocation(ctx: LLVMOpaqueContext*, line: i32, column: i32, sp: LLVMOpaqueMetadata*, inlined: LLVMOpaqueMetadata*);
+  func LLVMSetCurrentDebugLocation2(B: LLVMOpaqueBuilder*, loc: LLVMOpaqueMetadata*);
 }
 
 struct Emitter{
@@ -754,6 +771,10 @@ impl Emitter{
 
     func isPtr(self, val: LLVMOpaqueValue*): bool{
       let ty = LLVMTypeOf(val);
+      return LLVMGetTypeKind(ty) == LLVMTypeKind::LLVMPointerTypeKind{}.int();
+    }
+    
+    func isPtr(ty: LLVMOpaqueType*): bool{
       return LLVMGetTypeKind(ty) == LLVMTypeKind::LLVMPointerTypeKind{}.int();
     }
 

@@ -328,7 +328,6 @@ impl Compiler{
 
     methods.drop();
     llvm_file.drop();
-    outFile.drop();
     return outFile;
   }
 
@@ -394,7 +393,7 @@ impl Compiler{
         let name_c = gl.name.clone().cstr();
         // let glob = make_global(name_c.ptr(), ty, init);
         let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
-        LLVMSetInitializer(glob, init as LLVMOpaqueValue*);
+        LLVMSetInitializer(glob, init);
         self.globals.add(gl.name.clone(), glob );
         name_c.drop();
         continue;
@@ -403,8 +402,8 @@ impl Compiler{
       let ty = self.mapType(&rt.type);
       let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
-      let glob = LLVMAddGlobal(ll.module, ty as LLVMOpaqueType*, name_c.ptr());
-      LLVMSetInitializer(glob, init as LLVMOpaqueValue*);
+      let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
+      LLVMSetInitializer(glob, init);
       name_c.drop();
       if(self.llvm.di.get().debug){
         let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
@@ -424,10 +423,10 @@ impl Compiler{
     
     make_global_ctors2(proto as LLVMOpaqueValue*, ll);
 
-    CreateRetVoid();
+    LLVMBuildRetVoid(ll.builder);
     self.own.reset();
     self.llvm.di.get().finalize();
-    verifyFunction(proto);
+    LLVMVerifyFunction(proto, LLVMVerifierFailureAction::LLVMAbortProcessAction{}.int());
     //vector_Metadata_delete(globs);
     method.drop();
     globals.drop();
@@ -483,7 +482,8 @@ impl Compiler{
     }else{
       if(is_struct(&rt.type)){
         //init = ConstantStruct_get(ty as StructType*);
-        init = LLVMConstStructInContext(ll.ctx, ty as StructType*);
+        //init = LLVMConstStructInContext(ll.ctx, ty);
+        init = ptr::null<LLVMOpaqueValue>();
       }else{
         //prim or ptr
         init = ll.makeInt(0, self.getSize(&rt.type) as i32);
@@ -593,7 +593,7 @@ impl Compiler{
       }
     }
     self.llvm.di.get().finalize();
-    verifyFunction(proto);
+    LLVMVerifyFunction(proto, LLVMVerifierFailureAction::LLVMAbortProcessAction{}.int());
     self.own.drop();
     self.own = Option<Own>::new();
     self.ctx.prog.compile_end(m);

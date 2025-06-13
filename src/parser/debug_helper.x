@@ -19,15 +19,16 @@ func base_class_name(): str{
 }
 
 struct DebugInfo{
+    debug: bool;
+    ll: Emitter*;
+    builder: LLVMOpaqueDIBuilder*;
     cu: LLVMOpaqueMetadata*;
     file: LLVMOpaqueMetadata*;
     sp: Option<LLVMOpaqueMetadata*>;
     types: HashMap<String, LLVMOpaqueMetadata*>;
     incomplete_types: HashMap<String, LLVMOpaqueMetadata*>;
-    debug: bool;
     scopes: Stack<LLVMOpaqueMetadata*>;
     func_map: HashMap<String, LLVMOpaqueMetadata*>;
-    builder: LLVMOpaqueDIBuilder*;
 }
 
 func method_parent(m: Method*): Type*{
@@ -39,30 +40,37 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(path: str): DebugInfo{
-        init_dbg();
+    func new(path: str, ll: Emitter*): DebugInfo{
+        let builder = LLVMCreateDIBuilder(ll.module);
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
-        let file = createFile(path_c.ptr(), dir_c.ptr());
-        let file = LLVMDIBuilderCreateFile(self.builder, path_c.ptr(), path_c.len(), dir_c.ptr(), dir_c.len());
-        let cu = createCompileUnit(get_dwarf_cpp(), file);
+        let file = LLVMDIBuilderCreateFile(builder, path_c.ptr(), path_c.len(), dir_c.ptr(), dir_c.len());
+        let producer = "";
         let flags = "";
         let split = "";
         let DWOId = 0;
         let sysroot = "";
         let sdk = "";
-        let cu = LLVMDIBuilderCreateCompileUnit(self.builder, LLVMDIBuilderCreateCompileUnit::LLVMDWARFSourceLanguageC_plus_plus{}.int(), file, "".ptr(), 0, LLVMBoolFalse(), flags.ptr(), flags.len(), 1, split.ptr(), split.len(), LLVMDWARFEmissionKind::LLVMDWARFEmissionFull{}.int(), DWOId, LLVMBoolFalse(), LLVMBoolFalse(), sysroot.ptr(), sysroot.len(), sdk.ptr(), sdk.len());
+        let cu = LLVMDIBuilderCreateCompileUnit(builder, LLVMDWARFSourceLanguage::LLVMDWARFSourceLanguageC_plus_plus{}.int(), 
+             file, producer.ptr(), producer.len(), LLVMBoolFalse(), 
+            flags.ptr(), flags.len(),
+           1, split.ptr(), split.len(), 
+          LLVMDWARFEmissionKind::LLVMDWARFEmissionFull{}.int(),
+         DWOId, LLVMBoolFalse(), LLVMBoolFalse(), 
+        sysroot.ptr(), sysroot.len(), sdk.ptr(), sdk.len());
         let debug = !std::getenv("DEBUG").unwrap_or("1").eq("0");
         
         path_c.drop();
         dir_c.drop();
         return DebugInfo{
+          debug: debug,
+          ll: ll,
+          builder: builder,
           cu: cu,
           file: file,
           sp: Option<LLVMOpaqueMetadata*>::new(),
           types: HashMap<String, LLVMOpaqueMetadata*>::new(),
-          incomplete_types: HashMap<String, DICompositeType*>::new(),
-          debug: debug,
+          incomplete_types: HashMap<String, LLVMOpaqueMetadata*>::new(),
           scopes: Stack<LLVMOpaqueMetadata*>::new(),
           func_map: HashMap<String, LLVMOpaqueMetadata*>::new(),
         };
@@ -70,7 +78,7 @@ impl DebugInfo{
     
     func finalize(self){
         if (!self.debug) return;
-        finalizeSubprogram(self.sp.unwrap());
+        LLVMDIBuilderFinalizeSubprogram(self.builder, self.sp.unwrap());
         self.sp = Option<LLVMOpaqueMetadata*>::new();
     }
 
@@ -80,7 +88,8 @@ impl DebugInfo{
           //SetCurrentDebugLocation(self.cu as DIScope*, line, pos);
           panic("err no func for dbg");
         }
-        SetCurrentDebugLocation(self.get_scope(), line, pos);        
+        let loc = LLVMDIBuilderCreateDebugLocation(self.ll.ctx, line, pos, self.get_scope(), ptr::null<LLVMOpaqueMetadata>());
+        LLVMSetCurrentDebugLocation2(self.ll.builder, loc);        
     }
 
     func dbg_func(self, m: Method*, f: LLVMOpaqueValue*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
@@ -100,35 +109,36 @@ impl DebugInfo{
         }
         let opt = self.func_map.get(&linkage_name);
         if(opt.is_some()) return Option::new(*opt.unwrap());
-        let tys = vector_Metadata_new();
-        vector_Metadata_push(tys, self.map_di(&m.type, c) as Metadata*);
+        let tys = List<LLVMOpaqueMetadata*>::new();
+        tys.add(self.map_di(&m.type, c));
         if(m.self.is_some()){
           let st = self.map_di(&m.self.get().type, c);
-          vector_Metadata_push(tys, createObjectPointerType(st) as Metadata*);
+          tys.add(createObjectPointerType(st));
         }
         for prm in &m.params{
           let pt = self.map_di(&prm.type, c);
-          vector_Metadata_push(tys, pt as Metadata*);
+          tys.add(pt);
         }
         let path_c = m.path.clone().cstr();
-        let file = createFile(path_c.ptr(), ".".ptr());
+        let file = LLVMDIBuilderCreateFile(self.builder, path_c.ptr(), path_c.len(), ".".ptr(), 1);
         path_c.drop();
         //self.file = file;
-        let scope = file as DIScope*;
+        let scope = file;
         if(!m.parent.is_none()){
           let parent = method_parent(m);
-          scope = self.map_di(parent, c) as DIScope*;
+          scope = self.map_di(parent, c);
         }
-        let ft = createSubroutineType(tys);
+        let ft = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len() as i32, LLVMDIFlags::LLVMDIFlagZero{}.int());
         let flags = make_spflags(is_main(m));
         let name_c = m.name.clone().cstr();
         let linkage_name2 = linkage_name.clone();
         let linkage_c = linkage_name.cstr();
-        let sp = createFunction(scope, name_c.ptr(), linkage_c.ptr(), file, m.line, ft, flags);
+        let scopeline = m.line;
+        let sp = LLVMDIBuilderCreateFunction(self.builder, scope, name_c.ptr(), name_c.len(), linkage_c.ptr(), linkage_c.len(), file, m.line, ft, LLVMBoolFalse(), LLVMBoolTrue(), scopeline, flags, LLVMBoolFalse());
         self.func_map.add(linkage_name2, sp);
         name_c.drop();
         linkage_c.drop();
-        vector_Metadata_delete(tys);
+        tys.drop();
         return Option::new(sp);
     }
     
@@ -191,7 +201,7 @@ impl DebugInfo{
       self.scopes.push(scope);
     }
 
-    func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{
+    func map_di_proto(self, decl: Decl*, c: Compiler*): LLVMOpaqueMetadata*{
         let name: String = decl.type.print();
         let elems = vector_Metadata_new();
         let st_size = c.getSize(decl);
@@ -206,7 +216,7 @@ impl DebugInfo{
         return st;
     }
 
-    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: LLVMOpaqueMetadata*, var_size: i64, scope: DICompositeType*, var_off: i64): DIDerivedType*{
+    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: LLVMOpaqueMetadata*, file: LLVMOpaqueMetadata*, var_size: i64, scope: LLVMOpaqueMetadata*, var_off: i64): LLVMOpaqueMetadata*{
       let ev = decl.get_variants().get(var_idx);
       let name: String = format("{:?}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
@@ -216,14 +226,14 @@ impl DebugInfo{
       let st = createStructType(scope as DIScope*, name_c.ptr(), file, decl.line, var_size, elems);
       name_c.drop();
       //fill ty
-      let sl = getStructLayout(var_type as StructType*);
+      let sl = getStructLayout(var_type);
       let idx = 0;
       if(decl.base.is_some()){
         let base_ty = self.map_di(decl.base.get(), c);
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
         let mem = createMemberType(st as DIScope*, base_class_name().ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
-        vector_Metadata_push(elems, mem as Metadata*);
+        vector_Metadata_push(elems, mem);
         ++idx;
       }
       let fi = 0;
