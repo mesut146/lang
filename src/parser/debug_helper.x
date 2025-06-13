@@ -85,7 +85,7 @@ impl DebugInfo{
     func loc(self, line: i32, pos: i32) {
         if (!self.debug) return;
         if (self.sp.is_none()) {
-          //SetCurrentDebugLocation(self.cu as DIScope*, line, pos);
+          //SetCurrentDebugLocation(self.cu, line, pos);
           panic("err no func for dbg");
         }
         let loc = LLVMDIBuilderCreateDebugLocation(self.ll.ctx, line, pos, self.get_scope(), ptr::null<LLVMOpaqueMetadata>());
@@ -94,7 +94,7 @@ impl DebugInfo{
 
     func dbg_func(self, m: Method*, f: LLVMOpaqueValue*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
       let sp = self.dbg_func_proto(m, c).unwrap();
-      setSubprogram(f, sp);
+      LLVMSetSubprogram(f, sp);
       self.sp = Option<LLVMOpaqueMetadata*>::new(sp);
       self.loc(m.line, 0);
       return Option::new(sp);
@@ -113,7 +113,7 @@ impl DebugInfo{
         tys.add(self.map_di(&m.type, c));
         if(m.self.is_some()){
           let st = self.map_di(&m.self.get().type, c);
-          tys.add(createObjectPointerType(st));
+          tys.add(LLVMDIBuilderCreateObjectPointerType(self.builder, st, LLVMBoolFalse()));
         }
         for prm in &m.params{
           let pt = self.map_di(&prm.type, c);
@@ -129,12 +129,18 @@ impl DebugInfo{
           scope = self.map_di(parent, c);
         }
         let ft = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len() as i32, LLVMDIFlags::LLVMDIFlagZero{}.int());
-        let flags = make_spflags(is_main(m));
+        let flags = DISPFlags::SPFlagDefinition{}.int();
+        if(is_main(m)){
+          flags = flags | DISPFlags::SPFlagMainSubprogram{}.int();
+        }
         let name_c = m.name.clone().cstr();
         let linkage_name2 = linkage_name.clone();
         let linkage_c = linkage_name.cstr();
+        let IsLocalToUnit = LLVMBoolFalse();
+        let IsDefinition = LLVMBoolTrue();
         let scopeline = m.line;
-        let sp = LLVMDIBuilderCreateFunction(self.builder, scope, name_c.ptr(), name_c.len(), linkage_c.ptr(), linkage_c.len(), file, m.line, ft, LLVMBoolFalse(), LLVMBoolTrue(), scopeline, flags, LLVMBoolFalse());
+        let IsOptimized = LLVMBoolFalse();
+        let sp = LLVMDIBuilderCreateFunction(self.builder, scope, name_c.ptr(), name_c.len(), linkage_c.ptr(), linkage_c.len(), file, m.line, ft, IsLocalToUnit, IsDefinition, scopeline, flags, IsOptimized);
         self.func_map.add(linkage_name2, sp);
         name_c.drop();
         linkage_c.drop();
@@ -146,14 +152,20 @@ impl DebugInfo{
         if (!self.debug) return;
         let dt = self.map_di(&p.type, c);
         if(p.is_self && p.is_deref){
-          dt = createPointerType(dt, 64);
+          dt = LLVMDIBuilderCreatePointerType(self.builder, dt, 64, 0, 0, "".ptr(), 0);
         }
-        let scope = self.sp.unwrap() as DIScope*;
+        let scope = self.sp.unwrap();
         let name_c = p.name.clone().cstr();
-        let v = createParameterVariable(scope, name_c.ptr(), idx, self.file, p.line, dt, true, p.is_self);
+        let AlwaysPreserve = LLVMBoolTrue();
+        let flags = LLVMDIFlags::LLVMDIFlagZero{}.int();
+        if(p.is_self){
+          flags = flags | LLVMDIFlags::LLVMDIFlagArtificial{}.int();
+          flags = flags | LLVMDIFlags::LLVMDIFlagObjectPointer{}.int();
+        }
+        let v = LLVMDIBuilderCreateParameterVariable(self.builder, scope, name_c.ptr(), name_c.len(), idx, self.file, p.line, dt, AlwaysPreserve, flags);
         let val = *c.NamedValues.get(&p.name).unwrap();
-        let lc = DILocation_get(scope, p.line, p.pos);
-        insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+        let lc = LLVMDIBuilderCreateDebugLocation(self.ll.ctx, p.line, p.pos, scope, ptr::null<LLVMOpaqueMetadata>());
+        LLVMDIBuilderInsertDeclareRecordAtEnd(self.builder, val, v, LLVMDIBuilderCreateExpression(self.builder, ptr::null<i64>(), 0), lc, LLVMGetInsertBlock(self.ll.builder));
         name_c.drop();
     }
 
@@ -162,28 +174,32 @@ impl DebugInfo{
       let dt = self.map_di(type, c);
       let scope = self.get_scope();
       let name_c = name.clone().cstr();
-      let v = createAutoVariable(scope, name_c.ptr(), self.file, line, dt);
+      let AlwaysPreserve = LLVMBoolTrue();
+      let flags = LLVMDIFlags::LLVMDIFlagZero{}.int();
+      let v = LLVMDIBuilderCreateAutoVariable(self.builder, scope, name_c.ptr(), name_c.len(), self.file, line, dt, AlwaysPreserve, flags, 0);
       let val = *c.NamedValues.get(name).unwrap();
-      let lc = DILocation_get(scope, line, 0);
-      insertDeclare(val, v, createExpression(), lc, GetInsertBlock());
+      let lc = LLVMDIBuilderCreateDebugLocation(self.ll.ctx, line, 0, scope, ptr::null<LLVMOpaqueMetadata>());
+      LLVMDIBuilderInsertDeclareRecordAtEnd(self.builder, val, v, LLVMDIBuilderCreateExpression(self.builder, ptr::null<i64>(), 0), lc, LLVMGetInsertBlock(self.ll.builder));
       name_c.drop();
     }
 
     func dbg_glob(self, gl: Global*, ty: Type*, gv: LLVMOpaqueValue*, c: Compiler*): LLVMOpaqueMetadata*{
-      let scope = self.cu as DIScope*;
+      let scope = self.cu;
       let di_type = self.map_di(ty, c);
       let name_c = gl.name.clone().cstr();
-      let gve = LLVMDIBuilderCreateGlobalVariableExpression(self.builder, scope, name_c.ptr(), name_c.len(), name_c.ptr(), name_c.len(), self.file, gl.line, di_type, LLVMBoolFalse(), expr,decl, 0);
+      let expr = LLVMDIBuilderCreateExpression(self.builder, ptr::null<i64>(), 0);
+      let decl = ptr::null<LLVMOpaqueMetadata>();
+      let gve = LLVMDIBuilderCreateGlobalVariableExpression(self.builder, scope, name_c.ptr(), name_c.len(), name_c.ptr(), name_c.len(), self.file, gl.line, di_type, LLVMBoolFalse(), expr, decl, 0);
       name_c.drop();
-      addDebugInfo(gv, gve);
+      //LLVMAddMetadataToGlobal(gv, , gve);
       return gve;
     }
 
-    func get_scope(self): DIScope*{
+    func get_scope(self): LLVMOpaqueMetadata*{
       if(self.scopes.len() == 0){
-        return self.sp.unwrap() as DIScope*;
+        return self.sp.unwrap();
       }
-      return *self.scopes.top() as DIScope*;
+      return *self.scopes.top();
     }
 
     func new_scope(self, line: i32)/*: LLVMOpaqueMetadata*/{
@@ -203,16 +219,16 @@ impl DebugInfo{
 
     func map_di_proto(self, decl: Decl*, c: Compiler*): LLVMOpaqueMetadata*{
         let name: String = decl.type.print();
-        let elems = vector_Metadata_new();
+        let elems = [ptr::null<LLVMOpaqueMetadata>(); 0];
         let st_size = c.getSize(decl);
         let path_c = decl.path.clone().cstr();
         let name_c = name.clone().cstr();
         let file = createFile(path_c.ptr(), ".".ptr());
-        let st = createStructType(self.cu as DIScope*, name_c.ptr(), file, decl.line, st_size, elems);
+        let flags = ;
+        let st = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), file, decl.line, st_size, 0, flags, elems.ptr(), elems.len());
         self.incomplete_types.add(name, st);
         path_c.drop();
         name_c.drop();
-        vector_Metadata_delete(elems);
         return st;
     }
 
@@ -223,7 +239,7 @@ impl DebugInfo{
       let elems = vector_Metadata_new();
       //empty ty
       let name_c = name.clone().cstr();
-      let st = createStructType(scope as DIScope*, name_c.ptr(), file, decl.line, var_size, elems);
+      let st = LLVMDIBuilderCreateStructType(self.builder, scope, name_c.ptr(), file, decl.line, var_size, elems);
       name_c.drop();
       //fill ty
       let sl = getStructLayout(var_type);
@@ -232,7 +248,7 @@ impl DebugInfo{
         let base_ty = self.map_di(decl.base.get(), c);
         let base_size = DIType_getSizeInBits(base_ty);
         let off = 0;
-        let mem = createMemberType(st as DIScope*, base_class_name().ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
+        let mem = createMemberType(st, base_class_name().ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
         vector_Metadata_push(elems, mem);
         ++idx;
       }
@@ -246,7 +262,7 @@ impl DebugInfo{
         }else{
           format("_{}", fi).cstr()
         };
-        let mem = createMemberType(st as DIScope*, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
+        let mem = createMemberType(st, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
         fdname_c.drop();
         vector_Metadata_push(elems, mem as Metadata*);
         ++idx;
@@ -254,7 +270,7 @@ impl DebugInfo{
       }
       replaceElements(st, elems);
       let evname_c = ev.name.clone().cstr();
-      let res = createVariantMemberType(var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st);
+      let res = createVariantMemberType(var_part, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st);
       evname_c.drop();
       name.drop();
       vector_Metadata_delete(elems);
@@ -297,7 +313,7 @@ impl DebugInfo{
       path_c.drop();
       let elems = vector_Metadata_new();
       let base_ty = Option<LLVMOpaqueMetadata*>::new();
-      let scope = st as DIScope*;
+      let scope = st;
       if(decl.base.is_some()){
         let ty = self.map_di(decl.base.get(), c);
         base_ty = Option<LLVMOpaqueMetadata*>::new(ty);
@@ -387,6 +403,15 @@ impl DebugInfo{
       return res;
     }
 
+    func struct_ty(self, name: str, line: i32, size: i32, elems: [LLVMOpaqueMetadata*]): LLVMOpaqueMetadata*{
+      let name_c = name.cstr();
+      let flags = 0;
+      let RunTimeLang = 0;
+      let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags, ptr::null<LLVMOpaqueMetadata*>(), elems.ptr(), elems.len(), RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+      name_c.drop();
+      return res;
+    }
+
     func map_di_resolved(self, type: Type*, name: String*, c: Compiler*): LLVMOpaqueMetadata*{
       let opt1 = self.types.get(name);
       if(opt1.is_some()){
@@ -398,60 +423,63 @@ impl DebugInfo{
       }
       match type{
         Type::Pointer(elem) => {
-          return createPointerType(self.map_di(elem.get(), c), 64);
+          let name = "";
+          return LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, name.ptr(), name.len());
         },
         Type::Array(elem, count)=>{
-          let elems = vector_Metadata_new();
-          vector_Metadata_push(elems, getOrCreateSubrange(0, *count));
+          let elems = [LLVMDIBuilderGetOrCreateSubrange(self.builder, 0, *count)];
           let elem_ty = self.map_di(elem.get(), c);
           let size = c.getSize(type);
-          let res = createArrayType(size, elem_ty, elems);
-          vector_Metadata_delete(elems);
+          let align = 0;
+          let res = LLVMDIBuilderCreateArrayType(self.builder, size, align, elem_ty, elems.ptr(), elems.len() as i32);
           return res;
         },
         Type::Function(ft_box)=>{
-          let tys = vector_Metadata_new();
-          vector_Metadata_push(tys, self.map_di(&ft_box.get().return_type, c) as Metadata*);
+          let tys = List<LLVMOpaqueMetadata*>::new();
+          tys.add(self.map_di(&ft_box.get().return_type, c));
           for prm in & ft_box.get().params{
-            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+            tys.add(self.map_di(prm, c));
           }
-          let sp = createSubroutineType(tys);
-          vector_Metadata_delete(tys);
-          return createPointerType(sp, 64);
+          let file = self.file;
+          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len(), LLVMDIFlags::LLVMDIFlagZero{}.int());
+          let name = "";
+          tys.drop();
+          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, name.ptr(), name.len());
         },
         Type::Lambda(ft_box) => {
-          let tys = vector_Metadata_new();
-          vector_Metadata_push(tys, self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
+          let tys = List<LLVMOpaqueMetadata*>::new();
+          tys.add(self.map_di(ft_box.get().return_type.get(), c));
           for prm in & ft_box.get().params{
-            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+            tys.add(self.map_di(prm, c));
           }
           for prm in & ft_box.get().captured{
-            vector_Metadata_push(tys, self.map_di(prm, c) as Metadata*);
+            tys.add(self.map_di(prm, c));
           }
-          let sp = createSubroutineType(tys);
-          vector_Metadata_delete(tys);
-          return createPointerType(sp, 64);
+          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len(), LLVMDIFlags::LLVMDIFlagZero{}.int());
+          tys.drop();
+          let name = "";
+          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, name.ptr(), name.len());
         },
         Type::Slice(elem)=>{
+          let name = "";
           let size = c.getSize(type);
-          let elems = vector_Metadata_new();
           let line = 0;
           //ptr
-          let ptr_ty = createPointerType(self.map_di(elem.get(), c), 64);
+          let ptr_ty = LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, name.ptr(), name.len());
           let off = 0;
-          let flags = make_di_flags(false);
-          let ptr_mem = createMemberType(get_null_scope(), "ptr".ptr(), self.file, line, 64, off, flags, ptr_ty);
-          vector_Metadata_push(elems, ptr_mem as Metadata*);
+          let flags = 0;
+          let ptr_mem = LLVMDIBuilderCreateMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), "ptr".ptr(), 3, self.file, line, 64, 0, off, flags, ptr_ty);
           //len
           let bits: Type = as_type(SLICE_LEN_BITS());
           let len_ty = self.map_di(&bits, c);
           bits.drop();
-          let len_mem = createMemberType(get_null_scope(), "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
-          vector_Metadata_push(elems, len_mem as Metadata*);
-          let name_c = name.clone().cstr();
-          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems);
+          let len_mem = LLVMDIBuilderCreateMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), "len".ptr(), 3, self.file, line, SLICE_LEN_BITS(), 0, 64, flags, len_ty);
+          let name_c = "_slice".cstr();
+          let elems = [ptr_mem, len_mem];
+          let flags = 0;
+          let RunTimeLang = 0;
+          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags, ptr::null<LLVMOpaqueMetadata*>(), elems.ptr(), elems.len(), RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
           name_c.drop();
-          vector_Metadata_delete(elems);
           return res;
         },
         Type::Tuple(tt) => {
@@ -471,7 +499,7 @@ impl DebugInfo{
             ++idx;
             elem_name.drop();
           }
-          let res = createStructType(self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems);
+          let res = createStructType(self.cu, name_c.ptr(), self.file, line, size, elems);
           name_c.drop();
           vector_Metadata_delete(elems);
           return res;

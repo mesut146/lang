@@ -226,7 +226,7 @@ impl llvm_holder{
   func initModule(self, path: str, c: Compiler*){
     let name = getName(path);
     c.ll = Option::new(Emitter::new(getName(path)));
-    self.di = Option::new(DebugInfo::new(path));
+    self.di = Option::new(DebugInfo::new(path, c.ll.get()));
   }
 
   func init_llvm(){

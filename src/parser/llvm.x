@@ -9,8 +9,6 @@ func toLLVMBool(b: bool): i32{
   return 0;
 }
 
-type LLVMDWARFTypeEncoding = i32;
-
 struct LLVMOpaqueContext;
 struct LLVMOpaqueModule;
 struct LLVMTarget;
@@ -24,11 +22,13 @@ struct LLVMOpaqueBasicBlock;
 struct LLVMOpaqueAttributeRef;
 struct LLVMOpaqueMetadata;
 struct LLVMOpaqueDIBuilder;
+struct LLVMOpaqueDbgRecord;
 
 type LLVMTargetRef = LLVMTarget*;
 type LLVMTargetMachineRef = LLVMOpaqueTargetMachine*;
 type LLVMValueRef = LLVMOpaqueValue*;
 type LLVMTypeRef = LLVMOpaqueType*;
+type LLVMDWARFTypeEncoding = i32;
 
 enum LLVMCodeGenOptLevel{
     LLVMCodeGenLevelNone,
@@ -272,7 +272,10 @@ enum LLVMDIFlags{
 impl LLVMDIFlags{
   func int(self): i32{
     match self{
-      _=>panic("{:?}")
+      LLVMDIFlagZero => return 0,
+      LLVMDIFlagArtificial => return 1 << 6,
+      LLVMDIFlagObjectPointer => return 1 << 10,
+      _ => panic("{:?}")
     }
   }
 }
@@ -361,6 +364,33 @@ enum LLVMDWARFEmissionKind{
 impl LLVMDWARFEmissionKind{
   func int(self): i32{
     return *(self as i32*);
+  }
+}
+enum DISPFlags{
+  SPFlagZero /* = 0*/,
+  SPFlagVirtual /* = 1*/,
+  SPFlagPureVirtual /* = 2*/,
+  SPFlagLocalToUnit /*= (1 << 2)*/,
+  SPFlagDefinition /*= (1 << 3)*/,
+  SPFlagOptimized /*= (1 << 4)*/,
+  SPFlagPure /*= (1 << 5)*/,
+  SPFlagElemental /*= (1 << 6)*/,
+  SPFlagRecursive /*= (1 << 7)*/,
+  SPFlagMainSubprogram /*= (1 << 8)*/,
+  SPFlagDeleted /*= (1 << 9)*/,
+  SPFlagObjCDirect /*= (1 << 11)*/,
+  SPFlagLargest /*= (1 << 11)*/,
+  SPFlagNonvirtual /* = DISPFlags::SPFlagZero*/,
+  SPFlagVirtuality /* = DISPFlags::SPFlagVirtual | DISPFlags::SPFlagPureVirtual*/,
+}
+impl DISPFlags{
+  func int(self): i32{
+    match self{
+      DISPFlags::SPFlagZero => return 0,
+      DISPFlags::SPFlagDefinition => return 1 << 3,
+      DISPFlags::SPFlagMainSubprogram => return 1 << 8,
+      _ => panic("todo"),
+    }
   }
 }
 
@@ -562,6 +592,18 @@ extern{
                                     Flags: i32 /*LLVMDIFlags*/,
                                     IsOptimized: LLVMBool): LLVMOpaqueMetadata*;
 
+  func LLVMDIBuilderCreateParameterVariable(Builder: LLVMOpaqueDIBuilder*,
+                                            Scope: LLVMOpaqueMetadata*,
+                                            Name: i8*,
+                                            NameLen: i64,
+                                            ArgNo: i32,
+                                            File: LLVMOpaqueMetadata*,
+                                            LineNo: i32,
+                                            Ty: LLVMOpaqueMetadata*,
+                                            AlwaysPreserve: LLVMBool,
+                                            Flags: i32/*LLVMDIFlags */
+                                            ): LLVMOpaqueMetadata*;
+
   func LLVMDIBuilderCreateBasicType(B: LLVMOpaqueDIBuilder*,
                                     name: i8*, namelen: i64, bits: i64,
                                     encoding: LLVMDWARFTypeEncoding,
@@ -592,7 +634,7 @@ extern{
                                 FilenameLen: i64,
                                 Directory: i8*,
                                 DirectoryLen: i64): LLVMOpaqueMetadata*;
-  func LLVMDIBuilderCreateLexicalBlock(builder: LLVMOpaqueDIBuilder*, scope: LLVMOpaqueMetadata*, file: LLVMOpaqueMetadata, line: i32, column: i32): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderCreateLexicalBlock(builder: LLVMOpaqueDIBuilder*, scope: LLVMOpaqueMetadata*, file: LLVMOpaqueMetadata*, line: i32, column: i32): LLVMOpaqueMetadata*;
   func LLVMDIBuilderCreateGlobalVariableExpression( Builder: LLVMOpaqueDIBuilder*,
                                                     Scope: LLVMOpaqueMetadata*,
                                                     Name: i8*,
@@ -607,8 +649,72 @@ extern{
                                                     Decl: LLVMOpaqueMetadata*,
                                                     AlignInBits: i32): LLVMOpaqueMetadata*;
   func LLVMDIBuilderFinalizeSubprogram(B: LLVMOpaqueDIBuilder*, sp: LLVMOpaqueMetadata*);
-  func LLVMDIBuilderCreateDebugLocation(ctx: LLVMOpaqueContext*, line: i32, column: i32, sp: LLVMOpaqueMetadata*, inlined: LLVMOpaqueMetadata*);
+  func LLVMDIBuilderCreateDebugLocation(ctx: LLVMOpaqueContext*, line: i32, column: i32, sp: LLVMOpaqueMetadata*, inlined: LLVMOpaqueMetadata*): LLVMOpaqueMetadata*;
   func LLVMSetCurrentDebugLocation2(B: LLVMOpaqueBuilder*, loc: LLVMOpaqueMetadata*);
+  func LLVMSetSubprogram(Func: LLVMOpaqueValue*, SP: LLVMOpaqueMetadata*);
+  func LLVMDIBuilderCreateObjectPointerType(Builder: LLVMOpaqueDIBuilder*, Type: LLVMOpaqueMetadata*, Implicit: LLVMBool): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreatePointerType(Builder: LLVMOpaqueDIBuilder*,
+                                  PointeeTy: LLVMOpaqueMetadata*,
+                                  SizeInBits: i64,
+                                  AlignInBits: i64,
+                                  AddressSpace: i32,
+                                  Name: i8*,
+                                  NameLen: i64
+                                  ): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreateArrayType(Builder: LLVMOpaqueDIBuilder*, Size: i64, AlignInBits: i32, Ty: LLVMOpaqueMetadata*, Subscripts: LLVMOpaqueMetadata**, NumSubscripts: i32): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderGetOrCreateSubrange(Builder: LLVMOpaqueDIBuilder*, LowerBound: i64, Count: i64): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreateMemberType(Builder: LLVMOpaqueDIBuilder*,
+                                Scope: LLVMOpaqueMetadata*,
+                                Name: i8*,
+                                NameLen: i64,
+                                File: LLVMOpaqueMetadata*,
+                                LineNo: i32,
+                                SizeInBits: i64,
+                                AlignInBits: i32,
+                                OffsetInBits: i64,
+                                Flags: i32/*LLVMDIFlags*/,
+                                Ty: LLVMOpaqueMetadata*
+                                ): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderCreateStructType(Builder: LLVMOpaqueDIBuilder*,
+                                    Scope: LLVMOpaqueMetadata*,
+                                    Name: i8*,
+                                    NameLen: i64,
+                                    File: LLVMOpaqueMetadata*,
+                                    LineNumber: i32,
+                                    SizeInBits: i64,
+                                    AlignInBits: i32,
+                                    Flags: i32 /* LLVMDIFlags*/,
+                                    DerivedFrom: LLVMOpaqueMetadata*,
+                                    Elements: LLVMOpaqueMetadata**,
+                                    NumElements: i32,
+                                    RunTimeLang: i32,
+                                    VTableHolder: LLVMOpaqueMetadata*,
+                                    UniqueId: i8*,
+                                    UniqueIdLen: i64
+                                    ): LLVMOpaqueMetadata*;
+  func LLVMDIBuilderInsertDeclareRecordAtEnd(Builder: LLVMOpaqueDIBuilder*,
+                                            Storage: LLVMOpaqueValue*,
+                                            VarInfo: LLVMOpaqueMetadata*,
+                                            Expr: LLVMOpaqueMetadata*,
+                                            DebugLoc: LLVMOpaqueMetadata*,
+                                            Block: LLVMOpaqueBasicBlock*
+                                            ): LLVMOpaqueDbgRecord*;                                    
+  func LLVMDIBuilderCreateExpression(Builder: LLVMOpaqueDIBuilder*, Addr: i64*, Length: i64): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreateAutoVariable(Builder: LLVMOpaqueDIBuilder*,
+                                        Scope: LLVMOpaqueMetadata*,
+                                        Name: i8*,
+                                        NameLen: i64,
+                                        File: LLVMOpaqueMetadata*,
+                                        LineNo: i32,
+                                        Ty: LLVMOpaqueMetadata*,
+                                        AlwaysPreserve: LLVMBool,
+                                        Flags: i32/*LLVMDIFlags*/,
+                                        AlignInBits: i32 
+                                        ): LLVMOpaqueMetadata*;	
 }
 
 struct Emitter{
