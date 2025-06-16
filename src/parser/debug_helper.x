@@ -223,9 +223,9 @@ impl DebugInfo{
         let st_size = c.getSize(decl);
         let path_c = decl.path.clone().cstr();
         let name_c = name.clone().cstr();
-        let file = createFile(path_c.ptr(), ".".ptr());
-        let flags = ;
-        let st = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), file, decl.line, st_size, 0, flags, elems.ptr(), elems.len());
+        let file = LLVMDIBuilderCreateFile(self.builder, path_c.ptr(), path_c.len(), ".".ptr(), 1);
+        let flags = 0;
+        let st = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), file, decl.line, st_size, 0, flags, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
         self.incomplete_types.add(name, st);
         path_c.drop();
         name_c.drop();
@@ -236,44 +236,50 @@ impl DebugInfo{
       let ev = decl.get_variants().get(var_idx);
       let name: String = format("{:?}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name);
-      let elems = vector_Metadata_new();
+      let elems = List<LLVMOpaqueMetadata*>::new();
       //empty ty
       let name_c = name.clone().cstr();
-      let st = LLVMDIBuilderCreateStructType(self.builder, scope, name_c.ptr(), file, decl.line, var_size, elems);
-      name_c.drop();
+      let flags=0;
       //fill ty
-      let sl = getStructLayout(var_type);
+      //let sl = getStructLayout(var_type);
+      let dl = LLVMGetModuleDataLayout(self.ll.module);
       let idx = 0;
+      let scp = ptr::null<LLVMOpaqueMetadata>();
       if(decl.base.is_some()){
         let base_ty = self.map_di(decl.base.get(), c);
-        let base_size = DIType_getSizeInBits(base_ty);
+        let base_size = LLVMDITypeGetSizeInBits(base_ty);
         let off = 0;
-        let mem = createMemberType(st, base_class_name().ptr(), file, decl.line, base_size, off, make_di_flags(false), base_ty);
-        vector_Metadata_push(elems, mem);
+        let flagsm = 0;
+        let mem = LLVMDIBuilderCreateMemberType(self.builder, scp, base_class_name().ptr(), base_class_name().len(), file, decl.line, base_size, 0, off, flagsm, base_ty);
+        elems.add(mem);
         ++idx;
       }
       let fi = 0;
       for fd in &ev.fields{
         let fd_ty = self.map_di(&fd.type, c);
-        let off = getElementOffsetInBits(sl, idx);
-        let fd_size = DIType_getSizeInBits(fd_ty);
+        let off = LLVMOffsetOfElement(dl, var_type, idx);
+        let fd_size = LLVMDITypeGetSizeInBits(fd_ty);
         let fdname_c = if (fd.name.is_some()){
           fd.name.get().clone().cstr()
         }else{
           format("_{}", fi).cstr()
         };
-        let mem = createMemberType(st, fdname_c.ptr(), file, decl.line, fd_size, off, make_di_flags(false), fd_ty);
+        let flagsm = 0;
+        let mem = LLVMDIBuilderCreateMemberType(self.builder, scp, fdname_c.ptr(), fdname_c.len(), file, decl.line, fd_size, 0, off, flagsm, fd_ty);
         fdname_c.drop();
-        vector_Metadata_push(elems, mem as Metadata*);
+        elems.add(mem);
         ++idx;
         ++fi;
       }
-      replaceElements(st, elems);
+      let st = LLVMDIBuilderCreateStructType(self.builder, scope, name_c.ptr(), name_c.len(), file, decl.line, var_size, 0, flags, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+      
       let evname_c = ev.name.clone().cstr();
-      let res = createVariantMemberType(var_part, evname_c.ptr(), file, decl.line, var_size, var_off, var_idx, st);
+      let flagsm=0;
+      let res = LLVMDIBuilderCreateMemberType(self.builder, var_part, evname_c.ptr(), evname_c.len(), file, decl.line, var_size, 0, var_off, flagsm, st);//var_idx?
       evname_c.drop();
       name.drop();
-      vector_Metadata_delete(elems);
+      elems.drop();
+      name_c.drop();
       return res;
     }
 
@@ -289,7 +295,7 @@ impl DebugInfo{
       return res;
     }
 
-    func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: vector_Metadata*){
+    func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: List<LLVMOpaqueMetadata*>*){
       if(decl.type.is_generic()) return;
       if(decl.type.is_simple() && decl.type.as_simple().scope.is_some()){
         //todo
@@ -300,7 +306,7 @@ impl DebugInfo{
         for fun in &pr.a.methods{
           if(fun.is_generic) continue;
           let proto = self.dbg_func_proto(fun, c).unwrap();
-          vector_Metadata_push(elems, proto as Metadata*);
+          elems.add(proto);
         }
       }
     }
@@ -309,9 +315,9 @@ impl DebugInfo{
       let s = decl.type.print();
       let st = *self.incomplete_types.get(&s).unwrap();
       let path_c = decl.path.clone().cstr();
-      let file = createFile(path_c.ptr(), ".".ptr());
+      let file = LLVMDIBuilderCreateFile(self.builder, path_c.ptr(),path_c.len(), ".".ptr(), 1);
       path_c.drop();
-      let elems = vector_Metadata_new();
+      let elems = List<LLVMOpaqueMetadata*>::new();
       let base_ty = Option<LLVMOpaqueMetadata*>::new();
       let scope = st;
       if(decl.base.is_some()){
@@ -319,32 +325,31 @@ impl DebugInfo{
         base_ty = Option<LLVMOpaqueMetadata*>::new(ty);
       }
       let st_real = c.mapType(&decl.type);
-      //Type_dump(st_real);
-      let sl = getStructLayout(st_real as StructType*);
-      //print("st={} dl={}\n", getSizeInBits(st_real as StructType*), DataLayout_getTypeSizeInBits(st_real));
+      //let sl = getStructLayout(st_real as StructType*);
+      let dl = LLVMGetModuleDataLayout(self.ll.module);
       match decl{
         Decl::Struct(fields)=>{
           let idx = 0;
           if(decl.base.is_some()){
             let ty = *base_ty.get();
-            let size = DIType_getSizeInBits(ty);
+            let size = LLVMDITypeGetSizeInBits(ty);
             let off = 0;
-            let mem = createMemberType(scope, base_class_name().ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-            vector_Metadata_push(elems, mem as Metadata*);
+            let mem = LLVMDIBuilderCreateMemberType(self.builder, scope, base_class_name().ptr(), base_class_name().len(), file, decl.line, size, 0, off, 0, ty);
+            elems.add(mem);
             ++idx;
           }
           let fi = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
-            let size = DIType_getSizeInBits(ty);
-            let off = getElementOffsetInBits(sl, idx);
+            let size = LLVMDITypeGetSizeInBits(ty);
+            let off = LLVMOffsetOfElement(dl, idx);
             let name_c = if(fd.name.is_some()){
               fd.name.get().clone().cstr()
             }else{
               format("_{}", fi).cstr()
             };
-            let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-            vector_Metadata_push(elems, mem as Metadata*);
+            let mem = LLVMDIBuilderCreateMemberType(self.builder, scope, name_c.ptr(), name_c.len(), file, decl.line, size, 0, off, 0, ty);
+            elems.add(mem);
             ++idx;
             ++fi;
             name_c.drop();
@@ -355,11 +360,11 @@ impl DebugInfo{
           let idx = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
-            let size = DIType_getSizeInBits(ty);
-            let off = getElementOffsetInBits(sl, idx);
+            let size = LLVMDITypeGetSizeInBits(ty);
+            let off = LLVMOffsetOfElement(dl, idx);
             let name_c = format("_{}", idx).cstr();
-            let mem = createMemberType(scope, name_c.ptr(), file, decl.line, size, off, make_di_flags(false), ty);
-            vector_Metadata_push(elems, mem as Metadata*);
+            let mem = LLVMDIBuilderCreateMemberType(self.builder, scope, name_c.ptr(), name_c.len(), file, decl.line, size, 0,  off, 0, ty);
+            elems.add(mem);
             ++idx;
             name_c.drop();
           }
@@ -372,8 +377,9 @@ impl DebugInfo{
           let tag_ty0: Type = as_type(ENUM_TAG_BITS());
           let tag = self.map_di(&tag_ty0, c);
           tag_ty0.drop();
-          let disc = createMemberType(scope, "".ptr(), file, decl.line, data_size, tag_off, make_di_flags(true), tag);
-          let elems2 = vector_Metadata_new();
+          let fldesc = make_di_flags(true);
+          let disc = LLVMDIBuilderCreateMemberType(self.builder, scope, "".ptr(), 9,  file, decl.line, data_size, 0, tag_off, fldesc, tag);
+          let elems2 = List<LLVMOpaqueMetadata*>::new();
           let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
           //fill variant
           let var_idx = 1;
@@ -381,16 +387,16 @@ impl DebugInfo{
           for(let i = 0;i < variants.len();++i){
             let ev = variants.get(i);
             let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
-            vector_Metadata_push(elems2, var_type as Metadata*);
+            elems2.add(var_type);
           }
           replaceElements(var_part, elems2);
-          vector_Metadata_push(elems, var_part as Metadata*);
-          vector_Metadata_delete(elems2);
+          elems.add(var_part);
+          elems2.drop();
         },
       }
       replaceElements(st, elems);
       self.types.add(s, st);
-      vector_Metadata_delete(elems);
+      elems.drop();
       return st;
     }
 
@@ -486,40 +492,40 @@ impl DebugInfo{
           let name_c = mangleType(type).cstr();
           let line = 0;
           let size = c.getSize(type);
-          let elems = vector_Metadata_new();
+          let elems = List<LLVMOpaqueMetadata*>:: new();
           let idx = 0;
-          let sl = getStructLayout(c.mapType(type) as StructType*);
+          //let sl = getStructLayout(c.mapType(type) as StructType*);
           for elem in &tt.types{
             let elem_di = self.map_di(elem, c);
-            let off = getElementOffsetInBits(sl, idx);
-            let flags = make_di_flags(false);
+            let off = LLVMOffsetOfElement(sl, idx);
+            let flags = 0;
             let elem_name = format("_{}", idx).cstr();
-            let mem = createMemberType(get_null_scope(), elem_name.ptr(), self.file, line, size, off, flags, elem_di);
-            vector_Metadata_push(elems, mem as Metadata*);
+            let mem = LLVMDIBuilderCreateMemberType(self.builder, get_null_scope(), elem_name.ptr(), elem_name.len(), self.file, line, size, 0, off, flags, elem_di);
+            elems.add(mem);
             ++idx;
             elem_name.drop();
           }
-          let res = createStructType(self.cu, name_c.ptr(), self.file, line, size, elems);
+          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, 0, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len(), 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
           name_c.drop();
-          vector_Metadata_delete(elems);
+          elems.drop();
           return res;
         },
         Type::Simple(smp)=>{
-          if(name.eq("void")) return get_di_null();
+          if(name.eq("void")) return ptr::null<LLVMOpaqueMetadata>();
           if(name.eq("bool")){
-            return createBasicType(name, 8, DW_ATE_boolean());
+            return self.createBasicType(name, 8, DW_ATE_boolean());
           }
           if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
             let size = c.getSize(type);
-            return createBasicType(name, size, DW_ATE_signed());
+            return self.createBasicType(name, size, DW_ATE_signed());
           }
           if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
             let size = c.getSize(type);
-            return createBasicType(name, size, DW_ATE_unsigned());
+            return self.createBasicType(name, size, DW_ATE_unsigned());
           }
           if(name.eq("f32") || name.eq("f64")){
             let size = c.getSize(type);
-            return createBasicType(name, size, DW_ATE_float());
+            return self.createBasicType(name, size, DW_ATE_float());
           }
           //already mapped
           panic("map di {}\n", name);

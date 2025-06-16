@@ -448,6 +448,9 @@ extern{
     func LLVMTargetMachineOptionsSetCodeModel(Options: LLVMOpaqueTargetMachineOptions*, CodeModel: LLVMCodeModel);
     func LLVMGetTargetMachineCPU(T: LLVMOpaqueTargetMachine*): i8*;
     func LLVMGetTargetMachineTarget(tm: LLVMOpaqueTargetMachine*): LLVMTarget*;
+    func LLVMSetModuleDataLayout (m: LLVMOpaqueModule*, DL: LLVMOpaqueTargetData*);
+    func LLVMGetModuleDataLayout (m: LLVMOpaqueModule*): LLVMOpaqueTargetData*;
+    func LLVMOffsetOfElement(trg: LLVMOpaqueTargetData*, ty: LLVMOpaqueType*, elem: i32): i64;
 
     //ctx, module, func
     func LLVMContextCreate(): LLVMOpaqueContext*;
@@ -456,7 +459,7 @@ extern{
     func LLVMDisposeModule(m: LLVMOpaqueModule*);
     func LLVMSetTarget(m: LLVMOpaqueModule*, triple: i8*);
     func LLVMSetDataLayout(m: LLVMOpaqueModule*, DataLayoutStr: i8*);
-    func LLVMSetModuleDataLayout (m: LLVMOpaqueModule*, DL: LLVMOpaqueTargetData*);
+    
     func LLVMCreateTargetDataLayout(T: LLVMOpaqueTargetMachine*): LLVMOpaqueTargetData*;
     func LLVMDumpModule(m: LLVMOpaqueModule*);
     func LLVMPrintModuleToFile(m: LLVMOpaqueModule*, Filename: i8*, ErrorMessage: i8**): i32;
@@ -714,7 +717,8 @@ extern{
                                         AlwaysPreserve: LLVMBool,
                                         Flags: i32/*LLVMDIFlags*/,
                                         AlignInBits: i32 
-                                        ): LLVMOpaqueMetadata*;	
+                                        ): LLVMOpaqueMetadata*;
+  func LLVMDITypeGetSizeInBits(ty: LLVMOpaqueMetadata*): i64;
 }
 
 struct Emitter{
