@@ -68,37 +68,37 @@ func make_slice_type(ll: Emitter*): LLVMOpaqueType*{
     return res;
 }
 
-func make_printf(ll: Emitter*): LLVMOpaqueValue*{
+func make_printf(ll: Emitter*): FunctionInfo{
     let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
     let ret = LLVMIntTypeInContext(ll.ctx, 32);
     let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolTrue());
     let f = LLVMAddFunction(ll.module, "printf".ptr(), ft);
     LLVMSetFunctionCallConv(f, 0);
-    return f;
+    return FunctionInfo{f, ft};
 }
-func make_sprintf(ll: Emitter*): LLVMOpaqueValue*{
+func make_sprintf(ll: Emitter*): FunctionInfo{
   let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0), LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
   let ret = LLVMIntTypeInContext(ll.ctx, 32);
   let ft = LLVMFunctionType(ret, args.ptr(), 2, LLVMBoolTrue());
   let f = LLVMAddFunction(ll.module, "sprintf".ptr(), ft);
   LLVMSetFunctionCallConv(f, 0);
-  return f;
+  return FunctionInfo{f, ft};
 }
-func make_fflush(ll: Emitter*): LLVMOpaqueValue*{
-    let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
-    let ret = LLVMIntTypeInContext(ll.ctx, 32);
-    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
-    let f = LLVMAddFunction(ll.module, "fflush".ptr(), ft);
-    LLVMSetFunctionCallConv(f, 0);
-    return f;
+func make_fflush(ll: Emitter*): FunctionInfo{
+  let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
+  let ret = LLVMIntTypeInContext(ll.ctx, 32);
+  let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
+  let f = LLVMAddFunction(ll.module, "fflush".ptr(), ft);
+  LLVMSetFunctionCallConv(f, 0);
+  return FunctionInfo{f, ft};
 }
-func make_malloc(ll: Emitter*): LLVMOpaqueValue*{
-    let args = [LLVMIntTypeInContext(ll.ctx, 64)];
-    let ret = LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0);
-    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
-    let f = LLVMAddFunction(ll.module, "malloc".ptr(), ft);
-    LLVMSetFunctionCallConv(f, 0);
-    return f;
+func make_malloc(ll: Emitter*): FunctionInfo{
+  let args = [LLVMIntTypeInContext(ll.ctx, 64)];
+  let ret = LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0);
+  let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
+  let f = LLVMAddFunction(ll.module, "malloc".ptr(), ft);
+  LLVMSetFunctionCallConv(f, 0);
+  return FunctionInfo{f, ft};
 }
 
 func getTypes(items: List<Item>*, list: List<Decl*>*){
@@ -529,10 +529,10 @@ impl Compiler{
     elems.drop();
   }
 
-  func make_proto(self, m: Method*): Option<LLVMOpaqueValue*>{
+  func make_proto(self, m: Method*): Option<FunctionInfo>{
     if(true) return self.make_proto2(m);
     let ll = self.ll.get();
-    if(m.is_generic) return Option<LLVMOpaqueValue*>::new();
+    if(m.is_generic) return Option<FunctionInfo>::new();
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
@@ -579,15 +579,15 @@ impl Compiler{
       let attr = LLVMCreateTypeAttribute(ll.ctx, kind, self.mapType(&sig.ret));
       LLVMAddAttributeAtIndex(f, 1, attr);
     }
-    self.protos.get().funcMap.add(mangled, f);
+    self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
     args.drop();
     mangled_c.drop();
     sig.drop();
-    return Option::new(f);
+    return Option::new(FunctionInfo{f, ft});
   }
   
-  func make_proto2(self, m: Method*): Option<LLVMOpaqueValue*>{
-    if(m.is_generic) return Option<LLVMOpaqueValue*>::new();
+  func make_proto2(self, m: Method*): Option<FunctionInfo>{
+    if(m.is_generic) return Option<FunctionInfo>::new();
     let mangled = mangle(m);
     //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
@@ -634,11 +634,11 @@ impl Compiler{
       let attr = LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
       LLVMAddAttributeAtIndex(f, 1, attr);
     }
-    self.protos.get().funcMap.add(mangled, f);
+    self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
     args.drop();
     mangled_c.drop();
     sig.drop();
-    return Option::new(f);
+    return Option::new(FunctionInfo{f, ft});
   }
 
   func getSize(self, type: Type*): i64{

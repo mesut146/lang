@@ -342,7 +342,7 @@ impl DebugInfo{
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
             let size = LLVMDITypeGetSizeInBits(ty);
-            let off = LLVMOffsetOfElement(dl, idx);
+            let off = LLVMOffsetOfElement(dl, st_real, idx);
             let name_c = if(fd.name.is_some()){
               fd.name.get().clone().cstr()
             }else{
@@ -354,21 +354,21 @@ impl DebugInfo{
             ++fi;
             name_c.drop();
           }
-          self.fill_funcs_member(decl, c, elems);
+          self.fill_funcs_member(decl, c, &elems);
         },
         Decl::TupleStruct(fields)=>{
           let idx = 0;
           for fd in fields{
             let ty = self.map_di(&fd.type, c);
             let size = LLVMDITypeGetSizeInBits(ty);
-            let off = LLVMOffsetOfElement(dl, idx);
+            let off = LLVMOffsetOfElement(dl, st_real, idx);
             let name_c = format("_{}", idx).cstr();
             let mem = LLVMDIBuilderCreateMemberType(self.builder, scope, name_c.ptr(), name_c.len(), file, decl.line, size, 0,  off, 0, ty);
             elems.add(mem);
             ++idx;
             name_c.drop();
           }
-          self.fill_funcs_member(decl, c, elems);
+          self.fill_funcs_member(decl, c, &elems);
         },
         Decl::Enum(variants)=>{
           let data_size = c.getSize(decl) - ENUM_TAG_BITS();
@@ -377,24 +377,27 @@ impl DebugInfo{
           let tag_ty0: Type = as_type(ENUM_TAG_BITS());
           let tag = self.map_di(&tag_ty0, c);
           tag_ty0.drop();
-          let fldesc = make_di_flags(true);
-          let disc = LLVMDIBuilderCreateMemberType(self.builder, scope, "".ptr(), 9,  file, decl.line, data_size, 0, tag_off, fldesc, tag);
+          let fldesc = LLVMDIFlags::LLVMDIFlagArtificial{}.int();
+          let disc = LLVMDIBuilderCreateMemberType(self.builder, scope, "".ptr(), 0,  file, decl.line, data_size, 0, tag_off, fldesc, tag);
           let elems2 = List<LLVMOpaqueMetadata*>::new();
-          let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
+          //let var_part = createVariantPart(scope, "".ptr(), file, decl.line, data_size, disc, elems2);
+          let var_part = LLVMDIBuilderCreateEnumerationType(self.builder, scope, "".ptr(), 0, file, decl.line, data_size, 0, elems2.ptr(), elems2.len() as i32, st/*? */);/*disc */
           //fill variant
           let var_idx = 1;
-          let var_off = getElementOffsetInBits(sl, var_idx);
+          let var_off = LLVMOffsetOfElement(dl, st_real, var_idx);
           for(let i = 0;i < variants.len();++i){
             let ev = variants.get(i);
             let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st, var_off);
             elems2.add(var_type);
           }
-          replaceElements(var_part, elems2);
+          //replaceElements(var_part, elems2);
+          //LLVMMetadataReplaceAllUsesWith();
           elems.add(var_part);
           elems2.drop();
         },
       }
-      replaceElements(st, elems);
+      //replaceElements(st, elems);
+      //LLVMMetadataReplaceAllUsesWith(stold, stnew);
       self.types.add(s, st);
       elems.drop();
       return st;
@@ -413,7 +416,7 @@ impl DebugInfo{
       let name_c = name.cstr();
       let flags = 0;
       let RunTimeLang = 0;
-      let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags, ptr::null<LLVMOpaqueMetadata*>(), elems.ptr(), elems.len(), RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+      let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
       name_c.drop();
       return res;
     }
@@ -429,8 +432,8 @@ impl DebugInfo{
       }
       match type{
         Type::Pointer(elem) => {
-          let name = "";
-          return LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, name.ptr(), name.len());
+          let nameptr = "";
+          return LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, nameptr.ptr(), nameptr.len());
         },
         Type::Array(elem, count)=>{
           let elems = [LLVMDIBuilderGetOrCreateSubrange(self.builder, 0, *count)];
@@ -447,10 +450,10 @@ impl DebugInfo{
             tys.add(self.map_di(prm, c));
           }
           let file = self.file;
-          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len(), LLVMDIFlags::LLVMDIFlagZero{}.int());
-          let name = "";
+          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len() as i32, LLVMDIFlags::LLVMDIFlagZero{}.int());
+          let nameptr = "";
           tys.drop();
-          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, name.ptr(), name.len());
+          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, nameptr.ptr(), nameptr.len());
         },
         Type::Lambda(ft_box) => {
           let tys = List<LLVMOpaqueMetadata*>::new();
@@ -461,17 +464,17 @@ impl DebugInfo{
           for prm in & ft_box.get().captured{
             tys.add(self.map_di(prm, c));
           }
-          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, file, tys.ptr(), tys.len(), LLVMDIFlags::LLVMDIFlagZero{}.int());
+          let spt = LLVMDIBuilderCreateSubroutineType(self.builder, self.file, tys.ptr(), tys.len() as i32, LLVMDIFlags::LLVMDIFlagZero{}.int());
           tys.drop();
-          let name = "";
-          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, name.ptr(), name.len());
+          let nameptr = "";
+          return LLVMDIBuilderCreatePointerType(self.builder, spt, 64, 0, 0, nameptr.ptr(), nameptr.len());
         },
         Type::Slice(elem)=>{
-          let name = "";
+          let nameptr = "";
           let size = c.getSize(type);
           let line = 0;
           //ptr
-          let ptr_ty = LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, name.ptr(), name.len());
+          let ptr_ty = LLVMDIBuilderCreatePointerType(self.builder, self.map_di(elem.get(), c), 64, 0, 0, nameptr.ptr(), nameptr.len());
           let off = 0;
           let flags = 0;
           let ptr_mem = LLVMDIBuilderCreateMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), "ptr".ptr(), 3, self.file, line, 64, 0, off, flags, ptr_ty);
@@ -482,9 +485,9 @@ impl DebugInfo{
           let len_mem = LLVMDIBuilderCreateMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), "len".ptr(), 3, self.file, line, SLICE_LEN_BITS(), 0, 64, flags, len_ty);
           let name_c = "_slice".cstr();
           let elems = [ptr_mem, len_mem];
-          let flags = 0;
+          let flags2 = 0;
           let RunTimeLang = 0;
-          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags, ptr::null<LLVMOpaqueMetadata*>(), elems.ptr(), elems.len(), RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, flags2, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, RunTimeLang, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
           name_c.drop();
           return res;
         },
@@ -494,18 +497,19 @@ impl DebugInfo{
           let size = c.getSize(type);
           let elems = List<LLVMOpaqueMetadata*>:: new();
           let idx = 0;
-          //let sl = getStructLayout(c.mapType(type) as StructType*);
+          let ty = c.mapType(type) ;
+          let dl = LLVMGetModuleDataLayout(self.ll.module);
           for elem in &tt.types{
             let elem_di = self.map_di(elem, c);
-            let off = LLVMOffsetOfElement(sl, idx);
-            let flags = 0;
+            let off = LLVMOffsetOfElement(dl, ty, idx);
+            let flags2 = 0;
             let elem_name = format("_{}", idx).cstr();
-            let mem = LLVMDIBuilderCreateMemberType(self.builder, get_null_scope(), elem_name.ptr(), elem_name.len(), self.file, line, size, 0, off, flags, elem_di);
+            let mem = LLVMDIBuilderCreateMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), elem_name.ptr(), elem_name.len(), self.file, line, size, 0, off, flags2, elem_di);
             elems.add(mem);
             ++idx;
             elem_name.drop();
           }
-          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, 0, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len(), 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, 0, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
           name_c.drop();
           elems.drop();
           return res;
@@ -513,19 +517,19 @@ impl DebugInfo{
         Type::Simple(smp)=>{
           if(name.eq("void")) return ptr::null<LLVMOpaqueMetadata>();
           if(name.eq("bool")){
-            return self.createBasicType(name, 8, DW_ATE_boolean());
+            return self.createBasicType(name, 8, LLVMDWARFTypeEncoding_Boolean);
           }
           if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, DW_ATE_signed());
+            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Signed);
           }
           if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, DW_ATE_unsigned());
+            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Unsigned);
           }
           if(name.eq("f32") || name.eq("f64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, DW_ATE_float());
+            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Float);
           }
           //already mapped
           panic("map di {}\n", name);

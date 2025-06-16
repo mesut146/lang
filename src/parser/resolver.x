@@ -1450,7 +1450,7 @@ impl Resolver{
   }*/
 
   func visit_type(self, node: Type*): RType{
-    return self.visit_type0(node)?;
+    return self.visit_type0(node).unwrap();
   }
 
   func visit_type0(self, node: Type*): Result<RType, Error>{
@@ -1461,7 +1461,7 @@ impl Resolver{
   }
 
   func visit_type_str(self, node: Type*, str: String*): RType{
-    return self.visit_type_str0(node, str)?;
+    return self.visit_type_str0(node, str).unwrap();
   }
 
   func visit_type_str0(self, node: Type*, str: String*): Result<RType, Error>{

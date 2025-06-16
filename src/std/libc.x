@@ -165,6 +165,12 @@ struct timespec{
   tv_sec: time_t;
   tv_nsec: time_t;
 }
+impl timespec{
+  func as_sec(self): i64{
+    return self.tv_sec + self.tv_nsec / 1000000000;
+  }
+}
+
 #derive(Debug)
 struct timeval {
   tv_sec: time_t;     /* seconds */
@@ -200,7 +206,7 @@ struct stat{
   st_atim: timespec;
   st_mtim: timespec;
   st_ctim: timespec;
-  st_atime: time_t;
-  st_mtime: time_t;
-  st_ctime: time_t;
+  //st_atime: time_t;
+  //st_mtime: time_t;
+  //st_ctime: time_t;
 }

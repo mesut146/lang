@@ -839,6 +839,6 @@ impl Own{
         }
         let proto = protos.get_func(method);
         mangled.drop();
-        return proto;
+        return proto.val;
     }
 }

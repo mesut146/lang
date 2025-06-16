@@ -82,7 +82,7 @@ impl Compiler{
                 let target: Method* = r.get_method(&rt).unwrap();
                 let proto = self.protos.get().get_func(target);
                 rt.drop();
-                return proto;
+                return proto.val;
             }
             rt.drop();
             return self.simple_enum(node, type);
@@ -99,7 +99,7 @@ impl Compiler{
             let m = r.lambdas.get(&node.id).unwrap();
             let proto = self.protos.get().get_func(m);
             
-            return proto;
+            return proto.val;
         },
         Expr::Ques(bx) => {
           let r = self.get_resolver();
@@ -262,6 +262,8 @@ impl Compiler{
       }
       if(use_next){
           LLVMPositionBuilderAtEnd(ll.builder, nextbb);
+      }else{
+        LLVMDeleteBasicBlock(nextbb);
       }
       //handle ret value
       if(!infos.empty()){
@@ -410,6 +412,8 @@ impl Compiler{
           }
         }
         then_rt.drop();
+      }else{
+        LLVMDeleteBasicBlock(nextbb);
       }
       exit_then.drop();
       then_name.drop();
@@ -523,6 +527,8 @@ impl Compiler{
           }
         }
         then_rt.drop();
+      }else{
+        LLVMDeleteBasicBlock(next);
       }
       exit_then.drop();
       then_name.drop();
@@ -558,7 +564,7 @@ impl Compiler{
           let target: Method* = self.get_resolver().get_method(&rt).unwrap();
           let proto = self.protos.get().get_func(target);
           rt.drop();
-          return proto ;
+          return proto.val;
         }
       }
       if(self.globals.contains(name)){
@@ -1105,8 +1111,7 @@ impl Compiler{
         }
         let proto = self.protos.get().libc("malloc");
         let args = [size];
-        let ft = LLVMTypeOf(proto);
-        let res = LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), 1, "".ptr());
+        let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
         return res;
       }
       if(Resolver::is_call(mc, "ptr", "null")){
@@ -1314,8 +1319,7 @@ impl Compiler{
       if(Resolver::is_exit(mc)){
         self.print_frame();
       }
-      let ft = LLVMTypeOf(proto);
-      let res = LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), args.len() as i32, "".ptr());
+      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
       args.drop();
       if(Resolver::is_exit(mc)){
         LLVMBuildUnreachable(ll.builder);
@@ -1352,9 +1356,9 @@ impl Compiler{
         }
         arg_type.drop();
       }
+      //self.call_printf();
       let printf_proto = self.protos.get().libc("printf");
-      let ft = LLVMTypeOf(printf_proto);
-      let res = LLVMBuildCall2(ll.builder, ft, printf_proto, args.ptr(), args.len() as i32, "".ptr());
+      let res = LLVMBuildCall2(ll.builder, printf_proto.ty, printf_proto.val, args.ptr(), args.len() as i32, "".ptr());
       args.drop();
       //flush
       self.emit_fflush();
@@ -1366,8 +1370,7 @@ impl Compiler{
       let proto = self.protos.get().libc("fflush");
       let stdout_ptr = self.protos.get().stdout_ptr;
       let args = [ll.loadPtr(stdout_ptr)];
-      let ft = LLVMTypeOf(proto);
-      LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), 1, "".ptr());
+      LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
     }
   
     func call_printf(self, mc: Call*){
@@ -1406,8 +1409,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("printf");
-      let ft = LLVMTypeOf(proto);
-      let res = LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), args.len() as i32, "".ptr());
+      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
       args.drop();
       //flush
       self.emit_fflush();
@@ -1446,8 +1448,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("sprintf");
-      let ft = LLVMTypeOf(proto);
-      let res = LLVMBuildCall2(ll.builder, ft, proto, args.ptr(), args.len() as i32, "".ptr());
+      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
       args.drop();
       return res;
     }

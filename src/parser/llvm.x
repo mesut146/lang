@@ -45,6 +45,11 @@ enum LLVMRelocMode{
     LLVMRelocRWPI,
     LLVMRelocROPI_RWPI
 }
+impl LLVMRelocMode{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
 enum LLVMCodeModel{
     LLVMCodeModelDefault,
     LLVMCodeModelJITDefault,
@@ -123,8 +128,23 @@ enum LLVMRealPredicate{
     LLVMRealPredicateTrue   /**< Always true (always folded) */
 }
 impl LLVMRealPredicate{
+  func int(self): i32{
+    return *(self as i32*);
+  }
   func from(s: str): i32{
-    if(s.eq("==")) return 1;
+    if(s.eq("==")) return LLVMRealPredicate::LLVMRealOEQ{}.int();
+    if(s.eq(">")) return LLVMRealPredicate::LLVMRealOGT{}.int();
+    if(s.eq(">=")) return LLVMRealPredicate::LLVMRealOGE{}.int();
+    if(s.eq("<")) return LLVMRealPredicate::LLVMRealOLT{}.int();
+    if(s.eq("<=")) return LLVMRealPredicate::LLVMRealOLE{}.int();
+    if(s.eq("!=")) return LLVMRealPredicate::LLVMRealONE{}.int();
+
+    if(s.eq("==")) return LLVMRealPredicate::LLVMRealUEQ{}.int();
+    if(s.eq(">")) return LLVMRealPredicate::LLVMRealUGT{}.int();
+    if(s.eq(">=")) return LLVMRealPredicate::LLVMRealUGE{}.int();
+    if(s.eq("<")) return LLVMRealPredicate::LLVMRealULT{}.int();
+    if(s.eq("<=")) return LLVMRealPredicate::LLVMRealULE{}.int();
+    if(s.eq("!=")) return LLVMRealPredicate::LLVMRealUNE{}.int();
     panic("op='{}'", s);
   }
 }
@@ -394,6 +414,17 @@ impl DISPFlags{
   }
 }
 
+
+const LLVMDWARFTypeEncoding_Address       = 0x01;
+const LLVMDWARFTypeEncoding_Boolean       = 0x02;
+const LLVMDWARFTypeEncoding_ComplexFloat  = 0x03;
+const LLVMDWARFTypeEncoding_Float         = 0x04;
+const LLVMDWARFTypeEncoding_Signed        = 0x05;
+const LLVMDWARFTypeEncoding_SignedChar    = 0x06;
+const LLVMDWARFTypeEncoding_Unsigned      = 0x07;
+const LLVMDWARFTypeEncoding_UnsignedChar  = 0x08;
+
+
 func LLVMInitializeAllTargets(){
     LLVMInitializeX86Target();
     LLVMInitializeAArch64Target();
@@ -439,17 +470,17 @@ extern{
     func LLVMGetTargetFromTriple(triple: i8*, target: LLVMTarget**, err: i8**): i32;
     func LLVMCreateTargetMachineOptions(): LLVMOpaqueTargetMachineOptions*;
     func LLVMCreateTargetMachineWithOptions (T: LLVMTarget*, Triple: i8*, Options: LLVMOpaqueTargetMachineOptions*): LLVMOpaqueTargetMachine*;
-    func LLVMCreateTargetMachine(T: LLVMTarget*, Triple: i8*, CPU: i8*, Features: i8*, Level: LLVMCodeGenOptLevel, Reloc: LLVMRelocMode, CodeModel: LLVMCodeModel): LLVMOpaqueTargetMachine*;
+    func LLVMCreateTargetMachine(T: LLVMTarget*, Triple: i8*, CPU: i8*, Features: i8*, Level: LLVMCodeGenOptLevel, Reloc: i32/*LLVMRelocMode*/, CodeModel: LLVMCodeModel): LLVMOpaqueTargetMachine*;
     func LLVMTargetMachineOptionsSetCPU(Options: LLVMOpaqueTargetMachineOptions*, CPU: i8*);
     func LLVMTargetMachineOptionsSetFeatures(Options: LLVMOpaqueTargetMachineOptions*, Features: i8*);
     func LLVMTargetMachineOptionsSetABI(Options: LLVMOpaqueTargetMachineOptions*, ABI: i8*);
     func LLVMTargetMachineOptionsSetCodeGenOptLevel(Options: LLVMOpaqueTargetMachineOptions*, Level: LLVMCodeGenOptLevel);
-    func LLVMTargetMachineOptionsSetRelocMode(Options: LLVMOpaqueTargetMachineOptions*, Reloc: LLVMRelocMode);
+    func LLVMTargetMachineOptionsSetRelocMode(Options: LLVMOpaqueTargetMachineOptions*, Reloc: i32 /*LLVMRelocMode*/);
     func LLVMTargetMachineOptionsSetCodeModel(Options: LLVMOpaqueTargetMachineOptions*, CodeModel: LLVMCodeModel);
     func LLVMGetTargetMachineCPU(T: LLVMOpaqueTargetMachine*): i8*;
     func LLVMGetTargetMachineTarget(tm: LLVMOpaqueTargetMachine*): LLVMTarget*;
-    func LLVMSetModuleDataLayout (m: LLVMOpaqueModule*, DL: LLVMOpaqueTargetData*);
-    func LLVMGetModuleDataLayout (m: LLVMOpaqueModule*): LLVMOpaqueTargetData*;
+    func LLVMSetModuleDataLayout(m: LLVMOpaqueModule*, DL: LLVMOpaqueTargetData*);
+    func LLVMGetModuleDataLayout(m: LLVMOpaqueModule*): LLVMOpaqueTargetData*;
     func LLVMOffsetOfElement(trg: LLVMOpaqueTargetData*, ty: LLVMOpaqueType*, elem: i32): i64;
 
     //ctx, module, func
@@ -486,11 +517,12 @@ extern{
     func LLVMDumpValue(val: LLVMOpaqueValue*);
     func LLVMPrintValueToString(val: LLVMOpaqueValue*): i8*;
     func LLVMPrintTypeToString(val: LLVMOpaqueType*): i8*;
-    func LLVMSizeOfTypeInBits(trg: LLVMTarget*, ty: LLVMOpaqueType*): i64;
+    func LLVMSizeOfTypeInBits(trg: LLVMOpaqueTargetData*, ty: LLVMOpaqueType*): i64;
     func LLVMGetIntTypeWidth(ty: LLVMOpaqueType*): i32;
     func LLVMTypeOf(val: LLVMOpaqueValue*): LLVMOpaqueType*;
     func LLVMFunctionType(ret: LLVMOpaqueType*, params: LLVMOpaqueType**, cnt: i32, vararg: LLVMBool): LLVMOpaqueType*;
     func LLVMGetTypeKind(ty: LLVMOpaqueType*): /*LLVMTypeKind*/i32;
+    func LLVMGetElementType(ty: LLVMOpaqueType*): LLVMOpaqueType*;
 
     //global
     func LLVMAddGlobal(md: LLVMOpaqueModule*, ty: LLVMOpaqueType*, name: i8*): LLVMOpaqueValue*;
@@ -508,6 +540,7 @@ extern{
     func LLVMAppendBasicBlockInContext(C: LLVMOpaqueContext*, fn: LLVMOpaqueValue*, name: i8*): LLVMOpaqueBasicBlock*;
     func LLVMPositionBuilderAtEnd(B: LLVMOpaqueBuilder*, bb: LLVMOpaqueBasicBlock*);
     func LLVMGetInsertBlock(B: LLVMOpaqueBuilder*): LLVMOpaqueBasicBlock*;
+    func LLVMDeleteBasicBlock(bb: LLVMOpaqueBasicBlock*);
     
     //builder
     func LLVMCreateBuilderInContext(C: LLVMOpaqueContext*): LLVMOpaqueBuilder*;
@@ -580,6 +613,7 @@ extern{
 extern{
   func LLVMCreateDIBuilder(M: LLVMOpaqueModule*): LLVMOpaqueDIBuilder*;
   func LLVMGetSubprogram(fn: LLVMOpaqueValue*): LLVMOpaqueMetadata*;
+  func LLVMDITypeGetSizeInBits(ty: LLVMOpaqueMetadata*): i64;
   
   func LLVMDIBuilderCreateSubroutineType(B: LLVMOpaqueDIBuilder*, file: LLVMOpaqueMetadata*, params: LLVMOpaqueMetadata**, cnt: i32, flags: i32/*LLVMDIFlags*/): LLVMOpaqueMetadata*;
   func LLVMDIBuilderCreateFunction( B: LLVMOpaqueDIBuilder*,
@@ -610,7 +644,7 @@ extern{
   func LLVMDIBuilderCreateBasicType(B: LLVMOpaqueDIBuilder*,
                                     name: i8*, namelen: i64, bits: i64,
                                     encoding: LLVMDWARFTypeEncoding,
-                                    flags: i32/*LLVMDIFlags*/);
+                                    flags: i32/*LLVMDIFlags*/): LLVMOpaqueMetadata*;
 
   func LLVMDIBuilderCreateCompileUnit(Builder: LLVMOpaqueDIBuilder*,
 		  	                              Lang: i32/*LLVMDWARFSourceLanguage*/,
@@ -718,7 +752,45 @@ extern{
                                         Flags: i32/*LLVMDIFlags*/,
                                         AlignInBits: i32 
                                         ): LLVMOpaqueMetadata*;
-  func LLVMDITypeGetSizeInBits(ty: LLVMOpaqueMetadata*): i64;
+  
+  func LLVMDIBuilderCreateEnumerationType(Builder: LLVMOpaqueDIBuilder*,
+                                          Scope: LLVMOpaqueMetadata*,
+                                          Name: i8*,
+                                          NameLen: i64,
+                                          File: LLVMOpaqueMetadata*,
+                                          LineNumber: i32,
+                                          SizeInBits: i64,
+                                          AlignInBits: i32,
+                                          Elements: LLVMOpaqueMetadata**,
+                                          NumElements: i32,
+                                          ClassTy: LLVMOpaqueMetadata* 
+                                          ): LLVMOpaqueMetadata*;
+
+  func LLVMDIBuilderCreateEnumerator(Builder: LLVMOpaqueDIBuilder*,
+                                    Name: i8*,
+                                    NameLen: i64,
+                                    Value: i64,
+                                    IsUnsigned: LLVMBool
+                                    ): LLVMOpaqueMetadata*;
+
+  func LLVMTemporaryMDNode(Ctx: LLVMOpaqueContext*, Data: LLVMOpaqueMetadata*, NumElements: i64): LLVMOpaqueMetadata*;                                    
+  func LLVMMetadataReplaceAllUsesWith(TempTrgetMetadata: LLVMOpaqueMetadata*, Replacement: LLVMOpaqueMetadata*);
+  func LLVMDisposeTemporaryMDNode(TempNode: LLVMOpaqueMetadata*);
+
+  func LLVMDIBuilderCreateReplaceableCompositeType(Builder: LLVMOpaqueDIBuilder*,
+                                              Tag: i32,
+                                              Name: i8*,
+                                              NameLen: i64,
+                                              Scope: LLVMOpaqueMetadata*,
+                                              File: LLVMOpaqueMetadata*,
+                                              Line: i32,
+                                              RuntimeLang: i32,
+                                              SizeInBits: i64,
+                                              AlignInBits: i32,
+                                              Flags: i32/*LLVMDIFlags */,
+                                              UniqueIdentifier: i8*,
+                                              UniqueIdentifierLen: i64
+                                              ): LLVMOpaqueMetadata*;
 }
 
 struct Emitter{
@@ -749,6 +821,7 @@ impl Emitter{
 
         let opt = LLVMCreateTargetMachineOptions();
         LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
+        LLVMTargetMachineOptionsSetRelocMode(opt, LLVMRelocMode::LLVMRelocPIC{}.int());
         let tm = LLVMCreateTargetMachineWithOptions(target, target_triple.ptr(), opt);        
 
         let ctx = LLVMContextCreate();
@@ -830,8 +903,8 @@ impl Emitter{
     }
     
     func sizeOf(self, ty: LLVMOpaqueType*): i64{
-      let target = LLVMGetTargetMachineTarget(self.tm);
-      return LLVMSizeOfTypeInBits(target, ty);
+      let dl = LLVMGetModuleDataLayout(self.module);
+      return LLVMSizeOfTypeInBits(dl, ty);
     }
     
     func glob_str(self, str: str): LLVMOpaqueValue*{
@@ -890,5 +963,13 @@ impl Emitter{
 
     func loadPtr(self, val: LLVMOpaqueValue*): LLVMOpaqueValue*{
       return LLVMBuildLoad2(self.builder, LLVMPointerTypeInContext(self.ctx, 0), val, "".ptr());
+    }
+
+    func verify_func(self, proto: LLVMOpaqueValue*){
+      let vrf = LLVMVerifyFunction(proto, LLVMVerifierFailureAction::LLVMPrintMessageAction{}.int());
+      if(vrf == 1){
+        LLVMDumpValue(proto);
+        panic("");
+      }
     }
 }

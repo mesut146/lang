@@ -236,7 +236,14 @@ impl File{
   }
 
   func get_last_write_time(file: str): i64{
-    panic("todo");
+    let arr = [0i8; 1000];
+    let buf: stat* = arr.ptr() as stat*;
+    let filec = file.cstr();
+    if(stat(filec.ptr(), buf) != 0){
+      panic("libc::stat failed for '{}'", file);
+    }
+    filec.drop();
+    return buf.st_mtim.as_sec();
   }
 }
 

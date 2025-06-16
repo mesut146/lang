@@ -22,21 +22,13 @@ testd=$dir/../tests
 stdpath=$toolchain/src
 linker=$($dir/find_llvm.sh clang)
 
-check(){
-  if [ ! "$?" -eq "0" ]; then
-    echo "error while compiling $1"
-    exit 1
-  fi
-}
-
 run(){
-  eval $1 || (echo "error '$1'" && exit 1)
+  eval $1 || (echo "error while compiling '$1'"; exit 1)
 }
 
 normal(){
   for f in $testd/normal/*.x; do
     LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath $f"
-    check $f
   done
 }
 
@@ -44,8 +36,7 @@ normal_regex(){
   has_match=false
   for f in $testd/normal/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $stdpath $f
-      check $f
+      run "$compiler c -out $out_dir -stdpath $stdpath $f"
       has_match=true
     fi
   done
@@ -56,10 +47,9 @@ normal_regex(){
 }
 
 std_all(){
-  $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
+  run "$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std" || exit 1
   for f in $testd/std_test/*.x; do
-    $compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a $f
-    check $f
+    run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a $f"
   done
 }
 
@@ -67,8 +57,7 @@ std_regex(){
   has_match=false
   for f in $testd/std_test/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a  $f
-      check $f
+      run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a  $f"
       has_match=true
     fi
   done
