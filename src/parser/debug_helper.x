@@ -539,8 +539,7 @@ impl DebugInfo{
 
     func createBasicType(self, name: String*, size: i64, enc: i32): LLVMOpaqueMetadata*{
       let name_c = name.clone().cstr();
-      //let flags = LLVMDIFlags::LLVMDIFlagZero;
-      let flags = 0;
+      let flags = LLVMDIFlags::LLVMDIFlagZero{}.int();
       let res = LLVMDIBuilderCreateBasicType(self.builder, name_c.ptr(), name.len(), size, enc, flags);
       name_c.drop();
       return res;

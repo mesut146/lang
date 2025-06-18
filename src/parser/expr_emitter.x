@@ -594,6 +594,10 @@ impl Compiler{
       let inner = self.visit(expr);
       return inner;
     }
+
+    func visit_repr(self, e: Expr*): LLVMOpaqueValue*{
+      panic("todo");
+    }
   
     func visit_as(self, lhs: Expr*, rhs: Type*): LLVMOpaqueValue*{
       let ll = self.ll.get();
@@ -604,21 +608,33 @@ impl Compiler{
         lhs_rt.drop();
         return LLVMBuildPtrToInt(ll.builder, val, self.mapType(rhs), "".ptr());
       }
+      //prim to prim
       let rhs_rt = self.get_resolver().visit_type(rhs);
-      if (lhs_rt.type.is_prim()) {
+      if (lhs_rt.type.is_prim() && rhs.is_prim()) {
         let res = self.cast(lhs, &rhs_rt.type);
         lhs_rt.drop();
         rhs_rt.drop();
         return res;
       }
-      //enum to base, skip tag
-      let val = self.get_obj_ptr(lhs);
+      //enum -> base
       if(lhs_rt.is_decl()){
         let decl = self.get_resolver().get_decl(&lhs_rt).unwrap();
+        //enum repr -> int
+        if(decl.is_enum() && decl.is_repr() && rhs.is_prim()){
+          let val = self.visit_repr(lhs);
+          lhs_rt.drop();
+          rhs_rt.drop();
+          return val;
+        }
         if(decl.is_enum() && rhs_rt.is_decl()){
+          let val = self.get_obj_ptr(lhs);
           val = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), val, get_data_index(decl), "".ptr());
+          lhs_rt.drop();
+          rhs_rt.drop();
+          return val;
         }
       }
+      let val = self.get_obj_ptr(lhs);
       lhs_rt.drop();
       rhs_rt.drop();
       return val;

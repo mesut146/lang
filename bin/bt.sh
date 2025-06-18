@@ -25,16 +25,10 @@ fi
 echo "compiler=$compiler"
 echo "out=$out_dir"
 
-$dir/build_std.sh $compiler || exit 1
+$dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling" && exit 1
-fi
-#todo use toolchain's std dir?
-linker=$($dir/find_llvm.sh clang)
-
-$dir/build_ast.sh $compiler lib || exit 1
+$dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 bin=$(dirname $compiler)
@@ -54,6 +48,8 @@ flags="$flags $LIB_STD"
 flags="$flags $LIB_AST"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
+linker=$($dir/find_llvm.sh clang)
+#todo use toolchain's std dir?
 cmd="LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser -j 1"
 eval $cmd
 

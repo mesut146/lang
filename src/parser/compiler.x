@@ -714,7 +714,7 @@ impl Compiler{
   }
 
   func compile_dir(config: CompilerConfig): Result<String, CompilerError>{
-    if(config.jobs > 1){
+    if(config.jobs > 0){
       return Compiler::compile_dir_thread2(config);
     }
     File::create_dir(config.out_dir.str());
@@ -794,7 +794,7 @@ impl Compiler{
         idx: &idx,
         len: list.len() as i32,
       };
-      worker.add_arg(Compiler::make_compile_job2, args);
+      worker.add_arg(Compiler::make_compile_job, args);
     }
     sleep(1);
     worker.join();
@@ -804,24 +804,23 @@ impl Compiler{
     return config.link(&comp);
   }
 
-  func make_compile_job2(arg: c_void*){
+  func make_compile_job(arg: c_void*){
     let args = arg as CompileArgs*;
     let config = args.config;
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    //let cmp = Compiler::new(ctx, config, args.cache);
     let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
     }
     if(ctx.verbose){
-        let idx = args.idx.lock();
-        print("compiling [{}/{}] {}\n", *idx + 1, args.len, config.trim_by_root(args.file.str()));
-        *idx = *idx + 1;
-        args.idx.unlock();
+      let idx = args.idx.lock();
+      print("compiling {}\n", config.trim_by_root(args.file.str()));
+      *idx = *idx + 1;
+      args.idx.unlock();
     }
     let proc = Process::run(cmd.str());
     let code = proc.eat_close();
@@ -829,9 +828,11 @@ impl Compiler{
       panic("failed to compile {}", args.file);
     }
     if(ctx.verbose){
-        let compiled = args.compiled.lock();
-        print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
-        args.compiled.unlock();
+      let idx = args.idx.lock();
+      let compiled = args.compiled.lock();
+      print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
+      args.compiled.unlock();
+      args.idx.unlock();
     }
     let compiled = args.compiled.lock();
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
@@ -935,7 +936,7 @@ impl CompilerConfig{
       lt: LinkType::None,
       std_path: std_path,
       root_dir: Option<String>::new(),
-      jobs: 1,
+      jobs: 0,
       verbose_all: false,
       incremental_enabled: false,
       use_cache: true,
@@ -981,6 +982,9 @@ impl CompilerConfig{
     return self;
   }
   func set_jobs(self, j: i32): CompilerConfig*{
+    if(j < 0){
+      panic("invalid jobs {:?}", j);
+    }
     self.jobs = j;
     return self;
   }

@@ -54,6 +54,7 @@ impl OpenMode{
 
 impl File{
   func open(path: str, mode: OpenMode): Result<File, String>{
+    create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), mode.as_c_str());
     path_c.drop();
@@ -64,6 +65,7 @@ impl File{
   }
 
   func create(path: str): Result<File, String>{
+    create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), "w".cptr());
     if(fp as u64 == 0){
@@ -142,6 +144,7 @@ impl File{
   }
 
   func write_string(data: str, path: str, mode: OpenMode): Result<(), String>{
+    create_dirs_file(path);
     let file = File::open(path, mode)?;
     file.write_bytes(data.slice())?;
     file.close();
@@ -196,6 +199,11 @@ impl File{
 
   func exists(path: str): bool{
     return is_file(path) || is_dir(path);
+  }
+
+  func create_dirs_file(file: str): Result<(), String>{
+    let parent = Path::parent(file);
+    return File::create_dir(parent);
   }
   
   func create_dir(path: str): Result<(), String>{

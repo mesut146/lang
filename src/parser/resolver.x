@@ -664,7 +664,7 @@ impl Resolver{
     for(let i = 0;i < self.unit.items.len();++i){
       let it = self.unit.items.get(i);
       if let Item::Decl(decl) = it{
-        self.handle_derive(decl, &newItems);
+        self.handle_attr(decl, &newItems);
       }
     }
     self.unit.items.add_list(newItems);
@@ -782,15 +782,19 @@ impl Resolver{
     }
   }
 
-  func handle_derive(self, decl: Decl*, newItems: List<Item>*){
+  func handle_attr(self, decl: Decl*, newItems: List<Item>*){
     //derive
     for attr in &decl.attr.list{
-      if(attr.is_simple("drop") || attr.is_simple("proc_macro")){
+      if(attr.is_simple("drop") || attr.is_simple("proc_macro") || attr.is_call("repr")){
         continue;
       }
       else if(attr.is_call("derive")){
         for arg in &attr.args{
-          let imp = generate_derive(self, decl, &self.unit, arg.str());
+          let arg_str = match arg{
+            Expr::Name(name) => name.str(),
+            _ => panic("derive expr {:?}", arg)
+          };
+          let imp = generate_derive(self, decl, &self.unit, arg_str);
           newItems.add(Item::Impl{imp});
         }
       }else{
@@ -2813,39 +2817,41 @@ impl Resolver{
   func visit_as(self, node: Expr*, lhs: Expr*, type: Type*): RType{
     let left = self.visit(lhs);
     let right = self.visit_type(type);
+    //func ptr -> func ptr
     if(left.type.is_fpointer() && right.type.is_fpointer()){
-        let ft1 = left.type.get_ft();
-        let ft2 = right.type.get_ft();
-        if(ft1.params.len() == 1 && ft2.params.len() == 1){
-            if(ft1.params.get(0).is_pointer()&&
-            ft2.params.get(0).is_pointer()){
-                return right;
-            }
-        }
+      let ft1 = left.type.get_ft();
+      let ft2 = right.type.get_ft();
+      if(ft1.params.len() == 1 && ft2.params.len() == 1){
+          if(ft1.params.get(0).is_pointer()&&
+          ft2.params.get(0).is_pointer()){
+              return right;
+          }
+      }
     }
-    //prim->prim
+    //prim -> prim
     if (left.type.is_prim()) {
-      left.drop();
       if(right.type.is_prim()){
+        left.drop();
         return right;
       }
-      self.err(node, "invalid as expr");
-      panic("");
+      self.err(node, "invalid as expr rhs must be prim");
     }
-    if (left.type.is_pointer() && right.type.eq("u64")) {
+    //ptr -> int
+    if(left.type.is_pointer() && right.type.eq("u64")) {
       left.drop();
       right.drop();
       return RType::new("u64");
     }
-    if (!right.type.is_pointer()) {
-      self.err(node, "invalid as expr");
-    }
     //derived->base
     let decl1_opt = self.get_decl(&left);
     left.drop();
-    if (decl1_opt.is_some()) {
+    if(decl1_opt.is_some()) {
       let decl1 = decl1_opt.unwrap();
-      if(decl1.base.is_some()){
+      if(decl1.is_repr() && right.type.is_prim()){
+        return right;
+      }
+      //cast to base type ptr
+      if(decl1.base.is_some() && right.type.is_pointer()){
         let base_ptr = format("{:?}*", decl1.base.get());
         let rs = right.type.print();
         if (base_ptr.eq(rs.str())){
@@ -2857,6 +2863,10 @@ impl Resolver{
         rs.drop();
       }
     }
+    if (!right.type.is_pointer()) {
+      self.err(node, "invalid as expr");
+    }
+    //ptr -> ptr
     return right;
   }
 

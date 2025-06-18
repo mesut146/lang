@@ -36,6 +36,7 @@ enum LLVMCodeGenOptLevel{
     LLVMCodeGenLevelDefault,
     LLVMCodeGenLevelAggressive
 }
+//#repr(i32)
 enum LLVMRelocMode{
     LLVMRelocDefault,
     LLVMRelocStatic,

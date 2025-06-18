@@ -131,19 +131,25 @@ impl Parser{
     let res = Attributes::new();
     while(self.is(TokenType::HASH)){
       self.pop();
+      if(self.is(TokenType::LBRACKET)){
+        self.consume(TokenType::LBRACKET);
+      }
       let name = self.name();
       let at = Attribute::new(name);
       if(self.is(TokenType::LPAREN)){
         self.consume(TokenType::LPAREN);
         at.is_call = true;
-        at.args.add(self.name());
+        at.args.add(self.parse_expr());
         while(self.is(TokenType::COMMA)){
           self.pop();
-          at.args.add(self.name());
+          at.args.add(self.parse_expr());
         }
         self.consume(TokenType::RPAREN);
       }
       res.list.add(at);
+      if(self.is(TokenType::RBRACKET)){
+        self.consume(TokenType::RBRACKET);
+      }
     }
     return res;
   }

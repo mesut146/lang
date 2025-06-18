@@ -17,7 +17,11 @@ impl Clone for Attributes{
 }
 impl Clone for Attribute{
     func clone(self): Attribute{
-      return Attribute{name: self.name.clone(), args: self.args.clone(), is_call: self.is_call};
+        let map = HashMap<String, Type>::new();
+        let copier = AstCopier::new(&map);
+        let res = Attribute{name: self.name.clone(), args: copier.visit_list(&self.args), is_call: self.is_call};
+        map.drop();
+        return res;
     }
 }
 

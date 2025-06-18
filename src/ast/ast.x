@@ -167,7 +167,7 @@ impl Attributes{
   func has_attr(self, name: str): bool{
     for(let i = 0;i < self.list.len();++i){
       let at = self.list.get(i);
-      if(at.is_simple(name)){
+      if(at.name.eq(name)){
         return true;
       }
     }
@@ -176,12 +176,12 @@ impl Attributes{
 }
 struct Attribute{
   name: String;
-  args: List<String>;
+  args: List<Expr>;
   is_call: bool;
 }
 impl Attribute{
   func new(name: String): Attribute{
-    return Attribute{name: name, args: List<String>::new(), is_call: false};
+    return Attribute{name: name, args: List<Expr>::new(), is_call: false};
   }
   func is_simple(self, name: str): bool{
     return !self.is_call && self.name.eq(name);
@@ -293,6 +293,9 @@ impl Decl{
   func is_drop(self): bool{
     return self.attr.has_attr("drop");
   }
+  func is_repr(self): bool{
+    return self.attr.has_attr("repr");
+  }  
   func is_enum(self): bool{
     return self is Decl::Enum;
   }

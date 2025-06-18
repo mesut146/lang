@@ -10,6 +10,19 @@ enum E{
  D(a: A)
 }
 
+#repr(i32)
+enum F{
+  A = 10,
+  B = 20, 
+  C
+}
+
+func test_repr(){
+  let a = F::A;
+  let a2 = a as i32;
+  //let b = F::B as i32;
+  assert(a2 == 10);
+}
 
 func main(){
   let a: E = E::A;
@@ -41,6 +54,7 @@ func main(){
   assert(isC);
   assert(isD);
   test_mut();
+  test_repr();
   print("enumTest done\n");
 }
 

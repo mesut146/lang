@@ -40,10 +40,10 @@ if [ ! "$?" -eq "0" ]; then
   echo "error while compiling" && exit 1
 fi
 
-target_triple="aarch64-linux-gnu" LD=$linker $dir/build_ast.sh $compiler || exit 1
+target_triple="aarch64-linux-gnu" LD=$linker $dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-target_triple="aarch64-linux-gnu" LD=$linker $dir/build_std.sh $compiler || exit 1
+target_triple="aarch64-linux-gnu" LD=$linker $dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 bridge_lib=$toolchain_target/lib/libbridge.a
