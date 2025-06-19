@@ -595,8 +595,21 @@ impl Compiler{
       return inner;
     }
 
-    func visit_repr(self, e: Expr*): LLVMOpaqueValue*{
-      panic("todo");
+    func visit_repr(self, lhs: Expr*, rhs: Type*): LLVMOpaqueValue*{
+      match lhs{
+        Expr::Name(nm)=>{
+          let res = self.get_obj_ptr(lhs);
+          res = self.loadPrim(res, rhs);
+          return res;
+        },
+        Expr::Type(ty)=>{
+          let res = self.visit(lhs);
+          res = self.loadPrim(res, rhs);
+          return res;
+        },
+        _=> {}
+      }
+      panic("todo {:?} as {:?}", lhs, rhs);
     }
   
     func visit_as(self, lhs: Expr*, rhs: Type*): LLVMOpaqueValue*{
@@ -621,7 +634,7 @@ impl Compiler{
         let decl = self.get_resolver().get_decl(&lhs_rt).unwrap();
         //enum repr -> int
         if(decl.is_enum() && decl.is_repr() && rhs.is_prim()){
-          let val = self.visit_repr(lhs);
+          let val = self.visit_repr(lhs, &rhs_rt.type);
           lhs_rt.drop();
           rhs_rt.drop();
           return val;
@@ -664,6 +677,14 @@ impl Compiler{
       let smp = type.as_simple();
       let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
       let index = Resolver::findVariant(decl, &smp.name);
+      if(decl.is_repr()){
+        let at = decl.attr.find("repr").unwrap().args.get(0).print();
+        let desc = decl.get_variants().get(index).disc.unwrap();
+        LLVMBuildStore(ll.builder, ll.makeInt(desc, prim_size(at.str()).unwrap() as i32) , ptr);
+        at.drop();
+        return ptr;
+      }
+      
       let decl_ty = self.mapType(&decl.type);
       let tag_ptr = LLVMBuildStructGEP2(ll.builder,  decl_ty, ptr,  get_tag_index(decl), "".ptr());
       LLVMBuildStore(ll.builder, ll.makeInt(index, ENUM_TAG_BITS()) , tag_ptr);

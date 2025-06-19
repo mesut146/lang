@@ -20,8 +20,12 @@ enum F{
 func test_repr(){
   let a = F::A;
   let a2 = a as i32;
-  //let b = F::B as i32;
+  printf("a=%d\n", a2);
   assert(a2 == 10);
+  let b = F::B as i32;
+  assert(b == 20);
+  
+  assert(F::C as i32 == 21);
 }
 
 func main(){

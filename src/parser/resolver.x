@@ -1196,6 +1196,7 @@ impl Resolver{
       }else{
         //auto disc
         let disc = last_disc + 1;
+        ev.disc.set(disc);
       }
       for(let j = 0;j < ev.fields.len();++j){
         let fd = ev.fields.get(j);

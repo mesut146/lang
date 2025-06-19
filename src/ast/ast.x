@@ -165,13 +165,16 @@ impl Attributes{
     return Attributes{list: List<Attribute>::new()};
   }
   func has_attr(self, name: str): bool{
+    return self.find(name).is_some();
+  }
+  func find(self, name: str): Option<Attribute*>{
     for(let i = 0;i < self.list.len();++i){
       let at = self.list.get(i);
       if(at.name.eq(name)){
-        return true;
+        return Option::new(at);
       }
     }
-    return false;
+    return Option<Attribute*>::new();
   }
 }
 struct Attribute{
@@ -295,7 +298,7 @@ impl Decl{
   }
   func is_repr(self): bool{
     return self.attr.has_attr("repr");
-  }  
+  }
   func is_enum(self): bool{
     return self is Decl::Enum;
   }

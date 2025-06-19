@@ -28,7 +28,7 @@ run(){
 
 normal(){
   for f in $testd/normal/*.x; do
-    LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath $f"
+    LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
   done
 }
 

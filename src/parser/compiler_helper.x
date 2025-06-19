@@ -399,6 +399,15 @@ impl Compiler{
         if(prim_size.is_some()){
           return LLVMIntTypeInContext(ll.ctx, prim_size.unwrap());
         }
+        let decl = self.get_resolver().get_decl(rt).unwrap();
+        if(decl.is_repr()){
+          let at = decl.attr.find("repr").unwrap().args.get(0).print();
+          let ty = Type::new(at);
+          let res = self.mapType(&ty);
+          ty.drop();
+          return res;
+        }
+        
         let p = self.protos.get();
         let s = type.print();
         if(!p.classMap.contains(&s)){

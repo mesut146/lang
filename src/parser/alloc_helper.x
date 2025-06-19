@@ -300,6 +300,16 @@ impl AllocHelper{
         if(ty.is_simple()){
           let smp = ty.as_simple();
           if(smp.scope.is_some()){
+            let resolver = self.c.get_resolver();
+            let rt = resolver.visit(node);
+            let decl = resolver.get_decl(&rt);
+            if(decl.is_some() && decl.unwrap().is_repr()){
+              let at = decl.unwrap().attr.find("repr").unwrap().args.get(0).print();
+              let ty2 = Type::new(at);
+              res = Option::new(self.alloc_ty(&ty2, node));
+              ty2.drop();
+              return res;
+            }
             //enum creation
             return Option::new(self.alloc_ty(ty, node));
           }
