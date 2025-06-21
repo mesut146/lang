@@ -1185,13 +1185,10 @@ impl Resolver{
         base_fields = Option::new(base_decl.get_fields());
       }
     }
-    let has_disc = false;
     let last_disc = -1;
     for(let i = 0;i < vars.len();++i){
       let ev = vars.get(i);
       if(ev.disc.is_some()){
-        //self.err(node.line, "todo enum discriminant");
-        has_disc = true;
         last_disc = *ev.disc.get();
       }else{
         //auto disc
@@ -1561,6 +1558,17 @@ impl Resolver{
         if (!(decl is Decl::Enum)) {
           scope.drop();
           return Result<RType, Error>::ok(self.member_func_ptr(node, str));
+        }
+        if(decl.is_repr()){
+          let repty = decl.attr.find("repr").unwrap().args.get(0).print();
+          if(repty.eq("C")){
+            repty.drop();
+            repty = "i32".owned();
+          }
+          let res = RType::new(Type::new(repty));
+          self.addType(str.clone(), res.clone());
+          scope.drop();
+          return Result<RType, Error>::ok(res);
         }
         findVariant(decl, &simple.name);
         let ds = decl.type.print();
@@ -3109,8 +3117,9 @@ impl Resolver{
   func visit(self, node: Expr*): RType{
     let id = node.id;
     if(id == -1) panic("id=-1");
-    if(self.cache.contains(&node.id)){
-      return self.cache.get(&node.id).unwrap().clone();
+    let opt = self.cache.get(&node.id);
+    if(opt.is_some()){
+      return opt.unwrap().clone();
     }
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());

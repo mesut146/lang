@@ -19,13 +19,14 @@ enum F{
 
 func test_repr(){
   let a = F::A;
+  assert(a == 10);
   let a2 = a as i32;
-  printf("a=%d\n", a2);
   assert(a2 == 10);
   let b = F::B as i32;
   assert(b == 20);
+  assert(F::C == 21);
   
-  assert(F::C as i32 == 21);
+  printf("enumcons=%d\n", F::A|F::B);
 }
 
 func main(){
