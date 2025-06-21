@@ -1,5 +1,5 @@
 import ast/ast
-import parser/resolver
+import ast/utils
 
 enum ExitType {
     NONE,
@@ -182,7 +182,7 @@ impl Exit{
                 if(call.name.eq("exit") && call.scope.is_none()){
                     return Exit::new(ExitType::EXITCALL);
                 }
-                if(Resolver::is_call(call, "std", "unreachable")){
+                if(Utils::is_call(call, "std", "unreachable")){
                     return Exit::new(ExitType::UNREACHABLE);
                 }
                 return Exit::new(ExitType::NONE);
@@ -191,7 +191,7 @@ impl Exit{
                 if(call.name.eq("panic") && call.scope.is_none()){
                     return Exit::new(ExitType::PANIC);
                 }
-                if(Resolver::is_call(call, "std", "unreachable")){
+                if(Utils::is_call(call, "std", "unreachable")){
                     return Exit::new(ExitType::UNREACHABLE);
                 }
                 return Exit::new(ExitType::NONE);

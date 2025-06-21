@@ -40,12 +40,12 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(path: str, ll: Emitter*): DebugInfo{
+    func new(debug: bool, path: str, ll: Emitter*): DebugInfo{
         let builder = LLVMCreateDIBuilder(ll.module);
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
         let file = LLVMDIBuilderCreateFile(builder, path_c.ptr(), path_c.len(), dir_c.ptr(), dir_c.len());
-        let producer = "";
+        let producer = "xlang";
         let flags = "";
         let split = "";
         let DWOId = 0;
@@ -58,7 +58,6 @@ impl DebugInfo{
           LLVMDWARFEmissionKind::LLVMDWARFEmissionFull{}.int(),
          DWOId, LLVMBoolFalse(), LLVMBoolFalse(), 
         sysroot.ptr(), sysroot.len(), sdk.ptr(), sdk.len());
-        let debug = !std::getenv("DEBUG").unwrap_or("1").eq("0");
         
         path_c.drop();
         dir_c.drop();
@@ -93,6 +92,7 @@ impl DebugInfo{
     }
 
     func dbg_func(self, m: Method*, f: LLVMOpaqueValue*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
+      if (!self.debug) return Option<LLVMOpaqueMetadata*>::new();
       let sp = self.dbg_func_proto(m, c).unwrap();
       LLVMSetSubprogram(f, sp);
       self.sp = Option<LLVMOpaqueMetadata*>::new(sp);

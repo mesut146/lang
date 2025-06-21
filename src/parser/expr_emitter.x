@@ -31,7 +31,7 @@ impl Compiler{
 
     func visit_expr(self, node: Expr*): LLVMOpaqueValue*{
       let ll = self.ll.get();
-      self.llvm.di.get().loc(node.line, node.pos);
+      self.di.get().loc(node.line, node.pos);
       match node{
         Expr::Call(mc) => return self.visit_call(node, mc),
         Expr::MacroCall(mc) => return self.visit_macrocall(node, mc),
@@ -300,7 +300,7 @@ impl Compiler{
       if (rhs_ty.is_pointer()) {
         LLVMBuildStore(ll.builder, field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
-        self.llvm.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
+        self.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
         ty_ptr.drop();
       }else {
         //deref
@@ -312,7 +312,7 @@ impl Compiler{
             self.copy(alloc_ptr, field_ptr, &field.type);
             self.own.get().add_iflet_var(arg, field, alloc_ptr);
         }
-        self.llvm.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
+        self.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
       }      
     }
 
@@ -341,7 +341,7 @@ impl Compiler{
       let nextbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), next_name.ptr());
       LLVMBuildCondBr(ll.builder, cond, thenbb, elsebb);
       LLVMPositionBuilderAtEnd(ll.builder, thenbb);
-      self.llvm.di.get().new_scope(node.then.get().line());
+      self.di.get().new_scope(node.then.get().line());
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       let then_val = self.visit_body(node.then.get());
@@ -353,7 +353,7 @@ impl Compiler{
       }else{
         self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
       }
-      self.llvm.di.get().exit_scope();
+      self.di.get().exit_scope();
       if(!exit_then.is_jump()){
         LLVMBuildBr(ll.builder, nextbb);
       }
@@ -362,14 +362,14 @@ impl Compiler{
       let else_val = Option<LLVMOpaqueValue*>::new();
       
       if(node.else_stmt.is_some()){
-        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        self.di.get().new_scope(node.else_stmt.get().line());
         //this will restore if, bc we did fake end_scope
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
         else_end = LLVMGetInsertBlock(ll.builder);
         self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
-        self.llvm.di.get().exit_scope();
+        self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if(!else_jump){
@@ -445,7 +445,7 @@ impl Compiler{
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.own.get().do_move(&node.rhs);
       let variant = decl.get_variants().get(index);
-      self.llvm.di.get().new_scope(line);
+      self.di.get().new_scope(line);
       if(!variant.fields.empty()){
         //declare vars
         let fields = &variant.fields;
@@ -468,7 +468,7 @@ impl Compiler{
       }else{
         self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
       }
-      self.llvm.di.get().exit_scope();
+      self.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
       if (!exit_then.is_jump()) {
         LLVMBuildBr(ll.builder, next);
@@ -477,13 +477,13 @@ impl Compiler{
       let else_jump = false;
       let else_val = Option<LLVMOpaqueValue*>::new();
       if (node.else_stmt.is_some()) {
-        self.llvm.di.get().new_scope(node.else_stmt.get().line());
+        self.di.get().new_scope(node.else_stmt.get().line());
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
         else_end = LLVMGetInsertBlock(ll.builder);
         self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
-        self.llvm.di.get().exit_scope();
+        self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if (!else_jump) {
@@ -908,7 +908,7 @@ impl Compiler{
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): LLVMOpaqueValue*{
         let resolver = self.get_resolver();
         let ll = self.ll.get();
-        if(Resolver::is_call(mc, "ptr", "deref")){
+        if(Utils::is_call(mc, "ptr", "deref")){
           let arg_ptr = self.get_obj_ptr(mc.args.get(0));
           let type = self.getType(expr);
           if (!is_struct(&type)) {
@@ -919,7 +919,7 @@ impl Compiler{
           type.drop();
           return arg_ptr;
         }
-        if(Resolver::is_call(mc, "ptr", "get")){
+        if(Utils::is_call(mc, "ptr", "get")){
           let elem_type = self.getType(expr);
           let src = self.get_obj_ptr(mc.args.get(0));
           let idx = self.loadPrim(mc.args.get(1));
@@ -927,7 +927,7 @@ impl Compiler{
           elem_type.drop();
           return res;
         }
-        if(Resolver::is_call(mc, "ptr", "copy")){
+        if(Utils::is_call(mc, "ptr", "copy")){
           //ptr::copy(src_ptr, src_idx, elem)
           let src_ptr = self.get_obj_ptr(mc.args.get(0));
           let i64_ty = Type::new("i64");
@@ -940,11 +940,11 @@ impl Compiler{
           elem_type.drop();
           return ptr::null<LLVMOpaqueValue>();
         }
-        if(Resolver::is_call(mc, "std", "unreachable")){
+        if(Utils::is_call(mc, "std", "unreachable")){
           LLVMBuildUnreachable(ll.builder);
           return ptr::null<LLVMOpaqueValue>();
         }
-        if(Resolver::is_call(mc, "std", "internal_block")){
+        if(Utils::is_call(mc, "std", "internal_block")){
           let arg = mc.args.get(0).print();
           let id = i32::parse(arg.str()).unwrap();
           let blk: Block* = *resolver.block_map.get(&id).unwrap();
@@ -952,7 +952,7 @@ impl Compiler{
           arg.drop();
           return ptr::null<LLVMOpaqueValue>();
         }
-        if(Resolver::is_call(mc, "std", "typeof")){
+        if(Utils::is_call(mc, "std", "typeof")){
           let arg = mc.args.get(0);
           let ty = self.getType(arg);
           let str = ty.print();
@@ -962,7 +962,7 @@ impl Compiler{
           ty.drop();
           return res;
         }
-        if(Resolver::is_call(mc, "std", "no_drop")){
+        if(Utils::is_call(mc, "std", "no_drop")){
           let arg = mc.args.get(0);
           self.own.get().do_move(arg);
           return ptr::null<LLVMOpaqueValue>();
@@ -993,13 +993,13 @@ impl Compiler{
         }
         list.drop();
       }
-      if(Resolver::is_call(mc, "std", "no_drop")){
+      if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
         return ptr::null<LLVMOpaqueValue>();
       }
       //////////////////////////////////////
-      if(Resolver::is_call(mc, "ptr", "deref")){
+      if(Utils::is_call(mc, "ptr", "deref")){
         let arg_ptr = self.get_obj_ptr(mc.args.get(0));
         let type = self.getType(expr);
         if (!is_struct(&type)) {
@@ -1010,7 +1010,7 @@ impl Compiler{
         type.drop();
         return arg_ptr;
       }
-      if(Resolver::is_call(mc, "ptr", "get")){
+      if(Utils::is_call(mc, "ptr", "get")){
         let elem_type = self.getType(expr);
         let src = self.get_obj_ptr(mc.args.get(0));
         let idx = self.loadPrim(mc.args.get(1));
@@ -1018,7 +1018,7 @@ impl Compiler{
         elem_type.drop();
         return res;
       }
-      if(Resolver::is_call(mc, "ptr", "copy")){
+      if(Utils::is_call(mc, "ptr", "copy")){
         //ptr::copy(src_ptr, src_idx, elem)
         let src_ptr = self.get_obj_ptr(mc.args.get(0));
         let i64_ty = Type::new("i64");
@@ -1031,11 +1031,11 @@ impl Compiler{
         elem_type.drop();
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Resolver::is_call(mc, "std", "unreachable")){
+      if(Utils::is_call(mc, "std", "unreachable")){
         LLVMBuildUnreachable(ll.builder);
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Resolver::is_call(mc, "std", "internal_block")){
+      if(Utils::is_call(mc, "std", "internal_block")){
         let arg = mc.args.get(0).print();
         let id = i32::parse(arg.str()).unwrap();
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
@@ -1043,7 +1043,7 @@ impl Compiler{
         arg.drop();
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Resolver::is_call(mc, "std", "typeof")){
+      if(Utils::is_call(mc, "std", "typeof")){
         let arg = mc.args.get(0);
         let ty = self.getType(arg);
         let str = ty.print();
@@ -1053,7 +1053,7 @@ impl Compiler{
         ty.drop();
         return res;
       }
-      if(Resolver::is_call(mc, "std", "no_drop")){
+      if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
         return ptr::null<LLVMOpaqueValue>();
@@ -1067,16 +1067,16 @@ impl Compiler{
         }
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Resolver::is_call(mc, "std", "debug") || Resolver::is_call(mc, "std", "debug2")){
+      if(Utils::is_call(mc, "std", "debug") || Utils::is_call(mc, "std", "debug2")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Resolver::is_call(mc, "std", "print_type")){
+      if(Utils::is_call(mc, "std", "print_type")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         return self.visit_block(&info.block).unwrap();
       }
-      if(Resolver::is_drop_call(mc)){
+      if(Utils::is_call(mc, "Drop", "drop")){
         //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
@@ -1091,7 +1091,7 @@ impl Compiler{
         argt.drop();
       }
 
-      if(Resolver::is_call(mc, "std", "size")){
+      if(Utils::is_call(mc, "std", "size")){
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get(0));
           let sz = self.getSize(&ty) / 8;
@@ -1103,7 +1103,7 @@ impl Compiler{
           return ll.makeInt(sz, 32) ;
         }
       }    
-      if(Resolver::is_call(mc, "std", "is_ptr")){
+      if(Utils::is_call(mc, "std", "is_ptr")){
         let ty = mc.type_args.get(0);
         if(ty.is_pointer()){
           return ll.getTrue();
@@ -1151,7 +1151,7 @@ impl Compiler{
         let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
         return res;
       }
-      if(Resolver::is_call(mc, "ptr", "null")){
+      if(Utils::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
         return LLVMConstNull(LLVMPointerType(ty, 0));
       }

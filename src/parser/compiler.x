@@ -62,6 +62,8 @@ struct CompilerConfig{
   incremental_enabled: bool;
   use_cache: bool;
   llvm_only: bool;
+  debug: bool;
+  opt_level: Option<String>;
 }
 
 struct LoopInfo{
@@ -72,7 +74,7 @@ struct LoopInfo{
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
-  llvm: llvm_holder;
+  di: Option<DebugInfo>;
   ll: Option<Emitter>;
   protos: Option<Protos>;
   NamedValues: HashMap<String, LLVMOpaqueValue*>;
@@ -87,11 +89,10 @@ struct Compiler{
 }
 impl Compiler{
   func new(ctx: Context, config: CompilerConfig*, cache: Cache*): Compiler{
-    let vm = llvm_holder::new();
     return Compiler{
       ctx: ctx,
       resolver: Option<Resolver*>::new(),
-      llvm: vm,
+      di: Option<DebugInfo>::new(),
       ll: Option<Emitter>::new(),
       protos: Option<Protos>::new(),
       NamedValues: HashMap<String, LLVMOpaqueValue*>::new(),
@@ -104,16 +105,6 @@ impl Compiler{
       config: config,
       cache: cache,
     };
-  }
-}
-
-struct llvm_holder{
-  di: Option<DebugInfo>;
-}
-impl Drop for llvm_holder{
-  func drop(*self){
-    self.di.drop();
-    //todo destroy_llvm(self.target_machine);
   }
 }
 
@@ -227,28 +218,12 @@ func getName(path: str): str{
   return path.substr(i + 1);
 }
 
-impl llvm_holder{
-  func initModule(self, path: str, c: Compiler*){
-    let name = getName(path);
-    c.ll = Option::new(Emitter::new(getName(path)));
-    self.di = Option::new(DebugInfo::new(path, c.ll.get()));
-  }
-
-  func init_llvm(){
-    LLVMInitializeAllTargetInfos();
-    LLVMInitializeAllTargets();
-    LLVMInitializeAllTargetMCs();
-    LLVMInitializeAllAsmPrinters();
-    LLVMInitializeAllAsmParsers();
-  }
-
-  func new(): llvm_holder{
-    llvm_holder::init_llvm();
-    return llvm_holder{
-      di: Option<DebugInfo>::new()
-    };
-  }
-
+func init_llvm(){
+  LLVMInitializeAllTargetInfos();
+  LLVMInitializeAllTargets();
+  LLVMInitializeAllTargetMCs();
+  LLVMInitializeAllAsmPrinters();
+  LLVMInitializeAllAsmParsers();
 }
 
 impl Compiler{
@@ -282,13 +257,15 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension for {}", path);
     }
-    
+    let name = getName(path);
     
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
-    self.llvm.initModule(path, self);
+    init_llvm();
+    self.ll = Option::new(Emitter::new(name));
+    self.di = Option::new(DebugInfo::new(self.config.debug, path, self.ll.get()));
 
     self.createProtos();
     self.init_globals(self.config);
@@ -308,8 +285,10 @@ impl Compiler{
         self.genCode(p.b);
     }
     
-    let name = getName(path);
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
+    if(self.config.opt_level.is_some()){
+      self.ll.get().optimize_module_newpm(self.config.opt_level.get());
+    }
     self.ll.get().emit_module(llvm_file.str());
     //self.ll.get().dump();
     if(!self.config.llvm_only){
@@ -386,9 +365,8 @@ impl Compiler{
     let method = Method::new(Node::new(0), proto_pr.b, Type::new("void"));
     method.body = Option::new(Block::new(0, 0));
     self.own = Option::new(Own::new(self, &method));
-    //let globs = vector_Metadata_new();
     self.protos.get().cur = Option::new(proto);
-    self.llvm.di.get().dbg_func(&method, proto, self);
+    self.di.get().dbg_func(&method, proto, self);
     for(let j = 0;j < globals.len();++j){
       let gl: Global* = *globals.get(j);
       if(gl.expr.is_none()){
@@ -396,7 +374,6 @@ impl Compiler{
         let ty = self.mapType(gl.type.get());
         let init = ptr::null<LLVMOpaqueValue>();
         let name_c = gl.name.clone().cstr();
-        // let glob = make_global(name_c.ptr(), ty, init);
         let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
         LLVMSetInitializer(glob, init);
         self.globals.add(gl.name.clone(), glob );
@@ -410,8 +387,8 @@ impl Compiler{
       let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
       LLVMSetInitializer(glob, init);
       name_c.drop();
-      if(self.llvm.di.get().debug){
-        let gve = self.llvm.di.get().dbg_glob(gl, &rt.type, glob, self);
+      if(self.di.get().debug){
+        let gve = self.di.get().dbg_glob(gl, &rt.type, glob, self);
         //vector_Metadata_push(globs, gve as Metadata*);
       }
       self.globals.add(gl.name.clone(), glob);
@@ -422,15 +399,15 @@ impl Compiler{
       }
       rt.drop();
     }
-    if(self.llvm.di.get().debug){
-      //replaceGlobalVariables(self.llvm.di.get().cu, globs);
+    if(self.config.debug){
+      //replaceGlobalVariables(self.di.get().cu, globs);
     }
     
     make_global_ctors2(proto, ll);
 
     LLVMBuildRetVoid(ll.builder);
     self.own.reset();
-    self.llvm.di.get().finalize();
+    self.di.get().finalize();
     ll.verify_func(proto);
     //vector_Metadata_delete(globs);
     method.drop();
@@ -573,7 +550,7 @@ impl Compiler{
     let ll = self.ll.get();
     let bb = LLVMAppendBasicBlockInContext(ll.ctx, proto.val, "entry".ptr());
     LLVMPositionBuilderAtEnd(ll.builder, bb);
-    self.llvm.di.get().dbg_func(m, proto.val, self);
+    self.di.get().dbg_func(m, proto.val, self);
     AllocHelper::makeLocals(self, m.body.get());
     self.allocParams(m);
     self.enter_frame();
@@ -597,7 +574,7 @@ impl Compiler{
         self.own.get().do_move(m.body.get().return_expr.get());
       }
     }
-    self.llvm.di.get().finalize();
+    self.di.get().finalize();
     ll.verify_func(proto.val);
     self.own.drop();
     self.own = Option<Own>::new();
@@ -651,14 +628,14 @@ impl Compiler{
     if (m.self.is_some()) {
       let prm = m.self.get();
       self.store_prm(prm, f, argIdx);
-      self.llvm.di.get().dbg_prm(prm, argNo, self);
+      self.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
     }
     for(let i = 0;i < m.params.len();++i){
       let prm = m.params.get(i);
       self.store_prm(prm, f, argIdx);
-      self.llvm.di.get().dbg_prm(prm, argNo, self);
+      self.di.get().dbg_prm(prm, argNo, self);
       ++argIdx;
       ++argNo;
     }
@@ -886,11 +863,11 @@ impl Compiler{
       cmd.append(" ");
     }
     cmd.append(args);
+    //todo move this to main or bt.sh
     cmd.append(" -Wl,-rpath=$ORIGIN/../lib");
     File::write_string(cmd.str(), format("{}/link.sh", out_dir).str())?;
     let cmd_s = cmd.cstr();
     if(system(cmd_s.ptr()) == 0){
-      //run if linked
       print("build binary {}\n", out_file);
     }else{
       return Result<String, CompilerError>::err(CompilerError::new(format("link failed '{}'", cmd_s)));
@@ -941,6 +918,8 @@ impl CompilerConfig{
       incremental_enabled: false,
       use_cache: true,
       llvm_only: false,
+      debug: false,
+      opt_level: Option<String>::new(),
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{

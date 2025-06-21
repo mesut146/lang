@@ -444,16 +444,16 @@ impl Compiler{
       let decl = *list.get(i);
       self.fill_decl(decl, p.get(decl));
     }
-    if(self.llvm.di.get().debug){
+    if(self.di.get().debug){
       //di proto
       for(let i = 0;i < list.len();++i){
         let decl = *list.get(i);
-        self.llvm.di.get().map_di_proto(decl, self);
+        self.di.get().map_di_proto(decl, self);
       }
       //di fill
       for(let i = 0;i < list.len();++i){
         let decl = *list.get(i);
-        self.llvm.di.get().map_di_fill(decl, self);
+        self.di.get().map_di_fill(decl, self);
       }
     }
     list.drop();
@@ -539,7 +539,6 @@ impl Compiler{
   }
 
   func make_proto(self, m: Method*): Option<FunctionInfo>{
-    if(true) return self.make_proto2(m);
     let ll = self.ll.get();
     if(m.is_generic) return Option<FunctionInfo>::new();
     let mangled = mangle(m);
@@ -548,7 +547,7 @@ impl Compiler{
       panic("already proto {}\n", mangled);
     }
     let sig = MethodSig::new(m, self.get_resolver());
-    let rvo = is_struct(&m.type);
+    let rvo = is_struct(&sig.ret);
     let ret = LLVMVoidTypeInContext(ll.ctx);
     if(is_main(m)){
       ret = ll.intTy(32);
@@ -595,60 +594,60 @@ impl Compiler{
     return Option::new(FunctionInfo{f, ft});
   }
   
-  func make_proto2(self, m: Method*): Option<FunctionInfo>{
-    if(m.is_generic) return Option<FunctionInfo>::new();
-    let mangled = mangle(m);
-    //print("proto {}\n", mangled);
-    if(self.protos.get().funcMap.contains(&mangled)){
-      panic("already proto {}\n", mangled);
-    }
-    let ll = self.ll.get();
-    let sig = MethodSig::new(m, self.get_resolver());
-    let rvo = is_struct(&m.type);
-    let ret = LLVMVoidTypeInContext(ll.ctx);
-    if(is_main(m)){
-      ret = LLVMIntTypeInContext(ll.ctx, 32);
-    }else if(!rvo){
-      ret = self.mapType(&sig.ret);
-    }
-    let args = List<LLVMOpaqueType*>::new();
-    if(rvo){
-      let rvo_ty = LLVMPointerType(self.mapType(&sig.ret), 0);
-      args.add(rvo_ty);
-    }
-    for prm_type in &sig.params{
-      let pt = self.mapType(prm_type);
-      if(is_struct(prm_type)){
-        args.add(LLVMPointerType(pt, 0));
-      }else{
-        args.add(pt);
-      }
-    }
-    let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
-    let linkage = LLVMLinkage::LLVMExternalLinkage{}.int();
-    if(!m.type_params.empty()){
-      linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
-    }else if let Parent::Impl(info)=&m.parent{
-      if(info.type.is_simple() && !info.type.get_args().empty()){
-        linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
-      }
-    }
-    let mangled_c = mangled.clone().cstr();
-    let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
-    LLVMSetLinkage(f, linkage);
-    if(rvo){
-      let arg = LLVMGetParam(f, 0);
-      LLVMSetValueName2(arg, "ret".ptr(), 3);
-      let sret = LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
-      let attr = LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
-      LLVMAddAttributeAtIndex(f, 1, attr);
-    }
-    self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
-    args.drop();
-    mangled_c.drop();
-    sig.drop();
-    return Option::new(FunctionInfo{f, ft});
-  }
+  // func make_proto2(self, m: Method*): Option<FunctionInfo>{
+  //   if(m.is_generic) return Option<FunctionInfo>::new();
+  //   let mangled = mangle(m);
+  //   //print("proto {}\n", mangled);
+  //   if(self.protos.get().funcMap.contains(&mangled)){
+  //     panic("already proto {}\n", mangled);
+  //   }
+  //   let ll = self.ll.get();
+  //   let sig = MethodSig::new(m, self.get_resolver());
+  //   let rvo = is_struct(&m.type);
+  //   let ret = LLVMVoidTypeInContext(ll.ctx);
+  //   if(is_main(m)){
+  //     ret = LLVMIntTypeInContext(ll.ctx, 32);
+  //   }else if(!rvo){
+  //     ret = self.mapType(&sig.ret);
+  //   }
+  //   let args = List<LLVMOpaqueType*>::new();
+  //   if(rvo){
+  //     let rvo_ty = LLVMPointerType(self.mapType(&sig.ret), 0);
+  //     args.add(rvo_ty);
+  //   }
+  //   for prm_type in &sig.params{
+  //     let pt = self.mapType(prm_type);
+  //     if(is_struct(prm_type)){
+  //       args.add(LLVMPointerType(pt, 0));
+  //     }else{
+  //       args.add(pt);
+  //     }
+  //   }
+  //   let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
+  //   let linkage = LLVMLinkage::LLVMExternalLinkage{}.int();
+  //   if(!m.type_params.empty()){
+  //     linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
+  //   }else if let Parent::Impl(info)=&m.parent{
+  //     if(info.type.is_simple() && !info.type.get_args().empty()){
+  //       linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
+  //     }
+  //   }
+  //   let mangled_c = mangled.clone().cstr();
+  //   let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+  //   LLVMSetLinkage(f, linkage);
+  //   if(rvo){
+  //     let arg = LLVMGetParam(f, 0);
+  //     LLVMSetValueName2(arg, "ret".ptr(), 3);
+  //     let sret = LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
+  //     let attr = LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
+  //     LLVMAddAttributeAtIndex(f, 1, attr);
+  //   }
+  //   self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
+  //   args.drop();
+  //   mangled_c.drop();
+  //   sig.drop();
+  //   return Option::new(FunctionInfo{f, ft});
+  // }
 
   func getSize(self, type: Type*): i64{
     let ll = self.ll.get();

@@ -356,3 +356,24 @@ func get_line(buf: str, line: i32): str{
     }
     panic("not possible");
   }
+
+struct Utils;
+impl Utils{
+  func is_call(mc: Call*, scope: str, name: str): bool{
+    if(mc.is_static && mc.name.eq(name) && mc.scope.is_some()){
+      let scope_str = mc.scope.get().print();
+      let res = scope_str.eq(scope);
+      scope_str.drop();
+      return res;
+    }
+    return false;
+  }
+
+  func is_call(mc: MacroCall*, scope: str, name: str): bool{
+    return mc.scope.is_some() && mc.scope.get().eq(scope) && mc.name.eq(name);
+  }
+
+  func is_call(mc: MacroCall*, name: str): bool{
+    return mc.scope.is_none() && mc.name.eq(name);
+  }
+}

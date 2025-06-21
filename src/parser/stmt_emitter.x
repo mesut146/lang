@@ -16,7 +16,7 @@ import parser/own_model
 //stmt
 impl Compiler{
     func visit(self, node: Stmt*){
-      self.llvm.di.get().loc(node.line, node.pos);
+      self.di.get().loc(node.line, node.pos);
       match node{
         Stmt::Ret(e) => self.visit_ret(node, e),
         Stmt::Var(ve) => self.visit_var(ve),
@@ -107,11 +107,11 @@ impl Compiler{
       LLVMBuildCondBr(ll.builder, self.branch(cond), then, next);
       LLVMPositionBuilderAtEnd(ll.builder, then);
       self.loops.add(LoopInfo{condbb, next});
-      self.llvm.di.get().new_scope(body.line());
+      self.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
       self.visit_body(body);
       self.own.get().end_scope(get_end_line(body));
-      self.llvm.di.get().exit_scope();
+      self.di.get().exit_scope();
       self.loops.pop_back();
       let exit_body = Exit::get_exit_type(body);
       if(!exit_body.is_jump()){
@@ -142,7 +142,7 @@ impl Compiler{
       LLVMBuildBr(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       LLVMPositionBuilderAtEnd(ll.builder, condbb as LLVMOpaqueBasicBlock*);
       
-      /*let di_scope =*/ self.llvm.di.get().new_scope(stmt.line);
+      /*let di_scope =*/ self.di.get().new_scope(stmt.line);
       if (node.cond.is_some()) {
         LLVMBuildCondBr(ll.builder, self.branch(node.cond.get()), then as LLVMOpaqueBasicBlock*, next as LLVMOpaqueBasicBlock*);
       } else {
@@ -153,18 +153,18 @@ impl Compiler{
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit_body(node.body.get());
       self.own.get().end_scope(get_end_line(node.body.get()));
-      //self.llvm.di.get().exit_scope();
+      //self.di.get().exit_scope();
       let exit = Exit::get_exit_type(node.body.get());
       if(!exit.is_jump()){
         LLVMBuildBr(ll.builder, updatebb); 
       }
       LLVMPositionBuilderAtEnd(ll.builder, updatebb);
-      //self.llvm.di.get().new_scope(di_scope);
+      //self.di.get().new_scope(di_scope);
       for (let i = 0;i < node.updaters.len();++i) {
         let u = node.updaters.get(i);
         self.visit(u);
       }
-      self.llvm.di.get().exit_scope();
+      self.di.get().exit_scope();
       self.loops.pop_back();
       LLVMBuildBr(ll.builder, condbb);
       LLVMPositionBuilderAtEnd(ll.builder, next);
@@ -203,7 +203,7 @@ impl Compiler{
           let val = self.cast(&f.rhs, &type);
           LLVMBuildStore(ll.builder, val, ptr);
         }
-        self.llvm.di.get().dbg_var(&f.name, &type, f.line, self);
+        self.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
         self.own.get().add_var(f, ptr);
       }

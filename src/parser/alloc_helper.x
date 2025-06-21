@@ -159,7 +159,7 @@ impl AllocHelper{
   
   func visit_macrocall(self, node: Expr*, call: MacroCall*): Option<LLVMOpaqueValue*>{
       let resolver = self.c.get_resolver();
-      if(Resolver::is_call(call, "std", "internal_block")){
+      if(Utils::is_call(call, "std", "internal_block")){
         let arg = call.args.get(0).print();
         let id = i32::parse(arg.str()).unwrap();
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
@@ -167,7 +167,7 @@ impl AllocHelper{
         arg.drop();
         return Option<LLVMOpaqueValue*>::new();
       }
-      if(Resolver::is_call(call, "std", "env")){
+      if(Utils::is_call(call, "std", "env")){
         let info = resolver.get_macro(node);
         let rt = resolver.visit(node);
         self.visit(&info.block);
@@ -175,7 +175,7 @@ impl AllocHelper{
         rt.drop();
         return res;
       }
-      if(Resolver::is_call(call, "std", "typeof")){
+      if(Utils::is_call(call, "std", "typeof")){
         let rt = resolver.visit(node);
         let res = Option::new(self.alloc_ty(&rt.type, node));
         rt.drop();
@@ -198,7 +198,7 @@ impl AllocHelper{
 
   func visit_call(self, node: Expr*, call: Call*): Option<LLVMOpaqueValue*>{
     let resolver = self.c.get_resolver();
-    if(Resolver::is_call(call, "std", "internal_block")){
+    if(Utils::is_call(call, "std", "internal_block")){
       let arg = call.args.get(0).print();
       let id = i32::parse(arg.str()).unwrap();
       let blk: Block* = *resolver.block_map.get(&id).unwrap();
@@ -206,7 +206,7 @@ impl AllocHelper{
       arg.drop();
       return Option<LLVMOpaqueValue*>::new();
     }
-    if(Resolver::is_call(call, "std", "env")){
+    if(Utils::is_call(call, "std", "env")){
       let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
       self.visit(&info.block);
@@ -214,7 +214,7 @@ impl AllocHelper{
       rt.drop();
       return res;
     }
-    if(Resolver::is_call(call, "std", "typeof")){
+    if(Utils::is_call(call, "std", "typeof")){
       let rt = resolver.visit(node);
       let res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
@@ -227,7 +227,7 @@ impl AllocHelper{
       }
       return Option<LLVMOpaqueValue*>::new();
     }
-    if(Resolver::is_call(call, "std", "print_type")){
+    if(Utils::is_call(call, "std", "print_type")){
       let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
       self.visit(&info.block);
