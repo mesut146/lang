@@ -30,8 +30,8 @@ impl<K, V> Map<K, V>{
     }
     //already exist, change old
     let pair: Pair<K, V>* = opt.unwrap();
-    let old_a = ptr::deref(&pair.a);
-    let old_b = ptr::deref(&pair.b);
+    let old_a = ptr::deref!(&pair.a);
+    let old_b = ptr::deref!(&pair.b);
     Drop::drop(old_a);
     Drop::drop(old_b);
     std::no_drop(pair.a);
@@ -207,7 +207,7 @@ impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
     if(self.pos < self.map.len()){
       let idx = self.pos;
       self.pos += 1;
-      return Option::new(ptr::deref(self.map.get_pair_idx(idx).unwrap()));
+      return Option::new(ptr::deref!(self.map.get_pair_idx(idx).unwrap()));
     }
     return Option<Pair<K, V>>::new();
   }

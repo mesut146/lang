@@ -457,8 +457,8 @@ impl MethodResolver{
         //print("---------\n\n");
         if(list_res.is_err()){
             self.r.err(expr, list_res.unwrap_err());
-            //std::unreachable();
-            panic("unr");
+            //std::unreachable!();
+            panic("");
         }
         let list = list_res.unwrap();
         if(list.empty()){
@@ -496,7 +496,7 @@ impl MethodResolver{
             //real.drop();
             //errors.drop();
             self.r.err(expr, f.unwrap());
-            //std::unreachable();
+            //std::unreachable!();
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {:?} has {} candidates\n", mc, real.size());
@@ -511,7 +511,7 @@ impl MethodResolver{
             //real.drop();
             //errors.drop();
             self.r.err(expr, msg);
-            //std::unreachable();
+            //std::unreachable!();
         }
         let target_sig = *real.get(0);
         if(exact.is_some()){
@@ -586,7 +586,7 @@ impl MethodResolver{
                 //real.drop();
                 //errors.drop();
                 self.r.err(expr, msg);
-                //std::unreachable();
+                //std::unreachable!();
             }
         }
         if(sig.scope.is_some()){

@@ -20,7 +20,7 @@ mkdir -p $out_dir
 
 $compiler c -static -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/ast
 if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling ast"
+  echo "error while compiling $name"
   exit 1
 fi
 

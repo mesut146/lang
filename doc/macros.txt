@@ -1,7 +1,7 @@
-format("", ...): String;
-print("", ...): void;
-panic("", ...): void;
-assert(<bool>): void;
+format!("", ...): String;
+print!("", ...): void;
+panic!("", ...): void;
+assert!(<bool>): void;
 
 printf("", ...): void;
 
@@ -10,11 +10,11 @@ std::size<...>(): i64;
 std::is_ptr<...>(): bool;
 std::env("<name>"): Option<str>;//compile time env
 std::no_drop(obj): void;
-std::typeof(obj): <obj type>: str;
+std::typeof!(obj): <obj type>: str;
 std::unreachable(): void;
 std::debug(ptr: T*, Fmt*): void;
 std::debug2(ptr: T*, Fmt*): void;
-std::debug_member(field: T, Fmt*): void;
+std::debug_member!(field: T, Fmt*): void;
 
 ptr::null<T>(): T*;
 ptr::is_null<T>(ptr: T*): bool;

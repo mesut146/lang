@@ -1035,28 +1035,6 @@ impl Compiler{
         elem_type.drop();
         return ptr::null<LLVMOpaqueValue>();
       }
-      if(Utils::is_call(mc, "std", "unreachable")){
-        LLVMBuildUnreachable(ll.builder);
-        return ptr::null<LLVMOpaqueValue>();
-      }
-      if(Utils::is_call(mc, "std", "internal_block")){
-        let arg = mc.args.get(0).print();
-        let id = i32::parse(arg.str()).unwrap();
-        let blk: Block* = *resolver.block_map.get(&id).unwrap();
-        self.visit_block(blk);
-        arg.drop();
-        return ptr::null<LLVMOpaqueValue>();
-      }
-      if(Utils::is_call(mc, "std", "typeof")){
-        let arg = mc.args.get(0);
-        let ty = self.getType(arg);
-        let str = ty.print();
-        let ptr = self.get_alloc(expr);
-        let res = self.str_lit(str.str(), ptr);
-        str.drop();
-        ty.drop();
-        return res;
-      }
       if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
@@ -1167,7 +1145,7 @@ impl Compiler{
           return ll.makeInt(*sz, 64) ;
         }
         arr_type.drop();
-        //std::unreachable();
+        //std::unreachable!();
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){

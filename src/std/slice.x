@@ -16,6 +16,6 @@ impl<T> [T]{
     if(i < 0 || i >= len()){
         panic("index out of bounds {} len = {}", index, len());
     }
-    return ptr::get(self.ptr(), i);
+    return ptr::get!(self.ptr(), i);
   }
 }

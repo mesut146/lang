@@ -8,21 +8,7 @@ import ast/token
 struct AstCopier{
     type_map: HashMap<String, Type>*;
     unit: Option<Unit*>;
-}
-
-impl Clone for Attributes{
-    func clone(self): Attributes{
-      return Attributes{list: self.list.clone()};
-    }
-}
-impl Clone for Attribute{
-    func clone(self): Attribute{
-        let map = HashMap<String, Type>::new();
-        let copier = AstCopier::new(&map);
-        let res = Attribute{name: self.name.clone(), args: copier.visit_list(&self.args), is_call: self.is_call};
-        map.drop();
-        return res;
-    }
+    //last_id: i32*;
 }
 
 impl AstCopier{
@@ -100,6 +86,18 @@ impl AstCopier{
         return Node::new(id, old.line);
     }
 
+    func visit(self, node: Attributes*): Attributes{
+      return Attributes{list: self.visit_list(&node.list)};
+    }    
+
+    func visit(self, node: Attribute*): Attribute{
+        return Attribute{
+            name: node.name.clone(),
+            args: self.visit_list(&node.args), 
+            is_call: node.is_call
+        };
+    }
+
     func visit(self, node: Decl*): Decl{
         let type = self.visit(&node.type);
         let base = BaseDecl{
@@ -109,7 +107,7 @@ impl AstCopier{
             name: node.name.clone(),
             is_generic: false,
             base: self.visit_opt(&node.base), 
-            attr: node.attr.clone(),
+            attr: self.visit(&node.attr),
             parent: node.parent.clone(),
         };
         match node{
@@ -249,7 +247,7 @@ impl AstCopier{
             parent: self.visit(&m.parent),
             path: m.path.clone(),
             is_vararg: m.is_vararg,
-            attr: m.attr.clone(),
+            attr: self.visit(&m.attr),
         };
     }
 

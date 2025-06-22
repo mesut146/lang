@@ -62,8 +62,8 @@ impl<T> List<T>{
     }
     let tmp = List<T>::get_malloc(self.cap + 10);
     for(let i = 0;i < self.count;++i){
-      let old: T = ptr::deref(self.get(i));
-      ptr::copy(tmp, i, old);
+      let old: T = ptr::deref!(self.get(i));
+      ptr::copy!(tmp, i, old);
       std::no_drop(old);
     }
     free(self.ptr as i8*);
@@ -89,9 +89,9 @@ impl<T> List<T>{
     let elem = self.get_internal(pos);
     //shift rhs of pos to 1 left
     for(let i = pos;i < self.count - 1;++i){
-      let lhs: T* = ptr::get(self.ptr, i);
+      let lhs: T* = ptr::get!(self.ptr, i);
       std::no_drop(*lhs);
-      *lhs = ptr::deref(ptr::get(self.ptr, i + 1));
+      *lhs = ptr::deref!(ptr::get!(self.ptr, i + 1));
     }
     self.count -= 1;
     return elem;
@@ -104,7 +104,7 @@ impl<T> List<T>{
 
   func add(self, e: T): T*{
     self.expand();
-    ptr::copy(self.ptr, self.count, e);
+    ptr::copy!(self.ptr, self.count, e);
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
     return self.get(self.count - 1);
@@ -120,13 +120,13 @@ impl<T> List<T>{
     //shift rhs of pos to 1 right
     //pos will be empty after this
     for(let i = self.count - 1;i >= pos;i = i - 1){
-      let lhs: T* = ptr::get(self.ptr, i);
-      let rhs: T* = ptr::get(self.ptr, i + 1);
+      let lhs: T* = ptr::get!(self.ptr, i);
+      let rhs: T* = ptr::get!(self.ptr, i + 1);
       std::no_drop(*rhs);
-      *rhs = ptr::deref(lhs);
+      *rhs = ptr::deref!(lhs);
     }
     //place value to cleared spot
-    ptr::copy(self.ptr, pos, val);
+    ptr::copy!(self.ptr, pos, val);
     std::no_drop(val);
     self.count += 1;
   }
@@ -160,18 +160,18 @@ impl<T> List<T>{
 
   func set(self, pos: i64, val: T): T{
       let old = self.get_internal(pos);
-      ptr::copy(self.ptr, pos, val);
+      ptr::copy!(self.ptr, pos, val);
       std::no_drop(val);
       return old;
   }
 
   func get_internal(self, pos: i64): T{
-    return ptr::deref(self.get(pos));
+    return ptr::deref!(self.get(pos));
   }
 
   func get(self, pos: i64): T*{
     self.check(pos);
-    return ptr::get(self.ptr, pos);
+    return ptr::get!(self.ptr, pos);
   }
 
 
@@ -343,7 +343,7 @@ impl<T> Iterator<T> for ListIntoIter<T>{
     if(self.pos < self.list.len()){
       let idx = self.pos;
       self.pos += 1;
-      return Option::new(ptr::deref(self.list.get(idx)));
+      return Option::new(ptr::deref!(self.list.get(idx)));
     }
     return Option<T>::new();
   }

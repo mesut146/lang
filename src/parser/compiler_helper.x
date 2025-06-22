@@ -837,72 +837,43 @@ impl Compiler{
   }
 
   func emit_as_arg(self, node: Expr*): LLVMOpaqueValue*{
+    let ty = self.getType(node);
+    if(ty.is_prim()){
+      let val = self.visit(node);
+      let res = self.load(val,  &ty);
+      ty.drop();
+      return res;
+    }
     match node{
-      Lit(val)=>{
-        return self.visit(node);
-      },
+      Lit(val) => return self.visit(node),
       Name(val)=>{
         //todo
-      },
-      Call(mc) => {
         return self.visit(node);
       },
-      MacroCall(mc) => {
-        return self.visit(node);
-      },
-      Par(e) => {
-        return self.visit(node);
-      },
-      Type(val) => {
-        return self.visit(node);
-      },
-      Unary(op, e) => {
-        return self.visit(node);
-      },
-      Infix(op, l, r) => {
-        return self.visit(node);
-      },
+      Call(mc) => return self.visit(node),
+      MacroCall(mc) => return self.visit(node),
+      Par(e) => return self.visit(node),
+      Type(val) => return self.visit(node),
+      Unary(op, e) => return self.visit(node),
+      Infix(op, l, r) => return self.visit(node),
       Access(scope, name) => {
         //todo
-      },
-      Obj(type, args) => {
+        // loadprim
         return self.visit(node);
       },
-      As(e, type) => {
-
-      },
-      Is(e, rhs) => {
-        return self.visit(node);
-      },
-      Array(list, size) => {
-        return self.visit(node);
-      },
-      ArrAccess(val) => {
-
-      },
-      Match(val) => {
-        //todo
-      },
-      Block(x) => {
-
-      },
-      If(is) => {
-
-      },
-      IfLet(il) => {
-
-      },
-      Lambda(val) => {
-        return self.visit(node);
-      },
-      Ques(e) => {
-        return self.visit(node);
-      },
-      Tuple(elems) => {
-        return self.visit(node);
-      }
+      Obj(type, args) => return self.visit(node),
+      As(e, type) => return self.visit(node),
+      Is(e, rhs) => return self.visit(node),
+      Array(list, size) => return self.visit(node),
+      ArrAccess(val) => return self.visit(node),
+      Match(val) => return self.visit(node),
+      Block(x) => return self.visit(node),
+      If(is) => return self.visit(node),
+      IfLet(il) => return self.visit(node),
+      Lambda(val) => return self.visit(node),
+      Ques(e) => return self.visit(node),
+      Tuple(elems) => return self.visit(node),
     }
-    panic("todo");
   }
 
   func get_obj_ptr(self, node: Expr*): LLVMOpaqueValue*{
@@ -948,7 +919,7 @@ impl Compiler{
       return val;
   }
     self.get_resolver().err(node, format("get_obj_ptr {:?}", node));
-    std::unreachable();
+    std::unreachable!();
   }
 
   func getTag(self, expr: Expr*): LLVMOpaqueValue*{

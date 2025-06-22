@@ -63,7 +63,7 @@ func strlen(arr: [i8]): i32{
 }
 func strlen(arr: i8*, max: i32): i32{
   for(let i = 0;i < max;++i){
-    let chr = *ptr::get(arr, i);
+    let chr = *ptr::get!(arr, i);
     if(chr == 0) return i;
   }
   panic("no eof max={}", max);

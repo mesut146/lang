@@ -17,9 +17,11 @@ out_dir=$build/${name}_out
 
 mkdir -p $out_dir
 
-$compiler c -static -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/std
+cmd="$compiler c -static -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/std"
+eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling std"
+  echo $cmd
   exit 1
 fi
 

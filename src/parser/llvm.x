@@ -1041,6 +1041,18 @@ impl Emitter{
   // }
 
   func optimize_module_newpm(self, level: String*){
+    if(level.eq("-O0")) return;
+    let pipeline = if(level.eq("-O1") || level.eq("-O")){
+      "default<O1>"
+    }
+    else if(level.eq("-O2")){
+      "default<O2>"
+    }
+    else if(level.eq("-O3")){
+      "default<O3>"
+    }else{
+      panic("invalid optimization level '{}'", level);
+    };
     let opt = LLVMCreatePassBuilderOptions();
     LLVMPassBuilderOptionsSetLoopInterleaving(opt, LLVMBoolTrue());
     LLVMPassBuilderOptionsSetLoopVectorization(opt, LLVMBoolTrue());
@@ -1049,8 +1061,6 @@ impl Emitter{
     LLVMPassBuilderOptionsSetForgetAllSCEVInLoopUnroll(opt, LLVMBoolTrue());
     LLVMPassBuilderOptionsSetCallGraphProfile(opt, LLVMBoolTrue());
     LLVMPassBuilderOptionsSetMergeFunctions(opt, LLVMBoolTrue());
-    let pipeline = "default<O2>";
-    //let pipeline = "";
     let err = LLVMRunPasses(self.module, pipeline .ptr(), self.tm, opt);
     if(err as u64 != 0){
       let msg = LLVMGetErrorMessage(err);

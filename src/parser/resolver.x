@@ -278,7 +278,7 @@ impl Clone for RtKind{
   func clone(self): RtKind{
     match self{
       RtKind::MethodGen(name) => return RtKind::MethodGen{name.clone()},
-      _ => return ptr::deref(self),//safe,other variants are Copy type
+      _ => return ptr::deref!(self),//safe,other variants are Copy type
     }
   }
 }
@@ -1680,7 +1680,7 @@ impl Resolver{
       return Result<RType, Error>::err(err);
     }
     let map = make_type_map(simple, target);
-    let copier = AstCopier::new(&map);
+    let copier = AstCopier::new(&map, &self.unit);
     let decl0 = copier.visit(target);
     let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
@@ -2313,7 +2313,7 @@ impl Resolver{
     self.format_map.add(node.id, info);
   }
   
-  func visit_mcall(self, node: Expr*, call: MacroCall*): RType{
+  func visit_macrocall(self, node: Expr*, call: MacroCall*): RType{
     if(call.name.eq("debug_member")){
       assert(call.args.len() == 2);
       let src = call.args.get(0);
@@ -2477,107 +2477,77 @@ impl Resolver{
       fp.drop();
     }
     ////////////////////
-    if(call.name.eq("debug_member")){
-      assert(call.args.len() == 2);
-      let src = call.args.get(0);
-      let fmt = call.args.get(1);
-      let rt1 = self.visit(src);
-      let rt2 = self.visit(fmt);
-      assert(rt2.type.eq("Fmt*"));
-      let info = FormatInfo::new(node.line);
-      if(rt1.type.is_pointer()){
-          //print hex based address
-          info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
-      }else{
-          //todo take ref of it?
-          info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
-      }
-      self.visit_block(&info.block);
-      self.format_map.add(node.id, info);
-      rt1.drop();
-      rt2.drop();
-      return RType::new("void");
-    }
-    if(Utils::is_call(call, "std", "typeof")){
-      assert(call.args.len() == 1);
-      let arg = call.args.get(0);
-      let tmp = self.visit(arg);
-      tmp.drop();
-      return RType::new("str");
-    }
-    if(Utils::is_call(call, "std", "env")){
-      let arg = call.args.get(0);
-      if(is_str_lit(arg).is_none()){
-        self.err(node, "std::env expects str literal");
-      }
-      self.handle_env(node, call);
-      return RType::new(Type::parse("Option<str>"));
-    }
-    if(Utils::is_call(call, "std", "unreachable")){
-      assert(call.args.len() == 0);
-      return RType::new("void");
-    }
-    if(Utils::is_call(call, "std", "internal_block")){
-      assert(call.args.len() == 1);
-      let arg = call.args.get(0).print();
-      let id = i32::parse(arg.str()).unwrap();
-      let blk: Block* = *self.block_map.get(&id).unwrap();
-      self.visit_block(blk);
-      arg.drop();
-      return RType::new("void");
-    }
-    if(Utils::is_call(call, "ptr", "get")){
-      //ptr::get(src, idx)
-      if (call.args.len() != 2) {
-        self.err(node, "ptr access must have 2 args");
-      }
-      let src = self.getType(call.args.get(0));
-      if (!src.is_pointer()) {
-          self.err(node, "ptr src is not ptr");
-      }
-      let idx = self.getType(call.args.get(1));
-      if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
-        let res = self.visit_type(&src);
-        idx.drop();
-        src.drop();
-        return res;
-      }
-      idx.drop();
-      src.drop();
-      self.err(node, "ptr access index is not integer");
-    }
-    if(Utils::is_call(call, "ptr", "copy")){
-      if (call.args.len() != 3) {
-        self.err(node, "ptr::copy!() must have 3 args");
-      }
-      //ptr::copy!(src_ptr, src_idx, elem)
-      let ptr_type = self.getType(call.args.get(0));
-      let idx_type = self.getType(call.args.get(1));
-      let elem_type = self.getType(call.args.get(2));
-      if (!ptr_type.is_pointer()) {
-          self.err(node, "ptr arg is not ptr ");
-      }
-      if (!idx_type.eq("i32") && !idx_type.eq("i64") && !idx_type.eq("u32") && !idx_type.eq("u64") && !idx_type.eq("i8") && !idx_type.eq("i16")) {
-        self.err(node, "ptr access index is not integer");
-      }
-      if (!elem_type.eq(ptr_type.deref_ptr())) {
-        self.err(node, "ptr elem type dont match val type");
-      }
-      ptr_type.drop();
-      idx_type.drop();
-      elem_type.drop();
-      return RType::new("void");
-    }
-    if(Utils::is_call(call, "ptr", "deref")){
-        //unsafe deref
-        let rt = self.getType(call.args.get(0));
-        if (!rt.is_pointer()) {
-            self.err(node, "ptr arg is not ptr ");
-        }
-        let res = self.visit_type(rt.deref_ptr());
-        rt.drop();
-        return res;
-    }
+    // if(Utils::is_call(call, "std", "typeof")){
+    //   assert(call.args.len() == 1);
+    //   let arg = call.args.get(0);
+    //   let tmp = self.visit(arg);
+    //   tmp.drop();
+    //   return RType::new("str");
+    // }
+    // if(Utils::is_call(call, "std", "env")){
+    //   let arg = call.args.get(0);
+    //   if(is_str_lit(arg).is_none()){
+    //     self.err(node, "std::env expects str literal");
+    //   }
+    //   self.handle_env(node, call);
+    //   return RType::new(Type::parse("Option<str>"));
+    // }
+    // if(Utils::is_call(call, "std", "unreachable")){
+    //   assert(call.args.len() == 0);
+    //   return RType::new("void");
+    // }
+    // if(Utils::is_call(call, "ptr", "get")){
+    //   //ptr::get(src, idx)
+    //   if (call.args.len() != 2) {
+    //     self.err(node, "ptr access must have 2 args");
+    //   }
+    //   let src = self.getType(call.args.get(0));
+    //   if (!src.is_pointer()) {
+    //       self.err(node, "ptr src is not ptr");
+    //   }
+    //   let idx = self.getType(call.args.get(1));
+    //   if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
+    //     let res = self.visit_type(&src);
+    //     idx.drop();
+    //     src.drop();
+    //     return res;
+    //   }
+    //   idx.drop();
+    //   src.drop();
+    //   self.err(node, "ptr access index is not integer");
+    // }
+    // if(Utils::is_call(call, "ptr", "copy")){
+    //   if (call.args.len() != 3) {
+    //     self.err(node, "ptr::copy!() must have 3 args");
+    //   }
+    //   //ptr::copy!(src_ptr, src_idx, elem)
+    //   let ptr_type = self.getType(call.args.get(0));
+    //   let idx_type = self.getType(call.args.get(1));
+    //   let elem_type = self.getType(call.args.get(2));
+    //   if (!ptr_type.is_pointer()) {
+    //       self.err(node, "ptr arg is not ptr ");
+    //   }
+    //   if (!idx_type.eq("i32") && !idx_type.eq("i64") && !idx_type.eq("u32") && !idx_type.eq("u64") && !idx_type.eq("i8") && !idx_type.eq("i16")) {
+    //     self.err(node, "ptr access index is not integer");
+    //   }
+    //   if (!elem_type.eq(ptr_type.deref_ptr())) {
+    //     self.err(node, "ptr elem type dont match val type");
+    //   }
+    //   ptr_type.drop();
+    //   idx_type.drop();
+    //   elem_type.drop();
+    //   return RType::new("void");
+    // }
+    // if(Utils::is_call(call, "ptr", "deref")){
+    //     //unsafe deref
+    //     let rt = self.getType(call.args.get(0));
+    //     if (!rt.is_pointer()) {
+    //         self.err(node, "ptr arg is not ptr ");
+    //     }
+    //     let res = self.visit_type(rt.deref_ptr());
+    //     rt.drop();
+    //     return res;
+    // }
     if(Utils::is_call(call, "std", "no_drop")){
       let rt = self.visit(call.args.get(0));
       rt.drop();
@@ -2780,21 +2750,21 @@ impl Resolver{
   func visit_array(self, node: Expr*, list: List<Expr>*, size: Option<i32>*): RType{
     let elemType = self.getType(list.get(0));
     if (size.is_some()) {
-        return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), *size.get()});
+      return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), *size.get()});
     }
     for (let i = 1; i < list.len(); ++i) {
-        let elem = list.get(i);
-        let cur = self.visit(elem);
-        let cmp = MethodResolver::is_compatible(&cur.type, &cur.value, &elemType);
-        if (cmp.is_some()) {
-            let msg = format("{}\narray element type mismatch, expecting: {:?} got: {:?}({:?})", cmp.get(), elemType, &cur.type, elem);
-            self.err(node, msg.str());
-            cmp.drop();
-            cur.drop();
-            panic("");
-        }
-        cmp.drop();
-        cur.drop();
+      let elem = list.get(i);
+      let cur = self.visit(elem);
+      let cmp = MethodResolver::is_compatible(&cur.type, &cur.value, &elemType);
+      if (cmp.is_some()) {
+          let msg = format("{}\narray element type mismatch, expecting: {:?} got: {:?}({:?})", cmp.get(), elemType, &cur.type, elem);
+          self.err(node, msg.str());
+          cmp.drop();
+          cur.drop();
+          panic("");
+      }
+      cmp.drop();
+      cur.drop();
     }
     return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), list.len() as i32});
   }
@@ -3125,7 +3095,7 @@ impl Resolver{
         return self.visit_call(node, call);
       },
       Expr::MacroCall(call) => {
-        return self.visit_mcall(node, call);
+        return self.visit_macrocall(node, call);
       },
       Expr::Name(name) => {
         return self.visit_name(node, name);
@@ -3427,7 +3397,7 @@ impl Resolver{
     whl.append(format("let {} = {}.next();\n", &opt_name, &it_name));
     whl.append(format("if({}.is_none()) break;\n", &opt_name));
     whl.append(format("let {} = {}.unwrap();\n", &fe.var_name, &opt_name));
-    whl.append(format("std::internal_block({});\n", &node.id));
+    whl.append(format("std::internal_block!({});\n", &node.id));
     self.block_map.add(node.id, &fe.body);
     //let body_str = fe.body.print();
     //whl.append(body_str);
@@ -3435,9 +3405,6 @@ impl Resolver{
     let stmt = parse_stmt(whl, &self.unit, node.line);
     body.list.add(stmt);
     body.list.add(parse_stmt(format("{}.drop();", &it_name), &self.unit, node.line));
-    /*if(fe.var_name.eq("bucket_op")){
-      print("bucket={:?}\n", body);
-    }*/
     let tmp = self.visit_block(body);
 
     self.format_map.add(node.id, info);
@@ -3475,13 +3442,17 @@ impl Resolver{
           self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
         }
         self.dropScope();
-        rt2.drop();
+        if(!then_exit.is_jump()){
+          rt2.drop();
+          return rt1;
+        }
+        return rt2;
     }else{
       if(!rt1.type.is_void()){
         self.err(line, "then returns a non-void but no else");
       }
+      return rt1;
     }
-    return rt1;
   }
 
   func visit_iflet(self, is: IfLet*): RType{
@@ -3509,38 +3480,45 @@ impl Resolver{
     let index = Resolver::findVariant(decl, is.type.name());
     let variant = decl.get_variants().get(index);
     if (variant.fields.len() != is.args.len()) {
-        let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
-        self.err(line, msg);
+      let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
+      self.err(line, msg);
     }
     //init arg variables
     self.newScope();
     for (let i = 0;i < is.args.len();++i) {
-        let arg = is.args.get(i);
-        let field = variant.fields.get(i);
-        let ty = field.type.clone();
-        if (rhs.type.is_pointer()) {
-            ty = ty.toPtr();
-        } 
-        self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
-        self.cache.add(arg.id, RType::new(ty));
+      let arg = is.args.get(i);
+      let field = variant.fields.get(i);
+      let ty = field.type.clone();
+      if (rhs.type.is_pointer()) {
+          ty = ty.toPtr();
+      } 
+      self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
+      self.cache.add(arg.id, RType::new(ty));
     }
     let rt1 = self.visit_body(is.then.get());
     self.dropScope();
     if (is.else_stmt.is_some()) {
-        self.newScope();
-        let rt2 = self.visit_body(is.else_stmt.get());
-        if(!rt1.type.eq(&rt2.type) && !Exit::get_exit_type(is.else_stmt.get()).is_jump()){
-          self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
-        }
-        self.dropScope();
+      self.newScope();
+      let rt2 = self.visit_body(is.else_stmt.get());
+      let then_exit = Exit::get_exit_type(is.then.get());
+      let else_exit = Exit::get_exit_type(is.else_stmt.get());
+      if(!rt1.type.eq(&rt2.type) && !then_exit.is_jump() && !else_exit.is_jump()){
+        self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
+      }
+      self.dropScope();
+      rhs.drop();
+      if(!then_exit.is_jump()){
         rt2.drop();
+        return rt1;
+      }
+      return rt2;
     }else{
       if(!rt1.type.is_void()){
         self.err(line, "then returns a non-void but no else");
       }
+      rhs.drop();
+      return rt1;
     }
-    rhs.drop();
-    return rt1;
   }
   
   func isCondition(self, e: Expr*): bool{

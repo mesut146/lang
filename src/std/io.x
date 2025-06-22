@@ -93,7 +93,7 @@ struct CmdArgs{
 
 impl CmdArgs{
   func get_arg(args: i8**, idx: i32): str{
-    let ptr = *ptr::get(args, idx) as u8*;
+    let ptr = *ptr::get!(args, idx) as u8*;
     if(ptr as u64 == 0){
       panic("ptr is null");
     }

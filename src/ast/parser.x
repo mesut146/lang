@@ -933,8 +933,7 @@ impl Parser{
       return self.popv();
     }
     self.err(format("expected name got {:?}", self.peek()));
-    //std::unreachable();
-    panic("");
+    std::unreachable!();
   }
   
   func isTypeArg(self, pos: i32): i32{

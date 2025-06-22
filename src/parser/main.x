@@ -4,12 +4,14 @@ import std/fs
 import std/libc
 import std/stack
 import std/result
+
 import ast/lexer
 import ast/token
 import ast/parser
 import ast/ast
 import ast/printer
 import ast/utils
+
 import parser/resolver
 import parser/compiler
 import parser/debug_helper
@@ -17,7 +19,6 @@ import parser/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache
-import parser/tests
 
 func get_vendor(): str{
   return std::env("vendor").unwrap_or("x");
@@ -182,17 +183,10 @@ func handle(cmd: CmdArgs*){
     //todo should be default
     handle_c(cmd);
     return;
-  }
-  if(cmd.is("f") || cmd.is("format")){
-    let dir = format("{}/parser", get_src_dir());
-    let out = format("{}/parser2", get_src_dir());
-    format_dir(dir.str(), out.str());
-    return;
-  }
-  else if(handle_tests(cmd)){
-    return;
   }else{
-    panic("invalid cmd: {:?}", cmd.args);
+    handle_c(cmd);
+    return;
+    //panic("invalid cmd: {:?}", cmd.args);
   }
 }
 

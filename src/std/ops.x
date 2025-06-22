@@ -540,7 +540,7 @@ impl Compare for i32{
 }
 
 func assign_eq<T>(l: T*, r: T){
-  let lval = ptr::deref(l);
+  let lval = ptr::deref!(l);
   std::no_drop(*l);
   *l = r;
   lval.drop();

@@ -10,7 +10,7 @@ impl Any{
     }
     func new<T>(val: T): Any{
         let b = Box<T>::new(val);
-        let b2 = ptr::deref(&b as Box<i8>*);
+        let b2 = ptr::deref!(&b as Box<i8>*);
         std::no_drop(b);
         //Drop::drop as func(T): void
         //let drop_f = T::drop;
@@ -22,7 +22,7 @@ impl Any{
     }
 
     func drop2<T>(*self){
-        let val: T = ptr::deref(self.box.get() as T*);
+        let val: T = ptr::deref!(self.box.get() as T*);
         Drop::drop(val);
         std::no_drop(self);
     }
