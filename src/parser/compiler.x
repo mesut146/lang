@@ -64,6 +64,7 @@ struct CompilerConfig{
   llvm_only: bool;
   debug: bool;
   opt_level: Option<String>;
+  stack_trace: bool;
 }
 
 struct LoopInfo{
@@ -509,7 +510,7 @@ impl Compiler{
   }
   func exit_frame(self){
     let m = *self.curMethod.get();
-    if(self.ctx.stack_trace && !self.is_frame_call(m)){
+    if(self.config.stack_trace && !self.is_frame_call(m)){
       let stmt = parse_stmt("exit_frame();".str(), &self.get_resolver().unit, m.line);
       self.visit(&stmt);
       stmt.drop();
@@ -517,7 +518,7 @@ impl Compiler{
   }
   func enter_frame(self){
     let m = *self.curMethod.get();
-    if(self.ctx.stack_trace && !self.is_frame_call(m)){
+    if(self.config.stack_trace && !self.is_frame_call(m)){
       let pretty = printMethod(m);
       let str = format("enter_frame(\"{} {}:{}\");", pretty, m.path, m.line);
       let stmt = parse_stmt(str, &self.get_resolver().unit, m.line);
@@ -529,7 +530,7 @@ impl Compiler{
   }
   func print_frame(self){
     let m = *self.curMethod.get();
-    if(self.ctx.stack_trace && !self.is_frame_call(m)){
+    if(self.config.stack_trace && !self.is_frame_call(m)){
       let stmt = parse_stmt("print_frame();".str(), self.unit(), m.line);
       self.visit(&stmt);
       stmt.drop();
@@ -920,6 +921,7 @@ impl CompilerConfig{
       llvm_only: false,
       debug: false,
       opt_level: Option<String>::new(),
+      stack_trace: false,
     };
   }
   func set_std(self, std_path: String): CompilerConfig*{

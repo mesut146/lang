@@ -1074,7 +1074,10 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
       if(rt.is_method()){
         let target = r.get_method(&rt).unwrap();
         rt.drop();
-        return is_struct(&target.type);
+        let ret = r.getType(&target.type);
+        let res = is_struct(&ret);
+        ret.drop();
+        return res;
       }
       rt.drop();
       return false;

@@ -1,6 +1,0 @@
-./x bt -root .. x2
-../bin/x-x64 bt -root .. x2
-
-clear;ignore_drop=expr_emitter.x ./x5-dr bt x6-leak
-
-print_drop_real="" drop_enabled="" ignore_drop="alloc_helper.x,ast.x,cache.x,compiler_helper.x,compiler.x,copier.x,debug_helper.x,derive.x,expr_emitter.x,lexer.x,main.x,method_resolver.x,own_helper.x,own_model.x,own_visitor.x,ownership.x,parser.x,printer.x,stmt_emitter.x,tests.x,token.x,utils.x,resolver.x" ./x6-1.5-x64 bt x-drop-alloch

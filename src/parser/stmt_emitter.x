@@ -217,7 +217,7 @@ impl Compiler{
       if(node.return_expr.is_some()){
         let val = self.visit(node.return_expr.get());
         let rt = self.get_resolver().visit(node.return_expr.get());
-        if(is_loadable(&rt.type)){
+        if(is_loadable(&rt.type)){//todo remove
           val = self.loadPrim(val, &rt.type);
         }
         self.own.get().do_move(node.return_expr.get());

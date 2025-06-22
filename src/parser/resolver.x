@@ -47,7 +47,6 @@ struct Context{
   out_dir: String;
   verbose: bool;
   verbose_all: bool;
-  stack_trace: bool;
   prog: Progress;
 }
 impl Context{
@@ -66,7 +65,6 @@ impl Context{
        out_dir: out_dir,
        verbose: true,
        verbose_all: false,
-       stack_trace: std::getenv("TRACE").is_some(),
        prog: prog,
     };
     return res;

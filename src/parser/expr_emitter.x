@@ -48,21 +48,21 @@ impl Compiler{
         Expr::If(is) => {
           let res = self.visit_if(is.get());
           if(res.is_none()){
-            return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(ll.ctx), 0));
+            return self.nullptr();
           }
           return res.unwrap();
         },
         Expr::IfLet(is) => {
           let res = self.visit_iflet(node.line, is.get());
           if(res.is_none()){
-            return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(ll.ctx), 0));
+            return self.nullptr();
           }
           return res.unwrap();
         },
         Expr::Block(b) => {
           let res = self.visit_block(b.get());
           if(res.is_none()){
-            return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(ll.ctx), 0));
+            return self.nullptr();
           }
           return res.unwrap();
         },
@@ -90,7 +90,7 @@ impl Compiler{
         Expr::Match(me) => {
           let res = self.visit_match(node, me.get());
           if(res.is_none()){
-            return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(ll.ctx), 0));
+            return self.nullptr();
           }
           return res.unwrap();
         },
@@ -122,6 +122,10 @@ impl Compiler{
           return ptr;
         }
       }
+    }
+    
+    func nullptr(self): LLVMOpaqueValue*{
+      return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(self.ll.get().ctx), 0));
     }
 
     func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
@@ -1856,7 +1860,6 @@ impl Compiler{
   
     func visit_assign(self, l: Expr*, r: Expr*): LLVMOpaqueValue*{
       if(l is Expr::Infix) panic("assign lhs");
-      //let lhs = Option<LLVMOpaqueValue*>::new();
       let type = self.getType(l);
       if let Expr::Unary(op,l2)=l{
         if(op.eq("*")){
@@ -1908,6 +1911,7 @@ impl Compiler{
           }
         },
         _ => {
+          //todo slice
           panic("glob rhs '{:?}'", expr);
         },
       }
