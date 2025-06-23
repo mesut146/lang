@@ -18,6 +18,7 @@ func read_write(){
   let buf = [0i8; 5];
   let read_cnt = fread(buf.ptr(), 1, 5, fp);
   assert(read_cnt == 5);
+  print("strcmp(buf.ptr(), s.ptr())={}\n", strcmp(buf.ptr(), s.ptr()));
   assert(strcmp(buf.ptr(), s.ptr()) == 0);
 
   fclose(fp);

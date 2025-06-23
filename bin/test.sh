@@ -36,7 +36,7 @@ normal_regex(){
   has_match=false
   for f in $testd/normal/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      run "$compiler c -out $out_dir -stdpath $stdpath $f"
+      LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
       has_match=true
     fi
   done
@@ -49,7 +49,7 @@ normal_regex(){
 std_all(){
   run "$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std" || exit 1
   for f in $testd/std_test/*.x; do
-    run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a $f"
+    LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a $f" || exit 1
   done
 }
 
@@ -57,7 +57,7 @@ std_regex(){
   has_match=false
   for f in $testd/std_test/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a  $f"
+      LD=$linker run "$compiler c -out $out_dir -stdpath $stdpath -flags $out_dir/std.a  $f" || exit 1
       has_match=true
     fi
   done

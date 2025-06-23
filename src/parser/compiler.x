@@ -30,7 +30,15 @@ func get_linker(): str{
   if(opt.is_some()){
     return opt.unwrap();
   }
-  return "clang++-19";
+  let arr = ["clang++-19", "clang++", "g++", "gcc"];
+  for ld in &arr[0..arr.len()]{
+    let res = Process::run(*ld).read_close();
+    if(res.is_ok()){
+      res.drop();
+      return *ld;
+    }
+  }
+  panic("can't find linker");
 }
 
 struct CompilerError{
@@ -380,6 +388,11 @@ impl Compiler{
         self.globals.add(gl.name.clone(), glob );
         name_c.drop();
         continue;
+      }
+      if(std::getenv("TERMUX").is_some()){
+        let pr = self.protos.get().libc("printf");
+        let args = [ll.glob_str("glob init %s::%s\n"), ll.glob_str(Path::name(self.unit().path.str())), ll.glob_str(gl.name.str())];
+        let res = LLVMBuildCall2(ll.builder, pr.ty, pr.val, args.ptr(), args.len() as i32, "".ptr());
       }
       let rt = resolv.visit(gl.expr.get());
       let ty = self.mapType(&rt.type);

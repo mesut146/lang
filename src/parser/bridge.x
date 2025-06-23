@@ -263,9 +263,9 @@ extern{
     //func set_as_executable(path: i8*);
 }
 
-func getDefaultTargetTriple2(): CStr{
+/*func getDefaultTargetTriple2(): CStr{
     let arr = [0u8; 100];
     let ptr = arr.ptr();
     let len = getDefaultTargetTriple(ptr as i8*);
     return CStr::new(arr[0..len + 1]);
-}
+}*/

@@ -34,22 +34,29 @@ $sudo apt-get install -y binutils g++-aarch64-linux-gnu libffi8:arm64 libedit2:a
 
 
 linker="aarch64-linux-gnu-g++"
-
-target_triple="aarch64-linux-gnu" $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
+export target_triple="aarch64-linux-gnu"
+if [ "$4" = "-termux" ]; then
+  $sudo apt-get install -y wget
+  wget "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"
+  unzip "android-ndk-r27c-linux.zip"
+  linker="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+  export target_triple="aarch64-unknown-linux-android24"
+fi
+$compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling" && exit 1
 fi
 
-target_triple="aarch64-linux-gnu" LD=$linker $dir/build_ast.sh $compiler $out_dir || exit 1
+LD=$linker $dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-target_triple="aarch64-linux-gnu" LD=$linker $dir/build_std.sh $compiler $out_dir || exit 1
+LD=$linker $dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 bridge_lib=$toolchain_target/lib/libbridge.a
 llvm_lib=$toolchain_target/lib/libLLVM.so.19.1
 
-flags="$bridge_lib"
+#flags="$bridge_lib"
 flags="$flags $LIB_AST"
 flags="$flags $LIB_STD"
 flags="$flags $llvm_lib"
@@ -57,10 +64,11 @@ flags="$flags -lstdc++"
 
 static_flag=""
 if [ "$4" = "-termux" ]; then
-  static_flag="-static"
+  #static_flag="-static"
+  static_flag=""
 fi
 
-target_triple="aarch64-linux-gnu" LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $static_flag $dir/../src/parser
+LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $static_flag $dir/../src/parser
 if [ ! "$?" -eq "0" ]; then
   echo "Build failed"
   exit 1
