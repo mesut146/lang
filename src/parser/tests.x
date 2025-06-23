@@ -166,7 +166,7 @@ func handle_tests(cmd: CmdArgs*): bool{
     else if(cmd.is("testd")){
         cmd.consume();
         let inc = cmd.consume_any("-inc");
-        let path = cmd.get();
+        let path = cmd.get()?;
         normal_test_dir(path, inc);
         cmd.end();
         return true;
@@ -176,7 +176,7 @@ func handle_tests(cmd: CmdArgs*): bool{
         cmd.consume();
         print_cst = cmd.consume_any("-cst");
         print("cst={}\n", print_cst);
-        let path = cmd.get();
+        let path = cmd.get()?;
         let parser = Parser::from_path(path);
         let unit = parser.parse_unit();
         print("parse done {}\nunit={:?}\n", parser.path(), unit);
@@ -186,7 +186,7 @@ func handle_tests(cmd: CmdArgs*): bool{
     }else if(cmd.is("r")){
         //resolver test
         cmd.consume();
-        let path = cmd.get();
+        let path = cmd.get()?;
         let ctx = Context::new(get_out(), Option::new(get_std_path()));
         let resolver = ctx.create_resolver(&path);
         print("resolve done {}\n", path);
