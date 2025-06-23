@@ -5,6 +5,7 @@ on: [push]
 env:
   last_version: '1.00'
   new_version: '1.01'
+  publish: true
 
 jobs:
   build:
@@ -57,7 +58,7 @@ jobs:
 
 
       - name: Create Release
-        if: ${{ false && env.new_version != env.last_version }}
+        if: ${{ env.publish && env.new_version != env.last_version }}
         id: create_release
         uses: actions/create-release@v1
         with:
@@ -70,7 +71,7 @@ jobs:
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: ${{ false && env.new_version != env.last_version }}
+        if: ${{ env.publish && env.new_version != env.last_version }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip

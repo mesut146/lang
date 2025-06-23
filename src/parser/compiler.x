@@ -807,6 +807,10 @@ impl Compiler{
         cmd.append(" -i ");
         cmd.append(inc_dir);
     }
+    if(config.opt_level.is_some()){
+      cmd.append(" ");
+      cmd.append(config.opt_level.get());
+    }
     cmd.append(" ");
     cmd.append(&args.file);
     if(ctx.verbose){
