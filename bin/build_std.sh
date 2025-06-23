@@ -25,5 +25,5 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
-LIB_STD="$out_dir/$name.a"
+LIB_STD="${out_dir}/${name}.a"
 echo "$LIB_STD">$dir/tmp.txt

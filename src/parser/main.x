@@ -129,7 +129,7 @@ func handle_c(cmd: CmdArgs*){
     }
   }
 
-  let path: String = cmd.get();
+  let path: String = cmd.get()?;
   
   config.set_file(path.str());
   config.set_out(out_dir.clone());

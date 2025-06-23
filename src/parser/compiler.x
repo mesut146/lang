@@ -802,11 +802,13 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    let cmd = format("{} c -out {} -stdpath {} -nolink -cache {}", root_exe.get(), args.config.out_dir, args.config.std_path.get(), args.file);
+    let cmd = format("{} c -out {} -stdpath {} -nolink -cache", root_exe.get(), args.config.out_dir, args.config.std_path.get());
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
     }
+    cmd.append(" ");
+    cmd.append(&args.file);
     if(ctx.verbose){
       let idx = args.idx.lock();
       print("compiling {}\n", config.trim_by_root(args.file.str()));

@@ -207,7 +207,8 @@ impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
     if(self.pos < self.map.len()){
       let idx = self.pos;
       self.pos += 1;
-      return Option::new(ptr::deref!(self.map.get_pair_idx(idx).unwrap()));
+      let tmp = self.map.get_pair_idx(idx).unwrap();
+      return Option::new(ptr::deref!(tmp));
     }
     return Option<Pair<K, V>>::new();
   }

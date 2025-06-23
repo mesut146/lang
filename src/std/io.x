@@ -122,12 +122,12 @@ impl CmdArgs{
   func peek(self): String*{
     return self.args.get(0);
   }
-  func get(self): String{
+  func get(self): Result<String, String>{
     if(self.args.len() == 0){
-      panic("no more arguments");
+      return Result<String, String>::err("no more arguments".owned());
     }
     let res = self.args.remove(0);
-    return res;
+    return Result<String, String>::ok(res);
   }
   func has(self): bool{
     return self.args.len() > 0;
