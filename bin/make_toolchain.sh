@@ -47,8 +47,7 @@ cp $binary $dir/bin/x
 cp $old_toolchain/lib/libbridge.so $dir/lib
 cp $old_toolchain/lib/libbridge.a $dir/lib
 cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
-cp $(dirname $binary)/std.a $dir/lib
-cp $(dirname $binary)/../std_out/std.a $dir/lib
+cp $(dirname $binary)/std_out/std.a $dir/lib
 cp -r $cur/../src/std $dir/src
 
 #change llvm path to relative to toolchain
