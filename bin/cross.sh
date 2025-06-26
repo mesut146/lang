@@ -12,16 +12,15 @@ if [ -z "$3" ]; then
  echo "provide version" && exit 1
 fi
 
-toolchain=$1
-toolchain_target=$2
+host_tool=$1
+target_tool=$2
 version=$3
-compiler="$toolchain/bin/x"
+compiler=$host_tool/bin/x
 build=$dir/../build
 name="x_arm64"
 out_dir=$build/${name}_out
 
 mkdir -p $out_dir
-
 
 linker="aarch64-linux-gnu-g++"
 export target_triple="aarch64-linux-gnu"
@@ -37,8 +36,8 @@ LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 $dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-bridge_lib=$toolchain_target/lib/libbridge.a
-llvm_lib=$toolchain_target/lib/libLLVM.so.19.1
+bridge_lib=$target_tool/lib/libbridge.a
+llvm_lib=$target_tool/lib/libLLVM.so.19.1
 
 #flags="$bridge_lib"
 flags="$flags $LIB_AST"
@@ -67,4 +66,4 @@ if [ "$4" = "-termux" ]; then
 fi
 
 export ARCH=aarch64
-$dir/make_toolchain.sh $out_dir/$name $toolchain_target $dir/.. $version -zip || exit 1
+$dir/make_toolchain.sh $out_dir/$name $target_tool $dir/.. $version -zip || exit 1
