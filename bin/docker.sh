@@ -30,7 +30,7 @@ docker build --progress=plain -t cross -f ./bin/Dockerfile \
 --build-arg version=$version \
 --build-arg termux=$termux .
 
-docker run -name cross cross $dir/cross.sh $host_tool $target_tool $version $termux
+docker run cross -name cross $dir/cross.sh $host_tool $target_tool $version $termux
 
 #docker create --name cross cross
 docker cp cross:/home/lang/x-toolchain-$version-aarch64.zip .
