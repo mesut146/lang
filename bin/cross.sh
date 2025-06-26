@@ -53,6 +53,7 @@ fi
 
 
 cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $static_flag $dir/../src/parser"
+eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "Build failed\n$cmd" && exit 1
 fi
