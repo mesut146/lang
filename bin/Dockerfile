@@ -14,4 +14,5 @@ COPY "$target_tool" /home/lang/
 RUN uname -m
 WORKDIR /home/lang
 RUN rm -rf ./build
-RUN ./bin/cross.sh $host_tool $target_tool $version $termux
+RUN ./bin/cross_env.sh
+#RUN ./bin/cross.sh $host_tool $target_tool $version $termux
