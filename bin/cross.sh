@@ -29,11 +29,12 @@ if [ "$4" = "-termux" ]; then
   linker="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
   export target_triple="aarch64-unknown-linux-android24"
 fi
+export LD=$linker
 
-LD=$linker $dir/build_ast.sh $compiler $out_dir || exit 1
+$dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-LD=$linker $dir/build_std.sh $compiler $out_dir || exit 1
+$dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 bridge_lib=$toolchain_target/lib/libbridge.a
@@ -51,10 +52,10 @@ if [ "$4" = "-termux" ]; then
   static_flag=""
 fi
 
-LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $static_flag $dir/../src/parser
+
+cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $static_flag $dir/../src/parser"
 if [ ! "$?" -eq "0" ]; then
-  echo "Build failed"
-  exit 1
+  echo "Build failed\n$cmd" && exit 1
 fi
 
 if [ "$4" = "-termux" ]; then

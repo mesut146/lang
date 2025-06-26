@@ -1,25 +1,24 @@
 dir=$(dirname $0)
 
 if [ ! -d "$1" ]; then
- echo "provide toolchain dir"
- exit
+ echo "provide toolchain dir" && exit 1
 fi
 
 if [ -z "$2" ]; then
- echo "provide version"
- exit
+ echo "provide version" && exit 1
 fi
 
 toolchain=$1
 version=$2
 compiler="$toolchain/bin/x"
 build=$dir/../build
-mkdir -p $build
 name="xx2"
 out_dir=$build/${name}_out
 
-echo "compiler=$compiler"
-echo "out=$out_dir"
+mkdir -p $out_dir
+
+linker=$($dir/find_llvm.sh clang)
+export LD=$linker
 
 $dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
@@ -35,11 +34,10 @@ flags="$flags $LIB_STD"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 #todo use toolchain's std dir?
-linker=$($dir/find_llvm.sh clang)
-LD=$linker $compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
+
+$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags "$flags" -name $name $dir/../src/parser
 if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling"
-  exit 1
+  echo "error while compiling" && exit 1
 fi
 
 cp ${out_dir}/${name} $build
