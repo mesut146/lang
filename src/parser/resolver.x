@@ -1943,7 +1943,7 @@ impl Resolver{
         }
         let arg_type = self.visit(&e.expr);
         let target_type = &fields.get(i).type;
-        MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params);
+        MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params)?;
         arg_type.drop();
     }
     let res = Simple::new(type.name().clone());

@@ -683,7 +683,7 @@ impl Compiler{
 
   func compile_single(config: CompilerConfig): Result<String, CompilerError>{
     config.use_cache = false;
-    File::create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str())?;
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for inc_dir in &config.src_dirs{
       ctx.add_path(inc_dir.str());
@@ -708,7 +708,7 @@ impl Compiler{
     if(config.jobs > 0){
       return Compiler::compile_dir_thread(config);
     }
-    File::create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str())?;
     let cache = Cache::new(&config);
     cache.read_cache();
     
@@ -742,7 +742,7 @@ impl Compiler{
       let file: String = format("{}/{}", src_dir, rec_file);
       print("recompiling {}\n", config.trim_by_root(file.str()));
       //rem output to trigger recompiling
-      File::remove_file(get_out_file(file.str(), config.out_dir.str()).str());
+      File::remove_file(get_out_file(file.str(), config.out_dir.str()).str())?;
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
       ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
@@ -762,7 +762,7 @@ impl Compiler{
  
   
   func compile_dir_thread(config: CompilerConfig): Result<String, CompilerError>{
-    File::create_dir(config.out_dir.str());
+    File::create_dir(config.out_dir.str())?;
     let cache = Cache::new(&config);
     cache.read_cache();
     let src_dir = &config.file;
@@ -840,7 +840,7 @@ impl Compiler{
   }
 
   func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): Result<String, CompilerError>{
-    File::create_dir(out_dir);
+    File::create_dir(out_dir)?;
     let cmd = "".str();
     if(is_shared){
       cmd.append(get_linker());
@@ -873,7 +873,7 @@ impl Compiler{
     if(File::exists(out_file.str())){
       File::remove_file(out_file.str())?;
     }
-    File::create_dir(out_dir);
+    File::create_dir(out_dir)?;
     let cmd = get_linker().str();
     cmd.append(" -o ");
     cmd.append(&out_file);
