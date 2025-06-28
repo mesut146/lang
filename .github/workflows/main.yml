@@ -5,7 +5,7 @@ on: [push]
 env:
   last_version: '1.00'
   new_version: '1.01'
-  publish: true
+  publish: false
 
 jobs:
   build:

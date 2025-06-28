@@ -196,20 +196,20 @@ impl Attribute{
 
 
 enum ExternItem{
-  Method(m: Method),
-  Global(gl: Global),
+  Method{m: Method},
+  Global{gl: Global},
 }
 
 enum Item{
-  Method(m: Method),
-  Decl(decl: Decl),
-  Impl(i: Impl),
-  Trait(t: Trait),
-  Type(name: String, rhs: Type),
-  Extern(items: List<ExternItem>),
-  Const(val: Const),
-  Glob(gl: Global),
-  Module(m: Module),
+  Method{m: Method},
+  Decl{decl: Decl},
+  Impl{i: Impl},
+  Trait{t: Trait},
+  Type{name: String, rhs: Type},
+  Extern{items: List<ExternItem>},
+  Const{val: Const},
+  Glob{gl: Global},
+  Module{m: Module},
   Use{us: UseItem},
 }
 

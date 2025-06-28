@@ -706,7 +706,7 @@ impl Compiler{
 
   func compile_dir(config: CompilerConfig): Result<String, CompilerError>{
     if(config.jobs > 0){
-      return Compiler::compile_dir_thread2(config);
+      return Compiler::compile_dir_thread(config);
     }
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(&config);
@@ -761,7 +761,7 @@ impl Compiler{
   }
  
   
-  func compile_dir_thread2(config: CompilerConfig): Result<String, CompilerError>{
+  func compile_dir_thread(config: CompilerConfig): Result<String, CompilerError>{
     File::create_dir(config.out_dir.str());
     let cache = Cache::new(&config);
     cache.read_cache();

@@ -40,7 +40,7 @@ bin=$(dirname $compiler)
 #bridge_lib=$toolchain/lib/libbridge.a
 #bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 llvm_lib="/usr/lib/llvm-19/lib/libLLVM.so.19.1"
-if [ "$bin" = */bin ]; then
+if [[ "$bin" = */bin ]]; then
   toolchain=$bin/..
   llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 fi
@@ -53,7 +53,8 @@ flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 
 #todo use toolchain's std dir?
-cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser -j 1 -O2"
+cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser -j 1"
+# cmd="$cmd -O2"
 eval $cmd
 
 if [ ! "$?" -eq "0" ]; then
@@ -62,11 +63,5 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
-#change llvm path to relative to toolchain
-if ! command -v patchelf 2>&1 >/dev/null; then
-  sudo apt install -y patchelf
-fi
-
-#patchelf --set-rpath '$ORIGIN/../lib' ${out_dir}/${name}
 
 cp ${out_dir}/${name} $build

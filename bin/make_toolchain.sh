@@ -31,9 +31,10 @@ binary="$1"
 old_toolchain="$2"
 out_dir="$3"
 version="$4"
-arch=$(uname -m)
-if [ ! -z $ARCH ]; then
-  arch=$ARCH
+arch=$ARCH
+
+if [ -z $ARCH ]; then
+  arch=$(uname -m)
 fi
 name="x-toolchain-${version}-${arch}"
 dir=$out_dir/$name

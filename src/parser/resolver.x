@@ -3069,7 +3069,6 @@ impl Resolver{
     }
     let res = self.visit_nc(node);
     self.cache.add(node.id, res.clone());
-    //print("cached id={} line: {} {}\n", id, node.line, node);
     return res;
   }
   
@@ -3286,6 +3285,10 @@ impl Resolver{
     tmp.drop();
   }
 
+  func is_result_type(ty: Type*): bool{
+    return ty.is_simple() && ty.name().eq("Result");
+  }
+
   func visit(self, node: Stmt*){
     if(verbose_stmt()){
       print("visit stmt {:?}\n", node);
@@ -3293,6 +3296,9 @@ impl Resolver{
     match node{
       Stmt::Expr(e) => {
         let tmp = self.visit(e);
+        if(is_result_type(&tmp.type)){
+          self.err(e, format("Result type not handled, {:?}", tmp.type));
+        }
         tmp.drop();
       },
       Stmt::Ret(e) => {
