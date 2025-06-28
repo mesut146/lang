@@ -61,6 +61,11 @@ fi
 
 cp ${out_dir}/${name} $build
 
+if [ ! -z "stage"]; then
+  compiler2=${out_dir}/${name}
+  cmd="${compiler2} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name-stage2 $dir/../src/parser"
+  eval $cmd
+fi
 
 if [ -d "$target_tool" ]; then
   $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. ${version} -zip || exit 1
