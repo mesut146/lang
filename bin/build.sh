@@ -1,5 +1,7 @@
 dir=$(dirname $0)
 
+echo "build.sh=$@"
+
 if [ ! -d "$1" ]; then
  echo "provide toolchain dir" && exit 1
 fi
@@ -60,7 +62,7 @@ cp ${out_dir}/${name} $build
 
 
 if [ -d $target_tool ]; then
-  $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. $version -zip || exit 1
+  $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. ${version} -zip || exit 1
 else
-  $dir/make_toolchain.sh ${out_dir}/${name} $toolchain . ${version} -zip || exit 1
+  $dir/make_toolchain.sh ${out_dir}/${name} $toolchain $dir/.. ${version} -zip || exit 1
 fi

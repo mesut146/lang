@@ -55,8 +55,8 @@ cp -r $cur/../src/std $dir/src
 if ! command -v patchelf 2>&1 >/dev/null; then
   sudo apt install -y patchelf
 fi
-#patchelf --replace-needed libLLVM.so.19.1 ../lib/libLLVM.so.19.1 ${out_dir}/${name}
-patchelf --set-rpath '$ORIGIN/../lib' ${out_dir}/${name}
+
+patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
 
 if [ $is_zip = true ]; then
   cd $out_dir
