@@ -118,13 +118,13 @@ struct Moved{
 }
 
 enum Rhs{
-    EXPR(e: Expr*),
-    VAR(v: Variable),
-    FIELD(scp: Variable, name: String)
+    EXPR{e: Expr*},
+    VAR{v: Variable},
+    FIELD{scp: Variable, name: String}
 }
 enum Droppable{
-    VAR(var: Variable*),
-    OBJ(obj: Object*)
+    VAR{var: Variable*},
+    OBJ{obj: Object*}
 }
 
 impl Hash for Rhs{

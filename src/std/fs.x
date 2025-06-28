@@ -144,7 +144,7 @@ impl File{
   }
 
   func write_string(data: str, path: str, mode: OpenMode): Result<(), String>{
-    create_dirs_file(path);
+    create_dirs_file(path)?;
     let file = File::open(path, mode)?;
     file.write_bytes(data.slice())?;
     file.close();

@@ -5,9 +5,9 @@ struct A{
 
 enum E{
  A,
- B(a: i32, b: i32),
- C(a: i64),
- D(a: A)
+ B{a: i32, b: i32},
+ C{a: i64},
+ D{a: A}
 }
 
 #repr(i32)

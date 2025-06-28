@@ -40,7 +40,7 @@ struct Signature{
 
 #derive(Debug)
 enum SigResult{
-    Err(s: String),
+    Err{s: String},
     Exact,
     Compatible
 }

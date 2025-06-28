@@ -29,7 +29,6 @@ jobs:
 
       - name: build-x86_64
         id: build_x86_64
-        if: true
         run: |
           bin/build.sh $toolchain_dir $new_version
 
@@ -43,7 +42,6 @@ jobs:
 
       - name: build-arm64
         id: build_arm64
-        if: true
         run: |
           unzip $toolchain_arm64_dir.zip
           ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
@@ -56,6 +54,10 @@ jobs:
           path: ${{ env.tool2_arm64_zip }}
           compression-level: 0
 
+      - name: build-x86_64 stage2
+        id: build_x86_64_2
+        run: |
+          bin/build.sh x-toolchain-${new_version}-x86_64 "$new_version-stage2"
 
       - name: Create Release
         if: ${{ env.publish && env.new_version != env.last_version }}

@@ -1,7 +1,7 @@
 #derive(Debug)
 enum Option<T>{
   None,
-  Some(val: T)
+  Some{val: T}
 }
 
 impl<T> Option<T>{

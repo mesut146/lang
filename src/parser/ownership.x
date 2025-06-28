@@ -822,9 +822,9 @@ impl Own{
         let proto = self.get_proto(rt);
         let args = [ptr];
         let ll = self.compiler.ll.get();
-        LLVMBuildCall2(ll.builder, LLVMTypeOf(proto), proto, args.ptr(), 1, "".ptr());
+        LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
     }
-    func get_proto(self, rt: RType*): LLVMOpaqueValue*{
+    func get_proto(self, rt: RType*): FunctionInfo{
         let resolver = self.compiler.get_resolver();
         let decl = resolver.get_decl(rt).unwrap();
         let helper = DropHelper{resolver};
@@ -839,6 +839,6 @@ impl Own{
         }
         let proto = protos.get_func(method);
         mangled.drop();
-        return proto.val;
+        return proto;
     }
 }

@@ -8,7 +8,7 @@ struct B: A{
 
 enum E: A{
   E1,
-  E2(c: i64)
+  E2{c: i64}
 }
 
 func base_of_struct(){

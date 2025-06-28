@@ -51,9 +51,9 @@ impl CompilerError{
 }
 
 enum LinkType{
-  Binary(name: String, args: String, run: bool),
-  Static(name: String),
-  Dynamic(name: String),
+  Binary{name: String, args: String, run: bool},
+  Static{name: String},
+  Dynamic{name: String},
   None
 }
 

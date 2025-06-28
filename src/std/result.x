@@ -1,7 +1,7 @@
 #derive(Debug)
 enum Result<R, E>{
-  Ok(val: R),
-  Err(e: E)
+  Ok{val: R},
+  Err{e: E}
 }
 
 impl<R, E> Result<R, E>{

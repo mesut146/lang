@@ -287,9 +287,9 @@ struct BaseDecl{
 }
 
 enum Decl: BaseDecl{
-  Struct(fields: List<FieldDecl>),
-  Enum(variants: List<Variant>),
-  TupleStruct(fields: List<FieldDecl>),
+  Struct{fields: List<FieldDecl>},
+  Enum{variants: List<Variant>},
+  TupleStruct{fields: List<FieldDecl>},
 }
 
 impl Decl{
@@ -465,13 +465,13 @@ struct TupleType{
 }
 
 enum Type: Node{
-  Simple(type: Simple),
-  Pointer(type: Box<Type>),
-  Array(type: Box<Type>, size: i32),
-  Slice(type: Box<Type>),
-  Function(type: Box<FunctionType>),
-  Lambda(type: Box<LambdaType>),
-  Tuple(type: TupleType),
+  Simple{type: Simple},
+  Pointer{type: Box<Type>},
+  Array{type: Box<Type>, size: i32},
+  Slice{type: Box<Type>},
+  Function{type: Box<FunctionType>},
+  Lambda{type: Box<LambdaType>},
+  Tuple{type: TupleType},
 }
 impl Type{
   func new(name: str): Type{
@@ -712,12 +712,12 @@ struct IfLet{
 }
 
 enum Stmt: Node{
-    Var(ve: VarExpr),
-    Expr(e: Expr),
-    Ret(e: Option<Expr>),
-    While(cond: Expr, then: Box<Body>),
-    For(e: ForStmt),
-    ForEach(e: ForEach),
+    Var{ve: VarExpr},
+    Expr{e: Expr},
+    Ret{e: Option<Expr>},
+    While{cond: Expr, then: Box<Body>},
+    For{e: ForStmt},
+    ForEach{e: ForEach},
     Continue,
     Break
 }
@@ -729,10 +729,10 @@ impl Stmt{
 }
 
 enum Body: Node{
-  Block(val: Block),
-  Stmt(val: Stmt),
-  If(val: IfStmt),
-  IfLet(val: IfLet)
+  Block{val: Block},
+  Stmt{val: Stmt},
+  If{val: IfStmt},
+  IfLet{val: IfLet}
 }
 
 impl Body{
@@ -819,27 +819,27 @@ enum InfixOp{
 
 //fix-sort
 enum Expr: Node{
-  Lit(val: Literal),
-  Name(val: String),
-  Call(mc: Call),
-  MacroCall(mc: MacroCall),
-  Par(e: Box<Expr>),
-  Type(val: Type),
-  Unary(op: String, e: Box<Expr>),
-  Infix(op: String, l: Box<Expr>, r: Box<Expr>),
-  Access(scope: Box<Expr>, name: String),
-  Obj(type: Type, args: List<Entry>),
-  As(e: Box<Expr>, type: Type),
-  Is(e: Box<Expr>, rhs: Box<Expr>),
-  Array(list: List<Expr>, size: Option<i32>),
-  ArrAccess(val: ArrAccess),
-  Match(val: Box<Match>),
-  Block(x: Box<Block>),
-  If(e: Box<IfStmt>),
-  IfLet(e: Box<IfLet>),
-  Lambda(val: Lambda),
-  Ques(e: Box<Expr>),
-  Tuple(elems: List<Expr>),
+  Lit{val: Literal},
+  Name{val: String},
+  Call{mc: Call},
+  MacroCall{mc: MacroCall},
+  Par{e: Box<Expr>},
+  Type{val: Type},
+  Unary{op: String, e: Box<Expr>},
+  Infix{op: String, l: Box<Expr>, r: Box<Expr>},
+  Access{scope: Box<Expr>, name: String},
+  Obj{type: Type, args: List<Entry>},
+  As{e: Box<Expr>, type: Type},
+  Is{e: Box<Expr>, rhs: Box<Expr>},
+  Array{list: List<Expr>, size: Option<i32>},
+  ArrAccess{val: ArrAccess},
+  Match{val: Box<Match>},
+  Block{x: Box<Block>},
+  If{e: Box<IfStmt>},
+  IfLet{e: Box<IfLet>},
+  Lambda{val: Lambda},
+  Ques{e: Box<Expr>},
+  Tuple{elems: List<Expr>},
 }
 impl Expr{
   func print(self): String{
@@ -869,8 +869,8 @@ struct LambdaParam: Node{
     type: Option<Type>;
 }
 enum LambdaBody{
-    Expr(node: Expr),
-    Stmt(node: Stmt)
+    Expr{node: Expr},
+    Stmt{node: Stmt}
 }
 
 struct MacroCall{
@@ -935,8 +935,8 @@ enum MatchLhs{
 }
 
 enum MatchRhs{
-  EXPR(e: Expr),
-  STMT(stmt: Stmt)
+  EXPR{e: Expr},
+  STMT{stmt: Stmt}
 }
 impl MatchRhs{
   func new(e: Expr): MatchRhs{
