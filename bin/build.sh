@@ -10,14 +10,29 @@ fi
 
 toolchain=$1
 version=$2
+target_tool=$3
+termux=$4
+stage=$5
 compiler="$toolchain/bin/x"
 build=$dir/../build
 name="xx2"
+
+if [ -d $target_tool ]; then
+  name="x_arm64"
+fi
+
 out_dir=$build/${name}_out
 
 mkdir -p $out_dir
 
 linker=$($dir/find_llvm.sh clang)
+if [ -d $target_tool ]; then
+   linker="aarch64-linux-gnu-g++"
+fi
+if [ ! -z "$termux" ]; then
+  linker="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+  export target_triple="aarch64-unknown-linux-android24"
+fi
 export LD=$linker
 
 $dir/build_std.sh $compiler $out_dir || exit 1
@@ -43,4 +58,9 @@ fi
 
 cp ${out_dir}/${name} $build
 
-$dir/make_toolchain.sh ${out_dir}/${name} $toolchain . ${version} -zip
+
+if [ -d $target_tool ]; then
+  $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. $version -zip || exit 1
+else
+  $dir/make_toolchain.sh ${out_dir}/${name} $toolchain . ${version} -zip || exit 1
+fi

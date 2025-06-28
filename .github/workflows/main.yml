@@ -60,7 +60,7 @@ jobs:
           bin/build.sh x-toolchain-${new_version}-x86_64 "$new_version-stage2"
 
       - name: Create Release
-        if: ${{ env.publish && env.new_version != env.last_version }}
+        if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
         id: create_release
         uses: actions/create-release@v1
         with:
@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
-        if: ${{ env.publish && env.new_version != env.last_version }}
+        if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
