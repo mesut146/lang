@@ -19,7 +19,8 @@ compiler="$toolchain/bin/x"
 build=$dir/../build
 name="xx2"
 
-if [ -d $target_tool ]; then
+if [ -d "$target_tool" ]; then
+  echo "target_tool='$target_tool'"
   name="x_arm64"
 fi
 
@@ -28,7 +29,7 @@ out_dir=$build/${name}_out
 mkdir -p $out_dir
 
 linker=$($dir/find_llvm.sh clang)
-if [ -d $target_tool ]; then
+if [ -d "$target_tool" ]; then
    linker="aarch64-linux-gnu-g++"
 fi
 if [ ! -z "$termux" ]; then
@@ -61,7 +62,7 @@ fi
 cp ${out_dir}/${name} $build
 
 
-if [ -d $target_tool ]; then
+if [ -d "$target_tool" ]; then
   $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. ${version} -zip || exit 1
 else
   $dir/make_toolchain.sh ${out_dir}/${name} $toolchain $dir/.. ${version} -zip || exit 1
