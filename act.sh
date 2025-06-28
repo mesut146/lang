@@ -2,7 +2,8 @@ owner=mesut146
 repo=lang
 
 # Get workflow IDs with status "disabled_manually"
-workflow_ids=($(gh api repos/$owner/$repo/actions/workflows --paginate | jq '.workflows[] | select(.["state"] | contains("disabled_manually")) | .id'))
+workflow_ids=($(gh api repos/$owner/$repo/actions/workflows --paginate | jq '.workflows[] | select(.["state"] | contains("active")) | .id'))
+
 
 for workflow_id in "${workflow_ids[@]}"
 do
