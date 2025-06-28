@@ -51,9 +51,13 @@ cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
 cp $(dirname $binary)/std_out/std.a $dir/lib
 cp -r $cur/../src/std $dir/src
 
+sudo=""
+if command -v sudo 2>&1 >/dev/null; then
+  sudo="sudo"
+fi
 #change llvm path to relative to toolchain
 if ! command -v patchelf 2>&1 >/dev/null; then
-  sudo apt install -y patchelf
+  $sudo apt install -y patchelf
 fi
 
 patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
