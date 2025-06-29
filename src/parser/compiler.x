@@ -554,7 +554,7 @@ impl Compiler{
     //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
-    if(std::env("genCode").is_some()){
+    if(std::getenv("genCode").is_some()){
       let s = printMethod(m);
       print("emit {:?}\n", s);
       s.drop();
