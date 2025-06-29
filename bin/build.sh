@@ -1,7 +1,5 @@
 dir=$(dirname $0)
 
-echo "build.sh=$@"
-
 if [ ! -d "$1" ]; then
  echo "provide toolchain dir" && exit 1
 fi
@@ -13,14 +11,11 @@ fi
 toolchain=$1
 version=$2
 target_tool=$3
-termux=$4
-stage=$5
 compiler="$toolchain/bin/x"
 build=$dir/../build
 name="xx2"
 
 if [ -d "$target_tool" ]; then
-  echo "target_tool='$target_tool'"
   name="x_arm64"
 fi
 
@@ -32,7 +27,7 @@ linker=$($dir/find_llvm.sh clang)
 if [ -d "$target_tool" ]; then
    linker="aarch64-linux-gnu-g++"
 fi
-if [ ! -z "$termux" ]; then
+if [ ! -z "$XTERMUX" ]; then
   linker="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
   export target_triple="aarch64-unknown-linux-android24"
 fi
@@ -54,6 +49,12 @@ flags="$flags -lstdc++"
 #todo use toolchain's std dir?
 
 cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+if [ ! -z "$XOPT" ]; then
+  cmd="$cmd $XOPT"
+fi
+if [ ! -z "$XDEBUG" ]; then
+  cmd="$cmd -g"
+fi
 eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling\n$cmd" && exit 1
@@ -61,7 +62,7 @@ fi
 
 cp ${out_dir}/${name} $build
 
-if [ ! -z "$stage" ]; then
+if [ ! -z "$XSTAGE" ]; then
   compiler2=${out_dir}/${name}
   cmd="${compiler2} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name-stage2 $dir/../src/parser"
   eval $cmd
