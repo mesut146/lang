@@ -554,6 +554,9 @@ impl Compiler{
     //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
+    let s = printMethod(m);
+    print("emit {:?}\n", s);
+    s.drop();
     self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
