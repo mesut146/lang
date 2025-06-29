@@ -17,6 +17,7 @@ jobs:
           echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> $GITHUB_ENV
           echo "tool2_x86_64_zip=x-toolchain-${new_version}-x86_64.zip" >> $GITHUB_ENV
           echo "tool2_arm64_zip=x-toolchain-${new_version}-aarch64.zip" >> $GITHUB_ENV
+          echo "tool3_x86_64_zip=x-toolchain-${new_version}-stage2-x86_64.zip" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
       - name: "download toolchain"
@@ -58,6 +59,14 @@ jobs:
         id: build_x86_64_2
         run: |
           XOPT="-O2" bin/build.sh x-toolchain-${new_version}-x86_64 "${new_version}-stage2"
+
+      - name: Upload Artifacts stage2 x86_64
+        if: ${{ steps.build_x86_64_2.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.tool3_x86_64_zip }}
+          path: ${{ env.tool3_x86_64_zip }}
+          compression-level: 0
 
       - name: Create Release
         if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
