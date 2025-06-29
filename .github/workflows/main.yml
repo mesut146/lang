@@ -57,7 +57,7 @@ jobs:
       - name: build-x86_64 stage2
         id: build_x86_64_2
         run: |
-          XOPT="-02" bin/build.sh x-toolchain-${new_version}-x86_64 "${new_version}-stage2"
+          XOPT="-O2" bin/build.sh x-toolchain-${new_version}-x86_64 "${new_version}-stage2"
 
       - name: Create Release
         if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
