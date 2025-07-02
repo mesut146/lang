@@ -1,7 +1,7 @@
 #derive(Debug)
 enum Option<T>{
   None,
-  Some(val: T)
+  Some{val: T}
 }
 
 impl<T> Option<T>{
@@ -52,7 +52,7 @@ impl<T> Option<T>{
   func set(self, val: T){
     //todo return Option{ old val }
     if(self.is_some()){
-      let old = ptr::deref(self.get());
+      let old = ptr::deref!(self.get());
       Drop::drop(old);
     }
     std::no_drop(*self);
@@ -72,7 +72,7 @@ impl<T> Option<T>{
   //clears value, sets this to None
   func reset(self){
     if(self.is_some()){
-      let old = ptr::deref(self.get());
+      let old = ptr::deref!(self.get());
       Drop::drop(old);
     }
     std::no_drop(*self);

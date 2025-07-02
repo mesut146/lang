@@ -7,7 +7,6 @@ import ast/ast
 import ast/utils
 import ast/printer
 
-import parser/bridge
 import parser/own_visitor
 import parser/own_helper
 import parser/own_model
@@ -188,7 +187,7 @@ impl Own{
         }
         return self.is_drop_type(type);
     }
-    func add_prm(self, p: Param*, ptr: Value*){
+    func add_prm(self, p: Param*, ptr: LLVMOpaqueValue*){
         //print("add_prm {}:{} line={}\n", p.name, p.type, p.line);
         if(!self.is_drop_or_ptr(&p.type)) return;
         let var = Variable{
@@ -204,7 +203,7 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(p.id, var);
     }
-    func add_var(self, f: Fragment*, ptr: Value*){
+    func add_var(self, f: Fragment*, ptr: LLVMOpaqueValue*){
         let rt = self.compiler.get_resolver().visit_frag(f);
         if(!self.is_drop_or_ptr(&rt.type)){
             rt.drop();
@@ -225,7 +224,7 @@ impl Own{
         self.var_map.add(var.id, var);
         self.do_move(&f.rhs);
     }
-    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: Value*){
+    func add_iflet_var(self, arg: ArgBind*, fd: FieldDecl*, ptr: LLVMOpaqueValue*){
         if(!self.is_drop_type(&fd.type)) return;
         /*if(rhs_ty.is_pointer()){
             self.get_resolver().err(arg.line, format("can't deref member from ptr '{}'", arg.name));
@@ -243,7 +242,7 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(var.id, var);
     }
-    func add_obj(self, expr: Expr*, ptr: Value*, type: Type*){
+    func add_obj(self, expr: Expr*, ptr: LLVMOpaqueValue*, type: Type*){
         if(!self.is_drop_type(type)) return;
         let obj = Object{
             expr: expr,
@@ -685,7 +684,7 @@ impl Own{
         visitor.drop();
     }
 
-    func drop_lhs(self, lhs: Expr*, ptr: Value*){
+    func drop_lhs(self, lhs: Expr*, ptr: LLVMOpaqueValue*){
         if(!self.is_drop_type(lhs)){
             return;
         }
@@ -808,7 +807,7 @@ impl Own{
         rhs.drop();
     }
 
-    func drop_real(self, rt: RType*, ptr: Value*, line: i32, rhs: Rhs*){
+    func drop_real(self, rt: RType*, ptr: LLVMOpaqueValue*, line: i32, rhs: Rhs*){
         if(!self.is_drop_type(&rt.type)){
             return;
         }
@@ -819,14 +818,13 @@ impl Own{
             Logger::add(format("drop_real at: {} {:?}\n", line, rhs));
         }
     }
-    func drop_force(self, rt: RType*, ptr: Value*, line: i32, rhs: Rhs*){
+    func drop_force(self, rt: RType*, ptr: LLVMOpaqueValue*, line: i32, rhs: Rhs*){
         let proto = self.get_proto(rt);
-        let args = vector_Value_new();
-        vector_Value_push(args, ptr);
-        CreateCall(proto, args);
-        vector_Value_delete(args);
+        let args = [ptr];
+        let ll = self.compiler.ll.get();
+        LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
     }
-    func get_proto(self, rt: RType*): Function*{
+    func get_proto(self, rt: RType*): FunctionInfo{
         let resolver = self.compiler.get_resolver();
         let decl = resolver.get_decl(rt).unwrap();
         let helper = DropHelper{resolver};

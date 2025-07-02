@@ -433,7 +433,11 @@ llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name,
 llvm::DIScope *get_null_scope() { return nullptr; }
 
 llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
+  #if LLVM20
+  return llvm::DIBuilder::createObjectPointerType(ty, true);
+  #else
   return llvm::DIBuilder::createObjectPointerType(ty);
+  #endif
 }
 
 llvm::DIGlobalVariableExpression *
@@ -767,6 +771,10 @@ llvm::Constant *CreateGlobalStringPtr(char *str) {
   return Builder->CreateGlobalStringPtr(str);
 }
 
+llvm::GlobalVariable* CreateGlobalString(char* str){
+  return Builder->CreateGlobalString(str);
+}
+
 bool isPointerTy(llvm::Type *type) { return type->isPointerTy(); }
 bool Value_isPointerTy(llvm::Value *val) {
   return val->getType()->isPointerTy();
@@ -815,7 +823,8 @@ llvm::ArrayType *getArrTy(llvm::Type *elem, int size) {
 }
 
 llvm::PointerType *getPointerTo(llvm::Type *type) {
-  return type->getPointerTo();
+  int adds = 0;
+  return llvm::PointerType::get(type, adds);
 }
 
 llvm::Value *ConstantPointerNull_get(llvm::PointerType *ty) {

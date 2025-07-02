@@ -110,11 +110,18 @@ impl Unit{
     return Node::new(id, line);
   }
 
-  func get_globals(self): List<Global*>{
+  func get_globals(self, ext: bool): List<Global*>{
     let res = List<Global*>::new();
     for item in &self.items{
       if let Item::Glob(g) = item{
         res.add(g);
+      }
+      if let Item::Extern(items)=item{
+        for ei in items{
+          if let ExternItem::Global(g)=ei{
+            res.add(g);
+          }
+        }
       }
     }
     return res;
@@ -158,23 +165,26 @@ impl Attributes{
     return Attributes{list: List<Attribute>::new()};
   }
   func has_attr(self, name: str): bool{
+    return self.find(name).is_some();
+  }
+  func find(self, name: str): Option<Attribute*>{
     for(let i = 0;i < self.list.len();++i){
       let at = self.list.get(i);
-      if(at.is_simple(name)){
-        return true;
+      if(at.name.eq(name)){
+        return Option::new(at);
       }
     }
-    return false;
+    return Option<Attribute*>::new();
   }
 }
 struct Attribute{
   name: String;
-  args: List<String>;
+  args: List<Expr>;
   is_call: bool;
 }
 impl Attribute{
   func new(name: String): Attribute{
-    return Attribute{name: name, args: List<String>::new(), is_call: false};
+    return Attribute{name: name, args: List<Expr>::new(), is_call: false};
   }
   func is_simple(self, name: str): bool{
     return !self.is_call && self.name.eq(name);
@@ -184,16 +194,22 @@ impl Attribute{
   }
 }
 
+
+enum ExternItem{
+  Method{m: Method},
+  Global{gl: Global},
+}
+
 enum Item{
-  Method(m: Method),
-  Decl(decl: Decl),
-  Impl(i: Impl),
-  Trait(t: Trait),
-  Type(name: String, rhs: Type),
-  Extern(methods: List<Method>),
-  Const(val: Const),
-  Glob(gl: Global),
-  Module(m: Module),
+  Method{m: Method},
+  Decl{decl: Decl},
+  Impl{i: Impl},
+  Trait{t: Trait},
+  Type{name: String, rhs: Type},
+  Extern{items: List<ExternItem>},
+  Const{val: Const},
+  Glob{gl: Global},
+  Module{m: Module},
   Use{us: UseItem},
 }
 
@@ -220,7 +236,7 @@ struct Module{
 struct Global: Node{
   name: String;
   type: Option<Type>;
-  expr: Expr;
+  expr: Option<Expr>;
 }
 
 struct Const{
@@ -271,14 +287,17 @@ struct BaseDecl{
 }
 
 enum Decl: BaseDecl{
-  Struct(fields: List<FieldDecl>),
-  Enum(variants: List<Variant>),
-  TupleStruct(fields: List<FieldDecl>),
+  Struct{fields: List<FieldDecl>},
+  Enum{variants: List<Variant>},
+  TupleStruct{fields: List<FieldDecl>},
 }
 
 impl Decl{
   func is_drop(self): bool{
     return self.attr.has_attr("drop");
+  }
+  func is_repr(self): bool{
+    return self.attr.has_attr("repr");
   }
   func is_enum(self): bool{
     return self is Decl::Enum;
@@ -306,6 +325,7 @@ struct Variant{
   name: String;
   fields: List<FieldDecl>;
   is_tuple: bool;
+  disc: Option<i32>;
 }
 
 struct Trait{
@@ -339,7 +359,7 @@ impl Parent{
     match self{
       Parent::Impl(info) => return &info.type,
       Parent::Trait(type) => return type,
-      _ => panic("get_type"),
+      _ => panic("get_type {:?}", self),
     }
   }
   func clone(self): Parent{
@@ -445,13 +465,13 @@ struct TupleType{
 }
 
 enum Type: Node{
-  Simple(type: Simple),
-  Pointer(type: Box<Type>),
-  Array(type: Box<Type>, size: i32),
-  Slice(type: Box<Type>),
-  Function(type: Box<FunctionType>),
-  Lambda(type: Box<LambdaType>),
-  Tuple(type: TupleType),
+  Simple{type: Simple},
+  Pointer{type: Box<Type>},
+  Array{type: Box<Type>, size: i32},
+  Slice{type: Box<Type>},
+  Function{type: Box<FunctionType>},
+  Lambda{type: Box<LambdaType>},
+  Tuple{type: TupleType},
 }
 impl Type{
   func new(name: str): Type{
@@ -692,12 +712,12 @@ struct IfLet{
 }
 
 enum Stmt: Node{
-    Var(ve: VarExpr),
-    Expr(e: Expr),
-    Ret(e: Option<Expr>),
-    While(cond: Expr, then: Box<Body>),
-    For(e: ForStmt),
-    ForEach(e: ForEach),
+    Var{ve: VarExpr},
+    Expr{e: Expr},
+    Ret{e: Option<Expr>},
+    While{cond: Expr, then: Box<Body>},
+    For{e: ForStmt},
+    ForEach{e: ForEach},
     Continue,
     Break
 }
@@ -709,10 +729,10 @@ impl Stmt{
 }
 
 enum Body: Node{
-  Block(val: Block),
-  Stmt(val: Stmt),
-  If(val: IfStmt),
-  IfLet(val: IfLet)
+  Block{val: Block},
+  Stmt{val: Stmt},
+  If{val: IfStmt},
+  IfLet{val: IfLet}
 }
 
 impl Body{
@@ -799,27 +819,27 @@ enum InfixOp{
 
 //fix-sort
 enum Expr: Node{
-  Lit(val: Literal),
-  Name(val: String),
-  Call(mc: Call),
-  MacroCall(mc: MacroCall),
-  Par(e: Box<Expr>),
-  Type(val: Type),
-  Unary(op: String, e: Box<Expr>),
-  Infix(op: String, l: Box<Expr>, r: Box<Expr>),
-  Access(scope: Box<Expr>, name: String),
-  Obj(type: Type, args: List<Entry>),
-  As(e: Box<Expr>, type: Type),
-  Is(e: Box<Expr>, rhs: Box<Expr>),
-  Array(list: List<Expr>, size: Option<i32>),
-  ArrAccess(val: ArrAccess),
-  Match(val: Box<Match>),
-  Block(x: Box<Block>),
-  If(e: Box<IfStmt>),
-  IfLet(e: Box<IfLet>),
-  Lambda(val: Lambda),
-  Ques(e: Box<Expr>),
-  Tuple(elems: List<Expr>),
+  Lit{val: Literal},
+  Name{val: String},
+  Call{mc: Call},
+  MacroCall{mc: MacroCall},
+  Par{e: Box<Expr>},
+  Type{val: Type},
+  Unary{op: String, e: Box<Expr>},
+  Infix{op: String, l: Box<Expr>, r: Box<Expr>},
+  Access{scope: Box<Expr>, name: String},
+  Obj{type: Type, args: List<Entry>},
+  As{e: Box<Expr>, type: Type},
+  Is{e: Box<Expr>, rhs: Box<Expr>},
+  Array{list: List<Expr>, size: Option<i32>},
+  ArrAccess{val: ArrAccess},
+  Match{val: Box<Match>},
+  Block{x: Box<Block>},
+  If{e: Box<IfStmt>},
+  IfLet{e: Box<IfLet>},
+  Lambda{val: Lambda},
+  Ques{e: Box<Expr>},
+  Tuple{elems: List<Expr>},
 }
 impl Expr{
   func print(self): String{
@@ -849,8 +869,8 @@ struct LambdaParam: Node{
     type: Option<Type>;
 }
 enum LambdaBody{
-    Expr(node: Expr),
-    Stmt(node: Stmt)
+    Expr{node: Expr},
+    Stmt{node: Stmt}
 }
 
 struct MacroCall{
@@ -915,8 +935,8 @@ enum MatchLhs{
 }
 
 enum MatchRhs{
-  EXPR(e: Expr),
-  STMT(stmt: Stmt)
+  EXPR{e: Expr},
+  STMT{stmt: Stmt}
 }
 impl MatchRhs{
   func new(e: Expr): MatchRhs{

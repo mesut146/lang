@@ -31,9 +31,10 @@ binary="$1"
 old_toolchain="$2"
 out_dir="$3"
 version="$4"
-arch=$(uname -m)
-if [ ! -z $ARCH ]; then
-  arch=$ARCH
+arch=$ARCH
+
+if [ -z $ARCH ]; then
+  arch=$(uname -m)
 fi
 name="x-toolchain-${version}-${arch}"
 dir=$out_dir/$name
@@ -47,9 +48,19 @@ cp $binary $dir/bin/x
 cp $old_toolchain/lib/libbridge.so $dir/lib
 cp $old_toolchain/lib/libbridge.a $dir/lib
 cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
-cp $(dirname $binary)/std.a $dir/lib
-cp $(dirname $binary)/../std_out/std.a $dir/lib
+cp $(dirname $binary)/std_out/std.a $dir/lib
 cp -r $cur/../src/std $dir/src
+
+sudo=""
+if command -v sudo 2>&1 >/dev/null; then
+  sudo="sudo"
+fi
+#change llvm path to relative to toolchain
+if ! command -v patchelf 2>&1 >/dev/null; then
+  $sudo apt install -y patchelf
+fi
+
+patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
 
 if [ $is_zip = true ]; then
   cd $out_dir

@@ -131,19 +131,25 @@ impl Parser{
     let res = Attributes::new();
     while(self.is(TokenType::HASH)){
       self.pop();
+      if(self.is(TokenType::LBRACKET)){
+        self.consume(TokenType::LBRACKET);
+      }
       let name = self.name();
       let at = Attribute::new(name);
       if(self.is(TokenType::LPAREN)){
         self.consume(TokenType::LPAREN);
         at.is_call = true;
-        at.args.add(self.name());
+        at.args.add(self.parse_expr());
         while(self.is(TokenType::COMMA)){
           self.pop();
-          at.args.add(self.name());
+          at.args.add(self.parse_expr());
         }
         self.consume(TokenType::RPAREN);
       }
       res.list.add(at);
+      if(self.is(TokenType::RBRACKET)){
+        self.consume(TokenType::RBRACKET);
+      }
     }
     return res;
   }
@@ -160,6 +166,25 @@ impl Parser{
     }
     scope.drop();
     return unit;
+  }
+  
+  func parse_global(self): Global{
+      let id = self.node();
+      self.consume(TokenType::STATIC);
+      let name = self.name();
+      let type = Option<Type>::new();
+      if(self.is(TokenType::COLON)){
+        self.pop();
+        type = Option::new(self.parse_type());
+      }
+      if(self.is(TokenType::EQ)){
+        self.consume(TokenType::EQ);
+        let rhs = self.parse_expr();
+        self.consume(TokenType::SEMI);
+        return Global{.id, name, type, Option::new(rhs)};
+      }
+      self.consume(TokenType::SEMI);
+      return Global{.id, name, type, Option<Expr>::new()};
   }
 
   func parse_item(self, scope: Option<Type>*): Item{
@@ -189,23 +214,25 @@ impl Parser{
       return Item::Type{name: name, rhs: rhs};
     }
     else if(self.is(TokenType::EXTERN)){
-      self.pop();
-      let list = self.parse_methods(Parent::Extern);
-      return Item::Extern{methods: list};
+      self.consume(TokenType::EXTERN);
+      self.consume(TokenType::LBRACE);
+      let list = List<ExternItem>::new();
+      while(!self.is(TokenType::RBRACE)){
+        let attr2 = self.parse_attrs();
+        if(self.is(TokenType::STATIC)){
+          list.add(ExternItem::Global{self.parse_global()});
+        }
+        else if(self.is(TokenType::FUNC)){
+          list.add(ExternItem::Method{self.parse_method(Parent::Extern, attr2)});
+        }else{
+          self.err("invalid exten item");
+        }
+      }
+      self.consume(TokenType::RBRACE);
+      return Item::Extern{items: list};
     }
     else if(self.is(TokenType::STATIC)){
-      let id = self.node();
-      self.pop();
-      let name = self.name();
-      let type = Option<Type>::new();
-      if(self.is(TokenType::COLON)){
-        self.pop();
-        type = Option::new(self.parse_type());
-      }
-      self.consume(TokenType::EQ);
-      let rhs = self.parse_expr();
-      self.consume(TokenType::SEMI);
-      return Item::Glob{Global{.id, name, type, rhs}};
+      return Item::Glob{self.parse_global()};
     }
     else if(self.is(TokenType::CONST)){
       self.pop();
@@ -367,6 +394,9 @@ impl Parser{
           is_deref = true;
         }
         let self_name = self.name();
+        if(!(parent is Parent::Impl || parent is Parent::Trait)){
+          self.err("self param inside non impl");
+        }
         let self_ty = parent.get_type().clone();
         if(!is_deref){
           self_ty = self_ty.toPtr();
@@ -533,7 +563,13 @@ impl Parser{
       }
       self.consume(TokenType::RBRACE);
     }
-    return Variant{name, fields, is_tuple};
+    let disc = Option<i32>::new();
+    if(self.is(TokenType::EQ)){
+      self.consume(TokenType::EQ);
+      let tok = self.consume(TokenType::INTEGER_LIT);
+      disc = Option<i32>::new(i32::parse(tok.value.str())?);
+    }
+    return Variant{name, fields, is_tuple, disc};
   }
 
   func parse_type_prim(self, check_closing: bool): Type{
@@ -897,8 +933,7 @@ impl Parser{
       return self.popv();
     }
     self.err(format("expected name got {:?}", self.peek()));
-    //std::unreachable();
-    panic("");
+    std::unreachable!();
   }
   
   func isTypeArg(self, pos: i32): i32{

@@ -40,7 +40,7 @@ struct Signature{
 
 #derive(Debug)
 enum SigResult{
-    Err(s: String),
+    Err{s: String},
     Exact,
     Compatible
 }
@@ -434,15 +434,17 @@ impl MethodResolver{
             }
             else if let Item::Extern(arr) = item{
                 for (let j = 0;j < arr.len();++j) {
-                    let m = arr.get(j);
-                    if (m.name.eq(name)) {
-                        let desc = Desc{
-                            kind: RtKind::MethodExtern{j},
-                            path: m.path.clone(),
-                            idx: i,
-                            scope: Option<Type>::new(),
-                        };
-                        list.add(Signature::new(m, desc, self.r, origin));
+                    let exi = arr.get(j);
+                    if let ExternItem::Method(m)=exi{
+                      if (m.name.eq(name)) {
+                          let desc = Desc{
+                              kind: RtKind::MethodExtern{j},
+                              path: m.path.clone(),
+                              idx: i,
+                              scope: Option<Type>::new(),
+                          };
+                          list.add(Signature::new(m, desc, self.r, origin));
+                      }
                     }
                 }
             }
@@ -455,8 +457,8 @@ impl MethodResolver{
         //print("---------\n\n");
         if(list_res.is_err()){
             self.r.err(expr, list_res.unwrap_err());
-            //std::unreachable();
-            panic("unr");
+            //std::unreachable!();
+            panic("");
         }
         let list = list_res.unwrap();
         if(list.empty()){
@@ -494,7 +496,7 @@ impl MethodResolver{
             //real.drop();
             //errors.drop();
             self.r.err(expr, f.unwrap());
-            //std::unreachable();
+            //std::unreachable!();
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {:?} has {} candidates\n", mc, real.size());
@@ -509,7 +511,7 @@ impl MethodResolver{
             //real.drop();
             //errors.drop();
             self.r.err(expr, msg);
-            //std::unreachable();
+            //std::unreachable!();
         }
         let target_sig = *real.get(0);
         if(exact.is_some()){
@@ -584,7 +586,7 @@ impl MethodResolver{
                 //real.drop();
                 //errors.drop();
                 self.r.err(expr, msg);
-                //std::unreachable();
+                //std::unreachable!();
             }
         }
         if(sig.scope.is_some()){

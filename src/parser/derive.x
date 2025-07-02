@@ -41,7 +41,7 @@ func generate_derive(r: Resolver*, decl: Decl*, unit: Unit*, name: str): Impl{
         r.err(decl.line, "drop is auto impl");
     }
     r.err(decl.line, format("generate_derive decl: {:?} der: '{}'", decl.type, name));
-    std::unreachable();
+    std::unreachable!();
 }
 
 func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
@@ -194,8 +194,8 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let line = decl.line;
     let body = Block::new(line, line);
     if(decl.base.is_some()){
-        //Drop::drop(ptr::deref(self as <Base>*));
-        body.list.add(parse_stmt(format("Drop::drop(ptr::deref(self as {:?}*));", decl.base.get()), unit, line));
+        //Drop::drop(ptr::deref!(self as <Base>*));
+        body.list.add(parse_stmt(format("Drop::drop(ptr::deref!(self as {:?}*));", decl.base.get()), unit, line));
     }
     match decl{
         Decl::Enum(variants)=>{

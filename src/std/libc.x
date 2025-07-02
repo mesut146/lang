@@ -63,7 +63,7 @@ func strlen(arr: [i8]): i32{
 }
 func strlen(arr: i8*, max: i32): i32{
   for(let i = 0;i < max;++i){
-    let chr = *ptr::get(arr, i);
+    let chr = *ptr::get!(arr, i);
     if(chr == 0) return i;
   }
   panic("no eof max={}", max);
@@ -81,6 +81,9 @@ func SEEK_SET(): i32 { return 0; }
 //func SEEK_CUR(): i32 { return 0; }
 
 extern{
+  //static stdout: cFILE*;
+  
+  
   //func printf(fmt: i8*, ...);
   func exit(code: i32);
   func free(ptr: i8*);
@@ -162,6 +165,12 @@ struct timespec{
   tv_sec: time_t;
   tv_nsec: time_t;
 }
+impl timespec{
+  func as_sec(self): i64{
+    return self.tv_sec + self.tv_nsec / 1000000000;
+  }
+}
+
 #derive(Debug)
 struct timeval {
   tv_sec: time_t;     /* seconds */
@@ -197,7 +206,7 @@ struct stat{
   st_atim: timespec;
   st_mtim: timespec;
   st_ctim: timespec;
-  st_atime: time_t;
-  st_mtime: time_t;
-  st_ctime: time_t;
+  //st_atime: time_t;
+  //st_mtime: time_t;
+  //st_ctime: time_t;
 }

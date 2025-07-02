@@ -1,29 +1,40 @@
 dir=$(dirname $0)
 
-if [ ! -d "$1" ]; then
- echo "provide toolchain dir"
- exit
-fi
-
 toolchain=$1
 compiler="$toolchain/bin/x"
+
+if [ -f "$1" ]; then
+  compiler="$1"
+  toolchain=$dir/..
+elif [ -d "$1" ]; then
+  toolchain="$1"
+  compiler="$toolchain/bin/x"
+else
+  echo "provide toolchain dir or compiler"; exit 1
+fi
+
 pat=$2
 build=$dir/../build
 mkdir -p $build
 out_dir=$build/test_out
 testd=$dir/../tests
+stdpath=$toolchain/src
+linker=$($dir/find_llvm.sh clang)
+isgdb=false
 
-check(){
-  if [ ! "$?" -eq "0" ]; then
-    echo "error while compiling $1"
-    exit 1
-  fi
+if [ "$4" = "-gdb" ] || [ "$3" = "-gdb" ] || [ "$2" = "-gdb" ] || [ "$1" = "-gdb" ]; then
+  isgdb=true
+fi
+
+export LD=$linker 
+
+run(){
+  eval $1 || (echo "error while compiling '$1'"; exit 1)
 }
 
 normal(){
   for f in $testd/normal/*.x; do
-    $compiler c -out $out_dir -stdpath $toolchain/src $f
-    check $f
+    run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
   done
 }
 
@@ -31,8 +42,7 @@ normal_regex(){
   has_match=false
   for f in $testd/normal/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $toolchain/src $f
-      check $f
+      run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
       has_match=true
     fi
   done
@@ -43,19 +53,31 @@ normal_regex(){
 }
 
 std_all(){
-  $compiler c -cache -static -stdpath $dir/../src -i $dir/../src -out $out_dir $dir/../src/std
+  $dir/build_std.sh $compiler $out_dir || exit 1
+  LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+
   for f in $testd/std_test/*.x; do
-    $compiler c -out $out_dir -stdpath $toolchain/src -flags $out_dir/std.a $f
-    check $f
+    run "$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" || exit 1
   done
 }
 
 std_regex(){
+  $dir/build_std.sh $compiler $out_dir || exit 1
+  LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   has_match=false
+  
   for f in $testd/std_test/*.x; do
     if [[ "$f" =~ $1 ]]; then
-      $compiler c -out $out_dir -stdpath $toolchain/src -flags $out_dir/std.a  $f
-      check $f
+      cmd="run '$compiler c -g -out $out_dir -stdpath $stdpath -flags $LIB_STD $f'"
+      eval $cmd
+      if [ ! "$?" -eq "0" ]; then
+        if [ $isgdb = true ]; then
+          gdb --eval-command="b exit" --eval-command "r c -g -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" $compiler
+          #filename="${f%.*}"
+          #gdb --eval-command="b exit" --eval-command "r" ${out_dir}/${filename}.bin
+        fi
+        exit 1
+      fi
       has_match=true
     fi
   done
@@ -74,5 +96,5 @@ elif [ "$pat" == "std" ]; then
     std_regex $3
   fi
 elif [ ! -z "$pat" ]; then
-  normal_regex $2
+  normal_regex $pat
 fi

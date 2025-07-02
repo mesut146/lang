@@ -18,6 +18,7 @@ func read_write(){
   let buf = [0i8; 5];
   let read_cnt = fread(buf.ptr(), 1, 5, fp);
   assert(read_cnt == 5);
+  print("strcmp(buf.ptr(), s.ptr())={}\n", strcmp(buf.ptr(), s.ptr()));
   assert(strcmp(buf.ptr(), s.ptr()) == 0);
 
   fclose(fp);
@@ -74,6 +75,17 @@ func fork_test(){
   }
 }
 
+func stat_test(){
+  let file_name = file_name();
+  let fp = fopen(file_name.ptr(), "w+".ptr());
+  let arr = [0i8; 1000];
+  let buf: stat* = arr.ptr() as stat*;
+  stat(file_name.ptr(), buf);
+  print("stat={:?}\n", buf);
+  fclose(fp);
+  printf("remove result=%d\n", remove(file_name.ptr()));
+}
+
 func main(){
   parse_float();
   let cur = File::resolve(".").unwrap();
@@ -83,6 +95,7 @@ func main(){
   time_test();
   measure();
   fork_test();
-  cur.drop();
+  stat_test();
   print("libc_test done\n");
+  cur.drop();
 }

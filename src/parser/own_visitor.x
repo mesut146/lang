@@ -7,7 +7,7 @@ import ast/utils
 import parser/ownership
 import parser/own_helper
 import parser/own_model
-import parser/bridge
+import parser/llvm
 import parser/compiler
 import parser/resolver
 import parser/compiler_helper
@@ -79,7 +79,7 @@ impl OwnVisitor{
     func visit_var(self, ve: VarExpr*){
         for(let i = 0;i < ve.list.len();++i){
             let fr = ve.list.get(i);
-            self.own.add_var(fr, ptr::null<Value>());
+            self.own.add_var(fr, ptr::null<LLVMOpaqueValue>());
             self.do_move(&fr.rhs);
         }
     }
@@ -101,7 +101,7 @@ impl OwnVisitor{
         }
     }
     func visit_call(self, expr: Expr*, mc: Call*){
-        if(Resolver::is_call(mc, "std", "no_drop")){
+        if(Utils::is_call(mc, "std", "no_drop")){
             let arg = mc.args.get(0);
             self.do_move(arg);
             return;

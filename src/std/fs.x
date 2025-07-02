@@ -54,6 +54,7 @@ impl OpenMode{
 
 impl File{
   func open(path: str, mode: OpenMode): Result<File, String>{
+    create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), mode.as_c_str());
     path_c.drop();
@@ -64,6 +65,7 @@ impl File{
   }
 
   func create(path: str): Result<File, String>{
+    create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), "w".cptr());
     if(fp as u64 == 0){
@@ -131,12 +133,18 @@ impl File{
     }
     return Result<(), String>::ok(());
   }
+
+  func write_string(self, data: str): Result<(), String>{
+    self.write_bytes(data.slice())?;
+    return Result<(), String>::ok(());
+  }
   
   func write_string(data: str, path: str): Result<(), String>{
     return write_string(data, path, OpenMode::Write);
   }
 
   func write_string(data: str, path: str, mode: OpenMode): Result<(), String>{
+    create_dirs_file(path)?;
     let file = File::open(path, mode)?;
     file.write_bytes(data.slice())?;
     file.close();
@@ -192,6 +200,11 @@ impl File{
   func exists(path: str): bool{
     return is_file(path) || is_dir(path);
   }
+
+  func create_dirs_file(file: str): Result<(), String>{
+    let parent = Path::parent(file);
+    return File::create_dir(parent);
+  }
   
   func create_dir(path: str): Result<(), String>{
     if(exists(path)){
@@ -228,6 +241,17 @@ impl File{
     }
     Drop::drop(filec);
     return Result<(), String>::ok(());
+  }
+
+  func get_last_write_time(file: str): i64{
+    let arr = [0i8; 1000];
+    let buf: stat* = arr.ptr() as stat*;
+    let filec = file.cstr();
+    if(stat(filec.ptr(), buf) != 0){
+      panic("libc::stat failed for '{}'", file);
+    }
+    filec.drop();
+    return buf.st_mtim.as_sec();
   }
 }
 

@@ -12,7 +12,7 @@ impl<T> Box<T>{
           panic("box alloc failed");
         }
         //*ptr = val;
-        ptr::copy(ptr, 0, val);
+        ptr::copy!(ptr, 0, val);
         std::no_drop(val);
         return Box<T>{val: ptr};
     }
@@ -22,14 +22,14 @@ impl<T> Box<T>{
     }
 
     func unwrap(*self): T{
-      let res = ptr::deref(self.val);
+      let res = ptr::deref!(self.val);
       std::no_drop(self);
       return res;
     }
 
     func set(self, e: T): T{
-      let old = ptr::deref(self.val);
-      ptr::copy(self.val, 0, e);
+      let old = ptr::deref!(self.val);
+      ptr::copy!(self.val, 0, e);
       std::no_drop(e);
       return old;
     }

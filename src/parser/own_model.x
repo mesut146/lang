@@ -6,7 +6,7 @@ import ast/ast
 import ast/utils
 import ast/printer
 
-import parser/bridge
+import parser/llvm
 import parser/ownership
 import parser/own_visitor
 import parser/own_model
@@ -23,7 +23,7 @@ import parser/exit
 struct Variable {
     name: String;
     type: Type;
-    ptr: Value*;
+    ptr: LLVMOpaqueValue*;
     id: i32;
     line: i32;
     scope: i32;
@@ -47,7 +47,7 @@ impl Variable{
 #derive(Debug)
 struct Object {
     expr: Expr*;
-    ptr: Value*;
+    ptr: LLVMOpaqueValue*;
     id: i32;          //prm
     name: String;     //prm
     scope: i32;
@@ -118,13 +118,13 @@ struct Moved{
 }
 
 enum Rhs{
-    EXPR(e: Expr*),
-    VAR(v: Variable),
-    FIELD(scp: Variable, name: String)
+    EXPR{e: Expr*},
+    VAR{v: Variable},
+    FIELD{scp: Variable, name: String}
 }
 enum Droppable{
-    VAR(var: Variable*),
-    OBJ(obj: Object*)
+    VAR{var: Variable*},
+    OBJ{obj: Object*}
 }
 
 impl Hash for Rhs{

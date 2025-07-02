@@ -1,6 +1,7 @@
 import std/libc
 import std/any
 import std/result
+import std/fs
 
 //0 stdin
 //1 stdout
@@ -92,7 +93,7 @@ struct CmdArgs{
 
 impl CmdArgs{
   func get_arg(args: i8**, idx: i32): str{
-    let ptr = *ptr::get(args, idx) as u8*;
+    let ptr = *ptr::get!(args, idx) as u8*;
     if(ptr as u64 == 0){
       panic("ptr is null");
     }
@@ -108,8 +109,11 @@ impl CmdArgs{
     }
     return res;
   }
-  func get_root(self): str{
-    return self.root.str();
+  func get_root(): str{
+    return root_exe.get().str();
+  }
+  func get_name(): str{
+    return Path::name(root_exe.get().str());
   }
   func consume(self){
     let arg = self.get();
@@ -118,12 +122,12 @@ impl CmdArgs{
   func peek(self): String*{
     return self.args.get(0);
   }
-  func get(self): String{
+  func get(self): Result<String, String>{
     if(self.args.len() == 0){
-      panic("no more arguments");
+      return Result<String, String>::err("no more arguments".owned());
     }
     let res = self.args.remove(0);
-    return res;
+    return Result<String, String>::ok(res);
   }
   func has(self): bool{
     return self.args.len() > 0;

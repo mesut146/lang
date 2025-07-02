@@ -5,16 +5,36 @@ struct A{
 
 enum E{
  A,
- B(a: i32, b: i32),
- C(a: i64),
- D(a: A)
+ B{a: i32, b: i32},
+ C{a: i64},
+ D{a: A}
 }
 
+#repr(i32)
+enum F{
+  A = 10,
+  B = 20, 
+  C
+}
+
+func test_repr(){
+  let a = F::A;
+  assert(a == 10);
+  let a2 = a as i32;
+  assert(a2 == 10);
+  let b = F::B as i32;
+  assert(b == 20);
+  assert(F::C == 21);
+  
+  printf("enumcons=%d\n", F::A|F::B);
+}
 
 func main(){
   let a: E = E::A;
   let c: E = E::C{100};
   let d: E = E::D{A{a: 100, b: 200}};
+
+  //let ss = a as i32;
   
   assert(a is E::A);
   assert(c is E::C);
@@ -39,6 +59,7 @@ func main(){
   assert(isC);
   assert(isD);
   test_mut();
+  test_repr();
   print("enumTest done\n");
 }
 

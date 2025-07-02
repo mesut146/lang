@@ -4,4 +4,3 @@ cmake-build-debug
 out
 .vscode
 cpp_bridge/build
-cpp_source/build

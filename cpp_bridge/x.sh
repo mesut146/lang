@@ -16,10 +16,17 @@ llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
 clang_bin=$(${dir}/../bin/find_llvm.sh clang)
 llvm_dir=$($llvm_config_bin --includedir)
 
+if [ ! -z "$CC" ]; then
+  clang_bin="$CC"
+fi
 
 echo "llvm_dir=$llvm_dir"
 
-$clang_bin -I$llvm_dir -c -o $obj $dir/src/bridge.cpp
+if [ ! -z "$TERMUX_VERSION" ]; then
+  $clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp -DLLVM20
+else
+  $clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp
+fi
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1

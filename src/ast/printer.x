@@ -10,7 +10,7 @@ static print_cst = false;
 //static pretty_print = true;
 
 func format_dir(dir: str, out: str){
-    File::create_dir(out);
+    File::create_dir(out)?;
     let files = File::read_dir(dir).unwrap();
     for file in &files{
         let file2 = format("{}/{}", dir, file);
@@ -106,6 +106,15 @@ impl Debug for ImportStmt{
   func debug(self, f: Fmt*){
     f.print("import ");
     join(f, &self.list, "/");
+  }
+}
+
+impl Debug for ExternItem {
+  func debug(self, f: Fmt*){
+    match self{
+      ExternItem::Method(m) => m.debug(f),
+      ExternItem::Global(gl) => gl.debug(f),
+    }
   }
 }
 

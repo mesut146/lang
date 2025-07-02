@@ -55,7 +55,7 @@ func listAlign(){
   let e1 = Align{1i8, 2i16, 3};
   let e2 = Align{4i8, 5i16, 6};
   let e3 = Align{10i8, 20i16, 30};
-  *ptr::get(arr, 0) = e1;
+  *ptr::get!(arr, 0) = e1;
   free(arr as i8*);
 }
 

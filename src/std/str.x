@@ -77,7 +77,7 @@ impl str{
       return self.indexOf(s, pos) == pos;
     }
 
-    func is_valid(c: i8){
+    func is_valid(self, c: i8){
       if(c == 0) return;
       if(c >= '0' && c <= '9') return;
       if(c >= 'a' && c <= 'z') return;
@@ -86,12 +86,12 @@ impl str{
       for(let i = 0;i < arr.len();++i){
         if(arr[i] == c) return;
       }
-      panic("str::is_valid ({})='{}'\n", c as i32, c);
+      panic("str::is_valid ({})='{}'\nbuf={}", c as i32, c, self);
     }
 
     func check_all(self){
       for(let i = 0;i < self.len();++i){
-        is_valid(self.buf[i]);
+        self.is_valid(self.buf[i]);
       }
     }
 

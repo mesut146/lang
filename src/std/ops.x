@@ -11,6 +11,17 @@ func dbg(s1: String, s2: str, id: i32){
   s1.drop();
 }
 
+struct Pair<K, V>{
+  a: K;
+  b: V;
+}
+
+impl<K, V> Pair<K, V>{
+  func new(a: K, b: V): Pair<K, V>{
+    return Pair{a, b};
+  }
+}
+
 trait Eq{
   func eq(self, x: Self*): bool;
 }
@@ -529,7 +540,7 @@ impl Compare for i32{
 }
 
 func assign_eq<T>(l: T*, r: T){
-  let lval = ptr::deref(l);
+  let lval = ptr::deref!(l);
   std::no_drop(*l);
   *l = r;
   lval.drop();

@@ -1,4 +1,5 @@
 import std/it
+import std/map
 
 func test_normal(){
     let list = List<i32>::new();
@@ -8,7 +9,7 @@ func test_normal(){
     let arr = [11, 22, 33];
     let i = 0;
     for x in &list{
-        assert(std::typeof(x).eq("i32*"));
+        assert(std::typeof!(x).eq("i32*"));
         assert(*x == arr[i]);
         i += 1;
     }
@@ -22,7 +23,7 @@ func test_into_iter(){
     let arr = [111, 222, 333];
     let i = 0;
     for x in list{
-        assert(std::typeof(x).eq("i32"));
+        assert(std::typeof!(x).eq("i32"));
         assert(x == arr[i]);
         i += 1;
     }
@@ -33,7 +34,7 @@ func slice_iter(){
     let slice = arr[0..3];
     let i = 0;
     for x in &slice{
-        assert(std::typeof(x).eq("i32*"));
+        assert(std::typeof!(x).eq("i32*"));
         assert(*x == arr[i]);
         i += 1;
     }
@@ -44,7 +45,7 @@ func slice_into_iter(){
     let slice = arr[0..3];
     let i = 0;
     for x in slice{
-        assert(std::typeof(x).eq("i32"));
+        assert(std::typeof!(x).eq("i32"));
         assert(x == arr[i]);
         i += 1;
     }
@@ -59,7 +60,7 @@ func map_iter(){
     let vals = [7, 11, 13];
     let i = 0;
     for pair in &map{
-        assert(std::typeof(pair).eq("Pair<i32*, i32*>"));
+        assert(std::typeof!(pair).eq("Pair<i32*, i32*>"));
         assert_eq(*pair.a, keys[i]);
         assert_eq(*pair.b, vals[i]);
         i += 1;
@@ -75,7 +76,7 @@ func map_into_iter(){
     let vals = [7, 11, 13];
     let i = 0;
     for pair in map{
-        assert(std::typeof(pair).eq("Pair<i32, i32>"));
+        assert(std::typeof!(pair).eq("Pair<i32, i32>"));
         assert(pair.a == keys[i]);
         assert(pair.b == vals[i]);
         i += 1;

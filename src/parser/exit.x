@@ -1,5 +1,5 @@
 import ast/ast
-import parser/resolver
+import ast/utils
 
 enum ExitType {
     NONE,
@@ -96,7 +96,7 @@ impl Exit{
         return false;
     }
     func is_jump(self): bool{
-        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXITCALL) return true;
+        if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXITCALL || self.kind is ExitType::UNREACHABLE) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();
         if(!self.cases.empty()) return self.is_jump2();
         return false;
@@ -182,16 +182,13 @@ impl Exit{
                 if(call.name.eq("exit") && call.scope.is_none()){
                     return Exit::new(ExitType::EXITCALL);
                 }
-                if(Resolver::is_call(call, "std", "unreachable")){
-                    return Exit::new(ExitType::UNREACHABLE);
-                }
                 return Exit::new(ExitType::NONE);
             },
             Expr::MacroCall(call) => {
                 if(call.name.eq("panic") && call.scope.is_none()){
                     return Exit::new(ExitType::PANIC);
                 }
-                if(Resolver::is_call(call, "std", "unreachable")){
+                if(Utils::is_call(call, "std", "unreachable")){
                     return Exit::new(ExitType::UNREACHABLE);
                 }
                 return Exit::new(ExitType::NONE);

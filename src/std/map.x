@@ -2,16 +2,6 @@
 //import std/Option
 import std/ops
 
-struct Pair<K, V>{
-  a: K;
-  b: V;
-}
-
-impl<K, V> Pair<K, V>{
-  func new(a: K, b: V): Pair<K, V>{
-    return Pair{a, b};
-  }
-}
 
 //map with Eq::eq and insertion order
 struct Map<K, V>{
@@ -40,8 +30,8 @@ impl<K, V> Map<K, V>{
     }
     //already exist, change old
     let pair: Pair<K, V>* = opt.unwrap();
-    let old_a = ptr::deref(&pair.a);
-    let old_b = ptr::deref(&pair.b);
+    let old_a = ptr::deref!(&pair.a);
+    let old_b = ptr::deref!(&pair.b);
     Drop::drop(old_a);
     Drop::drop(old_b);
     std::no_drop(pair.a);
@@ -217,7 +207,8 @@ impl<K, V> Iterator<Pair<K, V>> for MapIntoIter<K, V>{
     if(self.pos < self.map.len()){
       let idx = self.pos;
       self.pos += 1;
-      return Option::new(ptr::deref(self.map.get_pair_idx(idx).unwrap()));
+      let tmp = self.map.get_pair_idx(idx).unwrap();
+      return Option::new(ptr::deref!(tmp));
     }
     return Option<Pair<K, V>>::new();
   }
