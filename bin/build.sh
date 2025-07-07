@@ -23,10 +23,14 @@ out_dir=$build/${name}_out
 
 mkdir -p $out_dir
 
+bridge_lib="$toolchain/lib/libbridge.a"
+llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 linker=$($dir/find_llvm.sh clang)
 if [ -d "$target_tool" ]; then
-   linker="aarch64-linux-gnu-g++"
-   export target_triple="aarch64-linux-gnu"
+    linker="aarch64-linux-gnu-g++"
+    export target_triple="aarch64-linux-gnu"
+    bridge_lib="$target_tool/lib/libbridge.a"
+    llvm_lib="$target_tool/lib/libLLVM.so.19.1"
 fi
 if [ ! -z "$XTERMUX" ]; then
   linker="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
@@ -40,8 +44,6 @@ LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 $dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
-bridge_lib="$toolchain/lib/libbridge.a"
-llvm_lib="$toolchain/lib/libLLVM.so.19.1"
 #flags="$bridge_lib"
 flags="$flags $LIB_AST"
 flags="$flags $LIB_STD"
