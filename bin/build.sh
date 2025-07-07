@@ -72,6 +72,7 @@ if [ ! -z "$XSTAGE" ]; then
 fi
 
 if [ -d "$target_tool" ]; then
+  export ARCH=aarch64
   $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. ${version} -zip || exit 1
 else
   $dir/make_toolchain.sh ${out_dir}/${name} $toolchain $dir/.. ${version} -zip || exit 1
