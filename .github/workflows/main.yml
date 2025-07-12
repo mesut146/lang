@@ -45,7 +45,7 @@ jobs:
         id: build_arm64
         run: |
           unzip $toolchain_arm64_dir.zip
-          ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
+          XOPT="" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
         if: ${{ steps.build_arm64.outcome == 'success' }}
