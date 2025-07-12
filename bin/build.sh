@@ -13,8 +13,8 @@ version=$2
 target_tool=$3
 compiler="$host_tool/bin/x"
 build=$dir/../build
-name="stage1"
 
+name="stage1"
 if [ -d "$target_tool" ]; then
   name="stage1_arm64"
 fi
@@ -75,6 +75,10 @@ if [ ! -z "$XSTAGE" ]; then
   #cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name stage2 $dir/../src/parser"
   #eval $cmd
   compiler=$final_binary
+  name="stage2"
+  if [ -d "$target_tool" ]; then
+    name="stage2_arm64"
+  fi
   build
   final_binary=${out_dir}/stage2
 fi
