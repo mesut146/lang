@@ -80,4 +80,4 @@ if [ -d "$target_tool" ]; then
   old_tool=$target_tool
 fi
 
-$dir/make_toolchain.sh '$final_binary' $old_tool $dir/.. ${version} -zip || exit 1
+$dir/make_toolchain.sh "$final_binary" $old_tool $dir/.. ${version} -zip || exit 1

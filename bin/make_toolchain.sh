@@ -1,6 +1,6 @@
 
 if [ ! -f "$1" ]; then
-  echo "provide compiler binary \$1"
+  echo "provide compiler binary $1"
   exit
 fi
 
