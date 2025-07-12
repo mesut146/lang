@@ -68,9 +68,10 @@ final_binary=${out_dir}/${name}
 cp ${out_dir}/${name} $build
 
 if [ ! -z "$XSTAGE" ]; then
-  cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name-stage2 $dir/../src/parser"
+  out_dir=$build/stage2_out
+  cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name stage2 $dir/../src/parser"
   eval $cmd
-  final_binary=${out_dir}/${name}-stage2
+  final_binary=${out_dir}/stage2
 fi
 
 old_tool=$host_tool
