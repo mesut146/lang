@@ -30,9 +30,7 @@ docker build --progress=plain -t cross -f ./bin/Dockerfile \
 --build-arg version=$version \
 --build-arg termux=$termux .
 
-#docker rm cross
-#docker run --name crossc cross sh -c "$dir/cross.sh $host_tool $target_tool $version $termux"
-docker run --name crossc cross sh -c "$dir/build.sh $host_tool $version $target_tool"
+docker run --name crossc cross sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/build.sh $host_tool $version $target_tool"
 
 #docker create --name crossc cross
 docker cp crossc:/home/lang/x-toolchain-$version-aarch64.zip .
