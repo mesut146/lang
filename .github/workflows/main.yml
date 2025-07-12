@@ -31,7 +31,7 @@ jobs:
       - name: build-x86_64
         id: build_x86_64
         run: |
-          bin/build.sh $toolchain_dir $new_version
+          XOPT="" XSTAGE="1" bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts x86_64
         if: ${{ steps.build_x86_64.outcome == 'success' }}
@@ -53,19 +53,6 @@ jobs:
         with:
           name: ${{ env.tool2_arm64_zip }}
           path: ${{ env.tool2_arm64_zip }}
-          compression-level: 0
-
-      - name: build-x86_64 stage2
-        id: build_x86_64_2
-        run: |
-          XOPT="-O2" bin/build.sh x-toolchain-${new_version}-x86_64 "${new_version}-stage2"
-
-      - name: Upload Artifacts stage2 x86_64
-        if: ${{ steps.build_x86_64_2.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.tool3_x86_64_zip }}
-          path: ${{ env.tool3_x86_64_zip }}
           compression-level: 0
 
       - name: Create Release

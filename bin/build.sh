@@ -1,30 +1,30 @@
 dir=$(dirname $0)
 
 if [ ! -d "$1" ]; then
- echo "provide toolchain dir" && exit 1
+ echo "provide host_tool dir" && exit 1
 fi
 
 if [ -z "$2" ]; then
  echo "provide version" && exit 1
 fi
 
-toolchain=$1
+host_tool=$1
 version=$2
 target_tool=$3
-compiler="$toolchain/bin/x"
+compiler="$host_tool/bin/x"
 build=$dir/../build
-name="xx2"
+name="stage1"
 
 if [ -d "$target_tool" ]; then
-  name="x_arm64"
+  name="stage1_arm64"
 fi
 
 out_dir=$build/${name}_out
 
 mkdir -p $out_dir
 
-bridge_lib="$toolchain/lib/libbridge.a"
-llvm_lib="$toolchain/lib/libLLVM.so.19.1"
+bridge_lib="$host_tool/lib/libbridge.a"
+llvm_lib="$host_tool/lib/libLLVM.so.19.1"
 linker=$($dir/find_llvm.sh clang)
 if [ -d "$target_tool" ]; then
     linker="aarch64-linux-gnu-g++"
@@ -63,17 +63,20 @@ if [ ! "$?" -eq "0" ]; then
   echo "error while compiling\n$cmd" && exit 1
 fi
 
+final_binary=${out_dir}/${name}
+
 cp ${out_dir}/${name} $build
 
 if [ ! -z "$XSTAGE" ]; then
-  compiler2=${out_dir}/${name}
-  cmd="${compiler2} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name-stage2 $dir/../src/parser"
+  cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name-stage2 $dir/../src/parser"
   eval $cmd
+  final_binary=${out_dir}/${name}-stage2
 fi
 
+old_tool=$host_tool
 if [ -d "$target_tool" ]; then
   export ARCH=aarch64
-  $dir/make_toolchain.sh ${out_dir}/${name} $target_tool $dir/.. ${version} -zip || exit 1
-else
-  $dir/make_toolchain.sh ${out_dir}/${name} $toolchain $dir/.. ${version} -zip || exit 1
+  old_tool=$target_tool
 fi
+
+$dir/make_toolchain.sh '$final_binary' $old_tool $dir/.. ${version} -zip || exit 1
