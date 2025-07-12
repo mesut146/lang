@@ -38,39 +38,44 @@ if [ ! -z "$XTERMUX" ]; then
 fi
 export LD=$linker
 
-$dir/build_std.sh $compiler $out_dir || exit 1
-LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+build(){
+  $dir/build_std.sh $compiler $out_dir || exit 1
+  LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+  
+  $dir/build_ast.sh $compiler $out_dir || exit 1
+  LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+  
+  #flags="$bridge_lib"
+  flags="$flags $LIB_AST"
+  flags="$flags $LIB_STD"
+  flags="$flags $llvm_lib"
+  flags="$flags -lstdc++"
+  #todo use toolchain's std dir?
+  
+  cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+  if [ ! -z "$XOPT" ]; then
+    cmd="$cmd $XOPT"
+  fi
+  if [ ! -z "$XDEBUG" ]; then
+    cmd="$cmd -g"
+  fi
+  eval $cmd
+  if [ ! "$?" -eq "0" ]; then
+    echo "error while compiling\n$cmd" && exit 1
+  fi
+}
 
-$dir/build_ast.sh $compiler $out_dir || exit 1
-LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
-
-#flags="$bridge_lib"
-flags="$flags $LIB_AST"
-flags="$flags $LIB_STD"
-flags="$flags $llvm_lib"
-flags="$flags -lstdc++"
-#todo use toolchain's std dir?
-
-cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
-if [ ! -z "$XOPT" ]; then
-  cmd="$cmd $XOPT"
-fi
-if [ ! -z "$XDEBUG" ]; then
-  cmd="$cmd -g"
-fi
-eval $cmd
-if [ ! "$?" -eq "0" ]; then
-  echo "error while compiling\n$cmd" && exit 1
-fi
-
+build
 final_binary=${out_dir}/${name}
 
 cp ${out_dir}/${name} $build
 
 if [ ! -z "$XSTAGE" ]; then
   out_dir=$build/stage2_out
-  cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name stage2 $dir/../src/parser"
-  eval $cmd
+  #cmd="${final_binary} c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name stage2 $dir/../src/parser"
+  #eval $cmd
+  compiler=$final_binary
+  build
   final_binary=${out_dir}/stage2
 fi
 
