@@ -75,12 +75,13 @@ if [ ! -z "$XSTAGE" ]; then
   if [ -d "$target_tool" ]; then
     name="stage2_arm64"
     #todo use x86 stage2 compiler 
+    final_binary=${out_dir}/stage2_arm64
   else
     name="stage2"
     compiler=$final_binary
+    final_binary=${out_dir}/stage2
   fi
   build
-  final_binary=${out_dir}/stage2
 fi
 
 old_tool=$host_tool
