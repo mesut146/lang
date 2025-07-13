@@ -78,9 +78,9 @@ if [ ! -z "$XSTAGE" ]; then
     name="stage2"
   fi
   out_dir=$build/${name}_out
-  final_binary=${out_dir}/$name
   compiler=$final_binary
   build
+  final_binary=${out_dir}/$name
 fi
 
 old_tool=$host_tool
