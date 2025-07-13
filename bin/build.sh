@@ -73,12 +73,13 @@ cp ${out_dir}/${name} $build
 if [ ! -z "$XSTAGE" ]; then
   if [ -d "$target_tool" ]; then
     name="stage2_arm64"
-    #todo use x86 stage2 compiler 
+    #todo use x86 stage1 compiler 
+    compiler=$build/stage1_out/stage1
   else
     name="stage2"
+    compiler=$final_binary
   fi
   out_dir=$build/${name}_out
-  compiler=$final_binary
   build
   final_binary=${out_dir}/$name
 fi
