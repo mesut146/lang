@@ -262,18 +262,13 @@ impl Compiler{
       //todo inc check
       return outFile;
     }
-    let ext = Path::ext(path);
-    if (!ext.eq("x")) {
+    if (!Path::ext(path).eq("x")) {
       panic("invalid extension for {}", path);
     }
-    let ign = std::getenv("XNOEMIT").is_some();
-    if(ign) print("XNOEMIT set\n");
     let name = getName(path);
-    
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
-    if(ign) return outFile;
     resolver.resolve_all();
     init_llvm();
     self.ll = Option::new(Emitter::new(name));
@@ -300,11 +295,11 @@ impl Compiler{
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     
     if(self.config.opt_level.is_some()){
-      if(!ign) self.ll.get().optimize_module_newpm(self.config.opt_level.get());
+      self.ll.get().optimize_module_newpm(self.config.opt_level.get());
     }
-    if(!ign) self.ll.get().emit_module(llvm_file.str());
+    self.ll.get().emit_module(llvm_file.str());
     if(!self.config.llvm_only){
-       if(!ign) self.ll.get().emit_obj(outFile.str());
+       self.ll.get().emit_obj(outFile.str());
     }
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
@@ -562,8 +557,6 @@ impl Compiler{
       print("emit {:?}\n", s);
       s.drop();
     }
-    let ign = std::getenv("XNOEMIT").is_some();
-    if(ign) return;
     self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
@@ -581,7 +574,6 @@ impl Compiler{
     self.storeParams(m, proto.val);
 
     let blk_val = self.visit_block(m.body.get());
-    //dbg(m.name.eq("handle"), 51);
     let exit = Exit::get_exit_type(m.body.get());
     if(!exit.is_exit()){
       if(m.type.is_void()){
