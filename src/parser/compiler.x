@@ -298,11 +298,11 @@ impl Compiler{
     let ign = std::getenv("XNOEMIT").is_some();
     if(ign) print("XNOEMIT set\n");
     if(self.config.opt_level.is_some()){
-      if(ign) self.ll.get().optimize_module_newpm(self.config.opt_level.get());
+      if(!ign) self.ll.get().optimize_module_newpm(self.config.opt_level.get());
     }
-    if(ign) self.ll.get().emit_module(llvm_file.str());
+    if(!ign) self.ll.get().emit_module(llvm_file.str());
     if(!self.config.llvm_only){
-       if(ign) self.ll.get().emit_obj(outFile.str());
+       if(!ign) self.ll.get().emit_obj(outFile.str());
     }
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
