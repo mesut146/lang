@@ -560,6 +560,8 @@ impl Compiler{
       print("emit {:?}\n", s);
       s.drop();
     }
+    let ign = std::getenv("XNOEMIT").is_some();
+    if(ign) return;
     self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();
