@@ -39,10 +39,10 @@ fi
 export LD=$linker
 
 build(){
-  #$dir/build_std.sh $compiler $out_dir || exit 1
+  $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
-  #$dir/build_ast.sh $compiler $out_dir || exit 1
+  $dir/build_ast.sh $compiler $out_dir || exit 1
   LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
   #flags="$bridge_lib"
@@ -80,6 +80,7 @@ if [ ! -z "$XSTAGE" ]; then
     compiler=$final_binary
   fi
   out_dir=$build/${name}_out
+  export XNOEMIT=1
   build
   final_binary=${out_dir}/$name
 fi
