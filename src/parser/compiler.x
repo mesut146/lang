@@ -296,13 +296,12 @@ impl Compiler{
     
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     if(self.config.opt_level.is_some()){
-      self.ll.get().optimize_module_newpm(self.config.opt_level.get());
+      //self.ll.get().optimize_module_newpm(self.config.opt_level.get());
     }
-    self.ll.get().emit_module(llvm_file.str());
-    //self.ll.get().dump();
+    /*self.ll.get().emit_module(llvm_file.str());
     if(!self.config.llvm_only){
        self.ll.get().emit_obj(outFile.str());
-    }
+    }*/
     if(self.config.incremental_enabled || bootstrap){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path)?;
