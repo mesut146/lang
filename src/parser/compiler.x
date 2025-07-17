@@ -296,6 +296,7 @@ impl Compiler{
     
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
     let ign = std::getenv("XNOEMIT").is_some();
+    if(ign) print("XNOEMIT set\n");
     if(self.config.opt_level.is_some()){
       if(ign) self.ll.get().optimize_module_newpm(self.config.opt_level.get());
     }
