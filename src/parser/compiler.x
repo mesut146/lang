@@ -266,12 +266,15 @@ impl Compiler{
     if (!ext.eq("x")) {
       panic("invalid extension for {}", path);
     }
+    let ign = std::getenv("XNOEMIT").is_some();
+    if(ign) print("XNOEMIT set\n");
     let name = getName(path);
     
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
+    if(ign) return outFile;
     init_llvm();
     self.ll = Option::new(Emitter::new(name));
     self.di = Option::new(DebugInfo::new(self.config.debug, path, self.ll.get()));
@@ -295,8 +298,7 @@ impl Compiler{
     }
     
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
-    let ign = std::getenv("XNOEMIT").is_some();
-    if(ign) print("XNOEMIT set\n");
+    
     if(self.config.opt_level.is_some()){
       if(!ign) self.ll.get().optimize_module_newpm(self.config.opt_level.get());
     }
