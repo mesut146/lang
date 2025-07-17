@@ -273,8 +273,8 @@ impl Compiler{
     let resolv = self.ctx.create_resolver(path);
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
-    //resolver.resolve_all();
     if(ign) return outFile;
+    resolver.resolve_all();
     init_llvm();
     self.ll = Option::new(Emitter::new(name));
     self.di = Option::new(DebugInfo::new(self.config.debug, path, self.ll.get()));
