@@ -44,6 +44,11 @@ if [ ! -z "$XTERMUX" ]; then
 fi
 export LD=$linker
 
+if [ ! -z "$XPERF" ]; then
+    sudo apt-get install google-perftools graphviz
+    go install github.com/google/pprof@latest
+fi
+
 build(){
   $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
@@ -57,7 +62,6 @@ build(){
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
   if [ ! -z "$XPERF" ]; then
-    sudo apt-get install google-perftools graphviz
     flags="$flags /usr/lib/x86_64-linux-gnu/libprofiler.so.0"
   fi
   #todo use toolchain's std dir?
@@ -80,7 +84,7 @@ build(){
     echo "error while compiling\n$cmd" && exit 1
   fi
   if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then
-    pprof "$compiler"  /tmp/prof.out
+    pprof -gv "$compiler" /tmp/prof.out
   fi
 }
 
