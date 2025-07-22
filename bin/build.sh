@@ -1,5 +1,11 @@
 dir=$(dirname $0)
 
+sudo ()
+{
+    [[ $EUID = 0 ]] || set -- command sudo "$@"
+    "$@"
+}
+
 if [ ! -d "$1" ]; then
  echo "provide host_tool dir" && exit 1
 fi
@@ -50,9 +56,19 @@ build(){
   flags="$flags $LIB_STD"
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
+  if [ ! -z "$XPERF" ]; then
+    sudo apt-get install google-perftools graphviz
+    flags="$flags -lprofiler"
+  fi
   #todo use toolchain's std dir?
   
   cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+  if [ "$name" = "stage2" ] && [ ! -z "$XCALL" ]; then 
+    cmd="valgrind --tool=callgrind $cmd"
+  fi
+  if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then 
+    cmd="CPUPROFILE=/tmp/prof.out $cmd"
+  fi
   if [ ! -z "$XOPT" ]; then
     cmd="$cmd $XOPT"
   fi
@@ -62,6 +78,9 @@ build(){
   eval $cmd
   if [ ! "$?" -eq "0" ]; then
     echo "error while compiling\n$cmd" && exit 1
+  fi
+  if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then
+    pprof "$compiler"  /tmp/prof.out
   fi
 }
 
