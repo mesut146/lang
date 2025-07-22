@@ -84,7 +84,7 @@ build(){
     echo "error while compiling\n$cmd" && exit 1
   fi
   if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then
-    pprof -gv "$compiler" /tmp/prof.out
+    go run github.com/google/pprof@latest -gv "$compiler" /tmp/prof.out
   fi
 }
 
