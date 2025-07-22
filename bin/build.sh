@@ -58,7 +58,7 @@ build(){
   flags="$flags -lstdc++"
   if [ ! -z "$XPERF" ]; then
     sudo apt-get install google-perftools graphviz
-    flags="$flags -lprofiler"
+    flags="$flags /usr/lib/x86_64-linux-gnu/libprofiler.so.0"
   fi
   #todo use toolchain's std dir?
   
