@@ -45,7 +45,7 @@ fi
 export LD=$linker
 
 if [ ! -z "$XPERF" ]; then
-    sudo apt-get install google-perftools graphviz
+    sudo apt-get install -y google-perftools graphviz
     go install github.com/google/pprof@latest
 fi
 
@@ -71,7 +71,7 @@ build(){
     cmd="valgrind --tool=callgrind $cmd"
   fi
   if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then 
-    cmd="CPUPROFILE=/tmp/prof.out $cmd"
+    cmd="CPUPROFILE=./prof.out $cmd"
   fi
   if [ ! -z "$XOPT" ]; then
     cmd="$cmd $XOPT"
@@ -84,7 +84,7 @@ build(){
     echo "error while compiling\n$cmd" && exit 1
   fi
   if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then
-    go run github.com/google/pprof@latest -gv "$compiler" /tmp/prof.out
+    go run github.com/google/pprof@latest -gv "$compiler" ./prof.out
   fi
 }
 
