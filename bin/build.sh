@@ -61,8 +61,9 @@ build(){
   flags="$flags $LIB_STD"
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
-  if [ ! -z "$XPERF" ]; then
+  if [ "$name" = "stage1" ] && [ ! -z "$XPERF" ]; then
     flags="$flags /usr/lib/x86_64-linux-gnu/libprofiler.so.0"
+    export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libprofiler.so.0"
   fi
   #todo use toolchain's std dir?
   
