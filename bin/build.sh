@@ -68,10 +68,10 @@ build(){
   #todo use toolchain's std dir?
   
   cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
-  if [ "$name" = "stage2" ] && [ ! -z "$XCALL" ]; then 
+  if [ "$name" = "stage2" ] && [ ! -z "$XCALL" ]; then
     cmd="valgrind --tool=callgrind $cmd"
   fi
-  if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then 
+  if [ "$name" = "stage2" ] && [ ! -z "$XPERF" ]; then
     cmd="CPUPROFILE=./prof.out $cmd"
   fi
   if [ ! -z "$XOPT" ]; then
