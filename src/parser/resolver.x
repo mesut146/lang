@@ -644,6 +644,14 @@ impl Resolver{
   func addType(self, name: String, res: RType){
     self.typeMap.add(name, res);
   }
+
+  func getTypeCached(self, str: String*): RType{
+    let res = self.typeMap.get(str);
+    if(res.is_some()){
+      return res.unwrap().clone();
+    }
+    panic("not cached {}", str);
+  }
   
   func init(self){
     if(self.is_init) return;
@@ -1444,11 +1452,6 @@ impl Resolver{
     return res;
   }
 
-  /*func clone_op(op: Option<Decl*>*): Option<Decl*>{
-    if(op.is_none()) return Option<Decl*>::new();
-    return Option<Decl*>::new(*op.get());
-  }*/
-
   func visit_type(self, node: Type*): RType{
     return self.visit_type0(node).unwrap();
   }
@@ -1479,6 +1482,7 @@ impl Resolver{
       }
       str2.drop();
     }
+    if(std::getenv("visit_type").is_some()) print("visit_type {:?} {:?}\n", str, self.unit.path);
     //print("visit_type {}\n", str);
     match node{
       Type::Tuple(tt) => {
@@ -1746,14 +1750,6 @@ impl Resolver{
       }
     }
     panic("unknown variant {:?}::{}", decl.type, name);
-  }
-
-  func getTypeCached(self, str: String*): RType{
-    let res = self.typeMap.get(str);
-    if(res.is_some()){
-      return res.unwrap().clone();
-    }
-    panic("not cached {}", str);
   }
   
   func findField(self, node: Expr*, name: String*, decl: Decl*, type: Type*): Pair<Decl*, i32>{
