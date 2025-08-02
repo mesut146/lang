@@ -54,6 +54,9 @@ impl OpenMode{
 
 impl File{
   func open(path: str, mode: OpenMode): Result<File, String>{
+    if(File::is_dir(path)){
+        return Result<File, String>::err(format("path is a dir '{}'", path));
+    }
     create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), mode.as_c_str());

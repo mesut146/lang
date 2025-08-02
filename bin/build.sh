@@ -56,9 +56,13 @@ build(){
   $dir/build_ast.sh $compiler $out_dir || exit 1
   LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
+  $dir/build_resolver.sh $compiler $out_dir || exit 1
+  LIB_RESOLVER=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+  
   #flags="$bridge_lib"
   flags="$flags $LIB_AST"
   flags="$flags $LIB_STD"
+  flags="$flags $LIB_RESOLVER"
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
   if [ "$name" = "stage1" ] && [ ! -z "$XPERF" ]; then

@@ -14,13 +14,13 @@ import ast/printer
 import ast/token
 import ast/utils
 import ast/copier
-import parser/method_resolver
-import parser/compiler_helper
-import parser/derive
-import parser/ownership
-import parser/drop_helper
-import parser/progress
-import parser/exit
+
+import resolver/method_resolver
+import resolver/derive
+import resolver/progress
+import resolver/exit
+import resolver/drop_helper
+
 
 static verbose_method: bool = false;
 static verbose_drop: bool = false;
@@ -187,7 +187,7 @@ struct Resolver{
   format_map: HashMap<i32, FormatInfo>;
   glob_map: HashSet<GlobalInfo>;//external glob name->local rt for it, (cloned)
   drop_map: HashMap<String, Desc>;
-  block_map: HashMap<i32, Block*>;
+  block_map: HashMap<i32, Block*>;//todo use desc
   lambdas: HashMap<i32, Method>;
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
@@ -195,14 +195,6 @@ struct Resolver{
   use_items: List<Type>;
 }
 
-func dump(r: Resolver*){
-    print("typeMap len={}\n", r.typeMap.len());
-    /*for p in &r.typeMap{
-        print("typeMap {:?} => {:?}\n", p.a, p.b.type);
-    }*/
-    print("---------\n");
-    //r.typeMap.dump();
-}
 impl Resolver{
   func new(path: String, ctx: Context*): Resolver{
     if(verbose_drop){
@@ -2846,42 +2838,47 @@ impl Resolver{
   func visit_lit(self, expr: Expr*, lit: Literal*): RType{
     let kind = &lit.kind;
     let value: str = lit.trim_suffix();
-    if(kind is LitKind::INT){
-      if(lit.suffix.is_some()){
-        if(i64::parse(value).unwrap() > max_for(lit.suffix.get())){
-          self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
+    match kind{
+        LitKind::INT => {
+          if(lit.suffix.is_some()){
+            if(i64::parse(value)? > max_for(lit.suffix.get())){
+              self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
+            }
+            return self.visit_type(lit.suffix.get());
+          }
+          let res = RType::new("i32");
+          res.value = Option::new(value.str());
+          return res;
+        },
+        LitKind::STR => {
+          let res = RType::new("str");
+          let rt = self.visit_type(&res.type);
+          res.drop();
+          return rt;
+        },
+        LitKind::BOOL => {
+          return RType::new("bool");
+        },
+        LitKind::FLOAT => {
+          if(lit.suffix.is_some()){
+            if(!can_fit_into(value, lit.suffix.get())){
+              self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
+            }
+            return self.visit_type(lit.suffix.get());
+          }
+          let res = RType::new("f32");
+          res.value = Option::new(value.str());
+          return res;
+        },
+        LitKind::CHAR => {
+          assert(lit.suffix.is_none());
+          let res = RType::new("u32");
+          //res.value = Option::new(value);
+          assert(value.len() == 1);
+          res.value = Option::new(i64::print(value.get(0)));
+          return res;
         }
-        return self.visit_type(lit.suffix.get());
-      }
-      let res = RType::new("i32");
-      res.value = Option::new(value.str());
-      return res;
-    }else if(kind is LitKind::STR){
-      let res = RType::new("str");
-      let rt = self.visit_type(&res.type);
-      res.drop();
-      return rt;
-    }else if(kind is LitKind::BOOL){
-      return RType::new("bool");
-    }else if(kind is LitKind::FLOAT){
-      if(lit.suffix.is_some()){
-        if(!can_fit_into(value, lit.suffix.get())){
-          self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
-        }
-        return self.visit_type(lit.suffix.get());
-      }
-      let res = RType::new("f32");
-      res.value = Option::new(value.str());
-      return res;
-    }else if(kind is LitKind::CHAR){
-      assert(lit.suffix.is_none());
-      let res = RType::new("u32");
-      //res.value = Option::new(value);
-      assert(value.len() == 1);
-      res.value = Option::new(i64::print(value.get(0)));
-      return res;
     }
-    panic("lit");
   }
 
   func visit_name(self, node: Expr*, name: String*): RType{
@@ -3293,7 +3290,7 @@ impl Resolver{
       Stmt::Expr(e) => {
         let tmp = self.visit(e);
         if(is_result_type(&tmp.type)){
-          self.err(e, format("Result type not handled, {:?}", tmp.type));
+          self.err(node, format("Result type not handled, {:?}", node));
         }
         tmp.drop();
       },

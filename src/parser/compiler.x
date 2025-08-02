@@ -5,11 +5,15 @@ import std/stack
 import std/any
 import std/th
 //import std/llist
+
 import ast/ast
 import ast/printer
 import ast/utils
 import ast/copier
-import parser/resolver
+
+import resolver/resolver
+import resolver/derive
+
 import parser/compiler_helper
 import parser/alloc_helper
 import parser/debug_helper
@@ -18,7 +22,6 @@ import parser/expr_emitter
 import parser/ownership
 import parser/own_model
 import parser/cache
-import parser/derive
 import parser/incremental
 import parser/llvm
 

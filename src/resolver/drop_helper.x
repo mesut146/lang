@@ -5,7 +5,8 @@ import std/stack
 import ast/ast
 import ast/utils
 import ast/printer
-import parser/resolver
+
+import resolver/resolver
 
 struct DropHelper {
   r: Resolver*;

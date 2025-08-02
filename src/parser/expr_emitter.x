@@ -1,18 +1,21 @@
 import std/map
 import std/stack
+
 import ast/ast
 import ast/utils
 import ast/printer
+
+import resolver/resolver
+import resolver/derive
+import resolver/drop_helper
+
 import parser/compiler
 import parser/stmt_emitter
-import parser/resolver
 import parser/llvm
 import parser/debug_helper
 import parser/compiler_helper
 import parser/ownership
 import parser/own_model
-import parser/derive
-import parser/drop_helper
 
 struct MatchInfo{
   type: Type;

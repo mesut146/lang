@@ -1,11 +1,14 @@
 import std/map
 import std/libc
 import std/stack
+
 import ast/ast
 import ast/printer
 import ast/utils
+
+import resolver/resolver
+
 import parser/llvm
-import parser/resolver
 import parser/compiler
 import parser/debug_helper
 import parser/expr_emitter

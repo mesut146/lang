@@ -10,7 +10,8 @@ import ast/parser
 import ast/lexer
 import ast/token
 
-import parser/resolver
+import resolver/resolver
+
 import parser/ownership
 
 func make_info(decl: Decl*, trait_name: str): ImplInfo{

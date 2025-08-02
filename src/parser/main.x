@@ -12,7 +12,8 @@ import ast/ast
 import ast/printer
 import ast/utils
 
-import parser/resolver
+import resolver/resolver
+
 import parser/compiler
 import parser/debug_helper
 import parser/llvm

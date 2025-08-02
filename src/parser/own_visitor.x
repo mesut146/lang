@@ -4,12 +4,14 @@ import std/stack
 import ast/ast
 import ast/printer
 import ast/utils
+
+import resolver/resolver
+
 import parser/ownership
 import parser/own_helper
 import parser/own_model
 import parser/llvm
 import parser/compiler
-import parser/resolver
 import parser/compiler_helper
 import parser/debug_helper
 

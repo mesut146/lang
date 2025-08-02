@@ -1,8 +1,10 @@
 import std/hashmap
 import std/hashset
 import std/fs
+
 import ast/ast
 import ast/parser
+
 import parser/compiler
 
 struct Incremental{

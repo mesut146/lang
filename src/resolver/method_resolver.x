@@ -3,11 +3,13 @@ import std/hashmap
 import std/libc
 import std/stack
 import std/result
+
 import ast/copier
 import ast/ast
 import ast/printer
 import ast/utils
-import parser/resolver
+
+import resolver/resolver
 import parser/ownership
 
 struct MethodSig{

@@ -34,6 +34,9 @@ LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 $dir/build_ast.sh $compiler $out_dir || exit 1
 LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
+$dir/build_resolver.sh $compiler $out_dir || exit 1
+LIB_RESOLVER=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+
 bin=$(dirname $compiler)
 
 
@@ -49,6 +52,7 @@ flags="$bridge_lib"
 #flags="$flags $out_dir/std.a"
 flags="$flags $LIB_STD"
 flags="$flags $LIB_AST"
+flags="$flags $LIB_RESOLVER"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 

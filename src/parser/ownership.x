@@ -7,17 +7,19 @@ import ast/ast
 import ast/utils
 import ast/printer
 
+import resolver/resolver
+import resolver/method_resolver
+import resolver/exit
+import resolver/derive
+import resolver/drop_helper
+
 import parser/own_visitor
 import parser/own_helper
 import parser/own_model
 import parser/compiler
-import parser/resolver
 import parser/compiler_helper
-import parser/method_resolver
 import parser/debug_helper
-import parser/derive
-import parser/drop_helper
-import parser/exit
+
 
 //todo endscope incorrectly warns 'field not moved at...' but that scope is irrevelant with var.field
 

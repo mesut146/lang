@@ -7,11 +7,12 @@ import ast/ast
 import ast/utils
 import ast/printer
 
+import resolver/resolver
+import resolver/method_resolver
+
 import parser/llvm
 import parser/compiler
 import parser/compiler_helper
-import parser/resolver
-import parser/method_resolver
 import parser/debug_helper
 import parser/ownership
 import parser/own_model

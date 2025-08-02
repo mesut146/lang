@@ -5,9 +5,10 @@ import ast/ast
 import ast/utils
 import ast/printer
 
+import resolver/resolver
+
 import parser/compiler
 import parser/expr_emitter
-import parser/resolver
 import parser/debug_helper
 import parser/compiler_helper
 import parser/ownership
