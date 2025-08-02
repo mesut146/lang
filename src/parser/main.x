@@ -71,6 +71,7 @@ func handle_c(cmd: CmdArgs*){
   let link_shared = cmd.consume_any("-shared");
   let flags = cmd.get_val_or("-flags", "".str());
   let name: Option<String> = cmd.get_val("-name");
+  let out_name: Option<String> = cmd.get_val("-o");
   let jobs = cmd.get_val("-j");
   let config = CompilerConfig::new();
   config.use_cache = cmd.consume_any("-cache");
@@ -131,23 +132,32 @@ func handle_c(cmd: CmdArgs*){
   }
 
   let path: String = cmd.get()?;
-  
+  let name2: str = if(name.is_some()){
+    name.get().str()
+  }else{
+    Path::name(path.str())
+  };
   config.set_file(path.str());
   config.set_out(out_dir.clone());
   if(link_static){
-    config.set_link(LinkType::Static{format("{}.a", Path::name(path.str()))});
+    if(out_name.is_none()){
+      out_name.set(format("{}.a", name2));
+    }
+    config.set_link(LinkType::Static{out_name.unwrap()});
   }else if(link_shared){
-    config.set_link(LinkType::Dynamic{format("{}.so", Path::name(path.str()))});
+    if(out_name.is_none()){
+      out_name.set(format("{}.so", name2));
+    }    
+    config.set_link(LinkType::Dynamic{out_name.unwrap()});
   }else if(compile_only){
     config.set_link(LinkType::None);
+    name2.drop();
   }else{
-    if(name.is_some()){
-      config.set_link(LinkType::Binary{name.unwrap(), flags, run});
-    }else{
-      let bin: String = bin_name(path.str());
-      config.set_link(LinkType::Binary{bin, flags, run});
-      name.drop();
+    if(out_name.is_none()){
+      out_name.set(name2.owned());
     }
+    //todo remove run
+    config.set_link(LinkType::Binary{out_name.unwrap(), flags, run});
   }
   
   if(File::is_dir(path.str())){

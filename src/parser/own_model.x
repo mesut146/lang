@@ -11,14 +11,12 @@ import resolver/method_resolver
 import resolver/derive
 import resolver/exit
 
-import parser/llvm
 import parser/ownership
 import parser/own_visitor
 import parser/own_model
 import parser/own_helper
+import parser/llvm
 import parser/compiler
-import parser/compiler_helper
-import parser/debug_helper
 
 //prm or var
 struct Variable {
@@ -177,13 +175,13 @@ impl StateType{
 impl Moved{
     func new(expr: Expr*, own: Own*): Moved{
         /*if let Expr::Access(scp*, name*)=expr{
-            let scp_rt = own.compiler.get_resolver().visit(scp.get());
+            let scp_rt = own.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
                 return Moved{expr, Option::new(scp_var.clone())};
             }
         }*/
-        let rt = own.compiler.get_resolver().visit(expr);
+        let rt = own.get_resolver().visit(expr);
         if(rt.vh.is_some()){
             let var = own.get_var(rt.vh.get().id);
             rt.drop();
@@ -200,7 +198,7 @@ impl Rhs{
     }
     func new(expr: Expr*, own: Own*): Rhs{
         if let Expr::Access(scp, name)=expr{
-            let scp_rt = own.compiler.get_resolver().visit(scp.get());
+            let scp_rt = own.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
                 scp_rt.drop();
@@ -208,7 +206,7 @@ impl Rhs{
             }
             scp_rt.drop();
         }
-        let rt = own.compiler.get_resolver().visit(expr);
+        let rt = own.get_resolver().visit(expr);
         if(rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary)){
             let var = own.get_var(rt.vh.get().id);
             rt.drop();
@@ -274,7 +272,7 @@ impl Move{
             return false;
         }
         let lhs: Moved* = self.lhs.get();
-        return lhs2.eq(lhs, own.compiler.get_resolver());
+        return lhs2.eq(lhs, own.get_resolver());
     }
     func is_rhs(self, other: Rhs*, own: Own*): bool{
         if(self.rhs.var.is_none()){
