@@ -53,6 +53,10 @@ impl AllocHelper{
     return self.alloc_ty(ty, node as Node*);
   }
 
+  func get_resolver(self): Resolver*{
+    return self.c.get_resolver();
+  }
+
   func visit(self, node: Block*): Option<LLVMOpaqueValue*>{
     for st in &node.list{
       self.visit(st);
@@ -90,7 +94,7 @@ impl AllocHelper{
   }
   func visit_iflet(self, node: IfLet*): Option<LLVMOpaqueValue*>{
     for arg in &node.args{
-      let ty = self.c.get_resolver().cache.get(&arg.id);
+      let ty = self.get_resolver().cache.get(&arg.id);
       let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
       let name_c = arg.name.clone().cstr();
       LLVMSetValueName2(arg_ptr, name_c.ptr(), arg.name.len());
@@ -118,7 +122,7 @@ impl AllocHelper{
         return;
       },
       Stmt::ForEach(fe)=>{
-        let info = self.c.get_resolver().format_map.get(&node.id).unwrap();
+        let info = self.get_resolver().format_map.get(&node.id).unwrap();
         self.visit(&info.block);
         return;
       },
@@ -150,7 +154,7 @@ impl AllocHelper{
   }
   func visit(self, node: VarExpr*){
     for f in &node.list{
-      let rt = self.c.get_resolver().visit_frag(f);
+      let rt = self.get_resolver().visit_frag(f);
       let ptr = self.alloc_ty(&rt.type, f);
       let name_c = f.name.clone().cstr();
       LLVMSetValueName2(ptr, name_c.ptr(), name_c.len());
@@ -161,7 +165,7 @@ impl AllocHelper{
   }
   
   func visit_macrocall(self, node: Expr*, call: MacroCall*): Option<LLVMOpaqueValue*>{
-      let resolver = self.c.get_resolver();
+      let resolver = self.get_resolver();
       if(Utils::is_call(call, "std", "internal_block")){
         let arg = call.args.get(0).print();
         let id = i32::parse(arg.str()).unwrap();
@@ -200,7 +204,7 @@ impl AllocHelper{
   }
 
   func visit_call(self, node: Expr*, call: Call*): Option<LLVMOpaqueValue*>{
-    let resolver = self.c.get_resolver();
+    let resolver = self.get_resolver();
     if(Utils::is_call(call, "std", "env")){
       let info = resolver.get_macro(node);
       let rt = resolver.visit(node);
@@ -289,7 +293,7 @@ impl AllocHelper{
         if(ty.is_simple()){
           let smp = ty.as_simple();
           if(smp.scope.is_some()){
-            let resolver = self.c.get_resolver();
+            let resolver = self.get_resolver();
             let rt = resolver.visit(node);
             let decl = resolver.get_decl(&rt);
             if(decl.is_some() && decl.unwrap().is_repr()){
@@ -322,7 +326,7 @@ impl AllocHelper{
         self.visit(e.get());
         if(op.eq("&")){
           if(RvalueHelper::is_rvalue(e.get())){
-            let ty = self.c.get_resolver().getType(e.get());
+            let ty = self.get_resolver().getType(e.get());
             self.alloc_ty(&ty, node);
             ty.drop();
           }
@@ -334,7 +338,7 @@ impl AllocHelper{
         self.visit(aa.idx.get());
         if(aa.idx2.is_some()){
           self.visit(aa.idx2.get());
-          let ty = self.c.get_resolver().getType(node);
+          let ty = self.get_resolver().getType(node);
           res.set(self.alloc_ty(&ty, node));
           ty.drop();
         }
@@ -346,7 +350,7 @@ impl AllocHelper{
       },
       Expr::Obj(type, args) => {
         //get full type
-        let rt = self.c.get_resolver().visit(node);
+        let rt = self.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
         rt.drop();
         for arg in args{
@@ -356,7 +360,7 @@ impl AllocHelper{
         return res;
       },
       Expr::Array(list, sz) => {
-        let rt = self.c.get_resolver().visit(node);
+        let rt = self.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
         rt.drop();
         if(sz.is_some()){
@@ -370,7 +374,7 @@ impl AllocHelper{
         return res;
       },
       Expr::Match(me) => {
-        let rt = self.c.get_resolver().visit(node);
+        let rt = self.get_resolver().visit(node);
         if(!rt.type.is_void()){
           res = Option::new(self.alloc_ty(&rt.type, node));
         }
@@ -378,7 +382,7 @@ impl AllocHelper{
         for case in &me.get().cases{
           if let MatchLhs::ENUM(type, args) = &case.lhs{
             for arg in args{
-              let ty = self.c.get_resolver().cache.get(&arg.id);
+              let ty = self.get_resolver().cache.get(&arg.id);
               let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
               let name_c = arg.name.clone().cstr();
               LLVMSetValueName2(arg_ptr, name_c.ptr(), name_c.len());
@@ -395,14 +399,14 @@ impl AllocHelper{
         return res;
       },
       Expr::Lambda(le) => {
-          let r = self.c.get_resolver();
+          let r = self.get_resolver();
           let m = r.lambdas.get(&node.id).unwrap();
           let ty = r.getType(node);
           res.set(self.alloc_ty(&ty, node));
           return res;
       },
       Expr::Ques(bx) => {
-        let r = self.c.get_resolver();
+        let r = self.get_resolver();
         let info = r.get_macro(node);
         self.visit(&info.block);
         let ty = r.getType(node);
@@ -410,7 +414,7 @@ impl AllocHelper{
         return res;
       },
       Expr::Tuple(elems) => {
-        let r = self.c.get_resolver();
+        let r = self.get_resolver();
         let ty = r.getType(node);
         res.set(self.alloc_ty(&ty, node));
         for elem in elems{

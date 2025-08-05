@@ -10,12 +10,8 @@ import resolver/method_resolver
 import resolver/derive
 import resolver/exit
 
-import parser/own_visitor
 import parser/own_model
 import parser/ownership
-import parser/compiler
-import parser/compiler_helper
-import parser/debug_helper
 
 func is_drop_method(method: Method*): bool{
     if(method.name.eq("drop") && method.parent.is_impl()){

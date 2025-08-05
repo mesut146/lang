@@ -17,8 +17,6 @@ import parser/own_visitor
 import parser/own_helper
 import parser/own_model
 import parser/compiler
-import parser/compiler_helper
-import parser/debug_helper
 
 
 //todo endscope incorrectly warns 'field not moved at...' but that scope is irrevelant with var.field
@@ -169,12 +167,12 @@ impl Own{
         return opt.unwrap();
     }
     func get_type(self, expr: Expr*): RType{
-        let rt = self.compiler.get_resolver().visit(expr);
+        let rt = self.get_resolver().visit(expr);
         return rt;
     }
     //register var & obj
     func is_drop_type(self, type: Type*): bool{
-        let helper = DropHelper{self.compiler.get_resolver()};
+        let helper = DropHelper{self.get_resolver()};
         return helper.is_drop_type(type);
     }
     func is_drop_type(self, expr: Expr*): bool{
@@ -206,7 +204,7 @@ impl Own{
         self.var_map.add(p.id, var);
     }
     func add_var(self, f: Fragment*, ptr: LLVMOpaqueValue*){
-        let rt = self.compiler.get_resolver().visit_frag(f);
+        let rt = self.get_resolver().visit_frag(f);
         if(!self.is_drop_or_ptr(&rt.type)){
             rt.drop();
             return;
@@ -400,7 +398,7 @@ impl Own{
             // print("{}\n", scope_str);
             // scope_str.drop();
             let tmp = printMethod(self.method);
-            self.compiler.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
+            self.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
             tmp.drop();
         }
     }
@@ -713,8 +711,9 @@ impl Own{
     func check_partial(self, var: Variable*, scope: VarScope*, line: i32){
         //check if all fields moved
         //let rhs = Rhs::new(var);
-        let rt = self.compiler.get_resolver().visit_type(&var.type);
-        let decl = self.compiler.get_resolver().get_decl(&rt).unwrap();
+        let resolver = self.get_resolver();
+        let rt = resolver.visit_type(&var.type);
+        let decl = resolver.get_decl(&rt).unwrap();
         let fields = decl.get_fields();
         let moved_fields = List<String>::new();
         for fd in fields{
@@ -723,7 +722,7 @@ impl Own{
             if(state.kind is StateType::MOVED){
                 moved_fields.add(fd.name.get().clone());
             }else if(state.kind is StateType::MOVED_PARTIAL){
-                self.get_resolver().err(var.line, "move of partial of partial");
+                resolver.err(var.line, "move of partial of partial");
             }
             rhs.drop();
         }
@@ -738,7 +737,7 @@ impl Own{
             }
         }
         if(err){
-            self.compiler.get_resolver().err(line, "");
+            resolver.err(line, "");
         }
         moved_fields.drop();
         rt.drop();
@@ -761,7 +760,7 @@ impl Own{
 
         if(state.kind is StateType::MOVED_PARTIAL){
             self.check_partial(var, scope, line);
-            //self.compiler.get_resolver().err(var.line, format("var {} moved partially", var));
+            //self.get_resolver().err(var.line, format("var {} moved partially", var));
             rhs.drop();
             return;
         }
@@ -774,7 +773,7 @@ impl Own{
             Logger::add(format("drop_var_real {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, tmp));
             tmp.drop();
         }
-        let rt = self.compiler.get_resolver().visit_type(&var.type);
+        let rt = self.get_resolver().visit_type(&var.type);
         self.drop_real(&rt, var.ptr, line, &rhs);
         rt.drop();
         rhs.drop();
@@ -783,7 +782,7 @@ impl Own{
         if(print_kind is PrintKind::Valid){
             Logger::add(format("drop_var_real {:?}\n", var));
         }
-        let rt = self.compiler.get_resolver().visit_type(&var.type);
+        let rt = self.get_resolver().visit_type(&var.type);
         let rhs = Rhs::new(var.clone());
         self.drop_real(&rt, var.ptr, line, &rhs);
         rt.drop();
@@ -802,7 +801,7 @@ impl Own{
         if(print_kind is PrintKind::Valid){
             Logger::add(format("drop_obj_real {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
-        let resolver = self.compiler.get_resolver();
+        let resolver = self.get_resolver();
         let rt = resolver.visit(obj.expr);
         self.drop_real(&rt, obj.ptr, line, &rhs);
         rt.drop();

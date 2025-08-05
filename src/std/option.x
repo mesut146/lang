@@ -69,6 +69,14 @@ impl<T> Option<T>{
     return self.unwrap();
   }
 
+  func unwrap_or(*self, f: func()=> T): T{
+    if(self.is_none()){
+      std::no_drop(self);
+      return f();
+    }
+    return self.unwrap();
+  }
+
   //clears value, sets this to None
   func reset(self){
     if(self.is_some()){
