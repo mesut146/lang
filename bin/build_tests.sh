@@ -42,9 +42,11 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
+bin=$out_dir/$name
 if [ ! -z "$XPERF" ]; then
-  bin=$out_dir/$name
   #export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libprofiler.so.0"
   CPUPROFILE=./prof.out $bin $2 $3 $4
   go run github.com/google/pprof@latest -top "$bin" ./prof.out
+else
+  $bin $2 $3 $4
 fi

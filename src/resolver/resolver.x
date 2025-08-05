@@ -1451,6 +1451,10 @@ impl Resolver{
   func visit_type0(self, node: Type*): Result<RType, Error>{
     let str = node.print();
     let res = self.visit_type_str0(node, &str);
+    if(!self.typeMap.contains(&str)){
+      self.addType(str, res.get().clone());
+      return res;
+    }
     str.drop();
     return res;
   }
