@@ -3,7 +3,6 @@ import std/io
 import std/fs
 import std/result
 
-import parser/llvm
 import parser/incremental
 
 struct Cache{
@@ -18,12 +17,12 @@ func CACHE_FILE(out_dir: str): String{
 }
 
 impl Cache{
-    func new(config: CompilerConfig*): Cache{
+    func new(incremental_enabled: bool, use_cache: bool, out_dir: str, src_dir: String): Cache{
         return Cache{
             map: HashMap<String, String>::new(),
-            file: CACHE_FILE(config.out_dir.str()),
-            inc: Incremental::new(config.incremental_enabled, config.out_dir.str(), config.file.clone()),
-            use_cache: config.use_cache,
+            file: CACHE_FILE(out_dir),
+            inc: Incremental::new(incremental_enabled, out_dir, src_dir),
+            use_cache: use_cache,
         };
     }
 

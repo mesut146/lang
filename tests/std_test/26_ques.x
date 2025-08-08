@@ -49,7 +49,7 @@ func chain(){
 
 func main(){
     test_ok();
-    same_ok();
-    diff_ok();
+    same_ok().unwrap_err();
+    diff_ok().unwrap_err();
     chain();
 }

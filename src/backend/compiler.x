@@ -4,7 +4,6 @@ import std/libc
 import std/stack
 import std/any
 import std/th
-//import std/llist
 
 import ast/ast
 import ast/printer
@@ -14,19 +13,16 @@ import ast/copier
 import resolver/resolver
 import resolver/derive
 
-import parser/compiler_helper
-import parser/alloc_helper
-import parser/debug_helper
-import parser/stmt_emitter
-import parser/expr_emitter
+import backend/compiler_helper
+import backend/alloc_helper
+import backend/debug_helper
+import backend/stmt_emitter
+import backend/expr_emitter
+import backend/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache
 import parser/incremental
-import parser/llvm
-
-static bootstrap = false;
-static inline_rvo = false;
 
 func get_linker(): str{
   let opt = std::getenv("LD");
@@ -76,6 +72,35 @@ struct CompilerConfig{
   debug: bool;
   opt_level: Option<String>;
   stack_trace: bool;
+  inline_rvo: bool;
+}
+impl CompilerConfig{
+  func new(): CompilerConfig{
+    return CompilerConfig::new(Option<String>::new());
+  }
+  func new(std_path: String): CompilerConfig{
+    return CompilerConfig::new(Option<String>::new(std_path));
+  }
+  func new(std_path: Option<String>): CompilerConfig{
+    return CompilerConfig{
+      file: "".str(),
+      src_dirs: List<String>::new(),
+      out_dir: "".str(),
+      args: "".str(),
+      lt: LinkType::None,
+      std_path: std_path,
+      root_dir: Option<String>::new(),
+      jobs: 0,
+      verbose_all: false,
+      incremental_enabled: false,
+      use_cache: true,
+      llvm_only: false,
+      debug: false,
+      opt_level: Option<String>::new(),
+      stack_trace: false,
+      inline_rvo: false,
+    };
+  }
 }
 
 struct LoopInfo{
@@ -304,7 +329,7 @@ impl Compiler{
     if(!self.config.llvm_only){
        self.ll.get().emit_obj(outFile.str());
     }
-    if(self.config.incremental_enabled || bootstrap){
+    if(self.config.incremental_enabled){
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path)?;
       if(File::exists(oldpath.str())){
@@ -366,10 +391,7 @@ impl Compiler{
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
     let proto = proto_pr.a;
-    //setSection(proto, ".text.startup".ptr());
     LLVMSetSection(proto, ".text.startup".ptr());
-    // let bb = create_bb2(proto);
-    // SetInsertPoint(bb);
     let bb = LLVMAppendBasicBlockInContext(ll.ctx, proto, "".ptr());
     LLVMPositionBuilderAtEnd(ll.builder, bb);
     let method = Method::new(Node::new(0), proto_pr.b, Type::new("void"));
@@ -424,7 +446,6 @@ impl Compiler{
     self.own.reset();
     self.di.get().finalize();
     ll.verify_func(proto);
-    //vector_Metadata_delete(globs);
     method.drop();
     globals.drop();
   }
@@ -438,7 +459,7 @@ impl Compiler{
     let struct_elems = [ptr::null<LLVMOpaqueValue>(); 3];
     struct_elems[0] = ll.makeInt(65535, 32);
     struct_elems[1] = proto;
-    struct_elems[2] =  LLVMConstNull(ll.intPtr(32));
+    struct_elems[2] = LLVMConstNull(ll.intPtr(32));
     let ctor_init_struct = LLVMConstStructInContext(ll.ctx, struct_elems.ptr(), 3, LLVMBoolFalse());
     let ctor_ty = LLVMArrayType(ctor_elem_ty, 1);
     let elems = [ctor_init_struct];
@@ -635,7 +656,7 @@ impl Compiler{
     }else{
       LLVMBuildStore(self.ll.get().builder, val, ptr);
     }
-    self.own.get().add_prm(prm, ptr);
+    self.own.get().add_prm(prm, LLVMPtr::new(ptr));
   }
 
   func storeParams(self, m: Method*, f: LLVMOpaqueValue*){
@@ -686,6 +707,30 @@ impl Compiler{
     return res;
   }
 
+  func get_drop_proto(self, rt: RType*): FunctionInfo{
+    let resolver = self.get_resolver();
+    let decl = resolver.get_decl(rt).unwrap();
+    let helper = DropHelper{resolver};
+    let method = helper.get_drop_method(rt);
+    if(method.is_generic){
+      panic("generic {:?}", rt.type);
+    }
+    let protos = self.protos.get();
+    let mangled = mangle(method);
+    if(!protos.funcMap.contains(&mangled)){
+      self.make_proto(method);
+    }
+    let proto = protos.get_func(method);
+    mangled.drop();
+    return proto;
+  }
+  func drop_force(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){
+    let proto = self.get_drop_proto(rt);
+    let args = [ptr.ptr as LLVMOpaqueValue*];
+    let ll = self.ll.get();
+    LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
+}
+
   func compile_single(config: CompilerConfig): Result<String, CompilerError>{
     config.use_cache = false;
     File::create_dir(config.out_dir.str())?;
@@ -693,7 +738,7 @@ impl Compiler{
     for inc_dir in &config.src_dirs{
       ctx.add_path(inc_dir.str());
     }
-    let cache = Cache::new(&config);
+    let cache = new_cache(&config);
     let cmp = Compiler::new(ctx, &config, &cache);
     let compiled = List<String>::new();
     if(cmp.ctx.verbose){
@@ -714,7 +759,7 @@ impl Compiler{
       return Compiler::compile_dir_thread(config);
     }
     File::create_dir(config.out_dir.str())?;
-    let cache = Cache::new(&config);
+    let cache = new_cache(&config);
     cache.read_cache();
     
     let inc = Incremental::new(config.incremental_enabled, config.out_dir.str(), config.file.clone());
@@ -764,11 +809,14 @@ impl Compiler{
     inc.drop();
     return config.link(&compiled);
   }
- 
+
+  func new_cache(config: CompilerConfig*): Cache{
+    return Cache::new(config.incremental_enabled, config.use_cache, config.out_dir.str(), config.file.clone());
+  }
   
   func compile_dir_thread(config: CompilerConfig): Result<String, CompilerError>{
     File::create_dir(config.out_dir.str())?;
-    let cache = Cache::new(&config);
+    let cache = new_cache(&config);
     cache.read_cache();
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
@@ -923,31 +971,6 @@ struct CompileArgs{
 }
 
 impl CompilerConfig{
-  func new(): CompilerConfig{
-    return CompilerConfig::new(Option<String>::new());
-  }
-  func new(std_path: String): CompilerConfig{
-    return CompilerConfig::new(Option<String>::new(std_path));
-  }
-  func new(std_path: Option<String>): CompilerConfig{
-    return CompilerConfig{
-      file: "".str(),
-      src_dirs: List<String>::new(),
-      out_dir: "".str(),
-      args: "".str(),
-      lt: LinkType::None,
-      std_path: std_path,
-      root_dir: Option<String>::new(),
-      jobs: 0,
-      verbose_all: false,
-      incremental_enabled: false,
-      use_cache: true,
-      llvm_only: false,
-      debug: false,
-      opt_level: Option<String>::new(),
-      stack_trace: false,
-    };
-  }
   func set_std(self, std_path: String): CompilerConfig*{
     self.std_path.drop();
     self.std_path = Option::new(std_path);

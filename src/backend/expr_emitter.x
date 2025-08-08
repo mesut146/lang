@@ -9,11 +9,11 @@ import resolver/resolver
 import resolver/derive
 import resolver/drop_helper
 
-import parser/compiler
-import parser/stmt_emitter
-import parser/llvm
-import parser/debug_helper
-import parser/compiler_helper
+import backend/compiler
+import backend/stmt_emitter
+import backend/llvm
+import backend/debug_helper
+import backend/compiler_helper
 import parser/ownership
 import parser/own_model
 
@@ -317,7 +317,7 @@ impl Compiler{
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
             self.copy(alloc_ptr, field_ptr, &field.type);
-            self.own.get().add_iflet_var(arg, field, alloc_ptr);
+            self.own.get().add_iflet_var(arg, field, LLVMPtr::new(alloc_ptr));
         }
         self.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
       }      
@@ -594,7 +594,7 @@ impl Compiler{
         //LLVMBuildStore(ll.builder, val, alloc_ptr);
         let expr_type = self.get_resolver().getType(expr);
         self.setField(expr, &expr_type, alloc_ptr);
-        self.own.get().add_obj(node, alloc_ptr, &expr_type);
+        self.own.get().add_obj(node, LLVMPtr::new(alloc_ptr), &expr_type);
         expr_type.drop();
         return alloc_ptr;
       }
@@ -730,7 +730,7 @@ impl Compiler{
     func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
       let ll = self.ll.get();
       let arrt = self.getType(node);
-      self.own.get().add_obj(node, ptr, &arrt);
+      self.own.get().add_obj(node, LLVMPtr::new(ptr), &arrt);
       let arr_ty = self.mapType(&arrt);
       arrt.drop();
       if(sz.is_none()){
@@ -1273,7 +1273,7 @@ impl Compiler{
     func visit_call2(self, expr: Expr*, mc: Call*, ptr_ret: Option<LLVMOpaqueValue*>, rt: RType): LLVMOpaqueValue*{
       let ll = self.ll.get();
       if(is_struct(&rt.type)){
-        self.own.get().add_obj(expr, ptr_ret.unwrap(), &rt.type);
+        self.own.get().add_obj(expr, LLVMPtr::new(ptr_ret.unwrap()), &rt.type);
       }
       let target: Method* = self.get_resolver().get_method(&rt).unwrap();
       self.cache.inc.depends_func(self.get_resolver(), target);
@@ -1639,7 +1639,7 @@ impl Compiler{
     func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
         let ll = self.ll.get();
         let rt = self.get_resolver().visit(node);
-        self.own.get().add_obj(node, ptr, &rt.type);
+        self.own.get().add_obj(node, LLVMPtr::new(ptr), &rt.type);
         let ty = self.mapType(&rt.type);
         let decl = self.get_resolver().get_decl(&rt).unwrap();
         self.cache.inc.depends_decl(self.get_resolver().unit.path.str(), decl);

@@ -44,9 +44,6 @@ struct DILocation;
 struct StructLayout;
 
 extern{
-    func setModule(md: LLVMModule*);
-    func setCtx(ctx: LLVMContext*);
-    func setBuilder(b: IRBuilder*);
     func vector_Type_new(): vector_Type*;
     func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
     func vector_Type_delete(vec: vector_Type*);

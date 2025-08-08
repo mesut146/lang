@@ -15,14 +15,23 @@ import parser/ownership
 import parser/own_visitor
 import parser/own_model
 import parser/own_helper
-import parser/llvm
-import parser/compiler
+import backend/llvm
+
+#derive(Debug)
+struct LLVMPtr{
+    ptr: LLVMOpaqueValue*;
+}
+impl LLVMPtr{
+    func new(ptr: LLVMOpaqueValue*): LLVMPtr{
+        return LLVMPtr{ptr: ptr};
+    }
+}
 
 //prm or var
 struct Variable {
     name: String;
     type: Type;
-    ptr: LLVMOpaqueValue*;
+    ptr: LLVMPtr;
     id: i32;
     line: i32;
     scope: i32;
@@ -46,7 +55,7 @@ impl Variable{
 #derive(Debug)
 struct Object {
     expr: Expr*;
-    ptr: LLVMOpaqueValue*;
+    ptr: LLVMPtr;
     id: i32;          //prm
     name: String;     //prm
     scope: i32;

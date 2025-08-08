@@ -5,7 +5,7 @@ import std/fs
 import ast/ast
 import ast/parser
 
-import parser/compiler
+import resolver/resolver
 
 struct Incremental{
     //a.x:struct C <- main.x, b.x

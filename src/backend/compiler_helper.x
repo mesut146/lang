@@ -8,10 +8,10 @@ import ast/utils
 
 import resolver/resolver
 
-import parser/llvm
-import parser/compiler
-import parser/debug_helper
-import parser/expr_emitter
+import backend/llvm
+import backend/compiler
+import backend/debug_helper
+import backend/expr_emitter
 import parser/ownership
 import parser/own_model
 
@@ -802,14 +802,14 @@ impl Compiler{
       let type = &rt.type;
       let ll = self.ll.get();
       if(is_struct(type)){
-        if(can_inline(expr, self.get_resolver())){
+        if(self.can_inline(expr)){
           //todo own drop_lhs
           self.do_inline(expr, trg);
           return;
         }
         let val = self.visit(expr);
         if(lhs.is_some()){
-          self.own.get().drop_lhs(lhs.unwrap(), trg);
+          self.own.get().drop_lhs(lhs.unwrap(), LLVMPtr::new(trg));
         }
         self.copy(trg, val, type);
       }else if(type.is_any_pointer()){
@@ -1030,10 +1030,10 @@ impl Compiler{
       }
     }
   }
-}
 
-func can_inline(expr: Expr*, r: Resolver*): bool{
-  return inline_rvo && doesAlloc(expr, r);
+  func can_inline(self, expr: Expr*): bool{
+    return self.config.inline_rvo && doesAlloc(expr, self.get_resolver());
+  }
 }
 
 func doesAlloc(e: Expr*, r: Resolver*): bool{

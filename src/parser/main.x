@@ -14,9 +14,9 @@ import ast/utils
 
 import resolver/resolver
 
-import parser/compiler
-import parser/debug_helper
-import parser/llvm
+import backend/compiler
+import backend/debug_helper
+import backend/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache

@@ -7,10 +7,10 @@ import ast/printer
 
 import resolver/resolver
 
-import parser/compiler
-import parser/expr_emitter
-import parser/debug_helper
-import parser/compiler_helper
+import backend/compiler
+import backend/expr_emitter
+import backend/debug_helper
+import backend/compiler_helper
 import parser/ownership
 import parser/own_model
 
@@ -184,7 +184,7 @@ impl Compiler{
         self.NamedValues.add(f.name.clone(), ptr);
         let type = self.get_resolver().getType(f);
         self.cache.inc.depends_decl(self.get_resolver(), &type);
-        if(can_inline(&f.rhs, self.get_resolver())){
+        if(self.can_inline(&f.rhs)){
           self.do_inline(&f.rhs, ptr);
         }
         else if(is_struct(&type)){
@@ -206,7 +206,7 @@ impl Compiler{
         }
         self.di.get().dbg_var(&f.name, &type, f.line, self);
         type.drop();
-        self.own.get().add_var(f, ptr);
+        self.own.get().add_var(f, LLVMPtr::new(ptr));
       }
     }
 
@@ -292,7 +292,7 @@ impl Compiler{
         return;
       }
       let sret_ptr = LLVMGetParam(self.protos.get().cur.unwrap(), 0);
-      if(can_inline(expr, self.get_resolver())){
+      if(self.can_inline(expr)){
         self.do_inline(expr, sret_ptr);
       }else{
         let val = self.visit(expr);

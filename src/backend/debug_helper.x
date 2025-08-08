@@ -9,9 +9,9 @@ import ast/printer
 
 import resolver/resolver
 
-import parser/llvm
-import parser/compiler
-import parser/compiler_helper
+import backend/llvm
+import backend/compiler
+import backend/compiler_helper
 import parser/ownership
 import parser/own_model
 
