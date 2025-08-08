@@ -877,9 +877,6 @@ impl Emitter{
       LLVMSetModuleDataLayout(md, dl);
 
       let builder = LLVMCreateBuilderInContext(ctx);
-      /*setModule(md as LLVMModule*);//todo remove these
-      setCtx(ctx as LLVMContext*);
-      setBuilder(builder as IRBuilder*);*/
 
       name.drop();
       target_triple.drop();

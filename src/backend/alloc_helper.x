@@ -36,7 +36,7 @@ impl AllocHelper{
       panic("internal err: alloc of void");
     }
   }
-  func alloc_ty(self, ty: Type*, node: Node*): LLVMOpaqueValue*{
+  func alloc_ty(self, ty: Type*, node: Node*): Value*{
     check_type(ty);
     let mapped = self.c.mapType(ty);
     if(ty.is_fpointer()){
@@ -46,10 +46,10 @@ impl AllocHelper{
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
-  func alloc_ty(self, ty: Type*, node: Fragment*): LLVMOpaqueValue*{
+  func alloc_ty(self, ty: Type*, node: Fragment*): Value*{
     return self.alloc_ty(ty, node as Node*);
   }
-  func alloc_ty(self, ty: Type*, node: Expr*): LLVMOpaqueValue*{
+  func alloc_ty(self, ty: Type*, node: Expr*): Value*{
     return self.alloc_ty(ty, node as Node*);
   }
 
@@ -57,23 +57,23 @@ impl AllocHelper{
     return self.c.get_resolver();
   }
 
-  func visit(self, node: Block*): Option<LLVMOpaqueValue*>{
+  func visit(self, node: Block*): Option<Value*>{
     for st in &node.list{
       self.visit(st);
     }
     if(node.return_expr.is_some()){
       return self.visit(node.return_expr.get());
     }
-    return Option<LLVMOpaqueValue*>::new();
+    return Option<Value*>::new();
   }
-  func visit_body(self, body: Body*): Option<LLVMOpaqueValue*>{
+  func visit_body(self, body: Body*): Option<Value*>{
     match body{
         Body::Block(b)=>{
             return self.visit(b);
         },
         Body::Stmt(b)=>{
             self.visit(b);
-            return Option<LLVMOpaqueValue*>::new();
+            return Option<Value*>::new();
         },
         Body::If(b)=>{
             return self.visit_if(b);
@@ -83,16 +83,16 @@ impl AllocHelper{
         }
     }
   }
-  func visit_if(self, node: IfStmt*): Option<LLVMOpaqueValue*>{
+  func visit_if(self, node: IfStmt*): Option<Value*>{
     //todo ret value?
     self.visit(&node.cond);
     self.visit_body(node.then.get());
     if(node.else_stmt.is_some()){
       self.visit_body(node.else_stmt.get());
     }
-    return Option<LLVMOpaqueValue*>::new();
+    return Option<Value*>::new();
   }
-  func visit_iflet(self, node: IfLet*): Option<LLVMOpaqueValue*>{
+  func visit_iflet(self, node: IfLet*): Option<Value*>{
     for arg in &node.args{
       let ty = self.get_resolver().cache.get(&arg.id);
       let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
@@ -106,7 +106,7 @@ impl AllocHelper{
     if(node.else_stmt.is_some()){
       self.visit_body(node.else_stmt.get());
     }
-    return Option<LLVMOpaqueValue*>::new();
+    return Option<Value*>::new();
   }
   func visit(self, node: Stmt*){
     match node{
@@ -160,11 +160,11 @@ impl AllocHelper{
       LLVMSetValueName2(ptr, name_c.ptr(), name_c.len());
       name_c.drop();
       rt.drop();
-      let rhs: Option<LLVMOpaqueValue*> = self.visit(&f.rhs);
+      let rhs: Option<Value*> = self.visit(&f.rhs);
     }
   }
   
-  func visit_macrocall(self, node: Expr*, call: MacroCall*): Option<LLVMOpaqueValue*>{
+  func visit_macrocall(self, node: Expr*, call: MacroCall*): Option<Value*>{
       let resolver = self.get_resolver();
       if(Utils::is_call(call, "std", "internal_block")){
         let arg = call.args.get(0).print();
@@ -172,7 +172,7 @@ impl AllocHelper{
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit(blk);
         arg.drop();
-        return Option<LLVMOpaqueValue*>::new();
+        return Option<Value*>::new();
       }
       if(Utils::is_call(call, "std", "env")){
         let info = resolver.get_macro(node);
@@ -196,14 +196,14 @@ impl AllocHelper{
       let rt = resolver.visit(node);
       if(rt.type.is_void()){
           rt.drop();
-          return Option<LLVMOpaqueValue*>::new();
+          return Option<Value*>::new();
       }
       let res = Option::new(self.alloc_ty(&rt.type, node));
       rt.drop();
       return res;
   }
 
-  func visit_call(self, node: Expr*, call: Call*): Option<LLVMOpaqueValue*>{
+  func visit_call(self, node: Expr*, call: Call*): Option<Value*>{
     let resolver = self.get_resolver();
     if(Utils::is_call(call, "std", "env")){
       let info = resolver.get_macro(node);
@@ -218,7 +218,7 @@ impl AllocHelper{
         let arg = call.args.get(i);
         self.visit(arg);
       }
-      return Option<LLVMOpaqueValue*>::new();
+      return Option<Value*>::new();
     }
     if(Utils::is_call(call, "std", "print_type")){
       let info = resolver.get_macro(node);
@@ -232,12 +232,12 @@ impl AllocHelper{
     if(Resolver::is_print(call) || Resolver::is_panic(call)){
       let info = resolver.get_macro(node);
       self.visit(&info.block);
-      return Option<LLVMOpaqueValue*>::new();
+      return Option<Value*>::new();
     }
     if(Resolver::is_assert(call)){
       let info = resolver.get_macro(node);
       self.visit(&info.block);
-      return Option<LLVMOpaqueValue*>::new();
+      return Option<Value*>::new();
     }
     if(Resolver::is_format(call)){
       let info = resolver.get_macro(node);
@@ -256,7 +256,7 @@ impl AllocHelper{
       }
       rval.drop();
     }
-    let res = Option<LLVMOpaqueValue*>::new();
+    let res = Option<Value*>::new();
     if(rt.is_method() && is_struct(&rt.type)){
       //non-internal method
       res = Option::new(self.alloc_ty(&rt.type, node));
@@ -271,8 +271,8 @@ impl AllocHelper{
     return res;
   }
   
-  func visit(self, node: Expr*): Option<LLVMOpaqueValue*>{
-    let res = Option<LLVMOpaqueValue*>::new();
+  func visit(self, node: Expr*): Option<Value*>{
+    let res = Option<Value*>::new();
     match node{
       Expr::Name(name) => return res,
       Expr::Par(e) => return self.visit(e.get()),

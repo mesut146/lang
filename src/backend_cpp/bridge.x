@@ -84,9 +84,9 @@ extern{
     func llvm_InitializeAArch64AsmParser();
     func llvm_InitializeAArch64AsmPrinter();
 
-    func make_module(name: i8*, tm: TargetMachine*, triple: i8*): LLVMModule*;
-    func make_ctx(): LLVMContext*;
-    func make_builder(): IRBuilder*;
+    func LLVMContext_new(): LLVMContext*;
+    func Module_new(name: i8*, tm: TargetMachine*, triple: i8*): LLVMModule*;
+    func IRBuilder_new(): IRBuilder*;
     func destroy_ctx();
     func destroy_llvm(tm: TargetMachine*);
     func emit_llvm(out: i8*);
@@ -150,10 +150,10 @@ extern{
     func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
-    func getInt(bits: i32): llvm_Type*;
-    func makeInt(val: i64, bits: i32): ConstantInt*;
-    func makeFloat(val: f32): Constant*;
-    func makeDouble(val: f64): Constant*;
+    func getInt(builder: IRBuilder*, bits: i32): llvm_Type*;
+    func makeInt(builder: IRBuilder*, val: i64, bits: i32): ConstantInt*;
+    func makeFloat(builder: IRBuilder*, val: f32): Constant*;
+    func makeDouble(builder: IRBuilder*, val: f64): Constant*;
     func getFloatTy(): llvm_Type*;
     func getDoubleTy(): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
@@ -163,21 +163,21 @@ extern{
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;
-    func ConstantPointerNull_get(ty: PointerType*): Value*;
-    func CreateFPCast(val: Value*, trg: llvm_Type*): Value*;
-    func CreateSIToFP(val: Value*, trg: llvm_Type*): Value*;
-    func CreateUIToFP(val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPToSI(val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPToUI(val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPExt(val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPTrunc(val: Value*, trg: llvm_Type*): Value*;
+    func ConstantPointerNull_get(builder: IRBuilder*, ty: PointerType*): Value*;
+    func CreateFPCast(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateSIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateUIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToSI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToUI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPExt(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPTrunc(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     
     func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
     func odr(): i32;
     func internal(): i32;
     func make_func(fr: llvm_FunctionType*, l: i32, name: i8*): Function*;
-    func get_arg(f: Function*, i: i32): Argument*;
+    func Function_get_arg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
@@ -185,76 +185,70 @@ extern{
     func verifyFunction(f: Function*): bool;
     func verifyModule(): bool;
     
-    func make_stdout(): Value*;
-    
-    func create_bb(): BasicBlock*;
-    func create_bb_named(name: i8*): BasicBlock*;
-    func create_bb2(f: Function*): BasicBlock*;
-    func create_bb2_named(f: Function*, name: i8*): BasicBlock*;
-    func SetInsertPoint(bb: BasicBlock*);
-    func GetInsertBlock(): BasicBlock*;
+    func create_bb(ctx: LLVMContext*, name: i8*, f: Function*): BasicBlock*;
+    func SetInsertPoint(builder: IRBuilder*, bb: BasicBlock*);
+    func GetInsertBlock(builder: IRBuilder*): BasicBlock*;
     func func_insert(f: Function*, bb: BasicBlock*);
     
     func Value_setName(v: Value*, name: i8*);
     func Value_getType(val: Value*): llvm_Type*;
     //func Value_dump(v: Value*);
     //func Type_dump(t: llvm_Type*);
-    func CreateAlloca(ty: llvm_Type*): Value*;
-    func CreateStore(val: Value*, ptr: Value*);
-    func CreateMemCpy(trg: Value*, src: Value*, size: i64);
-    func CreateRet(val: Value*);
-    func CreateRetVoid();
-    func CreateSExt(val: Value*, type: llvm_Type*): Value*;
-    func CreateZExt(val: Value*, type: llvm_Type*): Value*;
-    func CreateTrunc(val: Value*, type: llvm_Type*): Value*;
-    func CreatePtrToInt(val: Value*, type: llvm_Type*): Value*;
-    func CreateStructGEP(ptr: Value*, idx: i32, type: llvm_Type*): Value*;
-    func CreateInBoundsGEP(type: llvm_Type *, ptr: Value*, idx: vector_Value*): Value*;
-    func CreateGEP(type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
-    func CreateGlobalStringPtr(s: i8*): Value*;
-    func CreateGlobalString(s: i8*): GlobalVariable*;
-    func CreateCall(f: Function*, args: vector_Value*): Value*;
-    func CreateCall_ft(ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
-    func CreateUnreachable();
-    func CreateCondBr(cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
-    func CreateBr(bb: BasicBlock*);
-    func CreateCmp(op: i32, l: Value*, r: Value*): Value*;
+    func CreateAlloca(builder: IRBuilder*, ty: llvm_Type*): Value*;
+    func CreateStore(builder: IRBuilder*, val: Value*, ptr: Value*);
+    func CreateMemCpy(builder: IRBuilder*, trg: Value*, src: Value*, size: i64);
+    func CreateRet(builder: IRBuilder*, val: Value*);
+    func CreateRetVoid(builder: IRBuilder*);
+    func CreateSExt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
+    func CreateZExt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
+    func CreateTrunc(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
+    func CreatePtrToInt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
+    func CreateStructGEP(builder: IRBuilder*, ptr: Value*, idx: i32, type: llvm_Type*): Value*;
+    func CreateInBoundsGEP(builder: IRBuilder*, type: llvm_Type *, ptr: Value*, idx: vector_Value*): Value*;
+    func CreateGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
+    func CreateGlobalStringPtr(builder: IRBuilder*, s: i8*): Value*;
+    func CreateGlobalString(builder: IRBuilder*, s: i8*): GlobalVariable*;
+    func CreateCall(builder: IRBuilder*, f: Function*, args: vector_Value*): Value*;
+    func CreateCall_ft(builder: IRBuilder*, ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
+    func CreateUnreachable(builder: IRBuilder*);
+    func CreateCondBr(builder: IRBuilder*, cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
+    func CreateBr(builder: IRBuilder*, bb: BasicBlock*);
+    func CreateCmp(builder: IRBuilder*, op: i32, l: Value*, r: Value*): Value*;
     func get_comp_op(op: i8*): i32;
     func get_comp_op_float(op: i8*): i32;
     func CreateLoad(type: llvm_Type*, val: Value*): Value*;
-    func getTrue(): Value*;
-    func getFalse(): Value*;
-    func CreatePHI(type: llvm_Type*, cnt: i32): PHINode*;
+    func getTrue(builder: IRBuilder*): Value*;
+    func getFalse(builder: IRBuilder*): Value*;
+    func CreatePHI(builder: IRBuilder*, type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
-    func make_global(name: i8*, ty: llvm_Type*, init: Constant*): GlobalVariable*;
-    func make_global_linkage(name: i8*, ty: llvm_Type*, init: Constant*, linkage: i32): GlobalVariable*;
+    func make_global(module: LLVMModule*, ty: llvm_Type*, init: Constant*, linkage: i32, name: i8*): GlobalVariable*;
     func ConstantStruct_get(ty: StructType*): Constant*;
     func ConstantStruct_get_elems(ty: StructType*, elems: vector_Constant*): Constant*;
     func ConstantArray_get(ty: ArrayType*, elems: vector_Constant*): Constant*;
     func GlobalValue_ext(): i32;
     func GlobalValue_appending(): i32;
-    func CreateSwitch(cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
+    func CreateSwitch(builder: IRBuilder*, cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
     func SwitchInst_addCase(node: SwitchInst*, OnVal: ConstantInt*, Dest: BasicBlock*);
 
-    func CreateNSWAdd(l: Value*, r: Value*): Value*;
-    func CreateFAdd(l: Value*, r: Value*): Value*;
-    func CreateAdd(l: Value*, r: Value*): Value*;
-    func CreateNSWSub(l: Value*, r: Value*): Value*;
-    func CreateSub(l: Value*, r: Value*): Value*;
-    func CreateFSub(l: Value*, r: Value*): Value*;
-    func CreateNSWMul(l: Value*, r: Value*): Value*;
-    func CreateFMul(l: Value*, r: Value*): Value*;
-    func CreateSDiv(l: Value*, r: Value*): Value*;
-    func CreateFDiv(l: Value*, r: Value*): Value*;
-    func CreateSRem(l: Value*, r: Value*): Value*;
-    func CreateFRem(l: Value*, r: Value*): Value*;
-    func CreateAnd(l: Value*, r: Value*): Value*;
-    func CreateOr(l: Value*, r: Value*): Value*;
-    func CreateXor(l: Value*, r: Value*): Value*;
-    func CreateShl(l: Value*, r: Value*): Value*;
-    func CreateAShr(l: Value*, r: Value*): Value*;
-    func CreateNeg(l: Value*): Value*;
-    func CreateFNeg(l: Value*): Value*;
+    func CreateNSWAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateFAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateNSWSub(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateSub(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateFSub(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateNSWMul(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateFMul(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateSDiv(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateFDiv(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateSRem(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateFRem(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateAnd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateOr(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateXor(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateShl(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateAShr(builder: IRBuilder*, l: Value*, r: Value*): Value*;
+    func CreateNeg(builder: IRBuilder*, l: Value*): Value*;
+    func CreateFNeg(builder: IRBuilder*, l: Value*): Value*;
 
     func get_last_write_time(path: i8*): i64;
     //func set_as_executable(path: i8*);
@@ -266,3 +260,106 @@ extern{
     let len = getDefaultTargetTriple(ptr as i8*);
     return CStr::new(arr[0..len + 1]);
 }*/
+
+struct Emitter2{
+    tm: LLVMOpaqueTargetMachine*;
+    ctx: LLVMContext*;
+    module: LLVMModule*;
+    builder: IRBuilder*;
+}
+
+impl Emitter2{
+  func new(module_name: str): Emitter2{
+      LLVMInitializeAllTargetInfos();
+      LLVMInitializeAllTargets();
+      LLVMInitializeAllTargetMCs();
+      LLVMInitializeAllAsmPrinters();
+      LLVMInitializeAllAsmParsers();
+
+      let target_triple = CStr::new(LLVMGetDefaultTargetTriple());
+      let env_triple = std::getenv("target_triple");
+      if(env_triple.is_some()){
+          target_triple.drop();
+          target_triple = env_triple.unwrap().owned().cstr();
+      }
+      let target = ptr::null<LLVMTarget>();
+      let err = ptr::null<i8>();
+      let code = LLVMGetTargetFromTriple(target_triple.ptr(), &target, &err);
+      if(code != 0) panic("cant init llvm triple");
+
+      let opt = LLVMCreateTargetMachineOptions();
+      LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
+      LLVMTargetMachineOptionsSetRelocMode(opt, LLVMRelocMode::LLVMRelocPIC{}.int());
+      let tm = LLVMCreateTargetMachineWithOptions(target, target_triple.ptr(), opt);        
+
+      let ctx = LLVMContext_new();
+      let name = module_name.cstr();
+      let md = Module_new(name.ptr(), ctx, tm, target_triple.ptr());
+
+      let builder = IRBuilder_new(ctx);
+
+      name.drop();
+      target_triple.drop();
+      return Emitter2{tm: tm, ctx: ctx, module: md, builder: builder};
+  }
+
+  func make_stdout(self): Value*{
+      let ty = LLVMPointerTypeInContext(self.ctx, 0);
+      let res = LLVMAddGlobal(self.module, ty, "stdout".ptr());
+      LLVMSetLinkage(res, LLVMLinkage::LLVMExternalLinkage{}.int());
+      return res;
+  }
+
+  func optimize_module_newpm(self, level: String*){
+    if(level.eq("-O0")) return;
+    let pipeline = if(level.eq("-O1") || level.eq("-O")){
+      "default<O1>"
+    }
+    else if(level.eq("-O2")){
+      "default<O2>"
+    }
+    else if(level.eq("-O3")){
+      "default<O3>"
+    }else{
+      panic("invalid optimization level '{}'", level);
+    };
+    // let opt = LLVMCreatePassBuilderOptions();
+    // LLVMPassBuilderOptionsSetLoopInterleaving(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetLoopVectorization(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetSLPVectorization(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetLoopUnrolling(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetForgetAllSCEVInLoopUnroll(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetCallGraphProfile(opt, LLVMBoolTrue());
+    // LLVMPassBuilderOptionsSetMergeFunctions(opt, LLVMBoolTrue());
+    // let err = LLVMRunPasses(self.module, pipeline .ptr(), self.tm, opt);
+    // if(err as u64 != 0){
+    //   let msg = LLVMGetErrorMessage(err);
+    //   printf("LLVMRunPasses failed msg=%s\n", msg);
+    //   LLVMDisposeErrorMessage(msg);
+    //   panic("");
+    // }
+    // LLVMDisposePassBuilderOptions(opt);
+  }
+
+  func emit_module(self, file: str){
+      let file_c = file.cstr();
+      let error: i8* = Module_emit(self.module, file_c.ptr());
+      if(error as u64 != 0){
+        panic("cant emit file {:?}, err: {:?}", file, CStr::new(error));
+      }
+      file_c.drop();
+  }
+
+  func emit_obj(self, file: str){
+      let msg = ptr::null<i8>();
+      let code = LLVMVerifyModule(self.module, LLVMVerifierFailureAction::LLVMAbortProcessAction, &msg);
+
+      let file_c = file.cstr();
+      let err = ptr::null<i8>();
+      let code2 = LLVMTargetMachineEmitToFile(self.tm, self.module, file_c.ptr(), LLVMCodeGenFileType::LLVMObjectFile, &err);
+  }
+
+  func makeInt(self, val: i64, bits: i32): Value*{
+    return makeInt(self.ctx, val, bits);
+  }
+}

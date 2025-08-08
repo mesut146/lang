@@ -19,6 +19,7 @@ import backend/debug_helper
 import backend/stmt_emitter
 import backend/expr_emitter
 import backend/llvm
+import backend_cpp/bridge
 import parser/ownership
 import parser/own_model
 import parser/cache
@@ -104,23 +105,23 @@ impl CompilerConfig{
 }
 
 struct LoopInfo{
-  begin_bb: LLVMOpaqueBasicBlock*;
-  next_bb: LLVMOpaqueBasicBlock*;
+  begin_bb: BasicBlock*;
+  next_bb: BasicBlock*;
 }
 
 struct Compiler{
   ctx: Context;
   resolver: Option<Resolver*>;
   di: Option<DebugInfo>;
-  ll: Option<Emitter>;
+  ll: Option<Emitter2>;
   protos: Option<Protos>;
-  NamedValues: HashMap<String, LLVMOpaqueValue*>;
-  globals: HashMap<String, LLVMOpaqueValue*>;
-  allocMap: HashMap<i32, LLVMOpaqueValue*>;
+  NamedValues: HashMap<String, Value*>;
+  globals: HashMap<String, Value*>;
+  allocMap: HashMap<i32, Value*>;
   curMethod: Option<Method*>;
   loops: List<LoopInfo>;
   own: Option<Own>;
-  string_map: HashMap<String, LLVMOpaqueValue*>;
+  string_map: HashMap<String, Value*>;
   config: CompilerConfig*;
   cache: Cache*;
 }
@@ -130,15 +131,15 @@ impl Compiler{
       ctx: ctx,
       resolver: Option<Resolver*>::new(),
       di: Option<DebugInfo>::new(),
-      ll: Option<Emitter>::new(),
+      ll: Option<Emitter2>::new(),
       protos: Option<Protos>::new(),
-      NamedValues: HashMap<String, LLVMOpaqueValue*>::new(),
-      globals: HashMap<String, LLVMOpaqueValue*>::new(),
-      allocMap: HashMap<i32, LLVMOpaqueValue*>::new(),
+      NamedValues: HashMap<String, Value*>::new(),
+      globals: HashMap<String, Value*>::new(),
+      allocMap: HashMap<i32, Value*>::new(),
       curMethod: Option<Method*>::new(),
       loops: List<LoopInfo>::new(),
       own: Option<Own>::new(),
-      string_map: HashMap<String, LLVMOpaqueValue*>::new(),
+      string_map: HashMap<String, Value*>::new(),
       config: config,
       cache: cache,
     };
@@ -146,17 +147,17 @@ impl Compiler{
 }
 
 struct FunctionInfo{
-  val: LLVMOpaqueValue*;
-  ty: LLVMOpaqueType*;
+  val: Value*;
+  ty: llvm_Type*;
 }
 
 struct Protos{
-  classMap: HashMap<String, LLVMOpaqueType*>;
+  classMap: HashMap<String, llvm_Type*>;
   funcMap: HashMap<String, FunctionInfo>;
   libc: HashMap<str, FunctionInfo>;
-  stdout_ptr: LLVMOpaqueValue*;
-  std: HashMap<str, LLVMOpaqueType*>;
-  cur: Option<LLVMOpaqueValue*>;
+  stdout_ptr: Value*;
+  std: HashMap<str, llvm_Type*>;
+  cur: Option<Function*>;
   compiler: Compiler*;
 }
 impl Drop for Protos{
@@ -171,12 +172,12 @@ impl Drop for Protos{
 impl Protos{
   func new(compiler: Compiler*): Protos{
     let res = Protos{
-      classMap: HashMap<String, LLVMOpaqueType*>::new(),
+      classMap: HashMap<String, llvm_Type*>::new(),
       funcMap: HashMap<String, FunctionInfo>::new(),
       libc: HashMap<str, FunctionInfo>::new(),
       stdout_ptr: compiler.ll.get().make_stdout(),
-      std: HashMap<str, LLVMOpaqueType*>::new(),
-      cur: Option<LLVMOpaqueValue*>::new(),
+      std: HashMap<str, llvm_Type*>::new(),
+      cur: Option<Function*>::new(),
       compiler: compiler
     };
     res.init();
@@ -191,20 +192,20 @@ impl Protos{
       self.libc.add("fflush", make_fflush(ll));
       self.libc.add("malloc", make_malloc(ll));
   }
-  func get(self, d: Decl*): LLVMOpaqueType*{
+  func get(self, d: Decl*): llvm_Type*{
     let name = d.type.print();
     let res = self.get(&name);
     name.drop();
     return res;
   }
-  func get(self, name: String*): LLVMOpaqueType*{
+  func get(self, name: String*): llvm_Type*{
     let res = self.classMap.get(name);
     return *res.unwrap();
   }
   func libc(self, nm: str): FunctionInfo*{
     return self.libc.get(&nm).unwrap();
   }
-  func std(self, nm: str): LLVMOpaqueType*{
+  func std(self, nm: str): llvm_Type*{
     return *self.std.get(&nm).unwrap();
   }
   func make_proto(self, m: Method*){
@@ -298,8 +299,9 @@ impl Compiler{
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
-    init_llvm();
-    self.ll = Option::new(Emitter::new(name));
+    //init_llvm();
+    self.ll = Option::new(Emitter2::new(name));
+
     self.di = Option::new(DebugInfo::new(self.config.debug, path, self.ll.get()));
 
     self.createProtos();
@@ -368,10 +370,9 @@ impl Compiler{
     //declare external globals
     for gl_info in &resolv.glob_map{
       let ty = self.mapType(&gl_info.rt.type);
-      let init = ptr::null<LLVMOpaqueValue>();
+      let init = ptr::null<Value>();
       let name_c = gl_info.name.clone().cstr();
-      //let glob = make_global(name_c.ptr(), ty, init);
-      let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
+      let glob = make_global(ll.module, ty, init, ext(), name_c.ptr());
       self.globals.add(gl_info.name.clone(), glob);
       name_c.drop();
     }
@@ -392,8 +393,8 @@ impl Compiler{
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
     let proto = proto_pr.a;
     LLVMSetSection(proto, ".text.startup".ptr());
-    let bb = LLVMAppendBasicBlockInContext(ll.ctx, proto, "".ptr());
-    LLVMPositionBuilderAtEnd(ll.builder, bb);
+    let bb = create_bb(ll.ctx, "".ptr(), proto);
+    SetInsertPoint(ll.builder, bb);
     let method = Method::new(Node::new(0), proto_pr.b, Type::new("void"));
     method.body = Option::new(Block::new(0, 0));
     self.own = Option::new(Own::new(self, &method));
@@ -404,7 +405,7 @@ impl Compiler{
       if(gl.expr.is_none()){
         //local extern
         let ty = self.mapType(gl.type.get());
-        let init = ptr::null<LLVMOpaqueValue>();
+        let init = ptr::null<Value>();
         let name_c = gl.name.clone().cstr();
         let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
         LLVMSetInitializer(glob, init);
@@ -442,7 +443,7 @@ impl Compiler{
     
     make_global_ctors2(proto, ll);
 
-    LLVMBuildRetVoid(ll.builder);
+    CreateRetVoid(ll.builder);
     self.own.reset();
     self.di.get().finalize();
     ll.verify_func(proto);
@@ -450,13 +451,13 @@ impl Compiler{
     globals.drop();
   }
 
-  func make_global_ctors2(proto: LLVMOpaqueValue*, ll: Emitter*){
-    let struct_elem_types = [ptr::null<LLVMOpaqueType>(); 3];
+  func make_global_ctors2(proto: Value*, ll: Emitter2*){
+    let struct_elem_types = [ptr::null<llvm_Type>(); 3];
     struct_elem_types[0] = ll.intTy(32);
     struct_elem_types[1] = LLVMPointerTypeInContext(ll.ctx, 0);
     struct_elem_types[2] = LLVMPointerTypeInContext(ll.ctx, 0);
     let ctor_elem_ty = LLVMStructTypeInContext(ll.ctx, struct_elem_types.ptr(), 3, LLVMBoolFalse());
-    let struct_elems = [ptr::null<LLVMOpaqueValue>(); 3];
+    let struct_elems = [ptr::null<Value>(); 3];
     struct_elems[0] = ll.makeInt(65535, 32);
     struct_elems[1] = proto;
     struct_elems[2] = LLVMConstNull(ll.intPtr(32));
@@ -469,10 +470,10 @@ impl Compiler{
     LLVMSetLinkage(ctor, LLVMLinkage::LLVMAppendingLinkage{}.int());
   }
 
-  func make_global_init(self, gl: Global*, rt: RType*, ty: LLVMOpaqueType*): LLVMOpaqueValue*{
+  func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Value*{
     let ll = self.ll.get();
     let resolv = self.get_resolver();
-    let init = ptr::null<LLVMOpaqueValue>();
+    let init = ptr::null<Value>();
     if(gl.expr.is_none()) return init;
     if(is_constexpr(gl.expr.get())){
       if(rt.type.is_prim()){
@@ -589,8 +590,8 @@ impl Compiler{
     self.protos.get().cur = Option::new(proto.val);
     self.NamedValues.clear();
     let ll = self.ll.get();
-    let bb = LLVMAppendBasicBlockInContext(ll.ctx, proto.val, "entry".ptr());
-    LLVMPositionBuilderAtEnd(ll.builder, bb);
+    let bb = create_bb(ll.ctx, "entry".ptr(), proto.val);
+    SetInsertPoint(ll.builder, bb);
     self.di.get().dbg_func(m, proto.val, self);
     AllocHelper::makeLocals(self, m.body.get());
     self.allocParams(m);
@@ -604,9 +605,9 @@ impl Compiler{
         self.own.get().do_return(m.body.get().end_line);
         self.exit_frame();
         if(is_main(m)){
-          LLVMBuildRet(ll.builder, ll.makeInt(0, 32));
+          CreateRet(ll.builder, ll.makeInt(0, 32));
         }else{
-          LLVMBuildRetVoid(ll.builder);
+          CreateRetVoid(ll.builder);
         }
       }else if(blk_val.is_some() && !m.type.is_void()){
         //setField(blk_val.unwrap(), &m.type, );
@@ -643,23 +644,23 @@ impl Compiler{
     self.NamedValues.add(prm.name.clone(), ptr);
   }
 
-  func copy(self, trg: LLVMOpaqueValue*, src: LLVMOpaqueValue*, type: Type*){
+  func copy(self, trg: Value*, src: Value*, type: Type*){
     let size = self.getSize(type) / 8;
     LLVMBuildMemCpy(self.ll.get().builder, trg, 0, src, 0, self.ll.get().makeInt(size, 64));
   }
 
-  func store_prm(self, prm: Param*, f: LLVMOpaqueValue*, argIdx: i32){
+  func store_prm(self, prm: Param*, f: Value*, argIdx: i32){
     let ptr = *self.NamedValues.get(&prm.name).unwrap();
-    let val = LLVMGetParam(f, argIdx);
+    let val = Function_get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
     }else{
-      LLVMBuildStore(self.ll.get().builder, val, ptr);
+      CreateStore(self.ll.get().builder, val, ptr);
     }
     self.own.get().add_prm(prm, LLVMPtr::new(ptr));
   }
 
-  func storeParams(self, m: Method*, f: LLVMOpaqueValue*){
+  func storeParams(self, m: Method*, f: Value*){
     let argIdx = 0;
     if(is_struct(&m.type)){
       ++argIdx;//sret
@@ -681,14 +682,14 @@ impl Compiler{
     }
   }
   
-  func get_alloc(self, e: Expr*): LLVMOpaqueValue*{
+  func get_alloc(self, e: Expr*): Value*{
     let ptr = self.allocMap.get(&e.id);
     if(ptr.is_none()){
       self.get_resolver().err(e, "get_alloc() not set");
     }
     return *ptr.unwrap();
   }
-  func get_alloc(self, id: i32): LLVMOpaqueValue*{
+  func get_alloc(self, id: i32): Value*{
     let ptr = self.allocMap.get(&id);
     if(ptr.is_none()){
       panic("get_alloc() not set");
@@ -696,7 +697,7 @@ impl Compiler{
     return *ptr.unwrap();
   }
 
-  func cur_func(self): LLVMOpaqueValue*{
+  func cur_func(self): Function*{
     return self.protos.get().cur.unwrap();
   }
 
@@ -726,7 +727,7 @@ impl Compiler{
   }
   func drop_force(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){
     let proto = self.get_drop_proto(rt);
-    let args = [ptr.ptr as LLVMOpaqueValue*];
+    let args = [ptr.ptr as Value*];
     let ll = self.ll.get();
     LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
 }

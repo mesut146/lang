@@ -62,11 +62,11 @@ build(){
   XLIBNAME=backend XLIBSRC=$dir/../src/backend $dir/build_module.sh $compiler $out_dir || exit 1
   LIB_BACKEND=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
-  #flags="$bridge_lib"
   flags="$flags $LIB_AST"
   flags="$flags $LIB_RESOLVER"
   flags="$flags $LIB_BACKEND"
   flags="$flags $LIB_STD"
+  flags="$flags $bridge_lib"
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
   if [ "$name" = "stage1" ] && [ ! -z "$XPERF" ]; then

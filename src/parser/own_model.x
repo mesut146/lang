@@ -19,12 +19,16 @@ import backend/llvm
 
 #derive(Debug)
 struct LLVMPtr{
-    ptr: LLVMOpaqueValue*;
+    // ptr: LLVMOpaqueValue*;
+    ptr: Value*;
 }
 impl LLVMPtr{
     func new(ptr: LLVMOpaqueValue*): LLVMPtr{
         return LLVMPtr{ptr: ptr};
     }
+    func new(ptr: Value*): LLVMPtr{
+        return LLVMPtr{ptr: ptr};
+    }    
 }
 
 //prm or var

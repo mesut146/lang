@@ -14,25 +14,26 @@ import backend/stmt_emitter
 import backend/llvm
 import backend/debug_helper
 import backend/compiler_helper
+import backend_cpp/bridge
 import parser/ownership
 import parser/own_model
 
 struct MatchInfo{
   type: Type;
-  val: LLVMOpaqueValue*;
-  bb: LLVMOpaqueBasicBlock*;
+  val: Value*;
+  bb: BasicBlock*;
 }
 
 //expr------------------------------------------------------
 impl Compiler{
 
-    func visit(self, node: Expr*): LLVMOpaqueValue*{
+    func visit(self, node: Expr*): Value*{
       let res = self.visit_expr(node);
       //self.own.get().add_obj(node);
       return res;
     }
 
-    func visit_expr(self, node: Expr*): LLVMOpaqueValue*{
+    func visit_expr(self, node: Expr*): Value*{
       let ll = self.ll.get();
       self.di.get().loc(node.line, node.pos);
       match node{
@@ -127,7 +128,7 @@ impl Compiler{
       }
     }
     
-    func nullptr(self): LLVMOpaqueValue*{
+    func nullptr(self): Value*{
       return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(self.ll.get().ctx), 0));
     }
 
@@ -143,19 +144,19 @@ impl Compiler{
       panic("idx {:?} {:?}", lhs_ty, decl.type);
     }
 
-    func visit_match_rhs(self, rhs: MatchRhs*): Option<LLVMOpaqueValue*>{
+    func visit_match_rhs(self, rhs: MatchRhs*): Option<Value*>{
       match rhs{
         MatchRhs::EXPR(e)=>{
-          return Option<LLVMOpaqueValue*>::new(self.visit(e));
+          return Option<Value*>::new(self.visit(e));
         },
         MatchRhs::STMT(st)=>{
           self.visit(st);
-          return Option<LLVMOpaqueValue*>::new();
+          return Option<Value*>::new();
         }
       }
     }
 
-    func visit_match(self, expr: Expr*, node: Match*): Option<LLVMOpaqueValue*>{
+    func visit_match(self, expr: Expr*, node: Match*): Option<Value*>{
       let ll = self.ll.get();
       let resolver = self.get_resolver();
       let rhs_rt = resolver.visit(&node.expr);
@@ -166,28 +167,28 @@ impl Compiler{
 
       let next_name = format("next_{}", expr.line).cstr();
       let def_name = format("def_{}", expr.line).cstr();
-      let nextbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), next_name.ptr());
-      let def_bb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), def_name.ptr());
+      let nextbb = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
+      let def_bb = create_bb(ll.ctx, def_name.ptr(), self.cur_func());
       let sw = LLVMBuildSwitch(ll.builder, tag, def_bb, node.cases.len() as i32);
       let match_rt = resolver.visit(expr);
       let match_type = match_rt.unwrap();
       let none_case = node.has_none();
       if(none_case.is_none()){
-        LLVMPositionBuilderAtEnd(ll.builder, def_bb);
+        SetInsertPoint(ll.builder, def_bb);
         LLVMBuildUnreachable(ll.builder);
       }
       //create bb's
-      let res = Option<LLVMOpaqueValue*>::new();
+      let res = Option<Value*>::new();
       let infos = List<MatchInfo>::new();
       let use_next = false;
       for case in &node.cases{
         match &case.lhs{
           MatchLhs::NONE => {
-            LLVMPositionBuilderAtEnd(ll.builder, def_bb);
+            SetInsertPoint(ll.builder, def_bb);
             let rhs_val = self.visit_match_rhs(&case.rhs);
             let exit = Exit::get_exit_type(&case.rhs);
             if(!exit.is_jump()){
-                LLVMBuildBr(ll.builder, nextbb);
+                CreateBr(ll.builder, nextbb);
                 use_next = true;
                 if(!match_type.is_void()){
                   let rt2 = resolver.visit_match_rhs(&case.rhs);
@@ -197,10 +198,10 @@ impl Compiler{
           },
           MatchLhs::ENUM(type, args) => {
             let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
-            let bb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), name_c.ptr());
+            let bb = create_bb(ll.ctx, name_c.ptr(), self.cur_func());
             let var_index = get_variant_index_match(type, decl);
             LLVMAddCase(sw, ll.makeInt(var_index, 64), bb);
-            LLVMPositionBuilderAtEnd(ll.builder, bb);
+            SetInsertPoint(ll.builder, bb);
             //alloc args
             let variant = decl.get_variants().get(var_index);
             let arg_idx = 0;
@@ -227,20 +228,20 @@ impl Compiler{
                 rhs_val.set(val);
                 infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
               }
-              LLVMBuildBr(ll.builder, nextbb);
+              CreateBr(ll.builder, nextbb);
               use_next = true;
             }
             name_c.drop();
           },
           MatchLhs::UNION(types) => {
             let name_c = format("{:?}__$union_{}", decl.type, expr.line).cstr();
-            let bb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), name_c.ptr());
+            let bb = create_bb(ll.ctx, name_c.ptr(), self.cur_func());
             for uty in types{
               //all variants go to bb
               let var_index = get_variant_index_match(uty, decl);
               LLVMAddCase(sw, ll.makeInt(var_index, 64), bb);
             }
-            LLVMPositionBuilderAtEnd(ll.builder, bb);
+            SetInsertPoint(ll.builder, bb);
 
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             let rhs_val = self.visit_match_rhs(&case.rhs);
@@ -261,14 +262,14 @@ impl Compiler{
                 rhs_val.set(val);
                 infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
               }
-              LLVMBuildBr(ll.builder, nextbb);
+              CreateBr(ll.builder, nextbb);
               use_next = true;
             }
           }
         }
       }
       if(use_next){
-          LLVMPositionBuilderAtEnd(ll.builder, nextbb);
+          SetInsertPoint(ll.builder, nextbb);
       }else{
         LLVMDeleteBasicBlock(nextbb);
       }
@@ -290,7 +291,7 @@ impl Compiler{
       return res;
     }
 
-    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: LLVMOpaqueValue*, rhs_ty: Type*){
+    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*){
       let ll = self.ll.get();
       let data_index = get_data_index(decl);
       let dataPtr = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), enum_ptr, data_index, "".ptr());
@@ -305,7 +306,7 @@ impl Compiler{
       }
       let field_ptr = LLVMBuildStructGEP2(ll.builder, var_ty, dataPtr, gep_idx, "".ptr());
       if (rhs_ty.is_pointer()) {
-        LLVMBuildStore(ll.builder, field_ptr, alloc_ptr);
+        CreateStore(ll.builder, field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
         self.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
         ty_ptr.drop();
@@ -313,7 +314,7 @@ impl Compiler{
         //deref
         if (field.type.is_prim() || field.type.is_any_pointer()) {
             let field_val = LLVMBuildLoad2(ll.builder, self.mapType(&field.type), field_ptr, "".ptr());
-            LLVMBuildStore(ll.builder, field_val, alloc_ptr);
+            CreateStore(ll.builder, field_val, alloc_ptr);
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
             self.copy(alloc_ptr, field_ptr, &field.type);
@@ -336,18 +337,18 @@ impl Compiler{
       return expr is Expr::If || expr is Expr::IfLet;
     }
 
-    func visit_if(self, node: IfStmt*): Option<LLVMOpaqueValue*>{
+    func visit_if(self, node: IfStmt*): Option<Value*>{
       let ll = self.ll.get();
       let cond = self.branch(&node.cond);
       let line = node.cond.line;
       let then_name = CStr::new(format("if_then_{}", line));
       let else_name = CStr::new(format("if_else_{}", line));
       let next_name = CStr::new(format("if_next_{}", line));
-      let thenbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), then_name.ptr());
-      let elsebb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), else_name.ptr());
-      let nextbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), next_name.ptr());
-      LLVMBuildCondBr(ll.builder, cond, thenbb, elsebb);
-      LLVMPositionBuilderAtEnd(ll.builder, thenbb);
+      let thenbb = create_bb(ll.ctx, then_name.ptr(), self.cur_func());
+      let elsebb = create_bb(ll.ctx, else_name.ptr(), self.cur_func());
+      let nextbb = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
+      CreateCondBr(ll.builder, cond, thenbb, elsebb);
+      SetInsertPoint(ll.builder, thenbb);
       self.di.get().new_scope(node.then.get().line());
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
@@ -362,11 +363,11 @@ impl Compiler{
       }
       self.di.get().exit_scope();
       if(!exit_then.is_jump()){
-        LLVMBuildBr(ll.builder, nextbb);
+        CreateBr(ll.builder, nextbb);
       }
-      LLVMPositionBuilderAtEnd(ll.builder, elsebb);
+      SetInsertPoint(ll.builder, elsebb);
       let else_jump = false;
-      let else_val = Option<LLVMOpaqueValue*>::new();
+      let else_val = Option<Value*>::new();
       
       if(node.else_stmt.is_some()){
         self.di.get().new_scope(node.else_stmt.get().line());
@@ -380,18 +381,18 @@ impl Compiler{
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if(!else_jump){
-          LLVMBuildBr(ll.builder, nextbb);
+          CreateBr(ll.builder, nextbb);
         }
         exit_else.drop();
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
         self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
-        LLVMBuildBr(ll.builder, nextbb);
+        CreateBr(ll.builder, nextbb);
       }
-      let res = Option<LLVMOpaqueValue*>::new();
+      let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
-        LLVMPositionBuilderAtEnd(ll.builder, nextbb);
+        SetInsertPoint(ll.builder, nextbb);
         let then_rt = self.get_resolver().visit_body(node.then.get());
         if(!then_rt.type.is_void()){
           //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
@@ -429,7 +430,7 @@ impl Compiler{
       return res;
     }
 
-    func visit_iflet(self, line: i32, node: IfLet*): Option<LLVMOpaqueValue*>{
+    func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
       let ll = self.ll.get();
       let rt = self.get_resolver().visit_type(&node.type);
       let decl = self.get_resolver().get_decl(&rt).unwrap();
@@ -443,12 +444,12 @@ impl Compiler{
       let then_name = CStr::new(format("iflet_then_{}", line));
       let else_name = CStr::new(format("iflet_else_{}", line));
       let next_name = CStr::new(format("iflet_next_{}", line));
-      let then_bb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), then_name.ptr());
-      let elsebb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), else_name.ptr());
-      let next = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), next_name.ptr());
+      let then_bb = create_bb(ll.ctx, then_name.ptr(), self.cur_func());
+      let elsebb = create_bb(ll.ctx, else_name.ptr(), self.cur_func());
+      let next = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
       
-      LLVMBuildCondBr(ll.builder, self.branch(cmp), then_bb, elsebb);
-      LLVMPositionBuilderAtEnd(ll.builder, then_bb);
+      CreateCondBr(ll.builder, self.branch(cmp), then_bb, elsebb);
+      SetInsertPoint(ll.builder, then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.own.get().do_move(&node.rhs);
       let variant = decl.get_variants().get(index);
@@ -478,11 +479,11 @@ impl Compiler{
       self.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
       if (!exit_then.is_jump()) {
-        LLVMBuildBr(ll.builder, next);
+        CreateBr(ll.builder, next);
       }
-      LLVMPositionBuilderAtEnd(ll.builder, elsebb);
+      SetInsertPoint(ll.builder, elsebb);
       let else_jump = false;
-      let else_val = Option<LLVMOpaqueValue*>::new();
+      let else_val = Option<Value*>::new();
       if (node.else_stmt.is_some()) {
         self.di.get().new_scope(node.else_stmt.get().line());
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
@@ -494,18 +495,18 @@ impl Compiler{
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
         if (!else_jump) {
-          LLVMBuildBr(ll.builder, next);
+          CreateBr(ll.builder, next);
         }
         exit_else.drop();
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
         self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
-        LLVMBuildBr(ll.builder, next);
+        CreateBr(ll.builder, next);
       }
-      let res = Option<LLVMOpaqueValue*>::new();
+      let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
-        LLVMPositionBuilderAtEnd(ll.builder, next);
+        SetInsertPoint(ll.builder, next);
 
         let then_rt = self.get_resolver().visit_body(node.then.get());
         if(!then_rt.type.is_void()){
@@ -546,7 +547,7 @@ impl Compiler{
       return res;
     }
 
-    func visit_name(self, node: Expr*, name: String*, check: bool): LLVMOpaqueValue*{
+    func visit_name(self, node: Expr*, name: String*, check: bool): Value*{
       let rt = self.get_resolver().visit(node);
       if(rt.desc.kind is RtKind::Const){
         let cn = self.get_resolver().get_const(&rt);
@@ -587,11 +588,11 @@ impl Compiler{
       return *res.unwrap();
     }
 
-    func visit_ref(self, node: Expr*, expr: Expr*): LLVMOpaqueValue*{
+    func visit_ref(self, node: Expr*, expr: Expr*): Value*{
       if (RvalueHelper::is_rvalue(expr)) {
         let alloc_ptr = self.get_alloc(node);
         //let val = self.loadPrim(expr);
-        //LLVMBuildStore(ll.builder, val, alloc_ptr);
+        //CreateStore(ll.builder, val, alloc_ptr);
         let expr_type = self.get_resolver().getType(expr);
         self.setField(expr, &expr_type, alloc_ptr);
         self.own.get().add_obj(node, LLVMPtr::new(alloc_ptr), &expr_type);
@@ -602,7 +603,7 @@ impl Compiler{
       return inner;
     }
 
-    func visit_repr(self, lhs: Expr*, rhs: Type*): LLVMOpaqueValue*{
+    func visit_repr(self, lhs: Expr*, rhs: Type*): Value*{
       match lhs{
         Expr::Name(nm)=>{
           let res = self.get_obj_ptr(lhs);
@@ -619,7 +620,7 @@ impl Compiler{
       panic("todo {:?} as {:?}", lhs, rhs);
     }
   
-    func visit_as(self, lhs: Expr*, rhs: Type*): LLVMOpaqueValue*{
+    func visit_as(self, lhs: Expr*, rhs: Type*): Value*{
       let ll = self.ll.get();
       let lhs_rt = self.get_resolver().visit(lhs);
       //ptr to int
@@ -660,7 +661,7 @@ impl Compiler{
       return val;
     }
   
-    func visit_is(self, lhs: Expr*, rhs: Expr*): LLVMOpaqueValue*{
+    func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
       let ll = self.ll.get();
       let tag1 = self.getTag(lhs);
       let op = LLVMIntPredicate::from("==");
@@ -674,12 +675,12 @@ impl Compiler{
       return LLVMBuildICmp(ll.builder, op, tag1, tag2, "".ptr());
     }
 
-    func simple_enum(self, node: Expr*, type: Type*): LLVMOpaqueValue*{
+    func simple_enum(self, node: Expr*, type: Type*): Value*{
       let ptr = self.get_alloc(node);
       return self.simple_enum(type, ptr);
     }
   
-    func simple_enum(self, type: Type*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    func simple_enum(self, type: Type*, ptr: Value*): Value*{
       let ll = self.ll.get();
       let smp = type.as_simple();
       let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
@@ -687,18 +688,18 @@ impl Compiler{
       if(decl.is_repr()){
         let at = decl.attr.find("repr").unwrap().args.get(0).print();
         let desc = decl.get_variants().get(index).disc.unwrap();
-        LLVMBuildStore(ll.builder, ll.makeInt(desc, prim_size(at.str()).unwrap() as i32) , ptr);
+        CreateStore(ll.builder, ll.makeInt(desc, prim_size(at.str()).unwrap() as i32) , ptr);
         at.drop();
         return ptr;
       }
       
       let decl_ty = self.mapType(&decl.type);
       let tag_ptr = LLVMBuildStructGEP2(ll.builder,  decl_ty, ptr,  get_tag_index(decl), "".ptr());
-      LLVMBuildStore(ll.builder, ll.makeInt(index, ENUM_TAG_BITS()) , tag_ptr);
+      CreateStore(ll.builder, ll.makeInt(index, ENUM_TAG_BITS()) , tag_ptr);
       return ptr;
     }
   
-    func visit_access(self, node: Expr*, scope: Expr*, name: String*): LLVMOpaqueValue*{
+    func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
       let ll = self.ll.get();
       let scope_ptr = self.get_obj_ptr(scope);
       let scope_rt = self.get_resolver().visit(scope);
@@ -723,11 +724,11 @@ impl Compiler{
       return LLVMBuildStructGEP2(ll.builder,  sd_ty, scope_ptr,  index, "".ptr());
     }
   
-    func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): LLVMOpaqueValue*{
+    func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
       let ptr = self.get_alloc(node);
       return self.visit_array(node, list, sz, ptr);
     }
-    func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*, ptr: Value*): Value*{
       let ll = self.ll.get();
       let arrt = self.getType(node);
       self.own.get().add_obj(node, LLVMPtr::new(ptr), &arrt);
@@ -746,7 +747,7 @@ impl Compiler{
       }
       //repeated
       let elem = list.get(0);
-      let elem_ptr = Option<LLVMOpaqueValue*>::new();
+      let elem_ptr = Option<Value*>::new();
       let elem_type = self.getType(list.get(0));
       let elem_ty = self.mapType(&elem_type);
       if (doesAlloc(elem, self.get_resolver())) {
@@ -756,17 +757,17 @@ impl Compiler{
       let cur = self.ll.get().gep_arr(arr_ty, ptr, 0, 0);
       let end = self.ll.get().gep_arr(arr_ty, ptr, 0, *sz.get());
       //create cons and memcpy
-      let condbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), "".ptr());
-      let setbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), "".ptr());
-      let nextbb = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), "".ptr());
-      LLVMBuildBr(ll.builder, condbb);
-      LLVMPositionBuilderAtEnd(ll.builder, condbb);
+      let condbb = create_bb(ll.ctx, "".ptr(), self.cur_func());
+      let setbb = create_bb(ll.ctx, "".ptr(), self.cur_func());
+      let nextbb = create_bb(ll.ctx, "".ptr(), self.cur_func());
+      CreateBr(ll.builder, condbb);
+      SetInsertPoint(ll.builder, condbb);
       let phi_ty = LLVMPointerType(elem_ty, 0);
       let phi = LLVMBuildPhi(ll.builder, phi_ty, "".ptr());
       LLVMAddIncoming(phi, &cur, &bb, 1);
       let ne = LLVMBuildICmp(ll.builder, LLVMIntPredicate::from("!="), phi , end, "".ptr());
-      LLVMBuildCondBr(ll.builder, ne, setbb, nextbb);
-      LLVMPositionBuilderAtEnd(ll.builder, setbb);
+      CreateCondBr(ll.builder, ne, setbb, nextbb);
+      SetInsertPoint(ll.builder, setbb);
       if (elem_ptr.is_some()) {
           self.copy(phi , elem_ptr.unwrap(), &elem_type);
       } else {
@@ -774,13 +775,13 @@ impl Compiler{
       }
       let step = ll.gep_ptr(elem_ty, phi, ll.makeInt(1, 64));
       LLVMAddIncoming(phi, &step, &setbb, 1);
-      LLVMBuildBr(ll.builder, condbb);
-      LLVMPositionBuilderAtEnd(ll.builder, nextbb);
+      CreateBr(ll.builder, condbb);
+      SetInsertPoint(ll.builder, nextbb);
       elem_type.drop();
       return ptr;
     }
   
-    func visit_array_access(self, expr: Expr*, node: ArrAccess*): LLVMOpaqueValue*{
+    func visit_array_access(self, expr: Expr*, node: ArrAccess*): Value*{
       let ll = self.ll.get();
       if(node.idx2.is_some()){
         return self.visit_slice(expr, node);
@@ -812,12 +813,12 @@ impl Compiler{
       return self.ll.get().gep_ptr(elemty, arr, index);
     }
 
-    func visit_slice(self, expr: Expr*, node: ArrAccess*): LLVMOpaqueValue*{
+    func visit_slice(self, expr: Expr*, node: ArrAccess*): Value*{
       let ptr = self.get_alloc(expr);
       return self.visit_slice(expr, node, ptr);
     }
 
-    func visit_slice(self,expr: Expr*, node: ArrAccess*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    func visit_slice(self,expr: Expr*, node: ArrAccess*, ptr: Value*): Value*{
       let ll = self.ll.get();
       let arr = self.visit(node.arr.get());
       let arr_ty = self.getType(node.arr.get());
@@ -838,25 +839,25 @@ impl Compiler{
       let trg_ptr = LLVMBuildStructGEP2(ll.builder, sliceType, ptr, 0, "".ptr());
       let trg_len = LLVMBuildStructGEP2(ll.builder, sliceType, ptr, 1, "".ptr());
       //store ptr
-      LLVMBuildStore(ll.builder, arr, trg_ptr);
+      CreateStore(ll.builder, arr, trg_ptr);
       //set len
       let val_end = self.cast(node.idx2.get(), &i32_ty);
       let len = LLVMBuildSub(ll.builder, val_end, val_start, "".ptr());
       len = LLVMBuildSExt(ll.builder, len, ll.intTy(SLICE_LEN_BITS()), "".ptr());
-      LLVMBuildStore(ll.builder, len, trg_len);
+      CreateStore(ll.builder, len, trg_len);
       arr_ty.drop();
       i32_ty.drop();
       return ptr;
     }
 
-    func makeFloat_one(type: Type*, ll: Emitter*): LLVMOpaqueValue*{
+    func makeFloat_one(type: Type*, ll: Emitter*): Value*{
       if(type.eq("f32")){
         return ll.makeFloat(1.0);
       }
       return ll.makeDouble(1.0);
     }
   
-    func visit_unary(self, op: String*, e: Expr*): LLVMOpaqueValue*{
+    func visit_unary(self, op: String*, e: Expr*): Value*{
       let ll = self.ll.get();
       let val = self.loadPrim(e);
       if(op.eq("+")) return val;
@@ -879,27 +880,27 @@ impl Compiler{
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
           let res = LLVMBuildFAdd(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
-          LLVMBuildStore(ll.builder, res, var_ptr);
+          CreateStore(ll.builder, res, var_ptr);
           return res;
         }
         if(type.is_unsigned()){
           let res = LLVMBuildAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
-          LLVMBuildStore(ll.builder, res, var_ptr);
+          CreateStore(ll.builder, res, var_ptr);
           return res;
         }
         let res = LLVMBuildNSWAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
-        LLVMBuildStore(ll.builder, res, var_ptr);
+        CreateStore(ll.builder, res, var_ptr);
         return res;
       }
       if(op.eq("--")){
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
           let res = LLVMBuildFSub(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
-          LLVMBuildStore(ll.builder, res, var_ptr);
+          CreateStore(ll.builder, res, var_ptr);
           return res;
         }
         let res = LLVMBuildNSWSub(ll.builder, val, ll.makeInt(1, bits), "".ptr());
-        LLVMBuildStore(ll.builder, res, var_ptr);
+        CreateStore(ll.builder, res, var_ptr);
         return res;
       }
       if(op.eq("~")){
@@ -912,7 +913,7 @@ impl Compiler{
       return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
     }
 
-    func visit_macrocall(self, expr: Expr*, mc: MacroCall*): LLVMOpaqueValue*{
+    func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
         let ll = self.ll.get();
         if(Utils::is_call(mc, "ptr", "deref")){
@@ -945,11 +946,11 @@ impl Compiler{
           let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
           self.copy(trg_ptr, val, &elem_type);
           elem_type.drop();
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "unreachable")){
           LLVMBuildUnreachable(ll.builder);
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "internal_block")){
           let arg = mc.args.get(0).print();
@@ -957,7 +958,7 @@ impl Compiler{
           let blk: Block* = *resolver.block_map.get(&id).unwrap();
           self.visit_block(blk);
           arg.drop();
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "typeof")){
           let arg = mc.args.get(0);
@@ -972,7 +973,7 @@ impl Compiler{
         if(Utils::is_call(mc, "std", "no_drop")){
           let arg = mc.args.get(0);
           self.own.get().do_move(arg);
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         let info = resolver.format_map.get(&expr.id);
         if(info.is_none()){
@@ -980,10 +981,10 @@ impl Compiler{
         }
         let res = self.visit_block(&info.unwrap().block);
         if(res.is_some()) return res.unwrap();
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
     }
 
-    func visit_call(self, expr: Expr*, mc: Call*): LLVMOpaqueValue*{
+    func visit_call(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let env = std::getenv("ignore_drop");
       let ll = self.ll.get();
@@ -996,14 +997,14 @@ impl Compiler{
           //let arg = mc.scope.get();
           //self.own.get().do_move(arg);
           list.drop();
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         list.drop();
       }
       if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       //////////////////////////////////////
       if(Utils::is_call(mc, "ptr", "deref")){
@@ -1036,12 +1037,12 @@ impl Compiler{
         let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
         self.copy(trg_ptr, val, &elem_type);
         elem_type.drop();
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
         self.own.get().do_move(arg);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       /// /////////////////////////////
       let mac = resolver.format_map.get(&expr.id);
@@ -1050,12 +1051,12 @@ impl Compiler{
         if(res.is_some()){
           return res.unwrap();
         }
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Utils::is_call(mc, "std", "debug") || Utils::is_call(mc, "std", "debug2")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Utils::is_call(mc, "std", "print_type")){
         let info = resolver.format_map.get(&expr.id).unwrap();
@@ -1066,12 +1067,12 @@ impl Compiler{
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
           argt.drop();
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         let helper = DropHelper{resolver};
         if(!helper.is_drop_type(&argt)){
           argt.drop();
-          return ptr::null<LLVMOpaqueValue>();
+          return ptr::null<Value>();
         }
         argt.drop();
       }
@@ -1097,7 +1098,7 @@ impl Compiler{
       }
       if(Resolver::is_printf(mc)){
         self.call_printf(mc);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Resolver::is_sprintf(mc)){
         return self.call_sprintf(mc);
@@ -1105,12 +1106,12 @@ impl Compiler{
       if(Resolver::is_print(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Resolver::is_panic(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
@@ -1121,7 +1122,7 @@ impl Compiler{
       if(Resolver::is_assert(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
-        return ptr::null<LLVMOpaqueValue>();
+        return ptr::null<Value>();
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
@@ -1171,13 +1172,13 @@ impl Compiler{
       }
       return self.visit_call2(expr, mc);
     }
-    func visit_fp_call(self, expr: Expr*, mc: Call*, ft: FunctionType*): LLVMOpaqueValue*{
+    func visit_fp_call(self, expr: Expr*, mc: Call*, ft: FunctionType*): Value*{
       let ll = self.ll.get();
       let resolver = self.get_resolver();
       let val = self.visit_name(expr, &mc.name, false);
       val = ll.loadPtr(val);
       let proto = self.make_proto(ft);
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       let paramIdx = 0;
       for arg in &mc.args{
         let at = resolver.getType(arg);
@@ -1206,7 +1207,7 @@ impl Compiler{
       args.drop();
       return res;
     }
-    func visit_lambda_call(self, expr: Expr*, mc: Call*, rt: RType*): LLVMOpaqueValue*{
+    func visit_lambda_call(self, expr: Expr*, mc: Call*, rt: RType*): Value*{
       let ll = self.ll.get();
       let resolver = self.get_resolver();
       let val = self.visit_name(expr, &mc.name, false);
@@ -1220,7 +1221,7 @@ impl Compiler{
       }
       let ft = ft0.unwrap();
       let proto = self.make_proto(ft);
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       let paramIdx = 0;
       for arg in &mc.args{
         let at = resolver.getType(arg);
@@ -1249,7 +1250,7 @@ impl Compiler{
       args.drop();
       return res;
     }
-    func visit_call2(self, expr: Expr*, mc: Call*): LLVMOpaqueValue*{
+    func visit_call2(self, expr: Expr*, mc: Call*): Value*{
       let resolver = self.get_resolver();
       let ll = self.ll.get();
       let rt = resolver.visit(expr);
@@ -1263,14 +1264,14 @@ impl Compiler{
         resolver.err(expr, format("mc no method {:?}", expr));
       }
       //print("{}\n", expr);
-      let ptr_ret = Option<LLVMOpaqueValue*>::new();
+      let ptr_ret = Option<Value*>::new();
       if(is_struct(&rt.type)){
         ptr_ret = Option::new(self.get_alloc(expr));
       }
       return self.visit_call2(expr, mc, ptr_ret, rt);
     }
   
-    func visit_call2(self, expr: Expr*, mc: Call*, ptr_ret: Option<LLVMOpaqueValue*>, rt: RType): LLVMOpaqueValue*{
+    func visit_call2(self, expr: Expr*, mc: Call*, ptr_ret: Option<Value*>, rt: RType): Value*{
       let ll = self.ll.get();
       if(is_struct(&rt.type)){
         self.own.get().add_obj(expr, LLVMPtr::new(ptr_ret.unwrap()), &rt.type);
@@ -1279,7 +1280,7 @@ impl Compiler{
       self.cache.inc.depends_func(self.get_resolver(), target);
       rt.drop();
       let proto = self.protos.get().get_func(target);
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       if(ptr_ret.is_some()){
         args.add(ptr_ret.unwrap());
       }
@@ -1290,7 +1291,7 @@ impl Compiler{
         let scp_val = self.get_obj_ptr(*rval.scope.get());
         if(rval.rvalue){
           let rv_ptr = self.get_alloc(*rval.scope.get());
-          LLVMBuildStore(ll.builder, scp_val, rv_ptr);
+          CreateStore(ll.builder, scp_val, rv_ptr);
           args.add(rv_ptr);
         }else{
           args.add(scp_val);
@@ -1350,9 +1351,9 @@ impl Compiler{
       return res;
     }
   
-    func visit_print(self, mc: Call*): LLVMOpaqueValue*{
+    func visit_print(self, mc: Call*): Value*{
       let ll = self.ll.get();
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       for(let i = 0;i < mc.args.len();++i){
         let arg: Expr* = mc.args.get(i);
         let lit = is_str_lit(arg);
@@ -1397,7 +1398,7 @@ impl Compiler{
   
     func call_printf(self, mc: Call*){
       let ll = self.ll.get();
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       for(let i = 0;i < mc.args.len();++i){
         let arg: Expr* = mc.args.get(i);
         let lit = is_str_lit(arg);
@@ -1437,9 +1438,9 @@ impl Compiler{
       self.emit_fflush();
     }
 
-    func call_sprintf(self, mc: Call*): LLVMOpaqueValue*{
+    func call_sprintf(self, mc: Call*): Value*{
       let ll = self.ll.get();
-      let args = List<LLVMOpaqueValue*>::new();
+      let args = List<Value*>::new();
       for(let i = 0;i < mc.args.len();++i){
         let arg: Expr* = mc.args.get(i);
         let lit: Option<String*> = is_str_lit(arg);
@@ -1475,7 +1476,7 @@ impl Compiler{
       return res;
     }
   
-    func visit_deref(self, node: Expr*, e: Expr*): LLVMOpaqueValue*{
+    func visit_deref(self, node: Expr*, e: Expr*): Value*{
       let type = self.getType(node);
       let val = self.get_obj_ptr(e);
       if (type.is_prim() || type.is_pointer()) {
@@ -1502,22 +1503,22 @@ impl Compiler{
       }
     }
   
-    func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<LLVMOpaqueValue*, LLVMOpaqueBasicBlock*>{
+    func andOr(self, op: String*, l: Expr*, r: Expr*): Pair<Value*, BasicBlock*>{
       let ll = self.ll.get();
       let isand = true;
       if(op.eq("||")) isand = false;
   
       let lval = self.branch(l);//must be eval first
       let bb = LLVMGetInsertBlock(ll.builder);
-      let then = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), "".ptr());
-      let next = LLVMAppendBasicBlockInContext(ll.ctx, self.cur_func(), "".ptr());
+      let then = create_bb(ll.ctx, "".ptr(), self.cur_func());
+      let next = create_bb(ll.ctx, "".ptr(), self.cur_func());
       if (isand) {
-        LLVMBuildCondBr(ll.builder, lval, then, next);
+        CreateCondBr(ll.builder, lval, then, next);
       } else {
-        LLVMBuildCondBr(ll.builder, lval, next, then);
+        CreateCondBr(ll.builder, lval, next, then);
       }
-      LLVMPositionBuilderAtEnd(ll.builder, then);
-      let rv = Option<LLVMOpaqueValue*>::new();
+      SetInsertPoint(ll.builder, then);
+      let rv = Option<Value*>::new();
       if(is_logic(r)){
         let r_inner = r;
         if let Expr::Par(e)=r{
@@ -1534,8 +1535,8 @@ impl Compiler{
         rv = Option::new(self.loadPrim(r));
       }
       let rbit = LLVMBuildZExt(ll.builder, rv.unwrap(), ll.intTy(8), "".ptr());
-      LLVMBuildBr(ll.builder, next);
-      LLVMPositionBuilderAtEnd(ll.builder, next);
+      CreateBr(ll.builder, next);
+      SetInsertPoint(ll.builder, next);
       let phi = LLVMBuildPhi(ll.builder, ll.intTy(8), "".ptr());
       let i8val = 0;
       if(!isand){
@@ -1546,7 +1547,7 @@ impl Compiler{
       return Pair::new(LLVMBuildZExt(ll.builder, phi , ll.intTy(8), "".ptr()), next);
     }
     
-    func visit_lit(self, expr: Expr*, node: Literal*): LLVMOpaqueValue*{
+    func visit_lit(self, expr: Expr*, node: Literal*): Value*{
       let ll = self.ll.get();
       match &node.kind{
         LitKind::BOOL => {
@@ -1591,7 +1592,7 @@ impl Compiler{
       }
     }
 
-    func str_lit(self, val: str, trg_ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    func str_lit(self, val: str, trg_ptr: Value*): Value*{
       let ll = self.ll.get();
       let src = self.get_global_string(val.str());
       let str_ty = Type::new("str");
@@ -1601,15 +1602,15 @@ impl Compiler{
       let data_target = LLVMBuildStructGEP2(ll.builder, sliceType, slice_ptr, SLICE_PTR_INDEX(), "".ptr());
       let len_target = LLVMBuildStructGEP2(ll.builder, sliceType, slice_ptr, SLICE_LEN_INDEX(), "".ptr());
       //set ptr
-      LLVMBuildStore(ll.builder, src, data_target);
+      CreateStore(ll.builder, src, data_target);
       //set len
       let len = ll.makeInt(val.len(), SLICE_LEN_BITS()) ;
-      LLVMBuildStore(ll.builder, len, len_target);
+      CreateStore(ll.builder, len, len_target);
       str_ty.drop();
       return trg_ptr;
     }
   
-    func set_fields(self, ptr: LLVMOpaqueValue*, decl: Decl*,ty: LLVMOpaqueType*, args: List<Entry>*, fields: List<FieldDecl>*){
+    func set_fields(self, ptr: Value*, decl: Decl*,ty: llvm_Type*, args: List<Entry>*, fields: List<FieldDecl>*){
       let ll = self.ll.get();
       let field_idx = 0;
       for(let i = 0;i < args.len();++i){
@@ -1631,12 +1632,12 @@ impl Compiler{
         self.own.get().do_move(&arg.expr);
       }
     }
-    func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): LLVMOpaqueValue*{
+    func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*): Value*{
       let ptr = self.get_alloc(node);
       return self.visit_obj(node, type, args, ptr);
     }
     
-    func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*, ptr: LLVMOpaqueValue*): LLVMOpaqueValue*{
+    func visit_obj(self, node: Expr*, type: Type*, args: List<Entry>*, ptr: Value*): Value*{
         let ll = self.ll.get();
         let rt = self.get_resolver().visit(node);
         self.own.get().add_obj(node, LLVMPtr::new(ptr), &rt.type);
@@ -1690,7 +1691,7 @@ impl Compiler{
             //set tag
             let tag_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, get_tag_index(decl), "".ptr());
             let tag_val = ll.makeInt(variant_index, ENUM_TAG_BITS()) ;
-            LLVMBuildStore(ll.builder, tag_val, tag_ptr);
+            CreateStore(ll.builder, tag_val, tag_ptr);
             //set data
             let data_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, get_data_index(decl), "".ptr());
             let var_ty = self.get_variant_ty(decl, variant);
@@ -1701,14 +1702,14 @@ impl Compiler{
         return ptr;
     }
 
-    func visit_infix(self, expr: Expr*, op: String*, l: Expr*, r: Expr*): LLVMOpaqueValue*{
+    func visit_infix(self, expr: Expr*, op: String*, l: Expr*, r: Expr*): Value*{
       let rt = self.get_resolver().visit(l);
       let res = self.visit_infix(op, l, r, &rt.type);
       rt.drop();
       return res;
     }
 
-    func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): LLVMOpaqueValue*{
+    func visit_infix(self, op: String*, l: Expr*, r: Expr*, type: Type*): Value*{
       let ll = self.ll.get();
       if(op.eq("&&") || op.eq("||")){
         return self.andOr(op, l, r).a;
@@ -1722,11 +1723,11 @@ impl Compiler{
         let lval = self.loadPrim(l);
         if(type.is_float()){
           let tmp = LLVMBuildFAdd(ll.builder, lval, rv, "".ptr());
-          LLVMBuildStore(ll.builder, tmp, lv);
+          CreateStore(ll.builder, tmp, lv);
           return lv;
         }
         let tmp = LLVMBuildNSWAdd(ll.builder, lval, rv, "".ptr());
-        LLVMBuildStore(ll.builder, tmp, lv);
+        CreateStore(ll.builder, tmp, lv);
         return lv;
       }
       if(op.eq("-=")){
@@ -1734,11 +1735,11 @@ impl Compiler{
         let lval = self.loadPrim(l);
         if(type.is_float()){
           let tmp = LLVMBuildFSub(ll.builder, lval, rv, "".ptr());
-          LLVMBuildStore(ll.builder, tmp, lv);
+          CreateStore(ll.builder, tmp, lv);
           return lv;
         }
         let tmp = LLVMBuildNSWSub(ll.builder, lval, rv, "".ptr());
-        LLVMBuildStore(ll.builder, tmp, lv);
+        CreateStore(ll.builder, tmp, lv);
         return lv;
       }
       if(op.eq("*=")){
@@ -1746,11 +1747,11 @@ impl Compiler{
         let lval = self.loadPrim(l);
         if(type.is_float()){
           let tmp = LLVMBuildFMul(ll.builder, lval, rv, "".ptr());
-          LLVMBuildStore(ll.builder, tmp, lv);
+          CreateStore(ll.builder, tmp, lv);
           return lv;
         }
         let tmp = LLVMBuildNSWMul(ll.builder, lval, rv, "".ptr());
-        LLVMBuildStore(ll.builder, tmp, lv);
+        CreateStore(ll.builder, tmp, lv);
         return lv;
       }
       if(op.eq("/=")){
@@ -1758,11 +1759,11 @@ impl Compiler{
         let lval = self.loadPrim(l);
         if(type.is_float()){
           let tmp = LLVMBuildFDiv(ll.builder, lval, rv, "".ptr());
-          LLVMBuildStore(ll.builder, tmp, lv);
+          CreateStore(ll.builder, tmp, lv);
           return lv;
         }
         let tmp = LLVMBuildSDiv(ll.builder, lval, rv, "".ptr());
-        LLVMBuildStore(ll.builder, tmp, lv);
+        CreateStore(ll.builder, tmp, lv);
         return lv;
       }
       let lv = self.cast(l, type);
@@ -1826,7 +1827,7 @@ impl Compiler{
       panic("infix '{}'\n", op);
     }
     
-    func get_lhs(self, expr: Expr*): LLVMOpaqueValue*{
+    func get_lhs(self, expr: Expr*): Value*{
       if let Expr::Unary(op, l2)=expr{
         if(op.eq("*")){
           let lhs = self.get_obj_ptr(l2.get());
@@ -1839,7 +1840,7 @@ impl Compiler{
       return self.visit(expr);
     }
   
-    func visit_assign(self, l: Expr*, r: Expr*): LLVMOpaqueValue*{
+    func visit_assign(self, l: Expr*, r: Expr*): Value*{
       if(l is Expr::Infix) panic("assign lhs");
       let type = self.getType(l);
       if let Expr::Unary(op,l2)=l{
@@ -1859,7 +1860,7 @@ impl Compiler{
       return lhs;
     }
 
-    func emit_expr(self, expr: Expr*, trg_ptr: LLVMOpaqueValue*){
+    func emit_expr(self, expr: Expr*, trg_ptr: Value*){
       let ll = self.ll.get();
       let rt = self.get_resolver().visit(expr);
       match expr{
@@ -1871,15 +1872,15 @@ impl Compiler{
             self.str_lit(lit.val.str(), trg_ptr);
           }else{
             let val = self.visit_lit(expr, lit);
-            LLVMBuildStore(ll.builder, val, trg_ptr);
+            CreateStore(ll.builder, val, trg_ptr);
           }
         },
         Expr::Call(mc) => {
           if(is_struct(&rt.type)){
             self.visit_call2(expr, mc, Option::new(trg_ptr), rt);
           }else{
-            let val = self.visit_call2(expr, mc, Option<LLVMOpaqueValue*>::new(), rt);
-            LLVMBuildStore(ll.builder, val, trg_ptr);
+            let val = self.visit_call2(expr, mc, Option<Value*>::new(), rt);
+            CreateStore(ll.builder, val, trg_ptr);
           }
           return;//rt is moved,return
         },

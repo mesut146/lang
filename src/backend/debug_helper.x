@@ -21,7 +21,7 @@ func base_class_name(): str{
 
 struct DebugInfo{
     debug: bool;
-    ll: Emitter*;
+    ll: Emitter2*;
     builder: LLVMOpaqueDIBuilder*;
     cu: LLVMOpaqueMetadata*;
     file: LLVMOpaqueMetadata*;
@@ -41,7 +41,7 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(debug: bool, path: str, ll: Emitter*): DebugInfo{
+    func new(debug: bool, path: str, ll: Emitter2*): DebugInfo{
         let builder = LLVMCreateDIBuilder(ll.module);
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
@@ -92,7 +92,7 @@ impl DebugInfo{
         LLVMSetCurrentDebugLocation2(self.ll.builder, loc);        
     }
 
-    func dbg_func(self, m: Method*, f: LLVMOpaqueValue*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
+    func dbg_func(self, m: Method*, f: Value*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
       if (!self.debug) return Option<LLVMOpaqueMetadata*>::new();
       let sp = self.dbg_func_proto(m, c).unwrap();
       LLVMSetSubprogram(f, sp);
@@ -184,7 +184,7 @@ impl DebugInfo{
       name_c.drop();
     }
 
-    func dbg_glob(self, gl: Global*, ty: Type*, gv: LLVMOpaqueValue*, c: Compiler*): LLVMOpaqueMetadata*{
+    func dbg_glob(self, gl: Global*, ty: Type*, gv: Value*, c: Compiler*): LLVMOpaqueMetadata*{
       let scope = self.cu;
       let di_type = self.map_di(ty, c);
       let name_c = gl.name.clone().cstr();
