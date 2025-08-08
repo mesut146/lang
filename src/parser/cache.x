@@ -22,7 +22,7 @@ impl Cache{
         return Cache{
             map: HashMap<String, String>::new(),
             file: CACHE_FILE(config.out_dir.str()),
-            inc: Incremental::new(config),
+            inc: Incremental::new(config.incremental_enabled, config.out_dir.str(), config.file.clone()),
             use_cache: config.use_cache,
         };
     }

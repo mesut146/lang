@@ -15,19 +15,19 @@ struct Incremental{
     path: String;
     map: HashMap<String, HashMap<String, HashSet<String>>>;//file -> (desc -> list of dependants)
     enabled: bool;
-    config: CompilerConfig*;
     recompiles: HashSet<String>;
+    src_dir: String;
 }
 impl Incremental{
-    func new(config: CompilerConfig*): Incremental{
+    func new(enabled: bool, out_dir: str, src_dir: String): Incremental{
         //todo read
-        let path = format("{}/inc_map.txt", config.out_dir);
+        let path = format("{}/inc_map.txt", out_dir);
         let res = Incremental{
             path: path,
             map: HashMap<String, HashMap<String, HashSet<String>>>::new(), 
-            enabled: config.incremental_enabled,
-            config: config,
+            enabled: enabled,
             recompiles: HashSet<String>::new(),
+            src_dir: src_dir,
         };
         res.read();
         return res;
@@ -76,7 +76,7 @@ impl Incremental{
     }
 
     func update(self, file: str, key: String, item_path: str){
-        item_path = Path::relativize(item_path, self.config.file.str());
+        item_path = Path::relativize(item_path, self.src_dir.str());
         let map_opt = self.map.get_str(item_path);
         if(map_opt.is_none()){
             self.map.insert(item_path.owned(), HashMap<String, HashSet<String>>::new());
@@ -88,7 +88,7 @@ impl Incremental{
             map.insert(key.clone(), HashSet<String>::new());
             list_opt = map.get(&key);
         }
-        list_opt.unwrap().add(Path::relativize(file, self.config.file.str()).owned());
+        list_opt.unwrap().add(Path::relativize(file, self.src_dir.str()).owned());
         key.drop();
     }
 
@@ -149,7 +149,7 @@ impl Incremental{
     }
 
     //file is modified, find other files that depend on the file
-    func find_recompiles(self, c: Compiler*, file: str, old_file: str){
+    func find_recompiles(self, file: str, old_file: str){
         if(!self.enabled) return;
         
         let p = Parser::from_path(file.owned());
@@ -168,7 +168,7 @@ impl Incremental{
                     if(old_decl.is_some()){
                         if(compare_decl(decl, old_decl.unwrap())){
                             //scan other dependant files
-                            let opt = self.map.get_str(Path::relativize(file, self.config.file.str()));
+                            let opt = self.map.get_str(Path::relativize(file, self.src_dir.str()));
                             if(opt.is_some()){
                                 let key = get_key(decl);
                                 let list = opt.unwrap().get(&key);

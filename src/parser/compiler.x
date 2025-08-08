@@ -308,7 +308,7 @@ impl Compiler{
       let oldpath = format("{}/{}.old", &self.ctx.out_dir, name);
       let newdata = File::read_string(path)?;
       if(File::exists(oldpath.str())){
-        self.cache.inc.find_recompiles(self, path, oldpath.str());
+        self.cache.inc.find_recompiles(path, oldpath.str());
       }
       File::write_string(newdata.str(), oldpath.str())?;
       oldpath.drop();
@@ -717,7 +717,7 @@ impl Compiler{
     let cache = Cache::new(&config);
     cache.read_cache();
     
-    let inc = Incremental::new(&config);
+    let inc = Incremental::new(config.incremental_enabled, config.out_dir.str(), config.file.clone());
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = List<String>::new();
