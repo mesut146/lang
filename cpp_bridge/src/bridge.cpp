@@ -555,12 +555,14 @@ void SwitchInst_addCase(llvm::SwitchInst* node, llvm::ConstantInt *OnVal, llvm::
   node->addCase(OnVal, Dest);
 }
 
-llvm::Value *CreateCall(llvm::IRBuilder<>* builder, llvm::Function *f, std::vector<llvm::Value *> *args) {
-  return builder->CreateCall(f, *args);
+llvm::Value *CreateCall(llvm::IRBuilder<>* builder, llvm::Function *f, llvm::Value** args, int len) {
+  llvm::ArrayRef ref(args, len);
+  return builder->CreateCall(f, ref);
 }
 
-llvm::Value *CreateCall_ft(llvm::IRBuilder<>* builder, llvm::FunctionType *ft, llvm::Value* val, std::vector<llvm::Value *> *args) {
-  return builder->CreateCall(ft, val, *args);
+llvm::Value *CreateCall_ft(llvm::IRBuilder<>* builder, llvm::FunctionType *ft, llvm::Value* val, llvm::Value** args, int len) {
+  llvm::ArrayRef ref(args, len);
+  return builder->CreateCall(ft, val, ref);
 }
 
 void CreateRet(llvm::IRBuilder<>* builder, llvm::Value *val) { builder->CreateRet(val); }
@@ -800,9 +802,9 @@ llvm::Value *CreateInBoundsGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llv
   return builder->CreateInBoundsGEP(type, ptr, arr);
 }
 
-llvm::Value *CreateGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr,
-                       std::vector<llvm::Value *> *idx) {
-  return builder->CreateGEP(type, ptr, *idx);
+llvm::Value *CreateGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr, llvm::Value** idx, int len) {
+  llvm::ArrayRef<llvm::Value*> arr(idx, len);  
+  return builder->CreateGEP(type, ptr, arr);
 }
 
 llvm::Value *CreateLoad(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *val) {

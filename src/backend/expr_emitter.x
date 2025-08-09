@@ -774,7 +774,7 @@ impl Compiler{
       } else {
           self.setField(elem, &elem_type, phi as Value*);
       }
-      let step = ll.gep_ptr(elem_ty, phi, ll.makeInt(1, 64));
+      let step = ll.gep_ptr(elem_ty, phi as Value*, ll.makeInt(1, 64));
       phi_addIncoming(phi, step, setbb);
       CreateBr(ll.builder, condbb);
       SetInsertPoint(ll.builder, nextbb);
@@ -851,11 +851,11 @@ impl Compiler{
       return ptr;
     }
 
-    func makeFloat_one(type: Type*, ll: Emitter*): Value*{
+    func makeFloat_one(type: Type*, ll: Emitter2*): Value*{
       if(type.eq("f32")){
-        return ll.makeFloat(1.0);
+        return ll.makeFloat(1.0) as Value*;
       }
-      return ll.makeDouble(1.0);
+      return ll.makeDouble(1.0) as Value*;
     }
   
     func visit_unary(self, op: String*, e: Expr*): Value*{
@@ -864,7 +864,7 @@ impl Compiler{
       if(op.eq("+")) return val;
       if(op.eq("!")){
         val = CreateTrunc(ll.builder, val, intTy(ll.ctx, 1));
-        val = CreateXor(ll.builder, val, getTrue(ll.ctx));
+        val = CreateXor(ll.builder, val, getTrue(ll.builder));
         return CreateZExt(ll.builder, val, intTy(ll.ctx, 8));
       }
       let bits = self.ll.get().sizeOf(val) as i32;
@@ -872,10 +872,10 @@ impl Compiler{
       if(op.eq("-")){
         if(type.is_float()){
           type.drop();
-          return CreateFNeg(ll.builder, val, "".ptr());
+          return CreateFNeg(ll.builder, val);
         }
         type.drop();
-        return CreateNSWSub(ll.builder, ll.makeInt(0, bits) , val, "".ptr());
+        return CreateNSWSub(ll.builder, ll.makeInt(0, bits), val);
       }
       if(op.eq("++")){
         let var_ptr = self.visit(e);//var without load
@@ -1093,9 +1093,9 @@ impl Compiler{
       if(Utils::is_call(mc, "std", "is_ptr")){
         let ty = mc.type_args.get(0);
         if(ty.is_pointer()){
-          return ll.getTrue();
+          return getTrue(ll.builder);
         }
-        return ll.getFalse();
+        return getFalse(ll.builder);
       }
       if(Resolver::is_printf(mc)){
         self.call_printf(mc);
@@ -1135,12 +1135,12 @@ impl Compiler{
         }
         let proto = self.protos.get().libc("malloc");
         let args = [size];
-        let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
+        let res = CreateCall_ft(ll.builder, proto.ty as llvm_FunctionType*, proto.val, args.ptr(), 1);
         return res;
       }
       if(Utils::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
-        return ConstantPointerNull_get(getPointerTo(ty));
+        return ConstantPointerNull_get(ll.builder, getPointerTo(ty));
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
@@ -1203,8 +1203,7 @@ impl Compiler{
         ++paramIdx;
         at.drop();
       }
-      //args.add(size);
-      let res = LLVMBuildCall2(ll.builder, proto, val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
     }
@@ -1246,8 +1245,7 @@ impl Compiler{
         ++paramIdx;
         at.drop();
       }
-      //args.add(size);
-      let res = LLVMBuildCall2(ll.builder, proto, val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
     }
@@ -1343,7 +1341,7 @@ impl Compiler{
       if(Resolver::is_exit(mc)){
         self.print_frame();
       }
-      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, proto.ty as llvm_FunctionType*, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       if(Resolver::is_exit(mc)){
         CreateUnreachable(ll.builder);
@@ -1373,7 +1371,7 @@ impl Compiler{
           panic("print str");
         }else if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
-          //val = CreateLoad(ll.builder, self.mapType(&arg_type), val, "".ptr());
+          //val = CreateLoad(ll.builder, self.mapType(&arg_type), val);
           args.add(val);
         }else{
           panic("print {:?}", arg_type);
@@ -1382,7 +1380,7 @@ impl Compiler{
       }
       //self.call_printf();
       let printf_proto = self.protos.get().libc("printf");
-      let res = LLVMBuildCall2(ll.builder, printf_proto.ty, printf_proto.val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, printf_proto.ty, printf_proto.val, args.ptr(), args.len() as i32);
       args.drop();
       //flush
       self.emit_fflush();
@@ -1394,7 +1392,7 @@ impl Compiler{
       let proto = self.protos.get().libc("fflush");
       let stdout_ptr = self.protos.get().stdout_ptr;
       let args = [ll.loadPtr(stdout_ptr)];
-      LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
+      CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), 1);
     }
   
     func call_printf(self, mc: Call*){
@@ -1419,7 +1417,7 @@ impl Compiler{
         if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
           if(arg_type.eq("f32")){
-            val = LLVMBuildFPExt(ll.builder, val, LLVMDoubleTypeInContext(ll.ctx), "".ptr());
+            val = CreateFPExt(ll.builder, val, getDoubleTy(ll.ctx));
           }
           args.add(val);
         }else if(arg_type.is_any_pointer()){
@@ -1433,7 +1431,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("printf");
-      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       //flush
       self.emit_fflush();
@@ -1472,7 +1470,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("sprintf");
-      let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
+      let res = CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
     }
@@ -1522,10 +1520,10 @@ impl Compiler{
       let rv = Option<Value*>::new();
       if(is_logic(r)){
         let r_inner = r;
-        if let Expr::Par(e)=r{
+        if let Expr::Par(e) = r{
           r_inner = e.get();
         }
-        if let Expr::Infix(op2, l2, r2)=r_inner{
+        if let Expr::Infix(op2, l2, r2) = r_inner{
           let pair = self.andOr(op2, l2.get(), r2.get());
           then = pair.b;
           rv = Option::new(pair.a);
@@ -1535,7 +1533,7 @@ impl Compiler{
       }else{
         rv = Option::new(self.loadPrim(r));
       }
-      let rbit = LLVMBuildZExt(ll.builder, rv.unwrap(), intTy(ll.ctx,8));
+      let rbit = CreateZExt(ll.builder, rv.unwrap(), intTy(ll.ctx,8));
       CreateBr(ll.builder, next);
       SetInsertPoint(ll.builder, next);
       let phi = CreatePHI(ll.builder, intTy(ll.ctx, 8), 2);
@@ -1543,17 +1541,17 @@ impl Compiler{
       if(!isand){
         i8val = 1;
       }
-      phi_addIncoming(phi, &ll.makeInt(i8val, 8), &bb);
-      phi_addIncoming(phi, &rbit, &then);
-      return Pair::new(LLVMBuildZExt(ll.builder, phi , intTy(ll.ctx, 8)), next);
+      phi_addIncoming(phi, ll.makeInt(i8val, 8), bb);
+      phi_addIncoming(phi, rbit, then);
+      return Pair::new(CreateZExt(ll.builder, phi as Value* , intTy(ll.ctx, 8)), next);
     }
     
     func visit_lit(self, expr: Expr*, node: Literal*): Value*{
       let ll = self.ll.get();
       match &node.kind{
         LitKind::BOOL => {
-          if(node.val.eq("true")) return ll.getTrue() ;
-          return ll.getFalse() ;
+          if(node.val.eq("true")) return getTrue(ll.builder);
+          return getFalse(ll.builder);
         },
         LitKind::STR => {
           let trg_ptr = self.get_alloc(expr);
@@ -1599,9 +1597,9 @@ impl Compiler{
       let str_ty = Type::new("str");
       let stringType = self.mapType(&str_ty);
       let sliceType = self.protos.get().std("slice");
-      let slice_ptr = CreateStructGEP(ll.builder, stringType, trg_ptr, 0, "".ptr());
-      let data_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_PTR_INDEX(), "".ptr());
-      let len_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_LEN_INDEX(), "".ptr());
+      let slice_ptr = CreateStructGEP(ll.builder, stringType, trg_ptr, 0);
+      let data_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_PTR_INDEX());
+      let len_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_LEN_INDEX());
       //set ptr
       CreateStore(ll.builder, src, data_target);
       //set len
@@ -1628,7 +1626,7 @@ impl Compiler{
         }
         let fd = fields.get(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
-        let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, prm_idx, "".ptr());
+        let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, prm_idx);
         self.setField(&arg.expr, &fd.type, field_target_ptr);
         self.own.get().do_move(&arg.expr);
       }
@@ -1654,7 +1652,7 @@ impl Compiler{
           if(decl.is_enum()){
             base_index = 1;
           }
-          let base_ptr = CreateStructGEP(ll.builder,  ty, ptr,  base_index, "".ptr());
+          let base_ptr = CreateStructGEP(ll.builder,  ty, ptr,  base_index);
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
@@ -1678,7 +1676,7 @@ impl Compiler{
               }
               let fd = fields.get(prm_idx);
               if(decl.base.is_some()) ++prm_idx;
-              let field_target_ptr = CreateStructGEP(ll.builder,  ty, ptr,  prm_idx, "".ptr());
+              let field_target_ptr = CreateStructGEP(ll.builder,  ty, ptr,  prm_idx);
               self.setField(&arg.expr, &fd.type, field_target_ptr);
               self.own.get().do_move(&arg.expr);
             }
@@ -1690,11 +1688,11 @@ impl Compiler{
             let variant_index = Resolver::findVariant(decl, type.name());
             let variant = decl.get_variants().get(variant_index);
             //set tag
-            let tag_ptr = CreateStructGEP(ll.builder, ty, ptr, get_tag_index(decl), "".ptr());
+            let tag_ptr = CreateStructGEP(ll.builder, ty, ptr, get_tag_index(decl));
             let tag_val = ll.makeInt(variant_index, ENUM_TAG_BITS()) ;
             CreateStore(ll.builder, tag_val, tag_ptr);
             //set data
-            let data_ptr = CreateStructGEP(ll.builder, ty, ptr, get_data_index(decl), "".ptr());
+            let data_ptr = CreateStructGEP(ll.builder, ty, ptr, get_data_index(decl));
             let var_ty = self.get_variant_ty(decl, variant);
             self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
           }
@@ -1723,11 +1721,11 @@ impl Compiler{
         let lv = self.get_lhs(l);
         let lval = self.loadPrim(l);
         if(type.is_float()){
-          let tmp = LLVMBuildFAdd(ll.builder, lval, rv, "".ptr());
+          let tmp = CreateFAdd(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
           return lv;
         }
-        let tmp = LLVMBuildNSWAdd(ll.builder, lval, rv, "".ptr());
+        let tmp = CreateNSWAdd(ll.builder, lval, rv);
         CreateStore(ll.builder, tmp, lv);
         return lv;
       }
@@ -1735,11 +1733,11 @@ impl Compiler{
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
         if(type.is_float()){
-          let tmp = LLVMBuildFSub(ll.builder, lval, rv, "".ptr());
+          let tmp = CreateFSub(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
           return lv;
         }
-        let tmp = LLVMBuildNSWSub(ll.builder, lval, rv, "".ptr());
+        let tmp = CreateNSWSub(ll.builder, lval, rv);
         CreateStore(ll.builder, tmp, lv);
         return lv;
       }
@@ -1747,11 +1745,11 @@ impl Compiler{
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
         if(type.is_float()){
-          let tmp = LLVMBuildFMul(ll.builder, lval, rv, "".ptr());
+          let tmp = CreateFMul(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
           return lv;
         }
-        let tmp = LLVMBuildNSWMul(ll.builder, lval, rv, "".ptr());
+        let tmp = CreateNSWMul(ll.builder, lval, rv);
         CreateStore(ll.builder, tmp, lv);
         return lv;
       }
@@ -1759,11 +1757,11 @@ impl Compiler{
         let lv = self.visit(l);
         let lval = self.loadPrim(l);
         if(type.is_float()){
-          let tmp = LLVMBuildFDiv(ll.builder, lval, rv, "".ptr());
+          let tmp = CreateFDiv(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
           return lv;
         }
-        let tmp = LLVMBuildSDiv(ll.builder, lval, rv, "".ptr());
+        let tmp = CreateSDiv(ll.builder, lval, rv);
         CreateStore(ll.builder, tmp, lv);
         return lv;
       }
@@ -1772,58 +1770,58 @@ impl Compiler{
         //todo remove redundant cast
         let op_c = op.clone().cstr();
         if(type.is_float()){
-          let res = LLVMBuildFCmp(ll.builder, LLVMRealPredicate::from(op.str()), lv, rv, "".ptr());
+          let res = CreateCmp(ll.builder, get_comp_op_float(op_c.ptr()), lv, rv);
           op_c.drop();
           return res;
         }
-        let res = LLVMBuildICmp(self.ll.get().builder, LLVMIntPredicate::from(op.str()), lv, rv, "".ptr()) ;
+        let res = CreateCmp(self.ll.get().builder, get_comp_op(op_c.ptr()), lv, rv) ;
         op_c.drop();
         return res;
       }
       if(op.eq("+")){
         if(type.is_float()){
-          return LLVMBuildFAdd(ll.builder, lv, rv, "".ptr());
+          return CreateFAdd(ll.builder, lv, rv);
         }
-        return LLVMBuildNSWAdd(ll.builder, lv, rv, "".ptr());
+        return CreateNSWAdd(ll.builder, lv, rv);
       }
       if(op.eq("-")){
         if(type.is_float()){
-          return LLVMBuildFSub(ll.builder, lv, rv, "".ptr());
+          return CreateFSub(ll.builder, lv, rv);
         }
-        return LLVMBuildNSWSub(ll.builder, lv, rv, "".ptr());
+        return CreateNSWSub(ll.builder, lv, rv);
       }
       if(op.eq("*")){
         if(type.is_float()){
-          return LLVMBuildFMul(ll.builder, lv, rv, "".ptr());
+          return CreateFMul(ll.builder, lv, rv);
         }
-        return LLVMBuildNSWMul(ll.builder, lv, rv, "".ptr());
+        return CreateNSWMul(ll.builder, lv, rv);
       }
       if(op.eq("/")){
         if(type.is_float()){
-          return LLVMBuildFDiv(ll.builder, lv, rv, "".ptr());
+          return CreateFDiv(ll.builder, lv, rv);
         }
-        return LLVMBuildSDiv(ll.builder, lv, rv, "".ptr());
+        return CreateSDiv(ll.builder, lv, rv);
       }
       if(op.eq("%")){
         if(type.is_float()){
-          return LLVMBuildFRem(ll.builder, lv, rv, "".ptr());
+          return CreateFRem(ll.builder, lv, rv);
         }
-        return LLVMBuildSRem(ll.builder, lv, rv, "".ptr());
+        return CreateSRem(ll.builder, lv, rv);
       }
       if(op.eq("&")){
-        return LLVMBuildAnd(ll.builder, lv, rv, "".ptr());
+        return CreateAnd(ll.builder, lv, rv);
       }
       if(op.eq("|")){
-        return LLVMBuildOr(ll.builder, lv, rv, "".ptr());
+        return CreateOr(ll.builder, lv, rv);
       }
       if(op.eq("^")){
-        return LLVMBuildXor(ll.builder, lv, rv, "".ptr());
+        return CreateXor(ll.builder, lv, rv);
       }
       if(op.eq("<<")){
-        return LLVMBuildShl(ll.builder, lv, rv, "".ptr());
+        return CreateShl(ll.builder, lv, rv);
       }
       if(op.eq(">>")){
-        return LLVMBuildAShr(ll.builder, lv, rv, "".ptr());
+        return CreateAShr(ll.builder, lv, rv);
       }
       panic("infix '{}'\n", op);
     }

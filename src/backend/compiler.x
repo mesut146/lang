@@ -147,8 +147,8 @@ impl Compiler{
 }
 
 struct FunctionInfo{
-  val: Value*;
-  ty: llvm_Type*;
+  val: Function*;
+  ty: llvm_FunctionType*;
 }
 
 struct Protos{
@@ -372,8 +372,8 @@ impl Compiler{
       let ty = self.mapType(&gl_info.rt.type);
       let init = ptr::null<Value>();
       let name_c = gl_info.name.clone().cstr();
-      let glob = make_global(ll.module, ty, init, ext(), name_c.ptr());
-      self.globals.add(gl_info.name.clone(), glob);
+      let glob = make_global(ll.module, ty, init as Constant*, GlobalValue_ext(), name_c.ptr());
+      self.globals.add(gl_info.name.clone(), glob as Value*);
       name_c.drop();
     }
     let globals = resolv.unit.get_globals(true);
@@ -392,7 +392,7 @@ impl Compiler{
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
     let proto = proto_pr.a;
-    LLVMSetSection(proto, ".text.startup".ptr());
+    setSection(proto, ".text.startup".ptr());
     let bb = create_bb(ll.ctx, "".ptr(), proto);
     SetInsertPoint(ll.builder, bb);
     let method = Method::new(Node::new(0), proto_pr.b, Type::new("void"));
@@ -405,35 +405,33 @@ impl Compiler{
       if(gl.expr.is_none()){
         //local extern
         let ty = self.mapType(gl.type.get());
-        let init = ptr::null<Value>();
+        let init = ptr::null<Constant>();
         let name_c = gl.name.clone().cstr();
-        let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
-        LLVMSetInitializer(glob, init);
-        self.globals.add(gl.name.clone(), glob );
+        let glob = make_global(ll.module, ty, init, ext(), name_c.ptr());
+        self.globals.add(gl.name.clone(), glob as Value*);
         name_c.drop();
         continue;
       }
       if(std::getenv("TERMUX").is_some()){
         let pr = self.protos.get().libc("printf");
         let args = [ll.glob_str("glob init %s::%s\n"), ll.glob_str(Path::name(self.unit().path.str())), ll.glob_str(gl.name.str())];
-        let res = LLVMBuildCall2(ll.builder, pr.ty, pr.val, args.ptr(), args.len() as i32, "".ptr());
+        let res = CreateCall(ll.builder, pr.val, args.ptr(), args.len() as i32);
       }
       let rt = resolv.visit(gl.expr.get());
       let ty = self.mapType(&rt.type);
       let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
-      let glob = LLVMAddGlobal(ll.module, ty, name_c.ptr());
-      LLVMSetInitializer(glob, init);
+      let glob = make_global(ll.module, ty, init, GlobalValue_appending(), name_c.ptr());
       name_c.drop();
       if(self.di.get().debug){
-        let gve = self.di.get().dbg_glob(gl, &rt.type, glob, self);
+        let gve = self.di.get().dbg_glob(gl, &rt.type, glob as Value*, self);
         //vector_Metadata_push(globs, gve as Metadata*);
       }
-      self.globals.add(gl.name.clone(), glob);
+      self.globals.add(gl.name.clone(), glob as Value*);
       //todo make allochelper visit only children
       if(gl.expr.is_some()){
         AllocHelper::new(self).visit(gl.expr.get());
-        self.emit_expr(gl.expr.get(),  glob);
+        self.emit_expr(gl.expr.get(),  glob as Value*);
       }
       rt.drop();
     }
@@ -470,10 +468,10 @@ impl Compiler{
     LLVMSetLinkage(ctor, LLVMLinkage::LLVMAppendingLinkage{}.int());
   }
 
-  func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Value*{
+  func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
     let ll = self.ll.get();
     let resolv = self.get_resolver();
-    let init = ptr::null<Value>();
+    let init = ptr::null<Constant>();
     if(gl.expr.is_none()) return init;
     if(is_constexpr(gl.expr.get())){
       if(rt.type.is_prim()){

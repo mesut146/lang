@@ -42,7 +42,7 @@ impl AllocHelper{
     if(ty.is_fpointer()){
       mapped = self.c.ll.get().intPtr(8);
     }
-    let ptr = LLVMBuildAlloca(self.c.ll.get().builder, mapped, "".ptr());
+    let ptr = CreateAlloca(self.c.ll.get().builder, mapped);
     self.c.allocMap.add(node.id, ptr);
     return ptr;
   }
@@ -97,9 +97,9 @@ impl AllocHelper{
       let ty = self.get_resolver().cache.get(&arg.id);
       let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
       let name_c = arg.name.clone().cstr();
-      LLVMSetValueName2(arg_ptr, name_c.ptr(), arg.name.len());
-      name_c.drop();
+      Value_setName(arg_ptr, name_c.ptr());
       self.c.allocMap.add(arg.id, arg_ptr);
+      name_c.drop();
     }
     self.visit(&node.rhs);
     self.visit_body(node.then.get());
@@ -157,7 +157,7 @@ impl AllocHelper{
       let rt = self.get_resolver().visit_frag(f);
       let ptr = self.alloc_ty(&rt.type, f);
       let name_c = f.name.clone().cstr();
-      LLVMSetValueName2(ptr, name_c.ptr(), name_c.len());
+      Value_setName(ptr, name_c.ptr());
       name_c.drop();
       rt.drop();
       let rhs: Option<Value*> = self.visit(&f.rhs);
@@ -385,7 +385,7 @@ impl AllocHelper{
               let ty = self.get_resolver().cache.get(&arg.id);
               let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
               let name_c = arg.name.clone().cstr();
-              LLVMSetValueName2(arg_ptr, name_c.ptr(), name_c.len());
+              Value_setName(arg_ptr, name_c.ptr());
               name_c.drop();
               self.c.allocMap.add(arg.id, arg_ptr);
             }

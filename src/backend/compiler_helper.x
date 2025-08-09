@@ -705,7 +705,7 @@ impl Compiler{
         if(src_type.eq("f32")){
           //f32 -> f64
           src_type.drop();
-          return LLVMBuildFPExt(ll.builder, val, target_ty, "".ptr());
+          return CreateFPExt(ll.builder, val, target_ty);
         }else{
           //f64 -> f32
           src_type.drop();
@@ -960,7 +960,7 @@ impl Compiler{
     return res;
   }
 
-  func make_init_proto(self, path: str): Pair<Value*, String>{
+  func make_init_proto(self, path: str): Pair<Function*, String>{
     let ll = self.ll.get();
     let ret = LLVMVoidTypeInContext(ll.ctx);
     let args = ptr::null<llvm_Type*>();
@@ -974,7 +974,7 @@ impl Compiler{
     let mangled_c = mangled.clone().cstr();
     let proto = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
     LLVMSetLinkage(proto, linkage.int());
-    LLVMSetSection(proto, ".text.startup".ptr());
+    setSection(proto, ".text.startup".ptr());
     if(std::getenv("cxx_global").is_some()){
       handle_cxx_global(ll, proto, path);
     }
@@ -989,7 +989,7 @@ impl Compiler{
     let mangled_c = mangle_static(path).cstr();
     let caller_proto = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
     LLVMSetLinkage(caller_proto, linkage.int());
-    LLVMSetSection(caller_proto, ".text.startup".ptr());
+    setSection(caller_proto, ".text.startup".ptr());
     let bb = LLVMAppendBasicBlockInContext(ll.ctx, caller_proto, "".ptr());
     LLVMPositionBuilderAtEnd(ll.builder, bb);
     let args = ptr::null<Value*>();

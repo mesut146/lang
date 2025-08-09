@@ -92,7 +92,7 @@ impl DebugInfo{
         LLVMSetCurrentDebugLocation2(self.ll.builder, loc);        
     }
 
-    func dbg_func(self, m: Method*, f: Value*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
+    func dbg_func(self, m: Method*, f: Function*, c: Compiler*): Option<LLVMOpaqueMetadata*>{
       if (!self.debug) return Option<LLVMOpaqueMetadata*>::new();
       let sp = self.dbg_func_proto(m, c).unwrap();
       LLVMSetSubprogram(f, sp);

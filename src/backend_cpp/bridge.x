@@ -154,14 +154,14 @@ extern{
     func makeInt(builder: IRBuilder*, val: i64, bits: i32): ConstantInt*;
     func makeFloat(builder: IRBuilder*, val: f32): Constant*;
     func makeDouble(builder: IRBuilder*, val: f64): Constant*;
-    func getFloatTy(): llvm_Type*;
-    func getDoubleTy(): llvm_Type*;
+    func getFloatTy(ctx: LLVMContext*): llvm_Type*;
+    func getDoubleTy(ctx: LLVMContext*): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(builder: IRBuilder*): llvm_Type*;
     func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
-    func getPtr(): llvm_Type*;
+    func getPtr(ctx: LLVMContext*): llvm_Type*;
     func Value_isPointerTy(val: Value*): bool;
     func ConstantPointerNull_get(builder: IRBuilder*, ty: PointerType*): Value*;
     func CreateFPCast(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
@@ -205,11 +205,11 @@ extern{
     func CreatePtrToInt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
     func CreateStructGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: i32): Value*;
     func CreateInBoundsGEP(builder: IRBuilder*, type: llvm_Type *, ptr: Value*, idx: Value**, len: i32): Value*;
-    func CreateGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
+    func CreateGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: Value**, len: i32): Value*;
     func CreateGlobalStringPtr(builder: IRBuilder*, s: i8*): Value*;
     func CreateGlobalString(builder: IRBuilder*, s: i8*): GlobalVariable*;
-    func CreateCall(builder: IRBuilder*, f: Function*, args: vector_Value*): Value*;
-    func CreateCall_ft(builder: IRBuilder*, ft: llvm_FunctionType*, val: Value*, args: vector_Value*): Value*;
+    func CreateCall(builder: IRBuilder*, f: Function*, args: Value**, len: i32): Value*;
+    func CreateCall_ft(builder: IRBuilder*, ft: llvm_FunctionType*, val: Value*, args: Value**, len: i32): Value*;
     func CreateUnreachable(builder: IRBuilder*);
     func CreateCondBr(builder: IRBuilder*, cond: Value*, true_bb: BasicBlock*, false_bb: BasicBlock*);
     func CreateBr(builder: IRBuilder*, bb: BasicBlock*);
@@ -362,6 +362,12 @@ impl Emitter2{
   func makeInt(self, val: i64, bits: i32): Value*{
     return makeInt(self.ctx, val, bits);
   }
+  func makeFloat(self, val: f64): Value*{
+    return makeFloat(self.ctx, val);
+  }
+  func makeDouble(self, val: f64): Value*{
+    return makeDouble(self.ctx, val);
+  } 
   
   func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
     let args = [i1, i2];
@@ -370,5 +376,35 @@ impl Emitter2{
   
   func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
     return self.gep_arr(type, ptr, self.makeInt(i1, 64), self.makeInt(i2, 64));
+  }
+
+  func gep_ptr(self, type: llvm_Type*, ptr: Value*, i1: Value*): Value*{
+    let idx = [i1];
+    return CreateGEP(self.builder, type, ptr, idx.ptr(), 1);
+  }
+
+  func loadPtr(self, val: Value*): Value*{
+    return CreateLoad(self.builder, getPtr(self.ctx), val);
+  }
+
+  func sizeOf(self, ty: llvm_Type*): i64{
+    return DataLayout_getTypeSizeInBits(self.module, ty);
+  }
+
+  func sizeOf(self, val: Value*): i64{
+    let ty = Value_getType(val);
+    return DataLayout_getTypeSizeInBits(self.module, ty);
+  }
+
+  func intPtr(self, bits: i64): llvm_Type*{
+    let ty = intTy(self.ctx, bits);
+    return getPointerTo(ty);
+  }
+
+  func glob_str(self, str: str): Value*{
+    let cs = str.cstr();
+    let res = CreateGlobalString(self.builder, cs.ptr());
+    cs.drop();
+    return res;
   }
 }
