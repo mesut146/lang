@@ -18,7 +18,6 @@ import backend/alloc_helper
 import backend/debug_helper
 import backend/stmt_emitter
 import backend/expr_emitter
-import backend/llvm
 import backend_cpp/bridge
 import parser/ownership
 import parser/own_model
@@ -444,28 +443,28 @@ impl Compiler{
     CreateRetVoid(ll.builder);
     self.own.reset();
     self.di.get().finalize();
-    ll.verify_func(proto);
+    verifyFunction(proto);
     method.drop();
     globals.drop();
   }
 
-  func make_global_ctors2(proto: Value*, ll: Emitter2*){
+  func make_global_ctors2(proto: Function*, ll: Emitter2*){
     let struct_elem_types = [ptr::null<llvm_Type>(); 3];
-    struct_elem_types[0] = ll.intTy(32);
-    struct_elem_types[1] = LLVMPointerTypeInContext(ll.ctx, 0);
-    struct_elem_types[2] = LLVMPointerTypeInContext(ll.ctx, 0);
-    let ctor_elem_ty = LLVMStructTypeInContext(ll.ctx, struct_elem_types.ptr(), 3, LLVMBoolFalse());
-    let struct_elems = [ptr::null<Value>(); 3];
-    struct_elems[0] = ll.makeInt(65535, 32);
-    struct_elems[1] = proto;
-    struct_elems[2] = LLVMConstNull(ll.intPtr(32));
-    let ctor_init_struct = LLVMConstStructInContext(ll.ctx, struct_elems.ptr(), 3, LLVMBoolFalse());
-    let ctor_ty = LLVMArrayType(ctor_elem_ty, 1);
+    struct_elem_types[0] = intTy(ll.ctx, 32);
+    struct_elem_types[1] = getPtr(ll.ctx);
+    struct_elem_types[2] = getPtr(ll.ctx);
+    let ctor_elem_ty = make_struct_ty(ll.ctx, "".ptr(), struct_elem_types.ptr(), 3);
+
+    let struct_elems = [ptr::null<Constant>(); 3];
+    struct_elems[0] = ll.makeInt(65535, 32) as Constant*;
+    struct_elems[1] = proto as Constant*;
+    struct_elems[2] = ConstantPointerNull_get(ll.builder, ll.intPtr(32) as PointerType*) as Constant*;
+    let ctor_init_struct = ConstantStruct_getAnon(struct_elems.ptr(), 3);
+
+    let ctor_ty = ArrayType_get(ctor_elem_ty as llvm_Type*, 1);
     let elems = [ctor_init_struct];
-    let ctor_init = LLVMConstArray(ctor_elem_ty, elems.ptr(), 1);
-    let ctor = LLVMAddGlobal(ll.module, ctor_ty, "llvm.global_ctors".ptr());
-    LLVMSetInitializer(ctor, ctor_init);
-    LLVMSetLinkage(ctor, LLVMLinkage::LLVMAppendingLinkage{}.int());
+    let ctor_init = ConstantArray_get(ctor_ty, elems.ptr(), 1);
+    let ctor = make_global(ll.module, ctor_ty as llvm_Type*, ctor_init, GlobalValue_appending(), "llvm.global_ctors".ptr());
   }
 
   func make_global_init(self, gl: Global*, rt: RType*, ty: llvm_Type*): Constant*{
@@ -477,33 +476,31 @@ impl Compiler{
       if(rt.type.is_prim()){
         let rhs_str = gl.expr.get().print();
         if(rhs_str.eq("true")){
-          init = ll.makeInt(1, 8);
+          init = ll.makeInt(1, 8) as Constant*;
         }else if(rhs_str.eq("false")){
-          init = ll.makeInt(0, 8);
+          init = ll.makeInt(0, 8) as Constant*;
         }else{
           let val = i64::parse(rhs_str.str()).unwrap();
-          init = ll.makeInt(val, self.getSize(&rt.type) as i32);
+          init = ll.makeInt(val, self.getSize(&rt.type) as i32) as Constant*;
         }
         rhs_str.drop();
       }else if(rt.type.is_str()){
         let val = is_str_lit(gl.expr.get()).unwrap().str();
         let slice_ty = self.protos.get().std("slice");
         let ptr = self.get_global_string(val.str());
-        let cons_elems_slice = [ptr, ll.makeInt(val.len(), SLICE_LEN_BITS())];
-        let cons_slice = LLVMConstStructInContext(ll.ctx, cons_elems_slice.ptr(), 2, 0);
-        let cons_elems = [cons_slice];
-        init = LLVMConstStructInContext(ll.ctx, cons_elems.ptr(), 1, 0);
+        let cons_elems_slice = [ptr as Constant*, ll.makeInt(val.len(), SLICE_LEN_BITS()) as Constant*];
+        let cons_slice = ConstantStruct_getAnon(cons_elems_slice.ptr(), 2);
+        let cons_elems = [cons_slice as Constant*];
+        init = ConstantStruct_getAnon(cons_elems.ptr(), 1) as Constant*;
       }else{
         panic("glob constexpr not supported: {:?}", gl);
       }
     }else{
       if(is_struct(&rt.type)){
-        //init = ConstantStruct_get(ty as StructType*);
-        //init = LLVMConstStructInContext(ll.ctx, ty);
-        init = LLVMConstNull(ty);
+        init = ConstantPointerNull_get(ll.builder, getPointerTo(ty)) as Constant*;
       }else{
         //prim or ptr
-        init = ll.makeInt(0, self.getSize(&rt.type) as i32);
+        init = ll.makeInt(0, self.getSize(&rt.type) as i32) as Constant*;
       }
     }
     return init;
@@ -614,7 +611,7 @@ impl Compiler{
       }
     }
     self.di.get().finalize();
-    ll.verify_func(proto.val);
+    verifyFunction(proto.val);
     self.own.drop();
     self.own = Option<Own>::new();
     self.ctx.prog.compile_end(m);
@@ -637,17 +634,18 @@ impl Compiler{
   func alloc_prm(self, prm: Param*){
     let ty = self.mapType(&prm.type);
     let name_c = prm.name.clone().cstr();
-    let ptr = LLVMBuildAlloca(self.ll.get().builder, ty, name_c.ptr());
-    name_c.drop();
+    let ptr = CreateAlloca(self.ll.get().builder, ty);
+    Value_setName(ptr, name_c.ptr());
     self.NamedValues.add(prm.name.clone(), ptr);
+    name_c.drop();
   }
 
   func copy(self, trg: Value*, src: Value*, type: Type*){
     let size = self.getSize(type) / 8;
-    LLVMBuildMemCpy(self.ll.get().builder, trg, 0, src, 0, self.ll.get().makeInt(size, 64));
+    CreateMemCpy(self.ll.get().builder, trg, src, size);
   }
 
-  func store_prm(self, prm: Param*, f: Value*, argIdx: i32){
+  func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
     let ptr = *self.NamedValues.get(&prm.name).unwrap();
     let val = Function_get_arg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
@@ -658,7 +656,7 @@ impl Compiler{
     self.own.get().add_prm(prm, LLVMPtr::new(ptr));
   }
 
-  func storeParams(self, m: Method*, f: Value*){
+  func storeParams(self, m: Method*, f: Function*){
     let argIdx = 0;
     if(is_struct(&m.type)){
       ++argIdx;//sret
@@ -727,7 +725,7 @@ impl Compiler{
     let proto = self.get_drop_proto(rt);
     let args = [ptr.ptr as Value*];
     let ll = self.ll.get();
-    LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), 1, "".ptr());
+    CreateCall(ll.builder, proto.val, args.ptr(), 1);
 }
 
   func compile_single(config: CompilerConfig): Result<String, CompilerError>{

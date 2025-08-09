@@ -80,14 +80,15 @@ const llvm::Target *lookupTarget(const char *triple) {
   return Target;
 }
 
-llvm::TargetMachine *createTargetMachine(const char *triple) {
+llvm::TargetMachine *createTargetMachine(const char *triple, int reloc) {
   std::string TargetTriple(triple);
   auto Target = lookupTarget(triple);
 
   auto CPU = "generic";
   auto Features = "";
   llvm::TargetOptions opt;
-  auto RM = std::optional<llvm::Reloc::Model>(llvm::Reloc::Model::PIC_);
+  //llvm::Reloc::Model::PIC_
+  auto RM = std::optional<llvm::Reloc::Model>((llvm::Reloc::Model)reloc);
   return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
@@ -438,9 +439,9 @@ llvm::GlobalValue::LinkageTypes odr() {
 
 llvm::Type *getVoidTy(llvm::IRBuilder<>* builder) { return builder->getVoidTy(); }
 
-llvm::FunctionType *make_ft(llvm::Type *retType,
-                            std::vector<llvm::Type *> *argTypes, bool vararg) {
-  return llvm::FunctionType::get(retType, *argTypes, vararg);
+llvm::FunctionType *make_ft(llvm::Type *retType, llvm::Type** argTypes, int len, bool vararg) {
+  llvm::ArrayRef<llvm::Type*> ref(argTypes, len);
+  return llvm::FunctionType::get(retType, ref, vararg);
 }
 
 llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name, llvm::Module* mod) {
@@ -461,12 +462,11 @@ llvm::Attribute::AttrKind get_sret() { return llvm::Attribute::StructRet; }
 
 void Function_print(llvm::Function *f) { f->print(llvm::errs()); }
 
-llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name) {
-  return llvm::StructType::create(*ctx, name);
-}
-llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name,
-                                  std::vector<llvm::Type *> *elems) {
+llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name, llvm::Type** elems, int len) {
   return llvm::StructType::create(*ctx, *elems, name);
+}
+llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name) {
+  return llvm::StructType::create(*ctx, name);
 }
 llvm::StructType *make_struct_ty_noname(llvm::LLVMContext* ctx, std::vector<llvm::Type *> *elems) {
   return llvm::StructType::create(*ctx, *elems);
@@ -481,7 +481,7 @@ int StructType_getNumElements(llvm::StructType *st) {
   return st->getNumElements();
 }
 
-llvm::ArrayType *get_arrty(llvm::Type *elem, int size) {
+llvm::ArrayType *ArrayType_get(llvm::Type *elem, int size) {
   return llvm::ArrayType::get(elem, size);
 }
 
@@ -500,14 +500,19 @@ llvm::Constant *ConstantStruct_get(llvm::StructType *ty) {
   return llvm::ConstantStruct::get(ty);
 }
 
-llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty,
-                                         std::vector<llvm::Constant *> *elems) {
-  return llvm::ConstantStruct::get(ty, *elems);
+llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty, llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantStruct::get(ty, ref);
 }
 
-llvm::Constant *ConstantArray_get(llvm::ArrayType *ty,
-                                  std::vector<llvm::Constant *> *vec) {
-  return llvm::ConstantArray::get(ty, *vec);
+llvm::Constant *ConstantStruct_getAnon(llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantStruct::getAnon(ref);
+}
+
+llvm::Constant *ConstantArray_get(llvm::ArrayType *ty, llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantArray::get(ty, ref);
 }
 
 llvm::Value *CreateAlloca(llvm::IRBuilder<>* builder, llvm::Type *ty) { return builder->CreateAlloca(ty); }

@@ -8,7 +8,7 @@ import ast/utils
 
 import resolver/resolver
 
-import backend/llvm
+import backend_cpp/bridge
 import backend/compiler
 import backend/debug_helper
 import backend/expr_emitter
@@ -65,42 +65,45 @@ impl RvalueHelper{
 
 
 func make_slice_type(ll: Emitter2*): llvm_Type*{
-    let res = LLVMStructCreateNamed(ll.ctx, "__slice".ptr());
-    let elems = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0), LLVMIntTypeInContext(ll.ctx, SLICE_LEN_BITS())];
-    LLVMStructSetBody(res, elems.ptr(), 2, 0);
-    return res;
+  let elems = [ll.intPtr(8), intTy(ll.ctx, SLICE_LEN_BITS())];
+  let res = make_struct_ty(ll.ctx, "__slice".ptr(), elems.ptr(), 2);
+  return res as llvm_Type*;
 }
 
 func make_printf(ll: Emitter2*): FunctionInfo{
-    let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
-    let ret = LLVMIntTypeInContext(ll.ctx, 32);
-    let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolTrue());
-    let f = LLVMAddFunction(ll.module, "printf".ptr(), ft);
-    LLVMSetFunctionCallConv(f, 0);
+    let args = [ll.intPtr(8)];
+    let ret = intTy(ll.ctx, 32);
+    let ft = make_ft(ret, args.ptr(), 1, true);
+    let lin = ext();
+    let f = make_func(ft, lin, "printf".ptr(), ll.module);
+    setCallingConv(f);
     return FunctionInfo{f, ft};
 }
 func make_sprintf(ll: Emitter2*): FunctionInfo{
-  let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0), LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
-  let ret = LLVMIntTypeInContext(ll.ctx, 32);
-  let ft = LLVMFunctionType(ret, args.ptr(), 2, LLVMBoolTrue());
-  let f = LLVMAddFunction(ll.module, "sprintf".ptr(), ft);
-  LLVMSetFunctionCallConv(f, 0);
+  let args = [ll.intPtr(8), ll.intPtr(8)];
+  let ret = intTy(ll.ctx, 32);
+  let ft = make_ft(ret, args.ptr(), 2, true);
+  let lin = ext();
+  let f = make_func(ft, lin, "sprintf".ptr(), ll.module);
+  setCallingConv(f);
   return FunctionInfo{f, ft};
 }
 func make_fflush(ll: Emitter2*): FunctionInfo{
-  let args = [LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0)];
-  let ret = LLVMIntTypeInContext(ll.ctx, 32);
-  let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
-  let f = LLVMAddFunction(ll.module, "fflush".ptr(), ft);
-  LLVMSetFunctionCallConv(f, 0);
+  let args = [ll.intPtr(8)];
+  let ret = intTy(ll.ctx, 32);
+  let ft = make_ft(ret, args.ptr(), 1, false);
+  let lin = ext();
+  let f = make_func(ft, lin, "fflush".ptr(), ll.module);
+  setCallingConv(f);
   return FunctionInfo{f, ft};
 }
 func make_malloc(ll: Emitter2*): FunctionInfo{
-  let args = [LLVMIntTypeInContext(ll.ctx, 64)];
-  let ret = LLVMPointerType(LLVMIntTypeInContext(ll.ctx, 8), 0);
-  let ft = LLVMFunctionType(ret, args.ptr(), 1, LLVMBoolFalse());
-  let f = LLVMAddFunction(ll.module, "malloc".ptr(), ft);
-  LLVMSetFunctionCallConv(f, 0);
+  let args = [intTy(ll.ctx, 64)];
+  let ret = ll.intPtr(8);
+  let ft = make_ft(ret, args.ptr(), 1, false);
+  let lin = ext();
+  let f = make_func(ft, lin, "malloc".ptr(), ll.module);
+  setCallingConv(f);
   return FunctionInfo{f, ft};
 }
 
@@ -324,9 +327,9 @@ impl Compiler{
     for prm in &ft.params{
       args.add(self.mapType(prm));
     }
-    let res = LLVMFunctionType(ret, args.ptr(), ft.params.len() as i32, LLVMBoolFalse());
+    let res = make_ft(ret, args.ptr(), ft.params.len() as i32, false);
     args.drop();
-    return res;
+    return res as llvm_Type*;
   }
   func make_proto(self, ft: LambdaType*): llvm_Type*{
     let ret = self.mapType(ft.return_type.get());
@@ -337,9 +340,9 @@ impl Compiler{
     for prm in &ft.captured{
       args.add(self.mapType(prm));
     }
-    let res = LLVMFunctionType(ret, args.ptr(), args.len() as i32, LLVMBoolFalse());
+    let res = make_ft(ret, args.ptr(), args.len() as i32, false);
     args.drop();
-    return res;
+    return res as llvm_Type*;
   }
   func mapType(self, type: Type*): llvm_Type*{
     let r = self.get_resolver();
@@ -357,11 +360,11 @@ impl Compiler{
     match type{
       Type::Pointer(elem) =>{
         let elem_ty = self.mapType(elem.get());
-        return LLVMPointerType(elem_ty, 0);
+        return getPointerTo(elem_ty) as llvm_Type*;
       },
       Type::Array(elem, size) =>{
         let elem_ty = self.mapType(elem.get());
-        return LLVMArrayType(elem_ty, *size as u32);
+        return ArrayType_get(elem_ty, *size as u32) as llvm_Type*;
       },
       Type::Slice(elem) =>{
         let p = self.protos.get();
@@ -369,11 +372,11 @@ impl Compiler{
       },
       Type::Function(elem_bx)=>{
         let res = self.make_proto(elem_bx.get());
-        return LLVMPointerType(res as llvm_Type*, 0);
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
       },
       Type::Lambda(elem_bx)=>{
         let res = self.make_proto(elem_bx.get());
-        return LLVMPointerType(res as llvm_Type*, 0);
+        return getPointerTo(res as llvm_Type*) as llvm_Type*;
       },
       Type::Tuple(tt)=>{
         let name = mangleType(type).cstr();
@@ -384,23 +387,22 @@ impl Compiler{
           name.drop();
           return res as llvm_Type*;
         }
-        let res = ll.make_struct_ty(name.str());
         let elems = List<llvm_Type*>::new(tt.types.len());
         for elem in &tt.types{
           elems.add(self.mapType(elem));
         }
-        LLVMStructSetBody(res, elems.ptr(), elems.len() as i32, 0);
-        p.classMap.add(name.str().owned(), res);
+        let res = make_struct_ty(ll.ctx, name.ptr(), elems.ptr(), elems.len() as i32);
+        p.classMap.add(name.str().owned(), res as llvm_Type*);
         name.drop();
-        return res;
+        return res as llvm_Type*;
       },
       Type::Simple(smp) => {
-        if(type.is_void()) return LLVMVoidTypeInContext(ll.ctx);
-        if(type.eq("f32")) return LLVMFloatTypeInContext(ll.ctx);
-        if(type.eq("f64")) return LLVMDoubleTypeInContext(ll.ctx);
+        if(type.is_void()) return getVoidTy(ll.builder);
+        if(type.eq("f32")) return getFloatTy(ll.ctx);
+        if(type.eq("f64")) return getDoubleTy(ll.ctx);
         let prim_size = prim_size(smp.name.str());
         if(prim_size.is_some()){
-          return LLVMIntTypeInContext(ll.ctx, prim_size.unwrap());
+          return intTy(ll.ctx, prim_size.unwrap());
         }
         let decl = self.get_resolver().get_decl(rt).unwrap();
         if(decl.is_repr()){
@@ -471,15 +473,13 @@ impl Compiler{
         let ev = vars.get(i);
         let name = format("{:?}::{}", decl.type, ev.name);
         let name_c = name.clone().cstr();
-        //let var_ty = make_struct_ty(name_c.ptr());
-        let var_ty = LLVMStructCreateNamed(ll.ctx,name_c.ptr());
+        let var_ty = make_struct_ty2(ll.ctx, name_c.ptr());
         name_c.drop();
         p.classMap.add(name, var_ty);
       }
     }
     let type_c = decl.type.print().cstr();
-    //let st = make_struct_ty(type_c.ptr());
-    let st = LLVMStructCreateNamed(ll.ctx, type_c.ptr());
+    let st = make_struct_ty2(ll.ctx, type_c.ptr());
     type_c.drop();
     p.classMap.add(decl.type.print(), st);
   }
@@ -504,7 +504,7 @@ impl Compiler{
           name.drop();
         }
         elems.add(ll.intTy(ENUM_TAG_BITS()));
-        elems.add(LLVMArrayType(ll.intTy(8), max/8));
+        elems.add(ArrayType_get(ll.intTy(8), max / 8));
       },
       Decl::Struct(fields)=>{
         if(decl.base.is_some()){
@@ -551,7 +551,7 @@ impl Compiler{
     }
     let sig = MethodSig::new(m, self.get_resolver());
     let rvo = is_struct(&sig.ret);
-    let ret = LLVMVoidTypeInContext(ll.ctx);
+    let ret = getVoidTy(ll.builder);
     if(is_main(m)){
       ret = ll.intTy(32);
     }else if(!rvo){
@@ -559,18 +559,18 @@ impl Compiler{
     }
     let args = List<llvm_Type*>::new();
     if(rvo){
-      let rvo_ty = LLVMPointerType(self.mapType(&sig.ret), 0);
+      let rvo_ty = getPointerTo(self.mapType(&sig.ret));
       args.add(rvo_ty);
     }
     for prm_type in &sig.params{
       let pt = self.mapType(prm_type);
       if(is_struct(prm_type)){
-        args.add(LLVMPointerType(pt, 0));
+        args.add(getPointerTo(pt));
       }else{
         args.add(pt);
       }
     }
-    let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
+    let ft = make_ft(ret, args.ptr(), args.len() as i32, m.is_vararg);
     let linkage = LLVMLinkage::LLVMExternalLinkage;
     if(!m.type_params.empty()){
       linkage = LLVMLinkage::LLVMLinkOnceODRLinkage;
@@ -580,7 +580,7 @@ impl Compiler{
       }
     }
     let mangled_c = mangled.clone().cstr();
-    let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+    let f = make_func(ft, lin, mangled_c.ptr(), ll.module);
     LLVMSetLinkage(f, linkage.int());
     if(rvo){
       let arg = LLVMGetParam(f, 0);
@@ -596,61 +596,6 @@ impl Compiler{
     sig.drop();
     return Option::new(FunctionInfo{f, ft});
   }
-  
-  // func make_proto2(self, m: Method*): Option<FunctionInfo>{
-  //   if(m.is_generic) return Option<FunctionInfo>::new();
-  //   let mangled = mangle(m);
-  //   //print("proto {}\n", mangled);
-  //   if(self.protos.get().funcMap.contains(&mangled)){
-  //     panic("already proto {}\n", mangled);
-  //   }
-  //   let ll = self.ll.get();
-  //   let sig = MethodSig::new(m, self.get_resolver());
-  //   let rvo = is_struct(&m.type);
-  //   let ret = LLVMVoidTypeInContext(ll.ctx);
-  //   if(is_main(m)){
-  //     ret = LLVMIntTypeInContext(ll.ctx, 32);
-  //   }else if(!rvo){
-  //     ret = self.mapType(&sig.ret);
-  //   }
-  //   let args = List<llvm_Type*>::new();
-  //   if(rvo){
-  //     let rvo_ty = LLVMPointerType(self.mapType(&sig.ret), 0);
-  //     args.add(rvo_ty);
-  //   }
-  //   for prm_type in &sig.params{
-  //     let pt = self.mapType(prm_type);
-  //     if(is_struct(prm_type)){
-  //       args.add(LLVMPointerType(pt, 0));
-  //     }else{
-  //       args.add(pt);
-  //     }
-  //   }
-  //   let ft = LLVMFunctionType(ret, args.ptr(), args.len() as i32, toLLVMBool(m.is_vararg));
-  //   let linkage = LLVMLinkage::LLVMExternalLinkage{}.int();
-  //   if(!m.type_params.empty()){
-  //     linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
-  //   }else if let Parent::Impl(info)=&m.parent{
-  //     if(info.type.is_simple() && !info.type.get_args().empty()){
-  //       linkage = LLVMLinkage::LLVMLinkOnceODRLinkage{}.int();
-  //     }
-  //   }
-  //   let mangled_c = mangled.clone().cstr();
-  //   let f = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
-  //   LLVMSetLinkage(f, linkage);
-  //   if(rvo){
-  //     let arg = LLVMGetParam(f, 0);
-  //     LLVMSetValueName2(arg, "ret".ptr(), 3);
-  //     let sret = LLVMGetEnumAttributeKindForName("sret".ptr(), 4);
-  //     let attr = LLVMCreateTypeAttribute(ll.ctx, sret, self.mapType(&sig.ret));
-  //     LLVMAddAttributeAtIndex(f, 1, attr);
-  //   }
-  //   self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
-  //   args.drop();
-  //   mangled_c.drop();
-  //   sig.drop();
-  //   return Option::new(FunctionInfo{f, ft});
-  // }
 
   func getSize(self, type: Type*): i64{
     let ll = self.ll.get();
@@ -962,9 +907,9 @@ impl Compiler{
 
   func make_init_proto(self, path: str): Pair<Function*, String>{
     let ll = self.ll.get();
-    let ret = LLVMVoidTypeInContext(ll.ctx);
+    let ret = getVoidTy(ll.builder);
     let args = ptr::null<llvm_Type*>();
-    let ft = LLVMFunctionType(ret, args, 0, LLVMBoolFalse());
+    let ft = make_ft(ret, args, 0, false);
     let linkage = LLVMLinkage::LLVMExternalLinkage;
     let mangled = mangle_static(path);
     if(std::getenv("cxx_global").is_some()){
@@ -972,7 +917,7 @@ impl Compiler{
       linkage = LLVMLinkage::LLVMInternalLinkage;
     }
     let mangled_c = mangled.clone().cstr();
-    let proto = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+    let proto = make_func(ft, lin, mangled_c.ptr(), ll.module);
     LLVMSetLinkage(proto, linkage.int());
     setSection(proto, ".text.startup".ptr());
     if(std::getenv("cxx_global").is_some()){
@@ -984,10 +929,10 @@ impl Compiler{
   func handle_cxx_global(ll: Emitter*, f: Value*, path: str){
     //_GLOBAL__sub_I_glob.cpp
     let args_ft = ptr::null<llvm_Type*>();
-    let ft = LLVMFunctionType(LLVMVoidTypeInContext(ll.ctx), args_ft, 0, LLVMBoolFalse());
+    let ft = make_ft(getVoidTy(ll.builder), args_ft, 0, false);
     let linkage = LLVMLinkage::LLVMInternalLinkage;
     let mangled_c = mangle_static(path).cstr();
-    let caller_proto = LLVMAddFunction(ll.module, mangled_c.ptr(), ft);
+    let caller_proto = make_func(ft, lin, mangled_c.ptr(), ll.module);
     LLVMSetLinkage(caller_proto, linkage.int());
     setSection(caller_proto, ".text.startup".ptr());
     let bb = LLVMAppendBasicBlockInContext(ll.ctx, caller_proto, "".ptr());

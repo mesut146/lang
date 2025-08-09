@@ -43,6 +43,15 @@ struct DIExpression;
 struct DILocation;
 struct StructLayout;
 
+enum RelocMode{
+  Static, PIC_, DynamicNoPIC, ROPI, RWPI, ROPI_RWPI
+}
+impl RelocMode{
+  func int(self): i32{
+    return *(self as i32*);
+  }
+}
+
 extern{
     func vector_Type_new(): vector_Type*;
     func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
@@ -71,7 +80,7 @@ extern{
     func InitializeAllAsmPrinters();
     func lookupTarget(triple: i8*): Target*;
 
-    func createTargetMachine(triple: i8*): TargetMachine*;
+    func createTargetMachine(triple: i8*, reloc: i32): TargetMachine*;
 
     func llvm_InitializeX86TargetInfo();
     func llvm_InitializeX86Target();
@@ -143,9 +152,9 @@ extern{
     func get_dwarf_zig(): i32;
     func get_dwarf_swift(): i32;
 
-    func make_struct_ty(name: i8*): StructType*;
-    func make_struct_ty2(name: i8*, elems: vector_Type*): StructType*;
-    func make_struct_ty_noname(elems: vector_Type*): StructType*;
+    func make_struct_ty(ctx: LLVMContext*, name: i8*, elems: llvm_Type**, len: i32): StructType*;
+    func make_struct_ty2(ctx: LLVMContext*, name: i8*): StructType*;
+    func make_struct_ty_noname(ctx: LLVMContext*, elems: vector_Type*): StructType*;
     func setBody(st: StructType*, elems: vector_Type*);
     func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
@@ -157,7 +166,7 @@ extern{
     func getFloatTy(ctx: LLVMContext*): llvm_Type*;
     func getDoubleTy(ctx: LLVMContext*): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
-    func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
+    func ArrayType_get(elem: llvm_Type*, size: i32): ArrayType*; 
     func getVoidTy(builder: IRBuilder*): llvm_Type*;
     func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
@@ -172,11 +181,11 @@ extern{
     func CreateFPExt(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     func CreateFPTrunc(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     
-    func make_ft(ret: llvm_Type*, args: vector_Type*, vararg: bool): llvm_FunctionType*;
+    func make_ft(ret: llvm_Type*, args: llvm_Type**, len: i32, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
     func odr(): i32;
     func internal(): i32;
-    func make_func(fr: llvm_FunctionType*, l: i32, name: i8*): Function*;
+    func make_func(ft: llvm_FunctionType*, l: i32, name: i8*, module: LLVMModule*): Function*;
     func Function_get_arg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
@@ -222,9 +231,10 @@ extern{
     func CreatePHI(builder: IRBuilder*, type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
     func make_global(module: LLVMModule*, ty: llvm_Type*, init: Constant*, linkage: i32, name: i8*): GlobalVariable*;
+    func ConstantStruct_get_elems(ty: StructType*, elems: Constant**, len: i32): Constant*;
+    func ConstantStruct_getAnon(elems: Constant**, len: i32): Constant*;
     func ConstantStruct_get(ty: StructType*): Constant*;
-    func ConstantStruct_get_elems(ty: StructType*, elems: vector_Constant*): Constant*;
-    func ConstantArray_get(ty: ArrayType*, elems: vector_Constant*): Constant*;
+    func ConstantArray_get(ty: ArrayType*, elems: Constant**, len: i32): Constant*;
     func GlobalValue_ext(): i32;
     func GlobalValue_appending(): i32;
     func CreateSwitch(builder: IRBuilder*, cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
@@ -262,7 +272,7 @@ extern{
 }*/
 
 struct Emitter2{
-    tm: LLVMOpaqueTargetMachine*;
+    tm: TargetMachine*;
     ctx: LLVMContext*;
     module: LLVMModule*;
     builder: IRBuilder*;
@@ -282,15 +292,8 @@ impl Emitter2{
           target_triple.drop();
           target_triple = env_triple.unwrap().owned().cstr();
       }
-      let target = ptr::null<LLVMTarget>();
-      let err = ptr::null<i8>();
-      let code = LLVMGetTargetFromTriple(target_triple.ptr(), &target, &err);
-      if(code != 0) panic("cant init llvm triple");
 
-      let opt = LLVMCreateTargetMachineOptions();
-      LLVMTargetMachineOptionsSetCPU(opt, "generic".ptr());
-      LLVMTargetMachineOptionsSetRelocMode(opt, LLVMRelocMode::LLVMRelocPIC{}.int());
-      let tm = LLVMCreateTargetMachineWithOptions(target, target_triple.ptr(), opt);        
+      let tm = createTargetMachine(target_triple.ptr(), opt, RelocMode::PIC_{}.int());  
 
       let ctx = LLVMContext_new();
       let name = module_name.cstr();
