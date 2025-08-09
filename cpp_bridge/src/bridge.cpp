@@ -741,7 +741,7 @@ llvm::ConstantInt *makeInt(llvm::LLVMContext* ctx, int64_t val, int bits) {
   return llvm::ConstantInt::getSigned(intType, val);
 }
 
-llvm::Type *getInt(llvm::LLVMContext* ctx, int bit) { return llvm::IntegerType::get(*ctx, bit); }
+llvm::Type *intTy(llvm::LLVMContext* ctx, int bit) { return llvm::IntegerType::get(*ctx, bit); }
 
 llvm::Type *getFloatTy(llvm::LLVMContext* ctx) { return llvm::Type::getFloatTy(*ctx); }
 
@@ -791,12 +791,13 @@ llvm::Value *CreateFPTrunc(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::T
   return builder->CreateFPTrunc(val, type);
 }
 
-llvm::Value *CreateStructGEP(llvm::IRBuilder<>* builder, llvm::Value *ptr, int idx, llvm::Type *type) {
+llvm::Value *CreateStructGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr, int idx) {
   return builder->CreateStructGEP(type, ptr, idx);
 }
 llvm::Value *CreateInBoundsGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr,
-                               std::vector<llvm::Value *> *idx) {
-  return builder->CreateInBoundsGEP(type, ptr, *idx);
+                               llvm::Value** idx, int len) {
+  llvm::ArrayRef<llvm::Value*> arr(idx, len);       
+  return builder->CreateInBoundsGEP(type, ptr, arr);
 }
 
 llvm::Value *CreateGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr,

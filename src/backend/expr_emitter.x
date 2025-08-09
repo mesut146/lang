@@ -118,7 +118,7 @@ impl Compiler{
           for(let i = 0;i < elems.len();++i){
             let elem = elems.get(i);
             let elem_ty = r.getType(elem);
-            let field_target_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, i, "".ptr());
+            let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, i);
             self.setField(elem, &elem_ty, field_target_ptr);
             elem_ty.drop();
           }
@@ -129,7 +129,8 @@ impl Compiler{
     }
     
     func nullptr(self): Value*{
-      return LLVMConstNull(LLVMPointerType(LLVMVoidTypeInContext(self.ll.get().ctx), 0));
+      let vptr = getPointerTo(getVoidTy(self.ll.get().builder));
+      return ConstantPointerNull_get(self.ll.get().builder, vptr);
     }
 
     func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
@@ -162,20 +163,20 @@ impl Compiler{
       let rhs_rt = resolver.visit(&node.expr);
       let decl = resolver.get_decl(&rhs_rt).unwrap();
       let rhs = self.get_obj_ptr(&node.expr);
-      let tag_ptr = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl), "".ptr());
-      let tag = LLVMBuildLoad2(ll.builder, ll.intTy(ENUM_TAG_BITS()), tag_ptr, "".ptr());
+      let tag_ptr = CreateStructGEP(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl));
+      let tag = CreateLoad(ll.builder, intTy(ll.ctx, ENUM_TAG_BITS()), tag_ptr);
 
       let next_name = format("next_{}", expr.line).cstr();
       let def_name = format("def_{}", expr.line).cstr();
       let nextbb = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
       let def_bb = create_bb(ll.ctx, def_name.ptr(), self.cur_func());
-      let sw = LLVMBuildSwitch(ll.builder, tag, def_bb, node.cases.len() as i32);
+      let sw = CreateSwitch(ll.builder, tag, def_bb, node.cases.len() as i32);
       let match_rt = resolver.visit(expr);
       let match_type = match_rt.unwrap();
       let none_case = node.has_none();
       if(none_case.is_none()){
         SetInsertPoint(ll.builder, def_bb);
-        LLVMBuildUnreachable(ll.builder);
+        CreateUnreachable(ll.builder);
       }
       //create bb's
       let res = Option<Value*>::new();
@@ -200,7 +201,7 @@ impl Compiler{
             let name_c = format("{:?}__{}_{}", decl.type, type.name(), expr.line).cstr();
             let bb = create_bb(ll.ctx, name_c.ptr(), self.cur_func());
             let var_index = get_variant_index_match(type, decl);
-            LLVMAddCase(sw, ll.makeInt(var_index, 64), bb);
+            SwitchInst_addCase(sw, ll.makeInt(var_index, 64) as ConstantInt*, bb);
             SetInsertPoint(ll.builder, bb);
             //alloc args
             let variant = decl.get_variants().get(var_index);
@@ -212,7 +213,7 @@ impl Compiler{
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             let rhs_val = self.visit_match_rhs(&case.rhs);
             self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
-            let rhs_end_bb = LLVMGetInsertBlock(ll.builder);
+            let rhs_end_bb = GetInsertBlock(ll.builder);
             let exit = Exit::get_exit_type(&case.rhs);
             if(!exit.is_jump()){
               if(!match_type.is_void()){
@@ -220,8 +221,8 @@ impl Compiler{
                 let val = rhs_val.unwrap();
                 if(!is_struct(&match_type)){
                     //fix
-                    if(match_type.is_prim() && ll.isPtr(val)){
-                        val = LLVMBuildLoad2(ll.builder, self.mapType(&match_type), val, "".ptr());
+                    if(match_type.is_prim() && Value_isPointerTy(val)){
+                        val = CreateLoad(ll.builder, self.mapType(&match_type), val);
                     }
                     val = self.cast2(val, &rt2.type, &match_type);
                 }
@@ -239,14 +240,14 @@ impl Compiler{
             for uty in types{
               //all variants go to bb
               let var_index = get_variant_index_match(uty, decl);
-              LLVMAddCase(sw, ll.makeInt(var_index, 64), bb);
+              SwitchInst_addCase(sw, ll.makeInt(var_index, 64) as ConstantInt*, bb);
             }
             SetInsertPoint(ll.builder, bb);
 
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             let rhs_val = self.visit_match_rhs(&case.rhs);
             self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
-            let rhs_end_bb = LLVMGetInsertBlock(ll.builder);
+            let rhs_end_bb = GetInsertBlock(ll.builder);
             let exit = Exit::get_exit_type(&case.rhs);
             if(!exit.is_jump()){
               if(!match_type.is_void()){
@@ -254,8 +255,8 @@ impl Compiler{
                 let val = rhs_val.unwrap();
                 if(!is_struct(&match_type)){
                     //fix
-                    if(match_type.is_prim() && ll.isPtr(val)){
-                        val = LLVMBuildLoad2(ll.builder, self.mapType(&match_type), val, "".ptr());
+                    if(match_type.is_prim() && Value_isPointerTy(val)){
+                        val = CreateLoad(ll.builder, self.mapType(&match_type), val);
                     }
                     val = self.cast2(val, &rt2.type, &match_type);
                 }
@@ -269,21 +270,21 @@ impl Compiler{
         }
       }
       if(use_next){
-          SetInsertPoint(ll.builder, nextbb);
+        SetInsertPoint(ll.builder, nextbb);
       }else{
-        LLVMDeleteBasicBlock(nextbb);
+        //LLVMDeleteBasicBlock(nextbb);
       }
       //handle ret value
       if(!infos.empty()){
         let phi_type = self.mapType(&match_type);
         if(is_struct(&match_type)){
-          phi_type = LLVMPointerType(phi_type, 0);
+          phi_type = getPointerTo(phi_type) as llvm_Type*;
         }
-        let phi = LLVMBuildPhi(ll.builder, phi_type, "".ptr());
+        let phi = CreatePHI(ll.builder, phi_type, infos.len() as i32);
         for info in &infos{
-          LLVMAddIncoming(phi, &info.val, &info.bb, 1);
+          phi_addIncoming(phi, info.val, info.bb);
         }
-        res = Option::new(phi);
+        res = Option::new(phi as Value*);
       }
       def_name.drop();
       next_name.drop();
@@ -294,7 +295,7 @@ impl Compiler{
     func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*){
       let ll = self.ll.get();
       let data_index = get_data_index(decl);
-      let dataPtr = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), enum_ptr, data_index, "".ptr());
+      let dataPtr = CreateStructGEP(ll.builder, self.mapType(&decl.type), enum_ptr, data_index);
       let var_ty = self.get_variant_ty(decl, variant);
 
       let field = variant.fields.get(arg_idx);
@@ -304,7 +305,7 @@ impl Compiler{
       if(decl.base.is_some()){
         ++gep_idx;
       }
-      let field_ptr = LLVMBuildStructGEP2(ll.builder, var_ty, dataPtr, gep_idx, "".ptr());
+      let field_ptr = CreateStructGEP(ll.builder, var_ty, dataPtr, gep_idx);
       if (rhs_ty.is_pointer()) {
         CreateStore(ll.builder, field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
@@ -313,7 +314,7 @@ impl Compiler{
       }else {
         //deref
         if (field.type.is_prim() || field.type.is_any_pointer()) {
-            let field_val = LLVMBuildLoad2(ll.builder, self.mapType(&field.type), field_ptr, "".ptr());
+            let field_val = CreateLoad(ll.builder, self.mapType(&field.type), field_ptr);
             CreateStore(ll.builder, field_val, alloc_ptr);
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
@@ -353,8 +354,8 @@ impl Compiler{
       let exit_then = Exit::get_exit_type(node.then.get());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       let then_val = self.visit_body(node.then.get());
-      let then_end = LLVMGetInsertBlock(ll.builder);
-      let else_end = LLVMGetInsertBlock(ll.builder);
+      let then_end = GetInsertBlock(ll.builder);
+      let else_end = GetInsertBlock(ll.builder);
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
@@ -375,7 +376,7 @@ impl Compiler{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
-        else_end = LLVMGetInsertBlock(ll.builder);
+        else_end = GetInsertBlock(ll.builder);
         self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
         self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -406,22 +407,22 @@ impl Compiler{
           }else{
             let phi_type = self.mapType(&then_rt.type);
             if(is_struct(&then_rt.type)){
-              phi_type = LLVMPointerType(phi_type, 0);
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
             }
-            let phi = LLVMBuildPhi(ll.builder, phi_type, "".ptr());
+            let phi = CreatePHI(ll.builder, phi_type, 2);
             if(is_struct(&then_rt.type)){
-              LLVMAddIncoming(phi, &then_val.unwrap(), &then_end, 1);
-              LLVMAddIncoming(phi, &else_val.unwrap(), &else_end, 1);
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
             }else{
-              LLVMAddIncoming(phi, &self.loadPrim(then_val.unwrap(), &then_rt.type), &then_end, 1);
-              LLVMAddIncoming(phi, &self.loadPrim(else_val.unwrap(), &then_rt.type), &else_end, 1);
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
             }
-            res = Option::new(phi);
+            res = Option::new(phi as Value*);
           }
         }
         then_rt.drop();
       }else{
-        LLVMDeleteBasicBlock(nextbb);
+        //LLVMDeleteBasicBlock(nextbb);
       }
       exit_then.drop();
       then_name.drop();
@@ -436,10 +437,10 @@ impl Compiler{
       let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
       let rhs_rt = self.get_resolver().visit(&node.rhs);
-      let tag_ptr = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl), "".ptr());
-      let tag = LLVMBuildLoad2(ll.builder, ll.intTy(ENUM_TAG_BITS()), tag_ptr, "".ptr());
+      let tag_ptr = CreateStructGEP(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl));
+      let tag = CreateLoad(ll.builder, intTy(ll.ctx, ENUM_TAG_BITS()), tag_ptr);
       let index = Resolver::findVariant(decl, node.type.name());
-      let cmp = LLVMBuildICmp(ll.builder, LLVMIntPredicate::from("=="), tag, ll.makeInt(index, ENUM_TAG_BITS()), "".ptr());
+      let cmp = CreateCmp(ll.builder, get_comp_op("==".ptr()), tag, ll.makeInt(index, ENUM_TAG_BITS()));
   
       let then_name = CStr::new(format("iflet_then_{}", line));
       let else_name = CStr::new(format("iflet_else_{}", line));
@@ -458,7 +459,7 @@ impl Compiler{
         //declare vars
         let fields = &variant.fields;
         let data_index = get_data_index(decl);
-        let dataPtr = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), rhs, data_index, "".ptr());
+        let dataPtr = CreateStructGEP(ll.builder, self.mapType(&decl.type), rhs, data_index);
         let var_ty = self.get_variant_ty(decl, variant);
         for (let i = 0; i < fields.size(); ++i) {
             //regular var decl
@@ -468,8 +469,8 @@ impl Compiler{
         }
       }
       let then_val = self.visit_body(node.then.get());
-      let then_end = LLVMGetInsertBlock(ll.builder);
-      let else_end = LLVMGetInsertBlock(ll.builder);
+      let then_end = GetInsertBlock(ll.builder);
+      let else_end = GetInsertBlock(ll.builder);
       //else move aware end_scope
       if(node.else_stmt.is_some()){
         self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
@@ -489,7 +490,7 @@ impl Compiler{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
-        else_end = LLVMGetInsertBlock(ll.builder);
+        else_end = GetInsertBlock(ll.builder);
         self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
         self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
@@ -521,22 +522,22 @@ impl Compiler{
           }else{
             let phi_type = self.mapType(&then_rt.type);
             if(is_struct(&then_rt.type)){
-              phi_type = LLVMPointerType(phi_type, 0);
+              phi_type = getPointerTo(phi_type) as llvm_Type*;
             }
-            let phi = LLVMBuildPhi(ll.builder, phi_type, "".ptr());
+            let phi = CreatePHI(ll.builder, phi_type, 2);
             if(is_struct(&then_rt.type)){
-              LLVMAddIncoming(phi, &then_val.unwrap(), &then_end, 1);
-              LLVMAddIncoming(phi, &else_val.unwrap(), &else_end, 1);
+              phi_addIncoming(phi, then_val.unwrap(), then_end);
+              phi_addIncoming(phi, else_val.unwrap(), else_end);
             }else{
-              LLVMAddIncoming(phi, &self.loadPrim(then_val.unwrap(), &then_rt.type), &then_end, 1);
-              LLVMAddIncoming(phi, &self.loadPrim(else_val.unwrap(), &then_rt.type), &else_end, 1);
+              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
             }
-            res = Option::new(phi);
+            res = Option::new(phi as Value*);
           }
         }
         then_rt.drop();
       }else{
-        LLVMDeleteBasicBlock(next);
+        //LLVMDeleteBasicBlock(next);
       }
       exit_then.drop();
       then_name.drop();
@@ -627,7 +628,7 @@ impl Compiler{
       if (lhs_rt.type.is_any_pointer() && rhs.eq("u64")) {
         let val = self.get_obj_ptr(lhs);
         lhs_rt.drop();
-        return LLVMBuildPtrToInt(ll.builder, val, self.mapType(rhs), "".ptr());
+        return CreatePtrToInt(ll.builder, val, self.mapType(rhs));
       }
       //prim to prim
       let rhs_rt = self.get_resolver().visit_type(rhs);
@@ -649,7 +650,7 @@ impl Compiler{
         }
         if(decl.is_enum() && rhs_rt.is_decl()){
           let val = self.get_obj_ptr(lhs);
-          val = LLVMBuildStructGEP2(ll.builder, self.mapType(&decl.type), val, get_data_index(decl), "".ptr());
+          val = CreateStructGEP(ll.builder, self.mapType(&decl.type), val, get_data_index(decl));
           lhs_rt.drop();
           rhs_rt.drop();
           return val;
@@ -664,15 +665,15 @@ impl Compiler{
     func visit_is(self, lhs: Expr*, rhs: Expr*): Value*{
       let ll = self.ll.get();
       let tag1 = self.getTag(lhs);
-      let op = LLVMIntPredicate::from("==");
+      let op = get_comp_op("==".ptr());
       if let Expr::Type(rhs_ty) = rhs{
         let decl = self.get_resolver().get_decl(rhs_ty).unwrap();
         let index = Resolver::findVariant(decl, rhs_ty.name());
         let tag2 = ll.makeInt(index, ENUM_TAG_BITS()) ;
-        return LLVMBuildICmp(ll.builder, op, tag1, tag2, "".ptr());
+        return CreateCmp(ll.builder, op, tag1, tag2);
       }
       let tag2 = self.getTag(rhs);
-      return LLVMBuildICmp(ll.builder, op, tag1, tag2, "".ptr());
+      return CreateCmp(ll.builder, op, tag1, tag2);
     }
 
     func simple_enum(self, node: Expr*, type: Type*): Value*{
@@ -694,7 +695,7 @@ impl Compiler{
       }
       
       let decl_ty = self.mapType(&decl.type);
-      let tag_ptr = LLVMBuildStructGEP2(ll.builder,  decl_ty, ptr,  get_tag_index(decl), "".ptr());
+      let tag_ptr = CreateStructGEP(ll.builder,  decl_ty, ptr,  get_tag_index(decl));
       CreateStore(ll.builder, ll.makeInt(index, ENUM_TAG_BITS()) , tag_ptr);
       return ptr;
     }
@@ -706,7 +707,7 @@ impl Compiler{
       if let Type::Tuple(tt) = &scope_rt.type {
         let idx = i32::parse(name.str()).expect("tuple index parse error");
         let scope_ty = self.mapType(&scope_rt.type);
-        let res = LLVMBuildStructGEP2(ll.builder, scope_ty, scope_ptr, idx, "".ptr());
+        let res = CreateStructGEP(ll.builder, scope_ty, scope_ptr, idx);
         scope_rt.drop();
         return res;
       }
@@ -714,14 +715,14 @@ impl Compiler{
       if(decl.is_enum()){
         //base field, skip tag
         let ty = self.mapType(&decl.type);
-        scope_ptr = LLVMBuildStructGEP2(ll.builder,  ty, scope_ptr,  get_data_index(decl), "".ptr());
+        scope_ptr = CreateStructGEP(ll.builder,  ty, scope_ptr,  get_data_index(decl));
       }
       let pair = self.get_resolver().findField(node, name, decl, &decl.type);
       let index = pair.b;
       if (pair.a.base.is_some()) ++index;
       let sd_ty = self.mapType(&pair.a.type);
       scope_rt.drop();
-      return LLVMBuildStructGEP2(ll.builder,  sd_ty, scope_ptr,  index, "".ptr());
+      return CreateStructGEP(ll.builder,  sd_ty, scope_ptr,  index);
     }
   
     func visit_array(self, node: Expr*, list: List<Expr>*, sz: Option<i32>*): Value*{
@@ -753,7 +754,7 @@ impl Compiler{
       if (doesAlloc(elem, self.get_resolver())) {
           elem_ptr = Option::new(self.visit(elem));
       }
-      let bb = LLVMGetInsertBlock(ll.builder);
+      let bb = GetInsertBlock(ll.builder);
       let cur = self.ll.get().gep_arr(arr_ty, ptr, 0, 0);
       let end = self.ll.get().gep_arr(arr_ty, ptr, 0, *sz.get());
       //create cons and memcpy
@@ -762,19 +763,19 @@ impl Compiler{
       let nextbb = create_bb(ll.ctx, "".ptr(), self.cur_func());
       CreateBr(ll.builder, condbb);
       SetInsertPoint(ll.builder, condbb);
-      let phi_ty = LLVMPointerType(elem_ty, 0);
-      let phi = LLVMBuildPhi(ll.builder, phi_ty, "".ptr());
-      LLVMAddIncoming(phi, &cur, &bb, 1);
-      let ne = LLVMBuildICmp(ll.builder, LLVMIntPredicate::from("!="), phi , end, "".ptr());
+      let phi_ty = getPointerTo(elem_ty) as llvm_Type*;
+      let phi = CreatePHI(ll.builder, phi_ty, 2);
+      phi_addIncoming(phi, cur, bb);
+      let ne = CreateCmp(ll.builder, get_comp_op("!=".ptr()), phi as Value*, end);
       CreateCondBr(ll.builder, ne, setbb, nextbb);
       SetInsertPoint(ll.builder, setbb);
       if (elem_ptr.is_some()) {
-          self.copy(phi , elem_ptr.unwrap(), &elem_type);
+          self.copy(phi as Value*, elem_ptr.unwrap(), &elem_type);
       } else {
-          self.setField(elem, &elem_type, phi );
+          self.setField(elem, &elem_type, phi as Value*);
       }
       let step = ll.gep_ptr(elem_ty, phi, ll.makeInt(1, 64));
-      LLVMAddIncoming(phi, &step, &setbb, 1);
+      phi_addIncoming(phi, step, setbb);
       CreateBr(ll.builder, condbb);
       SetInsertPoint(ll.builder, nextbb);
       elem_type.drop();
@@ -805,7 +806,7 @@ impl Compiler{
       let elemty = self.mapType(elem);
       //read array ptr
       let sliceType = self.protos.get().std("slice");
-      let arr = LLVMBuildStructGEP2(ll.builder,  sliceType, src,  SLICE_PTR_INDEX(), "".ptr());
+      let arr = CreateStructGEP(ll.builder,  sliceType, src,  SLICE_PTR_INDEX());
       arr = ll.loadPtr(arr);
       let index = self.cast(node.idx.get(), &i64t);
       i64t.drop();
@@ -836,14 +837,14 @@ impl Compiler{
   
       let sliceType = self.protos.get().std("slice");
   
-      let trg_ptr = LLVMBuildStructGEP2(ll.builder, sliceType, ptr, 0, "".ptr());
-      let trg_len = LLVMBuildStructGEP2(ll.builder, sliceType, ptr, 1, "".ptr());
+      let trg_ptr = CreateStructGEP(ll.builder, sliceType, ptr, 0);
+      let trg_len = CreateStructGEP(ll.builder, sliceType, ptr, 1);
       //store ptr
       CreateStore(ll.builder, arr, trg_ptr);
       //set len
       let val_end = self.cast(node.idx2.get(), &i32_ty);
-      let len = LLVMBuildSub(ll.builder, val_end, val_start, "".ptr());
-      len = LLVMBuildSExt(ll.builder, len, ll.intTy(SLICE_LEN_BITS()), "".ptr());
+      let len = CreateSub(ll.builder, val_end, val_start);
+      len = CreateSExt(ll.builder, len, intTy(ll.ctx, SLICE_LEN_BITS()));
       CreateStore(ll.builder, len, trg_len);
       arr_ty.drop();
       i32_ty.drop();
@@ -862,49 +863,49 @@ impl Compiler{
       let val = self.loadPrim(e);
       if(op.eq("+")) return val;
       if(op.eq("!")){
-        val = LLVMBuildTrunc(ll.builder, val, ll.intTy(1), "".ptr());
-        val = LLVMBuildXor(ll.builder, val, ll.getTrue(), "".ptr());
-        return LLVMBuildZExt(ll.builder, val, ll.intTy(8), "".ptr());
+        val = CreateTrunc(ll.builder, val, intTy(ll.ctx, 1));
+        val = CreateXor(ll.builder, val, getTrue(ll.ctx));
+        return CreateZExt(ll.builder, val, intTy(ll.ctx, 8));
       }
       let bits = self.ll.get().sizeOf(val) as i32;
       let type = self.getType(e);
       if(op.eq("-")){
         if(type.is_float()){
           type.drop();
-          return LLVMBuildFNeg(ll.builder, val, "".ptr());
+          return CreateFNeg(ll.builder, val, "".ptr());
         }
         type.drop();
-        return LLVMBuildNSWSub(ll.builder, ll.makeInt(0, bits) , val, "".ptr());
+        return CreateNSWSub(ll.builder, ll.makeInt(0, bits) , val, "".ptr());
       }
       if(op.eq("++")){
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
-          let res = LLVMBuildFAdd(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
+          let res = CreateFAdd(ll.builder, val, makeFloat_one(&type, ll));
           CreateStore(ll.builder, res, var_ptr);
           return res;
         }
         if(type.is_unsigned()){
-          let res = LLVMBuildAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
+          let res = CreateAdd(ll.builder, val, ll.makeInt(1, bits));
           CreateStore(ll.builder, res, var_ptr);
           return res;
         }
-        let res = LLVMBuildNSWAdd(ll.builder, val, ll.makeInt(1, bits), "".ptr());
+        let res = CreateNSWAdd(ll.builder, val, ll.makeInt(1, bits));
         CreateStore(ll.builder, res, var_ptr);
         return res;
       }
       if(op.eq("--")){
         let var_ptr = self.visit(e);//var without load
         if(type.is_float()){
-          let res = LLVMBuildFSub(ll.builder, val, makeFloat_one(&type, ll), "".ptr());
+          let res = CreateFSub(ll.builder, val, makeFloat_one(&type, ll));
           CreateStore(ll.builder, res, var_ptr);
           return res;
         }
-        let res = LLVMBuildNSWSub(ll.builder, val, ll.makeInt(1, bits), "".ptr());
+        let res = CreateNSWSub(ll.builder, val, ll.makeInt(1, bits));
         CreateStore(ll.builder, res, var_ptr);
         return res;
       }
       if(op.eq("~")){
-        return LLVMBuildXor(ll.builder, val, ll.makeInt(-1, bits), "".ptr());
+        return CreateXor(ll.builder, val, ll.makeInt(-1, bits));
       }
       panic("unary {}", op);
     }
@@ -920,7 +921,7 @@ impl Compiler{
           let arg_ptr = self.get_obj_ptr(mc.args.get(0));
           let type = self.getType(expr);
           if (!is_struct(&type)) {
-              let res = LLVMBuildLoad2(ll.builder, self.mapType(&type), arg_ptr, "".ptr());
+              let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
               type.drop();
               return res;
           }
@@ -949,7 +950,7 @@ impl Compiler{
           return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "unreachable")){
-          LLVMBuildUnreachable(ll.builder);
+          CreateUnreachable(ll.builder);
           return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "internal_block")){
@@ -1011,7 +1012,7 @@ impl Compiler{
         let arg_ptr = self.get_obj_ptr(mc.args.get(0));
         let type = self.getType(expr);
         if (!is_struct(&type)) {
-            let res = LLVMBuildLoad2(ll.builder, self.mapType(&type), arg_ptr, "".ptr());
+            let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
             type.drop();
             return res;
         }
@@ -1130,7 +1131,7 @@ impl Compiler{
         i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get(0)) / 8;
-            size = LLVMBuildNSWMul(ll.builder, size, ll.makeInt(typeSize, 64), "".ptr());
+            size = CreateNSWMul(ll.builder, size, ll.makeInt(typeSize, 64));
         }
         let proto = self.protos.get().libc("malloc");
         let args = [size];
@@ -1139,7 +1140,7 @@ impl Compiler{
       }
       if(Utils::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
-        return LLVMConstNull(LLVMPointerType(ty, 0));
+        return ConstantPointerNull_get(getPointerTo(ty));
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());
@@ -1160,14 +1161,14 @@ impl Compiler{
         //sl.len()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
-        let len_ptr = LLVMBuildStructGEP2(ll.builder,  sliceType, sl,  SLICE_LEN_INDEX(), "".ptr());
-        return LLVMBuildLoad2(ll.builder, ll.intTy(SLICE_LEN_BITS()), len_ptr, "".ptr());
+        let len_ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_LEN_INDEX());
+        return CreateLoad(ll.builder, intTy(ll.ctx, SLICE_LEN_BITS()), len_ptr);
       }
       if(resolver.is_slice_get_ptr(mc)){
         //sl.ptr()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
-        let ptr = LLVMBuildStructGEP2(ll.builder,  sliceType, sl,  SLICE_PTR_INDEX(), "".ptr());
+        let ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_PTR_INDEX());
         return ll.loadPtr(ptr);
       }
       return self.visit_call2(expr, mc);
@@ -1345,7 +1346,7 @@ impl Compiler{
       let res = LLVMBuildCall2(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32, "".ptr());
       args.drop();
       if(Resolver::is_exit(mc)){
-        LLVMBuildUnreachable(ll.builder);
+        CreateUnreachable(ll.builder);
       }
       if(ptr_ret.is_some()) return ptr_ret.unwrap();
       return res;
@@ -1372,7 +1373,7 @@ impl Compiler{
           panic("print str");
         }else if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
-          //val = LLVMBuildLoad2(ll.builder, self.mapType(&arg_type), val, "".ptr());
+          //val = CreateLoad(ll.builder, self.mapType(&arg_type), val, "".ptr());
           args.add(val);
         }else{
           panic("print {:?}", arg_type);
@@ -1509,7 +1510,7 @@ impl Compiler{
       if(op.eq("||")) isand = false;
   
       let lval = self.branch(l);//must be eval first
-      let bb = LLVMGetInsertBlock(ll.builder);
+      let bb = GetInsertBlock(ll.builder);
       let then = create_bb(ll.ctx, "".ptr(), self.cur_func());
       let next = create_bb(ll.ctx, "".ptr(), self.cur_func());
       if (isand) {
@@ -1534,17 +1535,17 @@ impl Compiler{
       }else{
         rv = Option::new(self.loadPrim(r));
       }
-      let rbit = LLVMBuildZExt(ll.builder, rv.unwrap(), ll.intTy(8), "".ptr());
+      let rbit = LLVMBuildZExt(ll.builder, rv.unwrap(), intTy(ll.ctx,8));
       CreateBr(ll.builder, next);
       SetInsertPoint(ll.builder, next);
-      let phi = LLVMBuildPhi(ll.builder, ll.intTy(8), "".ptr());
+      let phi = CreatePHI(ll.builder, intTy(ll.ctx, 8), 2);
       let i8val = 0;
       if(!isand){
         i8val = 1;
       }
-      LLVMAddIncoming(phi, &ll.makeInt(i8val, 8), &bb, 1);
-      LLVMAddIncoming(phi, &rbit, &then, 1);
-      return Pair::new(LLVMBuildZExt(ll.builder, phi , ll.intTy(8), "".ptr()), next);
+      phi_addIncoming(phi, &ll.makeInt(i8val, 8), &bb);
+      phi_addIncoming(phi, &rbit, &then);
+      return Pair::new(LLVMBuildZExt(ll.builder, phi , intTy(ll.ctx, 8)), next);
     }
     
     func visit_lit(self, expr: Expr*, node: Literal*): Value*{
@@ -1598,9 +1599,9 @@ impl Compiler{
       let str_ty = Type::new("str");
       let stringType = self.mapType(&str_ty);
       let sliceType = self.protos.get().std("slice");
-      let slice_ptr = LLVMBuildStructGEP2(ll.builder, stringType, trg_ptr, 0, "".ptr());
-      let data_target = LLVMBuildStructGEP2(ll.builder, sliceType, slice_ptr, SLICE_PTR_INDEX(), "".ptr());
-      let len_target = LLVMBuildStructGEP2(ll.builder, sliceType, slice_ptr, SLICE_LEN_INDEX(), "".ptr());
+      let slice_ptr = CreateStructGEP(ll.builder, stringType, trg_ptr, 0, "".ptr());
+      let data_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_PTR_INDEX(), "".ptr());
+      let len_target = CreateStructGEP(ll.builder, sliceType, slice_ptr, SLICE_LEN_INDEX(), "".ptr());
       //set ptr
       CreateStore(ll.builder, src, data_target);
       //set len
@@ -1627,7 +1628,7 @@ impl Compiler{
         }
         let fd = fields.get(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
-        let field_target_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, prm_idx, "".ptr());
+        let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, prm_idx, "".ptr());
         self.setField(&arg.expr, &fd.type, field_target_ptr);
         self.own.get().do_move(&arg.expr);
       }
@@ -1653,7 +1654,7 @@ impl Compiler{
           if(decl.is_enum()){
             base_index = 1;
           }
-          let base_ptr = LLVMBuildStructGEP2(ll.builder,  ty, ptr,  base_index, "".ptr());
+          let base_ptr = CreateStructGEP(ll.builder,  ty, ptr,  base_index, "".ptr());
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
@@ -1677,7 +1678,7 @@ impl Compiler{
               }
               let fd = fields.get(prm_idx);
               if(decl.base.is_some()) ++prm_idx;
-              let field_target_ptr = LLVMBuildStructGEP2(ll.builder,  ty, ptr,  prm_idx, "".ptr());
+              let field_target_ptr = CreateStructGEP(ll.builder,  ty, ptr,  prm_idx, "".ptr());
               self.setField(&arg.expr, &fd.type, field_target_ptr);
               self.own.get().do_move(&arg.expr);
             }
@@ -1689,11 +1690,11 @@ impl Compiler{
             let variant_index = Resolver::findVariant(decl, type.name());
             let variant = decl.get_variants().get(variant_index);
             //set tag
-            let tag_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, get_tag_index(decl), "".ptr());
+            let tag_ptr = CreateStructGEP(ll.builder, ty, ptr, get_tag_index(decl), "".ptr());
             let tag_val = ll.makeInt(variant_index, ENUM_TAG_BITS()) ;
             CreateStore(ll.builder, tag_val, tag_ptr);
             //set data
-            let data_ptr = LLVMBuildStructGEP2(ll.builder, ty, ptr, get_data_index(decl), "".ptr());
+            let data_ptr = CreateStructGEP(ll.builder, ty, ptr, get_data_index(decl), "".ptr());
             let var_ty = self.get_variant_ty(decl, variant);
             self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
           }

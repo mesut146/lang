@@ -16,6 +16,8 @@ elif [ "$1" = "-cross" ]; then
 elif [ "$1" = "-bt" ]; then
   name="x2"
   cmd="$cmd&&./bin/bt.sh $host_tool/bin/x $name&&./bin/test.sh ./build/$name"
+elif [ "$1" = "-build" ]; then
+  cmd="$cmd&&./bin/build.sh $host_tool v2"
 fi
 gcloud cloud-shell ssh --command="$cmd"
 

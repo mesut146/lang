@@ -11,7 +11,7 @@ struct LLVMModule;
 struct LLVMContext;
 struct IRBuilder;
 struct StructType;
-struct llvm_Type;
+struct llvm_Type;//todo make LLVMType
 struct PointerType;
 struct ArrayType;
 struct llvm_FunctionType;
@@ -150,7 +150,7 @@ extern{
     func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
-    func getInt(builder: IRBuilder*, bits: i32): llvm_Type*;
+    func intTy(ctx: LLVMContext*, bits: i32): llvm_Type*;
     func makeInt(builder: IRBuilder*, val: i64, bits: i32): ConstantInt*;
     func makeFloat(builder: IRBuilder*, val: f32): Constant*;
     func makeDouble(builder: IRBuilder*, val: f64): Constant*;
@@ -158,7 +158,7 @@ extern{
     func getDoubleTy(): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
     func getArrTy(elem: llvm_Type*, size: i32): ArrayType*; 
-    func getVoidTy(): llvm_Type*;
+    func getVoidTy(builder: IRBuilder*): llvm_Type*;
     func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(): llvm_Type*;
@@ -203,8 +203,8 @@ extern{
     func CreateZExt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
     func CreateTrunc(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
     func CreatePtrToInt(builder: IRBuilder*, val: Value*, type: llvm_Type*): Value*;
-    func CreateStructGEP(builder: IRBuilder*, ptr: Value*, idx: i32, type: llvm_Type*): Value*;
-    func CreateInBoundsGEP(builder: IRBuilder*, type: llvm_Type *, ptr: Value*, idx: vector_Value*): Value*;
+    func CreateStructGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: i32): Value*;
+    func CreateInBoundsGEP(builder: IRBuilder*, type: llvm_Type *, ptr: Value*, idx: Value**, len: i32): Value*;
     func CreateGEP(builder: IRBuilder*, type: llvm_Type*, ptr: Value*, idx: vector_Value*): Value*;
     func CreateGlobalStringPtr(builder: IRBuilder*, s: i8*): Value*;
     func CreateGlobalString(builder: IRBuilder*, s: i8*): GlobalVariable*;
@@ -216,7 +216,7 @@ extern{
     func CreateCmp(builder: IRBuilder*, op: i32, l: Value*, r: Value*): Value*;
     func get_comp_op(op: i8*): i32;
     func get_comp_op_float(op: i8*): i32;
-    func CreateLoad(type: llvm_Type*, val: Value*): Value*;
+    func CreateLoad(builder: IRBuilder*, type: llvm_Type*, val: Value*): Value*;
     func getTrue(builder: IRBuilder*): Value*;
     func getFalse(builder: IRBuilder*): Value*;
     func CreatePHI(builder: IRBuilder*, type: llvm_Type*, cnt: i32): PHINode*;
@@ -361,5 +361,14 @@ impl Emitter2{
 
   func makeInt(self, val: i64, bits: i32): Value*{
     return makeInt(self.ctx, val, bits);
+  }
+  
+  func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
+    let args = [i1, i2];
+    return CreateInBoundsGEP(self.builder, type, ptr, args.ptr(), 2);
+  }
+  
+  func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: i32, i2: i32): Value*{
+    return self.gep_arr(type, ptr, self.makeInt(i1, 64), self.makeInt(i2, 64));
   }
 }
