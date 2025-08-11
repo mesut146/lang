@@ -136,7 +136,7 @@ extern{
     func insertDeclare(dib: DIBuilder*, value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
     func createExpression(dib: DIBuilder*): DIExpression*;
     //types
-    func createBasicType(dib: DIBuilder*, name: i8*, size: i64, enco: i32): DIType*;
+    func createBasicType(dib: DIBuilder*, name: i8*, size: i64, encoding: i32): DIType*;
     func createPointerType(dib: DIBuilder*, elem: DIType*, size: i64): DIType*;
     func createObjectPointerType(type: DIType*): DIType*;
     func createSubroutineType(dib: DIBuilder*, tys: Metadata**, len: i32): DISubroutineType*;

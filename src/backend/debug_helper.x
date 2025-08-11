@@ -453,7 +453,7 @@ impl DebugInfo{
         },
         Type::Lambda(ft_box) => {
           let tys = List<Metadata*>::new();
-          tys.add(self.map_di(ft_box.get().return_type.get(), c));
+          tys.add(self.map_di(ft_box.get().return_type.get(), c) as Metadata*);
           for prm in & ft_box.get().params{
             tys.add(self.map_di(prm, c) as Metadata*);
           }
@@ -482,31 +482,31 @@ impl DebugInfo{
           let len_mem = createMemberType(self.builder, scp, "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
           let name_c = "_slice".cstr();
           let elems = [ptr_mem as Metadata*, len_mem as Metadata*];
-          let flags2 = 0;
+          let flags2 = DIFlags_FlagZero();
           let RunTimeLang = 0;
           let res = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
           name_c.drop();
-          return res;
+          return res as DIType*;
         },
         Type::Tuple(tt) => {
           let name_c = mangleType(type).cstr();
           let line = 0;
           let size = c.getSize(type);
-          let elems = List<DIType*>:: new();
+          let elems = List<Metadata*>:: new();
           let idx = 0;
           let ty = c.mapType(type) ;
-          let dl = LLVMGetModuleDataLayout(self.ll.module);
+          let sl = getStructLayout(ty as StructType*);
           for elem in &tt.types{
             let elem_di = self.map_di(elem, c);
-            let off = LLVMOffsetOfElement(dl, ty, idx);
-            let flags2 = 0;
+            let off = getElementOffsetInBits(sl, idx);
+            let flags2 = DIFlags_FlagZero();
             let elem_name = format("_{}", idx).cstr();
-            let mem = createMemberType(self.builder, ptr::null<LLVMOpaqueMetadata>(), elem_name.ptr(), elem_name.len(), self.file, line, size, 0, off, flags2, elem_di);
-            elems.add(mem);
+            let mem = createMemberType(self.builder, ptr::null<DIScope>(), elem_name.ptr(), self.file, line, size, off, flags2, elem_di);
+            elems.add(mem as Metadata*);
             ++idx;
             elem_name.drop();
           }
-          let res = LLVMDIBuilderCreateStructType(self.builder, self.cu, name_c.ptr(), name_c.len(), self.file, line, size, 0, 0, ptr::null<LLVMOpaqueMetadata>(), elems.ptr(), elems.len() as i32, 0, ptr::null<LLVMOpaqueMetadata>(), name_c.ptr(), name_c.len());
+          let res = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
           name_c.drop();
           elems.drop();
           return res as DIType*;
@@ -514,19 +514,19 @@ impl DebugInfo{
         Type::Simple(smp)=>{
           if(name.eq("void")) return ptr::null<DIType>();
           if(name.eq("bool")){
-            return self.createBasicType(name, 8, LLVMDWARFTypeEncoding_Boolean) as DIType*;
+            return self.createBasicType(name, 8, DW_ATE_boolean()) as DIType*;
           }
           if(name.eq("i8") || name.eq("i16") || name.eq("i32") || name.eq("i64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Signed) as DIType*;
+            return self.createBasicType(name, size, DW_ATE_signed()) as DIType*;
           }
           if(name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Unsigned) as DIType*;
+            return self.createBasicType(name, size, DW_ATE_unsigned()) as DIType*;
           }
           if(name.eq("f32") || name.eq("f64")){
             let size = c.getSize(type);
-            return self.createBasicType(name, size, LLVMDWARFTypeEncoding_Float) as DIType*;
+            return self.createBasicType(name, size, DW_ATE_float()) as DIType*;
           }
           //already mapped
           panic("map di {}\n", name);
@@ -534,10 +534,9 @@ impl DebugInfo{
       }
     }
 
-    func createBasicType(self, name: String*, size: i64, enc: i32): LLVMOpaqueMetadata*{
+    func createBasicType(self, name: String*, size: i64, enc: i32): DIType*{
       let name_c = name.clone().cstr();
-      let flags = LLVMDIFlags::LLVMDIFlagZero{}.int();
-      let res = LLVMDIBuilderCreateBasicType(self.builder, name_c.ptr(), name.len(), size, enc, flags);
+      let res = createBasicType(self.builder, name_c.ptr(), size, enc);
       name_c.drop();
       return res;
     }

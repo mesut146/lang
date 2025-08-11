@@ -15,7 +15,9 @@ import parser/ownership
 import parser/own_visitor
 import parser/own_model
 import parser/own_helper
+
 import backend/llvm
+import backend_cpp/bridge
 
 #derive(Debug)
 struct LLVMPtr{
@@ -23,9 +25,9 @@ struct LLVMPtr{
     ptr: Value*;
 }
 impl LLVMPtr{
-    func new(ptr: LLVMOpaqueValue*): LLVMPtr{
+    /*func new(ptr: LLVMOpaqueValue*): LLVMPtr{
         return LLVMPtr{ptr: ptr};
-    }
+    }*/
     func new(ptr: Value*): LLVMPtr{
         return LLVMPtr{ptr: ptr};
     }    
