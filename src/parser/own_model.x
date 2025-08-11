@@ -17,7 +17,7 @@ import parser/own_model
 import parser/own_helper
 
 import backend/llvm
-import backend_cpp/bridge
+import backend/bridge
 
 #derive(Debug)
 struct LLVMPtr{

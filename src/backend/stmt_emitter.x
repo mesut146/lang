@@ -11,7 +11,7 @@ import backend/compiler
 import backend/expr_emitter
 import backend/debug_helper
 import backend/compiler_helper
-import backend_cpp/bridge
+import backend/bridge
 import parser/ownership
 import parser/own_model
 

@@ -10,7 +10,7 @@ import ast/printer
 import resolver/resolver
 import resolver/method_resolver
 
-import backend/llvm
+import backend/bridge
 import backend/compiler
 import backend/compiler_helper
 import backend/debug_helper

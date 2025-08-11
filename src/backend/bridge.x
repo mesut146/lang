@@ -54,6 +54,20 @@ impl RelocMode{
 }
 
 extern{
+  func LLVMInitializeX86Target();
+  func LLVMInitializeX86TargetInfo();
+  func LLVMInitializeX86TargetMC();
+  func LLVMInitializeX86AsmParser();
+  func LLVMInitializeX86AsmPrinter();
+
+  func LLVMInitializeAArch64Target();
+  func LLVMInitializeAArch64TargetInfo();
+  func LLVMInitializeAArch64TargetMC();
+  func LLVMInitializeAArch64AsmParser();
+  func LLVMInitializeAArch64AsmPrinter();
+}
+
+extern{
     func vector_Type_new(): vector_Type*;
     func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
     func vector_Type_delete(vec: vector_Type*);
@@ -95,12 +109,14 @@ extern{
     func llvm_InitializeAArch64AsmPrinter();
 
     func LLVMContext_new(): LLVMContext*;
-    func Module_new(name: i8*, tm: TargetMachine*, triple: i8*): LLVMModule*;
-    func IRBuilder_new(): IRBuilder*;
+    func Module_new(name: i8*, ctx: LLVMContext*, tm: TargetMachine*, triple: i8*): LLVMModule*;
+    func verifyModule(md: LLVMModule*): bool;
+    func IRBuilder_new(ctx: LLVMContext*): IRBuilder*;
     func destroy_ctx();
     func destroy_llvm(tm: TargetMachine*);
-    func emit_llvm(out: i8*);
-    func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
+    //func emit_llvm(out: i8*);
+    func Module_emit(md: LLVMModule*, file: i8*): i8*;
+    func emit_object(md: LLVMModule*, file: i8*, tm: TargetMachine*);
     
     //dbg enums
     func get_dwarf_cpp(): i32;
@@ -151,7 +167,7 @@ extern{
     
     func DIType_getSizeInBits(ty: DIType*): i64;
     func getStructLayout(st: StructType*): StructLayout*;
-    func DataLayout_getTypeSizeInBits(ty: llvm_Type*): i64;
+    func DataLayout_getTypeSizeInBits(md: LLVMModule*, ty: llvm_Type*): i64;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
     func replaceElements(st: DICompositeType*, elems: Metadata**, len: i32);
     
@@ -202,7 +218,6 @@ extern{
     func setCallingConv(f: Function*);
     func Function_print(f: Function*);
     func verifyFunction(f: Function*): bool;
-    func verifyModule(): bool;
     
     func create_bb(ctx: LLVMContext*, name: i8*, f: Function*): BasicBlock*;
     func SetInsertPoint(builder: IRBuilder*, bb: BasicBlock*);
@@ -274,12 +289,33 @@ extern{
     //func set_as_executable(path: i8*);
 }
 
-/*func getDefaultTargetTriple2(): CStr{
+func getDefaultTargetTriple2(): String{
     let arr = [0u8; 100];
     let ptr = arr.ptr();
     let len = getDefaultTargetTriple(ptr as i8*);
-    return CStr::new(arr[0..len + 1]);
-}*/
+    return String::new(arr[0..len + 1]);
+}
+
+func LLVMInitializeAllTargets(){
+    LLVMInitializeX86Target();
+    LLVMInitializeAArch64Target();
+}
+func LLVMInitializeAllTargetInfos(){
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeAArch64TargetInfo();
+}
+func LLVMInitializeAllTargetMCs(){
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeAArch64TargetMC();
+}
+func LLVMInitializeAllAsmParsers(){
+    LLVMInitializeX86AsmParser();
+    LLVMInitializeAArch64AsmParser();
+}
+func LLVMInitializeAllAsmPrinters(){
+    LLVMInitializeX86AsmPrinter();
+    LLVMInitializeAArch64AsmPrinter();
+}
 
 struct Emitter2{
     tm: TargetMachine*;
@@ -296,14 +332,14 @@ impl Emitter2{
       LLVMInitializeAllAsmPrinters();
       LLVMInitializeAllAsmParsers();
 
-      let target_triple = CStr::new(LLVMGetDefaultTargetTriple());
+      let target_triple = getDefaultTargetTriple2().cstr();
       let env_triple = std::getenv("target_triple");
       if(env_triple.is_some()){
           target_triple.drop();
           target_triple = env_triple.unwrap().owned().cstr();
       }
 
-      let tm = createTargetMachine(target_triple.ptr(), opt, RelocMode::PIC_{}.int());  
+      let tm = createTargetMachine(target_triple.ptr(), RelocMode::PIC_{}.int());  
 
       let ctx = LLVMContext_new();
       let name = module_name.cstr();
@@ -317,10 +353,10 @@ impl Emitter2{
   }
 
   func make_stdout(self): Value*{
-      let ty = LLVMPointerTypeInContext(self.ctx, 0);
-      let res = LLVMAddGlobal(self.module, ty, "stdout".ptr());
-      LLVMSetLinkage(res, LLVMLinkage::LLVMExternalLinkage{}.int());
-      return res;
+      let ty = getPtr(self.ctx);
+      let init = ptr::null<Constant>();
+      let res = make_global(self.module, ty, init, ext(), "stdout".ptr());
+      return res as Value*;
   }
 
   func optimize_module_newpm(self, level: String*){
@@ -364,22 +400,21 @@ impl Emitter2{
   }
 
   func emit_obj(self, file: str){
-      let msg = ptr::null<i8>();
-      let code = LLVMVerifyModule(self.module, LLVMVerifierFailureAction::LLVMAbortProcessAction, &msg);
+      verifyModule(self.module);
 
       let file_c = file.cstr();
       let err = ptr::null<i8>();
-      let code2 = LLVMTargetMachineEmitToFile(self.tm, self.module, file_c.ptr(), LLVMCodeGenFileType::LLVMObjectFile, &err);
+      emit_object(self.module, file_c.ptr(), self.tm);
   }
 
   func makeInt(self, val: i64, bits: i32): Value*{
-    return makeInt(self.ctx, val, bits);
+    return makeInt(self.builder, val, bits) as Value*;
   }
-  func makeFloat(self, val: f64): Value*{
-    return makeFloat(self.ctx, val);
+  func makeFloat(self, val: f32): Value*{
+    return makeFloat(self.builder, val) as Value*;
   }
   func makeDouble(self, val: f64): Value*{
-    return makeDouble(self.ctx, val);
+    return makeDouble(self.builder, val) as Value*;
   } 
   
   func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
@@ -409,15 +444,15 @@ impl Emitter2{
     return DataLayout_getTypeSizeInBits(self.module, ty);
   }
 
-  func intPtr(self, bits: i64): llvm_Type*{
+  func intPtr(self, bits: i32): llvm_Type*{
     let ty = intTy(self.ctx, bits);
-    return getPointerTo(ty);
+    return getPointerTo(ty) as llvm_Type*;
   }
 
   func glob_str(self, str: str): Value*{
     let cs = str.cstr();
     let res = CreateGlobalString(self.builder, cs.ptr());
     cs.drop();
-    return res;
+    return res as Value*;
   }
 }

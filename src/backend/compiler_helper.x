@@ -8,7 +8,7 @@ import ast/utils
 
 import resolver/resolver
 
-import backend_cpp/bridge
+import backend/bridge
 import backend/compiler
 import backend/debug_helper
 import backend/expr_emitter

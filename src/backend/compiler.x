@@ -18,7 +18,7 @@ import backend/alloc_helper
 import backend/debug_helper
 import backend/stmt_emitter
 import backend/expr_emitter
-import backend_cpp/bridge
+import backend/bridge
 import parser/ownership
 import parser/own_model
 import parser/cache

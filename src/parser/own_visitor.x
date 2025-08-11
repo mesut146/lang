@@ -77,7 +77,7 @@ impl OwnVisitor{
     func visit_var(self, ve: VarExpr*){
         for(let i = 0;i < ve.list.len();++i){
             let fr = ve.list.get(i);
-            self.own.add_var(fr, LLVMPtr::new(ptr::null<LLVMOpaqueValue>()));
+            self.own.add_var(fr, LLVMPtr::new(ptr::null<Value>()));
             self.do_move(&fr.rhs);
         }
     }

@@ -436,26 +436,7 @@ const LLVMDWARFTypeEncoding_Unsigned      = 0x07;
 const LLVMDWARFTypeEncoding_UnsignedChar  = 0x08;
 
 
-func LLVMInitializeAllTargets(){
-    LLVMInitializeX86Target();
-    LLVMInitializeAArch64Target();
-}
-func LLVMInitializeAllTargetInfos(){
-    LLVMInitializeX86TargetInfo();
-    LLVMInitializeAArch64TargetInfo();
-}
-func LLVMInitializeAllTargetMCs(){
-    LLVMInitializeX86TargetMC();
-    LLVMInitializeAArch64TargetMC();
-}
-func LLVMInitializeAllAsmParsers(){
-    LLVMInitializeX86AsmParser();
-    LLVMInitializeAArch64AsmParser();
-}
-func LLVMInitializeAllAsmPrinters(){
-    LLVMInitializeX86AsmPrinter();
-    LLVMInitializeAArch64AsmPrinter();
-}
+
 extern{
   //func LLVMInitializeAllTargets();
   //func LLVMInitializeAllTargetInfos();
@@ -847,11 +828,11 @@ struct Emitter{
 
 impl Emitter{
   func new(module_name: str): Emitter{
-      LLVMInitializeAllTargetInfos();
+      /*LLVMInitializeAllTargetInfos();
       LLVMInitializeAllTargets();
       LLVMInitializeAllTargetMCs();
       LLVMInitializeAllAsmPrinters();
-      LLVMInitializeAllAsmParsers();
+      LLVMInitializeAllAsmParsers();*/
 
       let target_triple = CStr::new(LLVMGetDefaultTargetTriple());
       let env_triple = std::getenv("target_triple");

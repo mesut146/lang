@@ -106,8 +106,7 @@ char* Module_emit(llvm::Module* mod, char *llvm_file) {
   return nullptr;
 }
 
-void emit_object(llvm::Module *mod, const char *name, llvm::TargetMachine *TargetMachine,
-                 char *triple) {
+void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *TargetMachine) {
   std::string TargetTriple(triple);
   std::string Filename(name);
   if (llvm::verifyModule(*mod, &llvm::outs())) {
@@ -115,7 +114,7 @@ void emit_object(llvm::Module *mod, const char *name, llvm::TargetMachine *Targe
     exit(1);
   }
   mod->setDataLayout(TargetMachine->createDataLayout());
-  mod->setTargetTriple(TargetTriple);
+  //mod->setTargetTriple(TargetTriple);
 
   std::error_code EC;
   llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
