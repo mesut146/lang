@@ -86,7 +86,7 @@ impl Compiler{
                 let target: Method* = r.get_method(&rt).unwrap();
                 let proto = self.protos.get().get_func(target);
                 rt.drop();
-                return proto.val;
+                return proto.val as Value*;
             }
             rt.drop();
             return self.simple_enum(node, type);
@@ -103,7 +103,7 @@ impl Compiler{
             let m = r.lambdas.get(&node.id).unwrap();
             let proto = self.protos.get().get_func(m);
             
-            return proto.val;
+            return proto.val as Value*;
         },
         Expr::Ques(bx) => {
           let r = self.get_resolver();
@@ -573,7 +573,7 @@ impl Compiler{
           let target: Method* = self.get_resolver().get_method(&rt).unwrap();
           let proto = self.protos.get().get_func(target);
           rt.drop();
-          return proto.val;
+          return proto.val as Value*;
         }
       }
       if(self.globals.contains(name)){
@@ -1135,7 +1135,7 @@ impl Compiler{
         }
         let proto = self.protos.get().libc("malloc");
         let args = [size];
-        let res = CreateCall_ft(ll.builder, proto.ty as llvm_FunctionType*, proto.val, args.ptr(), 1);
+        let res = CreateCall(ll.builder, proto.val, args.ptr(), 1);
         return res;
       }
       if(Utils::is_call(mc, "ptr", "null")){
@@ -1341,7 +1341,7 @@ impl Compiler{
       if(Resolver::is_exit(mc)){
         self.print_frame();
       }
-      let res = CreateCall_ft(ll.builder, proto.ty as llvm_FunctionType*, proto.val, args.ptr(), args.len() as i32);
+      let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       if(Resolver::is_exit(mc)){
         CreateUnreachable(ll.builder);
@@ -1380,7 +1380,7 @@ impl Compiler{
       }
       //self.call_printf();
       let printf_proto = self.protos.get().libc("printf");
-      let res = CreateCall_ft(ll.builder, printf_proto.ty, printf_proto.val, args.ptr(), args.len() as i32);
+      let res = CreateCall(ll.builder, printf_proto.val, args.ptr(), args.len() as i32);
       args.drop();
       //flush
       self.emit_fflush();
@@ -1392,7 +1392,7 @@ impl Compiler{
       let proto = self.protos.get().libc("fflush");
       let stdout_ptr = self.protos.get().stdout_ptr;
       let args = [ll.loadPtr(stdout_ptr)];
-      CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), 1);
+      CreateCall(ll.builder, proto.val, args.ptr(), 1);
     }
   
     func call_printf(self, mc: Call*){
@@ -1431,7 +1431,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("printf");
-      let res = CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32);
+      let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       //flush
       self.emit_fflush();
@@ -1470,7 +1470,7 @@ impl Compiler{
         arg_type.drop();
       }
       let proto = self.protos.get().libc("sprintf");
-      let res = CreateCall_ft(ll.builder, proto.ty, proto.val, args.ptr(), args.len() as i32);
+      let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
     }

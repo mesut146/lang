@@ -647,7 +647,7 @@ impl Compiler{
 
   func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
     let ptr = *self.NamedValues.get(&prm.name).unwrap();
-    let val = Function_get_arg(f, argIdx) as Value*;
+    let val = Function_getArg(f, argIdx) as Value*;
     if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
     }else{

@@ -10,15 +10,16 @@ struct TargetMachine;
 struct LLVMModule;
 struct LLVMContext;
 struct IRBuilder;
+struct StructLayout;
 struct StructType;
 struct llvm_Type;//todo make LLVMType
 struct PointerType;
 struct ArrayType;
 struct llvm_FunctionType;
-struct LinkageTypes;
+//struct LinkageTypes;
 struct Function;
 struct Argument;
-struct AttrKind;
+//struct AttrKind;
 struct Value;
 struct BasicBlock;
 struct PHINode;
@@ -26,8 +27,8 @@ struct SwitchInst;
 struct Constant;
 struct ConstantInt;
 struct GlobalVariable;
-struct DIGlobalVariableExpression;
 
+struct DIBuilder;
 struct DICompileUnit;
 struct DIFile;
 struct DISubprogram;
@@ -41,7 +42,7 @@ struct Metadata;
 struct DILocalVariable;
 struct DIExpression;
 struct DILocation;
-struct StructLayout;
+struct DIGlobalVariableExpression;
 
 enum RelocMode{
   Static, PIC_, DynamicNoPIC, ROPI, RWPI, ROPI_RWPI
@@ -100,50 +101,8 @@ extern{
     func destroy_llvm(tm: TargetMachine*);
     func emit_llvm(out: i8*);
     func emit_object(name: i8*, tm: TargetMachine*, triple: i8*);
-
-    func init_dbg();
-    func createFile(file: i8*, dir: i8*): DIFile*;
-    func createCompileUnit(lang: i32, file: DIFile*): DICompileUnit*;
-    func SetCurrentDebugLocation(scope: DIScope*, line: i32, pos: i32);
-    func createObjectPointerType(type: DIType*): DIType*;
-    func createSubroutineType(tys: vector_Metadata*): DISubroutineType*;
-    func make_spflags(is_main: bool): i32;
-    func getFunction(name: i8*): Function*;
-    func setSection(f: Function *, sec: i8*);
-    func createFunction(scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
-    func setSubprogram(f: Function*, sp: DISubprogram*);
-    func finalizeSubprogram(sp: DISubprogram*);
-    func createLexicalBlock(scope: DIScope*, file: DIFile*, line: i32, col: i32): DILexicalBlock*;
-    func createParameterVariable(scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool, is_self: bool): DILocalVariable*;
-    func createAutoVariable(scope :DIScope*, name: i8*, file: DIFile *, line: i32, ty: DIType*): DILocalVariable*;
-    func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
-    func createExpression(): DIExpression*;
-    func insertDeclare(value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
-    func createStructType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*): DICompositeType*;
-    func createStructType_ident(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*, ident: i8*): DICompositeType*;
-    func get_di_null(): DIType*;
-    func get_null_scope(): DIScope*;
-    func createBasicType(name: i8*, size: i64, enco: i32): DIType*;
-    func DW_ATE_boolean(): i32;
-    func DW_ATE_signed(): i32;
-    func DW_ATE_unsigned(): i32;
-    func DW_ATE_float(): i32;
-    func createPointerType(elem: DIType*, size: i64): DIType*;
-    func getOrCreateSubrange(lo: i64, count: i64): Metadata*;
-    func createArrayType(size: i64, ty: DIType*, elems: vector_Metadata*): DIType*;
-    func make_di_flags(artificial: bool): u32;
-    func createMemberType(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: u32, ty: DIType*): DIDerivedType*;
-    func DIType_getSizeInBits(ty: DIType*): i64;
-    func getStructLayout(st: StructType*): StructLayout*;
-    func DataLayout_getTypeSizeInBits(ty: llvm_Type*): i64;
-    func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
-    func replaceElements(st: DICompositeType*, elems: vector_Metadata*);
-    func createVariantPart(scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: vector_Metadata*): DICompositeType*;
-    func createVariantMemberType(scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
-    //glob dbg
-    func createGlobalVariableExpression(scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
-    func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
-    func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
+    
+    //dbg enums
     func get_dwarf_cpp(): i32;
     func get_dwarf_cpp20(): i32;
     func get_dwarf_c(): i32;
@@ -151,11 +110,60 @@ extern{
     func get_dwarf_rust(): i32;
     func get_dwarf_zig(): i32;
     func get_dwarf_swift(): i32;
+    func SPFlagMainSubprogram(): i32;
+    func SPFlagDefinition(): i32;
+    func DIFlags_FlagZero(): i32;
+    func DIFlags_FlagArtificial(): i32;
+    func DIFlags_FlagObjectPointer(): i32;
+    func DW_ATE_boolean(): i32;
+    func DW_ATE_signed(): i32;
+    func DW_ATE_unsigned(): i32;
+    func DW_ATE_float(): i32;
+    
+    func DIBuilder_new(module: LLVMModule*): DIBuilder*;
+    func createFile(dib: DIBuilder*, file: i8*, dir: i8*): DIFile*;
+    func createCompileUnit(dib: DIBuilder*, lang: i32, file: DIFile*, producer: i8*): DICompileUnit*;
+    func SetCurrentDebugLocation(ib: IRBuilder*, scope: DIScope*, line: i32, pos: i32);
+    func DILocation_get(dib: DIBuilder*, scope: DIScope*, line: i32, pos: i32): DILocation*;
+    
+    func createFunction(dib: DIBuilder*, scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
+    func setSubprogram(f: Function*, sp: DISubprogram*);
+    func finalizeSubprogram(dib: DIBuilder*, sp: DISubprogram*);
+    func createLexicalBlock(dib: DIBuilder*, scope: DIScope*, file: DIFile*, line: i32, col: i32): DILexicalBlock*;
+    
+    func createParameterVariable(dib: DIBuilder*, scope: DIScope*, name: i8*, idx: i32, file: DIFile*, line: i32, type: DIType*, preserve: bool, flags: i32): DILocalVariable*;
+    func createAutoVariable(dib: DIBuilder*, scope :DIScope*, name: i8*, file: DIFile *, line: i32, ty: DIType*): DILocalVariable*;
+    func insertDeclare(dib: DIBuilder*, value: Value*, var_info: DILocalVariable*, expr: DIExpression*, loc: DILocation*, bb: BasicBlock*);
+    func createExpression(dib: DIBuilder*): DIExpression*;
+    //types
+    func createBasicType(dib: DIBuilder*, name: i8*, size: i64, enco: i32): DIType*;
+    func createPointerType(dib: DIBuilder*, elem: DIType*, size: i64): DIType*;
+    func createObjectPointerType(type: DIType*): DIType*;
+    func createSubroutineType(dib: DIBuilder*, tys: Metadata**, len: i32): DISubroutineType*;
+    func createStructType(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata**, len: i32): DICompositeType*;
+    func createStructType_ident(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*, ident: i8*): DICompositeType*;
+    func getOrCreateSubrange(dib: DIBuilder*, lo: i64, count: i64): Metadata*;
+    func createArrayType(dib: DIBuilder*, size: i64, ty: DIType*, elems: Metadata**, len: i32): DIType*;
+    func make_di_flags(artificial: bool): u32;
+    func createMemberType(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: i32, ty: DIType*): DIDerivedType*;
+    func createVariantPart(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata**, len: i32): DICompositeType*;
+    func createVariantMemberType(dib: DIBuilder*, scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
+    
+    func DIType_getSizeInBits(ty: DIType*): i64;
+    func getStructLayout(st: StructType*): StructLayout*;
+    func DataLayout_getTypeSizeInBits(ty: llvm_Type*): i64;
+    func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
+    func replaceElements(st: DICompositeType*, elems: Metadata**, len: i32);
+    
+    //glob dbg
+    func createGlobalVariableExpression(dib: DIBuilder*, scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
+    func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
+    func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
 
     func make_struct_ty(ctx: LLVMContext*, name: i8*, elems: llvm_Type**, len: i32): StructType*;
     func make_struct_ty2(ctx: LLVMContext*, name: i8*): StructType*;
     func make_struct_ty_noname(ctx: LLVMContext*, elems: vector_Type*): StructType*;
-    func setBody(st: StructType*, elems: vector_Type*);
+    func StructType_setBody(st: StructType*, elems: llvm_Type**, len: i32);
     func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
@@ -186,7 +194,9 @@ extern{
     func odr(): i32;
     func internal(): i32;
     func make_func(ft: llvm_FunctionType*, l: i32, name: i8*, module: LLVMModule*): Function*;
-    func Function_get_arg(f: Function*, i: i32): Argument*;
+    func getFunction(name: i8*): Function*;
+    func setSection(f: Function *, sec: i8*);
+    func Function_getArg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);

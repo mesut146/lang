@@ -255,7 +255,7 @@ impl Compiler{
         type.drop();
         return;
       }
-      let sret_ptr = Function_get_arg(self.protos.get().cur.unwrap(), 0);
+      let sret_ptr = Function_getArg(self.protos.get().cur.unwrap(), 0);
       self.copy(sret_ptr as Value*, val, &type);
       self.exit_frame();
       CreateRetVoid(ll.builder);
@@ -282,7 +282,7 @@ impl Compiler{
         type.drop();
         return;
       }
-      let sret_ptr = Function_get_arg(self.protos.get().cur.unwrap(), 0) as Value*;
+      let sret_ptr = Function_getArg(self.protos.get().cur.unwrap(), 0) as Value*;
       if(self.can_inline(expr)){
         self.do_inline(expr, sret_ptr);
       }else{

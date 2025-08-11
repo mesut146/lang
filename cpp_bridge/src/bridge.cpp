@@ -170,7 +170,7 @@ llvm::IRBuilder<>* IRBuilder_new(llvm::LLVMContext* ctx) {
   return new llvm::IRBuilder<>(*ctx);
 }
 
-llvm::DIBuilder* init_dbg(llvm::Module *mod) {
+llvm::DIBuilder* DIBuilder_new(llvm::Module *mod) {
   auto res = new llvm::DIBuilder(*mod);
   mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 4);
   mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
@@ -205,9 +205,9 @@ int get_dwarf_swift(){
     return llvm::dwarf::DW_LANG_Swift;
 }
 
-llvm::DICompileUnit *createCompileUnit(llvm::DIBuilder* dbuilder, int lang, llvm::DIFile *file) {
+llvm::DICompileUnit *createCompileUnit(llvm::DIBuilder* dbuilder, int lang, llvm::DIFile *file, char* producer) {
   return dbuilder->createCompileUnit(
-      lang, file, "lang dbg", false, "", 0, "",
+      lang, file, producer, false, "", 0, "",
       llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
       llvm::DICompileUnit::DebugNameTableKind::None);
 }
@@ -230,17 +230,17 @@ void SetCurrentDebugLocation(llvm::IRBuilder<>* builder, llvm::DIScope *scope, i
       llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
 
-int make_spflags(bool is_main) {
-  auto spflags = llvm::DISubprogram::SPFlagDefinition;
-  if (is_main) {
-    spflags |= llvm::DISubprogram::SPFlagMainSubprogram;
-  }
-  return spflags;
+int SPFlagDefinition(){
+    return llvm::DISubprogram::SPFlagDefinition;
+}
+int SPFlagMainSubprogram(){
+    return llvm::DISubprogram::SPFlagMainSubprogram;
 }
 
 llvm::DISubroutineType *
-createSubroutineType(llvm::DIBuilder* dbuilder, std::vector<llvm::Metadata *> *types) {
-  return dbuilder->createSubroutineType(dbuilder->getOrCreateTypeArray(*types));
+createSubroutineType(llvm::DIBuilder* dbuilder, llvm::Metadata** types, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(types, len);
+  return dbuilder->createSubroutineType(dbuilder->getOrCreateTypeArray(ref));
 }
 
 llvm::Function *getFunction(llvm::Module *mod, char *name) { return mod->getFunction(name); }
@@ -251,7 +251,6 @@ llvm::DISubprogram *createFunction(llvm::DIBuilder* dbuilder, llvm::DIScope *sco
                                    char *linkage_name, llvm::DIFile *file,
                                    int line, llvm::DISubroutineType *ft,
                                    int spflags) {
-  // std::cout << "createFunction " << name << ", " << linkage_name << "\n";
   return dbuilder->createFunction(scope, name, linkage_name, file, line, ft,
                                   line, llvm::DINode::FlagPrototyped,
                                   (llvm::DISubprogram::DISPFlags)spflags);
@@ -261,17 +260,21 @@ void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
   f->setSubprogram(sp);
 }
 
+int DIFlags_FlagZero(){
+  return llvm::DINode::DIFlags::FlagZero;
+}
+int DIFlags_FlagArtificial(){
+  return llvm::DINode::DIFlags::FlagArtificial;
+}
+int DIFlags_FlagObjectPointer(){
+  return llvm::DINode::DIFlags::FlagObjectPointer;
+}
 llvm::DILocalVariable *createParameterVariable(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                                int idx, llvm::DIFile *file,
                                                int line, llvm::DIType *type,
-                                               bool preserve, bool is_self) {
-                                                auto flags = llvm::DINode::DIFlags::FlagZero;
-                                                if(is_self){
-                                                   flags |= llvm::DINode::DIFlags::FlagArtificial;
-                                                   flags |= llvm::DINode::DIFlags::FlagObjectPointer;
-                                                }
+                                               bool preserve, int flags) {
   return dbuilder->createParameterVariable(scope, name, idx, file, line, type,
-                                           preserve, flags);
+                                           preserve, (llvm::DINode::DIFlags)flags);
 }
 
 llvm::DILocalVariable *createAutoVariable(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
@@ -294,8 +297,9 @@ void insertDeclare(llvm::DIBuilder* dbuilder, llvm::Value *value, llvm::DILocalV
 
 llvm::DICompositeType *createStructType(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
                                         llvm::DIFile *file, int line, int size,
-                                        std::vector<llvm::Metadata *> *elems) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+                                        llvm::Metadata** elems, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, len);
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   auto align = 0;
   return dbuilder->createStructType(scope, name, file, line, size, align,
                                     llvm::DINode::FlagZero, nullptr, arr);
@@ -324,13 +328,12 @@ int64_t getElementOffsetInBits(llvm::StructLayout *sl, int idx) {
   return sl->getElementOffsetInBits(idx);
 }
 
-llvm::DIType *get_di_null() { return nullptr; }
-
 int64_t DIType_getSizeInBits(llvm::DIType *ty) { return ty->getSizeInBits(); }
 
 void replaceElements(llvm::LLVMContext* ctx, llvm::DICompositeType *st,
-                     std::vector<llvm::Metadata *> *elems) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+                     llvm::Metadata** elems, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, len);                       
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   st->replaceElements(arr);
 }
 
@@ -389,14 +392,13 @@ uint32_t make_di_flags(bool artificial) {
 
 llvm::DIDerivedType *createMemberType(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                       llvm::DIFile *file, int line,
-                                      int64_t size, int64_t off, uint32_t flags,
+                                      int64_t size, int64_t off, int32_t flags,
                                       llvm::DIType *ty) {
   int align = 0;                                      
   return dbuilder->createMemberType(scope, name, file, line, size, align, off,
                                     (llvm::DINode::DIFlags)flags, ty);
 }
 
-llvm::DIScope *get_null_scope() { return nullptr; }
 
 llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
   #if LLVM20
@@ -449,7 +451,7 @@ llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name, llvm:
                                 name, *mod);
 }
 
-llvm::Argument *Function_get_arg(llvm::Function *f, int i) { return f->getArg(i); }
+llvm::Argument *Function_getArg(llvm::Function *f, int i) { return f->getArg(i); }
 
 void Argument_setname(llvm::Argument *arg, char *name) { arg->setName(name); }
 
@@ -777,8 +779,9 @@ llvm::Value *ConstantPointerNull_get(llvm::PointerType *ty) {
 
 bool isVoidTy(llvm::Type *type) { return type->isVoidTy(); }
 
-void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
-  st->setBody(*elems);
+void StructType_setBody(llvm::StructType *st, llvm::Type ** elems, int len) {
+  llvm::ArrayRef<llvm::Type*> ref(elems, len);
+  st->setBody(ref);
 }
 
 //void Value_dump(llvm::Value *v) { v->dump(); }

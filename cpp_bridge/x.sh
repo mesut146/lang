@@ -22,11 +22,13 @@ fi
 
 echo "llvm_dir=$llvm_dir"
 
+cmd="$clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp"
+
 if [ ! -z "$TERMUX_VERSION" ]; then
-  $clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp -DLLVM20
-else
-  $clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp
+  cmd="$cmd -DLLVM20"
 fi
+echo $cmd
+$cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling"
   exit 1
