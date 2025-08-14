@@ -224,7 +224,7 @@ impl DebugInfo{
         let name_c = name.clone().cstr();
         let file = createFile(self.builder, path_c.ptr(), ".".ptr());
         let flags = 0;
-        let st = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), file, decl.line, st_size, elems.ptr(), elems.len() as i32);
+        let st = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), file, decl.line, st_size, elems.ptr(), elems.len() as i32);
         self.incomplete_types.add(name, st);
         path_c.drop();
         name_c.drop();
@@ -269,7 +269,7 @@ impl DebugInfo{
         ++idx;
         ++fi;
       }
-      let st = createStructType(self.builder, scope, name_c.ptr(), file, decl.line, var_size, elems.ptr(), elems.len() as i32);
+      let st = createStructType(self.builder, self.ll.ctx, scope, name_c.ptr(), file, decl.line, var_size, elems.ptr(), elems.len() as i32);
       
       let evname_c = ev.name.clone().cstr();
       let flagsm=0;
@@ -412,7 +412,7 @@ impl DebugInfo{
       let name_c = name.cstr();
       let flags = 0;
       let RunTimeLang = 0;
-      let res = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
+      let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
       name_c.drop();
       return res;
     }
@@ -484,7 +484,7 @@ impl DebugInfo{
           let elems = [ptr_mem as Metadata*, len_mem as Metadata*];
           let flags2 = DIFlags_FlagZero();
           let RunTimeLang = 0;
-          let res = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
+          let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
           name_c.drop();
           return res as DIType*;
         },
@@ -506,7 +506,7 @@ impl DebugInfo{
             ++idx;
             elem_name.drop();
           }
-          let res = createStructType(self.builder, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
+          let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
           name_c.drop();
           elems.drop();
           return res as DIType*;

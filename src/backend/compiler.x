@@ -420,7 +420,7 @@ impl Compiler{
       let ty = self.mapType(&rt.type);
       let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
-      let glob = make_global(ll.module, ty, init, GlobalValue_appending(), name_c.ptr());
+      let glob = make_global(ll.module, ty, init, GlobalValue_ext(), name_c.ptr());
       name_c.drop();
       if(self.di.get().debug){
         let gve = self.di.get().dbg_glob(gl, &rt.type, glob as Value*, self);
@@ -458,7 +458,7 @@ impl Compiler{
     let struct_elems = [ptr::null<Constant>(); 3];
     struct_elems[0] = ll.makeInt(65535, 32) as Constant*;
     struct_elems[1] = proto as Constant*;
-    struct_elems[2] = ConstantPointerNull_get(ll.builder, ll.intPtr(32) as PointerType*) as Constant*;
+    struct_elems[2] = ConstantPointerNull_get(ll.intPtr(32) as PointerType*) as Constant*;
     let ctor_init_struct = ConstantStruct_getAnon(struct_elems.ptr(), 3);
 
     let ctor_ty = ArrayType_get(ctor_elem_ty as llvm_Type*, 1);
@@ -497,7 +497,8 @@ impl Compiler{
       }
     }else{
       if(is_struct(&rt.type)){
-        init = ConstantPointerNull_get(ll.builder, getPointerTo(ty)) as Constant*;
+        //init = ConstantPointerNull_get(getPointerTo(ty)) as Constant*;
+        init = ConstantAggregateZero_get(ty) as Constant*;
       }else{
         //prim or ptr
         init = ll.makeInt(0, self.getSize(&rt.type) as i32) as Constant*;

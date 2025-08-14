@@ -11,7 +11,7 @@ import resolver/drop_helper
 
 import backend/compiler
 import backend/stmt_emitter
-import backend/llvm
+//import backend/llvm
 import backend/debug_helper
 import backend/compiler_helper
 import backend/bridge
@@ -129,8 +129,10 @@ impl Compiler{
     }
     
     func nullptr(self): Value*{
-      let vptr = getPointerTo(getVoidTy(self.ll.get().builder));
-      return ConstantPointerNull_get(self.ll.get().builder, vptr);
+      //let vptr = getPointerTo(getVoidTy(self.ll.get().builder));
+      //let vptr = getPtr(self.ll.get().ctx) as PointerType*;
+      let vptr = self.ll.get().intPtr(8) as PointerType*;
+      return ConstantPointerNull_get(vptr);
     }
 
     func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
@@ -273,6 +275,8 @@ impl Compiler{
         SetInsertPoint(ll.builder, nextbb);
       }else{
         //LLVMDeleteBasicBlock(nextbb);
+        SetInsertPoint(ll.builder, nextbb);
+        CreateUnreachable(ll.builder);
       }
       //handle ret value
       if(!infos.empty()){
@@ -423,6 +427,8 @@ impl Compiler{
         then_rt.drop();
       }else{
         //LLVMDeleteBasicBlock(nextbb);
+        SetInsertPoint(ll.builder, nextbb);
+        CreateUnreachable(ll.builder);
       }
       exit_then.drop();
       then_name.drop();
@@ -538,6 +544,8 @@ impl Compiler{
         then_rt.drop();
       }else{
         //LLVMDeleteBasicBlock(next);
+        SetInsertPoint(ll.builder, next);
+        CreateUnreachable(ll.builder);
       }
       exit_then.drop();
       then_name.drop();
@@ -1140,7 +1148,7 @@ impl Compiler{
       }
       if(Utils::is_call(mc, "ptr", "null")){
         let ty = self.mapType(mc.type_args.get(0));
-        return ConstantPointerNull_get(ll.builder, getPointerTo(ty));
+        return ConstantPointerNull_get(getPointerTo(ty));
       }
       if(resolver.is_array_get_len(mc)){
         let arr_type = self.getType(mc.scope.get());

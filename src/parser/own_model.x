@@ -16,7 +16,7 @@ import parser/own_visitor
 import parser/own_model
 import parser/own_helper
 
-import backend/llvm
+//import backend/llvm
 import backend/bridge
 
 #derive(Debug)

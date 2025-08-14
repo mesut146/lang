@@ -11,9 +11,16 @@ shared=$dir/build/libbridge.so
 
 rm -f $lib $obj $shared
 
+if ! command -v llvm-config-19 2>&1 >/dev/null; then
+  wget https://apt.llvm.org/llvm.sh
+  chmod +x llvm.sh
+  sudo ./llvm.sh 19
+  rm ./llvm.sh
+fi
 
 llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
-clang_bin=$(${dir}/../bin/find_llvm.sh clang)
+#clang_bin=$(${dir}/../bin/find_llvm.sh clang)
+clang_bin="g++"
 llvm_dir=$($llvm_config_bin --includedir)
 
 if [ ! -z "$CC" ]; then
@@ -22,7 +29,7 @@ fi
 
 echo "llvm_dir=$llvm_dir"
 
-cmd="$clang_bin -I$llvm_dir -c -o $obj -fPIC $dir/src/bridge.cpp"
+cmd="$clang_bin -I$llvm_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
 
 if [ ! -z "$TERMUX_VERSION" ]; then
   cmd="$cmd -DLLVM20"

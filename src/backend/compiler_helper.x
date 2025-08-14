@@ -551,11 +551,12 @@ impl Compiler{
     }
     let sig = MethodSig::new(m, self.get_resolver());
     let rvo = is_struct(&sig.ret);
+    let ret_real = self.mapType(&sig.ret);
     let ret = getVoidTy(ll.builder);
     if(is_main(m)){
       ret = intTy(ll.ctx, 32);
     }else if(!rvo){
-      ret = self.mapType(&sig.ret);
+      ret = ret_real;
     }
     let args = List<llvm_Type*>::new();
     if(rvo){
@@ -584,7 +585,7 @@ impl Compiler{
     if(rvo){
       let arg = Function_getArg(f, 0);
       Argument_setname(arg, "_ret".ptr());
-      Argument_setsret(arg, ret);
+      Argument_setsret(ll.ctx, arg, ret_real);
     }
     self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
     args.drop();

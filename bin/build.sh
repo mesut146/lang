@@ -30,8 +30,10 @@ out_dir=$build/${name}_out
 mkdir -p $out_dir
 
 bridge_lib="$host_tool/lib/libbridge.a"
+bridge_lib="$host_tool/lib/libbridge2.a"
 llvm_lib="$host_tool/lib/libLLVM.so.19.1"
-linker=$($dir/find_llvm.sh clang)
+#linker=$($dir/find_llvm.sh clang)
+linker="g++"
 if [ -d "$target_tool" ]; then
     linker="aarch64-linux-gnu-g++"
     export target_triple="aarch64-linux-gnu"

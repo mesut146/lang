@@ -107,8 +107,8 @@ char* Module_emit(llvm::Module* mod, char *llvm_file) {
 }
 
 void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *TargetMachine) {
-  std::string TargetTriple(triple);
-  std::string Filename(name);
+  //std::string TargetTriple(triple);
+  std::string Filename(file);
   if (llvm::verifyModule(*mod, &llvm::outs())) {
     llvm::errs() << "Module verification failed!\n";
     exit(1);
@@ -126,7 +126,7 @@ void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *Targe
 
   llvm::legacy::PassManager pass;
   if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-    std::cerr << "TargetMachine can't emit a file of this type triple=" << triple << "\nfile=" << name;
+    std::cerr << "TargetMachine can't emit a file of this type file=" << file;
     std::cerr << std::endl;
     exit(1);
   }
@@ -464,7 +464,8 @@ llvm::Attribute::AttrKind get_sret() { return llvm::Attribute::StructRet; }
 void Function_print(llvm::Function *f) { f->print(llvm::errs()); }
 
 llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name, llvm::Type** elems, int len) {
-  return llvm::StructType::create(*ctx, *elems, name);
+  llvm::ArrayRef<llvm::Type*> ref(elems, len);
+  return llvm::StructType::create(*ctx, ref, name);
 }
 llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name) {
   return llvm::StructType::create(*ctx, name);
@@ -495,6 +496,10 @@ llvm::GlobalVariable *make_global(llvm::Module* mod, llvm::Type *ty, llvm::Const
   auto res = new llvm::GlobalVariable(
       *mod, ty, false, (llvm::GlobalValue::LinkageTypes)linkage, init, name);
   return res;
+}
+
+llvm::ConstantAggregateZero* ConstantAggregateZero_get(llvm::Type* ty){
+    return llvm::ConstantAggregateZero::get(ty);
 }
 
 llvm::Constant *ConstantStruct_get(llvm::StructType *ty) {
@@ -749,6 +754,10 @@ llvm::ConstantInt *makeInt(llvm::LLVMContext* ctx, int64_t val, int bits) {
   return llvm::ConstantInt::getSigned(intType, val);
 }
 
+llvm::ConstantInt* ConstantInt_get(llvm::IntegerType* ty, int64_t val, bool isSigned) {
+    return llvm::ConstantInt::get(ty, val);
+}
+
 llvm::Type *intTy(llvm::LLVMContext* ctx, int bit) { return llvm::IntegerType::get(*ctx, bit); }
 
 llvm::Type *getFloatTy(llvm::LLVMContext* ctx) { return llvm::Type::getFloatTy(*ctx); }
@@ -783,9 +792,9 @@ void StructType_setBody(llvm::StructType *st, llvm::Type ** elems, int len) {
   st->setBody(ref);
 }
 
-//void Value_dump(llvm::Value *v) { v->dump(); }
+void Value_dump(llvm::Value *v) { v->dump(); }
 
-//void Type_dump(llvm::Type *v) { v->dump(); }
+void Type_dump(llvm::Type *v) { v->dump(); }
 
 llvm::Value *CreateSExt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
   return builder->CreateSExt(val, type);

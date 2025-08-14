@@ -20,11 +20,6 @@ out_dir=$build/test_out
 testd=$dir/../tests
 stdpath=$toolchain/src
 linker=$($dir/find_llvm.sh clang)
-isgdb=false
-
-if [ "$4" = "-gdb" ] || [ "$3" = "-gdb" ] || [ "$2" = "-gdb" ] || [ "$1" = "-gdb" ]; then
-  isgdb=true
-fi
 
 export LD=$linker 
 
@@ -34,7 +29,13 @@ run(){
 
 normal(){
   for f in $testd/normal/*.x; do
-    run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
+    run "$compiler c -out $out_dir -stdpath $stdpath $f"
+    if [ ! "$?" -eq "0" ]; then
+      if [ ! -z "$XGDB" ]; then
+        gdb --eval-command="b exit" --eval-command "r c -out $out_dir -stdpath $stdpath $f" $compiler
+      fi
+      exit 1
+    fi
   done
 }
 
@@ -71,7 +72,7 @@ std_regex(){
       cmd="run '$compiler c -g -out $out_dir -stdpath $stdpath -flags $LIB_STD $f'"
       eval $cmd
       if [ ! "$?" -eq "0" ]; then
-        if [ $isgdb = true ]; then
+        if [ ! -z "$XGDB" ]; then
           gdb --eval-command="b exit" --eval-command "r c -g -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" $compiler
           #filename="${f%.*}"
           #gdb --eval-command="b exit" --eval-command "r" ${out_dir}/${filename}.bin

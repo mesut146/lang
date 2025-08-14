@@ -2,7 +2,8 @@ dir=$(dirname $0)
 
 cd $dir/..
 zip="tmp.zip"
-zip -q -r $zip ./bin ./src ./tests ./cpp_bridge ./doc ./grammar
+rm ./cpp_bridge/build -rf
+zip -q -r $zip ./bin ./src ./tests ./cpp_bridge/src ./cpp_bridge/x.sh ./cpp_bridge/CMakeLists.txt ./doc ./grammar
 
 gcloud cloud-shell scp localhost:$zip cloudshell:/home/mesutdogansoy/lang
 
@@ -17,7 +18,13 @@ elif [ "$1" = "-bt" ]; then
   name="x2"
   cmd="$cmd&&./bin/bt.sh $host_tool/bin/x $name&&./bin/test.sh ./build/$name"
 elif [ "$1" = "-build" ]; then
-  cmd="$cmd&&./bin/build.sh $host_tool v2"
+  if [ ! -z "$XSTAGE" ]; then
+    cmd="$cmd&&XSTAGE=1 ./bin/build.sh $host_tool v2"
+  else
+    cmd="$cmd&&./bin/build.sh $host_tool v2"
+  fi
+elif [ "$1" = "-test" ]; then
+  cmd="$cmd&&./bin/build.sh $host_tool v2 &&./bin/test.sh ./build/stage1"
 fi
 gcloud cloud-shell ssh --command="$cmd"
 

@@ -1,4 +1,4 @@
-
+import std/io
 
 struct vector_Type;
 struct vector_Value;
@@ -15,6 +15,7 @@ struct StructType;
 struct llvm_Type;//todo make LLVMType
 struct PointerType;
 struct ArrayType;
+struct IntegerType;
 struct llvm_FunctionType;
 //struct LinkageTypes;
 struct Function;
@@ -156,7 +157,7 @@ extern{
     func createPointerType(dib: DIBuilder*, elem: DIType*, size: i64): DIType*;
     func createObjectPointerType(type: DIType*): DIType*;
     func createSubroutineType(dib: DIBuilder*, tys: Metadata**, len: i32): DISubroutineType*;
-    func createStructType(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata**, len: i32): DICompositeType*;
+    func createStructType(dib: DIBuilder*, ctx: LLVMContext*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata**, len: i32): DICompositeType*;
     func createStructType_ident(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*, ident: i8*): DICompositeType*;
     func getOrCreateSubrange(dib: DIBuilder*, lo: i64, count: i64): Metadata*;
     func createArrayType(dib: DIBuilder*, size: i64, ty: DIType*, elems: Metadata**, len: i32): DIType*;
@@ -184,9 +185,10 @@ extern{
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func intTy(ctx: LLVMContext*, bits: i32): llvm_Type*;
-    func makeInt(builder: IRBuilder*, val: i64, bits: i32): ConstantInt*;
-    func makeFloat(builder: IRBuilder*, val: f32): Constant*;
-    func makeDouble(builder: IRBuilder*, val: f64): Constant*;
+    func ConstantInt_get(ty: IntegerType*, val: i64, isSigned: bool): ConstantInt*;
+    func makeInt(ctx: LLVMContext*, val: i64, bits: i32): ConstantInt*;
+    func makeFloat(ctx: LLVMContext*, val: f32): Constant*;
+    func makeDouble(ctx: LLVMContext*, val: f64): Constant*;
     func getFloatTy(ctx: LLVMContext*): llvm_Type*;
     func getDoubleTy(ctx: LLVMContext*): llvm_Type*;
     func getPointerTo(type: llvm_Type*): PointerType*;
@@ -194,9 +196,9 @@ extern{
     func getVoidTy(builder: IRBuilder*): llvm_Type*;
     func isVoidTy(type: llvm_Type*): bool;
     func isPointerTy(type: llvm_Type*): bool;
-    func getPtr(ctx: LLVMContext*): llvm_Type*;
+    func getPtr(ctx: LLVMContext*): llvm_Type*;//todo PointerType
     func Value_isPointerTy(val: Value*): bool;
-    func ConstantPointerNull_get(builder: IRBuilder*, ty: PointerType*): Value*;
+    func ConstantPointerNull_get(ty: PointerType*): Value*;
     func CreateFPCast(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     func CreateSIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     func CreateUIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
@@ -214,7 +216,7 @@ extern{
     func setSection(f: Function *, sec: i8*);
     func Function_getArg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
-    func Argument_setsret(a: Argument*, ty: llvm_Type*): i32;
+    func Argument_setsret(ctx: LLVMContext*, a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
     func Function_print(f: Function*);
     func verifyFunction(f: Function*): bool;
@@ -255,7 +257,9 @@ extern{
     func getFalse(builder: IRBuilder*): Value*;
     func CreatePHI(builder: IRBuilder*, type: llvm_Type*, cnt: i32): PHINode*;
     func phi_addIncoming(phi: PHINode*, val: Value*, bb: BasicBlock*);
+    //globals
     func make_global(module: LLVMModule*, ty: llvm_Type*, init: Constant*, linkage: i32, name: i8*): GlobalVariable*;
+    func ConstantAggregateZero_get(ty: llvm_Type*): Constant*;
     func ConstantStruct_get_elems(ty: StructType*, elems: Constant**, len: i32): Constant*;
     func ConstantStruct_getAnon(elems: Constant**, len: i32): Constant*;
     func ConstantStruct_get(ty: StructType*): Constant*;
@@ -408,13 +412,14 @@ impl Emitter2{
   }
 
   func makeInt(self, val: i64, bits: i32): Value*{
-    return makeInt(self.builder, val, bits) as Value*;
+    let ty = intTy(self.ctx, bits);
+    return ConstantInt_get(ty as IntegerType*, val, true) as Value*;
   }
   func makeFloat(self, val: f32): Value*{
-    return makeFloat(self.builder, val) as Value*;
+    return makeFloat(self.ctx, val) as Value*;
   }
   func makeDouble(self, val: f64): Value*{
-    return makeDouble(self.builder, val) as Value*;
+    return makeDouble(self.ctx, val) as Value*;
   } 
   
   func gep_arr(self, type: llvm_Type*, ptr: Value*, i1: Value*, i2: Value*): Value*{
