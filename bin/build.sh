@@ -30,8 +30,10 @@ out_dir=$build/${name}_out
 mkdir -p $out_dir
 
 bridge_lib="$host_tool/lib/libbridge.a"
+bridge_lib="$host_tool/lib/libbridge2.a"
 llvm_lib="$host_tool/lib/libLLVM.so.19.1"
-linker=$($dir/find_llvm.sh clang)
+#linker=$($dir/find_llvm.sh clang)
+linker="g++"
 if [ -d "$target_tool" ]; then
     linker="aarch64-linux-gnu-g++"
     export target_triple="aarch64-linux-gnu"
@@ -62,11 +64,11 @@ build(){
   XLIBNAME=backend XLIBSRC=$dir/../src/backend $dir/build_module.sh $compiler $out_dir || exit 1
   LIB_BACKEND=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
-  #flags="$bridge_lib"
   flags="$flags $LIB_AST"
   flags="$flags $LIB_RESOLVER"
   flags="$flags $LIB_BACKEND"
   flags="$flags $LIB_STD"
+  flags="$flags $bridge_lib"
   flags="$flags $llvm_lib"
   flags="$flags -lstdc++"
   if [ "$name" = "stage1" ] && [ ! -z "$XPERF" ]; then

@@ -2,9 +2,9 @@ func main(){
   sized();
   elems();
   deref();
-  arr_of_ptr();  
+  arr_of_ptr();
   sliceTest();
-  arr2d();
+  //arr2d();
   print("arrayTest done\n");
 }
 

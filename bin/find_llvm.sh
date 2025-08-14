@@ -1,12 +1,12 @@
 find_clang(){
-  if command -v clang++-19 2>&1 >/dev/null; then
+  if command -v g++ 2>&1 >/dev/null; then
+    echo "g++"
+  elif command -v clang++-19 2>&1 >/dev/null; then
     echo "clang++-19"
   elif command -v clang++ 2>&1 >/dev/null; then
     echo "clang++"
-  elif command -v g++ 2>&1 >/dev/null; then
-    echo "g++"
   else
-    echo "can't find clang++"
+    echo "can't find linker"
     exit 1
   fi
 }

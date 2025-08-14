@@ -16,11 +16,6 @@
 #include <iostream>
 #include <vector>
 
-static llvm::IRBuilder<> *Builder = nullptr;
-static llvm::LLVMContext *ctx = nullptr;
-static llvm::Module *mod = nullptr;
-static llvm::DIBuilder *DBuilder = nullptr;
-
 extern "C" {
 
 std::vector<llvm::Type *> *vector_Type_new() {
@@ -59,10 +54,6 @@ void vector_Constant_push(std::vector<llvm::Constant *> *vec,
 }
 void vector_Constant_delete(std::vector<llvm::Constant *> *vec) { delete vec; }
 
-void setBuilder(llvm::IRBuilder<> *b) { Builder = b; }
-void setModule(llvm::Module *m) { mod = m; }
-void setCtx(llvm::LLVMContext *c) { ctx = c; }
-
 /*void printDefaultTargetAndDetectedCPU() {
   llvm::sys::printDefaultTargetAndDetectedCPU(llvm::outs());
 }*/
@@ -78,16 +69,6 @@ int getDefaultTargetTriple(char *ptr) {
 //void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
 //void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
 //void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
-void llvm_InitializeX86Target() { LLVMInitializeX86Target(); }
-void llvm_InitializeX86TargetInfo() { LLVMInitializeX86TargetInfo(); }
-void llvm_InitializeX86TargetMC() { LLVMInitializeX86TargetMC(); }
-void llvm_InitializeX86AsmParser() { LLVMInitializeX86AsmParser(); }
-void llvm_InitializeX86AsmPrinter() { LLVMInitializeX86AsmPrinter(); }
-void llvm_InitializeAArch64Target() { LLVMInitializeAArch64Target(); }
-void llvm_InitializeAArch64TargetInfo() { LLVMInitializeAArch64TargetInfo(); }
-void llvm_InitializeAArch64TargetMC() { LLVMInitializeAArch64TargetMC(); }
-void llvm_InitializeAArch64AsmParser() { LLVMInitializeAArch64AsmParser(); }
-void llvm_InitializeAArch64AsmPrinter() { LLVMInitializeAArch64AsmPrinter(); }
 
 const llvm::Target *lookupTarget(const char *triple) {
   std::string TargetTriple(triple);
@@ -99,35 +80,41 @@ const llvm::Target *lookupTarget(const char *triple) {
   return Target;
 }
 
-llvm::TargetMachine *createTargetMachine(const char *triple) {
+llvm::TargetMachine *createTargetMachine(const char *triple, int reloc) {
   std::string TargetTriple(triple);
   auto Target = lookupTarget(triple);
 
   auto CPU = "generic";
   auto Features = "";
   llvm::TargetOptions opt;
-  auto RM = std::optional<llvm::Reloc::Model>(llvm::Reloc::Model::PIC_);
+  //llvm::Reloc::Model::PIC_
+  auto RM = std::optional<llvm::Reloc::Model>((llvm::Reloc::Model)reloc);
   return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
-bool verifyModule() { return llvm::verifyModule(*mod, &llvm::outs()); }
+bool verifyModule(llvm::Module* mod) { return llvm::verifyModule(*mod, &llvm::outs()); }
 
-void emit_llvm(char *llvm_file) {
+char* Module_emit(llvm::Module* mod, char *llvm_file) {
   std::error_code ec;
   llvm::raw_fd_ostream fd(llvm_file, ec);
   mod->print(fd, nullptr);
+  if(ec.value() != 0){
+    char* buf = new char[ec.message().size() + 1];
+    strcpy(buf, ec.message().c_str());
+    return buf;
+  }
+  return nullptr;
 }
 
-void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
-                 char *triple) {
-  std::string TargetTriple(triple);
-  std::string Filename(name);
+void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *TargetMachine) {
+  //std::string TargetTriple(triple);
+  std::string Filename(file);
   if (llvm::verifyModule(*mod, &llvm::outs())) {
     llvm::errs() << "Module verification failed!\n";
     exit(1);
   }
   mod->setDataLayout(TargetMachine->createDataLayout());
-  mod->setTargetTriple(TargetTriple);
+  //mod->setTargetTriple(TargetTriple);
 
   std::error_code EC;
   llvm::raw_fd_ostream dest(Filename, EC, llvm::sys::fs::OF_None);
@@ -139,7 +126,7 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
 
   llvm::legacy::PassManager pass;
   if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-    std::cerr << "TargetMachine can't emit a file of this type triple=" << triple << "\nfile=" << name;
+    std::cerr << "TargetMachine can't emit a file of this type file=" << file;
     std::cerr << std::endl;
     exit(1);
   }
@@ -151,8 +138,8 @@ void emit_object(const char *name, llvm::TargetMachine *TargetMachine,
 
 void destroy_llvm(llvm::TargetMachine *tm) { delete tm; }
 
-void destroy_ctx() {
-  if (mod != nullptr) {
+void LLVMContext_delete(llvm::LLVMContext* ctx) {
+  /*if (mod != nullptr) {
     delete mod;
     mod = nullptr;
   }
@@ -160,61 +147,39 @@ void destroy_ctx() {
     delete Builder;
     Builder = nullptr;
   }
-  if (DBuilder != nullptr) {
-    delete DBuilder;
-    DBuilder = nullptr;
-  }
-  if (ctx != nullptr) {
-    delete ctx;
-    ctx = nullptr;
-  }
+  if (dbuilder != nullptr) {
+    delete dbuilder;
+    dbuilder = nullptr;
+  }*/
+  delete ctx;
 }
 
-llvm::LLVMContext *make_ctx() {
-  if (ctx != nullptr) {
-    // delete ctx;
-    return ctx;
-  }
-  ctx = new llvm::LLVMContext();
-  return ctx;
+llvm::LLVMContext *LLVMContext_new() {
+  return new llvm::LLVMContext();
 }
 
-llvm::Module *make_module(char *name, llvm::TargetMachine *TargetMachine,
-                          char *triple) {
-  if (mod != nullptr) {
-    delete mod;
-    mod = nullptr;
-  }
-  // std::string TargetTriple(triple);
-  mod = new llvm::Module(name, *ctx);
+llvm::Module *Module_new(char *name, llvm::LLVMContext* ctx, llvm::TargetMachine *TargetMachine, char *triple) {
+  auto mod = new llvm::Module(name, *ctx);
   mod->setTargetTriple(triple);
   mod->setDataLayout(TargetMachine->createDataLayout());
   return mod;
 }
 
-llvm::IRBuilder<> *make_builder() {
-  if (Builder != nullptr) {
-    delete Builder;
-    Builder = nullptr;
-  }
-  Builder = new llvm::IRBuilder<>(*ctx);
-  return Builder;
+llvm::IRBuilder<>* IRBuilder_new(llvm::LLVMContext* ctx) {
+  return new llvm::IRBuilder<>(*ctx);
 }
 
-void init_dbg() {
-  if (DBuilder != nullptr) {
-    delete DBuilder;
-    DBuilder = nullptr;
-  }
-  DBuilder = new llvm::DIBuilder(*mod);
+llvm::DIBuilder* DIBuilder_new(llvm::Module *mod) {
+  auto res = new llvm::DIBuilder(*mod);
   mod->addModuleFlag(llvm::Module::Max, "Dwarf Version", 4);
   mod->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 3);
   mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
   mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
+  return res;
 }
 
-llvm::DIFile *createFile(char *path, char *dir) {
-  return DBuilder->createFile(path, dir);
+llvm::DIFile *createFile(llvm::DIBuilder* dbuilder, char *path, char *dir) {
+  return dbuilder->createFile(path, dir);
 }
 
 int get_dwarf_cpp(){
@@ -239,54 +204,53 @@ int get_dwarf_swift(){
     return llvm::dwarf::DW_LANG_Swift;
 }
 
-llvm::DICompileUnit *createCompileUnit(int lang, llvm::DIFile *file) {
-  return DBuilder->createCompileUnit(
-      lang, file, "lang dbg", false, "", 0, "",
+llvm::DICompileUnit *createCompileUnit(llvm::DIBuilder* dbuilder, int lang, llvm::DIFile *file, char* producer) {
+  return dbuilder->createCompileUnit(
+      lang, file, producer, false, "", 0, "",
       llvm::DICompileUnit::DebugEmissionKind::FullDebug, 0, true, false,
       llvm::DICompileUnit::DebugNameTableKind::None);
 }
 
-void replaceGlobalVariables(llvm::DICompileUnit *cu,
+void replaceGlobalVariables(llvm::LLVMContext* ctx, llvm::DICompileUnit *cu,
                             std::vector<llvm::Metadata *> *vec) {
   llvm::MDTuple *tuple = llvm::MDTuple::get(*ctx, *vec);
   llvm::MDTupleTypedArrayWrapper<llvm::DIGlobalVariableExpression> w(tuple);
   cu->replaceGlobalVariables(w);
 }
 
-llvm::DILexicalBlock *createLexicalBlock(llvm::DIScope *scope,
+llvm::DILexicalBlock *createLexicalBlock(llvm::DIBuilder* dbuilder, llvm::DIScope *scope,
                                          llvm::DIFile *file, int line,
                                          int col) {
-  return DBuilder->createLexicalBlock(scope, file, line, col);
+  return dbuilder->createLexicalBlock(scope, file, line, col);
 }
 
-void SetCurrentDebugLocation(llvm::DIScope *scope, int line, int pos) {
-  Builder->SetCurrentDebugLocation(
+void SetCurrentDebugLocation(llvm::IRBuilder<>* builder, llvm::DIScope *scope, int line, int pos) {
+  builder->SetCurrentDebugLocation(
       llvm::DILocation::get(scope->getContext(), line, pos, scope));
 }
 
-int make_spflags(bool is_main) {
-  auto spflags = llvm::DISubprogram::SPFlagDefinition;
-  if (is_main) {
-    spflags |= llvm::DISubprogram::SPFlagMainSubprogram;
-  }
-  return spflags;
+int SPFlagDefinition(){
+    return llvm::DISubprogram::SPFlagDefinition;
+}
+int SPFlagMainSubprogram(){
+    return llvm::DISubprogram::SPFlagMainSubprogram;
 }
 
 llvm::DISubroutineType *
-createSubroutineType(std::vector<llvm::Metadata *> *types) {
-  return DBuilder->createSubroutineType(DBuilder->getOrCreateTypeArray(*types));
+createSubroutineType(llvm::DIBuilder* dbuilder, llvm::Metadata** types, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(types, len);
+  return dbuilder->createSubroutineType(dbuilder->getOrCreateTypeArray(ref));
 }
 
-llvm::Function *getFunction(char *name) { return mod->getFunction(name); }
+llvm::Function *getFunction(llvm::Module *mod, char *name) { return mod->getFunction(name); }
 
 void setSection(llvm::Function *f, char *sec) { f->setSection(sec); }
 
-llvm::DISubprogram *createFunction(llvm::DIScope *scope, char *name,
+llvm::DISubprogram *createFunction(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                    char *linkage_name, llvm::DIFile *file,
                                    int line, llvm::DISubroutineType *ft,
                                    int spflags) {
-  // std::cout << "createFunction " << name << ", " << linkage_name << "\n";
-  return DBuilder->createFunction(scope, name, linkage_name, file, line, ft,
+  return dbuilder->createFunction(scope, name, linkage_name, file, line, ft,
                                   line, llvm::DINode::FlagPrototyped,
                                   (llvm::DISubprogram::DISPFlags)spflags);
 }
@@ -295,62 +259,67 @@ void setSubprogram(llvm::Function *f, llvm::DISubprogram *sp) {
   f->setSubprogram(sp);
 }
 
-llvm::DILocalVariable *createParameterVariable(llvm::DIScope *scope, char *name,
+int DIFlags_FlagZero(){
+  return llvm::DINode::DIFlags::FlagZero;
+}
+int DIFlags_FlagArtificial(){
+  return llvm::DINode::DIFlags::FlagArtificial;
+}
+int DIFlags_FlagObjectPointer(){
+  return llvm::DINode::DIFlags::FlagObjectPointer;
+}
+llvm::DILocalVariable *createParameterVariable(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                                int idx, llvm::DIFile *file,
                                                int line, llvm::DIType *type,
-                                               bool preserve, bool is_self) {
-                                                auto flags = llvm::DINode::DIFlags::FlagZero;
-                                                if(is_self){
-                                                   flags |= llvm::DINode::DIFlags::FlagArtificial;
-                                                   flags |= llvm::DINode::DIFlags::FlagObjectPointer;
-                                                }
-  return DBuilder->createParameterVariable(scope, name, idx, file, line, type,
-                                           preserve, flags);
+                                               bool preserve, int flags) {
+  return dbuilder->createParameterVariable(scope, name, idx, file, line, type,
+                                           preserve, (llvm::DINode::DIFlags)flags);
 }
 
-llvm::DILocalVariable *createAutoVariable(llvm::DIScope *scope, char *name,
+llvm::DILocalVariable *createAutoVariable(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                           llvm::DIFile *file, int line,
                                           llvm::DIType *ty) {
-  return DBuilder->createAutoVariable(scope, name, file, line, ty);
+  return dbuilder->createAutoVariable(scope, name, file, line, ty);
 }
 
-llvm::DIExpression *createExpression() { return DBuilder->createExpression(); }
+llvm::DIExpression *createExpression(llvm::DIBuilder* dbuilder) { return dbuilder->createExpression(); }
 
 llvm::DILocation *DILocation_get(llvm::DIScope *scope, int line, int pos) {
   return llvm::DILocation::get(scope->getContext(), line, pos, scope);
 }
 
-void insertDeclare(llvm::Value *value, llvm::DILocalVariable *var_info,
+void insertDeclare(llvm::DIBuilder* dbuilder, llvm::Value *value, llvm::DILocalVariable *var_info,
                    llvm::DIExpression *expr, llvm::DILocation *loc,
                    llvm::BasicBlock *bb) {
-  DBuilder->insertDeclare(value, var_info, expr, loc, bb);
+  dbuilder->insertDeclare(value, var_info, expr, loc, bb);
 }
 
-llvm::DICompositeType *createStructType(llvm::DIScope *scope, char *name,
+llvm::DICompositeType *createStructType(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
                                         llvm::DIFile *file, int line, int size,
-                                        std::vector<llvm::Metadata *> *elems) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+                                        llvm::Metadata** elems, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, len);
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   auto align = 0;
-  return DBuilder->createStructType(scope, name, file, line, size, align,
+  return dbuilder->createStructType(scope, name, file, line, size, align,
                                     llvm::DINode::FlagZero, nullptr, arr);
 }
 
-llvm::DICompositeType *createStructType_ident(llvm::DIScope *scope, char *name,
+llvm::DICompositeType *createStructType_ident(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
   llvm::DIFile *file, int line, int size,
   std::vector<llvm::Metadata *> *elems, char* ident) {
-auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
-auto align = 0;
-auto RunTimeLang = 0;
-llvm::DIType *VTableHolder = nullptr;
-return DBuilder->createStructType(scope, name, file, line, size, align,
-llvm::DINode::FlagZero, nullptr, arr, RunTimeLang, VTableHolder, ident);
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+  auto align = 0;
+  auto RunTimeLang = 0;
+  llvm::DIType *VTableHolder = nullptr;
+  return dbuilder->createStructType(scope, name, file, line, size, align,
+  llvm::DINode::FlagZero, nullptr, arr, RunTimeLang, VTableHolder, ident);
 }
 
-const llvm::StructLayout *getStructLayout(llvm::StructType *st) {
+const llvm::StructLayout *getStructLayout(llvm::Module *mod, llvm::StructType *st) {
   return mod->getDataLayout().getStructLayout(st);
 }
 
-uint64_t DataLayout_getTypeSizeInBits(llvm::Type *ty) {
+uint64_t DataLayout_getTypeSizeInBits(llvm::Module *mod, llvm::Type *ty) {
   return mod->getDataLayout().getTypeSizeInBits(ty);
 }
 
@@ -358,38 +327,37 @@ int64_t getElementOffsetInBits(llvm::StructLayout *sl, int idx) {
   return sl->getElementOffsetInBits(idx);
 }
 
-llvm::DIType *get_di_null() { return nullptr; }
-
 int64_t DIType_getSizeInBits(llvm::DIType *ty) { return ty->getSizeInBits(); }
 
-void replaceElements(llvm::DICompositeType *st,
-                     std::vector<llvm::Metadata *> *elems) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+void replaceElements(llvm::LLVMContext* ctx, llvm::DICompositeType *st,
+                     llvm::Metadata** elems, int len) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, len);                       
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   st->replaceElements(arr);
 }
 
-llvm::DICompositeType *createVariantPart(llvm::DIScope *scope, char *name,
+llvm::DICompositeType *createVariantPart(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
                                          llvm::DIFile *file, int line,
                                          int64_t size,
                                          llvm::DIDerivedType *disc,
                                          std::vector<llvm::Metadata *> *elems) {
   auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
-  return DBuilder->createVariantPart(scope, name, file, line, size, 0,
+  return dbuilder->createVariantPart(scope, name, file, line, size, 0,
                                      llvm::DINode::FlagZero, disc, arr);
 }
 
-llvm::DIDerivedType *createVariantMemberType(llvm::DIScope *scope, char *name,
+llvm::DIDerivedType *createVariantMemberType(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
                                              llvm::DIFile *file, int line,
                                              int64_t size, int64_t off, int idx,
                                              llvm::DIType *ty) {
   auto intType = llvm::IntegerType::get(*ctx, 32);
   auto disc = llvm::ConstantInt::getSigned(intType, idx);
-  return DBuilder->createVariantMemberType(
+  return dbuilder->createVariantMemberType(
       scope, name, file, line, size, 0, off, disc, llvm::DINode::FlagZero, ty);
 }
 
-llvm::DIType *createBasicType(char *name, uint64_t size, int encoding) {
-  return DBuilder->createBasicType(name, size, encoding);
+llvm::DIType *createBasicType(llvm::DIBuilder* dbuilder, char *name, uint64_t size, int encoding) {
+  return dbuilder->createBasicType(name, size, encoding);
 }
 
 int DW_ATE_boolean() { return llvm::dwarf::DW_ATE_boolean; }
@@ -400,18 +368,18 @@ int DW_ATE_unsigned() { return llvm::dwarf::DW_ATE_unsigned; }
 
 int DW_ATE_float() { return llvm::dwarf::DW_ATE_float; }
 
-llvm::DIType *createPointerType(llvm::DIType *elem, int64_t size) {
-  return DBuilder->createPointerType(elem, size);
+llvm::DIType *createPointerType(llvm::DIBuilder* dbuilder, llvm::DIType *elem, int64_t size) {
+  return dbuilder->createPointerType(elem, size);
 }
 
-llvm::Metadata *getOrCreateSubrange(int64_t lo, int64_t count) {
-  return DBuilder->getOrCreateSubrange(lo, count);
+llvm::Metadata *getOrCreateSubrange(llvm::DIBuilder* dbuilder, int64_t lo, int64_t count) {
+  return dbuilder->getOrCreateSubrange(lo, count);
 }
 
-llvm::DIType *createArrayType(int64_t size, llvm::DIType *ty,
+llvm::DIType *createArrayType(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, int64_t size, llvm::DIType *ty,
                               std::vector<llvm::Metadata *> *elems) {
   llvm::DINodeArray subs(llvm::MDTuple::get(*ctx, *elems));
-  return DBuilder->createArrayType(size, 0, ty, subs);
+  return dbuilder->createArrayType(size, 0, ty, subs);
 }
 
 uint32_t make_di_flags(bool artificial) {
@@ -421,16 +389,15 @@ uint32_t make_di_flags(bool artificial) {
   return llvm::DINode::FlagZero;
 }
 
-llvm::DIDerivedType *createMemberType(llvm::DIScope *scope, char *name,
+llvm::DIDerivedType *createMemberType(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name,
                                       llvm::DIFile *file, int line,
-                                      int64_t size, int64_t off, uint32_t flags,
+                                      int64_t size, int64_t off, int32_t flags,
                                       llvm::DIType *ty) {
   int align = 0;                                      
-  return DBuilder->createMemberType(scope, name, file, line, size, align, off,
+  return dbuilder->createMemberType(scope, name, file, line, size, align, off,
                                     (llvm::DINode::DIFlags)flags, ty);
 }
 
-llvm::DIScope *get_null_scope() { return nullptr; }
 
 llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
   #if LLVM20
@@ -441,10 +408,10 @@ llvm::DIType *createObjectPointerType(llvm::DIType *ty) {
 }
 
 llvm::DIGlobalVariableExpression *
-createGlobalVariableExpression(llvm::DIScope *scope, char *name, char *lname,
+createGlobalVariableExpression(llvm::DIBuilder* dbuilder, llvm::DIScope *scope, char *name, char *lname,
                                llvm::DIFile *file, int line,
                                llvm::DIType *type) {
-  return DBuilder->createGlobalVariableExpression(scope, name, lname, file,
+  return dbuilder->createGlobalVariableExpression(scope, name, lname, file,
                                                   line, type, false, true);
 }
 
@@ -453,8 +420,8 @@ void addDebugInfo(llvm::GlobalVariable *gv,
   gv->addDebugInfo(gve);
 }
 
-void finalizeSubprogram(llvm::DISubprogram *sp) {
-  DBuilder->finalizeSubprogram(sp);
+void finalizeSubprogram(llvm::DIBuilder* dbuilder, llvm::DISubprogram *sp) {
+  dbuilder->finalizeSubprogram(sp);
 }
 
 void setCallingConv(llvm::Function *f) {
@@ -471,22 +438,23 @@ llvm::GlobalValue::LinkageTypes odr() {
     return llvm::Function::LinkOnceODRLinkage;
 }*/
 
-llvm::Type *getVoidTy() { return Builder->getVoidTy(); }
+llvm::Type *getVoidTy(llvm::IRBuilder<>* builder) { return builder->getVoidTy(); }
 
-llvm::FunctionType *make_ft(llvm::Type *retType,
-                            std::vector<llvm::Type *> *argTypes, bool vararg) {
-  return llvm::FunctionType::get(retType, *argTypes, vararg);
+llvm::FunctionType *make_ft(llvm::Type *retType, llvm::Type** argTypes, int len, bool vararg) {
+  llvm::ArrayRef<llvm::Type*> ref(argTypes, len);
+  return llvm::FunctionType::get(retType, ref, vararg);
 }
 
-llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name) {
+llvm::Function *make_func(llvm::FunctionType *ft, int linkage, char *name, llvm::Module* mod) {
   return llvm::Function::Create(ft, (llvm::GlobalValue::LinkageTypes)linkage,
                                 name, *mod);
 }
 
-llvm::Argument *get_arg(llvm::Function *f, int i) { return f->getArg(i); }
+llvm::Argument *Function_getArg(llvm::Function *f, int i) { return f->getArg(i); }
 
 void Argument_setname(llvm::Argument *arg, char *name) { arg->setName(name); }
-void Argument_setsret(llvm::Argument *arg, llvm::Type *ty) {
+
+void Argument_setsret(llvm::LLVMContext* ctx, llvm::Argument *arg, llvm::Type *ty) {
   auto attr = llvm::Attribute::get(*ctx, llvm::Attribute::StructRet, ty);
   arg->addAttr(attr);
 }
@@ -495,25 +463,19 @@ llvm::Attribute::AttrKind get_sret() { return llvm::Attribute::StructRet; }
 
 void Function_print(llvm::Function *f) { f->print(llvm::errs()); }
 
-llvm::StructType *make_struct_ty(char *name) {
+llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name, llvm::Type** elems, int len) {
+  llvm::ArrayRef<llvm::Type*> ref(elems, len);
+  return llvm::StructType::create(*ctx, ref, name);
+}
+llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name) {
   return llvm::StructType::create(*ctx, name);
 }
-llvm::StructType *make_struct_ty2(char *name,
-                                  std::vector<llvm::Type *> *elems) {
-  return llvm::StructType::create(*ctx, *elems, name);
-}
-llvm::StructType *make_struct_ty_noname(std::vector<llvm::Type *> *elems) {
+llvm::StructType *make_struct_ty_noname(llvm::LLVMContext* ctx, std::vector<llvm::Type *> *elems) {
   return llvm::StructType::create(*ctx, *elems);
 }
 
-int getSizeInBits(llvm::StructType *st) {
+int getSizeInBits(llvm::Module *mod, llvm::StructType *st) {
   int res = mod->getDataLayout().getStructLayout(st)->getSizeInBits();
-  /*if (res == 0) {
-    st->dump();
-    auto name = st->getName().str();
-    std::cout << "getSizeInBits " << name << " size: " << res
-              << " elems:" << st->getNumElements() << std::endl;
-  }*/
   return res;
 }
 
@@ -521,126 +483,110 @@ int StructType_getNumElements(llvm::StructType *st) {
   return st->getNumElements();
 }
 
-llvm::ArrayType *get_arrty(llvm::Type *elem, int size) {
+llvm::ArrayType *ArrayType_get(llvm::Type *elem, int size) {
   return llvm::ArrayType::get(elem, size);
 }
 
-llvm::Type *getPtr() { return llvm::PointerType::getUnqual(*ctx); }
-
-llvm::GlobalVariable *make_stdout() {
-  auto res = new llvm::GlobalVariable(*mod, getPtr(), false,
-                                      llvm::GlobalValue::ExternalLinkage,
-                                      nullptr, "stdout");
-  res->addAttribute("global");
-  return res;
-}
-
-llvm::GlobalVariable *make_global(const char *name, llvm::Type *ty,
-                                  llvm::Constant *init) {
-  auto res = new llvm::GlobalVariable(
-      *mod, ty, false, llvm::GlobalValue::ExternalLinkage, init, name);
-  // res->addAttribute("global");
-  return res;
-}
+llvm::Type *getPtr(llvm::LLVMContext* ctx) { return llvm::PointerType::getUnqual(*ctx); }
 
 int GlobalValue_ext() { return llvm::GlobalValue::ExternalLinkage; }
 int GlobalValue_appending() { return llvm::GlobalValue::AppendingLinkage; }
 
-llvm::GlobalVariable *make_global_linkage(const char *name, llvm::Type *ty,
-                                          llvm::Constant *init, int linkage) {
+llvm::GlobalVariable *make_global(llvm::Module* mod, llvm::Type *ty, llvm::Constant *init, int linkage, const char *name) {
   auto res = new llvm::GlobalVariable(
       *mod, ty, false, (llvm::GlobalValue::LinkageTypes)linkage, init, name);
   return res;
+}
+
+llvm::ConstantAggregateZero* ConstantAggregateZero_get(llvm::Type* ty){
+    return llvm::ConstantAggregateZero::get(ty);
 }
 
 llvm::Constant *ConstantStruct_get(llvm::StructType *ty) {
   return llvm::ConstantStruct::get(ty);
 }
 
-llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty,
-                                         std::vector<llvm::Constant *> *elems) {
-  return llvm::ConstantStruct::get(ty, *elems);
+llvm::Constant *ConstantStruct_get_elems(llvm::StructType *ty, llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantStruct::get(ty, ref);
 }
 
-llvm::Constant *ConstantArray_get(llvm::ArrayType *ty,
-                                  std::vector<llvm::Constant *> *vec) {
-  return llvm::ConstantArray::get(ty, *vec);
+llvm::Constant *ConstantStruct_getAnon(llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantStruct::getAnon(ref);
 }
 
-llvm::Value *CreateAlloca(llvm::Type *ty) { return Builder->CreateAlloca(ty); }
+llvm::Constant *ConstantArray_get(llvm::ArrayType *ty, llvm::Constant** elems, int len) {
+  llvm::ArrayRef<llvm::Constant*> ref(elems, len);
+  return llvm::ConstantArray::get(ty, ref);
+}
+
+llvm::Value *CreateAlloca(llvm::IRBuilder<>* builder, llvm::Type *ty) { return builder->CreateAlloca(ty); }
 
 void Value_setName(llvm::Value *val, char *name) { val->setName(name); }
 
-llvm::Value *CreateFPCast(llvm::Value *val, llvm::Type *trg_type) {
-  return Builder->CreateFPCast(val, trg_type);
+llvm::Value *CreateFPCast(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *trg_type) {
+  return builder->CreateFPCast(val, trg_type);
 }
-llvm::Value *CreateSIToFP(llvm::Value *val, llvm::Type *trg_type) {
-  return Builder->CreateSIToFP(val, trg_type);
+llvm::Value *CreateSIToFP(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *trg_type) {
+  return builder->CreateSIToFP(val, trg_type);
 }
-llvm::Value *CreateUIToFP(llvm::Value *val, llvm::Type *trg_type) {
-  return Builder->CreateUIToFP(val, trg_type);
+llvm::Value *CreateUIToFP(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *trg_type) {
+  return builder->CreateUIToFP(val, trg_type);
 }
-llvm::Value *CreateFPToSI(llvm::Value *val, llvm::Type *trg_type) {
-  return Builder->CreateFPToSI(val, trg_type);
+llvm::Value *CreateFPToSI(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *trg_type) {
+  return builder->CreateFPToSI(val, trg_type);
 }
-llvm::Value *CreateFPToUI(llvm::Value *val, llvm::Type *trg_type) {
-  return Builder->CreateFPToUI(val, trg_type);
-}
-
-void CreateStore(llvm::Value *val, llvm::Value *ptr) {
-  Builder->CreateStore(val, ptr);
+llvm::Value *CreateFPToUI(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *trg_type) {
+  return builder->CreateFPToUI(val, trg_type);
 }
 
-llvm::BasicBlock *create_bb2(llvm::Function *func) {
-  return llvm::BasicBlock::Create(*ctx, "", func);
+void CreateStore(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Value *ptr) {
+  builder->CreateStore(val, ptr);
 }
 
-llvm::BasicBlock *create_bb2_named(llvm::Function *func, const char *name) {
+llvm::BasicBlock *create_bb(llvm::LLVMContext* ctx, const char *name, llvm::Function *func) {
   return llvm::BasicBlock::Create(*ctx, name, func);
 }
 
-llvm::BasicBlock *create_bb() { return llvm::BasicBlock::Create(*ctx, ""); }
+void SetInsertPoint(llvm::IRBuilder<>* builder, llvm::BasicBlock *bb) { builder->SetInsertPoint(bb); }
 
-llvm::BasicBlock *create_bb_named(const char *name) {
-  return llvm::BasicBlock::Create(*ctx, name);
-}
-
-void SetInsertPoint(llvm::BasicBlock *bb) { Builder->SetInsertPoint(bb); }
-
-llvm::BasicBlock *GetInsertBlock() { return Builder->GetInsertBlock(); }
+llvm::BasicBlock *GetInsertBlock(llvm::IRBuilder<>* builder) { return builder->GetInsertBlock(); }
 
 void func_insert(llvm::Function *f, llvm::BasicBlock *bb) {
   f->insert(f->end(), bb);
 }
 
-llvm::SwitchInst *CreateSwitch(llvm::Value *cond, llvm::BasicBlock *default_bb,
+llvm::SwitchInst *CreateSwitch(llvm::IRBuilder<>* builder, llvm::Value *cond, llvm::BasicBlock *default_bb,
                                int num_cases) {
-  return Builder->CreateSwitch(cond, default_bb, num_cases);
+  return builder->CreateSwitch(cond, default_bb, num_cases);
 }
 
 void SwitchInst_addCase(llvm::SwitchInst* node, llvm::ConstantInt *OnVal, llvm::BasicBlock *Dest) {
   node->addCase(OnVal, Dest);
 }
 
-llvm::Value *CreateCall(llvm::Function *f, std::vector<llvm::Value *> *args) {
-  return Builder->CreateCall(f, *args);
+llvm::Value *CreateCall(llvm::IRBuilder<>* builder, llvm::Function *f, llvm::Value** args, int len) {
+  llvm::ArrayRef ref(args, len);
+  return builder->CreateCall(f, ref);
 }
 
-llvm::Value *CreateCall_ft(llvm::FunctionType *ft, llvm::Value* val, std::vector<llvm::Value *> *args) {
-  return Builder->CreateCall(ft, val, *args);
+llvm::Value *CreateCall_ft(llvm::IRBuilder<>* builder, llvm::FunctionType *ft, llvm::Value* val, llvm::Value** args, int len) {
+  llvm::ArrayRef ref(args, len);
+  return builder->CreateCall(ft, val, ref);
 }
 
-void CreateRet(llvm::Value *val) { Builder->CreateRet(val); }
+void CreateRet(llvm::IRBuilder<>* builder, llvm::Value *val) { builder->CreateRet(val); }
 
-void CreateRetVoid() { Builder->CreateRetVoid(); }
+void CreateRetVoid(llvm::IRBuilder<>* builder) { builder->CreateRetVoid(); }
 
 bool verifyFunction(llvm::Function *func) {
   return llvm::verifyFunction(*func, &llvm::outs());
 }
 
-void CreateCondBr(llvm::Value *cond, llvm::BasicBlock *then,
+void CreateCondBr(llvm::IRBuilder<>* builder, llvm::Value *cond, llvm::BasicBlock *then,
                   llvm::BasicBlock *next) {
-  Builder->CreateCondBr(cond, then, next);
+  builder->CreateCondBr(cond, then, next);
 }
 
 int getPrimitiveSizeInBits(llvm::Type *type) {
@@ -649,10 +595,10 @@ int getPrimitiveSizeInBits(llvm::Type *type) {
 
 llvm::Type *Value_getType(llvm::Value *val) { return val->getType(); }
 
-void CreateBr(llvm::BasicBlock *bb) { Builder->CreateBr(bb); }
+void CreateBr(llvm::IRBuilder<>* builder, llvm::BasicBlock *bb) { builder->CreateBr(bb); }
 
-llvm::PHINode *CreatePHI(llvm::Type *type, int cnt) {
-  return Builder->CreatePHI(type, cnt);
+llvm::PHINode *CreatePHI(llvm::IRBuilder<>* builder, llvm::Type *type, int cnt) {
+  return builder->CreatePHI(type, cnt);
 }
 
 void phi_addIncoming(llvm::PHINode *phi, llvm::Value *val,
@@ -706,82 +652,84 @@ int get_comp_op_float(char *ops) {
   throw std::runtime_error("get_comp_op");
 }
 
-llvm::Value *CreateCmp(int op, llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateCmp((llvm::CmpInst::Predicate)op, l, r);
+llvm::Value *CreateCmp(llvm::IRBuilder<>* builder, int op, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateCmp((llvm::CmpInst::Predicate)op, l, r);
 }
 
-llvm::Value *CreateNSWAdd(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateNSWAdd(l, r);
+llvm::Value *CreateNSWAdd(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateNSWAdd(l, r);
 }
-llvm::Value *CreateAdd(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateAdd(l, r);
+llvm::Value *CreateAdd(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateAdd(l, r);
 }
-llvm::Value *CreateFAdd(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateFAdd(l, r);
+llvm::Value *CreateFAdd(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateFAdd(l, r);
 }
-llvm::Value *CreateNSWSub(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateNSWSub(l, r);
+llvm::Value *CreateNSWSub(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateNSWSub(l, r);
 }
-llvm::Value *CreateSub(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateSub(l, r);
+llvm::Value *CreateSub(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateSub(l, r);
 }
-llvm::Value *CreateFSub(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateFSub(l, r);
+llvm::Value *CreateFSub(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateFSub(l, r);
 }
-llvm::Value *CreateNSWMul(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateNSWMul(l, r);
+llvm::Value *CreateNSWMul(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateNSWMul(l, r);
 }
-llvm::Value *CreateFMul(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateFMul(l, r);
+llvm::Value *CreateFMul(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateFMul(l, r);
 }
-llvm::Value *CreateSDiv(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateSDiv(l, r);
+llvm::Value *CreateSDiv(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateSDiv(l, r);
 }
-llvm::Value *CreateFDiv(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateFDiv(l, r);
+llvm::Value *CreateFDiv(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateFDiv(l, r);
 }
-llvm::Value *CreateSRem(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateSRem(l, r);
+llvm::Value *CreateSRem(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateSRem(l, r);
 }
-llvm::Value *CreateFRem(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateFRem(l, r);
+llvm::Value *CreateFRem(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateFRem(l, r);
 }
-llvm::Value *CreateXor(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateXor(l, r);
+llvm::Value *CreateXor(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateXor(l, r);
 }
-llvm::Value *CreateOr(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateOr(l, r);
+llvm::Value *CreateOr(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateOr(l, r);
 }
-llvm::Value *CreateAnd(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateAnd(l, r);
+llvm::Value *CreateAnd(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateAnd(l, r);
 }
-llvm::Value *CreateShl(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateShl(l, r);
+llvm::Value *CreateShl(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateShl(l, r);
 }
-llvm::Value *CreateAShr(llvm::Value *l, llvm::Value *r) {
-  return Builder->CreateAShr(l, r);
+llvm::Value *CreateAShr(llvm::IRBuilder<>* builder, llvm::Value *l, llvm::Value *r) {
+  return builder->CreateAShr(l, r);
 }
-llvm::Value *CreateTrunc(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreateTrunc(val, type);
+llvm::Value *CreateTrunc(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreateTrunc(val, type);
 }
-llvm::Value *CreateNeg(llvm::Value *val) { return Builder->CreateNeg(val); }
-llvm::Value *CreateFNeg(llvm::Value *val) { return Builder->CreateFNeg(val); }
+llvm::Value *CreateNeg(llvm::IRBuilder<>* builder, llvm::Value *val) { return builder->CreateNeg(val); }
 
-llvm::Constant *CreateGlobalStringPtr(char *str) {
-  return Builder->CreateGlobalStringPtr(str);
+llvm::Value *CreateFNeg(llvm::IRBuilder<>* builder, llvm::Value *val) { return builder->CreateFNeg(val); }
+
+llvm::Constant *CreateGlobalStringPtr(llvm::IRBuilder<>* builder, char *str) {
+  return builder->CreateGlobalStringPtr(str);
 }
 
-llvm::GlobalVariable* CreateGlobalString(char* str){
-  return Builder->CreateGlobalString(str);
+llvm::GlobalVariable* CreateGlobalString(llvm::IRBuilder<>* builder, char* str){
+  return builder->CreateGlobalString(str);
 }
 
 bool isPointerTy(llvm::Type *type) { return type->isPointerTy(); }
+
 bool Value_isPointerTy(llvm::Value *val) {
   return val->getType()->isPointerTy();
 }
 
-llvm::UnreachableInst *CreateUnreachable() {
-  return Builder->CreateUnreachable();
+llvm::UnreachableInst *CreateUnreachable(llvm::IRBuilder<>* builder) {
+  return builder->CreateUnreachable();
 }
 
 llvm::Constant *getConst(llvm::Type *type, int val) {
@@ -792,30 +740,36 @@ llvm::Constant *getConstF(llvm::Type *type, double val) {
   return llvm::ConstantFP::get(type, val);
 }
 
-void CreateMemCpy(llvm::Value *trg, llvm::Value *src, uint64_t size) {
-  Builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0),
+void CreateMemCpy(llvm::IRBuilder<>* builder, llvm::Value *trg, llvm::Value *src, uint64_t size) {
+  builder->CreateMemCpy(trg, llvm::MaybeAlign(0), src, llvm::MaybeAlign(0),
                         size);
 }
 
-llvm::Value *CreatePtrToInt(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreatePtrToInt(val, type);
+llvm::Value *CreatePtrToInt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreatePtrToInt(val, type);
 }
 
-llvm::ConstantInt *makeInt(int64_t val, int bits) {
+llvm::ConstantInt *makeInt(llvm::LLVMContext* ctx, int64_t val, int bits) {
   auto intType = llvm::IntegerType::get(*ctx, bits);
   return llvm::ConstantInt::getSigned(intType, val);
 }
 
-llvm::Type *getInt(int bit) { return llvm::IntegerType::get(*ctx, bit); }
-
-llvm::Type *getFloatTy() { return llvm::Type::getFloatTy(*ctx); }
-llvm::Type *getDoubleTy() { return llvm::Type::getDoubleTy(*ctx); }
-llvm::Constant *makeFloat(float val) {
-  return llvm::ConstantFP::get(getFloatTy(), val);
+llvm::ConstantInt* ConstantInt_get(llvm::IntegerType* ty, int64_t val, bool isSigned) {
+    return llvm::ConstantInt::get(ty, val);
 }
 
-llvm::Constant *makeDouble(double val) {
-  return llvm::ConstantFP::get(getDoubleTy(), val);
+llvm::Type *intTy(llvm::LLVMContext* ctx, int bit) { return llvm::IntegerType::get(*ctx, bit); }
+
+llvm::Type *getFloatTy(llvm::LLVMContext* ctx) { return llvm::Type::getFloatTy(*ctx); }
+
+llvm::Type *getDoubleTy(llvm::LLVMContext* ctx) { return llvm::Type::getDoubleTy(*ctx); }
+
+llvm::Constant *makeFloat(llvm::LLVMContext* ctx, float val) {
+  return llvm::ConstantFP::get(getFloatTy(ctx), val);
+}
+
+llvm::Constant *makeDouble(llvm::LLVMContext* ctx, double val) {
+  return llvm::ConstantFP::get(getDoubleTy(ctx), val);
 }
 
 llvm::ArrayType *getArrTy(llvm::Type *elem, int size) {
@@ -833,52 +787,54 @@ llvm::Value *ConstantPointerNull_get(llvm::PointerType *ty) {
 
 bool isVoidTy(llvm::Type *type) { return type->isVoidTy(); }
 
-void setBody(llvm::StructType *st, std::vector<llvm::Type *> *elems) {
-  st->setBody(*elems);
+void StructType_setBody(llvm::StructType *st, llvm::Type ** elems, int len) {
+  llvm::ArrayRef<llvm::Type*> ref(elems, len);
+  st->setBody(ref);
 }
 
-//void Value_dump(llvm::Value *v) { v->dump(); }
+void Value_dump(llvm::Value *v) { v->dump(); }
 
-//void Type_dump(llvm::Type *v) { v->dump(); }
+void Type_dump(llvm::Type *v) { v->dump(); }
 
-llvm::Value *CreateSExt(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreateSExt(val, type);
+llvm::Value *CreateSExt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreateSExt(val, type);
 }
-llvm::Value *CreateZExt(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreateZExt(val, type);
+llvm::Value *CreateZExt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreateZExt(val, type);
 }
-llvm::Value *CreateFPExt(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreateFPExt(val, type);
+llvm::Value *CreateFPExt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreateFPExt(val, type);
 }
-llvm::Value *CreateFPTrunc(llvm::Value *val, llvm::Type *type) {
-  return Builder->CreateFPTrunc(val, type);
-}
-
-llvm::Value *CreateStructGEP(llvm::Value *ptr, int idx, llvm::Type *type) {
-  return Builder->CreateStructGEP(type, ptr, idx);
-  // return Builder->CreateConstInBoundsGEP1_64(type, ptr, idx);
-}
-llvm::Value *CreateInBoundsGEP(llvm::Type *type, llvm::Value *ptr,
-                               std::vector<llvm::Value *> *idx) {
-  return Builder->CreateInBoundsGEP(type, ptr, *idx);
+llvm::Value *CreateFPTrunc(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
+  return builder->CreateFPTrunc(val, type);
 }
 
-llvm::Value *CreateGEP(llvm::Type *type, llvm::Value *ptr,
-                       std::vector<llvm::Value *> *idx) {
-  return Builder->CreateGEP(type, ptr, *idx);
+llvm::Value *CreateStructGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr, int idx) {
+  return builder->CreateStructGEP(type, ptr, idx);
+}
+llvm::Value *CreateInBoundsGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr,
+                               llvm::Value** idx, int len) {
+  llvm::ArrayRef<llvm::Value*> arr(idx, len);       
+  return builder->CreateInBoundsGEP(type, ptr, arr);
 }
 
-llvm::Value *CreateLoad(llvm::Type *type, llvm::Value *val) {
+llvm::Value *CreateGEP(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *ptr, llvm::Value** idx, int len) {
+  llvm::ArrayRef<llvm::Value*> arr(idx, len);  
+  return builder->CreateGEP(type, ptr, arr);
+}
+
+llvm::Value *CreateLoad(llvm::IRBuilder<>* builder, llvm::Type *type, llvm::Value *val) {
   auto val_type = val->getType();
   if (val_type->isVoidTy()) {
     llvm::errs() << "Error: Cannot load from void type\n";
     exit(1);
   }
-  return Builder->CreateLoad(type, val);
+  return builder->CreateLoad(type, val);
 }
 
-llvm::Value *getTrue() { return Builder->getTrue(); }
-llvm::Value *getFalse() { return Builder->getFalse(); }
+llvm::Value *getTrue(llvm::IRBuilder<>* builder) { return builder->getTrue(); }
+
+llvm::Value *getFalse(llvm::IRBuilder<>* builder) { return builder->getFalse(); }
 
 int64_t get_last_write_time(const char *path) {
   auto time = std::filesystem::last_write_time(path).time_since_epoch() /

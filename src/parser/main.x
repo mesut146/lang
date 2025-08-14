@@ -16,7 +16,7 @@ import resolver/resolver
 
 import backend/compiler
 import backend/debug_helper
-import backend/llvm
+//import backend/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache
