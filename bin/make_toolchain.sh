@@ -5,32 +5,29 @@ if [ ! -f "$1" ]; then
 fi
 
 if [ ! -d "$2" ]; then
-  echo "provide old toolchain dir \$2"
+  echo "provide output dir \$2"
   exit
 fi
 
-if [ ! -d "$3" ]; then
-  echo "provide output dir \$3"
+if [ -z "$3" ]; then
+  echo "enter version \$3"
   exit
 fi
-
-if [ -z "$4" ]; then
-  echo "enter version \$4"
-  exit
+if [ -z "$LIBLLVM" ]; then
+  echo "missing \$LIBLLVM" && exit 1
 fi
 
 is_zip=false
 
-if [ "$5" = "-zip" ]; then
+if [ "$4" = "-zip" ]; then
   is_zip=true
 fi
 
 cur=$(dirname $0)
 
 binary="$1"
-old_toolchain="$2"
-out_dir="$3"
-version="$4"
+out_dir="$2"
+version="$3"
 arch=$ARCH
 
 if [ -z $ARCH ]; then
@@ -45,10 +42,11 @@ mkdir -p $dir/lib
 mkdir -p $dir/src
 
 cp $binary $dir/bin/x
-cp $old_toolchain/lib/libbridge.so $dir/lib
-cp $old_toolchain/lib/libbridge.a $dir/lib
-cp $old_toolchain/lib/libLLVM.so.19.1 $dir/lib
+cp $LIBLLVM $dir/lib
 cp $(dirname $binary)/std_out/std.a $dir/lib
+if [ ! -z "$LIBZ3" ]; then
+  cp $LIBZ3 $dir/lib
+fi
 cp -r $cur/../src/std $dir/src
 
 sudo=""

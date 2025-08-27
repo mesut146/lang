@@ -16,7 +16,8 @@ import resolver/drop_helper
 import parser/own_visitor
 import parser/own_helper
 import parser/own_model
-import backend/compiler
+
+import backend/emitter
 
 
 //todo endscope incorrectly warns 'field not moved at...' but that scope is irrevelant with var.field
@@ -81,7 +82,7 @@ impl Logger{
 }
 
 struct Own{
-    compiler: Compiler*;
+    compiler: Emitter*;
     method: Method*;
     main_scope: i32;
     cur_scope: i32;
@@ -98,7 +99,7 @@ impl Drop for Own{
 }
 
 impl Own{
-    func new(c: Compiler*, m: Method*): Own{
+    func new(c: Emitter*, m: Method*): Own{
         //print("print_kind={:?}\n", print_kind);
         let exit = Exit::get_exit_type(m.body.get());
         let main_scope = VarScope::new(ScopeType::MAIN, m.line, exit);

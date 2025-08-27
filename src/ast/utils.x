@@ -376,4 +376,41 @@ impl Utils{
   func is_call(mc: MacroCall*, name: str): bool{
     return mc.scope.is_none() && mc.name.eq(name);
   }
+  
+  func get_end_line(stmt: Stmt*): i32{
+      if let Stmt::Expr(e) = stmt{
+        return get_end_line(e);
+      }
+      return stmt.line;
+    }
+
+    func get_end_line(expr: Expr*): i32{
+      match expr{
+        Expr::If(is) => {
+          return is.get().cond.line;
+        },
+        Expr::Match(ms) => {
+          return ms.get().expr.line;
+        },
+        Expr::Block(block) => {
+          return block.get().end_line;
+        },
+        _ => return expr.line,
+      }
+    }
+
+    func get_end_line(body: Body*): i32{
+      match body{
+        Body::Block(b) => return b.end_line,
+        Body::Stmt(s) => return s.line,
+        Body::If(b) => return b.cond.line,
+        Body::IfLet(b) => return b.rhs.line,
+      }
+    }
+    func get_end_line(rhs: MatchRhs*): i32{
+      match rhs{
+        MatchRhs::STMT(stmt) => return get_end_line(stmt),
+        MatchRhs::EXPR(expr) => return get_end_line(expr),
+      }
+    }
 }

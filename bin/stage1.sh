@@ -8,7 +8,7 @@ sudo ()
     "$@"
 }
 
-echo "build.sh $1,$2,$3"
+echo "stage1.sh $1,$2,$3"
 if [ ! -d "$1" ]; then
  echo "provide host_tool dir" && exit 1
 fi
@@ -22,18 +22,19 @@ version=$2
 target_tool=$3
 compiler="$host_tool/bin/x"
 build=$dir/../build
-XCROSS=false
 name="stage1"
-if [ -d "$target_tool" ]; then
+if [ ! -z "$XCROSS" ]; then
   name="stage1_arm64"
   XCROSS=true
   echo "cross compiling"
+else
+  XCROSS=false
 fi
 
 out_dir=$build/${name}_out
 mkdir -p $out_dir
 
-#todo
+#todo delete this 
 rm -rf $build
 export XTMP=$build/tmp
 XCROSS=$XCROSS $dir/apt.sh
@@ -67,7 +68,7 @@ fi
 $dir/../cpp_bridge/x.sh || exit 1
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 
-build(){
+
   $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
@@ -103,29 +104,12 @@ build(){
   if [ ! "$?" -eq "0" ]; then
     echo "error while compiling\n$cmd" && exit 1
   fi
-}
 
-build
 final_binary=${out_dir}/${name}
 
 cp ${out_dir}/${name} $build
-
-if [ ! -z "$XSTAGE" ]; then
-  if [ "$XCROSS" = true ]; then
-    name="stage2_arm64"
-    #todo use x86_64 stage1 compiler ,outside of container
-    #compiler=$build/stage1_out/stage1
-  else
-    name="stage2"
-    compiler=$final_binary
-  fi
-  out_dir=$build/${name}_out
-  build
-  final_binary=${out_dir}/$name
-fi
 
 if [ "$XCROSS" = true ]; then
   export ARCH=aarch64
 fi
 
-$dir/make_toolchain.sh "$final_binary" $dir/.. ${version} -zip || exit 1

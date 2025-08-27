@@ -1,10 +1,5 @@
 import std/io
 
-struct vector_Type;
-struct vector_Value;
-struct vector_Constant;//std::vector<llvm::Constant*>
-struct vector_Metadata;
-
 struct Target;
 struct TargetMachine;
 struct LLVMModule;
@@ -66,56 +61,28 @@ extern{
   func LLVMInitializeAArch64TargetMC();
   func LLVMInitializeAArch64AsmParser();
   func LLVMInitializeAArch64AsmPrinter();
+  
+  func InitializeAllTargets();
+  func InitializeAllTargetInfos();
+  func InitializeAllTargetMCs();
+  func InitializeAllAsmParsers();
+  func InitializeAllAsmPrinters();
 }
 
 extern{
-    func vector_Type_new(): vector_Type*;
-    func vector_Type_push(vec: vector_Type*, elem: llvm_Type*);
-    func vector_Type_delete(vec: vector_Type*);
-    
-    func Function_delete(f: Function*);
-    
-    func vector_Value_new(): vector_Value*;
-    func vector_Value_push(vec: vector_Value*, elem: Value*);
-    func vector_Value_delete(vec: vector_Value*);
-
-    func vector_Constant_new(): vector_Constant*;
-    func vector_Constant_push(vec: vector_Constant*, elem: Constant*);
-    func vector_Constant_delete(vec: vector_Constant*);
-
-    func vector_Metadata_new(): vector_Metadata*;
-    func vector_Metadata_push(vec: vector_Metadata*, elem: Metadata*);
-    func vector_Metadata_delete(vec: vector_Metadata*);
 
     //func printDefaultTargetAndDetectedCPU();
     func getDefaultTargetTriple(ptr: i8*): i32;
-    func InitializeAllTargets();
-    func InitializeAllTargetInfos();
-    func InitializeAllTargetMCs();
-    func InitializeAllAsmParsers();
-    func InitializeAllAsmPrinters();
     func lookupTarget(triple: i8*): Target*;
-
     func createTargetMachine(triple: i8*, reloc: i32): TargetMachine*;
 
-    func llvm_InitializeX86TargetInfo();
-    func llvm_InitializeX86Target();
-    func llvm_InitializeX86TargetMC();
-    func llvm_InitializeX86AsmParser();
-    func llvm_InitializeX86AsmPrinter();
-    func llvm_InitializeAArch64TargetInfo();
-    func llvm_InitializeAArch64Target();
-    func llvm_InitializeAArch64TargetMC();
-    func llvm_InitializeAArch64AsmParser();
-    func llvm_InitializeAArch64AsmPrinter();
-
     func LLVMContext_new(): LLVMContext*;
+    func LLVMContext_delete(ctx: LLVMContext*);
     func Module_new(name: i8*, ctx: LLVMContext*, tm: TargetMachine*, triple: i8*): LLVMModule*;
+    func Module_delete(md: LLVMModule*);
     func verifyModule(md: LLVMModule*): bool;
     func IRBuilder_new(ctx: LLVMContext*): IRBuilder*;
-    func destroy_ctx();
-    func destroy_llvm(tm: TargetMachine*);
-    //func emit_llvm(out: i8*);
+    func IRBuilder_delete(b: IRBuilder*);
     func Module_emit(md: LLVMModule*, file: i8*): i8*;
     func emit_object(md: LLVMModule*, file: i8*, tm: TargetMachine*);
     
@@ -138,6 +105,7 @@ extern{
     func DW_ATE_float(): i32;
     
     func DIBuilder_new(module: LLVMModule*): DIBuilder*;
+    func DIBuilder_delete(dib: DIBuilder*);
     func createFile(dib: DIBuilder*, file: i8*, dir: i8*): DIFile*;
     func createCompileUnit(dib: DIBuilder*, lang: i32, file: DIFile*, producer: i8*): DICompileUnit*;
     func SetCurrentDebugLocation(ib: IRBuilder*, scope: DIScope*, line: i32, pos: i32);
@@ -158,9 +126,8 @@ extern{
     func createObjectPointerType(type: DIType*): DIType*;
     func createSubroutineType(dib: DIBuilder*, tys: Metadata**, len: i32): DISubroutineType*;
     func createStructType(dib: DIBuilder*, ctx: LLVMContext*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: Metadata**, len: i32): DICompositeType*;
-    func createStructType_ident(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, elems: vector_Metadata*, ident: i8*): DICompositeType*;
     func getOrCreateSubrange(dib: DIBuilder*, lo: i64, count: i64): Metadata*;
-    func createArrayType(dib: DIBuilder*, size: i64, ty: DIType*, elems: Metadata**, len: i32): DIType*;
+    func createArrayType(dib: DIBuilder*, ctx: LLVMContext*, size: i64, ty: DIType*, elems: Metadata**, len: i32): DIType*;
     func make_di_flags(artificial: bool): u32;
     func createMemberType(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: i32, ty: DIType*): DIDerivedType*;
     func createVariantPart(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata**, len: i32): DICompositeType*;
@@ -175,11 +142,10 @@ extern{
     //glob dbg
     func createGlobalVariableExpression(dib: DIBuilder*, scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
     func addDebugInfo(gv: GlobalVariable*, gve: DIGlobalVariableExpression*);
-    func replaceGlobalVariables(cu: DICompileUnit*, vec: vector_Metadata*);
+    func replaceGlobalVariables(ctx: LLVMContext*, cu: DICompileUnit*, vec: Metadata**, cnt: i32);
 
     func make_struct_ty(ctx: LLVMContext*, name: i8*, elems: llvm_Type**, len: i32): StructType*;
     func make_struct_ty2(ctx: LLVMContext*, name: i8*): StructType*;
-    func make_struct_ty_noname(ctx: LLVMContext*, elems: vector_Type*): StructType*;
     func StructType_setBody(st: StructType*, elems: llvm_Type**, len: i32);
     func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
@@ -198,14 +164,6 @@ extern{
     func isPointerTy(type: llvm_Type*): bool;
     func getPtr(ctx: LLVMContext*): llvm_Type*;//todo PointerType
     func Value_isPointerTy(val: Value*): bool;
-    func ConstantPointerNull_get(ty: PointerType*): Value*;
-    func CreateFPCast(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateSIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateUIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPToSI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPToUI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPExt(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
-    func CreateFPTrunc(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
     
     func make_ft(ret: llvm_Type*, args: llvm_Type**, len: i32, vararg: bool): llvm_FunctionType*;
     func ext(): i32;
@@ -224,7 +182,6 @@ extern{
     func create_bb(ctx: LLVMContext*, name: i8*, f: Function*): BasicBlock*;
     func SetInsertPoint(builder: IRBuilder*, bb: BasicBlock*);
     func GetInsertBlock(builder: IRBuilder*): BasicBlock*;
-    func func_insert(f: Function*, bb: BasicBlock*);
     
     func Value_setName(v: Value*, name: i8*);
     func Value_getType(val: Value*): llvm_Type*;
@@ -269,6 +226,15 @@ extern{
     func CreateSwitch(builder: IRBuilder*, cond: Value*, def_bb: BasicBlock*, num_cases: i32): SwitchInst*;
     func SwitchInst_addCase(node: SwitchInst*, OnVal: ConstantInt*, Dest: BasicBlock*);
 
+    func ConstantPointerNull_get(ty: PointerType*): Value*;
+    func CreateFPCast(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateSIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateUIToFP(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToSI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPToUI(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPExt(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+    func CreateFPTrunc(builder: IRBuilder*, val: Value*, trg: llvm_Type*): Value*;
+
     func CreateNSWAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
     func CreateFAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
     func CreateAdd(builder: IRBuilder*, l: Value*, r: Value*): Value*;
@@ -289,8 +255,6 @@ extern{
     func CreateNeg(builder: IRBuilder*, l: Value*): Value*;
     func CreateFNeg(builder: IRBuilder*, l: Value*): Value*;
 
-    func get_last_write_time(path: i8*): i64;
-    //func set_as_executable(path: i8*);
 }
 
 func getDefaultTargetTriple2(): String{
@@ -321,15 +285,15 @@ func LLVMInitializeAllAsmPrinters(){
     LLVMInitializeAArch64AsmPrinter();
 }
 
-struct Emitter2{
+struct LLVMInfo{
     tm: TargetMachine*;
     ctx: LLVMContext*;
     module: LLVMModule*;
     builder: IRBuilder*;
 }
 
-impl Emitter2{
-  func new(module_name: str): Emitter2{
+impl LLVMInfo{
+  func new(module_name: str): LLVMInfo{
       LLVMInitializeAllTargetInfos();
       LLVMInitializeAllTargets();
       LLVMInitializeAllTargetMCs();
@@ -353,7 +317,7 @@ impl Emitter2{
 
       name.drop();
       target_triple.drop();
-      return Emitter2{tm: tm, ctx: ctx, module: md, builder: builder};
+      return LLVMInfo{tm: tm, ctx: ctx, module: md, builder: builder};
   }
 
   func make_stdout(self): Value*{

@@ -14,49 +14,9 @@
 
 #include <filesystem>
 #include <iostream>
-#include <vector>
 
 extern "C" {
 
-std::vector<llvm::Type *> *vector_Type_new() {
-  return new std::vector<llvm::Type *>();
-}
-void vector_Type_push(std::vector<llvm::Type *> *vec, llvm::Type *type) {
-  vec->push_back(type);
-}
-void vector_Type_delete(std::vector<llvm::Type *> *vec) { delete vec; }
-void Function_delete(llvm::Function *f) { delete f; }
-
-std::vector<llvm::Value *> *vector_Value_new() {
-  return new std::vector<llvm::Value *>();
-}
-void vector_Value_push(std::vector<llvm::Value *> *vec, llvm::Value *val) {
-  vec->push_back(val);
-}
-void vector_Value_delete(std::vector<llvm::Value *> *vec) { delete vec; }
-
-std::vector<llvm::Metadata *> *vector_Metadata_new() {
-  return new std::vector<llvm::Metadata *>();
-}
-void vector_Metadata_push(std::vector<llvm::Metadata *> *vec,
-                          llvm::Metadata *md) {
-  vec->push_back(md);
-}
-void vector_Metadata_delete(std::vector<llvm::Metadata *> *vec) { delete vec; }
-
-std::vector<llvm::Constant *> *vector_Constant_new() {
-  return new std::vector<llvm::Constant *>();
-}
-
-void vector_Constant_push(std::vector<llvm::Constant *> *vec,
-                          llvm::Constant *elem) {
-  vec->push_back(elem);
-}
-void vector_Constant_delete(std::vector<llvm::Constant *> *vec) { delete vec; }
-
-/*void printDefaultTargetAndDetectedCPU() {
-  llvm::sys::printDefaultTargetAndDetectedCPU(llvm::outs());
-}*/
 
 int getDefaultTargetTriple(char *ptr) {
   std::string res = llvm::sys::getDefaultTargetTriple();
@@ -64,11 +24,11 @@ int getDefaultTargetTriple(char *ptr) {
   return res.length();
 }
 
-//void InitializeAllTargets() { llvm::InitializeAllTargets(); }
-//void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
-//void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
-//void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
-//void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
+void InitializeAllTargets() { llvm::InitializeAllTargets(); }
+void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
+void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
+void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
+void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
 
 const llvm::Target *lookupTarget(const char *triple) {
   std::string TargetTriple(triple);
@@ -136,26 +96,11 @@ void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *Targe
   dest.close();
 }
 
-void destroy_llvm(llvm::TargetMachine *tm) { delete tm; }
-
-void LLVMContext_delete(llvm::LLVMContext* ctx) {
-  /*if (mod != nullptr) {
-    delete mod;
-    mod = nullptr;
-  }
-  if (Builder != nullptr) {
-    delete Builder;
-    Builder = nullptr;
-  }
-  if (dbuilder != nullptr) {
-    delete dbuilder;
-    dbuilder = nullptr;
-  }*/
-  delete ctx;
-}
-
 llvm::LLVMContext *LLVMContext_new() {
   return new llvm::LLVMContext();
+}
+void LLVMContext_delete(llvm::LLVMContext* ctx) {
+  delete ctx;
 }
 
 llvm::Module *Module_new(char *name, llvm::LLVMContext* ctx, llvm::TargetMachine *TargetMachine, char *triple) {
@@ -165,8 +110,15 @@ llvm::Module *Module_new(char *name, llvm::LLVMContext* ctx, llvm::TargetMachine
   return mod;
 }
 
+void Module_delete(llvm::Module* md){
+    delete md;
+}
+
 llvm::IRBuilder<>* IRBuilder_new(llvm::LLVMContext* ctx) {
   return new llvm::IRBuilder<>(*ctx);
+}
+void IRBuilder_delete(llvm::IRBuilder<>* b){
+    delete b;
 }
 
 llvm::DIBuilder* DIBuilder_new(llvm::Module *mod) {
@@ -176,6 +128,9 @@ llvm::DIBuilder* DIBuilder_new(llvm::Module *mod) {
   mod->addModuleFlag(llvm::Module::Min, "PIC Level", 2);
   mod->addModuleFlag(llvm::Module::Max, "PIE Level", 2);
   return res;
+}
+void DIBuilder_delete(llvm::DIBuilder* db){
+    delete db;
 }
 
 llvm::DIFile *createFile(llvm::DIBuilder* dbuilder, char *path, char *dir) {
@@ -212,8 +167,9 @@ llvm::DICompileUnit *createCompileUnit(llvm::DIBuilder* dbuilder, int lang, llvm
 }
 
 void replaceGlobalVariables(llvm::LLVMContext* ctx, llvm::DICompileUnit *cu,
-                            std::vector<llvm::Metadata *> *vec) {
-  llvm::MDTuple *tuple = llvm::MDTuple::get(*ctx, *vec);
+                            llvm::Metadata** globs, int cnt) {
+  llvm::ArrayRef<llvm::Metadata*> ref(globs, cnt);
+  llvm::MDTuple *tuple = llvm::MDTuple::get(*ctx, ref);
   llvm::MDTupleTypedArrayWrapper<llvm::DIGlobalVariableExpression> w(tuple);
   cu->replaceGlobalVariables(w);
 }
@@ -304,17 +260,6 @@ llvm::DICompositeType *createStructType(llvm::DIBuilder* dbuilder, llvm::LLVMCon
                                     llvm::DINode::FlagZero, nullptr, arr);
 }
 
-llvm::DICompositeType *createStructType_ident(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, llvm::DIScope *scope, char *name,
-  llvm::DIFile *file, int line, int size,
-  std::vector<llvm::Metadata *> *elems, char* ident) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
-  auto align = 0;
-  auto RunTimeLang = 0;
-  llvm::DIType *VTableHolder = nullptr;
-  return dbuilder->createStructType(scope, name, file, line, size, align,
-  llvm::DINode::FlagZero, nullptr, arr, RunTimeLang, VTableHolder, ident);
-}
-
 const llvm::StructLayout *getStructLayout(llvm::Module *mod, llvm::StructType *st) {
   return mod->getDataLayout().getStructLayout(st);
 }
@@ -330,8 +275,8 @@ int64_t getElementOffsetInBits(llvm::StructLayout *sl, int idx) {
 int64_t DIType_getSizeInBits(llvm::DIType *ty) { return ty->getSizeInBits(); }
 
 void replaceElements(llvm::LLVMContext* ctx, llvm::DICompositeType *st,
-                     llvm::Metadata** elems, int len) {
-  llvm::ArrayRef<llvm::Metadata*> ref(elems, len);                       
+                     llvm::Metadata** elems, int cnt) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, cnt);
   auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   st->replaceElements(arr);
 }
@@ -340,8 +285,9 @@ llvm::DICompositeType *createVariantPart(llvm::DIBuilder* dbuilder, llvm::LLVMCo
                                          llvm::DIFile *file, int line,
                                          int64_t size,
                                          llvm::DIDerivedType *disc,
-                                         std::vector<llvm::Metadata *> *elems) {
-  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, *elems));
+                                         llvm::Metadata** elems, int cnt) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, cnt);
+  auto arr = llvm::DINodeArray(llvm::MDTuple::get(*ctx, ref));
   return dbuilder->createVariantPart(scope, name, file, line, size, 0,
                                      llvm::DINode::FlagZero, disc, arr);
 }
@@ -377,8 +323,9 @@ llvm::Metadata *getOrCreateSubrange(llvm::DIBuilder* dbuilder, int64_t lo, int64
 }
 
 llvm::DIType *createArrayType(llvm::DIBuilder* dbuilder, llvm::LLVMContext* ctx, int64_t size, llvm::DIType *ty,
-                              std::vector<llvm::Metadata *> *elems) {
-  llvm::DINodeArray subs(llvm::MDTuple::get(*ctx, *elems));
+                              llvm::Metadata** elems, int cnt) {
+  llvm::ArrayRef<llvm::Metadata*> ref(elems, cnt);
+  llvm::DINodeArray subs(llvm::MDTuple::get(*ctx, ref));
   return dbuilder->createArrayType(size, 0, ty, subs);
 }
 
@@ -470,9 +417,6 @@ llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name, llvm::Type*
 llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name) {
   return llvm::StructType::create(*ctx, name);
 }
-llvm::StructType *make_struct_ty_noname(llvm::LLVMContext* ctx, std::vector<llvm::Type *> *elems) {
-  return llvm::StructType::create(*ctx, *elems);
-}
 
 int getSizeInBits(llvm::Module *mod, llvm::StructType *st) {
   int res = mod->getDataLayout().getStructLayout(st)->getSizeInBits();
@@ -553,9 +497,9 @@ void SetInsertPoint(llvm::IRBuilder<>* builder, llvm::BasicBlock *bb) { builder-
 
 llvm::BasicBlock *GetInsertBlock(llvm::IRBuilder<>* builder) { return builder->GetInsertBlock(); }
 
-void func_insert(llvm::Function *f, llvm::BasicBlock *bb) {
+/*void func_insert(llvm::Function *f, llvm::BasicBlock *bb) {
   f->insert(f->end(), bb);
-}
+}*/
 
 llvm::SwitchInst *CreateSwitch(llvm::IRBuilder<>* builder, llvm::Value *cond, llvm::BasicBlock *default_bb,
                                int num_cases) {
@@ -714,10 +658,6 @@ llvm::Value *CreateNeg(llvm::IRBuilder<>* builder, llvm::Value *val) { return bu
 
 llvm::Value *CreateFNeg(llvm::IRBuilder<>* builder, llvm::Value *val) { return builder->CreateFNeg(val); }
 
-llvm::Constant *CreateGlobalStringPtr(llvm::IRBuilder<>* builder, char *str) {
-  return builder->CreateGlobalStringPtr(str);
-}
-
 llvm::GlobalVariable* CreateGlobalString(llvm::IRBuilder<>* builder, char* str){
   return builder->CreateGlobalString(str);
 }
@@ -836,17 +776,4 @@ llvm::Value *getTrue(llvm::IRBuilder<>* builder) { return builder->getTrue(); }
 
 llvm::Value *getFalse(llvm::IRBuilder<>* builder) { return builder->getFalse(); }
 
-int64_t get_last_write_time(const char *path) {
-  auto time = std::filesystem::last_write_time(path).time_since_epoch() /
-              std::chrono::milliseconds(1);
-  return time;
-}
-
-/*void set_as_executable(const char *path) {
-  std::filesystem::permissions(path,
-                               std::filesystem::perms::owner_all |
-                                   std::filesystem::perms::group_read |
-                                   std::filesystem::perms::others_read,
-                               std::filesystem::perm_options::add);
-}*/
 }

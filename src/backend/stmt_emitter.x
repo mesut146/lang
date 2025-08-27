@@ -7,7 +7,7 @@ import ast/printer
 
 import resolver/resolver
 
-import backend/compiler
+import backend/emitter
 import backend/expr_emitter
 import backend/debug_helper
 import backend/compiler_helper
@@ -16,7 +16,7 @@ import parser/ownership
 import parser/own_model
 
 //stmt
-impl Compiler{
+impl Emitter{
     func visit(self, node: Stmt*){
       self.di.get().loc(node.line, node.pos);
       match node{
@@ -34,42 +34,6 @@ impl Compiler{
           self.own.get().do_break(node.line);
           CreateBr(self.ll.get().builder, self.loops.last().next_bb);
         },
-      }
-    }
-    func get_end_line(stmt: Stmt*): i32{
-      if let Stmt::Expr(e) = stmt{
-        return get_end_line(e);
-      }
-      return stmt.line;
-    }
-
-    func get_end_line(expr: Expr*): i32{
-      match expr{
-        Expr::If(is) => {
-          return is.get().cond.line;
-        },
-        Expr::Match(ms) => {
-          return ms.get().expr.line;
-        },
-        Expr::Block(block) => {
-          return block.get().end_line;
-        },
-        _ => return expr.line,
-      }
-    }
-
-    func get_end_line(body: Body*): i32{
-      match body{
-        Body::Block(b) => return b.end_line,
-        Body::Stmt(s) => return s.line,
-        Body::If(b) => return b.cond.line,
-        Body::IfLet(b) => return b.rhs.line,
-      }
-    }
-    func get_end_line(rhs: MatchRhs*): i32{
-      match rhs{
-        MatchRhs::STMT(stmt) => return get_end_line(stmt),
-        MatchRhs::EXPR(expr) => return get_end_line(expr),
       }
     }
 
@@ -110,7 +74,7 @@ impl Compiler{
       self.di.get().new_scope(body.line());
       self.own.get().add_scope(ScopeType::WHILE, body);
       self.visit_body(body);
-      self.own.get().end_scope(get_end_line(body));
+      self.own.get().end_scope(Utils::get_end_line(body));
       self.di.get().exit_scope();
       self.loops.pop_back();
       let exit_body = Exit::get_exit_type(body);
@@ -152,7 +116,7 @@ impl Compiler{
       self.loops.add(LoopInfo{updatebb, next});
       self.own.get().add_scope(ScopeType::FOR, node.body.get());
       self.visit_body(node.body.get());
-      self.own.get().end_scope(get_end_line(node.body.get()));
+      self.own.get().end_scope(Utils::get_end_line(node.body.get()));
       //self.di.get().exit_scope();
       let exit = Exit::get_exit_type(node.body.get());
       if(!exit.is_jump()){
