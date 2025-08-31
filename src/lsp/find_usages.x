@@ -7,13 +7,6 @@ import ast/lexer
 
 static find_type = Option<str>::new();
 
-func main(){
-    print("find usages()\n");
-    print("pwd={:?}\n", current_dir()?);
-    find_type = Option::new("TargetMachine");
-    find_usage("../src/parser");
-}
-
 func find_usage(dir: str){
     let ignore = Option<str>::new();
     ignore = Option::new("bridge.x");
@@ -86,7 +79,7 @@ func visit_item(item: Item*){
             if(gl.type.is_some()){
                 visit_type(gl.type.get());
             }
-            visit_expr(&gl.expr);
+            visit_expr(gl.expr.get());
         },
         Item::Const(cn)=>{
             if(cn.type.is_some()){
@@ -120,8 +113,19 @@ func visit_item(item: Item*){
             }
         },
         Item::Extern(methods)=>{
-            for m in methods{
-                visit_method(m);
+            for ei in methods{
+                match ei{
+                    ExternItem::Method(m)=>{
+                        visit_method(m);
+                    },
+                    ExternItem::Global(gl)=>{
+                        if(gl.type.is_some()){
+                            visit_type(gl.type.get());
+                        }
+                        visit_expr(gl.expr.get());
+                    }
+                }
+                
             }
         },
         Item::Module(md)=>{

@@ -9,8 +9,7 @@ import ast/printer
 
 import resolver/resolver
 
-//import backend/llvm
-import backend/compiler
+import backend/emitter
 import backend/compiler_helper
 import backend/bridge
 import parser/ownership
@@ -22,7 +21,7 @@ func base_class_name(): str{
 
 struct DebugInfo{
     debug: bool;
-    ll: Emitter2*;
+    ll: LLVMInfo*;
     builder: DIBuilder*;
     cu: DICompileUnit*;
     file: DIFile*;
@@ -42,7 +41,7 @@ func method_parent(m: Method*): Type*{
 }
 
 impl DebugInfo{
-    func new(debug: bool, path: str, ll: Emitter2*): DebugInfo{
+    func new(debug: bool, path: str, ll: LLVMInfo*): DebugInfo{
         let builder = DIBuilder_new(ll.module);
         let path_c = CStr::new(path);
         let dir_c = CStr::new(".");
@@ -87,7 +86,7 @@ impl DebugInfo{
         SetCurrentDebugLocation(self.ll.builder, self.get_scope(), line, pos);        
     }
 
-    func dbg_func(self, m: Method*, f: Function*, c: Compiler*): Option<DISubprogram*>{
+    func dbg_func(self, m: Method*, f: Function*, c: Emitter*): Option<DISubprogram*>{
       if (!self.debug) return Option<DISubprogram*>::new();
       let sp = self.dbg_func_proto(m, c).unwrap();
       setSubprogram(f, sp);
@@ -96,7 +95,7 @@ impl DebugInfo{
       return Option::new(sp);
     }
 
-    func dbg_func_proto(self, m: Method*, c: Compiler*): Option<DISubprogram*>{
+    func dbg_func_proto(self, m: Method*, c: Emitter*): Option<DISubprogram*>{
         if (!self.debug) return Option<DISubprogram*>::new();
         let linkage_name = "".str();
         if(!is_main(m)){
@@ -144,7 +143,7 @@ impl DebugInfo{
         return Option::new(sp);
     }
     
-    func dbg_prm(self, p: Param*, idx: i32, c: Compiler*) {
+    func dbg_prm(self, p: Param*, idx: i32, c: Emitter*) {
         if (!self.debug) return;
         let dt = self.map_di(&p.type, c);
         if(p.is_self && p.is_deref){
@@ -167,7 +166,7 @@ impl DebugInfo{
         name_c.drop();
     }
 
-    func dbg_var(self, name: String*, type: Type*, line: i32, c: Compiler*) {
+    func dbg_var(self, name: String*, type: Type*, line: i32, c: Emitter*) {
       if (!self.debug) return;
       let dt = self.map_di(type, c);
       let scope = self.get_scope();
@@ -182,7 +181,7 @@ impl DebugInfo{
       name_c.drop();
     }
 
-    func dbg_glob(self, gl: Global*, ty: Type*, gv: Value*, c: Compiler*): DIGlobalVariableExpression*{
+    func dbg_glob(self, gl: Global*, ty: Type*, gv: Value*, c: Emitter*): DIGlobalVariableExpression*{
       let scope = self.cu as DIScope*;
       let di_type = self.map_di(ty, c);
       let name_c = gl.name.clone().cstr();
@@ -201,7 +200,7 @@ impl DebugInfo{
       return *self.scopes.top();
     }
 
-    func new_scope(self, line: i32)/*: LLVMOpaqueMetadata*/{
+    func new_scope(self, line: i32){
       if(!self.debug) return;
       let scope = createLexicalBlock(self.builder, self.get_scope(), self.file, line, 0);
       self.scopes.push(scope as DIScope*);
@@ -216,7 +215,7 @@ impl DebugInfo{
       self.scopes.push(scope);
     }
 
-    func map_di_proto(self, decl: Decl*, c: Compiler*): DICompositeType*{
+    func map_di_proto(self, decl: Decl*, c: Emitter*): DICompositeType*{
         let name: String = decl.type.print();
         let elems = [ptr::null<Metadata>(); 0];
         let st_size = c.getSize(decl);
@@ -231,7 +230,7 @@ impl DebugInfo{
         return st;
     }
 
-    func make_variant_type(self, c: Compiler*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: DIFile*, var_size: i64, scope: DIScope*, var_off: i64): DIDerivedType*{
+    func make_variant_type(self, c: Emitter*, decl: Decl*, var_idx: i32, var_part: DICompositeType*, file: DIFile*, var_size: i64, scope: DIScope*, var_off: i64): DIDerivedType*{
       let ev = decl.get_variants().get(var_idx);
       let name: String = format("{:?}::{}", decl.type, ev.name.str());
       let var_type = c.protos.get().get(&name) as StructType*;
@@ -293,7 +292,7 @@ impl DebugInfo{
       return res;
     }
 
-    func fill_funcs_member(self, decl: Decl*, c: Compiler*, elems: List<Metadata*>*){
+    func fill_funcs_member(self, decl: Decl*, c: Emitter*, elems: List<Metadata*>*){
       if(decl.type.is_generic()) return;
       if(decl.type.is_simple() && decl.type.as_simple().scope.is_some()){
         //todo
@@ -309,7 +308,7 @@ impl DebugInfo{
       }
     }
 
-    func map_di_fill(self, decl: Decl*, c: Compiler*): DICompositeType*{
+    func map_di_fill(self, decl: Decl*, c: Emitter*): DICompositeType*{
       let s = decl.type.print();
       let st = *self.incomplete_types.get(&s).unwrap();
       let path_c = decl.path.clone().cstr();
@@ -399,7 +398,7 @@ impl DebugInfo{
       return st;
     }
 
-    func map_di(self, type: Type*, c: Compiler*): DIType*{
+    func map_di(self, type: Type*, c: Emitter*): DIType*{
       let rt = c.get_resolver().visit_type(type);
       let name = rt.type.print();
       let res = self.map_di_resolved(&rt.type, &name, c);
@@ -417,7 +416,7 @@ impl DebugInfo{
       return res;
     }
 
-    func map_di_resolved(self, type: Type*, name: String*, c: Compiler*): DIType*{
+    func map_di_resolved(self, type: Type*, name: String*, c: Emitter*): DIType*{
       let opt1 = self.types.get(name);
       if(opt1.is_some()){
         return *opt1.unwrap() as DIType*;
@@ -436,7 +435,7 @@ impl DebugInfo{
           let elem_ty = self.map_di(elem.get(), c);
           let size = c.getSize(type);
           let align = 0;
-          let res = createArrayType(self.builder, size, elem_ty, elems.ptr(), elems.len() as i32);
+          let res = createArrayType(self.builder, self.ll.ctx, size, elem_ty, elems.ptr(), elems.len() as i32);
           return res as DIType*;
         },
         Type::Function(ft_box)=>{

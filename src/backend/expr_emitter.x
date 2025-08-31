@@ -9,14 +9,14 @@ import resolver/resolver
 import resolver/derive
 import resolver/drop_helper
 
-import backend/compiler
-import backend/stmt_emitter
-//import backend/llvm
-import backend/debug_helper
-import backend/compiler_helper
-import backend/bridge
 import parser/ownership
 import parser/own_model
+
+import backend/bridge
+import backend/stmt_emitter
+import backend/emitter
+import backend/debug_helper
+import backend/compiler_helper
 
 struct MatchInfo{
   type: Type;
@@ -25,7 +25,7 @@ struct MatchInfo{
 }
 
 //expr------------------------------------------------------
-impl Compiler{
+impl Emitter{
 
     func visit(self, node: Expr*): Value*{
       let res = self.visit_expr(node);
@@ -214,7 +214,7 @@ impl Compiler{
             }
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             let rhs_val = self.visit_match_rhs(&case.rhs);
-            self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
+            self.own.get().end_scope(Utils::get_end_line(&case.rhs));
             let rhs_end_bb = GetInsertBlock(ll.builder);
             let exit = Exit::get_exit_type(&case.rhs);
             if(!exit.is_jump()){
@@ -248,7 +248,7 @@ impl Compiler{
 
             self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             let rhs_val = self.visit_match_rhs(&case.rhs);
-            self.own.get().end_scope(Compiler::get_end_line(&case.rhs));
+            self.own.get().end_scope(Utils::get_end_line(&case.rhs));
             let rhs_end_bb = GetInsertBlock(ll.builder);
             let exit = Exit::get_exit_type(&case.rhs);
             if(!exit.is_jump()){
@@ -362,9 +362,9 @@ impl Compiler{
       let else_end = GetInsertBlock(ll.builder);
       //else move aware end_scope
       if(node.else_stmt.is_some()){
-        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope_if(&node.else_stmt, Utils::get_end_line(node.then.get()));
       }else{
-        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
       }
       self.di.get().exit_scope();
       if(!exit_then.is_jump()){
@@ -381,7 +381,7 @@ impl Compiler{
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
         else_end = GetInsertBlock(ll.builder);
-        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.else_stmt.get()));
         self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
@@ -392,7 +392,7 @@ impl Compiler{
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
         CreateBr(ll.builder, nextbb);
       }
       let res = Option<Value*>::new();
@@ -479,9 +479,9 @@ impl Compiler{
       let else_end = GetInsertBlock(ll.builder);
       //else move aware end_scope
       if(node.else_stmt.is_some()){
-        self.own.get().end_scope_if(&node.else_stmt, Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope_if(&node.else_stmt, Utils::get_end_line(node.then.get()));
       }else{
-        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
       }
       self.di.get().exit_scope();
       let exit_then = Exit::get_exit_type(node.then.get());
@@ -497,7 +497,7 @@ impl Compiler{
         self.own.get().get_scope(else_id).sibling = if_id;
         else_val = self.visit_body(node.else_stmt.get());
         else_end = GetInsertBlock(ll.builder);
-        self.own.get().end_scope(Compiler::get_end_line(node.else_stmt.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.else_stmt.get()));
         self.di.get().exit_scope();
         let exit_else = Exit::get_exit_type(node.else_stmt.get());
         else_jump = exit_else.is_jump();
@@ -508,7 +508,7 @@ impl Compiler{
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.own.get().end_scope(Compiler::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
         CreateBr(ll.builder, next);
       }
       let res = Option<Value*>::new();
@@ -859,7 +859,7 @@ impl Compiler{
       return ptr;
     }
 
-    func makeFloat_one(type: Type*, ll: Emitter2*): Value*{
+    func makeFloat_one(type: Type*, ll: LLVMInfo*): Value*{
       if(type.eq("f32")){
         return ll.makeFloat(1.0) as Value*;
       }
@@ -1892,7 +1892,7 @@ impl Compiler{
           return;//rt is moved,return
         },
         Expr::Array(list, size) => {
-          if(!Compiler::is_constexpr(expr)){
+          if(!Emitter::is_constexpr(expr)){
             //AllocHelper::new(self).visit_child(expr);
             self.visit_array(expr, list, size, trg_ptr);
           }else{
@@ -1906,7 +1906,7 @@ impl Compiler{
       }
       rt.drop();
     }
-}//end impl Compiler
+}//end impl Emitter
 
 
 func is_deref(expr: Expr*): Option<Expr*>{

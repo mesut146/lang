@@ -9,7 +9,7 @@ import ast/utils
 import resolver/resolver
 
 import backend/bridge
-import backend/compiler
+import backend/emitter
 import backend/debug_helper
 import backend/expr_emitter
 import parser/ownership
@@ -64,13 +64,13 @@ impl RvalueHelper{
 }
 
 
-func make_slice_type(ll: Emitter2*): llvm_Type*{
+func make_slice_type(ll: LLVMInfo*): llvm_Type*{
   let elems = [ll.intPtr(8), intTy(ll.ctx, SLICE_LEN_BITS())];
   let res = make_struct_ty(ll.ctx, "__slice".ptr(), elems.ptr(), 2);
   return res as llvm_Type*;
 }
 
-func make_printf(ll: Emitter2*): FunctionInfo{
+func make_printf(ll: LLVMInfo*): FunctionInfo{
     let args = [ll.intPtr(8)];
     let ret = intTy(ll.ctx, 32);
     let ft = make_ft(ret, args.ptr(), 1, true);
@@ -79,7 +79,7 @@ func make_printf(ll: Emitter2*): FunctionInfo{
     setCallingConv(f);
     return FunctionInfo{f, ft};
 }
-func make_sprintf(ll: Emitter2*): FunctionInfo{
+func make_sprintf(ll: LLVMInfo*): FunctionInfo{
   let args = [ll.intPtr(8), ll.intPtr(8)];
   let ret = intTy(ll.ctx, 32);
   let ft = make_ft(ret, args.ptr(), 2, true);
@@ -88,7 +88,7 @@ func make_sprintf(ll: Emitter2*): FunctionInfo{
   setCallingConv(f);
   return FunctionInfo{f, ft};
 }
-func make_fflush(ll: Emitter2*): FunctionInfo{
+func make_fflush(ll: LLVMInfo*): FunctionInfo{
   let args = [ll.intPtr(8)];
   let ret = intTy(ll.ctx, 32);
   let ft = make_ft(ret, args.ptr(), 1, false);
@@ -97,7 +97,7 @@ func make_fflush(ll: Emitter2*): FunctionInfo{
   setCallingConv(f);
   return FunctionInfo{f, ft};
 }
-func make_malloc(ll: Emitter2*): FunctionInfo{
+func make_malloc(ll: LLVMInfo*): FunctionInfo{
   let args = [intTy(ll.ctx, 64)];
   let ret = ll.intPtr(8);
   let ft = make_ft(ret, args.ptr(), 1, false);
@@ -307,7 +307,7 @@ func getMethods(items: List<Item>*, list: List<Method*>*){
   }
 }
 
-impl Compiler{
+impl Emitter{
   func get_global_string(self, val: String): Value*{
     let opt = self.string_map.get(&val);
     if(opt.is_some()){
@@ -922,7 +922,7 @@ impl Compiler{
     return Pair::new(proto, mangled);
   }
 
-  func handle_cxx_global(ll: Emitter2*, f: Function*, path: str){
+  func handle_cxx_global(ll: LLVMInfo*, f: Function*, path: str){
     //_GLOBAL__sub_I_glob.cpp
     let args_ft = ptr::null<llvm_Type*>();
     let ft = make_ft(getVoidTy(ll.builder), args_ft, 0, false);

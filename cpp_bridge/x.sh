@@ -1,3 +1,5 @@
+#!/bin/bash
+
 dir=$(dirname $0)
 
 echo "building cpp_bridge"
@@ -8,26 +10,34 @@ lib=$dir/build/libbridge.a
 obj=$dir/build/bridge.o
 shared=$dir/build/libbridge.so
 
+#compile if only src is modified or lib is deleted
+mtnew=$(stat -c %Y $dir/src/bridge.cpp)
+if [ -f "$dir/build/.mtime" ]; then
+  mtold=$(cat $dir/build/.mtime)
+  if [ $mtold = $mtnew ] && [ -f $lib ]; then
+    echo "no change" && exit 0
+  fi
+fi
+echo $mtnew > $dir/build/.mtime
 
 rm -f $lib $obj $shared
 
-if ! command -v llvm-config-19 2>&1 >/dev/null; then
-  wget https://apt.llvm.org/llvm.sh
-  chmod +x llvm.sh
-  sudo ./llvm.sh 19
-  rm ./llvm.sh
+if [ -z "$LLVM_ROOT" ]; then
+  llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
+  inc_dir=$($llvm_config_bin --includedir)
+else
+  inc_dir=$LLVM_ROOT/include
 fi
 
-llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
-#clang_bin=$(${dir}/../bin/find_llvm.sh clang)
-clang_bin="g++"
-llvm_dir=$($llvm_config_bin --includedir)
-
-if [ ! -z "$CC" ]; then
-  clang_bin="$CC"
+#CXX=$(${dir}/../bin/find_llvm.sh clang)
+if [ -z "$CXX" ]; then
+  CXX="g++"
+fi
+if [ -z "$AR" ]; then
+  AR="ar"
 fi
 
-echo "llvm_dir=$llvm_dir"
+cmd="$CXX -I$inc_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
 
 cmd="$clang_bin -I$llvm_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
 
@@ -41,5 +51,4 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
-ar rcs $lib $obj && ranlib $lib && echo "writing $lib"
-$clang_bin -I$llvm_dir -shared -o $shared $obj && echo "writing $shared"
+$AR rcs $lib $obj && ranlib $lib && echo "writing $lib"

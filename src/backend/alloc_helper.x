@@ -11,24 +11,20 @@ import resolver/resolver
 import resolver/method_resolver
 
 import backend/bridge
-import backend/compiler
-import backend/compiler_helper
-import backend/debug_helper
-import parser/ownership
-import parser/own_model
+import backend/emitter
 
 struct AllocHelper{
-  c: Compiler*;
+  c: Emitter*;
 }
 
 impl AllocHelper{
-  func makeLocals(c: Compiler*, b: Block*){
+  func makeLocals(c: Emitter*, b: Block*){
     //allocMap.clear();
     let ah = AllocHelper::new(c);
     ah.visit(b);
   } 
 
-  func new(c: Compiler*): AllocHelper{
+  func new(c: Emitter*): AllocHelper{
     return AllocHelper{c: c};
   }
   func check_type(ty: Type*){
