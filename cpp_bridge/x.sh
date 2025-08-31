@@ -8,7 +8,6 @@ mkdir -p $dir/build
 
 lib=$dir/build/libbridge.a
 obj=$dir/build/bridge.o
-shared=$dir/build/libbridge.so
 
 #compile if only src is modified or lib is deleted
 mtnew=$(stat -c %Y $dir/src/bridge.cpp)
@@ -20,7 +19,7 @@ if [ -f "$dir/build/.mtime" ]; then
 fi
 echo $mtnew > $dir/build/.mtime
 
-rm -f $lib $obj $shared
+rm -f $lib $obj
 
 if [ -z "$LLVM_ROOT" ]; then
   llvm_config_bin=$(${dir}/../bin/find_llvm.sh config)
