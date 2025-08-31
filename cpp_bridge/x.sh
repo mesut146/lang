@@ -39,8 +39,6 @@ fi
 
 cmd="$CXX -I$inc_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
 
-cmd="$clang_bin -I$llvm_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
-
 if [ ! -z "$TERMUX_VERSION" ]; then
   cmd="$cmd -DLLVM20"
 fi
