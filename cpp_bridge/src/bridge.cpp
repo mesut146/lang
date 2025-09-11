@@ -24,12 +24,12 @@ int getDefaultTargetTriple(char *ptr) {
   return res.length();
 }
 
-void InitializeAllTargets() { llvm::InitializeAllTargets(); }
+/*void InitializeAllTargets() { llvm::InitializeAllTargets(); }
 void InitializeAllTargetInfos() { llvm::InitializeAllTargetInfos(); }
 void InitializeAllTargetMCs() { llvm::InitializeAllTargetMCs(); }
 void InitializeAllAsmParsers() { llvm::InitializeAllAsmParsers(); }
 void InitializeAllAsmPrinters() { llvm::InitializeAllAsmPrinters(); }
-
+*/
 const llvm::Target *lookupTarget(const char *triple) {
   std::string TargetTriple(triple);
   std::string Error;
@@ -732,9 +732,21 @@ void StructType_setBody(llvm::StructType *st, llvm::Type ** elems, int len) {
   st->setBody(ref);
 }
 
-void Value_dump(llvm::Value *v) { v->dump(); }
+void Value_dump(llvm::Value *v) {
+#ifdef TERMUX
+//todo
+#else
+v->dump();
+#endif
+}
 
-void Type_dump(llvm::Type *v) { v->dump(); }
+void Type_dump(llvm::Type *v) {
+#ifdef TERMUX
+//todo
+#else
+v->dump();
+#endif
+}
 
 llvm::Value *CreateSExt(llvm::IRBuilder<>* builder, llvm::Value *val, llvm::Type *type) {
   return builder->CreateSExt(val, type);

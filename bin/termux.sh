@@ -22,14 +22,8 @@ version=$2
 target_tool=$3
 compiler="$host_tool/bin/x"
 build=$dir/../build
-name="stage1"
-if [ ! -z "$XCROSS" ]; then
-  name="stage1_arm64"
-  XCROSS=true
-  echo "cross compiling"
-else
-  XCROSS=false
-fi
+name="stage1_termux"
+XCROSS=true
 
 out_dir=$build/${name}_out
 mkdir -p $out_dir
@@ -37,35 +31,25 @@ mkdir -p $out_dir
 #todo delete this 
 rm -rf $build
 export XTMP=$build/tmp
-XCROSS=$XCROSS $dir/apt.sh
+export XTERMUX=1
+XCROSS=$XCROSS $dir/apt_cross.sh
 XCROSS=$XCROSS $dir/llvm.sh
 
-
-if [ "$XCROSS" = true ]; then
-  export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
-else
-  export LIBZ3=$build/tmp/usr/lib/x86_64-linux-gnu/libz3.so.4
-fi
+#export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
 
 export LLVM_ROOT=$build/tmp/usr/lib/llvm-19
-export LIBLLVM="$LLVM_ROOT/lib/libLLVM.so.19.1"
+#export LIBLLVM="$LLVM_ROOT/lib/libLLVM.so.19.1"
+export LIBLLVM="$target_tool/lib/libLLVM.so.19"
 #LIBLLVM="$host_tool/lib/libLLVM.so.19.1"
-#export LD=$($dir/find_llvm.sh clang)
-export LD="g++"
-export AR=x86_64-linux-gnu-ar
-export CXX=$LD
-if [ "$XCROSS" = true ]; then
-    export LD=aarch64-linux-gnu-g++
-    export AR=aarch64-linux-gnu-ar
-    export CXX=$LD
-    export target_triple="aarch64-linux-gnu"
-    #llvm_lib="$target_tool/lib/libLLVM.so.19.1"
-fi
-if [ ! -z "$XTERMUX" ]; then
-  export LD="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
-  export target_triple="aarch64-unknown-linux-android24"
-fi
 
+export LD="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+export target_triple="aarch64-unknown-linux-android24"
+  
+export AR="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+export CXX=$LD
+#llvm_lib="$target_tool/lib/libLLVM.so.19.1"
+
+export TERMUX_VERSION="0.118.1"
 $dir/../cpp_bridge/x.sh || exit 1
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 
@@ -96,8 +80,8 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   #flags="$flags /usr/lib/aarch64-linux-gnu/libxml2.so.16"
   flags="$flags -lstdc++"
   #todo use toolchain's std dir?
-  
-  cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+  dirr=$(realpath $dir)
+  cmd="$compiler c -norun -cache -stdpath $dirr/../src -i $dirr/../src -out $out_dir -flags '$flags' -name $name $dirr/../src/parser"
   if [ ! -z "$XDEBUG" ]; then
     cmd="$cmd -g"
   fi
@@ -114,3 +98,4 @@ if [ "$XCROSS" = true ]; then
   export ARCH=aarch64
 fi
 
+XTERMUX=1 $dir/make_toolchain.sh "$final_binary" $dir/.. ${version} -zip || exit 1

@@ -58,7 +58,11 @@ if ! command -v patchelf 2>&1 >/dev/null; then
   $sudo apt install -y patchelf
 fi
 
-patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
+if [ ! -z "XTERMUX" ]; then
+  patchelf --set-rpath '$ORIGIN/../lib:/data/data/com.termux/files/usr/lib' $dir/bin/x
+else
+  patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
+fi
 
 if [ $is_zip = true ]; then
   cd $out_dir

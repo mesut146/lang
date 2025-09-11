@@ -39,7 +39,8 @@ fi
 cmd="$CXX -I$inc_dir -c -o $obj -fPIC -std=c++17 $dir/src/bridge.cpp"
 
 if [ ! -z "$TERMUX_VERSION" ]; then
-  cmd="$cmd -DLLVM20"
+  #cmd="$cmd -DLLVM20"
+  cmd="$cmd -DTERMUX"
 fi
 echo $cmd
 $cmd
@@ -49,3 +50,6 @@ if [ ! "$?" -eq "0" ]; then
 fi
 
 $AR rcs $lib $obj && ranlib $lib && echo "writing $lib"
+
+cmd="$CXX -I$inc_dir -o $dir/build/bridge.so -fPIC -std=c++17 $dir/src/bridge.cpp -shared"
+echo $cmd && $cmd

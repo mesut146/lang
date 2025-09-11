@@ -7,9 +7,9 @@ ARG termux
 ARG DEBIAN_FRONTEND=noninteractive
 
 COPY . /home/lang
-COPY "$host_tool" /home/lang/
-COPY "$target_tool" /home/lang/
+#COPY "$host_tool" /home/lang/
+#COPY "$target_tool" /home/lang/
 
 WORKDIR /home/lang
 RUN rm -rf ./build ./cpp_bridge/build
-RUN XCROSS="true" XTMP=./build/tmp ./bin/apt_cross.sh
+RUN XTERMUX="$termux" XTMP=./build/tmp ./bin/apt_cross.sh

@@ -13,24 +13,26 @@ fi
 host_tool=$1
 version=$2
 
-docker builder prune -f
-#--no-cache
-NOCACHE=true
 #move tools inside project dir otherwise docker cant access them
 root=$(realpath $dir/..)
 host_real=$(realpath $host_tool)
 if [[ ! "$host_real" = $root/* ]]; then
-    cp -r $host_tool $root && host_tool=$root/$(basename $host_tool)
+    cp -r $host_tool $root
+    host_tool=$root/$(basename $host_tool)
 fi
-if [[ $NOCACHE = true || $(docker images x64:latest) != *"x64"* ]]; then
-docker build --progress=plain -t x64 -f ./bin/Dockerfile_x64 \
+name="test"
+docker builder prune -f
+docker rmi -f $name
+docker build \
+-t $name \
+-f ./bin/Dockerfile_x64 \
 --build-arg host_tool=$host_tool \
 --build-arg XTMP=$XTMP \
---no-cache --pull .
-fi
+  .
 
 docker rm -f x64c
-docker run --name x64c x64 sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/stage1.sh $host_tool $version"
+docker run $name sh -c "cat ./src/std/string.x"
+#docker run --rm --name x64c $name sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/stage1.sh $host_tool $version"
 
 #docker create --name crossc cross
 #docker cp crossc:/home/lang/x-toolchain-$version-aarch64.zip .
