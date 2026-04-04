@@ -4,11 +4,21 @@ sudo ()
     "$@"
 }
 
-if [ ! -f $XTMP/llvm-19-dev*.deb ] ; then
-    if[[ $(apt-add-repository -L) != *"llvm-toolchain-noble"* ]]
-    sudo wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
-    sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble main"
+if [ -z "${XTMP:-}" ]; then
+  echo "Error: XTMP environment variable is not set" >&2
+  exit 1
+fi
+
+if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
+
+    if ! grep -Rq "apt.llvm.org/noble" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+      sudo mkdir -p /etc/apt/keyrings
+      wget -qO /etc/apt/keyrings/llvm.asc https://apt.llvm.org/llvm-snapshot.gpg.key
+      echo "deb [signed-by=/etc/apt/keyrings/llvm.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble main" | \
+      sudo tee /etc/apt/sources.list.d/llvm.list
     fi
+
+
     mkdir -p $XTMP
     pushd $XTMP
     echo "XCROSS=$XCROSS"
