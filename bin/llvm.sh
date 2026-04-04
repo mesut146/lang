@@ -4,10 +4,11 @@ sudo ()
     "$@"
 }
 
-if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
+if [ ! -f $XTMP/llvm-19-dev*.deb ] ; then
+    if[[ $(apt-add-repository -L) != *"llvm-toolchain-noble"* ]]
     sudo wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
     sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble main"
-
+    fi
     mkdir -p $XTMP
     pushd $XTMP
     echo "XCROSS=$XCROSS"

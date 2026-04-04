@@ -31,6 +31,10 @@ else
   XCROSS=false
 fi
 
+if [ $(uname -m) = "aarch64" ]; then
+  XCROSS=true
+fi
+
 out_dir=$build/${name}_out
 mkdir -p $out_dir
 
