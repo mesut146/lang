@@ -37,6 +37,7 @@ mkdir -p $out_dir
 rm -rf $build
 export XTMP=$build/tmp
 XCROSS=$XCROSS $dir/apt.sh
+XCROSS=$XCROSS $dir/llvm.sh
 
 
 if [ "$XCROSS" = true ]; then
@@ -64,6 +65,8 @@ if [ ! -z "$XTERMUX" ]; then
   export target_triple="aarch64-unknown-linux-android24"
 fi
 
+# bridge object is arch-specific; force rebuild on arch switches
+rm -rf $dir/../cpp_bridge/build
 $dir/../cpp_bridge/x.sh || exit 1
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 

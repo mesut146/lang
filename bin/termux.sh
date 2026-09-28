@@ -67,6 +67,8 @@ export CXX=$LD
 #llvm_lib="$target_tool/lib/libLLVM.so.19.1"
 
 export TERMUX_VERSION="0.118.1"
+# bridge object is arch-specific; force rebuild on arch switches
+rm -rf $dir/../cpp_bridge/build
 $dir/../cpp_bridge/x.sh || exit 1
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 

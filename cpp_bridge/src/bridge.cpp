@@ -47,6 +47,9 @@ llvm::TargetMachine *createTargetMachine(const char *triple, int reloc) {
   auto CPU = "generic";
   auto Features = "";
   llvm::TargetOptions opt;
+  // clang/gcc emit .init_array; raw API defaults to legacy .ctors which
+  // Android's linker ignores, so global constructors would never run there.
+  opt.UseInitArray = true;
   //llvm::Reloc::Model::PIC_
   auto RM = std::optional<llvm::Reloc::Model>((llvm::Reloc::Model)reloc);
   return Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);

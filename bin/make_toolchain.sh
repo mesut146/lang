@@ -70,6 +70,10 @@ fi
 
 if [ ! -z "$XTERMUX" ]; then
   patchelf --set-rpath '$ORIGIN/../lib:/data/data/com.termux/files/usr/lib' $dir/bin/x
+  # Termux rolls libxml2 SONAME forward (so.2 -> so.16); our libLLVM still
+  # wants libxml2.so.2. Absolute symlink lets the loader resolve it from the
+  # system prefix; rpath already covers both locations.
+  ln -sf /data/data/com.termux/files/usr/lib/libxml2.so.16 $dir/lib/libxml2.so.2
 else
   patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
 fi
