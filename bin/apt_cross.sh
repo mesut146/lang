@@ -17,7 +17,9 @@ sudo apt-get install -y wget software-properties-common gnupg
 
 
 if [ ! -z "$XTERMUX" ]; then
-  wget "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"
-  unzip "android-ndk-r27c-linux.zip"
+  if [ ! -d "android-ndk-r27c" ]; then
+    wget "https://dl.google.com/android/repository/android-ndk-r27c-linux.zip"
+    unzip "android-ndk-r27c-linux.zip"
+  fi
   export LD="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
 fi

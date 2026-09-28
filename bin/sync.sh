@@ -11,14 +11,14 @@ zip -q -r $zip ./bin ./src ./tests ./cpp_bridge/src ./cpp_bridge/x.sh ./cpp_brid
 gcloud cloud-shell scp localhost:$zip cloudshell:/home/mesutdogansoy/lang
 
 host_tool="x-toolchain-1.00-x86_64"
-termux_tool="x-toolchain-1.00-tmux-aarch64"
+termux_tool="x-toolchain-1.00-termux-aarch64"
 
 if [ -z "$XVER" ]; then
     XVER="v2"
 fi
 cmd="cd lang/ && unzip -u -o tmp.zip && rm -f tmp.zip"
 if [ "$1" = "-termux" ]; then
-  cmd="$cmd&&./bin/docker.sh $host_tool $termuz_tool v-tmux-termux -termux"
+  cmd="$cmd&&./bin/docker.sh $host_tool $termux_tool v-tmux-termux -termux"
 elif [ "$1" = "-termuxd" ]; then
   cmd="$cmd&&./bin/docker_termux.sh $host_tool vtermux x-toolchain-1.00-termux-aarch64"
   #gcloud cloud-shell scp cloudshell:/home/mesutdogansoy/lang/x-toolchain-vtermux-aarch64.zip localhost:.

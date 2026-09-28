@@ -25,27 +25,44 @@ build=$dir/../build
 name="stage1_termux"
 XCROSS=true
 
+if [ ! -f "$compiler" ]; then
+  echo "host compiler not found: $compiler" && exit 1
+fi
+if [ ! -d "$target_tool" ]; then
+  echo "provide target_tool dir with Termux libLLVM (e.g. x-toolchain-1.00-termux-aarch64)" && exit 1
+fi
+
+# wipe build AFTER resolving vars, BEFORE creating out_dir
+rm -rf $build
+export XTMP=$build/tmp
 out_dir=$build/${name}_out
 mkdir -p $out_dir
 
-#todo delete this 
-rm -rf $build
-export XTMP=$build/tmp
 export XTERMUX=1
 XCROSS=$XCROSS $dir/apt_cross.sh
-XCROSS=$XCROSS $dir/llvm.sh
+XTERMUX=1 XCROSS=$XCROSS $dir/llvm.sh
+# NB: Debian arm64 libLLVM from llvm.sh is NOT usable for Android linking.
+# libLLVM must come from the previous Termux toolchain (built against NDK/Termux llvm).
 
 #export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
 
 export LLVM_ROOT=$build/tmp/usr/lib/llvm-19
-#export LIBLLVM="$LLVM_ROOT/lib/libLLVM.so.19.1"
-export LIBLLVM="$target_tool/lib/libLLVM.so.19"
+#libLLVM must be the Android/Termux one, not the Debian x86_64 one
+if ls "$target_tool"/lib/libLLVM.so* >/dev/null 2>&1; then
+  export LIBLLVM=$(ls "$target_tool"/lib/libLLVM.so* | head -n 1)
+else
+  echo "no libLLVM.so* in $target_tool/lib" && exit 1
+fi
 #LIBLLVM="$host_tool/lib/libLLVM.so.19.1"
 
-export LD="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
-export target_triple="aarch64-unknown-linux-android24"
+NDK_ROOT="$dir/../android-ndk-r27c"
+if [ ! -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++" ]; then
+  echo "NDK not found at $NDK_ROOT (apt_cross.sh should have downloaded it)" && exit 1
+fi
+export LD="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang++"
+export target_triple="aarch64-linux-android24"
   
-export AR="./android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+export AR="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
 export CXX=$LD
 #llvm_lib="$target_tool/lib/libLLVM.so.19.1"
 
@@ -75,7 +92,9 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
-  flags="$flags $LIBZ3"
+  if [ ! -z "$LIBZ3" ]; then
+    flags="$flags $LIBZ3"
+  fi
   #flags="$flags -lxml2"
   #flags="$flags /usr/lib/aarch64-linux-gnu/libxml2.so.16"
   flags="$flags -lstdc++"
@@ -95,7 +114,7 @@ final_binary=${out_dir}/${name}
 cp ${out_dir}/${name} $build
 
 if [ "$XCROSS" = true ]; then
-  export ARCH=aarch64
+  export ARCH=termux-aarch64
 fi
 
-XTERMUX=1 $dir/make_toolchain.sh "$final_binary" $dir/.. ${version} -zip || exit 1
+XTERMUX=1 ARCH=termux-aarch64 $dir/make_toolchain.sh "$final_binary" $dir/.. ${version} -zip || exit 1

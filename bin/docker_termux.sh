@@ -3,8 +3,15 @@ dir=$(dirname $0)
 
 echo "docker_termux.sh $1,$2,$3"
 
-gh release download --skip-existing v1.00 -p "x-toolchain-1.00-termux-aarch64.zip" && unzip -n x-toolchain-1.00-termux-aarch64.zip
-target_tool="x-toolchain-1.00-termux-aarch64"
+host_tool=$1
+version=$2
+target_tool=$3
+if [ -z "$target_tool" ]; then
+  target_tool="x-toolchain-1.00-termux-aarch64"
+fi
+if [ ! -d "$target_tool" ]; then
+  gh release download --skip-existing v1.00 -p "x-toolchain-1.00-termux-aarch64.zip" && unzip -n x-toolchain-1.00-termux-aarch64.zip || true
+fi
 
 if [ ! -d "$1" ]; then
  echo "provide host toolchain" && exit 1
@@ -18,7 +25,10 @@ fi
 
 host_tool=$1
 version=$2
-#target_tool=$3
+target_tool=$3
+if [ -z "$target_tool" ]; then
+  target_tool="x-toolchain-1.00-termux-aarch64"
+fi
 
 docker builder prune -f
 docker rmi -f cross
@@ -40,5 +50,5 @@ docker build --progress=plain -t cross -f ./bin/Dockerfile \
 fi
 
 docker run --name crossc cross sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/termux.sh $host_tool $version $target_tool"
-docker cp crossc:/home/lang/x-toolchain-$version-aarch64.zip .
+docker cp crossc:/home/lang/x-toolchain-$version-termux-aarch64.zip .
 docker rm -f crossc

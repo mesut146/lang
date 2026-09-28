@@ -15,8 +15,10 @@ jobs:
         run: |
           echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
           echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> $GITHUB_ENV
+          echo "toolchain_termux_dir=x-toolchain-${last_version}-termux-aarch64" >> $GITHUB_ENV
           echo "tool2_x86_64_zip=x-toolchain-${new_version}-x86_64.zip" >> $GITHUB_ENV
           echo "tool2_arm64_zip=x-toolchain-${new_version}-aarch64.zip" >> $GITHUB_ENV
+          echo "tool2_termux_zip=x-toolchain-${new_version}-termux-aarch64.zip" >> $GITHUB_ENV
           echo "tool3_x86_64_zip=x-toolchain-${new_version}-stage2-x86_64.zip" >> $GITHUB_ENV
 
       - uses: actions/checkout@v4
@@ -53,6 +55,20 @@ jobs:
         with:
           name: ${{ env.tool2_arm64_zip }}
           path: ${{ env.tool2_arm64_zip }}
+          compression-level: 0
+
+      - name: build-termux
+        id: build_termux
+        run: |
+          unzip -n ${{ env.toolchain_termux_dir }}.zip || echo "no termux bootstrap toolchain present"
+          XOPT="" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
+
+      - name: Upload Artifacts termux
+        if: ${{ steps.build_termux.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.tool2_termux_zip }}
+          path: ${{ env.tool2_termux_zip }}
           compression-level: 0
 
       - name: Create Release

@@ -33,6 +33,10 @@ arch=$ARCH
 if [ -z $ARCH ]; then
   arch=$(uname -m)
 fi
+# termux toolchain must not collide with gnu aarch64
+if [ ! -z "$XTERMUX" ] && [ "$arch" = "aarch64" ]; then
+  arch="termux-aarch64"
+fi
 name="x-toolchain-${version}-${arch}"
 dir=$out_dir/$name
 
@@ -43,6 +47,12 @@ mkdir -p $dir/src
 
 cp $binary $dir/bin/x
 cp $LIBLLVM $dir/lib
+# Android libLLVM SONAME is libLLVM.so while the file is libLLVM.so.19;
+# loader looks up SONAME, so provide the symlink next to it.
+llvm_base=$(basename $LIBLLVM)
+if [ "$llvm_base" != "libLLVM.so" ]; then
+  ln -sf "$llvm_base" $dir/lib/libLLVM.so
+fi
 cp $(dirname $binary)/std_out/std.a $dir/lib
 if [ ! -z "$LIBZ3" ]; then
   cp $LIBZ3 $dir/lib
@@ -58,7 +68,7 @@ if ! command -v patchelf 2>&1 >/dev/null; then
   $sudo apt install -y patchelf
 fi
 
-if [ ! -z "XTERMUX" ]; then
+if [ ! -z "$XTERMUX" ]; then
   patchelf --set-rpath '$ORIGIN/../lib:/data/data/com.termux/files/usr/lib' $dir/bin/x
 else
   patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
