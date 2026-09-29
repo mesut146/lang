@@ -1,0 +1,10 @@
+# keep docker build context small: NDK/build outputs/zips are
+# re-downloaded or regenerated inside the container
+build/
+cpp_bridge/build/
+android-ndk-r27c/
+android-ndk-r27c-linux.zip
+*.zip
+.git/
+ses_*.json
+/tmp/

@@ -53,6 +53,38 @@ llvm_base=$(basename $LIBLLVM)
 if [ "$llvm_base" != "libLLVM.so" ]; then
   ln -sf "$llvm_base" $dir/lib/libLLVM.so
 fi
+# gnu-aarch64 cross: bundle the arm64 runtime deps of libLLVM so the
+# toolchain is self-contained. Prefer noble builds (glibc <=2.39, runs on
+# Ubuntu 24.04-class devices); sid builds need GLIBC_2.42+.
+# llvm.sh puts sid debs in build/tmp and noble ones in build/tmp/noble-deps.
+if [ "$arch" = "aarch64" ] && [ -z "$XTERMUX" ]; then
+  depdir=$out_dir/build/tmp
+  if ls $out_dir/build/tmp/noble-deps/*.deb >/dev/null 2>&1; then
+    depdir=$out_dir/build/tmp/noble-deps
+  fi
+  tmpd=$(mktemp -d)
+  for deb in $depdir/libffi8*.deb \
+             $depdir/libedit2*.deb \
+             $depdir/libzstd1*.deb \
+             $depdir/libxml2*.deb; do
+    [ -f "$deb" ] || continue
+    case "$deb" in *libxml2-dev*) continue;; esac
+    dpkg-deb -x "$deb" "$tmpd"
+  done
+  for so in "$tmpd"/usr/lib/aarch64-linux-gnu/libffi.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libedit.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libzstd.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libxml2.so*; do
+    [ -e "$so" ] || [ -L "$so" ] || continue
+    cp -a "$so" $dir/lib/
+  done
+  rm -rf "$tmpd"
+  # noble ships libxml2.so.2 (with the old version nodes our libLLVM wants),
+  # while sid-built libLLVM asks for .so.16 -> retarget when we bundled .so.2.
+  if ls $dir/lib/libxml2.so.2* >/dev/null 2>&1; then
+    patchelf --replace-needed libxml2.so.16 libxml2.so.2 $dir/lib/$llvm_base || true
+  fi
+fi
 cp $(dirname $binary)/std_out/std.a $dir/lib
 if [ ! -z "$LIBZ3" ]; then
   cp $LIBZ3 $dir/lib
@@ -70,17 +102,41 @@ fi
 
 if [ ! -z "$XTERMUX" ]; then
   patchelf --set-rpath '$ORIGIN/../lib:/data/data/com.termux/files/usr/lib' $dir/bin/x
-  # Termux rolls libxml2 SONAME forward (so.2 -> so.16); our libLLVM still
-  # wants libxml2.so.2. Absolute symlink lets the loader resolve it from the
-  # system prefix; rpath already covers both locations.
-  ln -sf /data/data/com.termux/files/usr/lib/libxml2.so.16 $dir/lib/libxml2.so.2
+  # Bundle Termux-built LLVM deps (repo termux-deps/*.deb) so the toolchain
+  # does not depend on the device's rolling packages.
+  # NB: libxml2 >=2.15 dropped symbol versioning, while our libLLVM wants
+  # versioned xml symbols -> clear the requirements so any libxml2.so.16
+  # (2.14 with versions, or 2.15 unversioned) satisfies them.
+  deps_src="$cur/../termux-deps"
+  if [ -d "$deps_src" ]; then
+    tmpd=$(mktemp -d)
+    for deb in "$deps_src"/libffi_*.deb "$deps_src"/libxml2_2*.deb "$deps_src"/zstd_*.deb; do
+      [ -f "$deb" ] || continue
+      dpkg-deb -x "$deb" "$tmpd"
+    done
+    for so in "$tmpd"/data/data/com.termux/files/usr/lib/libffi.so \
+              "$tmpd"/data/data/com.termux/files/usr/lib/libxml2.so* \
+              "$tmpd"/data/data/com.termux/files/usr/lib/libzstd.so*; do
+      [ -e "$so" ] || [ -L "$so" ] || continue
+      cp -a "$so" $dir/lib/
+    done
+    rm -rf "$tmpd"
+  fi
+  for sym in xmlFreeDoc xmlFree xmlSetGenericErrorFunc xmlReadMemory \
+             xmlDocGetRootElement xmlUnlinkNode xmlFreeNode xmlCopyNamespace \
+             xmlNewProp xmlStrdup xmlAddChild xmlNewDoc xmlDocSetRootElement \
+             xmlDocDumpFormatMemoryEnc xmlFreeNs xmlNewNs; do
+    patchelf --clear-symbol-version $sym $dir/lib/$llvm_base || echo "warn: clear $sym failed"
+  done
+  patchelf --replace-needed libxml2.so.2 libxml2.so.16 $dir/lib/$llvm_base || true
 else
   patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
 fi
 
 if [ $is_zip = true ]; then
   cd $out_dir
-  zip -r ${name}.zip "./$name" && echo "built toolchain ${name}.zip"
+  # -y: keep symlinks as symlinks, otherwise libLLVM ships twice (118MB x2)
+  zip -r -y ${name}.zip "./$name" && echo "built toolchain ${name}.zip"
 else
   echo "built toolchain ${name}/"
 fi

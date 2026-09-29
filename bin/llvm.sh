@@ -48,6 +48,17 @@ if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
     if [ "$XCROSS" = "true" ]; then
       sudo dpkg --add-architecture arm64
       sudo apt-get download llvm-19-dev:arm64 libllvm19:arm64 libz3-4:arm64
+      # runtime deps of arm64 libLLVM, bundled into the toolchain (see make_toolchain.sh)
+      sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2-16:arm64
+      # ...plus noble builds (glibc <=2.39) for devices older than sid;
+      # make_toolchain.sh prefers these when present.
+      if ! grep -Rq "ports.ubuntu.com.*noble" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+        echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble noble-updates main universe" | \
+        sudo tee /etc/apt/sources.list.d/ubuntu-ports-noble-arm64.list
+        sudo apt-get update || true
+      fi
+      mkdir -p ./noble-deps
+      (cd ./noble-deps && sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64 || true)
     else
       #amd64
       sudo apt-get download llvm-19-dev libllvm19 libz3-4
