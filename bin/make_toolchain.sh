@@ -46,6 +46,11 @@ mkdir -p $dir/lib
 mkdir -p $dir/src
 
 cp $binary $dir/bin/x
+#follow symlinks: we want the real file (libLLVM.so.19) plus a SONAME
+#symlink (libLLVM.so), not a 118MB duplicate under the link name.
+if [ -L "$LIBLLVM" ]; then
+  LIBLLVM=$(readlink -f "$LIBLLVM")
+fi
 cp $LIBLLVM $dir/lib
 # Android libLLVM SONAME is libLLVM.so while the file is libLLVM.so.19;
 # loader looks up SONAME, so provide the symlink next to it.
@@ -66,7 +71,12 @@ if [ "$arch" = "aarch64" ] && [ -z "$XTERMUX" ]; then
   for deb in $depdir/libffi8*.deb \
              $depdir/libedit2*.deb \
              $depdir/libzstd1*.deb \
-             $depdir/libxml2*.deb; do
+             $depdir/libxml2*.deb \
+             $depdir/libbsd0*.deb \
+             $depdir/libtinfo6*.deb \
+             $depdir/liblzma5*.deb \
+             $depdir/libz3-4*.deb \
+             $depdir/libz3*.deb; do
     [ -f "$deb" ] || continue
     case "$deb" in *libxml2-dev*) continue;; esac
     dpkg-deb -x "$deb" "$tmpd"
@@ -74,7 +84,12 @@ if [ "$arch" = "aarch64" ] && [ -z "$XTERMUX" ]; then
   for so in "$tmpd"/usr/lib/aarch64-linux-gnu/libffi.so* \
             "$tmpd"/usr/lib/aarch64-linux-gnu/libedit.so* \
             "$tmpd"/usr/lib/aarch64-linux-gnu/libzstd.so* \
-            "$tmpd"/usr/lib/aarch64-linux-gnu/libxml2.so*; do
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libxml2.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libbsd.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libtinfo.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/liblzma.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libz3.so* \
+            "$tmpd"/usr/lib/aarch64-linux-gnu/libmd.so*; do
     [ -e "$so" ] || [ -L "$so" ] || continue
     cp -a "$so" $dir/lib/
   done

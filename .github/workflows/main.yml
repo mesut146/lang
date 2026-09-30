@@ -3,8 +3,8 @@ name: test
 on: [push]
 
 env:
-  last_version: '1.00'
-  new_version: '1.01'
+  last_version: '1.03'
+  new_version: '1.04'
   publish: false
 
 jobs:
@@ -42,6 +42,11 @@ jobs:
           name: ${{ env.tool2_x86_64_zip }}
           path: ${{ env.tool2_x86_64_zip }}
           compression-level: 0
+
+      - name: test-x86_64
+        id: test_x86_64
+        run: |
+          ./bin/test.sh x-toolchain-${{ env.new_version }}-x86_64 all
 
       - name: build-arm64
         id: build_arm64

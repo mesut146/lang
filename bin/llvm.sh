@@ -47,7 +47,7 @@ if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
     echo "XCROSS=$XCROSS"
     if [ "$XCROSS" = "true" ]; then
       sudo dpkg --add-architecture arm64
-      sudo apt-get download llvm-19-dev:arm64 libllvm19:arm64
+      sudo apt-get download llvm-19-dev:arm64 libllvm19:arm64 libz3-4:arm64
       # runtime deps of arm64 libLLVM, bundled into the toolchain (see make_toolchain.sh)
       sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2-16:arm64
       # ...plus noble builds (glibc <=2.39) for devices older than sid;
@@ -58,7 +58,7 @@ if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
         sudo apt-get update || true
       fi
       mkdir -p ./noble-deps
-      (cd ./noble-deps && sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64 || true)
+      (cd ./noble-deps && sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64 libbsd0:arm64 libtinfo6:arm64 liblzma5:arm64 libz3-4:arm64 || true)
     else
       #amd64
       sudo apt-get download llvm-19-dev libllvm19
@@ -66,5 +66,6 @@ if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
 
     dpkg-deb -x ./llvm-19-dev*.deb .
     dpkg-deb -x ./libllvm19*.deb .
+    dpkg-deb -x ./libz3-4*.deb .
     popd
 fi

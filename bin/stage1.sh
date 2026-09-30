@@ -46,6 +46,11 @@ XCROSS=$XCROSS $dir/llvm.sh
 
 
 
+#NB: gnu-arm64 libLLVM needs libz3 (x86_64/termux do not link it)
+if [ "$XCROSS" = true ]; then
+  export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
+fi
+
 export LLVM_ROOT=$build/tmp/usr/lib/llvm-19
 export LIBLLVM="$LLVM_ROOT/lib/libLLVM.so.19.1"
 #LIBLLVM="$host_tool/lib/libLLVM.so.19.1"
@@ -92,6 +97,9 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
+  if [ ! -z "$LIBZ3" ]; then
+    flags="$flags $LIBZ3"
+  fi
   #flags="$flags -lxml2"
   #flags="$flags /usr/lib/aarch64-linux-gnu/libxml2.so.16"
   flags="$flags -lstdc++"
