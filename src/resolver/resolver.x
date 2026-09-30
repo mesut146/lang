@@ -208,6 +208,10 @@ struct Resolver{
   resolvers_cache_cur_valid: bool;
   resolvers_cache_extra: i64;
   resolvers_cache_method: String;
+  //memoized generic instantiations: exact (method, scope, inferred-types)
+  //key -> Desc of the generated method. Avoids the O(n) scan over prior
+  //instantiations in generateMethod (O(n^2) total for hot generics).
+  gen_cache: HashMap<String, Desc>;
 }
 
 impl Resolver{
@@ -255,6 +259,7 @@ impl Resolver{
       resolvers_cache_cur_valid: false,
       resolvers_cache_extra: 0,
       resolvers_cache_method: "".str(),
+      gen_cache: HashMap<String, Desc>::new(),
     };
   }
 }

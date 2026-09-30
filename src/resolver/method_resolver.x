@@ -101,10 +101,8 @@ impl Signature{
             r: Option::new(r),
             desc: Desc::new()
         };
-        let is_trait = false;                            
+        let is_trait = false;
         if(mc.scope.is_some()){
-            let str = mc.print();
-            //print("{}\n", str);
             let scp: RType = r.visit(mc.scope.get());
             let real_scope = Option::new(scp.clone());
             is_trait = scp.is_trait();
@@ -127,7 +125,6 @@ impl Signature{
                 res.args.add(real_scope.get().type.clone());
             }
             real_scope.drop();
-            str.drop();
         }
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get(i);
@@ -865,8 +862,87 @@ impl MethodResolver{
         }
     }
 
+    //exact-instantiation key: method identity + scope + inferred types in
+    //canonical (type-param) order. Hit means bit-identical instantiation.
+    func gen_key(m: Method*, sig: Signature*, map: HashMap<String, Type>*, type_params: List<Type>*): String{
+        let f = Fmt::new();
+        f.print(&m.path);
+        f.print("#");
+        f.print(&m.name);
+        f.print("#");
+        match &m.parent{
+            Parent::Impl(info) => {
+                f.print(&info.type);
+            },
+            Parent::Trait(ty) => {
+                f.print(ty);
+            },
+            Parent::Module(qp) => {
+                f.print(qp);
+            },
+            Parent::Extern => {
+                f.print("extern");
+            },
+            Parent::None => {},
+        }
+        f.print("#");
+        if(sig.scope.is_some()){
+            f.print(&sig.scope.get().type);
+        }
+        f.print("#");
+        if(sig.mc.unwrap().is_static){
+            f.print("s");
+        }else{
+            f.print("i");
+        }
+        //method shape: overloads (new() vs new(cap)) share name, parent,
+        //scope and inferred types, so the definition itself must be keyed.
+        f.print("#");
+        f.print(&m.type);
+        if(m.self.is_some()){
+            f.print("#self=");
+            f.print(&m.self.get().type);
+        }
+        for(let i = 0;i < m.params.len();++i){
+            f.print("#p=");
+            f.print(&m.params.get(i).type);
+        }
+        for(let i = 0;i < type_params.len();++i){
+            let tp = type_params.get(i);
+            f.print("#");
+            f.print(tp.name());
+            f.print("=");
+            let hit = map.get(tp.name());
+            if(hit.is_some()){
+                f.print(hit.unwrap());
+            }
+            hit.drop();
+        }
+        return f.unwrap();
+    }
+
     func generateMethod(self, map: HashMap<String, Type>*, m: Method*, sig: Signature*): Pair<Method*, Desc>{
         let mc = sig.mc.unwrap();
+        //fast path: exact (method, scope, inferred-types) key. Misses fall
+        //through to the compatibility scan below (which also backfills).
+        let tp_all = get_type_params(m);
+        let key = gen_key(m, sig, map, &tp_all);
+        {
+            let cached = self.r.gen_cache.get(&key);
+            if(cached.is_some()){
+                let idx = cached.unwrap().idx;
+                let arr = self.r.generated_methods.get(&m.name).unwrap();
+                if(idx >= 0 && idx < arr.len()){
+                    let gm = arr.get(idx).get();
+                    let desc = cached.unwrap().clone();
+                    cached.drop();
+                    tp_all.drop();
+                    key.drop();
+                    return Pair::new(gm, desc);
+                }
+                cached.drop();
+            }
+        }
         let arr_opt = self.r.generated_methods.get(&m.name);
         if(arr_opt.is_some()){
             let i = 0;
@@ -883,6 +959,9 @@ impl MethodResolver{
                         idx: i,
                         scope: Option<Type>::new(),
                     };
+                    self.r.gen_cache.add(key.clone(), desc.clone());
+                    tp_all.drop();
+                    key.drop();
                     return Pair::new(gm.get(), desc);
                 }
                 ++i;
@@ -904,6 +983,8 @@ impl MethodResolver{
         };
         self.r.generated_methods_todo.add(desc.clone());
         let res: Method* = arr_opt.unwrap().add(Box::new(res2)).get();
+        self.r.gen_cache.add(key, desc.clone());
+        tp_all.drop();
         if(!(m.parent is Parent::Impl)){
             return Pair::new(res, desc);
         }
@@ -946,22 +1027,22 @@ impl MethodResolver{
         }
         if(type1.is_slice()){
             if(!type2.is_slice()){
-                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
+                return SigResult::Err{"not same impl: slice vs non-slice".str()};
             }
             if(info.type_params.empty()){
-                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
+                return SigResult::Err{"not same impl: slice not generic".str()};
             }
             let cmp = is_compatible(type1, type2, &info.type_params);
             if(cmp.is_some()){
                 cmp.drop();
-                return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
+                return SigResult::Err{"not same impl: slice incompatible".str()};
             }
             cmp.drop();
             return SigResult::Exact;
             //panic("todo {} vs {}, mc={} cmp={}", type1, type2, sig.mc.unwrap(), &cmp);
         }
         if(!type1.is_simple() || !type2.is_simple()){
-            return SigResult::Err{format("not same kind {:?} vs {:?}", type1, type2)};
+            return SigResult::Err{"not same impl kind".str()};
         }
         if (scope_rt.is_trait()) {
             let real_scope = sig.args.get(0).deref_ptr();
@@ -972,14 +1053,14 @@ impl MethodResolver{
                 return SigResult::Exact;
             }
             else if (!real_scope.name().eq(type2.name())) {
-                return SigResult::Err{format("not same impl {:?} vs {:?}", real_scope, type2)};
+                return SigResult::Err{"not same impl trait scope".str()};
             }
         }
         if(info.type_params.empty()){
-            return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
+            return SigResult::Err{"not same impl: not generic".str()};
         }
         if (!type1.name().eq(type2.name().str())) {
-            return SigResult::Err{format("not same impl {:?} vs {:?}", type1, type2)};
+            return SigResult::Err{"not same impl name".str()};
             //return self.check_args(sig, sig2);
         }
         return SigResult::Exact;
@@ -1002,8 +1083,7 @@ impl MethodResolver{
                     let ta1 = mc_targs.get(i);
                     let ta2 = m.type_params.get(i);
                     if (!ta1.eq(ta2)) {
-                        let err = format("type arg {:?} not compatible with {:?}", ta1, ta2);
-                        return SigResult::Err{err};
+                        return SigResult::Err{"type arg not compatible".str()};
                     }
                 }
             }
