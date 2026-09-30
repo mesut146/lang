@@ -364,8 +364,10 @@ impl i64{
   func str(self): String{
     return i64::print(*self);
   }
+  //NB: all arithmetic below is same-type u64, so parsing is exact
+  //regardless of mixed-width codegen fixes (bootstrap-safe).
   func parse(s: str): Result<i64, String>{
-    let x: i64 = 0;
+    let x: u64 = 0 as u64;
     let neg = false;
     let pos = 0;
     if(s.get(0) as u32 == '-'){
@@ -380,13 +382,13 @@ impl i64{
       if(!(ch >= '0' && ch <= '9')){
         return Result<i64, String>::err(format("invalid digit '{}' at pos {}", ch as u8, pos));
       }
-      x = 10 * x + (ch as i64 - ('0' as i64));
+      x = (10 as u64) * x + ((ch as u64) - ('0' as u64));
       ++pos;
     }
     if(neg){
-      return Result<i64, String>::ok(-x);
+      return Result<i64, String>::ok(((0 as u64) - x) as i64);
     }
-    return Result<i64, String>::ok(x);
+    return Result<i64, String>::ok(x as i64);
   }
   func parse_hex(s: str): Result<i64, String>{
     let neg = false;
@@ -403,29 +405,29 @@ impl i64{
     if(pos >= s.len()){
       return Result<i64, String>::err(format("hex is too short {}", s));
     }
-    let x = 0_i64;
+    let x = 0 as u64;
     while(pos < s.len()){
       let ch = s.get(pos) as i32;
-      let y = 0;
+      let y = 0 as u64;
       if(ch >= '0' && ch <= '9'){
-        y = ch - ('0' as i32);
+        y = (ch as u64) - ('0' as u64);
       }
       else if(ch >= 'a' && ch <= 'f'){
-        y = ch - ('a' as i32) + 10;
+        y = ((ch as u64) - ('a' as u64)) + (10 as u64);
       }
       else if(ch >= 'A' && ch <= 'F'){
-        y = ch - ('A' as i32) + 10;
+        y = ((ch as u64) - ('A' as u64)) + (10 as u64);
       }
       else{
         return Result<i64, String>::err(format("invalid hex char: {}({}) in {}", ch as i8, ch, s));
       }
-      x = 16 * x + y;
+      x = (16 as u64) * x + y;
       ++pos;
     }
     if(neg){
-      return Result<i64, String>::ok(-x);
+      return Result<i64, String>::ok(((0 as u64) - x) as i64);
     }
-    return Result<i64, String>::ok(x);
+    return Result<i64, String>::ok(x as i64);
   }
 
   func print(x: i64): String{

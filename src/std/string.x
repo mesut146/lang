@@ -89,9 +89,15 @@ impl String{
     }
 
     func append(self, s: str): String*{
-        for(let i = 0;i < s.len();++i){
-            self.append(s.get(i));
+        //grow once + memcpy instead of per-byte checked appends
+        let n = s.len() as i64;
+        if(n == 0){
+          return self;
         }
+        self.arr.reserve(n);
+        let dst: u8* = ptr::get!(self.arr.ptr, self.arr.count);
+        memcpy(dst as i8*, s.ptr() as i8*, n);
+        self.arr.count += n;
         return self;
     }
     

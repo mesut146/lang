@@ -71,6 +71,23 @@ impl<T> List<T>{
     self.cap = self.cap + 10;
   }
 
+  //ensure room for `extra` more elems (expand() only guarantees one).
+  func reserve(self, extra: i64){
+    let need = self.count + extra;
+    if(need <= self.cap){
+      return;
+    }
+    let tmp = List<T>::get_malloc(need + 10);
+    for(let i = 0;i < self.count;++i){
+      let old: T = ptr::deref!(self.get(i));
+      ptr::copy!(tmp, i, old);
+      std::no_drop(old);
+    }
+    free(self.ptr as i8*);
+    self.ptr = tmp;
+    self.cap = need + 10;
+  }
+
   func in_index(self, pos: i64): bool{
     return pos >= 0 && pos < self.count;
   }

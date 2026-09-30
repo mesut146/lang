@@ -195,12 +195,16 @@ impl str{
     }
 
     func cmp(self, s: str): i32{
-      if(self.real_len() < s.real_len()) return -1;
-      if(self.real_len() > s.real_len()) return 1;
-      for(let i = 0;i < self.real_len();++i){
-        if(self.get(i) < s.get(i)) return -1;
-        if(self.get(i) > s.get(i)) return 1;
-      }
+      //lengths first (also preserves the trailing-NUL semantics of
+      //real_len), then a single memcmp instead of per-byte checked loads.
+      let ll = self.real_len();
+      let rl = s.real_len();
+      if(ll < rl) return -1;
+      if(ll > rl) return 1;
+      if(ll == 0) return 0;
+      let r = memcmp(self.ptr() as i8*, s.ptr() as i8*, ll as u64);
+      if(r < 0) return -1;
+      if(r > 0) return 1;
       return 0;
     }
 
