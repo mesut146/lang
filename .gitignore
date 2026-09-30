@@ -4,3 +4,8 @@ cmake-build-debug
 out
 .vscode
 cpp_bridge/build
+
+x-toolchain-*.zip
+x-toolchain-*/
+build/test_out/
+bin/tmp.txt
