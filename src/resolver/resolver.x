@@ -3085,20 +3085,39 @@ impl Resolver{
           }
           //unsuffixed literals default to i32: reject anything that does
           //not fit (silently wrapping here miscompiled downstream).
-          //Bound is 2^31 (not 2^31-1) so unary minus keeps working for
-          //-2147483648; use an _i64 suffix for bigger values.
-          //NB: written as max+1 so this check itself is correct even
-          //before mixed-width arithmetic is fixed. Hex/underscores handled
-          //like the backend const emitter.
-          let imax = 2147483647 as i64 + 1;
-          let normal = value.replace("_", "");
-          let parsed = if(normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
-            i64::parse_hex(normal.str())?
+          //Pure string logic (no arithmetic) so the check itself cannot
+          //miscompile at any bootstrap stage. Bound is 2^31 (not 2^31-1)
+          //so unary minus keeps working for -2147483648 (the minus is
+          //part of the text here); use an _i64 suffix for bigger values.
+          let digits: String = value.replace("_", "");
+          let body = digits.str();
+          if(body.starts_with("-")){
+            body = body.substr(1, body.len());
+          }
+          let over = false;
+          if(body.starts_with("0x")){
+            //one hex digit = 4 bits; more than 8 cannot fit i32
+            if(body.len() - 2 > 8){
+              over = true;
+            }
           }else{
-            i64::parse(normal.str())?
-          };
-          normal.drop();
-          if(parsed > imax){
+            if(body.len() > 10){
+              over = true;
+            }else if(body.len() == 10){
+              //lexicographic compare against 2147483648
+              let max = "2147483648";
+              for(let i = 0;i < 10;++i){
+                let a = body.get(i);
+                let b = max.get(i);
+                if(a != b){
+                  over = a > b;
+                  break;
+                }
+              }
+            }
+          }
+          digits.drop();
+          if(over){
             self.err(expr, format("literal out of range {} (i32, use _i64 suffix for bigger values)", value));
           }
           let res = RType::new("i32");
