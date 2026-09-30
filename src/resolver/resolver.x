@@ -48,6 +48,10 @@ struct Context{
   verbose: bool;
   verbose_all: bool;
   prog: Progress;
+  //memoized import -> resolved path (get_path stats the fs per search
+  //dir otherwise, on the resolve hot path). Search paths are fixed
+  //after setup, so no invalidation is needed.
+  path_cache: HashMap<String, String>;
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
@@ -66,6 +70,7 @@ impl Context{
        verbose: true,
        verbose_all: false,
        prog: prog,
+       path_cache: HashMap<String, String>::new(),
     };
     return res;
   }
@@ -81,6 +86,7 @@ impl Drop for Context{
     self.std_path.drop();
     self.search_paths.drop();
     self.out_dir.drop();
+    self.path_cache.drop();
   }
 }
 
@@ -441,11 +447,20 @@ impl Context{
     //print("get_path arr: {}, imp: {}\n", self.search_paths, is.list);
     let suffix = is.str();
     suffix.append(".x");
+    {
+      let hit = self.path_cache.get(&suffix);
+      if(hit.is_some()){
+        let res = hit.unwrap().clone();
+        suffix.drop();
+        return res;
+      }
+    }
     for(let i = 0;i < self.search_paths.len();++i){
       let path = self.search_paths.get(i).clone();
       path.append("/");
       path.append(&suffix);
       if(File::is_file(path.str())){
+        self.path_cache.add(suffix.clone(), path.clone());
         suffix.drop();
         return path;
       }
@@ -2120,6 +2135,14 @@ impl Resolver{
       rt.drop();
       return RType::new("bool");
     }else{
+      //fast path: same-type operands keep their type, no print round trip
+      //(infix_result returns l when both sides are equal).
+      if(lt.type.eq_value(&rt.type)){
+        let res = RType::new(lt.type.clone());
+        lt.drop();
+        rt.drop();
+        return res;
+      }
       let s1 = lt.type.print();
       let s2 = rt.type.print();
       let res = RType::new(infix_result(s1.str(), s2.str()));

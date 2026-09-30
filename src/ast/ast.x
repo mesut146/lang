@@ -523,30 +523,53 @@ impl Type{
   }
 
   func is_void(self): bool{
-    let str = self.print();
-    let res = str.eq("void");
-    str.drop();
-    return res;
+    if let Type::Simple(smp) = self{
+      return !smp.scope.is_some() && smp.args.empty() && smp.name.eq("void");
+    }
+    return false;
   }
   func is_prim(self): bool{
-    return prim_size(self.print()).is_some();
+    if let Type::Simple(smp) = self{
+      if(smp.scope.is_some() || !smp.args.empty()){
+        return false;
+      }
+      return prim_size(smp.name.str()).is_some();
+    }
+    return false;
   }
   func is_unsigned(self): bool{
-    let str = self.print();
-    let res = str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
-    str.drop();
-    return res;
+    if let Type::Simple(smp) = self{
+      if(smp.scope.is_some() || !smp.args.empty()){
+        return false;
+      }
+      let name = smp.name.str();
+      let res = name.eq("u8") || name.eq("u16") || name.eq("u32") || name.eq("u64");
+      return res;
+    }
+    return false;
   }
   func is_float(self): bool{
-    let str = self.print();
-    let res = str.eq("f32") || str.eq("f64");
-    str.drop();
-    return res;
+    if let Type::Simple(smp) = self{
+      if(smp.scope.is_some() || !smp.args.empty()){
+        return false;
+      }
+      let name = smp.name.str();
+      let res = name.eq("f32") || name.eq("f64");
+      return res;
+    }
+    return false;
   }
   func is_str(self): bool{
     return self.eq("str");
   }
   func eq(self, s: str): bool{
+    //fast path: bare `Name` prints as itself; scoped/generic types
+    //fall back to full printing (identical result).
+    if let Type::Simple(smp) = self{
+      if(!smp.scope.is_some() && smp.args.empty()){
+        return smp.name.eq(s);
+      }
+    }
     let tmp = self.print();
     let res = tmp.eq(s);
     tmp.drop();
@@ -672,12 +695,115 @@ impl Clone for Type{
 }
 impl Eq for Type{
   func eq(self, other: Type*): bool{
-    let s1 = self.print();
-    let s2 = other.print();
-    let res = s1.eq(&s2);
-    s1.drop();
-    s2.drop();
-    return res;
+    return self.eq_value(other);
+  }
+}
+
+//Structural equality, mirroring what print() emits (same equivalence,
+//no string building). Hot: overload checks and inference compare types
+//constantly; the old print-and-compare round trip dominated profiles.
+impl Type{
+  func eq_value(self, other: Type*): bool{
+    if let Type::Simple(a) = self{
+      if let Type::Simple(b) = other{
+        if(a.scope.is_some() != b.scope.is_some()){
+          return false;
+        }
+        if(a.scope.is_some() && !a.scope.get().eq_value(b.scope.get())){
+          return false;
+        }
+        if(!a.name.eq(&b.name)){
+          return false;
+        }
+        if(a.args.len() != b.args.len()){
+          return false;
+        }
+        for(let i = 0;i < a.args.len();++i){
+          if(!a.args.get(i).eq_value(b.args.get(i))){
+            return false;
+          }
+        }
+        return true;
+      }
+      return false;
+    }
+    if let Type::Pointer(a) = self{
+      if let Type::Pointer(b) = other{
+        return a.get().eq_value(b.get());
+      }
+      return false;
+    }
+    if let Type::Array(abx, asz) = self{
+      if let Type::Array(bbx, bsz) = other{
+        if(*asz != *bsz){
+          return false;
+        }
+        return abx.get().eq_value(bbx.get());
+      }
+      return false;
+    }
+    if let Type::Slice(a) = self{
+      if let Type::Slice(b) = other{
+        return a.get().eq_value(b.get());
+      }
+      return false;
+    }
+    if let Type::Function(a) = self{
+      if let Type::Function(b) = other{
+        let fa = a.get();
+        let fb = b.get();
+        if(!fa.return_type.eq_value(&fb.return_type)){
+          return false;
+        }
+        if(fa.params.len() != fb.params.len()){
+          return false;
+        }
+        for(let i = 0;i < fa.params.len();++i){
+          if(!fa.params.get(i).eq_value(fb.params.get(i))){
+            return false;
+          }
+        }
+        return true;
+      }
+      return false;
+    }
+    if let Type::Lambda(a) = self{
+      if let Type::Lambda(b) = other{
+        let la = a.get();
+        let lb = b.get();
+        if(la.return_type.is_some() != lb.return_type.is_some()){
+          return false;
+        }
+        if(la.return_type.is_some() && !la.return_type.get().eq_value(lb.return_type.get())){
+          return false;
+        }
+        if(la.params.len() != lb.params.len()){
+          return false;
+        }
+        for(let i = 0;i < la.params.len();++i){
+          if(!la.params.get(i).eq_value(lb.params.get(i))){
+            return false;
+          }
+        }
+        return true;
+      }
+      return false;
+    }
+    if let Type::Tuple(a) = self{
+      if let Type::Tuple(b) = other{
+        if(a.types.len() != b.types.len()){
+          return false;
+        }
+        for(let i = 0;i < a.types.len();++i){
+          if(!a.types.get(i).eq_value(b.types.get(i))){
+            return false;
+          }
+        }
+        return true;
+      }
+      return false;
+    }
+    panic("eq_value: unknown type {:?}", self);
   }
 }
 

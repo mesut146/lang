@@ -86,9 +86,6 @@ if [ "$arch" = "aarch64" ] && [ -z "$XTERMUX" ]; then
   fi
 fi
 cp $(dirname $binary)/std_out/std.a $dir/lib
-if [ ! -z "$LIBZ3" ]; then
-  cp $LIBZ3 $dir/lib
-fi
 cp -r $cur/../src/std $dir/src
 
 sudo=""

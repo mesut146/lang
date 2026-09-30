@@ -44,7 +44,6 @@ XTERMUX=1 XCROSS=$XCROSS $dir/llvm.sh
 # NB: Debian arm64 libLLVM from llvm.sh is NOT usable for Android linking.
 # libLLVM must come from the previous Termux toolchain (built against NDK/Termux llvm).
 
-#export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
 
 export LLVM_ROOT=$build/tmp/usr/lib/llvm-19
 #libLLVM must be the Android/Termux one, not the Debian x86_64 one
@@ -94,9 +93,6 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
-  if [ ! -z "$LIBZ3" ]; then
-    flags="$flags $LIBZ3"
-  fi
   #flags="$flags -lxml2"
   #flags="$flags /usr/lib/aarch64-linux-gnu/libxml2.so.16"
   flags="$flags -lstdc++"

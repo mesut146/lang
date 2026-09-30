@@ -45,11 +45,6 @@ XCROSS=$XCROSS $dir/apt.sh
 XCROSS=$XCROSS $dir/llvm.sh
 
 
-if [ "$XCROSS" = true ]; then
-  export LIBZ3=$build/tmp/usr/lib/aarch64-linux-gnu/libz3.so.4
-else
-  export LIBZ3=$build/tmp/usr/lib/x86_64-linux-gnu/libz3.so.4
-fi
 
 export LLVM_ROOT=$build/tmp/usr/lib/llvm-19
 export LIBLLVM="$LLVM_ROOT/lib/libLLVM.so.19.1"
@@ -97,7 +92,6 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
-  flags="$flags $LIBZ3"
   #flags="$flags -lxml2"
   #flags="$flags /usr/lib/aarch64-linux-gnu/libxml2.so.16"
   flags="$flags -lstdc++"

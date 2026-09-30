@@ -23,7 +23,8 @@ LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 $dir/build_resolver.sh $compiler $out_dir || exit 1
 LIB_RESOLVER=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
-flags="$LIB_AST $LIB_STD $LIB_RESOLVER"
+flags="$LIB_RESOLVER $LIB_AST $LIB_STD"
+#NB: lib order matters (single-pass archive linking): dependents first.
 
 sudo ()
 {

@@ -917,13 +917,15 @@ impl MethodResolver{
                     }
                 }
             }
-            let t1_str = t1.print();
-            let t2_str = t2.print();
-            if (!t1_str.eq(&t2_str)) {
+            //exactness by structure (string compare would print both
+            //types on every candidate; prints move into the error branch).
+            if (!t1.eq_value(t2)) {
                 all_exact = false;
             }
             let cmp: Option<String> = MethodResolver::is_compatible(&t1, t2, &typeParams);
             if (cmp.is_some()) {
+                let t1_str = t1.print();
+                let t2_str = t2.print();
                 let arg = String::new();
                 arg.drop();
                 if(method.self.is_some()){
@@ -948,8 +950,6 @@ impl MethodResolver{
                 t1.drop();
                 return res;
             }
-            t1_str.drop();
-            t2_str.drop();
             cmp.drop();
             t1.drop();
         }
