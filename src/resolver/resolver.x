@@ -1799,10 +1799,12 @@ impl Resolver{
           return Result<RType, Error>::ok(res);
         }
         findVariant(decl, &simple.name);
-        let ds = decl.type.print();
-        let res = self.getTypeCached(&ds);
+        //the pattern's type is its scope's (enum) type: generic-root
+        //(Option<T>) or already-instantiated (Option<i32>). The old code
+        //re-derived this via the decl's own spelling, which is never
+        //cached for generics -> "not cached Option<T>".
+        let res = scope.clone();
         self.addType(str.clone(), res.clone());
-        ds.drop();
         scope.drop();
         return Result<RType, Error>::ok(res);
       }
@@ -2085,6 +2087,18 @@ impl Resolver{
         let variant = variants.get(idx);
         fields0 = Option::new(&variant.fields);
         type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
+        if (decl.is_generic) {
+            //infer from entries, like structs (Some{val: x} -> Option<i32>).
+            //Zero-arg literals (None) cannot infer: inferStruct reports a
+            //clean error asking for an annotated scope (Option<i32>::None).
+            let inferred: Type = self.inferStruct(node, &decl.type, hasNamed, &variant.fields, args);
+            res.drop();
+            res = self.visit_type(&inferred);
+            inferred.drop();
+            let gen_decl = self.get_decl(&res).unwrap();
+            let gen_idx = Resolver::findVariant(gen_decl, &variant.name);
+            fields0 = Option::new(&gen_decl.get_variants().get(gen_idx).fields);
+        }
       },
       Decl::Struct(f)=>{
         fields0 = Option::new(f);
@@ -3735,8 +3749,19 @@ impl Resolver{
 
   func visit_iflet(self, is: IfLet*): RType{
     let line = is.rhs.line;
-    //check lhs
-    let rt = self.visit_type(&is.type);
+    //check lhs: resolve the enum decl via the pattern's SCOPE (bare
+    //`Option`), never via the full pattern type - on generic enums the
+    //latter routes bare `T` through visit_type (not cached).
+    let scope_ty = is.type.clone();
+    if(is.type.is_simple()){
+      let smp = is.type.as_simple();
+      if(smp.scope.is_some()){
+        scope_ty.drop();
+        scope_ty = smp.scope.get().clone();
+      }
+    }
+    let rt = self.visit_type(&scope_ty);
+    scope_ty.drop();
     let decl_opt = self.get_decl(&rt);
     rt.drop();
     if (decl_opt.is_none() || !decl_opt.unwrap().is_enum()) {
@@ -3761,18 +3786,56 @@ impl Resolver{
       let msg = format("if let args size mismatch got:{} expected: {}", is.args.len(), variant.fields.len());
       self.err(line, msg);
     }
+    //substitute the rhs concrete args (Option<i32>) for decl params (T)
+    //so bound variables (Some(x)) get resolvable types instead of bare T.
+    //Only generic decls need this; instances already have concrete fields.
+    let sub_map = HashMap<String, Type>::new();
+    if(decl.is_generic){
+      let rty = rhs.type.clone();
+      if(rty.is_pointer()){
+        let inner = rty.deref_ptr().clone();
+        rty.drop();
+        rty = inner;
+      }
+      if(rty.is_simple()){
+        let rsmp = rty.as_simple();
+        let dargs = decl.type.get_args();
+        if(!rsmp.args.empty() && rsmp.args.len() == dargs.len()){
+          let ok = true;
+          for(let k = 0;k < dargs.len();++k){
+            if(!dargs.get(k).is_simple()){
+              ok = false;
+              break;
+            }
+          }
+          if(ok){
+            let tmp = make_type_map(rsmp, decl);
+            sub_map.drop();
+            sub_map = tmp;
+          }
+        }
+      }
+      rty.drop();
+    }
     //init arg variables
     self.newScope();
     for (let i = 0;i < is.args.len();++i) {
       let arg = is.args.get(i);
       let field = variant.fields.get(i);
       let ty = field.type.clone();
+      if(!sub_map.empty()){
+        let ac = AstCopier::new(&sub_map);
+        let mapped = ac.visit(&ty);
+        ty.drop();
+        ty = mapped;
+      }
       if (rhs.type.is_pointer()) {
           ty = ty.toPtr();
       } 
       self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
       self.cache.add(arg.id, RType::new(ty));
     }
+    sub_map.drop();
     let rt1 = self.visit_body(is.then.get());
     self.dropScope();
     if (is.else_stmt.is_some()) {

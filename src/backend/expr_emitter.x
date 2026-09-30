@@ -439,10 +439,12 @@ impl Emitter{
 
     func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
       let ll = self.ll.get();
-      let rt = self.get_resolver().visit_type(&node.type);
-      let decl = self.get_resolver().get_decl(&rt).unwrap();
       let rhs = self.get_obj_ptr(&node.rhs);
       let rhs_rt = self.get_resolver().visit(&node.rhs);
+      //layouts need the concrete (possibly instantiated) enum type from
+      //the rhs, not the pattern's generic spelling: Option<T> has no LLVM
+      //struct and its bare T breaks drop-glue synthesis.
+      let decl = self.get_resolver().get_decl(&rhs_rt).unwrap();
       let tag_ptr = CreateStructGEP(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl));
       let tag = CreateLoad(ll.builder, intTy(ll.ctx, ENUM_TAG_BITS()), tag_ptr);
       let index = Resolver::findVariant(decl, node.type.name());
@@ -551,7 +553,6 @@ impl Emitter{
       then_name.drop();
       else_name.drop();
       next_name.drop();
-      rt.drop();
       rhs_rt.drop();
       return res;
     }
