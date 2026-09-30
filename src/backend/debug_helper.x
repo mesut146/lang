@@ -161,7 +161,7 @@ impl DebugInfo{
         let val = *c.NamedValues.get(&p.name).unwrap();
         let ex = createExpression(self.builder);
         let bb = GetInsertBlock(self.ll.builder);
-        let loc = DILocation_get(self.builder, scope, p.line, p.pos);
+        let loc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(self.builder, val, v, ex, loc, bb);
         name_c.drop();
     }
@@ -176,7 +176,7 @@ impl DebugInfo{
       let ex = createExpression(self.builder);
       let bb = GetInsertBlock(self.ll.builder);
       let pos = 0;
-      let loc = DILocation_get(self.builder, scope, line, pos);
+      let loc = DILocation_get(scope, line, pos);
       insertDeclare(self.builder, val, v, ex, loc, bb);
       name_c.drop();
     }
@@ -239,7 +239,7 @@ impl DebugInfo{
       let name_c = name.clone().cstr();
       let flags=0;
       //fill ty
-      let sl = getStructLayout(var_type);
+      let sl = getStructLayout(self.ll.module, var_type);
       let idx = 0;
       let scp = ptr::null<DIScope>();
       if(decl.base.is_some()){
@@ -322,7 +322,7 @@ impl DebugInfo{
         base_ty = Option::new(ty);
       }
       let st_real = c.mapType(&decl.type);
-      let sl = getStructLayout(st_real as StructType*);
+      let sl = getStructLayout(self.ll.module, st_real as StructType*);
       //let dl = LLVMGetModuleDataLayout(self.ll.module);
       match decl{
         Decl::Struct(fields)=>{
@@ -377,7 +377,7 @@ impl DebugInfo{
           let fldesc = DIFlags_FlagArtificial();
           let disc = createMemberType(self.builder, scope, "".ptr(), file, decl.line, data_size, tag_off, fldesc, tag);
           let elems2 = List<Metadata*>::new();
-          let var_part = createVariantPart(self.builder, scope, "".ptr(), file, decl.line, data_size, disc, elems2.ptr(), elems2.len() as i32);
+          let var_part = createVariantPart(self.builder, self.ll.ctx, scope, "".ptr(), file, decl.line, data_size, disc, elems2.ptr(), elems2.len() as i32);
           
           //fill variant
           let var_idx = 1;
@@ -387,12 +387,12 @@ impl DebugInfo{
             let var_type = self.make_variant_type(c, decl, i, var_part, file, data_size, st as DIScope*, var_off);
             elems2.add(var_type as Metadata*);
           }
-          replaceElements(var_part, elems2.ptr(), elems2.len() as i32);
+          replaceElements(self.ll.ctx, var_part, elems2.ptr(), elems2.len() as i32);
           elems.add(var_part as Metadata*);
           elems2.drop();
         },
       }
-      replaceElements(st, elems.ptr(), elems.len() as i32);
+      replaceElements(self.ll.ctx, st, elems.ptr(), elems.len() as i32);
       self.types.add(s, st);
       elems.drop();
       return st;
@@ -494,7 +494,7 @@ impl DebugInfo{
           let elems = List<Metadata*>:: new();
           let idx = 0;
           let ty = c.mapType(type) ;
-          let sl = getStructLayout(ty as StructType*);
+          let sl = getStructLayout(self.ll.module, ty as StructType*);
           for elem in &tt.types{
             let elem_di = self.map_di(elem, c);
             let off = getElementOffsetInBits(sl, idx);

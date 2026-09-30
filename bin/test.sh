@@ -85,6 +85,14 @@ normal_regex(){
   fi
 }
 
+debug_all(){
+  #debug-info smoke: one self-contained test compiled WITH -g and executed.
+  #-g codegen used to segfault repo-wide (FFI arity mismatches on the
+  #debug-only bridge paths); keep this green.
+  run "$compiler c -g -o 31-debug -out $out_dir -stdpath $stdpath $testd/normal/31-debug.x" || exit 1
+  $out_dir/31-debug || exit 1
+}
+
 std_all(){
   $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
@@ -171,6 +179,7 @@ elif [ "$pat" == "inc" ]; then
   inc_all
 elif [ "$pat" == "all" ]; then
   normal
+  debug_all
   std_all
   own_all
   vararg_all

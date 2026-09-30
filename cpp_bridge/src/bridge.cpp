@@ -13,6 +13,8 @@
 #include <llvm/Target/TargetOptions.h>
 
 #include <filesystem>
+#include <cstdio>
+#include <cstdlib>
 #include <iostream>
 
 extern "C" {
@@ -272,6 +274,13 @@ uint64_t DataLayout_getTypeSizeInBits(llvm::Module *mod, llvm::Type *ty) {
 }
 
 int64_t getElementOffsetInBits(llvm::StructLayout *sl, int idx) {
+  //defensive: a legitimate caller never exceeds the layout. This used to
+  //be silent UB via mismatched FFI arity (debug-only paths); fail loudly.
+  size_t n = sl->getMemberOffsets().size();
+  if(idx < 0 || (size_t)idx >= n){
+    fprintf(stderr, "getElementOffsetInBits OOB idx=%d num=%zu\n", idx, n);
+    abort();
+  }
   return sl->getElementOffsetInBits(idx);
 }
 
@@ -419,11 +428,6 @@ llvm::StructType *make_struct_ty(llvm::LLVMContext* ctx, char *name, llvm::Type*
 }
 llvm::StructType *make_struct_ty2(llvm::LLVMContext* ctx, char *name) {
   return llvm::StructType::create(*ctx, name);
-}
-
-int getSizeInBits(llvm::Module *mod, llvm::StructType *st) {
-  int res = mod->getDataLayout().getStructLayout(st)->getSizeInBits();
-  return res;
 }
 
 int StructType_getNumElements(llvm::StructType *st) {

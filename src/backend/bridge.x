@@ -109,7 +109,7 @@ extern{
     func createFile(dib: DIBuilder*, file: i8*, dir: i8*): DIFile*;
     func createCompileUnit(dib: DIBuilder*, lang: i32, file: DIFile*, producer: i8*): DICompileUnit*;
     func SetCurrentDebugLocation(ib: IRBuilder*, scope: DIScope*, line: i32, pos: i32);
-    func DILocation_get(dib: DIBuilder*, scope: DIScope*, line: i32, pos: i32): DILocation*;
+    func DILocation_get(scope: DIScope*, line: i32, pos: i32): DILocation*;
     
     func createFunction(dib: DIBuilder*, scope: DIScope*, name: i8*, linkage_name: i8*, file: DIFile*, line: i32, ft: DISubroutineType*, spflags: i32): DISubprogram*;
     func setSubprogram(f: Function*, sp: DISubprogram*);
@@ -130,14 +130,14 @@ extern{
     func createArrayType(dib: DIBuilder*, ctx: LLVMContext*, size: i64, ty: DIType*, elems: Metadata**, len: i32): DIType*;
     func make_di_flags(artificial: bool): u32;
     func createMemberType(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, off: i64, flags: i32, ty: DIType*): DIDerivedType*;
-    func createVariantPart(dib: DIBuilder*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata**, len: i32): DICompositeType*;
-    func createVariantMemberType(dib: DIBuilder*, scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
+    func createVariantPart(dib: DIBuilder*, ctx: LLVMContext*, scope: DIScope*, name: i8*, file: DIFile*, line: i32, size: i64, disc: DIDerivedType*, elems: Metadata**, len: i32): DICompositeType*;
+    func createVariantMemberType(dib: DIBuilder*, ctx: LLVMContext*, scope: DIScope *, name: i8*, file: DIFile *, line: i32, size: i64, off: i64, idx: i32, ty: DIType *): DIDerivedType*;
     
     func DIType_getSizeInBits(ty: DIType*): i64;
-    func getStructLayout(st: StructType*): StructLayout*;
+    func getStructLayout(mod: LLVMModule*, st: StructType*): StructLayout*;
     func DataLayout_getTypeSizeInBits(md: LLVMModule*, ty: llvm_Type*): i64;
     func getElementOffsetInBits(sl: StructLayout*, idx: i32): i64;
-    func replaceElements(st: DICompositeType*, elems: Metadata**, len: i32);
+    func replaceElements(ctx: LLVMContext*, st: DICompositeType*, elems: Metadata**, len: i32);
     
     //glob dbg
     func createGlobalVariableExpression(dib: DIBuilder*, scope: DIScope*, name: i8*, lname: i8*, file :DIFile*, line: i32, type: DIType*): DIGlobalVariableExpression*;
@@ -147,7 +147,6 @@ extern{
     func make_struct_ty(ctx: LLVMContext*, name: i8*, elems: llvm_Type**, len: i32): StructType*;
     func make_struct_ty2(ctx: LLVMContext*, name: i8*): StructType*;
     func StructType_setBody(st: StructType*, elems: llvm_Type**, len: i32);
-    func getSizeInBits(st: StructType*): i32;
     func StructType_getNumElements(st: StructType*): i32;
     func getPrimitiveSizeInBits(st: llvm_Type*): i32;
     func intTy(ctx: LLVMContext*, bits: i32): llvm_Type*;
