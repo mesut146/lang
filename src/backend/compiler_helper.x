@@ -416,6 +416,16 @@ impl Emitter{
         let p = self.protos.get();
         let s = type.print();
         if(!p.classMap.contains(&s)){
+          //scoped use (M::A) of a decl registered under its own spelling
+          //(A): fall back to the decl's canonical name.
+          let ds = decl.type.print();
+          if(p.classMap.contains(&ds)){
+            s.drop();
+            let res = p.get(&ds);
+            ds.drop();
+            return res as llvm_Type*;
+          }
+          ds.drop();
           panic("mapType2 {}\n", s);
         }
         let res = p.get(&s);
