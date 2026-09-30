@@ -58,7 +58,7 @@ if [ ! -f $XTMP/llvm-19-dev*.deb ]; then
         sudo apt-get update || true
       fi
       mkdir -p ./noble-deps
-      (cd ./noble-deps && sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64 libbsd0:arm64 libtinfo6:arm64 liblzma5:arm64 libz3-4:arm64 || true)
+      (cd ./noble-deps && sudo apt-get download libffi8:arm64 libedit2:arm64 libzstd1:arm64 libxml2:arm64 libbsd0:arm64 libtinfo6:arm64 liblzma5:arm64 libz3-4:arm64 libmd0:arm64 || true)
     else
       #amd64
       sudo apt-get download llvm-19-dev libllvm19
