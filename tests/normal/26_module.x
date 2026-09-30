@@ -20,6 +20,11 @@ mod M{
         struct B{
             b: i32;
         }
+        impl M::N::B{
+            func get(self): i32 {
+                return self.b;
+            }
+        }
         impl A{//M::A
 
         }
@@ -31,11 +36,11 @@ impl M::A{
         return M::A{a};
     }
 }
-/*impl M::N::B{
+impl M::N::B{
     func new(b: i32): M::N::B {
         return M::N::B{b};
     }
-}*/
+}
 
 func main(){
     A{10};
@@ -44,4 +49,7 @@ func main(){
 
     let b = M::A::new(10);
     assert(b.get() == 10);
+
+    let c = M::N::B::new(3);
+    assert(c.get() == 3);
 }

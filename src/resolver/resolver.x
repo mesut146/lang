@@ -1122,6 +1122,25 @@ impl Resolver{
 
   func get_module(self, rt: RType*): Option<Module*>{
     if(rt.desc.kind is RtKind::Module){
+      //Nested modules are indexed within their parent (see member
+      //lookup); descend the scope chain instead of top-level indexing.
+      if(rt.desc.scope.is_some()){
+        let scope = self.visit_type(rt.desc.scope.get());
+        if(scope.desc.kind.is_module()){
+          let md = self.get_module(&scope);
+          scope.drop();
+          if(md.is_some()){
+            let item = md.unwrap().items.get(rt.desc.idx);
+            if let Item::Module(m) = item{
+              return Option::new(m);
+            }
+            return Option<Module*>::new();
+          }
+          return Option<Module*>::new();
+        }
+        scope.drop();
+        return Option<Module*>::new();
+      }
       let resolver = self.ctx.create_resolver(&rt.desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(rt.desc.idx);
@@ -1696,10 +1715,48 @@ impl Resolver{
           return self.visit_type2(node, simple, str);
         }
         //enum variant or member func
-        let scope = self.visit_type(simple.scope.get());
+        let scope_res = self.visit_type0(simple.scope.get());
+        if(scope_res.is_err()){
+          //unresolvable scope (e.g. another file's module when probing
+          //imports); callers with is_ok()/? skip or report gracefully.
+          return scope_res;
+        }
+        let scope = scope_res.unwrap();
         if(scope.desc.kind is RtKind::Module){
+          //member lookup inside a module (struct/enum/nested mod):
+          //find `name` among the module's items and describe it the
+          //same way init_item does, so get_decl/get_method keep working.
           let md = self.get_module(&scope);
-          panic("todo rt module {:?} '{:?}'", node, md.unwrap());
+          if(md.is_none()){
+            scope.drop();
+            return Result<RType, Error>::err(Error{format("scope is not module {:?}", node), node.line});
+          }
+          let mdu = md.unwrap();
+          for(let i = 0;i < mdu.items.len();++i){
+            let item = mdu.items.get(i);
+            if let Item::Decl(decl) = item{
+              if(decl.type.name().eq(simple.name.str())){
+                let res = RType::new(decl.type.clone());
+                res.desc.drop();
+                res.desc = Desc{RtKind::Decl, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
+                self.addType(str.clone(), res.clone());
+                scope.drop();
+                return Result<RType, Error>::ok(res);
+              }
+            }
+            if let Item::Module(nmd) = item{
+              if(nmd.name.eq(simple.name.str())){
+                let res = RType::new(nmd.name.str());
+                res.desc.drop();
+                res.desc = Desc{RtKind::Module, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
+                self.addType(str.clone(), res.clone());
+                scope.drop();
+                return Result<RType, Error>::ok(res);
+              }
+            }
+          }
+          scope.drop();
+          return Result<RType, Error>::err(Error{format("not found {:?} in module", node), node.line});
         }
         let decl = self.get_decl(&scope).unwrap();
         if (!(decl is Decl::Enum)) {

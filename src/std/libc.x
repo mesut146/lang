@@ -92,6 +92,7 @@ extern{
   func fopen(name: i8*, mode: i8*): cFILE*;
   func fdopen(fd: i32, mode: i8*): cFILE*;
   func open(name: i8*, flags: i32, mode: i32): i32;
+  func write(fd: i32, buf: i8*, count: u64): i64;
   func fclose(file: cFILE*): i32;
   //func fflush(file: cFILE*): i32;
   func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: cFILE*): i32;
