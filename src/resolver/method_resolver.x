@@ -516,7 +516,33 @@ impl MethodResolver{
                 }
                 let scp_args = scope_type.get_args();
                 if(scp_args.empty()){
-                  list.add(Signature::new(m, &map, desc, self.r, origin));
+                  let sig2 = Signature::new(m, &map, desc, self.r, origin);
+                  if(hit.nested){
+                    //unscoped nested impl header (impl A in mod M): qualify
+                    //its types (A) to the call scope (M::A) so check_args
+                    //compares like with like.
+                    let st = scope_type.as_simple();
+                    if(st.scope.is_some() && imp.info.type.is_simple()
+                        && imp.info.type.as_simple().scope.is_none()
+                        && st.name.eq(imp.info.type.name().str())){
+                      let qmap = HashMap<String, Type>::new();
+                      qmap.add(imp.info.type.name().clone(), scope_type.clone());
+                      let ac = AstCopier::new(&qmap);
+                      for (let k = 0;k < sig2.args.len();++k) {
+                        let arg = sig2.args.get(k);
+                        let mapped = ac.visit(arg);
+                        let tmp = sig2.args.set(k, mapped);
+                        tmp.drop();
+                      }
+                      if(sig2.scope.is_some()){
+                        let scp_mapped = ac.visit(&sig2.scope.get().type);
+                        sig2.scope.get().type.drop();
+                        sig2.scope.get().type = scp_mapped;
+                      }
+                      qmap.drop();
+                    }
+                  }
+                  list.add(sig2);
                 }else{
                   let typeMap = HashMap<String, Type>::new();
                   for(let k = 0;k < m.type_params.len();++k){
@@ -1057,6 +1083,27 @@ impl MethodResolver{
             }
         }
         if(info.type_params.empty()){
+            //unscoped nested impl header (impl A inside mod M, found via
+            //module recursion): the search already verified membership, so
+            //structural equality modulo the module scope is exact. Args
+            //must still match (Option<X> is not Option<Y>).
+            if(type1.is_simple() && type2.is_simple()){
+                let s1 = type1.as_simple();
+                let s2 = type2.as_simple();
+                if(s2.scope.is_none() && s1.name.eq(&s2.name)
+                    && s1.args.len() == s2.args.len()){
+                    let same = true;
+                    for(let k = 0;k < s1.args.len();++k){
+                        if(!s1.args.get(k).eq_value(s2.args.get(k))){
+                            same = false;
+                            break;
+                        }
+                    }
+                    if(same){
+                        return SigResult::Exact;
+                    }
+                }
+            }
             return SigResult::Err{"not same impl: not generic".str()};
         }
         if (!type1.name().eq(type2.name().str())) {
@@ -1151,7 +1198,14 @@ impl MethodResolver{
                 arg.drop();
                 if(method.self.is_some()){
                     if(mc.is_static){
-                        arg = mc.args.get(i).print();
+                        //sig2.args[0] is self, which static call syntax
+                        //carries as scope, not as args[0] (off by one, and
+                        //mc.args is empty for T::m() -> OOB).
+                        if(i == 0){
+                            arg = mc.scope.get().print();
+                        }else{
+                            arg = mc.args.get(i - 1).print();
+                        }
                     }else{
                         arg = mc.scope.get().print();
                     }
