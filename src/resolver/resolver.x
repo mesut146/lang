@@ -193,6 +193,15 @@ struct Resolver{
   extra_imports: List<ImportStmt>;
   in_global_rhs: bool;
   use_items: List<Type>;
+  //memoized get_resolvers(): imports only change when extra_imports grows
+  //or curMethod changes; hits avoid re-statting/re-parsing every import
+  //on every type lookup (the resolve hot path).
+  resolvers_cache: List<Resolver*>;
+  resolvers_cache_cur: List<Resolver*>;
+  resolvers_cache_valid: bool;
+  resolvers_cache_cur_valid: bool;
+  resolvers_cache_extra: i64;
+  resolvers_cache_method: String;
 }
 
 impl Resolver{
@@ -234,6 +243,12 @@ impl Resolver{
       extra_imports: List<ImportStmt>::new(),
       in_global_rhs: false,
       use_items: List<Type>::new(),
+      resolvers_cache: List<Resolver*>::new(),
+      resolvers_cache_cur: List<Resolver*>::new(),
+      resolvers_cache_valid: false,
+      resolvers_cache_cur_valid: false,
+      resolvers_cache_extra: 0,
+      resolvers_cache_method: "".str(),
     };
   }
 }
@@ -496,6 +511,32 @@ impl Resolver{
   }
 
   func get_resolvers(self, include_cur: bool): List<Resolver*>{
+    //hot path: imports are fixed during resolve except for extra_imports
+    //growth and curMethod changes, so memoize the resolver list.
+    //Both include_cur variants are cached separately.
+    let cur_method = "".str();
+    if(self.curMethod.is_some()){
+      cur_method.drop();
+      cur_method = self.curMethod.unwrap_ptr().path.clone();
+    }
+    let key_ok = self.resolvers_cache_extra == self.extra_imports.len()
+        && self.resolvers_cache_method.eq(cur_method.str());
+    if(key_ok && !include_cur && self.resolvers_cache_valid){
+      cur_method.drop();
+      let hit = List<Resolver*>::new();
+      for(let i = 0;i < self.resolvers_cache.len();++i){
+        hit.add(*self.resolvers_cache.get(i));
+      }
+      return hit;
+    }
+    if(key_ok && include_cur && self.resolvers_cache_cur_valid){
+      cur_method.drop();
+      let hit = List<Resolver*>::new();
+      for(let i = 0;i < self.resolvers_cache_cur.len();++i){
+        hit.add(*self.resolvers_cache_cur.get(i));
+      }
+      return hit;
+    }
     let res = List<Resolver*>::new();
     let added = HashSet<String>::new();
     let list = List<String>::new();
@@ -563,6 +604,27 @@ impl Resolver{
     }
     //print("----------\n\n");
     added.drop();
+    //memoize for the hot path (get_resolvers runs per type lookup)
+    if(include_cur){
+      self.resolvers_cache_cur.drop();
+      self.resolvers_cache_cur = List<Resolver*>::new();
+      for(let i = 0;i < res.len();++i){
+        self.resolvers_cache_cur.add(*res.get(i));
+      }
+      self.resolvers_cache_cur_valid = true;
+      self.resolvers_cache_valid = false;
+    }else{
+      self.resolvers_cache.drop();
+      self.resolvers_cache = List<Resolver*>::new();
+      for(let i = 0;i < res.len();++i){
+        self.resolvers_cache.add(*res.get(i));
+      }
+      self.resolvers_cache_valid = true;
+      self.resolvers_cache_cur_valid = false;
+    }
+    self.resolvers_cache_extra = self.extra_imports.len();
+    self.resolvers_cache_method.drop();
+    self.resolvers_cache_method = cur_method;
     return res;
   }
   
@@ -572,27 +634,48 @@ impl Resolver{
     //print("resolve_all {}\n", self.unit.path);
     self.is_resolved = true;
     self.newScope();//globals
+    let xprof = std::getenv("XPROF").is_some();
+    let t0 = gettime();
     self.init();
     self.init_globals();
+    let t1 = gettime();
     let scope = Option<Type>::new();
     for(let i = 0;i < self.unit.items.len();++i){
       let item = self.unit.items.get(i);
+      let ti0 = gettime();
       match self.visit_item(item, &scope){
         Err(err) => self.err(err.line, err.msg),
         _ => {}
+      }
+      if(xprof){
+        let ti_ms = gettime().sub(&ti0).as_ms();
+        if(ti_ms > 200){
+          print("xprof {} slow item[{}]={}ms\n", self.unit.path, i, ti_ms);
+        }
       }
       if(self.ctx.verbose_all && item is Item::Method){
           print("resolve method done\n");
       }
     }
+    let t2 = gettime();
+    let gen_count: i64 = 0;
+    let gen_lookup_ms: i64 = 0;
+    let gen_visit_ms: i64 = 0;
     while(!self.generated_methods_todo.empty()){
       let desc = self.generated_methods_todo.pop_back();
       let tmp = Type::new("?tmp?");//todo?
+      let tg0 = gettime();
       let gm = self.get_method(&desc, &tmp);
+      let tg1 = gettime();
       self.visit_method(gm.unwrap());
+      let tg2 = gettime();
+      gen_lookup_ms += tg1.sub(&tg0).as_ms();
+      gen_visit_ms += tg2.sub(&tg1).as_ms();
+      gen_count += 1;
       desc.drop();
       tmp.drop();
     }
+    let t3 = gettime();
     /*for pair in &self.generated_methods{
       for gm in pair.b{
         self.visit_method(gm.get());
@@ -600,6 +683,15 @@ impl Resolver{
     }*/
     for lm in &self.lambdas{
         self.visit_method(lm.b);
+    }
+    let t4 = gettime();
+    if(xprof){
+      print("xprof {} init={}ms items={}ms generics={}ms lambdas={}ms total={}ms\n",
+        self.unit.path,
+        t1.sub(&t0).as_ms(), t2.sub(&t1).as_ms(),
+        t3.sub(&t2).as_ms(), t4.sub(&t3).as_ms(), t4.sub(&t0).as_ms());
+      print("xprof {} gen_count={} gen_lookup={}ms gen_visit={}ms\n",
+        self.unit.path, gen_count, gen_lookup_ms, gen_visit_ms);
     }
     self.dropScope();//globals
     self.prog().resolve_done();
