@@ -1042,6 +1042,25 @@ impl Resolver{
   }
   func get_method(self, desc: Desc*, type: Type*): Option<Method*>{
     if(desc.kind is RtKind::Method){
+      //Module-nested free functions are indexed within their module
+      //(see collect_module_funcs); plain functions live top-level.
+      if(desc.scope.is_some()){
+        let tmp = self.visit_type0(desc.scope.get());
+        if(tmp.is_ok()){
+          let rt = tmp.unwrap();
+          let md = self.get_module(&rt);
+          rt.drop();
+          if(md.is_some()){
+            let item = md.unwrap().items.get(desc.idx);
+            if let Item::Method(m) = item{
+              return Option::new(m);
+            }
+          }
+        }else{
+          tmp.drop();
+        }
+        return Option<Method*>::new();
+      }
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
@@ -3063,6 +3082,24 @@ impl Resolver{
               self.err(expr, format("literal out of range {} -> {:?}", value, lit.suffix.get()));
             }
             return self.visit_type(lit.suffix.get());
+          }
+          //unsuffixed literals default to i32: reject anything that does
+          //not fit (silently wrapping here miscompiled downstream).
+          //Bound is 2^31 (not 2^31-1) so unary minus keeps working for
+          //-2147483648; use an _i64 suffix for bigger values.
+          //NB: written as max+1 so this check itself is correct even
+          //before mixed-width arithmetic is fixed. Hex/underscores handled
+          //like the backend const emitter.
+          let imax = 2147483647 as i64 + 1;
+          let normal = value.replace("_", "");
+          let parsed = if(normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
+            i64::parse_hex(normal.str())?
+          }else{
+            i64::parse(normal.str())?
+          };
+          normal.drop();
+          if(parsed > imax){
+            self.err(expr, format("literal out of range {} (i32, use _i64 suffix for bigger values)", value));
           }
           let res = RType::new("i32");
           res.value = Option::new(value.str());

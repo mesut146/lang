@@ -1718,8 +1718,14 @@ impl Emitter{
 
     func visit_infix(self, expr: Expr*, op: String*, l: Expr*, r: Expr*): Value*{
       let rt = self.get_resolver().visit(l);
-      let res = self.visit_infix(op, l, r, &rt.type);
+      let rrt = self.get_resolver().visit(r);
+      //usual arithmetic conversions: both sides compute in the common
+      //type (previously everything coerced to the lhs type, silently
+      //truncating wider rhs values).
+      let ct = common_infix(&rt.type, &rrt.type);
+      let res = self.visit_infix(op, l, r, ct);
       rt.drop();
+      rrt.drop();
       return res;
     }
 

@@ -298,9 +298,9 @@ impl DebugInfo{
         //todo
         return;
       }
-      let imps: List<Pair<Impl*, i32>> = MethodResolver::get_impl(c.get_resolver(), &decl.type, Option<Type*>::new()).unwrap();
+      let imps: List<ImplHit> = MethodResolver::get_impl(c.get_resolver(), &decl.type, Option<Type*>::new()).unwrap();
       for pr in imps{
-        for fun in &pr.a.methods{
+        for fun in &pr.imp.methods{
           if(fun.is_generic) continue;
           let proto = self.dbg_func_proto(fun, c).unwrap();
           elems.add(proto as Metadata*);

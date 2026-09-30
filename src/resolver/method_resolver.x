@@ -144,6 +144,12 @@ impl Signature{
         if(!type.is_simple()) return map;
         let type_plain: Type = type.erase();
         let decl_rt = sig.r.unwrap().visit_type(&type_plain);
+        if(!decl_rt.is_decl()){
+            //module scopes (M::useA) carry no type args to infer
+            type_plain.drop();
+            decl_rt.drop();
+            return map;
+        }
         let decl_opt = sig.r.unwrap().get_decl(&decl_rt);
         type_plain.drop();
         decl_rt.drop();
@@ -257,6 +263,8 @@ impl MethodResolver{
             if(r.is_err()){
                 return Result<List<Signature>, String>::err(r.unwrap_err());
             }
+            //free functions inside modules: M::useA()
+            self.collect_module_funcs(sig, scope_type, &list, self.r);
         }else{
             //static sibling
             if(self.r.curMethod.is_some()){
@@ -411,6 +419,66 @@ impl MethodResolver{
         }else{
             return get_impl(self.r, scope_type, Option<Type*>::new());
         }
+    }
+
+    func collect_module_funcs(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, origin: Resolver*){
+        //Free functions nested in modules (M::useA()). Purely syntactic
+        //descent by scope segments: no type visits here, this runs
+        //mid-collection where generic scopes may not resolve (and visits
+        //have side effects like drop synthesis). Same-file modules only.
+        //Only non-generic functions for now; idx is module-local
+        //(see get_method), scope records where to find it.
+        let segs = List<String>::new();
+        let cur: Type* = scope_type;
+        while(true){
+            if(!cur.is_simple()){
+                segs.drop();
+                return;
+            }
+            let smp = cur.as_simple();
+            segs.add(smp.name.clone());
+            if(!smp.scope.is_some()){
+                break;
+            }
+            cur = smp.scope.get();
+        }
+        //segs is inner-first; walk top-level items down from the outer end
+        let items = &self.r.unit.items;
+        let md: Module* = ptr::null<Module>();
+        for(let i = segs.len() - 1;i >= 0;--i){
+            let want = segs.get(i);
+            let found: Module* = ptr::null<Module>();
+            for(let j = 0;j < items.len();++j){
+                let item = items.get(j);
+                if let Item::Module(m) = item{
+                    if(m.name.eq(want.str())){
+                        found = m;
+                        break;
+                    }
+                }
+            }
+            if(found as u64 == 0){
+                segs.drop();
+                return;
+            }
+            md = found;
+            items = &md.items;
+        }
+        for(let i = 0;i < items.len();++i){
+            let item = items.get(i);
+            if let Item::Method(m) = item{
+                if(!m.name.eq(&sig.name)) continue;
+                if(m.is_generic) continue;
+                let desc = Desc{
+                    kind: RtKind::Method,
+                    path: m.path.clone(),
+                    idx: i,
+                    scope: Option::new(scope_type.clone()),
+                };
+                list.add(Signature::new(m, desc, self.r, origin));
+            }
+        }
+        segs.drop();
     }
 
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool, origin: Resolver*): Result<i32, String>{

@@ -3,7 +3,10 @@ func main(){
     assert(x0 == 2.0);
     let x: f32 = 3.5;
     assert(x == 3.5);
-    assert(10.11_f32 == 10.11_f64);
+    //mixed f32/f64 promotes to f64 (like C/Rust), so these differ:
+    //f32(10.11) == 10.1099996.., f64(10.11) == 10.11..
+    assert(10.11_f32 != 10.11_f64);
+    assert(10.11_f32 == 10.11_f32);
 
     assert(x + 1 == 4.5);
     assert(x + 1.0 == 4.5);

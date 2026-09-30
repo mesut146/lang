@@ -137,6 +137,38 @@ func is_struct(type: Type*): bool{
   return !type.is_prim() && !type.is_pointer() && !type.is_void() && !type.is_fpointer() && !(type is Type::Lambda);
 }
 
+//Usual arithmetic conversions (widths only): float wins over int,
+//wider wins over narrower. Returns borrowed l or r, never allocates.
+//Same-type operands resolve to l, so existing behavior is unchanged
+//there; only mixed widths change (previously the rhs was silently
+//truncated to the lhs width).
+func common_infix(l: Type*, r: Type*): Type*{
+  if(l.is_float() && r.is_float()){
+    if(l.eq("f64")){
+      return l;
+    }
+    if(r.eq("f64")){
+      return r;
+    }
+    return l;
+  }
+  if(l.is_float()){
+    return l;
+  }
+  if(r.is_float()){
+    return r;
+  }
+  if(!l.is_prim() || !r.is_prim()){
+    return l;
+  }
+  let lb = prim_size(l.name().str()).unwrap();
+  let rb = prim_size(r.name().str()).unwrap();
+  if(rb > lb){
+    return r;
+  }
+  return l;
+}
+
 func is_loadable(type: Type*): bool{
     return type.is_prim() || type.is_pointer() || type.is_fpointer() || type is Type::Lambda;
   }

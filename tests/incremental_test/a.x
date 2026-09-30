@@ -6,7 +6,7 @@ struct A{
 }
 
 func getB(): B{
-    return B{b: 111};
+    return B{b: 111, c: 222};
 }
 
 func getA(): A{

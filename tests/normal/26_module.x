@@ -52,4 +52,6 @@ func main(){
 
     let c = M::N::B::new(3);
     assert(c.get() == 3);
+
+    assert(M::useA().a == 10);
 }
