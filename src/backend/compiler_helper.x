@@ -648,6 +648,9 @@ impl Emitter{
   func cast(self, expr: Expr*, target_type: Type*): Value*{
     let ll = self.ll.get();
     let src_type = self.get_resolver().getType(expr);
+    if(std::getenv("genCode").is_some()){
+      print("xcast {:?} -> {:?}\n", src_type, target_type);
+    }
     let val = self.loadPrim(expr);
     let is_unsigned = isUnsigned(&src_type);
     let target_ty = self.mapType(target_type);
@@ -683,6 +686,12 @@ impl Emitter{
       }
     }
     let val_ty = Value_getType(val);
+    if(std::getenv("genCode").is_some()){
+      print("xcast llvm src: ");
+      Type_dump(val_ty);
+      print("xcast llvm trg: ");
+      Type_dump(target_ty);
+    }
     let src_size = ll.sizeOf(val_ty);
     let trg_size = self.getSize(target_type);
     let trg_ty = intTy(ll.ctx, trg_size as i32);

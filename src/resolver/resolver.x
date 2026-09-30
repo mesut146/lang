@@ -1052,10 +1052,41 @@ impl Resolver{
     if let RtKind::MethodImpl(idx2) = &desc.kind{
       let resolver = self.ctx.create_resolver(&desc.path);
       let unit = &resolver.unit;
-      let item = unit.items.get(desc.idx);
-      if let Item::Impl(imp) = item{
-        let m = imp.methods.get(*idx2);
-        return Option::new(m);
+      let xmod = std::getenv("XMOD").is_some();
+      //Nested impls (found via module recursion) are indexed within
+      //their module; desc.scope says so unambiguously. Anything else
+      //addresses top-level items (existing behavior kept).
+      if(desc.scope.is_some()){
+        let tmp = resolver.visit_type0(desc.scope.get());
+        if(xmod){
+          print("xmod get_method scope ok={}\n", tmp.is_ok());
+        }
+        if(tmp.is_ok()){
+          let rt = tmp.unwrap();
+          let md = resolver.get_module(&rt);
+          rt.drop();
+          if(md.is_some()){
+            let item = md.unwrap().items.get(desc.idx);
+            if let Item::Impl(imp) = item{
+              let m = imp.methods.get(*idx2);
+              if(xmod){
+                print("xmod get_method mod hit\n");
+              }
+              return Option::new(m);
+            }
+          }
+        }else{
+          tmp.drop();
+        }
+      }else if(desc.idx < unit.items.len()){
+        let item = unit.items.get(desc.idx);
+        if let Item::Impl(imp) = item{
+          let m = imp.methods.get(*idx2);
+          if(xmod){
+            print("xmod get_method top hit {:?}\n", type);
+          }
+          return Option::new(m);
+        }
       }
     }
     if let RtKind::MethodGen(name) = &desc.kind{
@@ -1552,13 +1583,24 @@ impl Resolver{
   }
 
   func visit_type(self, node: Type*): RType{
-    return self.visit_type0(node).unwrap();
+    let tmp = self.visit_type0(node);
+    if(tmp.is_err()){
+      panic("visit_type failed for {:?}\n", node);
+    }
+    return tmp.unwrap();
   }
 
   func visit_type0(self, node: Type*): Result<RType, Error>{
     let str = node.print();
     let res = self.visit_type_str0(node, &str);
     if(!self.typeMap.contains(&str)){
+      if(res.is_err()){
+        //was: unconditional .get() panic here, which defeated every
+        //is_ok() guard on this call (e.g. module-scope probing in
+        //get_impl) and hid the real error. Propagate instead.
+        str.drop();
+        return res;
+      }
       self.addType(str, res.get().clone());
       return res;
     }
@@ -1701,14 +1743,14 @@ impl Resolver{
       self.err(node.line, format("type scope is not enum: {} {:?}", str, arr));
     }
     let list = List<Signature>::new();
-    for pair in &arr{
+    for hit in &arr{
       let i = 0;
-      for m in &pair.a.methods{
+      for m in &hit.imp.methods{
         if(m.name.eq(&simp.name)){
           let desc = Desc{
             kind: RtKind::MethodImpl{i},
             path: m.path.clone(),
-            idx: pair.b,
+            idx: hit.idx,
             scope: Option<Type>::new(),
           };
           list.add(Signature::new(m, desc, self, self));

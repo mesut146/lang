@@ -1275,6 +1275,9 @@ impl Emitter{
       if(is_struct(&rt.type)){
         ptr_ret = Option::new(self.get_alloc(expr));
       }
+      if(std::getenv("genCode").is_some()){
+        print("xcall {:?} is_struct={} has_ptrret={}\n", expr, is_struct(&rt.type), ptr_ret.is_some());
+      }
       return self.visit_call2(expr, mc, ptr_ret, rt);
     }
   
@@ -1353,6 +1356,10 @@ impl Emitter{
       args.drop();
       if(Resolver::is_exit(mc)){
         CreateUnreachable(ll.builder);
+      }
+      if(std::getenv("genCode").is_some()){
+        print("xcallres {:?} -> ", printMethod(target));
+        Type_dump(Value_getType(res));
       }
       if(ptr_ret.is_some()) return ptr_ret.unwrap();
       return res;

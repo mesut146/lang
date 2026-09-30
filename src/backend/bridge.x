@@ -186,7 +186,7 @@ extern{
     func Value_setName(v: Value*, name: i8*);
     func Value_getType(val: Value*): llvm_Type*;
     //func Value_dump(v: Value*);
-    //func Type_dump(t: llvm_Type*);
+    func Type_dump(t: llvm_Type*);
     func CreateAlloca(builder: IRBuilder*, ty: llvm_Type*): Value*;
     func CreateStore(builder: IRBuilder*, val: Value*, ptr: Value*);
     func CreateMemCpy(builder: IRBuilder*, trg: Value*, src: Value*, size: i64);

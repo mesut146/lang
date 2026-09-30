@@ -56,6 +56,24 @@ impl SigResult{
     }
 }
 
+//One impl candidate from get_impl. idx addresses items of a module
+//when nested is true, top-level unit items otherwise (see get_method).
+struct ImplHit{
+  imp: Impl*;
+  idx: i32;
+  nested: bool;
+}
+impl Debug for ImplHit{
+  func debug(self, f: Fmt*){
+    f.print("ImplHit{idx: ");
+    self.idx.debug(f);
+    f.print(", nested: ");
+    self.nested.debug(f);
+    f.print(", imp: ");
+    self.imp.debug(f);
+    f.print("}");
+  }
+}
 struct MethodResolver{
     r: Resolver*;
 }
@@ -270,36 +288,65 @@ impl MethodResolver{
       return type.print();
     }
 
-    func get_impl(resolver: Resolver*, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
+    func get_impl(resolver: Resolver*, type: Type*, tr: Option<Type*>): Result<List<ImplHit>, String>{
         return MethodResolver::get_impl(resolver, &resolver.unit.items, type, tr);
     }
     
-    func get_impl(resolver: Resolver*, items: List<Item>*, type: Type*, tr: Option<Type*>): Result<List<Pair<Impl*, i32>>, String>{
+    func get_impl(resolver: Resolver*, items: List<Item>*, type: Type*, tr: Option<Type*>): Result<List<ImplHit>, String>{
+      let xmod = std::getenv("XMOD").is_some();
+      if(xmod){
+        print("xmod get_impl unit={} type={:?} items={}\n", resolver.unit.path, type, items.len());
+      }
       match type{
         Type::Slice(sl) => {},
         Type::Simple(sl) => {},
         _ => {
-            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+            return Result<List<ImplHit>, String>::err(format("get_impl type not covered: {:?}", type));
         }
       }
+      //Scoped searches (M::A) combine impls nested inside the module
+      //(recursion with stripped name, collected below) with impls spelled
+      //with the scope at this level (root `impl M::A`, matched in the loop
+      //below). Name filtering happens downstream in collect_member.
+      let scoped = List<ImplHit>::new();
       if(type.is_simple()){
         let smp = type.as_simple();
         if(smp.scope.is_some()){
-          //scope can be module
+          //scope can be module: search inside it with stripped name...
           let tmp = resolver.visit_type0(smp.scope.get());
           if(tmp.is_ok()){
             let rt = tmp.unwrap();
             let md = resolver.get_module(&rt);
             rt.drop();
-            if(md.is_none()) return Result<List<Pair<Impl*, i32>>, String>::err(format("scope is not module {:?}", type));
+            if(md.is_none()){
+              scoped.drop();
+              return Result<List<ImplHit>, String>::err(format("scope is not module {:?}", type));
+            }
             let smp2 = smp.clone();
             smp2.scope = Ptr<Type>::new();
             let type2 = smp2.into(type.line);
-            return MethodResolver::get_impl(resolver, &md.unwrap().items, &type2, tr);
+            let rec = MethodResolver::get_impl(resolver, &md.unwrap().items, &type2, tr);
+            if(xmod){
+              print("xmod get_impl recurse type={:?} err={}\n", type, rec.is_err());
+            }
+            if(rec.is_ok()){
+              let found = rec.unwrap();
+              for(let i = 0;i < found.len();++i){
+                let fp = found.get(i);
+                scoped.add(ImplHit{imp: fp.imp, idx: fp.idx, nested: true});
+              }
+              found.drop();
+            }else{
+              scoped.drop();
+              return rec;
+            }
           }
+          //...and also check current items for impls spelled with the
+          //same scope (root-level `impl M::A`), which the recursion
+          //above can never see. Falls through to the loop below.
         }
       }
-      let list = List<Pair<Impl*, i32>>::new();
+      let list = scoped;
       let erased: String = print_erased(type);
       //todo generated impl too
       for(let i = 0;i < items.len();++i){
@@ -318,11 +365,20 @@ impl MethodResolver{
         if(type.is_simple()){
             let smp = type.as_simple();
             if(smp.scope.is_some()){
-                //scope can be module
+                //scoped search (M::A): match impls spelled with the same
+                //scope, e.g. root-level `impl M::A` (the module recursion
+                //above only sees impls nested inside M).
+                let full = type.print();
+                let imp_full = imp.info.type.print();
+                if(full.eq(&imp_full)){
+                    list.add(ImplHit{imp: imp, idx: i, nested: false});
+                }
+                full.drop();
+                imp_full.drop();
             }else{
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
-                    list.add(Pair::new(imp, i));
+                    list.add(ImplHit{imp: imp, idx: i, nested: false});
                 }
                 imp_erased.drop();
             }
@@ -333,19 +389,22 @@ impl MethodResolver{
             let val = Option<String>::new();
             let cmp = is_compatible(type, &val, &imp.info.type, &imp.info.type_params);
             if(cmp.is_none()){
-                list.add(Pair::new(imp, i));
+                list.add(ImplHit{imp: imp, idx: i, nested: false});
             }
             cmp.drop();
             val.drop();
         }else{
-            return Result<List<Pair<Impl*, i32>>, String>::err(format("get_impl type not covered: {:?}", type));
+            return Result<List<ImplHit>, String>::err(format("get_impl type not covered: {:?}", type));
         }
       }
       erased.drop();
-      return Result<List<Pair<Impl*, i32>>, String>::ok(list);
+      if(xmod){
+        print("xmod get_impl done type={:?} found={}\n", type, list.len());
+      }
+      return Result<List<ImplHit>, String>::ok(list);
     }
 
-    func get_impl(self, sig: Signature*, scope_type: Type*): Result<List<Pair<Impl*, i32>>, String>{
+    func get_impl(self, sig: Signature*, scope_type: Type*): Result<List<ImplHit>, String>{
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
             let actual: Type* = sig.args.get(0).deref_ptr();
             return get_impl(self.r, actual, Option::new(&sig.scope.get().type));
@@ -359,22 +418,32 @@ impl MethodResolver{
         if(imp_list0.is_err()){
             return Result<i32, String>::err(imp_list0.unwrap_err());
         }
-        let imp_list: List<Pair<Impl*, i32>> = imp_list0.unwrap();
+        let imp_list: List<ImplHit> = imp_list0.unwrap();
         //todo make this take real resolver
 
         let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
-            let pair: Pair<Impl*, i32>* = imp_list.get(i);
-            let imp: Impl* = pair.a;
+            let hit: ImplHit* = imp_list.get(i);
+            let imp: Impl* = hit.imp;
             //print("mc={:?} i={:?} imp={:?}\n", sig.mc.unwrap(), i, imp);
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get(j);       
                 if(!m.name.eq(&sig.name)) continue;
+                //record module scope for impls found via module recursion:
+                //their idx addresses items inside the module, not top level
+                //(see get_method).
+                let desc_scope = Option<Type>::new();
+                if(hit.nested && scope_type.is_simple()){
+                    let st = scope_type.as_simple();
+                    if(st.scope.is_some()){
+                        desc_scope.set(st.scope.get().clone());
+                    }
+                }
                 let desc = Desc{
                     kind: RtKind::MethodImpl{j},
                     path: m.path.clone(),
-                    idx: pair.b,
-                    scope: Option<Type>::new(),
+                    idx: hit.idx,
+                    scope: desc_scope,
                 };
                 if(!scope_type.is_simple()){
                   list.add(Signature::new(m, desc, self.r, origin));
@@ -454,6 +523,10 @@ impl MethodResolver{
     }    
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
+        let xmod = std::getenv("XMOD").is_some();
+        if(xmod){
+          print("xmod handle name={} scope_set={}\n", sig.name, sig.scope.is_some());
+        }
         let mc = sig.mc.unwrap();
         let list_res = self.collect(sig);
         //print("---------\n\n");
