@@ -73,8 +73,21 @@ func handle_c(cmd: CmdArgs*){
   let name: Option<String> = cmd.get_val("-name");
   let out_name: Option<String> = cmd.get_val("-o");
   let jobs = cmd.get_val("-j");
+  if(jobs.is_none()){
+    //attached form: -j4
+    for(let i = 0;i < cmd.args.len();++i){
+      let a = cmd.args.get(i).str();
+      if(a.starts_with("-j") && a.len() > 2){
+        let num = a.substr(2, a.len());
+        jobs.set(num.owned());
+        cmd.args.remove(i).drop();
+        break;
+      }
+    }
+  }
   let config = CompilerConfig::new();
   config.use_cache = cmd.consume_any("-cache");
+  config.cache_write = !cmd.consume_any("-cache-ro");
   config.incremental_enabled = cmd.consume_any("-inc");
   config.debug = cmd.consume_any("-g");
   config.stack_trace = cmd.consume_any("-trace");

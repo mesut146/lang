@@ -79,6 +79,7 @@ struct CompilerConfig{
   verbose_all: bool;
   incremental_enabled: bool;
   use_cache: bool;
+  cache_write: bool;
   llvm_only: bool;
   debug: bool;
   opt_level: Option<String>;
@@ -105,6 +106,7 @@ impl CompilerConfig{
       verbose_all: false,
       incremental_enabled: false,
       use_cache: true,
+      cache_write: true,
       llvm_only: false,
       debug: false,
       opt_level: Option<String>::new(),
@@ -148,13 +150,19 @@ func getName(path: str): str{
 struct Compiler;
 impl Compiler{
   func compile_single(config: CompilerConfig): Result<String, CompilerError>{
-    config.use_cache = false;
+    //single-file outputs (binaries) don't consult the .o cache; but -j
+    //worker children (see -cache-ro) compile single files and MUST use it,
+    //otherwise warm parallel builds recompile everything every time.
+    if(config.cache_write){
+      config.use_cache = false;
+    }
     File::create_dir(config.out_dir.str())?;
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
     for inc_dir in &config.src_dirs{
       ctx.add_path(inc_dir.str());
     }
     let cache = new_cache(&config);
+    cache.read_cache();
     let cmp = Emitter::new(ctx, &config, &cache);
     let compiled = List<String>::new();
     if(cmp.ctx.verbose){
@@ -227,13 +235,22 @@ impl Compiler{
   }
 
   func new_cache(config: CompilerConfig*): Cache{
-    return Cache::new(config.incremental_enabled, config.use_cache, config.out_dir.str(), config.file.clone());
+    let c = Cache::new(config.incremental_enabled, config.use_cache, config.out_dir.str(), config.file.clone());
+    //XCACHE_RO is set by a -j parent for its worker children (inherited env):
+    //they share one cache.txt, so only the parent merges+writes. Env (not a
+    //flag) so older compilers simply ignore it instead of choking.
+    c.write = config.cache_write && std::getenv("XCACHE_RO").is_none();
+    return c;
   }
   
   func compile_dir_thread(config: CompilerConfig): Result<String, CompilerError>{
     File::create_dir(config.out_dir.str())?;
     let cache = new_cache(&config);
     cache.read_cache();
+    //worker children share this cache.txt: they must not write it
+    //concurrently (last-writer-wins would drop entries). They see this
+    //env and skip writes; the parent merges once after the join.
+    std::setenv("XCACHE_RO", "1");
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let compiled = Mutex::new(List<String>::new());
@@ -256,8 +273,19 @@ impl Compiler{
       };
       worker.add_arg(Compiler::make_compile_job, args);
     }
-    sleep(1);
     worker.join();
+    //children run with -cache-ro (no shared cache.txt writes); merge once here.
+    for(let i = 0;i < list.len();++i){
+      let name = list.get(i).str();
+      let file: String = format("{}/{}", src_dir, name);
+      if(File::is_dir(file.str()) || !name.ends_with(".x")) {
+        file.drop();
+        continue;
+      }
+      cache.update(file.str());
+      file.drop();
+    }
+    cache.write_cache();
     list.drop();
     cache.drop();
     let comp = compiled.unwrap();
@@ -271,7 +299,10 @@ impl Compiler{
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
-    let cmd = format("{} c -out {} -stdpath {} -nolink -cache", root_exe.get(), args.config.out_dir, args.config.std_path.get());
+    //Parent and child are always the same binary (see root_exe), so the
+    //child always understands this flag. (An env fallback also exists in
+    //new_cache for exotic flows; old compilers never emit the flag.)
+    let cmd = format("{} c -out {} -stdpath {} -nolink -cache -cache-ro", root_exe.get(), args.config.out_dir, args.config.std_path.get());
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
@@ -291,7 +322,9 @@ impl Compiler{
     let proc = Process::run(cmd.str());
     let code = proc.eat_close();
     if(code != 0){
-      panic("failed to compile {}", args.file);
+      //fail fast: panicking here would strand the worker pool and hang join()
+      print("failed to compile {}\n", args.file);
+      exit(1);
     }
     if(ctx.verbose){
       let idx = args.idx.lock();
@@ -303,7 +336,6 @@ impl Compiler{
     let compiled = args.compiled.lock();
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
     args.compiled.unlock();
-    sleep(1);
     ctx.drop();
     cmd.drop();
   }

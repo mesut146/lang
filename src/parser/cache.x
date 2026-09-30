@@ -10,6 +10,7 @@ struct Cache{
     file: String;
     inc: Incremental;
     use_cache: bool;
+    write: bool;
 }
 
 func CACHE_FILE(out_dir: str): String{
@@ -23,6 +24,7 @@ impl Cache{
             file: CACHE_FILE(out_dir),
             inc: Incremental::new(incremental_enabled, out_dir, src_dir),
             use_cache: use_cache,
+            write: true,
         };
     }
 
@@ -49,6 +51,7 @@ impl Cache{
     
     func write_cache(self){
         if(!self.use_cache) return;
+        if(!self.write) return;
         let str = String::new();
         for pair in &self.map{
             str.append(pair.a.str());

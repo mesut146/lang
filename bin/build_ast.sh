@@ -18,7 +18,12 @@ out_dir=$build/${name}_out
 
 mkdir -p $out_dir
 
-$compiler c -static -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/ast
+# XJOBS=N enables parallel per-file compilation (-j)
+if [ ! -z "$XJOBS" ]; then
+  JOBS="-j $XJOBS"
+fi
+
+$compiler c -static -cache $JOBS -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/ast
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"
   exit 1

@@ -223,7 +223,7 @@ impl Worker{
       while(!infos.empty()){
           //infos.last().get().th.get().join();
           self.infos.unlock();
-          sleep(1);
+          msleep(20);
           infos = self.infos.lock();
       }
       self.infos.unlock();

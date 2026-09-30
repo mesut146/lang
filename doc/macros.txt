@@ -40,7 +40,7 @@ ptr::deref(ptr): <*ptr>;
 -std
 
 #bt config
--j <num> //jobs
+-j <num> //jobs, also -j<num>; -cache-ro reads cache without writing (for -j workers)
 -v //verbose
 -static //static link
 -static-llvm //static llvm
