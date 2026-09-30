@@ -48,11 +48,23 @@ mkdir -p $dir/src
 cp $binary $dir/bin/x
 #ship the C++ bridge too: native rebuilds (e.g. on Termux, where no
 #matching LLVM headers exist) link it instead of recompiling it.
-if [ -f "$cur/../cpp_bridge/build/libbridge.a" ]; then
+#BRIDGE_LIB (used by termux_native.sh) points at a prebuilt bridge;
+#otherwise use a just-built one next to the repo.
+if [ -z "$BRIDGE_LIB" ]; then
+  BRIDGE_LIB="$cur/../cpp_bridge/build/libbridge.a"
+fi
+if [ -f "$BRIDGE_LIB" ]; then
+  cp $BRIDGE_LIB $dir/lib/libbridge.a
+elif [ -f "$cur/../cpp_bridge/build/libbridge.a" ]; then
   cp $cur/../cpp_bridge/build/libbridge.a $dir/lib/
 fi
 if [ -f "$cur/../cpp_bridge/build/libbridge.so" ]; then
   cp $cur/../cpp_bridge/build/libbridge.so $dir/lib/
+fi
+#never ship a bridgeless Termux toolchain silently: the next native
+#generation links this file and has no headers to rebuild it.
+if [ ! -f "$dir/lib/libbridge.a" ] && [ ! -z "$XTERMUX" ]; then
+  echo "missing libbridge.a for termux toolchain (set BRIDGE_LIB)" && exit 1
 fi
 #follow symlinks: we want the real file (libLLVM.so.19) plus a SONAME
 #symlink (libLLVM.so), not a 118MB duplicate under the link name.

@@ -56,6 +56,11 @@ else
 fi
 bridge_lib="$host_tool/lib/libbridge.a"
 
+#make_toolchain ships $BRIDGE_LIB; on device there is no cpp_bridge/build
+#(gitignored), so pass the host toolchain's bridge through for the next
+#native generation.
+export BRIDGE_LIB="$bridge_lib"
+
 #Termux system linker; default target is already aarch64-linux-android
 export LD="clang++"
 unset target_triple
