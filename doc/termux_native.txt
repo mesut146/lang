@@ -1,0 +1,22 @@
+Native Termux bootstrap: rebuilding the compiler ON the phone.
+
+Requires a previous Termux toolchain >= 1.04 (it ships libbridge.a;
+older ones do not). No NDK, Docker or LLVM downloads: codegen runs
+through the toolchain's own libLLVM.so.19 + libbridge.a, and Termux's
+clang++ only links final binaries.
+
+On device, first time:
+  pkg install clang lld binutils make zip unzip patchelf
+  # get a bootstrap toolchain (latest release asset):
+  #   curl -L -o tool.zip <x-toolchain-<ver>-termux-aarch64.zip url>
+  #   unzip tool.zip
+Then (takes a while, keep the phone cool):
+  ./bin/termux_native.sh x-toolchain-<ver>-termux-aarch64 <new-ver>
+Optional:
+  XJOBS=$(nproc) ./bin/termux_native.sh ...   # parallel lib builds
+
+Notes:
+- libLLVM/libbridge are reused, never rebuilt: there are no LLVM 19
+  headers on Termux (only LLVM 21), and the bridge is tied to v19.
+- test.sh works on device too (needs the same pkg set).
+- vararg tests need gcc, not packaged on Termux: skipped there.

@@ -46,6 +46,14 @@ mkdir -p $dir/lib
 mkdir -p $dir/src
 
 cp $binary $dir/bin/x
+#ship the C++ bridge too: native rebuilds (e.g. on Termux, where no
+#matching LLVM headers exist) link it instead of recompiling it.
+if [ -f "$cur/../cpp_bridge/build/libbridge.a" ]; then
+  cp $cur/../cpp_bridge/build/libbridge.a $dir/lib/
+fi
+if [ -f "$cur/../cpp_bridge/build/libbridge.so" ]; then
+  cp $cur/../cpp_bridge/build/libbridge.so $dir/lib/
+fi
 #follow symlinks: we want the real file (libLLVM.so.19) plus a SONAME
 #symlink (libLLVM.so), not a 118MB duplicate under the link name.
 if [ -L "$LIBLLVM" ]; then
