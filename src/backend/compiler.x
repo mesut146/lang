@@ -386,6 +386,12 @@ impl Compiler{
       cmd.append(" ");
     }
     cmd.append(args);
+    //export dynamic symbols so backtrace_symbols_fd prints function
+    //names in panic backtraces; bionic lacks execinfo, so Termux
+    //targets (which also omit the trace call) skip it.
+    if(std::getenv("XTERMUX").is_none()){
+      cmd.append(" -rdynamic");
+    }
     //todo move this to main or bt.sh
     cmd.append(" -Wl,-rpath=$ORIGIN/../lib");
     File::write_string(cmd.str(), format("{}/link.sh", out_dir).str())?;

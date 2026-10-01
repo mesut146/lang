@@ -94,6 +94,10 @@ extern{
   func open(name: i8*, flags: i32, mode: i32): i32;
   func write(fd: i32, buf: i8*, count: u64): i64;
   func memcmp(s1: i8*, s2: i8*, n: u64): i32;
+  //glibc execinfo (absent on bionic: panic_backtrace() is only emitted
+  //for non-Termux targets, see derive.x)
+  func backtrace(buf: u64*, size: i32): i32;
+  func backtrace_symbols_fd(buf: u64*, size: i32, fd: i32);
   func fclose(file: cFILE*): i32;
   //func fflush(file: cFILE*): i32;
   func fwrite(buf: i8*, size_of_elem: i32, count: i32, target: cFILE*): i32;

@@ -378,6 +378,24 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
     return imp;
 }
 
+//Backtrace emission for fatal paths (panic/assert), inlined as parsed
+//statements: lib-less binaries cannot link prelude-defined helpers, and
+//a runtime env switch would need str->i8* conversion (also unavailable),
+//so traces are a build-time decision (XBACKTRACE=1). glibc execinfo is
+//absent on bionic, so Termux-targeted builds omit them entirely.
+func emit_backtrace(block: Block*, unit: Unit*, line: i32, id: i32){
+    if(std::getenv("XTERMUX").is_some()){
+        return;
+    }
+    if(std::getenv("XBACKTRACE").is_none()){
+        return;
+    }
+    //one statement per parse_stmt call (it parses a single statement).
+    block.list.add(parse_stmt(format!("let __bt{}_buf = [0 as u64; 64];", id), unit, line));
+    block.list.add(parse_stmt(format!("let __bt{}_n = backtrace(__bt{}_buf.ptr(), 64);", id, id), unit, line));
+    block.list.add(parse_stmt(format!("backtrace_symbols_fd(__bt{}_buf.ptr(), __bt{}_n, 2);", id, id), unit, line));
+}
+
 func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
@@ -409,6 +427,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             msg.drop();
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            emit_backtrace(block, &r.unit, line, node.id);
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
             msg.drop();
         }else{
@@ -520,6 +539,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //..Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
+        emit_backtrace(block, &r.unit, line, node.id);
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
         //..print("block={}\n", block);
         r.visit_block(block);
@@ -566,6 +586,7 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
             msg.drop();
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
+            emit_backtrace(block, &r.unit, line, node.id);
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
             msg.drop();
         }else{
@@ -676,6 +697,7 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         //..Drop::drop(f);
         let drop_st = parse_stmt(format("Drop::drop({});", &fmt_var_name), &r.unit, line);
         block.list.add(drop_st);
+        emit_backtrace(block, &r.unit, line, node.id);
         block.list.add(parse_stmt("exit(1);".str(), &r.unit, line));
         //..print("block={}\n", block);
         r.visit_block(block);
@@ -746,6 +768,11 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     //let str = format("if(!({:?})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
     let fm = Fmt::new(format("if(!({:?})){{\n", arg));
     fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.curMethod.unwrap().path, node.line, arg_norm, method_sig));
+    if(std::getenv("XTERMUX").is_none() && std::getenv("XBACKTRACE").is_some()){
+      fm.print(format!("let __bta{}_buf = [0 as u64; 64];\n", node.id));
+      fm.print(format!("let __bta{}_n = backtrace(__bta{}_buf.ptr(), 64);\n", node.id, node.id));
+      fm.print(format!("backtrace_symbols_fd(__bta{}_buf.ptr(), __bta{}_n, 2);\n", node.id, node.id));
+    }
     fm.print("exit(1);\n}");
     let str = fm.unwrap();
     //print("assert='{}'", str);
