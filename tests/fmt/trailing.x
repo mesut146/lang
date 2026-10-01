@@ -1,0 +1,17 @@
+// file header line one
+// header line two
+import std/option
+
+// section divider
+struct A{
+    a: i32;
+}
+
+// doc comment for main
+func main(){
+    // inner note
+    let x = 1; // trailing note
+    assert(x == 1);
+    print("cmt done\n");
+}
+// file trailer

@@ -134,6 +134,26 @@ std_regex(){
   fi
 }
 
+#formatter: each tests/fmt/*.x must format to its checked-in
+#.expected byte-for-byte (comment placement regressions show up as
+#diffs here) and be idempotent (second pass changes nothing).
+fmt_all(){
+  $dir/build_formatter.sh $compiler || exit 1
+  fmt=$dir/../build/fmt_out/fmt
+  for f in $testd/fmt/*.x; do
+    base=$(basename $f .x)
+    run "$fmt $f $out_dir/$base.out" || exit 1
+    if ! diff -q "$testd/fmt/$base.expected" "$out_dir/$base.out" > /dev/null; then
+      echo "FMT-DIFF: $f"; exit 1
+    fi
+    run "$fmt $out_dir/$base.out $out_dir/$base.out2" || exit 1
+    if ! diff -q "$out_dir/$base.out" "$out_dir/$base.out2" > /dev/null; then
+      echo "FMT-NOT-IDEMPOTENT: $f"; exit 1
+    fi
+  done
+  echo "fmt: pass"
+}
+
 #ownership + move-semantics tests (tests/own, tests/own_if).
 #They share tests/own/common.x (Drop-tracker helper, no main) and assert
 #runtime behavior, so every test is compiled, linked AND executed.
@@ -182,8 +202,11 @@ elif [ "$pat" == "vararg" ]; then
   vararg_all
 elif [ "$pat" == "inc" ]; then
   inc_all
+elif [ "$pat" == "fmt" ]; then
+  fmt_all
 elif [ "$pat" == "all" ]; then
   normal
+  fmt_all
   debug_all
   std_all
   own_all
