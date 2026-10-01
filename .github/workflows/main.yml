@@ -3,8 +3,8 @@ name: test
 on: [push]
 
 env:
-  last_version: '1.06'
-  new_version: '1.07'
+  last_version: '1.07'
+  new_version: '1.08'
   publish: false
 
 jobs:
