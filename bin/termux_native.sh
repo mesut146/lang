@@ -91,7 +91,7 @@ fi
   flags="$flags $LIBLLVM"
   flags="$flags $STDCPP"
   dirr=$(realpath $dir)
-  cmd="$compiler c -norun -cache -stdpath $dirr/../src -i $dirr/../src -out $out_dir -flags '$flags' -name $name $dirr/../src/parser"
+  cmd="$compiler c -cache -stdpath $dirr/../src -i $dirr/../src -out $out_dir -flags '$flags' -name $name $dirr/../src/parser"
   if [ ! -z "$XDEBUG" ]; then
     cmd="$cmd -g"
   fi

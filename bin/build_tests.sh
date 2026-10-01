@@ -37,7 +37,7 @@ if [ ! -z "$XPERF" ]; then
   flags="$flags /usr/lib/x86_64-linux-gnu/libprofiler.so.0"
 fi
 
-$compiler c -norun -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name -flags "$flags" $dir/../src/tests
+$compiler c -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name -flags "$flags" $dir/../src/tests
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"
   exit 1

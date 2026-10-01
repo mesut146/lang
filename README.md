@@ -47,7 +47,8 @@ $TC/bin/x c -o hello -out ./out -stdpath $TC/src hello.x
 ```
 
 Notes:
-- `x c` compiles **and runs** the result; pass `-norun` to only build.
+- `x c` only builds; run the binary yourself (`-nolink` stops before
+  linking, for object-only builds).
 - `assert(cond)` is a builtin: failures print `file:line`, the offending
   expression, and the enclosing function. `assert_eq` / `assert2` live in
   `std` for value comparison and custom messages.

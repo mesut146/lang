@@ -16,7 +16,6 @@ import resolver/resolver
 
 import backend/compiler
 import backend/debug_helper
-//import backend/llvm
 import parser/ownership
 import parser/own_model
 import parser/cache
@@ -49,23 +48,9 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
   return lib;
 }
 
-func trim_nl(s: String): String{
-  if(s.str().ends_with("\n")){
-    return s.substr(0, s.len() - 1).owned();
-  }
-  return s;
-}
-
-
-func bin_name(path: str): String{
-  let name = Path::name(path);
-  return format("{}.bin", Path::noext(name));
-}
-
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
   let out_dir = cmd.get_val2("-out");
-  let run = !cmd.consume_any("-norun");
   let compile_only = cmd.consume_any("-nolink");
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
@@ -107,7 +92,6 @@ func handle_c(cmd: CmdArgs*){
   }
   if(cmd.has_any("-stdpath")){
     let std_path = cmd.get_val2("-stdpath");
-    //config.add_dir(Path::parent(std_path.str()).owned());
     config.add_dir(std_path.clone());
     config.set_std(std_path.clone());
     if(cmd.consume_any("-std")){
@@ -169,8 +153,7 @@ func handle_c(cmd: CmdArgs*){
     if(out_name.is_none()){
       out_name.set(name2.owned());
     }
-    //todo remove run
-    config.set_link(LinkType::Binary{out_name.unwrap(), flags, run});
+    config.set_link(LinkType::Binary{out_name.unwrap(), flags});
   }
   
   if(File::is_dir(path.str())){
@@ -210,7 +193,6 @@ func handle(cmd: CmdArgs*){
   }else{
     handle_c(cmd);
     return;
-    //panic("invalid cmd: {:?}", cmd.args);
   }
 }
 

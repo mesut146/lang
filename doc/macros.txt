@@ -29,7 +29,6 @@ ptr::deref(ptr): <*ptr>;
 #cmd config
 -cache //use cache
 -out <dir> //output dir
--norun
 -nolink
 -static
 -shared

@@ -38,7 +38,7 @@ normal(){
     if [ ! -z "$sf" ]; then
       #negative test: must fail to compile (never executed)
       msg=$(echo "$sf" | sed 's|// should-fail:||;s|// should-fail||;s|^ *||')
-      if $compiler c -norun -o $base -out $out_dir -stdpath $stdpath "$f" > $out_dir/$base.err 2>&1; then
+      if $compiler c -o $base -out $out_dir -stdpath $stdpath "$f" > $out_dir/$base.err 2>&1; then
         echo "FAIL (compiled, expected failure): $f"; exit 1
       elif [ ! -z "$msg" ] && ! grep -qF "$msg" $out_dir/$base.err; then
         echo "FAIL (wrong error, want '$msg'): $f"; exit 1
@@ -46,7 +46,7 @@ normal(){
         pass=$((pass+1))
       fi
     else
-      if $compiler c -o $base -out $out_dir -stdpath $stdpath "$f" > /dev/null 2>&1; then
+      if $compiler c -o $base -out $out_dir -stdpath $stdpath "$f" > /dev/null 2>&1 && $out_dir/$base > /dev/null 2>&1; then
         if [ ! -z "$xf" ]; then
           echo "XPASS (expected failure, but passed): $f :: $xf"; xpass=$((xpass+1))
         else
@@ -76,6 +76,7 @@ normal_regex(){
   for f in $testd/normal/*.x; do
     if [[ "$f" =~ $1 ]]; then
       run "$compiler c -out $out_dir -stdpath $stdpath $f" || exit 1
+      run "$out_dir/$(basename $f)" || exit 1
       has_match=true
     fi
   done
@@ -99,6 +100,7 @@ std_all(){
 
   for f in $testd/std_test/*.x; do
     run "$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" || exit 1
+    run "$out_dir/$(basename $f)" || exit 1
   done
 }
 
@@ -112,6 +114,8 @@ std_regex(){
       #NB: no -g here, debug info codegen is currently broken (segfaults
       #even on trivial files); use XGDB=1 for gdb sessions instead.
       cmd="run '$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f'"
+      eval $cmd
+      cmd="run '$out_dir/$(basename $f)'"
       eval $cmd
       if [ ! "$?" -eq "0" ]; then
         if [ ! -z "$XGDB" ]; then
@@ -161,6 +165,7 @@ vararg_all(){
 #multi-file import resolution (tests/incremental_test/*.x, single main)
 inc_all(){
   run "$compiler c -out $out_dir -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
+  run "$out_dir/incremental_test" || exit 1
 }
 
 if [ -z "$pat" ]; then

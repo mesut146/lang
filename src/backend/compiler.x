@@ -61,7 +61,7 @@ impl CompilerError{
 }
 
 enum LinkType{
-  Binary{name: String, args: String, run: bool},
+  Binary{name: String, args: String},
   Static{name: String},
   Dynamic{name: String},
   None
@@ -413,15 +413,6 @@ impl Compiler{
     return Result<String, CompilerError>::ok(out_file);
   }
   
-  func run(path: String){
-    let path_c: CStr = path.cstr();
-    let code = system(path_c.ptr());
-    if(code != 0){
-      print("error while running {} code={}\n", path_c, code);
-      exit(1);
-    }
-    path_c.drop();
-  }
 }//Compiler
 
 
@@ -484,12 +475,8 @@ impl CompilerConfig{
     if(self.llvm_only) return Result<String, CompilerError>::ok("".owned());
     match &self.lt{
       LinkType::None => return Result<String, CompilerError>::ok("".owned()),
-      LinkType::Binary(bin_name, args, run) => {
-        let path = Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
-        if(path.is_ok() && *run){
-          Compiler::run(path.get().clone());
-        }
-        return path;
+      LinkType::Binary(bin_name, args) => {
+        return Compiler::link(compiled, self.out_dir.str(), bin_name.str(), args.str());
       },
       LinkType::Static(lib_name) => {
         return Compiler::build_library(compiled, lib_name.str(), self.out_dir.str(), false);
