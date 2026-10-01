@@ -51,6 +51,9 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
   let out_dir = cmd.get_val2("-out");
+  //deprecated no-op: builds never run the binary anymore, but scripts still
+  //pass -norun so the same command works against pre-1.07 bootstrap compilers
+  cmd.consume_any("-norun");
   let compile_only = cmd.consume_any("-nolink");
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");

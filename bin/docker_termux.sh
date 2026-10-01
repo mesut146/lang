@@ -49,6 +49,6 @@ docker build --progress=plain -t cross -f ./bin/Dockerfile \
 --no-cache --pull .
 fi
 
-docker run --name crossc cross sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/termux.sh $host_tool $version $target_tool"
-docker cp crossc:/home/lang/x-toolchain-$version-termux-aarch64.zip .
+docker run --name crossc cross sh -c "XOPT='$XOPT' XSTAGE='$XSTAGE' $dir/termux.sh $host_tool $version $target_tool" || exit 1
+docker cp crossc:/home/lang/x-toolchain-$version-termux-aarch64.zip . || exit 1
 docker rm -f crossc

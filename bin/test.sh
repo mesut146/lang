@@ -38,7 +38,7 @@ normal(){
     if [ ! -z "$sf" ]; then
       #negative test: must fail to compile (never executed)
       msg=$(echo "$sf" | sed 's|// should-fail:||;s|// should-fail||;s|^ *||')
-      if $compiler c -o $base -out $out_dir -stdpath $stdpath "$f" > $out_dir/$base.err 2>&1; then
+      if $compiler c -norun -o $base -out $out_dir -stdpath $stdpath "$f" > $out_dir/$base.err 2>&1; then
         echo "FAIL (compiled, expected failure): $f"; exit 1
       elif [ ! -z "$msg" ] && ! grep -qF "$msg" $out_dir/$base.err; then
         echo "FAIL (wrong error, want '$msg'): $f"; exit 1
