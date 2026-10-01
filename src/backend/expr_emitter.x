@@ -118,7 +118,7 @@ impl Emitter{
             let elem = elems.get(i);
             let elem_ty = r.getType(elem);
             let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, i);
-            self.setField(elem, &elem_ty, field_target_ptr);
+            self.store(elem, &elem_ty, field_target_ptr);
             elem_ty.drop();
           }
           node_type.drop();
@@ -177,7 +177,7 @@ impl Emitter{
             if(match_type.is_prim() && Value_isPointerTy(val)){
               val = CreateLoad(ll.builder, self.mapType(match_type), val);
             }
-            val = self.cast2(val, &rt2.type, match_type);
+            val = self.cast_value(val, &rt2.type, match_type);
           }
           rhs_val.set(val);
           infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
@@ -192,7 +192,7 @@ impl Emitter{
       let resolver = self.get_resolver();
       let rhs_rt = resolver.visit(&node.expr);
       let decl = resolver.get_decl(&rhs_rt).unwrap();
-      let rhs = self.get_obj_ptr(&node.expr);
+      let rhs = self.eval_operand(&node.expr);
       let tag_ptr = CreateStructGEP(ll.builder, self.mapType(&decl.type), rhs, get_tag_index(decl));
       let tag = CreateLoad(ll.builder, intTy(ll.ctx, ENUM_TAG_BITS()), tag_ptr);
 
@@ -398,8 +398,8 @@ impl Emitter{
               phi_addIncoming(phi, then_val.unwrap(), then_end);
               phi_addIncoming(phi, else_val.unwrap(), else_end);
             }else{
-              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
-              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
+              phi_addIncoming(phi, self.load_if_ptr(then_val.unwrap(), &then_rt.type), then_end);
+              phi_addIncoming(phi, self.load_if_ptr(else_val.unwrap(), &then_rt.type), else_end);
             }
             res = Option::new(phi as Value*);
           }
@@ -436,7 +436,7 @@ impl Emitter{
 
     func visit_iflet(self, line: i32, node: IfLet*): Option<Value*>{
       let ll = self.ll.get();
-      let rhs = self.get_obj_ptr(&node.rhs);
+      let rhs = self.eval_operand(&node.rhs);
       let rhs_rt = self.get_resolver().visit(&node.rhs);
       //layouts need the concrete (possibly instantiated) enum type from
       //the rhs, not the pattern's generic spelling: Option<T> has no LLVM
@@ -526,7 +526,7 @@ impl Emitter{
       if (RvalueHelper::is_rvalue(expr)) {
         let alloc_ptr = self.get_alloc(node);
         let expr_type = self.get_resolver().getType(expr);
-        self.setField(expr, &expr_type, alloc_ptr);
+        self.store(expr, &expr_type, alloc_ptr);
         self.own.get().add_obj(node, LLVMPtr::new(alloc_ptr), &expr_type);
         expr_type.drop();
         return alloc_ptr;
@@ -538,13 +538,13 @@ impl Emitter{
     func visit_repr(self, lhs: Expr*, rhs: Type*): Value*{
       match lhs{
         Expr::Name(nm)=>{
-          let res = self.get_obj_ptr(lhs);
-          res = self.loadPrim(res, rhs);
+          let res = self.eval_operand(lhs);
+          res = self.load_if_ptr(res, rhs);
           return res;
         },
         Expr::Type(ty)=>{
           let res = self.visit(lhs);
-          res = self.loadPrim(res, rhs);
+          res = self.load_if_ptr(res, rhs);
           return res;
         },
         _=> {}
@@ -557,14 +557,14 @@ impl Emitter{
       let lhs_rt = self.get_resolver().visit(lhs);
       //ptr to int
       if (lhs_rt.type.is_any_pointer() && rhs.eq("u64")) {
-        let val = self.get_obj_ptr(lhs);
+        let val = self.eval_operand(lhs);
         lhs_rt.drop();
         return CreatePtrToInt(ll.builder, val, self.mapType(rhs));
       }
       //prim to prim
       let rhs_rt = self.get_resolver().visit_type(rhs);
       if (lhs_rt.type.is_prim() && rhs.is_prim()) {
-        let res = self.cast(lhs, &rhs_rt.type);
+        let res = self.cast_expr(lhs, &rhs_rt.type);
         lhs_rt.drop();
         rhs_rt.drop();
         return res;
@@ -580,14 +580,14 @@ impl Emitter{
           return val;
         }
         if(decl.is_enum() && rhs_rt.is_decl()){
-          let val = self.get_obj_ptr(lhs);
+          let val = self.eval_operand(lhs);
           val = CreateStructGEP(ll.builder, self.mapType(&decl.type), val, get_data_index(decl));
           lhs_rt.drop();
           rhs_rt.drop();
           return val;
         }
       }
-      let val = self.get_obj_ptr(lhs);
+      let val = self.eval_operand(lhs);
       lhs_rt.drop();
       rhs_rt.drop();
       return val;
@@ -633,7 +633,7 @@ impl Emitter{
   
     func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
       let ll = self.ll.get();
-      let scope_ptr = self.get_obj_ptr(scope);
+      let scope_ptr = self.eval_operand(scope);
       let scope_rt = self.get_resolver().visit(scope);
       if let Type::Tuple(tt) = &scope_rt.type {
         let idx = i32::parse(name.str()).expect("tuple index parse error");
@@ -671,7 +671,7 @@ impl Emitter{
           let e = list.get(i);
           let elem_target = self.ll.get().gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
-          self.setField(e, &et, elem_target);
+          self.store(e, &et, elem_target);
           et.drop();
         }
         return ptr;
@@ -702,7 +702,7 @@ impl Emitter{
       if (elem_ptr.is_some()) {
           self.copy(phi as Value*, elem_ptr.unwrap(), &elem_type);
       } else {
-          self.setField(elem, &elem_type, phi as Value*);
+          self.store(elem, &elem_type, phi as Value*);
       }
       let step = ll.gep_ptr(elem_ty, phi as Value*, ll.makeInt(1, 64));
       phi_addIncoming(phi, step, setbb);
@@ -720,11 +720,11 @@ impl Emitter{
       let i64t = Type::new("i64");
       let type = self.getType(node.arr.get());
       let ty = type.deref_ptr();
-      let src = self.get_obj_ptr(node.arr.get());
+      let src = self.eval_operand(node.arr.get());
       if(ty.is_array()){
         //regular array access
         let i1 = ll.makeInt(0, 64) ;
-        let i2 = self.cast(node.idx.get(), &i64t);
+        let i2 = self.cast_expr(node.idx.get(), &i64t);
         let res = ll.gep_arr(self.mapType(ty), src, i1, i2);
         type.drop();
         i64t.drop();
@@ -738,7 +738,7 @@ impl Emitter{
       let sliceType = self.protos.get().std("slice");
       let arr = CreateStructGEP(ll.builder,  sliceType, src,  SLICE_PTR_INDEX());
       arr = ll.loadPtr(arr);
-      let index = self.cast(node.idx.get(), &i64t);
+      let index = self.cast_expr(node.idx.get(), &i64t);
       i64t.drop();
       type.drop();
       return self.ll.get().gep_ptr(elemty, arr, index);
@@ -760,7 +760,7 @@ impl Emitter{
       }
       let elem_ty = arr_ty.elem();
       let i32_ty = Type::new("i32");
-      let val_start = self.cast(node.idx.get(), &i32_ty);
+      let val_start = self.cast_expr(node.idx.get(), &i32_ty);
       let ptr_ty = self.mapType(elem_ty);
       //shift by start
       arr = self.ll.get().gep_ptr(ptr_ty, arr, val_start);
@@ -772,7 +772,7 @@ impl Emitter{
       //store ptr
       CreateStore(ll.builder, arr, trg_ptr);
       //set len
-      let val_end = self.cast(node.idx2.get(), &i32_ty);
+      let val_end = self.cast_expr(node.idx2.get(), &i32_ty);
       let len = CreateSub(ll.builder, val_end, val_start);
       len = CreateSExt(ll.builder, len, intTy(ll.ctx, SLICE_LEN_BITS()));
       CreateStore(ll.builder, len, trg_len);
@@ -790,7 +790,7 @@ impl Emitter{
   
     func visit_unary(self, op: String*, e: Expr*): Value*{
       let ll = self.ll.get();
-      let val = self.loadPrim(e);
+      let val = self.load_expr(e);
       if(op.eq("+")) return val;
       if(op.eq("!")){
         val = CreateTrunc(ll.builder, val, intTy(ll.ctx, 1));
@@ -849,7 +849,7 @@ impl Emitter{
     //they share these helpers (taking only the arg list both sides have).
     func emit_ptr_deref(self, expr: Expr*, args: List<Expr>*): Value*{
         let ll = self.ll.get();
-        let arg_ptr = self.get_obj_ptr(args.get(0));
+        let arg_ptr = self.eval_operand(args.get(0));
         let type = self.getType(expr);
         if (!is_struct(&type)) {
             let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
@@ -861,16 +861,16 @@ impl Emitter{
     }
     func emit_ptr_get(self, expr: Expr*, args: List<Expr>*): Value*{
         let elem_type = self.getType(expr);
-        let src = self.get_obj_ptr(args.get(0));
-        let idx = self.loadPrim(args.get(1));
+        let src = self.eval_operand(args.get(0));
+        let idx = self.load_expr(args.get(1));
         let res = self.ll.get().gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
         elem_type.drop();
         return res;
     }
     func emit_ptr_copy(self, args: List<Expr>*): Value*{
-        let src_ptr = self.get_obj_ptr(args.get(0));
+        let src_ptr = self.eval_operand(args.get(0));
         let i64_ty = Type::new("i64");
-        let idx = self.cast(args.get(1), &i64_ty);
+        let idx = self.cast_expr(args.get(1), &i64_ty);
         i64_ty.drop();
         let val = self.visit(args.get(2));
         let elem_type: Type = self.getType(args.get(2));
@@ -1034,7 +1034,7 @@ impl Emitter{
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
-        let size = self.cast(mc.args.get(0), &i64_ty);
+        let size = self.cast_expr(mc.args.get(0), &i64_ty);
         i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get(0)) / 8;
@@ -1060,16 +1060,16 @@ impl Emitter{
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){
-        return self.get_obj_ptr(mc.scope.get());
+        return self.eval_operand(mc.scope.get());
       }
       if(resolver.is_slice_get_len(mc)){
-        let sl = self.get_obj_ptr(mc.scope.get());
+        let sl = self.eval_operand(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
         let len_ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_LEN_INDEX());
         return CreateLoad(ll.builder, intTy(ll.ctx, SLICE_LEN_BITS()), len_ptr);
       }
       if(resolver.is_slice_get_ptr(mc)){
-        let sl = self.get_obj_ptr(mc.scope.get());
+        let sl = self.eval_operand(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
         let ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_PTR_INDEX());
         return ll.loadPtr(ptr);
@@ -1089,12 +1089,12 @@ impl Emitter{
       for arg in &mc.args{
         let at = resolver.getType(arg);
         if (at.is_any_pointer()) {
-          args.add(self.get_obj_ptr(arg));
+          args.add(self.eval_operand(arg));
         }
         else if (is_struct(&at)) {
           let de = is_deref(arg);
           if (de.is_some()) {
-            args.add(self.get_obj_ptr(de.unwrap()));
+            args.add(self.eval_operand(de.unwrap()));
           }
           else {
             args.add(self.visit(arg));
@@ -1102,7 +1102,7 @@ impl Emitter{
         } else {
             let pt0 = params.get(paramIdx);
             let pt = resolver.visit_type(pt0).unwrap();
-            args.add(self.cast(arg, &pt));
+            args.add(self.cast_expr(arg, &pt));
             pt.drop();
         }
         ++paramIdx;
@@ -1177,7 +1177,7 @@ impl Emitter{
       let argIdx = 0;
       if(target.self.is_some()){
         let rval = RvalueHelper::need_alloc(mc, target, self.get_resolver());
-        let scp_val = self.get_obj_ptr(*rval.scope.get());
+        let scp_val = self.eval_operand(*rval.scope.get());
         if(rval.rvalue){
           let rv_ptr = self.get_alloc(*rval.scope.get());
           CreateStore(ll.builder, scp_val, rv_ptr);
@@ -1202,12 +1202,12 @@ impl Emitter{
           args.add(val);
         }
         else if (at.is_any_pointer()) {
-          args.add(self.get_obj_ptr(arg));
+          args.add(self.eval_operand(arg));
         }
         else if (is_struct(&at)) {
           let de = is_deref(arg);
           if (de.is_some()) {
-            args.add(self.get_obj_ptr(de.unwrap()));
+            args.add(self.eval_operand(de.unwrap()));
           }
           else {
             args.add(self.visit(arg));
@@ -1215,11 +1215,11 @@ impl Emitter{
         }
         else {
           if(target.is_vararg && paramIdx >= target.params.len()){
-            args.add(self.loadPrim(arg));
+            args.add(self.load_expr(arg));
           }else{
             let prm = target.params.get(paramIdx);
             let pt = self.get_resolver().getType(&prm.type);
-            args.add(self.cast(arg, &pt));
+            args.add(self.cast_expr(arg, &pt));
             pt.drop();
           }
         }
@@ -1257,13 +1257,13 @@ impl Emitter{
         }
         let arg_type = self.getType(arg);
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
-          let val = self.get_obj_ptr(arg);
+          let val = self.eval_operand(arg);
           args.add(val);
         }
         else if(arg_type.is_str()){
           panic("print str");
         }else if(arg_type.is_prim()){
-          let val = self.loadPrim(arg);
+          let val = self.load_expr(arg);
           args.add(val);
         }else{
           panic("print {:?}", arg_type);
@@ -1300,19 +1300,19 @@ impl Emitter{
         }
         let arg_type = self.getType(arg);
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
-          let val = self.get_obj_ptr(arg);
+          let val = self.eval_operand(arg);
           args.add(val);
           arg_type.drop();
           continue;
         }
         if(arg_type.is_prim()){
-          let val = self.loadPrim(arg);
+          let val = self.load_expr(arg);
           if(arg_type.eq("f32")){
             val = CreateFPExt(ll.builder, val, getDoubleTy(ll.ctx));
           }
           args.add(val);
         }else if(arg_type.is_any_pointer()){
-          let val = self.get_obj_ptr(arg);
+          let val = self.eval_operand(arg);
           args.add(val);
           arg_type.drop();
           continue;
@@ -1342,16 +1342,16 @@ impl Emitter{
         }
         let arg_type = self.getType(arg);
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
-          let val = self.get_obj_ptr(arg);
+          let val = self.eval_operand(arg);
           args.add(val);
           arg_type.drop();
           continue;
         }
         if(arg_type.is_prim()){
-          let val = self.loadPrim(arg);
+          let val = self.load_expr(arg);
           args.add(val);
         }else if(arg_type.is_any_pointer()){
-          let val = self.get_obj_ptr(arg);
+          let val = self.eval_operand(arg);
           args.add(val);
           arg_type.drop();
           continue;
@@ -1368,7 +1368,7 @@ impl Emitter{
   
     func visit_deref(self, node: Expr*, e: Expr*): Value*{
       let type = self.getType(node);
-      let val = self.get_obj_ptr(e);
+      let val = self.eval_operand(e);
       if (type.is_prim() || type.is_pointer()) {
           let res = self.load(val, &type);
           type.drop();
@@ -1422,7 +1422,7 @@ impl Emitter{
           panic("");
         }
       }else{
-        rv = Option::new(self.loadPrim(r));
+        rv = Option::new(self.load_expr(r));
       }
       let rbit = CreateZExt(ll.builder, rv.unwrap(), intTy(ll.ctx,8));
       CreateBr(ll.builder, next);
@@ -1518,7 +1518,7 @@ impl Emitter{
         let fd = fields.get(prm_idx);
         if(decl.base.is_some()) ++prm_idx;
         let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, prm_idx);
-        self.setField(&arg.expr, &fd.type, field_target_ptr);
+        self.store(&arg.expr, &fd.type, field_target_ptr);
         self.own.get().do_move(&arg.expr);
       }
     }
@@ -1595,10 +1595,10 @@ impl Emitter{
       if(op.eq("=")){
         return self.visit_assign(l, r);
       }
-      let rv = self.cast(r, type);
+      let rv = self.cast_expr(r, type);
       if(op.eq("+=")){
         let lv = self.get_lhs(l);
-        let lval = self.loadPrim(l);
+        let lval = self.load_expr(l);
         if(type.is_float()){
           let tmp = CreateFAdd(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
@@ -1609,8 +1609,8 @@ impl Emitter{
         return lv;
       }
       if(op.eq("-=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
+        let lv = self.get_lhs(l);
+        let lval = self.load_expr(l);
         if(type.is_float()){
           let tmp = CreateFSub(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
@@ -1621,8 +1621,8 @@ impl Emitter{
         return lv;
       }
       if(op.eq("*=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
+        let lv = self.get_lhs(l);
+        let lval = self.load_expr(l);
         if(type.is_float()){
           let tmp = CreateFMul(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
@@ -1633,8 +1633,8 @@ impl Emitter{
         return lv;
       }
       if(op.eq("/=")){
-        let lv = self.visit(l);
-        let lval = self.loadPrim(l);
+        let lv = self.get_lhs(l);
+        let lval = self.load_expr(l);
         if(type.is_float()){
           let tmp = CreateFDiv(ll.builder, lval, rv);
           CreateStore(ll.builder, tmp, lv);
@@ -1644,7 +1644,7 @@ impl Emitter{
         CreateStore(ll.builder, tmp, lv);
         return lv;
       }
-      let lv = self.cast(l, type);
+      let lv = self.cast_expr(l, type);
       if(is_comp(op.str())){
         //todo remove redundant cast
         let op_c = op.clone().cstr();
@@ -1706,9 +1706,15 @@ impl Emitter{
     }
     
     func get_lhs(self, expr: Expr*): Value*{
+      //parenthesized lvalues recurse: (*p) -= 1 must reach the inner
+      //deref, not visit() the parens (visit would load the value and
+      //the store below would target a value instead of an address).
+      if let Expr::Par(e)=expr{
+        return self.get_lhs(e.get());
+      }
       if let Expr::Unary(op, l2)=expr{
         if(op.eq("*")){
-          let lhs = self.get_obj_ptr(l2.get());
+          let lhs = self.eval_operand(l2.get());
           return lhs;
         }
       }
@@ -1723,16 +1729,16 @@ impl Emitter{
       let type = self.getType(l);
       if let Expr::Unary(op,l2)=l{
         if(op.eq("*")){
-          let lhs = self.get_obj_ptr(l2.get());
-          self.setField(r, &type, lhs, Option::new(l));
+          let lhs = self.eval_operand(l2.get());
+          self.store(r, &type, lhs, Option::new(l));
           self.own.get().do_assign(l, r);
           type.drop();
           return lhs;
         }
       }
       let lhs = self.get_lhs(l);
-      //todo setField should free lhs
-      self.setField(r, &type, lhs, Option::new(l));
+      //todo store should free lhs
+      self.store(r, &type, lhs, Option::new(l));
       self.own.get().do_assign(l, r);
       type.drop();
       return lhs;

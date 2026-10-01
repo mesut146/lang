@@ -480,7 +480,7 @@ impl Emitter{
           CreateRetVoid(ll.builder);
         }
       }else if(blk_val.is_some() && !m.type.is_void()){
-        //setField(blk_val.unwrap(), &m.type, );
+        //store(blk_val.unwrap(), &m.type, );
         self.visit_ret(blk_val.unwrap());
         self.own.get().do_move(m.body.get().return_expr.get());
       }

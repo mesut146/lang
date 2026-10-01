@@ -596,10 +596,10 @@ impl Emitter{
     return self.ll.get().sizeOf(mapped);
   }
 
-  func cast(self, expr: Expr*, target_type: Type*): Value*{
+  func cast_expr(self, expr: Expr*, target_type: Type*): Value*{
     let ll = self.ll.get();
     let src_type = self.get_resolver().getType(expr);
-    let val = self.loadPrim(expr);
+    let val = self.load_expr(expr);
     let is_unsigned = isUnsigned(&src_type);
     let target_ty = self.mapType(target_type);
 
@@ -653,7 +653,7 @@ impl Emitter{
     return val;
   }
   
-  func cast2(self, val: Value*, src_type: Type*, target_type: Type*): Value*{
+  func cast_value(self, val: Value*, src_type: Type*, target_type: Type*): Value*{
     let is_unsigned = isUnsigned(src_type);
     let ll = self.ll.get();
     let val_ty = Value_getType(val);
@@ -672,7 +672,7 @@ impl Emitter{
     return val;
   }
 
-  func loadPrim(self, expr: Expr*): Value*{
+  func load_expr(self, expr: Expr*): Value*{
     let val = self.visit(expr);
     let ll = self.ll.get();
     let ty = Value_getType(val);
@@ -684,7 +684,7 @@ impl Emitter{
     return res;
   }
 
-  func loadPrim(self, val: Value*, type: Type*): Value*{
+  func load_if_ptr(self, val: Value*, type: Type*): Value*{
     assert(is_loadable(type));
     let ll = self.ll.get();
     let ty = Value_getType(val);
@@ -693,15 +693,15 @@ impl Emitter{
     return res;
   }
 
-  func setField(self, expr: Expr*, type: Type*, trg: Value*){
-    self.setField(expr, type, trg, Option<Expr*>::new());
+  func store(self, expr: Expr*, type: Type*, trg: Value*){
+    self.store(expr, type, trg, Option<Expr*>::new());
   }
-  func setField(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
+  func store(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
       let rt = self.get_resolver().visit_type(type);
-      self.setField(expr, &rt, trg, lhs);
+      self.store(expr, &rt, trg, lhs);
       rt.drop();
   }
-  func setField(self, expr: Expr*, rt: RType*, trg: Value*, lhs: Option<Expr*>){
+  func store(self, expr: Expr*, rt: RType*, trg: Value*, lhs: Option<Expr*>){
       let type = &rt.type;
       let ll = self.ll.get();
       if(is_struct(type)){
@@ -716,17 +716,17 @@ impl Emitter{
         }
         self.copy(trg, val, type);
       }else if(type.is_any_pointer()){
-        let val = self.get_obj_ptr(expr);
+        let val = self.eval_operand(expr);
         CreateStore(ll.builder, val, trg);
       }else{
-        let val = self.cast(expr, type);
+        let val = self.cast_expr(expr, type);
         CreateStore(ll.builder, val, trg); 
       }
   }
 
   //returns 1 bit for br
   func branch(self, expr: Expr*): Value*{
-    let val = self.loadPrim(expr);
+    let val = self.load_expr(expr);
     let ll = self.ll.get();
     return CreateTrunc(ll.builder, val, intTy(ll.ctx, 1));
   }
@@ -742,90 +742,108 @@ impl Emitter{
     return CreateLoad(ll.builder, mapped, val);
   }
 
-  func emit_as_arg(self, node: Expr*): Value*{
-    let ty = self.getType(node);
-    if(ty.is_prim()){
-      let val = self.visit(node);
-      let res = self.load(val,  &ty);
-      ty.drop();
-      return res;
-    }
-    match node{
-      Lit(val) => return self.visit(node),
-      Name(val)=>{
-        //todo
-        return self.visit(node);
-      },
-      Call(mc) => return self.visit(node),
-      MacroCall(mc) => return self.visit(node),
-      Par(e) => return self.visit(node),
-      Type(val) => return self.visit(node),
-      Unary(op, e) => return self.visit(node),
-      Infix(op, l, r) => return self.visit(node),
-      Access(scope, name) => {
-        //todo
-        // loadprim
-        return self.visit(node);
-      },
-      Obj(type, args) => return self.visit(node),
-      As(e, type) => return self.visit(node),
-      Is(e, rhs) => return self.visit(node),
-      Array(list, size) => return self.visit(node),
-      ArrAccess(val) => return self.visit(node),
-      Match(val) => return self.visit(node),
-      Block(x) => return self.visit(node),
-      If(is) => return self.visit(node),
-      IfLet(il) => return self.visit(node),
-      Lambda(val) => return self.visit(node),
-      Ques(e) => return self.visit(node),
-      Tuple(elems) => return self.visit(node),
-    }
-  }
 
-  func get_obj_ptr(self, node: Expr*): Value*{
+  //Normalize any expression to the pointer-or-value its emitter needs:
+  //value-producing forms evaluate to a ready value, place forms evaluate
+  //to an address (loaded through only when the place itself is pointer
+  //typed). Every Expr variant is accounted for below; the ones that can
+  //never be an operand address fail loudly instead of miscompiling.
+  func eval_operand(self, node: Expr*): Value*{
+    //Parens unwrap before evaluation: visiting the paren would emit the
+    //inner expression, and the recursion below would emit it again.
     if let Expr::Par(e)=node{
-      return self.get_obj_ptr(e.get());
+      return self.eval_operand(e.get());
     }
-    if let Expr::Unary(op, e)=node{
-      if(op.eq("*")){
-        return self.visit(node);
-      }
-    }
+    //single evaluation: every arm below returns either this value or a
+    //load through it, never re-visits (re-visiting would emit twice).
     let val = self.visit(node);
-    if(node is Expr::Obj || node is Expr::Call || node is Expr::MacroCall || node is Expr::Lit || node is Expr::Unary || node is Expr::As || node is Expr::Infix){
-      return val;
-    }
-    if(node is Expr::Name || node is Expr::ArrAccess || node is Expr::Access){
-      let ty = self.get_resolver().visit(node);
-      if(ty.type.is_any_pointer() && !ty.is_method()){
-        ty.drop();
-        return self.ll.get().loadPtr(val);
-      }
-      ty.drop();
-      return val;
-    }
-    if let Expr::Lambda(le)=node{
+    match node{
+      Expr::Par(e) => {
+        //dead: caught above, but the exhaustiveness checker requires
+        //every variant to appear in the match.
+        std::unreachable!();
+      },
+      Expr::Unary(op, e) => {
         return val;
-    }
-    if let Expr::Type(type)=node{
+      },
+      Expr::Obj(type, args) => {
+        return val;
+      },
+      Expr::Call(mc) => {
+        return val;
+      },
+      Expr::MacroCall(mc) => {
+        return val;
+      },
+      Expr::Lit(lit) => {
+        return val;
+      },
+      Expr::As(e, type) => {
+        return val;
+      },
+      Expr::Infix(op, l, r) => {
+        return val;
+      },
+      Expr::Name(nm) => {
+        return self.eval_place(node, val);
+      },
+      Expr::ArrAccess(aa) => {
+        return self.eval_place(node, val);
+      },
+      Expr::Access(scope, name) => {
+        return self.eval_place(node, val);
+      },
+      Expr::Lambda(le) => {
+        return val;
+      },
+      Expr::Type(type) => {
         //ptr to member func
         let rt = self.get_resolver().visit(node);
         if(rt.type.is_fpointer() && rt.method_desc.is_some()){
+            rt.drop();
             return val;
         }
         if(rt.type.is_lambda()){
+            rt.drop();
             return val;
         }
-    }
-    if let Expr::IfLet(il)=node{
+        rt.drop();
+      },
+      Expr::IfLet(il) => {
         return val;
+      },
+      Expr::Ques(bx) => {
+        //todo load prim
+        return val;
+      },
+      Expr::Is(e, rhs) => {
+      },
+      Expr::Array(list, size) => {
+      },
+      Expr::Tuple(elems) => {
+      },
+      Expr::Block(x) => {
+      },
+      Expr::If(e) => {
+      },
+      Expr::Match(m) => {
+      },
     }
-    if let Expr::Ques(bx)=node{
-      //todo load prim
-      return val;
-  }
-    self.get_resolver().err(node, format("get_obj_ptr {:?}", node));
+    self.get_resolver().err(node, format("eval_operand {:?}", node));
     std::unreachable!();
+  }
+
+  //Place forms (Name, ArrAccess, Access) given their already-visited
+  //value: the address itself, loaded through one level when the place
+  //is pointer-typed (and not a method value).
+  func eval_place(self, node: Expr*, val: Value*): Value*{
+    let ty = self.get_resolver().visit(node);
+    if(ty.type.is_any_pointer() && !ty.is_method()){
+      ty.drop();
+      return self.ll.get().loadPtr(val);
+    }
+    ty.drop();
+    return val;
   }
 
   func getTag(self, expr: Expr*): Value*{
@@ -833,7 +851,7 @@ impl Emitter{
     let ll = self.ll.get();
     let decl = self.get_resolver().get_decl(&rt).unwrap();
     let tag_idx = get_tag_index(decl);
-    let tag = self.get_obj_ptr(expr);
+    let tag = self.eval_operand(expr);
     let mapped = self.mapType(rt.type.deref_ptr());
     rt.drop();
     tag = CreateStructGEP(ll.builder, mapped, tag, tag_idx);

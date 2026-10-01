@@ -158,10 +158,10 @@ impl Emitter{
             CreateStore(ll.builder, val, ptr);
           }
         }else if(type.is_pointer() || type.is_fpointer() || type.is_lambda()){
-          let val = self.get_obj_ptr(&f.rhs);
+          let val = self.eval_operand(&f.rhs);
           CreateStore(ll.builder, val, ptr);
         } else{
-          let val = self.cast(&f.rhs, &type);
+          let val = self.cast_expr(&f.rhs, &type);
           CreateStore(ll.builder, val, ptr);
         }
         self.di.get().dbg_var(&f.name, &type, f.line, self);
@@ -179,7 +179,7 @@ impl Emitter{
         let val = self.visit(node.return_expr.get());
         let rt = self.get_resolver().visit(node.return_expr.get());
         if(is_loadable(&rt.type)){//todo remove
-          val = self.loadPrim(val, &rt.type);
+          val = self.load_if_ptr(val, &rt.type);
         }
         self.own.get().do_move(node.return_expr.get());
         rt.drop();
@@ -231,7 +231,7 @@ impl Emitter{
       let mtype: Type* = &self.curMethod.unwrap().type;
       let type = self.get_resolver().getType(mtype);
       if(type.is_pointer() || type.is_fpointer()){
-        let val = self.get_obj_ptr(expr);
+        let val = self.eval_operand(expr);
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(ll.builder, val);
@@ -239,7 +239,7 @@ impl Emitter{
         return;
       }
       if(!is_struct(&type)){
-        let val = self.cast(expr, &type);
+        let val = self.cast_expr(expr, &type);
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(ll.builder, val);
