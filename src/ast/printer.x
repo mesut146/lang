@@ -656,10 +656,10 @@ impl Debug for Fragment{
 
 impl Debug for Literal{
   func debug(self, f: Fmt*){
-    let replaced = self.val.replace("\n", "\\n");
-    let tmp = replaced.replace("\"", "\\\"");
-    replaced.drop();
-    replaced = tmp;
+    //escape backslash first (others introduce backslashes themselves),
+    //then the rest; the lexer decodes them back via checkEscape.
+    //chained (no temporaries to reassign).
+    let replaced = self.val.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t").replace("\"", "\\\"").replace("'", "\\'");
     if(self.kind is LitKind::STR){
       f.print("\"");
     }else if(self.kind is LitKind::CHAR){
