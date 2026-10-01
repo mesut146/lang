@@ -20,7 +20,10 @@ func format_dir(dir: str, out: str){
         print("out={}\n", outf);
         let p = Parser::from_path(file2);
         let unit = p.parse_unit();
-        let str = Fmt::str(&unit);
+        let f = Fmt::new();
+        debug_unit(&unit, &f, &unit.comments);
+        let str = f.buf.clone();
+        Drop::drop(f);
         File::write_string(str.str(), outf.str())?;
         outf.drop();
         str.drop();
@@ -37,25 +40,30 @@ func join<T>(f: Fmt*, arr: List<T>*, sep: str){
 }
 
 //Render a node into a standalone string for the "indent every line" trick
-//used by body() and Debug for Impl.
+//used by body() and debug_impl.
 //
-//NB: this deliberately does NOT use Fmt::str, which starts with an empty
-//comment list. Because the sub-render walks the same nodes in the same
-//order, it must SHARE the caller's comment array, otherwise every comment
-//below the sub-render (method bodies, if/while/for bodies) is dropped on
-//the floor and later re-emitted at file level.
-//
-//Consume-on-emit marks (line = 0) live in the shared array, so copying
-//the handle back leaves the caller consistent: comments this sub-render
-//placed stay marked, the rest are still pending. The sub-Fmt is detached
-//from the array before it is dropped, so only the caller frees it.
-func sub_str<T>(f: Fmt*, node: T*): String{
+//The unit's comment list is threaded through as an explicit side table,
+//never stored on Fmt: sub-renders walk the same nodes in the same order,
+//so the consume-on-emit marks they leave are exactly what the caller
+//would have made. No handle copying, no ownership dance.
+func sub_str_stmt(f: Fmt*, comments: List<Comment>*, node: Stmt*): String{
   let sub = Fmt::new();
-  sub.comments = f.comments;
-  Debug::debug(node, &sub);
+  debug_stmt(node, &sub, comments);
   let res = sub.buf.clone();
-  f.comments = sub.comments;
-  sub.comments = List<Comment>::new();
+  Drop::drop(sub);
+  return res;
+}
+func sub_str_expr(f: Fmt*, comments: List<Comment>*, node: Expr*): String{
+  let sub = Fmt::new();
+  debug_expr(node, &sub, comments);
+  let res = sub.buf.clone();
+  Drop::drop(sub);
+  return res;
+}
+func sub_str_method(f: Fmt*, comments: List<Comment>*, node: Method*): String{
+  let sub = Fmt::new();
+  debug_method(node, &sub, comments);
+  let res = sub.buf.clone();
   Drop::drop(sub);
   return res;
 }
@@ -74,12 +82,12 @@ func debug_attrs(list: List<Attribute>*, f: Fmt*){
   }
 }
 
-func body(node: Stmt*, f: Fmt*){
-    body(node, f, false);
+func body(node: Stmt*, f: Fmt*, comments: List<Comment>*){
+    body(node, f, comments, false);
 }
 
-func body(node: Stmt*, f: Fmt*, skip_first: bool){
-  let str = sub_str(f, node); 
+func body(node: Stmt*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
+  let str = sub_str_stmt(f, comments, node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
     if(j > 0){
@@ -94,12 +102,12 @@ func body(node: Stmt*, f: Fmt*, skip_first: bool){
   lines.drop();
 }
 
-func body(node: Expr*, f: Fmt*){
-    body(node, f, false);
+func body(node: Expr*, f: Fmt*, comments: List<Comment>*){
+    body(node, f, comments, false);
 }
 
-func body(node: Expr*, f: Fmt*, skip_first: bool){
-  let str = sub_str(f, node); 
+func body(node: Expr*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
+  let str = sub_str_expr(f, comments, node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
     if(j > 0 || !skip_first){
@@ -130,21 +138,23 @@ impl Debug for QPath{
 }
 
 //comment trivia: leading = lines (prev, line), trailing = == line.
-//Emitted entries are consumed (line set to 0) so nested containers
-//never re-emit them; ranges overlap by design (a block's range sits
-//inside its item's range). Lines are 1-based, so 0 never matches.
-func emit_one(f: Fmt*, idx: i32, indent: str){
-    let c = f.comments.get(idx);
+//The list is threaded through as a side table (List<Comment>*), never
+//stored: Fmt stays a generic buffer and Comment stays an ast type that
+//std never names. Emitted entries are consumed (line set to 0) so nested
+//containers never re-emit them; ranges overlap by design (a block's range
+//sits inside its item's range). Lines are 1-based, so 0 never matches.
+func emit_one(f: Fmt*, comments: List<Comment>*, idx: i32, indent: str){
+    let c = comments.get(idx);
     f.print(indent);
     f.print(&c.text);
     f.print("\n");
     c.line = 0;
 }
-func emit_leading(f: Fmt*, prev: i32, line: i32, indent: str): i32{
-    for(let i = 0;i < f.comments.len();++i){
-        let c = f.comments.get(i);
+func emit_leading(f: Fmt*, comments: List<Comment>*, prev: i32, line: i32, indent: str): i32{
+    for(let i = 0;i < comments.len();++i){
+        let c = comments.get(i);
         if(c.line > prev && c.line < line){
-            emit_one(f, i, indent);
+            emit_one(f, comments, i, indent);
         }
     }
     if(line > prev){
@@ -152,12 +162,12 @@ func emit_leading(f: Fmt*, prev: i32, line: i32, indent: str): i32{
     }
     return prev;
 }
-func emit_trailing(f: Fmt*, line: i32){
+func emit_trailing(f: Fmt*, comments: List<Comment>*, line: i32){
     if(line <= 0){
         return;
     }
-    for(let i = 0;i < f.comments.len();++i){
-        let c = f.comments.get(i);
+    for(let i = 0;i < comments.len();++i){
+        let c = comments.get(i);
         if(c.line == line){
             f.print(" ");
             f.print(&c.text);
@@ -173,16 +183,16 @@ func emit_trailing(f: Fmt*, line: i32){
 //The first emitted line gets a leading newline: every container prints
 //its last element without a trailing newline, so without it the drain
 //would glue the comment onto the closing brace.
-func emit_rest(f: Fmt*, prev: i32, indent: str, limit: i32): bool{
+func emit_rest(f: Fmt*, comments: List<Comment>*, prev: i32, indent: str, limit: i32): bool{
     let started = false;
-    for(let i = 0;i < f.comments.len();++i){
-        let c = f.comments.get(i);
+    for(let i = 0;i < comments.len();++i){
+        let c = comments.get(i);
         if(c.line > prev && (limit <= 0 || c.line <= limit)){
             if(!started){
                 f.print("\n");
                 started = true;
             }
-            emit_one(f, i, indent);
+            emit_one(f, comments, i, indent);
         }
     }
     return started;
@@ -253,6 +263,14 @@ func stmt_line(st: Stmt*): i32{
 
 impl Debug for Unit{
   func debug(self, f: Fmt*){
+    //single-node diagnostics render comment-free; the file formatter
+    //threads the unit's list explicitly through debug_unit()
+    let empty = List<Comment>::new();
+    debug_unit(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_unit(self: Unit*, f: Fmt*, comments: List<Comment>*){
     let prev = 0;
     for(let i = 0;i < self.imports.len();++i){
         let im = self.imports.get(i);
@@ -262,9 +280,9 @@ impl Debug for Unit{
         //separator first: leading comments belong to the item that
         //follows them, so they must land after the blank line, not
         //glued to the previous item's last line.
-        prev = emit_leading(f, prev, im.line, "");
+        prev = emit_leading(f, comments, prev, im.line, "");
         im.debug(f);
-        emit_trailing(f, im.line);
+        emit_trailing(f, comments, im.line);
     }
     if(!self.imports.empty()){
         f.print("\n\n");
@@ -275,13 +293,12 @@ impl Debug for Unit{
         if(i > 0){
             f.print("\n\n");
         }
-        prev = emit_leading(f, prev, ln, "");
-        it.debug(f);
-        emit_trailing(f, ln);
+        prev = emit_leading(f, comments, prev, ln, "");
+        debug_item(it, f, comments);
+        emit_trailing(f, comments, ln);
     }
     //no limit: the file claims every remaining comment.
-    emit_rest(f, prev, "", 0);
-  }
+    emit_rest(f, comments, prev, "", 0);
 }
 
 
@@ -303,17 +320,24 @@ impl Debug for ExternItem {
 
 impl Debug for Item{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_item(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_item(self: Item*, f: Fmt*, comments: List<Comment>*){
     match self{
       Item::Decl(decl) => {
         if(print_cst) f.print("Item::Decl{\n");
-        decl.debug(f);
+        debug_decl(decl, f, comments);
         if(print_cst) f.print("}");
       },
       Item::Method(m) => {
-        m.debug(f);
+        debug_method(m, f, comments);
       },
       Item::Impl(i) => {
-        i.debug(f);
+        debug_impl(i, f, comments);
       },
       Item::Type(name, rhs) => {
         f.print("type ");
@@ -335,9 +359,9 @@ impl Debug for Item{
           if(i > 0){
             f.print("\n");
           }
-          prev = emit_leading(f, prev, m.line, "");
-          m.debug(f);
-          emit_trailing(f, m.line);
+          prev = emit_leading(f, comments, prev, m.line, "");
+          debug_method(m, f, comments);
+          emit_trailing(f, comments, m.line);
         }
         //no trailing drain: like Decl, Trait carries no end line, and an
         //uncapped drain here would swallow every later comment in the
@@ -364,13 +388,12 @@ impl Debug for Item{
         gl.debug(f);
       },
       Item::Module(md) => {
-        Debug::debug(md, f);
+        debug_module(md, f, comments);
       },
       Item::Use(uit) => {
         Debug::debug(uit, f);
       }
     }
-  }
 }
 impl Debug for UseItem{
   func debug(self, f: Fmt*){
@@ -389,6 +412,13 @@ impl Debug for UseItem{
 
 impl Debug for Module{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_module(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_module(self: Module*, f: Fmt*, comments: List<Comment>*){
     f.print("mod ");
     Debug::debug(&self.name, f);
     f.print("{\n");
@@ -401,19 +431,18 @@ impl Debug for Module{
         if(i > 0){
             f.print("    \n");
         }
-        prev = emit_leading(f, prev, ln, "");
-        it.debug(f);
-        emit_trailing(f, ln);
+        prev = emit_leading(f, comments, prev, ln, "");
+        debug_item(it, f, comments);
+        emit_trailing(f, comments, ln);
     }
     //capped at the module's own closing brace: a comment below it
     //belongs to the enclosing file, not to this module body.
     //the drain already ended the line, so only add the newline that
     //separates the body from `}` when it emitted nothing.
-    if(!emit_rest(f, prev, "", self.end_line)){
+    if(!emit_rest(f, comments, prev, "", self.end_line)){
         f.print("\n");
     }
     f.print("}");
-  }
 }
 
 impl Debug for Global{
@@ -436,13 +465,20 @@ impl Debug for Global{
 
 impl Debug for Impl{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_impl(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_impl(self: Impl*, f: Fmt*, comments: List<Comment>*){
     self.info.debug(f);
     f.print("{\n");
     for(let i=0;i<self.methods.len();++i){
         if(i>0){
             f.print("\n");
         }
-      let ms = sub_str(f, self.methods.get(i));
+      let ms = sub_str_method(f, comments, self.methods.get(i));
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
         f.print("    ");
@@ -453,7 +489,6 @@ impl Debug for Impl{
       lines.drop();
     }
     f.print("\n}");
-  }
 }
 
 impl Debug for ImplInfo{
@@ -475,19 +510,26 @@ impl Debug for ImplInfo{
 
 impl Debug for Decl{
     func debug(self, f: Fmt*){
+      //see Unit: diagnostics render comment-free
+      let empty = List<Comment>::new();
+      debug_decl(self, f, &empty);
+      empty.drop();
+    }
+}
+func debug_decl(self: Decl*, f: Fmt*, comments: List<Comment>*){
       match self{
         Decl::Struct(fields) => {
-            debug_struct(self, fields, f);
+            debug_struct(self, fields, f, comments);
         },
         Decl::Enum(variants) => {
-            debug_enum(self, variants, f);
+            debug_enum(self, variants, f, comments);
         },
         Decl::TupleStruct(fields) => {
           debug_struct_tuple(self, fields, f);
         }
       }
     }
-    func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+    func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*, comments: List<Comment>*){
         debug_attrs(&decl.attr.list, f);
         f.print("struct ");
         decl.type.debug(f);
@@ -531,7 +573,7 @@ impl Debug for Decl{
   }
 
 
-  func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
+  func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*, comments: List<Comment>*){
       debug_attrs(&decl.attr.list, f);
       f.print("enum ");
       decl.type.debug(f);
@@ -545,7 +587,7 @@ impl Debug for Decl{
       let prev = decl.line;
       for(let i = 0;i < variants.len();++i){
         let ev = variants.get(i);
-        prev = emit_leading(f, prev, ev.line, "    ");
+        prev = emit_leading(f, comments, prev, ev.line, "    ");
         f.print("    ");
         f.print(&ev.name);
         if(ev.disc.is_some()){
@@ -564,7 +606,7 @@ impl Debug for Decl{
         if(i < variants.len() - 1) f.print(",");
         //after the comma: `A, // note` is the source form, and printing
         //the comment first would yield the unparseable `A // note,`.
-        emit_trailing(f, ev.line);
+        emit_trailing(f, comments, ev.line);
         f.print("\n");
       }
       //no trailing drain here: Decl carries no end line, so a comment
@@ -573,7 +615,6 @@ impl Debug for Decl{
       //claim it only costs indentation; draining here could swallow a
       //file comment into the enum body.
       f.print("}");
-  }
 }
 
 impl Debug for FieldDecl{
@@ -589,6 +630,13 @@ impl Debug for FieldDecl{
 
 impl Debug for Method{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_method(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_method(self: Method*, f: Fmt*, comments: List<Comment>*){
     debug_attrs(&self.attr.list, f);
     f.print("func ");
     f.print(&self.name);
@@ -617,11 +665,10 @@ impl Debug for Method{
         self.type.debug(f);
     }
     if(self.body.is_some()){
-      self.body.get().debug(f);
+      debug_block(self.body.get(), f, comments);
     }else{
       f.print(";");
     }
-  }
 }
 
 impl Debug for Param{
@@ -733,15 +780,22 @@ impl Debug for LambdaType{  func debug(self, f: Fmt*){
 //statements------------------------------------------------
 impl Debug for Stmt{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_stmt(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_stmt(self: Stmt*, f: Fmt*, comments: List<Comment>*){
     match self{
       Stmt::Var(ve)=>{
         f.print("let ");
-        ve.debug(f);
+        debug_varexpr(ve, f, comments);
         f.print(";");
       },
       Stmt::Expr(e) => {
         if(print_cst) f.print("Stmt::Expr{\n");
-        e.debug(f);
+        debug_expr(e, f, comments);
         if(!e.is_body()){
           f.print(";");
         }
@@ -751,30 +805,33 @@ impl Debug for Stmt{
         f.print("return");
         if(e.is_some()){
           f.print(" ");
-          e.get().debug(f);
+          debug_expr(e.get(), f, comments);
         }
         f.print(";");
       },
       Stmt::While(e, b)=>{
         f.print("while(");
-        e.debug(f);
+        debug_expr(e, f, comments);
         f.print(")");
-        b.get().debug(f);
+        debug_body(b.get(), f, comments);
       },
       Stmt::For(fs)=>{
         f.print("for(");
         if(fs.var_decl.is_some()){
           f.print("let ");
-          fs.var_decl.get().debug(f);
+          debug_varexpr(fs.var_decl.get(), f, comments);
         }
         f.print(";");
         if(fs.cond.is_some()){
-          fs.cond.get().debug(f);
+          debug_expr(fs.cond.get(), f, comments);
         }
         f.print(";");
-        join(f, &fs.updaters, ", ");
+        for(let i = 0;i < fs.updaters.len();++i){
+          if(i > 0) f.print(", ");
+          debug_expr(fs.updaters.get(i), f, comments);
+        }
         f.print(")");
-        fs.body.get().debug(f);
+        debug_body(fs.body.get(), f, comments);
       },
       Stmt::Continue =>{
         f.print("continue;");
@@ -786,38 +843,43 @@ impl Debug for Stmt{
         f.print("for ");
         f.print(&fe.var_name);
         f.print(" in ");
-        fe.rhs.debug(f);
-        fe.body.debug(f);
+        debug_expr(&fe.rhs, f, comments);
+        debug_block(&fe.body, f, comments);
       }
     }
-  }
 }
 
 impl Debug for Body{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_body(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_body(self: Body*, f: Fmt*, comments: List<Comment>*){
     match self{
       Body::Block(b)=>{
         if(print_cst) f.print("Body::Block{\n");
-        b.debug(f);
+        debug_block(b, f, comments);
         if(print_cst) f.print("}\n");
       },
       Body::Stmt(b)=>{
         if(print_cst) f.print("Body::Stmt{\n");
-        b.debug(f);
+        debug_stmt(b, f, comments);
         if(print_cst) f.print("}\n");
       },
       Body::If(b)=>{
         if(print_cst) f.print("Body::If{\n");
-        b.debug(f);
+        debug_ifstmt(b, f, comments);
         if(print_cst) f.print("}\n");
       },
       Body::IfLet(b)=>{
         if(print_cst) f.print("Body::IfLet{\n");
-        b.debug(f);
+        debug_iflet(b, f, comments);
         if(print_cst) f.print("}\n");
       }
     }
-  }
 }
 
 impl Debug for ArgBind{
@@ -831,14 +893,21 @@ impl Debug for ArgBind{
 
 impl Debug for Block{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_block(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_block(self: Block*, f: Fmt*, comments: List<Comment>*){
     f.print("{\n");
     let prev = 0;
     for(let i = 0;i < self.list.len();++i){
         let ln = stmt_line(self.list.get(i));
         if(i>0) f.print("\n");
-        prev = emit_leading(f, prev, ln, "    ");
-        body(self.list.get(i), f);
-        emit_trailing(f, ln);
+        prev = emit_leading(f, comments, prev, ln, "    ");
+        body(self.list.get(i), f, comments);
+        emit_trailing(f, comments, ln);
     }
     if(self.return_expr.is_some()){
         if(!self.list.empty()){
@@ -851,7 +920,7 @@ impl Debug for Block{
       //expression as its return_expr, and its nested body owns the
       //comments inside it. Draining first would hoist them above the
       //statement they belong to.
-      body(self.return_expr.get(), f);
+      body(self.return_expr.get(), f, comments);
       if(print_cst) f.print("}\n");
     }
     //capped at the body's closing brace so a comment after the function
@@ -860,31 +929,45 @@ impl Debug for Block{
     //placed inside this body.
     //a drain ends its own last line, so `}` needs no leading newline;
     //every other path leaves the stream mid-line and needs one.
-    if(emit_rest(f, prev, "    ", self.end_line)){
+    if(emit_rest(f, comments, prev, "    ", self.end_line)){
         f.print("}");
     }else{
         f.print("\n}");
     }
-  }
 }
 
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
-    //multi-declarator fragments (let i = 0, j = 1) need separators
-    join(f, &self.list, ", ");
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_varexpr(self, f, &empty);
+    empty.drop();
   }
+}
+func debug_varexpr(self: VarExpr*, f: Fmt*, comments: List<Comment>*){
+    //multi-declarator fragments (let i = 0, j = 1) need separators
+    for(let i = 0;i < self.list.len();++i){
+      if(i > 0) f.print(", ");
+      debug_fragment(self.list.get(i), f, comments);
+    }
 }
 
 impl Debug for Fragment{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_fragment(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_fragment(self: Fragment*, f: Fmt*, comments: List<Comment>*){
     f.print(&self.name);
     if(self.type.is_some()){
       f.print(": ");
       self.type.get().debug(f);
     }
     f.print(" = ");
-    self.rhs.debug(f);
-  }
+    debug_expr(&self.rhs, f, comments);
 }
 
 impl Debug for Literal{
@@ -915,6 +998,13 @@ impl Debug for Literal{
 //expr---------------------------------
 impl Debug for Expr{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_expr(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_expr(self: Expr*, f: Fmt*, comments: List<Comment>*){
     match self{
       Expr::Lit(lit) => {
         if(print_cst) f.print("Expr::Lit{");
@@ -926,18 +1016,21 @@ impl Debug for Expr{
       },
       Expr::Call(call) => {
         if(print_cst) f.print("Expr::Call{");
-        call.debug(f);
+        debug_call(call, f, comments);
       },
       Expr::Par(e) => {
         if(print_cst) f.print("Expr::Par{");
         f.print("(");
-        e.get().debug(f);
+        debug_expr(e.get(), f, comments);
         f.print(")");
       },
       Expr::Tuple(elems) => {
         if(print_cst) f.print("Expr::Tuple{");
         f.print("(");
-        join(f, elems, ",");
+        for(let i = 0;i < elems.len();++i){
+          if(i > 0) f.print(",");
+          debug_expr(elems.get(i), f, comments);
+        }
         //single-element tuples need the comma or they re-parse as parens
         if(elems.len() == 1){
           f.print(",");
@@ -951,19 +1044,19 @@ impl Debug for Expr{
       Expr::Unary(op, e) => {
         if(print_cst) f.print("Expr::Unary{");
         f.print(op);
-        e.get().debug(f);
+        debug_expr(e.get(), f, comments);
       },
       Expr::Infix(op, l, r) => {
         if(print_cst) f.print("Expr::Infix{");
-        l.get().debug(f);
+        debug_expr(l.get(), f, comments);
         f.print(" ");
         f.print(op);
         f.print(" ");
-        r.get().debug(f);
+        debug_expr(r.get(), f, comments);
       },
       Expr::Access(scp, nm) => {
         if(print_cst) f.print("Expr::Access{");
-        scp.get().debug(f);
+        debug_expr(scp.get(), f, comments);
         f.print(".");
         f.print(nm);
       },
@@ -971,25 +1064,31 @@ impl Debug for Expr{
         if(print_cst) f.print("Expr::Obj{");
         ty.debug(f);
         f.print("{");
-        join(f, args, ", ");
+        for(let i = 0;i < args.len();++i){
+          if(i > 0) f.print(", ");
+          debug_entry(args.get(i), f, comments);
+        }
         f.print("}");
       },
       Expr::As(e, type) => {
         if(print_cst) f.print("Expr::As{");
-        e.get().debug(f);
+        debug_expr(e.get(), f, comments);
         f.print(" as ");
         type.debug(f);
       },
       Expr::Is(e, rhs) => {
         if(print_cst) f.print("Expr::Is{");
-        e.get().debug(f);
+        debug_expr(e.get(), f, comments);
         f.print(" is ");
-        rhs.get().debug(f);
+        debug_expr(rhs.get(), f, comments);
       },
       Expr::Array(arr, sz) => {
         if(print_cst) f.print("Expr::Array{");
         f.print("[");
-        join(f, arr, ", ");
+        for(let i = 0;i < arr.len();++i){
+          if(i > 0) f.print(", ");
+          debug_expr(arr.get(i), f, comments);
+        }
         if(sz.is_some()){
           f.print("; ");
           sz.get().debug(f);
@@ -998,33 +1097,33 @@ impl Debug for Expr{
       },
       Expr::ArrAccess(aa) => {
         if(print_cst) f.print("Expr::ArrAccess{");
-        aa.arr.get().debug(f);
+        debug_expr(aa.arr.get(), f, comments);
         f.print("[");
-        aa.idx.get().debug(f);
+        debug_expr(aa.idx.get(), f, comments);
         if(aa.idx2.is_some()){
           f.print("..");
-          aa.idx2.get().debug(f);
+          debug_expr(aa.idx2.get(), f, comments);
         }
         f.print("]");
       },
       Expr::Block(b) => {
         if(print_cst) f.print("Expr::Block{");
-        b.get().debug(f);
+        debug_block(b.get(), f, comments);
       },
       Expr::If(ife) => {
         if(print_cst) f.print("Expr::If{");
-        ife.get().debug(f);
+        debug_ifstmt(ife.get(), f, comments);
       },
       Expr::IfLet(il) => {
         if(print_cst) f.print("Expr::IfLet{");
-        il.get().debug(f);
+        debug_iflet(il.get(), f, comments);
       },
       Expr::Match(me) => {
         if(print_cst) f.print("Expr::Match{");
-        me.get().debug(f);
+        debug_match(me.get(), f, comments);
       },
       Expr::MacroCall(mc) => {
-        Debug::debug(mc, f); 
+        debug_macrocall(mc, f, comments);
       },
       Expr::Lambda(lc) => {
           f.print("|");
@@ -1036,21 +1135,20 @@ impl Debug for Expr{
           }
           match (lc.body.get()){
               LambdaBody::Expr(e)=>{
-                  body(e, f, true);
+                  body(e, f, comments, true);
               },
               LambdaBody::Stmt(s)=>{
-                  body(s, f, true);
+                  body(s, f, comments, true);
               }
           }
       },
       Expr::Ques(bx) => {
         if(print_cst) f.print("Expr::Ques{");
-        Debug::debug(bx.get(), f);
+        debug_expr(bx.get(), f, comments);
         f.print("?");
       }
     }
     if(print_cst) f.print("}");
-  }
 }
 impl Debug for MatchLhs{
   func debug(self, f: Fmt*){
@@ -1072,8 +1170,15 @@ impl Debug for MatchLhs{
 }
 impl Debug for Match{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_match(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_match(self: Match*, f: Fmt*, comments: List<Comment>*){
     f.print("match ");
-    self.expr.debug(f);
+    debug_expr(&self.expr, f, comments);
     f.print("{\n");
     for(let i = 0;i < self.cases.len();++i){
       if(i > 0){
@@ -1085,12 +1190,10 @@ impl Debug for Match{
       f.print(" => ");
       match &case.rhs{
         MatchRhs::EXPR(expr)=>{
-          //expr.debug(f);
-          body(expr, f, true);
+          body(expr, f, comments, true);
         },
         MatchRhs::STMT(stmt)=>{
-          body(stmt, f, true);
-          //stmt.debug(f);
+          body(stmt, f, comments, true);
         }
       }
       if(i < self.cases.len() - 1){
@@ -1098,28 +1201,40 @@ impl Debug for Match{
       }
     }
     f.print("\n}\n");
-  } 
 }
 
 impl Debug for IfStmt{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_ifstmt(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_ifstmt(self: IfStmt*, f: Fmt*, comments: List<Comment>*){
     f.print("if(");
-    self.cond.debug(f);
+    debug_expr(&self.cond, f, comments);
     f.print(")");
     if(!(self.then.get() is Body::Block)){
       f.print(" ");
     }
-    self.then.get().debug(f);
+    debug_body(self.then.get(), f, comments);
     if(self.else_stmt.is_some()){
       f.print("\nelse ");
       let els = self.else_stmt.get();
-      els.debug(f);
+      debug_body(els, f, comments);
     }
-  }
 }
 
 impl Debug for IfLet{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_iflet(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_iflet(self: IfLet*, f: Fmt*, comments: List<Comment>*){
     f.print("if let ");
     self.type.debug(f);
     //empty parens do not re-parse: only fieldless variants omit them
@@ -1129,30 +1244,45 @@ impl Debug for IfLet{
       f.print(")");
     }
     f.print(" = ");
-    self.rhs.debug(f);
-    self.then.get().debug(f);
+    debug_expr(&self.rhs, f, comments);
+    debug_body(self.then.get(), f, comments);
     if(self.else_stmt.is_some()){
       f.print("else ");
-      self.else_stmt.get().debug(f);
+      debug_body(self.else_stmt.get(), f, comments);
     }
-  }
 }
 
 impl Debug for MacroCall{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_macrocall(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_macrocall(self: MacroCall*, f: Fmt*, comments: List<Comment>*){
     if(self.scope.is_some()){
       Debug::debug(self.scope.get(), f);
       f.print("::");
     }
     f.print(&self.name);
     f.print("!(");
-    join(f, &self.args, ", ");
+    for(let i = 0;i < self.args.len();++i){
+      if(i > 0) f.print(", ");
+      debug_expr(self.args.get(i), f, comments);
+    }
     f.print(")");
-  }
 }
 
 impl Debug for Call{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_call(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_call(self: Call*, f: Fmt*, comments: List<Comment>*){
     if(self.scope.is_some()){
       //scope: Option<Box<Expr>>
       let scp: Expr* = self.scope.get();
@@ -1160,7 +1290,7 @@ impl Debug for Call{
         t.debug(f);
         f.print("::");
       }else{
-        scp.debug(f);
+        debug_expr(scp, f, comments);
         f.print(".");
       }
     }
@@ -1171,13 +1301,22 @@ impl Debug for Call{
       f.print(">");
     }
     f.print("(");
-    join(f, &self.args, ", ");
+    for(let i = 0;i < self.args.len();++i){
+      if(i > 0) f.print(", ");
+      debug_expr(self.args.get(i), f, comments);
+    }
     f.print(")");
-  }
 }
 
 impl Debug for Entry{
   func debug(self, f: Fmt*){
+    //see Unit: diagnostics render comment-free
+    let empty = List<Comment>::new();
+    debug_entry(self, f, &empty);
+    empty.drop();
+  }
+}
+func debug_entry(self: Entry*, f: Fmt*, comments: List<Comment>*){
     if(self.isBase){
       f.print(".");
     }else{
@@ -1186,6 +1325,5 @@ impl Debug for Entry{
       f.print(": ");
     }
     }
-    self.expr.debug(f);
-  }
+    debug_expr(&self.expr, f, comments);
 }

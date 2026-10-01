@@ -148,3 +148,13 @@ impl Debug for Token{
         f.print("}");
     }
 }
+
+//A source comment stripped from the token stream and kept for the
+//formatter (line: 1-based source line, text includes the // or /* */
+//markers, without trailing newline). Lives here, next to the COMMENT
+//tokens it comes from -- not in std: Fmt must stay a generic buffer,
+//and std cannot name ast types.
+struct Comment{
+  line: i32;
+  text: String;
+}

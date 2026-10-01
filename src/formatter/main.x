@@ -18,12 +18,11 @@ func main(argc: i32, args: i8**){
     let parser = Parser::from_path(inp.clone());
     let unit = parser.parse_unit();
     parser.drop();
-    //hand comment trivia to the printer. This top-level Fmt owns the
-    //list; nested sub-renders share it (see sub_str) and copy it back,
-    //so every comment is placed exactly once.
+    //comments ride along explicitly: they live on the unit (ast data),
+    //and the printer threads them as a side table (see debug_unit).
+    //Fmt itself stays a plain buffer.
     let f = Fmt::new();
-    f.comments = unit.comments.clone();
-    Debug::debug(&unit, &f);
+    debug_unit(&unit, &f, &unit.comments);
     let out = f.buf.clone();
     Drop::drop(f);
     unit.drop();
