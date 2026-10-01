@@ -978,7 +978,8 @@ impl Expr{
     panic("get_call {:?}", self);
   }
   func is_body(self): bool{
-    return self is Expr::Block || self is Expr::If || self is Expr::IfLet;
+    //block-like expressions stand alone as statements (no trailing ;)
+    return self is Expr::Block || self is Expr::If || self is Expr::IfLet || self is Expr::Match;
   }
   func into_stmt(*self): Stmt{
     let id = *(self as Node*);

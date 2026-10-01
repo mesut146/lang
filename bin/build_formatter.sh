@@ -20,7 +20,7 @@ LIB_AST=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
 flags="$LIB_AST $LIB_STD"
 
-$compiler c -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name -flags "$flags" $dir/../src/formatter
+$compiler c -norun -cache -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name -flags "$flags" $dir/../src/formatter
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"
   exit 1

@@ -36,6 +36,20 @@ func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   }
 }
 
+//attributes affect semantics (derive/repr/drop): always reprint them
+func debug_attrs(list: List<Attribute>*, f: Fmt*){
+  for at in list{
+    f.print("#");
+    f.print(&at.name);
+    if(at.is_call){
+      f.print("(");
+      join(f, &at.args, ", ");
+      f.print(")");
+    }
+    f.print("\n");
+  }
+}
+
 func body(node: Stmt*, f: Fmt*){
     body(node, f, false);
 }
@@ -142,6 +156,9 @@ impl Debug for Item{
       Item::Trait(tr) => {
         f.print("trait ");
         tr.type.debug(f);
+        f.print("{\n");
+        join(f, &tr.methods, "\n");
+        f.print("\n}");
       },
       Item::Extern(methods) => {
         f.print("extern{\n");
@@ -157,6 +174,7 @@ impl Debug for Item{
         }
         f.print(" = ");
         f.print(&cn.rhs);
+        f.print(";");
       },
       Item::Glob(gl) => {
         gl.debug(f);
@@ -178,10 +196,9 @@ impl Debug for UseItem{
       f.print("::{");
       join(f, &self.list, ",");
       f.print("}");
-    }else{
-      f.print("::");
-      Debug::debug(self.list.get(0), f);
     }
+    //single form (use M::A) carries the item as the last path segment
+    //and scope form (use M) as the whole path; neither has a list.
     f.print(";");
   }
 }
@@ -204,8 +221,12 @@ impl Debug for Global{
       f.print(": ");
       self.type.get().debug(f);
     }
-    f.print(" = ");
-    self.expr.debug(f);
+    //expr is Option (uninitialized statics parse but fail resolve);
+    //only initialized ones round-trip through here in practice
+    if(self.expr.is_some()){
+      f.print(" = ");
+      self.expr.get().debug(f);
+    }
     f.print(";");
   }
 }
@@ -264,6 +285,7 @@ impl Debug for Decl{
       }
     }
     func debug_struct(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+        debug_attrs(&decl.attr.list, f);
         f.print("struct ");
         decl.type.debug(f);
         if(decl.base.is_some()){
@@ -284,6 +306,7 @@ impl Debug for Decl{
     }
 
     func debug_struct_tuple(decl: Decl*, fields: List<FieldDecl>*, f: Fmt*){
+      debug_attrs(&decl.attr.list, f);
       f.print("struct ");
       decl.type.debug(f);
       if(decl.base.is_some()){
@@ -306,13 +329,22 @@ impl Debug for Decl{
 
 
   func debug_enum(decl: Decl*, variants: List<Variant>*, f: Fmt*){
+      debug_attrs(&decl.attr.list, f);
       f.print("enum ");
       decl.type.debug(f);
+      if(decl.base.is_some()){
+        f.print(": ");
+        decl.base.get().debug(f);
+      }
       f.print("{\n");
       for(let i = 0;i < variants.len();++i){
         let ev = variants.get(i);
         f.print("    ");
         f.print(&ev.name);
+        if(ev.disc.is_some()){
+          f.print(" = ");
+          ev.disc.get().debug(f);
+        }
         if(ev.fields.len() > 0){
           //todo ev.is_tuple
           f.print("(");
@@ -342,8 +374,14 @@ impl Debug for FieldDecl{
 
 impl Debug for Method{
   func debug(self, f: Fmt*){
+    debug_attrs(&self.attr.list, f);
     f.print("func ");
     f.print(&self.name);
+    if(!self.type_params.empty()){
+      f.print("<");
+      join(f, &self.type_params, ", ");
+      f.print(">");
+    }
     f.print("(");
     if(self.self.is_some()){
       self.self.get().debug(f);
@@ -373,11 +411,20 @@ impl Debug for Method{
 
 impl Debug for Param{
   func debug(self, f: Fmt*){
+    //self params print bare under their declared name (self, *self, x1):
+    //an explicit `: Type` would re-parse as a regular parameter and
+    //break method resolution.
+    if(self.is_self){
+      if(self.is_deref){
+        f.print("*");
+      }
+      f.print(&self.name);
+      return;
+    }
     if(self.is_deref){
       f.print("*");
     }
     f.print(&self.name);
-    if(self.is_self){}
     f.print(": ");
     self.type.debug(f);
   }
@@ -446,8 +493,16 @@ impl Debug for FunctionType{
   }
 }
 
-impl Debug for LambdaType{
+impl Debug for LambdaParam{
   func debug(self, f: Fmt*){
+    f.print(&self.name);
+    if(self.type.is_some()){
+      f.print(": ");
+      self.type.get().debug(f);
+    }
+  }
+}
+impl Debug for LambdaType{  func debug(self, f: Fmt*){
     f.print("func2(");
     if(!self.params.empty()){
       join(f, &self.params, ", ");
@@ -494,6 +549,7 @@ impl Debug for Stmt{
       Stmt::For(fs)=>{
         f.print("for(");
         if(fs.var_decl.is_some()){
+          f.print("let ");
           fs.var_decl.get().debug(f);
         }
         f.print(";");
@@ -581,9 +637,8 @@ impl Debug for Block{
 
 impl Debug for VarExpr{
   func debug(self, f: Fmt*){
-    for(let i=0;i<self.list.len();++i){
-      self.list.get(i).debug(f);
-    }
+    //multi-declarator fragments (let i = 0, j = 1) need separators
+    join(f, &self.list, ", ");
   }
 }
 
@@ -650,6 +705,10 @@ impl Debug for Expr{
         if(print_cst) f.print("Expr::Tuple{");
         f.print("(");
         join(f, elems, ",");
+        //single-element tuples need the comma or they re-parse as parens
+        if(elems.len() == 1){
+          f.print(",");
+        }
         f.print(")");
       },
       Expr::Type(t) => {
@@ -736,6 +795,7 @@ impl Debug for Expr{
       },
       Expr::Lambda(lc) => {
           f.print("|");
+          join(f, &lc.params, ", ");
           f.print("|");
           if(lc.return_type.is_some()){
               f.print(": ");
@@ -829,9 +889,13 @@ impl Debug for IfLet{
   func debug(self, f: Fmt*){
     f.print("if let ");
     self.type.debug(f);
-    f.print("(");
-    join(f, &self.args, ", ");
-    f.print(") = ");
+    //empty parens do not re-parse: only fieldless variants omit them
+    if(!self.args.empty()){
+      f.print("(");
+      join(f, &self.args, ", ");
+      f.print(")");
+    }
+    f.print(" = ");
     self.rhs.debug(f);
     self.then.get().debug(f);
     if(self.else_stmt.is_some()){
