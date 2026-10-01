@@ -123,20 +123,6 @@ func getTypes(items: List<Item>*, list: List<Decl*>*){
     }
 }
 
-func sort(list: List<Decl*>*, r: Resolver*){
-  for (let i = 0; i < list.len(); ++i) {
-    //find decl belongs to i'th index
-    let min: Decl* = *list.get(i);
-    for (let j = i + 1; j < list.len(); ++j) {
-      let cur: Decl* = *list.get(j);
-      if (r.is_cyclic(&min.type, &cur.type)) {
-        min = cur;
-        swap(list, i, j);
-      }
-    }
-  }
-}
-
 func all_deps(type: Type*, r: Resolver*, arr: List<String>*){
   if(type.is_any_pointer() || type.is_prim() || type.is_slice()) return;
   if(type.is_array()){
@@ -186,38 +172,16 @@ func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
   }
 }
 
-func sort4(list: List<Decl*>*, r: Resolver*){
-  let index_map = Map<String, i32>::new(list.len());
-  for (let i = 0; i < list.len(); ++i) {
-    let d: Decl* = *list.get(i);
-    index_map.add(d.type.print(), 0);
-    if(d is Decl::Struct){
-      let fields = d.get_fields();
-      for (let j = 0; j < fields.len(); ++j) {
-        let fd = fields.get(j);
-        let key = fd.type.print();
-      }
-    }
-  }
-}
-
 func sort2(list: List<Decl*>*, r: Resolver*){
   //parent -> fields
   let map = Map<String, List<String>>::new();
   //field -> parents
-  //let map2 = Map<String, List<String>>::new();
   for (let i = 0; i < list.len(); ++i) {
     let decl = *list.get(i);
     let arr = List<String>::new();
     all_deps(decl, r, &arr);
-    /*for ch in &arr{
-      let parents = &map2.get_pair_or(ch.clone(), List<String>::new()).b;
-      parents.add_not_exist(decl.type.print());
-    }*/
-    //print("{} -> {}\n", decl.type, arr);
     map.add(decl.type.print(), arr);
   }
-  //print("map2={}\n", map2);
   //sort
   //let left_all = List<String>::new();
   let right_all = List<String>::new();
@@ -251,18 +215,8 @@ func sort2(list: List<Decl*>*, r: Resolver*){
       s2.drop();
     }
   }
-  //print("sorted={}\n", list);
   map.drop();
   right_all.drop();
-}
-
-func printlist(list: List<Decl*>*){
-  print("list={\n");
-  for (let i = 0; i < list.len(); ++i) {
-    let decl = *list.get(i);
-    print("  {:?}", decl.type);
-  }
-  print("}\n\n");
 }
 
 func swap(list: List<Decl*>*, i: i32, j: i32){
@@ -441,7 +395,6 @@ impl Emitter{
     let resolver = self.get_resolver();
     let list = List<Decl*>::new();
     getTypes(&self.unit().items, &list);
-    //print("used={}\n", resolver.used_types);
     for rt in &resolver.used_types{
       let decl = resolver.get_decl(rt).unwrap();
       if (decl.is_generic) continue;
@@ -451,7 +404,6 @@ impl Emitter{
     //first create just protos to fill later
     for(let i = 0;i < list.len();++i){
       let decl = *list.get(i);
-      //print("decl proto {}\n", decl.type);
       self.make_decl_proto(decl);
     }
     //fill with elems
@@ -555,7 +507,6 @@ impl Emitter{
     let ll = self.ll.get();
     if(m.is_generic) return Option<FunctionInfo>::new();
     let mangled = mangle(m);
-    //print("proto {}\n", mangled);
     if(self.protos.get().funcMap.contains(&mangled)){
       panic("already proto {}\n", mangled);
     }
@@ -648,9 +599,6 @@ impl Emitter{
   func cast(self, expr: Expr*, target_type: Type*): Value*{
     let ll = self.ll.get();
     let src_type = self.get_resolver().getType(expr);
-    if(std::getenv("genCode").is_some()){
-      print("xcast {:?} -> {:?}\n", src_type, target_type);
-    }
     let val = self.loadPrim(expr);
     let is_unsigned = isUnsigned(&src_type);
     let target_ty = self.mapType(target_type);
@@ -686,12 +634,6 @@ impl Emitter{
       }
     }
     let val_ty = Value_getType(val);
-    if(std::getenv("genCode").is_some()){
-      print("xcast llvm src: ");
-      Type_dump(val_ty);
-      print("xcast llvm trg: ");
-      Type_dump(target_ty);
-    }
     let src_size = ll.sizeOf(val_ty);
     let trg_size = self.getSize(target_type);
     let trg_ty = intTy(ll.ctx, trg_size as i32);

@@ -80,7 +80,6 @@ impl DebugInfo{
     func loc(self, line: i32, pos: i32) {
         if (!self.debug) return;
         if (self.sp.is_none()) {
-          //SetCurrentDebugLocation(self.cu, line, pos);
           panic("err no func for dbg");
         }
         SetCurrentDebugLocation(self.ll.builder, self.get_scope(), line, pos);        

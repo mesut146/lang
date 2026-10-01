@@ -361,7 +361,6 @@ impl Compiler{
       cmd.append(" rcs ");
     }
     let out_file = format("{}/{}", out_dir, name);
-    //print("linking {}\n", out_file);
     cmd.append(&out_file);
     cmd.append(" ");
     for file in compiled{
@@ -382,7 +381,6 @@ impl Compiler{
   
   func link(compiled: List<String>*, out_dir: str, name: str, args: str): Result<String, CompilerError>{
     let out_file = format("{}/{}", out_dir, name);
-    //print("linking {}\n", out_file);
     if(File::exists(out_file.str())){
       File::remove_file(out_file.str())?;
     }

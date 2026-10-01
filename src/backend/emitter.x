@@ -397,21 +397,18 @@ impl Emitter{
     self.make_decl_protos();
     //methods
     let methods: List<Method*> = getMethods(self.unit());
-    //print("local m\n");
     for (let i = 0;i < methods.len();++i) {
       let m = *methods.get(i);
       p.make_proto(m);
     }
     methods.drop();
     //generic methods from resolver
-    //print("gen m\n");
     let r = self.get_resolver();
     for pair in &r.generated_methods{
         for m in pair.b{
           p.make_proto(m.get());
         }
     }
-    //print("used m\n");
     for pr in &r.used_methods{
         p.make_proto(*pr.b);
     }
@@ -453,14 +450,8 @@ impl Emitter{
   }
 
   func genCode(self, m: Method*){
-    //print("gen {}\n", m.name);
     if(m.body.is_none()) return;
     if(m.is_generic) return;
-    if(std::getenv("genCode").is_some()){
-      let s = printMethod(m);
-      print("emit {:?}\n", s);
-      s.drop();
-    }
     self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
     self.own.drop();

@@ -338,22 +338,9 @@ impl LLVMInfo{
     }else{
       panic("invalid optimization level '{}'", level);
     };
-    // let opt = LLVMCreatePassBuilderOptions();
-    // LLVMPassBuilderOptionsSetLoopInterleaving(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetLoopVectorization(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetSLPVectorization(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetLoopUnrolling(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetForgetAllSCEVInLoopUnroll(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetCallGraphProfile(opt, LLVMBoolTrue());
-    // LLVMPassBuilderOptionsSetMergeFunctions(opt, LLVMBoolTrue());
-    // let err = LLVMRunPasses(self.module, pipeline .ptr(), self.tm, opt);
-    // if(err as u64 != 0){
-    //   let msg = LLVMGetErrorMessage(err);
-    //   printf("LLVMRunPasses failed msg=%s\n", msg);
-    //   LLVMDisposeErrorMessage(msg);
-    //   panic("");
-    // }
-    // LLVMDisposePassBuilderOptions(opt);
+    //pass pipeline intentionally not run: the new-PM bindings are not
+    //wired yet, so every -O level is currently a no-op (kept for CLI compat).
+    pipeline.drop();
   }
 
   func emit_module(self, file: str){

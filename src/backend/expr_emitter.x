@@ -29,7 +29,6 @@ impl Emitter{
 
     func visit(self, node: Expr*): Value*{
       let res = self.visit_expr(node);
-      //self.own.get().add_obj(node);
       return res;
     }
 
@@ -129,8 +128,6 @@ impl Emitter{
     }
     
     func nullptr(self): Value*{
-      //let vptr = getPointerTo(getVoidTy(self.ll.get().builder));
-      //let vptr = getPtr(self.ll.get().ctx) as PointerType*;
       let vptr = self.ll.get().intPtr(8) as PointerType*;
       return ConstantPointerNull_get(vptr);
     }
@@ -159,6 +156,37 @@ impl Emitter{
       }
     }
 
+    //Shared body of the ENUM and UNION match arms below: scope,
+    //rhs emission, void/phi bookkeeping and the branch out. The arms
+    //differ only in dispatch (one variant vs all-union) and payload
+    //binding (above); everything from add_scope on is identical.
+    //Returns whether this case falls through to nextbb.
+    func emit_case_body(self, rhs: MatchRhs*, match_type: Type*, nextbb: BasicBlock*, infos: List<MatchInfo>*): bool{
+      let ll = self.ll.get();
+      self.own.get().add_scope(ScopeType::MATCH_CASE, rhs);
+      let rhs_val = self.visit_match_rhs(rhs);
+      self.own.get().end_scope(Utils::get_end_line(rhs));
+      let rhs_end_bb = GetInsertBlock(ll.builder);
+      let exit = Exit::get_exit_type(rhs);
+      if(!exit.is_jump()){
+        if(!match_type.is_void()){
+          let rt2 = self.get_resolver().visit_match_rhs(rhs);
+          let val = rhs_val.unwrap();
+          if(!is_struct(match_type)){
+            //fix
+            if(match_type.is_prim() && Value_isPointerTy(val)){
+              val = CreateLoad(ll.builder, self.mapType(match_type), val);
+            }
+            val = self.cast2(val, &rt2.type, match_type);
+          }
+          rhs_val.set(val);
+          infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
+        }
+        CreateBr(ll.builder, nextbb);
+        return true;
+      }
+      return false;
+    }
     func visit_match(self, expr: Expr*, node: Match*): Option<Value*>{
       let ll = self.ll.get();
       let resolver = self.get_resolver();
@@ -212,26 +240,7 @@ impl Emitter{
               self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type);
               ++arg_idx;
             }
-            self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
-            let rhs_val = self.visit_match_rhs(&case.rhs);
-            self.own.get().end_scope(Utils::get_end_line(&case.rhs));
-            let rhs_end_bb = GetInsertBlock(ll.builder);
-            let exit = Exit::get_exit_type(&case.rhs);
-            if(!exit.is_jump()){
-              if(!match_type.is_void()){
-                let rt2 = resolver.visit_match_rhs(&case.rhs);
-                let val = rhs_val.unwrap();
-                if(!is_struct(&match_type)){
-                    //fix
-                    if(match_type.is_prim() && Value_isPointerTy(val)){
-                        val = CreateLoad(ll.builder, self.mapType(&match_type), val);
-                    }
-                    val = self.cast2(val, &rt2.type, &match_type);
-                }
-                rhs_val.set(val);
-                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
-              }
-              CreateBr(ll.builder, nextbb);
+            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos)){
               use_next = true;
             }
             name_c.drop();
@@ -246,35 +255,16 @@ impl Emitter{
             }
             SetInsertPoint(ll.builder, bb);
 
-            self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
-            let rhs_val = self.visit_match_rhs(&case.rhs);
-            self.own.get().end_scope(Utils::get_end_line(&case.rhs));
-            let rhs_end_bb = GetInsertBlock(ll.builder);
-            let exit = Exit::get_exit_type(&case.rhs);
-            if(!exit.is_jump()){
-              if(!match_type.is_void()){
-                let rt2 = resolver.visit_match_rhs(&case.rhs);
-                let val = rhs_val.unwrap();
-                if(!is_struct(&match_type)){
-                    //fix
-                    if(match_type.is_prim() && Value_isPointerTy(val)){
-                        val = CreateLoad(ll.builder, self.mapType(&match_type), val);
-                    }
-                    val = self.cast2(val, &rt2.type, &match_type);
-                }
-                rhs_val.set(val);
-                infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), rhs_end_bb});
-              }
-              CreateBr(ll.builder, nextbb);
+            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos)){
               use_next = true;
             }
+            name_c.drop();
           }
         }
       }
       if(use_next){
         SetInsertPoint(ll.builder, nextbb);
       }else{
-        //LLVMDeleteBasicBlock(nextbb);
         SetInsertPoint(ll.builder, nextbb);
         CreateUnreachable(ll.builder);
       }
@@ -343,48 +333,40 @@ impl Emitter{
       return expr is Expr::If || expr is Expr::IfLet;
     }
 
-    func visit_if(self, node: IfStmt*): Option<Value*>{
+    //Shared tail of visit_if and visit_iflet: then/else emission, scope
+    //bookkeeping and the join (phi or passthrough). The two differ only
+    //in how they reach the CondBr (plain condition vs tag compare, plus
+    //iflet's payload setup); everything from the then-body on is
+    //identical, so it lives here instead of in both.
+    func emit_branch_join(self, then: Body*, else_stmt: Ptr<Body>*, thenbb: BasicBlock*, elsebb: BasicBlock*, nextbb: BasicBlock*, line: i32, if_id: i32): Option<Value*>{
       let ll = self.ll.get();
-      let cond = self.branch(&node.cond);
-      let line = node.cond.line;
-      let then_name = CStr::new(format("if_then_{}", line));
-      let else_name = CStr::new(format("if_else_{}", line));
-      let next_name = CStr::new(format("if_next_{}", line));
-      let thenbb = create_bb(ll.ctx, then_name.ptr(), self.cur_func());
-      let elsebb = create_bb(ll.ctx, else_name.ptr(), self.cur_func());
-      let nextbb = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
-      CreateCondBr(ll.builder, cond, thenbb, elsebb);
-      SetInsertPoint(ll.builder, thenbb);
-      self.di.get().new_scope(node.then.get().line());
-      let exit_then = Exit::get_exit_type(node.then.get());
-      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
-      let then_val = self.visit_body(node.then.get());
+      let then_val = self.visit_body(then);
       let then_end = GetInsertBlock(ll.builder);
       let else_end = GetInsertBlock(ll.builder);
       //else move aware end_scope
-      if(node.else_stmt.is_some()){
-        self.own.get().end_scope_if(&node.else_stmt, Utils::get_end_line(node.then.get()));
+      if(else_stmt.is_some()){
+        self.own.get().end_scope_if(else_stmt, Utils::get_end_line(then));
       }else{
-        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(then));
       }
       self.di.get().exit_scope();
+      let exit_then = Exit::get_exit_type(then);
       if(!exit_then.is_jump()){
         CreateBr(ll.builder, nextbb);
       }
       SetInsertPoint(ll.builder, elsebb);
       let else_jump = false;
       let else_val = Option<Value*>::new();
-      
-      if(node.else_stmt.is_some()){
-        self.di.get().new_scope(node.else_stmt.get().line());
+      if(else_stmt.is_some()){
+        self.di.get().new_scope(else_stmt.get().line());
         //this will restore if, bc we did fake end_scope
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
+        let else_id = self.own.get().add_scope(ScopeType::ELSE, else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
-        else_val = self.visit_body(node.else_stmt.get());
+        else_val = self.visit_body(else_stmt.get());
         else_end = GetInsertBlock(ll.builder);
-        self.own.get().end_scope(Utils::get_end_line(node.else_stmt.get()));
+        self.own.get().end_scope(Utils::get_end_line(else_stmt.get()));
         self.di.get().exit_scope();
-        let exit_else = Exit::get_exit_type(node.else_stmt.get());
+        let exit_else = Exit::get_exit_type(else_stmt.get());
         else_jump = exit_else.is_jump();
         if(!else_jump){
           CreateBr(ll.builder, nextbb);
@@ -393,17 +375,14 @@ impl Emitter{
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
-        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
+        self.own.get().end_scope(Utils::get_end_line(then));
         CreateBr(ll.builder, nextbb);
       }
       let res = Option<Value*>::new();
       if(!(exit_then.is_jump() && else_jump)){
         SetInsertPoint(ll.builder, nextbb);
-        let then_rt = self.get_resolver().visit_body(node.then.get());
+        let then_rt = self.get_resolver().visit_body(then);
         if(!then_rt.type.is_void()){
-          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
-            //self.get_resolver().err(line, "nested if expr not allowed");
-          //}
           if(exit_then.is_jump() && !else_jump){
             res = else_val;
           }
@@ -427,11 +406,28 @@ impl Emitter{
         }
         then_rt.drop();
       }else{
-        //LLVMDeleteBasicBlock(nextbb);
         SetInsertPoint(ll.builder, nextbb);
         CreateUnreachable(ll.builder);
       }
       exit_then.drop();
+      return res;
+    }
+
+    func visit_if(self, node: IfStmt*): Option<Value*>{
+      let ll = self.ll.get();
+      let cond = self.branch(&node.cond);
+      let line = node.cond.line;
+      let then_name = CStr::new(format("if_then_{}", line));
+      let else_name = CStr::new(format("if_else_{}", line));
+      let next_name = CStr::new(format("if_next_{}", line));
+      let thenbb = create_bb(ll.ctx, then_name.ptr(), self.cur_func());
+      let elsebb = create_bb(ll.ctx, else_name.ptr(), self.cur_func());
+      let nextbb = create_bb(ll.ctx, next_name.ptr(), self.cur_func());
+      CreateCondBr(ll.builder, cond, thenbb, elsebb);
+      SetInsertPoint(ll.builder, thenbb);
+      self.di.get().new_scope(node.then.get().line());
+      let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
+      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, thenbb, elsebb, nextbb, line, if_id);
       then_name.drop();
       else_name.drop();
       next_name.drop();
@@ -477,80 +473,7 @@ impl Emitter{
             self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type);
         }
       }
-      let then_val = self.visit_body(node.then.get());
-      let then_end = GetInsertBlock(ll.builder);
-      let else_end = GetInsertBlock(ll.builder);
-      //else move aware end_scope
-      if(node.else_stmt.is_some()){
-        self.own.get().end_scope_if(&node.else_stmt, Utils::get_end_line(node.then.get()));
-      }else{
-        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
-      }
-      self.di.get().exit_scope();
-      let exit_then = Exit::get_exit_type(node.then.get());
-      if (!exit_then.is_jump()) {
-        CreateBr(ll.builder, next);
-      }
-      SetInsertPoint(ll.builder, elsebb);
-      let else_jump = false;
-      let else_val = Option<Value*>::new();
-      if (node.else_stmt.is_some()) {
-        self.di.get().new_scope(node.else_stmt.get().line());
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, node.else_stmt.get());
-        self.own.get().get_scope(else_id).sibling = if_id;
-        else_val = self.visit_body(node.else_stmt.get());
-        else_end = GetInsertBlock(ll.builder);
-        self.own.get().end_scope(Utils::get_end_line(node.else_stmt.get()));
-        self.di.get().exit_scope();
-        let exit_else = Exit::get_exit_type(node.else_stmt.get());
-        else_jump = exit_else.is_jump();
-        if (!else_jump) {
-          CreateBr(ll.builder, next);
-        }
-        exit_else.drop();
-      }else{
-        let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
-        self.own.get().get_scope(else_id).sibling = if_id;
-        self.own.get().end_scope(Utils::get_end_line(node.then.get()));
-        CreateBr(ll.builder, next);
-      }
-      let res = Option<Value*>::new();
-      if(!(exit_then.is_jump() && else_jump)){
-        SetInsertPoint(ll.builder, next);
-
-        let then_rt = self.get_resolver().visit_body(node.then.get());
-        if(!then_rt.type.is_void()){
-          //if(is_nested_if(node.then.get()) || is_nested_if(node.else_stmt.get())){
-            //self.get_resolver().err(line, "nested if expr not allowed");
-          //}
-          if(exit_then.is_jump() && !else_jump){
-            res = else_val;
-          }
-          else if(!exit_then.is_jump() && else_jump){
-            res = then_val;
-          }else{
-            let phi_type = self.mapType(&then_rt.type);
-            if(is_struct(&then_rt.type)){
-              phi_type = getPointerTo(phi_type) as llvm_Type*;
-            }
-            let phi = CreatePHI(ll.builder, phi_type, 2);
-            if(is_struct(&then_rt.type)){
-              phi_addIncoming(phi, then_val.unwrap(), then_end);
-              phi_addIncoming(phi, else_val.unwrap(), else_end);
-            }else{
-              phi_addIncoming(phi, self.loadPrim(then_val.unwrap(), &then_rt.type), then_end);
-              phi_addIncoming(phi, self.loadPrim(else_val.unwrap(), &then_rt.type), else_end);
-            }
-            res = Option::new(phi as Value*);
-          }
-        }
-        then_rt.drop();
-      }else{
-        //LLVMDeleteBasicBlock(next);
-        SetInsertPoint(ll.builder, next);
-        CreateUnreachable(ll.builder);
-      }
-      exit_then.drop();
+      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, then_bb, elsebb, next, line, if_id);
       then_name.drop();
       else_name.drop();
       next_name.drop();
@@ -602,8 +525,6 @@ impl Emitter{
     func visit_ref(self, node: Expr*, expr: Expr*): Value*{
       if (RvalueHelper::is_rvalue(expr)) {
         let alloc_ptr = self.get_alloc(node);
-        //let val = self.loadPrim(expr);
-        //CreateStore(ll.builder, val, alloc_ptr);
         let expr_type = self.get_resolver().getType(expr);
         self.setField(expr, &expr_type, alloc_ptr);
         self.own.get().add_obj(node, LLVMPtr::new(alloc_ptr), &expr_type);
@@ -748,7 +669,6 @@ impl Emitter{
       if(sz.is_none()){
         for(let i = 0;i < list.len();++i){
           let e = list.get(i);
-          // let elem_target = gep_arr(arr_ty, ptr, 0, i);
           let elem_target = self.ll.get().gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
           self.setField(e, &et, elem_target);
@@ -924,40 +844,52 @@ impl Emitter{
       return mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty();
     }
 
+    //The ptr/deref/get/copy intrinsics at the top of visit_macrocall and
+    //visit_call are identical bodies over different call-node types, so
+    //they share these helpers (taking only the arg list both sides have).
+    func emit_ptr_deref(self, expr: Expr*, args: List<Expr>*): Value*{
+        let ll = self.ll.get();
+        let arg_ptr = self.get_obj_ptr(args.get(0));
+        let type = self.getType(expr);
+        if (!is_struct(&type)) {
+            let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
+            type.drop();
+            return res;
+        }
+        type.drop();
+        return arg_ptr;
+    }
+    func emit_ptr_get(self, expr: Expr*, args: List<Expr>*): Value*{
+        let elem_type = self.getType(expr);
+        let src = self.get_obj_ptr(args.get(0));
+        let idx = self.loadPrim(args.get(1));
+        let res = self.ll.get().gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
+        elem_type.drop();
+        return res;
+    }
+    func emit_ptr_copy(self, args: List<Expr>*): Value*{
+        let src_ptr = self.get_obj_ptr(args.get(0));
+        let i64_ty = Type::new("i64");
+        let idx = self.cast(args.get(1), &i64_ty);
+        i64_ty.drop();
+        let val = self.visit(args.get(2));
+        let elem_type: Type = self.getType(args.get(2));
+        let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
+        self.copy(trg_ptr, val, &elem_type);
+        elem_type.drop();
+        return ptr::null<Value>();
+    }
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
         let ll = self.ll.get();
         if(Utils::is_call(mc, "ptr", "deref")){
-          let arg_ptr = self.get_obj_ptr(mc.args.get(0));
-          let type = self.getType(expr);
-          if (!is_struct(&type)) {
-              let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
-              type.drop();
-              return res;
-          }
-          type.drop();
-          return arg_ptr;
+          return self.emit_ptr_deref(expr, &mc.args);
         }
         if(Utils::is_call(mc, "ptr", "get")){
-          let elem_type = self.getType(expr);
-          let src = self.get_obj_ptr(mc.args.get(0));
-          let idx = self.loadPrim(mc.args.get(1));
-          let res = self.ll.get().gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
-          elem_type.drop();
-          return res;
+          return self.emit_ptr_get(expr, &mc.args);
         }
         if(Utils::is_call(mc, "ptr", "copy")){
-          //ptr::copy(src_ptr, src_idx, elem)
-          let src_ptr = self.get_obj_ptr(mc.args.get(0));
-          let i64_ty = Type::new("i64");
-          let idx = self.cast(mc.args.get(1), &i64_ty);
-          i64_ty.drop();
-          let val = self.visit(mc.args.get(2));
-          let elem_type: Type = self.getType(mc.args.get(2));
-          let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
-          self.copy(trg_ptr, val, &elem_type);
-          elem_type.drop();
-          return ptr::null<Value>();
+          return self.emit_ptr_copy(&mc.args);
         }
         if(Utils::is_call(mc, "std", "unreachable")){
           CreateUnreachable(ll.builder);
@@ -1002,11 +934,8 @@ impl Emitter{
       //todo dont remove this until own is stable
       if(is_drop_call2(mc) && env.is_some()){
         let list = env.unwrap().split(",");
-        //let cur_name: str = Path::name(self.unit().path.str());
         let cur_name: str = Path::name(self.curMethod.unwrap().path.str()); 
         if(list.contains(&cur_name)){
-          //let arg = mc.scope.get();
-          //self.own.get().do_move(arg);
           list.drop();
           return ptr::null<Value>();
         }
@@ -1017,45 +946,15 @@ impl Emitter{
         self.own.get().do_move(arg);
         return ptr::null<Value>();
       }
-      //////////////////////////////////////
       if(Utils::is_call(mc, "ptr", "deref")){
-        let arg_ptr = self.get_obj_ptr(mc.args.get(0));
-        let type = self.getType(expr);
-        if (!is_struct(&type)) {
-            let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
-            type.drop();
-            return res;
-        }
-        type.drop();
-        return arg_ptr;
+        return self.emit_ptr_deref(expr, &mc.args);
       }
       if(Utils::is_call(mc, "ptr", "get")){
-        let elem_type = self.getType(expr);
-        let src = self.get_obj_ptr(mc.args.get(0));
-        let idx = self.loadPrim(mc.args.get(1));
-        let res = self.ll.get().gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
-        elem_type.drop();
-        return res;
+        return self.emit_ptr_get(expr, &mc.args);
       }
       if(Utils::is_call(mc, "ptr", "copy")){
-        //ptr::copy(src_ptr, src_idx, elem)
-        let src_ptr = self.get_obj_ptr(mc.args.get(0));
-        let i64_ty = Type::new("i64");
-        let idx = self.cast(mc.args.get(1), &i64_ty);
-        i64_ty.drop();
-        let val = self.visit(mc.args.get(2));
-        let elem_type: Type = self.getType(mc.args.get(2));
-        let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
-        self.copy(trg_ptr, val, &elem_type);
-        elem_type.drop();
-        return ptr::null<Value>();
+        return self.emit_ptr_copy(&mc.args);
       }
-      if(Utils::is_call(mc, "std", "no_drop")){
-        let arg = mc.args.get(0);
-        self.own.get().do_move(arg);
-        return ptr::null<Value>();
-      }
-      /// /////////////////////////////
       let mac = resolver.format_map.get(&expr.id);
       if(mac.is_some()){
         let res = self.visit_block(&mac.unwrap().block);
@@ -1074,7 +973,6 @@ impl Emitter{
         return self.visit_block(&info.block).unwrap();
       }
       if(Utils::is_call(mc, "Drop", "drop")){
-        //print("drop_call {} line: {}\n", expr, expr.line);
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
           argt.drop();
@@ -1127,7 +1025,6 @@ impl Emitter{
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
-        //self.own.get().do_move(info.block.return_expr.get());
         return res.unwrap();
       }
       if(Resolver::is_assert(mc)){
@@ -1160,22 +1057,18 @@ impl Emitter{
           return ll.makeInt(*sz, 64) ;
         }
         arr_type.drop();
-        //std::unreachable!();
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){
-        //arr.ptr()
         return self.get_obj_ptr(mc.scope.get());
       }
       if(resolver.is_slice_get_len(mc)){
-        //sl.len()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
         let len_ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_LEN_INDEX());
         return CreateLoad(ll.builder, intTy(ll.ctx, SLICE_LEN_BITS()), len_ptr);
       }
       if(resolver.is_slice_get_ptr(mc)){
-        //sl.ptr()
         let sl = self.get_obj_ptr(mc.scope.get());
         let sliceType=self.protos.get().std("slice");
         let ptr = CreateStructGEP(ll.builder,  sliceType, sl,  SLICE_PTR_INDEX());
@@ -1183,12 +1076,14 @@ impl Emitter{
       }
       return self.visit_call2(expr, mc);
     }
-    func visit_fp_call(self, expr: Expr*, mc: Call*, ft: FunctionType*): Value*{
-      let ll = self.ll.get();
+    //Shared argument lowering of visit_fp_call and visit_lambda_call:
+    //pointers decay, structs deref-or-visit, everything else casts to
+    //the callee's declared parameter type. The two callers differ only
+    //in where the prototype comes from, so the parameter list (same
+    //List<Type> shape on FunctionType and LambdaType) is the only input
+    //besides the call itself.
+    func emit_call_args(self, mc: Call*, params: List<Type>*): List<Value*>{
       let resolver = self.get_resolver();
-      let val = self.visit_name(expr, &mc.name, false);
-      val = ll.loadPtr(val);
-      let proto = self.make_proto(ft);
       let args = List<Value*>::new();
       let paramIdx = 0;
       for arg in &mc.args{
@@ -1205,7 +1100,7 @@ impl Emitter{
             args.add(self.visit(arg));
           }
         } else {
-            let pt0 = ft.params.get(paramIdx);
+            let pt0 = params.get(paramIdx);
             let pt = resolver.visit_type(pt0).unwrap();
             args.add(self.cast(arg, &pt));
             pt.drop();
@@ -1213,13 +1108,20 @@ impl Emitter{
         ++paramIdx;
         at.drop();
       }
+      return args;
+    }
+    func visit_fp_call(self, expr: Expr*, mc: Call*, ft: FunctionType*): Value*{
+      let ll = self.ll.get();
+      let val = self.visit_name(expr, &mc.name, false);
+      val = ll.loadPtr(val);
+      let proto = self.make_proto(ft);
+      let args = self.emit_call_args(mc, &ft.params);
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
     }
     func visit_lambda_call(self, expr: Expr*, mc: Call*, rt: RType*): Value*{
       let ll = self.ll.get();
-      let resolver = self.get_resolver();
       let val = self.visit_name(expr, &mc.name, false);
       val = ll.loadPtr(val);
       let ft0 = Option<LambdaType*>::none();
@@ -1227,34 +1129,10 @@ impl Emitter{
           ft0.set(bx.get());
       }else{
           panic("impossible");
-          //Option<LambdaType>::none().get()
       }
       let ft = ft0.unwrap();
       let proto = self.make_proto(ft);
-      let args = List<Value*>::new();
-      let paramIdx = 0;
-      for arg in &mc.args{
-        let at = resolver.getType(arg);
-        if (at.is_any_pointer()) {
-          args.add(self.get_obj_ptr(arg));
-        }
-        else if (is_struct(&at)) {
-          let de = is_deref(arg);
-          if (de.is_some()) {
-            args.add(self.get_obj_ptr(de.unwrap()));
-          }
-          else {
-            args.add(self.visit(arg));
-          }
-        } else {
-            let pt0 = ft.params.get(paramIdx);
-            let pt = resolver.visit_type(pt0).unwrap();
-            args.add(self.cast(arg, &pt));
-            pt.drop();
-        }
-        ++paramIdx;
-        at.drop();
-      }
+      let args = self.emit_call_args(mc, &ft.params);
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
       args.drop();
       return res;
@@ -1272,7 +1150,6 @@ impl Emitter{
       if(!rt.is_method()){
         resolver.err(expr, format("mc no method {:?}", expr));
       }
-      //print("{}\n", expr);
       let ptr_ret = Option<Value*>::new();
       if(is_struct(&rt.type)){
         ptr_ret = Option::new(self.get_alloc(expr));
@@ -1315,7 +1192,6 @@ impl Emitter{
         }else if(target.self.get().is_deref){
           self.own.get().do_move(mc.scope.get());
         }
-        //++paramIdx;
       }
       for(;argIdx < mc.args.len();++argIdx){
         let arg: Expr* = mc.args.get(argIdx);
@@ -1388,14 +1264,12 @@ impl Emitter{
           panic("print str");
         }else if(arg_type.is_prim()){
           let val = self.loadPrim(arg);
-          //val = CreateLoad(ll.builder, self.mapType(&arg_type), val);
           args.add(val);
         }else{
           panic("print {:?}", arg_type);
         }
         arg_type.drop();
       }
-      //self.call_printf();
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(ll.builder, printf_proto.val, args.ptr(), args.len() as i32);
       args.drop();
@@ -1678,25 +1552,7 @@ impl Emitter{
         }
         match decl{
           Decl::Struct(fields)=>{
-            let field_idx = 0;
-            for(let i = 0;i < args.len();++i){
-              let arg = args.get(i);
-              if(arg.isBase){
-                continue;
-              }
-              let prm_idx = 0;
-              if(arg.name.is_some()){
-                prm_idx = Resolver::fieldIndex(fields, arg.name.get().str(), &rt.type);
-              }else{
-                prm_idx = field_idx;
-                ++field_idx;
-              }
-              let fd = fields.get(prm_idx);
-              if(decl.base.is_some()) ++prm_idx;
-              let field_target_ptr = CreateStructGEP(ll.builder,  ty, ptr,  prm_idx);
-              self.setField(&arg.expr, &fd.type, field_target_ptr);
-              self.own.get().do_move(&arg.expr);
-            }
+            self.set_fields(ptr, decl, ty, args, fields);
           },
           Decl::TupleStruct(fields)=>{
             panic("todo");
@@ -1908,7 +1764,6 @@ impl Emitter{
         },
         Expr::Array(list, size) => {
           if(!Emitter::is_constexpr(expr)){
-            //AllocHelper::new(self).visit_child(expr);
             self.visit_array(expr, list, size, trg_ptr);
           }else{
             panic("glob rhs arr '{:?}'", expr);
