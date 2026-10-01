@@ -188,46 +188,6 @@ func emit_rest(f: Fmt*, prev: i32, indent: str, limit: i32): bool{
     return started;
 }
 
-func item_line(it: Item*): i32{
-    match it{
-        Item::Method(m) => {
-            return m.line;
-        },
-        Item::Decl(decl) => {
-            return decl.line;
-        },
-        Item::Impl(imp) => {
-            if(imp.methods.empty()){
-                return 0;
-            }
-            return imp.methods.get(0).line;
-        },
-        Item::Trait(tr) => {
-            if(tr.methods.empty()){
-                return 0;
-            }
-            return tr.methods.get(0).line;
-        },
-        Item::Type(name, rhs) => {
-            return rhs.line;
-        },
-        Item::Extern(items) => {
-            return 0;
-        },
-        Item::Const(val) => {
-            return val.rhs.line;
-        },
-        Item::Glob(gl) => {
-            return gl.line;
-        },
-        Item::Module(md) => {
-            return md.start_line;
-        },
-        Item::Use(us) => {
-            return 0;
-        },
-    }
-}
 //start line of a statement's expression.
 //
 //NB: for block-like expressions this must NOT use Expr's own Node line.
@@ -254,6 +214,8 @@ func stmt_start_line(e: Expr*): i32{
     }
 }
 
+//NB: item start lines live in one place only: Item::line() in ast/ast.x.
+//Do not add a second dispatch here; the two will drift (they did).
 func stmt_line(st: Stmt*): i32{
     match st{
         Stmt::Var(ve) => {
@@ -309,7 +271,7 @@ impl Debug for Unit{
     }
     for(let i = 0;i < self.items.len();++i){
         let it = self.items.get(i);
-        let ln = item_line(it);
+        let ln = it.line();
         if(i > 0){
             f.print("\n\n");
         }
@@ -435,7 +397,7 @@ impl Debug for Module{
     let prev = self.start_line;
     for(let i = 0;i < self.items.len();++i){
         let it = self.items.get(i);
-        let ln = item_line(it);
+        let ln = it.line();
         if(i > 0){
             f.print("    \n");
         }
