@@ -258,7 +258,16 @@ impl AllocHelper{
       res = Option::new(self.alloc_ty(&rt.type, node));
     }
     if(call.scope.is_some()){
-      self.visit(call.scope.get());
+      //type scopes (M::A::method) are not runtime values: visiting them
+      //allocs the as-written (possibly generic) type instead of doing
+      //nothing. Value scopes still visit normally.
+      let is_ty = false;
+      if let Expr::Type(ty) = call.scope.get(){
+        is_ty = true;
+      }
+      if(!is_ty){
+        self.visit(call.scope.get());
+      }
     }
     for arg in &call.args{
       self.visit(arg);

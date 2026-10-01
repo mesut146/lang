@@ -329,11 +329,12 @@ impl Parser{
         type_params = self.type_params();
       }
       let t1 = self.parse_type();
-      //qualify unscoped nested impl headers (impl A in mod M becomes
-      //impl M::A) so later lookup, overloads and codegen mangling all see
-      //the canonical scoped form. Done here so methods capture the scoped
-      //parent too. Already-scoped headers are untouched.
-      if(scope.is_some() && t1.is_simple() && t1.as_simple().scope.is_none()){
+      //qualify unscoped, arg-free nested impl headers (impl A in mod M
+      //becomes impl M::A) before methods capture the parent, so lookup,
+      //overloads and codegen mangling see the canonical scoped form.
+      //Generic headers keep theirs (args must be preserved; generic
+      //nested members are a known gap).
+      if(scope.is_some() && t1.is_simple() && t1.as_simple().scope.is_none() && t1.get_args().empty()){
         let nm = t1.name().clone();
         let scp = scope.get().clone();
         t1.drop();

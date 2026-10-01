@@ -1844,6 +1844,35 @@ impl Resolver{
             let item = mdu.items.get(i);
             if let Item::Decl(decl) = item{
               if(decl.type.name().eq(simple.name.str())){
+                //generic member with concrete args: instantiate like
+                //visit_type2 does, keeping the module scope on the
+                //generated type so it cannot collide with a top-level
+                //type of the same spelling.
+                if(decl.is_generic && !simple.args.empty()){
+                  if(simple.args.len() != decl.type.get_args().len()){
+                    scope.drop();
+                    return Result<RType, Error>::err(Error{format("type arguments size not matched {} vs {}", simple.args.len(), decl.type.get_args().len()), node.line});
+                  }
+                  let map = make_type_map(simple, decl);
+                  let copier = AstCopier::new(&map, &self.unit);
+                  let decl0 = copier.visit(decl);
+                  let gnm = decl0.type.name().clone();
+                  let gargs = decl0.type.get_args().clone();
+                  let gscp = simple.scope.get().clone();
+                  let nsmp = Simple::new(gscp, gnm);
+                  for ga in &gargs{
+                    nsmp.args.add(ga.clone());
+                  }
+                  gargs.drop();
+                  decl0.type.drop();
+                  decl0.type = nsmp.into(node.line);
+                  let gdecl: Decl* = self.add_generated(decl0);
+                  self.add_used_decl(gdecl);
+                  map.drop();
+                  let gres = self.getTypeCached(str);
+                  scope.drop();
+                  return Result<RType, Error>::ok(gres);
+                }
                 let res = RType::new(decl.type.clone());
                 res.desc.drop();
                 res.desc = Desc{RtKind::Decl, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
@@ -2175,7 +2204,12 @@ impl Resolver{
             //infer from entries, like structs (Some{val: x} -> Option<i32>).
             //Zero-arg literals (None) cannot infer: inferStruct reports a
             //clean error asking for an annotated scope (Option<i32>::None).
-            let inferred: Type = self.inferStruct(node, &decl.type, hasNamed, &variant.fields, args);
+            let scp = Option<Type>::new();
+            if(type0.is_simple() && type0.as_simple().scope.is_some()){
+              scp.set(type0.as_simple().scope.get().clone());
+            }
+            let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, &variant.fields, args);
+            scp.drop();
             res.drop();
             res = self.visit_type(&inferred);
             inferred.drop();
@@ -2189,7 +2223,12 @@ impl Resolver{
         type_opt = Option::new(decl.type.clone());
         if (decl.is_generic) {
             //infer
-            let inferred: Type = self.inferStruct(node, &decl.type, hasNamed, f, args);
+            let scp = Option<Type>::new();
+            if(type0.is_simple() && type0.as_simple().scope.is_some()){
+              scp.set(type0.as_simple().scope.get().clone());
+            }
+            let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, f, args);
+            scp.drop();
             res.drop();
             res = self.visit_type(&inferred);
             inferred.drop();
@@ -2250,7 +2289,7 @@ impl Resolver{
     return res;
   }
 
-  func inferStruct(self, node: Expr*, type: Type*, hasNamed: bool, fields: List<FieldDecl>*, args: List<Entry>*): Type{
+  func inferStruct(self, node: Expr*, type: Type*, scope: Option<Type>*, hasNamed: bool, fields: List<FieldDecl>*, args: List<Entry>*): Type{
     let inferMap = HashMap<String, Type>::new();
     let type_params: List<Type>* = type.get_args();
     for (let i = 0; i < args.len(); ++i) {
@@ -2267,6 +2306,15 @@ impl Resolver{
         arg_type.drop();
     }
     let res = Simple::new(type.name().clone());
+    //preserve module scope (M::Wrapper<T> infers M::Wrapper<i32>, not
+    //bare), but never self-scope: for Option::Some the pattern scope is
+    //the enum itself, and the inferred type is already that enum.
+    if(scope.is_some() && scope.get().is_simple()){
+      let sc = scope.get().as_simple();
+      if(!sc.name.eq(type.name())){
+        res.scope = Ptr<Type>::new(scope.get().clone());
+      }
+    }
     for (let i = 0;i < type_params.len();++i) {
         let tp = type_params.get(i);
         let opt = inferMap.get(tp.name());
