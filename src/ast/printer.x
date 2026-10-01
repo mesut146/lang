@@ -232,7 +232,15 @@ func stmt_line(st: Stmt*): i32{
             if(ve.list.empty()){
                 return 0;
             }
-            return ve.list.get(0).line;
+            //look through to the initializer: parse_frag stamps the
+            //fragment's own node AFTER the rhs, so for a multi-line rhs
+            //(a lambda body, a match, ...) the fragment line points past
+            //its own body and the enclosing block would swallow the body's
+            //comments as leading trivia. stmt_start_line() recovers the
+            //rhs's true start for exactly the block-like cases that own
+            //inner comments; anything else keeps today's behavior.
+            let fr = ve.list.get(0);
+            return stmt_start_line(&fr.rhs);
         },
         Stmt::Expr(e) => {
             return stmt_start_line(e);
