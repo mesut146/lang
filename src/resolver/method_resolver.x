@@ -56,23 +56,14 @@ impl SigResult{
     }
 }
 
-//One impl candidate from get_impl. idx addresses items of a module
-//when nested is true, top-level unit items otherwise (see get_method).
+//One impl candidate from get_impl. scope carries the module whose items
+//idx addresses (None = top-level unit items); get_method resolves it
+//(see get_method). Sibling-module hits (impl M::A inside mod N) record N.
+#derive(Debug)
 struct ImplHit{
   imp: Impl*;
   idx: i32;
-  nested: bool;
-}
-impl Debug for ImplHit{
-  func debug(self, f: Fmt*){
-    f.print("ImplHit{idx: ");
-    self.idx.debug(f);
-    f.print(", nested: ");
-    self.nested.debug(f);
-    f.print(", imp: ");
-    self.imp.debug(f);
-    f.print("}");
-  }
+  scope: Option<Type>;
 }
 struct MethodResolver{
     r: Resolver*;
@@ -338,7 +329,7 @@ impl MethodResolver{
               let found = rec.unwrap();
               for(let i = 0;i < found.len();++i){
                 let fp = found.get(i);
-                scoped.add(ImplHit{imp: fp.imp, idx: fp.idx, nested: true});
+                scoped.add(ImplHit{imp: fp.imp, idx: fp.idx, scope: Option::new(smp.scope.get().clone())});
               }
               found.drop();
             }else{
@@ -376,14 +367,14 @@ impl MethodResolver{
                 let full = type.print();
                 let imp_full = imp.info.type.print();
                 if(full.eq(&imp_full)){
-                    list.add(ImplHit{imp: imp, idx: i, nested: false});
+                    list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
                 }
                 full.drop();
                 imp_full.drop();
             }else{
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
-                    list.add(ImplHit{imp: imp, idx: i, nested: false});
+                    list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
                 }
                 imp_erased.drop();
             }
@@ -394,7 +385,7 @@ impl MethodResolver{
             let val = Option<String>::new();
             let cmp = is_compatible(type, &val, &imp.info.type, &imp.info.type_params);
             if(cmp.is_none()){
-                list.add(ImplHit{imp: imp, idx: i, nested: false});
+                list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
             }
             cmp.drop();
             val.drop();
@@ -403,6 +394,21 @@ impl MethodResolver{
         }
       }
       erased.drop();
+      //sibling modules: impls spelled with the full search scope but
+      //nested in a different module (impl M::A inside mod N). The loop
+      //above only sees root items and the recursion only descends the
+      //scope's own module. Exact full-print matches only, so unscoped
+      //searches are unaffected.
+      if(type.is_simple() && type.as_simple().scope.is_some()){
+        let full = type.print();
+        for(let k = 0;k < items.len();++k){
+          let top = items.get(k);
+          if let Item::Module(md) = top{
+            scan_mod_items(&md.items, Type::new(md.name.clone()), &full, tr, &list);
+          }
+        }
+        full.drop();
+      }
       if(xmod){
         print("xmod get_impl done type={:?} found={}\n", type, list.len());
       }
@@ -494,15 +500,12 @@ impl MethodResolver{
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get(j);       
                 if(!m.name.eq(&sig.name)) continue;
-                //record module scope for impls found via module recursion:
-                //their idx addresses items inside the module, not top level
-                //(see get_method).
+                //record module scope for impls found via module search:
+                //their idx addresses items inside that module, not top
+                //level (see get_method).
                 let desc_scope = Option<Type>::new();
-                if(hit.nested && scope_type.is_simple()){
-                    let st = scope_type.as_simple();
-                    if(st.scope.is_some()){
-                        desc_scope.set(st.scope.get().clone());
-                    }
+                if(hit.scope.is_some()){
+                    desc_scope.set(hit.scope.get().clone());
                 }
                 let desc = Desc{
                     kind: RtKind::MethodImpl{j},
@@ -517,7 +520,7 @@ impl MethodResolver{
                 let scp_args = scope_type.get_args();
                 if(scp_args.empty()){
                   let sig2 = Signature::new(m, &map, desc, self.r, origin);
-                  if(hit.nested){
+                  if(hit.scope.is_some()){
                     //unscoped nested impl header (impl A in mod M): qualify
                     //its types (A) to the call scope (M::A) so check_args
                     //compares like with like.
@@ -1522,6 +1525,37 @@ impl MethodResolver{
             return Option::new(format("{:?} can't fit into {}", arg, target_str.str()));
         }
     }
+}
+
+//recursive module scan for get_impl: impls spelled with the full search
+//scope but nested in a different module (impl M::A inside mod N, or deeper).
+//prefix is the accumulated module path (owned, dropped at the end).
+//Exact full-print matches only; unscoped searches never reach here.
+func scan_mod_items(items: List<Item>*, prefix: Type, full: String*, tr: Option<Type*>, list: List<ImplHit>*){
+    for(let i = 0;i < items.len();++i){
+        let item = items.get(i);
+        if let Item::Module(md) = item{
+            let deeper = Type::new(prefix.clone(), md.name.clone());
+            scan_mod_items(&md.items, deeper, full, tr, list);
+            continue;
+        }
+        if(!(item is Item::Impl)) continue;
+        let imp = item.as_impl();
+        if(tr.is_some()){
+            if(imp.info.trait_name.is_none()){
+                continue;
+            }
+            if(!imp.info.trait_name.get().eq(*tr.get())){
+                continue;
+            }
+        }
+        let imp_full = imp.info.type.print();
+        if(full.eq(&imp_full)){
+            list.add(ImplHit{imp: imp, idx: i, scope: Option::new(prefix.clone())});
+        }
+        imp_full.drop();
+    }
+    prefix.drop();
 }
 
 func get_type_params(m: Method*): List<Type>{

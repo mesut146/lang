@@ -1,4 +1,3 @@
-// xfail: impl with a foreign module scope spelled inside another module is invisible (only the scope's own module and top level are searched)
 mod M{
     struct A{ a: i32; }
     impl A{
