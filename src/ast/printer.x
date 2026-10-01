@@ -82,19 +82,107 @@ func debug_attrs(list: List<Attribute>*, f: Fmt*){
   }
 }
 
+//Tracks comment/string state across the lines of one sub-render so
+//re-indenting never touches lines that already carry their own layout:
+//continuations of /* */ comments and of multi-line strings are verbatim
+//text, and fmt re-lexes them as such -- indenting them again would push
+//them one level deeper on every pass (see emit_lines). Mirrors the
+//lexer: comments don't nest, and markers inside strings/chars and after
+//a // don't count. All state starts false: a sub-render always begins at
+//a node boundary, which is never inside a comment or string.
+struct CommentScan{
+  in_block: bool;
+  in_str: bool;
+  in_chr: bool;
+}
+impl CommentScan{
+  func new(): CommentScan{
+    return CommentScan{false, false, false};
+  }
+  //indent for this line ("", i.e. none, when the line starts inside a
+  //block comment or string), updating state for the next line.
+  func indent_for(self, line: str*, indent: str): str{
+    if(self.in_block || self.in_str || self.in_chr){
+      self.scan(line);
+      return "";
+    }
+    self.scan(line);
+    return indent;
+  }
+  func scan(self, line: str*){
+    let i = 0;
+    while(i < line.len()){
+      let c = line.get(i) as i8;
+      if(self.in_block){
+        if(c == '*' && i + 1 < line.len() && line.get(i + 1) as i8 == '/'){
+          self.in_block = false;
+          i += 2;
+          continue;
+        }
+        i += 1;
+        continue;
+      }
+      if(self.in_str){
+        if(c == '\\'){
+          i += 2;
+          continue;
+        }
+        if(c == '"'){
+          self.in_str = false;
+        }
+        i += 1;
+        continue;
+      }
+      if(self.in_chr){
+        if(c == '\\'){
+          i += 2;
+          continue;
+        }
+        if(c == '\''){
+          self.in_chr = false;
+        }
+        i += 1;
+        continue;
+      }
+      if(c == '"'){
+        self.in_str = true;
+        i += 1;
+        continue;
+      }
+      if(c == '\''){
+        self.in_chr = true;
+        i += 1;
+        continue;
+      }
+      if(c == '/' && i + 1 < line.len() && line.get(i + 1) as i8 == '/'){
+        break;
+      }
+      if(c == '/' && i + 1 < line.len() && line.get(i + 1) as i8 == '*'){
+        self.in_block = true;
+        i += 2;
+        continue;
+      }
+      i += 1;
+    }
+  }
+}
+
 func body(node: Stmt*, f: Fmt*, comments: List<Comment>*){
     body(node, f, comments, false);
 }
 
 func body(node: Stmt*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
-  let str = sub_str_stmt(f, comments, node); 
+  let str = sub_str_stmt(f, comments, node);
   let lines: List<str> = str.split("\n");
+  let scan = CommentScan::new();
   for(let j = 0;j < lines.len();++j){
+    //comment/string continuations keep their own layout (see CommentScan)
+    let ind = scan.indent_for(lines.get(j), "    ");
     if(j > 0){
         f.print("\n");
     }
     if(j > 0 || !skip_first){
-      f.print("    ");
+      f.print(ind);
     }
     f.print(lines.get(j));
   }
@@ -107,11 +195,13 @@ func body(node: Expr*, f: Fmt*, comments: List<Comment>*){
 }
 
 func body(node: Expr*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
-  let str = sub_str_expr(f, comments, node); 
+  let str = sub_str_expr(f, comments, node);
   let lines: List<str> = str.split("\n");
+  let scan = CommentScan::new();
   for(let j = 0;j < lines.len();++j){
+    let ind = scan.indent_for(lines.get(j), "    ");
     if(j > 0 || !skip_first){
-      f.print("    ");
+      f.print(ind);
     }
     f.print(lines.get(j));
     if(j < lines.len() - 1){
@@ -488,8 +578,9 @@ func debug_impl(self: Impl*, f: Fmt*, comments: List<Comment>*){
         }
       let ms = sub_str_method(f, comments, self.methods.get(i));
       let lines = ms.str().split("\n");
+      let scan = CommentScan::new();
       for(let j = 0;j < lines.len();++j){
-        f.print("    ");
+        f.print(scan.indent_for(lines.get(j), "    "));
         f.print(lines.get(j));
         f.print("\n");
       }
