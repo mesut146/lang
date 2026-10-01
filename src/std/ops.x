@@ -102,15 +102,30 @@ func to_string<T>(node: T*): String{
     return f.unwrap();
 }
 
+//a source comment kept for the formatter (line: 1-based source line,
+//text includes the // or /* */ markers, without trailing newline).
+struct Comment{
+  line: i32;
+  text: String;
+}
+impl Clone for Comment{
+  func clone(self): Comment{
+    return Comment{line: self.line, text: self.text.clone()};
+  }
+}
+
 struct Fmt{
   buf: String;
+  //comment trivia for the formatter (empty otherwise); sub-renders via
+  //Fmt::str start empty so nested printing never drains them twice.
+  comments: List<Comment>;
 }
 impl Fmt{
   func new(): Fmt{
-    return Fmt{String::new()};
+    return Fmt{String::new(), List<Comment>::new()};
   }
   func new(s: String): Fmt{
-    return Fmt{s};
+    return Fmt{s, List<Comment>::new()};
   }
   func unwrap(*self): String{
     let res = self.buf;

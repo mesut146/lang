@@ -92,6 +92,7 @@ struct Unit{
   imports: List<ImportStmt>;
   items: List<Item>;
   last_id: i32;
+  comments: List<Comment>;
 }
 
 impl Unit{
@@ -101,6 +102,7 @@ impl Unit{
       last_line: 0,
       imports: List<ImportStmt>::new(),
       items: List<Item>::new(),
+      comments: List<Comment>::new(),
       last_id: -1
     };
   }
@@ -130,18 +132,18 @@ impl Unit{
 
 struct ImportStmt{
   list: List<String>;
-  //line: i32;
+  line: i32;
 }
 
 impl Clone for ImportStmt{
   func clone(self): ImportStmt{
-    return ImportStmt{list: self.list.clone()};
+    return ImportStmt{list: self.list.clone(), line: self.line};
   }
 }
 
 impl ImportStmt{
   func new(): ImportStmt{
-    return ImportStmt{list: List<String>::new()};
+    return ImportStmt{list: List<String>::new(), line: 0};
   }
   func str(self): String{
       let res = String::new();
@@ -213,7 +215,61 @@ enum Item{
   Use{us: UseItem},
 }
 
+func impl_first_line(imp: Impl*): i32{
+  if(imp.methods.empty()){
+    return 0;
+  }
+  return imp.methods.get(0).line;
+}
+func trait_first_line(tr: Trait*): i32{
+  if(tr.methods.empty()){
+    return 0;
+  }
+  return tr.methods.get(0).line;
+}
+func module_first_line(md: Module*): i32{
+  if(md.items.empty()){
+    return 0;
+  }
+  return md.items.get(0).line();
+}
 impl Item{
+  //start line for comment placement (0 = unknown: attaches nothing,
+  //comments flow to the next lined element or file end).
+  func line(self): i32{
+    match self{
+      Item::Method(m) => {
+        return m.line;
+      },
+      Item::Decl(decl) => {
+        return decl.line;
+      },
+      Item::Impl(imp) => {
+        return impl_first_line(imp);
+      },
+      Item::Trait(tr) => {
+        return trait_first_line(tr);
+      },
+      Item::Type(name, rhs) => {
+        return rhs.line;
+      },
+      Item::Extern(items) => {
+        return 0;
+      },
+      Item::Const(val) => {
+        return val.rhs.line;
+      },
+      Item::Glob(gl) => {
+        return gl.line;
+      },
+      Item::Module(md) => {
+        return module_first_line(md);
+      },
+      Item::Use(us) => {
+        return 0;
+      },
+    }
+  }
   func as_impl(self): Impl*{
     if let Item::Impl(imp) = self{
       return imp;

@@ -17,7 +17,13 @@ func main(argc: i32, args: i8**){
     let parser = Parser::from_path(inp.clone());
     let unit = parser.parse_unit();
     parser.drop();
-    let out = Fmt::str(&unit);
+    //hand comment trivia to the printer (Fmt::str starts empty, so only
+    //this top-level render drains them exactly once)
+    let f = Fmt::new();
+    f.comments = unit.comments.clone();
+    Debug::debug(&unit, &f);
+    let out = f.buf.clone();
+    Drop::drop(f);
     unit.drop();
     if(cmd.args.len() == 2){
         let dst = cmd.args.get(1).clone();

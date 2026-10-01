@@ -11,18 +11,19 @@ struct Parser{
   pos: i32;
   unit: Option<Unit*>;
   lexer: Lexer;
+  comments: List<Comment>;
 }
 
 impl Parser{
   func from_path(path: String): Parser{
     let lexer = Lexer::from_path(path.clone());
-    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new()};
     res.fill();
     return res;
   }
   func from_string(buf: String, line: i32): Parser{
     let lexer = Lexer::from_string("<buf>".str(), buf, line);
-    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer};
+    let res = Parser{List<Token>::new(), 0, Option<Unit*>::new(), lexer, List<Comment>::new()};
     res.fill();
     return res;
   }
@@ -39,6 +40,7 @@ impl Parser{
         break;
       }
       else if (t.is(TokenType::COMMENT)){
+        self.comments.add(Comment{t.line, t.value.clone()});
         t.drop();
         continue;
       }
@@ -165,6 +167,11 @@ impl Parser{
       unit.items.add(self.parse_item(&scope));
     }
     scope.drop();
+    //move collected comments into the unit (remove-loop: moves each
+    //element so nothing is cloned or double-owned)
+    while(!self.comments.empty()){
+      unit.comments.add(self.comments.remove(0));
+    }
     return unit;
   }
   
@@ -311,8 +318,9 @@ impl Parser{
   }
   
   func parse_import(self): ImportStmt{
+    let line = self.peek().line;
     self.consume(TokenType::IMPORT);
-    let res = ImportStmt{list: List<String>::new()};
+    let res = ImportStmt{list: List<String>::new(), line: line};
     res.list.add(self.popv());
     while(self.is(TokenType::DIV)){
       self.pop();

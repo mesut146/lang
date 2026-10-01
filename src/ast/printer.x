@@ -105,13 +105,155 @@ impl Debug for QPath{
   }
 }
 
+//comment trivia: leading = lines (prev, line), trailing = == line.
+//Emitted entries are consumed (line set to 0) so nested containers
+//never re-emit them; ranges overlap by design (a block's range sits
+//inside its item's range). Lines are 1-based, so 0 never matches.
+func emit_one(f: Fmt*, idx: i32, indent: str){
+    let c = f.comments.get(idx);
+    f.print(indent);
+    f.print(&c.text);
+    f.print("\n");
+    c.line = 0;
+}
+func emit_leading(f: Fmt*, prev: i32, line: i32, indent: str): i32{
+    for(let i = 0;i < f.comments.len();++i){
+        let c = f.comments.get(i);
+        if(c.line > prev && c.line < line){
+            emit_one(f, i, indent);
+        }
+    }
+    if(line > prev){
+        return line;
+    }
+    return prev;
+}
+func emit_trailing(f: Fmt*, line: i32){
+    if(line <= 0){
+        return;
+    }
+    for(let i = 0;i < f.comments.len();++i){
+        let c = f.comments.get(i);
+        if(c.line == line){
+            f.print(" ");
+            f.print(&c.text);
+            c.line = 0;
+        }
+    }
+}
+func emit_rest(f: Fmt*, prev: i32, indent: str){
+    for(let i = 0;i < f.comments.len();++i){
+        let c = f.comments.get(i);
+        if(c.line > prev){
+            emit_one(f, i, indent);
+        }
+    }
+}
+
+func item_line(it: Item*): i32{
+    match it{
+        Item::Method(m) => {
+            return m.line;
+        },
+        Item::Decl(decl) => {
+            return decl.line;
+        },
+        Item::Impl(imp) => {
+            if(imp.methods.empty()){
+                return 0;
+            }
+            return imp.methods.get(0).line;
+        },
+        Item::Trait(tr) => {
+            if(tr.methods.empty()){
+                return 0;
+            }
+            return tr.methods.get(0).line;
+        },
+        Item::Type(name, rhs) => {
+            return rhs.line;
+        },
+        Item::Extern(items) => {
+            return 0;
+        },
+        Item::Const(val) => {
+            return val.rhs.line;
+        },
+        Item::Glob(gl) => {
+            return gl.line;
+        },
+        Item::Module(md) => {
+            if(md.items.empty()){
+                return 0;
+            }
+            return item_line(md.items.get(0));
+        },
+        Item::Use(us) => {
+            return 0;
+        },
+    }
+}
+func stmt_line(st: Stmt*): i32{
+    match st{
+        Stmt::Var(ve) => {
+            if(ve.list.empty()){
+                return 0;
+            }
+            return ve.list.get(0).line;
+        },
+        Stmt::Expr(e) => {
+            return e.line;
+        },
+        Stmt::Ret(e) => {
+            if(e.is_some()){
+                return e.get().line;
+            }
+            return 0;
+        },
+        Stmt::While(cond, then) => {
+            return cond.line;
+        },
+        Stmt::For(e) => {
+            return 0;
+        },
+        Stmt::ForEach(fe) => {
+            return fe.rhs.line;
+        },
+        Stmt::Continue => {
+            return 0;
+        },
+        Stmt::Break => {
+            return 0;
+        }
+    }
+}
+
 impl Debug for Unit{
   func debug(self, f: Fmt*){
-    join(f, &self.imports, "\n");
+    let prev = 0;
+    for(let i = 0;i < self.imports.len();++i){
+        let im = self.imports.get(i);
+        prev = emit_leading(f, prev, im.line, "");
+        if(i > 0){
+            f.print("\n");
+        }
+        im.debug(f);
+        emit_trailing(f, im.line);
+    }
     if(!self.imports.empty()){
         f.print("\n\n");
     }
-    join(f, &self.items, "\n\n");
+    for(let i = 0;i < self.items.len();++i){
+        let it = self.items.get(i);
+        let ln = item_line(it);
+        prev = emit_leading(f, prev, ln, "");
+        if(i > 0){
+            f.print("\n\n");
+        }
+        it.debug(f);
+        emit_trailing(f, ln);
+    }
+    emit_rest(f, prev, "");
   }
 }
 
@@ -208,7 +350,18 @@ impl Debug for Module{
     f.print("mod ");
     Debug::debug(&self.name, f);
     f.print("{\n");
-    join(f, &self.items, "    \n");
+    let prev = 0;
+    for(let i = 0;i < self.items.len();++i){
+        let it = self.items.get(i);
+        let ln = item_line(it);
+        prev = emit_leading(f, prev, ln, "");
+        if(i > 0){
+            f.print("    \n");
+        }
+        it.debug(f);
+        emit_trailing(f, ln);
+    }
+    emit_rest(f, prev, "");
     f.print("\n}");
   }
 }
@@ -617,10 +770,15 @@ impl Debug for ArgBind{
 impl Debug for Block{
   func debug(self, f: Fmt*){
     f.print("{\n");
+    let prev = 0;
     for(let i = 0;i < self.list.len();++i){
+        let ln = stmt_line(self.list.get(i));
+        prev = emit_leading(f, prev, ln, "    ");
         if(i>0) f.print("\n");
        body(self.list.get(i), f);
+       emit_trailing(f, ln);
     }
+    emit_rest(f, prev, "    ");
     if(self.return_expr.is_some()){
         if(!self.list.empty()){
             f.print("\n");
