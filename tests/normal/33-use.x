@@ -9,6 +9,14 @@ mod N{
     struct C{ c: i32; }
 }
 
+mod O{
+    use M::A;
+    func mk(): A{
+        //use inside a module resolves file-wide
+        return A{a: 4};
+    }
+}
+
 use M::A;
 use M::{B};
 use N;
@@ -28,5 +36,7 @@ func main(){
     //fully-qualified spelling still works alongside
     let a2 = M::A{a: 7};
     assert(a2.get() == 7);
+    //use inside a module resolves file-wide
+    assert(O::mk().a == 4);
     print("use done\n");
 }
