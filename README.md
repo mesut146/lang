@@ -47,6 +47,9 @@ $TC/bin/x c -o hello -out ./out -stdpath $TC/src hello.x
 ```
 
 Notes:
+- On Termux, extract with `unzip` (in `pkg install unzip`): GUI extractors on
+  Android can drop unix permission bits, leaving `bin/x` non-executable;
+  recover with `chmod +x $TC/bin/x`.
 - `x c` only builds; run the binary yourself (`-nolink` stops before
   linking, for object-only builds).
 - `assert(cond)` is a builtin: failures print `file:line`, the offending

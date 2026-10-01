@@ -165,6 +165,12 @@ else
   patchelf --set-rpath '$ORIGIN/../lib' $dir/bin/x
 fi
 
+#normalize perms before packaging: zip stores unix modes and termux .debs
+#ship owner-only ones (libLLVM 0600, libffi/libxml2 0700 via cp -a) which
+#break dlopen when the tree is extracted by a different uid or tool.
+chmod -R a+rX $dir
+chmod a+x $dir/bin/x
+
 if [ $is_zip = true ]; then
   cd $out_dir
   # -y: keep symlinks as symlinks, otherwise libLLVM ships twice (118MB x2)
