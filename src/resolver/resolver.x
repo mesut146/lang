@@ -212,6 +212,9 @@ struct Resolver{
   //key -> Desc of the generated method. Avoids the O(n) scan over prior
   //instantiations in generateMethod (O(n^2) total for hot generics).
   gen_cache: HashMap<String, Desc>;
+  //`use` aliases: bare name -> canonical type (use M::A / M::{A, B}).
+  //Checked after the type cache (locals always win) but before use_items
+  //prefixes. Targets resolve lazily on first use.
 }
 
 impl Resolver{
@@ -888,7 +891,18 @@ impl Resolver{
         }
         res.drop();
       },
-      Item::Use(ty) => {},
+      Item::Use(ty) => {
+        //plain `use M[::N]` adds a scope prefix; item aliases resolve
+        //lazily in visit_type_str0 (no stored state).
+        if(ty.list.empty()){
+          let scp = Type::new(ty.path.get(0).clone());
+          for(let i = 1;i < ty.path.len();++i){
+            let seg = ty.path.get(i).clone();
+            scp = Type::new(scp, seg);
+          }
+          self.use_items.add(scp);
+        }
+      },
     }
   }
 
@@ -1655,10 +1669,80 @@ impl Resolver{
     return self.visit_type_str0(node, str).unwrap();
   }
 
+  //scan unit items (incl. modules) for a `use` aliasing name.
+  //Returns the canonical type (owned) or None.
+  func find_use_alias(self, name: String*): Option<Type>{
+    return self.find_use_alias_in(&self.unit.items, name);
+  }
+  func find_use_alias_in(self, items: List<Item>*, name: String*): Option<Type>{
+    for(let i = 0;i < items.len();++i){
+      let it = items.get(i);
+      if let Item::Use(uit) = it{
+        if(uit.list.empty()){
+          continue;
+        }
+        if(uit.has_multiple){
+          for nm in &uit.list{
+            if(nm.eq(name)){
+              return Option::new(use_path(&uit.path, nm));
+            }
+          }
+        }else{
+          let last = uit.path.last();
+          if(last.eq(name)){
+            return Option::new(use_path(&uit.path, last));
+          }
+        }
+      }
+      if let Item::Module(md) = it{
+        let rec = self.find_use_alias_in(&md.items, name);
+        if(rec.is_some()){
+          return rec;
+        }
+        rec.drop();
+      }
+    }
+    return Option<Type>::new();
+  }
+  //build the canonical type: full path for single form (use M::A),
+  //path + leaf for multi form (use M::{B} matching B). Recursive: a
+  //loop-moved accumulator cannot be reused after the loop here.
+  func use_path_segs(path: List<String>*, i: i32, acc: Type): Type{
+    if(i >= path.len()){
+      return acc;
+    }
+    let seg = path.get(i).clone();
+    return use_path_segs(path, i + 1, Type::new(acc, seg));
+  }
+  func use_path(path: List<String>*, leaf: String*): Type{
+    let first = Type::new(path.get(0).clone());
+    let canon = use_path_segs(path, 1, first);
+    if(!path.last().eq(leaf)){
+      return Type::new(canon, leaf.clone());
+    }
+    return canon;
+  }
+
   func visit_type_str0(self, node: Type*, str: String*): Result<RType, Error>{
     let cached = self.typeMap.get(str);
     if(cached.is_some()){
       return Result<RType, Error>::ok(cached.unwrap().clone());
+    }
+    //`use` aliases (bare A -> M::A for use M::A / M::{A,..}):
+    //locals (above) always win. Scanned on miss (no stored state).
+    if(node.is_simple()){
+      let smp = node.as_simple();
+      if(smp.scope.is_none()){
+        let found = self.find_use_alias(&smp.name);
+        if(found.is_some()){
+          //unwrap moves; nothing of found remains to drop.
+          let canon = found.unwrap();
+          let tmp = self.visit_type0(&canon);
+          canon.drop();
+          return tmp;
+        }
+        found.drop();
+      }
     }
     //try using items as prefix
     for prefix in &self.use_items{
