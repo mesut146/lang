@@ -135,7 +135,8 @@ impl AstCopier{
           name: node.name.clone(),
           fields: self.visit_list(&node.fields),
           is_tuple: node.is_tuple, 
-          disc: self.visit_opt(&node.disc)
+          disc: self.visit_opt(&node.disc),
+          line: node.line
         };
     }
 

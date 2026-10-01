@@ -4,8 +4,9 @@ import std/io
 import std/fs
 
 //fmt: parse a file and reprint it canonically via Debug pretty-printing
-//(print_cst off). NOTE: comments are dropped (the lexer does not keep
-//them) and layout is normalized; output must parse to the same AST.
+//(print_cst off). Comments are preserved: the lexer hands them to the
+//parser, which stores them on the Unit, and the printer re-attaches them
+//by source line. Layout is normalized; output must parse to the same AST.
 //usage: fmt <in.x> [out.x] (stdout when out.x is omitted)
 func main(argc: i32, args: i8**){
     let cmd = CmdArgs::new(argc, args);
@@ -17,8 +18,9 @@ func main(argc: i32, args: i8**){
     let parser = Parser::from_path(inp.clone());
     let unit = parser.parse_unit();
     parser.drop();
-    //hand comment trivia to the printer (Fmt::str starts empty, so only
-    //this top-level render drains them exactly once)
+    //hand comment trivia to the printer. This top-level Fmt owns the
+    //list; nested sub-renders share it (see sub_str) and copy it back,
+    //so every comment is placed exactly once.
     let f = Fmt::new();
     f.comments = unit.comments.clone();
     Debug::debug(&unit, &f);

@@ -102,8 +102,12 @@ impl Unit{
       last_line: 0,
       imports: List<ImportStmt>::new(),
       items: List<Item>::new(),
-      comments: List<Comment>::new(),
-      last_id: -1
+      //NB: keep literal field order identical to the declaration order
+      //above; named-looking literals are matched positionally, so
+      //swapping these writes a List into last_id and leaves comments
+      //holding an i32 (crashes in List<Comment>::drop at shutdown).
+      last_id: -1,
+      comments: List<Comment>::new()
     };
   }
 
@@ -227,11 +231,11 @@ func trait_first_line(tr: Trait*): i32{
   }
   return tr.methods.get(0).line;
 }
+//the `mod` keyword line, not the first inner item: comments between the
+//keyword and the first item belong to the module body, so the file level
+//must not claim them.
 func module_first_line(md: Module*): i32{
-  if(md.items.empty()){
-    return 0;
-  }
-  return md.items.get(0).line();
+  return md.start_line;
 }
 impl Item{
   //start line for comment placement (0 = unknown: attaches nothing,
@@ -287,6 +291,11 @@ struct UseItem{
 struct Module{
   name: String;
   items: List<Item>;
+  //line of the `mod` keyword and of the module's closing brace; the
+  //formatter uses them to keep comments strictly inside the module
+  //instead of absorbing (or leaking) file comments around it.
+  start_line: i32;
+  end_line: i32;
 }
 
 struct Global: Node{
@@ -382,6 +391,9 @@ struct Variant{
   fields: List<FieldDecl>;
   is_tuple: bool;
   disc: Option<i32>;
+  //line of the variant name; the formatter needs it to keep comments
+  //between variants inside the enum body.
+  line: i32;
 }
 
 struct Trait{

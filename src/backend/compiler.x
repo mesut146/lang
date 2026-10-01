@@ -240,6 +240,16 @@ impl Compiler{
     //they share one cache.txt, so only the parent merges+writes. Env (not a
     //flag) so older compilers simply ignore it instead of choking.
     c.write = config.cache_write && std::getenv("XCACHE_RO").is_none();
+    //The witness root is the include path (-i src), NOT
+    //Path::parent(config.file): config.file can be a bare module name with
+    //no '/' in it, and parent() answers "/" for those, which would walk the
+    //whole filesystem. See Cache::add_witness().
+    if(config.src_dirs.len() > 0){
+      //get() returns T* (a pointer); clone() on it copies the element out
+      //as an owned String (same pattern as cmd.args.get(0).clone() in
+      //formatter/main.x). Do NOT use .str() here: that borrows.
+      c.src_root = config.src_dirs.get(0).clone();
+    }
     return c;
   }
   

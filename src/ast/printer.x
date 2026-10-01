@@ -36,6 +36,30 @@ func join<T>(f: Fmt*, arr: List<T>*, sep: str){
   }
 }
 
+//Render a node into a standalone string for the "indent every line" trick
+//used by body() and Debug for Impl.
+//
+//NB: this deliberately does NOT use Fmt::str, which starts with an empty
+//comment list. Because the sub-render walks the same nodes in the same
+//order, it must SHARE the caller's comment array, otherwise every comment
+//below the sub-render (method bodies, if/while/for bodies) is dropped on
+//the floor and later re-emitted at file level.
+//
+//Consume-on-emit marks (line = 0) live in the shared array, so copying
+//the handle back leaves the caller consistent: comments this sub-render
+//placed stay marked, the rest are still pending. The sub-Fmt is detached
+//from the array before it is dropped, so only the caller frees it.
+func sub_str<T>(f: Fmt*, node: T*): String{
+  let sub = Fmt::new();
+  sub.comments = f.comments;
+  Debug::debug(node, &sub);
+  let res = sub.buf.clone();
+  f.comments = sub.comments;
+  sub.comments = List<Comment>::new();
+  Drop::drop(sub);
+  return res;
+}
+
 //attributes affect semantics (derive/repr/drop): always reprint them
 func debug_attrs(list: List<Attribute>*, f: Fmt*){
   for at in list{
@@ -55,7 +79,7 @@ func body(node: Stmt*, f: Fmt*){
 }
 
 func body(node: Stmt*, f: Fmt*, skip_first: bool){
-  let str = Fmt::str(node); 
+  let str = sub_str(f, node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
     if(j > 0){
@@ -75,7 +99,7 @@ func body(node: Expr*, f: Fmt*){
 }
 
 func body(node: Expr*, f: Fmt*, skip_first: bool){
-  let str = Fmt::str(node); 
+  let str = sub_str(f, node); 
   let lines: List<str> = str.split("\n");
   for(let j = 0;j < lines.len();++j){
     if(j > 0 || !skip_first){
@@ -141,13 +165,27 @@ func emit_trailing(f: Fmt*, line: i32){
         }
     }
 }
-func emit_rest(f: Fmt*, prev: i32, indent: str){
+//limit caps the lines this container may claim, so a comment sitting
+//after the container's last token flows outward instead of being
+//stolen by the innermost block (e.g. a file trailer after a function's
+//closing brace belongs to the file, not to the body).
+//limit <= 0 means uncapped (same 0-means-unknown convention as lines).
+//The first emitted line gets a leading newline: every container prints
+//its last element without a trailing newline, so without it the drain
+//would glue the comment onto the closing brace.
+func emit_rest(f: Fmt*, prev: i32, indent: str, limit: i32): bool{
+    let started = false;
     for(let i = 0;i < f.comments.len();++i){
         let c = f.comments.get(i);
-        if(c.line > prev){
+        if(c.line > prev && (limit <= 0 || c.line <= limit)){
+            if(!started){
+                f.print("\n");
+                started = true;
+            }
             emit_one(f, i, indent);
         }
     }
+    return started;
 }
 
 func item_line(it: Item*): i32{
@@ -183,16 +221,39 @@ func item_line(it: Item*): i32{
             return gl.line;
         },
         Item::Module(md) => {
-            if(md.items.empty()){
-                return 0;
-            }
-            return item_line(md.items.get(0));
+            return md.start_line;
         },
         Item::Use(us) => {
             return 0;
         },
     }
 }
+//start line of a statement's expression.
+//
+//NB: for block-like expressions this must NOT use Expr's own Node line.
+//The parser creates that node after the whole primary expression is
+//parsed (see Parser::as_is), so it points *past* the body. Using it
+//would make a parent block claim the comments living inside the if /
+//match / block body and hoist them above the statement. These variants
+//keep their own accurate line, same trick as get_end_line() in utils.x.
+func stmt_start_line(e: Expr*): i32{
+    match e{
+        Expr::If(is) => {
+            return is.get().cond.line;
+        },
+        Expr::IfLet(il) => {
+            return il.get().rhs.line;
+        },
+        Expr::Match(ms) => {
+            return ms.get().expr.line;
+        },
+        Expr::Block(b) => {
+            return b.get().line;
+        },
+        _ => return e.line,
+    }
+}
+
 func stmt_line(st: Stmt*): i32{
     match st{
         Stmt::Var(ve) => {
@@ -202,7 +263,7 @@ func stmt_line(st: Stmt*): i32{
             return ve.list.get(0).line;
         },
         Stmt::Expr(e) => {
-            return e.line;
+            return stmt_start_line(e);
         },
         Stmt::Ret(e) => {
             if(e.is_some()){
@@ -233,10 +294,13 @@ impl Debug for Unit{
     let prev = 0;
     for(let i = 0;i < self.imports.len();++i){
         let im = self.imports.get(i);
-        prev = emit_leading(f, prev, im.line, "");
         if(i > 0){
             f.print("\n");
         }
+        //separator first: leading comments belong to the item that
+        //follows them, so they must land after the blank line, not
+        //glued to the previous item's last line.
+        prev = emit_leading(f, prev, im.line, "");
         im.debug(f);
         emit_trailing(f, im.line);
     }
@@ -246,14 +310,15 @@ impl Debug for Unit{
     for(let i = 0;i < self.items.len();++i){
         let it = self.items.get(i);
         let ln = item_line(it);
-        prev = emit_leading(f, prev, ln, "");
         if(i > 0){
             f.print("\n\n");
         }
+        prev = emit_leading(f, prev, ln, "");
         it.debug(f);
         emit_trailing(f, ln);
     }
-    emit_rest(f, prev, "");
+    //no limit: the file claims every remaining comment.
+    emit_rest(f, prev, "", 0);
   }
 }
 
@@ -299,7 +364,22 @@ impl Debug for Item{
         f.print("trait ");
         tr.type.debug(f);
         f.print("{\n");
-        join(f, &tr.methods, "\n");
+        //same reasoning as enum: keep comments between the trait's
+        //methods inside the trait body instead of letting the next
+        //file-level item claim them.
+        let prev = 0;
+        for(let i = 0;i < tr.methods.len();++i){
+          let m = tr.methods.get(i);
+          if(i > 0){
+            f.print("\n");
+          }
+          prev = emit_leading(f, prev, m.line, "");
+          m.debug(f);
+          emit_trailing(f, m.line);
+        }
+        //no trailing drain: like Decl, Trait carries no end line, and an
+        //uncapped drain here would swallow every later comment in the
+        //file (including ones inside the next item's body).
         f.print("\n}");
       },
       Item::Extern(methods) => {
@@ -350,19 +430,27 @@ impl Debug for Module{
     f.print("mod ");
     Debug::debug(&self.name, f);
     f.print("{\n");
-    let prev = 0;
+    //start from the `mod` keyword so comments between it and the first
+    //item stay inside this module.
+    let prev = self.start_line;
     for(let i = 0;i < self.items.len();++i){
         let it = self.items.get(i);
         let ln = item_line(it);
-        prev = emit_leading(f, prev, ln, "");
         if(i > 0){
             f.print("    \n");
         }
+        prev = emit_leading(f, prev, ln, "");
         it.debug(f);
         emit_trailing(f, ln);
     }
-    emit_rest(f, prev, "");
-    f.print("\n}");
+    //capped at the module's own closing brace: a comment below it
+    //belongs to the enclosing file, not to this module body.
+    //the drain already ended the line, so only add the newline that
+    //separates the body from `}` when it emitted nothing.
+    if(!emit_rest(f, prev, "", self.end_line)){
+        f.print("\n");
+    }
+    f.print("}");
   }
 }
 
@@ -392,7 +480,7 @@ impl Debug for Impl{
         if(i>0){
             f.print("\n");
         }
-      let ms = Fmt::str(self.methods.get(i));
+      let ms = sub_str(f, self.methods.get(i));
       let lines = ms.str().split("\n");
       for(let j = 0;j < lines.len();++j){
         f.print("    ");
@@ -490,8 +578,12 @@ impl Debug for Decl{
         decl.base.get().debug(f);
       }
       f.print("{\n");
+      //drain inside the enum body so comments between variants are not
+      //claimed by whatever item follows the enum at file level.
+      let prev = decl.line;
       for(let i = 0;i < variants.len();++i){
         let ev = variants.get(i);
+        prev = emit_leading(f, prev, ev.line, "    ");
         f.print("    ");
         f.print(&ev.name);
         if(ev.disc.is_some()){
@@ -508,8 +600,16 @@ impl Debug for Decl{
           f.print(")");
         }
         if(i < variants.len() - 1) f.print(",");
+        //after the comma: `A, // note` is the source form, and printing
+        //the comment first would yield the unparseable `A // note,`.
+        emit_trailing(f, ev.line);
         f.print("\n");
       }
+      //no trailing drain here: Decl carries no end line, so a comment
+      //after the last variant cannot be told apart from one sitting
+      //below the enum's closing brace. Letting the next file-level item
+      //claim it only costs indentation; draining here could swallow a
+      //file comment into the enum body.
       f.print("}");
   }
 }
@@ -773,23 +873,36 @@ impl Debug for Block{
     let prev = 0;
     for(let i = 0;i < self.list.len();++i){
         let ln = stmt_line(self.list.get(i));
-        prev = emit_leading(f, prev, ln, "    ");
         if(i>0) f.print("\n");
-       body(self.list.get(i), f);
-       emit_trailing(f, ln);
+        prev = emit_leading(f, prev, ln, "    ");
+        body(self.list.get(i), f);
+        emit_trailing(f, ln);
     }
-    emit_rest(f, prev, "    ");
     if(self.return_expr.is_some()){
         if(!self.list.empty()){
             f.print("\n");
         }
       if(print_cst) f.print("Block::return_expr{\n");
+      //NB: the tail expression is rendered BEFORE the drain below. A
+      //block whose only content is a block-like expression (a function
+      //whose sole statement is an `if`, for example) keeps that
+      //expression as its return_expr, and its nested body owns the
+      //comments inside it. Draining first would hoist them above the
+      //statement they belong to.
       body(self.return_expr.get(), f);
-      //self.return_expr.get().debug(f);
-      //f.print("\n");
       if(print_cst) f.print("}\n");
     }
-    f.print("\n}");
+    //capped at the body's closing brace so a comment after the function
+    //stays a file comment instead of being pulled into the last block.
+    //runs last so whatever the tail expression did not claim is still
+    //placed inside this body.
+    //a drain ends its own last line, so `}` needs no leading newline;
+    //every other path leaves the stream mid-line and needs one.
+    if(emit_rest(f, prev, "    ", self.end_line)){
+        f.print("}");
+    }else{
+        f.print("\n}");
+    }
   }
 }
 

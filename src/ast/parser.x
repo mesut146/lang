@@ -255,6 +255,7 @@ impl Parser{
       return Item::Const{Const{name, type, rhs}};
     }
     else if(self.is(TokenType::MOD)){
+      let start_line = self.line();
       self.pop();
       let name = self.name();
       self.consume(TokenType::LBRACE);
@@ -263,9 +264,12 @@ impl Parser{
       while(!self.is(TokenType::RBRACE)){
         items.add(self.parse_item(&scope2));
       }
+      //same convention as parse_block: capture the RBRACE line before
+      //consuming it, so end_line is the module's closing brace.
+      let end_line = self.line();
       self.consume(TokenType::RBRACE);
       scope2.drop();
-      return Item::Module{Module{name, items}};
+      return Item::Module{Module{name, items, start_line, end_line}};
     }else if(self.is_val("use")){
       return self.parse_use();
     }
@@ -559,6 +563,7 @@ impl Parser{
   }
   
   func parse_variant(self): Variant{
+    let line = self.line();
     let name = self.name();
     let fields = List<FieldDecl>::new();
     let is_tuple = false;
@@ -588,7 +593,7 @@ impl Parser{
       let tok = self.consume(TokenType::INTEGER_LIT);
       disc = Option<i32>::new(i32::parse(tok.value.str())?);
     }
-    return Variant{name, fields, is_tuple, disc};
+    return Variant{name, fields, is_tuple, disc, line};
   }
 
   func parse_type_prim(self, check_closing: bool): Type{
