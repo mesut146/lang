@@ -61,8 +61,8 @@ Requirements: Linux x86_64, `g++`/`clang++`, `ar`, and LLVM 19
 ```sh
 bin/stage1.sh <host-toolchain-dir> <version>   # bootstrap with a previous x
 bin/stage2.sh ./build/stage1 <version>         # self-compile → build/stage2
-bin/test.sh ./build/stage2                     # test suite (53 tests + std/fail sets)
-bin/make_toolchain.sh ./build/stage2 <out> <version> [-zip]
+bin/test.sh ./build/stage2                     # test suite (54 tests + std/fail sets)
+bin/make_toolchain.sh build/stage2_out/stage2 <out> <version> [-zip]
 ```
 
 Builds use a per-module object cache (`-cache`); editing a header-like
