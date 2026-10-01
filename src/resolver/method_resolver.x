@@ -289,10 +289,6 @@ impl MethodResolver{
     }
     
     func get_impl(resolver: Resolver*, items: List<Item>*, type: Type*, tr: Option<Type*>): Result<List<ImplHit>, String>{
-      let xmod = std::getenv("XMOD").is_some();
-      if(xmod){
-        print("xmod get_impl unit={} type={:?} items={}\n", resolver.unit.path, type, items.len());
-      }
       match type{
         Type::Slice(sl) => {},
         Type::Simple(sl) => {},
@@ -322,9 +318,6 @@ impl MethodResolver{
             smp2.scope = Ptr<Type>::new();
             let type2 = smp2.into(type.line);
             let rec = MethodResolver::get_impl(resolver, &md.unwrap().items, &type2, tr);
-            if(xmod){
-              print("xmod get_impl recurse type={:?} err={}\n", type, rec.is_err());
-            }
             if(rec.is_ok()){
               let found = rec.unwrap();
               for(let i = 0;i < found.len();++i){
@@ -349,14 +342,8 @@ impl MethodResolver{
         let item: Item* = items.get(i);
         if(!(item is Item::Impl)) continue;
         let imp = item.as_impl();
-        //print("imp {:?} {:?}\n", type, imp.info);
-        if(tr.is_some()){
-            if(imp.info.trait_name.is_none()){
-                continue;
-            }
-            if(!imp.info.trait_name.get().eq(*tr.get())){
-                continue;
-            }
+        if(!trait_matches(imp, tr)){
+            continue;
         }
         if(type.is_simple()){
             let smp = type.as_simple();
@@ -408,9 +395,6 @@ impl MethodResolver{
           }
         }
         full.drop();
-      }
-      if(xmod){
-        print("xmod get_impl done type={:?} found={}\n", type, list.len());
       }
       return Result<List<ImplHit>, String>::ok(list);
     }
@@ -496,7 +480,6 @@ impl MethodResolver{
         for(let i = 0;i < imp_list.len();++i){
             let hit: ImplHit* = imp_list.get(i);
             let imp: Impl* = hit.imp;
-            //print("mc={:?} i={:?} imp={:?}\n", sig.mc.unwrap(), i, imp);
             for(let j = 0;j < imp.methods.len();++j){
                 let m = imp.methods.get(j);       
                 if(!m.name.eq(&sig.name)) continue;
@@ -583,33 +566,30 @@ impl MethodResolver{
         return Result<i32, String>::ok(0);
     }
 
+    //one Item::Method / ExternItem::Method arm of collect_static: same
+    //Desc shape, only the kind differs.
+    func add_static_sig(self, m: Method*, idx: i32, kind: RtKind, name: str, list: List<Signature>*, origin: Resolver*){
+        if (m.name.eq(name)) {
+            let desc = Desc{
+                kind: kind,
+                path: m.path.clone(),
+                idx: idx,
+                scope: Option<Type>::new(),
+            };
+            list.add(Signature::new(m, desc, self.r, origin));
+        }
+    }
     func collect_static(self, name: str, list: List<Signature>*, origin: Resolver*){
         for (let i = 0;i < self.r.unit.items.len();++i) {
             let item: Item* = self.r.unit.items.get(i);
             if let Item::Method(m) = item{
-                if (m.name.eq(name)) {
-                    let desc = Desc{
-                        kind: RtKind::Method,
-                        path: m.path.clone(),
-                        idx: i,
-                        scope: Option<Type>::new(),
-                    };
-                    list.add(Signature::new(m, desc, self.r, origin));
-                }
+                self.add_static_sig(m, i, RtKind::Method, name, list, origin);
             }
             else if let Item::Extern(arr) = item{
                 for (let j = 0;j < arr.len();++j) {
                     let exi = arr.get(j);
                     if let ExternItem::Method(m)=exi{
-                      if (m.name.eq(name)) {
-                          let desc = Desc{
-                              kind: RtKind::MethodExtern{j},
-                              path: m.path.clone(),
-                              idx: i,
-                              scope: Option<Type>::new(),
-                          };
-                          list.add(Signature::new(m, desc, self.r, origin));
-                      }
+                      self.add_static_sig(m, i, RtKind::MethodExtern{j}, name, list, origin);
                     }
                 }
             }
@@ -617,16 +597,10 @@ impl MethodResolver{
     }    
 
     func handle(self, expr: Expr*, sig: Signature*): RType{
-        let xmod = std::getenv("XMOD").is_some();
-        if(xmod){
-          print("xmod handle name={} scope_set={}\n", sig.name, sig.scope.is_some());
-        }
         let mc = sig.mc.unwrap();
         let list_res = self.collect(sig);
-        //print("---------\n\n");
         if(list_res.is_err()){
             self.r.err(expr, list_res.unwrap_err());
-            //std::unreachable!();
             panic("");
         }
         let list = list_res.unwrap();
@@ -661,11 +635,7 @@ impl MethodResolver{
                 f.print(&err.b);
                 f.print("\n");
             }
-            //list.drop();
-            //real.drop();
-            //errors.drop();
             self.r.err(expr, f.unwrap());
-            //std::unreachable!();
         }
         if (real.size() > 1 && exact.is_none()) {
             let msg = format("method {:?} has {} candidates\n", mc, real.size());
@@ -676,11 +646,7 @@ impl MethodResolver{
                 msg.append(" ");
                 msg.append(&err.m.unwrap_ptr().path);
             }
-            //list.drop();
-            //real.drop();
-            //errors.drop();
             self.r.err(expr, msg);
-            //std::unreachable!();
         }
         let target_sig = *real.get(0);
         if(exact.is_some()){
@@ -700,16 +666,12 @@ impl MethodResolver{
         }
         let inferred_map = HashMap<String, Type>::new();
         let type_params = get_type_params(target);
-        if(mc.name.eq("use_self")){
-            let dbg = 10;
-        }
         //place user given type args
         if (mc.scope.is_some() && mc.is_static) {
             if let Expr::Type(scp_type) = mc.scope.get(){
                 if(scp_type.is_generic()){
                     //todo trait
                     //is static & have type args
-                    //let scope_args = sig.scope.get().type.get_args();
                     let scope_args = scp_type.get_args();
                     if(scope_args.len() != type_params.len()){
                         self.r.err(expr, format("type args size mismatch {} vs {}", scope_args.len(), type_params.len()));
@@ -750,12 +712,7 @@ impl MethodResolver{
             let tp = type_params.get(i);
             if (!inferred_map.contains(tp.name())) {
                 let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
-                //type_params.drop();
-                //list.drop();
-                //real.drop();
-                //errors.drop();
                 self.r.err(expr, msg);
-                //std::unreachable!();
             }
         }
         if(sig.scope.is_some()){
@@ -765,7 +722,6 @@ impl MethodResolver{
             scp_rt.type = full_scope;
         }
         let gen_pair: Pair<Method*, Desc> = self.generateMethod(&inferred_map, target, sig);
-        //print("{:?} map={:?} prms={:?} sig={:?} gen={:?}\n", expr, &inferred_map, &type_params, sig, gen_pair.a);
         let res = self.r.visit_type(&gen_pair.a.type);
         res.method_desc = Option::new(gen_pair.b);
         type_params.drop();
@@ -999,7 +955,6 @@ impl MethodResolver{
         let copier = AstCopier::new(map, &self.r.unit);
         let res2: Method = copier.visit(m);
         res2.is_generic = false;
-        //print("add gen {} {}\n", printMethod(&res2), mc);
         if(arr_opt.is_none()){
             self.r.generated_methods.add(m.name.clone(), List<Box<Method>>::new());
             arr_opt = self.r.generated_methods.get(&m.name);
@@ -1290,7 +1245,6 @@ impl MethodResolver{
                     if(*size != *size2){
                         return Option::new(format("element size mismatch {} vs {}", size, size2));
                     }
-                    // return Option::new(format("todo {:?} vs {:?}", arg, target));
                     return is_compatible(arg.elem(), target.elem(), typeParams);
                 }else{
                     return Option::new("arg is not array".str());
@@ -1374,24 +1328,6 @@ impl MethodResolver{
                 }
             }
         }
-        /*if (!arg.is_simple()) {
-            if(target.is_simple()){
-                return Option::new("diff kind".str());
-            }
-            if (arg.eq(target)) {
-                return Option<String>::new();
-            }
-            let lhs_kind = TypeKind::new(arg);
-            let rhs_kind = TypeKind::new(target);
-            if (!(lhs_kind is rhs_kind)) {
-                return Option::new("internal error in is_compatible".str());
-            }
-            if (hasGeneric(target, typeParams)) {
-                let trg_elem = target.elem();
-                return MethodResolver::is_compatible(arg.elem(), trg_elem, typeParams);
-            }
-            return Option::new("unknown".str());
-        }*/
         if(!target.is_simple()){
             return Option::new("diff kind".str());
         }
@@ -1423,9 +1359,6 @@ impl MethodResolver{
                 if (cmp.is_some()) {
                     return cmp;
                 }
-                /*if (cmp.cast) {
-                    return CompareResult("cant cast subtype");
-                }*/
                 cmp.drop();
             }
             return Option<String>::new();
@@ -1460,71 +1393,18 @@ impl MethodResolver{
         }
     }
 
-    func is_compatible_simple(arg: Type*, arg_str: String*, arg_val: Option<String>*, target: Type*, target_str: String*, typeParams: List<Type>*): Option<String>{
-        //both simple
-        if (!arg.is_prim()) {
-            //arg struct
-            if (target.is_prim()) return Option::new("target is prim".str());
-            let targs = arg.get_args();
-            let targs2 = target.get_args();
-            if(!arg.name().eq(target.name())){
-                return Option::new("not match".str());
-            }
-            if(targs.len() != targs2.len()){
-                return Option::new(format("type args size dont match {} vs {}", targs.len(), targs2.len()));
-            }
-            if(!hasGeneric(target, typeParams)){
-                //target is generated param, must match whole
-                if (arg_str.eq(target_str)) {
-                    return Option<String>::new();
-                } else {
-                    return Option::new("type args don't match".str());
-                }
-            }
-            //A<i32> and A<i64> not compatible
-            for (let i = 0; i < targs.len(); ++i) {
-                let ta = targs.get(i);
-                let tp = targs2.get(i);
-                let cmp = is_compatible(ta, tp, typeParams);
-                if (cmp.is_some()) {
-                    return cmp;
-                }
-                /*if (cmp.cast) {
-                    return CompareResult("cant cast subtype");
-                }*/
-                cmp.drop();
-            }
-            return Option<String>::new();
-        }
-        if (!target.is_prim()) return Option::new("target is not prim".str());
-        if (arg_str.eq("bool") || target_str.eq("bool")) return Option::new("target is not bool".str());
-        if (arg_val.is_some()) {
-            //autocast literal
-            let v: String* = arg_val.get();
-            if (v.get(0) == '-') {
-                if (isUnsigned(target)) {
-                    return Option::new(format("{} is signed but {} is unsigned", v.str(), target_str.str()));
-                }
-                //check range
-            } else {
-                if (max_for(target) >= i64::parse(v.str()).unwrap()) {
-                    return Option<String>::new();
-                } else {
-                    return Option::new(format("{} can't fit into {}", v.str(), target_str.str()));
-                }
-            }
-        }
-        if (isUnsigned(target) && isSigned(arg)) {
-            return Option::new("arg is signed but target is unsigned".str());
-        }
-        // auto cast to larger size
-        if (prim_size(arg.name().str()).unwrap() <= prim_size(target.name().str()).unwrap()){
-            return Option<String>::new();
-        }
-        else {
-            return Option::new(format("{:?} can't fit into {}", arg, target_str.str()));
-        }
+}
+
+//true when the impl passes the optional trait filter (None = unscoped
+//search, everything passes).
+func trait_matches(imp: Impl*, tr: Option<Type*>): bool{
+    if(tr.is_none()){
+        return true;
     }
+    if(imp.info.trait_name.is_none()){
+        return false;
+    }
+    return imp.info.trait_name.get().eq(*tr.get());
 }
 
 //recursive module scan for get_impl: impls spelled with the full search
@@ -1541,13 +1421,8 @@ func scan_mod_items(items: List<Item>*, prefix: Type, full: String*, tr: Option<
         }
         if(!(item is Item::Impl)) continue;
         let imp = item.as_impl();
-        if(tr.is_some()){
-            if(imp.info.trait_name.is_none()){
-                continue;
-            }
-            if(!imp.info.trait_name.get().eq(*tr.get())){
-                continue;
-            }
+        if(!trait_matches(imp, tr)){
+            continue;
         }
         let imp_full = imp.info.type.print();
         if(full.eq(&imp_full)){
