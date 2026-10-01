@@ -25,9 +25,6 @@ mod M{
                 return self.b;
             }
         }
-        impl A{//M::A
-
-        }
     }
 }
 

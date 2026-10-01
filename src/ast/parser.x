@@ -197,7 +197,7 @@ impl Parser{
     }
     else if(self.is(TokenType::IMPL)){
       let p = QPath::new();
-      return Item::Impl{self.parse_impl(Option::new(p))};
+      return Item::Impl{self.parse_impl(Option::new(p), scope)};
     }
     else if(self.is(TokenType::TRAIT)){
       return Item::Trait{self.parse_trait()};
@@ -321,7 +321,7 @@ impl Parser{
     return res;
   }
   
-  func parse_impl(self, path: Option<QPath>): Impl{
+  func parse_impl(self, path: Option<QPath>, scope: Option<Type>*): Impl{
       self.consume(TokenType::IMPL);
       let type_params = List<Type>::new();
       if (self.is(TokenType::LT)) {
@@ -329,6 +329,16 @@ impl Parser{
         type_params = self.type_params();
       }
       let t1 = self.parse_type();
+      //qualify unscoped nested impl headers (impl A in mod M becomes
+      //impl M::A) so later lookup, overloads and codegen mangling all see
+      //the canonical scoped form. Done here so methods capture the scoped
+      //parent too. Already-scoped headers are untouched.
+      if(scope.is_some() && t1.is_simple() && t1.as_simple().scope.is_none()){
+        let nm = t1.name().clone();
+        let scp = scope.get().clone();
+        t1.drop();
+        t1 = Type::new(scp, nm);
+      }
       if(self.is(TokenType::FOR)){
           self.pop();
           let target = self.parse_type();
