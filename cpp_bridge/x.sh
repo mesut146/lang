@@ -19,6 +19,9 @@ if [ -f "$dir/build/.mtime" ]; then
 fi
 echo $mtnew > $dir/build/.mtime
 
+#FFI arity gate: .x extern decls vs C++ defs (linker can't catch these)
+python3 $dir/../bin/check_ffi.py || exit 1
+
 rm -f $lib $obj
 
 if [ -z "$LLVM_ROOT" ]; then

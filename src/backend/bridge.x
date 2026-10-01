@@ -169,7 +169,6 @@ extern{
     func odr(): i32;
     func internal(): i32;
     func make_func(ft: llvm_FunctionType*, l: i32, name: i8*, module: LLVMModule*): Function*;
-    func getFunction(name: i8*): Function*;
     func setSection(f: Function *, sec: i8*);
     func Function_getArg(f: Function*, i: i32): Argument*;
     func Argument_setname(a: Argument*, name: i8*);
