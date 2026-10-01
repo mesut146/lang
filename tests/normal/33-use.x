@@ -18,7 +18,7 @@ mod O{
 }
 
 use M::A;
-use M::{B};
+use M::{B, A};
 use N;
 
 func mkc(): C{

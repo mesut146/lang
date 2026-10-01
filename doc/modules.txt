@@ -1,0 +1,57 @@
+modules, use, generics: rules that are tested, not just intended
+(see tests/normal/26_module.x, 32-module-dup.x, 33-use*.x,
+34-generic-nested.x, generic_iflet.x, 31_result_iflet.x)
+
+mod M{
+    struct A{ a: i32; }
+    impl A{  //means impl M::A (lexical scoping, innermost module wins)
+        func get(self): i32 { return self.a; }
+    }
+}
+let a = M::A{a: 5};
+
+//same type name in two modules stays distinct (mangled with scope)
+mod N{
+    struct A{ a: i32; }
+    impl A{
+        func get(self): i32 { return self.a * 2; }
+    }
+}
+
+//use forms: alias, multi, scope prefix. locals always win.
+use M::A;       //bare A means M::A
+use M::{A, B};  //same, several at once
+use N;          //bare X tries N::X
+//struct A{...} here would shadow the alias; M::A stays reachable.
+
+//generic members instantiate on use; literals infer from entries:
+mod G{
+    struct Wrapper<T>{ v: T; }
+    impl<T> Wrapper<T>{
+        func get(self): T{ return self.v; }
+        func wrap(x: T): G::Wrapper<T>{ return G::Wrapper{v: x}; }
+    }
+}
+let b = G::Wrapper{v: 7};          //G::Wrapper<i32>, inferred
+let c = G::Wrapper::wrap(8);       //static call, bare scope ok
+let d = G::Wrapper<i32>::wrap(9);  //annotated scope, same thing
+
+//if-let works on generic enums; patterns stay bare:
+import std/option
+func maybe(x: i32): Option<i32>{
+    if(x > 0){
+        return Option::Some{val: x};
+    }
+    return Option<i32>::None;  //bare None cannot infer T: annotate
+}
+if let Option::Some(v) = maybe(5){
+    assert(v == 5);
+}
+
+//multi-param literals need full annotation (entries fix one side only):
+import std/result
+return Result<i32, String>::Ok{val: x};
+
+//panics print file:line + message; rebuild with XBACKTRACE=1 for a
+//native backtrace on stderr (glibc only; Termux builds omit it).
+//-g emits debug info (tests/normal/31-debug.x is the smoke test).
