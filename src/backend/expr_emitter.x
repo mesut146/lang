@@ -313,6 +313,7 @@ impl Emitter{
       if (rhs_ty.is_pointer()) {
         CreateStore(ll.builder, field_ptr, alloc_ptr);
         let ty_ptr = field.type.clone().toPtr();
+        self.own.get().add_iflet_var(arg, &ty_ptr, LLVMPtr::new(alloc_ptr));
         self.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
         ty_ptr.drop();
       }else {
@@ -323,7 +324,7 @@ impl Emitter{
         } else {
             //DropHelper::new(self.get_resolver()).is_drop_type(&node.rhs), delete this after below works
             self.copy(alloc_ptr, field_ptr, &field.type);
-            self.own.get().add_iflet_var(arg, field, LLVMPtr::new(alloc_ptr));
+            self.own.get().add_iflet_var(arg, &field.type, LLVMPtr::new(alloc_ptr));
         }
         self.di.get().dbg_var(&arg.name, &field.type, arg.line, self);
       }      
