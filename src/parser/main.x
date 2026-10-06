@@ -186,6 +186,16 @@ func print_version(){
   print("{} version {} by {}\n", get_compiler_name(), get_version(), get_vendor());
 }
 
+func print_usage(){
+  print("usage: x <command>\n");
+  print("  c [-o name] [-out dir] [-stdpath dir] [-i dir]\n");
+  print("    [-O0/-O1/-O2/-O3] [-nolink] [-static] [-shared] [-g]\n");
+  print("    [-cache] [-cache-ro] [-inc] [-trace] [-flags '...']\n");
+  print("    [-std] [-target x86_64|aarch64|android] <file.x|dir>\n");
+  print("  -v, --version\n");
+  print("  -h, --help\n");
+}
+
 func handle(cmd: CmdArgs*){
   let env_triple = std::getenv("target_triple");
   if(env_triple.is_some()){
@@ -198,6 +208,10 @@ func handle(cmd: CmdArgs*){
   }
   if(cmd.is("-v") || cmd.is("--version")){
     print_version();
+    return;
+  }
+  if(cmd.is("-h") || cmd.is("--help")){
+    print_usage();
     return;
   }
   if(cmd.is("c") || cmd.is("compile")){
