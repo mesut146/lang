@@ -224,8 +224,9 @@ func handle(cmd: CmdArgs*){
     handle_c(cmd);
     return;
   }else{
-    handle_c(cmd);
-    return;
+    print("unknown command: {}\n", cmd.args.get(0));
+    print_usage();
+    exit(1);
   }
 }
 
