@@ -61,7 +61,10 @@ jobs:
         if: ${{ steps.build_x86_64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.tool2_x86_64_zip }}
+          #artifact name has no .zip suffix: gh run download unpacks each
+          #artifact into a folder of that name, and the suffix made it look
+          #doubly zipped (x-toolchain-1.08-x86_64.zip/x-toolchain-....zip).
+          name: x-toolchain-${{ env.new_version }}-x86_64
           path: ${{ env.tool2_x86_64_zip }}
           compression-level: 0
 
@@ -80,7 +83,7 @@ jobs:
         if: ${{ steps.build_arm64.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.tool2_arm64_zip }}
+          name: x-toolchain-${{ env.new_version }}-aarch64
           path: ${{ env.tool2_arm64_zip }}
           compression-level: 0
 
@@ -94,7 +97,7 @@ jobs:
         if: ${{ steps.build_termux.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.tool2_termux_zip }}
+          name: x-toolchain-${{ env.new_version }}-termux-aarch64
           path: ${{ env.tool2_termux_zip }}
           compression-level: 0
 
