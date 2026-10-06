@@ -1,18 +1,41 @@
 
 name: test
-on: [push]
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
 
-env:
-  last_version: '1.08'
-  new_version: '1.09'
-  publish: false
+#releases are cut by pushing a tag (vX.Y): the tag build bootstraps from
+#the previous release tag, tests everything, and publishes all three
+#toolchains. Branch pushes only build+test (artifacts named dev-<sha>).
+#No version-bump commits, no publish flag.
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: "set env"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "set versions"
         run: |
+          tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            new_version="${GITHUB_REF_NAME#v}"
+            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
+          else
+            last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no release tag to bootstrap from"; exit 1; }
+            new_version="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "building $new_version from bootstrap $last_version"
+          echo "last_version=$last_version" >> $GITHUB_ENV
+          echo "new_version=$new_version" >> $GITHUB_ENV
           echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
           echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> $GITHUB_ENV
           echo "toolchain_termux_dir=x-toolchain-${last_version}-termux-aarch64" >> $GITHUB_ENV
@@ -21,7 +44,6 @@ jobs:
           echo "tool2_termux_zip=x-toolchain-${new_version}-termux-aarch64.zip" >> $GITHUB_ENV
           echo "tool3_x86_64_zip=x-toolchain-${new_version}-stage2-x86_64.zip" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v4
       - name: "download toolchain"
         run: |
           gh auth status
@@ -76,25 +98,12 @@ jobs:
           path: ${{ env.tool2_termux_zip }}
           compression-level: 0
 
-      - name: Create Release
-        if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Publish Release
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.new_version }}
-          release_name: v${{ env.new_version }}
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        if: ${{ env.publish == 'true' && env.new_version != env.last_version }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: x-toolchain-${{ env.new_version }}-x86_64.zip
-          asset_name: x-toolchain-${{ env.new_version }}-x86_64.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            x-toolchain-${{ env.new_version }}-x86_64.zip
+            x-toolchain-${{ env.new_version }}-aarch64.zip
+            x-toolchain-${{ env.new_version }}-termux-aarch64.zip
+          generate_release_notes: true
