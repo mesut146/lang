@@ -161,9 +161,13 @@ impl Emitter{
     //differ only in dispatch (one variant vs all-union) and payload
     //binding (above); everything from add_scope on is identical.
     //Returns whether this case falls through to nextbb.
-    func emit_case_body(self, rhs: MatchRhs*, match_type: Type*, nextbb: BasicBlock*, infos: List<MatchInfo>*): bool{
+    func emit_case_body(self, rhs: MatchRhs*, match_type: Type*, nextbb: BasicBlock*, infos: List<MatchInfo>*, scoped: bool): bool{
       let ll = self.ll.get();
-      self.own.get().add_scope(ScopeType::MATCH_CASE, rhs);
+      //ENUM arms pre-scope before binding payloads (see visit_match), so
+      //bindings die with the arm that ran; statutory scope otherwise.
+      if(!scoped){
+        self.own.get().add_scope(ScopeType::MATCH_CASE, rhs);
+      }
       let rhs_val = self.visit_match_rhs(rhs);
       self.own.get().end_scope(Utils::get_end_line(rhs));
       let rhs_end_bb = GetInsertBlock(ll.builder);
@@ -233,6 +237,11 @@ impl Emitter{
             let var_index = get_variant_index_match(type, decl);
             SwitchInst_addCase(sw, ll.makeInt(var_index, 64) as ConstantInt*, bb);
             SetInsertPoint(ll.builder, bb);
+            //scope before binding: payload bindings must die with the arm
+            //that ran. Allocated in the enclosing scope (as before), their
+            //drops fire at its end on paths where the arm never ran, i.e.
+            //on uninitialized slots (?-with-drop-payload segfaults).
+            self.own.get().add_scope(ScopeType::MATCH_CASE, &case.rhs);
             //alloc args
             let variant = decl.get_variants().get(var_index);
             let arg_idx = 0;
@@ -240,7 +249,7 @@ impl Emitter{
               self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type);
               ++arg_idx;
             }
-            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos)){
+            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos, true)){
               use_next = true;
             }
             name_c.drop();
@@ -255,7 +264,7 @@ impl Emitter{
             }
             SetInsertPoint(ll.builder, bb);
 
-            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos)){
+            if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos, false)){
               use_next = true;
             }
             name_c.drop();

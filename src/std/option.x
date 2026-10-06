@@ -60,6 +60,20 @@ impl<T> Option<T>{
     //todo *std::enum_data!(self) = val;
   }
 
+  //move the value out, leaving None behind. Infallible like Rust's
+  //take: None in gives None out. Read + no_drop + overwrite is invisible
+  //to the move tracker (same style as set), so unlike moving a field out
+  //of a temporary this never double-drops.
+  func take(self): Option<T>{
+    if(self.is_none()){
+      return Option<T>::none();
+    }
+    let old = ptr::deref!(self.get());
+    std::no_drop(*self);
+    *self = Option<T>::none();
+    return Option::new(old);
+  }
+
   func unwrap_or(*self, def: T): T{
     if(self.is_none()){
       std::no_drop(self);

@@ -63,8 +63,12 @@ impl<T> LinkedList<T>{
     func remove(self, pos: i32){
         if(pos == 0){
             if(self.head.get().next.is_some()){
-                let nx = self.head.unwrap().next.unwrap().unwrap();
-                self.head = Option::new(nx);
+                //take (not unwrap().next...): moving a field out of the
+                //temporary would double-drop it. Whole-temp takes leave
+                //None behind, so every temp drops only what remains; the
+                //old head's val still drops exactly once via its temp.
+                let nx = self.head.take().unwrap().next.take().unwrap().unwrap();
+                self.head = Option<Node<T>>::new(nx);
             }else{
                 self.head = Option<Node<T>>::new();
             }
@@ -81,8 +85,14 @@ impl<T> LinkedList<T>{
             }
         }
         if(i == pos){
-            let nx = cur.next.unwrap().unwrap().next;
-            //cur.next = Option<Box<Node<T>>>::new();
+            //take-chain (not unwrap().unwrap().next): field moves out of
+            //temps double-drop. Each take()/unwrap() consumes a whole temp
+            //or leaves None behind, so no named partial is ever recorded;
+            //every temp drops only what remains, and the bypassed node's
+            //val still drops exactly once via its temp. (Box::unwrap leaks
+            //the box shell itself, as before.) The final take() is
+            //infallible, so removing the last element needs no guard.
+            let nx = cur.next.take().unwrap().unwrap().next.take();
             cur.next = nx;
         }
     }
