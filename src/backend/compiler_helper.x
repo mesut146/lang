@@ -819,8 +819,14 @@ impl Emitter{
       Expr::Is(e, rhs) => {
       },
       Expr::Array(list, size) => {
+        //visit above already emitted the storage and returns its pointer,
+        //which is exactly what operand users (GEP) need: a value, not a
+        //place to load through.
+        return val;
       },
       Expr::Tuple(elems) => {
+        //same as Array: visit returns the tuple storage pointer.
+        return val;
       },
       Expr::Block(x) => {
       },
