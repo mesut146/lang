@@ -49,7 +49,11 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
 }
 
 func handle_c(cmd: CmdArgs*){
-  cmd.consume();
+  //`c` is the default command: only consume the command word when present,
+  //so `x hello.x` works like `x c hello.x`.
+  if(cmd.is("c") || cmd.is("compile")){
+    cmd.consume();
+  }
   if(!cmd.has_any("-out")){
     print("missing required flag -out\n");
     print_usage();
@@ -231,13 +235,16 @@ func handle(cmd: CmdArgs*){
     return;
   }
   if(cmd.is("c") || cmd.is("compile")){
-    //todo should be default
     handle_c(cmd);
     return;
-  }else{
+  }else if(cmd.args.get(0).str().starts_with("-")){
     print("unknown command: {}\n", cmd.args.get(0));
     print_usage();
     exit(1);
+  }else{
+    //bare path: `x hello.x` means `x c hello.x`
+    handle_c(cmd);
+    return;
   }
 }
 

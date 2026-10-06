@@ -33,7 +33,7 @@ jobs:
       - name: build-x86_64
         id: build_x86_64
         run: |
-          XOPT="" XSTAGE="1" bin/build.sh $toolchain_dir $new_version
+          XOPT="-O2" XSTAGE="1" bin/build.sh $toolchain_dir $new_version
 
       - name: Upload Artifacts x86_64
         if: ${{ steps.build_x86_64.outcome == 'success' }}
@@ -52,7 +52,7 @@ jobs:
         id: build_arm64
         run: |
           unzip $toolchain_arm64_dir.zip
-          XOPT="" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
+          XOPT="-O2" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
         if: ${{ steps.build_arm64.outcome == 'success' }}
@@ -66,7 +66,7 @@ jobs:
         id: build_termux
         run: |
           unzip -n ${{ env.toolchain_termux_dir }}.zip || echo "no termux bootstrap toolchain present"
-          XOPT="" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
+          XOPT="-O2" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
 
       - name: Upload Artifacts termux
         if: ${{ steps.build_termux.outcome == 'success' }}
