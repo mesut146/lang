@@ -17,7 +17,8 @@ if [ -f "$dir/build/.mtime" ]; then
     echo "no change" && exit 0
   fi
 fi
-echo $mtnew > $dir/build/.mtime
+#mtime is recorded only after a successful build below; a failed compile
+#must not poison the stamp (the lib is deleted before recompiling).
 
 #FFI arity gate: .x extern decls vs C++ defs (linker can't catch these)
 python3 $dir/../bin/check_ffi.py || exit 1
@@ -52,7 +53,7 @@ if [ ! "$?" -eq "0" ]; then
   exit 1
 fi
 
-$AR rcs $lib $obj && ranlib $lib && echo "writing $lib"
+$AR rcs $lib $obj && ranlib $lib && echo "writing $lib" && echo $mtnew > $dir/build/.mtime
 
 cmd="$CXX -I$inc_dir -o $dir/build/bridge.so -fPIC -std=c++17 $dir/src/bridge.cpp -shared"
 echo $cmd && $cmd

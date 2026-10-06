@@ -2,6 +2,8 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm-c/Error.h>
+#include <llvm-c/Transforms/PassBuilder.h>
 #include "llvm/IR/Module.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
@@ -99,6 +101,21 @@ void emit_object(llvm::Module *mod, const char *file, llvm::TargetMachine *Targe
 
   dest.flush();
   dest.close();
+}
+
+//Run a new-PM pipeline (e.g. "default<O2>") over the module. Returns null
+//on success, heap error message otherwise (same convention as Module_emit).
+char* Module_optimize(llvm::Module *mod, const char *pipeline, llvm::TargetMachine *tm) {
+  auto opts = LLVMCreatePassBuilderOptions();
+  LLVMErrorRef err = LLVMRunPasses(
+      reinterpret_cast<LLVMModuleRef>(mod), pipeline,
+      reinterpret_cast<LLVMTargetMachineRef>(tm), opts);
+  LLVMDisposePassBuilderOptions(opts);
+  if (err) {
+    //leaked like Module_emit's message; the caller prints it and exits.
+    return LLVMGetErrorMessage(err);
+  }
+  return nullptr;
 }
 
 llvm::LLVMContext *LLVMContext_new() {

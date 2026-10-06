@@ -174,6 +174,21 @@ own_all(){
   done
 }
 
+#optimizer gate: same programs must produce identical observable behavior
+#with the new-PM pipeline on. Fresh out dir on purpose: .o cache keys do
+#not include the opt level, so reusing test_out could link -O0 objects.
+opt_all(){
+  opt_out=$build/test_opt_out
+  rm -rf $opt_out
+  mkdir -p $opt_out
+  for f in $testd/normal/09-array.x $testd/normal/19-match.x $testd/normal/23-lambda.x $testd/normal/35-op-assign-deref.x $testd/normal/36-literal-operand.x; do
+    base=$(basename $f .x)
+    run "$compiler c -O2 -norun -o $base -out $opt_out -stdpath $stdpath \"$f\"" || exit 1
+    run "$opt_out/$base" || exit 1
+  done
+  echo "opt: pass"
+}
+
 #vararg (C interop): tests/vararg/vararg.x + tests/vararg/main.c
 vararg_all(){
   run "$compiler c -nolink -cache -out $out_dir -stdpath $stdpath $testd/vararg/vararg.x" || exit 1
@@ -204,6 +219,8 @@ elif [ "$pat" == "inc" ]; then
   inc_all
 elif [ "$pat" == "fmt" ]; then
   fmt_all
+elif [ "$pat" == "opt" ]; then
+  opt_all
 elif [ "$pat" == "all" ]; then
   normal
   fmt_all
@@ -212,6 +229,7 @@ elif [ "$pat" == "all" ]; then
   own_all
   vararg_all
   inc_all
+  opt_all
 elif [ ! -z "$pat" ]; then
   normal_regex $pat
 fi

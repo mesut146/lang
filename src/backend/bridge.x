@@ -84,6 +84,7 @@ extern{
     func IRBuilder_new(ctx: LLVMContext*): IRBuilder*;
     func IRBuilder_delete(b: IRBuilder*);
     func Module_emit(md: LLVMModule*, file: i8*): i8*;
+    func Module_optimize(md: LLVMModule*, pipeline: i8*, tm: TargetMachine*): i8*;
     func emit_object(md: LLVMModule*, file: i8*, tm: TargetMachine*);
     
     //dbg enums
@@ -338,9 +339,13 @@ impl LLVMInfo{
     }else{
       panic("invalid optimization level '{}'", level);
     };
-    //pass pipeline intentionally not run: the new-PM bindings are not
-    //wired yet, so every -O level is currently a no-op (kept for CLI compat).
+    let pipe_c = pipeline.cstr();
+    let error: i8* = Module_optimize(self.module, pipe_c.ptr(), self.tm);
+    pipe_c.drop();
     pipeline.drop();
+    if(error as u64 != 0){
+      panic("cant run -O pipeline {:?}, err: {:?}", level, CStr::new(error));
+    }
   }
 
   func emit_module(self, file: str){

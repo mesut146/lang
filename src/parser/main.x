@@ -79,7 +79,7 @@ func handle_c(cmd: CmdArgs*){
   config.incremental_enabled = cmd.consume_any("-inc");
   config.debug = cmd.consume_any("-g");
   config.stack_trace = cmd.consume_any("-trace");
-  let opt_levels = ["-O", "O0", "-O1", "-O2", "-O3"];
+  let opt_levels = ["-O", "-O0", "-O1", "-O2", "-O3"];
   for level in opt_levels[0..opt_levels.len()]{
     if(cmd.consume_any(level)){
       config.opt_level = Option::new(level.owned());
