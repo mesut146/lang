@@ -8,13 +8,69 @@ on:
 #releases are cut by pushing a tag (vX.Y): the tag build bootstraps from
 #the previous release tag, tests everything, and publishes all three
 #toolchains. Branch pushes only build+test (artifacts named dev-<sha>).
-#No version-bump commits, no publish flag.
+#The three builds are independent jobs (each bootstraps from the last
+#release, not from another job) so they run concurrently; publish waits
+#for all of them. No version-bump commits, no publish flag.
 permissions:
   contents: write
   actions: write
 
 jobs:
-  build:
+  build-x86_64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "set versions"
+        run: |
+          tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            new_version="${GITHUB_REF_NAME#v}"
+            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
+          else
+            last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no release tag to bootstrap from"; exit 1; }
+            new_version="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "building $new_version from bootstrap $last_version"
+          echo "last_version=$last_version" >> $GITHUB_ENV
+          echo "new_version=$new_version" >> $GITHUB_ENV
+          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
+          echo "tool2_x86_64_zip=x-toolchain-${new_version}-x86_64.zip" >> $GITHUB_ENV
+
+      - name: "download toolchain"
+        run: |
+          gh auth status
+          gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
+          unzip $toolchain_dir.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build-x86_64
+        id: build_x86_64
+        run: |
+          XOPT="-O2" XSTAGE="1" bin/build.sh $toolchain_dir $new_version
+
+      - name: Upload Artifacts x86_64
+        if: ${{ steps.build_x86_64.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          #no .zip suffix on the artifact name: gh run download unpacks
+          #each artifact into a folder of that name, and the suffix made
+          #it look doubly zipped.
+          name: x-toolchain-${{ env.new_version }}-x86_64
+          path: ${{ env.tool2_x86_64_zip }}
+          compression-level: 0
+
+      - name: test-x86_64
+        id: test_x86_64
+        run: |
+          ./bin/test.sh x-toolchain-${{ env.new_version }}-x86_64 all
+
+  build-aarch64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,45 +94,19 @@ jobs:
           echo "new_version=$new_version" >> $GITHUB_ENV
           echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
           echo "toolchain_arm64_dir=x-toolchain-${last_version}-aarch64" >> $GITHUB_ENV
-          echo "toolchain_termux_dir=x-toolchain-${last_version}-termux-aarch64" >> $GITHUB_ENV
-          echo "tool2_x86_64_zip=x-toolchain-${new_version}-x86_64.zip" >> $GITHUB_ENV
           echo "tool2_arm64_zip=x-toolchain-${new_version}-aarch64.zip" >> $GITHUB_ENV
-          echo "tool2_termux_zip=x-toolchain-${new_version}-termux-aarch64.zip" >> $GITHUB_ENV
-          echo "tool3_x86_64_zip=x-toolchain-${new_version}-stage2-x86_64.zip" >> $GITHUB_ENV
 
       - name: "download toolchain"
         run: |
           gh auth status
           gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
-          unzip $toolchain_dir.zip
+          unzip $toolchain_arm64_dir.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: build-x86_64
-        id: build_x86_64
-        run: |
-          XOPT="-O2" XSTAGE="1" bin/build.sh $toolchain_dir $new_version
-
-      - name: Upload Artifacts x86_64
-        if: ${{ steps.build_x86_64.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
-        with:
-          #artifact name has no .zip suffix: gh run download unpacks each
-          #artifact into a folder of that name, and the suffix made it look
-          #doubly zipped (x-toolchain-1.08-x86_64.zip/x-toolchain-....zip).
-          name: x-toolchain-${{ env.new_version }}-x86_64
-          path: ${{ env.tool2_x86_64_zip }}
-          compression-level: 0
-
-      - name: test-x86_64
-        id: test_x86_64
-        run: |
-          ./bin/test.sh x-toolchain-${{ env.new_version }}-x86_64 all
 
       - name: build-arm64
         id: build_arm64
         run: |
-          unzip $toolchain_arm64_dir.zip
           XOPT="-O2" XSTAGE="1" ./bin/docker.sh $toolchain_dir $toolchain_arm64_dir $new_version
 
       - name: Upload Artifacts arm64
@@ -87,10 +117,43 @@ jobs:
           path: ${{ env.tool2_arm64_zip }}
           compression-level: 0
 
+  build-termux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "set versions"
+        run: |
+          tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            new_version="${GITHUB_REF_NAME#v}"
+            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
+          else
+            last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
+            [ -z "$last_version" ] && { echo "no release tag to bootstrap from"; exit 1; }
+            new_version="dev-$(git rev-parse --short HEAD)"
+          fi
+          echo "building $new_version from bootstrap $last_version"
+          echo "last_version=$last_version" >> $GITHUB_ENV
+          echo "new_version=$new_version" >> $GITHUB_ENV
+          echo "toolchain_dir=x-toolchain-${last_version}-$(uname -m)" >> $GITHUB_ENV
+          echo "toolchain_termux_dir=x-toolchain-${last_version}-termux-aarch64" >> $GITHUB_ENV
+          echo "tool2_termux_zip=x-toolchain-${new_version}-termux-aarch64.zip" >> $GITHUB_ENV
+
+      - name: "download toolchain"
+        run: |
+          gh auth status
+          gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
+          unzip -n ${{ env.toolchain_termux_dir }}.zip || echo "no termux bootstrap toolchain present"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: build-termux
         id: build_termux
         run: |
-          unzip -n ${{ env.toolchain_termux_dir }}.zip || echo "no termux bootstrap toolchain present"
           XOPT="-O2" XSTAGE="" ./bin/docker_termux.sh ${{ env.toolchain_dir }} ${{ env.new_version }} ${{ env.toolchain_termux_dir }}
 
       - name: Upload Artifacts termux
@@ -101,12 +164,18 @@ jobs:
           path: ${{ env.tool2_termux_zip }}
           compression-level: 0
 
+  publish:
+    needs: [build-x86_64, build-aarch64, build-termux]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
       - name: Publish Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            x-toolchain-${{ env.new_version }}-x86_64.zip
-            x-toolchain-${{ env.new_version }}-aarch64.zip
-            x-toolchain-${{ env.new_version }}-termux-aarch64.zip
+          files: assets/*.zip
           generate_release_notes: true
