@@ -26,7 +26,7 @@ if [ -z "$2" ]; then
 fi
 
 host_tool=$1
-version=$2
+export version=$2
 compiler="$host_tool/bin/x"
 build=$dir/../build
 name="stage1_termux"

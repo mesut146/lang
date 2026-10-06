@@ -17,7 +17,7 @@ if [ -z "$2" ]; then
  echo "provide version" && exit 1
 fi
 
-version=$2
+export version=$2
 target_tool=$3
 compiler="$1"
 build=$dir/../build

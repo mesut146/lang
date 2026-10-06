@@ -18,7 +18,7 @@ if [ -z "$2" ]; then
 fi
 
 host_tool=$1
-version=$2
+export version=$2
 target_tool=$3
 compiler="$host_tool/bin/x"
 build=$dir/../build
