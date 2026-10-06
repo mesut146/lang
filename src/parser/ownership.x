@@ -256,6 +256,70 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(expr, self), StateType::NONE);
     }
 
+    //A payload binding copies the scrutinee temp's bytes; from birth the
+    //binding owns the copy, so the temp must never drop it (else the same
+    //buffer dies twice: `let s = File::read_string(..)?` double-freed).
+    //Mark the temp consumed in its own scope. Named scrutinees are
+    //untouched: their tracking still applies. Mirrors Rhs::new's
+    //named-place recognition, but never panics: an unregistered vh just
+    //means "not provably named", and for anything but a proven temp we
+    //do nothing.
+    func consume_match_temp(self, scr: Expr*){
+        if let Expr::Access(scp, name) = scr{
+            let scp_rt = self.get_resolver().visit(scp.get());
+            let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
+            scp_rt.drop();
+            if(named){
+                return;
+            }
+        }else{
+            let rt = self.get_resolver().visit(scr);
+            let named = rt.vh.is_some() && (scr is Expr::Name || scr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some();
+            rt.drop();
+            if(named){
+                return;
+            }
+        }
+        let rhs = Rhs::EXPR{scr};
+        let scope = self.get_scope();
+        while(true){
+            for obj in &scope.objects{
+                if(obj.expr.id == scr.id){
+                    self.update_state(rhs, StateType::MOVED{scr.line}, scope);
+                    return;
+                }
+            }
+            if(scope.parent == -1){
+                break;
+            }
+            scope = self.get_scope(scope.parent);
+        }
+        rhs.drop();
+    }
+
+    //Mark a match-arm yielded place as moved: the arm value is memcpy'd
+    //into the match result, so the place must not also die with the arm.
+    //VAR places with registered ids only; anything else keeps today's
+    //behavior. Never panics (membership-checked before get_var). Non-drop
+    //types are unaffected: check() and drop emission both skip them.
+    func mark_yield(self, e: Expr*){
+        if(!(e is Expr::Name || e is Expr::Unary)){
+            return;
+        }
+        let rt = self.get_resolver().visit(e);
+        if(rt.vh.is_none()){
+            rt.drop();
+            return;
+        }
+        let id = rt.vh.get().id;
+        rt.drop();
+        if(self.var_map.get(&id).is_none()){
+            return;
+        }
+        let v = self.get_var(id).clone();
+        self.update_state(Rhs::new(v), StateType::MOVED{e.line}, self.get_scope());
+    }
+
     // func do_move(self, block: Block*){
     // }
 

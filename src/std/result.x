@@ -24,6 +24,9 @@ impl<R, E> Result<R, E>{
   func unwrap(*self): R{
     match self{
       Result<R, E>::Ok(val) => {
+        //payload moves to the caller: suppress self's drop, else the
+        //same bytes die twice (scope end drops self too).
+        std::no_drop(self);
         return val;
       },
       Result<R, E>::Err(val) => {
@@ -41,6 +44,8 @@ impl<R, E> Result<R, E>{
 
   func unwrap_err(*self): E{
     if let Result<R, E>::Err(val) = self{
+      //payload moves to the caller: suppress self's drop (see unwrap).
+      std::no_drop(self);
       return val;
     }
     panic("unwrap on empty Result");

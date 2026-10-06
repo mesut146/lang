@@ -17,6 +17,9 @@ impl<T> Option<T>{
 
   func unwrap(*self): T{
     if let Option<T>::Some(val) = (self){
+      //payload moves to the caller: suppress self's drop, else the same
+      //bytes die twice (scope end drops self too).
+      std::no_drop(self);
       return val;
     }
     std::no_drop(self);

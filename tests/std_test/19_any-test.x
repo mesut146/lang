@@ -14,4 +14,10 @@ func main(){
     let a2 = Any::new(A{a: 10, b: 20, c: 30});
     let val2 = Any::get<A>(&a2);
     print("a={}\nb={}\nc={}\n", val2.a, val2.b, val2.c);
+    //Any is type-erased: auto-drop refuses it ("must be drop manually"),
+    //so release explicitly (static call style: method turbofish does not
+    //resolve on *self receivers). Also correct with drops off: scope end
+    //then finds nothing to drop.
+    Any::drop2<i32>(a1);
+    Any::drop2<A>(a2);
 }

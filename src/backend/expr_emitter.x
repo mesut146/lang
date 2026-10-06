@@ -169,9 +169,18 @@ impl Emitter{
         self.own.get().add_scope(ScopeType::MATCH_CASE, rhs);
       }
       let rhs_val = self.visit_match_rhs(rhs);
+      //Ownership transfers to the match result: a yielded drop-typed
+      //place is memcpy'd out, so it must not also die with the arm.
+      //Mark only when this match produces a value and the arm falls
+      //through (jumping arms transfer via return/break handling).
+      let exit = Exit::get_exit_type(rhs);
+      if(!match_type.is_void() && !exit.is_jump()){
+        if let MatchRhs::EXPR(e) = rhs{
+          self.own.get().mark_yield(e);
+        }
+      }
       self.own.get().end_scope(Utils::get_end_line(rhs));
       let rhs_end_bb = GetInsertBlock(ll.builder);
-      let exit = Exit::get_exit_type(rhs);
       if(!exit.is_jump()){
         if(!match_type.is_void()){
           let rt2 = self.get_resolver().visit_match_rhs(rhs);
@@ -246,7 +255,7 @@ impl Emitter{
             let variant = decl.get_variants().get(var_index);
             let arg_idx = 0;
             for arg in args{
-              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type);
+              self.alloc_enum_arg(arg, variant, arg_idx, decl, rhs, &rhs_rt.type, &node.expr);
               ++arg_idx;
             }
             if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos, true)){
@@ -295,7 +304,10 @@ impl Emitter{
       return res;
     }
 
-    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*){
+    func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*, scr: Expr*){
+      //the binding copies the scrutinee temp's bytes; mark the temp
+      //consumed so it never drops the copy (see consume_match_temp).
+      self.own.get().consume_match_temp(scr);
       let ll = self.ll.get();
       let data_index = get_data_index(decl);
       let dataPtr = CreateStructGEP(ll.builder, self.mapType(&decl.type), enum_ptr, data_index);
@@ -479,7 +491,7 @@ impl Emitter{
             //regular var decl
             let prm = fields.get(i);
             let arg = node.args.get(i);
-            self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type);
+            self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type, &node.rhs);
         }
       }
       let res = self.emit_branch_join(node.then.get(), &node.else_stmt, then_bb, elsebb, next, line, if_id);

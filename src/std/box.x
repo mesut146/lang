@@ -81,10 +81,17 @@ impl<T> Ptr<T>{
     return self.val.get().get();
   }
   func unwrap(*self): T{
-    return self.val.unwrap().unwrap();
+    //payload moves to the caller: suppress self's drop, else the same
+    //bytes die twice (scope end drops self too). Use before suppress:
+    //no_drop marks moved, so self is unreadable after it.
+    let v = self.val.unwrap().unwrap();
+    std::no_drop(self);
+    return v;
   }
   func unwrap_box(*self): Box<T>{
-    return self.val.unwrap();
+    let b = self.val.unwrap();
+    std::no_drop(self);
+    return b;
   }
   func set(self, e: T): Option<T>{
     if(self.is_some()){
