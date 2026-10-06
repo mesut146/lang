@@ -136,6 +136,17 @@ func handle_c(cmd: CmdArgs*){
     }
   }
 
+  if(!cmd.has()){
+    print("missing input file\n");
+    print_usage();
+    out_dir.drop();
+    flags.drop();
+    name.drop();
+    out_name.drop();
+    jobs.drop();
+    config.drop();
+    exit(1);
+  }
   let path: String = cmd.get()?;
   if(!File::exists(path.str())){
     print("no such file or directory: {}\n", &path);
