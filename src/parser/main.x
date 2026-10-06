@@ -132,6 +132,17 @@ func handle_c(cmd: CmdArgs*){
   }
 
   let path: String = cmd.get()?;
+  if(!File::exists(path.str())){
+    print("no such file or directory: {}\n", &path);
+    path.drop();
+    out_dir.drop();
+    flags.drop();
+    name.drop();
+    out_name.drop();
+    jobs.drop();
+    config.drop();
+    exit(1);
+  }
   let name2: str = if(name.is_some()){
     name.get().str()
   }else{
@@ -185,7 +196,7 @@ func handle(cmd: CmdArgs*){
     print("enter a command\n");
     return;
   }
-  if(cmd.is("-v")){
+  if(cmd.is("-v") || cmd.is("--version")){
     print_version();
     return;
   }
