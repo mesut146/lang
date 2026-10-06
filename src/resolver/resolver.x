@@ -16,6 +16,7 @@ import ast/utils
 import ast/copier
 
 import resolver/method_resolver
+import resolver/method_sig
 import resolver/derive
 import resolver/progress
 import resolver/exit
