@@ -1012,12 +1012,9 @@ impl Emitter{
       if(Resolver::is_sprintf(mc)){
         return self.call_sprintf(mc);
       }
-      if(Resolver::is_print(mc)){
-        let info = resolver.format_map.get(&expr.id).unwrap();
-        self.visit_block(&info.block);
-        return ptr::null<Value>();
-      }
-      if(Resolver::is_panic(mc)){
+      //print/panic/assert all lower to a prebuilt format block evaluated
+      //for side effects; only format() (below) yields its value.
+      if(Resolver::is_print(mc) || Resolver::is_panic(mc) || Resolver::is_assert(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return ptr::null<Value>();
@@ -1026,11 +1023,6 @@ impl Emitter{
         let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
         return res.unwrap();
-      }
-      if(Resolver::is_assert(mc)){
-        let info = resolver.format_map.get(&expr.id).unwrap();
-        self.visit_block(&info.block);
-        return ptr::null<Value>();
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
