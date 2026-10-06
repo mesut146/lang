@@ -100,6 +100,7 @@ jobs:
         run: |
           gh auth status
           gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
+          unzip $toolchain_dir.zip
           unzip $toolchain_arm64_dir.zip
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -147,6 +148,7 @@ jobs:
         run: |
           gh auth status
           gh release download v${last_version}&&echo "download toolchain '$toolchain_dir'"
+          unzip $toolchain_dir.zip
           unzip -n ${{ env.toolchain_termux_dir }}.zip || echo "no termux bootstrap toolchain present"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
