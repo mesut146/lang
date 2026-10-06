@@ -50,6 +50,11 @@ func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
 
 func handle_c(cmd: CmdArgs*){
   cmd.consume();
+  if(!cmd.has_any("-out")){
+    print("missing required flag -out\n");
+    print_usage();
+    exit(1);
+  }
   let out_dir = cmd.get_val2("-out");
   //deprecated no-op: builds never run the binary anymore, but scripts still
   //pass -norun so the same command works against pre-1.07 bootstrap compilers

@@ -47,6 +47,7 @@ $TC/bin/x c -o hello -out ./out -stdpath $TC/src hello.x
 ```
 
 Notes:
+- `x -h` lists commands and `c` flags; `x -v` prints the version.
 - On Termux, extract with `unzip` (in `pkg install unzip`): GUI extractors on
   Android can drop unix permission bits, leaving `bin/x` non-executable;
   recover with `chmod +x $TC/bin/x`.
