@@ -49,20 +49,17 @@ func parse_stmt(input: String, unit: Unit*, line: i32): Stmt{
     let parser = Parser::from_string(input, line);
     parser.unit = Option::new(unit);
     let res = parser.parse_stmt();
-    parser.drop();
     return res;
 }
 func parse_expr(input: String, unit: Unit*, line: i32): Expr{
     let parser = Parser::from_string(input, line);
     parser.unit = Option::new(unit);
     let res = parser.parse_expr();
-    parser.drop();
     return res;
 }
 
 func make_impl_m(m: Method*, decl: Decl*, trait_name: str): Impl{
     m.parent = Parent::Impl{make_info(decl, trait_name)};
-    m.path.drop();
     m.path = decl.path.clone();
     m.body = Option::new(Block::new(decl.line, decl.line));
     return make_impl(decl, trait_name);
@@ -180,7 +177,6 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
     };
     m.self = Option::new(prm);
     m.parent = Parent::Impl{make_info(decl, "Clone")};
-    m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
     //print("mlone={:?}\n", &m);
@@ -253,7 +249,6 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     m.is_generic = decl.is_generic;
     m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone(), true, true});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
-    m.path.drop();
     m.path = unit.path.clone();
     m.body = Option::new(body);
     let imp = make_impl(decl, "Drop");
@@ -401,7 +396,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.err(node, "format no arg");
     }
     let fmt: Expr* = mc.args.get(0);
-    r.visit(fmt).drop();
     let lit_opt = is_str_lit(fmt);
     if (lit_opt.is_none()) {
         r.err(node, "format arg not str literal");
@@ -424,16 +418,13 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         if (Resolver::is_panic(mc)) {
             let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
             let tmp = normalize_quotes(msg.str());
-            msg.drop();
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
             emit_backtrace(block, &r.unit, line, node.id);
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
-            msg.drop();
         }else{
             let msg = normalize_quotes(fmt_str);
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
-            msg.drop();
         }
         r.visit_block(block);
         r.format_map.add(node.id, info);
@@ -451,14 +442,12 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             let sub2 = normalize_quotes(sub);
             let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
             block.list.add(st);
-            sub2.drop();
             break;
         }
         if(br_pos > pos){
             let sub = fmt_str.substr(pos, br_pos);
             let sub2 = normalize_quotes(sub);
             let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
-            sub2.drop();
             block.list.add(st);
         }
         // '{' escaped as '{{'
@@ -494,8 +483,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
                 let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
                 block.list.add(dbg_st);
             }
-            arg_rt.drop();
-            expr.drop();
         }else{
             if(arg_idx >= mc.args.len()){
                 r.err(node, "format specifier not matched");
@@ -511,7 +498,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
                 block.list.add(dbg_st);
             }
             ++arg_idx;
-            argt.drop();
         }
         pos = br_end + 1;
         // argt.drop();
@@ -531,7 +517,6 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //.."<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
-        pos_info.drop();
         block.list.add(pos_info_st);
         //..f.buf.print();
         let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
@@ -548,19 +533,16 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
         block.return_expr.set(unwrap_expr);
         let tmp = r.visit_block(block);
-        tmp.drop();
     }else{
         r.err(node, "generate_format");
     }
     r.format_map.add(node.id, info);
-    fmt_var_name.drop();
 }
 func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");
     }
     let fmt: Expr* = mc.args.get(0);
-    r.visit(fmt).drop();
     let lit_opt = is_str_lit(fmt);
     if (lit_opt.is_none()) {
         r.err(node, "format arg not str literal");
@@ -583,16 +565,13 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         if (Resolver::is_panic(mc)) {
             let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
             let tmp = normalize_quotes(msg.str());
-            msg.drop();
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
             emit_backtrace(block, &r.unit, line, node.id);
             block.list.add(parse_stmt(format("exit(1);"), &r.unit, line));
-            msg.drop();
         }else{
             let msg = normalize_quotes(fmt_str);
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
-            msg.drop();
         }
         r.visit_block(block);
         r.format_map.add(node.id, info);
@@ -610,14 +589,12 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
             let sub2 = normalize_quotes(sub);
             let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
             block.list.add(st);
-            sub2.drop();
             break;
         }
         if(br_pos > pos){
             let sub = fmt_str.substr(pos, br_pos);
             let sub2 = normalize_quotes(sub);
             let st = parse_stmt(format("{}.print(\"{}\");", &fmt_var_name, sub2), &r.unit, line);
-            sub2.drop();
             block.list.add(st);
         }
         if(fmt_str.get(br_pos + 1) == '{'){
@@ -652,8 +629,6 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
                 let dbg_st = parse_stmt(format("{}({:?}, &{});", func_name, arg_str, fmt_var_name), &r.unit, line);
                 block.list.add(dbg_st);
             }
-            arg_rt.drop();
-            expr.drop();
         }else{
             if(arg_idx >= mc.args.len()){
                 r.err(node, "format specifier not matched");
@@ -669,7 +644,6 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
                 block.list.add(dbg_st);
             }
             ++arg_idx;
-            argt.drop();
         }
         pos = br_end + 1;
         // argt.drop();
@@ -689,7 +663,6 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         //.."<method:line>".print();
         let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
-        pos_info.drop();
         block.list.add(pos_info_st);
         //..f.buf.print();
         let print_st = parse_stmt(format("{}.buf.println();", &fmt_var_name), &r.unit, line);
@@ -706,12 +679,10 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
         block.return_expr.set(unwrap_expr);
         let tmp = r.visit_block(block);
-        tmp.drop();
     }else{
         r.err(node, "generate_format");
     }
     r.format_map.add(node.id, info);
-    fmt_var_name.drop();
 }
 
 //replace non escaped quotes into escaped ones
@@ -742,7 +713,6 @@ func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
     message.print(" ");
     let method_sig = printMethod(method);
     message.print(method_sig.str());
-    method_sig.drop();
     if (s.is_some()) {
         message.print("\n");
         message.print(s.get());
@@ -780,7 +750,4 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     r.format_map.add(node.id, info);
     //print("assert {} id={} path={}\nblock={}\n", node, node.id, r.unit.path, block);
     r.visit_block(block);
-    arg_str.drop();
-    arg_norm.drop();
-    method_sig.drop();
 }

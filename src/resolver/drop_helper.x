@@ -21,7 +21,6 @@ impl DropHelper{
   func is_drop_type(self, expr: Expr*): bool{
     let rt = self.r.visit(expr);
     let res = self.is_drop_type(&rt);
-    rt.drop();
     return res;
   }
   func is_drop_type(self, type: Type*): bool{
@@ -33,7 +32,6 @@ impl DropHelper{
     }
     let rt = self.r.visit_type(type);
     let res = self.is_drop_type(&rt);
-    rt.drop();
     return res;
   }
   func is_drop_type(self, rt: RType*): bool{
@@ -167,7 +165,6 @@ impl DropHelper{
     }
     let key = rt.type.print();
     let method_desc = self.r.drop_map.get(&key).unwrap();
-    key.drop();
     //panic("{} -> {}", rt);
     return self.r.get_method(method_desc, &decl.type).unwrap();
   }

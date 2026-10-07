@@ -62,7 +62,6 @@ impl Progress{
             for p in &parr{
                 print("{:?}=>{:?}\n", p.b, p.a);
             }
-            parr.drop();
             prog_map.clear();
         }
     }
@@ -70,7 +69,6 @@ impl Progress{
     func resolve_begin(self, m: Method*){
         let s = printMethod(m);
         if(progress_print) print("resolve begin {:?}\n", s);
-        s.drop();
         self.begin.set(gettime());
     }
 
@@ -85,8 +83,6 @@ impl Progress{
         if(prog_print_freq){
             self.update(m, &prog_map, ms);
         }
-        s.drop();
-        msg.drop();
     }
 
     func update(self, m: Method*, map: HashMap<String, ProgInfo>*, ms: timeval){
@@ -106,13 +102,11 @@ impl Progress{
             info.time.tv_sec += ms.tv_sec;
             info.time.tv_usec += ms.tv_usec;
         }
-        nm.drop();
     }
 
     func compile_begin(self, m: Method*){
         let s = printMethod(m);
         if(progress_print) print("compile begin {:?}\n", s);
-        s.drop();
         self.begin.set(gettime());
     }
 
@@ -125,7 +119,6 @@ impl Progress{
         if(progress_print) print("{}", msg);
         File::write_string(msg.str(), self.logfile.str(), OpenMode::Append)?;
         self.update(m, &compile_map, ms);
-        s.drop();
     }
 
     func compile_done(self){
@@ -136,7 +129,6 @@ impl Progress{
             for p in &parr{
                 print("{:?}=>{:?}\n", p.b, p.a);
             }
-            parr.drop();
             compile_map.clear();
         }
     }

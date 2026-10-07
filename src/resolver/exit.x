@@ -124,7 +124,6 @@ impl Exit{
             if(!res.is_none()){
                 return res;
             }
-            res.drop();
             return Exit::new(ExitType::BLOCK_RETURN);
         }
         if(block.list.empty()){

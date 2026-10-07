@@ -36,12 +36,10 @@ impl Parser{
     while (true) {
       let t = self.lexer.next();
       if (t.is(TokenType::EOF_)){
-        t.drop();
         break;
       }
       else if (t.is(TokenType::COMMENT)){
         self.comments.add(Comment{t.line, t.value.clone()});
-        t.drop();
         continue;
       }
       self.tokens.add(t);
@@ -122,7 +120,6 @@ impl Parser{
   }
   func err(self, msg: String){
     self.err(msg.str());
-    msg.drop();
   }
   func err(self, line: i32, msg: String){
     print("in file {}:{}\n`{}`\n", &self.lexer.path, line, get_line(self.lexer.buf.str(), line).trim());
@@ -166,7 +163,6 @@ impl Parser{
     while(self.has()){
       unit.items.add(self.parse_item(&scope));
     }
-    scope.drop();
     //move collected comments into the unit (remove-loop: moves each
     //element so nothing is cloned or double-owned)
     while(!self.comments.empty()){
@@ -268,7 +264,6 @@ impl Parser{
       //consuming it, so end_line is the module's closing brace.
       let end_line = self.line();
       self.consume(TokenType::RBRACE);
-      scope2.drop();
       return Item::Module{Module{name, items, start_line, end_line}};
     }else if(self.is_val("use")){
       return self.parse_use();
@@ -316,7 +311,6 @@ impl Parser{
         let attr = self.parse_attrs();
         res.methods.add(self.parse_method(parent, attr));
     }
-    type.drop();
     self.consume(TokenType::RBRACE);
     return res;
   }
@@ -337,7 +331,6 @@ impl Parser{
       self.consume(TokenType::IMPL);
       let type_params = List<Type>::new();
       if (self.is(TokenType::LT)) {
-        type_params.drop();
         type_params = self.type_params();
       }
       let t1 = self.parse_type();
@@ -349,7 +342,6 @@ impl Parser{
       if(scope.is_some() && t1.is_simple() && t1.as_simple().scope.is_none() && t1.get_args().empty()){
         let nm = t1.name().clone();
         let scp = scope.get().clone();
-        t1.drop();
         t1 = Type::new(scp, nm);
       }
       if(self.is(TokenType::FOR)){
@@ -373,7 +365,6 @@ impl Parser{
         arr.add(self.parse_method(parent.clone(), attr));
       }
       self.consume(TokenType::RBRACE);
-      parent.drop();
       return arr;
   }
   
@@ -388,7 +379,6 @@ impl Parser{
     let type_args = List<Type>::new();
     let is_generic = false;
     if(self.is(TokenType::LT)){
-      type_args.drop();
       type_args = self.type_params();
       is_generic = true;
     }
@@ -621,7 +611,6 @@ impl Parser{
           let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
           res = tmp;
         }
-        part.drop();
       }
       return res;
     }
@@ -1259,11 +1248,9 @@ impl Parser{
             let scp = Expr::Type{.n, smp.scope.get().clone()};
             let is_static = true;
             let res = self.call(scp, smp.name.clone(), is_static, smp.args.clone());
-            ty.drop();
             return res;
           }else{
             let res = self.call(smp.name.clone(), smp.args.clone());
-            ty.drop();
             return res;
           }
         }else{
@@ -1285,7 +1272,6 @@ impl Parser{
           let args = self.exprList(TokenType::RPAREN);
           self.consume(TokenType::RPAREN);
           let res = Expr::MacroCall{.n, MacroCall{scope: scp, name: smp.name.clone(), args: args}};
-          ty.drop();
           return res;
         }else{
           self.err(format("macro scope is invalid '{:?}'", ty));
@@ -1486,11 +1472,9 @@ func dump(e: Expr*){
   let f = Fmt::new();
   e.debug(&f);
   f.buf.print();
-  f.drop();
 }
 func dump(e: Stmt*){
   let f = Fmt::new();
   e.debug(&f);
   f.buf.print();
-  f.drop();
 }
