@@ -41,8 +41,8 @@ static print_kind: PrintKind = init_print();
 static print_drop_real: bool = hasenv("print_drop_real");
 static print_drop_lhs: bool = hasenv("print_drop_lhs");
 
-static drop_enabled: bool = hasenv("drop_enabled");
-static drop_lhs_enabled: bool =  hasenv("drop_lhs_enabled");
+static drop_enabled: bool = true;
+static drop_lhs_enabled: bool = true;
 static move_ptr_field = true;
 static allow_else_move = true;
 
