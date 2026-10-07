@@ -1,3 +1,5 @@
+import std/libc
+
 struct Any{
     box: Box<i8>;
     type: String;
@@ -24,13 +26,25 @@ impl Any{
     func drop2<T>(*self){
         let val: T = ptr::deref!(self.box.get() as T*);
         Drop::drop(val);
+        //manual drop must be total: free the box shell and the type
+        //string too (auto-drop covers those but not payload innards;
+        //drop2 used to leak both shells - the complement).
+        free(self.box.val as i8*);
+        Drop::drop(self.type);
         std::no_drop(self);
     }
 }
 
 impl Drop for Any{
     func drop(*self){
-        panic("any must be drop manually");
+        //Type-erased: T is gone, so payload innards can't be dropped (that
+        //needs a per-T drop glue stored at construction; no such mechanism
+        //exists yet). Free the box shell and the type string; payload
+        //innards leak. This never panics: auto-drop must be total. Manual
+        //drop2 frees more where it is used.
+        free(self.box.val as i8*);
+        Drop::drop(self.type);
+        std::no_drop(self);
     }
 }
 
