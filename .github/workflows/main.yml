@@ -186,7 +186,9 @@ jobs:
       - name: test-drops
         run: |
           unzip tc/x-toolchain-*-x86_64.zip -d tc
-          TC=$(echo tc/x-toolchain-*)
+          #trailing slash: the artifact download leaves both the .zip file
+          #and the extracted dir; only the dir is a toolchain.
+          TC=$(echo tc/x-toolchain-*/)
           export drop_enabled=1 drop_lhs_enabled=1
           export XSKIP="20_worker"
           ./bin/test.sh $TC all
