@@ -92,7 +92,10 @@ impl<T> Mutex<T>{
 }
 impl<T> Drop for Mutex<T>{
   func drop(*self){
-    self.unlock();
+    //NB: no unlock here: destroying a held mutex must fail loudly
+    //(EBUSY), and unlocking an unlocked one corrupts the counter, so a
+    //prior version of this drop failed on EVERY mutex. Holders must
+    //unlock before the mutex dies; join() guarantees that for Worker.
     let code = pthread_mutex_destroy(&self.lock);
     if(code != 0){
       panic("mutex destroy failed, code={}", code);
@@ -112,6 +115,11 @@ struct Worker{
   thread_cnt: i32;
   infos: Mutex<LinkedList<Box<WorkerBridgeInfo>>>;
   todo: Mutex<List<Job>>;
+  //join handles retained here (NOT in the self-removing infos nodes):
+  //join() joins every thread before returning, so no thread can still
+  //hold a mutex when the Worker drops. Only the owning thread touches
+  //this list (workers touch infos/todo), so no mutex needed for it.
+  threads: List<Thread>;
 }
 struct WorkerBridgeInfo{
   fp: func(c_void*) => void;
@@ -132,21 +140,23 @@ func worker_bridge(arg: c_void*){
   let infos = worker.infos.lock();
   let todo = worker.todo.lock(); 
   if(xxx) print("finished\n");
-  if(infos.len() == 1){
-      infos.clear();
-  }else{
-      let i = 0;
-      let cur: Node<Box<WorkerBridgeInfo>>* = infos.head.get();
-      while(true){
-          if(cur.val.get().th.get().id != info.th.get().id){
-              infos.remove(i);
-              if(xxx) print("removed {}\n", infos.len());
-              break;
-          }
-          if(cur.next.is_none()) break;
-          cur = cur.next.get().get();
-          i+=1;
+  //remove SELF, never a peer: peers may still run their jobs, and with
+  //auto-drops a removed node is freed immediately, so freeing another
+  //thread's node use-after-frees it (garbage sleeps, EBUSY at teardown).
+  //the old code removed the first non-self node, which only worked while
+  //drops were off and remove() leaked. after this point `info` and `cur`
+  //dangle: only `worker` (copied above) and fresh locks are used below.
+  let i = 0;
+  let cur: Node<Box<WorkerBridgeInfo>>* = infos.head.get();
+  while(true){
+      if(cur.val.get().th.get().id == info.th.get().id){
+          infos.remove(i);
+          if(xxx) print("removed {}\n", infos.len());
+          break;
       }
+      if(cur.next.is_none()) break;
+      cur = cur.next.get().get();
+      i+=1;
   }
   if(xxx) print("todo {} wc={}\n", todo.len(), infos.len());
   while(!todo.empty() && infos.len() < worker.thread_cnt){
@@ -166,7 +176,8 @@ impl Worker{
     return Worker{
                   thread_cnt: thread_cnt,
                   infos: Mutex::new(LinkedList<Box<WorkerBridgeInfo>>::new()),
-                  todo: Mutex::new(List<Job>::new())
+                  todo: Mutex::new(List<Job>::new()),
+                  threads: List<Thread>::new()
     };
   }
 
@@ -212,21 +223,45 @@ impl Worker{
       let bx: Box<WorkerBridgeInfo>* = infos.add(Box::new(info));
       let info_ptr = bx.get();
       let th = thread::spawn_arg(worker_bridge, info_ptr);
+      let tid = th.id;
       info_ptr.th = Option::new(th);
+      //retain the handle outside the self-removing node (see threads).
+      //id is copied before the move; Thread itself is just the id.
+      self.threads.add(Thread{id: tid});
       if(xxx) print("added1={}\n", infos.len());
       self.infos.unlock();
       if(xxx) print("added {}\n", self.get_working());
   }
 
   func join(self){
-      let infos = self.infos.lock();
-      while(!infos.empty()){
-          //infos.last().get().th.get().join();
+      //drain + join until quiescent: a finishing thread can pull from
+      //todo and spawn while we join (its node appears after we looked),
+      //so a single pass can miss stragglers. Spawns are finite (each
+      //consumes a todo entry), so this terminates.
+      while(true){
+          let infos = self.infos.lock();
+          while(!infos.empty()){
+              //infos.last().get().th.get().join();
+              self.infos.unlock();
+              msleep(20);
+              infos = self.infos.lock();
+          }
           self.infos.unlock();
-          msleep(20);
-          infos = self.infos.lock();
+          //join every spawned thread before returning: the queue being
+          //empty does not mean threads exited, and dropping Worker while
+          //one still holds infos/todo makes their destroy fail (EBUSY).
+          //Draining the list also makes repeat join() calls safe no-ops.
+          while(!self.threads.empty()){
+              let th = self.threads.remove(0);
+              th.join();
+          }
+          let infos2 = self.infos.lock();
+          let quiet = infos2.empty();
+          self.infos.unlock();
+          if(quiet){
+              break;
+          }
       }
-      self.infos.unlock();
       //sleep(5);
   }
 }

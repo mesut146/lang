@@ -1,7 +1,8 @@
-worker teardown redesign (future work, not started)
+worker teardown redesign (done 2026-10-07, was future work)
 
-status: 20_worker passes drops-off, fails drops-on. tracked here so the
-drops-on suite has exactly one known exclusion.
+status: 20_worker green with drops on (own section, repeated runs) and
+off. the redesign below is implemented in src/std/th.x; this note now
+records what was wrong and why the fix looks the way it does.
 
 problem
 -------
@@ -37,13 +38,23 @@ what not to do
 - joining via the infos list (th.x:224 shape): nodes self-remove, so the
   handle you want is already gone by the time you look for it.
 
-redesign direction
+redesign direction (implemented)
 ------------------
-retain join handles outside the self-removing list (e.g. a thread table
-owned by Worker, appended at spawn, never removed by workers), and make
-Worker::join pthread_join every live thread before returning. only then
-may infos/todo be destroyed. validate with repeated drops-on runs of
-20_worker: threading flakes need statistics, not single passes.
+retain join handles outside the self-removing list (Worker.threads, no
+mutex needed: only the owning thread touches it), and join-before-destroy
+with quiescence: drain, join all recorded, re-check, repeat (todo refill
+can spawn mid-join; spawns are finite so it terminates). worker_bridge
+removes SELF, never peers: freeing another live thread's node was the
+use-after-free behind garbage sleeps (~261-year msleep observed) and the
+EBUSY that followed. after self-removal nothing touches `info` again
+(worker ptr was copied beforehand); the old len==1/clear() special case
+is subsumed by uniform self-search.
+
+separately fixed while here: Mutex::drop unconditionally unlocked before
+destroy, corrupting the counter to -1 on every already-unlocked mutex, so
+destroy could never succeed (even single-threaded, zero jobs). drop now
+destroys directly; a held mutex at destroy stays loud (EBUSY) as it
+should. an unconditional unlock would also have been wrong.
 
 related, done
 ------------
