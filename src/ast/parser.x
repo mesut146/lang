@@ -1298,10 +1298,13 @@ impl Parser{
     let ty = Option<Type>::new();
     match type_expr{
       Expr::Name(nm) => {
-        ty = Option::new(Type::new(nm));
+        //clone, never move: bindings alias the scrutinee's buffers and
+        //the scrutinee still drops, so a moved-out payload would dangle.
+        ty = Option::new(Type::new(nm.clone()));
       },
       Expr::Type(t) => {
-        ty = Option::new(t);
+        //same: t.clone() moves t (fine), the deep copy owns itself.
+        ty = Option::new(t.clone());
       },
       _ => {
         self.err(type_expr.line, format("was expecting name got {:?}", &type_expr));

@@ -88,12 +88,16 @@ struct Own{
     cur_scope: i32;
     scope_map: Map<i32, VarScope>;
     var_map: Map<i32, Variable>;
+    //MATCH_CASE scope ids of the innermost open match (stack discipline
+    //via begin_match/end_match): end_match merges non-jump arm marks up.
+    match_arms: List<i32>;
 }
 
 impl Drop for Own{
     func drop(*self){
         self.scope_map.drop();
         self.var_map.drop();
+        self.match_arms.drop();
         Logger::exit(&self);
     }
 }
@@ -109,7 +113,8 @@ impl Own{
             main_scope: main_scope.id,
             cur_scope: main_scope.id,
             scope_map: Map<i32, VarScope>::new(),
-            var_map: Map<i32, Variable>::new()
+            var_map: Map<i32, Variable>::new(),
+            match_arms: List<i32>::new()
         };
         res.scope_map.add(main_scope.id, main_scope);
         return res;
@@ -131,6 +136,9 @@ impl Own{
         scope.parent = parent.id;
         let id = scope.id;      
         self.scope_map.add(scope.id, scope);
+        if(kind is ScopeType::MATCH_CASE){
+            self.match_arms.add(id);
+        }
         self.set_current(id);
         return id;
     }
@@ -264,21 +272,31 @@ impl Own{
     //named-place recognition, but never panics: an unregistered vh just
     //means "not provably named", and for anything but a proven temp we
     //do nothing.
-    func consume_match_temp(self, scr: Expr*){
+    func consume_match_temp(self, scr: Expr*, track_named: bool){
         if let Expr::Access(scp, name) = scr{
             let scp_rt = self.get_resolver().visit(scp.get());
             let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
-            scp_rt.drop();
             if(named){
+                let vid = scp_rt.vh.get().id;
+                scp_rt.drop();
+                if(track_named){
+                    self.mark_scrutinee(vid, scr);
+                }
                 return;
             }
+            scp_rt.drop();
         }else{
             let rt = self.get_resolver().visit(scr);
             let named = rt.vh.is_some() && (scr is Expr::Name || scr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some();
-            rt.drop();
             if(named){
+                let vid = rt.vh.get().id;
+                rt.drop();
+                if(track_named){
+                    self.mark_scrutinee(vid, scr);
+                }
                 return;
             }
+            rt.drop();
         }
         let rhs = Rhs::EXPR{scr};
         let scope = self.get_scope();
@@ -297,6 +315,43 @@ impl Own{
         rhs.drop();
     }
 
+    //A payload binding copies the named scrutinee's bytes; from birth the
+    //binding owns the copy, so the scrutinee must never drop it (else the
+    //same buffer dies twice). Mark the scrutinee consumed in the current
+    //(arm) scope: sibling arms snapshot clean states, and end_match merges
+    //non-jump arm marks to the parent for post-match drops.
+    func mark_scrutinee(self, vid: i32, scr: Expr*){
+        if(self.var_map.get(&vid).is_some()){
+            let v = self.get_var(vid).clone();
+            self.update_state(Rhs::new(v), StateType::MOVED{scr.line}, self.get_scope());
+        }
+    }
+
+    //Match-arm scope stack discipline (see match_arms): nested matches
+    //merge only the arms they opened.
+    func begin_match(self): i64{
+        return self.match_arms.len();
+    }
+    func end_match(self, mark: i64){
+        let parent = self.get_scope();
+        let n = self.match_arms.len();
+        let i = mark;
+        while(i < n){
+            let arm = self.get_scope(*self.match_arms.get(i));
+            if(!arm.exit.is_jump()){
+                for pair in &arm.state_map{
+                    if(pair.b is StateType::MOVED || pair.b is StateType::MOVED_PARTIAL){
+                        self.update_state(pair.a.clone(), pair.b.clone(), parent);
+                    }
+                }
+            }
+            i += 1;
+        }
+        while(self.match_arms.len() > mark){
+            self.match_arms.pop_back();
+        }
+    }
+
     //Mark a match-arm yielded place as moved: the arm value is memcpy'd
     //into the match result, so the place must not also die with the arm.
     //VAR places with registered ids only; anything else keeps today's
@@ -304,6 +359,10 @@ impl Own{
     //types are unaffected: check() and drop emission both skip them.
     func mark_yield(self, e: Expr*){
         if(!(e is Expr::Name || e is Expr::Unary)){
+            //yielded temp (e.g. `_ => String::new(..)`): the value is
+            //memcpy'd to the match result, so the temp must not drop it
+            //afterwards (nor drop garbage when another arm ran).
+            self.update_state(Rhs::EXPR{e}, StateType::MOVED{e.line}, self.get_scope());
             return;
         }
         let rt = self.get_resolver().visit(e);

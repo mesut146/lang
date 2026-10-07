@@ -225,6 +225,7 @@ impl Emitter{
       let res = Option<Value*>::new();
       let infos = List<MatchInfo>::new();
       let use_next = false;
+      let mmark = self.own.get().begin_match();
       for case in &node.cases{
         match &case.lhs{
           MatchLhs::NONE => {
@@ -235,6 +236,11 @@ impl Emitter{
                 CreateBr(ll.builder, nextbb);
                 use_next = true;
                 if(!match_type.is_void()){
+                  //like enum arms: a yielded temp is memcpy'd out, so it
+                  //must not die with the arm (nor drop another arm's slot).
+                  if let MatchRhs::EXPR(e) = &case.rhs{
+                    self.own.get().mark_yield(e);
+                  }
                   let rt2 = resolver.visit_match_rhs(&case.rhs);
                   infos.add(MatchInfo{rt2.unwrap(), rhs_val.unwrap(), def_bb});
                 }
@@ -286,6 +292,9 @@ impl Emitter{
         SetInsertPoint(ll.builder, nextbb);
         CreateUnreachable(ll.builder);
       }
+      //merge non-jump arm marks (e.g. consumed scrutinees) to the parent
+      //for post-match drops; sibling arms already compiled clean.
+      self.own.get().end_match(mmark);
       //handle ret value
       if(!infos.empty()){
         let phi_type = self.mapType(&match_type);
@@ -305,15 +314,19 @@ impl Emitter{
     }
 
     func alloc_enum_arg(self, arg: ArgBind*, variant: Variant*, arg_idx: i32, decl: Decl*, enum_ptr: Value*, rhs_ty: Type*, scr: Expr*){
-      //the binding copies the scrutinee temp's bytes; mark the temp
-      //consumed so it never drops the copy (see consume_match_temp).
-      self.own.get().consume_match_temp(scr);
       let ll = self.ll.get();
       let data_index = get_data_index(decl);
       let dataPtr = CreateStructGEP(ll.builder, self.mapType(&decl.type), enum_ptr, data_index);
       let var_ty = self.get_variant_ty(decl, variant);
 
       let field = variant.fields.get(arg_idx);
+      //the binding copies the scrutinee's bytes; consume temps as before,
+      //and for drop-tracked payloads also consume a named scrutinee so it
+      //never drops the copy (see consume_match_temp). Primitive payloads
+      //copy independently, and borrows (pointer scrutinee, e.g. if-let on
+      //&x) never own: the scrutinee stays droppable in both cases.
+      let track = self.own.get().is_drop_or_ptr(&field.type) && !rhs_ty.is_pointer();
+      self.own.get().consume_match_temp(scr, track);
       let alloc_ptr = self.get_alloc(arg.id);
       self.NamedValues.add(arg.name.clone(), alloc_ptr);
       let gep_idx = arg_idx;
