@@ -46,6 +46,7 @@ rm -rf $build
 export XTMP=$build/tmp
 out_dir=$build/${name}_out
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 export XTERMUX=1
 #no apt/NDK/llvm downloads here: reuse the toolchain's own libs

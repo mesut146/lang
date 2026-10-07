@@ -17,6 +17,7 @@ compiler=$1
 build=$dir/../build
 mkdir -p $build
 out_dir=$build/${name}_out
+$dir/cache_env.sh $out_dir
 
 if [ -d "$1" ]; then
   compiler="$1/bin/x"

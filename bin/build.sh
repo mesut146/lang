@@ -32,6 +32,7 @@ fi
 
 out_dir=$build/${name}_out
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 #todo
 rm -rf $build
@@ -125,6 +126,7 @@ if [ ! -z "$XSTAGE" ]; then
     compiler=$final_binary
   fi
   out_dir=$build/${name}_out
+  $dir/cache_env.sh $out_dir
   build
   final_binary=${out_dir}/$name
 fi

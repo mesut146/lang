@@ -31,6 +31,7 @@ fi
 
 out_dir=$build/${name}_out
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 export XTMP=$build/tmp
 

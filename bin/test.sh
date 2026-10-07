@@ -114,7 +114,7 @@ std_regex(){
       #NB: no -g here, debug info codegen is currently broken (segfaults
       #even on trivial files); use XGDB=1 for gdb sessions instead.
       cmd="run '$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f'"
-      eval $cmd
+      eval $cmd || exit 1
       cmd="run '$out_dir/$(basename $f)'"
       eval $cmd
       if [ ! "$?" -eq "0" ]; then

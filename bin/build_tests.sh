@@ -11,6 +11,7 @@ build=$dir/../build
 name="xtest"
 out_dir=$build/${name}_out
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 export LD=$($dir/find_llvm.sh clang)
 

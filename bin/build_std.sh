@@ -16,6 +16,7 @@ name="std"
 out_dir=$build/${name}_out
 
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 # XJOBS=N enables parallel per-file compilation (-j)
 if [ ! -z "$XJOBS" ]; then

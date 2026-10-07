@@ -37,6 +37,7 @@ rm -rf $build
 export XTMP=$build/tmp
 out_dir=$build/${name}_out
 mkdir -p $out_dir
+$dir/cache_env.sh $out_dir
 
 export XTERMUX=1
 XCROSS=$XCROSS $dir/apt_cross.sh

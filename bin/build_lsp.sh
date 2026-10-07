@@ -11,6 +11,7 @@ name="lsp"
 out_dir=$build/${name}_out
 
 mkdir -p $build
+$dir/cache_env.sh $out_dir
 
 $dir/build_std.sh $compiler $out_dir || exit 1
 LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
