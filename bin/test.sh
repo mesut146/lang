@@ -28,6 +28,16 @@ run(){
   eval $1 || (echo "error while compiling '$1'"; exit 1)
 }
 
+#XSKIP="20_worker": basenames to skip (space-separated, glob patterns ok),
+#for tests known to fail under a given configuration. Currently used for
+#20_worker under drops (needs the worker teardown redesign, doc/worker.txt).
+skipped(){
+  for s in $XSKIP; do
+    if [[ "$1" == $s ]]; then return 0; fi
+  done
+  return 1
+}
+
 normal(){
   pass=0; fail=0; xpass=0
   for f in $testd/normal/*.x $testd/fail/*.x; do
@@ -99,6 +109,8 @@ std_all(){
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
 
   for f in $testd/std_test/*.x; do
+    base=$(basename $f .x)
+    if skipped $base; then echo "SKIP: $f"; continue; fi
     run "$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" || exit 1
     run "$out_dir/$(basename $f)" || exit 1
   done

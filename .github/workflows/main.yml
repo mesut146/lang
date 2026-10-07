@@ -166,6 +166,31 @@ jobs:
           path: ${{ env.tool2_termux_zip }}
           compression-level: 0
 
+  #drops-on gate: same suite with ownership drops forced on. Known
+  #exclusion is 20_worker (worker teardown redesign, doc/worker.txt).
+  #Not in publish needs yet: proving stability over a few runs first.
+  test-drops:
+    needs: [build-x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: x-toolchain-*-x86_64
+          path: tc
+          merge-multiple: true
+
+      - name: test-drops
+        run: |
+          unzip tc/x-toolchain-*-x86_64.zip -d tc
+          TC=$(echo tc/x-toolchain-*)
+          export drop_enabled=1 drop_lhs_enabled=1
+          export XSKIP="20_worker"
+          ./bin/test.sh $TC all
+
   publish:
     needs: [build-x86_64, build-aarch64, build-termux]
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
