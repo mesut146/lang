@@ -123,7 +123,6 @@ impl<K, V> Map<K, V>{
     let idx = self.indexOf(k);
     if(idx != -1){
       let old = self.remove_idx(idx);
-      old.drop();
     }
   }
 

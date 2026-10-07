@@ -146,7 +146,6 @@ impl<K, V> HashMap<K, V>{
             hash: hash,
             next: Ptr<HashNode<K,V>>::new()
         });
-        old.drop();
         self.count += 1;
         self.rehash();
         return Option<V>::none();
@@ -160,7 +159,6 @@ impl<K, V> HashMap<K, V>{
         assert(std::print_type<K>().eq("String"));
         let key_str = s.owned();
         let res = self.get(&key_str);
-        key_str.drop();
         return res;
     }
 

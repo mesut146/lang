@@ -18,8 +18,6 @@ func list_i32(){
     let str = Fmt::str(&list);
     print("list = {}\n", str);
     assert(str.eq("[5, 7, 10, 70]"));
-    str.drop();
-    list.drop();
 }
 
 func list_str(){
@@ -34,8 +32,6 @@ func list_str(){
     let str = Fmt::str(&list);
     print("list = {}\n", str);
     assert(str.eq("[abb, abc, abd, bxx, cbd]"));
-    str.drop();
-    list.drop();
 }
 
 func main(){

@@ -20,5 +20,4 @@ func main(){
     let a = A{10, "aa"};
     let s = format("dsp={} dbg={:?}\n", a, a);
     print("{}", s);
-    s.drop();
 }

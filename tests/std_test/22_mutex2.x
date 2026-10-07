@@ -21,5 +21,4 @@ func main(){
     for th in &arr{
         th.join();
     }
-    arr.drop();
 }

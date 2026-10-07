@@ -13,8 +13,6 @@ func print_test(){
   let str2 = f64::print(-1.23);
   assert_eq(str2.str(), "-1.230000");
 
-  str.drop();
-  str2.drop();
 }
 
 func main(){

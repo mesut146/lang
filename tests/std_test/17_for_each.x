@@ -13,7 +13,6 @@ func test_normal(){
         assert(*x == arr[i]);
         i += 1;
     }
-    list.drop();
 }
 func test_into_iter(){
     let list = List<i32>::new();

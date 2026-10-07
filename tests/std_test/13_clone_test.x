@@ -35,8 +35,6 @@ func main(){
   let a_str = Fmt::str(&a);
   let a2_str = Fmt::str(&a2);
   assert_eq(&a_str, &a2_str);
-  a_str.drop();
-  a2_str.drop();
 
   let e1 = E::E1{a: 5, b: &x, c: b};
   let e1_clone = e1.clone();
@@ -45,8 +43,6 @@ func main(){
   printf("&x=%p\n", &x);
   e1.dump();
   //assert_eq(&e1_str, &e1c_str);
-  e1_str.drop();
-  e1c_str.drop();
 
   let e2 =  E::E2;
   let e2_clone = e2.clone();

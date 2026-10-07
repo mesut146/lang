@@ -11,7 +11,6 @@ func hashset_test(){
     set.add(12);
     set.add(50);
     print("set={:?}\n", set);
-    set.drop();
 }
 
 func main(){
@@ -23,7 +22,6 @@ func main(){
     //set.add(12);
     //set.add(70);
     print("set={:?}\n", set);
-    set.drop();
     hashset_test();
     print("set test done\n");
 }

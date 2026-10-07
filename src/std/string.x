@@ -109,7 +109,6 @@ impl String{
     }
     func append(self, s: String): String*{
       self.append(&s);
-      s.drop();
       return self;
     }
 

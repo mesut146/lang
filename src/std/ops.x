@@ -8,7 +8,6 @@ func dbg(c: bool, id: i32){
 }
 func dbg(s1: String, s2: str, id: i32){
   dbg(s1.eq(s2), id);
-  s1.drop();
 }
 
 struct Pair<K, V>{
@@ -125,7 +124,6 @@ impl Fmt{
   }
   func print(self, s: String){
     self.buf.append(&s);
-    s.drop();
   }
   func print<T>(self, node: T*){
     Debug::debug(node, self);
@@ -512,7 +510,6 @@ impl f64{
   func parse(s: str): f64{
     let cs = CStr::new(s);
     let res: f64 = atof(cs.ptr());
-    cs.drop();
     return res;
   }
 
@@ -545,7 +542,6 @@ func assign_eq<T>(l: T*, r: T){
   let lval = ptr::deref!(l);
   std::no_drop(*l);
   *l = r;
-  lval.drop();
 }
 
 
@@ -568,19 +564,15 @@ func assert_eq(s1: String, s2: String){
   if(!s1.eq(s2.str())){
     panic("assertion failed: {}!= {}", s1, s2);
   }
-  s1.drop();
-  s2.drop();
 }
 func assert_eq(s1: String, s2: str){
   if(!s1.eq(s2)){
     panic("assertion failed: {}!= {}", s1, s2);
   }
-  s1.drop();
 }
 
 func assert2(c: bool, msg: String){
   if(!c){
     panic("{}\n", msg);
   }
-  msg.drop();
 }

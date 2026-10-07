@@ -150,7 +150,6 @@ impl<T> List<T>{
 
   func add_not_exist(self, e: T){
     if(self.contains(&e)){
-      e.drop();
       return;
     }
     self.add(e);

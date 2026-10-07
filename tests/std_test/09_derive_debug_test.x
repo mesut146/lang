@@ -43,7 +43,6 @@ func main(){
     let b = B{a: a, b: 3};
     let s2 = Fmt::str(&b);
     assert(s2.eq("B{a: A{a: 1, b: 2}, b: 3}"));
-    s2.drop();
 
     let e = E::B{b};
     let s3 = Fmt::str(&e);
@@ -70,7 +69,5 @@ func main(){
     //let ge2 = GenEnum<i32>::B{456, &x};
     //assert_eq(Fmt::str(&ge2), format("GenEnum<i32>::B{{val: 456, ptr: {}}", x_str));
 
-    x_str.drop();
-    x2_str.drop();
     print("derive test done\n");
 }

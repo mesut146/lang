@@ -141,7 +141,6 @@ func try_func_ptr(self, expr: Expr*, name: str, err_multiple: bool): Option<RTyp
         }
       }
     }
-    arr.drop();
     if(list.len() > 1 && err_multiple){
       self.err(expr, format("multiple matching functions for '{}'\n{:?}", name, list));
     }
@@ -149,7 +148,6 @@ func try_func_ptr(self, expr: Expr*, name: str, err_multiple: bool): Option<RTyp
       let sig = list.get_ptr(0);
       let method = sig.m.unwrap();
       if(method.is_generic){
-        list.drop();
         return Option<RType>::new();
       }
       let ret = self.visit_type(&method.type).unwrap();
@@ -161,10 +159,8 @@ func try_func_ptr(self, expr: Expr*, name: str, err_multiple: bool): Option<RTyp
       let id = Node::new(-1, expr.line);
       let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
       rt.method_desc = Option::new(sig.desc.clone());
-      list.drop();
       return Option::new(rt);
     }
-    list.drop();
     return Option<RType>::new();
   }
 */

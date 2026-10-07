@@ -23,6 +23,5 @@ func main(){
     let val = m.unwrap();
     print("mutex={}\n", val);
     assert(val == th_cnt);
-    arr.drop();
     print("mutex2 done\n");
 }

@@ -34,10 +34,7 @@ func main(){
   assert(b2.get().b[9] == 9);
   let cp = b2.clone();
   assert(cp.get().a == 7);
-  b2.drop();
-  cp.drop();
   
   let b3 = LinkedList::B{Box::new(LinkedList::A{11})};
-  b3.drop();
   print("box_text done\n");
 }

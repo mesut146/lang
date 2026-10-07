@@ -60,7 +60,6 @@ impl File{
     create_dirs_file(path)?;
     let path_c = CStr::new(path);
     let fp = fopen(path_c.ptr(), mode.as_c_str());
-    path_c.drop();
     if(fp as u64 == 0){
       return Result<File, String>::err(format("no such file '{}'", path));
     }
@@ -85,7 +84,6 @@ impl File{
   func remove_file(path: str): Result<(), String>{
     let path_c = CStr::new(path);
     let code = remove(path_c.ptr());
-    path_c.drop();
     if(code == 0){
       return Result<(), String>::ok(());
     }
@@ -99,7 +97,6 @@ impl File{
     target_file.write_bytes(bytes.slice())?;
     src_file.close();
     target_file.close();
-    bytes.drop();
     return Result<(), String>::ok(());
   }
 
@@ -125,7 +122,6 @@ impl File{
   func read_string(path: str): Result<String, String>{
     let f = File::open(path, OpenMode::Read)?;
     let res = f.read_string();
-    f.drop();
     return Result<String, String>::ok(res);
   }
 
@@ -158,7 +154,6 @@ impl File{
     let list = List<String>::new();
     let path_c = CStr::new(path);
     let dp = opendir(path_c.ptr());
-    path_c.drop();
     if(dp as u64 == 0) {
       return Result<List<String>, String>::err(format("no such dir {}", path));
     }
@@ -253,7 +248,6 @@ impl File{
     if(stat(filec.ptr(), buf) != 0){
       panic("libc::stat failed for '{}'", file);
     }
-    filec.drop();
     return buf.st_mtim.as_sec();
   }
 }

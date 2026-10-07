@@ -25,7 +25,6 @@ impl Process{
         if(is_null(fp)){
             panic("failed to run {}", cmd);
         }
-        cs.drop();
         return Process{fp: fp};
     }
     func read_str(self): String{
@@ -45,7 +44,6 @@ impl Process{
         return pclose(self.fp);
     }
     func eat_close(*self): i32{
-        self.read().drop();
         return self.close();
     }
     func read_close(*self): Result<String, i32>{
@@ -54,7 +52,6 @@ impl Process{
         if(status == 0){
           return Result<String, i32>::ok(res);
         }
-        res.drop();
         return Result<String, i32>::err(status);
     }
 }
@@ -70,7 +67,6 @@ impl std{
   func getenv(name: str): Option<str>{
     let c_name = CStr::new(name);
     let c_env = getenv(c_name.ptr());
-    c_name.drop();
     if(is_null(c_env)){
       return Option<str>::new();
     }
@@ -80,8 +76,6 @@ impl std{
     let c_name = CStr::new(name);
     let c_val = CStr::new(val);
     setenv(c_name.ptr(), c_val.ptr(), 1);
-    c_name.drop();
-    c_val.drop();
   }
 }
 
@@ -117,7 +111,6 @@ impl CmdArgs{
   }
   func consume(self){
     let arg = self.get();
-    arg.drop();
   }
   func peek(self): String*{
     return self.args.get(0);
@@ -152,7 +145,6 @@ impl CmdArgs{
     for(let i = 0; i < self.args.len(); ++i){
       if(self.args.get(i).eq(arg)){
         let tmp = self.args.remove(i);
-        tmp.drop();
         return true;
       }
     }
@@ -163,7 +155,6 @@ impl CmdArgs{
       if(self.args.get(i).eq(arg)){
         let val = self.args.remove(i + 1);
         let key = self.args.remove(i);
-        key.drop();
         return Option::new(val);
       }
     }

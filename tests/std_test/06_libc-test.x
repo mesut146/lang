@@ -39,7 +39,6 @@ func list_test(){
     let file = arr.get_ptr(i);
     print("{}\n", file.ptr());
   }*/
-  arr.drop();
 }
 
 func parse_float(){
@@ -97,5 +96,4 @@ func main(){
   fork_test();
   stat_test();
   print("libc_test done\n");
-  cur.drop();
 }

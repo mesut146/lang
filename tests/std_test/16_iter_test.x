@@ -13,7 +13,6 @@ func test_iter(){
     }
     assert_eq(list.len() as i32, 2);
     assert_eq(i, 2);
-    list.drop();
 }
 
 func test_iter_mut(){
@@ -32,7 +31,6 @@ func test_iter_mut(){
     for(let i = 0;i < list.len();++i){
         assert_eq(*list.get(i), arr[i]);
     }
-    list.drop();
 }
 
 func test_into_iter(){
@@ -49,7 +47,6 @@ func test_into_iter(){
         i += 1;
     }
     assert_eq(i, 2);
-    it.drop();
 }
 
 func main(){

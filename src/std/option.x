@@ -82,7 +82,6 @@ impl<T> Option<T>{
       std::no_drop(self);
       return def;
     }
-    def.drop();
     return self.unwrap();
   }
 

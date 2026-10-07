@@ -2,7 +2,6 @@ func test_format(){
     let h = "hello";
     let s = format!("{} world", h);
     assert(s.eq("hello world"));
-    s.drop();
 }
 
 func format_named(){
@@ -10,7 +9,6 @@ func format_named(){
     let x = 42;
     let s2 = format!("{s} {x}");
     assert(s2.eq("hello 42"));
-    s2.drop();
 }
 
 func test_print(){

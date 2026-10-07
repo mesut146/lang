@@ -228,7 +228,6 @@ impl Captures{
     func get(self, idx: i32): Capture*{
         let s = format("{}", idx);
         let res = self.get(s.str());
-        s.drop();
         return res;
     }
     func get(self, name: str): Capture*{

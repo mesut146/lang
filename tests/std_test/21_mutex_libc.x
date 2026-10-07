@@ -23,5 +23,4 @@ func main(){
         th.join();
     }
     pthread_mutex_destroy(&lock); 
-    arr.drop();
 }

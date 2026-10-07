@@ -25,5 +25,4 @@ func main(){
     assert(*l.get(0) == 20);
     assert(*l.get(1) == 30);
     print("l={}\n", l);
-    l.drop();
 }
