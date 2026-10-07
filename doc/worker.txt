@@ -1,0 +1,53 @@
+worker teardown redesign (future work, not started)
+
+status: 20_worker passes drops-off, fails drops-on. tracked here so the
+drops-on suite has exactly one known exclusion.
+
+problem
+-------
+tests/std_test/20_worker.x panics under drops with
+  Mutex<LinkedList<Box<WorkerBridgeInfo>>>::drop(*self)
+  mutex destroy failed, code=16
+code 16 is EBUSY: pthread_mutex_destroy on a locked mutex.
+
+evidence (all reproduced, not theorized)
+- drops-off: green (nothing is ever destroyed, so nothing is checked).
+- drops-on: Any::drop panic first (fixed by making Any::drop total,
+  commit b599365); then EBUSY deterministically enough to fail the suite.
+- the panic fires in worker teardown after join() returned, never in
+  worker_bridge itself.
+
+root cause
+----------
+threads remove THEMSELVES from worker.infos when done, then exit freely.
+Worker::join waits only for the queue to drain (infos.empty()), never
+pthread_joins anyone (a join attempt via the infos list is commented out
+at th.x:224 - the handles vanish together with the removed nodes).
+so join() can return, the test can end, and Worker can drop while a
+worker thread is still inside worker_bridge holding infos or todo.
+destroying a held mutex is EBUSY, correctly reported.
+
+additionally the test is racy even drops-off: threads may touch freed
+worker memory after join; it just never crashes observably there.
+
+what not to do
+--------------
+- retry-on-EBUSY or tolerant destroy in Mutex::drop: masks the race,
+  keeps the use-after-free. EBUSY here is a true report.
+- joining via the infos list (th.x:224 shape): nodes self-remove, so the
+  handle you want is already gone by the time you look for it.
+
+redesign direction
+------------------
+retain join handles outside the self-removing list (e.g. a thread table
+owned by Worker, appended at spawn, never removed by workers), and make
+Worker::join pthread_join every live thread before returning. only then
+may infos/todo be destroyed. validate with repeated drops-on runs of
+20_worker: threading flakes need statistics, not single passes.
+
+related, done
+------------
+- Any::drop no longer panics (frees shell + type string; payload innards
+  leak without per-T glue). drop2 is complete (innards + shell + type).
+- LinkedList::remove drops bypassed vals; with Any payloads that is now
+  safe (no panic), leaking only heap-owning innards.
