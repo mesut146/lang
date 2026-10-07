@@ -14,7 +14,6 @@ func main(argc: i32, args: i8**){
       overlay(&cmd);
   }
   cmd.end();
-  cmd.drop();
 }
 
 func overlay(cmd: CmdArgs*){

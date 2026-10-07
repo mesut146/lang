@@ -20,7 +20,6 @@ func find_usage(dir: str){
         for item in &unit.items{
             visit_item(item);
         }
-        unit.drop();
     }
 }
 

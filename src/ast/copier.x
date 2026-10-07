@@ -23,14 +23,12 @@ impl AstCopier{
         let type_map = HashMap<String, Type>::new();
         let copier = AstCopier::new(&type_map, unit);
         let res = copier.visit(node);
-        type_map.drop();
         return res;
     }
     func clone<T>(node: T*): T{
         let type_map = HashMap<String, Type>::new();
         let copier = AstCopier::new(&type_map);
         let res = copier.visit(node);
-        type_map.drop();
         return res;
     }
 

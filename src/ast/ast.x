@@ -54,7 +54,6 @@ func prim_size(s: str): Option<u32>{
 
 func prim_size(s: String): Option<u32>{
   let res = prim_size(s.str());
-  s.drop();
   return res;
 }
 
@@ -586,7 +585,6 @@ impl Type{
       std::no_drop(self);
       return simple;
     }
-    self.drop();
     panic("as_simple");
   }
 
@@ -640,7 +638,6 @@ impl Type{
     }
     let tmp = self.print();
     let res = tmp.eq(s);
-    tmp.drop();
     return res;
   }
   func is_generic(self): bool{
@@ -751,7 +748,6 @@ impl Type{
   func parse(input: str): Type{
     let parser = Parser::from_string(input.str(), 0);
     let res = parser.parse_type();
-    parser.drop();
     return res;
   }
 
@@ -984,7 +980,6 @@ impl Literal{
     }
     let suffix_str = self.suffix.get().print();
     let res = self.val.substr(0, self.val.len() - suffix_str.len());
-    suffix_str.drop();
     if(res.ends_with("_")){
       res = res.substr(0, res.len() - 1);
     }

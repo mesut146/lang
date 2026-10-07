@@ -25,10 +25,7 @@ func format_dir(dir: str, out: str){
         let str = f.buf.clone();
         Drop::drop(f);
         File::write_string(str.str(), outf.str())?;
-        outf.drop();
-        str.drop();
     }
-    files.drop();
 }
 
 //T: Debug
@@ -186,8 +183,6 @@ func body(node: Stmt*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
     }
     f.print(lines.get(j));
   }
-  str.drop();
-  lines.drop();
 }
 
 func body(node: Expr*, f: Fmt*, comments: List<Comment>*){
@@ -208,8 +203,6 @@ func body(node: Expr*, f: Fmt*, comments: List<Comment>*, skip_first: bool){
         f.print("\n");
     }
   }
-  str.drop();
-  lines.drop();
 }
 func body(str: String, f: Fmt*){
     for(let i=0;i<str.len();++i){
@@ -218,7 +211,6 @@ func body(str: String, f: Fmt*){
         }
         //f.print(ch);
     }
-    str.drop();
 }
 
 impl Debug for QPath{
@@ -365,7 +357,6 @@ impl Debug for Unit{
     //threads the unit's list explicitly through debug_unit()
     let empty = List<Comment>::new();
     debug_unit(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_unit(self: Unit*, f: Fmt*, comments: List<Comment>*){
@@ -421,7 +412,6 @@ impl Debug for Item{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_item(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_item(self: Item*, f: Fmt*, comments: List<Comment>*){
@@ -513,7 +503,6 @@ impl Debug for Module{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_module(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_module(self: Module*, f: Fmt*, comments: List<Comment>*){
@@ -566,7 +555,6 @@ impl Debug for Impl{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_impl(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_impl(self: Impl*, f: Fmt*, comments: List<Comment>*){
@@ -584,8 +572,6 @@ func debug_impl(self: Impl*, f: Fmt*, comments: List<Comment>*){
         f.print(lines.get(j));
         f.print("\n");
       }
-      ms.drop();
-      lines.drop();
     }
     f.print("\n}");
 }
@@ -612,7 +598,6 @@ impl Debug for Decl{
       //see Unit: diagnostics render comment-free
       let empty = List<Comment>::new();
       debug_decl(self, f, &empty);
-      empty.drop();
     }
 }
 func debug_decl(self: Decl*, f: Fmt*, comments: List<Comment>*){
@@ -732,7 +717,6 @@ impl Debug for Method{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_method(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_method(self: Method*, f: Fmt*, comments: List<Comment>*){
@@ -882,7 +866,6 @@ impl Debug for Stmt{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_stmt(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_stmt(self: Stmt*, f: Fmt*, comments: List<Comment>*){
@@ -953,7 +936,6 @@ impl Debug for Body{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_body(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_body(self: Body*, f: Fmt*, comments: List<Comment>*){
@@ -995,7 +977,6 @@ impl Debug for Block{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_block(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_block(self: Block*, f: Fmt*, comments: List<Comment>*){
@@ -1040,7 +1021,6 @@ impl Debug for VarExpr{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_varexpr(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_varexpr(self: VarExpr*, f: Fmt*, comments: List<Comment>*){
@@ -1056,7 +1036,6 @@ impl Debug for Fragment{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_fragment(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_fragment(self: Fragment*, f: Fmt*, comments: List<Comment>*){
@@ -1090,7 +1069,6 @@ impl Debug for Literal{
       f.print("_");
       self.suffix.get().debug(f);
     }*/
-    replaced.drop();
   }
 }
 
@@ -1100,7 +1078,6 @@ impl Debug for Expr{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_expr(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_expr(self: Expr*, f: Fmt*, comments: List<Comment>*){
@@ -1272,7 +1249,6 @@ impl Debug for Match{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_match(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_match(self: Match*, f: Fmt*, comments: List<Comment>*){
@@ -1307,7 +1283,6 @@ impl Debug for IfStmt{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_ifstmt(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_ifstmt(self: IfStmt*, f: Fmt*, comments: List<Comment>*){
@@ -1330,7 +1305,6 @@ impl Debug for IfLet{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_iflet(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_iflet(self: IfLet*, f: Fmt*, comments: List<Comment>*){
@@ -1356,7 +1330,6 @@ impl Debug for MacroCall{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_macrocall(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_macrocall(self: MacroCall*, f: Fmt*, comments: List<Comment>*){
@@ -1378,7 +1351,6 @@ impl Debug for Call{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_call(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_call(self: Call*, f: Fmt*, comments: List<Comment>*){
@@ -1412,7 +1384,6 @@ impl Debug for Entry{
     //see Unit: diagnostics render comment-free
     let empty = List<Comment>::new();
     debug_entry(self, f, &empty);
-    empty.drop();
   }
 }
 func debug_entry(self: Entry*, f: Fmt*, comments: List<Comment>*){

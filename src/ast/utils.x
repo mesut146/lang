@@ -78,13 +78,11 @@ func hasGeneric(type: Type*, typeParams: List<Type>*): bool{
 func isUnsigned(type: Type*): bool{
     let str = type.print();
     let res = str.eq("u8") || str.eq("u16") || str.eq("u32") || str.eq("u64");
-    str.drop();
     return res;
 }
 func isSigned(type: Type*): bool{
     let str = type.print();
     let res = str.eq("i8") || str.eq("i16") || str.eq("i32") || str.eq("i64");
-    str.drop();
     return res;
 }
 
@@ -185,7 +183,6 @@ func is_main(m: Method*): bool{
     assign_eq(&s, s.replace("$P", "*"));
     assign_eq(&s, s.replace("__", "::"));
     res.print(&s);
-    s.drop();
     return res.unwrap();
 }*/
 
@@ -345,9 +342,7 @@ func printMethod(m: Method*): String{
       let prm_type = &m.params.get(i).type;
       let mapped: Type = copier.visit(prm_type);
       s.print(&mapped);
-      mapped.drop();
     }
-    map.drop();
     s.print(")");
     return s.unwrap();
   }
@@ -395,7 +390,6 @@ impl Utils{
     if(mc.is_static && mc.name.eq(name) && mc.scope.is_some()){
       let scope_str = mc.scope.get().print();
       let res = scope_str.eq(scope);
-      scope_str.drop();
       return res;
     }
     return false;

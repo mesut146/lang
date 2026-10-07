@@ -297,10 +297,8 @@ impl Lexer{
     os.append(c);
     let oss = os.str();
     if(lexer_ops.get(&oss).is_some()){
-      os.drop();
       return self.read_op();
     }
-    os.drop();
     let err = String::new();
     if(self.single_line != -1){
       err.append("buf='");

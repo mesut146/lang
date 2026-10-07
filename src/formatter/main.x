@@ -17,7 +17,6 @@ func main(argc: i32, args: i8**){
     let inp = cmd.args.get(0).clone();
     let parser = Parser::from_path(inp.clone());
     let unit = parser.parse_unit();
-    parser.drop();
     //comments ride along explicitly: they live on the unit (ast data),
     //and the printer threads them as a side table (see debug_unit).
     //Fmt itself stays a plain buffer.
@@ -25,25 +24,15 @@ func main(argc: i32, args: i8**){
     debug_unit(&unit, &f, &unit.comments);
     let out = f.buf.clone();
     Drop::drop(f);
-    unit.drop();
     if(cmd.args.len() == 2){
         let dst = cmd.args.get(1).clone();
         out.append("\n");
         let res = File::write_string(out.str(), dst.str());
         if(res.is_err()){
             print("cannot write {}\n", &dst);
-            out.drop();
-            dst.drop();
-            inp.drop();
-            cmd.drop();
             exit(1);
         }
-        res.drop();
-        dst.drop();
     }else{
         print("{}\n", &out);
     }
-    out.drop();
-    inp.drop();
-    cmd.drop();
 }
