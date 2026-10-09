@@ -980,6 +980,12 @@ impl Emitter{
         self.own.get().do_move(arg);
         return ptr::null<Value>();
       }
+      //explicit drop: record the receiver so auto-drop never double-frees
+      //it (see note_explicit_drop). Mirrors the own_visitor hook; set-adds
+      //are idempotent.
+      if(mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty()){
+        self.own.get().note_explicit_drop(mc.scope.get());
+      }
       if(Utils::is_call(mc, "ptr", "deref")){
         return self.emit_ptr_deref(expr, &mc.args);
       }

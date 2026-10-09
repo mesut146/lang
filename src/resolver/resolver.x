@@ -2836,7 +2836,9 @@ impl Resolver{
         return res;
       }
       else if(fp.is_some()){
-        if let Type::Lambda(bx)=fp.get().type{
+        //clone: bx copies the temp's bytes and both drop, so the temp
+        //must own independently (fp still drops the original below).
+        if let Type::Lambda(bx)=fp.get().type.clone(){
           let ret = bx.get().return_type.get();
           let res = self.visit_type(ret);
           res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));

@@ -104,6 +104,14 @@ impl OwnVisitor{
             self.do_move(arg);
             return;
         }
+        //explicit drop: record the receiver so auto-drop never double-frees
+        //it on any path (conditional drops included). No marks: drops destroy
+        //in place, and reassignment below clears the record for the fresh
+        //value. Sibling scopes snapshot clean states, so checks there are
+        //unaffected. See Own::note_explicit_drop.
+        if(mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty()){
+            self.own.note_explicit_drop(mc.scope.get());
+        }
         if(Resolver::is_format(mc)){
             let info = self.get_resolver().format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);

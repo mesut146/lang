@@ -94,6 +94,9 @@ struct Own{
     //payload binding id -> scrutinee record (see BindInfo): arm-end
     //rollback for bindings that never escaped.
     match_binds: Map<i32, BindInfo>;
+    //Fmt::str keys of explicitly dropped places (see note_explicit_drop):
+    //drop emission skips them so manual drops never double-fire.
+    explicit_drops: Map<String, bool>;
 }
 
 impl Drop for Own{
@@ -102,6 +105,7 @@ impl Drop for Own{
         self.var_map.drop();
         self.match_arms.drop();
         self.match_binds.drop();
+        self.explicit_drops.drop();
         Logger::exit(&self);
     }
 }
@@ -119,7 +123,8 @@ impl Own{
             scope_map: Map<i32, VarScope>::new(),
             var_map: Map<i32, Variable>::new(),
             match_arms: List<i32>::new(),
-            match_binds: Map<i32, BindInfo>::new()
+            match_binds: Map<i32, BindInfo>::new(),
+            explicit_drops: Map<String, bool>::new()
         };
         res.scope_map.add(main_scope.id, main_scope);
         return res;
@@ -269,14 +274,18 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(expr, self), StateType::NONE);
     }
 
-    //A payload binding copies the scrutinee temp's bytes; from birth the
-    //binding owns the copy, so the temp must never drop it (else the same
-    //buffer dies twice: `let s = File::read_string(..)?` double-freed).
-    //Mark the temp consumed in its own scope. Named scrutinees are
-    //untouched: their tracking still applies. Mirrors Rhs::new's
-    //named-place recognition, but never panics: an unregistered vh just
-    //means "not provably named", and for anything but a proven temp we
-    //do nothing.
+    //A payload binding copies the scrutinee's bytes; from birth the
+    //binding owns the copy, so the source must never drop it (else the
+    //same buffer dies twice: `let s = File::read_string(..)?` double-freed).
+    //Temps are marked consumed in their own scope. Named scrutinees are
+    //marked too (see mark_scrutinee) when the payload is drop-tracked and
+    //the scrutinee is a value, not a borrow. LIMITATION: a temp derived
+    //from a named owner (e.g. `if let V(s) = get(&o)`) still double-drops:
+    //the temp is consumed but the owner isn't tracked through the call.
+    //Bind from the owner directly, or clone at the site (visit_call does
+    //this for lambda types). Mirrors Rhs::new's named-place recognition,
+    //but never panics: an unregistered vh just means "not provably
+    //named", and for anything but a proven temp we do nothing.
     func consume_match_temp(self, scr: Expr*, track_named: bool, bind_id: i32){
         if let Expr::Access(scp, name) = scr{
             let scp_rt = self.get_resolver().visit(scp.get());
@@ -544,6 +553,42 @@ impl Own{
         }
         rt.drop();
     }
+    //explicit drop target: record it so drop emission skips the auto
+    //duplicate (see drop_var/drop_obj). No marks: destroying in place is
+    //not a move, so post-uses and validators stay quiet; reassignment
+    //clears the record via update_state.
+    func note_explicit_drop(self, expr: Expr*){
+        if let Expr::Access(scp, name) = expr{
+            let scp_rt = self.get_resolver().visit(scp.get());
+            if(scp_rt.vh.is_none() || self.var_map.get(&scp_rt.vh.get().id).is_none()){
+                scp_rt.drop();
+                return;
+            }
+            let sv = self.get_var(scp_rt.vh.get().id).clone();
+            scp_rt.drop();
+            let rf = Rhs::FIELD{sv.clone(), name.clone()};
+            let fkey = Fmt::str(&rf);
+            rf.drop();
+            self.explicit_drops.add(fkey, true);
+            let rs = Rhs::new(sv);
+            let skey = Fmt::str(&rs);
+            rs.drop();
+            self.explicit_drops.add(skey, true);
+            return;
+        }
+        let rt = self.get_resolver().visit(expr);
+        let named = rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some();
+        if(!named){
+            rt.drop();
+            return;
+        }
+        let v = self.get_var(rt.vh.get().id).clone();
+        rt.drop();
+        let r = Rhs::new(v);
+        let key = Fmt::str(&r);
+        r.drop();
+        self.explicit_drops.add(key, true);
+    }
     //move rhs
     func do_assign(self, lhs: Expr*, rhs: Expr*){
         let scope = self.get_scope();
@@ -574,6 +619,12 @@ impl Own{
             let scp_rhs = Rhs::new(scp.clone());
             self.update_state(scp_rhs, StateType::MOVED_PARTIAL, scope);
         }*/
+        //reassignment starts fresh ownership: clear any explicit-drop
+        //record so the new value drops normally.
+        if(kind is StateType::ASSIGNED){
+            let rkey = Fmt::str(&rhs);
+            self.explicit_drops.remove(&rkey);
+        }
         //todo remove self param
         scope.state_map.add(rhs, kind);
     }
@@ -1013,6 +1064,13 @@ impl Own{
             return;
         }
         let rhs = Rhs::new(var.clone());
+        //explicitly dropped by hand: the manual call frees it, skip the
+        //auto duplicate (see note_explicit_drop).
+        let ekey = Fmt::str(&rhs);
+        if(self.explicit_drops.contains(&ekey)){
+            rhs.drop();
+            return;
+        }
         let state = self.get_state(&rhs, scope);
         if(print_kind is PrintKind::Any){
             let info = scope.print_info();
@@ -1052,6 +1110,12 @@ impl Own{
     }
     func drop_obj(self, obj: Object*, scope: VarScope*, line: i32){
         let rhs = Rhs::new(obj.expr, self);
+        //explicitly dropped by hand: skip the auto duplicate.
+        let ekey = Fmt::str(&rhs);
+        if(self.explicit_drops.contains(&ekey)){
+            rhs.drop();
+            return;
+        }
         let state = self.get_state(&rhs, scope);
         if(print_kind is PrintKind::Any){
             Logger::add(format("drop_obj {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
