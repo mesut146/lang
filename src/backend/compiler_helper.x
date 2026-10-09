@@ -205,7 +205,7 @@ func sort2(list: List<Decl*>*, r: Resolver*){
       if(is_all_left){
         //j belongs to i
         let rpos = right_all.indexOf(&s2);
-        right_all.remove(rpos).drop();
+        right_all.remove(rpos);
         swap(list, i, j);
         break;
       }

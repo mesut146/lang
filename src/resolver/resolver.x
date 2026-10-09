@@ -1365,7 +1365,7 @@ impl Resolver{
       return Result<(), Error>::ok(());
     }
     self.curImpl = Option::new(imp);
-    self.visit_type0(&imp.info.type)?.drop();
+    self.visit_type0(&imp.info.type)?;
     //resolve non generic type args
     if(imp.info.trait_name.is_some()){
       //todo
@@ -1385,7 +1385,7 @@ impl Resolver{
         self.visit_method(m);
         let mangled = mangle2(m, &imp.info.type);
         if(required.contains(&mangled)){
-          required.remove(&mangled).drop();
+          required.remove(&mangled);
         }
         mangled.drop();
       }
@@ -1539,19 +1539,19 @@ impl Resolver{
     //self.print_used();
     
     if(decl.base.is_some()){
-      self.visit_type(decl.base.get()).drop();
+      self.visit_type(decl.base.get());
     }
     match decl{
       Decl::Struct(fields) => {
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
-          self.visit_type(&fd.type).drop();
+          self.visit_type(&fd.type);
         }
       },
       Decl::TupleStruct(fields) => {
         for(let i = 0;i < fields.len();++i){
           let fd = fields.get(i);
-          self.visit_type(&fd.type).drop();
+          self.visit_type(&fd.type);
         }
       },
       Decl::Enum(variants)=>{
@@ -1559,7 +1559,7 @@ impl Resolver{
           let ev = variants.get(i);
           for(let j = 0;j < ev.fields.len();++j){
             let f = ev.fields.get(j);
-            self.visit_type(&f.type).drop();
+            self.visit_type(&f.type);
           }
         }
       }
@@ -2401,7 +2401,7 @@ impl Resolver{
             if(idx == -1){
               self.err(expr, format("invalid variant {}", smp.name));
             }
-            not_covered.remove(idx).drop();
+            not_covered.remove(idx);
           }
         }
       }
@@ -2522,7 +2522,7 @@ impl Resolver{
     if (is_str_lit(fmt).is_none()) {
         self.err(node, "format string is not a string literal");
     }
-    self.visit(fmt).drop();
+    self.visit(fmt);
     //check rest
     for (let i = 1; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get(i));
@@ -2543,7 +2543,7 @@ impl Resolver{
     if (is_str_lit(fmt).is_none()) {
         self.err(node, "format string is not a string literal");
     }
-    self.visit(fmt).drop();
+    self.visit(fmt);
     //check rest
     for (let i = 2; i < mc.args.len(); ++i) {
         let arg = self.getType(mc.args.get(i));
@@ -2900,7 +2900,7 @@ impl Resolver{
       return RType::new("i64");
     }
     if(Utils::is_call(call, "std", "is_ptr")){
-      self.visit_type(call.type_args.get(0)).drop();
+      self.visit_type(call.type_args.get(0));
       return RType::new("bool");
     }
     if(Utils::is_call(call, "ptr", "null")){
@@ -3457,7 +3457,7 @@ impl Resolver{
     let result_ty = format("Result<{:?},{:?}>", ok_type, err_type);
     let expr_str = format("match {:?}{{\n{result_ty}::Ok(ok{expr.id})=>ok{expr.id},{result_ty}::Err(err{expr.id})=>{}\n}", inner, err_str.get());
     info.block.return_expr.set(parse_expr(expr_str, &self.unit, expr.line));
-    self.visit_block(&info.block).drop();
+    self.visit_block(&info.block);
     self.format_map.add(expr.id, info);
     return self.visit_type(ok_type);
 
