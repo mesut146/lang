@@ -54,18 +54,19 @@ func main(){
   send(c);
   check_ids(2);
 
-  //inspect-only: binding copy drops, scrutinee leaks (no double).
+  //inspect-only: binding suppressed, scrutinee drops normally.
   reset();
-  {
-    let w = Wrp{e: E::V{v: A::new(3)}};
-    match w.e {
-      E::V(s) => {
-        assert(s.a == 3);
-      },
-      _ => {}
-    }
-  }
+  inspect14(Wrp{e: E::V{v: A::new(3)}});
   check_ids(3);
 
   print("field done\n");
+}
+
+func inspect14(w: Wrp){
+  match w.e {
+    E::V(s) => {
+      assert(s.a == 3);
+    },
+    _ => {}
+  }
 }

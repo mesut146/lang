@@ -73,19 +73,20 @@ func main(){
   send(d);
   check_ids(3);
 
-  //inspect-only: the binding copy drops in-arm, the scrutinee leaks
-  //(bind-time consume, same as temps) instead of double-dropping.
+  //inspect-only: the binding copy is suppressed in-arm, the scrutinee
+  //drops normally (no leak, no double).
   reset();
-  {
-    let e = E::V{v: A::new(4)};
-    match e {
-      E::V(s) => {
-        assert(s.a == 4);
-      },
-      _ => {}
-    }
-  }
+  inspect_e(E::V{v: A::new(4)});
   check_ids(4);
 
   print("match scrutinee done\n");
+}
+
+func inspect_e(e: E){
+  match e {
+    E::V(s) => {
+      assert(s.a == 4);
+    },
+    _ => {}
+  }
 }

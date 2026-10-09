@@ -91,6 +91,9 @@ struct Own{
     //MATCH_CASE scope ids of the innermost open match (stack discipline
     //via begin_match/end_match): end_match merges non-jump arm marks up.
     match_arms: List<i32>;
+    //payload binding id -> scrutinee record (see BindInfo): arm-end
+    //rollback for bindings that never escaped.
+    match_binds: Map<i32, BindInfo>;
 }
 
 impl Drop for Own{
@@ -98,6 +101,7 @@ impl Drop for Own{
         self.scope_map.drop();
         self.var_map.drop();
         self.match_arms.drop();
+        self.match_binds.drop();
         Logger::exit(&self);
     }
 }
@@ -114,7 +118,8 @@ impl Own{
             cur_scope: main_scope.id,
             scope_map: Map<i32, VarScope>::new(),
             var_map: Map<i32, Variable>::new(),
-            match_arms: List<i32>::new()
+            match_arms: List<i32>::new(),
+            match_binds: Map<i32, BindInfo>::new()
         };
         res.scope_map.add(main_scope.id, main_scope);
         return res;
@@ -272,7 +277,7 @@ impl Own{
     //named-place recognition, but never panics: an unregistered vh just
     //means "not provably named", and for anything but a proven temp we
     //do nothing.
-    func consume_match_temp(self, scr: Expr*, track_named: bool){
+    func consume_match_temp(self, scr: Expr*, track_named: bool, bind_id: i32){
         if let Expr::Access(scp, name) = scr{
             let scp_rt = self.get_resolver().visit(scp.get());
             let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
@@ -280,7 +285,7 @@ impl Own{
                 let vid = scp_rt.vh.get().id;
                 scp_rt.drop();
                 if(track_named){
-                    self.mark_scrutinee(vid, scr);
+                    self.mark_scrutinee(vid, scr, bind_id);
                 }
                 return;
             }
@@ -292,7 +297,7 @@ impl Own{
                 let vid = rt.vh.get().id;
                 rt.drop();
                 if(track_named){
-                    self.mark_scrutinee(vid, scr);
+                    self.mark_scrutinee(vid, scr, bind_id);
                 }
                 return;
             }
@@ -320,11 +325,137 @@ impl Own{
     //same buffer dies twice). Mark the scrutinee consumed in the current
     //(arm) scope: sibling arms snapshot clean states, and end_match merges
     //non-jump arm marks to the parent for post-match drops.
-    func mark_scrutinee(self, vid: i32, scr: Expr*){
+    func mark_scrutinee(self, vid: i32, scr: Expr*, bind_id: i32){
         if(self.var_map.get(&vid).is_some()){
+            let scope = self.get_scope();
+            if(verbose){
+                print("mark_scrutinee scope\n");
+            }
+            //pre-state comes from the parent: if-let moves the scrutinee
+            //into the arm scope first (do_move), and nested binds see the
+            //outer arm's marks there. Both must read as moved.
+            let parent = self.get_scope(scope.parent);
             let v = self.get_var(vid).clone();
-            self.update_state(Rhs::new(v), StateType::MOVED{scr.line}, self.get_scope());
+            let key = Rhs::new(v.clone());
+            let pre = self.get_state(&key, parent);
+            key.drop();
+            self.match_binds.add(bind_id, BindInfo{scr: vid, pre: pre.kind.clone(), line: scr.line});
+            self.update_state(Rhs::new(v), StateType::MOVED{scr.line}, scope);
         }
+    }
+
+    //Arm-end rollback for inspect-only arms (see BindInfo): for each
+    //distinct recorded scrutinee in this arm, if every recorded binding
+    //is still unmoved, the scrutinee is untouched since the bind, and it
+    //was unmoved before, roll back: suppress the aliasing bindings and
+    //restore the scrutinee. The scrutinee then drops (and reads) normally
+    //with no leak and no false use-after-move. Anything escaped, moved,
+    //reassigned, unregistered, or pre-moved keeps the conservative marks.
+    func end_match_arm(self, scope: VarScope*){
+        if(verbose){
+            print("end_match_arm scope\n");
+        }
+        let n = scope.vars.len();
+        let i = 0;
+        while(i < n){
+            let bid = *scope.vars.get(i);
+            let rec = self.match_binds.get(&bid);
+            if(rec.is_some()){
+                self.maybe_rollback(rec.unwrap().scr, scope);
+            }
+            i += 1;
+        }
+    }
+    func maybe_rollback(self, scr: i32, scope: VarScope*){
+        //all recorded bindings of scr in this arm must be registered and
+        //unmoved; anything else (escaped, partial, unregistered) vetoes.
+        let n = scope.vars.len();
+        let i = 0;
+        let line = -1;
+        let pre_none = false;
+        let first = true;
+        while(i < n){
+            let bid = *scope.vars.get(i);
+            let rec = self.match_binds.get(&bid);
+            if(rec.is_some() && rec.unwrap().scr == scr){
+                if(self.var_map.get(&bid).is_none()){
+                    if(verbose){
+                        print("rollback veto: binding unregistered\n");
+                    }
+                    return;
+                }
+                let bv = self.get_var(bid).clone();
+                let bkey = Rhs::new(bv.clone());
+                let bst = self.get_state(&bkey, scope);
+                bkey.drop();
+                bv.drop();
+                if(!(bst.kind is StateType::NONE)){
+                    if(verbose){
+                        print("rollback veto: binding moved\n");
+                    }
+                    return;
+                }
+                if(first){
+                    line = rec.unwrap().line;
+                    pre_none = rec.unwrap().pre is StateType::NONE;
+                    first = false;
+                }
+            }
+            i += 1;
+        }
+        if(first){
+            if(verbose){
+                print("rollback veto: no bindings in scope\n");
+            }
+            return;
+        }
+        if(!pre_none){
+            if(verbose){
+                print("rollback veto: pre moved\n");
+            }
+            return;
+        }
+        //scrutinee untouched since the bind mark?
+        if(self.var_map.get(&scr).is_none()){
+            if(verbose){
+                print("rollback veto: scrutinee unregistered\n");
+            }
+            return;
+        }
+        let sv = self.get_var(scr).clone();
+        let skey = Rhs::new(sv.clone());
+        let sst = self.get_state(&skey, scope);
+        skey.drop();
+        sv.drop();
+        if let StateType::MOVED(mline) = sst.kind{
+            if(mline != line){
+                if(verbose){
+                    print("rollback veto: scrutinee moved elsewhere\n");
+                }
+                return;
+            }
+        }else{
+            if(verbose){
+                print("rollback veto: scrutinee not in bind mark\n");
+            }
+            return;
+        }
+        //roll back: bindings suppressed, scrutinee restored.
+        if(verbose){
+            print("rollback scope\n");
+        }
+        let j = 0;
+        while(j < n){
+            let bid2 = *scope.vars.get(j);
+            let rec2 = self.match_binds.get(&bid2);
+            if(rec2.is_some() && rec2.unwrap().scr == scr){
+                let bv2 = self.get_var(bid2).clone();
+                self.update_state(Rhs::new(bv2), StateType::MOVED{scope.line}, scope);
+            }
+            j += 1;
+        }
+        let sv2 = self.get_var(scr).clone();
+        self.update_state(Rhs::new(sv2), StateType::NONE, scope);
     }
 
     //Match-arm scope stack discipline (see match_arms): nested matches
@@ -664,6 +795,13 @@ impl Own{
         }
         if(verbose){
             print("end_scope {:?} sline: {} line: {}\n", scope.kind, scope.line, line);
+        }
+        //inspect-only match/if-let arms: bindings that never escaped
+        //alias the scrutinee, so suppress them and roll the scrutinee
+        //back instead of leaking it (see end_match_arm). Jump arms exit;
+        //their marks stand as emitted on their own paths.
+        if(scope.kind is ScopeType::MATCH_CASE || scope.kind is ScopeType::IF){
+            self.end_match_arm(scope);
         }
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);

@@ -326,7 +326,7 @@ impl Emitter{
       //copy independently, and borrows (pointer scrutinee, e.g. if-let on
       //&x) never own: the scrutinee stays droppable in both cases.
       let track = self.own.get().is_drop_or_ptr(&field.type) && !rhs_ty.is_pointer();
-      self.own.get().consume_match_temp(scr, track);
+      self.own.get().consume_match_temp(scr, track, arg.id);
       let alloc_ptr = self.get_alloc(arg.id);
       self.NamedValues.add(arg.name.clone(), alloc_ptr);
       let gep_idx = arg_idx;

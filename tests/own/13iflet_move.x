@@ -44,15 +44,16 @@ func main(){
   send(c);
   check_ids(2);
 
-  //inspect-only: binding copy drops in-arm, scrutinee leaks (no double).
+  //inspect-only: binding suppressed, scrutinee drops normally.
   reset();
-  {
-    let e = E::V{v: A::new(3)};
-    if let E::V(s) = e {
-      assert(s.a == 3);
-    }
-  }
+  inspect13(E::V{v: A::new(3)});
   check_ids(3);
 
   print("iflet done\n");
+}
+
+func inspect13(e: E){
+  if let E::V(s) = e {
+    assert(s.a == 3);
+  }
 }

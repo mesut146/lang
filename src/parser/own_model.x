@@ -115,6 +115,18 @@ struct State{
     scope: VarScope*;
 }
 
+//match payload binding record: which named scrutinee it was copied
+//from, the scrutinee's pre-bind state, and the bind line. At arm end,
+//if no binding escaped and the scrutinee is otherwise untouched, the
+//bind marks are rolled back: unmoved bindings are suppressed (their
+//bytes alias the scrutinee) and the scrutinee drops normally. No leak,
+//no false use-after-move for inspect-only arms.
+struct BindInfo{
+    scr: i32;
+    pre: StateType;
+    line: i32;
+}
+
 struct Move{
     lhs: Option<Moved>;
     rhs: Moved;
