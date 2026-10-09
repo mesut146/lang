@@ -55,8 +55,6 @@ impl DebugInfo{
         let cu = createCompileUnit(builder, get_dwarf_cpp(), 
              file, producer.ptr());
         
-        path_c.drop();
-        dir_c.drop();
         return DebugInfo{
           debug: debug,
           ll: ll,
@@ -98,7 +96,6 @@ impl DebugInfo{
         if (!self.debug) return Option<DISubprogram*>::new();
         let linkage_name = "".str();
         if(!is_main(m)){
-          linkage_name.drop();
           linkage_name = mangle(m);
         }
         let opt = self.func_map.get(&linkage_name);
@@ -115,7 +112,6 @@ impl DebugInfo{
         }
         let path_c = m.path.clone().cstr();
         let file = createFile(self.builder, path_c.ptr(), ".".ptr());
-        path_c.drop();
         //self.file = file;
         let scope = file as DIScope*;
         if(!m.parent.is_none()){
@@ -136,9 +132,6 @@ impl DebugInfo{
         let IsOptimized = false;
         let sp = createFunction(self.builder, scope, name_c.ptr(), linkage_c.ptr(), file, m.line, ft, flags);
         self.func_map.add(linkage_name2, sp);
-        name_c.drop();
-        linkage_c.drop();
-        tys.drop();
         return Option::new(sp);
     }
     
@@ -162,7 +155,6 @@ impl DebugInfo{
         let bb = GetInsertBlock(self.ll.builder);
         let loc = DILocation_get(scope, p.line, p.pos);
         insertDeclare(self.builder, val, v, ex, loc, bb);
-        name_c.drop();
     }
 
     func dbg_var(self, name: String*, type: Type*, line: i32, c: Emitter*) {
@@ -177,7 +169,6 @@ impl DebugInfo{
       let pos = 0;
       let loc = DILocation_get(scope, line, pos);
       insertDeclare(self.builder, val, v, ex, loc, bb);
-      name_c.drop();
     }
 
     func dbg_glob(self, gl: Global*, ty: Type*, gv: Value*, c: Emitter*): DIGlobalVariableExpression*{
@@ -188,7 +179,6 @@ impl DebugInfo{
       //let decl = ptr::null<LLVMOpaqueMetadata>();
       let gve = createGlobalVariableExpression(self.builder, scope, name_c.ptr(), name_c.ptr(), self.file, gl.line, di_type);
       addDebugInfo(gv as GlobalVariable*, gve);
-      name_c.drop();
       return gve;
     }
 
@@ -224,8 +214,6 @@ impl DebugInfo{
         let flags = 0;
         let st = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), file, decl.line, st_size, elems.ptr(), elems.len() as i32);
         self.incomplete_types.add(name, st);
-        path_c.drop();
-        name_c.drop();
         return st;
     }
 
@@ -272,10 +260,6 @@ impl DebugInfo{
       let evname_c = ev.name.clone().cstr();
       let flagsm=0;
       let res = createMemberType(self.builder, var_part as DIScope*, evname_c.ptr(), file, decl.line, var_size, var_off, flagsm, st as DIType*);//var_idx?
-      evname_c.drop();
-      name.drop();
-      elems.drop();
-      name_c.drop();
       return res;
     }
 
@@ -312,7 +296,6 @@ impl DebugInfo{
       let st = *self.incomplete_types.get(&s).unwrap();
       let path_c = decl.path.clone().cstr();
       let file = createFile(self.builder, path_c.ptr(), ".".ptr());
-      path_c.drop();
       let elems = List<Metadata*>::new();
       let base_ty = Option<DIType*>::new();
       let scope = st as DIScope*;
@@ -372,7 +355,6 @@ impl DebugInfo{
           //create empty variant
           let tag_ty0: Type = as_type(ENUM_TAG_BITS());
           let tag = self.map_di(&tag_ty0, c);
-          tag_ty0.drop();
           let fldesc = DIFlags_FlagArtificial();
           let disc = createMemberType(self.builder, scope, "".ptr(), file, decl.line, data_size, tag_off, fldesc, tag);
           let elems2 = List<Metadata*>::new();
@@ -388,12 +370,10 @@ impl DebugInfo{
           }
           replaceElements(self.ll.ctx, var_part, elems2.ptr(), elems2.len() as i32);
           elems.add(var_part as Metadata*);
-          elems2.drop();
         },
       }
       replaceElements(self.ll.ctx, st, elems.ptr(), elems.len() as i32);
       self.types.add(s, st);
-      elems.drop();
       return st;
     }
 
@@ -401,8 +381,6 @@ impl DebugInfo{
       let rt = c.get_resolver().visit_type(type);
       let name = rt.type.print();
       let res = self.map_di_resolved(&rt.type, &name, c);
-      rt.drop();
-      name.drop();
       return res;
     }
 
@@ -411,7 +389,6 @@ impl DebugInfo{
       let flags = 0;
       let RunTimeLang = 0;
       let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
-      name_c.drop();
       return res;
     }
 
@@ -446,7 +423,6 @@ impl DebugInfo{
           let file = self.file;
           let spt = createSubroutineType(self.builder, tys.ptr(), tys.len() as i32);
           let nameptr = "";
-          tys.drop();
           return createPointerType(self.builder, spt as DIType*, 64) as DIType*;
         },
         Type::Lambda(ft_box) => {
@@ -459,7 +435,6 @@ impl DebugInfo{
             tys.add(self.map_di(prm, c) as Metadata*);
           }
           let spt = createSubroutineType(self.builder, tys.ptr(), tys.len() as i32);
-          tys.drop();
           let nameptr = "";
           return createPointerType(self.builder, spt as DIType*, 64) as DIType*;
         },
@@ -476,14 +451,12 @@ impl DebugInfo{
           //len
           let bits: Type = as_type(SLICE_LEN_BITS());
           let len_ty = self.map_di(&bits, c);
-          bits.drop();
           let len_mem = createMemberType(self.builder, scp, "len".ptr(), self.file, line, SLICE_LEN_BITS(), 64, flags, len_ty);
           let name_c = "_slice".cstr();
           let elems = [ptr_mem as Metadata*, len_mem as Metadata*];
           let flags2 = DIFlags_FlagZero();
           let RunTimeLang = 0;
           let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
-          name_c.drop();
           return res as DIType*;
         },
         Type::Tuple(tt) => {
@@ -505,8 +478,6 @@ impl DebugInfo{
             elem_name.drop();
           }
           let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
-          name_c.drop();
-          elems.drop();
           return res as DIType*;
         },
         Type::Simple(smp)=>{
@@ -535,7 +506,6 @@ impl DebugInfo{
     func createBasicType(self, name: String*, size: i64, enc: i32): DIType*{
       let name_c = name.clone().cstr();
       let res = createBasicType(self.builder, name_c.ptr(), size, enc);
-      name_c.drop();
       return res;
     }
 }

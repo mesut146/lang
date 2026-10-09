@@ -82,9 +82,6 @@ impl Emitter{
           CreateBr(ll.builder, condbb);
       }
       SetInsertPoint(ll.builder, next);
-      cond_name.drop();
-      then_name.drop();
-      next_name.drop();
     }
   
     func visit_for(self, stmt: Stmt*, node: ForStmt*){
@@ -133,10 +130,6 @@ impl Emitter{
       CreateBr(ll.builder, condbb);
       SetInsertPoint(ll.builder, next);
 
-      then_name.drop();
-      cond_name.drop();
-      update_name.drop();
-      next_name.drop();
     }
 
     func visit_var(self, node: VarExpr*){
@@ -182,7 +175,6 @@ impl Emitter{
           val = self.load_if_ptr(val, &rt.type);
         }
         self.own.get().do_move(node.return_expr.get());
-        rt.drop();
         return Option<Value*>::new(val);
       }
       return Option<Value*>::new();
@@ -210,20 +202,17 @@ impl Emitter{
       if(type.is_pointer() || type.is_fpointer()){
         self.exit_frame();
         CreateRet(ll.builder, val);
-        type.drop();
         return;
       }
       if(!is_struct(&type)){
         self.exit_frame();
         CreateRet(ll.builder, val);
-        type.drop();
         return;
       }
       let sret_ptr = Function_getArg(self.protos.get().cur.unwrap(), 0);
       self.copy(sret_ptr as Value*, val, &type);
       self.exit_frame();
       CreateRetVoid(ll.builder);
-      type.drop();
     }
 
     func visit_ret(self, expr: Expr*){
@@ -235,7 +224,6 @@ impl Emitter{
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(ll.builder, val);
-        type.drop();
         return;
       }
       if(!is_struct(&type)){
@@ -243,7 +231,6 @@ impl Emitter{
         self.own.get().do_return(expr);
         self.exit_frame();
         CreateRet(ll.builder, val);
-        type.drop();
         return;
       }
       let sret_ptr = Function_getArg(self.protos.get().cur.unwrap(), 0) as Value*;
@@ -256,7 +243,6 @@ impl Emitter{
       self.own.get().do_return(expr);
       self.exit_frame();
       CreateRetVoid(ll.builder);
-      type.drop();
     }
 }//end impl
   

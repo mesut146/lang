@@ -105,14 +105,12 @@ impl Signature{
             if (scp.type.is_pointer()) {
                 let inner = scp.type.deref_ptr();
                 res.scope = Option::new(r.visit_type(inner));
-                scp.drop();
             } else {
                 res.scope = Option::new(scp);
             }
             if (!mc.is_static) {
                 res.args.add(real_scope.get().type.clone());
             }
-            real_scope.drop();
         }
         for(let i = 0;i < mc.args.len();++i){
             let arg = mc.args.get(i);
@@ -131,13 +129,9 @@ impl Signature{
         let decl_rt = sig.r.unwrap().visit_type(&type_plain);
         if(!decl_rt.is_decl()){
             //module scopes (M::useA) carry no type args to infer
-            type_plain.drop();
-            decl_rt.drop();
             return map;
         }
         let decl_opt = sig.r.unwrap().get_decl(&decl_rt);
-        type_plain.drop();
-        decl_rt.drop();
         
         if(decl_opt.is_none()){
             return map;
@@ -156,7 +150,6 @@ impl Signature{
     func new(m: Method*, desc: Desc, r: Resolver*, origin: Resolver*): Signature{
         let map = HashMap<String, Type>::new();
         let res = Signature::new(m, &map, desc, r, origin);
-        map.drop();
         return res;
     }
     func replace_self(typ: Type*, m: Method*): Type{

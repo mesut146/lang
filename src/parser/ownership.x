@@ -77,7 +77,6 @@ impl Logger{
         }
         print("\n");
         logger.list.clear();
-        mstr.drop();
     }
 }
 
@@ -197,7 +196,6 @@ impl Own{
     func is_drop_type(self, expr: Expr*): bool{
         let rt = self.get_type(expr);
         let res = self.is_drop_type(&rt.type);
-        rt.drop();
         return res;
     }
     func is_drop_or_ptr(self, type: Type*): bool{
@@ -225,7 +223,6 @@ impl Own{
     func add_var(self, f: Fragment*, ptr: LLVMPtr){
         let rt = self.get_resolver().visit_frag(f);
         if(!self.is_drop_or_ptr(&rt.type)){
-            rt.drop();
             return;
         } 
         let var = Variable{
@@ -237,7 +234,6 @@ impl Own{
             scope: self.get_scope().id,
             is_self: false
         };
-        rt.drop();
         self.get_scope().vars.add(var.id);
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
         self.var_map.add(var.id, var);
@@ -292,25 +288,21 @@ impl Own{
             let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
             if(named){
                 let vid = scp_rt.vh.get().id;
-                scp_rt.drop();
                 if(track_named){
                     self.mark_scrutinee(vid, scr, bind_id);
                 }
                 return;
             }
-            scp_rt.drop();
         }else{
             let rt = self.get_resolver().visit(scr);
             let named = rt.vh.is_some() && (scr is Expr::Name || scr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some();
             if(named){
                 let vid = rt.vh.get().id;
-                rt.drop();
                 if(track_named){
                     self.mark_scrutinee(vid, scr, bind_id);
                 }
                 return;
             }
-            rt.drop();
         }
         let rhs = Rhs::EXPR{scr};
         let scope = self.get_scope();
@@ -326,7 +318,6 @@ impl Own{
             }
             scope = self.get_scope(scope.parent);
         }
-        rhs.drop();
     }
 
     //A payload binding copies the named scrutinee's bytes; from birth the
@@ -347,7 +338,6 @@ impl Own{
             let v = self.get_var(vid).clone();
             let key = Rhs::new(v.clone());
             let pre = self.get_state(&key, parent);
-            key.drop();
             self.match_binds.add(bind_id, BindInfo{scr: vid, pre: pre.kind.clone(), line: scr.line});
             self.update_state(Rhs::new(v), StateType::MOVED{scr.line}, scope);
         }
@@ -434,8 +424,6 @@ impl Own{
         let sv = self.get_var(scr).clone();
         let skey = Rhs::new(sv.clone());
         let sst = self.get_state(&skey, scope);
-        skey.drop();
-        sv.drop();
         if let StateType::MOVED(mline) = sst.kind{
             if(mline != line){
                 if(verbose){
@@ -507,11 +495,9 @@ impl Own{
         }
         let rt = self.get_resolver().visit(e);
         if(rt.vh.is_none()){
-            rt.drop();
             return;
         }
         let id = rt.vh.get().id;
-        rt.drop();
         if(self.var_map.get(&id).is_none()){
             return;
         }
@@ -525,7 +511,6 @@ impl Own{
     func do_move(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
-            rt.drop();
             return;
         }
         if(verbose){
@@ -535,7 +520,6 @@ impl Own{
                 line: expr.line
             };
             print("do_move {:?}\n", &mv);
-            mv.drop();
         }
         let rhs = Rhs::new(expr, self);
         if let Rhs::FIELD(scp, name)=&rhs{
@@ -551,7 +535,6 @@ impl Own{
             },
             _ => {}
         }
-        rt.drop();
     }
     //explicit drop target: record it so drop emission skips the auto
     //duplicate (see drop_var/drop_obj). No marks: destroying in place is
@@ -561,32 +544,25 @@ impl Own{
         if let Expr::Access(scp, name) = expr{
             let scp_rt = self.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_none() || self.var_map.get(&scp_rt.vh.get().id).is_none()){
-                scp_rt.drop();
                 return;
             }
             let sv = self.get_var(scp_rt.vh.get().id).clone();
-            scp_rt.drop();
             let rf = Rhs::FIELD{sv.clone(), name.clone()};
             let fkey = Fmt::str(&rf);
-            rf.drop();
             self.explicit_drops.add(fkey, true);
             let rs = Rhs::new(sv);
             let skey = Fmt::str(&rs);
-            rs.drop();
             self.explicit_drops.add(skey, true);
             return;
         }
         let rt = self.get_resolver().visit(expr);
         let named = rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some();
         if(!named){
-            rt.drop();
             return;
         }
         let v = self.get_var(rt.vh.get().id).clone();
-        rt.drop();
         let r = Rhs::new(v);
         let key = Fmt::str(&r);
-        r.drop();
         self.explicit_drops.add(key, true);
     }
     //move rhs
@@ -594,19 +570,15 @@ impl Own{
         let scope = self.get_scope();
         let rt = self.get_type(rhs);
         if(!self.is_drop_type(&rt.type)){
-            rt.drop();
             return;
         }
         if(verbose){
             let mv = Move{Option::new(Moved::new(lhs, self)), Moved::new(rhs, self), lhs.line};
             print("do_move {:?} line:{}\n", &mv, lhs.line);
-            mv.drop();
         }
         self.update_state(rhs, &rt, StateType::MOVED{rhs.line}, scope);
         let rt_lhs = self.get_type(lhs);
         self.update_state(lhs, &rt_lhs, StateType::ASSIGNED, scope);
-        rt.drop();
-        rt_lhs.drop();
     }
 
     func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
@@ -688,24 +660,20 @@ impl Own{
     func check(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
-            rt.drop();
             return;
         }
-        rt.drop();
         let scope = self.get_scope();
         if(print_check){
             print("check {:?} line:{}\n", expr, expr.line);
         }
         let rhs = Rhs::new(expr, self);
         let state = self.get_state(&rhs, scope);
-        rhs.drop();
         if let StateType::MOVED(line)=state.kind{
             // let scope_str = self.get_scope(self.main_scope).print(self);
             // print("{}\n", scope_str);
             // scope_str.drop();
             let tmp = printMethod(self.method);
             self.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
-            tmp.drop();
         }
     }
     func check_field(self, expr: Expr*){
@@ -787,7 +755,6 @@ impl Own{
         for dr in &drops{
             self.drop_any(dr, scope, line);
         }
-        drops.drop();
         if(verbose){
             print("\n");
         }
@@ -815,7 +782,6 @@ impl Own{
         for dr in &drops{
             self.drop_any(dr, scope, line);
         }
-        drops.drop();
     }
     
     func do_break(self, line: i32){
@@ -906,7 +872,6 @@ impl Own{
                 rhs.drop();
             }
         }
-        outers.drop();
         self.end_scope_update();
         self.set_current(scope.parent);
         if(verbose){
@@ -984,7 +949,6 @@ impl Own{
             }
             rhs.drop();
         }
-        outers.drop();
         //restore old scope
         for(let i = 0;i < visitor.scopes.len();++i){
             let st = visitor.scopes.get(i);
@@ -994,7 +958,6 @@ impl Own{
             print("\n");
         }
         self.set_current(if_scope.parent);
-        visitor.drop();
     }
 
     func drop_lhs(self, lhs: Expr*, ptr: LLVMPtr){
@@ -1004,7 +967,6 @@ impl Own{
         let lhs2 = Rhs::new(lhs, self);
         let state = self.get_state(&lhs2, self.get_scope());
         if(state.is_moved()){
-            lhs2.drop();
             return;
         }
         if(print_drop_lhs){
@@ -1013,9 +975,7 @@ impl Own{
         if(drop_lhs_enabled){
             let rt = self.get_type(lhs);
             self.drop_force(&rt, ptr, lhs.line, &lhs2);
-            rt.drop();
         }
-        lhs2.drop();
     }
 }
 
@@ -1052,8 +1012,6 @@ impl Own{
         if(err){
             resolver.err(line, "");
         }
-        moved_fields.drop();
-        rt.drop();
     }
     func drop_var(self, var: Variable*, scope: VarScope*, line: i32){
         if(var.is_self && is_drop_method(self.method)){
@@ -1068,35 +1026,28 @@ impl Own{
         //auto duplicate (see note_explicit_drop).
         let ekey = Fmt::str(&rhs);
         if(self.explicit_drops.contains(&ekey)){
-            rhs.drop();
             return;
         }
         let state = self.get_state(&rhs, scope);
         if(print_kind is PrintKind::Any){
             let info = scope.print_info();
             Logger::add(format("drop_var {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, info));
-            info.drop();
         }
 
         if(state.kind is StateType::MOVED_PARTIAL){
             self.check_partial(var, scope, line);
             //self.get_resolver().err(var.line, format("var {} moved partially", var));
-            rhs.drop();
             return;
         }
         if(state.is_moved()){
-            rhs.drop();
             return;
         }
         if(print_kind is PrintKind::Valid){
             let tmp = scope.print_info();
             Logger::add(format("drop_var_real {:?} line: {} state: {:?} scope: {:?}\n", var, line,  state, tmp));
-            tmp.drop();
         }
         let rt = self.get_resolver().visit_type(&var.type);
         self.drop_real(&rt, var.ptr, line, &rhs);
-        rt.drop();
-        rhs.drop();
     }
     func drop_var_real(self, var: Variable*, line: i32){
         if(print_kind is PrintKind::Valid){
@@ -1105,15 +1056,12 @@ impl Own{
         let rt = self.get_resolver().visit_type(&var.type);
         let rhs = Rhs::new(var.clone());
         self.drop_real(&rt, var.ptr, line, &rhs);
-        rt.drop();
-        rhs.drop();
     }
     func drop_obj(self, obj: Object*, scope: VarScope*, line: i32){
         let rhs = Rhs::new(obj.expr, self);
         //explicitly dropped by hand: skip the auto duplicate.
         let ekey = Fmt::str(&rhs);
         if(self.explicit_drops.contains(&ekey)){
-            rhs.drop();
             return;
         }
         let state = self.get_state(&rhs, scope);
@@ -1121,7 +1069,6 @@ impl Own{
             Logger::add(format("drop_obj {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         if(state.is_moved()){
-            rhs.drop();
             return;
         }
         if(print_kind is PrintKind::Valid){
@@ -1130,8 +1077,6 @@ impl Own{
         let resolver = self.get_resolver();
         let rt = resolver.visit(obj.expr);
         self.drop_real(&rt, obj.ptr, line, &rhs);
-        rt.drop();
-        rhs.drop();
     }
 
     func drop_real(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){

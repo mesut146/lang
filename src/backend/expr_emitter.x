@@ -84,10 +84,8 @@ impl Emitter{
             if(rt.type.is_fpointer() && rt.method_desc.is_some()){
                 let target: Method* = r.get_method(&rt).unwrap();
                 let proto = self.protos.get().get_func(target);
-                rt.drop();
                 return proto.val as Value*;
             }
-            rt.drop();
             return self.simple_enum(node, type);
         },
         Expr::Match(me) => {
@@ -121,7 +119,6 @@ impl Emitter{
             self.store(elem, &elem_ty, field_target_ptr);
             elem_ty.drop();
           }
-          node_type.drop();
           return ptr;
         }
       }
@@ -307,9 +304,6 @@ impl Emitter{
         }
         res = Option::new(phi as Value*);
       }
-      def_name.drop();
-      next_name.drop();
-      rhs_rt.drop();
       return res;
     }
 
@@ -339,7 +333,6 @@ impl Emitter{
         let ty_ptr = field.type.clone().toPtr();
         self.own.get().add_iflet_var(arg, &ty_ptr, LLVMPtr::new(alloc_ptr));
         self.di.get().dbg_var(&arg.name, &ty_ptr, arg.line, self);
-        ty_ptr.drop();
       }else {
         //deref
         if (field.type.is_prim() || field.type.is_any_pointer()) {
@@ -405,7 +398,6 @@ impl Emitter{
         if(!else_jump){
           CreateBr(ll.builder, nextbb);
         }
-        exit_else.drop();
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
@@ -438,12 +430,10 @@ impl Emitter{
             res = Option::new(phi as Value*);
           }
         }
-        then_rt.drop();
       }else{
         SetInsertPoint(ll.builder, nextbb);
         CreateUnreachable(ll.builder);
       }
-      exit_then.drop();
       return res;
     }
 
@@ -462,9 +452,6 @@ impl Emitter{
       self.di.get().new_scope(node.then.get().line());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       let res = self.emit_branch_join(node.then.get(), &node.else_stmt, thenbb, elsebb, nextbb, line, if_id);
-      then_name.drop();
-      else_name.drop();
-      next_name.drop();
       return res;
     }
 
@@ -508,10 +495,6 @@ impl Emitter{
         }
       }
       let res = self.emit_branch_join(node.then.get(), &node.else_stmt, then_bb, elsebb, next, line, if_id);
-      then_name.drop();
-      else_name.drop();
-      next_name.drop();
-      rhs_rt.drop();
       return res;
     }
 
@@ -539,7 +522,6 @@ impl Emitter{
         if(rt.method_desc.is_some()){
           let target: Method* = self.get_resolver().get_method(&rt).unwrap();
           let proto = self.protos.get().get_func(target);
-          rt.drop();
           return proto.val as Value*;
         }
       }
@@ -562,7 +544,6 @@ impl Emitter{
         let expr_type = self.get_resolver().getType(expr);
         self.store(expr, &expr_type, alloc_ptr);
         self.own.get().add_obj(node, LLVMPtr::new(alloc_ptr), &expr_type);
-        expr_type.drop();
         return alloc_ptr;
       }
       let inner = self.visit(expr);
@@ -592,15 +573,12 @@ impl Emitter{
       //ptr to int
       if (lhs_rt.type.is_any_pointer() && rhs.eq("u64")) {
         let val = self.eval_operand(lhs);
-        lhs_rt.drop();
         return CreatePtrToInt(ll.builder, val, self.mapType(rhs));
       }
       //prim to prim
       let rhs_rt = self.get_resolver().visit_type(rhs);
       if (lhs_rt.type.is_prim() && rhs.is_prim()) {
         let res = self.cast_expr(lhs, &rhs_rt.type);
-        lhs_rt.drop();
-        rhs_rt.drop();
         return res;
       }
       //enum -> base
@@ -609,21 +587,15 @@ impl Emitter{
         //enum repr -> int
         if(decl.is_enum() && decl.is_repr() && rhs.is_prim()){
           let val = self.visit_repr(lhs, &rhs_rt.type);
-          lhs_rt.drop();
-          rhs_rt.drop();
           return val;
         }
         if(decl.is_enum() && rhs_rt.is_decl()){
           let val = self.eval_operand(lhs);
           val = CreateStructGEP(ll.builder, self.mapType(&decl.type), val, get_data_index(decl));
-          lhs_rt.drop();
-          rhs_rt.drop();
           return val;
         }
       }
       let val = self.eval_operand(lhs);
-      lhs_rt.drop();
-      rhs_rt.drop();
       return val;
     }
   
@@ -655,7 +627,6 @@ impl Emitter{
         let at = decl.attr.find("repr").unwrap().args.get(0).print();
         let desc = decl.get_variants().get(index).disc.unwrap();
         CreateStore(ll.builder, ll.makeInt(desc, prim_size(at.str()).unwrap() as i32) , ptr);
-        at.drop();
         return ptr;
       }
       
@@ -673,7 +644,6 @@ impl Emitter{
         let idx = i32::parse(name.str()).expect("tuple index parse error");
         let scope_ty = self.mapType(&scope_rt.type);
         let res = CreateStructGEP(ll.builder, scope_ty, scope_ptr, idx);
-        scope_rt.drop();
         return res;
       }
       let decl = self.get_resolver().get_decl(&scope_rt).unwrap();
@@ -686,7 +656,6 @@ impl Emitter{
       let index = pair.b;
       if (pair.a.base.is_some()) ++index;
       let sd_ty = self.mapType(&pair.a.type);
-      scope_rt.drop();
       return CreateStructGEP(ll.builder,  sd_ty, scope_ptr,  index);
     }
   
@@ -699,7 +668,6 @@ impl Emitter{
       let arrt = self.getType(node);
       self.own.get().add_obj(node, LLVMPtr::new(ptr), &arrt);
       let arr_ty = self.mapType(&arrt);
-      arrt.drop();
       if(sz.is_none()){
         for(let i = 0;i < list.len();++i){
           let e = list.get(i);
@@ -742,7 +710,6 @@ impl Emitter{
       phi_addIncoming(phi, step, setbb);
       CreateBr(ll.builder, condbb);
       SetInsertPoint(ll.builder, nextbb);
-      elem_type.drop();
       return ptr;
     }
   
@@ -760,8 +727,6 @@ impl Emitter{
         let i1 = ll.makeInt(0, 64) ;
         let i2 = self.cast_expr(node.idx.get(), &i64t);
         let res = ll.gep_arr(self.mapType(ty), src, i1, i2);
-        type.drop();
-        i64t.drop();
         return res ;
       }
       
@@ -773,8 +738,6 @@ impl Emitter{
       let arr = CreateStructGEP(ll.builder,  sliceType, src,  SLICE_PTR_INDEX());
       arr = ll.loadPtr(arr);
       let index = self.cast_expr(node.idx.get(), &i64t);
-      i64t.drop();
-      type.drop();
       return self.ll.get().gep_ptr(elemty, arr, index);
     }
 
@@ -810,8 +773,6 @@ impl Emitter{
       let len = CreateSub(ll.builder, val_end, val_start);
       len = CreateSExt(ll.builder, len, intTy(ll.ctx, SLICE_LEN_BITS()));
       CreateStore(ll.builder, len, trg_len);
-      arr_ty.drop();
-      i32_ty.drop();
       return ptr;
     }
 
@@ -835,10 +796,8 @@ impl Emitter{
       let type = self.getType(e);
       if(op.eq("-")){
         if(type.is_float()){
-          type.drop();
           return CreateFNeg(ll.builder, val);
         }
-        type.drop();
         return CreateNSWSub(ll.builder, ll.makeInt(0, bits), val);
       }
       if(op.eq("++")){
@@ -887,10 +846,8 @@ impl Emitter{
         let type = self.getType(expr);
         if (!is_struct(&type)) {
             let res = CreateLoad(ll.builder, self.mapType(&type), arg_ptr);
-            type.drop();
             return res;
         }
-        type.drop();
         return arg_ptr;
     }
     func emit_ptr_get(self, expr: Expr*, args: List<Expr>*): Value*{
@@ -898,19 +855,16 @@ impl Emitter{
         let src = self.eval_operand(args.get(0));
         let idx = self.load_expr(args.get(1));
         let res = self.ll.get().gep_ptr(self.mapType(elem_type.deref_ptr()), src, idx);
-        elem_type.drop();
         return res;
     }
     func emit_ptr_copy(self, args: List<Expr>*): Value*{
         let src_ptr = self.eval_operand(args.get(0));
         let i64_ty = Type::new("i64");
         let idx = self.cast_expr(args.get(1), &i64_ty);
-        i64_ty.drop();
         let val = self.visit(args.get(2));
         let elem_type: Type = self.getType(args.get(2));
         let trg_ptr = self.ll.get().gep_ptr(self.mapType(&elem_type), src_ptr, idx);
         self.copy(trg_ptr, val, &elem_type);
-        elem_type.drop();
         return ptr::null<Value>();
     }
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
@@ -934,7 +888,6 @@ impl Emitter{
           let id = i32::parse(arg.str()).unwrap();
           let blk: Block* = *resolver.block_map.get(&id).unwrap();
           self.visit_block(blk);
-          arg.drop();
           return ptr::null<Value>();
         }
         if(Utils::is_call(mc, "std", "typeof")){
@@ -943,8 +896,6 @@ impl Emitter{
           let str = ty.print();
           let ptr = self.get_alloc(expr);
           let res = self.str_lit(str.str(), ptr);
-          str.drop();
-          ty.drop();
           return res;
         }
         if(Utils::is_call(mc, "std", "no_drop")){
@@ -970,10 +921,8 @@ impl Emitter{
         let list = env.unwrap().split(",");
         let cur_name: str = Path::name(self.curMethod.unwrap().path.str()); 
         if(list.contains(&cur_name)){
-          list.drop();
           return ptr::null<Value>();
         }
-        list.drop();
       }
       if(Utils::is_call(mc, "std", "no_drop")){
         let arg = mc.args.get(0);
@@ -1015,22 +964,18 @@ impl Emitter{
       if(Utils::is_call(mc, "Drop", "drop")){
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
-          argt.drop();
           return ptr::null<Value>();
         }
         let helper = DropHelper{resolver};
         if(!helper.is_drop_type(&argt)){
-          argt.drop();
           return ptr::null<Value>();
         }
-        argt.drop();
       }
 
       if(Utils::is_call(mc, "std", "size")){
         if(!mc.args.empty()){
           let ty = self.getType(mc.args.get(0));
           let sz = self.getSize(&ty) / 8;
-          ty.drop();
           return ll.makeInt(sz, 32) ;
         }else{
           let ty = mc.type_args.get(0);
@@ -1067,7 +1012,6 @@ impl Emitter{
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");
         let size = self.cast_expr(mc.args.get(0), &i64_ty);
-        i64_ty.drop();
         if (!mc.type_args.empty()) {
             let typeSize = self.getSize(mc.type_args.get(0)) / 8;
             size = CreateNSWMul(ll.builder, size, ll.makeInt(typeSize, 64));
@@ -1085,10 +1029,8 @@ impl Emitter{
         let arr_type = self.getType(mc.scope.get());
         let arr_type2 = arr_type.deref_ptr();
         if let Type::Array(elem, sz)=arr_type2{
-          arr_type.drop();
           return ll.makeInt(*sz, 64) ;
         }
-        arr_type.drop();
         panic("");
       }
       if(resolver.is_array_get_ptr(mc)){
@@ -1149,7 +1091,6 @@ impl Emitter{
       let proto = self.make_proto(ft);
       let args = self.emit_call_args(mc, &ft.params);
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
-      args.drop();
       return res;
     }
     func visit_lambda_call(self, expr: Expr*, mc: Call*, rt: RType*): Value*{
@@ -1166,7 +1107,6 @@ impl Emitter{
       let proto = self.make_proto(ft);
       let args = self.emit_call_args(mc, &ft.params);
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
-      args.drop();
       return res;
     }
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
@@ -1199,7 +1139,6 @@ impl Emitter{
       }
       let target: Method* = self.get_resolver().get_method(&rt).unwrap();
       self.cache.inc.depends_func(self.get_resolver(), target);
-      rt.drop();
       let proto = self.protos.get().get_func(target);
       let args = List<Value*>::new();
       if(ptr_ret.is_some()){
@@ -1217,7 +1156,6 @@ impl Emitter{
         }else{
           args.add(scp_val);
         }
-        rval.drop();
         if(mc.is_static){
           ++argIdx;
           self.own.get().do_move(mc.args.get(0));
@@ -1263,7 +1201,6 @@ impl Emitter{
         self.print_frame();
       }
       let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
-      args.drop();
       if(Resolver::is_exit(mc)){
         CreateUnreachable(ll.builder);
       }
@@ -1304,7 +1241,6 @@ impl Emitter{
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(ll.builder, printf_proto.val, args.ptr(), args.len() as i32);
-      args.drop();
       //flush
       self.emit_fflush();
       return res;
@@ -1355,7 +1291,6 @@ impl Emitter{
       }
       let proto = self.protos.get().libc("printf");
       let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
-      args.drop();
       //flush
       self.emit_fflush();
     }
@@ -1394,7 +1329,6 @@ impl Emitter{
       }
       let proto = self.protos.get().libc("sprintf");
       let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
-      args.drop();
       return res;
     }
   
@@ -1403,10 +1337,8 @@ impl Emitter{
       let val = self.eval_operand(e);
       if (type.is_prim() || type.is_pointer()) {
           let res = self.load(val, &type);
-          type.drop();
           return res;
       }
-      type.drop();
       return val;
     }
   
@@ -1508,7 +1440,6 @@ impl Emitter{
           }else{
             val = i64::parse(normal.str()).unwrap();
           }
-          normal.drop();
           return ll.makeInt(val, bits) ;
         },
       }
@@ -1528,7 +1459,6 @@ impl Emitter{
       //set len
       let len = ll.makeInt(val.len(), SLICE_LEN_BITS()) ;
       CreateStore(ll.builder, len, len_target);
-      str_ty.drop();
       return trg_ptr;
     }
   
@@ -1602,7 +1532,6 @@ impl Emitter{
             self.set_fields(data_ptr, decl, var_ty, args, &variant.fields);
           }
         }
-        rt.drop();
         return ptr;
     }
 
@@ -1614,8 +1543,6 @@ impl Emitter{
       //truncating wider rhs values).
       let ct = common_infix(&rt.type, &rrt.type);
       let res = self.visit_infix(op, l, r, ct);
-      rt.drop();
-      rrt.drop();
       return res;
     }
 
@@ -1682,11 +1609,9 @@ impl Emitter{
         let op_c = op.clone().cstr();
         if(type.is_float()){
           let res = CreateCmp(ll.builder, get_comp_op_float(op_c.ptr()), lv, rv);
-          op_c.drop();
           return res;
         }
         let res = CreateCmp(self.ll.get().builder, get_comp_op(op_c.ptr()), lv, rv) ;
-        op_c.drop();
         return res;
       }
       if(op.eq("+")){
@@ -1764,7 +1689,6 @@ impl Emitter{
           let lhs = self.eval_operand(l2.get());
           self.store(r, &type, lhs, Option::new(l));
           self.own.get().do_assign(l, r);
-          type.drop();
           return lhs;
         }
       }
@@ -1772,7 +1696,6 @@ impl Emitter{
       //todo store should free lhs
       self.store(r, &type, lhs, Option::new(l));
       self.own.get().do_assign(l, r);
-      type.drop();
       return lhs;
     }
 
@@ -1812,7 +1735,6 @@ impl Emitter{
           panic("glob rhs '{:?}'", expr);
         },
       }
-      rt.drop();
     }
 }//end impl Emitter
 

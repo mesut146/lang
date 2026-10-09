@@ -110,9 +110,7 @@ func handle_c(cmd: CmdArgs*){
       let lib = build_std(std_path.str(), out_dir.str());
       flags.append(" ");
       flags.append(lib.str());
-      lib.drop();
     }
-    std_path.drop();
   }else{
     //in <toolchain_dir>/{bin/x, src/std, lib/std.a}
     let binary = CmdArgs::get_root();
@@ -143,24 +141,11 @@ func handle_c(cmd: CmdArgs*){
   if(!cmd.has()){
     print("missing input file\n");
     print_usage();
-    out_dir.drop();
-    flags.drop();
-    name.drop();
-    out_name.drop();
-    jobs.drop();
-    config.drop();
     exit(1);
   }
   let path: String = cmd.get()?;
   if(!File::exists(path.str())){
     print("no such file or directory: {}\n", &path);
-    path.drop();
-    out_dir.drop();
-    flags.drop();
-    name.drop();
-    out_name.drop();
-    jobs.drop();
-    config.drop();
     exit(1);
   }
   let name2: str = if(name.is_some()){
@@ -182,7 +167,6 @@ func handle_c(cmd: CmdArgs*){
     config.set_link(LinkType::Dynamic{out_name.unwrap()});
   }else if(compile_only){
     config.set_link(LinkType::None);
-    name2.drop();
   }else{
     if(out_name.is_none()){
       out_name.set(name2.owned());
@@ -192,13 +176,9 @@ func handle_c(cmd: CmdArgs*){
   
   if(File::is_dir(path.str())){
     let out = Compiler::compile_dir(config)?;
-    out.drop();
   }else{
     let out = Compiler::compile_single(config)?;
-    out.drop();
   }
-  path.drop();
-  out_dir.drop();
   cmd.end();
 }
 
@@ -251,5 +231,4 @@ func handle(cmd: CmdArgs*){
 func main(argc: i32, args: i8**){
   let cmd = CmdArgs::new(argc, args);
   handle(&cmd);
-  cmd.drop();
 }

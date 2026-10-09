@@ -143,8 +143,6 @@ impl Eq for Rhs{
         let s1 = Fmt::str(self);
         let s2 = Fmt::str(other);
         let res = s1.eq(&s2);
-        s1.drop();
-        s2.drop();
         return res;
     }
 }

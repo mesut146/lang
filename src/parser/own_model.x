@@ -157,7 +157,6 @@ impl Hash for Rhs{
         }*/
         let s = Fmt::str(self);
         let h = s.hash();
-        s.drop();
         return h;
     }
 }
@@ -206,10 +205,8 @@ impl Moved{
         let rt = own.get_resolver().visit(expr);
         if(rt.vh.is_some()){
             let var = own.get_var(rt.vh.get().id);
-            rt.drop();
             return Moved{expr, Option::new(var.clone())};
         }
-        rt.drop();
         return Moved{expr, Option<Variable>::new()};
     }
 }
@@ -223,18 +220,14 @@ impl Rhs{
             let scp_rt = own.get_resolver().visit(scp.get());
             if(scp_rt.vh.is_some()){
                 let scp_var = own.get_var(scp_rt.vh.get().id);
-                scp_rt.drop();
                 return Rhs::FIELD{scp_var.clone(), name.clone()};
             }
-            scp_rt.drop();
         }
         let rt = own.get_resolver().visit(expr);
         if(rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary)){
             let var = own.get_var(rt.vh.get().id);
-            rt.drop();
             return Rhs::VAR{var.clone()};
         }
-        rt.drop();
         return Rhs::EXPR{expr};
     }
     func new(var: Variable): Rhs{
@@ -266,10 +259,8 @@ impl Rhs{
             let rt = resolver.visit(*e);
             if(rt.vh.is_some()){
                 let res = rt.vh.get().id == vh.id;
-                rt.drop();
                 return res;
             }
-            rt.drop();
             return false;
         }
         return self.get_var().id == vh.id;

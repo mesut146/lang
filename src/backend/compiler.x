@@ -171,10 +171,6 @@ impl Compiler{
     let obj = cmp.compile(config.file.str());
     compiled.add(obj);
     let res = config.link(&compiled);
-    config.drop();
-    cmp.drop();
-    compiled.drop();
-    cache.drop();
     return res;
   }
 
@@ -228,9 +224,6 @@ impl Compiler{
       cmp.drop();
       file.drop();
     }
-    list.drop();
-    cache.drop();
-    inc.drop();
     return config.link(&compiled);
   }
 
@@ -296,8 +289,6 @@ impl Compiler{
       file.drop();
     }
     cache.write_cache();
-    list.drop();
-    cache.drop();
     let comp = compiled.unwrap();
     return config.link(&comp);
   }
@@ -346,8 +337,6 @@ impl Compiler{
     let compiled = args.compiled.lock();
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
     args.compiled.unlock();
-    ctx.drop();
-    cmd.drop();
   }
 
   func build_library(compiled: List<String>*, name: str, out_dir: str, is_shared: bool): Result<String, CompilerError>{
@@ -371,10 +360,8 @@ impl Compiler{
     let cmd_res = Process::run(cmd.str()).read_close();
     if(cmd_res.is_err()){
       let res = Result<String, CompilerError>::err(CompilerError::new(format("link failed '{}'\ncmd={}", cmd_res.get_err(), cmd)));
-      cmd.drop();
       return res;
     }
-    cmd_res.drop();
     print("build library {}\n", out_file);
     return Result<String, CompilerError>::ok(out_file);
   }
@@ -409,7 +396,6 @@ impl Compiler{
       return Result<String, CompilerError>::err(CompilerError::new(format("link failed '{}'\ncmd={}", cmd_res.get_err(), cmd)));
     }
     print("build binary {}\n", out_file);
-    cmd.drop();
     return Result<String, CompilerError>::ok(out_file);
   }
   

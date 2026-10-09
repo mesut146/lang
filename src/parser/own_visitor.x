@@ -121,11 +121,9 @@ impl OwnVisitor{
         let rt = self.get_resolver().visit(expr);
         if(!rt.is_method()){
             //macro
-            rt.drop();
             return;
         }
         let target = self.get_resolver().get_method(&rt).unwrap();
-        rt.drop();
         let argIdx = 0;
         if(target.self.is_some()){
             if(mc.is_static){

@@ -225,7 +225,6 @@ impl Resolver{
     }
     let parser = Parser::from_path(path);
     let unit = parser.parse_unit();
-    parser.drop();
     if(print_unit){
       print("print_unit\n");
       print("unit={:?}\n", unit);
@@ -362,7 +361,6 @@ impl RType{
   }
   func unwrap(*self): Type{
     let res = self.type.clone();
-    self.drop();
     return res;
   }
   func is_decl(self): bool{
@@ -395,7 +393,6 @@ impl Hash for RType{
   func hash(self): i64{
     let s = self.type.print();
     let h = s.hash();
-    s.drop();
     return h;
   }
 }
@@ -449,7 +446,6 @@ impl Context{
   func create_resolver(self, path: str): Resolver*{
     let path2 = path.str();
     let res = self.create_resolver(&path2);
-    path2.drop();
     return res;
   }
   func get_path(self, is: ImportStmt*): String{
@@ -460,7 +456,6 @@ impl Context{
       let hit = self.path_cache.get(&suffix);
       if(hit.is_some()){
         let res = hit.unwrap().clone();
-        suffix.drop();
         return res;
       }
     }
@@ -475,13 +470,11 @@ impl Context{
       }
       path.drop();
     }
-    suffix.drop();
     panic("can't resolve import: {:?}\nstd: {:?}\npaths={:?}", is, self.std_path, self.search_paths);
   }
   func get_resolver(self, is: ImportStmt*): Resolver*{
     let path = self.get_path(is);
     let res = self.create_resolver(&path);
-    path.drop();
     return res;
   }
 }
@@ -509,7 +502,6 @@ impl Resolver{
   }
   func dropScope(self){
     let tmp = self.scopes.remove(self.scopes.len() - 1);
-    tmp.drop();
   }
   func addScope(self, name: String, type: RType, id: i32, kind: VarKind, line: i32){
     for scope in &self.scopes{
@@ -540,13 +532,11 @@ impl Resolver{
     //Both include_cur variants are cached separately.
     let cur_method = "".str();
     if(self.curMethod.is_some()){
-      cur_method.drop();
       cur_method = self.curMethod.unwrap_ptr().path.clone();
     }
     let key_ok = self.resolvers_cache_extra == self.extra_imports.len()
         && self.resolvers_cache_method.eq(cur_method.str());
     if(key_ok && !include_cur && self.resolvers_cache_valid){
-      cur_method.drop();
       let hit = List<Resolver*>::new();
       for(let i = 0;i < self.resolvers_cache.len();++i){
         hit.add(*self.resolvers_cache.get(i));
@@ -554,7 +544,6 @@ impl Resolver{
       return hit;
     }
     if(key_ok && include_cur && self.resolvers_cache_cur_valid){
-      cur_method.drop();
       let hit = List<Resolver*>::new();
       for(let i = 0;i < self.resolvers_cache_cur.len();++i){
         hit.add(*self.resolvers_cache_cur.get(i));
@@ -627,7 +616,6 @@ impl Resolver{
       res.add(self);
     }
     //print("----------\n\n");
-    added.drop();
     //memoize for the hot path (get_resolvers runs per type lookup)
     if(include_cur){
       self.resolvers_cache_cur.drop();
@@ -782,7 +770,6 @@ impl Resolver{
       }
     }
     self.unit.items.add_list(newItems);
-    empty_scope.drop();
   }
 
   func init_type_items(self){
@@ -890,7 +877,6 @@ impl Resolver{
           scope2.drop();
           j += 1;
         }
-        res.drop();
       },
       Item::Use(ty) => {
         //plain `use M[::N]` adds a scope prefix; item aliases resolve
@@ -939,7 +925,6 @@ impl Resolver{
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
       print("{}:{} {}\n", self.curMethod.unwrap().path, line, str);
-      str.drop();
     }else{
       print("{}:{}\n", self.unit.path, line);
     }
@@ -953,18 +938,15 @@ impl Resolver{
   }
   func err(self, node: Expr*, msg: String){
     self.err(node, msg.str());
-    msg.drop();
   }
   func err(self, node: Stmt*, msg: str){
     self.err(node.line, msg);
   }
   func err(self, node: Stmt*, msg: String){
     self.err(node, msg.str());
-    msg.drop();
   }
   func err(self, line: i32, msg: String){
     self.err(line, msg.str());
-    msg.drop();
   }
   func err(self, line: i32, msg: str){
     self.print_line_ctx(line, msg);
@@ -973,19 +955,16 @@ impl Resolver{
   func getType(self, e: Type*): Type{
     let rt = self.visit_type(e);
     let res = rt.type.clone();
-    rt.drop();
     return res;
   }
   func getType(self, e: Expr*): Type{
     let rt = self.visit(e);
     let res = rt.type.clone();
-    rt.drop();
     return res;
   }
   func getType(self, f: Fragment*): Type{
     let rt = self.visit_frag(f);
     let res = rt.type.clone();
-    rt.drop();
     return res;
   }
   
@@ -995,7 +974,6 @@ impl Resolver{
     }
     let rt = self.visit_type(ty);
     let res = self.get_decl(&rt);
-    rt.drop();
     return res;
   }
   func get_decl(self, rt: RType*): Option<Decl*>{
@@ -1014,11 +992,9 @@ impl Resolver{
           let md = self.get_module(&scope).unwrap();
           let item = md.items.get(rt.desc.idx);
           if let Item::Decl(decl) = item{
-            scope.drop();
             return Option::new(decl);
           }
         }
-        scope.drop();
       }else{
         let item = unit.items.get(rt.desc.idx);
         if let Item::Decl(decl) = item{
@@ -1069,7 +1045,6 @@ impl Resolver{
         if(tmp.is_ok()){
           let rt = tmp.unwrap();
           let md = self.get_module(&rt);
-          rt.drop();
           if(md.is_some()){
             let item = md.unwrap().items.get(desc.idx);
             if let Item::Method(m) = item{
@@ -1077,7 +1052,6 @@ impl Resolver{
             }
           }
         }else{
-          tmp.drop();
         }
         return Option<Method*>::new();
       }
@@ -1103,7 +1077,6 @@ impl Resolver{
         if(tmp.is_ok()){
           let rt = tmp.unwrap();
           let md = resolver.get_module(&rt);
-          rt.drop();
           if(md.is_some()){
             let item = md.unwrap().items.get(desc.idx);
             if let Item::Impl(imp) = item{
@@ -1115,7 +1088,6 @@ impl Resolver{
             }
           }
         }else{
-          tmp.drop();
         }
       }else if(desc.idx < unit.items.len()){
         let item = unit.items.get(desc.idx);
@@ -1167,7 +1139,6 @@ impl Resolver{
         let scope = self.visit_type(rt.desc.scope.get());
         if(scope.desc.kind.is_module()){
           let md = self.get_module(&scope);
-          scope.drop();
           if(md.is_some()){
             let item = md.unwrap().items.get(rt.desc.idx);
             if let Item::Module(m) = item{
@@ -1177,7 +1148,6 @@ impl Resolver{
           }
           return Option<Module*>::new();
         }
-        scope.drop();
         return Option<Module*>::new();
       }
       let resolver = self.ctx.create_resolver(&rt.desc.path);
@@ -1249,7 +1219,6 @@ impl Resolver{
           if(!ty.eq(&rhs_type.type)){
             panic("const rhs type mismatch {:?} -> {:?}", cn.type.get(), rhs_type.type);
           }
-          ty.drop();
         }
       },
       Item::Glob(g) => {},
@@ -1277,11 +1246,9 @@ impl Resolver{
     }
     let rt = self.visit_type(type);
     if (!is_struct(&rt.type)){
-      rt.drop();
       return false;
     }
     let decl = self.get_decl(&rt).unwrap();
-    rt.drop();
     if (decl.base.is_some()) {
       if(self.is_cyclic(decl.base.get(), target)){
         return true;
@@ -1330,7 +1297,6 @@ impl Resolver{
       }
     }
     let tmp = self.visit_type(&fd.type);
-    tmp.drop();
     if(self.is_cyclic(&fd.type, &node.type)){
       self.err(node.line, format("cyclic type {:?}", node.type));
     }
@@ -1342,7 +1308,6 @@ impl Resolver{
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
-      base_rt.drop();
       if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
@@ -1358,7 +1323,6 @@ impl Resolver{
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
-      base_rt.drop();
       if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
@@ -1374,7 +1338,6 @@ impl Resolver{
     if(node.base.is_some()){
       let base_rt = self.visit_type(node.base.get());
       let base_decl = self.get_decl(&base_rt).unwrap();
-      base_rt.drop();
       if(base_decl is Decl::Struct){
         base_fields = Option::new(base_decl.get_fields());
       }
@@ -1409,7 +1372,6 @@ impl Resolver{
       let required = HashMap<String, Method*>::new();
       let trait_rt = self.visit_type(imp.info.trait_name.get());
       let trait_decl = self.get_trait(&trait_rt).unwrap();
-      trait_rt.drop();
       for(let i = 0;i < trait_decl.methods.len();++i){
         let m = trait_decl.methods.get(i);
         if(m.body.is_none()){
@@ -1442,7 +1404,6 @@ impl Resolver{
         }
         self.err(imp.info.type.line, msg.unwrap());
       }
-      required.drop();
     }else{
       for(let i = 0;i < imp.methods.len();++i){
         let m = imp.methods.get(i);
@@ -1458,7 +1419,6 @@ impl Resolver{
     if(verbose_method){
       let tmp = printMethod(node);
       print("visit_method {} {} generic: {}\n", tmp, self.unit.path, node.is_generic);
-      tmp.drop();
     }
     if(node.is_vararg && node.body.is_some()){
       self.err(node.line, "vararg method only for extern c");
@@ -1469,7 +1429,6 @@ impl Resolver{
     self.prog().resolve_begin(node);
     self.curMethod = Option::new(node);
     let res = self.visit_type(&node.type);
-    res.drop();
     self.newScope();
     if(node.self.is_some()){
       let self_prm: Param* = node.self.get();
@@ -1487,7 +1446,6 @@ impl Resolver{
       if (!node.type.is_void() && !exit.is_exit() && !exit.is_unreachable()) {
         self.check_return(&body_rt.type, node.body.get().end_line);
       }
-      exit.drop();
     }
     self.dropScope();
     self.curMethod = Option<Method*>::new();
@@ -1530,10 +1488,6 @@ impl Resolver{
     let pair = mr.generateMethod(&map, method, &sig);
     //method = pair.a;
     self.drop_map.add(decl.type.print(), pair.b.clone());
-    drop_expr.drop();
-    map.drop();
-    pair.drop();
-    sig.drop();
     //print("handle_drop_method {}\n", rt.type);
   }
 
@@ -1553,7 +1507,6 @@ impl Resolver{
   func add_used_decl(self, decl: Decl*){
       let rt = self.visit_type(&decl.type);
       /*if(!self.used_types.add(rt.clone())){
-          rt.drop();
           return;
       }*/
     for used in &self.used_types{
@@ -1617,7 +1570,6 @@ impl Resolver{
   func addUsed(self, m: Method*){
     let mng = mangle(m);
     if(self.used_methods.contains(&mng)){
-        mng.drop();
         return;
     }
     self.used_methods.add(mng, m);
@@ -1636,7 +1588,6 @@ impl Resolver{
   func is_condition(self, e: Expr*): bool{
     let tmp = self.visit(e);
     let res = tmp.type.eq("bool");
-    tmp.drop();
     return res;
   }
 
@@ -1656,13 +1607,11 @@ impl Resolver{
         //was: unconditional .get() panic here, which defeated every
         //is_ok() guard on this call (e.g. module-scope probing in
         //get_impl) and hid the real error. Propagate instead.
-        str.drop();
         return res;
       }
       self.addType(str, res.get().clone());
       return res;
     }
-    str.drop();
     return res;
   }
 
@@ -1739,10 +1688,8 @@ impl Resolver{
           //unwrap moves; nothing of found remains to drop.
           let canon = found.unwrap();
           let tmp = self.visit_type0(&canon);
-          canon.drop();
           return tmp;
         }
-        found.drop();
       }
     }
     //try using items as prefix
@@ -1837,7 +1784,6 @@ impl Resolver{
           //same way init_item does, so get_decl/get_method keep working.
           let md = self.get_module(&scope);
           if(md.is_none()){
-            scope.drop();
             return Result<RType, Error>::err(Error{format("scope is not module {:?}", node), node.line});
           }
           let mdu = md.unwrap();
@@ -1893,23 +1839,19 @@ impl Resolver{
               }
             }
           }
-          scope.drop();
           return Result<RType, Error>::err(Error{format("not found {:?} in module", node), node.line});
         }
         let decl = self.get_decl(&scope).unwrap();
         if (!(decl is Decl::Enum)) {
-          scope.drop();
           return Result<RType, Error>::ok(self.member_func_ptr(node, str));
         }
         if(decl.is_repr()){
           let repty = decl.attr.find("repr").unwrap().args.get(0).print();
           if(repty.eq("C")){
-            repty.drop();
             repty = "i32".owned();
           }
           let res = RType::new(Type::new(repty));
           self.addType(str.clone(), res.clone());
-          scope.drop();
           return Result<RType, Error>::ok(res);
         }
         findVariant(decl, &simple.name);
@@ -1919,7 +1861,6 @@ impl Resolver{
         //cached for generics -> "not cached Option<T>".
         let res = scope.clone();
         self.addType(str.clone(), res.clone());
-        scope.drop();
         return Result<RType, Error>::ok(res);
       }
     }
@@ -1977,7 +1918,6 @@ impl Resolver{
     let id = Node::new(-1, node.line);
     let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
     rt.method_desc = Option::new(sig.desc.clone());
-    list.drop();
     return rt;
   }
 
@@ -2017,10 +1957,8 @@ impl Resolver{
       res.desc.drop();
       res.desc = target_rt.desc.clone();
       self.addType(str.clone(), res.clone());
-      target_rt.drop();
       return Result<RType, Error>::ok(res);
     }
-    target_rt.drop();
     if (simple.args.len() != target.type.get_args().len()) {
       let err = Error{format("type arguments size not matched {} vs {}", simple.args.len(), target.type.get_args().len()), node.line};
       return Result<RType, Error>::err(err);
@@ -2031,7 +1969,6 @@ impl Resolver{
     let decl: Decl* = self.add_generated(decl0);
     self.add_used_decl(decl);//fields may be foreign
     let res = self.getTypeCached(str);
-    map.drop();
     return Result<RType, Error>::ok(res);
   }
 
@@ -2079,7 +2016,6 @@ impl Resolver{
         return Option::new(res);
       }
     }
-    arr.drop();
     return Option<RType>::new();
   }
   
@@ -2144,7 +2080,6 @@ impl Resolver{
     let decl = self.get_decl(&scp).unwrap();
     let pair = self.findField(node, name, decl, &scp.type);
     let fd = pair.a.get_fields().get(pair.b);
-    scp.drop();
     return self.visit_field(fd);
   }
   
@@ -2190,7 +2125,6 @@ impl Resolver{
             let msg = format("invalid base class type: {:?} expecting {:?}", base_ty.type, decl.base.get());
             self.err(node, msg);
         }
-        base_ty.drop();
     }
     let fields0 = Option<List<FieldDecl>*>::new();
     let type_opt = Option<Type>::new();
@@ -2210,10 +2144,7 @@ impl Resolver{
               scp.set(type0.as_simple().scope.get().clone());
             }
             let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, &variant.fields, args);
-            scp.drop();
-            res.drop();
             res = self.visit_type(&inferred);
-            inferred.drop();
             let gen_decl = self.get_decl(&res).unwrap();
             let gen_idx = Resolver::findVariant(gen_decl, &variant.name);
             fields0 = Option::new(&gen_decl.get_variants().get(gen_idx).fields);
@@ -2229,10 +2160,7 @@ impl Resolver{
               scp.set(type0.as_simple().scope.get().clone());
             }
             let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, f, args);
-            scp.drop();
-            res.drop();
             res = self.visit_type(&inferred);
-            inferred.drop();
             let gen_decl = self.get_decl(&res).unwrap();
             fields0 = Option::new(gen_decl.get_fields());
         }
@@ -2285,8 +2213,6 @@ impl Resolver{
             self.err(node, msg);
         }
     }
-    names.drop();
-    type.drop();
     return res;
   }
 
@@ -2324,7 +2250,6 @@ impl Resolver{
         }
         res.args.add(opt.unwrap().clone());
     }
-    inferMap.drop();
     return res.into(node.line);
   }
   
@@ -2369,8 +2294,6 @@ impl Resolver{
       let msg = format("cannot assign {:?}={:?}", t1.type, t2.type);
       self.err(node, msg);
     }
-    opt.drop();
-    t2.drop();
     return t1;
   }
 
@@ -2390,8 +2313,6 @@ impl Resolver{
       self.err(node, format("infix on non prim type {:?} vs {:?}", lt.type, rt.type));
     }
     if(is_comp(op.str())){
-      lt.drop();
-      rt.drop();
       return RType::new("bool");
     }
     else if(op.eq("&&") || op.eq("||")){
@@ -2401,25 +2322,17 @@ impl Resolver{
       if (!rt.type.eq("bool")) {
         self.err(node, format("infix rhs is not boolean: {:?}", rhs));
       }
-      lt.drop();
-      rt.drop();
       return RType::new("bool");
     }else{
       //fast path: same-type operands keep their type, no print round trip
       //(infix_result returns l when both sides are equal).
       if(lt.type.eq_value(&rt.type)){
         let res = RType::new(lt.type.clone());
-        lt.drop();
-        rt.drop();
         return res;
       }
       let s1 = lt.type.print();
       let s2 = rt.type.print();
       let res = RType::new(infix_result(s1.str(), s2.str()));
-      lt.drop();
-      rt.drop();
-      s1.drop();
-      s2.drop();
       return res;
     }
   }
@@ -2509,8 +2422,6 @@ impl Resolver{
     if(not_covered.empty() && has_none){
       self.err(expr, "none case is unreachable");
     }
-    scp.drop();
-    not_covered.drop();
     if(res.is_none()) return RType::new("void");
     return res.unwrap();
   }
@@ -2554,7 +2465,6 @@ impl Resolver{
     let scope = self.getType(mc.scope.get());
     let scope2 = scope.deref_ptr();
     let res = TypeKind::new(scope2) is kind;
-    scope.drop();
     return res;
   }
   
@@ -2642,7 +2552,6 @@ impl Resolver{
         }
         arg.drop();
     }
-    ptr_rt.drop();
   }
 
   func handle_env(self, node: Expr*, mc: MacroCall*){
@@ -2658,7 +2567,6 @@ impl Resolver{
     let tmp = parse_expr(str, &self.unit, node.line);
     info.block.return_expr.set(tmp);
     let rt = self.visit_block(&info.block);
-    rt.drop();
     self.format_map.add(node.id, info);
   }
 
@@ -2675,7 +2583,6 @@ impl Resolver{
     let tmp = parse_expr(str, &self.unit, node.line);
     info.block.return_expr.set(tmp);
     let rt = self.visit_block(&info.block);
-    rt.drop();
     self.format_map.add(node.id, info);
   }
 
@@ -2686,7 +2593,6 @@ impl Resolver{
     let info = FormatInfo::new(node.line);
     info.block.return_expr.set(tmp);
     let rt = self.visit_block(&info.block);
-    rt.drop();
     self.format_map.add(node.id, info);
   }
   
@@ -2709,15 +2615,12 @@ impl Resolver{
       //print("info={:?} {:?} {:?}\n", node, &rt1.type, &info.block);
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);
-      rt1.drop();
-      rt2.drop();
       return RType::new("void");
     }
     if(Utils::is_call(call, "std", "typeof")){
       assert(call.args.len() == 1);
       let arg = call.args.get(0);
       let tmp = self.visit(arg);
-      tmp.drop();
       return RType::new("str");
     }
     if(Utils::is_call(call, "std", "env")){
@@ -2738,7 +2641,6 @@ impl Resolver{
       let id = i32::parse(arg.str()).unwrap();
       let blk: Block* = *self.block_map.get(&id).unwrap();
       self.visit_block(blk);
-      arg.drop();
       return RType::new("void");
     }
     if(Utils::is_call(call, "ptr", "get")){
@@ -2753,12 +2655,8 @@ impl Resolver{
       let idx = self.getType(call.args.get(1));
       if (idx.eq("i32") || idx.eq("i64") || idx.eq("u32") || idx.eq("u64") || idx.eq("i8") || idx.eq("i16")) {
         let res = self.visit_type(&src);
-        idx.drop();
-        src.drop();
         return res;
       }
-      idx.drop();
-      src.drop();
       self.err(node, "ptr access index is not integer");
     }
     if(Utils::is_call(call, "ptr", "copy")){
@@ -2778,9 +2676,6 @@ impl Resolver{
       if (!elem_type.eq(ptr_type.deref_ptr())) {
         self.err(node, "ptr elem type dont match val type");
       }
-      ptr_type.drop();
-      idx_type.drop();
-      elem_type.drop();
       return RType::new("void");
     }
     if(Utils::is_call(call, "ptr", "deref")){
@@ -2790,12 +2685,10 @@ impl Resolver{
             self.err(node, "ptr arg is not ptr ");
         }
         let res = self.visit_type(rt.deref_ptr());
-        rt.drop();
         return res;
     }
     if(Utils::is_call(call, "std", "no_drop")){
       let rt = self.visit(call.args.get(0));
-      rt.drop();
       return RType::new("void");
     }
     if(is_format(call)){
@@ -2832,7 +2725,6 @@ impl Resolver{
         }
         let res = self.visit_type(&ft.return_type);
         res.fp_info.set(fp.get().type.clone().unwrap_ft());
-        fp.drop();
         return res;
       }
       else if(fp.is_some()){
@@ -2853,7 +2745,6 @@ impl Resolver{
           return res;
         }
       }
-      fp.drop();
     }
     ////////////////////
     // if(Utils::is_call(call, "std", "typeof")){
@@ -2929,7 +2820,6 @@ impl Resolver{
     // }
     if(Utils::is_call(call, "std", "no_drop")){
       let rt = self.visit(call.args.get(0));
-      rt.drop();
       return RType::new("void");
     }
     /// /////////////
@@ -2938,7 +2828,6 @@ impl Resolver{
       assert(call.type_args.len() == 1);
       let ta = call.type_args.get(0);
       let tmp = self.visit_type(ta);
-      tmp.drop();
       self.handle_print_type(node, call);
       return RType::new("str");
     }
@@ -2967,25 +2856,20 @@ impl Resolver{
       }
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);
-      rt1.drop();
-      rt2.drop();
       return RType::new("void");
     }
     if(Utils::is_call(call, "Drop", "drop")){
       let argt = self.visit(call.args.get(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){
-        argt.drop();
         return RType::new("void");
       }
       //let decl = self.get_decl(&argt);
       let helper = DropHelper{self};
       //if (!DropHelper::has_drop_impl(decl, self)) {
         if(!helper.is_drop_type(&argt)){
-          argt.drop();
           return RType::new("void");
         }
       //}
-      argt.drop();
     }
     if(is_printf(call)){
       self.validate_printf(node, call);
@@ -3010,10 +2894,8 @@ impl Resolver{
     if(Utils::is_call(call, "std", "size")){
       if(!call.args.empty()){
         let tmp = self.visit(call.args.get(0));
-        tmp.drop();
       }else{
         let tmp = self.visit_type(call.type_args.get(0));
-        tmp.drop();
       }
       return RType::new("i64");
     }
@@ -3038,12 +2920,10 @@ impl Resolver{
     if (self.is_slice_get_len(call)) {
         let tmp = self.visit(call.scope.get());
         let ltype = as_type(SLICE_LEN_BITS());
-        tmp.drop();
         return RType::new(ltype);
     }
     if(self.is_array_get_len(call)){
       let tmp = self.visit(call.scope.get());
-      tmp.drop();
       return RType::new("i64");
     }
     if(self.is_array_get_ptr(call)){
@@ -3055,7 +2935,6 @@ impl Resolver{
       if(!argt.is_prim()){
         self.err(node, "malloc arg is not integer");
       }
-      argt.drop();
       if(call.type_args.empty()){
         return RType::new(Type::new("i8").toPtr());
       }else{
@@ -3072,7 +2951,6 @@ impl Resolver{
     }
     let mr = MethodResolver::new(self);
     let res = mr.handle(node, &sig);
-    sig.drop();
     return res;
   }
   
@@ -3083,21 +2961,17 @@ impl Resolver{
     if (idx.eq("bool") || !idx.is_prim()){
       self.err(node, "array index is not an integer");
     }
-    idx.drop();
     if (!aa.idx2.is_some()) {
       //normal
       if (arr.is_pointer()) {
           let tmp = self.getType(arr.elem());
-          arr.drop();
           arr = tmp;
       }
       if (arr.is_array() || arr.is_slice()) {
           let res = self.visit_type(arr.elem());
-          arr.drop();
           return res;
       }
       self.err(node, "cant index: ");
-      arr.drop();
       panic("");
     }
     //slice
@@ -3106,20 +2980,16 @@ impl Resolver{
       self.err(node, "range end is not an integer");
       panic("");
     }
-    idx2.drop();
     let inner = arr.deref_ptr();
     if (inner.is_slice()) {
         let res = RType::new(inner.clone());
-        arr.drop();
         return res;
     } else if (inner.is_array()) {
         let res = RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(inner.elem().clone())});
-        arr.drop();
         return res;
     } else if (arr.is_pointer()) {
         //from raw pointer
         let res = RType::new(Type::Slice{.Node::new(-1, node.line), Box::new(inner.clone())});
-        arr.drop();
         return res;
     }
     self.err(node, "cant make slice out of ");
@@ -3165,20 +3035,16 @@ impl Resolver{
     //prim -> prim
     if (left.type.is_prim()) {
       if(right.type.is_prim()){
-        left.drop();
         return right;
       }
       self.err(node, "invalid as expr rhs must be prim");
     }
     //ptr -> int
     if(left.type.is_pointer() && right.type.eq("u64")) {
-      left.drop();
-      right.drop();
       return RType::new("u64");
     }
     //derived->base
     let decl1_opt = self.get_decl(&left);
-    left.drop();
     if(decl1_opt.is_some()) {
       let decl1 = decl1_opt.unwrap();
       if(decl1.is_repr() && right.type.is_prim()){
@@ -3189,12 +3055,8 @@ impl Resolver{
         let base_ptr = format("{:?}*", decl1.base.get());
         let rs = right.type.print();
         if (base_ptr.eq(rs.str())){
-          base_ptr.drop();
-          rs.drop();
           return right;
         }
-        base_ptr.drop();
-        rs.drop();
       }
     }
     if (!right.type.is_pointer()) {
@@ -3209,14 +3071,11 @@ impl Resolver{
     let decl1_opt = self.get_decl(&rt);
     if (decl1_opt.is_none() || !(*decl1_opt.get() is Decl::Enum)) {
         self.err(node, format("lhs of is expr is not enum: {:?}", rt.type));
-        rt.drop();
         panic("");
     }
-    rt.drop();
     let decl1 = decl1_opt.unwrap();
     let rt2 = self.visit(rhs);
     let decl2 = self.get_decl(&rt2).unwrap();
-    rt2.drop();
     if (!decl1.type.eq(&decl2.type)) {
         self.err(node, format("rhs is not same type with lhs {:?} vs {:?}", decl1.type, decl2.type));
     }
@@ -3270,7 +3129,6 @@ impl Resolver{
               }
             }
           }
-          digits.drop();
           if(over){
             self.err(expr, format("literal out of range {} (i32, use _i64 suffix for bigger values)", value));
           }
@@ -3281,7 +3139,6 @@ impl Resolver{
         LitKind::STR => {
           let res = RType::new("str");
           let rt = self.visit_type(&res.type);
-          res.drop();
           return rt;
         },
         LitKind::BOOL => {
@@ -3412,7 +3269,6 @@ impl Resolver{
         return cn;
       }
     }
-    arr.drop();
     //func ptr, (statics & members) + imports
     let res = self.try_func_ptr(node, name.str(), err_multiple);
     if(res.is_some()){
@@ -3444,7 +3300,6 @@ impl Resolver{
         }
       }
     }
-    arr.drop();
     if(list.len() > 1 && err_multiple){
       self.err(expr, format("multiple matching functions for '{}'\n{:?}", name, list));
     }
@@ -3452,7 +3307,6 @@ impl Resolver{
       let sig = list.get(0);
       let method = sig.m.unwrap();
       if(method.is_generic){
-        list.drop();
         return Option<RType>::new();
       }
       let ret = self.visit_type(&method.type).unwrap();
@@ -3464,10 +3318,8 @@ impl Resolver{
       let id = Node::new(-1, expr.line);
       let rt = RType::new(Type::Function{.id, type: Box::new(ft)});
       rt.method_desc = Option::new(sig.desc.clone());
-      list.drop();
       return Option::new(rt);
     }
-    list.drop();
     return Option<RType>::new();
   }
 
@@ -3607,7 +3459,6 @@ impl Resolver{
     info.block.return_expr.set(parse_expr(expr_str, &self.unit, expr.line));
     self.visit_block(&info.block).drop();
     self.format_map.add(expr.id, info);
-    err_str.drop();
     return self.visit_type(ok_type);
 
   }
@@ -3703,7 +3554,6 @@ impl Resolver{
     if(cmp.is_some()){
       self.err(line, format("return type mismatch {:?} -> {:?}", type, expected_type.unwrap()));
     }
-    tmp.drop();
   }
 
   func is_result_type(ty: Type*): bool{
@@ -3720,13 +3570,11 @@ impl Resolver{
         if(is_result_type(&tmp.type)){
           self.err(node, format("Result type not handled, {:?}", node));
         }
-        tmp.drop();
       },
       Stmt::Ret(e) => {
         if(e.is_some()){
           let rt = self.visit(e.get());
           self.check_return(&rt.type, node.line);
-          rt.drop();
         }else{
           if(!self.curMethod.unwrap().type.is_void()){
             self.err(node, "non-void method returns void");
@@ -3772,7 +3620,6 @@ impl Resolver{
         if (!c.eq("bool")) {
             self.err(cond, format("for condition not a bool: {:?}", c));
         }
-        c.drop();
       }
       for (let i = 0;i < f.updaters.len();++i) {
         let tmp = self.visit(f.updaters.get(i));
@@ -3835,10 +3682,6 @@ impl Resolver{
     let tmp = self.visit_block(body);
 
     self.format_map.add(node.id, info);
-    rt.drop();
-    it_name.drop();
-    opt_name.drop();
-    tmp.drop();
   }
   
   func visit_while(self, node: Stmt*, cond: Expr*, body: Body*){
@@ -3870,7 +3713,6 @@ impl Resolver{
         }
         self.dropScope();
         if(!then_exit.is_jump()){
-          rt2.drop();
           return rt1;
         }
         return rt2;
@@ -3891,14 +3733,11 @@ impl Resolver{
     if(is.type.is_simple()){
       let smp = is.type.as_simple();
       if(smp.scope.is_some()){
-        scope_ty.drop();
         scope_ty = smp.scope.get().clone();
       }
     }
     let rt = self.visit_type(&scope_ty);
-    scope_ty.drop();
     let decl_opt = self.get_decl(&rt);
-    rt.drop();
     if (decl_opt.is_none() || !decl_opt.unwrap().is_enum()) {
         let msg = format("if let type is not enum: {:?}", is.type);
         self.err(line, msg);
@@ -3929,7 +3768,6 @@ impl Resolver{
       let rty = rhs.type.clone();
       if(rty.is_pointer()){
         let inner = rty.deref_ptr().clone();
-        rty.drop();
         rty = inner;
       }
       if(rty.is_simple()){
@@ -3945,12 +3783,10 @@ impl Resolver{
           }
           if(ok){
             let tmp = make_type_map(rsmp, decl);
-            sub_map.drop();
             sub_map = tmp;
           }
         }
       }
-      rty.drop();
     }
     //init arg variables
     self.newScope();
@@ -3970,7 +3806,6 @@ impl Resolver{
       self.addScope(arg.name.clone(), self.visit_type(&ty), arg.id, VarKind::IFLET, arg.line);
       self.cache.add(arg.id, RType::new(ty));
     }
-    sub_map.drop();
     let rt1 = self.visit_body(is.then.get());
     self.dropScope();
     if (is.else_stmt.is_some()) {
@@ -3982,9 +3817,7 @@ impl Resolver{
         self.err(line, format("then & else type mismatch {:?} vs {:?}", rt1.type, rt2.type));
       }
       self.dropScope();
-      rhs.drop();
       if(!then_exit.is_jump()){
-        rt2.drop();
         return rt1;
       }
       return rt2;
@@ -3992,7 +3825,6 @@ impl Resolver{
       if(!rt1.type.is_void()){
         self.err(line, "then returns a non-void but no else");
       }
-      rhs.drop();
       return rt1;
     }
   }
@@ -4000,7 +3832,6 @@ impl Resolver{
   func isCondition(self, e: Expr*): bool{
     let rt = self.visit(e);
     let res = rt.type.eq("bool");
-    rt.drop();
     return res;
   }
 
@@ -4023,7 +3854,6 @@ impl Resolver{
         if(last.is_jump() || last.is_unreachable()){
           self.err(node.return_expr.get(), "unreachable code");
         }
-        last.drop();
       }
       return self.visit(node.return_expr.get());
     }
@@ -4052,8 +3882,6 @@ impl Resolver{
       self.err(node.line, format("type mismatch {:?} vs {:?}\n{:?}", res.type, rhs.type, err_opt.get()));
     }
     rhs.type = res.type.clone();
-    err_opt.drop();
-    res.drop();
     return rhs;
   }
 

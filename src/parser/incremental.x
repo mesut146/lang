@@ -89,7 +89,6 @@ impl Incremental{
             list_opt = map.get(&key);
         }
         list_opt.unwrap().add(Path::relativize(file, self.src_dir.str()).owned());
-        key.drop();
     }
 
     func get_key(decl: Decl*): String{

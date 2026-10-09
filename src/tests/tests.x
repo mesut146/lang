@@ -27,18 +27,15 @@
      let dir = Path::parent(full.str());
      if(dir.ends_with("build") || dir.ends_with("bin")){
          let res = Path::parent(dir).str();
-         full.drop();
          //root = Option::new(res);
          root.set(res);
          return root.get();
      }else if(Path::parent(dir).ends_with("build")){
          let res = Path::parent(Path::parent(dir)).str();
-         full.drop();
          //root = Option::new(res);
          root.set(res);
          return root.get();
      }
-     full.drop();
      panic("can't find root");
  }
 
@@ -79,7 +76,6 @@ func handle_resolve(path: String*){
     let ms = end.sub(&beg);
     print("resolve done {} in {} ms\n", path, ms.as_ms());
     dump(r);
-    ctx.drop();
 }
 
 func main(argc: i32, args: i8**){
@@ -98,8 +94,6 @@ func main(argc: i32, args: i8**){
          let parser = Parser::from_path(path);
          let unit = parser.parse_unit();
          print("parse done {}\nunit={:?}\n", parser.path(), unit);
-         parser.drop();
-         unit.drop();
      }else if(cmd.is("r")){
          //resolver test
          cmd.consume();
@@ -114,7 +108,6 @@ func main(argc: i32, args: i8**){
          }else{
            handle_resolve(&path);
          }
-         path.drop();
      }else{
      	panic("invalid test command {:?}", cmd.args);
      }

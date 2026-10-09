@@ -167,7 +167,6 @@ impl AllocHelper{
         let id = i32::parse(arg.str()).unwrap();
         let blk: Block* = *resolver.block_map.get(&id).unwrap();
         self.visit(blk);
-        arg.drop();
         return Option<Value*>::new();
       }
       if(Utils::is_call(call, "std", "env")){
@@ -175,13 +174,11 @@ impl AllocHelper{
         let rt = resolver.visit(node);
         self.visit(&info.block);
         let res = Option::new(self.alloc_ty(&rt.type, node));
-        rt.drop();
         return res;
       }
       if(Utils::is_call(call, "std", "typeof")){
         let rt = resolver.visit(node);
         let res = Option::new(self.alloc_ty(&rt.type, node));
-        rt.drop();
         return res;
       }
       
@@ -191,11 +188,9 @@ impl AllocHelper{
       }
       let rt = resolver.visit(node);
       if(rt.type.is_void()){
-          rt.drop();
           return Option<Value*>::new();
       }
       let res = Option::new(self.alloc_ty(&rt.type, node));
-      rt.drop();
       return res;
   }
 
@@ -206,7 +201,6 @@ impl AllocHelper{
       let rt = resolver.visit(node);
       self.visit(&info.block);
       let res = Option::new(self.alloc_ty(&rt.type, node));
-      rt.drop();
       return res;
     }
     if(Resolver::is_printf(call)){
@@ -221,7 +215,6 @@ impl AllocHelper{
       let rt = resolver.visit(node);
       self.visit(&info.block);
       let res = Option::new(self.alloc_ty(&rt.type, node));
-      rt.drop();
       return res;
     }
 
@@ -240,7 +233,6 @@ impl AllocHelper{
       self.visit(&info.block);
       let str_ty = Type::new("String");
       let res = Option::new(self.alloc_ty(&str_ty, info.block.return_expr.get()));
-      str_ty.drop();
       return res;
     }
     let rt = resolver.visit(node);
@@ -250,7 +242,6 @@ impl AllocHelper{
       if (rval.rvalue) {
           self.alloc_ty(rval.scope_type.get(), *rval.scope.get());
       }
-      rval.drop();
     }
     let res = Option<Value*>::new();
     if(rt.is_method() && is_struct(&rt.type)){
@@ -272,7 +263,6 @@ impl AllocHelper{
     for arg in &call.args{
       self.visit(arg);
     }
-    rt.drop();
     return res;
   }
   
@@ -305,7 +295,6 @@ impl AllocHelper{
               let at = decl.unwrap().attr.find("repr").unwrap().args.get(0).print();
               let ty2 = Type::new(at);
               res = Option::new(self.alloc_ty(&ty2, node));
-              ty2.drop();
               return res;
             }
             //enum creation
@@ -318,7 +307,6 @@ impl AllocHelper{
         if(lit.kind is LitKind::STR){
           let ty = Type::new("str");
           res.set(self.alloc_ty(&ty, node));
-          ty.drop();
         }
         return res;
       },
@@ -333,7 +321,6 @@ impl AllocHelper{
           if(RvalueHelper::is_rvalue(e.get())){
             let ty = self.get_resolver().getType(e.get());
             self.alloc_ty(&ty, node);
-            ty.drop();
           }
         }
         return res;
@@ -345,7 +332,6 @@ impl AllocHelper{
           self.visit(aa.idx2.get());
           let ty = self.get_resolver().getType(node);
           res.set(self.alloc_ty(&ty, node));
-          ty.drop();
         }
         return res;
       },
@@ -357,7 +343,6 @@ impl AllocHelper{
         //get full type
         let rt = self.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
-        rt.drop();
         for arg in args{
           //self.child(&arg.expr);//rvo opt
           self.visit(&arg.expr);
@@ -367,7 +352,6 @@ impl AllocHelper{
       Expr::Array(list, sz) => {
         let rt = self.get_resolver().visit(node);
         res = Option::new(self.alloc_ty(&rt.type, node));
-        rt.drop();
         if(sz.is_some()){
           let elem = list.get(0);
           self.visit(elem);
@@ -400,7 +384,6 @@ impl AllocHelper{
             MatchRhs::STMT(st) => { self.visit(st); }
           }
         }
-        rt.drop();
         return res;
       },
       Expr::Lambda(le) => {

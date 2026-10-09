@@ -53,8 +53,6 @@ impl Cache{
                 let time = line.substr(eq + 1);
                 self.map.add(path.str(), time.str());
             }
-            lines.drop();
-            buf.drop();
         }
         //print("read_cache={}\n", self.map);
         //
@@ -116,7 +114,6 @@ impl Cache{
         }
         let res = File::read_dir(dir.str());
         if(res.is_err()){
-            res.drop();
             return;
         }
         let list = res.unwrap();
@@ -151,7 +148,6 @@ impl Cache{
             full.drop();
             name.drop();
         }
-        list.drop();
     }
 
     //True when every recorded entry still matches the file on disk.
@@ -194,7 +190,6 @@ impl Cache{
             str.append("\n");
         }
         File::write_string(str.str(), self.file.str())?;
-        str.drop();
     }
     
     func need_compile(self, file: str, out: str): bool{
@@ -211,16 +206,12 @@ impl Cache{
         file = resolved.str();
         let file_s = file.str();
         let old = self.map.get(&file_s);
-        file_s.drop();
         if(old.is_some()){
             let old_time = old.unwrap();
             let cur_time = self.get_time(file);
             let res = !old_time.eq(cur_time.str());
-            cur_time.drop();
-            resolved.drop();
             return res;
         }
-        resolved.drop();
         return true;
     }
     
@@ -234,7 +225,6 @@ impl Cache{
     func get_time(self, file: str): String{
         let resolved = File::resolve(file)?;
         let time = File::get_last_write_time(resolved.str());
-        resolved.drop();
         return time.str();
     }
 }

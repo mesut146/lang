@@ -53,7 +53,6 @@ impl MethodResolver{
                 let mr = MethodResolver::new(resolver);
                 mr.collect_static(sig.name.str(), &list, self.r);
             }
-            arr.drop();         
         }
         return Result<List<Signature>, String>::ok(list);
     }
@@ -90,9 +89,7 @@ impl MethodResolver{
           if(tmp.is_ok()){
             let rt = tmp.unwrap();
             let md = resolver.get_module(&rt);
-            rt.drop();
             if(md.is_none()){
-              scoped.drop();
               return Result<List<ImplHit>, String>::err(format("scope is not module {:?}", type));
             }
             let smp2 = smp.clone();
@@ -105,9 +102,7 @@ impl MethodResolver{
                 let fp = found.get(i);
                 scoped.add(ImplHit{imp: fp.imp, idx: fp.idx, scope: Option::new(smp.scope.get().clone())});
               }
-              found.drop();
             }else{
-              scoped.drop();
               return rec;
             }
           }
@@ -161,7 +156,6 @@ impl MethodResolver{
             return Result<List<ImplHit>, String>::err(format("get_impl type not covered: {:?}", type));
         }
       }
-      erased.drop();
       //sibling modules: impls spelled with the full search scope but
       //nested in a different module (impl M::A inside mod N). The loop
       //above only sees root items and the recursion only descends the
@@ -175,7 +169,6 @@ impl MethodResolver{
             scan_mod_items(&md.items, Type::new(md.name.clone()), &full, tr, &list);
           }
         }
-        full.drop();
       }
       return Result<List<ImplHit>, String>::ok(list);
     }
@@ -246,7 +239,6 @@ impl MethodResolver{
                 list.add(Signature::new(m, desc, self.r, origin));
             }
         }
-        segs.drop();
     }
 
     func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool, origin: Resolver*): Result<i32, String>{
@@ -340,10 +332,7 @@ impl MethodResolver{
                 return Result<i32, String>::err(err.unwrap_err());
             }
           }
-         arr.drop();
         }
-        imp_list.drop();
-        map.drop();
         return Result<i32, String>::ok(0);
     }
 
@@ -440,9 +429,6 @@ impl MethodResolver{
             }
             let res = self.r.visit_type(&target.type);
             res.method_desc = Option::new(target_sig.desc.clone());
-            list.drop();
-            real.drop();
-            errors.drop();
             return res;
         }
         let inferred_map = HashMap<String, Type>::new();
@@ -505,11 +491,6 @@ impl MethodResolver{
         let gen_pair: Pair<Method*, Desc> = self.generateMethod(&inferred_map, target, sig);
         let res = self.r.visit_type(&gen_pair.a.type);
         res.method_desc = Option::new(gen_pair.b);
-        type_params.drop();
-        inferred_map.drop();
-        list.drop();
-        real.drop();
-        errors.drop();
         return res;
     }
 
@@ -701,12 +682,8 @@ impl MethodResolver{
                 if(idx >= 0 && idx < arr.len()){
                     let gm = arr.get(idx).get();
                     let desc = cached.unwrap().clone();
-                    cached.drop();
-                    tp_all.drop();
-                    key.drop();
                     return Pair::new(gm, desc);
                 }
-                cached.drop();
             }
         }
         let arr_opt = self.r.generated_methods.get(&m.name);
@@ -749,7 +726,6 @@ impl MethodResolver{
         self.r.generated_methods_todo.add(desc.clone());
         let res: Method* = arr_opt.unwrap().add(Box::new(res2)).get();
         self.r.gen_cache.add(key, desc.clone());
-        tp_all.drop();
         if(!(m.parent is Parent::Impl)){
             return Pair::new(res, desc);
         }
@@ -761,7 +737,6 @@ impl MethodResolver{
         }
         let st: Simple = sig.scope.get().type.clone().unwrap_simple();
         if(sig.scope.get().is_trait()){
-            st.drop();
             st = sig.args.get(0).deref_ptr().as_simple().clone();
         }
         //put full type, Box::new(...) -> Box<...>::new()
@@ -799,10 +774,8 @@ impl MethodResolver{
             }
             let cmp = is_compatible(type1, type2, &info.type_params);
             if(cmp.is_some()){
-                cmp.drop();
                 return SigResult::Err{"not same impl: slice incompatible".str()};
             }
-            cmp.drop();
             return SigResult::Exact;
             //panic("todo {} vs {}, mc={} cmp={}", type1, type2, sig.mc.unwrap(), &cmp);
         }
@@ -887,7 +860,6 @@ impl MethodResolver{
         if(tmp is SigResult::Err){
             return tmp;
         }
-        tmp.drop();
         return self.check_args(sig, sig2);
         
     }
@@ -967,7 +939,6 @@ impl MethodResolver{
             cmp.drop();
             t1.drop();
         }
-        typeParams.drop();
         if(all_exact){
             return SigResult::Exact;
         }
@@ -978,21 +949,17 @@ impl MethodResolver{
         let typeParams = List<Type>::new();
         let arg_val = Option<String>::new();
         let res = MethodResolver::is_compatible(arg, &arg_val, target, &typeParams);
-        typeParams.drop();
-        arg_val.drop();
         return res;
     }
     func is_compatible(arg: Type*, target: Type*, typeParams: List<Type>*): Option<String>{
         let arg_val = Option<String>::new();
         let res = MethodResolver::is_compatible(arg, &arg_val, target, typeParams);
-        arg_val.drop();
         return res;
     }
 
     func is_compatible(arg: Type*, arg_val: Option<String>*, target: Type*): Option<String>{
         let typeParams = List<Type>::new();
         let res = is_compatible(arg, arg_val, target, &typeParams);
-        typeParams.drop();
         return res;
     }
 
@@ -1003,7 +970,6 @@ impl MethodResolver{
     func is_compatible_no_cast(arg: Type*, target: Type*): Option<String>{
         let typeParams = List<Type>::new();
         let res = is_compatible(arg, &Option<String>::new(), target, &typeParams, false);
-        typeParams.drop();
         return res;
     }
 
@@ -1211,7 +1177,6 @@ func scan_mod_items(items: List<Item>*, prefix: Type, full: String*, tr: Option<
         }
         imp_full.drop();
     }
-    prefix.drop();
 }
 
 func get_type_params(m: Method*): List<Type>{
@@ -1220,7 +1185,6 @@ func get_type_params(m: Method*): List<Type>{
         return res;
     }
     if let Parent::Impl(info) = &m.parent{
-        res.drop();
         res = info.type_params.clone();
     }
     res.add_list(m.type_params.clone());
@@ -1230,6 +1194,5 @@ func get_type_params(m: Method*): List<Type>{
 func hasGeneric(type: Type*, m: Method*): bool{
     let arr = get_type_params(m);
     let res = hasGeneric(type, &arr);
-    arr.drop();
     return res;
 }

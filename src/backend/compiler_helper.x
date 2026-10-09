@@ -57,7 +57,6 @@ impl RvalueHelper{
             res.rvalue = true;
             res.scope_type = Option::new(scope_type.type.clone());
          }
-         scope_type.drop();
        }
        return res;
     }
@@ -132,13 +131,11 @@ func all_deps(type: Type*, r: Resolver*, arr: List<String>*){
   let rt = r.visit_type(type);
   let opt = r.get_decl(&rt);
   if(opt.is_none()){
-    rt.drop();
     return;
   }
   arr.add_not_exist(type.print());
   let decl = opt.unwrap();
   all_deps(decl, r, arr);
-  rt.drop();
 }
 
 func all_deps(decl: Decl*, r: Resolver*, res: List<String>*){
@@ -215,8 +212,6 @@ func sort2(list: List<Decl*>*, r: Resolver*){
       s2.drop();
     }
   }
-  map.drop();
-  right_all.drop();
 }
 
 func swap(list: List<Decl*>*, i: i32, j: i32){
@@ -265,14 +260,12 @@ impl Emitter{
   func get_global_string(self, val: String): Value*{
     let opt = self.string_map.get(&val);
     if(opt.is_some()){
-      val.drop();
       return *opt.unwrap();
     }
     let val2 = val.clone();
     let val_c = val.cstr();
     let ptr = self.ll.get().glob_str(val2.str());
     self.string_map.add(val2, ptr);
-    val_c.drop();
     return ptr;
   }
   func make_proto(self, ft: FunctionType*): llvm_Type*{
@@ -282,7 +275,6 @@ impl Emitter{
       args.add(self.mapType(prm));
     }
     let res = make_ft(ret, args.ptr(), ft.params.len() as i32, false);
-    args.drop();
     return res as llvm_Type*;
   }
   func make_proto(self, ft: LambdaType*): llvm_Type*{
@@ -295,7 +287,6 @@ impl Emitter{
       args.add(self.mapType(prm));
     }
     let res = make_ft(ret, args.ptr(), args.len() as i32, false);
-    args.drop();
     return res as llvm_Type*;
   }
   func mapType(self, type: Type*): llvm_Type*{
@@ -303,8 +294,6 @@ impl Emitter{
     let rt = r.visit_type(type);
     let str = rt.type.print();
     let res = self.mapType2(&rt);
-    rt.drop();
-    str.drop();
     return res;
   }
 
@@ -338,7 +327,6 @@ impl Emitter{
         let opt = p.classMap.get_str(name.str());
         if(opt.is_some()){
           let res = *opt.unwrap();
-          name.drop();
           return res as llvm_Type*;
         }
         let elems = List<llvm_Type*>::new(tt.types.len());
@@ -347,7 +335,6 @@ impl Emitter{
         }
         let res = make_struct_ty(ll.ctx, name.ptr(), elems.ptr(), elems.len() as i32);
         p.classMap.add(name.str().owned(), res as llvm_Type*);
-        name.drop();
         return res as llvm_Type*;
       },
       Type::Simple(smp) => {
@@ -363,7 +350,6 @@ impl Emitter{
           let at = decl.attr.find("repr").unwrap().args.get(0).print();
           let ty = Type::new(at);
           let res = self.mapType(&ty);
-          ty.drop();
           return res;
         }
         
@@ -374,16 +360,12 @@ impl Emitter{
           //(A): fall back to the decl's canonical name.
           let ds = decl.type.print();
           if(p.classMap.contains(&ds)){
-            s.drop();
             let res = p.get(&ds);
-            ds.drop();
             return res as llvm_Type*;
           }
-          ds.drop();
           panic("mapType2 {}\n", s);
         }
         let res = p.get(&s);
-        s.drop();
         return res as llvm_Type*;
       }
     }
@@ -423,7 +405,6 @@ impl Emitter{
         self.di.get().map_di_fill(decl, self);
       }
     }
-    list.drop();
   }
 
   func make_decl_proto(self, decl: Decl*){
@@ -442,7 +423,6 @@ impl Emitter{
     }
     let type_c = decl.type.print().cstr();
     let st = make_struct_ty2(ll.ctx, type_c.ptr());
-    type_c.drop();
     p.classMap.add(decl.type.print(), st as llvm_Type*);
   }
 
@@ -487,7 +467,6 @@ impl Emitter{
       }
     }
     StructType_setBody(st as StructType*, elems.ptr(), elems.len() as i32);
-    elems.drop();
   }
   func make_variant_type(self, ev: Variant*, decl: Decl*, name: String*, ty: llvm_Type*){
     let elems = List<llvm_Type*>::new();
@@ -500,7 +479,6 @@ impl Emitter{
       elems.add(ft);
     }
     StructType_setBody(ty as StructType*, elems.ptr(), elems.len() as i32);
-    elems.drop();
   }
 
   func make_proto(self, m: Method*): Option<FunctionInfo>{
@@ -549,9 +527,6 @@ impl Emitter{
       Argument_setsret(ll.ctx, arg, ret_real);
     }
     self.protos.get().funcMap.add(mangled, FunctionInfo{f, ft});
-    args.drop();
-    mangled_c.drop();
-    sig.drop();
     return Option::new(FunctionInfo{f, ft});
   }
 
@@ -572,7 +547,6 @@ impl Emitter{
       Type::Tuple(tt) => {
         let rt = self.get_resolver().visit_type(type);
         let mapped = self.mapType(&rt.type);
-        rt.drop();
         return ll.sizeOf(mapped);
       },
       Type::Simple(smp) => {
@@ -582,10 +556,8 @@ impl Emitter{
         let rt = self.get_resolver().visit_type(type);
         if(rt.is_decl()){
           let decl = self.get_resolver().get_decl(&rt).unwrap();
-          rt.drop();
           return self.getSize(decl);
         }
-        rt.drop();
         panic("no decl");
       }
     }
@@ -607,29 +579,23 @@ impl Emitter{
       if(src_type.is_float()){
         if(src_type.eq("f32")){
           //f32 -> f64
-          src_type.drop();
           return CreateFPExt(ll.builder, val, target_ty);
         }else{
           //f64 -> f32
-          src_type.drop();
           return CreateFPTrunc(ll.builder, val, target_ty);
         }
       }else{
         if(is_unsigned){
-          src_type.drop();
           return CreateUIToFP(ll.builder, val, target_ty);
         }else{
-          src_type.drop();
           return CreateSIToFP(ll.builder, val, target_ty);
         }
       }
     }
     if(src_type.is_float()){
       if(is_unsigned){
-        src_type.drop();
         return CreateFPToUI(ll.builder, val, target_ty);
       }else{
-        src_type.drop();
         return CreateFPToSI(ll.builder, val, target_ty);
       }
     }
@@ -639,17 +605,13 @@ impl Emitter{
     let trg_ty = intTy(ll.ctx, trg_size as i32);
     if(src_size < trg_size){
       if(is_unsigned){
-        src_type.drop();
         return CreateZExt(ll.builder, val, trg_ty);
       }else{
-        src_type.drop();
         return CreateSExt(ll.builder, val, trg_ty);
       }
     }else if(src_size > trg_size){
-      src_type.drop();
       return CreateTrunc(ll.builder, val, trg_ty);
     }
-    src_type.drop();
     return val;
   }
   
@@ -680,7 +642,6 @@ impl Emitter{
     let type = self.getType(expr);
     assert(is_loadable(&type));
     let res = CreateLoad(ll.builder, self.mapType(&type), val);//local var
-    type.drop();
     return res;
   }
 
@@ -699,7 +660,6 @@ impl Emitter{
   func store(self, expr: Expr*, type: Type*, trg: Value*, lhs: Option<Expr*>){
       let rt = self.get_resolver().visit_type(type);
       self.store(expr, &rt, trg, lhs);
-      rt.drop();
   }
   func store(self, expr: Expr*, rt: RType*, trg: Value*, lhs: Option<Expr*>){
       let type = &rt.type;
@@ -800,14 +760,11 @@ impl Emitter{
         //ptr to member func
         let rt = self.get_resolver().visit(node);
         if(rt.type.is_fpointer() && rt.method_desc.is_some()){
-            rt.drop();
             return val;
         }
         if(rt.type.is_lambda()){
-            rt.drop();
             return val;
         }
-        rt.drop();
       },
       Expr::IfLet(il) => {
         return val;
@@ -845,10 +802,8 @@ impl Emitter{
   func eval_place(self, node: Expr*, val: Value*): Value*{
     let ty = self.get_resolver().visit(node);
     if(ty.type.is_any_pointer() && !ty.is_method()){
-      ty.drop();
       return self.ll.get().loadPtr(val);
     }
-    ty.drop();
     return val;
   }
 
@@ -859,7 +814,6 @@ impl Emitter{
     let tag_idx = get_tag_index(decl);
     let tag = self.eval_operand(expr);
     let mapped = self.mapType(rt.type.deref_ptr());
-    rt.drop();
     tag = CreateStructGEP(ll.builder, mapped, tag, tag_idx);
     return CreateLoad(ll.builder, intTy(ll.ctx, ENUM_TAG_BITS()), tag);
   }
@@ -867,7 +821,6 @@ impl Emitter{
   func get_variant_ty(self, decl: Decl*, variant: Variant*): llvm_Type*{
     let name = format("{:?}::{}", decl.type, variant.name.str());
     let res = *self.protos.get().classMap.get(&name).unwrap();
-    name.drop();
     return res;
   }
 
@@ -875,15 +828,12 @@ impl Emitter{
     let s1 = path.replace(".", "_");
     let s2 = s1.replace("/", "_");
     let s3 = s2.replace("-", "_");
-    s1.drop();
-    s2.drop();
     return s3;
   }
 
   func mangle_static(path: str): String{
     let mangled = mangle_unit(path);
     let res = format("{}_static_init", mangled);
-    mangled.drop();
     return res;
   }
 
@@ -921,7 +871,6 @@ impl Emitter{
     let args = ptr::null<Value*>();
     CreateCall(ll.builder, f, args, 0);
     CreateRetVoid(ll.builder);
-    mangled_c.drop();
   }
 
   func do_inline(self, expr: Expr*, ptr_ret: Value*){
@@ -933,7 +882,6 @@ impl Emitter{
           self.visit_call2(expr, call, Option::new(ptr_ret), rt);
           return;
         }
-        rt.drop();
       },
       Expr::Type(type) => {
         self.simple_enum(type, ptr_ret);
@@ -972,13 +920,10 @@ func doesAlloc(e: Expr*, r: Resolver*): bool{
       let rt = r.visit(e);
       if(rt.is_method()){
         let target = r.get_method(&rt).unwrap();
-        rt.drop();
         let ret = r.getType(&target.type);
         let res = is_struct(&ret);
-        ret.drop();
         return res;
       }
-      rt.drop();
       return false;
     },
     _ => return false,

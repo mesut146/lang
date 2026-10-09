@@ -118,7 +118,6 @@ impl Protos{
   func get(self, d: Decl*): llvm_Type*{
     let name = d.type.print();
     let res = self.get(&name);
-    name.drop();
     return res;
   }
   func get(self, name: String*): llvm_Type*{
@@ -139,11 +138,9 @@ impl Protos{
     let mangled = mangle(m);
     let opt = self.funcMap.get(&mangled);
     if(opt.is_none()){
-      mangled.drop();
       return self.compiler.make_proto(m).unwrap();
       //panic("no proto for {}, {}", mangled, demangle(mangled.str()));
     }
-    mangled.drop();
     return *opt.unwrap();
   }
 }
@@ -220,8 +217,6 @@ impl Emitter{
         self.cache.inc.find_recompiles(path, oldpath.str());
       }
       File::write_string(newdata.str(), oldpath.str())?;
-      oldpath.drop();
-      newdata.drop();
     }
     self.cleanup();
     self.cache.update(path);
@@ -229,8 +224,6 @@ impl Emitter{
 
     self.ctx.prog.compile_done();
 
-    methods.drop();
-    llvm_file.drop();
     return outFile;
   }
 
@@ -260,7 +253,6 @@ impl Emitter{
     }
     let globals = resolv.unit.get_globals(true);
     if(globals.empty()){
-      globals.drop();
       return;
     }
     if(std::getenv("TERMUX").is_some()){
@@ -270,7 +262,6 @@ impl Emitter{
       tmp.write_string(resolv.unit.path.str())?;
       tmp.write_string("\n")?;
       tmp.close();
-      globfiles.drop();
     }
     let proto_pr = self.make_init_proto(resolv.unit.path.str());
     let proto = proto_pr.a;
@@ -326,9 +317,6 @@ impl Emitter{
     self.own.reset();
     self.di.get().finalize();
     verifyFunction(proto);
-    globs.drop();
-    method.drop();
-    globals.drop();
   }
 
   func make_global_ctors(proto: Function*, ll: LLVMInfo*){
@@ -366,7 +354,6 @@ impl Emitter{
           let val = i64::parse(rhs_str.str()).unwrap();
           init = ll.makeInt(val, self.getSize(&rt.type) as i32) as Constant*;
         }
-        rhs_str.drop();
       }else if(rt.type.is_str()){
         let val = is_str_lit(gl.expr.get()).unwrap().str();
         let slice_ty = self.protos.get().std("slice");
@@ -401,7 +388,6 @@ impl Emitter{
       let m = *methods.get(i);
       p.make_proto(m);
     }
-    methods.drop();
     //generic methods from resolver
     let r = self.get_resolver();
     for pair in &r.generated_methods{
@@ -425,7 +411,6 @@ impl Emitter{
     if(self.config.stack_trace && !self.is_frame_call(m)){
       let stmt = parse_stmt("exit_frame();".str(), &self.get_resolver().unit, m.line);
       self.visit(&stmt);
-      stmt.drop();
     }
   }
   func enter_frame(self){
@@ -436,8 +421,6 @@ impl Emitter{
       let stmt = parse_stmt(str, &self.get_resolver().unit, m.line);
       AllocHelper::new(self).visit(&stmt);
       self.visit(&stmt);
-      pretty.drop();
-      stmt.drop();
     }
   }
   func print_frame(self){
@@ -445,7 +428,6 @@ impl Emitter{
     if(self.config.stack_trace && !self.is_frame_call(m)){
       let stmt = parse_stmt("print_frame();".str(), self.unit(), m.line);
       self.visit(&stmt);
-      stmt.drop();
     }
   }
 
@@ -490,7 +472,6 @@ impl Emitter{
     self.own.drop();
     self.own = Option<Own>::new();
     self.ctx.prog.compile_end(m);
-    exit.drop();
   }
   
   func allocParams(self, m: Method*){
@@ -512,7 +493,6 @@ impl Emitter{
     let ptr = CreateAlloca(self.ll.get().builder, ty);
     Value_setName(ptr, name_c.ptr());
     self.NamedValues.add(prm.name.clone(), ptr);
-    name_c.drop();
   }
 
   func copy(self, trg: Value*, src: Value*, type: Type*){
@@ -575,7 +555,6 @@ impl Emitter{
   func getType(self, e: Expr*): Type{
     let rt = self.get_resolver().visit_cached(e);
     let res = rt.type.clone();
-    rt.drop();
     return res;
   }
 
@@ -593,7 +572,6 @@ impl Emitter{
       self.make_proto(method);
     }
     let proto = protos.get_func(method);
-    mangled.drop();
     return proto;
   }
   func drop_force(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){

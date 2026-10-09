@@ -302,7 +302,6 @@ impl LLVMInfo{
       let target_triple = getDefaultTargetTriple2().cstr();
       let env_triple = std::getenv("target_triple");
       if(env_triple.is_some()){
-          target_triple.drop();
           target_triple = env_triple.unwrap().owned().cstr();
       }
 
@@ -314,8 +313,6 @@ impl LLVMInfo{
 
       let builder = IRBuilder_new(ctx);
 
-      name.drop();
-      target_triple.drop();
       return LLVMInfo{tm: tm, ctx: ctx, module: md, builder: builder};
   }
 
@@ -341,8 +338,6 @@ impl LLVMInfo{
     };
     let pipe_c = pipeline.cstr();
     let error: i8* = Module_optimize(self.module, pipe_c.ptr(), self.tm);
-    pipe_c.drop();
-    pipeline.drop();
     if(error as u64 != 0){
       panic("cant run -O pipeline {:?}, err: {:?}", level, CStr::new(error));
     }
@@ -354,7 +349,6 @@ impl LLVMInfo{
       if(error as u64 != 0){
         panic("cant emit file {:?}, err: {:?}", file, CStr::new(error));
       }
-      file_c.drop();
   }
 
   func emit_obj(self, file: str){
@@ -411,7 +405,6 @@ impl LLVMInfo{
   func glob_str(self, str: str): Value*{
     let cs = str.cstr();
     let res = CreateGlobalString(self.builder, cs.ptr());
-    cs.drop();
     return res as Value*;
   }
 }
