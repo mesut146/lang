@@ -28,7 +28,16 @@ jobs:
           tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             new_version="${GITHUB_REF_NAME#v}"
-            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            if [[ "$new_version" == "1.14" ]]; then
+              #one-off: v1.13's analyzer inserts drops but predates the
+              #explicit-drop suppression, so manual+auto double-fire
+              #building this tree (x86_64 heap corruption in CI).
+              #Bootstrap from v1.11 (drops-off, sound) instead. v1.14+
+              #analyzers suppress correctly.
+              last_version="1.11"
+            else
+              last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            fi
             [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
           else
             last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
@@ -82,7 +91,16 @@ jobs:
           tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             new_version="${GITHUB_REF_NAME#v}"
-            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            if [[ "$new_version" == "1.14" ]]; then
+              #one-off: v1.13's analyzer inserts drops but predates the
+              #explicit-drop suppression, so manual+auto double-fire
+              #building this tree (x86_64 heap corruption in CI).
+              #Bootstrap from v1.11 (drops-off, sound) instead. v1.14+
+              #analyzers suppress correctly.
+              last_version="1.11"
+            else
+              last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            fi
             [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
           else
             last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
@@ -130,7 +148,16 @@ jobs:
           tags=$(git tag --sort=creatordate | grep -E '^v[0-9]+\.[0-9]+$' || true)
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             new_version="${GITHUB_REF_NAME#v}"
-            last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            if [[ "$new_version" == "1.14" ]]; then
+              #one-off: v1.13's analyzer inserts drops but predates the
+              #explicit-drop suppression, so manual+auto double-fire
+              #building this tree (x86_64 heap corruption in CI).
+              #Bootstrap from v1.11 (drops-off, sound) instead. v1.14+
+              #analyzers suppress correctly.
+              last_version="1.11"
+            else
+              last_version=$(echo "$tags" | grep -B1 "^v${new_version}$" | head -1 | sed 's/^v//')
+            fi
             [ -z "$last_version" ] && { echo "no previous release tag before v$new_version"; exit 1; }
           else
             last_version=$(echo "$tags" | tail -1 | sed 's/^v//')
