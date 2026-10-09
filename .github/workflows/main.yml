@@ -77,6 +77,10 @@ jobs:
       - name: test-x86_64
         id: test_x86_64
         run: |
+          #MALLOC_CHECK_=3 turns silent heap corruption (the class that
+          #passed aarch64/termux while aborting x86_64) into loud aborts.
+          #musl/bionic ignore it; glibc enforces it.
+          export MALLOC_CHECK_=3
           ./bin/test.sh x-toolchain-${{ env.new_version }}-x86_64 all
 
   build-aarch64:
