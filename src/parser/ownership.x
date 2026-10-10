@@ -853,16 +853,10 @@ impl Own{
     }
 
     func check_ptr_field(self, scope: VarScope*, line: i32){
-        if(!move_ptr_field) return;
-        for pair in &scope.state_map{
-            if let StateType::MOVED(mv_line) = pair.b{
-                if let Rhs::FIELD(scp, name) = pair.a{
-                    if(scp.type.is_pointer()){
-                        self.get_resolver().err(line, format("move out of ptr but not assigned\nmoved in: {}, {:?}", mv_line, pair.a));
-                    }
-                }
-            }
-        }
+        //Superseded by check_ptr_moves (heal-aware records): the old
+        //mark-scan fired before reassignment could heal and used a
+        //different message for the same rule. Kept as a no-op for the
+        //move_ptr_field flag plumbing.
     }
 
     func end_scope(self, line: i32){
