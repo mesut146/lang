@@ -283,6 +283,11 @@ impl Own{
     //but never panics: an unregistered vh just means "not provably
     //named", and for anything but a proven temp we do nothing.
     func consume_match_temp(self, scr: Expr*, track_named: bool, bind_id: i32){
+        //Call results may alias borrowed args (return *o): a payload
+        //binding copies those bytes, so each borrowed named place is
+        //consumed like a scrutinee (rollback restores the unescaped
+        //ones). By-value args are already moved and need nothing.
+        self.consume_call_borrows(scr, track_named, bind_id);
         if let Expr::Access(scp, name) = scr{
             let scp_rt = self.get_resolver().visit(scp.get());
             let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
@@ -325,6 +330,27 @@ impl Own{
     //same buffer dies twice). Mark the scrutinee consumed in the current
     //(arm) scope: sibling arms snapshot clean states, and end_match merges
     //non-jump arm marks to the parent for post-match drops.
+    func consume_call_borrows(self, scr: Expr*, track: bool, bind_id: i32){
+        if(!(scr is Expr::Call)){
+            return;
+        }
+        if let Expr::Call(mc) = scr{
+            for(let i = 0;i < mc.args.len();++i){
+                let arg = mc.args.get(i);
+                if let Expr::Unary(op, inner) = arg{
+                    if(!op.eq("&")){
+                        continue;
+                    }
+                    let rt = self.get_resolver().visit(inner.get());
+                    let named = rt.vh.is_some() && self.var_map.get(&rt.vh.get().id).is_some();
+                    if(named && track){
+                        self.mark_scrutinee(rt.vh.get().id, scr, bind_id);
+                    }
+                }
+            }
+        }
+    }
+
     func mark_scrutinee(self, vid: i32, scr: Expr*, bind_id: i32){
         if(self.var_map.get(&vid).is_some()){
             let scope = self.get_scope();
