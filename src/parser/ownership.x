@@ -283,11 +283,6 @@ impl Own{
     //but never panics: an unregistered vh just means "not provably
     //named", and for anything but a proven temp we do nothing.
     func consume_match_temp(self, scr: Expr*, track_named: bool, bind_id: i32){
-        //Call results may alias borrowed args (return *o): a payload
-        //binding copies those bytes, so each borrowed named place is
-        //consumed like a scrutinee (rollback restores the unescaped
-        //ones). By-value args are already moved and need nothing.
-        self.consume_call_borrows(scr, track_named, bind_id);
         if let Expr::Access(scp, name) = scr{
             let scp_rt = self.get_resolver().visit(scp.get());
             let named = scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some();
@@ -330,27 +325,6 @@ impl Own{
     //same buffer dies twice). Mark the scrutinee consumed in the current
     //(arm) scope: sibling arms snapshot clean states, and end_match merges
     //non-jump arm marks to the parent for post-match drops.
-    func consume_call_borrows(self, scr: Expr*, track: bool, bind_id: i32){
-        if(!(scr is Expr::Call)){
-            return;
-        }
-        if let Expr::Call(mc) = scr{
-            for(let i = 0;i < mc.args.len();++i){
-                let arg = mc.args.get(i);
-                if let Expr::Unary(op, inner) = arg{
-                    if(!op.eq("&")){
-                        continue;
-                    }
-                    let rt = self.get_resolver().visit(inner.get());
-                    let named = rt.vh.is_some() && self.var_map.get(&rt.vh.get().id).is_some();
-                    if(named && track){
-                        self.mark_scrutinee(rt.vh.get().id, scr, bind_id);
-                    }
-                }
-            }
-        }
-    }
-
     func mark_scrutinee(self, vid: i32, scr: Expr*, bind_id: i32){
         if(self.var_map.get(&vid).is_some()){
             let scope = self.get_scope();
@@ -534,6 +508,52 @@ impl Own{
     // func do_move(self, block: Block*){
     // }
 
+    //Record a move of drop data out through a pointer (struct field of a
+    //borrowed place, or deref). Heal by reassigning the same place before
+    //scope end; leftovers error in check_ptr_moves. No state marks: drops
+    //and validators stay exactly as before.
+    func note_ptr_move(self, rhs: Rhs*, line: i32){
+        let scope = self.get_scope();
+        let key = Fmt::str(rhs);
+        scope.ptr_left.add(PtrMove{place: key, line: line});
+    }
+    //Record a deref move (*p, *boxed) under the pointer var's key, so a
+    //later *p = x heals it. Falls through (false) when unresolvable.
+    func note_deref_move(self, e: Expr*, line: i32): bool{
+        let rt = self.get_resolver().visit(e);
+        if(rt.vh.is_some() && self.var_map.get(&rt.vh.get().id).is_some()){
+            let v = self.get_var(rt.vh.get().id).clone();
+            let tmp = Rhs::new(v);
+            self.note_ptr_move(&tmp, line);
+            tmp.drop();
+            return true;
+        }
+        return false;
+    }
+    //A reassignment heals a recorded pointer move on the same place
+    //(take(p.s); p.s = x). Only same-shape keys match, so whole-var
+    //reassigns don't heal field moves and vice versa.
+    func clear_ptr_move(self, rhs: Rhs*, scope: VarScope*){
+        let key = Fmt::str(rhs);
+        let i = 0;
+        while(i < scope.ptr_left.len()){
+            if(scope.ptr_left.get(i).place.eq(&key)){
+                scope.ptr_left.remove(i);
+            }else{
+                i += 1;
+            }
+        }
+    }
+    //Scope-end rule (see note_ptr_move): every recorded move must have
+    //been healed by reassign. Unconditional-in-scope; conditional heals
+    //still error (documented limitation).
+    func check_ptr_moves(self, scope: VarScope*, line: i32){
+        if(scope.ptr_left.empty()){
+            return;
+        }
+        let first = scope.ptr_left.get(0);
+        self.get_resolver().err(line, format!("move of drop type out of pointer without reassign: {:?}", first.place));
+    }
     func do_move(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
@@ -551,6 +571,22 @@ impl Own{
         if let Rhs::FIELD(scp, name)=&rhs{
             if(!move_ptr_field && scp.type.is_pointer()){
                 self.get_resolver().err(expr, "move out of pointer");
+            }
+            //moving drop data out through a borrowed struct must heal by
+            //reassign before scope end (see check_ptr_moves); the mark
+            //stays for the existing validator.
+            if(scp.type.is_pointer()){
+                self.note_ptr_move(&rhs, expr.line);
+            }
+        }
+        //deref of drop data (*p, *boxed): same rule, but the pointer
+        //itself stays usable, so skip the VAR mark and only record.
+        //Unresolvable operands keep the old path.
+        if let Expr::Unary(op, inner) = expr{
+            if(op.eq("*") && self.note_deref_move(inner.get(), expr.line)){
+                rhs.drop();
+                rt.drop();
+                return;
             }
         }
         let scope = self.get_scope();
@@ -622,6 +658,7 @@ impl Own{
         if(kind is StateType::ASSIGNED){
             let rkey = Fmt::str(&rhs);
             self.explicit_drops.remove(&rkey);
+            self.clear_ptr_move(&rhs, scope);
         }
         //todo remove self param
         scope.state_map.add(rhs, kind);
@@ -777,6 +814,7 @@ impl Own{
             print("do_return {:?} sline: {} line: {}\n", scope.kind, scope.line, line);
         }
         self.check_ptr_field(scope, line);
+        self.check_ptr_moves(scope, line);
         let drops: List<Droppable> = self.get_outer_vars(scope);
         for dr in &drops{
             self.drop_any(dr, scope, line);
@@ -832,6 +870,7 @@ impl Own{
         //assert(scope.kind is ScopeType::ELSE || scope.kind is ScopeType::IF);
         if(scope.exit.is_jump()){
             //has own drop, just update state
+            self.check_ptr_moves(scope, line);
             self.end_scope_update();
             self.set_current(scope.parent);
             return;
@@ -842,10 +881,12 @@ impl Own{
         //inspect-only match/if-let arms: bindings that never escaped
         //alias the scrutinee, so suppress them and roll the scrutinee
         //back instead of leaking it (see end_match_arm). Jump arms exit;
-        //their marks stand as emitted on their own paths.
+        //their marks stand as emitted on their own paths. Unhealed
+        //pointer moves error here (see check_ptr_moves).
         if(scope.kind is ScopeType::MATCH_CASE || scope.kind is ScopeType::IF){
             self.end_match_arm(scope);
         }
+        self.check_ptr_moves(scope, line);
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);
         for dr in &outers{
