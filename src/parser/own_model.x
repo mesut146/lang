@@ -70,6 +70,13 @@ enum ScopeType {
     FOR,
     MATCH_CASE
 }
+//A move of drop-typed data out through a pointer, awaiting heal by
+//reassignment in the same scope. Unhealed leftovers error at scope end
+//(see check_ptr_moves): moves can't dangle, borrows stay free.
+struct PtrMove{
+    place: String;
+    line: i32;
+}
 struct VarScope{
     kind: ScopeType;
     id: i32;
@@ -82,6 +89,7 @@ struct VarScope{
     is_empty: bool;
     state_map: HashMap<Rhs, StateType>; //var_id -> StateType
     pending_parent: HashMap<i32, StateType>; //var_id -> StateType
+    ptr_left: List<PtrMove>;
 }
 impl VarScope{
     func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
@@ -96,7 +104,8 @@ impl VarScope{
             sibling: -1,
             is_empty: false,
             state_map: HashMap<Rhs, StateType>::new(),
-            pending_parent: HashMap<i32, StateType>::new()
+            pending_parent: HashMap<i32, StateType>::new(),
+            ptr_left: List<PtrMove>::new()
         };
         return scope;
     }
