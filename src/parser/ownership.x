@@ -579,16 +579,14 @@ impl Own{
                 self.note_ptr_move(&rhs, expr.line);
             }
         }
-        //deref of drop data (*p, *boxed): same rule, but the pointer
-        //itself stays usable, so skip the VAR mark and only record.
-        //Unresolvable operands keep the old path.
+        //deref of drop data (*p, *boxed): record for the heal rule, but
+        //keep the normal VAR mark (it suppresses autos elsewhere).
         if let Expr::Unary(op, inner) = expr{
-            if(op.eq("*") && self.note_deref_move(inner.get(), expr.line)){
-                rhs.drop();
-                rt.drop();
-                return;
+            if(op.eq("*")){
+                self.note_deref_move(inner.get(), expr.line);
             }
         }
+
         let scope = self.get_scope();
         self.update_state(rhs, StateType::MOVED{expr.line}, scope);
         match expr{
