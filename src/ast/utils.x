@@ -374,7 +374,10 @@ func get_line(buf: str, line: i32): str{
       }else{
         let i = buf.indexOf("\n", pos);
         if(i == -1){
-    //todo
+          //past EOF: the caller's line number belongs to a bigger unit
+          //than this buffer (macro/format snippets). No line to show;
+          //return empty so the real error proceeds (never spin here).
+          return "";
         }else{
           cur_line += 1;
           pos = i + 1;
