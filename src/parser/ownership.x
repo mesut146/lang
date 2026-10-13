@@ -554,6 +554,23 @@ impl Own{
         let first = scope.ptr_left.get(0);
         self.get_resolver().err(line, format!("move of drop type out of pointer without reassign: {:?}", first.place));
     }
+    //Move leftover records to the parent scope (see above). Scopes without
+    //a parent check instead of bubbling.
+    func bubble_ptr_moves(self, scope: VarScope*){
+        if(scope.ptr_left.empty()){
+            return;
+        }
+        if(scope.parent == -1){
+            self.check_ptr_moves(scope, scope.line);
+            return;
+        }
+        let parent = self.get_scope(scope.parent);
+        for(let i = 0;i < scope.ptr_left.len();++i){
+            let e = scope.ptr_left.get(i);
+            parent.ptr_left.add(PtrMove{place: e.place.clone(), line: e.line});
+        }
+        scope.ptr_left.clear();
+    }
     func do_move(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
@@ -878,7 +895,10 @@ impl Own{
         if(scope.kind is ScopeType::MATCH_CASE || scope.kind is ScopeType::IF){
             self.end_match_arm(scope);
         }
-        self.check_ptr_moves(scope, line);
+        //bubble unhealed pointer moves to the parent: a heal in an outer
+        //scope still counts (conditional move + outer heal). Jumps and
+        //returns keep checking locally (nothing can follow them).
+        self.bubble_ptr_moves(scope);
         //drop cur vars & obj & moved outers
         let outers: List<Droppable> = self.get_outer_vars(scope);
         for dr in &outers{
