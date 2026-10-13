@@ -44,17 +44,23 @@ Ownership only — no Rust-like borrows:
   previous release; `MALLOC_CHECK_=3` on the x86_64 suite gate (turns
   silent heap corruption loud; musl/bionic ignore it).
 
+## Resolved since (in tree)
+
+- Temp-derived owners: closed by construction, not provenance. Since
+  `return *o` on drop types is rejected, legal callees cannot hand out
+  owned aliases of borrows (only `ptr::deref`/extern can, both explicit
+  user responsibility). No borrow-marking of call args exists anymore.
+- Conditional heals: `if(c){ take(p.s); } p.s = x;` compiles via record
+  bubbling to parent scopes; jumps/returns still check locally.
+- `Box<T>` deref follows the same heal rule (`#drop` attribute).
+
 ## Known open holes (documented, not yet solved)
 
-1. Temp-derived owners via calls: `if let V(s) = get(&o)` where `get`
-   returns an alias is only safe today if `get` can't legally exist
-   (it can't return `*o` anymore). True call-effect provenance (or
-   `#[returns_alias]` annotations) is future work. See
-   `consume_match_temp` LIMITATION comment.
-2. Outer `let a = take_it(&o)` chains: silent double on heap types.
-   Needs (1).
-3. Conditional heals still error (unconditional-in-scope rule).
-4. `v1.11`/`v1.12`-built analyzers diverge from `1.05`-built ones on
+1. Outer `let`-bound chains through `extern`/unsafe aliasing functions
+   (no body to check): `let a = ffi_get(&o)` where the callee aliases a
+   borrow. Needs `#[returns_alias]`-style opt-in annotations or explicit
+   acceptance. See narrowest-possible-open-item note in session `ses_f176720f6ffeR8gNaVE2u4WXcu`.
+2. `v1.11`/`v1.12`-built analyzers diverge from `1.05`-built ones on
    corner logic (e.g. `vh` for borrows) — never root-caused; contained
    by validating every change through the strict triangle below.
 
