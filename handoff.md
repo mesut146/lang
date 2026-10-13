@@ -56,10 +56,10 @@ Ownership only — no Rust-like borrows:
 
 ## Known open holes (documented, not yet solved)
 
-1. Outer `let`-bound chains through `extern`/unsafe aliasing functions
+1. [DEFERRED] Outer `let`-bound chains through `extern`/unsafe aliasing functions
    (no body to check): `let a = ffi_get(&o)` where the callee aliases a
    borrow. Needs `#[returns_alias]`-style opt-in annotations or explicit
-   acceptance. See narrowest-possible-open-item note in session `ses_f176720f6ffeR8gNaVE2u4WXcu`.
+   acceptance. Deferred per user 2026-10-13 — do later.
 2. `v1.11`/`v1.12`-built analyzers diverge from `1.05`-built ones on
    corner logic (e.g. `vh` for borrows) — never root-caused; contained
    by validating every change through the strict triangle below.
