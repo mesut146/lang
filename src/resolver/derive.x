@@ -11,6 +11,7 @@ import ast/lexer
 import ast/token
 
 import resolver/resolver
+import resolver/drop_helper
 
 import parser/ownership
 
@@ -254,6 +255,46 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     let imp = make_impl(decl, "Drop");
     imp.methods.add(m);
     return imp;
+}
+//B2: manual Drop keeps its body; if the body never touches self,
+//append derived frees for every drop-typed struct field (side-effect-
+//only customs). Anything touching self keeps full responsibility.
+//Idempotent: appended statements touch self, so re-runs skip. Enums
+//keep full manual responsibility.
+func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
+    if(!(decl is Decl::Struct)){
+        return;
+    }
+    let helper = DropHelper{r};
+    let imp = helper.find_drop_impl(decl);
+    if(imp.methods.empty()){
+        return;
+    }
+    let m = imp.methods.get(0);
+    if(m.body.is_none()){
+        return;
+    }
+    let scan = DropScan{touched: false};
+    r.scan_drop_body(&scan, m.body.get());
+    //Anything touching self keeps full manual responsibility (frees
+    //hide in helpers, bindings and FFI); only side-effect-only customs
+    //gain recursion. Appended statements touch self, so re-runs skip.
+    if(scan.touched){
+        return;
+    }
+    if let Decl::Struct(fields) = decl{
+        for(let i = 0;i < fields.len();++i){
+            let fd = fields.get(i);
+            if(!is_struct(&fd.type)){
+                continue;
+            }
+            if(!fd.name.is_some()){
+                continue;
+            }
+            let stmt = parse_stmt(format("Drop::drop(self.{});", fd.name.get()), unit, decl.line);
+            m.body.get().list.add(stmt);
+        }
+    }
 }
 
 func generate_debug(decl: Decl*, unit: Unit*): Impl{

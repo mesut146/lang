@@ -480,6 +480,11 @@ impl Scope{
   }
 }
 
+//B2 scan state: whether a manual Drop body touches self at all.
+struct DropScan{
+  touched: bool;
+}
+
 impl Resolver{
 
   func newScope(self){
@@ -887,7 +892,226 @@ impl Resolver{
       if(decl.is_generic || helper.is_drop_decl(decl)){
         newItems.add(Item::Impl{generate_derive(self, decl, &self.unit, "Drop")});
       }
+    }else{
+      //B2: manual Drop keeps its body; side-effect-only customs gain
+      //derived field frees (see augment_manual_drop). Enums keep full
+      //manual responsibility.
+      augment_manual_drop(self, decl, &self.unit);
     }
+  }
+  //Collect whether a manual Drop body touches self anywhere (any
+  //call with self-derived scope/args, control flow included).
+  func scan_drop_body(self, scan: DropScan*, block: Block*){
+    for(let i = 0;i < block.list.len();++i){
+      self.scan_drop_stmt(scan, block.list.get(i));
+    }
+  }
+  func scan_drop_stmt(self, scan: DropScan*, st: Stmt*){
+    match st{
+      Stmt::Var(ve) => {
+        for(let i = 0;i < ve.list.len();++i){
+          self.scan_drop_expr(scan, &ve.list.get(i).rhs);
+        }
+      },
+      Stmt::Expr(e) => {
+        self.scan_drop_expr(scan, e);
+      },
+      Stmt::Ret(e) => {
+        if(e.is_some()){
+          self.scan_drop_expr(scan, e.get());
+        }
+      },
+      Stmt::While(cnd, body) => {
+        self.scan_drop_expr(scan, cnd);
+        self.scan_drop_body_val(scan, body.get());
+      },
+      Stmt::For(f) => {
+        if(f.var_decl.is_some()){
+          for(let i = 0;i < f.var_decl.get().list.len();++i){
+            self.scan_drop_expr(scan, &f.var_decl.get().list.get(i).rhs);
+          }
+        }
+        if(f.cond.is_some()){
+          self.scan_drop_expr(scan, f.cond.get());
+        }
+        for(let i = 0;i < f.updaters.len();++i){
+          self.scan_drop_expr(scan, f.updaters.get(i));
+        }
+        self.scan_drop_body_val(scan, f.body.get());
+      },
+      Stmt::ForEach(fe) => {
+        self.scan_drop_expr(scan, &fe.rhs);
+        self.scan_drop_body(scan, &fe.body);
+      },
+      _ => {}
+    }
+  }
+  func scan_drop_body_val(self, scan: DropScan*, body: Body*){
+    match body{
+      Body::Block(b) => {
+        self.scan_drop_body(scan, b);
+      },
+      Body::Stmt(s) => {
+        self.scan_drop_stmt(scan, s);
+      },
+      Body::If(i) => {
+        self.scan_drop_expr(scan, &i.cond);
+        self.scan_drop_body_val(scan, i.then.get());
+        if(!i.else_stmt.is_none()){
+          self.scan_drop_body_val(scan, i.else_stmt.get());
+        }
+      },
+      Body::IfLet(il) => {
+        self.scan_drop_expr(scan, &il.rhs);
+        self.scan_drop_body_val(scan, il.then.get());
+        if(!il.else_stmt.is_none()){
+          self.scan_drop_body_val(scan, il.else_stmt.get());
+        }
+      }
+    }
+  }
+  //A manual Drop body that touches self in any call keeps full
+  //responsibility (its frees may hide in helpers, bindings or FFI);
+  //only side-effect-only customs get field recursion. Idempotent:
+  //appended statements touch self, so re-runs skip.
+  func scan_drop_expr(self, scan: DropScan*, e: Expr*){
+    match e{
+      Expr::Call(mc) => {
+        if(mc.scope.is_some()){
+          if(self.expr_touches_self(mc.scope.get())){
+            scan.touched = true;
+          }
+          self.scan_drop_expr(scan, mc.scope.get());
+        }
+        for(let i = 0;i < mc.args.len();++i){
+          let a = mc.args.get(i);
+          if(self.expr_touches_self(a)){
+            scan.touched = true;
+          }
+          self.scan_drop_expr(scan, a);
+        }
+        return;
+      },
+      Expr::Match(m) => {
+        self.scan_drop_expr(scan, &m.get().expr);
+        for(let i = 0;i < m.get().cases.len();++i){
+          let rhs = &m.get().cases.get(i).rhs;
+          if let MatchRhs::EXPR(ce) = rhs{
+            self.scan_drop_expr(scan, ce);
+          }else if let MatchRhs::STMT(cs) = rhs{
+            self.scan_drop_stmt(scan, cs);
+          }
+        }
+      },
+      Expr::Block(b) => {
+        self.scan_drop_body(scan, b.get());
+      },
+      Expr::If(i) => {
+        self.scan_drop_expr(scan, &i.get().cond);
+        self.scan_drop_body_val(scan, i.get().then.get());
+        if(!i.get().else_stmt.is_none()){
+          self.scan_drop_body_val(scan, i.get().else_stmt.get());
+        }
+      },
+      Expr::IfLet(il) => {
+        self.scan_drop_expr(scan, &il.get().rhs);
+        self.scan_drop_body_val(scan, il.get().then.get());
+        if(!il.get().else_stmt.is_none()){
+          self.scan_drop_body_val(scan, il.get().else_stmt.get());
+        }
+      },
+      Expr::Ques(q) => {
+        self.scan_drop_expr(scan, q.get());
+      },
+      Expr::As(cast, ty) => {
+        self.scan_drop_expr(scan, cast.get());
+      },
+      Expr::ArrAccess(aa) => {
+        self.scan_drop_expr(scan, aa.arr.get());
+      },
+      Expr::Obj(obj_type, entries) => {
+        for(let i = 0;i < entries.len();++i){
+          self.scan_drop_expr(scan, &entries.get(i).expr);
+        }
+      },
+      Expr::Array(arr, sz) => {
+        for(let i = 0;i < arr.len();++i){
+          self.scan_drop_expr(scan, arr.get(i));
+        }
+      },
+      Expr::Tuple(elems) => {
+        for(let i = 0;i < elems.len();++i){
+          self.scan_drop_expr(scan, elems.get(i));
+        }
+      },
+      Expr::Infix(op, l, r) => {
+        self.scan_drop_expr(scan, l.get());
+        self.scan_drop_expr(scan, r.get());
+      },
+      Expr::Lambda(lm) => {
+        scan.touched = true;
+      },
+      Expr::Is(l, r) => {
+        self.scan_drop_expr(scan, l.get());
+        self.scan_drop_expr(scan, r.get());
+      },
+      _ => {}
+    }
+  }
+  //True for self itself and anything rooted at self (fields,
+  //borrows, parens, casts, indexing, composite literals). Reads and
+  //frees both count: any touch keeps full manual responsibility.
+  //Lambdas count as touching (bodies may run later holding captures).
+  func expr_touches_self(self, e: Expr*): bool{
+    if let Expr::Name(sn) = e{
+      return sn.str().eq("self");
+    }
+    if let Expr::Access(scp, name) = e{
+      return self.expr_touches_self(scp.get());
+    }
+    if let Expr::Unary(op, inner) = e{
+      return self.expr_touches_self(inner.get());
+    }
+    if let Expr::Par(bx) = e{
+      return self.expr_touches_self(bx.get());
+    }
+    if let Expr::As(cast, ty) = e{
+      return self.expr_touches_self(cast.get());
+    }
+    if let Expr::ArrAccess(aa) = e{
+      return self.expr_touches_self(aa.arr.get());
+    }
+    if let Expr::Obj(ob_ty, ob) = e{
+      for(let i = 0;i < ob.len();++i){
+        if(self.expr_touches_self(&ob.get(i).expr)){
+          return true;
+        }
+      }
+      return false;
+    }
+    if let Expr::Array(arr, sz) = e{
+      for(let i = 0;i < arr.len();++i){
+        if(self.expr_touches_self(arr.get(i))){
+          return true;
+        }
+      }
+      return false;
+    }
+    if let Expr::Tuple(elems) = e{
+      for(let i = 0;i < elems.len();++i){
+        if(self.expr_touches_self(elems.get(i))){
+          return true;
+        }
+      }
+      return false;
+    }
+    if let Expr::Lambda(lm) = e{
+      return true;
+    }
+    if let Expr::Infix(op, l, r) = e{
+      return self.expr_touches_self(l.get()) || self.expr_touches_self(r.get());
+    }
+    return false;
   }
 
   func print_line_ctx(self, line: i32, msg: str){

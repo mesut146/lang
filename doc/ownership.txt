@@ -30,10 +30,26 @@ drop_lhs), which is why heal-assigns must skip and why test 17's
 deref-heal phase expects single counts, not doubles.
 
 Manual drops that remain (all load-bearing, do not strip):
-- impl Drop for Own (Logger::exit flush has no relocatable site).
+- impl Drop for Own (Logger::exit flush has no relocatable site, and
+  its body touches self so B2 skips it anyway).
 - Drop-derive codegen string (derive.x: generates source, not memory).
-Deleted as redundant (derived glue proven): impl Drop for Protos and
-Context (pure field frees; RSS-compared, no leak signal).
+Deleted as redundant (derived glue proven): impl Drop for String
+(List frees its buffer), Protos and Context (pure field frees;
+RSS-compared, no leak signal).
+
+B2 rule (impl Drop augments): a manual Drop body runs first; then
+derived glue frees every drop-typed struct field, UNLESS the body
+touches self in any call (then it keeps full manual responsibility --
+frees hide in helpers, bindings, casts and FFI). Rationale: touching
+is easy to detect syntactically (Name/Access/casts/index/literals/
+infix/lambda shapes walked recursively); freeing is not. So the rule
+is conservative in the safe direction: side-effect-only customs
+(print-only bodies) gain recursion, everything else behaves exactly
+as before. Idempotent (appended statements touch self). Structs only;
+enums keep full manual responsibility. Proven by tests/own/19wrap
+(custom print + unfreed field drops exactly once). Incidental finding
+while proving this: bare blocks don't scope drops (locals die at
+function end), so drop-count tests must use function boundaries.
 
 Extern aliasing (CLOSED with #[returns_alias], tests own/18alias +
 fail/returns_alias_*): legal callees cannot return owned aliases of

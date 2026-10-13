@@ -176,13 +176,8 @@ impl Eq for String{
   }
 }
 
-impl Drop for String{
-  func drop(*self){
-    //print("String::drop ");
-    //self.dump();
-    Drop::drop(self.arr);
-  }
-}
+//No manual Drop: String is just {arr: List<u8>} and List frees its own
+//buffer, so derived glue covers everything.
 
 impl Compare for String{
   //compare alphabeticly
