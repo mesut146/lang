@@ -91,3 +91,16 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   visit_var, visit_block) -- missing drops on clone temps, 6 distinct
   stack shapes. Short-lived compiler process; accepted, revisit if the
   compiler ever goes long-lived (e.g. LSP/daemon mode).
+
+Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
+past EOF spun forever (empty //todo branch). Any from_string snippet
+error with the caller's line number -- e.g. unparsable {…} placeholders
+-- hung instead of reporting. get_line now returns empty past EOF.
+Lesson: error paths need the same termination scrutiny as main paths;
+a fail-test pins each newly loud error.
+
+Todo probes (v1.15, doc/todo): macro/panic-macro absent (no keyword);
+|args| lambdas work, => and true capture don't; custom {::T} printer
+open (placeholder hangs fixed above, feature not built); match-in-match
+works (phi nodes fine), int-match rejected cleanly; turbofish calls work
+incl. runtime.

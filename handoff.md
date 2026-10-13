@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-13. Main: `f3aa0b3`. Releases published: v1.11, v1.12, v1.13, v1.14.
+Date: 2026-10-13. Main: `0968605`. Releases published: v1.11 – v1.15.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -20,10 +20,8 @@ Ownership only — no Rust-like borrows:
   responsibility — analyzer tracks nothing special).
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
-- `doc/move_ptr_field.txt` (untracked): the `take(p.s); p.s = ...`
-  debate note that motivated the heal rule.
 
-## What's in the tree (main = f3aa0b3)
+## What's in the tree (main = 0968605)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -32,14 +30,21 @@ Ownership only — no Rust-like borrows:
 - Explicit-drop suppression set (manual `x.drop()` never double-fires;
   reassignment clears the record).
 - `parse_obj` / lambda-call sites clone instead of moving payloads out.
-- ~760 redundant manual `.drop()` calls stripped (560 plain locals +
-  temp drops as bare calls). KEPT deliberately: Drop-glue internals
-  (sole owners), loop bodies (per-iteration frees), field drops that
-  heal by reassign, `no_drop`/`Drop::drop` forms, intentional test drops.
-- Regression tests: `tests/own/12match_scrutinee`–`16inspect_use`,
-  `tests/fail/deref_move_drop`, `tests/fail/field_move_drop`,
-  `tests/normal/37-ptr-move`. (Old `17call_temp` removed: its getter is
-  illegal under the design.)
+- Manual drops: 164 dead-after temps + 27 reassign temps + 2 anonymous
+  temps stripped; `impl Drop` for String/Protos/Context deleted
+  (derived glue owns); 6 remain, all load-bearing (`impl Drop for Own`
+  for `Logger::exit`, Drop-derive codegen string). See doc/ownership.txt.
+- Drop-on-assign via `drop_lhs` (struct path; hardened to never panic on
+  untracked places); drop-then-reassign manuals all stripped.
+- `#[returns_alias(p)]` closes the extern-alias hole (owner consumed at
+  call, post-uses error).
+- B2: side-effect-only manual `Drop` bodies gain derived field frees.
+- Regression tests: `tests/own/12match_scrutinee`–`19wrap`,
+  `tests/fail/` (moves, ptr-moves, alias, bad placeholder),
+  `tests/normal/37-ptr-move`, `38-ptr-cond-heal`. (Old `17call_temp`
+  removed: its getter is illegal under the design.)
+- `get_line` past EOF returns empty (error paths hung on snippet
+  buffers before this; pinned by `format_bad_placeholder`).
 - CI (`.github/workflows/main.yml`): tag-driven releases bootstrap from
   previous release; `MALLOC_CHECK_=3` on the x86_64 suite gate (turns
   silent heap corruption loud; musl/bionic ignore it).
@@ -61,11 +66,13 @@ Ownership only — no Rust-like borrows:
 - Conditional heals: `if(c){ take(p.s); } p.s = x;` compiles via record
   bubbling to parent scopes; jumps/returns still check locally.
 - `Box<T>` deref follows the same heal rule (`#drop` attribute).
+- v1.15 cut from here (heal/bubble/strip/alias/B2/tests/heap-gate batch).
 
 ## Known open holes (documented, not yet solved)
 
-(none -- extern aliasing closed with #[returns_alias], see
-doc/ownership.txt; the last deferred item.)
+(none in ownership -- last deferred item closed with #[returns_alias].
+Remaining work is language features (doc/todo) and accepted valgrind
+residuals, both outside ownership.)
 
 ## Validation protocol (mandatory before merging to main)
 
@@ -75,7 +82,7 @@ doc/ownership.txt; the last deferred item.)
    2026-10-13; 1.05 retired -- it predates drop_lhs and cannot compile
    current sources, e.g. borrow payloads off field bases). Surfaces
    analyzer fallout as precise errors.
-3. Full suite: `bin/test.sh <compiler> all` → `normal pass=55 xpass=0`
+3. Full suite: `bin/test.sh <compiler> all` → `normal pass=63 xpass=0`
    (+ by-design `big_literal` XFAIL), `fmt: pass`, `opt: pass`.
 4. Heap suite: same with `MALLOC_CHECK_=3`.
 5. Self-host is subsumed by (2) -- same command. Keep the name for
@@ -96,8 +103,17 @@ doc/ownership.txt; the last deferred item.)
   builds flakily OOM — retry (cache resumes), never parallel builds.
 - `test.txt` (untracked) regenerates itself; leave it.
 - `20_worker` is timing-sensitive; validate with repeated runs.
-- Method-call turbofish on `*self` receivers doesn't resolve; use
-  static `Type::method::<T>()` style.
-- Do not release/publish without asking. Next release (v1.15) needs no
-  bootstrap override (v1.14 builds main cleanly — but re-prove before
-  touching the workflow).
+- Method-call turbofish works, including runtime (`to_list<i32>(41)`
+  probed green on v1.15).
+- Do not release/publish without asking. Next release (v1.16) bootstraps
+  from v1.15 — re-prove before touching the workflow.
+- `pkill -f` matches its own command line: kill hung compilers by exact
+  PID from a pidfile, never by pattern.
+- Always verify `build/stage2` freshness (`-v` + timestamp) before
+  trusting probe results; a stale binary once cost a full debug cycle.
+- Hang diagnosis ladder (all needed for the `{:` format hang): own_verbose
+  traces → file-appended markers (never `print`, buffering eats tails)
+  → `strace -f` as parent (works where gdb attach is blocked by
+  ptrace_scope) → error-path audit. Flat RSS + no syscalls = pure spin.
+- Unparsable `{...}` placeholders must fail loud, never hang (pinned by
+  `format_bad_placeholder`; root cause was `get_line` past EOF).
