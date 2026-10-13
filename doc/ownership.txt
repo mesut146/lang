@@ -45,7 +45,7 @@ marking -- they went too (anonstrip).
 Validation limits: suite + MALLOC_CHECK_=3 catch doubles loudly but
 are LEAK-BLIND. Every strip batch additionally needs an IR or
 drop-count argument (A-tracker in tests/own/common.x, check_ids) that
-the freed value still dies exactly once. Per-batch triangle (strict
-1.05 build, suite, heap, self-host) is mandatory; strict catches
+the freed value still dies exactly once. Per-batch triangle (previous-release build, suite, heap, self-host
+is the same gate twice -- build once, validate much) is mandatory; strict catches
 analyzer fallout as precise errors, self-host catches builder
 divergence (closed: 1.05/v1.14/v1.11 agree).

@@ -72,12 +72,16 @@ Ownership only — no Rust-like borrows:
 ## Validation protocol (mandatory before merging to main)
 
 1. Develop on a worktree/branch, never on main.
-2. Strict build: `./bin/stage2.sh ./x-toolchain-1.05-x86_64/bin/x <ver>`
-   must exit 0 (surfaces use-after-move fallout as precise errors).
+2. Strict build: `./bin/stage1.sh <prev-release-toolchain> <ver>`
+   must exit 0 (previous release is the reference builder since
+   2026-10-13; 1.05 retired -- it predates drop_lhs and cannot compile
+   current sources, e.g. borrow payloads off field bases). Surfaces
+   analyzer fallout as precise errors.
 3. Full suite: `bin/test.sh <compiler> all` → `normal pass=55 xpass=0`
    (+ by-design `big_literal` XFAIL), `fmt: pass`, `opt: pass`.
 4. Heap suite: same with `MALLOC_CHECK_=3`.
-5. Self-host: `bin/stage1.sh <prev-release-toolchain>` must exit 0.
+5. Self-host is subsumed by (2) -- same command. Keep the name for
+   the gate: the binary from (2) must run the suite, not just build.
 6. New ownership behavior needs a regression test that FAILS pre-fix
    (A-tracker counts in `tests/own/`, or `should-fail:` in `tests/fail/`).
 7. Commit early/often and push branches (uncommitted work in /tmp has

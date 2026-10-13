@@ -285,12 +285,12 @@ impl MethodResolver{
                         let mapped = ac.visit(arg);
                         let tmp = sig2.args.set(k, mapped);
                       }
-                      if(sig2.scope.is_some()){
-                        let scp_mapped = ac.visit(&sig2.scope.get().type);
-                        //untracked place (field of a call result): drop_lhs
-                        //cannot see it (see Own::drop_lhs), manual owns it.
-                        sig2.scope.get().type.drop();
-                        sig2.scope.get().type = scp_mapped;
+                      if let Option::Some(tmp) = &sig2.scope{
+                        let scp_mapped = ac.visit(&tmp.type);
+                        //borrowed place (field through a named pointer):
+                        //tracked, so drop_lhs owns the old Type (see
+                        //Own::drop_lhs); no manual needed.
+                        tmp.type = scp_mapped;
                       }
                     }
                   }
