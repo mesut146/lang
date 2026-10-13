@@ -1,13 +1,10 @@
 
-//trim debug paths
+//trim debug paths?
 
 //full macro support 
 asd!(5, "test");
 macro asd{
 }
-
-//multiple types, methods mix up
-
 
 //closures
 let f = (a: i32, b: str): i32=>{
@@ -21,7 +18,7 @@ print("method is {::TraitName}", m);
 =TraitName::fmt(m, f);
 
 
-//match expr complex
+//match expr complex: match inside match (phi-node testing)
 
 //panic macro
 macro panic(e: Expr, s: String){
@@ -31,4 +28,3 @@ macro panic(e: Expr, s: String){
 func to_list<E, T>(it: T): List<E>
 call like to_list<i32>(..) should work
 
-self.len() < self.buckets.len() * 0.75, emit as mul 0
