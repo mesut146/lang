@@ -30,10 +30,10 @@ drop_lhs), which is why heal-assigns must skip and why test 17's
 deref-heal phase expects single counts, not doubles.
 
 Manual drops that remain (all load-bearing, do not strip):
-- impl Drop bodies (intentional destruction).
+- impl Drop for Own (Logger::exit flush has no relocatable site).
 - Drop-derive codegen string (derive.x: generates source, not memory).
-- EXPR-place manual (method_resolver.x: sig2.scope.get().type -- field
-  of a call result; no state can exist, drop_lhs returns early there).
+Deleted as redundant (derived glue proven): impl Drop for Protos and
+Context (pure field frees; RSS-compared, no leak signal).
 
 Extern aliasing (CLOSED with #[returns_alias], tests own/18alias +
 fail/returns_alias_*): legal callees cannot return owned aliases of

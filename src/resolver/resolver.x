@@ -76,20 +76,8 @@ impl Context{
     return res;
   }
 }
-
-impl Drop for Context{
-  func drop(*self){
-    if(verbose_drop){
-      print("Context::drop\n");
-    }
-    self.map.drop();
-    self.prelude.drop();
-    self.std_path.drop();
-    self.search_paths.drop();
-    self.out_dir.drop();
-    self.path_cache.drop();
-  }
-}
+//No manual Drop: derived glue frees the maps and paths (all structural
+//drop types). Drops the dead verbose_drop print with it (flag never set).
 
 struct Scope{
   list: List<VarHolder>;

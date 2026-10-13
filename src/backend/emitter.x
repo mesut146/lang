@@ -83,14 +83,9 @@ struct Protos{
   cur: Option<Function*>;
   compiler: Emitter*;
 }
-impl Drop for Protos{
-  func drop(*self){
-    self.classMap.drop();
-    self.funcMap.drop();
-    self.libc.drop();
-    self.std.drop();
-  }
-}
+//No manual Drop: derived glue frees the maps (all structural drop
+//types); LLVM objects behind the pointers are process-lifetime and
+//were never freed here either.
 
 impl Protos{
   func new(compiler: Emitter*): Protos{
