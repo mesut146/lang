@@ -275,9 +275,11 @@ impl Own{
     //same buffer dies twice: `let s = File::read_string(..)?` double-freed).
     //Temps are marked consumed in their own scope. Named scrutinees are
     //marked too (see mark_scrutinee) when the payload is drop-tracked and
-    //the scrutinee is a value, not a borrow. LIMITATION: a temp derived
-    //from a named owner (e.g. `if let V(s) = get(&o)`) still double-drops:
-    //the temp is consumed but the owner isn't tracked through the call.
+    //the scrutinee is a value, not a borrow. Legal callees cannot hand out
+    //owned aliases of borrows (`return *o` on drop types is rejected, and
+    //generics are instantiation-checked), so a temp derived from a legal
+    //call needs no owner tracking. Remaining hole is `extern`/unsafe
+    //aliasing fns only (no body to check -- deferred, see handoff).
     //Bind from the owner directly, or clone at the site (visit_call does
     //this for lambda types). Mirrors Rhs::new's named-place recognition,
     //but never panics: an unregistered vh just means "not provably
