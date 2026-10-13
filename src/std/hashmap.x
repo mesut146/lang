@@ -1,3 +1,5 @@
+import std/libc
+
 struct HashMap<K, V>{
   buckets: List<Option<HashNode<K, V>>>;
   count: i64;//node count
@@ -96,11 +98,14 @@ impl<K, V> HashMap<K, V>{
     func rehash(self, node: HashNode<K, V>){
         self.insert(node.key, node.value);
         while(node.next.is_some()){
-            let nx = node.next.unwrap();
-            node = nx;
+            //take the box (marks next moved), free its shell after moving
+            //the value out: the shell is ours alone, contents live on.
+            let nxbox = node.next.unwrap_box();
+            let raw = nxbox.val as i8*;
+            node = nxbox.unwrap();
+            free(raw);
             self.insert(node.key, node.value);
         }
-        std::no_drop(node.next);
     }
 
     func insert(self, key: K, value: V): Option<V>{
