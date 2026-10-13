@@ -1,0 +1,51 @@
+Ownership / auto-drop mechanism notes (established Oct 2026, all
+proven through strict-triangle validation + IR inspection).
+
+Drop-ness is structural: DropHelper recurses struct/enum fields, so any
+type containing a String (Variable, Rhs, RType, CStr, Option<Drop>...)
+is a drop type. is_struct() covers every drop type (prims/pointers/
+lambdas/str/slices are never drop). Consequence: every owned value the
+analyzer can name is auto-dropped somewhere; manual drops only survive
+where the analyzer cannot name or must not fire.
+
+Where auto-drop fires (all verified):
+- Named locals: drop_var at scope end (ownership.x).
+- Call-result temps: add_obj registers exactly four shapes
+  (backend/expr_emitter.x): &temp materialization (visit_ref rvalue),
+  arrays, struct-typed calls (visit_call2), struct literals (visit_obj).
+- Reassignment: store() routes every drop type through drop_lhs
+  (ownership.x), which frees the overwritten live value. Skips MOVED
+  (heal pattern), moved-partial, explicitly-dropped places. Hardened to
+  return (never panic) on untracked EXPR shapes and unregistered vars.
+- Jumps: do_return / do_continue / do_break emit for live vars+objects
+  (get_outer_vars_loop includes OBJs, stops at the loop boundary).
+- Loops: per-iteration emission inside the body, IR-proven for while
+  AND for-each (a `let s` temp drops inside while_then/for-body, once
+  total -- no scope-end duplicate).
+
+Move = shallow copy. The callee frees the heap once; the source keeps
+dangling bytes that must be heal-overwritten before anyone reads or
+drops them. MOVED marks suppress every auto path (drop_var, drop_obj,
+drop_lhs), which is why heal-assigns must skip and why test 17's
+deref-heal phase expects single counts, not doubles.
+
+Manual drops that remain (all load-bearing, do not strip):
+- impl Drop bodies (intentional destruction).
+- Drop-derive codegen string (derive.x: generates source, not memory).
+- EXPR-place manual (method_resolver.x: sig2.scope.get().type -- field
+  of a call result; no state can exist, drop_lhs returns early there).
+
+Removal rule (used for 164 stripped): a manual drop may go iff its
+value is a named drop-typed place (or registered object) that is dead
+after the call, with borrows-only uses. Reassign sites need no manual
+(drop_lhs covers); EXPR-shaped lhs keeps its manual. Anonymous call
+temps (remove().drop()) are covered by add_obj + *self-receiver move
+marking -- they went too (anonstrip).
+
+Validation limits: suite + MALLOC_CHECK_=3 catch doubles loudly but
+are LEAK-BLIND. Every strip batch additionally needs an IR or
+drop-count argument (A-tracker in tests/own/common.x, check_ids) that
+the freed value still dies exactly once. Per-batch triangle (strict
+1.05 build, suite, heap, self-host) is mandatory; strict catches
+analyzer fallout as precise errors, self-host catches builder
+divergence (closed: 1.05/v1.14/v1.11 agree).

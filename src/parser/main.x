@@ -77,7 +77,7 @@ func handle_c(cmd: CmdArgs*){
       if(a.starts_with("-j") && a.len() > 2){
         let num = a.substr(2, a.len());
         jobs.set(num.owned());
-        cmd.args.remove(i).drop();
+        cmd.args.remove(i);
         break;
       }
     }

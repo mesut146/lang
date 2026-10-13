@@ -2329,7 +2329,7 @@ impl Resolver{
           if(idx == -1){
             self.err(expr, format("invalid variant {}", smp.name));
           }
-          not_covered.remove(idx).drop();
+          not_covered.remove(idx);
           let index = Resolver::findVariant(decl, &smp.name);
           let variant = decl.get_variants().get(index);
           if(args.len() != variant.fields.len()){
