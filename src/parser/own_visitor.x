@@ -137,6 +137,9 @@ impl OwnVisitor{
             let arg = mc.args.get(argIdx);
             self.do_move(arg);
         }
+        //mirror of the backend hook: else-path re-analysis must see the
+        //same marks or arm merges disagree.
+        self.own.consume_alias_args(mc, target, expr.line);
     }
 
     func visit_obj(self, expr: Expr*, type: Type*, args: List<Entry>*){

@@ -35,6 +35,18 @@ Manual drops that remain (all load-bearing, do not strip):
 - EXPR-place manual (method_resolver.x: sig2.scope.get().type -- field
   of a call result; no state can exist, drop_lhs returns early there).
 
+Extern aliasing (CLOSED with #[returns_alias], tests own/18alias +
+fail/returns_alias_*): legal callees cannot return owned aliases of
+borrows, but extern bodies cannot be checked. An annotated param
+`#[returns_alias(p)]` declares the return may alias that borrow; at
+each call with `&o` in that position the owner is consumed (post-uses
+error, scope end skips its drop) and the fresh return drops normally.
+Non-borrow or unresolvable args are a loud error; non-heap owners pass
+through. Over-claiming on plain fns is allowed but conservative (owner
+consumed anyway). Limitations: direct calls only (no fn-pointer/
+lambda attr lookup), `self` not nameable, pointer-var forwarding
+`f(p)` rejected (no points-to info -- pass `&o`).
+
 Removal rule (used for 164 stripped): a manual drop may go iff its
 value is a named drop-typed place (or registered object) that is dead
 after the call, with borrows-only uses. Reassign sites need no manual

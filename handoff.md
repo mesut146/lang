@@ -64,10 +64,8 @@ Ownership only — no Rust-like borrows:
 
 ## Known open holes (documented, not yet solved)
 
-1. [DEFERRED] Outer `let`-bound chains through `extern`/unsafe aliasing functions
-   (no body to check): `let a = ffi_get(&o)` where the callee aliases a
-   borrow. Needs `#[returns_alias]`-style opt-in annotations or explicit
-   acceptance. Deferred per user 2026-10-13 — do later.
+(none -- extern aliasing closed with #[returns_alias], see
+doc/ownership.txt; the last deferred item.)
 
 ## Validation protocol (mandatory before merging to main)
 

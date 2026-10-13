@@ -1189,6 +1189,9 @@ impl Emitter{
         self.own.get().do_move(arg);
         ++paramIdx;
       }
+      //#[returns_alias]: consume borrowed owners after lowering args
+      //(lowering checks the places; marking first would false-fire).
+      self.own.get().consume_alias_args(mc, target, expr.line);
       if(Resolver::is_exit(mc)){
         self.print_frame();
       }

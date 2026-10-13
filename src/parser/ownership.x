@@ -643,6 +643,69 @@ impl Own{
         let key = Fmt::str(&r);
         self.explicit_drops.add(key, true);
     }
+    //#[returns_alias(p)] (on plain or extern methods): the return value
+    //may alias the borrow passed as p. The owner is consumed at the call
+    //so post-uses error and scope end skips its drop; the fresh return
+    //drops normally. Exactly-once moves from owner to return.
+    //Non-borrow or unresolvable args are a loud error (silence would be
+    //a hole); non-heap owners need no protection and pass through.
+    //Mirrored in backend visit_call2 and own_visitor visit_call so arm
+    //merges agree (same discipline as note_explicit_drop).
+    func consume_alias_args(self, mc: Call*, target: Method*, line: i32){
+        let opt = target.attr.find("returns_alias");
+        if(opt.is_none()){
+            return;
+        }
+        let at = opt.unwrap();
+        if(!at.is_call){
+            self.get_resolver().err(line, "returns_alias expects a parameter list");
+        }
+        //mirror visit_call2 receiver alignment: static-with-self calls
+        //carry the receiver in args[0].
+        let argIdx = 0;
+        if(target.self.is_some() && mc.is_static){
+            argIdx = 1;
+        }
+        let paramIdx = 0;
+        while(paramIdx < target.params.len() && argIdx < mc.args.len()){
+            let prm = target.params.get(paramIdx);
+            if(self.is_alias_param(at, line, &prm.name)){
+                self.consume_alias_arg(mc.args.get(argIdx));
+            }
+            paramIdx += 1;
+            argIdx += 1;
+        }
+    }
+    func is_alias_param(self, at: Attribute*, line: i32, name: String*): bool{
+        for ae in &at.args{
+            if let Expr::Name(nm) = ae{
+                if(nm.str().eq(name.str())){
+                    return true;
+                }
+            }else{
+                self.get_resolver().err(line, "returns_alias expects parameter names");
+            }
+        }
+        return false;
+    }
+    func consume_alias_arg(self, arg: Expr*){
+        if let Expr::Unary(op, inner) = arg{
+            if(op.eq("&")){
+                let rt = self.get_resolver().visit(inner.get());
+                //no heap behind the borrow: nothing to protect.
+                if(!self.is_drop_or_ptr(&rt.type)){
+                    return;
+                }
+                let ok = rt.vh.is_some() && self.var_map.get(&rt.vh.get().id).is_some();
+                if(!ok){
+                    self.get_resolver().err(arg, "returns_alias argument must be a borrow of a named place");
+                }
+                self.do_move(inner.get());
+                return;
+            }
+        }
+        self.get_resolver().err(arg, "returns_alias argument must be a borrow of a named place");
+    }
     //move rhs
     func do_assign(self, lhs: Expr*, rhs: Expr*){
         let scope = self.get_scope();
