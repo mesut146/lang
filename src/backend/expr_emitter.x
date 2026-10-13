@@ -1677,7 +1677,8 @@ impl Emitter{
         }
       }
       let lhs = self.get_lhs(l);
-      //todo store should free lhs
+      //store() drops the overwritten live value via drop_lhs (skips
+      //moved-out and explicitly-dropped places, see Own::drop_lhs).
       self.store(r, &type, lhs, Option::new(l));
       self.own.get().do_assign(l, r);
       return lhs;

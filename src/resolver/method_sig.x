@@ -101,7 +101,6 @@ impl Signature{
                     r.add_used_decl(trg);
                 }
             }
-            res.scope.drop();
             if (scp.type.is_pointer()) {
                 let inner = scp.type.deref_ptr();
                 res.scope = Option::new(r.visit_type(inner));
@@ -183,11 +182,9 @@ impl Signature{
             //if m is generic, replace <T> with real type
             let mapped = copier.visit(&prm.type);
             let mapped2 = replace_self(&mapped, m);
-            mapped.drop();
             mapped = mapped2;
             if(!hasGeneric(&mapped, m)){
                 let mapped3 = origin.visit_type(&mapped).unwrap();
-                mapped.drop();
                 mapped = mapped3;
             }
             res.args.add(mapped);

@@ -1040,6 +1040,20 @@ impl Own{
             return;
         }
         let lhs2 = Rhs::new(lhs, self);
+        //untracked temps (field of a call result, deref of a call):
+        //no state exists and none can be built, so there is nothing to
+        //consult; such places keep their manual drops (if any) and this
+        //stays a silent no-op rather than a compiler panic.
+        if(lhs2 is Rhs::EXPR){
+            return;
+        }
+        //Unregistered named place: same robustness rule (today this only
+        //happens for non-drop or global shapes, but never crash here).
+        if let Rhs::VAR(v) = &lhs2{
+            if(self.var_map.get(&v.id).is_none()){
+                return;
+            }
+        }
         let state = self.get_state(&lhs2, self.get_scope());
         if(state.is_moved()){
             return;

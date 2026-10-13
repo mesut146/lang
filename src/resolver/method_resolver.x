@@ -287,6 +287,8 @@ impl MethodResolver{
                       }
                       if(sig2.scope.is_some()){
                         let scp_mapped = ac.visit(&sig2.scope.get().type);
+                        //untracked place (field of a call result): drop_lhs
+                        //cannot see it (see Own::drop_lhs), manual owns it.
                         sig2.scope.get().type.drop();
                         sig2.scope.get().type = scp_mapped;
                       }
@@ -732,7 +734,6 @@ impl MethodResolver{
                 st.args.add(resolved.clone());
             }
         }
-        res.parent.drop();
         let info = ImplInfo::new(st.into(res.line));
         //todo args of trait
         info.trait_name = imp.trait_name.clone();
@@ -885,7 +886,6 @@ impl MethodResolver{
                 let t1_str = t1.print();
                 let t2_str = t2.print();
                 let arg = String::new();
-                arg.drop();
                 if(method.self.is_some()){
                     if(mc.is_static){
                         //sig2.args[0] is self, which static call syntax

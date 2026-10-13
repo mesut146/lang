@@ -663,7 +663,8 @@ impl Emitter{
       let ll = self.ll.get();
       if(is_struct(type)){
         if(self.can_inline(expr)){
-          //todo own drop_lhs
+          //dead while inline_rvo is off; reviving it must drop_lhs the
+          //overwritten value exactly like the path below.
           self.do_inline(expr, trg);
           return;
         }

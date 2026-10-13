@@ -612,7 +612,6 @@ impl Resolver{
     //print("----------\n\n");
     //memoize for the hot path (get_resolvers runs per type lookup)
     if(include_cur){
-      self.resolvers_cache_cur.drop();
       self.resolvers_cache_cur = List<Resolver*>::new();
       for(let i = 0;i < res.len();++i){
         self.resolvers_cache_cur.add(*res.get(i));
@@ -620,7 +619,6 @@ impl Resolver{
       self.resolvers_cache_cur_valid = true;
       self.resolvers_cache_valid = false;
     }else{
-      self.resolvers_cache.drop();
       self.resolvers_cache = List<Resolver*>::new();
       for(let i = 0;i < res.len();++i){
         self.resolvers_cache.add(*res.get(i));
@@ -629,7 +627,6 @@ impl Resolver{
       self.resolvers_cache_cur_valid = false;
     }
     self.resolvers_cache_extra = self.extra_imports.len();
-    self.resolvers_cache_method.drop();
     self.resolvers_cache_method = cur_method;
     return res;
   }
@@ -813,19 +810,16 @@ impl Resolver{
           let ty = Type::new(scope.get().clone(), decl.type.name().clone());
           let res = RType::new(ty);
           desc.scope.set(scope.get().clone());
-          res.desc.drop();
           res.desc = desc;
           self.addType(qname, res);
         }else{
           let res = RType::new(decl.type.clone());
-          res.desc.drop();
           res.desc = desc;
           self.addType(decl.type.name().clone(), res);
         }
       },
       Item::Trait(tr) => {
         let res = RType::new(tr.type.clone());
-        res.desc.drop();
         res.desc = Desc{RtKind::Trait, self.unit.path.clone(), idx, Option<Type>::new()};
         self.addType(tr.type.name().clone(), res);
       },
@@ -1698,7 +1692,6 @@ impl Resolver{
       Type::Pointer(bx) => {
         let res = self.visit_type(bx.get());
         let ptr = res.type.clone().toPtr();
-        res.type.drop();
         res.type = ptr;
         return Result<RType, Error>::ok(res);
       },
@@ -1790,7 +1783,6 @@ impl Resolver{
                   for ga in &gargs{
                     nsmp.args.add(ga.clone());
                   }
-                  decl0.type.drop();
                   decl0.type = nsmp.into(node.line);
                   let gdecl: Decl* = self.add_generated(decl0);
                   self.add_used_decl(gdecl);
@@ -1798,7 +1790,6 @@ impl Resolver{
                   return Result<RType, Error>::ok(gres);
                 }
                 let res = RType::new(decl.type.clone());
-                res.desc.drop();
                 res.desc = Desc{RtKind::Decl, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
                 return Result<RType, Error>::ok(res);
@@ -1807,7 +1798,6 @@ impl Resolver{
             if let Item::Module(nmd) = item{
               if(nmd.name.eq(simple.name.str())){
                 let res = RType::new(nmd.name.str());
-                res.desc.drop();
                 res.desc = Desc{RtKind::Module, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
                 return Result<RType, Error>::ok(res);
@@ -1929,7 +1919,6 @@ impl Resolver{
     if (simple.args.empty() || !target.is_generic) {
       //inferred later
       let res = RType::new(target.type.clone());
-      res.desc.drop();
       res.desc = target_rt.desc.clone();
       self.addType(str.clone(), res.clone());
       return Result<RType, Error>::ok(res);
@@ -1956,7 +1945,6 @@ impl Resolver{
     let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
-    rt.desc.drop();
     rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, Option<Type>::new()};
     //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
@@ -2412,7 +2400,6 @@ impl Resolver{
   func visit_ref(self, node: Expr*, e: Expr*): RType{
     let res = self.visit(e);
     let tmp = res.type.clone().toPtr();
-    res.type.drop();
     res.type = tmp;
     return res;
   }
@@ -2423,7 +2410,6 @@ impl Resolver{
       self.err(node, format("deref expr is not pointer: {:?}", inner.type));
     }
     let tmp = inner.type.deref_ptr().clone();
-    inner.type.drop();
     inner.type = tmp;
     return inner;
   }
@@ -3172,7 +3158,6 @@ impl Resolver{
         self.err(node ,"can't reference from global to another global");
       }
       let res = self.visit_type(vh.get_type());
-      res.vh.drop();
       res.vh = Option::new(vh.clone());
       if(!self.inLambda.empty()){
         if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
@@ -3755,7 +3740,6 @@ impl Resolver{
       if(!sub_map.empty()){
         let ac = AstCopier::new(&sub_map);
         let mapped = ac.visit(&ty);
-        ty.drop();
         ty = mapped;
       }
       if (rhs.type.is_pointer()) {

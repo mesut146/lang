@@ -432,7 +432,6 @@ impl Emitter{
     if(m.is_generic) return;
     self.ctx.prog.compile_begin(m);
     self.curMethod = Option<Method*>::new(m);
-    self.own.drop();
     self.own = Option::new(Own::new(self, m));
     let proto = self.protos.get().get_func(m);
     self.protos.get().cur = Option::new(proto.val);
@@ -465,7 +464,6 @@ impl Emitter{
     }
     self.di.get().finalize();
     verifyFunction(proto.val);
-    self.own.drop();
     self.own = Option<Own>::new();
     self.ctx.prog.compile_end(m);
   }

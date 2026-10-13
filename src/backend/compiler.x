@@ -403,12 +403,10 @@ struct CompileArgs{
 
 impl CompilerConfig{
   func set_std(self, std_path: String): CompilerConfig*{
-    self.std_path.drop();
     self.std_path = Option::new(std_path);
     return self;
   }
   func set_std_path(self, std_path: str): CompilerConfig*{
-    self.std_path.drop();
     self.std_path = Option::new(std_path.str());
     return self;
   }
@@ -416,7 +414,6 @@ impl CompilerConfig{
     return self.set_out(out.str());
   }
   func set_out(self, out: String): CompilerConfig*{
-    self.out_dir.drop();
     self.out_dir = out;
     return self;
   }
@@ -436,7 +433,6 @@ impl CompilerConfig{
     return self.set_file(file.str());
   }
   func set_file(self, file: String): CompilerConfig*{
-    self.file.drop();
     self.file = file;
     return self;
   }
