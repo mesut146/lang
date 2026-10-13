@@ -132,14 +132,11 @@ impl MethodResolver{
                 if(full.eq(&imp_full)){
                     list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
                 }
-                full.drop();
-                imp_full.drop();
             }else{
                 let imp_erased: String = print_erased(&imp.info.type);
                 if(imp_erased.eq(&erased)){
                     list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
                 }
-                imp_erased.drop();
             }
         }else if(type.is_slice()){
             if(!imp.info.type.is_slice()){
@@ -150,8 +147,6 @@ impl MethodResolver{
             if(cmp.is_none()){
                 list.add(ImplHit{imp: imp, idx: i, scope: Option<Type>::new()});
             }
-            cmp.drop();
-            val.drop();
         }else{
             return Result<List<ImplHit>, String>::err(format("get_impl type not covered: {:?}", type));
         }
@@ -193,7 +188,6 @@ impl MethodResolver{
         let cur: Type* = scope_type;
         while(true){
             if(!cur.is_simple()){
-                segs.drop();
                 return;
             }
             let smp = cur.as_simple();
@@ -219,7 +213,6 @@ impl MethodResolver{
                 }
             }
             if(found as u64 == 0){
-                segs.drop();
                 return;
             }
             md = found;
@@ -291,14 +284,12 @@ impl MethodResolver{
                         let arg = sig2.args.get(k);
                         let mapped = ac.visit(arg);
                         let tmp = sig2.args.set(k, mapped);
-                        tmp.drop();
                       }
                       if(sig2.scope.is_some()){
                         let scp_mapped = ac.visit(&sig2.scope.get().type);
                         sig2.scope.get().type.drop();
                         sig2.scope.get().type = scp_mapped;
                       }
-                      qmap.drop();
                     }
                   }
                   list.add(sig2);
@@ -314,10 +305,8 @@ impl MethodResolver{
                     let ac = AstCopier::new(&typeMap);
                     let mapped = ac.visit(arg);
                     let tmp = sig2.args.set(k, mapped);
-                    tmp.drop();
                   }
                   list.add(sig2);
-                  typeMap.drop();
                 }
             }
         }
@@ -393,7 +382,6 @@ impl MethodResolver{
                     exact = Option::new(sig2);
                 }
                 real.add(sig2);
-                cmp_res.drop();
             }
         }
         if(real.empty()){
@@ -467,7 +455,6 @@ impl MethodResolver{
                 if(err.is_err()){
                     self.r.err(expr, err.unwrap_err());
                 }
-                arg2.drop();
             }else{
                 let err = MethodResolver::infer(arg_type, target_type, &inferred_map, &type_params);
                 if(err.is_err()){
@@ -663,7 +650,6 @@ impl MethodResolver{
             if(hit.is_some()){
                 f.print(hit.unwrap());
             }
-            hit.drop();
         }
         return f.unwrap();
     }
@@ -693,8 +679,6 @@ impl MethodResolver{
                 let sig2 = Signature::new(gm.get(), Desc::new(), self.r, self.r);
                 let sig_res: SigResult = self.is_same(sig, &sig2);
                 let is_err = sig_res is SigResult::Err;
-                sig2.drop();
-                sig_res.drop();
                 if(!is_err){
                     let desc = Desc{
                         kind: RtKind::MethodGen{m.name.clone()},
@@ -703,8 +687,6 @@ impl MethodResolver{
                         scope: Option<Type>::new(),
                     };
                     self.r.gen_cache.add(key.clone(), desc.clone());
-                    tp_all.drop();
-                    key.drop();
                     return Pair::new(gm.get(), desc);
                 }
                 ++i;
@@ -747,7 +729,6 @@ impl MethodResolver{
                 let ta = imp_args.get(i);
                 let ta_str = ta.print();
                 let resolved = map.get(&ta_str).unwrap();
-                ta_str.drop();
                 st.args.add(resolved.clone());
             }
         }
@@ -890,8 +871,6 @@ impl MethodResolver{
                     }
                 } else {
                     if (t1.is_pointer()) {
-                        typeParams.drop();
-                        t1.drop();
                         return SigResult::Err{format("can't convert borrowed self to *self, {:?} vs {:?}", t1p, t2)};
                     }
                 }
@@ -928,16 +907,8 @@ impl MethodResolver{
                     }
                 }
                 let res = SigResult::Err{format("arg '{:?}' is not compatible with param '{}' vs '{}'\n{}", arg, t1_str.str(), t2_str.str(), cmp.get())};
-                arg.drop();
-                t1_str.drop();
-                t2_str.drop();
-                typeParams.drop();
-                cmp.drop();
-                t1.drop();
                 return res;
             }
-            cmp.drop();
-            t1.drop();
         }
         if(all_exact){
             return SigResult::Exact;
@@ -1106,7 +1077,6 @@ impl MethodResolver{
                 if (cmp.is_some()) {
                     return cmp;
                 }
-                cmp.drop();
             }
             return Option<String>::new();
         }
@@ -1175,7 +1145,6 @@ func scan_mod_items(items: List<Item>*, prefix: Type, full: String*, tr: Option<
         if(full.eq(&imp_full)){
             list.add(ImplHit{imp: imp, idx: i, scope: Option::new(prefix.clone())});
         }
-        imp_full.drop();
     }
 }
 

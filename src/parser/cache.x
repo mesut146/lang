@@ -123,7 +123,6 @@ impl Cache{
             //into them loops forever (src/. -> src/./. -> ...), pinning a
             //core with no output. Skip them before anything else.
             if(name.eq(".") || name.eq("..")){
-                name.drop();
                 continue;
             }
             let full = format("{}/{}", dir.str(), name);
@@ -131,12 +130,9 @@ impl Cache{
                 //recursive call takes full by value (a move), so it must
                 //not be dropped afterwards
                 self.add_witness(full);
-                name.drop();
                 continue;
             }
             if(!name.ends_with(".x")){
-                full.drop();
-                name.drop();
                 continue;
             }
             if(File::is_file(full.str())){
@@ -145,8 +141,6 @@ impl Cache{
                 self.map.add(full, time);
                 continue;
             }
-            full.drop();
-            name.drop();
         }
     }
 
@@ -171,7 +165,6 @@ impl Cache{
             }
             let cur = File::get_last_write_time(path).str();
             let ok = cur.eq(pair.b.str());
-            cur.drop();
             if(!ok){
                 return false;
             }

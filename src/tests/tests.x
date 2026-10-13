@@ -103,7 +103,6 @@ func main(argc: i32, args: i8**){
                let f = format("{}/{}", path, fname);
                if(File::is_dir(f.str())) continue;
                handle_resolve(&f);
-               f.drop();
            }
          }else{
            handle_resolve(&path);

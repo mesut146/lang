@@ -95,7 +95,6 @@ impl AllocHelper{
       let name_c = arg.name.clone().cstr();
       Value_setName(arg_ptr, name_c.ptr());
       self.c.allocMap.add(arg.id, arg_ptr);
-      name_c.drop();
     }
     self.visit(&node.rhs);
     self.visit_body(node.then.get());
@@ -154,8 +153,6 @@ impl AllocHelper{
       let ptr = self.alloc_ty(&rt.type, f);
       let name_c = f.name.clone().cstr();
       Value_setName(ptr, name_c.ptr());
-      name_c.drop();
-      rt.drop();
       let rhs: Option<Value*> = self.visit(&f.rhs);
     }
   }
@@ -375,7 +372,6 @@ impl AllocHelper{
               let arg_ptr = self.alloc_ty(&ty.unwrap().type, arg as Node*);
               let name_c = arg.name.clone().cstr();
               Value_setName(arg_ptr, name_c.ptr());
-              name_c.drop();
               self.c.allocMap.add(arg.id, arg_ptr);
             }
           }

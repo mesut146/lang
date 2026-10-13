@@ -465,10 +465,8 @@ impl Context{
       path.append(&suffix);
       if(File::is_file(path.str())){
         self.path_cache.add(suffix.clone(), path.clone());
-        suffix.drop();
         return path;
       }
-      path.drop();
     }
     panic("can't resolve import: {:?}\nstd: {:?}\npaths={:?}", is, self.std_path, self.search_paths);
   }
@@ -562,7 +560,6 @@ impl Resolver{
         let path = format("{}/std/{}.x", self.ctx.std_path.get(), pre);
         //added.add(File::resolve(path.str())?);
         list.add(path.clone());
-        path.drop();
       }
     }
     //normal imports
@@ -571,7 +568,6 @@ impl Resolver{
       let path = self.ctx.get_path(is);
       // added.add(File::resolve(path.str())?);
       list.add(path.clone());
-      path.drop();
     }
     //generic method, transitive imports
     if (self.curMethod.is_some() && !self.curMethod.unwrap_ptr().type_params.empty()) {
@@ -582,14 +578,12 @@ impl Resolver{
           let path = self.ctx.get_path(is);
           // added.add(File::resolve(path.str())?);
           list.add(path.clone());
-          path.drop();
       }
     }
     for is in &self.extra_imports{
         let path = self.ctx.get_path(is);
         // added.add(File::resolve(path.str())?);
         list.add(path.clone());
-        path.drop();
     }
     let cur_path = File::resolve(self.unit.path.str())?;
     let cur_added = false;
@@ -684,8 +678,6 @@ impl Resolver{
       gen_lookup_ms += tg1.sub(&tg0).as_ms();
       gen_visit_ms += tg2.sub(&tg1).as_ms();
       gen_count += 1;
-      desc.drop();
-      tmp.drop();
     }
     let t3 = gettime();
     /*for pair in &self.generated_methods{
@@ -729,8 +721,6 @@ impl Resolver{
           self.err(g.line, msg);
           panic("");
         }
-        err_opt.drop();
-        type.drop();
       }else{
       }
       self.addScope(g.name.clone(), rhs, g.id, VarKind::GLOBAL, g.line);
@@ -794,11 +784,9 @@ impl Resolver{
           if(scope.is_some()){
             let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
             self.init_type_item(it2, j, &scope2);
-            scope2.drop();
           }else{
             let scope2 = Option::new(Type::new(md.name.clone()));
             self.init_type_item(it2, j, &scope2);
-            scope2.drop();
           }
           j += 1;
         }
@@ -874,7 +862,6 @@ impl Resolver{
             self.init_item(it2, j, &scope2);
             //scope2.drop();
           }
-          scope2.drop();
           j += 1;
         }
       },
@@ -1387,7 +1374,6 @@ impl Resolver{
         if(required.contains(&mangled)){
           required.remove(&mangled);
         }
-        mangled.drop();
       }
       if(!required.empty()){
         let msg = Fmt::new();
@@ -1397,7 +1383,6 @@ impl Resolver{
           msg.print(" ");
           let tmp = printMethod(*pair.b);
           msg.print(tmp.str());
-          tmp.drop();
           msg.print(" not implemented for ");
           msg.print(&imp.info.type);
           msg.print("\n");
@@ -1511,7 +1496,6 @@ impl Resolver{
       }*/
     for used in &self.used_types{
       if(used.type.eq(&decl.type)){
-        rt.drop();
         return;
       }
     }
@@ -1649,7 +1633,6 @@ impl Resolver{
         if(rec.is_some()){
           return rec;
         }
-        rec.drop();
       }
     }
     return Option<Type>::new();
@@ -1697,10 +1680,8 @@ impl Resolver{
       let str2 = format("{:?}::{:?}", prefix, node);
       cached = self.typeMap.get(&str2);
       if(cached.is_some()){
-        str2.drop();
         return Result<RType, Error>::ok(cached.unwrap().clone());
       }
-      str2.drop();
     }
     if(std::getenv("visit_type").is_some()) print("visit_type {:?} {:?}\n", str, self.unit.path);
     //print("visit_type {}\n", str);
@@ -1797,7 +1778,6 @@ impl Resolver{
                 //type of the same spelling.
                 if(decl.is_generic && !simple.args.empty()){
                   if(simple.args.len() != decl.type.get_args().len()){
-                    scope.drop();
                     return Result<RType, Error>::err(Error{format("type arguments size not matched {} vs {}", simple.args.len(), decl.type.get_args().len()), node.line});
                   }
                   let map = make_type_map(simple, decl);
@@ -1810,21 +1790,17 @@ impl Resolver{
                   for ga in &gargs{
                     nsmp.args.add(ga.clone());
                   }
-                  gargs.drop();
                   decl0.type.drop();
                   decl0.type = nsmp.into(node.line);
                   let gdecl: Decl* = self.add_generated(decl0);
                   self.add_used_decl(gdecl);
-                  map.drop();
                   let gres = self.getTypeCached(str);
-                  scope.drop();
                   return Result<RType, Error>::ok(gres);
                 }
                 let res = RType::new(decl.type.clone());
                 res.desc.drop();
                 res.desc = Desc{RtKind::Decl, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
-                scope.drop();
                 return Result<RType, Error>::ok(res);
               }
             }
@@ -1834,7 +1810,6 @@ impl Resolver{
                 res.desc.drop();
                 res.desc = Desc{RtKind::Module, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
-                scope.drop();
                 return Result<RType, Error>::ok(res);
               }
             }
@@ -2012,7 +1987,6 @@ impl Resolver{
           self.addType(str.clone(), res.clone());
           self.add_used_decl(decl.unwrap());
         }
-        arr.drop();
         return Option::new(res);
       }
     }
@@ -2201,9 +2175,6 @@ impl Resolver{
             let err = format("field type is imcompatiple {:?}\n expected: {:?} got: {:?}", e.expr, pt, arg.type);
             self.err(node, err);
         }
-        pt.drop();
-        arg.drop();
-        opt.drop();
     }
     //check non set fields
     for (let i = 0;i < fields.len();++i) {
@@ -2230,7 +2201,6 @@ impl Resolver{
         let arg_type = self.visit(&e.expr);
         let target_type = &fields.get(i).type;
         MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params)?;
-        arg_type.drop();
     }
     let res = Simple::new(type.name().clone());
     //preserve module scope (M::Wrapper<T> infers M::Wrapper<i32>, not
@@ -2529,7 +2499,6 @@ impl Resolver{
         if (!(arg.is_prim() || arg.is_pointer() || arg.is_fpointer())) {
             self.err(node, "format arg is invalid");
         }
-        arg.drop();
     }
   }
 
@@ -2550,7 +2519,6 @@ impl Resolver{
         if (!(arg.is_prim() || arg.is_pointer())) {
             self.err(node, format("format arg is invalid: {:?}", arg));
         }
-        arg.drop();
     }
   }
 
@@ -3008,12 +2976,8 @@ impl Resolver{
       if (cmp.is_some()) {
           let msg = format("{}\narray element type mismatch, expecting: {:?} got: {:?}({:?})", cmp.get(), elemType, &cur.type, elem);
           self.err(node, msg.str());
-          cmp.drop();
-          cur.drop();
           panic("");
       }
-      cmp.drop();
-      cur.drop();
     }
     return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), list.len() as i32});
   }
@@ -3189,7 +3153,6 @@ impl Resolver{
             idx: i,
             scope: Option<Type>::new(),
           };
-          rhs2.drop();
           return Option::new(rt);
         }
       }
@@ -3247,7 +3210,6 @@ impl Resolver{
           let rt = if(glob.expr.is_some()){
             let expr2 = AstCopier::clone(glob.expr.get(), &self.unit);
             let tmp = self.visit(&expr2);
-            expr2.drop();
             tmp
           }else{
             self.visit_type(glob.type.get())
@@ -3255,12 +3217,10 @@ impl Resolver{
           for old in &self.glob_map{
             if(old.name.eq(name)){
               //already have
-              arr.drop();
               return Option::new(rt);
             }
           }
           self.glob_map.add(GlobalInfo{glob.name.clone(), rt.clone(), res.unit.path.clone()});
-          arr.drop();
           return Option::new(rt);
         }
       }
@@ -3425,7 +3385,6 @@ impl Resolver{
     for elem in elems{
       let ty = self.visit(elem);
       types.add(ty.type.clone());
-      ty.drop();
     }
     return RType::new(Type::Tuple{.self.unit.node(expr.line), TupleType{types}});
   }
@@ -3623,7 +3582,6 @@ impl Resolver{
       }
       for (let i = 0;i < f.updaters.len();++i) {
         let tmp = self.visit(f.updaters.get(i));
-        tmp.drop();
       }
       self.inLoop += 1;
       self.visit_body(f.body.get());
@@ -3840,10 +3798,8 @@ impl Resolver{
       if(i > 0){
         let prev = Exit::get_exit_type(node.list.get(i - 1));
         if(prev.is_jump() || prev.is_unreachable()){
-          prev.drop();
           self.err(node.list.get(i), "unreachable code");
         }else{
-          prev.drop();
         }
       }
       self.visit(node.list.get(i));

@@ -117,7 +117,6 @@ impl Emitter{
             let elem_ty = r.getType(elem);
             let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, i);
             self.store(elem, &elem_ty, field_target_ptr);
-            elem_ty.drop();
           }
           return ptr;
         }
@@ -264,7 +263,6 @@ impl Emitter{
             if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos, true)){
               use_next = true;
             }
-            name_c.drop();
           },
           MatchLhs::UNION(types) => {
             let name_c = format("{:?}__$union_{}", decl.type, expr.line).cstr();
@@ -279,7 +277,6 @@ impl Emitter{
             if(self.emit_case_body(&case.rhs, &match_type, nextbb, &infos, false)){
               use_next = true;
             }
-            name_c.drop();
           }
         }
       }
@@ -674,7 +671,6 @@ impl Emitter{
           let elem_target = self.ll.get().gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
           self.store(e, &et, elem_target);
-          et.drop();
         }
         return ptr;
       }
@@ -1077,10 +1073,8 @@ impl Emitter{
             let pt0 = params.get(paramIdx);
             let pt = resolver.visit_type(pt0).unwrap();
             args.add(self.cast_expr(arg, &pt));
-            pt.drop();
         }
         ++paramIdx;
-        at.drop();
       }
       return args;
     }
@@ -1190,10 +1184,8 @@ impl Emitter{
             let prm = target.params.get(paramIdx);
             let pt = self.get_resolver().getType(&prm.type);
             args.add(self.cast_expr(arg, &pt));
-            pt.drop();
           }
         }
-        at.drop();
         self.own.get().do_move(arg);
         ++paramIdx;
       }
@@ -1237,7 +1229,6 @@ impl Emitter{
         }else{
           panic("print {:?}", arg_type);
         }
-        arg_type.drop();
       }
       let printf_proto = self.protos.get().libc("printf");
       let res = CreateCall(ll.builder, printf_proto.val, args.ptr(), args.len() as i32);
@@ -1270,7 +1261,6 @@ impl Emitter{
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.eval_operand(arg);
           args.add(val);
-          arg_type.drop();
           continue;
         }
         if(arg_type.is_prim()){
@@ -1282,12 +1272,10 @@ impl Emitter{
         }else if(arg_type.is_any_pointer()){
           let val = self.eval_operand(arg);
           args.add(val);
-          arg_type.drop();
           continue;
         }else{
           panic("compiler err printf arg {:?}", arg_type);
         }
-        arg_type.drop();
       }
       let proto = self.protos.get().libc("printf");
       let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
@@ -1311,7 +1299,6 @@ impl Emitter{
         if(arg_type.eq("i8*") || arg_type.eq("u8*")){
           let val = self.eval_operand(arg);
           args.add(val);
-          arg_type.drop();
           continue;
         }
         if(arg_type.is_prim()){
@@ -1320,12 +1307,10 @@ impl Emitter{
         }else if(arg_type.is_any_pointer()){
           let val = self.eval_operand(arg);
           args.add(val);
-          arg_type.drop();
           continue;
         }else{
           panic("compiler err sprintf arg {:?}", arg_type);
         }
-        arg_type.drop();
       }
       let proto = self.protos.get().libc("sprintf");
       let res = CreateCall(ll.builder, proto.val, args.ptr(), args.len() as i32);
@@ -1509,7 +1494,6 @@ impl Emitter{
           let val_ptr = self.visit(&arg.expr);
           let base_ty = self.get_resolver().getType(&arg.expr);
           self.copy(base_ptr, val_ptr, &base_ty);
-          base_ty.drop();
           self.own.get().do_move(&arg.expr);
         }
         match decl{

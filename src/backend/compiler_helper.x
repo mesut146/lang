@@ -209,7 +209,6 @@ func sort2(list: List<Decl*>*, r: Resolver*){
         swap(list, i, j);
         break;
       }
-      s2.drop();
     }
   }
 }
@@ -417,7 +416,6 @@ impl Emitter{
         let name = format("{:?}::{}", decl.type, ev.name);
         let name_c = name.clone().cstr();
         let var_ty = make_struct_ty2(ll.ctx, name_c.ptr());
-        name_c.drop();
         p.classMap.add(name, var_ty as llvm_Type*);
       }
     }
@@ -443,7 +441,6 @@ impl Emitter{
           if(variant_size > max){
             max = variant_size as i32;
           }
-          name.drop();
         }
         elems.add(intTy(ll.ctx, ENUM_TAG_BITS()));
         elems.add(ArrayType_get(intTy(ll.ctx, 8), max / 8) as llvm_Type*);

@@ -116,7 +116,6 @@ impl Signature{
             let arg = mc.args.get(i);
             let argt: RType = r.visit(arg);
             let type = argt.type.clone();
-            argt.drop();
             res.args.add(type);
         }
         return res;

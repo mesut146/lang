@@ -250,7 +250,6 @@ impl DebugInfo{
         };
         let flagsm = 0;
         let mem = createMemberType(self.builder, scp, fdname_c.ptr(), file, decl.line, fd_size, off, flagsm, fd_ty);
-        fdname_c.drop();
         elems.add(mem as Metadata*);
         ++idx;
         ++fi;
@@ -331,7 +330,6 @@ impl DebugInfo{
             elems.add(mem as Metadata*);
             ++idx;
             ++fi;
-            name_c.drop();
           }
           self.fill_funcs_member(decl, c, &elems);
         },
@@ -345,7 +343,6 @@ impl DebugInfo{
             let mem = createMemberType(self.builder, scope, name_c.ptr(), file, decl.line, size, off, 0, ty);
             elems.add(mem as Metadata*);
             ++idx;
-            name_c.drop();
           }
           self.fill_funcs_member(decl, c, &elems);
         },
@@ -475,7 +472,6 @@ impl DebugInfo{
             let mem = createMemberType(self.builder, ptr::null<DIScope>(), elem_name.ptr(), self.file, line, size, off, flags2, elem_di);
             elems.add(mem as Metadata*);
             ++idx;
-            elem_name.drop();
           }
           let res = createStructType(self.builder, self.ll.ctx, self.cu as DIScope*, name_c.ptr(), self.file, line, size, elems.ptr(), elems.len() as i32);
           return res as DIType*;

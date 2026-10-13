@@ -249,7 +249,6 @@ impl Emitter{
       let name_c = gl_info.name.clone().cstr();
       let glob = make_global(ll.module, ty, init as Constant*, GlobalValue_ext(), name_c.ptr());
       self.globals.add(gl_info.name.clone(), glob as Value*);
-      name_c.drop();
     }
     let globals = resolv.unit.get_globals(true);
     if(globals.empty()){
@@ -283,7 +282,6 @@ impl Emitter{
         let name_c = gl.name.clone().cstr();
         let glob = make_global(ll.module, ty, init, ext(), name_c.ptr());
         self.globals.add(gl.name.clone(), glob as Value*);
-        name_c.drop();
         continue;
       }
       if(std::getenv("TERMUX").is_some()){
@@ -296,7 +294,6 @@ impl Emitter{
       let init = self.make_global_init(gl, &rt, ty);
       let name_c = gl.name.clone().cstr();
       let glob = make_global(ll.module, ty, init, GlobalValue_ext(), name_c.ptr());
-      name_c.drop();
       if(self.di.get().debug){
         let gve = self.di.get().dbg_glob(gl, &rt.type, glob as Value*, self);
         globs.add(gve as Metadata*);
@@ -307,7 +304,6 @@ impl Emitter{
         AllocHelper::new(self).visit(gl.expr.get());
         self.emit_expr(gl.expr.get(),  glob as Value*);
       }
-      rt.drop();
     }
     if(self.config.debug){
       replaceGlobalVariables(ll.ctx, self.di.get().cu, globs.ptr(), globs.len() as i32);

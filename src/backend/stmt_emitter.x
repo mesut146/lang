@@ -158,7 +158,6 @@ impl Emitter{
           CreateStore(ll.builder, val, ptr);
         }
         self.di.get().dbg_var(&f.name, &type, f.line, self);
-        type.drop();
         self.own.get().add_var(f, LLVMPtr::new(ptr));
       }
     }

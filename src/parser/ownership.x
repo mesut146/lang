@@ -388,8 +388,8 @@ impl Own{
                 let bv = self.get_var(bid).clone();
                 let bkey = Rhs::new(bv.clone());
                 let bst = self.get_state(&bkey, scope);
-                bkey.drop();
-                bv.drop();
+                //auto-drop owns bv/bkey (both drop types via String): no
+                //manual drops needed, exactly once at scope end.
                 if(!(bst.kind is StateType::NONE)){
                     if(verbose){
                         print("rollback veto: binding moved\n");
@@ -527,7 +527,6 @@ impl Own{
             let v = self.get_var(rt.vh.get().id).clone();
             let tmp = Rhs::new(v);
             self.note_ptr_move(&tmp, line);
-            tmp.drop();
             return true;
         }
         return false;
@@ -925,7 +924,6 @@ impl Own{
                 if(if_state.is_moved() && !if_state.scope.exit.is_jump()){
                     self.drop_var(var, scope, line);
                 }
-                rhs.drop();
             }
             else if(scope.kind is ScopeType::IF){
                 //if without else
@@ -937,7 +935,6 @@ impl Own{
                 if(parent_state.is_moved()){
                     self.drop_var(var, scope, line);
                 }
-                rhs.drop();
             }
             //forbid else-only move
             if(!allow_else_move && scope.kind is ScopeType::ELSE && !scope.is_empty){
@@ -950,7 +947,6 @@ impl Own{
                         self.get_resolver().err(scope.line, format("else-only move of {:?} in {}\n", var, st.get_line()));
                     }
                 }
-                rhs.drop();
             }
         }
         self.end_scope_update();
@@ -1018,7 +1014,6 @@ impl Own{
                 }
                 //todo dont look child
                 //already moved in parent, dont check sibling move
-                rhs.drop();
                 continue;
             }
             let else_state = self.get_state(&rhs, else_scope);
@@ -1028,7 +1023,6 @@ impl Own{
                 self.drop_var(var, if_scope, line);
                 //panic("moved in sibling {}", var);
             }
-            rhs.drop();
         }
         //restore old scope
         for(let i = 0;i < visitor.scopes.len();++i){
@@ -1078,7 +1072,6 @@ impl Own{
             }else if(state.kind is StateType::MOVED_PARTIAL){
                 resolver.err(var.line, "move of partial of partial");
             }
-            rhs.drop();
         }
         let err = false;
         for fd in fields{

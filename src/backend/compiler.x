@@ -28,7 +28,6 @@ func get_linker(): str{
   for ld in &arr[0..arr.len()]{
     let res = Process::run(*ld).read_close();
     if(res.is_ok()){
-      res.drop();
       return *ld;
     }
   }
@@ -44,7 +43,6 @@ func get_ar(): str{
   for ld in &arr[0..arr.len()]{
     let res = Process::run(*ld).read_close();
     if(res.is_ok()){
-      res.drop();
       return *ld;
     }
   }
@@ -191,7 +189,6 @@ impl Compiler{
       if(!name.ends_with(".x")) continue;
       let file: String = format("{}/{}", src_dir, name);
       if(File::is_dir(file.str())) {
-        file.drop();
         continue;
       }
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
@@ -205,8 +202,6 @@ impl Compiler{
       }
       let obj = cmp.compile(file.str());
       compiled.add(obj);
-      cmp.drop();
-      file.drop();
     }
     for rec_file in &cache.inc.recompiles{
       let file: String = format("{}/{}", src_dir, rec_file);
@@ -221,8 +216,6 @@ impl Compiler{
       let cmp = Emitter::new(ctx, &config, &cache);
       let obj = cmp.compile(file.str());
       //compiled.add(obj);
-      cmp.drop();
-      file.drop();
     }
     return config.link(&compiled);
   }
@@ -262,7 +255,6 @@ impl Compiler{
       let name = list.get(i).str();
       let file: String = format("{}/{}", src_dir, name);
       if(File::is_dir(file.str()) || !name.ends_with(".x")) {
-        file.drop();
         continue;
       }
       let idx = Mutex::new(0);
@@ -282,11 +274,9 @@ impl Compiler{
       let name = list.get(i).str();
       let file: String = format("{}/{}", src_dir, name);
       if(File::is_dir(file.str()) || !name.ends_with(".x")) {
-        file.drop();
         continue;
       }
       cache.update(file.str());
-      file.drop();
     }
     cache.write_cache();
     let comp = compiled.unwrap();
