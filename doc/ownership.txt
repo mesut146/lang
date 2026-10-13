@@ -73,7 +73,21 @@ marking -- they went too (anonstrip).
 Validation limits: suite + MALLOC_CHECK_=3 catch doubles loudly but
 are LEAK-BLIND. Every strip batch additionally needs an IR or
 drop-count argument (A-tracker in tests/own/common.x, check_ids) that
-the freed value still dies exactly once. Per-batch triangle (previous-release build, suite, heap, self-host
-is the same gate twice -- build once, validate much) is mandatory; strict catches
-analyzer fallout as precise errors, self-host catches builder
-divergence (closed: 1.05/v1.14/v1.11 agree).
+the freed value still dies exactly once. Per-batch triangle (previous-
+release build, suite, heap, self-host is the same gate twice -- build
+once, validate much) is mandatory; strict catches analyzer fallout as
+precise errors, self-host catches builder divergence (closed:
+1.05/v1.14/v1.11 agree).
+
+Valgrind ledger (Oct 2026, v3.22, x86_64):
+- User programs: 9/9 drop-count tests report 0 bytes at exit. Ownership
+  soundness proven where it matters.
+- HashMap rehash orphans: fixed (consumed chain boxes freed; 14KB
+  definite + 5KB indirect on the hashmap test went to zero).
+- LLVM graph (~4MB, Function::Create rooted at never-disposed module)
+  and static-init tables: by design, undisposable, ignored.
+- Accepted residuals (NOT fixed): ~50KB per big compile of Type::clone
+  crumbs across resolver visit sites (visit_impl, isCondition,
+  visit_var, visit_block) -- missing drops on clone temps, 6 distinct
+  stack shapes. Short-lived compiler process; accepted, revisit if the
+  compiler ever goes long-lived (e.g. LSP/daemon mode).
