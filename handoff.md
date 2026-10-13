@@ -46,6 +46,14 @@ Ownership only — no Rust-like borrows:
 
 ## Resolved since (in tree)
 
+- Builder divergence: CLOSED 2026-10-13. Same sources built by 1.05,
+  v1.14 and v1.11 produce identical ownership verdicts on all of
+  `tests/own/*`, `tests/fail/*`, 37/38 and a borrow-flow probe, plus
+  identical `own_verbose` traces (1.05 vs v1.14). The old `vh`-for-borrows
+  divergence no longer reproduces; `visit_ref` (`src/resolver/resolver.x:2442`)
+  propagates `vh` through `&` deterministically on all lineages.
+  Strict-triangle validation stays mandatory regardless.
+
 - Temp-derived owners: closed by construction, not provenance. Since
   `return *o` on drop types is rejected, legal callees cannot hand out
   owned aliases of borrows (only `ptr::deref`/extern can, both explicit
@@ -60,9 +68,6 @@ Ownership only — no Rust-like borrows:
    (no body to check): `let a = ffi_get(&o)` where the callee aliases a
    borrow. Needs `#[returns_alias]`-style opt-in annotations or explicit
    acceptance. Deferred per user 2026-10-13 — do later.
-2. `v1.11`/`v1.12`-built analyzers diverge from `1.05`-built ones on
-   corner logic (e.g. `vh` for borrows) — never root-caused; contained
-   by validating every change through the strict triangle below.
 
 ## Validation protocol (mandatory before merging to main)
 
