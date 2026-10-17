@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-13. Main: `0968605`. Releases published: v1.11 – v1.15.
+Date: 2026-10-17. Main: `b0e399e`. Releases published: v1.11 – v1.15.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -68,11 +68,26 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` deref follows the same heal rule (`#drop` attribute).
 - v1.15 cut from here (heal/bubble/strip/alias/B2/tests/heap-gate batch).
 
+- Discarded macro results + if-let temporaries (2026-10-17, b0e399e):
+  the emitter registers a format()/`?` macro block's result temp as an
+  owned object (track_result_temp) and drop_obj uses the resolved result
+  type recorded on FormatInfo (the macro call's own RType is a bare,
+  decl-less String, so drop glue cannot resolve it); if-let drops its
+  owned scrutinee on the non-matching path (ElseScrutinee); Box::unwrap
+  frees its cell. Tests: tests/own/20qmark_discard, 21iflet_temp;
+  tests/leak/* plus the `bin/test.sh leak` valgrind gate (wired into
+  `all`). Validated by previous-release (v1.15) bootstrap + full suite
+  (MALLOC_CHECK_=3, wiped dirs: normal 63/0, fmt/leak/opt pass).
+
 ## Known open holes (documented, not yet solved)
 
-(none in ownership -- last deferred item closed with #[returns_alias].
-Remaining work is language features (doc/todo) and accepted valgrind
-residuals, both outside ownership.)
+Ownership residuals -- NOT accepted, first opened 2026-10-17: ~38KB
+non-LLVM compiler leaks per big compile, all Type::clone temporaries at
+resolver type-cache sites (visit_impl/visit_type0/visit_type_str0,
+isCondition, visit_block). Confirmed on a self-hosted build (compiler
+source compiled by the fixed compiler), so it is not a codegen artifact.
+Shapes and the ruled-out minimal repros are in doc/ownership.txt (OPEN
+ledger entry). Also open: language features (doc/todo).
 
 ## Validation protocol (mandatory before merging to main)
 

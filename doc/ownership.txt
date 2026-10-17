@@ -82,15 +82,25 @@ precise errors, self-host catches builder divergence (closed:
 Valgrind ledger (Oct 2026, v3.22, x86_64):
 - User programs: 9/9 drop-count tests report 0 bytes at exit. Ownership
   soundness proven where it matters.
+- Discarded macro results (format()/`?` in statement position) and
+  non-matching if-let temporaries: FIXED (b0e399e; tests/own/20,21 +
+  tests/leak/* + bin/test.sh leak gate). Same-pass fixes: Box::unwrap
+  frees its cell (Drop delegates; hashmap::rehash drops its manual free).
 - HashMap rehash orphans: fixed (consumed chain boxes freed; 14KB
   definite + 5KB indirect on the hashmap test went to zero).
 - LLVM graph (~4MB, Function::Create rooted at never-disposed module)
   and static-init tables: by design, undisposable, ignored.
-- Accepted residuals (NOT fixed): ~50KB per big compile of Type::clone
-  crumbs across resolver visit sites (visit_impl, isCondition,
-  visit_var, visit_block) -- missing drops on clone temps, 6 distinct
-  stack shapes. Short-lived compiler process; accepted, revisit if the
-  compiler ever goes long-lived (e.g. LSP/daemon mode).
+- OPEN, NOT accepted (b0e399e): ~38KB non-LLVM per big compile, all
+  Type::clone temporaries at resolver type-cache sites. Measured on a
+  self-hosted build (compiler source compiled by the fixed compiler), so
+  not a codegen artifact: definite ~940B (880B List<Type> from
+  Simple::new through a clone in visit_type_str0->visit_type0->
+  visit_impl; 26B Desc::clone; 32B inline format in Compiler::link; 1B
+  String::clone) + ~37KB indirect. Ruled out by valgrind-clean minimal
+  repros: `?`-discard of an enum or struct-wrapping-enum payload,
+  Option<enum> discard, HashMap replacement-return discard, inline
+  format(..).str() argument. Next: root-cause + fix, with a regression
+  test + the tests/leak gate.
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet
