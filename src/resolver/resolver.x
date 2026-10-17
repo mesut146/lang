@@ -485,9 +485,14 @@ impl Scope{
   }
 }
 
-//B2 scan state: whether a manual Drop body touches self at all.
+//B2 scan state: how a manual Drop body refers to `self`. `touched` means
+//it uses `self` as a whole (bare self, self cast/passed to a call, lambda
+//capture) and so keeps full manual responsibility -- frees can hide behind
+//it. `fields` records the top-level fields it names (self.f...): only those
+//forfeit their derived free, untouched drop-typed fields still get one.
 struct DropScan{
   touched: bool;
+  fields: Map<String, bool>;
 }
 
 impl Resolver{
@@ -983,16 +988,12 @@ impl Resolver{
     match e{
       Expr::Call(mc) => {
         if(mc.scope.is_some()){
-          if(self.expr_touches_self(mc.scope.get())){
-            scan.touched = true;
-          }
+          self.note_self_touch(scan, mc.scope.get());
           self.scan_drop_expr(scan, mc.scope.get());
         }
         for(let i = 0;i < mc.args.len();++i){
           let a = mc.args.get(i);
-          if(self.expr_touches_self(a)){
-            scan.touched = true;
-          }
+          self.note_self_touch(scan, a);
           self.scan_drop_expr(scan, a);
         }
         return;
@@ -1063,58 +1064,77 @@ impl Resolver{
       _ => {}
     }
   }
-  //True for self itself and anything rooted at self (fields,
-  //borrows, parens, casts, indexing, composite literals). Reads and
-  //frees both count: any touch keeps full manual responsibility.
-  //Lambdas count as touching (bodies may run later holding captures).
-  func expr_touches_self(self, e: Expr*): bool{
+  //Record how a manual Drop body refers to `self`: a top-level field
+  //(self.f...) is remembered individually; anything rooted at bare self
+  //(self, self as T, &self, self passed as a call argument, a lambda)
+  //marks `touched`, i.e. full manual responsibility -- a free can hide
+  //behind a whole-self helper. Reads and frees both count.
+  func note_self_touch(self, scan: DropScan*, e: Expr*){
     if let Expr::Name(sn) = e{
-      return sn.str().eq("self");
+      if(sn.str().eq("self")){
+        scan.touched = true;
+      }
+      return;
     }
     if let Expr::Access(scp, name) = e{
-      return self.expr_touches_self(scp.get());
+      if(self.is_self_expr(scp.get())){
+        scan.fields.add(name.clone(), true);
+        return;
+      }
+      self.note_self_touch(scan, scp.get());
+      return;
     }
     if let Expr::Unary(op, inner) = e{
-      return self.expr_touches_self(inner.get());
+      self.note_self_touch(scan, inner.get());
+      return;
     }
     if let Expr::Par(bx) = e{
-      return self.expr_touches_self(bx.get());
+      self.note_self_touch(scan, bx.get());
+      return;
     }
     if let Expr::As(cast, ty) = e{
-      return self.expr_touches_self(cast.get());
+      self.note_self_touch(scan, cast.get());
+      return;
     }
     if let Expr::ArrAccess(aa) = e{
-      return self.expr_touches_self(aa.arr.get());
+      self.note_self_touch(scan, aa.arr.get());
+      return;
     }
     if let Expr::Obj(ob_ty, ob) = e{
       for(let i = 0;i < ob.len();++i){
-        if(self.expr_touches_self(&ob.get(i).expr)){
-          return true;
-        }
+        self.note_self_touch(scan, &ob.get(i).expr);
       }
-      return false;
+      return;
     }
     if let Expr::Array(arr, sz) = e{
       for(let i = 0;i < arr.len();++i){
-        if(self.expr_touches_self(arr.get(i))){
-          return true;
-        }
+        self.note_self_touch(scan, arr.get(i));
       }
-      return false;
+      return;
     }
     if let Expr::Tuple(elems) = e{
       for(let i = 0;i < elems.len();++i){
-        if(self.expr_touches_self(elems.get(i))){
-          return true;
-        }
+        self.note_self_touch(scan, elems.get(i));
       }
-      return false;
+      return;
     }
     if let Expr::Lambda(lm) = e{
-      return true;
+      scan.touched = true;
+      return;
     }
     if let Expr::Infix(op, l, r) = e{
-      return self.expr_touches_self(l.get()) || self.expr_touches_self(r.get());
+      self.note_self_touch(scan, l.get());
+      self.note_self_touch(scan, r.get());
+      return;
+    }
+  }
+  //`self`, possibly parenthesised -- the base of a field access.
+  func is_self_expr(self, e: Expr*): bool{
+    if let Expr::Par(bx) = e{
+      return self.is_self_expr(bx.get());
+    }
+    if let Expr::Name(sn) = e{
+      return sn.str().eq("self");
     }
     return false;
   }

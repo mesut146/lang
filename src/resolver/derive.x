@@ -256,11 +256,12 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     imp.methods.add(m);
     return imp;
 }
-//B2: manual Drop keeps its body; if the body never touches self,
-//append derived frees for every drop-typed struct field (side-effect-
-//only customs). Anything touching self keeps full responsibility.
-//Idempotent: appended statements touch self, so re-runs skip. Enums
-//keep full manual responsibility.
+//B2: manual Drop keeps its body; append derived frees for the drop-typed
+//struct fields the body does NOT already handle (side-effect-only customs
+//get all of them). Whole-self use keeps full manual responsibility; naming
+//a field (self.f...) suppresses only that field. Enums keep full manual
+//responsibility. Idempotent: an appended `self.f` marks f touched, so a
+//re-run skips it.
 func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
     if(!(decl is Decl::Struct)){
         return;
@@ -274,11 +275,11 @@ func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
     if(m.body.is_none()){
         return;
     }
-    let scan = DropScan{touched: false};
+    let scan = DropScan{touched: false, fields: Map<String, bool>::new()};
     r.scan_drop_body(&scan, m.body.get());
-    //Anything touching self keeps full manual responsibility (frees
-    //hide in helpers, bindings and FFI); only side-effect-only customs
-    //gain recursion. Appended statements touch self, so re-runs skip.
+    //Whole-self use (bare self, casts, helpers, lambdas) keeps full manual
+    //responsibility (frees can hide behind it); otherwise only the fields
+    //the body names are taken as freed, and the rest still get recursion.
     if(scan.touched){
         return;
     }
@@ -289,6 +290,9 @@ func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
                 continue;
             }
             if(!fd.name.is_some()){
+                continue;
+            }
+            if(scan.fields.contains(fd.name.get())){
                 continue;
             }
             let stmt = parse_stmt(format("Drop::drop(self.{});", fd.name.get()), unit, decl.line);

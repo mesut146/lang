@@ -188,6 +188,10 @@ impl str{
     }
 
     func real_len(self): i32{
+      //empty: nothing to strip, and get(-1) would read before the buffer
+      if(self.empty()){
+        return 0;
+      }
       if(self.get(self.len() - 1) == 0){
         return self.len() - 1;
       }

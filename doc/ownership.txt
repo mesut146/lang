@@ -38,18 +38,24 @@ Deleted as redundant (derived glue proven): impl Drop for String
 RSS-compared, no leak signal).
 
 B2 rule (impl Drop augments): a manual Drop body runs first; then
-derived glue frees every drop-typed struct field, UNLESS the body
-touches self in any call (then it keeps full manual responsibility --
-frees hide in helpers, bindings, casts and FFI). Rationale: touching
-is easy to detect syntactically (Name/Access/casts/index/literals/
-infix/lambda shapes walked recursively); freeing is not. So the rule
-is conservative in the safe direction: side-effect-only customs
-(print-only bodies) gain recursion, everything else behaves exactly
-as before. Idempotent (appended statements touch self). Structs only;
-enums keep full manual responsibility. Proven by tests/own/19wrap
-(custom print + unfreed field drops exactly once). Incidental finding
-while proving this: bare blocks don't scope drops (locals die at
-function end), so drop-count tests must use function boundaries.
+derived glue frees the drop-typed struct fields the body does not
+already handle. The scan is PER-FIELD: naming a field (self.f...) marks
+only that field handled (its derived free is suppressed); anything
+rooted at bare self (self, self as T, &self, self passed as an argument,
+a lambda capture) marks the whole body manual and suppresses every
+derived free -- a free can hide behind a whole-self helper. Rationale:
+touching a field is easy to detect syntactically (Name/Access/casts/
+index/literals/infix/lambda shapes walked recursively); freeing is not.
+So per-field is conservative in the safe direction and never frees less
+than the old "any touch -> suppress all" rule: side-effect-only customs
+gain recursion, and a body that handles one field still lets the others
+drop. Idempotent (an appended `Drop::drop(self.f)` names f, so re-runs
+skip it). Structs only; enums keep full manual responsibility. Proven by
+tests/own/19wrap (custom print + unfreed field drops exactly once) and
+tests/own/22b2partial (body frees one field, the other still drops).
+Incidental finding while proving this: bare blocks don't scope drops
+(locals die at function end), so drop-count tests must use function
+boundaries.
 
 Extern aliasing (CLOSED with #[returns_alias], tests own/18alias +
 fail/returns_alias_*): legal callees cannot return owned aliases of
@@ -95,6 +101,18 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   unwrap). Fix: visit the argument in both elision branches.
 - HashMap rehash orphans: fixed (consumed chain boxes freed; 14KB
   definite + 5KB indirect on the hashmap test went to zero).
+- Mutex<T> payload: FIXED by per-field B2 (tests/leak/mutex_payload.x;
+  tests/own/22b2partial). `Mutex<T>::drop` names only self.lock, yet the
+  old rule suppressed the derived free of `val` too, so every
+  Mutex<String|List<..>> leaked its payload buffer (400B in
+  tests/std_test/20_worker.x, whose todo queue is Mutex<List<Job>>; the
+  10B/40B reps in tests/leak). 20_worker is valgrind-clean now.
+- str::real_len empty-string read: FIXED (tests/leak/empty_streq.x). It
+  did `self.get(self.len() - 1)`, i.e. buf[-1] for an empty slice, a
+  1-byte OOB read before the (0-size) buffer; String::eq with an empty
+  operand hits it (HashMap<String,..> key vs a default key). The gate is
+  valgrind's error exit, so it catches the read, not a leak. It fired
+  inside the compiler too, while compiling a module.
 - LLVM graph (~4MB, Function::Create rooted at never-disposed module)
   and static-init tables: by design, undisposable, ignored.
 - CLOSED -- bootstrap artifact, not a source leak (db58ca6): the ~38KB
@@ -111,6 +129,14 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   Option<enum> discard, HashMap replacement-return discard, inline
   format(..).str() argument) remain clean; the one real leak the chase
   did surface is the elided-argument bug above.
+- Compiler-internal roots: NONE left in compiler code. On a normal
+  program (tests/normal/19-match.x) and on a full 25-file module compile
+  (src/std), every definite/indirect root that valgrind reports is
+  LLVM-internal (LLVMContext/Module/TargetMachine/IRBuilder/DIBuilder,
+  never disposed in a one-shot compile). Total definite bytes are
+  LLVM-only (654KB / ~5MB respectively); no double-free or invalid
+  free/read in either. The compiler's own manual drops (Own) name every
+  field, so per-field B2 leaves them untouched.
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet
