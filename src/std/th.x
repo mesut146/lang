@@ -201,6 +201,13 @@ impl Worker{
   func add_arg<T>(self, fp: func(c_void*) => void, arg: T){
       self.add_arg(fp, Any::new(arg));
   }
+
+  //Heap-owning payload: the boxed arg's innards are freed on auto-drop only
+  //if the constructing site supplies T's drop glue (std/any.x cannot derive
+  //it generically). T is known at the call, so take the glue explicitly.
+  func add_arg_heap<T>(self, fp: func(c_void*) => void, arg: T, drop_f: func(i8*) => void){
+      self.add_arg(fp, Any::new(arg, drop_f));
+  }
   
   func add_arg(self, fp: func(c_void*) => void, arg: Any){
       let infos = self.infos.lock();

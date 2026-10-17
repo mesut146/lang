@@ -266,7 +266,7 @@ impl Compiler{
         idx: &idx,
         len: list.len() as i32,
       };
-      worker.add_arg(Compiler::make_compile_job, args);
+      worker.add_arg_heap(Compiler::make_compile_job, args, release_compile_args);
     }
     worker.join();
     //children run with -cache-ro (no shared cache.txt writes); merge once here.
@@ -310,9 +310,12 @@ impl Compiler{
       *idx = *idx + 1;
       args.idx.unlock();
     }
-    let proc = Process::run(cmd.str());
-    let code = proc.eat_close();
-    if(code != 0){
+    //read_close drains the child's stdout before closing: pclose closes the
+    //read end *before* waiting for the child, so an undrained child that
+    //prints (every one does: "compiling ...") dies with SIGPIPE and the whole
+    //build fails with "failed to compile".
+    let res = Process::run(cmd.str()).read_close();
+    if(res.is_err()){
       //fail fast: panicking here would strand the worker pool and hang join()
       print("failed to compile {}\n", args.file);
       exit(1);
@@ -399,6 +402,16 @@ struct CompileArgs{
   compiled: Mutex<List<String>>*;
   idx: Mutex<i32>*;
   len: i32;
+}
+
+//Drop glue for a boxed CompileArgs job arg. Any auto-drop is type-erased
+//(std/any.x), so the box owner cannot free the payload's own heap; the job
+//runner is told T via add_arg_heap, and this is the glue it runs. Frees
+//CompileArgs.file's buffer (the pointers and len are not drop-typed); the box
+//shell is freed right after by Any::drop.
+func release_compile_args(p: i8*){
+  let args: CompileArgs = ptr::deref!(p as CompileArgs*);
+  Drop::drop(args);
 }
 
 impl CompilerConfig{

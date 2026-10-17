@@ -239,6 +239,12 @@ vararg_all(){
 inc_all(){
   run "$compiler c -out $out_dir -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
   run "$out_dir/incremental_test" || exit 1
+  #parallel compile path (-j): each job is a child compiler whose stdout must
+  #be drained before the stream is closed, or the child dies with SIGPIPE and
+  #the build fails ("failed to compile"). A fresh out dir keeps the cache cold
+  #so the children actually run.
+  run "$compiler c -cache -j 4 -out $out_dir/inc_j -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
+  run "$out_dir/inc_j/incremental_test" || exit 1
 }
 
 if [ -z "$pat" ]; then

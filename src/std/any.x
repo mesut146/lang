@@ -1,22 +1,33 @@
 import std/libc
 
+//Auto-drop of a boxed payload needs T's drop glue. Type erasure loses T, and
+//the language cannot materialize that glue at a generic site (a generic
+//function reference, a generic-method reference and a generic lambda are all
+//rejected), so the site that knows T must hand it in:
+//  - Any::new<T>(v)          : no glue; payload innards need drop2<T>.
+//  - Any::new<T>(v, glue)    : auto-drop is total (frees payload innards).
+//`glue` is a func(i8*) that drops a T living at that address.
+func any_nop(p: i8*){
+}
+
 struct Any{
     box: Box<i8>;
     type: String;
-    //drop_f: func(i8*): void;
+    drop_f: func(i8*) => void;
 }
    
 impl Any{
     func new(): Any{
-        return Any{box: Box::new(0i8), type: "".owned()};
+        return Any{box: Box::new(0i8), type: "".owned(), drop_f: any_nop};
     }
     func new<T>(val: T): Any{
+        return Any::new<T>(val, any_nop);
+    }
+    func new<T>(val: T, drop_f: func(i8*) => void): Any{
         let b = Box<T>::new(val);
         let b2 = ptr::deref!(&b as Box<i8>*);
         std::no_drop(b);
-        //Drop::drop as func(T): void
-        //let drop_f = T::drop;
-        return Any{box: b2, type: std::print_type<T>().owned()};
+        return Any{box: b2, type: std::print_type<T>().owned(), drop_f: drop_f};
     }
 
     func get<T>(self): T*{
@@ -37,11 +48,12 @@ impl Any{
 
 impl Drop for Any{
     func drop(*self){
-        //Type-erased: T is gone, so payload innards can't be dropped (that
-        //needs a per-T drop glue stored at construction; no such mechanism
-        //exists yet). Free the box shell and the type string; payload
-        //innards leak. This never panics: auto-drop must be total. Manual
-        //drop2 frees more where it is used.
+        //Free the payload innards through the glue captured at construction
+        //(any_nop when the constructing site did not know T), then the box
+        //shell and the type string. This never panics: auto-drop must be
+        //total. Manual drop2 frees a payload whose glue was not supplied.
+        let dp = self.drop_f;
+        dp(self.box.get() as i8*);
         free(self.box.val as i8*);
         Drop::drop(self.type);
         std::no_drop(self);
