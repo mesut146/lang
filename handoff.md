@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-17. Main: `3d50cfb`. Releases published: v1.11 – v1.15.
+Date: 2026-10-17. Main: `3567d0a`. Releases published: v1.11 – v1.15.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
