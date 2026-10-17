@@ -1006,10 +1006,17 @@ impl Emitter{
       if(Utils::is_call(mc, "Drop", "drop")){
         let argt = self.getType(mc.args.get(0));
         if(argt.is_any_pointer() || argt.is_prim()){
+          //No callee to run, but the argument expression still has to be
+          //evaluated: an explicit Drop impl may build it for its side
+          //effects (`Drop::drop(self.unwrap())` frees the boxed cell
+          //inside unwrap). Skipping it leaked every Box<T>/Ptr<T> whose
+          //payload has no drop glue.
+          self.visit(mc.args.get(0));
           return ptr::null<Value>();
         }
         let helper = DropHelper{resolver};
         if(!helper.is_drop_type(&argt)){
+          self.visit(mc.args.get(0));
           return ptr::null<Value>();
         }
       }
