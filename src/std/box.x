@@ -22,8 +22,15 @@ impl<T> Box<T>{
     }
 
     func unwrap(*self): T{
+      //Payload moves to the caller and the cell dies with the Box: free it
+      //here, so an unwrapped box never leaks the cell (a named box whose
+      //Drop is suppressed by no_drop, or any caller that never runs Drop).
+      //`cell` is captured before no_drop marks self moved; the caller then
+      //owns only the payload.
+      let cell = self.val as i8*;
       let res = ptr::deref!(self.val);
       std::no_drop(self);
+      free(cell);
       return res;
     }
 
@@ -51,9 +58,9 @@ impl<T> Clone for Box<T>{
 
 impl<T> Drop for Box<T>{
   func drop(*self){
-    let ptr = self.val as i8*;
+    //unwrap frees the cell; the remaining job is to drop the moved-out
+    //payload. (Frees exactly once: see Box::unwrap.)
     Drop::drop(self.unwrap());
-    free(ptr);
   }
 }
 

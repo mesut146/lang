@@ -98,12 +98,10 @@ impl<K, V> HashMap<K, V>{
     func rehash(self, node: HashNode<K, V>){
         self.insert(node.key, node.value);
         while(node.next.is_some()){
-            //take the box (marks next moved), free its shell after moving
-            //the value out: the shell is ours alone, contents live on.
-            let nxbox = node.next.unwrap_box();
-            let raw = nxbox.val as i8*;
-            node = nxbox.unwrap();
-            free(raw);
+            //take the box (marks next moved); Box::unwrap frees the shell
+            //as it moves the value out, so there is no manual free here
+            //(freeing again would double-free the shell).
+            node = node.next.unwrap_box().unwrap();
             self.insert(node.key, node.value);
         }
     }

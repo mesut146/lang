@@ -574,6 +574,9 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
         block.return_expr.set(unwrap_expr);
         let tmp = r.visit_block(block);
+        //the emitter needs the resolved result type to drop a discarded
+        //result (the format call's own RType is a bare, decl-less String).
+        info.rt = r.visit(block.return_expr.get());
     }else{
         r.err(node, "generate_format");
     }
@@ -720,6 +723,9 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         let unwrap_expr = parse_expr(format("{}.unwrap()", &fmt_var_name), &r.unit, line);
         block.return_expr.set(unwrap_expr);
         let tmp = r.visit_block(block);
+        //the emitter needs the resolved result type to drop a discarded
+        //result (the format call's own RType is a bare, decl-less String).
+        info.rt = r.visit(block.return_expr.get());
     }else{
         r.err(node, "generate_format");
     }

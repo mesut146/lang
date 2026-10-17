@@ -270,6 +270,46 @@ impl Own{
         self.get_scope().state_map.add(Rhs::new(expr, self), StateType::NONE);
     }
 
+    //True when if-let's scrutinee is an owned temporary the engine already
+    //tracks as an object (not a named place, not a borrow). Only such a
+    //scrutinee needs the explicit else-path drop (ElseScrutinee): the
+    //engine would drop it at the parent scope end, save for the move mark
+    //if-let plants for the match path; a named place is instead handled by
+    //the arm rollback (mark_scrutinee/end_match_arm).
+    func is_temp_scrutinee(self, scr: Expr*): bool{
+        if let Expr::Access(scp, name) = scr{
+            let scp_rt = self.get_resolver().visit(scp.get());
+            if(scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some()){
+                return false;
+            }
+        }else{
+            let rt = self.get_resolver().visit(scr);
+            if(rt.vh.is_some() && (scr is Expr::Name || scr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some()){
+                return false;
+            }
+        }
+        let scope = self.get_scope();
+        while(true){
+            for obj in &scope.objects{
+                if(obj.expr.id == scr.id){
+                    return true;
+                }
+            }
+            if(scope.parent == -1){
+                break;
+            }
+            scope = self.get_scope(scope.parent);
+        }
+        return false;
+    }
+    //Explicit, path-local drop of an owned temporary (if-let else path,
+    //see ElseScrutinee). There is no state to consult: the emitter proved
+    //this path owns the value, and the temporary is suppressed on the
+    //other path by the match mark.
+    func drop_temp(self, rt: RType*, ptr: LLVMPtr, line: i32, scr: Expr*){
+        let rhs = Rhs::EXPR{scr};
+        self.drop_real(rt, ptr, line, &rhs);
+    }
     //A payload binding copies the scrutinee's bytes; from birth the
     //binding owns the copy, so the source must never drop it (else the
     //same buffer dies twice: `let s = File::read_string(..)?` double-freed).
@@ -1226,8 +1266,15 @@ impl Own{
             Logger::add(format("drop_obj_real {:?} state: {:?} oline: {} line: {}\n", obj.expr, state.kind, obj.expr.line, line));
         }
         let resolver = self.get_resolver();
-        let rt = resolver.visit(obj.expr);
-        self.drop_real(&rt, obj.ptr, line, &rhs);
+        let mut_rt = resolver.visit(obj.expr);
+        //A discarded format()/`?` macro result: the macro call's own RType
+        //is a bare, decl-less placeholder that drop-glue cannot resolve.
+        //Use the resolved result type recorded on the block's FormatInfo.
+        let info = resolver.format_map.get(&obj.expr.id);
+        if(info.is_some()){
+            mut_rt = info.unwrap().rt.clone();
+        }
+        self.drop_real(&mut_rt, obj.ptr, line, &rhs);
     }
 
     func drop_real(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){

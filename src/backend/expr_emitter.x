@@ -24,6 +24,16 @@ struct MatchInfo{
   bb: BasicBlock*;
 }
 
+//if-let over an owned temporary: the payload binding (match path) copies
+//the value, so the temporary is suppressed there; the else path copies
+//nothing and would leak it, so it must drop the temporary explicitly on
+//that path only (see emit_branch_join / Own::is_temp_scrutinee).
+struct ElseScrutinee{
+  rt: RType*;
+  ptr: Value*;
+  scr: Expr*;
+}
+
 //expr------------------------------------------------------
 impl Emitter{
 
@@ -105,7 +115,7 @@ impl Emitter{
         Expr::Ques(bx) => {
           let r = self.get_resolver();
           let info = r.get_macro(node);
-          return self.visit_block(&info.block).unwrap();
+          return self.track_result_temp(node, self.visit_block(&info.block).unwrap());
         },
         Expr::Tuple(elems) => {
           let r = self.get_resolver();
@@ -357,12 +367,21 @@ impl Emitter{
       return expr is Expr::If || expr is Expr::IfLet;
     }
 
+    //drop the owned if-let scrutinee on the non-matching path (see
+    //ElseScrutinee). No-op for plain if (else_scr empty).
+    func emit_else_scrutinee_drop(self, else_scr: Ptr<ElseScrutinee>*, line: i32){
+      if(else_scr.is_none()){
+        return;
+      }
+      let es = else_scr.get();
+      self.own.get().drop_temp(es.rt, LLVMPtr::new(es.ptr), line, es.scr);
+    }
     //Shared tail of visit_if and visit_iflet: then/else emission, scope
     //bookkeeping and the join (phi or passthrough). The two differ only
     //in how they reach the CondBr (plain condition vs tag compare, plus
     //iflet's payload setup); everything from the then-body on is
     //identical, so it lives here instead of in both.
-    func emit_branch_join(self, then: Body*, else_stmt: Ptr<Body>*, thenbb: BasicBlock*, elsebb: BasicBlock*, nextbb: BasicBlock*, line: i32, if_id: i32): Option<Value*>{
+    func emit_branch_join(self, then: Body*, else_stmt: Ptr<Body>*, thenbb: BasicBlock*, elsebb: BasicBlock*, nextbb: BasicBlock*, line: i32, if_id: i32, else_scr: Ptr<ElseScrutinee>*): Option<Value*>{
       let ll = self.ll.get();
       let then_val = self.visit_body(then);
       let then_end = GetInsertBlock(ll.builder);
@@ -386,6 +405,7 @@ impl Emitter{
         //this will restore if, bc we did fake end_scope
         let else_id = self.own.get().add_scope(ScopeType::ELSE, else_stmt.get());
         self.own.get().get_scope(else_id).sibling = if_id;
+        self.emit_else_scrutinee_drop(else_scr, line);
         else_val = self.visit_body(else_stmt.get());
         else_end = GetInsertBlock(ll.builder);
         self.own.get().end_scope(Utils::get_end_line(else_stmt.get()));
@@ -398,6 +418,9 @@ impl Emitter{
       }else{
         let else_id = self.own.get().add_scope(ScopeType::ELSE, line, Exit::new(ExitType::NONE), true);
         self.own.get().get_scope(else_id).sibling = if_id;
+        //no user else block: the non-matching path is the implicit else,
+        //so the temporary scrutinee must still drop here.
+        self.emit_else_scrutinee_drop(else_scr, line);
         self.own.get().end_scope(Utils::get_end_line(then));
         CreateBr(ll.builder, nextbb);
       }
@@ -448,7 +471,8 @@ impl Emitter{
       SetInsertPoint(ll.builder, thenbb);
       self.di.get().new_scope(node.then.get().line());
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
-      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, thenbb, elsebb, nextbb, line, if_id);
+      let no_scr = Ptr<ElseScrutinee>::new();
+      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, thenbb, elsebb, nextbb, line, if_id, &no_scr);
       return res;
     }
 
@@ -476,6 +500,15 @@ impl Emitter{
       SetInsertPoint(ll.builder, then_bb);
       let if_id = self.own.get().add_scope(ScopeType::IF, node.then.get());
       self.own.get().do_move(&node.rhs);
+      //owned temporary scrutinee: the match path copies the payload into a
+      //binding (the temp is suppressed there), but the non-matching path
+      //copies nothing, so it must drop the temp explicitly. Named
+      //scrutinees are handled by the arm rollback (mark_scrutinee/
+      //end_match_arm), so only proven temporaries are tracked here.
+      let else_scr = Ptr<ElseScrutinee>::new();
+      if(self.own.get().is_temp_scrutinee(&node.rhs) && self.own.get().is_drop_type(&rhs_rt.type)){
+        else_scr = Ptr<ElseScrutinee>::new(ElseScrutinee{rt: &rhs_rt, ptr: rhs, scr: &node.rhs});
+      }
       let variant = decl.get_variants().get(index);
       self.di.get().new_scope(line);
       if(!variant.fields.empty()){
@@ -491,7 +524,7 @@ impl Emitter{
             self.alloc_enum_arg(arg, variant, i, decl, rhs, &rhs_rt.type, &node.rhs);
         }
       }
-      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, then_bb, elsebb, next, line, if_id);
+      let res = self.emit_branch_join(node.then.get(), &node.else_stmt, then_bb, elsebb, next, line, if_id, &else_scr);
       return res;
     }
 
@@ -863,6 +896,19 @@ impl Emitter{
         self.copy(trg_ptr, val, &elem_type);
         return ptr::null<Value>();
     }
+    //A format()/`?` macro block yields its value to the caller. Like any
+    //struct-returning call (visit_call2), that temporary is owned by the
+    //caller's scope and must drop when the statement discards it. The
+    //block marks its own return temp moved (visit_block), so without this
+    //the value silently leaks (`format(..);` / `f()?;` in statement
+    //position). No-op for non-drop results.
+    func track_result_temp(self, expr: Expr*, val: Value*): Value*{
+      let rt = self.get_resolver().visit(expr);
+      if(is_struct(&rt.type)){
+        self.own.get().add_obj(expr, LLVMPtr::new(val), &rt.type);
+      }
+      return val;
+    }
     func visit_macrocall(self, expr: Expr*, mc: MacroCall*): Value*{
         let resolver = self.get_resolver();
         let ll = self.ll.get();
@@ -904,7 +950,7 @@ impl Emitter{
           resolver.err(expr, "internal err no macro");
         }
         let res = self.visit_block(&info.unwrap().block);
-        if(res.is_some()) return res.unwrap();
+        if(res.is_some()) return self.track_result_temp(expr, res.unwrap());
         return ptr::null<Value>();
     }
 
@@ -944,7 +990,7 @@ impl Emitter{
       if(mac.is_some()){
         let res = self.visit_block(&mac.unwrap().block);
         if(res.is_some()){
-          return res.unwrap();
+          return self.track_result_temp(expr, res.unwrap());
         }
         return ptr::null<Value>();
       }
@@ -955,7 +1001,7 @@ impl Emitter{
       }
       if(Utils::is_call(mc, "std", "print_type")){
         let info = resolver.format_map.get(&expr.id).unwrap();
-        return self.visit_block(&info.block).unwrap();
+        return self.track_result_temp(expr, self.visit_block(&info.block).unwrap());
       }
       if(Utils::is_call(mc, "Drop", "drop")){
         let argt = self.getType(mc.args.get(0));
@@ -1003,7 +1049,7 @@ impl Emitter{
       if(Resolver::is_format(mc)){
         let info = resolver.format_map.get(&expr.id).unwrap();
         let res = self.visit_block(&info.block);
-        return res.unwrap();
+        return self.track_result_temp(expr, res.unwrap());
       }
       if(mc.name.eq("malloc") && mc.scope.is_none()){
         let i64_ty = Type::new("i64");

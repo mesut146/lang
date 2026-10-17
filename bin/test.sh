@@ -201,6 +201,32 @@ opt_all(){
   echo "opt: pass"
 }
 
+#valgrind leak gate: raw malloc leaks the drop-count tracker cannot see
+#(discarded format()/`?` buffers, Box::unwrap storage). Each
+#tests/leak/*.x must run with zero definite/indirect bytes at exit.
+#Needs valgrind; skips loudly (does not fail) when it is not installed.
+leak_all(){
+  if ! command -v valgrind > /dev/null 2>&1; then
+    echo "leak: SKIP (valgrind not installed)"; return 0
+  fi
+  $dir/build_std.sh $compiler $out_dir || exit 1
+  LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
+  for f in $testd/leak/*.x; do
+    [ -f "$f" ] || continue
+    base=$(basename $f)
+    run "$compiler c -out $out_dir -stdpath $stdpath -flags $LIB_STD $f" || exit 1
+    if ! valgrind -q --error-exitcode=99 --leak-check=full \
+         --errors-for-leak-kinds=definite,indirect \
+         $out_dir/$base > /dev/null 2>&1; then
+      echo "LEAK: $f"
+      valgrind -q --leak-check=full --errors-for-leak-kinds=definite,indirect \
+        $out_dir/$base
+      exit 1
+    fi
+  done
+  echo "leak: pass"
+}
+
 #vararg (C interop): tests/vararg/vararg.x + tests/vararg/main.c
 vararg_all(){
   run "$compiler c -nolink -cache -out $out_dir -stdpath $stdpath $testd/vararg/vararg.x" || exit 1
@@ -233,12 +259,15 @@ elif [ "$pat" == "fmt" ]; then
   fmt_all
 elif [ "$pat" == "opt" ]; then
   opt_all
+elif [ "$pat" == "leak" ]; then
+  leak_all
 elif [ "$pat" == "all" ]; then
   normal
   fmt_all
   debug_all
   std_all
   own_all
+  leak_all
   vararg_all
   inc_all
   opt_all

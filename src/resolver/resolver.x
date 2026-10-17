@@ -139,10 +139,15 @@ impl Clone for VarHolder{
 
 struct FormatInfo {
   block: Block;
+  //Result type of the macro (format: the resolved String from the block's
+  //final unwrap; `?`: the payload type). Recorded here because the macro
+  //call's own RType is a bare, decl-less placeholder the emitter cannot
+  //resolve when a discarded result must drop.
+  rt: RType;
 }
 impl FormatInfo{
   func new(line: i32): FormatInfo{
-    return FormatInfo{block: Block::new(line, line)};
+    return FormatInfo{block: Block::new(line, line), rt: RType::new("void")};
   }
 }
 
@@ -3614,6 +3619,9 @@ impl Resolver{
     let expr_str = format("match {:?}{{\n{result_ty}::Ok(ok{expr.id})=>ok{expr.id},{result_ty}::Err(err{expr.id})=>{}\n}", inner, err_str.get());
     info.block.return_expr.set(parse_expr(expr_str, &self.unit, expr.line));
     self.visit_block(&info.block);
+    //the emitter needs the resolved payload type to drop a discarded `?`
+    //result (the `?` node's own RType is not consulted by drop_obj).
+    info.rt = self.visit_type(ok_type);
     self.format_map.add(expr.id, info);
     return self.visit_type(ok_type);
 
