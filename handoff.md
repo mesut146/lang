@@ -119,6 +119,32 @@ Ownership only — no Rust-like borrows:
   valgrind compile SIGBUSes (environment), so use the `src/std` module
   compile for compiler-internal measurements.
 
+- Parallel compile + Any drop glue (2026-10-17, on `own-leak-jobs`): two
+  pre-existing `-j` bugs (both in v1.15), both fixed. (a) every `-j`
+  build failed: the job runner closed each child with `eat_close`
+  (pclose) without draining its stdout, and glibc pclose closes the read
+  end before waitpid, so the child -- always printing "compiling ..." --
+  died with SIGPIPE -> "failed to compile" + exit(1). A bare C
+  `popen("echo hi","r"); pclose(f)` reproduces (rc=13); every other
+  Process::run site already used `read_close()`. (b) the job arg then
+  leaked: `CompileArgs` (owns `file: String`) is boxed into an `Any`,
+  whose auto-drop is type-erased, so the file clone leaked per job
+  (valgrind `-j 4` parent: 81 B / 3 blocks at `String::clone <-
+  compile_dir_thread`; 0 after). Fix for (b): `Any` now carries a per-T
+  `drop_f: func(i8*) => void`; the language cannot materialize T's glue
+  at a generic site (generic fn/method refs and generic lambdas are all
+  rejected -- verified), so the constructing site hands it in:
+  `Any::new<T>(v, glue)`, `Worker::add_arg_heap<T>`, and the compiler's
+  `release_compile_args`. `Any::new<T>(v)` keeps a no-op glue
+  (`drop2<T>` still manual). Tests: `inc_all` now also builds
+  `tests/incremental_test` with `-j 4` (fails pre-fix);
+  `tests/own/23jobarg.x` (A-tracker: boxed arg drops once) and
+  `tests/leak/any_payload.x` (valgrind: payload String freed) fail to
+  compile pre-fix. Triangle S1!=S2 (v1.15 codegen differs), S2==S3;
+  full suite green on S1 and S3 (`normal pass=63 xpass=0`, fmt/leak/opt
+  pass); the `-j 4` parent and the `src/std` module compile are
+  valgrind-clean (LLVM-internal roots only).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: none open as of db58ca6 (see doc/ownership.txt
