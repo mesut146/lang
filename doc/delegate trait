@@ -1,3 +1,17 @@
+status: CLOSED (user, 2026-10-18) -- not planned. The derive would only
+generate the 4-line manual `impl Debug` shown below, and still needs the
+trait (and usually an explicit `impl MyDebugTrait for A`) written by hand,
+so total code grows where it is used. `{::TraitName}` (the custom printer)
+already covers custom formatting at the call site. The one effect it has
+that `{::Trait}` does not: it redirects *all* Debug formatting for the type
+(panic messages, std containers), silently. The syntax also forces a
+same-unit lookup of the trait just to learn the delegate method's name.
+Revisit only in the inverted form -- `#derive(Hex)` deriving a user printer
+trait with the standard field dump, so `{::Hex}` works on every opted-in
+type without hand-written formatters. Today
+`#derive(Debug = MyDebugTrait)` panics "derive expr Debug = MyDebugTrait".
+See handoff.md "Known open holes".
+
 #derive(Debug = MyDebugTrait)
 struct A{}
 

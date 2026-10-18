@@ -465,8 +465,19 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
 - `impl E::A{ .. }` (impl on an enum variant, doc/enum_var_type) fails with
   `invalid field E*.x`; the doc's `A(a: i32, b: str)` variant syntax is not
   what is implemented (variants are comma-separated with `{}` fields).
-- `#derive(Debug = SomeTrait)` delegation (doc/delegate trait) is
-  unsupported: panics "derive expr Debug = MyDebugTrait".
+- `#derive(Debug = SomeTrait)` delegation (doc/delegate trait): CLOSED, not
+  planned (user, 2026-10-18). It would generate exactly the 4-line
+  `impl Debug for P{ func debug(self, f){ Trait::m(self, f); } }` that can
+  be written by hand, while still needing the trait (and usually its manual
+  impl) written by hand; `{::Trait}` (the custom printer above) already
+  covers custom formatting at the call site. Its one unique effect would be
+  silently redirecting *all* Debug formatting for a type (panic messages,
+  std containers) -- a surprising thing to hide in an attribute -- and the
+  doc syntax would force a same-unit trait lookup just to learn the
+  delegate method's name. If ever revisited, prefer the inverted form:
+  `#derive(Hex)` deriving a *user* printer trait with the standard field
+  dump, so `{::Hex}` works on every opted-in type without hand-written
+  formatters. Today it still panics "derive expr Debug = MyDebugTrait".
 - `//trim debug paths?`: panic messages embed absolute source paths
   (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
 
