@@ -2,8 +2,9 @@
 
 Date: 2026-10-18. Main: `3105e7f` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
-`3105e7f`) + custom printer `{::Trait}` (this branch). v1.17 released at
-`92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
+`3105e7f`) + custom printer `{::Trait}` and trait-aware method mangling
+(this branch). v1.17 released at `92e3875`; next release v1.18 bootstraps
+from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -376,16 +377,46 @@ Ownership only — no Rust-like borrows:
   custom printers in one string, `print` call + `print!` macro, asserts the
   rendered text) and tests/fail/custom_printer_no_impl.x /
   custom_printer_empty.x (both parse-panic pre-fix, so the harness message
-  check is what fails there). LIMITATION, pre-existing and found while
-  testing this: `{::Trait}` is only reliable while the receiver type has no
-  other `fmt` impl, because an explicit trait-qualified call does not
-  disambiguate by trait -- see the open-holes note. A derived/other `Debug`
-  is fine (`debug` is a different name), which is the expected shape
-  (`#derive(Debug)` + a custom `fmt` trait works).
+  check is what fails there). The placeholder is only reliable while the
+  receiver type has no other `fmt` impl -- that used to be a hard limit
+  because an explicit trait-qualified call did not disambiguate by trait;
+  the mangling fix in the next entry closes it, so `{::Hex}` now works on a
+  type that also implements Display (extended test above).
   Gates: full suite green on the self-hosted binary (`normal pass=79`,
   fmt/opt pass, std gate includes the new test; leak self-skips, no
   valgrind here), triangle byte-identical (A built by the cyclic-fix
   compiler, B built by A, `cmp` clean; A != previous main).
+
+- Trait impl methods carry their trait in the mangled name (2026-10-18,
+  same branch, closes the hole the entry above ran into): `mangle` built
+  `<impl type>__<name>_<self>_<params>` and ignored the impl's trait, so
+  two traits handing one type the same method name and signature
+  (`impl Display for P{ func fmt }` + `impl Hex for P{ func fmt }`, or a
+  trait method vs an inherent one) produced *one* symbol. LLVM then kept a
+  single function and the second body was emitted as an unreachable block
+  (`entry1`) inside the first, so every call -- `Hex::fmt(&p, &f)`,
+  `{}`/`{::Hex}`, `p.fmt(&f)` -- ran whichever impl was declared first.
+  The resolver had picked the right candidate all along (`is_same` filters
+  by trait; `get_impl`'s trait scope path is fine), so this was purely a
+  symbol collision, not a resolution bug: the debug run showed one
+  candidate per call and one `define` with two `entry` blocks. `mangle`
+  now inserts the trait name when the method's impl has one
+  (`P__Display__fmt_P$P_Fmt$P`). Inherent impls, trait default methods and
+  extern methods mangle exactly as before, and cross-unit calls stay
+  consistent because the trait name is stable across units (an impl idx
+  would not be). Tests: tests/std_test/34-trait-method-symbols.x (two
+  traits, same method name for one type, `A::tag`/`B::tag` dispatch) and
+  the extended tests/std_test/33-custom-printer.x (P implements Display
+  *and* the custom Hex, `{}`/`{::Hex}`/`{:?}` mixed in one string);
+  pre-fix 34's `tag_b` returns "A" and 33's first assert fails, so both
+  are genuine regression guards.
+  ABI note: every trait-impl method symbol moves, so `-cache` objects from
+  an older compiler no longer link -- wipe the out dirs (the suite rebuilds
+  std itself; I wiped test_out/std_out/ast_out/fmt_out/test_opt_out).
+  Triangle: A (built by the pre-fix compiler) != B (built by A) is
+  *expected* here, because A's own trait-impl methods carry the old names;
+  B == C (built by B) is the fixpoint, byte-identical. Full suite green on
+  the fixpoint binary (`normal pass=79`, fmt/opt pass, leak self-skips).
 
 ## Known open holes (documented, not yet solved)
 
@@ -407,19 +438,16 @@ Compile gaps (pre-existing, not yet fixed):
   total (`DropHelper::active`) and the validator reports `cyclic type S`
   cleanly; see the cyclic-type entry above.
   Non-self-referential arrays/tuples as fields work (owner entry above).
-- Explicit trait-qualified method calls (`Trait::method(x, ..)`) pick the
-  *first-declared* impl of that method name for the receiver's type instead
-  of filtering by the named trait. Pre-existing (v1.17 reproduces): with
-  `impl Display for P{ func fmt(self, f: Fmt*){} }` declared before
-  `impl Hex for P{ func fmt(self, f: Fmt*){} }`, a direct
-  `Hex::fmt(&p, &f);` in main runs Display's body, and `print("{}", p)`
-  likewise runs whichever came first. Found while adding the `{::Trait}`
-  custom printer, which generates exactly that call (see the entry above),
-  and it bounds that feature: the placeholder is only reliable for a type
-  that has no other `fmt` impl. `trait_matches` (method_resolver.x:1117)
-  and `get_impl(sig, ..)`'s `sig.scope.is_trait()` branch already exist, so
-  the filter is either not reached or lost for this shape -- diagnose
-  before changing (the `{::Trait}` probe above is a ready repro).
+- (fixed 2026-10-18) Explicit trait-qualified method calls
+  (`Trait::method(x, ..)`) picked the *first-declared* impl of that method
+  name for the receiver's type instead of the named trait: with
+  `impl Display for P{ func fmt }` declared before `impl Hex for P{ func
+  fmt }`, `Hex::fmt(&p, &f)` ran Display's body (and `{}` ran whichever came
+  first). Root cause was the symbol, not the resolver: `mangle` omitted the
+  trait, so both impls shared one symbol and the second body became an
+  unreachable block. `mangle` now includes the trait; see the entry above
+  and tests/std_test/34-trait-method-symbols.x. Found while adding the
+  `{::Trait}` custom printer, which generates exactly that call.
 - Array-element places *are* tracked now (constant index into a local
   array; see the owner entry above), so `arr[i] = v` no longer leaks and
   `send(arr[0])` works. What stays refused, with a clean error, is any
