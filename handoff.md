@@ -1,8 +1,9 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `681a8cc` + place use-after-move (`163359c`, docs
-`f478e0e`) + cyclic-type fix (this branch). v1.17 released at `92e3875`;
-next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
+Date: 2026-10-18. Main: `3105e7f` (owns `681a8cc` array places, place
+use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
+`3105e7f`) + custom printer `{::Trait}` (this branch). v1.17 released at
+`92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -357,6 +358,35 @@ Ownership only — no Rust-like borrows:
   installed in this environment), triangle byte-identical (A built by the
   pre-fix main compiler, B built by A, `cmp` clean; A != pre-fix main).
 
+- Custom printer placeholders (2026-10-18, same branch, doc/todo item
+  "inside format macro, call custom printer"): `{::TraitName}` in a format
+  string now calls `TraitName::fmt(<arg>, &f)` instead of `Display::fmt` /
+  `Debug::debug`, so a user trait with `func fmt(self, f: Fmt*)` prints a
+  value its own way. Both `generate_format` copies grew the case (the
+  `Call*` one behind `print`/`format`/`panic` and the `MacroCall*` one
+  behind `print!`/`format!`/`panic!`); `func_name` became a `String` so the
+  name can be built. The placeholder is positional like `{}` (it consumes
+  the next call argument) and mixes freely with `{}`, `{:?}` and named
+  args; `{::}` is a clean "invalid format custom printer" (pre-fix the name
+  was taken as a named-argument expression and the parser died on the
+  leading `::`, "invalid expr Token{value: '::'}", for *every* `{::...}`),
+  and an unknown trait / missing impl goes through ordinary method
+  resolution ("no such method Hex::fmt(P*, Fmt*)"). Tests:
+  tests/std_test/33-custom-printer.x (positive: mixed placeholders, two
+  custom printers in one string, `print` call + `print!` macro, asserts the
+  rendered text) and tests/fail/custom_printer_no_impl.x /
+  custom_printer_empty.x (both parse-panic pre-fix, so the harness message
+  check is what fails there). LIMITATION, pre-existing and found while
+  testing this: `{::Trait}` is only reliable while the receiver type has no
+  other `fmt` impl, because an explicit trait-qualified call does not
+  disambiguate by trait -- see the open-holes note. A derived/other `Debug`
+  is fine (`debug` is a different name), which is the expected shape
+  (`#derive(Debug)` + a custom `fmt` trait works).
+  Gates: full suite green on the self-hosted binary (`normal pass=79`,
+  fmt/opt pass, std gate includes the new test; leak self-skips, no
+  valgrind here), triangle byte-identical (A built by the cyclic-fix
+  compiler, B built by A, `cmp` clean; A != previous main).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -377,6 +407,19 @@ Compile gaps (pre-existing, not yet fixed):
   total (`DropHelper::active`) and the validator reports `cyclic type S`
   cleanly; see the cyclic-type entry above.
   Non-self-referential arrays/tuples as fields work (owner entry above).
+- Explicit trait-qualified method calls (`Trait::method(x, ..)`) pick the
+  *first-declared* impl of that method name for the receiver's type instead
+  of filtering by the named trait. Pre-existing (v1.17 reproduces): with
+  `impl Display for P{ func fmt(self, f: Fmt*){} }` declared before
+  `impl Hex for P{ func fmt(self, f: Fmt*){} }`, a direct
+  `Hex::fmt(&p, &f);` in main runs Display's body, and `print("{}", p)`
+  likewise runs whichever came first. Found while adding the `{::Trait}`
+  custom printer, which generates exactly that call (see the entry above),
+  and it bounds that feature: the placeholder is only reliable for a type
+  that has no other `fmt` impl. `trait_matches` (method_resolver.x:1117)
+  and `get_impl(sig, ..)`'s `sig.scope.is_trait()` branch already exist, so
+  the filter is either not reached or lost for this shape -- diagnose
+  before changing (the `{::Trait}` probe above is a ready repro).
 - Array-element places *are* tracked now (constant index into a local
   array; see the owner entry above), so `arr[i] = v` no longer leaks and
   `send(arr[0])` works. What stays refused, with a clean error, is any
@@ -442,6 +485,10 @@ Compile gaps (pre-existing, not yet fixed):
 - Pod memory limit is 16GB (`oom_kill` counter provable); full-module
   builds flakily OOM — retry (cache resumes), never parallel builds.
 - `test.txt` (untracked) regenerates itself; leave it.
+- Dev compiler builds must use a unique `<name>_out`: `bin/build_formatter.sh`
+  owns `build/fmt_out` and `cache_env.sh` wipes it on a flag-signature
+  mismatch, which silently deletes your compiler mid-suite (`build/cprint_out`,
+  `build/dev_out` etc. are safe).
 - `20_worker` is timing-sensitive; validate with repeated runs.
 - Method-call turbofish works, including runtime (`to_list<i32>(41)`
   probed green on v1.15).
