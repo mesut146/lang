@@ -392,9 +392,10 @@ Lesson: error paths need the same termination scrutiny as main paths;
 a fail-test pins each newly loud error.
 
 Todo probes (v1.15, re-probed 2026-10-18 on the mangle-fix compiler):
-macro: slice 1 landed 2026-10-18 (`macro name(p: Expr){...}` + `name!(...)`,
-`Expr` syntax slots, statement + expression position, unit-local; value/typed
-parameters and token streams still open); |args| lambdas work, `=>` closures
+macro: slices 1+2 landed 2026-10-18 (`macro name(p: Expr, n: i32){...}` +
+`name!(...)`: `Expr` syntax slots and typed value parameters, statement +
+expression position, looked up by bare name in the unit and in imported units;
+token streams and hygiene still open); |args| lambdas work, `=>` closures
 and true capture don't
 (`(a: i32): i32 => {` parses as a tuple expression and dies on `:`);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it

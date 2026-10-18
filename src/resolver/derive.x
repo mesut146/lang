@@ -607,18 +607,34 @@ func is_builtin_macro_name(name: str): bool{
 
 const MAX_MACRO_DEPTH: i32 = 64;
 
-//`name!(a, b)` where `name` is a unit-local `macro name(p1: Expr, p2: Expr)`.
-//Expanded per call site into a block: the macro body with every reference to a
-//parameter replaced by a copy of the matching argument expression. AstCopier
-//re-issues node ids, so two calls of one macro -- and two uses of one argument
-//-- never share nodes; a twice-used argument is evaluated twice, which the
-//ownership pass reports as a use-after-move when it moves. The block is then
-//resolved like any other generated code and the emitter picks it up through
-//format_map, the same channel the builtin macros use. A trailing expression in
-//the body makes the macro an expression macro of the inferred result type.
+//`Expr` is the syntax-slot marker: a parameter declared with it is replaced by
+//a copy of the argument at every use. Any other declared type makes it a value
+//parameter (see expand_user_macro).
+func is_expr_param(prm: MacroParam*): bool{
+    return prm.type.is_some() && prm.type.get().print().eq("Expr");
+}
+
+//`name!(a, b)` where `name` is a `macro name(p1: Expr, p2: i32)` (own unit or
+//an imported one). Expanded per call site into a block:
+//- each *value* parameter (`p: i32`) is bound once, in declaration order, by
+//  `let p: i32 = <arg>;` at the top of the expansion: typed, evaluated once,
+//  and the argument resolves in the caller's scope (so a body local cannot
+//  capture it). The binding gets a fresh name because x has no shadowing --
+//  binding the parameter's own name would collide with a live variable at the
+//  call site, often the very argument (`take!(s)`) -- so the body's references
+//  are renamed to the fresh name (rename_map);
+//- each `Expr` parameter is a syntax slot: every reference to it in the body is
+//  replaced by a copy of the argument expression (a twice-used argument is
+//  evaluated twice, which the ownership pass reports as a use-after-move when
+//  it moves).
+//AstCopier re-issues node ids, so two calls of one macro -- and two uses of one
+//argument -- never share nodes. The block is then resolved like any other
+//generated code and the emitter picks it up through format_map, the same
+//channel the builtin macros use. A trailing expression in the body makes the
+//macro an expression macro of the inferred result type.
 func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*): RType{
     if(call.scope.is_some()){
-        r.err(node, format!("macro '{}' is unit-local, not scoped", mac.name));
+        r.err(node, format!("macro '{}' must be called unqualified", mac.name));
     }
     if(call.args.len() != mac.params.len()){
         r.err(node, format!("macro {} expects {} args, got {}", mac.name, mac.params.len(), call.args.len()));
@@ -627,17 +643,36 @@ func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*)
         r.err(node, format!("macro expansion too deep (recursive macro {})", mac.name));
     }
     let args = HashMap<String, Expr*>::new();
+    let renames = HashMap<String, String>::new();
+    let info = FormatInfo::new(node.line);
     for(let i = 0;i < call.args.len();++i){
-        args.add(mac.params.get(i).name.clone(), call.args.get(i));
+        let prm = mac.params.get(i);
+        if(is_expr_param(prm)){
+            args.add(prm.name.clone(), call.args.get(i));
+        }else{
+            //value parameter: bound once, in declaration order, with its
+            //declared type. The binding keeps the parameter's name when that
+            //name is free at the call site; otherwise (x has no shadowing, and
+            //the argument is often a variable of the same name: `take!(s)`) it
+            //is bound under a fresh name and the body's references are renamed.
+            let bind_name = if(r.has_live_name(&prm.name)){ format!("{}_{}", prm.name, node.id) } else { prm.name.clone() };
+            if(!bind_name.eq(&prm.name)){
+                renames.add(prm.name.clone(), bind_name.clone());
+            }
+            let bind = format!("let {}: {} = {:?};", bind_name, prm.type.get().print(), call.args.get(i));
+            info.block.list.add(parse_stmt(bind, &r.unit, node.line));
+        }
     }
     let types = HashMap<String, Type>::new();
-    let copier = AstCopier::new(&types, &r.unit, args);
-    let info = FormatInfo::new(node.line);
+    let copier = AstCopier::new(&types, &r.unit, args, renames);
     for st in &mac.body.list{
         info.block.list.add(copier.visit(st));
     }
     if(mac.body.return_expr.is_some()){
         info.block.return_expr.set(copier.visit(mac.body.return_expr.get()));
+    }
+    if(copier.param_decl.is_some()){
+        r.err(node, format!("macro {}: body declares `{}`, which is a parameter", mac.name, copier.param_decl.get()));
     }
     r.newScope();
     r.macro_depth += 1;

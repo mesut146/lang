@@ -1,4 +1,6 @@
-// should-fail: is unit-local, not scoped
+// should-fail: must be called unqualified
+//macros are looked up by bare name (own unit, then imports); a scoped call
+//still has no meaning
 mod t{
     macro m(x: Expr){
         x;

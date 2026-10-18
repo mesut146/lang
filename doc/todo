@@ -1,11 +1,13 @@
  
-//user macros slice 1 landed: `macro name(p: Expr){...}` + `name!(...)`, where
-//an `Expr` parameter is a syntax slot (body copied per call site, references
-//replaced by a copy of the argument). Statement + expression position,
-//unit-local.
-//still open: value/typed parameters, token streams (resolver/macros.x stub),
-//macros defined in another unit (`use`/imports), hygiene (a body local can
-//collide with a name at the call site; x has no shadowing at all)
+//user macros slice 2 landed: `macro name(p: Expr, n: i32){...}` + `name!(...)`
+//-- an `Expr` parameter is a syntax slot (each reference is replaced by a copy
+//of the argument, the body is copied per call site), any other declared type is
+//a value parameter (bound once, typed, at the top of the expansion). Statement
+//+ expression position; looked up by bare name in this unit, then in the units
+//it imports.
+//still open: token streams (resolver/macros.x stub), `use` aliases and scoped
+//calls (`m::name!(...)`), hygiene (an `Expr` body can capture call-site names,
+//and a body local named like an `Expr` parameter is refused)
 
 //closures
 let f = (a: i32, b: str): i32=>{
@@ -16,10 +18,8 @@ f();
 
 //match expr complex: match inside match (phi-node testing)
 
-//panic macro: `panic!(..)` itself is a builtin; what is still missing is a
-//user macro with a *value* parameter (typed params, see above)
-macro panic(e: Expr, s: String){
-}
+//panic macro: a user macro with a value parameter now works, but `panic` is a
+//reserved builtin macro name; the shape is e.g. `macro my_panic(e: Expr, s: str)`
 
 
 func to_list<E, T>(it: T): List<E>

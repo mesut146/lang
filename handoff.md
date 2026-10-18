@@ -1,11 +1,12 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `a0980fe` (owns `681a8cc` array places, place
+Date: 2026-10-18. Main: `28e2b07` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
-normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag
-forwarding) + user-defined macros slice 1 (this branch). v1.17 released at
+normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
+user-defined macros slice 1 `67f3962`/docs `28e2b07`) + user-defined macros
+slice 2 (this branch). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -27,7 +28,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = a0980fe)
+## What's in the tree (main = 28e2b07)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -587,6 +588,58 @@ Ownership only — no Rust-like borrows:
   Observed while validating, pre-existing and unrelated: `bin/build_lsp.sh`
   does not build on this tree (`visit_type failed for CmdArgs`, identical
   with this batch stashed); the lsp is not part of `bin/build.sh`/CI.
+
+- User-defined macros, slice 2: typed *value* parameters + macros across units
+  (2026-10-18). Slice 1 gave `Expr` slots (substitution); this one lands the
+  other half of the doc/todo shape:
+  - a parameter whose declared type is not `Expr` is a *value*: the expansion
+    starts with `let p: T = <arg>;` in declaration order, so the argument is
+    type-checked (`type mismatch i32 vs str` at the call line), evaluated
+    exactly once (`bind!(next())` runs `next` once even though the body reads
+    the parameter twice), and behaves like a local of the expansion: assigning
+    to it does not touch the caller, a move-type argument is moved into it (a
+    second call with the same variable is the ordinary use-after-move error).
+    Both kinds mix freely (`macro build_h(v: Expr, extra: i32)`), which is the
+    `macro panic(e: Expr, s: String)` shape doc/todo sketched (under a
+    non-reserved name: `panic` itself is a builtin);
+  - x has *no shadowing* (`addScope` rejects any name live in any enclosing
+    scope), so a value binding cannot simply take the parameter's name -- the
+    argument is often a variable of that very name (`take!(s)`, the natural
+    spelling). `Resolver::has_live_name` decides: free name -> bind as-is,
+    otherwise bind `<name>_<call id>` and rename the body's references
+    (`AstCopier::rename_map`). An `Expr` parameter cannot be renamed that way
+    (its references are replaced by AST copies), so a body that *declares* a
+    parameter's name is now an error instead of silently referring to the
+    parameter (`macro m: body declares `x`, which is a parameter`); the check
+    sits in the copier's `Fragment`/`LambdaParam` visitors, so `for` and lambda
+    binders are covered too;
+  - macros are looked up through imports: `Resolver::find_macro` checks the
+    unit's own map first, then every resolver `get_resolvers()` returns (prelude
+    plus the units imported here). A hit in a foreign unit also copies that
+    unit's imports into `extra_imports` -- the same trick `add_used_decl` uses
+    for foreign generics -- so the copied body still resolves the names its own
+    unit could see, and no more: the caller must import the macro's unit for the
+    lookup to find it. `m::name!(...)` stays rejected ("must be called
+    unqualified"); `use` aliases for macros are still open;
+  - seeding also rejects duplicate *parameter* names now, and slice 1's
+    `Expr`-only definition-site check is gone (that fail test,
+    `macro_param_kind.x`, is replaced by `macro_value_type.x`).
+  Tests: `tests/normal/41-macro-value-params.x` (single evaluation via a
+  `static` call counter, an `Expr` slot writing through where a value parameter
+  does not, a parameter sharing the caller's name, an expression macro with
+  value parameters, a struct argument moving into the binding), four new
+  `tests/fail/macro_*.x` (type mismatch through a value parameter, duplicate
+  parameter, body declaring a parameter) plus the rewritten `macro_scoped_call`,
+  and `tests/fmt/macro.x`+`.expected` grew value parameters. The cross-unit case
+  lives in `tests/incremental_test/`: `macros.x` defines `build_h` whose body
+  uses `H`/`h_seven` from `mhelper.x` -- which `main.x` does *not* import -- so
+  the expansion only compiles through the foreign-imports step (`main.x` imports
+  `macros` and calls `build_h!(30, 5)`; the `inc` gate compiles the directory and
+  runs it).
+  Triangle: no ABI or content change for non-macro programs (the compiler defines
+  no macros itself), B == C byte-identical; full suite green on that binary
+  (`normal pass=91 xpass=0` = 79 + 2 normal + 10 fail, fmt/trace/path/opt pass,
+  leak self-skips).
 
 ## Known open holes (documented, not yet solved)
 

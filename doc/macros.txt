@@ -22,24 +22,37 @@ ptr::get(src: T*, index): T*;
 ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
 
-#user macros (slice 1, 2026-10-18)
-macro name(p1: Expr, p2: Expr){
+#user macros (slice 2, 2026-10-18)
+macro name(p1: Expr, p2: i32, p3: P){
     ...
 }
-name!(arg1, arg2);//statement or expression position
-//A parameter is a syntax slot: every reference to it in the body is replaced
-//by a copy of the argument expression, and the body is copied per call site,
-//so `macro swap(a: Expr, b: Expr){ let t = a; a = b; b = t; }` assigns through
-//its arguments. Only `Expr` parameters exist so far (typed/value parameters
-//and token streams are still open). A body ending in an expression makes the
-//macro an expression of the inferred type (`macro square(x: Expr){ x * x }`),
-//otherwise it is void.
+name!(arg1, arg2, arg3);//statement or expression position
+//Two parameter kinds, decided by the declared type:
+//- `Expr` is a *syntax slot*: every reference to it in the body is replaced by a
+//  copy of the argument expression, and the body is copied per call site, so
+//  `macro swap(a: Expr, b: Expr){ let t = a; a = b; b = t; }` assigns through
+//  its arguments (a twice-used argument is evaluated twice -- if it moves, that
+//  is a use-after-move error, not a silent double free);
+//- any other type is a *value* parameter: bound once, in declaration order and
+//  type-checked, by `let p: T = <arg>;` at the top of the expansion. It behaves
+//  like a local of the expansion (assigning to it does not touch the caller, a
+//  move type argument is moved into it) and it is evaluated even when the body
+//  does not mention it. Since x has no shadowing, the binding uses a fresh name
+//  when the parameter's name is already live at the call site, so `take!(s)`
+//  never collides; the body's references are renamed along with it.
+//A body ending in an expression makes the macro an expression of the inferred
+//type (`macro square(x: Expr){ x * x }`), otherwise it is void.
 //The expansion is a scope of its own, but there is no hygiene: a body local
-//named like a name at the call site collides (x has no shadowing at all), and
-//a twice-used argument is evaluated twice (if it moves, that is a use-after-
-//move error, not a silent double free). Macros are unit-local and looked up by
-//bare name; module-nested definitions are seeded the same way, `m::name!(...)`
-//is rejected and there can be only one `macro name` per unit.
+//named like an `Expr` parameter is rejected (it would silently refer to the
+//parameter), and a `Expr`-substituted body can capture a name from the call
+//site. Lookup is by bare name -- this unit's definitions first, then the units
+//it imports (so a macro defined in another file is visible when that file is
+//imported; a foreign body is resolved with the imports of its own unit), and
+//module-nested definitions are seeded flat. `m::name!(...)` is rejected, there
+//can be only one `macro name` per unit, parameter names must be unique and the
+//builtin names (`format`/`print`/`panic`/`debug_member`) are reserved.
+//Still open: token-stream macros (resolver/macros.x + TokenStream), `use`
+//aliases for macros, scoped calls, real hygiene.
 
 
 #env

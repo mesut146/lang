@@ -522,6 +522,18 @@ impl Resolver{
   func dropScope(self){
     let tmp = self.scopes.remove(self.scopes.len() - 1);
   }
+  //true when `name` is taken by a live local (x has no shadowing). Value
+  //parameter binding uses it: the binding must not collide with a name at the
+  //call site, which is why it falls back to a fresh name and a rename
+  //(expand_user_macro).
+  func has_live_name(self, name: String*): bool{
+    for scope in &self.scopes{
+      if(scope.find(name).is_some()){
+        return true;
+      }
+    }
+    return false;
+  }
   func addScope(self, name: String, type: RType, id: i32, kind: VarKind, line: i32){
     for scope in &self.scopes{
       if(scope.find(&name).is_some()){
@@ -539,6 +551,42 @@ impl Resolver{
   func get_unit(self, path: String*): Unit*{
     let r = self.ctx.create_resolver(path);
     return &r.unit;
+  }
+
+  //Macro lookup: this unit's own definitions first, then the units it imports
+  //(prelude included) -- one level, like the other name lookups. A hit in a
+  //foreign unit also pulls that unit's imports into extra_imports so the
+  //copied body can still name what its own unit could; the defining unit
+  //itself is already in scope, since that is how the macro was found.
+  func find_macro(self, name: String*): Option<Macro*>{
+    let own = self.macros.get(name);
+    if(own.is_some()){
+      return Option::new(*own.unwrap());
+    }
+    let list = self.get_resolvers();
+    for(let i = 0;i < list.len();++i){
+      let fr = *list.get(i);
+      let m = fr.macros.get(name);
+      if(m.is_some()){
+        for is in &fr.unit.imports{
+          self.add_extra_import(is);
+        }
+        return Option::new(*m.unwrap());
+      }
+    }
+    return Option<Macro*>::new();
+  }
+
+  //extra_imports is a dedup'd list of import statements (same shape as
+  //add_used_decl's copy loop); the resolvers cache is keyed on its length, so
+  //growing it makes the next lookup see the new units.
+  func add_extra_import(self, is: ImportStmt*){
+    for ex in &self.extra_imports{
+      if(ex.eq(is)){
+        return;
+      }
+    }
+    self.extra_imports.add(is.clone());
   }
 
   func get_resolvers(self): List<Resolver*>{
@@ -893,20 +941,24 @@ impl Resolver{
         }
       },
       Item::Macro(m) => {
-        //`macro name(p: Expr){...}`: slice 1 is unit-local (module-nested
-        //definitions are seeded under their bare name; no `use`/imports yet)
-        //and only supports `Expr` parameters, i.e. syntax slots that
-        //expand_user_macro substitutes with the argument expression.
+        //`macro name(p: Expr){...}`: a bare `Expr` parameter is a syntax slot
+        //substituted into the body per call site, any other type is a *value*
+        //parameter (bound once, typed, at the top of the expansion). Seeds a
+        //unit-local map; foreign macros are found through imports
+        //(see find_macro). Reserved names refused: the resolver expands those
+        //itself and the ownership pass keys on them.
         if(is_builtin_macro_name(m.name.str())){
           self.err(m.line, format!("macro name '{}' is reserved (builtin macro)", m.name));
         }
         if(self.macros.contains(&m.name)){
           self.err(m.line, format!("macro {} already defined", m.name));
         }
+        let prms = HashSet<String>::new();
         for prm in &m.params{
-          if(prm.type.is_none() || !prm.type.get().print().eq("Expr")){
-            self.err(prm.line, format("macro {}: parameter '{}' must be declared as `Expr`", m.name, prm.name));
+          if(prms.contains(&prm.name)){
+            self.err(prm.line, format!("macro {}: duplicate parameter {}", m.name, prm.name));
           }
+          prms.add(prm.name.clone());
         }
         self.macros.add(m.name.clone(), m);
       },
@@ -2940,10 +2992,11 @@ impl Resolver{
       generate_format(node, call, self);
       return RType::new("void");
     }
-    //user-defined `macro name(p: Expr){...}` (see expand_user_macro)
-    let mac = self.macros.get(&call.name);
+    //user-defined `macro name(p: Expr){...}` (see expand_user_macro); own
+    //definitions first, then the units this one imports
+    let mac = self.find_macro(&call.name);
     if(mac.is_some()){
-      return expand_user_macro(node, call, *mac.unwrap(), self);
+      return expand_user_macro(node, call, mac.unwrap(), self);
     }
     self.err(node, format!("unknown macro '{}'", call.name));
     return RType::new("void");

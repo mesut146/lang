@@ -9,24 +9,34 @@ struct AstCopier{
     type_map: HashMap<String, Type>*;
     unit: Option<Unit*>;
     //macro expansion: bare names listed here are replaced by a copy of the
-    //bound argument expression (expand_user_macro). Empty otherwise.
+    //bound argument expression (`Expr` parameters). Empty otherwise.
     expr_map: HashMap<String, Expr*>;
+    //macro expansion: value parameters are bound under a fresh name (x has no
+    //shadowing, so the parameter name itself would collide with any live
+    //variable at the call site); references to them in the body are renamed.
+    rename_map: HashMap<String, String>;
     //while copying a substituted argument: its names belong to the caller, so
-    //they must not be substituted again (params are often named like the args)
+    //they must not be substituted/renamed again (params are often named like
+    //the arguments)
     in_arg: bool;
+    //set while copying a macro body that *declares* a name one of the
+    //parameters already owns: x has no shadowing, so such a body would
+    //silently refer to the parameter (expand_user_macro reports it)
+    param_decl: Option<String>;
     //last_id: i32*;
 }
 
 impl AstCopier{
     func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), in_arg: false};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, param_decl: Option<String>::new()};
     }
     func new(type_map: HashMap<String, Type>*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), in_arg: false};
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, param_decl: Option<String>::new()};
     }
-    //macro expansion: same as new(), but `expr_map` names are substituted.
-    func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, in_arg: false};
+    //macro expansion: same as new(), but `expr_map` names are substituted with
+    //their argument and `rename_map` names are renamed.
+    func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>, rename_map: HashMap<String, String>): AstCopier{
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, param_decl: Option<String>::new()};
     }
 
     func clone<T>(node: T*, unit: Unit*): T{
@@ -269,6 +279,11 @@ impl AstCopier{
     
     func visit(self, node: Fragment*): Fragment{
       let id = self.node(node as Node*);
+      //a macro body that declares one of its own parameters' names would
+      //silently refer to the parameter (x has no shadowing): report instead
+      if(!self.in_arg && (self.expr_map.contains(&node.name) || self.rename_map.contains(&node.name))){
+        self.param_decl = Option::new(node.name.clone());
+      }
       return Fragment{.id, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
     }
 
@@ -337,6 +352,7 @@ impl AstCopier{
         //macro expansion: a bare name bound to an argument is replaced by a
         //copy of that argument (each reference copies: a twice-used argument
         //is evaluated twice, and the ownership pass diagnoses that if it moves)
+        let id = self.node(node as Node*);
         if(!self.in_arg){
             if let Expr::Name(name) = node{
                 let rep = self.expr_map.get(name);
@@ -346,9 +362,14 @@ impl AstCopier{
                     self.in_arg = false;
                     return res;
                 }
+                //value parameter: bound under a fresh name (see rename_map), so
+                //every reference in the body becomes that name
+                let renamed = self.rename_map.get(name);
+                if(renamed.is_some()){
+                    return Expr::Name{.id, renamed.unwrap().clone()};
+                }
             }
         }
-        let id = self.node(node as Node*);
         match node{
             Expr::Name(name) => return Expr::Name{.id, name.clone()},
             Expr::Call(mc) => return Expr::Call{.id, self.visit(mc)},
@@ -386,6 +407,11 @@ impl AstCopier{
     }
     func visit(self, node: LambdaParam*): LambdaParam{
         let id = self.node(node as Node*);
+        //same shadowing guard as Fragment: a lambda in a macro body cannot
+        //reuse a parameter's name as its own binder
+        if(!self.in_arg && (self.expr_map.contains(&node.name) || self.rename_map.contains(&node.name))){
+          self.param_decl = Option::new(node.name.clone());
+        }
         return LambdaParam{.id, type: self.visit_opt(&node.type), name: node.name.clone()};
         
     }
