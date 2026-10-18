@@ -174,6 +174,17 @@ impl Emitter{
     self.resolver = Option::new(resolv);//Resolver*
     let resolver = self.get_resolver();
     resolver.resolve_all();
+    if(self.config.stack_trace){
+      //genCode() below synthesizes `enter_frame("<sig> <path>:<line>")` for
+      //every method (see Emitter::enter_frame), whose argument is a `str`
+      //literal. Decl protos are demand-driven (resolver.used_types), so a unit
+      //that never mentions `str` has none, and the AllocHelper pass over the
+      //synthesized statement dies in mapType ("mapType2 str"). Record it
+      //before protos are built. add_used_decl (not used_types.add) so the
+      //decl's imports/drop glue come along, like any other used type.
+      let str_rt = resolver.visit_type(&Type::new("str"));
+      resolver.add_used_decl(resolver.get_decl(&str_rt).unwrap());
+    }
  
     self.ll = Option::new(LLVMInfo::new(name));
     self.di = Option::new(DebugInfo::new(self.config.debug, self.config.display_path(path).str(), self.ll.get()));

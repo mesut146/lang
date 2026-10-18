@@ -321,6 +321,15 @@ impl Compiler{
         cmd.append(" -remap-path-prefix ");
         cmd.append(remap);
     }
+    //Flags that change the emitted object must reach the child too, or a
+    //parallel build silently differs from a serial one: without -trace no
+    //frame calls are emitted, without -g no debug info.
+    if(config.stack_trace){
+        cmd.append(" -trace");
+    }
+    if(config.debug){
+        cmd.append(" -g");
+    }
     if(config.opt_level.is_some()){
       cmd.append(" ");
       cmd.append(config.opt_level.get());

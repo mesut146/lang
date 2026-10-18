@@ -480,9 +480,8 @@ Ownership only — no Rust-like borrows:
   `-remap-path-prefix $d=.` plus a `-g` DWARF check with `readelf`. Pre-fix
   red: the pre-fix compiler's object carries
   `.../path_all/bin/../src/prog.x:2` (verified against a pre-batch binary).
-  The `-trace` `enter_frame` string is trimmed too but cannot be gated:
-  `-trace` panics in codegen (`mapType2 str`) identically pre- and post-fix
-  (pre-existing, needs its own batch).
+  The `-trace` `enter_frame` string is trimmed too; it could not be gated
+  until the `mapType2 str` panic was fixed (next entry).
   Effect on the artifact: the pre-fix binary and the stage built *by* it carry
   748 `bin/../src` strings; the next stage (compiled by that one) carries 0 and
   swaps all 19 LLVM include paths for `/usr/include/...`.
@@ -497,8 +496,38 @@ Ownership only — no Rust-like borrows:
   (`normal pass=79 xpass=0`, fmt/path/opt pass, leak self-skips -- no valgrind
   here).
 
-## Known open holes (documented, not yet solved)
+- `-trace` was dead on arrival for any unit that never mentions `str`
+  (2026-10-18): the emitter synthesizes `enter_frame("<sig> <path>:<line>")`
+  per method in genCode(), and that argument is a `str` literal, which
+  AllocHelper allocates a slot for. Decl protos are demand-driven
+  (`resolver.used_types`), so a unit with no `str` of its own had no proto for
+  it and mapType2 panicked (`mapType2 str`, compiler_helper.x:365) before
+  emitting a single instruction. Reproduced on the minimal
+  `func main(){ let a = 2; }`: `assert` masks it (its expansion allocates a
+  `str` of its own), which is why the flag shipped broken unnoticed.
+  Fix: `Emitter::compile` marks `str` used when `-trace` is on, *before*
+  `createProtos()`, via `resolver.add_used_decl` rather than a raw
+  `used_types.add` so the decl's imports/drop glue come along like any other
+  used type. No protos change unless the flag is on.
+  Adjacent gap found while gating it: `-j` worker children are separate
+  compiler processes and inherited neither `-trace` nor `-g`, so a parallel
+  build silently emitted no frame calls (and no debug info);
+  `make_compile_job` now forwards both, next to the `-remap-path-prefix`
+  forwarding from the entry above.
+  Test: new `trace` gate (`bin/test.sh trace`, part of `all`). Two methods, no
+  own `str` and no `assert` (either would proto `str` and hide the bug), no
+  import/multi-unit: compiled with `-trace`, run, and both frames must print
+  with trimmed paths (`0 main() <abs>/prog.x:4`, `1 helper() ...:1`); then the
+  same program through `-j 2`, which is what catches the unforwarded flag.
+  Red pre-fix (the mapType2 panic aborts the compile).
+  Also verified by hand: `-g -trace`, `-trace` on a program that *does* use
+  `str`, and `-trace -j` over a real two-unit directory all run and print
+  frames. Triangle: no ABI or content change (nothing new is baked into the
+  compiler: the fix only affects `-trace` compilations), so the strict
+  B == C byte-identical holds, and the full suite is green on that binary
+  (`normal pass=79 xpass=0`, fmt/trace/path/opt pass, leak self-skips).
 
+## Known open holes (documented, not yet solved)
 Ownership residuals: place use-after-move is closed as of this batch (see
 doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow
 residual documented there: while a whole-var write's invalidation entry

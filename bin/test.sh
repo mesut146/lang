@@ -247,6 +247,44 @@ inc_all(){
   run "$out_dir/inc_j/incremental_test" || exit 1
 }
 
+#-trace frame instrumentation (std/rt.x call_stack): the emitter synthesizes
+#`enter_frame("<sig> <path>:<line>")` per method, i.e. it passes a `str`
+#literal. Decl protos are demand-driven (resolver.used_types), so a unit that
+#never mentions `str` used to die in mapType ("mapType2 str") before emitting
+#anything -- the program below deliberately has no other str and no `assert`
+#(the assert expansion allocates a str of its own, which masked the panic).
+#Also covers the link+run against the std frame runtime and the trimmed path
+#in the frame line.
+trace_all(){
+  d=$out_dir/trace_all
+  rm -rf $d
+  mkdir -p $d
+  d=$(readlink -f $d)
+  #two methods, no `assert` and no str use of its own (either would proto str)
+  printf 'func helper(){\n    print_frame();\n}\nfunc main(){\n    let a = 2;\n    helper();\n}\n' > $d/prog.x
+  $dir/build_std.sh $compiler $out_dir || exit 1
+  LIB_STD=$(cat "$dir/tmp.txt") && rm -rf "$dir/tmp.txt"
+  run "$compiler c -trace -out $d -stdpath $stdpath -flags $LIB_STD -o prog $d/prog.x" || exit 1
+  run "$d/prog > $d/out.txt" || { echo "TRACE-RUN-FAILED"; cat $d/out.txt; exit 1; }
+  #both frames: enter_frame ran for each method, with trimmed paths
+  grep -q "0 main() $d/prog.x:4" $d/out.txt \
+    || { echo "TRACE-FRAME-MISSING (main)"; cat $d/out.txt; exit 1; }
+  grep -q "1 helper() $d/prog.x:1" $d/out.txt \
+    || { echo "TRACE-FRAME-MISSING (helper)"; cat $d/out.txt; exit 1; }
+  #parallel: -j children are separate compiler processes, so the flag has to be
+  #forwarded (see make_compile_job) or the frame code vanishes silently
+  rm -rf $d/j $d/jout
+  mkdir -p $d/j
+  cp $d/prog.x $d/j/prog.x
+  printf 'func unused(){\n    let b = 3;\n}\n' > $d/j/other.x
+  run "$compiler c -trace -j 2 -out $d/jout -stdpath $stdpath -flags $LIB_STD -o prog $d/j" || exit 1
+  run "$d/jout/prog > $d/jout.txt" || { echo "TRACE-RUN-FAILED (-j)"; cat $d/jout.txt; exit 1; }
+  grep -q "1 helper() $d/j/prog.x:1" $d/jout.txt \
+    || { echo "TRACE-FRAME-MISSING (-j)"; cat $d/jout.txt; exit 1; }
+  echo "trace: pass"
+}
+
+
 #Source paths recorded in the output: `assert`/`panic` bake the unit path into
 #the object, diagnostics print it and -g puts it in DWARF. They must be
 #lexically normalized (`bin/../src/x.x` must not ship) and remappable with
@@ -317,6 +355,8 @@ elif [ "$pat" == "inc" ]; then
   inc_all
 elif [ "$pat" == "path" ]; then
   path_all
+elif [ "$pat" == "trace" ]; then
+  trace_all
 elif [ "$pat" == "fmt" ]; then
   fmt_all
 elif [ "$pat" == "opt" ]; then
@@ -327,6 +367,7 @@ elif [ "$pat" == "all" ]; then
   normal
   fmt_all
   debug_all
+  trace_all
   std_all
   own_all
   leak_all
