@@ -22,7 +22,7 @@ ptr::get(src: T*, index): T*;
 ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
 
-#user macros (slice 2, 2026-10-18)
+#user macros (slice 3, 2026-10-18)
 macro name(p1: Expr, p2: i32, p3: P){
     ...
 }
@@ -39,20 +39,26 @@ name!(arg1, arg2, arg3);//statement or expression position
 //  move type argument is moved into it) and it is evaluated even when the body
 //  does not mention it. Since x has no shadowing, the binding uses a fresh name
 //  when the parameter's name is already live at the call site, so `take!(s)`
-//  never collides; the body's references are renamed along with it.
+//  never collides.
+//Hygiene: the names the *body* declares are alpha-renamed per call site, so a
+//macro may use `t`, `i` or `res` whatever the caller has in scope, and a
+//substituted argument cannot be captured by a body local of the same name (a
+//body local may even reuse a parameter's name: from its declaration on the name
+//is the local, before it the parameter). Two limits: a name the body never
+//declares still resolves at the call site (macro-level capture, unchanged), and
+//a nested binder's spelling keeps its fresh name for the rest of the body (no
+//scope restore), so keep inner binder names distinct from outer uses.
 //A body ending in an expression makes the macro an expression of the inferred
 //type (`macro square(x: Expr){ x * x }`), otherwise it is void.
-//The expansion is a scope of its own, but there is no hygiene: a body local
-//named like an `Expr` parameter is rejected (it would silently refer to the
-//parameter), and a `Expr`-substituted body can capture a name from the call
-//site. Lookup is by bare name -- this unit's definitions first, then the units
-//it imports (so a macro defined in another file is visible when that file is
+//Lookup is by bare name -- this unit's definitions first, then the units it
+//imports (so a macro defined in another file is visible when that file is
 //imported; a foreign body is resolved with the imports of its own unit), and
 //module-nested definitions are seeded flat. `m::name!(...)` is rejected, there
 //can be only one `macro name` per unit, parameter names must be unique and the
 //builtin names (`format`/`print`/`panic`/`debug_member`) are reserved.
 //Still open: token-stream macros (resolver/macros.x + TokenStream), `use`
-//aliases for macros, scoped calls, real hygiene.
+//aliases for macros, scoped calls, and definition-site resolution of body names
+//(the capture above).
 
 
 #env

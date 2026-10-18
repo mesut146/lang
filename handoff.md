@@ -1,12 +1,12 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `28e2b07` (owns `681a8cc` array places, place
+Date: 2026-10-18. Main: `331e934` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
 normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
-user-defined macros slice 1 `67f3962`/docs `28e2b07`) + user-defined macros
-slice 2 (this branch). v1.17 released at
+user-defined macros slice 1 `67f3962`/docs `28e2b07` and slice 2 `331e934`) +
+macro hygiene, slice 3 (this branch). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -28,7 +28,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 28e2b07)
+## What's in the tree (main = 331e934)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -640,6 +640,41 @@ Ownership only — no Rust-like borrows:
   no macros itself), B == C byte-identical; full suite green on that binary
   (`normal pass=91 xpass=0` = 79 + 2 normal + 10 fail, fmt/trace/path/opt pass,
   leak self-skips).
+
+- User-defined macros, slice 3: hygiene for the names the body declares
+  (2026-10-18). A macro body is alpha-renamed per call site: `hygienic` mode on
+  `AstCopier` renames every binder the body declares -- `let`/`for` variables
+  (`Fragment`), for-each variables, lambda parameters, match/if-let bindings
+  (`ArgBind`) -- to `{name}_{call id}_{seq}`; `Expr::Name` references follow the
+  map, which is consulted *before* the parameter maps, so a body local that
+  reuses a parameter's name means the local from its declaration on and the
+  parameter before it. An unqualified `Call` whose callee names a body local (a
+  lambda in the body) is renamed too: callee names are plain strings, so a
+  renamed lambda would otherwise be unresolvable ("no such method f(i32)"); a
+  scoped call is a method lookup and is left alone, as is a callee the body does
+  not declare. Effect: a macro may use `t`, `i` or `res` whatever the call site
+  has in scope, and a substituted argument can no longer be captured by a body
+  local of the same name. Slice 2's "a body may not declare a parameter's name"
+  error -- and the copier's `param_decl` channel -- is gone with it (that body is
+  legal now), so `tests/fail/macro_param_shadow.x` is deleted and the case is
+  covered positively.
+  Limits, documented: the map is never restored when a nested scope ends (a
+  nested binder's spelling keeps its fresh name to the end of the body), and a
+  body name that is *not* declared still resolves at the call site -- the
+  capture doc/todo's macro proposal relies on; definition-site resolution would
+  be the real fix and stays open. Diagnostics inside an expansion print the
+  fresh names (the `assert` message text is the resolved AST, so `t` may read
+  `t_46_0`).
+  Tests: `tests/normal/42-macro-hygiene.x` -- a body local against a caller
+  variable; the argument itself named like a body local; the same spelling
+  declared twice in one body (`let i` plus the for's `let i`); a for-each
+  variable and a body local against caller names; a lambda parameter; a match
+  binding; a body local reusing a parameter's name; and one case pinning that an
+  undeclared body name still captures the call site. Pre-fix red: slice 2's
+  compiler reports `variable t already exists`.
+  Triangle: no ABI or content change for non-macro programs, B == C
+  byte-identical; full suite green (`normal pass=91 xpass=0`, fmt/trace/path/opt
+  pass, leak self-skips).
 
 ## Known open holes (documented, not yet solved)
 

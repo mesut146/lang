@@ -19,24 +19,42 @@ struct AstCopier{
     //they must not be substituted/renamed again (params are often named like
     //the arguments)
     in_arg: bool;
-    //set while copying a macro body that *declares* a name one of the
-    //parameters already owns: x has no shadowing, so such a body would
-    //silently refer to the parameter (expand_user_macro reports it)
-    param_decl: Option<String>;
+    //macro expansion (hygienic: true): names the *body* declares -- let/for
+    //variables, for-each and lambda parameters, match/if-let bindings -- are
+    //alpha-renamed per call site, so a body local can neither collide with nor
+    //capture a name at the call site. The map grows as declarations are copied:
+    //x has no shadowing, so anything copied before a declaration is a name from
+    //the call site and is left alone. Entries are never restored when a nested
+    //scope ends (the name keeps the last fresh spelling).
+    local_renames: HashMap<String, String>;
+    hygienic: bool;
+    //suffix for fresh names: the macro call's node id, unique per call, plus a
+    //per-declaration counter so one body may declare the same spelling twice
+    rename_id: i32;
+    rename_seq: i32;
     //last_id: i32*;
 }
 
 impl AstCopier{
     func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, param_decl: Option<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
     }
     func new(type_map: HashMap<String, Type>*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, param_decl: Option<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
     }
     //macro expansion: same as new(), but `expr_map` names are substituted with
     //their argument and `rename_map` names are renamed.
     func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>, rename_map: HashMap<String, String>): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, param_decl: Option<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
+    }
+
+    //hygienic rename of one name a macro body declares: the fresh spelling is
+    //returned and recorded, so references copied from here on follow it
+    func hygienic_name(self, name: String*): String{
+        let fresh = format!("{}_{}_{}", name, self.rename_id, self.rename_seq);
+        self.rename_seq += 1;
+        self.local_renames.add(name.clone(), fresh.clone());
+        return fresh;
     }
 
     func clone<T>(node: T*, unit: Unit*): T{
@@ -279,12 +297,14 @@ impl AstCopier{
     
     func visit(self, node: Fragment*): Fragment{
       let id = self.node(node as Node*);
-      //a macro body that declares one of its own parameters' names would
-      //silently refer to the parameter (x has no shadowing): report instead
-      if(!self.in_arg && (self.expr_map.contains(&node.name) || self.rename_map.contains(&node.name))){
-        self.param_decl = Option::new(node.name.clone());
+      //the initializer belongs to the enclosing scope, so it is copied before
+      //the name becomes the fresh one
+      let ty = self.visit_opt(&node.type);
+      let rhs = self.visit(&node.rhs);
+      if(self.hygienic && !self.in_arg){
+        return Fragment{.id, self.hygienic_name(&node.name), ty, rhs};
       }
-      return Fragment{.id, node.name.clone(), self.visit_opt(&node.type), self.visit(&node.rhs)};
+      return Fragment{.id, node.name.clone(), ty, rhs};
     }
 
     func visit(self, node: VarExpr*): VarExpr{
@@ -293,6 +313,10 @@ impl AstCopier{
 
     func visit(self, node: ArgBind*): ArgBind{
         let id = self.node(node as Node*);
+        //match/if-let bindings are binders, like Fragment
+        if(self.hygienic && !self.in_arg){
+            return ArgBind{.id, self.hygienic_name(&node.name)};
+        }
         return ArgBind{.id, node.name.clone()};
     }
     func visit(self, node: Body*): Body{
@@ -322,11 +346,18 @@ impl AstCopier{
                     body: self.visit_box(&fs.body),
                 }};
             },
-            Stmt::ForEach(fe) => return Stmt::ForEach{.id, ForEach{
-                var_name: fe.var_name.clone(),
-                rhs: self.visit(&fe.rhs),
-                body: self.visit(&fe.body)
-            }},
+            Stmt::ForEach(fe) => {
+                //the iterated expression is copied first: the loop variable
+                //comes into scope only for the body
+                let rhs = self.visit(&fe.rhs);
+                let vname = if(self.hygienic && !self.in_arg){ self.hygienic_name(&fe.var_name) } else { fe.var_name.clone() };
+                let body = self.visit(&fe.body);
+                return Stmt::ForEach{.id, ForEach{
+                    var_name: vname,
+                    rhs: rhs,
+                    body: body
+                }};
+            },
         }
     }
 
@@ -355,6 +386,12 @@ impl AstCopier{
         let id = self.node(node as Node*);
         if(!self.in_arg){
             if let Expr::Name(name) = node{
+                //a name the body itself declared (hygienic alpha-rename) wins
+                //over the parameter maps: it is the innermost binding
+                let local = self.local_renames.get(name);
+                if(local.is_some()){
+                    return Expr::Name{.id, local.unwrap().clone()};
+                }
                 let rep = self.expr_map.get(name);
                 if(rep.is_some()){
                     self.in_arg = true;
@@ -407,12 +444,11 @@ impl AstCopier{
     }
     func visit(self, node: LambdaParam*): LambdaParam{
         let id = self.node(node as Node*);
-        //same shadowing guard as Fragment: a lambda in a macro body cannot
-        //reuse a parameter's name as its own binder
-        if(!self.in_arg && (self.expr_map.contains(&node.name) || self.rename_map.contains(&node.name))){
-          self.param_decl = Option::new(node.name.clone());
+        let ty = self.visit_opt(&node.type);
+        if(self.hygienic && !self.in_arg){
+          return LambdaParam{.id, type: ty, name: self.hygienic_name(&node.name)};
         }
-        return LambdaParam{.id, type: self.visit_opt(&node.type), name: node.name.clone()};
+        return LambdaParam{.id, type: ty, name: node.name.clone()};
         
     }
     func visit(self, node: LambdaBody*): LambdaBody{
@@ -444,9 +480,20 @@ impl AstCopier{
     }
     
     func visit(self, node: Call*): Call{
+        let scope = self.visit_ptr(&node.scope);
+        let name = node.name.clone();
+        //an unqualified callee that the body declared is a local (a lambda):
+        //its name was alpha-renamed, so the call has to follow. A scoped call
+        //is a method lookup and a name that is not a body local is a function.
+        if(self.hygienic && !self.in_arg && scope.is_none()){
+            let local = self.local_renames.get(&node.name);
+            if(local.is_some()){
+                name = local.unwrap().clone();
+            }
+        }
         return Call{
-            scope: self.visit_ptr(&node.scope), 
-            name: node.name.clone(),
+            scope: scope, 
+            name: name,
             type_args: self.visit_list(&node.type_args), 
             args: self.visit_list(&node.args), 
             is_static: node.is_static

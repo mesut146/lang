@@ -619,14 +619,21 @@ func is_expr_param(prm: MacroParam*): bool{
 //- each *value* parameter (`p: i32`) is bound once, in declaration order, by
 //  `let p: i32 = <arg>;` at the top of the expansion: typed, evaluated once,
 //  and the argument resolves in the caller's scope (so a body local cannot
-//  capture it). The binding gets a fresh name because x has no shadowing --
-//  binding the parameter's own name would collide with a live variable at the
-//  call site, often the very argument (`take!(s)`) -- so the body's references
-//  are renamed to the fresh name (rename_map);
+//  capture it). When the parameter's own name is already live at the call site
+//  (x has no shadowing, and the argument is often a variable of that name:
+//  `take!(s)`) the binding takes a fresh name and the body's references are
+//  renamed with it (rename_map);
 //- each `Expr` parameter is a syntax slot: every reference to it in the body is
 //  replaced by a copy of the argument expression (a twice-used argument is
 //  evaluated twice, which the ownership pass reports as a use-after-move when
-//  it moves).
+//  it moves);
+//- the body is hygienic for the names *it* declares (`hygienic: true`): let/for
+//  variables, for-each and lambda parameters and match/if-let bindings are
+//  alpha-renamed per call site, so a macro may use `t`, `i` or `res` without
+//  colliding with the caller's variables, and a substituted argument cannot be
+//  captured by a body local of the same name. A body name that is *not*
+//  declared still resolves at the call site (that capture is unchanged); a
+//  nested binder's spelling keeps its fresh name to the end of the body.
 //AstCopier re-issues node ids, so two calls of one macro -- and two uses of one
 //argument -- never share nodes. The block is then resolved like any other
 //generated code and the emitter picks it up through format_map, the same
@@ -665,14 +672,14 @@ func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*)
     }
     let types = HashMap<String, Type>::new();
     let copier = AstCopier::new(&types, &r.unit, args, renames);
+    //hygienic: names the body declares are alpha-renamed per call site
+    copier.hygienic = true;
+    copier.rename_id = node.id;
     for st in &mac.body.list{
         info.block.list.add(copier.visit(st));
     }
     if(mac.body.return_expr.is_some()){
         info.block.return_expr.set(copier.visit(mac.body.return_expr.get()));
-    }
-    if(copier.param_decl.is_some()){
-        r.err(node, format!("macro {}: body declares `{}`, which is a parameter", mac.name, copier.param_decl.get()));
     }
     r.newScope();
     r.macro_depth += 1;

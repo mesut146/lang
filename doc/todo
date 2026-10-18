@@ -1,13 +1,14 @@
  
-//user macros slice 2 landed: `macro name(p: Expr, n: i32){...}` + `name!(...)`
+//user macros slice 3 landed: `macro name(p: Expr, n: i32){...}` + `name!(...)`
 //-- an `Expr` parameter is a syntax slot (each reference is replaced by a copy
 //of the argument, the body is copied per call site), any other declared type is
 //a value parameter (bound once, typed, at the top of the expansion). Statement
 //+ expression position; looked up by bare name in this unit, then in the units
-//it imports.
+//it imports; the names the body declares are alpha-renamed per call site, so a
+//body local can neither collide with nor capture a caller name.
 //still open: token streams (resolver/macros.x stub), `use` aliases and scoped
-//calls (`m::name!(...)`), hygiene (an `Expr` body can capture call-site names,
-//and a body local named like an `Expr` parameter is refused)
+//calls (`m::name!(...)`), and a body name that is never declared still resolves
+//at the call site (definition-site resolution)
 
 //closures
 let f = (a: i32, b: str): i32=>{
