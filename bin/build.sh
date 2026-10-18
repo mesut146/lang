@@ -72,6 +72,13 @@ $dir/../cpp_bridge/x.sh || exit 1
 bridge_lib=$dir/../cpp_bridge/build/libbridge.a
 
 build(){
+  # Link against this stage's own libraries only: `flags` used to accumulate,
+  # so the stage2 command passed stage1's objects (built by the previous
+  # release) *before* stage2's. That is invisible while the ABI is frozen,
+  # but any symbol change (e.g. trait-aware method mangling) makes the mixed
+  # link keep the old names for half the objects and fail with undefined
+  # references (`Rhs__drop_Rhs`).
+  flags=""
   $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
   
