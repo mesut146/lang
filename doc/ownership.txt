@@ -306,6 +306,15 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   that field twice (`A::drop 1` twice); it is now a clean "cannot move out
   of an array element" (`Own::do_move` refuses any index-rooted place that
   is not `Rhs::INDEX`).
+  DECISION (user, 2026-10-18, do not relitigate without asking): runtime
+  indices are deliberately NOT tracked. A static key -- local array name
+  + literal index -- is the boundary of place tracking; a "runtime index"
+  variant would force conservative whole-aggregate state through
+  `get_state`/`do_move`/`check_partial` for little gain, and the current
+  clean error is sound (the aggregate keeps owning the element). The
+  same boundary is why `for x in <array>` by value over a drop element
+  type stays an error (the slice iterator indexes with a runtime `idx`);
+  iterate by reference instead.
   Regression: tests/own/28arrassign.x (overwrite; field-of-element and
   nested cases), tests/own/29arrmove.x (moves), tests/normal/40-array-foreach.x,
   tests/fail/array_elem_move.x (dynamic index),

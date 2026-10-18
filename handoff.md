@@ -319,7 +319,10 @@ Compile gaps (pre-existing, not yet fixed):
   array; see the owner entry above), so `arr[i] = v` no longer leaks and
   `send(arr[0])` works. What stays refused, with a clean error, is any
   index place the state cannot name: a dynamic index, a slice, a pointer
-  base, a nested array, and a field of an element. One residual: writing
+  base, a nested array, and a field of an element. That refusal is now a
+  *closed decision* (user, 2026-10-18: no runtime-index place tracking --
+  a static name + literal index is the tracking boundary; do not
+  "fix" this without asking). One residual: writing
   into an element (or a field of one) after it was moved out is not
   diagnosed -- the stale value is not dropped (so no double free), but
   the new value can leak.
