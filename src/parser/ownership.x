@@ -1138,16 +1138,61 @@ impl Own{
         self.set_current(if_scope.parent);
     }
 
+    //base expression of a field place, descending nested field accesses
+    func place_root(self, e: Expr*): Expr*{
+        if let Expr::Access(scp, name) = e{
+            return self.place_root(scp.get());
+        }
+        return e;
+    }
+    //Assigning to a field of an owned temporary, `f().field = v`: the
+    //temporary is registered as an object and dropped at scope end, so its
+    //field is live by construction and the overwritten value must drop here
+    //too -- else the old value leaks. Walks field accesses down to the base
+    //expression and matches it against the registered temp objects (mirrors
+    //is_temp_scrutinee's scope walk). Other untracked bases (bare
+    //`ptr::deref!`, extern results) are left to the silent no-op below.
+    func drop_temp_field(self, lhs: Expr*, ptr: LLVMPtr, rhs: Rhs*){
+        let root = self.place_root(lhs);
+        let scope = self.get_scope();
+        while(true){
+            for obj in &scope.objects{
+                if(obj.expr.id == root.id){
+                    let okey = Rhs::new(obj.expr, self);
+                    if(self.get_state(&okey, scope).is_moved()){
+                        return;
+                    }
+                    if(print_drop_lhs){
+                        Logger::add(format("drop_lhs(temp field) {:?} line: {}\n", lhs, lhs.line));
+                    }
+                    if(drop_lhs_enabled){
+                        let rt = self.get_type(lhs);
+                        self.drop_force(&rt, ptr, lhs.line, rhs);
+                    }
+                    return;
+                }
+            }
+            if(scope.parent == -1){
+                break;
+            }
+            scope = self.get_scope(scope.parent);
+        }
+    }
     func drop_lhs(self, lhs: Expr*, ptr: LLVMPtr){
         if(!self.is_drop_type(lhs)){
             return;
         }
         let lhs2 = Rhs::new(lhs, self);
-        //untracked temps (field of a call result, deref of a call):
-        //no state exists and none can be built, so there is nothing to
-        //consult; such places keep their manual drops (if any) and this
-        //stays a silent no-op rather than a compiler panic.
+        //untracked base (field of a call result, deref of a call): no place
+        //state exists. A field of an owned temporary is the one case we can
+        //still own: the engine registers that temporary as an object, so the
+        //field is live and the overwritten value must drop. Everything else
+        //(bare `ptr::deref!`, extern results) keeps its manual drops (if
+        //any) and this stays a silent no-op rather than a compiler panic.
         if(lhs2 is Rhs::EXPR){
+            if(lhs is Expr::Access){
+                self.drop_temp_field(lhs, ptr, &lhs2);
+            }
             return;
         }
         //Unregistered named place: same robustness rule (today this only

@@ -160,9 +160,10 @@ Ownership only — no Rust-like borrows:
   exit path -- early `return`, and `return` from inside a loop
   (IR-proven: `String__drop_String` right before each `ret`) -- and
   drop-on-assign fires for `p.f = x` / `*p = x` on concrete, generic
-  and enum places (IR-proven). The one place form it does NOT cover is
-  an explicit deref member `ptr::deref!(p).f = x` (untracked -> leak);
-  none of the swept sites used it. The `Any` glue in
+  and enum places (IR-proven). The one place form it did not cover at
+  the time -- the explicit deref member `ptr::deref!(p).f = x`
+  (untracked -> leak) -- was closed right after (next entry); none of
+  the swept sites used it. The `Any` glue in
   `backend/compiler.x` (`release_compile_args`) stays -- type-erased,
   cannot be auto-dropped. Regression: tests/own/24ptrassign.x (pins
   pointer-field, pointer-deref, Map::add same-key, get_pair_or hit).
@@ -183,13 +184,44 @@ Ownership only — no Rust-like borrows:
   `deref_macro_move`. Full suite green on F1 and F3 (`normal pass=63
   xpass=0`, fmt/leak/opt pass); triangle F1==F2==F3 byte-identical.
 
+- Field of an owned temporary (2026-10-18, same branch): `f().field = v`
+  leaked the overwritten value -- `drop_lhs` bailed on any `Rhs::EXPR`
+  place (verified: probe `mk().s = format(..)` leaked the `String` built
+  in `mk`; valgrind 10 bytes definitely lost, no drop before the field
+  store). Fix: `drop_lhs` now recognizes a field of a registered temp
+  *object* -- an owned temporary the engine already drops at scope end.
+  `place_root` descends nested field accesses to the base and
+  `drop_temp_field` matches it against the scope's objects (mirrors
+  is_temp_scrutinee's walk); the field is live by construction, so the
+  old value drops at the assign while the temporary's own drop later
+  frees only the new value (exactly once). Other untracked bases (bare
+  `ptr::deref!` of an untracked place, extern results) keep the silent
+  no-op. Regression: tests/own/25tempassign.x (direct + nested; fails
+  pre-fix: assertion 0 != 1). Full suite green on FIX1/FIX3
+  (`normal pass=63 xpass=0`, fmt/leak/opt pass); triangle FIX1==FIX2==
+  FIX3 byte-identical.
+
 ## Known open holes (documented, not yet solved)
 
-Ownership residuals: none open as of 80f74e6 (see doc/ownership.txt
-ledger). Known and left untracked on purpose (leak = safe direction):
-field-of-call-result overwrites, `f().field = v` -- silent leak of the
-old value; no in-tree instance (src/ only assigns non-drop fields
-there). Open: language features (doc/todo).
+Ownership residuals: none open as of 54faa2f (see doc/ownership.txt
+ledger). Remaining deliberate silent no-ops: bare `ptr::deref!` of an
+untracked place, and `extern`/unsafe aliases (no body to check). Open:
+language features (doc/todo).
+
+Compile bugs (pre-existing, isolated 2026-10-18, not yet fixed):
+- `continue` inside a `for x in &list` loop whose body also contains a
+  `return` fails codegen: "Module verification failed! Terminator found
+  in the middle of a basic block". The C-style `for(let i=0;..)` form is
+  fine, and `continue` with no later `return` is fine. Repro:
+  `func f(items: List<i32>): i32{ for x in &items{ if(*x == 2){
+  continue; } return *x; } return 0; }`. Hit while compiling the
+  literal first draft of the temp-field fix above.
+- An array *literal* whose element type is a drop type (`[String::new(
+  "a"), ..]`, `[P{..}, ..]`) crashes the compiler: "unwrap on None"
+  (`Option<Decl*>::unwrap`, option.x:26). Arrays of non-drop types are
+  fine. So array elements of drop types are effectively unusable today
+  (which is why the temp-field fix covers field accesses only, not
+  array-element overwrites).
 
 ## Validation protocol (mandatory before merging to main)
 

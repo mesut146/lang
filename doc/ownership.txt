@@ -208,15 +208,22 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   tests/own/24ptrassign.x cases `deref_macro` (leaked pre-fix) and
   `deref_macro_move` (exactly once with heal). Full suite green on F1
   and F3; triangle F1==F2==F3 byte-identical.
-- Untracked place shapes (known, safe-direction): `drop_lhs` still
-  silently skips a field of a *call result*, `f().field = v` (and any
-  other `Rhs::EXPR` place), so the overwritten value leaks. Verified
-  with a probe: `mk().s = format(..)` leaks the `String` built in `mk`
-  (valgrind: 10 bytes definitely lost; IR has no drop before the field
-  store). No in-tree instance -- the four `call().field = v` uses in
-  src/ assign non-drop fields (i32; `Option<ptr>`). Left untracked on
-  purpose (a leak is the safe direction); closing it needs temp objects
-  in the place model (`Rhs` is VAR / FIELD-var / EXPR only).
+- Field of an owned temporary, `f().field = v` (2026-10-18, same
+  branch): `drop_lhs` bailed on any `Rhs::EXPR` place, so assigning to a
+  field of a call-result temporary leaked the overwritten value
+  (verified: probe `mk().s = format(..)` leaked the `String` built in
+  `mk`; valgrind 10 bytes definitely lost, no drop before the store).
+  Fix: `drop_lhs` now recognizes a field of a registered temp *object*
+  -- an owned temporary the engine already drops at scope end.
+  `place_root` descends nested field accesses to the base expression and
+  `drop_temp_field` matches it against the scope's objects (mirrors
+  is_temp_scrutinee's walk); the field is live by construction, so the
+  old value drops at the assign while the temporary's own drop later
+  frees only the new value (exactly once). Other untracked bases (bare
+  `ptr::deref!` of an untracked place, extern results) keep the silent
+  no-op. Regression: tests/own/25tempassign.x (direct + nested; fails
+  pre-fix: assertion 0 != 1). Full suite green on FIX1/FIX3; triangle
+  FIX1==FIX2==FIX3 byte-identical.
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet
