@@ -205,7 +205,7 @@ impl Own{
     }
     //register var & obj
     func is_drop_type(self, type: Type*): bool{
-        let helper = DropHelper{self.get_resolver()};
+        let helper = DropHelper::new(self.get_resolver());
         return helper.is_drop_type(type);
     }
     func is_drop_type(self, expr: Expr*): bool{

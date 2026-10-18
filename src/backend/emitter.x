@@ -550,7 +550,7 @@ impl Emitter{
   func get_drop_proto(self, rt: RType*): FunctionInfo{
     let resolver = self.get_resolver();
     let decl = resolver.get_decl(rt).unwrap();
-    let helper = DropHelper{resolver};
+    let helper = DropHelper::new(resolver);
     let method = helper.get_drop_method(rt);
     if(method.is_generic){
       panic("generic {:?}", rt.type);
@@ -572,7 +572,7 @@ impl Emitter{
     //constants, so unroll; that keeps this straight-line (no new basic
     //blocks, no interaction with the control flow of the statement being
     //emitted).
-    let helper = DropHelper{self.get_resolver()};
+    let helper = DropHelper::new(self.get_resolver());
     if let Type::Array(elem, size) = &rt.type{
       if(!helper.is_drop_type(elem.get())){
         return;

@@ -266,7 +266,7 @@ func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
     if(!(decl is Decl::Struct)){
         return;
     }
-    let helper = DropHelper{r};
+    let helper = DropHelper::new(r);
     let imp = helper.find_drop_impl(decl);
     if(imp.methods.empty()){
         return;

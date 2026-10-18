@@ -10,11 +10,20 @@ import resolver/resolver
 
 struct DropHelper {
   r: Resolver*;
+  //Type keys (`Type::print`) currently being expanded by
+  //is_drop_type/is_drop_decl. A value-level cycle (`struct S{ s: S; }`, or
+  //through a tuple field, an array or a base) makes that mutual recursion
+  //unbounded; a type that contains itself by value has infinite size, so a
+  //type we are already expanding cannot contribute drop-ness: return false
+  //there and let the field validator (`Resolver::is_cyclic`) report the
+  //cycle. Balanced (every add has a matching remove), so diamond nesting
+  //(`struct A{ x: C; y: C; }`) is unaffected.
+  active: Map<String, bool>;
 }
 
 impl DropHelper{
   func new(r: Resolver*): DropHelper{
-    return DropHelper{r};
+    return DropHelper{r, Map<String, bool>::new()};
   }
   //todo cache drop types
   
@@ -38,6 +47,19 @@ impl DropHelper{
     let type = &rt.type;
     if (type.is_str() || type.is_slice()) return false;
     if (!is_struct(type)) return false;
+    //See `active`: the type is already being expanded, so it is a cycle.
+    let key = type.print();
+    if(self.active.get(&key).is_some()){
+      return false;
+    }
+    self.active.add(key.clone(), true);
+    let res = self.is_drop_rt(rt);
+    self.active.remove(&key);
+    return res;
+  }
+  //Body of is_drop_type(RType*), split out so `active` is removed on every
+  //return path (x has no defer).
+  func is_drop_rt(self, rt: RType*): bool{
     match &rt.type{
       Type::Array(elem, size)=>{
         return self.is_drop_type(elem.get());

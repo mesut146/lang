@@ -896,7 +896,7 @@ impl Resolver{
         self.err(decl.line, format("invalid attribute '{}'", attr.name));
       }
     }
-    let helper = DropHelper{self};
+    let helper = DropHelper::new(self);
     //improve decl.is_generic, this way all generic types derives drop but dont need to
     if (!DropHelper::has_drop_impl(decl, self)) {
       if(decl.is_generic || helper.is_drop_decl(decl)){
@@ -1686,7 +1686,7 @@ impl Resolver{
   }
 
   func handle_drop_method(self, rt: RType*, decl: Decl*){
-    let helper = DropHelper{self};
+    let helper = DropHelper::new(self);
     if(!helper.is_drop_decl(decl)){
       return;
     }
@@ -3072,7 +3072,7 @@ impl Resolver{
         return RType::new("void");
       }
       //let decl = self.get_decl(&argt);
-      let helper = DropHelper{self};
+      let helper = DropHelper::new(self);
       //if (!DropHelper::has_drop_impl(decl, self)) {
         if(!helper.is_drop_type(&argt)){
           return RType::new("void");
@@ -3210,7 +3210,7 @@ impl Resolver{
       //`[e; n]` copies one value into n slots, so a drop-typed element would
       //become n aliases of one owned allocation (and be dropped n times).
       //Reject it; write the elements out explicitly instead.
-      let helper = DropHelper{self};
+      let helper = DropHelper::new(self);
       if(helper.is_drop_type(&elemType)){
         self.err(node, "repeated array element type needs dropping; write out the elements");
       }

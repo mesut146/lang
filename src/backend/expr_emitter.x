@@ -1030,7 +1030,7 @@ impl Emitter{
           self.visit(mc.args.get(0));
           return ptr::null<Value>();
         }
-        let helper = DropHelper{resolver};
+        let helper = DropHelper::new(resolver);
         if(!helper.is_drop_type(&argt)){
           self.visit(mc.args.get(0));
           return ptr::null<Value>();
