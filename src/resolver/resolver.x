@@ -3190,6 +3190,13 @@ impl Resolver{
   func visit_array(self, node: Expr*, list: List<Expr>*, size: Option<i32>*): RType{
     let elemType = self.getType(list.get(0));
     if (size.is_some()) {
+      //`[e; n]` copies one value into n slots, so a drop-typed element would
+      //become n aliases of one owned allocation (and be dropped n times).
+      //Reject it; write the elements out explicitly instead.
+      let helper = DropHelper{self};
+      if(helper.is_drop_type(&elemType)){
+        self.err(node, "repeated array element type needs dropping; write out the elements");
+      }
       return RType::new(Type::Array{.Node::new(-1, node.line), Box::new(elemType), *size.get()});
     }
     for (let i = 1; i < list.len(); ++i) {

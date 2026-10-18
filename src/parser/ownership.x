@@ -626,6 +626,16 @@ impl Own{
             print("do_move {:?}\n", &mv);
         }
         let rhs = Rhs::new(expr, self);
+        //An index place (`arr[i]`, `slice[i]`, `p[i]`) is not tracked like a
+        //field, so moving drop data out of it would leave the aggregate
+        //dropping a value that already left (double free). Refuse the move:
+        //the array/slice keeps owning the element. Reads and
+        //`arr[i].clone()` are unaffected.
+        if let Expr::ArrAccess(aa) = expr{
+            if(aa.idx2.is_none()){
+                self.get_resolver().err(expr, "cannot move out of an array element");
+            }
+        }
         if let Rhs::FIELD(scp, name)=&rhs{
             if(!move_ptr_field && scp.type.is_pointer()){
                 self.get_resolver().err(expr, "move out of pointer");
@@ -1223,25 +1233,41 @@ impl Own{
         //let rhs = Rhs::new(var);
         let resolver = self.get_resolver();
         let rt = resolver.visit_type(&var.type);
-        let decl = resolver.get_decl(&rt).unwrap();
-        let fields = decl.get_fields();
+        //A tuple has no decl; its elements are its fields, named by index
+        //(the same name Rhs::new gives `t.0`). Enumerating them used to
+        //panic in get_decl.
+        let names = List<String>::new();
+        let types = List<Type>::new();
+        if let Type::Tuple(tt) = &rt.type{
+            for(let i = 0;i < tt.types.len();++i){
+                names.add(format("{}", i));
+                types.add(tt.types.get(i).clone());
+            }
+        }else{
+            let decl = resolver.get_decl(&rt).unwrap();
+            let fields = decl.get_fields();
+            for fd in fields{
+                names.add(fd.name.get().clone());
+                types.add(fd.type.clone());
+            }
+        }
         let moved_fields = List<String>::new();
-        for fd in fields{
-            let rhs = Rhs::new(var.clone(), fd.name.get().clone());
+        for(let i = 0;i < names.len();++i){
+            let rhs = Rhs::new(var.clone(), names.get(i).clone());
             let state = self.get_state(&rhs, scope);
             if(state.kind is StateType::MOVED){
-                moved_fields.add(fd.name.get().clone());
+                moved_fields.add(names.get(i).clone());
             }else if(state.kind is StateType::MOVED_PARTIAL){
                 resolver.err(var.line, "move of partial of partial");
             }
         }
         let err = false;
-        for fd in fields{
-            if(!self.is_drop_type(&fd.type)){
+        for(let i = 0;i < names.len();++i){
+            if(!self.is_drop_type(types.get(i))){
                 continue;
             }
-            if(!moved_fields.contains(fd.name.get())){
-                print("field '{:?}.{:?}' vline: {} not moved at: {}\n", var.name, fd.name.get(), var.line, line);
+            if(!moved_fields.contains(names.get(i))){
+                print("field '{:?}.{:?}' vline: {} not moved at: {}\n", var.name, names.get(i), var.line, line);
                 err = true;
             }
         }

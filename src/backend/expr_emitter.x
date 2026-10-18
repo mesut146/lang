@@ -127,6 +127,9 @@ impl Emitter{
             let elem_ty = r.getType(elem);
             let field_target_ptr = CreateStructGEP(ll.builder, ty, ptr, i);
             self.store(elem, &elem_ty, field_target_ptr);
+            //the tuple owns the element now: mark the source moved so its
+            //temp is not dropped a second time (mirrors set_fields)
+            self.own.get().do_move(elem);
           }
           return ptr;
         }
@@ -704,6 +707,9 @@ impl Emitter{
           let elem_target = self.ll.get().gep_arr(arr_ty, ptr, 0, i);
           let et = self.getType(e);
           self.store(e, &et, elem_target);
+          //the array owns the element now: mark the source moved so its
+          //temp is not dropped a second time (mirrors set_fields)
+          self.own.get().do_move(e);
         }
         return ptr;
       }

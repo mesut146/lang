@@ -219,6 +219,34 @@ Ownership only — no Rust-like borrows:
   compile). Full suite green on N1/N3 (`normal pass=64 xpass=0`,
   fmt/leak/opt pass); triangle N1==N2==N3 byte-identical.
 
+- Arrays and tuples as owners (2026-10-18, same session): an array or
+  tuple value whose element type needs dropping crashed the compiler:
+  `Emitter::drop_force` called `get_drop_proto`, which does
+  `get_decl(rt).unwrap()` -- an array/tuple has no decl, so `None`
+  ("unwrap on None", option.x:26). Reported with `let x =
+  [String::new("a"), String::new("b")];`. Fix: `drop_force`
+  (`src/backend/emitter.x`) drops aggregate elements element-wise and
+  recurses; the element count is a compile-time constant, so the loop is
+  unrolled (straight-line, no new blocks). The literal emitters
+  (`src/backend/expr_emitter.x`) also mark each element source moved
+  (`do_move`, mirroring `set_fields`) -- without that every source temp
+  was dropped a second time (valgrind: same allocation freed twice).
+  Two adjacent holes the feature exposed were closed too: a repeated
+  array with a drop element type is a clean error in
+  `Resolver::visit_array` (`[e; n]` copies one value into n slots = n
+  aliases freed n times), and a move out of an index place is refused in
+  `Own::do_move` (`send(arr[0])`; index places are untracked). `Own::
+  check_partial` learned tuples instead of panicking in `get_decl`, so
+  partial tuple moves follow the struct rule (move every drop element,
+  or error). Regression: tests/own/26arrtuple.x (pre-fix it does not
+  compile) + tests/fail/array_elem_move.x and
+  tests/fail/array_repeated_drop.x. Full suite green on F1/F3 (`normal
+  pass=66 xpass=0`, own/fmt/leak/opt pass); triangle F1==F2==F3
+  byte-identical. Still open: an aggregate *field* (`struct S{ a:
+  [String; 2]; }` or a tuple field) still fails in the generated
+  `Drop::drop(self.a)` ("get_impl type not covered"), and array-element
+  overwrites stay untracked (leak), as before.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: none open as of f6feed3 (see doc/ownership.txt
@@ -226,23 +254,29 @@ ledger). Remaining deliberate silent no-ops: bare `ptr::deref!` of an
 untracked place, and `extern`/unsafe aliases (no body to check). Open:
 language features (doc/todo).
 
-Compile bugs (pre-existing, isolated 2026-10-18, not yet fixed):
-- An array *literal* whose element type is a drop type (`[String::new(
-  "a"), ..]`, `[P{..}, ..]`) crashes the compiler: "unwrap on None"
-  (`Option<Decl*>::unwrap`, option.x:26). Arrays of non-drop types are
-  fine. So array elements of drop types are effectively unusable today
-  (which is why the temp-field fix covers field accesses only, not
-  array-element overwrites).
-- A `tests/normal`-style compile (no `-flags <std lib>`) of a program
-  that instantiates `List<T>` fails to link: `undefined reference to
-  Fmt__drop_Fmt`, needed by `List<T>::get_malloc`'s `panic("invalid
-  size {}", size)` path. Repro: `import std/list; func main(){ let a =
-  List<i32>::new(); a.add(1); print("ok\n"); }`. Reproduces on the
-  unmodified compiler; links fine once the std lib is passed via
-  `-flags` (the `std_all` suite path). Why the direct `format(...)` use
-  in tests/normal/20-func_ptr.x links but this generic path does not is
-  not yet pinned. This is why the new for-each regression iterates a
-  slice (`import std/it`) rather than a `List`.
+Compile gaps (pre-existing, not yet fixed):
+- An aggregate *field* whose element type is a drop type still fails:
+  `struct S{ a: [String; 2]; }` (and a tuple field) makes the derived
+  `Drop::drop(self.a)` unresolvable -> "get_impl type not covered:
+  [String; 2]". Arrays/tuples as *values* work now (owner entry above);
+  closing this needs the derive (derive.x) to emit an element loop.
+- Array-element places stay untracked: `arr[i] = v` still leaks the old
+  value (silent no-op, as before) and moving out (`send(arr[0])`) is
+  refused with a clean error ("cannot move out of an array element")
+  rather than supported. Also, `for x in <array>` is unsupported
+  generally, even for `[i32; 3]` ("get_impl type not covered") -- use a
+  slice or a List.
+- Not a compiler bug, but a harness constraint worth knowing: the
+  `tests/normal` runner compiles with `-stdpath src` and no `-std`, so
+  no std lib is linked -- only generic std code monomorphised into the
+  user object resolves. A test that references a non-generic std symbol
+  fails to link: `print("x {}\n", 1)` -> `Fmt__new`; `import std/string`
+  + `String::new` -> `String__new`; any `List<T>` use ->
+  `Fmt__drop_Fmt` (`List<T>::get_malloc`'s `panic("invalid size
+  {}", ..)`). The `std_all` path passes `-flags $LIB_STD` and is
+  unaffected. So a `tests/normal` regression must stick to builtins +
+  monomorphised generics (as tests/normal/39-foreach-continue.x does: a
+  slice loop via `import std/it`, literal print).
 
 ## Validation protocol (mandatory before merging to main)
 

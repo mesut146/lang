@@ -564,6 +564,43 @@ impl Emitter{
     return proto;
   }
   func drop_force(self, rt: RType*, ptr: LLVMPtr, line: i32, rhs: Rhs*){
+    //An array or tuple value has no decl, so there is no drop function to
+    //call for it: drop its drop-typed elements instead. Both shapes used to
+    //panic here -- get_drop_proto below does get_decl(rt).unwrap(), which is
+    //None for a decl-less type ("unwrap on None", option.x:26) -- whenever
+    //an element was a drop type. Element count/size are compile-time
+    //constants, so unroll; that keeps this straight-line (no new basic
+    //blocks, no interaction with the control flow of the statement being
+    //emitted).
+    let helper = DropHelper{self.get_resolver()};
+    if let Type::Array(elem, size) = &rt.type{
+      if(!helper.is_drop_type(elem.get())){
+        return;
+      }
+      let elem_rt = self.get_resolver().visit_type(elem.get());
+      let ll = self.ll.get();
+      let arr_ty = self.mapType(&rt.type);
+      let zero = ll.makeInt(0, 64);
+      for(let i = 0;i < *size;++i){
+        let ep = ll.gep_arr(arr_ty, ptr.ptr as Value*, zero, ll.makeInt(i as i64, 64));
+        self.drop_force(&elem_rt, LLVMPtr::new(ep), line, rhs);
+      }
+      return;
+    }
+    if let Type::Tuple(tt) = &rt.type{
+      let ll = self.ll.get();
+      let tup_ty = self.mapType(&rt.type);
+      for(let i = 0;i < tt.types.len();++i){
+        let elem = tt.types.get(i);
+        if(!helper.is_drop_type(elem)){
+          continue;
+        }
+        let elem_rt = self.get_resolver().visit_type(elem);
+        let ep = CreateStructGEP(ll.builder, tup_ty, ptr.ptr as Value*, i);
+        self.drop_force(&elem_rt, LLVMPtr::new(ep), line, rhs);
+      }
+      return;
+    }
     let proto = self.get_drop_proto(rt);
     let args = [ptr.ptr as Value*];
     let ll = self.ll.get();
