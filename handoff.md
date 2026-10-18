@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-17. Main: `44dbf4a`. Releases published: v1.11 – v1.15.
+Date: 2026-10-18. Main: `9ca614c` (released as v1.16). Releases: v1.11 – v1.16.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -192,8 +192,8 @@ ledger). Open: language features (doc/todo).
 - `20_worker` is timing-sensitive; validate with repeated runs.
 - Method-call turbofish works, including runtime (`to_list<i32>(41)`
   probed green on v1.15).
-- Do not release/publish without asking. Next release (v1.16) bootstraps
-  from v1.15 — re-prove before touching the workflow.
+- Do not release/publish without asking. Next release (v1.17) bootstraps
+  from v1.16 — re-prove before touching the workflow.
 - `pkill -f` matches its own command line: kill hung compilers by exact
   PID from a pidfile, never by pattern.
 - Always verify `build/stage2` freshness (`-v` + timestamp) before
