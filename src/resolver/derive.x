@@ -507,11 +507,23 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
             r.err(node, "invalid format no closing }");
         }
         let debug = false;
-        let func_name = "Display::fmt";
+        let func_name: String = "Display::fmt".str();
         if(fmt_str.starts_with("{:?", br_pos)){
             debug = true;
-            func_name = "Debug::debug";
+            func_name = "Debug::debug".str();
             pos = br_pos + 3;
+        }else if(fmt_str.starts_with("{::", br_pos)){
+            //Custom printer: `{::TraitName}` calls that trait's printer
+            //(`TraitName::fmt(<arg>, &f)`) instead of Display::fmt /
+            //Debug::debug -- a user trait with `func fmt(self, f: Fmt*)`
+            //(doc/todo). The argument is positional, like `{}`; the name is
+            //used verbatim as a path prefix.
+            let name = fmt_str.substr(br_pos + 3, br_end);
+            if(name.len() == 0){
+                r.err(node, "invalid format custom printer");
+            }
+            func_name = format("{}::fmt", name);
+            pos = br_end;
         }else{
             pos = br_pos + 1;
         }
@@ -656,11 +668,23 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
             r.err(node, "invalid format no closing }");
         }
         let debug = false;
-        let func_name = "Display::fmt";
+        let func_name: String = "Display::fmt".str();
         if(fmt_str.starts_with("{:?", br_pos)){
             debug = true;
-            func_name = "Debug::debug";
+            func_name = "Debug::debug".str();
             pos = br_pos + 3;
+        }else if(fmt_str.starts_with("{::", br_pos)){
+            //Custom printer: `{::TraitName}` calls that trait's printer
+            //(`TraitName::fmt(<arg>, &f)`) instead of Display::fmt /
+            //Debug::debug -- a user trait with `func fmt(self, f: Fmt*)`
+            //(doc/todo). The argument is positional, like `{}`; the name is
+            //used verbatim as a path prefix.
+            let name = fmt_str.substr(br_pos + 3, br_end);
+            if(name.len() == 0){
+                r.err(node, "invalid format custom printer");
+            }
+            func_name = format("{}::fmt", name);
+            pos = br_end;
         }else{
             pos = br_pos + 1;
         }
