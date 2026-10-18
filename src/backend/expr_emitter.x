@@ -48,9 +48,9 @@ impl Emitter{
       match node{
         Expr::Call(mc) => return self.visit_call(node, mc),
         Expr::MacroCall(mc) => return self.visit_macrocall(node, mc),
-        Expr::ArrAccess(aa) => return self.visit_array_access(node, aa),
+        Expr::ArrAccess(aa) => return self.visit_array_access(node, aa, true),
         Expr::Array(list, sz) => return self.visit_array(node, list, sz),
-        Expr::Access(scope, name) => return self.visit_access(node, scope.get(), name),
+        Expr::Access(scope, name) => return self.visit_access(node, scope.get(), name, true),
         Expr::Par(e) => return self.visit(e.get()),
         Expr::Obj(type, args) => return self.visit_obj(node, type, args),
         Expr::Lit(lit) => return self.visit_lit(node, lit),
@@ -669,8 +669,13 @@ impl Emitter{
       return ptr;
     }
   
-    func visit_access(self, node: Expr*, scope: Expr*, name: String*): Value*{
+    func visit_access(self, node: Expr*, scope: Expr*, name: String*, check: bool): Value*{
       let ll = self.ll.get();
+      if(check){
+        //a moved-out field/element below this one is dead (check_place);
+        //as an assignment target the whole place may be reinitialized.
+        self.own.get().check_place(node);
+      }
       let scope_ptr = self.eval_operand(scope);
       let scope_rt = self.get_resolver().visit(scope);
       if let Type::Tuple(tt) = &scope_rt.type {
@@ -748,10 +753,15 @@ impl Emitter{
       return ptr;
     }
   
-    func visit_array_access(self, expr: Expr*, node: ArrAccess*): Value*{
+    func visit_array_access(self, expr: Expr*, node: ArrAccess*, check: bool): Value*{
       let ll = self.ll.get();
       if(node.idx2.is_some()){
         return self.visit_slice(expr, node);
+      }
+      if(check){
+        //an element that was moved out is dead (check_place); as an
+        //assignment target the whole element may be reinitialized.
+        self.own.get().check_place(expr);
       }
       let i64t = Type::new("i64");
       let type = self.getType(node.arr.get());
@@ -1738,6 +1748,14 @@ impl Emitter{
       }
       if let Expr::Name(name)=expr{
         return self.visit_name(expr, name, false);
+      }
+      //a whole field/element assignment target reinitializes its place
+      //(the legal revive), so it is not a use: check=false (see check_place).
+      if let Expr::Access(scp, name)=expr{
+        return self.visit_access(expr, scp.get(), name, false);
+      }
+      if let Expr::ArrAccess(aa)=expr{
+        return self.visit_array_access(expr, aa, false);
       }
       return self.visit(expr);
     }

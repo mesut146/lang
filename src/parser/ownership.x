@@ -96,6 +96,19 @@ struct Own{
     //Fmt::str keys of explicitly dropped places (see note_explicit_drop):
     //drop emission skips them so manual drops never double-fire.
     explicit_drops: Map<String, bool>;
+    //Fmt::str keys of fields/elements whose MOVED mark was invalidated by a
+    //whole-var (re)write (`x = X{..}` reinitializes every field of x, see
+    //note_reinit). check_place skips exactly those marks. The marks stay in
+    //the state map: block/loop merges and the drop machinery rely on the
+    //accumulated marks, and removing them there would let a var whose
+    //fields were moved out inside a loop be dropped whole (double free).
+    //Entries stay for the rest of the method on purpose: re-arming them on a
+    //later move would report the post-loop use in
+    //`while(c){ send(x.f); x = X{..}; }` `send(x.f);` as a use after move,
+    //but that use is live (the last iteration ended with the reinit).
+    //Consequence: a *second* move of such a place after the whole-var write
+    //is not diagnosed (doc/ownership.txt residual).
+    reinit_places: Map<String, bool>;
 }
 
 impl Drop for Own{
@@ -105,6 +118,7 @@ impl Drop for Own{
         self.match_arms.drop();
         self.match_binds.drop();
         self.explicit_drops.drop();
+        self.reinit_places.drop();
         Logger::exit(&self);
     }
 }
@@ -123,7 +137,8 @@ impl Own{
             var_map: Map<i32, Variable>::new(),
             match_arms: List<i32>::new(),
             match_binds: Map<i32, BindInfo>::new(),
-            explicit_drops: Map<String, bool>::new()
+            explicit_drops: Map<String, bool>::new(),
+            reinit_places: Map<String, bool>::new()
         };
         res.scope_map.add(main_scope.id, main_scope);
         return res;
@@ -796,6 +811,12 @@ impl Own{
         }
         self.update_state(rhs, &rt, StateType::MOVED{rhs.line}, scope);
         let rt_lhs = self.get_type(lhs);
+        //A whole-var write reinitializes every field/element of the var, so
+        //the move marks of its sub-places are stale (see note_reinit).
+        let lhs_place = self.place_rhs(lhs);
+        if(lhs_place.is_some()){
+            self.note_reinit(&lhs_place.unwrap(), scope);
+        }
         self.update_state(lhs, &rt_lhs, StateType::ASSIGNED, scope);
     }
 
@@ -818,6 +839,40 @@ impl Own{
         }
         //todo remove self param
         scope.state_map.add(rhs, kind);
+    }
+    //A whole-var (re)write reinitializes every field/element of the var:
+    //`node = next` after `insert(node.key, ..)` moved the fields out (the
+    //loop pattern in std/hashmap's rehash). Any move mark of a sub-place of
+    //that var recorded before the write is therefore stale, and check_place
+    //must not report it as a use after move. Remember those places here --
+    //the marks themselves stay (see the field declaration): a plain
+    //straight-line case still drops the moved-out *old* value correctly, and
+    //the loop-exit state keeps naming the fields that really are moved.
+    //Only a whole *local* has this shape: its fields/elements are all keyed
+    //by the variable id, and the whole-var write really does cover each of
+    //them. A field/element write marks that place ASSIGNED itself, so it
+    //needs no entry (and its nested places are not keyed separately, see
+    //Rhs::FIELD/INDEX).
+    func note_reinit(self, rhs: Rhs*, scope: VarScope*){
+        if let Rhs::VAR(v) = rhs{
+            for pair in &scope.state_map{
+                if(!(pair.b is StateType::MOVED)){
+                    continue;
+                }
+                if let Rhs::FIELD(scp, name) = pair.a{
+                    if(scp.id == v.id){
+                        let place = pair.a.clone();
+                        self.reinit_places.add(Fmt::str(&place), true);
+                    }
+                }
+                if let Rhs::INDEX(scp, idx) = pair.a{
+                    if(scp.id == v.id){
+                        let place = pair.a.clone();
+                        self.reinit_places.add(Fmt::str(&place), true);
+                    }
+                }
+            }
+        }
     }
     func end_scope_update(self){
         let id = self.cur_scope;
@@ -894,6 +949,84 @@ impl Own{
             let tmp = printMethod(self.method);
             self.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
         }
+    }
+    //Use after move through a *place* -- the counterpart of check() for
+    //whole locals. A struct/tuple field or an array element that was moved
+    //out is dead: reading it, writing a part of it, or moving it a second
+    //time is a use after move (the aggregate still owns the bytes, but the
+    //value is gone). The one legal use is a whole-place *write*
+    //(`arr[i] = v`, `f.a = v`): it reinitializes the place, exactly like a
+    //whole-local write (`x = v`), which is why visit_name/check are called
+    //with check=false from Emitter::get_lhs and these two callers do the
+    //same.
+    func check_place(self, expr: Expr*){
+        if(print_check){
+            print("check_place {:?} line:{}\n", expr, expr.line);
+        }
+        let opt = self.place_rhs(expr);
+        if(opt.is_none()){
+            //Untracked place (`s[i]`, `p[i]`, a nested index, a bare deref):
+            //no state to consult, and moves out of it are refused in
+            //do_move. A plain local is check()'s job.
+            return;
+        }
+        let rhs = opt.unwrap();
+        if(!(rhs is Rhs::FIELD || rhs is Rhs::INDEX)){
+            return;
+        }
+        let state = self.get_state(&rhs, self.get_scope());
+        if let StateType::MOVED(line)=state.kind{
+            if(self.reinit_places.get(&Fmt::str(&rhs)).is_some()){
+                //the mark predates a whole-var (re)write of the base, so the
+                //place is live again (see note_reinit).
+                return;
+            }
+            let tmp = printMethod(self.method);
+            self.get_resolver().err(expr, format("use after move in {}:{} {:?}", tmp, line, expr));
+        }
+    }
+    //Rhs::new restricted to the two *tracked* place kinds (FIELD/INDEX) and
+    //made total: a vh that var_map does not know (a `*self` base, a global,
+    //any place the engine never registered) is a place with no state, not an
+    //error -- Rhs::new itself panics on those, so it must not be used on an
+    //expression the emitter is free to hand us (see consume_match_temp for
+    //the same guard on the match path).
+    func place_rhs(self, expr: Expr*): Option<Rhs>{
+        if let Expr::Access(scp, name)=expr{
+            let scp_rt = self.get_resolver().visit(scp.get());
+            if(scp_rt.vh.is_some() && self.var_map.get(&scp_rt.vh.get().id).is_some()){
+                let v = self.get_var(scp_rt.vh.get().id);
+                return Option::new(Rhs::FIELD{v.clone(), name.clone()});
+            }
+            if let Expr::MacroCall(mc) = scp.get(){
+                if(Utils::is_call(mc, "ptr", "deref") && mc.args.len() > 0){
+                    let irt = self.get_resolver().visit(mc.args.get(0));
+                    if(irt.vh.is_some() && self.var_map.get(&irt.vh.get().id).is_some()){
+                        let iv = self.get_var(irt.vh.get().id);
+                        return Option::new(Rhs::FIELD{iv.clone(), name.clone()});
+                    }
+                }
+            }
+            return Option<Rhs>::none();
+        }
+        if let Expr::ArrAccess(aa) = expr{
+            if(aa.arr.get() is Expr::Name){
+                let opt = self.const_index(aa);
+                if(opt.is_some()){
+                    let art = self.get_resolver().visit(aa.arr.get());
+                    if(art.type.is_array() && art.vh.is_some() && self.var_map.get(&art.vh.get().id).is_some()){
+                        let av = self.get_var(art.vh.get().id);
+                        return Option::new(Rhs::INDEX{scp: av.clone(), idx: opt.unwrap()});
+                    }
+                }
+            }
+        }
+        let rt = self.get_resolver().visit(expr);
+        if(rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary) && self.var_map.get(&rt.vh.get().id).is_some()){
+            let v = self.get_var(rt.vh.get().id);
+            return Option::new(Rhs::VAR{v.clone()});
+        }
+        return Option<Rhs>::none();
     }
     func check_field(self, expr: Expr*){
         if let Expr::Access(scp, name)=expr{
