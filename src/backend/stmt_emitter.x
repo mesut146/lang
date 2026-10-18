@@ -57,6 +57,44 @@ impl Emitter{
       self.visit_block(&info.block);
     }
     
+    //A statement that is the for-each desugar's opaque body placeholder,
+    //`std::internal_block!(id)`, resolves back to the real block via the
+    //resolver's block_map.
+    func internal_block_of(self, st: Stmt*): Option<Block*>{
+      if let Stmt::Expr(ex) = st{
+        if let Expr::MacroCall(mc) = ex{
+          if(Utils::is_call(mc, "std", "internal_block")){
+            let id = i32::parse(mc.args.get(0).print().str()).unwrap();
+            let found = self.get_resolver().block_map.get(&id);
+            if(found.is_some()){
+              return Option::new(*found.unwrap());
+            }
+          }
+        }
+      }
+      return Option<Block*>::new();
+    }
+    //Exit of a loop body, seeing through the for-each desugar. The desugared
+    //`while(true)` ends with `std::internal_block!(id)`, which Exit reads as
+    //NONE, so a user body ending in `return`/`break`/`continue`/`panic` is
+    //invisible and the back-edge would be emitted after the already
+    //terminated block ("Terminator found in the middle of a basic block").
+    //When that macro is the body's last statement, use the real block's exit.
+    func body_exit(self, body: Body*): Exit{
+      let exit = Exit::get_exit_type(body);
+      if(exit.is_jump()){
+        return exit;
+      }
+      if let Body::Block(b) = body{
+        if(!b.list.empty()){
+          let real = self.internal_block_of(b.list.last());
+          if(real.is_some()){
+            return Exit::get_exit_type(real.unwrap());
+          }
+        }
+      }
+      return exit;
+    }
     func visit_while(self, stmt: Stmt*, cond: Expr*, body: Body*){
       let line = stmt.line;
       let cond_name = CStr::new(format("while_cond_{}", line));
@@ -77,7 +115,7 @@ impl Emitter{
       self.own.get().end_scope(Utils::get_end_line(body));
       self.di.get().exit_scope();
       self.loops.pop_back();
-      let exit_body = Exit::get_exit_type(body);
+      let exit_body = self.body_exit(body);
       if(!exit_body.is_jump()){
           CreateBr(ll.builder, condbb);
       }
@@ -115,7 +153,7 @@ impl Emitter{
       self.visit_body(node.body.get());
       self.own.get().end_scope(Utils::get_end_line(node.body.get()));
       //self.di.get().exit_scope();
-      let exit = Exit::get_exit_type(node.body.get());
+      let exit = self.body_exit(node.body.get());
       if(!exit.is_jump()){
         CreateBr(ll.builder, updatebb); 
       }

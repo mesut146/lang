@@ -225,6 +225,17 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   pre-fix: assertion 0 != 1). Full suite green on FIX1/FIX3; triangle
   FIX1==FIX2==FIX3 byte-identical.
 
+Codegen: for-each `continue` + trailing `return` (fixed 2026-10-18,
+tests/normal/39-foreach-continue.x): the for-each desugar ends its
+`while(true)` body with the opaque `std::internal_block!(id)`, which
+`Exit::get_exit_type` reads as NONE, so a body ending in
+`return`/`break`/`continue`/`panic` looked fall-through and the loop
+back-edge was emitted after the already-terminated block ("Terminator
+found in the middle of a basic block"). Fix: `Emitter::body_exit`
+(stmt_emitter.x) sees through the placeholder via the resolver's
+block_map. Same lesson as the error-path hang below: an opaque wrapper
+must not hide a terminator from exit analysis.
+
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet
 error with the caller's line number -- e.g. unparsable {…} placeholders

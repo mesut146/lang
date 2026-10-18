@@ -201,6 +201,24 @@ Ownership only — no Rust-like borrows:
   (`normal pass=63 xpass=0`, fmt/leak/opt pass); triangle FIX1==FIX2==
   FIX3 byte-identical.
 
+- for-each `continue` + trailing `return` codegen (2026-10-18, same
+  session): the for-each desugar ends its `while(true)` body with the
+  opaque `std::internal_block!(id)`; `Exit::get_exit_type` reads a
+  `MacroCall` as NONE, so a body ending in `return`/`break`/`continue`/
+  `panic` looked fall-through and `visit_while` emitted the loop
+  back-edge after the already-terminated block -> "Module verification
+  failed! Terminator found in the middle of a basic block". (Hit while
+  compiling the literal first draft of the temp-field fix above, which
+  used `continue` in a for-in body.) Fix: `Emitter::body_exit`
+  (`src/backend/stmt_emitter.x`) sees through the placeholder -- when a
+  loop body's last statement is that macro, it takes the exit of the
+  mapped block from the resolver's `block_map`; `visit_while` and
+  `visit_for` use it to decide the back-edge. `continue`/`break`/plain
+  bodies are unchanged. Regression: tests/normal/39-foreach-continue.x
+  (continue with and without a trailing return; failed pre-fix at
+  compile). Full suite green on N1/N3 (`normal pass=64 xpass=0`,
+  fmt/leak/opt pass); triangle N1==N2==N3 byte-identical.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: none open as of 2f08bb3 (see doc/ownership.txt
@@ -209,19 +227,22 @@ untracked place, and `extern`/unsafe aliases (no body to check). Open:
 language features (doc/todo).
 
 Compile bugs (pre-existing, isolated 2026-10-18, not yet fixed):
-- `continue` inside a `for x in &list` loop whose body also contains a
-  `return` fails codegen: "Module verification failed! Terminator found
-  in the middle of a basic block". The C-style `for(let i=0;..)` form is
-  fine, and `continue` with no later `return` is fine. Repro:
-  `func f(items: List<i32>): i32{ for x in &items{ if(*x == 2){
-  continue; } return *x; } return 0; }`. Hit while compiling the
-  literal first draft of the temp-field fix above.
 - An array *literal* whose element type is a drop type (`[String::new(
   "a"), ..]`, `[P{..}, ..]`) crashes the compiler: "unwrap on None"
   (`Option<Decl*>::unwrap`, option.x:26). Arrays of non-drop types are
   fine. So array elements of drop types are effectively unusable today
   (which is why the temp-field fix covers field accesses only, not
   array-element overwrites).
+- A `tests/normal`-style compile (no `-flags <std lib>`) of a program
+  that instantiates `List<T>` fails to link: `undefined reference to
+  Fmt__drop_Fmt`, needed by `List<T>::get_malloc`'s `panic("invalid
+  size {}", size)` path. Repro: `import std/list; func main(){ let a =
+  List<i32>::new(); a.add(1); print("ok\n"); }`. Reproduces on the
+  unmodified compiler; links fine once the std lib is passed via
+  `-flags` (the `std_all` suite path). Why the direct `format(...)` use
+  in tests/normal/20-func_ptr.x links but this generic path does not is
+  not yet pinned. This is why the new for-each regression iterates a
+  slice (`import std/it`) rather than a `List`.
 
 ## Validation protocol (mandatory before merging to main)
 
