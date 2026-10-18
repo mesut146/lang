@@ -263,6 +263,15 @@ func mangle(m: Method*): String{
   if let Parent::Impl(info) = &m.parent{
     mangleType(&info.type, &f);
     f.print("__");
+    //A trait impl method's identity includes the trait: `impl Display for
+    //P{ func fmt }` and `impl Hex for P{ func fmt }` share impl type, name
+    //and args, so without the trait both mangle to one symbol -- the second
+    //body then lands in the first function as an unreachable block and
+    //every call runs whichever impl was declared first.
+    if(info.trait_name.is_some()){
+      mangleType(info.trait_name.get(), &f);
+      f.print("__");
+    }
   }else if let Parent::Trait(ty) = &m.parent{
     mangleType(ty, &f);
     f.print("__");
