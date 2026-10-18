@@ -320,8 +320,58 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   tests/fail/array_elem_move.x (dynamic index),
   tests/fail/array_elem_field_move.x (field of an element). Residual
   (documented): writing into an element, or a field of one, *after* it was
-  moved out is not diagnosed -- the stale value is not dropped (no double
-  free) but the new value can leak.
+  moved out was not diagnosed -- the stale value is not dropped (no double
+  free) but the new value can leak. Closed by the next entry; the hole was
+  *not* array-specific.
+
+Place use-after-move (fixed 2026-10-18, tests/fail/dead_elem_write.x /
+dead_elem_read.x / dead_elem_move.x, tests/fail/dead_field_write.x /
+dead_field_move.x, tests/own/30loopreinit.x): the residual above was
+general, not array-specific -- a struct/tuple field had the same hole, at
+the same cost (`send(g.f)` then `g.f.s = ..` leaked the written value;
+`let y = g.f` after `send(g.f)` was an invalid read + invalid free, ex4/s2,s3),
+because `Own::check` only ever ran on whole locals (`visit_name(check=true)`)
+while the two place emitters were reached with plain `self.visit`.
+`Own::check_place` is the place counterpart of `check`: reading a moved-out
+field/element, writing a *part* of it, or moving it a second time is a use
+after move (the aggregate still owns the bytes, the value is gone -- Rust
+rejects the same shapes). The one legal use is a whole-place *write*
+(`arr[i] = v`, `f.a = v`): it reinitializes the place, exactly like `x = v`,
+so `Emitter::get_lhs` calls the two emitters with `check=false` (mirroring
+its existing `visit_name(expr, name, false)`) while the dispatcher passes
+`check=true`. `check_place` builds its place through `Own::place_rhs`, a
+total mirror of `Rhs::new` restricted to FIELD/INDEX: `Rhs::new` panics on a
+vh `var_map` does not know (a `*self` base, a global -- that panic is why the
+first cut died building std/it.x), and the emitter may hand us any
+expression. A place with no tracked shape (dynamic index, slice, pointer
+base, nested array, field of an element, bare deref) has no state and is
+already refused for moves, so it stays silent here.
+  Whole-var reinit vs the check: `x = X{..}` reinitializes *every* field of
+  x, so the move marks its sub-places carry from before the write are stale
+  -- std/hashmap's `rehash` loop reads exactly such a mark
+  (`while(node.next.is_some()){ node = node.next..; insert(node.key, ..) }`).
+  The marks must stay in the state map: loop/block merges and the drop
+  machinery rely on the accumulated marks, and *deleting* them at the write
+  makes the loop's exit state say "x is fully live", so the last node is
+  dropped whole and its payload freed twice (proved: double free in
+  12_hashmap-test, and check_partial's all-fields rule then rejects the
+  original rehash). `Own::note_reinit` / `reinit_places` therefore record
+  the invalidated sub-places in a shadow set (monotone for the method) and
+  `check_place` skips marks in it. A field/element *write* needs no entry:
+  `do_assign` marks that place ASSIGNED itself. Rejected alternatives:
+  clearing the marks at the write (double free above); re-arming the set on
+  a later move (it then reports the post-loop `send(x.f)` in
+  `while(c){ send(x.f); x = X{..}; } send(x.f);` as a use after move,
+  although the last iteration ended with the reinit, so the use is live).
+  Residual (documented): while such an entry holds, a *second* move of that
+  field/element is not diagnosed -- `send(x.f); x = X{..}; send(x.f);
+  send(x.f)` hands the same bytes to two callees. The drop machinery is
+  unchanged, so nothing new is freed twice by the *compiler*; it is the
+  pre-fix silent behaviour, now bounded to a variable that was wholly
+  reassigned after the first move. Pre-existing and also unchanged: after
+  `send(x.f); x = X{..}` the *new* x is only partially dropped (the stale
+  mark rolls `get_state` up to MOVED_PARTIAL), so the new field value leaks.
+
 
 Codegen: for-each `continue` + trailing `return` (fixed 2026-10-18,
 tests/normal/39-foreach-continue.x): the for-each desugar ends its

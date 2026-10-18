@@ -299,14 +299,47 @@ Ownership only — no Rust-like borrows:
   tests/normal/40-array-foreach.x, tests/fail/array_elem_move.x (dynamic
   index now), tests/fail/array_elem_field_move.x. Residual (documented):
   writing into an element (or a field of one) after it was moved out is not
-  diagnosed -- no double free, but the new value can leak.
+  diagnosed -- no double free, but the new value can leak. (Closed by the
+  next entry; the hole was not array-specific.)
+
+- Place use-after-move (2026-10-18, same branch, closes the residual above):
+  `Own::check_place` is the place counterpart of `Own::check` -- reading a
+  moved-out struct/tuple field or array element, writing a *part* of it, or
+  moving it a second time is now "use after move in <fn>:<move line> <place>"
+  (the aggregate owns the bytes, the value is gone; Rust rejects the same
+  shapes). A whole-place *write* (`arr[i] = v`, `f.a = v`) stays legal: it
+  reinitializes the place like `x = v` does, so `Emitter::get_lhs` passes
+  `check=false` for it while the dispatcher passes `check=true`. The place is
+  built by `Own::place_rhs`, a total mirror of `Rhs::new` restricted to
+  FIELD/INDEX, because `Rhs::new` panics on a vh `var_map` does not know (a
+  `*self` base, a global) and the emitter hands us any expression. The
+  struct-field half was the same hole at the same cost (`let y = g.f;` after
+  `send(g.f)` was an invalid read + invalid free; `g.f.s = ..` leaked), so
+  the fix is one rule for both roots. Whole-var reinit needed care: `x =
+  X{..}` makes the pre-write move marks of x's sub-places stale (that is
+  std/hashmap's `rehash` loop), and *deleting* them lets the loop's exit
+  state say x is fully live -- the last node is then dropped whole and its
+  payload freed twice (double free in 12_hashmap-test). `Own::note_reinit` /
+  `reinit_places` instead keep a shadow set of invalidated sub-places that
+  `check_place` skips (monotone: see the ledger for the rejected variants).
+  Tests: tests/fail/dead_elem_write.x / dead_elem_read.x / dead_elem_move.x,
+  tests/fail/dead_field_write.x / dead_field_move.x (all compile pre-fix),
+  tests/own/30loopreinit.x (the reinit loop + post-loop live use; runs with
+  identical drop counts pre-fix). All new behavior verified with the v1.17
+  compiler (ex3/ex4 probes: write/read/second-move over dead elements and
+  fields; revive and live-write still compile and are valgrind-clean).
 
 ## Known open holes (documented, not yet solved)
 
-Ownership residuals: none open as of 681a8cc (see doc/ownership.txt
-ledger). Remaining deliberate silent no-ops: bare `ptr::deref!` of an
-untracked place, and `extern`/unsafe aliases (no body to check). Open:
-language features (doc/todo).
+Ownership residuals: place use-after-move is closed as of this batch (see
+doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow
+residual documented there: while a whole-var write's invalidation entry
+holds, a *second* move of that variable's field/element is not diagnosed
+(`send(x.f); x = X{..}; send(x.f); send(x.f);`) -- pre-fix silent behaviour,
+bounded to a variable wholly reassigned after the first move. Remaining
+deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
+`extern`/unsafe aliases (no body to check). Open: language features
+(doc/todo).
 
 Compile gaps (pre-existing, not yet fixed):
 - A *self-referential* aggregate field (`struct S{ t: (S, i32); }`)
@@ -322,10 +355,13 @@ Compile gaps (pre-existing, not yet fixed):
   base, a nested array, and a field of an element. That refusal is now a
   *closed decision* (user, 2026-10-18: no runtime-index place tracking --
   a static name + literal index is the tracking boundary; do not
-  "fix" this without asking). One residual: writing
-  into an element (or a field of one) after it was moved out is not
-  diagnosed -- the stale value is not dropped (so no double free), but
-  the new value can leak.
+  "fix" this without asking). The write-after-move residual of the first
+  array batch is closed: `Own::check_place` (place counterpart of
+  `check`) now rejects reading a moved-out field/element, writing a part
+  of it, and moving it twice, for struct/tuple fields *and* array
+  elements alike (`tests/fail/dead_elem_*.x`, `dead_field_*.x`); the
+  whole-place write stays legal (the revive), and `reinit_places` keeps
+  a loop that reassigns the whole var (std/hashmap's rehash) green.
 - Not a compiler bug, but a harness constraint worth knowing: the
   `tests/normal` runner compiles with `-stdpath src` and no `-std`, so
   no std lib is linked -- only generic std code monomorphised into the
