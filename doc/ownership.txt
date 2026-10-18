@@ -391,11 +391,18 @@ error with the caller's line number -- e.g. unparsable {…} placeholders
 Lesson: error paths need the same termination scrutiny as main paths;
 a fail-test pins each newly loud error.
 
-Todo probes (v1.15, doc/todo): macro/panic-macro absent (no keyword);
-|args| lambdas work, => and true capture don't; custom {::T} printer
-open (placeholder hangs fixed above, feature not built); match-in-match
-works (phi nodes fine), int-match rejected cleanly; turbofish calls work
-incl. runtime.
+Todo probes (v1.15, re-probed 2026-10-18 on the mangle-fix compiler):
+macro/panic-macro still absent (no `macro` keyword: `invalid top level
+decl: 'macro'`); |args| lambdas work, `=>` closures and true capture don't
+(`(a: i32): i32 => {` parses as a tuple expression and dies on `:`);
+custom {::T} printer DONE (landed, plus the mangle fix that makes it
+reliable on a type that also implements Display); match-in-match works
+(phi nodes fine), int-match rejected cleanly (`match expr is not enum:
+i32`); turbofish calls work incl. runtime; `?` works (tests/std_test/
+26_ques.x, used throughout src/std/fs.x); `impl E::A{..}` on an enum
+variant fails with `invalid field E*.x` (open, doc/enum_var_type);
+`#derive(Debug = SomeTrait)` delegation is unsupported, it panics with
+`derive expr Debug = MyDebugTrait` (open, doc/delegate trait).
 
 Cyclic value types are a clean error (fixed 2026-10-18,
 tests/fail/cyclic_type.x / cyclic_type_tuple.x / cyclic_type_mutual.x /

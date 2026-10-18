@@ -450,7 +450,25 @@ holds, a *second* move of that variable's field/element is not diagnosed
 bounded to a variable wholly reassigned after the first move. Remaining
 deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
 `extern`/unsafe aliases (no body to check). Open: language features
-(doc/todo).
+(doc/todo), verified 2026-10-18 (details in doc/ownership.txt):
+- no user-defined macros: `macro asd{}` dies in the parser ("invalid top
+  level decl: 'macro'"). `print!`/`format!`/`panic!`/`assert!` are builtins
+  handled in the format/derive path, not a macro system.
+- no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
+  `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
+  outer local (tests/normal/23-lambda.x has the failing capture case
+  commented out).
+- `match` is enum-only: nested match is fine, an integer pattern is
+  rejected cleanly (`match expr is not enum: i32`).
+- `?` (doc/throw.txt) works and is used across std/fs.x; turbofish calls
+  work (`conv<i32, i32>(5)`).
+- `impl E::A{ .. }` (impl on an enum variant, doc/enum_var_type) fails with
+  `invalid field E*.x`; the doc's `A(a: i32, b: str)` variant syntax is not
+  what is implemented (variants are comma-separated with `{}` fields).
+- `#derive(Debug = SomeTrait)` delegation (doc/delegate trait) is
+  unsupported: panics "derive expr Debug = MyDebugTrait".
+- `//trim debug paths?`: panic messages embed absolute source paths
+  (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
 
 Compile gaps (pre-existing, not yet fixed):
 - (fixed 2026-10-18) A *self-referential* aggregate field (`struct S{
