@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `681a8cc` (v1.16 released at `9ca614c`; next release v1.17 bootstraps from v1.16). Releases: v1.11 – v1.16.
+Date: 2026-10-18. Main: `681a8cc` (v1.17 released at `92e3875`; next release v1.18 bootstraps from v1.17). Releases: v1.11 – v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -343,7 +343,7 @@ Compile gaps (pre-existing, not yet fixed):
    2026-10-13; 1.05 retired -- it predates drop_lhs and cannot compile
    current sources, e.g. borrow payloads off field bases). Surfaces
    analyzer fallout as precise errors.
-3. Full suite: `bin/test.sh <compiler> all` → `normal pass=63 xpass=0`
+3. Full suite: `bin/test.sh <compiler> all` → `normal pass=68 xpass=0`
    (+ by-design `big_literal` XFAIL), `fmt: pass`, `leak: pass`,
    `opt: pass`.
 4. Heap suite: same with `MALLOC_CHECK_=3`.
@@ -377,8 +377,8 @@ Compile gaps (pre-existing, not yet fixed):
 - `20_worker` is timing-sensitive; validate with repeated runs.
 - Method-call turbofish works, including runtime (`to_list<i32>(41)`
   probed green on v1.15).
-- Do not release/publish without asking. Next release (v1.17) bootstraps
-  from v1.16 — re-prove before touching the workflow.
+- Do not release/publish without asking. Next release (v1.18) bootstraps
+  from v1.17 — re-prove before touching the workflow.
 - `pkill -f` matches its own command line: kill hung compilers by exact
   PID from a pidfile, never by pattern.
 - Always verify `build/stage2` freshness (`-v` + timestamp) before
