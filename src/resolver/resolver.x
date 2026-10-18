@@ -3868,10 +3868,27 @@ impl Resolver{
     if(!rt.type.is_pointer()){
       call_name = "into_iter";
     }
+    //An array has no iter/into_iter impl of its own; iterate a slice *view*
+    //of the whole array (`arr[0..N]`) instead, which is what the slice impls
+    //do. A pointer to an array is dereferenced to a place first, so the view
+    //is taken of the array itself rather than of the (temporary) pointer:
+    //`(*p)[0..N]`, not `p[0..N]`. Everything else (slice, List, Range) is
+    //passed through exactly as before. By value this needs a copy of each
+    //element, so a drop-typed element type errors like it does for slices
+    //(the slice impl moves out of an index, which is refused); by reference
+    //(`for x in &arr`) each `x` is a pointer into the array and is fine.
+    let target = format("{:?}", &fe.rhs);
+    if let Type::Array(elem, size) = &rt.type{
+      target = format("({})[0..{}]", target, *size);
+    }else if let Type::Pointer(bx) = &rt.type{
+      if let Type::Array(elem2, size2) = bx.get(){
+        target = format("(*({}))[0..{}]", target, *size2);
+      }
+    }
     let info = FormatInfo::new(node.line);
     let body = &info.block;
     let it_name = format("_it_{}", node.id);
-    let it_decl = parse_stmt(format("let {} = ({:?}).{}();", &it_name, &fe.rhs, call_name), &self.unit, node.line);
+    let it_decl = parse_stmt(format("let {} = ({}).{}();", &it_name, target, call_name), &self.unit, node.line);
     body.list.add(it_decl);
     let whl = "while(true){\n".str();
     let opt_name = format("_{}_{}_opt", &fe.var_name, node.id);

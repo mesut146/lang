@@ -274,6 +274,46 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   i32); }`) still overflows the stack in `DropHelper::is_drop_type` --
   pre-existing, invalid type (should be a clean cyclic-type error).
 
+- Array elements as places (2026-10-18, same branch): three holes, one
+  shape. (1) `arr[i] = v` never dropped the old element: `drop_lhs` only
+  knew struct fields, so an index place fell through as an untracked
+  expression -- a plain leak (valgrind: "definitely lost" with String
+  elements; the A-tracker showed the old element never dropped).
+  `drop_lhs` now drops the overwritten value for any place rooted at an
+  index (`arr[i] = v`, `arr[i].f = v`, `arr[i].f[0] = v`), consulting the
+  element's state first so an overwrite into an already moved-out element
+  is a no-op (`Own::is_index_place` / `Own::index_root`). (2) a *constant*
+  index into a local array is a tracked place now (`Rhs::INDEX{scp, idx}`,
+  built by `Rhs::new` only for an `Expr::Name` base of array type with a
+  literal index), so `send(arr[0])` works: the element behaves exactly like
+  a struct field -- moving one out suppresses the array's own element-wise
+  drop, and `check_partial` then requires *every* drop element to move (the
+  all-fields rule; it enumerates array slots via `Rhs::INDEX`). Reassigning
+  a moved element revives it, as for fields. (3) `for x in <array>` used to
+  fail outright ("get_impl type not covered: [i32; 3]"): the desugar calls
+  iter/into_iter on the array type, which has no impl.
+  `Resolver::visit_for_each` now iterates a slice *view* of the whole array
+  (`arr[0..N]`); a pointer to an array is dereferenced first
+  (`(*p)[0..N]`, never `p[0..N]`, which is a slice of the temporary pointer
+  and dangles). By value this copies elements, so a drop-typed element type
+  errors exactly like it already does for slices; by reference (`for x in
+  &arr`) each `x` is a pointer into the array. Slices, List and Range are
+  passed through unchanged (the slice impls live in `std/it`, so the import
+  is still required, exactly as for slices).
+  Still refused (no place state, so the aggregate would drop a value that
+  already left): a dynamic index, a slice, a pointer base, a nested array,
+  and a *field* of an element -- `send(p[0].a)` used to compile and drop
+  that field twice (`A::drop 1` twice); it is now a clean "cannot move out
+  of an array element" (`Own::do_move` refuses any index-rooted place that
+  is not `Rhs::INDEX`).
+  Regression: tests/own/28arrassign.x (overwrite; field-of-element and
+  nested cases), tests/own/29arrmove.x (moves), tests/normal/40-array-foreach.x,
+  tests/fail/array_elem_move.x (dynamic index),
+  tests/fail/array_elem_field_move.x (field of an element). Residual
+  (documented): writing into an element, or a field of one, *after* it was
+  moved out is not diagnosed -- the stale value is not dropped (no double
+  free) but the new value can leak.
+
 Codegen: for-each `continue` + trailing `return` (fixed 2026-10-18,
 tests/normal/39-foreach-continue.x): the for-each desugar ends its
 `while(true)` body with the opaque `std::internal_block!(id)`, which

@@ -126,6 +126,13 @@ impl Debug for Rhs{
                 f.print(name);
                 f.print("}");
             },
+            Rhs::INDEX(scp, idx) => {
+                f.print("Rhs::INDEX{");
+                f.print(scp);
+                f.print(", ");
+                f.print(idx);
+                f.print("}");
+            },
         }
     }
 }
@@ -135,6 +142,7 @@ impl Clone for Rhs{
             Rhs::EXPR(e) => return Rhs::EXPR{*e},
             Rhs::VAR(v) => return Rhs::VAR{v.clone()},
             Rhs::FIELD(scp, name) => return Rhs::FIELD{scp: scp.clone(), name: name.clone()},
+            Rhs::INDEX(scp, idx) => return Rhs::INDEX{scp: scp.clone(), idx: *idx},
         }
     }
 }

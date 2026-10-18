@@ -150,7 +150,12 @@ struct Moved{
 enum Rhs{
     EXPR{e: Expr*},
     VAR{v: Variable},
-    FIELD{scp: Variable, name: String}
+    FIELD{scp: Variable, name: String},
+    //A constant index into a local array: an element place, tracked exactly
+    //like a field (see Rhs::new below). Moving one element out suppresses the
+    //array's own drop; check_partial then requires every drop element to
+    //move, mirroring the all-fields rule for structs.
+    INDEX{scp: Variable, idx: i32}
 }
 enum Droppable{
     VAR{var: Variable*},
@@ -224,6 +229,9 @@ impl Rhs{
     func new(scope: Variable, name: String): Rhs{
         return Rhs::FIELD{scope, name};
     }
+    func new(scope: Variable, idx: i32): Rhs{
+        return Rhs::INDEX{scope, idx};
+    }
     func new(expr: Expr*, own: Own*): Rhs{
         if let Expr::Access(scp, name)=expr{
             let scp_rt = own.get_resolver().visit(scp.get());
@@ -241,6 +249,30 @@ impl Rhs{
                     if(irt.vh.is_some() && own.var_map.get(&irt.vh.get().id).is_some()){
                         let iv = own.get_var(irt.vh.get().id);
                         return Rhs::FIELD{iv.clone(), name.clone()};
+                    }
+                }
+            }
+        }
+        //A *constant* index into a local array is a place like a field
+        //(`arr[0]` <=> field "0"): the element can be moved out and dropped
+        //independently, and once any element moved the array's own drop is
+        //suppressed (check_partial then requires all drop elements to move,
+        //the same all-fields rule as for structs). A dynamic index, a slice
+        //(`arr[a..b]`), or a pointer base has no place state and stays
+        //Rhs::EXPR, so do_move keeps refusing moves out of it.
+        if let Expr::ArrAccess(aa) = expr{
+            //Only a *plain local array* base gets a tracked element place:
+            //`arr[0]`. A slice, a pointer, a nested array, or a field-typed
+            //base stays untracked (Rhs::EXPR) and is refused below.
+            if(aa.arr.get() is Expr::Name){
+                let opt = own.const_index(aa);
+                if(opt.is_some()){
+                    let art = own.get_resolver().visit(aa.arr.get());
+                    if(art.type.is_array()){
+                        if(art.vh.is_some() && own.var_map.get(&art.vh.get().id).is_some()){
+                            let av = own.get_var(art.vh.get().id);
+                            return Rhs::INDEX{scp: av.clone(), idx: opt.unwrap()};
+                        }
                     }
                 }
             }

@@ -612,6 +612,32 @@ impl Own{
         }
         scope.ptr_left.clear();
     }
+    //The literal integer index of `arr[N]`, or none for anything else: a
+    //dynamic index, a slice (`arr[a..b]`), a non-int literal. A constant
+    //index makes the element a trackable place (see Rhs::new).
+    func const_index(self, aa: ArrAccess*): Option<i32>{
+        if(aa.idx2.is_some()){
+            return Option<i32>::new();
+        }
+        if let Expr::Lit(lit) = aa.idx.get(){
+            if(lit.kind is LitKind::INT){
+                let trimmed = lit.trim_suffix();
+                let normal = trimmed.replace("_", "");
+                if(normal.str().starts_with("0x") || normal.str().starts_with("-0x")){
+                    let r = i64::parse_hex(normal.str());
+                    if(r.is_ok()){
+                        return Option<i32>::new(r.unwrap() as i32);
+                    }
+                    return Option<i32>::new();
+                }
+                let r = i64::parse(normal.str());
+                if(r.is_ok()){
+                    return Option<i32>::new(r.unwrap() as i32);
+                }
+            }
+        }
+        return Option<i32>::new();
+    }
     func do_move(self, expr: Expr*){
         let rt = self.get_type(expr);
         if(!self.is_drop_type(&rt.type)){
@@ -626,15 +652,16 @@ impl Own{
             print("do_move {:?}\n", &mv);
         }
         let rhs = Rhs::new(expr, self);
-        //An index place (`arr[i]`, `slice[i]`, `p[i]`) is not tracked like a
-        //field, so moving drop data out of it would leave the aggregate
-        //dropping a value that already left (double free). Refuse the move:
-        //the array/slice keeps owning the element. Reads and
-        //`arr[i].clone()` are unaffected.
-        if let Expr::ArrAccess(aa) = expr{
-            if(aa.idx2.is_none()){
-                self.get_resolver().err(expr, "cannot move out of an array element");
-            }
+        //Any place rooted at an index (`arr[i]`, `arr[i].f`, `p[i].a`) is
+        //movable only when it *is* a tracked element place: a constant index
+        //into a local array (Rhs::INDEX, see Rhs::new). Everything else has
+        //no place state, so the aggregate would keep dropping a value that
+        //already left (the same allocation freed twice). Refuse those: the
+        //aggregate keeps owning the element. (This also covers cases like
+        //`send(p[0].a)`, which used to compile and drop that field twice.)
+        //Reads and `arr[i].clone()` are unaffected.
+        if(self.is_index_place(expr) && !(rhs is Rhs::INDEX)){
+            self.get_resolver().err(expr, "cannot move out of an array element");
         }
         if let Rhs::FIELD(scp, name)=&rhs{
             if(!move_ptr_field && scp.type.is_pointer()){
@@ -880,14 +907,14 @@ impl Own{
         //print("get_state {} from {}\n", rhs, scope.print_info());
         let opt = scope.state_map.get(rhs);
         if(opt.is_none()){
-            if(rhs is Rhs::FIELD){
+            if(rhs is Rhs::FIELD || rhs is Rhs::INDEX){
                 return State::new(StateType::NONE, scope);
             }
             print("{:?}\n", self.get_scope(self.main_scope).print(self));
             panic("no state {:?} from {:?}", rhs, scope.kind);
         }
         let state: StateType = *opt.unwrap();
-        if let Rhs::FIELD(scp, name) = rhs{
+        if(rhs is Rhs::FIELD || rhs is Rhs::INDEX){
             return State::new(state, scope);
             //let scp_state = self.get_state(Rhs::new(scp));
         }
@@ -901,6 +928,13 @@ impl Own{
                     continue;
                 }
                 if let Rhs::FIELD(scp, name) = pair.a{
+                    if(scp.id == rhs.get_id()){
+                        return State::new(StateType::MOVED_PARTIAL, scope);
+                    }
+                }
+                //an element of a tracked array (constant index) behaves
+                //exactly like a field for the partial-move rollup
+                if let Rhs::INDEX(scp, idx) = pair.a{
                     if(scp.id == rhs.get_id()){
                         return State::new(StateType::MOVED_PARTIAL, scope);
                     }
@@ -1188,11 +1222,69 @@ impl Own{
             scope = self.get_scope(scope.parent);
         }
     }
+    //True for `arr[i]` (a real index, not a slice `arr[a..b]` or `arr[i..]`)
+    //and for a field chain rooted at one (`arr[i].f`, `arr[i].f[0]`, ...):
+    //places whose base aggregate keeps every element live, so an overwrite
+    //through them must drop the old value (and a move out of the *root*
+    //element place must be tracked, see do_move). Bare `ptr::deref!(...)`
+    //and other untracked roots are not included and stay silent no-ops, as
+    //documented.
+    func is_index_place(self, e: Expr*): bool{
+        if let Expr::ArrAccess(aa) = e{
+            return aa.idx2.is_none();
+        }
+        if let Expr::Access(scp, name) = e{
+            return self.is_index_place(scp.get());
+        }
+        return false;
+    }
+    //The tracked element place at the root of a place expression: `arr[i]`
+    //for `arr[i]`, `arr[i].f`, `arr[i].f[0]`; for `m[0][1]` it is the
+    //innermost index that Rhs::new can name (`m[0]`, when the base is a
+    //plain local array). None when no index level is trackable. Used to
+    //consult the element's state before dropping an overwrite into it.
+    func index_root(self, e: Expr*): Option<Rhs>{
+        if let Expr::Access(scp, name) = e{
+            return self.index_root(scp.get());
+        }
+        if let Expr::ArrAccess(aa) = e{
+            let r = Rhs::new(e, self);
+            if(r is Rhs::INDEX){
+                return Option<Rhs>::new(r);
+            }
+            return self.index_root(aa.arr.get());
+        }
+        return Option<Rhs>::new();
+    }
     func drop_lhs(self, lhs: Expr*, ptr: LLVMPtr){
         if(!self.is_drop_type(lhs)){
             return;
         }
         let lhs2 = Rhs::new(lhs, self);
+        //A place rooted at an index (`arr[i] = v`, `arr[i].f = v`, any
+        //depth): the base aggregate keeps owning every element, so the value
+        //being overwritten is live and must drop here; `store` hands us its
+        //address. The element is a *tracked* place when the base is a local
+        //array with a constant index (Rhs::INDEX): then a moved-out element
+        //is already dead, so neither it nor anything into it may drop the
+        //stale value -- exactly like a moved field. For deeper shapes
+        //(`arr[i].f = v`) the tracked level is the index root. (The
+        //struct-field path below only sees plain FIELD shapes.)
+        if(self.is_index_place(lhs)){
+            let tracked = self.index_root(lhs);
+            if(tracked.is_some()){
+                let r = tracked.unwrap();
+                let st = self.get_state(&r, self.get_scope());
+                if(st.is_moved()){
+                    return;
+                }
+            }
+            if(drop_lhs_enabled){
+                let rt = self.get_type(lhs);
+                self.drop_force(&rt, ptr, lhs.line, &lhs2);
+            }
+            return;
+        }
         //untracked base (field of a call result, deref of a call): no place
         //state exists. A field of an owned temporary is the one case we can
         //still own: the engine registers that temporary as an object, so the
@@ -1235,13 +1327,22 @@ impl Own{
         let rt = resolver.visit_type(&var.type);
         //A tuple has no decl; its elements are its fields, named by index
         //(the same name Rhs::new gives `t.0`). Enumerating them used to
-        //panic in get_decl.
+        //panic in get_decl. An array is the same story, but its elements are
+        //Rhs::INDEX places (`arr[0]`), one per slot, all of the element type.
         let names = List<String>::new();
         let types = List<Type>::new();
+        let places = List<Rhs>::new();
         if let Type::Tuple(tt) = &rt.type{
             for(let i = 0;i < tt.types.len();++i){
                 names.add(format("{}", i));
                 types.add(tt.types.get(i).clone());
+                places.add(Rhs::new(var.clone(), names.get(i).clone()));
+            }
+        }else if let Type::Array(elem, size) = &rt.type{
+            for(let i = 0;i < *size;++i){
+                names.add(format("{}", i));
+                types.add(elem.get().clone());
+                places.add(Rhs::new(var.clone(), i));
             }
         }else{
             let decl = resolver.get_decl(&rt).unwrap();
@@ -1249,11 +1350,12 @@ impl Own{
             for fd in fields{
                 names.add(fd.name.get().clone());
                 types.add(fd.type.clone());
+                places.add(Rhs::new(var.clone(), fd.name.get().clone()));
             }
         }
         let moved_fields = List<String>::new();
         for(let i = 0;i < names.len();++i){
-            let rhs = Rhs::new(var.clone(), names.get(i).clone());
+            let rhs = places.get(i).clone();
             let state = self.get_state(&rhs, scope);
             if(state.kind is StateType::MOVED){
                 moved_fields.add(names.get(i).clone());

@@ -271,6 +271,36 @@ Ownership only — no Rust-like borrows:
   `DropHelper::is_drop_type`/`is_drop_decl` (SIGSEGV, same pre-fix) --
   invalid type, should be a clean "cyclic type" error.
 
+- Array elements as places (2026-10-18, same branch): closes the last
+  documented array/ownership gap, in three parts. (1) `arr[i] = v` leaked
+  the old element -- `drop_lhs` only knew struct fields, so an index place
+  fell through as an untracked expression. It now drops the overwritten
+  value for any place rooted at an index (`arr[i] = v`, `arr[i].f = v`,
+  `arr[i].f[0] = v`), consulting the element's state first so an overwrite
+  into an already moved-out element is a no-op (`Own::is_index_place` /
+  `Own::index_root`). (2) `send(arr[0])` was refused; a *constant* index
+  into a local array is a tracked place now (`Rhs::INDEX{scp, idx}`,
+  produced by `Rhs::new` only for an `Expr::Name` base of array type with a
+  literal index), so the element behaves like a struct field: moving one
+  out suppresses the array's element-wise drop, and `check_partial`
+  requires *every* drop element to move (the all-fields rule, enumerating
+  array slots). Reassigning a moved element revives it, as for fields.
+  (3) `for x in <array>` failed outright ("get_impl type not covered:
+  [i32; 3]"); `Resolver::visit_for_each` now iterates a slice *view* of the
+  array (`arr[0..N]`), dereferencing a pointer to an array first
+  (`(*p)[0..N]`, since `p[0..N]` slices the temporary pointer and dangles).
+  By value it copies, so a drop element type errors as it already does for
+  slices; by reference each `x` points into the array. Still refused:
+  dynamic index, slice, pointer base, nested array, and a *field* of an
+  element -- `send(p[0].a)` used to compile and drop that field twice
+  (`A::drop 1` twice), now a clean "cannot move out of an array element"
+  (`Own::do_move` refuses any index-rooted place that is not `Rhs::INDEX`).
+  Tests: tests/own/28arrassign.x, tests/own/29arrmove.x,
+  tests/normal/40-array-foreach.x, tests/fail/array_elem_move.x (dynamic
+  index now), tests/fail/array_elem_field_move.x. Residual (documented):
+  writing into an element (or a field of one) after it was moved out is not
+  diagnosed -- no double free, but the new value can leak.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: none open as of 4311e77 (see doc/ownership.txt
@@ -285,12 +315,14 @@ Compile gaps (pre-existing, not yet fixed):
   before the field validator runs. Same pre-fix. The type is invalid
   (infinite size) and should be a clean "cyclic type" error.
   Non-self-referential arrays/tuples as fields work (owner entry above).
-- Array-element places stay untracked: `arr[i] = v` still leaks the old
-  value (silent no-op, as before) and moving out (`send(arr[0])`) is
-  refused with a clean error ("cannot move out of an array element")
-  rather than supported. Also, `for x in <array>` is unsupported
-  generally, even for `[i32; 3]` ("get_impl type not covered") -- use a
-  slice or a List.
+- Array-element places *are* tracked now (constant index into a local
+  array; see the owner entry above), so `arr[i] = v` no longer leaks and
+  `send(arr[0])` works. What stays refused, with a clean error, is any
+  index place the state cannot name: a dynamic index, a slice, a pointer
+  base, a nested array, and a field of an element. One residual: writing
+  into an element (or a field of one) after it was moved out is not
+  diagnosed -- the stale value is not dropped (so no double free), but
+  the new value can leak.
 - Not a compiler bug, but a harness constraint worth knowing: the
   `tests/normal` runner compiles with `-stdpath src` and no `-std`, so
   no std lib is linked -- only generic std code monomorphised into the

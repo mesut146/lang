@@ -1,7 +1,9 @@
 // should-fail: cannot move out of an array element
-//An index place is not tracked like a field, so a move out of an array
-//element would leave the array dropping a value that already left. Use a
-//copy, or move the whole array.
+//Only a *constant* index into a local array is a tracked element place now
+//(Rhs::INDEX); a dynamic index has no place state, so a move out of it would
+//leave the array dropping a value that already left. Use a copy, or move the
+//whole array. (The same refusal covers slices, pointer bases, nested arrays,
+//and fields of elements -- see array_elem_field_move.x.)
 #drop
 struct A{
   a: i32;
@@ -14,5 +16,6 @@ func send(a: A){
 }
 func main(){
   let arr = [A{a: 1}, A{a: 2}];
-  send(arr[0]);
+  let i = 0;
+  send(arr[i]);
 }
