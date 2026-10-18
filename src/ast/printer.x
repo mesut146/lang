@@ -23,7 +23,6 @@ func format_dir(dir: str, out: str){
         let f = Fmt::new();
         debug_unit(&unit, &f, &unit.comments);
         let str = f.buf.clone();
-        Drop::drop(f);
         File::write_string(str.str(), outf.str())?;
     }
 }
@@ -47,21 +46,18 @@ func sub_str_stmt(f: Fmt*, comments: List<Comment>*, node: Stmt*): String{
   let sub = Fmt::new();
   debug_stmt(node, &sub, comments);
   let res = sub.buf.clone();
-  Drop::drop(sub);
   return res;
 }
 func sub_str_expr(f: Fmt*, comments: List<Comment>*, node: Expr*): String{
   let sub = Fmt::new();
   debug_expr(node, &sub, comments);
   let res = sub.buf.clone();
-  Drop::drop(sub);
   return res;
 }
 func sub_str_method(f: Fmt*, comments: List<Comment>*, node: Method*): String{
   let sub = Fmt::new();
   debug_method(node, &sub, comments);
   let res = sub.buf.clone();
-  Drop::drop(sub);
   return res;
 }
 

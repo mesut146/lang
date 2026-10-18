@@ -23,7 +23,6 @@ func main(argc: i32, args: i8**){
     let f = Fmt::new();
     debug_unit(&unit, &f, &unit.comments);
     let out = f.buf.clone();
-    Drop::drop(f);
     if(cmd.args.len() == 2){
         let dst = cmd.args.get(1).clone();
         out.append("\n");

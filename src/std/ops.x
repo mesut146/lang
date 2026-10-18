@@ -133,7 +133,6 @@ impl Fmt{
     let f = Fmt::new();
     Debug::debug(node, &f);
     let res = f.buf.clone();
-    Drop::drop(f);
     return res;
   }
 }
@@ -203,7 +202,6 @@ impl Debug for i32{
   func debug(self, f: Fmt*){
     let str = self.str();
     f.print(&str);
-    Drop::drop(str);
   }
 }
 impl Display for i32{
@@ -215,7 +213,6 @@ impl Debug for i64{
   func debug(self, f: Fmt*){
     let str = self.str();
     f.print(&str);
-    Drop::drop(str);
   }
 }
 impl Display for i64{
@@ -227,7 +224,6 @@ impl Debug for f32{
   func debug(self, f: Fmt*){
     let str = self.str();
     f.print(&str);
-    Drop::drop(str);
   }
 }
 impl Display for f32{
@@ -239,7 +235,6 @@ impl Debug for f64{
   func debug(self, f: Fmt*){
     let str = self.str();
     f.print(&str);
-    Drop::drop(str);
   }
 }
 impl Display for f64{
@@ -486,7 +481,6 @@ impl i64{
   func debug_hex(x: i64, f: Fmt*){
     let str = i64::print_hex(x);
     f.print(&str);
-    Drop::drop(str);
   }
 }
 

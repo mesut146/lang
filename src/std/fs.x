@@ -73,7 +73,6 @@ impl File{
     if(fp as u64 == 0){
       return Result<File, String>::err(format("failed to create file '{}'", path));
     }
-    Drop::drop(path_c);
     return Result<File, String>::ok(File{fp});
   }
 
@@ -172,10 +171,8 @@ impl File{
     let dp = opendir(path_c.ptr());
     if(dp as u64 != 0){
       closedir(dp);
-      Drop::drop(path_c);
       return true;
     }
-    Drop::drop(path_c);
     return false;
   }
   
@@ -184,10 +181,8 @@ impl File{
     let fp = fopen(path_c.ptr(), "r".cptr());
     if(fp as u64 != 0){
       fclose(fp);
-      Drop::drop(path_c);
       return true;
     }
-    Drop::drop(path_c);
     return false;
   }
   
@@ -210,7 +205,6 @@ impl File{
     }
     let path_c = CStr::new(path);
     let rc = mkdir(path_c.ptr(), /*0777*/ /*511*/ 511);
-    Drop::drop(path_c);
     if(rc != 0){
       return Result<(), String>::err(format("failed to create dir '{}', code={}", path, &rc));
     }
@@ -221,7 +215,6 @@ impl File{
     let buf = [0i8; 256];
     let path_c = CStr::new(path);
     let ptr = realpath(path_c.ptr(), &buf[0] as i8*);
-    Drop::drop(path_c);
     if(ptr as u64 == 0){
       return Result<String, String>::err(format("resolving path is null '{}'\n", path));
     }
@@ -237,7 +230,6 @@ impl File{
     if(ret != 0){
       return Result<(), String>::err(format("failed to set permissions for '{}', code={}", file, ret));
     }
-    Drop::drop(filec);
     return Result<(), String>::ok(());
   }
 

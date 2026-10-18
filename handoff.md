@@ -32,8 +32,12 @@ Ownership only — no Rust-like borrows:
 - `parse_obj` / lambda-call sites clone instead of moving payloads out.
 - Manual drops: 164 dead-after temps + 27 reassign temps + 2 anonymous
   temps stripped; `impl Drop` for String/Protos/Context deleted
-  (derived glue owns); 6 remain, all load-bearing (`impl Drop for Own`
-  for `Logger::exit`, Drop-derive codegen string). See doc/ownership.txt.
+  (derived glue owns). The last 27 explicit drops outside `impl Drop`
+  bodies were stripped 2026-10-18 (fs/ops/printer/map/option/hashmap/
+  formatter): auto-drop owns locals+params on every exit path, and
+  drop-on-assign owns `p.f=x`/`*p=x`. The only remaining manual drop is
+  the type-erased `Any` glue (`release_compile_args`), which cannot be
+  auto-dropped. See doc/ownership.txt.
 - Drop-on-assign via `drop_lhs` (struct path; hardened to never panic on
   untracked places); drop-then-reassign manuals all stripped.
 - `#[returns_alias(p)]` closes the extern-alias hole (owner consumed at
@@ -144,6 +148,27 @@ Ownership only — no Rust-like borrows:
   full suite green on S1 and S3 (`normal pass=63 xpass=0`, fmt/leak/opt
   pass); the `-j 4` parent and the `src/std` module compile are
   valgrind-clean (LLVM-internal roots only).
+
+- Manual-drop sweep (2026-10-18, on `own-strip-manual-drops`): the
+  hand-written `Drop::drop` / `.drop()` calls left outside `impl Drop`
+  bodies (and `Any::drop2`) were removed -- 27 sites in 7 files -- now
+  that drop-on-assign has matured. Two families: (a) "free a
+  local/param before returning" (fs 8, ops 6, printer 4, map
+  get_pair_or 2, hashmap 2, formatter 1); (b) "drop-old +
+  std::no_drop(place) + assign" (map add 2, option set/reset 2).
+  Removal is a no-op: owned locals *and* owned params drop on every
+  exit path -- early `return`, and `return` from inside a loop
+  (IR-proven: `String__drop_String` right before each `ret`) -- and
+  drop-on-assign fires for `p.f = x` / `*p = x` on concrete, generic
+  and enum places (IR-proven). The one place form it does NOT cover is
+  an explicit deref member `ptr::deref!(p).f = x` (untracked -> leak);
+  none of the swept sites used it. The `Any` glue in
+  `backend/compiler.x` (`release_compile_args`) stays -- type-erased,
+  cannot be auto-dropped. Regression: tests/own/24ptrassign.x (pins
+  pointer-field, pointer-deref, Map::add same-key, get_pair_or hit).
+  Full suite green on S1 and S3 (`normal pass=63 xpass=0`, fmt/leak/opt
+  pass); triangle S1==S2==S3 byte-identical (source-level change,
+  codegen logic untouched).
 
 ## Known open holes (documented, not yet solved)
 

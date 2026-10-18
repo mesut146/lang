@@ -28,15 +28,8 @@ impl<K, V> Map<K, V>{
       let res = self.arr.add(Pair{k, v});
       return res;
     }
-    //already exist, change old
+    //already exist, change old: assignment drops the old a/b in place
     let pair: Pair<K, V>* = opt.unwrap();
-    let old_a = ptr::deref!(&pair.a);
-    let old_b = ptr::deref!(&pair.b);
-    Drop::drop(old_a);
-    Drop::drop(old_b);
-    std::no_drop(pair.a);
-    std::no_drop(pair.b);
-
     pair.a = k;//todo add option to keep old key
     pair.b = v;
     return pair;
@@ -96,8 +89,6 @@ impl<K, V> Map<K, V>{
     for(let i = 0;i < self.arr.len();++i){
       let pair = self.arr.get(i);
       if(Eq::eq(&pair.a, &key)){
-        Drop::drop(key);
-        Drop::drop(def);
         return pair;
       }
     }

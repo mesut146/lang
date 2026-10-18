@@ -167,6 +167,29 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   the boxed arg drops exactly once) and tests/leak/any_payload.x
   (valgrind: the payload's String buffer is freed). Both fail to
   compile pre-fix.
+- Manual-drop sweep (2026-10-18, on `own-strip-manual-drops`): the
+  hand-written explicit drops outside `impl Drop` bodies (and
+  `Any::drop2`) were removed -- 27 sites, 7 files. Two families: (a)
+  "free a local/param before returning" (fs.x 8, ops.x 6, printer.x 4,
+  map.x get_pair_or 2, hashmap.x 2, formatter/main.x 1); (b) "drop-old +
+  std::no_drop(place) + assign" (map.x add 2, option.x set/reset 2).
+  Auto-drop already owns both, so removal is a no-op: (a) owned locals
+  *and* owned params drop on every exit path, including early `return`
+  and `return` from inside a loop (IR: `String__drop_String`
+  immediately before each `ret`, for a local and for a param alike);
+  (b) drop-on-assign fires for `p.f = x` and `*p = x`, concrete and
+  generic struct fields and enums (IR: `..__drop_..(&p.f)`,
+  `G__drop_G(p)`, `Option<..>__drop_Option(..)` immediately before the
+  store). The one place form that does NOT drop-on-assign is an
+  explicit deref member, `ptr::deref!(p).f = x` (untracked -> leaks);
+  none of the swept sites used it. The only manual drop left outside
+  `impl Drop` bodies is the type-erased `Any` glue
+  (`release_compile_args`, backend/compiler.x) -- by construction it
+  cannot be auto-dropped. Regression: tests/own/24ptrassign.x pins the
+  overwrite shapes (pointer-field, pointer-deref, Map::add same-key,
+  get_pair_or hit) via the A-tracker. Full suite green on S1 and S3
+  (normal pass=63 xpass=0, fmt/leak/opt pass); triangle S1==S2==S3
+  byte-identical (source-level change; codegen logic untouched).
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet

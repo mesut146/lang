@@ -128,7 +128,6 @@ impl<K, V> HashMap<K, V>{
             let res = Option<V>::new(node.value);
             node.value = value;
             node.hash = hash;
-            Drop::drop(key);
             return res;
         }
         while(node.next.is_some()){
@@ -138,7 +137,6 @@ impl<K, V> HashMap<K, V>{
                 let res = Option<V>::new(node.value);
                 node.value = value;
                 node.hash = hash;
-                Drop::drop(key);
                 return res;
             }
         }

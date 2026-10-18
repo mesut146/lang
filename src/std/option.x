@@ -54,11 +54,7 @@ impl<T> Option<T>{
   
   func set(self, val: T){
     //todo return Option{ old val }
-    if(self.is_some()){
-      let old = ptr::deref!(self.get());
-      Drop::drop(old);
-    }
-    std::no_drop(*self);
+    //assignment frees the old value in place
     *self = Option::new(val);
     //todo *std::enum_data!(self) = val;
   }
@@ -95,11 +91,7 @@ impl<T> Option<T>{
 
   //clears value, sets this to None
   func reset(self){
-    if(self.is_some()){
-      let old = ptr::deref!(self.get());
-      Drop::drop(old);
-    }
-    std::no_drop(*self);
+    //assignment frees the old value in place
     *self = Option<T>::new();
   }
 
