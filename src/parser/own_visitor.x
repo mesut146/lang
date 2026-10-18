@@ -117,6 +117,12 @@ impl OwnVisitor{
         //format_map; walking it is what tracks moves/drops inside the
         //expansion (a twice-used macro argument that moves is diagnosed as a
         //use-after-move) and drops the expansion's own locals.
+        //NB: user macro calls parse as Expr::MacroCall (see visit_expr above),
+        //so this Call* branch does not see them; movement and drops inside an
+        //expansion are still handled (the emitter emits the block and the
+        //ownership engine follows it -- a body local drops like a block local,
+        //and a twice-used moving argument is diagnosed, see
+        //tests/fail/macro_double_move.x).
         if(Resolver::is_format(mc) || resolver.macros.contains(&mc.name)){
             let info = resolver.format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);

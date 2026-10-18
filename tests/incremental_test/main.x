@@ -10,5 +10,7 @@ func main(){
    //cross-unit macro: defined in macros.x, whose own import (mhelper.x) is not
    //imported here -- the expansion still resolves H and h_seven
    build_h!(30, 5);
+   //scoped call into a module of an imported unit
+   toolkit::build_pair!(9);
    printf("incremental done\n");
 }

@@ -219,10 +219,13 @@ struct Resolver{
   //`use` aliases: bare name -> canonical type (use M::A / M::{A, B}).
   //Checked after the type cache (locals always win) but before use_items
   //prefixes. Targets resolve lazily on first use.
-  //`macro name(...)`: unit-local definitions (seeded by init_item, module-nested
-  //ones flattened the same way), looked up by bare name for a `name!(...)` call
-  //(see expand_user_macro).
+  //`macro name(...)`: unit-local definitions (seeded by init_item), looked up
+  //by bare name for a `name!(...)` call or through a module path for
+  //`m::name!(...)` (see find_macro).
   macros: HashMap<String, Macro*>;
+  //name -> the module a macro was declared in (`None` = top level), which is
+  //what a scoped call matches and a bare call does not
+  macro_scopes: HashMap<String, Type>;
   //guards a macro that expands itself (directly or through another)
   macro_depth: i32;
 }
@@ -273,6 +276,7 @@ impl Resolver{
       resolvers_cache_method: "".str(),
       gen_cache: HashMap<String, Desc>::new(),
       macros: HashMap<String, Macro*>::new(),
+      macro_scopes: HashMap<String, Type>::new(),
       macro_depth: 0,
     };
   }
@@ -553,25 +557,71 @@ impl Resolver{
     return &r.unit;
   }
 
-  //Macro lookup: this unit's own definitions first, then the units it imports
-  //(prelude included) -- one level, like the other name lookups. A hit in a
-  //foreign unit also pulls that unit's imports into extra_imports so the
-  //copied body can still name what its own unit could; the defining unit
-  //itself is already in scope, since that is how the macro was found.
-  func find_macro(self, name: String*): Option<Macro*>{
-    let own = self.macros.get(name);
+  //Macro lookup, mirroring how types resolve (and, through `use_items`, how a
+  //module's items come into bare scope): a bare `name!` reaches this unit's
+  //top-level macros, the macros of every module registered as a use prefix
+  //(own modules are registered by visit_item, `use m;` adds one explicitly, and
+  //`use m::{name}` canonicalizes through find_use_alias) and the units it
+  //imports; `m::name!` matches a macro declared in module `m`. A hit in a
+  //foreign unit also pulls that unit's imports into extra_imports, so the copied
+  //body can still name what its own unit could.
+  func lookup_macro_local(self, scope: Option<Type>*, name: String*): Option<Macro*>{
+    let m = self.macros.get(name);
+    if(m.is_none()){
+      return Option<Macro*>::new();
+    }
+    let sc = self.macro_scopes.get(name);
+    if(scope.is_none()){
+      //bare name: a top-level macro, or one whose module find_macro has
+      //already put in scope through a use prefix
+      if(sc.is_none()){
+        return Option::new(*m.unwrap());
+      }
+      return Option<Macro*>::new();
+    }
+    if(sc.is_some() && sc.unwrap().eq(scope.get())){
+      return Option::new(*m.unwrap());
+    }
+    return Option<Macro*>::new();
+  }
+
+  func find_macro(self, scope: Option<Type>*, name: String*): Option<Macro*>{
+    let own = self.lookup_macro_local(scope, name);
     if(own.is_some()){
-      return Option::new(*own.unwrap());
+      return own;
+    }
+    if(scope.is_none()){
+      //`use m;` / `use a::b;`: the prefix itself is the module
+      for prefix in &self.use_items{
+        let scp = Option::new(prefix.clone());
+        let hit = self.lookup_macro_local(&scp, name);
+        if(hit.is_some()){
+          return hit;
+        }
+      }
+      //`use m::{name}`: the alias canonicalizes to the macro's full path
+      let alias = self.find_use_alias(name);
+      if(alias.is_some()){
+        let canon = alias.unwrap();
+        let smp = canon.as_simple();
+        if(smp.scope.is_some()){
+          let asco = Option::new(smp.scope.get().clone());
+          let hit = self.lookup_macro_local(&asco, name);
+          if(hit.is_some()){
+            return hit;
+          }
+        }
+      }
     }
     let list = self.get_resolvers();
     for(let i = 0;i < list.len();++i){
       let fr = *list.get(i);
-      let m = fr.macros.get(name);
+      let m = fr.lookup_macro_local(scope, name);
       if(m.is_some()){
         for is in &fr.unit.imports{
           self.add_extra_import(is);
         }
-        return Option::new(*m.unwrap());
+        return m;
       }
     }
     return Option<Macro*>::new();
@@ -943,10 +993,12 @@ impl Resolver{
       Item::Macro(m) => {
         //`macro name(p: Expr){...}`: a bare `Expr` parameter is a syntax slot
         //substituted into the body per call site, any other type is a *value*
-        //parameter (bound once, typed, at the top of the expansion). Seeds a
-        //unit-local map; foreign macros are found through imports
-        //(see find_macro). Reserved names refused: the resolver expands those
-        //itself and the ownership pass keys on them.
+        //parameter (bound once, typed, at the top of the expansion). The name
+        //is recorded with the module it was declared in, so `m::name!` can
+        //match it (a bare call reaches it through the module use-prefixes, see
+        //lookup_macro_local), and foreign macros are found through imports (see
+        //find_macro). Reserved names refused: the resolver expands those itself
+        //and the ownership pass keys on them.
         if(is_builtin_macro_name(m.name.str())){
           self.err(m.line, format!("macro name '{}' is reserved (builtin macro)", m.name));
         }
@@ -959,6 +1011,9 @@ impl Resolver{
             self.err(prm.line, format!("macro {}: duplicate parameter {}", m.name, prm.name));
           }
           prms.add(prm.name.clone());
+        }
+        if(scope.is_some()){
+          self.macro_scopes.add(m.name.clone(), scope.get().clone());
         }
         self.macros.add(m.name.clone(), m);
       },
@@ -2992,11 +3047,15 @@ impl Resolver{
       generate_format(node, call, self);
       return RType::new("void");
     }
-    //user-defined `macro name(p: Expr){...}` (see expand_user_macro); own
-    //definitions first, then the units this one imports
-    let mac = self.find_macro(&call.name);
+    //user-defined `macro name(p: Expr){...}` (see expand_user_macro); this
+    //unit's top-level macros first, then imported units; `m::name!` matches a
+    //module macro, `use` brings one into bare scope
+    let mac = self.find_macro(&call.scope, &call.name);
     if(mac.is_some()){
       return expand_user_macro(node, call, mac.unwrap(), self);
+    }
+    if(call.scope.is_some()){
+      self.err(node, format!("no macro '{}' in '{}'", call.name, call.scope.get().print()));
     }
     self.err(node, format!("unknown macro '{}'", call.name));
     return RType::new("void");

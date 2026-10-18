@@ -50,15 +50,17 @@ name!(arg1, arg2, arg3);//statement or expression position
 //scope restore), so keep inner binder names distinct from outer uses.
 //A body ending in an expression makes the macro an expression of the inferred
 //type (`macro square(x: Expr){ x * x }`), otherwise it is void.
-//Lookup is by bare name -- this unit's definitions first, then the units it
-//imports (so a macro defined in another file is visible when that file is
-//imported; a foreign body is resolved with the imports of its own unit), and
-//module-nested definitions are seeded flat. `m::name!(...)` is rejected, there
-//can be only one `macro name` per unit, parameter names must be unique and the
-//builtin names (`format`/`print`/`panic`/`debug_member`) are reserved.
-//Still open: token-stream macros (resolver/macros.x + TokenStream), `use`
-//aliases for macros, scoped calls, and definition-site resolution of body names
-//(the capture above).
+//Lookup follows the same rules as any other name: a bare `name!` reaches
+//top-level macros of this unit and, through `use` prefixes (every `mod` is
+//registered as one, as for types), the macros of its modules -- `use m;` or
+//`use m::{name}` spell that out -- plus the macros of imported units; a scoped
+//`m::name!(...)` (or `a::b::name!`) matches the module the macro was declared
+//in, including a module of an imported unit. One `macro name` per unit,
+//parameter names must be unique and the builtin names
+//(`format`/`print`/`panic`/`debug_member`) are reserved.
+//Still open: token-stream macros (resolver/macros.x + TokenStream), printing a
+//`use m::{name}` list (it comes out as `use m;`), and definition-site
+//resolution of body names (the capture above).
 
 
 #env

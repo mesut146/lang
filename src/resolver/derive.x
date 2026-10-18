@@ -640,9 +640,6 @@ func is_expr_param(prm: MacroParam*): bool{
 //channel the builtin macros use. A trailing expression in the body makes the
 //macro an expression macro of the inferred result type.
 func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*): RType{
-    if(call.scope.is_some()){
-        r.err(node, format!("macro '{}' must be called unqualified", mac.name));
-    }
     if(call.args.len() != mac.params.len()){
         r.err(node, format!("macro {} expects {} args, got {}", mac.name, mac.params.len(), call.args.len()));
     }

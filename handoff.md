@@ -1,12 +1,13 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `331e934` (owns `681a8cc` array places, place
+Date: 2026-10-18. Main: `de51789` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
 normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
-user-defined macros slice 1 `67f3962`/docs `28e2b07` and slice 2 `331e934`) +
-macro hygiene, slice 3 (this branch). v1.17 released at
+user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934` and
+macro hygiene `de51789`) + scoped macro calls and `use` for macros (this
+branch). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -28,7 +29,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 331e934)
+## What's in the tree (main = de51789)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -675,6 +676,53 @@ Ownership only — no Rust-like borrows:
   Triangle: no ABI or content change for non-macro programs, B == C
   byte-identical; full suite green (`normal pass=91 xpass=0`, fmt/trace/path/opt
   pass, leak self-skips).
+
+- User-defined macros, slice 3b: scoped calls and `use` (2026-10-18). Macro
+  lookup follows the same path as any other name now, so the "unit-local, bare
+  name only" restriction is gone:
+  - `m::name!(...)` (and `a::b::name!`) resolves when the macro's *declared
+    module* matches the path: `init_item` records the module per name
+    (`Resolver::macro_scopes`, absent = top level) and `lookup_macro_local`
+    compares it structurally (`Type::eq`). The search order is this unit, then
+    the units it imports -- and a foreign hit still pulls the defining unit's
+    imports into `extra_imports`, so a scoped call into a module of an *imported*
+    unit works too;
+  - a bare `name!` reaches the macros registered in `use_items` and, as for
+    types, `visit_item` registers every `mod` as a use prefix: a module's macros
+    are therefore in scope unit-wide, and `use m;` / `use m::{name}` are the
+    explicit spellings (`find_use_alias` canonicalizes the list form to
+    `m::name`, whose scope is what is matched). Macros of imported units: only
+    their top-level ones are reachable bare, their module macros take the scoped
+    form -- the same split types have;
+  - diagnostics follow the new rules: an unresolved scoped call reports
+    "no macro 'x' in 'm'" instead of "must be called unqualified", and
+    `expand_user_macro` no longer rejects a scope.
+  Tests: `tests/normal/43-macro-scoped.x` (top-level bare; `helpers::double_it!`;
+  nested `helpers::more::add_one!`; `use helpers::{double_it}` then bare;
+  `use tools;` then bare), a new `tests/fail/macro_bad_scope.x`
+  (`other::m!(v)` -> "no macro 'm' in 'other'", replacing `macro_scoped_call.x`
+  whose error no longer exists) and `tests/incremental_test/` grew a module macro
+  in `macros.x`, called from `main.x` as `toolkit::build_pair!` (scoped,
+  cross-unit, and the body uses `mhelper.x`, which main does not import).
+  `tests/fmt/macro.x`+`.expected` print a scoped call and a `use` too.
+  Pre-fix red: main's compiler rejects all of them with "must be called
+  unqualified".
+  Observed while validating -- pre-existing, not this batch, and noted rather
+  than fixed:
+  - printing a `use m::{name}` list loses the list (it comes out as `use m;`),
+    so the narrow form cannot round-trip through the formatter yet;
+  - `inner::h()` on a module of an *imported* unit panics in `get_decl`
+    (`Desc{kind: Module}`) for a function, i.e. that path is not implemented;
+    macros resolve there now precisely because the lookup is resolver-side;
+  - the ownership visitor's macro branch sits in the `Call*` overload while user
+    macro calls parse as `Expr::MacroCall`, so it never sees them. Moves and
+    drops inside an expansion still work (the emitter emits the format_map block
+    and the ownership engine follows it): verified with a drop-tracker probe (a
+    body local drops like a block local) and with slice 1's
+    `tests/fail/macro_double_move.x`.
+  Triangle: no ABI or content change for non-macro programs, B == C
+  byte-identical; full suite green (`normal pass=92 xpass=0` = 79 + 3 normal +
+  10 fail, fmt/trace/path/opt pass, leak self-skips).
 
 ## Known open holes (documented, not yet solved)
 

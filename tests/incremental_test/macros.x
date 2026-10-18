@@ -9,3 +9,13 @@ macro build_h(v: Expr, extra: i32){
     assert(h.m == extra);
     assert(h_seven() == 7);
 }
+
+//a macro inside a module of this unit: reachable from main.x as
+//`toolkit::build_pair!` (the scope is matched across imported units)
+mod toolkit{
+    macro build_pair(v: Expr){
+        let h = H{v, h_seven()};
+        assert(h.n == v);
+        assert(h.m == 7);
+    }
+}
