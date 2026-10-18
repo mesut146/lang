@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `9ca614c` (released as v1.16). Releases: v1.11 – v1.16.
+Date: 2026-10-18. Main: `8be22b3` (v1.16 released at `9ca614c`; next release v1.17 bootstraps from v1.16). Releases: v1.11 – v1.16.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
