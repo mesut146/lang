@@ -14,11 +14,6 @@ let f = ()=>5;
 f();
 
 
-//inside format macro, call custom printer
-print("method is {::TraitName}", m);
-=TraitName::fmt(m, f);
-
-
 //match expr complex: match inside match (phi-node testing)
 
 //panic macro: `panic!(..)` itself is a builtin; what is still missing is a

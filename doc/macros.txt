@@ -48,7 +48,9 @@ name!(arg1, arg2);//statement or expression position
 #cmd config
 -cache //use cache
 -out <dir> //output dir
+-o <name> //output binary name
 -nolink
+-norun //do not run the built binary
 -static
 -shared
 -flags <flags> //sent to linker LD
@@ -56,6 +58,10 @@ name!(arg1, arg2);//statement or expression position
 -i <dir>
 -stdpath <dir>
 -std
+-inc //incremental recompile (witness of moved sources)
+-g //debug info (DWARF)
+-trace //frame instrumentation (std/rt.x call_stack, print_frame())
+-remap-path-prefix OLD=NEW //repeatable; trims recorded paths (see Path::display_path)
 
 #bt config
 -j <num> //jobs, also -j<num>; -cache-ro reads cache without writing (for -j workers)
