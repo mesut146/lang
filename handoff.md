@@ -1,6 +1,8 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `681a8cc` (v1.17 released at `92e3875`; next release v1.18 bootstraps from v1.17). Releases: v1.11 – v1.17.
+Date: 2026-10-18. Main: `681a8cc` + place use-after-move (`163359c`, docs
+`f478e0e`) + cyclic-type fix (this branch). v1.17 released at `92e3875`;
+next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -266,10 +268,10 @@ Ownership only — no Rust-like borrows:
   emitter's aggregate drop is the single place that knows an array/tuple
   has no decl. Regression: tests/own/27aggfield.x (struct array field,
   tuple field, nested array field, enum variant array field; pre-fix it
-  does not compile). Still open (pre-existing): a *self-referential*
-  aggregate field (`struct S{ t: (S, i32); }`) overflows the stack in
-  `DropHelper::is_drop_type`/`is_drop_decl` (SIGSEGV, same pre-fix) --
-  invalid type, should be a clean "cyclic type" error.
+  does not compile). The *self-referential* aggregate field (`struct S{
+  t: (S, i32); }`) stack overflow noted here (SIGSEGV in
+  `DropHelper::is_drop_type`/`is_drop_decl`) is fixed -- see the
+  cyclic-type entry below.
 
 - Array elements as places (2026-10-18, same branch): closes the last
   documented array/ownership gap, in three parts. (1) `arr[i] = v` leaked
@@ -329,6 +331,32 @@ Ownership only — no Rust-like borrows:
   compiler (ex3/ex4 probes: write/read/second-move over dead elements and
   fields; revive and live-write still compile and are valgrind-clean).
 
+- Cyclic value types are a clean error (2026-10-18, same branch, closes the
+  documented compile gap): `DropHelper::is_drop_type`/`is_drop_decl` is a
+  mutual recursion that walks the whole type graph, so a type containing
+  itself by value (`struct S{ s: S; }`, also through a tuple field, an array
+  element or a base; `struct A{ b: B; } struct B{ a: A; }`) recursed forever
+  -- SIGSEGV (stack overflow, exit 139) inside `handle_attr` during
+  `Resolver::init`, i.e. *before* `Resolver::is_cyclic` (is_valid_field)
+  could report the cycle, for both v1.17 and the new main. The query is now
+  total: `DropHelper::active` holds the `Type::print` keys being expanded and
+  a re-entered key returns false -- a type that contains itself by value has
+  infinite size, so the recursive position cannot contribute drop-ness. The
+  set is balanced (every add has its matching remove on every return path,
+  hence the split into `is_drop_rt`), so diamond nesting
+  (`struct A{ x: C; y: C; }`) and recursion *through a pointer*
+  (`struct S{ s: S*; }`, `Box<N>`, `[S]` -- the std tree relies on this) are
+  untouched: neither ever re-enters a key that is still active. With the
+  crash gone the validator reports `cyclic type S` (the decl under
+  validation; `A` for the mutual pair) and exits. Tests:
+  tests/fail/cyclic_type.x / cyclic_type_tuple.x / cyclic_type_mutual.x /
+  cyclic_type_array.x -- all four dump core pre-fix, so the harness's
+  message check is what fails there. All 8 `DropHelper{...}` literals became
+  `DropHelper::new(...)`. Gates: full suite green on the self-hosted binary
+  (`normal pass=77`, fmt/opt pass; the leak gate self-skips, valgrind is not
+  installed in this environment), triangle byte-identical (A built by the
+  pre-fix main compiler, B built by A, `cmp` clean; A != pre-fix main).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -342,11 +370,12 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
 (doc/todo).
 
 Compile gaps (pre-existing, not yet fixed):
-- A *self-referential* aggregate field (`struct S{ t: (S, i32); }`)
-  overflows the stack inside `DropHelper::is_drop_type`/
-  `is_drop_decl` mutual recursion -- SIGSEGV during `handle_attr`,
-  before the field validator runs. Same pre-fix. The type is invalid
-  (infinite size) and should be a clean "cyclic type" error.
+- (fixed 2026-10-18) A *self-referential* aggregate field (`struct S{
+  t: (S, i32); }`) overflowed the stack inside
+  `DropHelper::is_drop_type`/`is_drop_decl` -- SIGSEGV during
+  `handle_attr`, before the field validator ran. The drop query is now
+  total (`DropHelper::active`) and the validator reports `cyclic type S`
+  cleanly; see the cyclic-type entry above.
   Non-self-referential arrays/tuples as fields work (owner entry above).
 - Array-element places *are* tracked now (constant index into a local
   array; see the owner entry above), so `arr[i] = v` no longer leaks and

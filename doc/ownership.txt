@@ -271,8 +271,8 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   Regression: tests/own/27aggfield.x (struct array field, tuple field,
   nested array field, enum variant array field; pre-fix it does not
   compile). A *self-referential* aggregate field (`struct S{ t: (S,
-  i32); }`) still overflows the stack in `DropHelper::is_drop_type` --
-  pre-existing, invalid type (should be a clean cyclic-type error).
+  i32); }`) overflowed the stack in `DropHelper::is_drop_type` --
+  pre-existing; closed by the cyclic-type entry below.
 
 - Array elements as places (2026-10-18, same branch): three holes, one
   shape. (1) `arr[i] = v` never dropped the old element: `drop_lhs` only
@@ -396,3 +396,29 @@ Todo probes (v1.15, doc/todo): macro/panic-macro absent (no keyword);
 open (placeholder hangs fixed above, feature not built); match-in-match
 works (phi nodes fine), int-match rejected cleanly; turbofish calls work
 incl. runtime.
+
+Cyclic value types are a clean error (fixed 2026-10-18,
+tests/fail/cyclic_type.x / cyclic_type_tuple.x / cyclic_type_mutual.x /
+cyclic_type_array.x): `DropHelper::is_drop_type`/`is_drop_decl` is a
+mutual recursion that walked the whole type graph, so a type containing
+itself by value (`struct S{ s: S; }`, also via a tuple field, an array
+element or a base) recursed forever -- SIGSEGV (stack overflow) inside
+`handle_attr` during `Resolver::init`, i.e. *before*
+`Resolver::is_cyclic` could report the cycle. The query is now total:
+`DropHelper::active` holds the `Type::print` keys currently being
+expanded and a re-entered key returns false (a type that contains itself
+by value has infinite size, so the recursive position cannot contribute
+drop-ness). The set is balanced -- every `add` has its matching `remove`
+on every return path, hence `is_drop_rt` holds the old body -- so
+diamond nesting (`struct A{ x: C; y: C; }`) and recursion *through a
+pointer* (`struct S{ s: S*; }`, `Box<N>`, `[S]`) are untouched: those
+never re-enter a key that is still active. With the crash gone the
+existing field validator reports `cyclic type S` (the decl under
+validation; `A` for the mutual pair) and `err` exits. Four `tests/fail`
+regressions; pre-fix all four dump core, so the harness's message check
+is what fails there. All 8 `DropHelper{...}` literals became
+`DropHelper::new(...)` (the struct gained the `active` map).
+Validation: full suite green on the self-hosted binary (`normal pass=77`,
+fmt/opt pass; the leak gate self-skips -- valgrind is not installed in
+this environment), triangle byte-identical (A built by the v1.17-era
+main compiler, B built by A).
