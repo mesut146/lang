@@ -242,10 +242,34 @@ Ownership only — no Rust-like borrows:
   compile) + tests/fail/array_elem_move.x and
   tests/fail/array_repeated_drop.x. Full suite green on F1/F3 (`normal
   pass=66 xpass=0`, own/fmt/leak/opt pass); triangle F1==F2==F3
-  byte-identical. Still open: an aggregate *field* (`struct S{ a:
-  [String; 2]; }` or a tuple field) still fails in the generated
-  `Drop::drop(self.a)` ("get_impl type not covered"), and array-element
-  overwrites stay untracked (leak), as before.
+  byte-identical. Array-element overwrites stay untracked (leak), as
+  before; the aggregate-*field* gap that note listed is closed by the
+  next entry.
+
+- Aggregate fields as owners (2026-10-18, same branch): closes the
+  "still open" note above. `derive.x` emits `Drop::drop(self.f)` for an
+  array/tuple field (`is_struct` is true for both) and a decl-less type
+  has no impl to resolve -- "get_impl type not covered: [String; 2]".
+  Fix: `Resolver::visit_call` returns void for an array/tuple argument
+  of `Drop::drop` (skips impl resolution); `Emitter::visit_call`'s
+  `Drop::drop` case then drops the argument's elements in place via
+  `drop_force` on the argument's address and records the argument moved
+  (`do_move`), exactly like the normal arg path. The move mark matters
+  for enum variant fields: the generated drop binds the payload to a
+  local that the engine auto-drops at arm end -- without the mark the
+  payload is freed twice (valgrind: same allocation freed twice);
+  `own_visitor.x` mirrors the mark so else-path/arm-merge re-analysis
+  agrees. Also fixed: `Resolver::is_cyclic` panicked on a *tuple* field
+  (`get_decl(tuple).unwrap()`, "unwrap on None") -- it now recurses into
+  tuple elements like it does for arrays (`Type::is_tuple`, ast.x). The
+  generated drop source is unchanged, so derive stays simple: the
+  emitter's aggregate drop is the single place that knows an array/tuple
+  has no decl. Regression: tests/own/27aggfield.x (struct array field,
+  tuple field, nested array field, enum variant array field; pre-fix it
+  does not compile). Still open (pre-existing): a *self-referential*
+  aggregate field (`struct S{ t: (S, i32); }`) overflows the stack in
+  `DropHelper::is_drop_type`/`is_drop_decl` (SIGSEGV, same pre-fix) --
+  invalid type, should be a clean "cyclic type" error.
 
 ## Known open holes (documented, not yet solved)
 
@@ -255,11 +279,12 @@ untracked place, and `extern`/unsafe aliases (no body to check). Open:
 language features (doc/todo).
 
 Compile gaps (pre-existing, not yet fixed):
-- An aggregate *field* whose element type is a drop type still fails:
-  `struct S{ a: [String; 2]; }` (and a tuple field) makes the derived
-  `Drop::drop(self.a)` unresolvable -> "get_impl type not covered:
-  [String; 2]". Arrays/tuples as *values* work now (owner entry above);
-  closing this needs the derive (derive.x) to emit an element loop.
+- A *self-referential* aggregate field (`struct S{ t: (S, i32); }`)
+  overflows the stack inside `DropHelper::is_drop_type`/
+  `is_drop_decl` mutual recursion -- SIGSEGV during `handle_attr`,
+  before the field validator runs. Same pre-fix. The type is invalid
+  (infinite size) and should be a clean "cyclic type" error.
+  Non-self-referential arrays/tuples as fields work (owner entry above).
 - Array-element places stay untracked: `arr[i] = v` still leaks the old
   value (silent no-op, as before) and moving out (`send(arr[0])`) is
   refused with a clean error ("cannot move out of an array element")

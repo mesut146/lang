@@ -120,6 +120,15 @@ impl OwnVisitor{
         }
         let rt = self.get_resolver().visit(expr);
         if(!rt.is_method()){
+            //Drop::drop with no impl to resolve: a pointer/prim argument, a
+            //type that needs no dropping, or an array/tuple (whose elements
+            //the emitter drops in place, see Emitter::visit_call). An
+            //aggregate argument is consumed here; without this mark a
+            //binding it came from (an enum variant field, say) would
+            //auto-drop it too -- double free.
+            if(Utils::is_call(mc, "Drop", "drop")){
+                self.do_move(mc.args.get(0));
+            }
             //macro
             return;
         }

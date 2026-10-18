@@ -250,12 +250,29 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   literal, array of structs, nested array, tuple, whole-array pass,
   tuple partial move; pre-fix it does not compile) plus
   tests/fail/array_elem_move.x and tests/fail/array_repeated_drop.x for
-  the two diagnostics. Still open: an aggregate *field*
-  (`struct S{ a: [String; 2]; }`, or a tuple field) fails to resolve
-  its generated `Drop::drop(self.a)` ("get_impl type not covered"), and
-  array-element overwrites stay untracked (silent leak), as before.
-  Full suite green on F1/F3 (`normal pass=66 xpass=0`, own/fmt/leak/opt
-  pass); triangle F1==F2==F3 byte-identical.
+  the two diagnostics. Array-element overwrites stay untracked (silent
+  leak, as before). Full suite green on F1/F3 (`normal pass=66 xpass=0`,
+  own/fmt/leak/opt pass); triangle F1==F2==F3 byte-identical.
+
+- Aggregate *fields* as owners (2026-10-18, same branch): `derive.x`
+  emits `Drop::drop(self.f)` for an array/tuple field (`is_struct` is
+  true for both), which used to fail to resolve -- a decl-less type has
+  no Drop impl ("get_impl type not covered: [String; 2]"). Resolution
+  now returns void for an array/tuple argument of `Drop::drop`
+  (resolver.x), and the emitter's `Drop::drop` case drops the argument's
+  elements in place (`drop_force` on the argument's address) and records
+  the argument moved (`do_move`) like the normal arg path
+  (expr_emitter.x). The move mark is what keeps an enum variant field
+  from being freed twice: the generated drop binds the payload to a
+  local that the engine auto-drops at arm end (own_visitor.x mirrors the
+  mark for arm merges). `Resolver::is_cyclic` also panicked on a tuple
+  field (`get_decl(tuple).unwrap()`, "unwrap on None"); it now recurses
+  into tuple elements like it does for arrays (`Type::is_tuple`).
+  Regression: tests/own/27aggfield.x (struct array field, tuple field,
+  nested array field, enum variant array field; pre-fix it does not
+  compile). A *self-referential* aggregate field (`struct S{ t: (S,
+  i32); }`) still overflows the stack in `DropHelper::is_drop_type` --
+  pre-existing, invalid type (should be a clean cyclic-type error).
 
 Codegen: for-each `continue` + trailing `return` (fixed 2026-10-18,
 tests/normal/39-foreach-continue.x): the for-each desugar ends its

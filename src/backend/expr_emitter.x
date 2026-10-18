@@ -1025,6 +1025,21 @@ impl Emitter{
           self.visit(mc.args.get(0));
           return ptr::null<Value>();
         }
+        //An array or tuple has no Drop impl to call: drop its drop-typed
+        //elements directly. (The resolver likewise skips impl resolution
+        //for aggregate arguments.) The argument is a place here, so take
+        //its address; `rhs` is unused by drop_force.
+        if(argt.is_array() || argt.is_tuple()){
+          let rt = resolver.visit_cached(mc.args.get(0));
+          let ptr = LLVMPtr::new(self.eval_operand(mc.args.get(0)));
+          self.drop_force(&rt, ptr, mc.args.get(0).line, ptr::null<Rhs>());
+          //the argument is consumed in place (the resolver skips impl
+          //resolution for it too); mark it moved like the normal arg path
+          //below, or a binding it came from (an enum variant field) would
+          //auto-drop it a second time.
+          self.own.get().do_move(mc.args.get(0));
+          return ptr::null<Value>();
+        }
       }
 
       if(Utils::is_call(mc, "std", "size")){

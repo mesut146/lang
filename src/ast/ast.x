@@ -673,6 +673,9 @@ impl Type{
   func is_slice(self): bool{
     return self is Type::Slice;
   }
+  func is_tuple(self): bool{
+    return self is Type::Tuple;
+  }
   func deref_ptr(self): Type*{
     if let Type::Pointer(bx) = self{
       return bx.get();

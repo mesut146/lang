@@ -1459,6 +1459,16 @@ impl Resolver{
         return self.is_cyclic(type.elem(), target);
     }
     if (type.is_slice()) return false;
+    //A tuple field can contain the target type (`struct S{ t: (S, i32); }`),
+    //so recurse into the elements. It has no decl to look up below.
+    if let Type::Tuple(tt) = type{
+        for(let i = 0;i < tt.types.len();++i){
+            if(self.is_cyclic(tt.types.get(i), target)){
+                return true;
+            }
+        }
+        return false;
+    }
     if (type.eq(target)) {
         return true;
     }
@@ -3052,6 +3062,13 @@ impl Resolver{
     if(Utils::is_call(call, "Drop", "drop")){
       let argt = self.visit(call.args.get(0));
       if(argt.type.is_pointer() || argt.type.is_prim()){
+        return RType::new("void");
+      }
+      //An array or tuple has no Drop impl to resolve; the emitter drops its
+      //drop-typed elements directly (see Emitter::visit_call's Drop::drop
+      //case). Covers aggregate *fields*: derive.x emits Drop::drop(self.f)
+      //for them too.
+      if(argt.type.is_array() || argt.type.is_tuple()){
         return RType::new("void");
       }
       //let decl = self.get_decl(&argt);
