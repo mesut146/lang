@@ -185,8 +185,11 @@ Ownership only — no Rust-like borrows:
 
 ## Known open holes (documented, not yet solved)
 
-Ownership residuals: none open as of db58ca6 (see doc/ownership.txt
-ledger). Open: language features (doc/todo).
+Ownership residuals: none open as of 80f74e6 (see doc/ownership.txt
+ledger). Known and left untracked on purpose (leak = safe direction):
+field-of-call-result overwrites, `f().field = v` -- silent leak of the
+old value; no in-tree instance (src/ only assigns non-drop fields
+there). Open: language features (doc/todo).
 
 ## Validation protocol (mandatory before merging to main)
 

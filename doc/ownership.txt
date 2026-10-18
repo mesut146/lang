@@ -180,9 +180,10 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   (b) drop-on-assign fires for `p.f = x` and `*p = x`, concrete and
   generic struct fields and enums (IR: `..__drop_..(&p.f)`,
   `G__drop_G(p)`, `Option<..>__drop_Option(..)` immediately before the
-  store). The one place form that does NOT drop-on-assign is an
-  explicit deref member, `ptr::deref!(p).f = x` (untracked -> leaks);
-  none of the swept sites used it. The only manual drop left outside
+  store). The one place form it did not cover at the time -- the
+  explicit deref member, `ptr::deref!(p).f = x` (untracked -> leak) --
+  was closed right after (next bullet); none of the swept sites used
+  it. The only manual drop left outside
   `impl Drop` bodies is the type-erased `Any` glue
   (`release_compile_args`, backend/compiler.x) -- by construction it
   cannot be auto-dropped. Regression: tests/own/24ptrassign.x pins the
@@ -207,6 +208,15 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   tests/own/24ptrassign.x cases `deref_macro` (leaked pre-fix) and
   `deref_macro_move` (exactly once with heal). Full suite green on F1
   and F3; triangle F1==F2==F3 byte-identical.
+- Untracked place shapes (known, safe-direction): `drop_lhs` still
+  silently skips a field of a *call result*, `f().field = v` (and any
+  other `Rhs::EXPR` place), so the overwritten value leaks. Verified
+  with a probe: `mk().s = format(..)` leaks the `String` built in `mk`
+  (valgrind: 10 bytes definitely lost; IR has no drop before the field
+  store). No in-tree instance -- the four `call().field = v` uses in
+  src/ assign non-drop fields (i32; `Option<ptr>`). Left untracked on
+  purpose (a leak is the safe direction); closing it needs temp objects
+  in the place model (`Rhs` is VAR / FIELD-var / EXPR only).
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet
