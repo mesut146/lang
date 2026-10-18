@@ -10,6 +10,7 @@ import std/option
 //  - pointer field assign          `p.f = x`   (Map::add pair.a/pair.b)
 //  - pointer whole-place assign    `*p = x`    (Option::set/reset)
 //  - unused owned arg on a hit                 (Map::get_pair_or)
+//  - unsafe deref member place     `ptr::deref!(p).f`  (assign + move/heal)
 
 struct Holder{
   v: A;
@@ -28,6 +29,12 @@ func set_deref(o: Option<A>*, id: i32){
 //pointer whole-place assign, clearing (the Option::reset shape)
 func clear(o: Option<A>*){
   *o = Option<A>::new();
+}
+
+//unsafe deref member assign: `ptr::deref!(p).f` names the same place as
+//`p.f`, so the overwritten value must drop (this shape used to leak)
+func set_deref_macro(h: Holder*, id: i32){
+  ptr::deref!(h).v = A::new(id);
 }
 
 func case_field(){
@@ -55,6 +62,28 @@ func case_reset(){
   assert(r.is_none());
 }
 
+func case_deref_macro(){
+  reset();
+  let h = Holder{v: A::new(60)};
+  set_deref_macro(&h, 61);
+  check_ids(60);      //old field value dropped (leaked before the fix)
+  assert(h.v.a == 61);
+  //h drops here -> A{61}
+}
+
+func case_deref_macro_move(){
+  reset();
+  let h = Holder{v: A::new(70)};
+  let hp = &h;
+  let old = ptr::deref!(hp).v;   //move out: tracked as h.v now
+  check_ids();                   //nothing dropped yet
+  ptr::deref!(hp).v = A::new(71);//same place: the heal
+  check_ids();                   //heal assign drops nothing (no double)
+  send(old);
+  check_ids(70);
+  //h drops here -> A{71}
+}
+
 func case_map_add(){
   reset();
   let m = Map<i32, A>::new();
@@ -80,6 +109,8 @@ func main(){
   case_field();
   case_deref();
   case_reset();
+  case_deref_macro();
+  case_deref_macro_move();
   case_map_add();
   case_pair_or();
   print("ptrassign done\n");

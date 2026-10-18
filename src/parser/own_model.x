@@ -231,6 +231,19 @@ impl Rhs{
                 let scp_var = own.get_var(scp_rt.vh.get().id);
                 return Rhs::FIELD{scp_var.clone(), name.clone()};
             }
+            //unsafe deref is transparent for place identity: `ptr::deref!(p).f`
+            //names the same place as `p.f`, so drop-on-assign and move tracking
+            //apply even though the raw deref macro carries no vh of its own.
+            //(bare `ptr::deref!(p)` stays EXPR/untracked, as documented.)
+            if let Expr::MacroCall(mc) = scp.get(){
+                if(Utils::is_call(mc, "ptr", "deref") && mc.args.len() > 0){
+                    let irt = own.get_resolver().visit(mc.args.get(0));
+                    if(irt.vh.is_some() && own.var_map.get(&irt.vh.get().id).is_some()){
+                        let iv = own.get_var(irt.vh.get().id);
+                        return Rhs::FIELD{iv.clone(), name.clone()};
+                    }
+                }
+            }
         }
         let rt = own.get_resolver().visit(expr);
         if(rt.vh.is_some() && (expr is Expr::Name || expr is Expr::Unary)){

@@ -190,6 +190,23 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   get_pair_or hit) via the A-tracker. Full suite green on S1 and S3
   (normal pass=63 xpass=0, fmt/leak/opt pass); triangle S1==S2==S3
   byte-identical (source-level change; codegen logic untouched).
+- `ptr::deref!` member place (2026-10-18, same branch): the sweep above
+  flagged `ptr::deref!(p).f = x` as the one shape drop-on-assign did not
+  cover (untracked -> leak). Cause: `Own::drop_lhs` bails when
+  `Rhs::new(lhs)` is `Rhs::EXPR`, and `Rhs::new` types a field place
+  only when its scope carries a variable handle -- which the
+  `ptr::deref` macro's RType does not (`visit_macrocall` returns a bare
+  `visit_type`; resolver.x:2872). `p.f` and `*p` carry a `vh`, so they
+  were fine. Fix: `Rhs::new` sees through a `ptr::deref!` scope, so
+  `ptr::deref!(X).f` names the same place as `X.f` (`FIELD{X, f}`).
+  Because `drop_lhs` and `do_move` share that key, a live old value
+  drops on assign (leak gone) and a value moved out first
+  (`let o = ptr::deref!(p).f;`) is marked moved, so the heal assign
+  drops nothing (no double free). Bare `ptr::deref!(p)` (whole value)
+  is unchanged: still EXPR/untracked. Regression:
+  tests/own/24ptrassign.x cases `deref_macro` (leaked pre-fix) and
+  `deref_macro_move` (exactly once with heal). Full suite green on F1
+  and F3; triangle F1==F2==F3 byte-identical.
 
 Error-path hang (fixed, tests/fail/format_bad_placeholder): get_line
 past EOF spun forever (empty //todo branch). Any from_string snippet

@@ -170,6 +170,19 @@ Ownership only — no Rust-like borrows:
   pass); triangle S1==S2==S3 byte-identical (source-level change,
   codegen logic untouched).
 
+- `ptr::deref!` member place (2026-10-18, same branch): the sweep entry
+  above noted `ptr::deref!(p).f = x` as the one shape drop-on-assign
+  did not cover -- `Rhs::new` types a field place only when its scope
+  has a `vh`, and the deref macro's RType has none, so `drop_lhs` saw
+  `EXPR` and skipped it (leak). Fix: `Rhs::new` now sees through a
+  `ptr::deref!` scope, so `ptr::deref!(X).f` is `FIELD{X, f}` -- the
+  same place as `X.f`. `drop_lhs` and `do_move` share the key, so a
+  live value drops on assign and a moved-out one is skipped (the heal
+  assign drops nothing). Bare `ptr::deref!(p)` stays EXPR/untracked.
+  Regression: tests/own/24ptrassign.x `deref_macro` (leaked pre-fix) +
+  `deref_macro_move`. Full suite green on F1 and F3 (`normal pass=63
+  xpass=0`, fmt/leak/opt pass); triangle F1==F2==F3 byte-identical.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: none open as of db58ca6 (see doc/ownership.txt
