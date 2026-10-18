@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `2f08bb3` (v1.16 released at `9ca614c`; next release v1.17 bootstraps from v1.16). Releases: v1.11 – v1.16.
+Date: 2026-10-18. Main: `f6feed3` (v1.16 released at `9ca614c`; next release v1.17 bootstraps from v1.16). Releases: v1.11 – v1.16.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
@@ -21,7 +21,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 2f08bb3)
+## What's in the tree (main = f6feed3)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -221,7 +221,7 @@ Ownership only — no Rust-like borrows:
 
 ## Known open holes (documented, not yet solved)
 
-Ownership residuals: none open as of 2f08bb3 (see doc/ownership.txt
+Ownership residuals: none open as of f6feed3 (see doc/ownership.txt
 ledger). Remaining deliberate silent no-ops: bare `ptr::deref!` of an
 untracked place, and `extern`/unsafe aliases (no body to check). Open:
 language features (doc/todo).
