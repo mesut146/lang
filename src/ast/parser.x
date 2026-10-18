@@ -268,9 +268,41 @@ impl Parser{
     }else if(self.is_val("use")){
       return self.parse_use();
     }
+    else if(self.is_val("macro")){
+      return Item::Macro{self.parse_macro()};
+    }
     else{
       panic("invalid top level decl: {:?}", self.peek());
     }
+  }
+
+  //`macro name(p1: Expr, p2: Expr){ stmts }`. Slice 1: parameters must be
+  //declared as `Expr` (pure syntax slots, substituted per call site) and are
+  //expanded by expand_user_macro -- the parser only records the shape.
+  func parse_macro(self): Macro{
+    let node = self.node();
+    self.pop();//macro
+    let name = self.name();
+    let params = List<MacroParam>::new();
+    if(self.is(TokenType::LPAREN)){
+      self.pop();
+      while(!self.is(TokenType::RPAREN)){
+        let pnode = self.node();
+        let pname = self.name();
+        let ptype = Option<Type>::new();
+        if(self.is(TokenType::COLON)){
+          self.pop();
+          ptype = Option::new(self.parse_type());
+        }
+        params.add(MacroParam{.pnode, name: pname, type: ptype});
+        if(self.is(TokenType::COMMA)){
+          self.pop();
+        }
+      }
+      self.consume(TokenType::RPAREN);
+    }
+    let body = self.parse_block();
+    return Macro{.node, name: name, params: params, body: body};
   }
 
   func parse_use(self): Item{

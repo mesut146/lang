@@ -598,6 +598,61 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
     }
     r.format_map.add(node.id, info);
 }
+
+//Macro names the resolver expands itself in visit_macrocall: a user macro with
+//one of these names would be shadowed (and the ownership pass keys on them).
+func is_builtin_macro_name(name: str): bool{
+    return name.eq("format") || name.eq("print") || name.eq("panic") || name.eq("debug_member");
+}
+
+const MAX_MACRO_DEPTH: i32 = 64;
+
+//`name!(a, b)` where `name` is a unit-local `macro name(p1: Expr, p2: Expr)`.
+//Expanded per call site into a block: the macro body with every reference to a
+//parameter replaced by a copy of the matching argument expression. AstCopier
+//re-issues node ids, so two calls of one macro -- and two uses of one argument
+//-- never share nodes; a twice-used argument is evaluated twice, which the
+//ownership pass reports as a use-after-move when it moves. The block is then
+//resolved like any other generated code and the emitter picks it up through
+//format_map, the same channel the builtin macros use. A trailing expression in
+//the body makes the macro an expression macro of the inferred result type.
+func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*): RType{
+    if(call.scope.is_some()){
+        r.err(node, format!("macro '{}' is unit-local, not scoped", mac.name));
+    }
+    if(call.args.len() != mac.params.len()){
+        r.err(node, format!("macro {} expects {} args, got {}", mac.name, mac.params.len(), call.args.len()));
+    }
+    if(r.macro_depth >= MAX_MACRO_DEPTH){
+        r.err(node, format!("macro expansion too deep (recursive macro {})", mac.name));
+    }
+    let args = HashMap<String, Expr*>::new();
+    for(let i = 0;i < call.args.len();++i){
+        args.add(mac.params.get(i).name.clone(), call.args.get(i));
+    }
+    let types = HashMap<String, Type>::new();
+    let copier = AstCopier::new(&types, &r.unit, args);
+    let info = FormatInfo::new(node.line);
+    for st in &mac.body.list{
+        info.block.list.add(copier.visit(st));
+    }
+    if(mac.body.return_expr.is_some()){
+        info.block.return_expr.set(copier.visit(mac.body.return_expr.get()));
+    }
+    r.newScope();
+    r.macro_depth += 1;
+    r.visit_block(&info.block);
+    r.macro_depth -= 1;
+    r.dropScope();
+    if(info.block.return_expr.is_some()){
+        //the emitter needs the resolved result type to drop a discarded result
+        info.rt = r.visit(info.block.return_expr.get());
+    }
+    let res = info.rt.clone();
+    r.format_map.add(node.id, info);
+    return res;
+}
+
 func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
     if (mc.args.empty()) {
         r.err(node, "format no arg");

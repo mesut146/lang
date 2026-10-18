@@ -1,10 +1,11 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `c0cb456` (owns `681a8cc` array places, place
+Date: 2026-10-18. Main: `a0980fe` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
-`bin/build.sh` two-stage link fix, delegate-derive closed) + source path
-normalization / `-remap-path-prefix` (this branch). v1.17 released at
+`bin/build.sh` two-stage link fix, delegate-derive closed, source path
+normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag
+forwarding) + user-defined macros slice 1 (this branch). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -26,7 +27,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = c0cb456)
+## What's in the tree (main = a0980fe)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -527,7 +528,68 @@ Ownership only — no Rust-like borrows:
   B == C byte-identical holds, and the full suite is green on that binary
   (`normal pass=79 xpass=0`, fmt/trace/path/opt pass, leak self-skips).
 
+- User-defined macros, slice 1: `macro name(p: Expr){ ... }` + `name!(...)`
+  (2026-10-18, doc/todo "full macro support"). A parameter is a *syntax
+  slot*: every reference to it in the body is replaced by a copy of the
+  matching argument, and the body is copied per call site -- so a macro can
+  do what a function cannot, assign through its argument (`swap!(a, b)`).
+  Most of the plumbing already existed: `name!(...)` parses as
+  `Expr::MacroCall`, and the emitter is name-agnostic (it looks the call's
+  node id up in `resolver.format_map` and emits `info.block`), which is how
+  all builtins (`format!`, `print!`, `panic!`, `std::env`, `ptr::*`) work.
+  So this batch is parser + resolver:
+  - parser: a `macro` item, params optionally parenthesised (`macro
+    name{...}` is the zero-parameter form doc/todo sketched);
+  - `Resolver::init_item` seeds a unit-local `macros` map. Module-nested
+    definitions are seeded too (bare name, like the rest of the compiler's
+    flat name spaces), a duplicate name is an error and `m::name!(...)` is
+    rejected with "unit-local, not scoped";
+  - `expand_user_macro` (derive.x): `AstCopier` copies the body with fresh
+    node ids (`unit.last_id`), a new `expr_map` substitutes bare names with a
+    copy of the bound argument (guarded by `in_arg` so an argument is never
+    re-substituted -- parameters are often named exactly like the caller's
+    variables), the block is resolved in a fresh scope (`newScope`/
+    `dropScope`: without it the body's locals leaked into the call site, and
+    x rejects any name that exists in a live scope) and registered in
+    `format_map`. A trailing expression makes the macro an expression macro
+    with an inferred result type (`macro square(x: Expr){ x * x }`), a
+    statement body a void macro; using a void macro as a value still reports
+    the ordinary "void variable" error;
+  - an `Item::Macro` resolves nothing at its definition site (the body only
+    means something at a call site), and `own_visitor` now walks user-macro
+    blocks, so drops inside an expansion are inserted and a twice-used
+    *moving* argument is a diagnosed use-after-move instead of a silent
+    double free.
+  Limits, on purpose (slice 1): only `Expr` parameters (a non-`Expr`
+  parameter is a definition-site error; value parameters are the next slice),
+  no hygiene beyond the expansion being its own scope -- a body local named
+  like a call-site name is a collision the user must avoid, the same trade
+  the builtin macros make by naming their temporaries `f_<id>`, real renaming
+  is TODO --, arguments are evaluated once *per use* (a body using one
+  argument twice evaluates it twice, Rust-`macro_rules!`-like), an argument
+  the body never uses is never evaluated or type-checked, recursion is capped
+  (`MAX_MACRO_DEPTH`, "macro expansion too deep"), and macros do not cross
+  units yet (imported/`use`d macros, and the token-stream design sketched in
+  `resolver/macros.x` + `TokenStream`, are later slices).
+  Tests: `tests/normal/40-user-macro.x` (lvalue swap, twice-used argument,
+  macro calling macro, the expansion's scope, expression position),
+  `tests/fmt/macro.x` + `.expected` (printer round-trip, incl. the bare
+  `macro name{...}` form; the formatted output compiles and runs) and eight
+  `tests/fail/macro_*.x`: arity, unknown name, non-`Expr` parameter, reserved
+  name (`print`/`format`/`panic`/`debug_member`), duplicate name, scoped
+  call, recursive expansion, and use-after-move through a macro. Pre-fix red:
+  main's parser panics `invalid top level decl: 'macro'`, so the positive
+  test cannot even parse and each fail test reports the wrong error.
+  Triangle: no ABI or content change (macros are opt-in per program; the
+  compiler itself defines none), so B == C byte-identical holds and the suite
+  is green on that binary (`normal pass=88 xpass=0` = 79 + 1 new normal + 8
+  fail, fmt/trace/path/opt pass, leak self-skips).
+  Observed while validating, pre-existing and unrelated: `bin/build_lsp.sh`
+  does not build on this tree (`visit_type failed for CmdArgs`, identical
+  with this batch stashed); the lsp is not part of `bin/build.sh`/CI.
+
 ## Known open holes (documented, not yet solved)
+
 Ownership residuals: place use-after-move is closed as of this batch (see
 doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow
 residual documented there: while a whole-var write's invalidation entry

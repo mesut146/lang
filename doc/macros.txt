@@ -22,6 +22,25 @@ ptr::get(src: T*, index): T*;
 ptr::copy(src, index, elem): void;
 ptr::deref(ptr): <*ptr>;
 
+#user macros (slice 1, 2026-10-18)
+macro name(p1: Expr, p2: Expr){
+    ...
+}
+name!(arg1, arg2);//statement or expression position
+//A parameter is a syntax slot: every reference to it in the body is replaced
+//by a copy of the argument expression, and the body is copied per call site,
+//so `macro swap(a: Expr, b: Expr){ let t = a; a = b; b = t; }` assigns through
+//its arguments. Only `Expr` parameters exist so far (typed/value parameters
+//and token streams are still open). A body ending in an expression makes the
+//macro an expression of the inferred type (`macro square(x: Expr){ x * x }`),
+//otherwise it is void.
+//The expansion is a scope of its own, but there is no hygiene: a body local
+//named like a name at the call site collides (x has no shadowing at all), and
+//a twice-used argument is evaluated twice (if it moves, that is a use-after-
+//move error, not a silent double free). Macros are unit-local and looked up by
+//bare name; module-nested definitions are seeded the same way, `m::name!(...)`
+//is rejected and there can be only one `macro name` per unit.
+
 
 #env
  target_triple, LD=clang-19, TRACE

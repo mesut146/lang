@@ -219,6 +219,12 @@ struct Resolver{
   //`use` aliases: bare name -> canonical type (use M::A / M::{A, B}).
   //Checked after the type cache (locals always win) but before use_items
   //prefixes. Targets resolve lazily on first use.
+  //`macro name(...)`: unit-local definitions (seeded by init_item, module-nested
+  //ones flattened the same way), looked up by bare name for a `name!(...)` call
+  //(see expand_user_macro).
+  macros: HashMap<String, Macro*>;
+  //guards a macro that expands itself (directly or through another)
+  macro_depth: i32;
 }
 
 impl Resolver{
@@ -266,6 +272,8 @@ impl Resolver{
       resolvers_cache_extra: 0,
       resolvers_cache_method: "".str(),
       gen_cache: HashMap<String, Desc>::new(),
+      macros: HashMap<String, Macro*>::new(),
+      macro_depth: 0,
     };
   }
 }
@@ -884,6 +892,24 @@ impl Resolver{
           self.use_items.add(scp);
         }
       },
+      Item::Macro(m) => {
+        //`macro name(p: Expr){...}`: slice 1 is unit-local (module-nested
+        //definitions are seeded under their bare name; no `use`/imports yet)
+        //and only supports `Expr` parameters, i.e. syntax slots that
+        //expand_user_macro substitutes with the argument expression.
+        if(is_builtin_macro_name(m.name.str())){
+          self.err(m.line, format!("macro name '{}' is reserved (builtin macro)", m.name));
+        }
+        if(self.macros.contains(&m.name)){
+          self.err(m.line, format!("macro {} already defined", m.name));
+        }
+        for prm in &m.params{
+          if(prm.type.is_none() || !prm.type.get().print().eq("Expr")){
+            self.err(prm.line, format("macro {}: parameter '{}' must be declared as `Expr`", m.name, prm.name));
+          }
+        }
+        self.macros.add(m.name.clone(), m);
+      },
     }
   }
 
@@ -1414,6 +1440,10 @@ impl Resolver{
         }
       },
       Item::Trait(tr) => {
+      },
+      Item::Macro(m) => {
+        //nothing to resolve at the definition site: the body is copied and
+        //resolved per call site (Resolver::expand_user_macro)
       },
       Item::Extern(items) => {
         for(let i = 0;i < items.len();++i){
@@ -2910,11 +2940,13 @@ impl Resolver{
       generate_format(node, call, self);
       return RType::new("void");
     }
-    /*if(Resolver::is_assert(call)){
-      generate_assert(node, call, self);
-      return RType::new("void");
-    }*/
-    panic("resolve macro {:?}", node);
+    //user-defined `macro name(p: Expr){...}` (see expand_user_macro)
+    let mac = self.macros.get(&call.name);
+    if(mac.is_some()){
+      return expand_user_macro(node, call, *mac.unwrap(), self);
+    }
+    self.err(node, format!("unknown macro '{}'", call.name));
+    return RType::new("void");
   }
 
   func visit_call(self, node: Expr*, call: Call*): RType{

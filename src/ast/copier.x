@@ -8,15 +8,25 @@ import ast/token
 struct AstCopier{
     type_map: HashMap<String, Type>*;
     unit: Option<Unit*>;
+    //macro expansion: bare names listed here are replaced by a copy of the
+    //bound argument expression (expand_user_macro). Empty otherwise.
+    expr_map: HashMap<String, Expr*>;
+    //while copying a substituted argument: its names belong to the caller, so
+    //they must not be substituted again (params are often named like the args)
+    in_arg: bool;
     //last_id: i32*;
 }
 
 impl AstCopier{
     func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit)};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), in_arg: false};
     }
     func new(type_map: HashMap<String, Type>*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option<Unit*>::new()};
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), in_arg: false};
+    }
+    //macro expansion: same as new(), but `expr_map` names are substituted.
+    func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>): AstCopier{
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, in_arg: false};
     }
 
     func clone<T>(node: T*, unit: Unit*): T{
@@ -324,6 +334,20 @@ impl AstCopier{
     }
 
     func visit(self, node: Expr*): Expr{
+        //macro expansion: a bare name bound to an argument is replaced by a
+        //copy of that argument (each reference copies: a twice-used argument
+        //is evaluated twice, and the ownership pass diagnoses that if it moves)
+        if(!self.in_arg){
+            if let Expr::Name(name) = node{
+                let rep = self.expr_map.get(name);
+                if(rep.is_some()){
+                    self.in_arg = true;
+                    let res = self.visit(*rep.unwrap());
+                    self.in_arg = false;
+                    return res;
+                }
+            }
+        }
         let id = self.node(node as Node*);
         match node{
             Expr::Name(name) => return Expr::Name{.id, name.clone()},

@@ -476,6 +476,9 @@ func debug_item(self: Item*, f: Fmt*, comments: List<Comment>*){
       },
       Item::Use(uit) => {
         Debug::debug(uit, f);
+      },
+      Item::Macro(m) => {
+        debug_macro(m, f, comments);
       }
     }
 }
@@ -748,6 +751,30 @@ func debug_method(self: Method*, f: Fmt*, comments: List<Comment>*){
     }else{
       f.print(";");
     }
+}
+
+//`macro name(p1: Expr, p2: Expr){ ... }`. Params print with their declared
+//type so the source round-trips; a zero-parameter macro prints the bare
+//`macro name{...}` form the parser also accepts.
+func debug_macro(self: Macro*, f: Fmt*, comments: List<Comment>*){
+    f.print("macro ");
+    f.print(&self.name);
+    if(!self.params.empty()){
+      f.print("(");
+      join(f, &self.params, ", ");
+      f.print(")");
+    }
+    debug_block(&self.body, f, comments);
+}
+
+impl Debug for MacroParam{
+  func debug(self, f: Fmt*){
+    f.print(&self.name);
+    if(self.type.is_some()){
+      f.print(": ");
+      self.type.get().debug(f);
+    }
+  }
 }
 
 impl Debug for Param{

@@ -216,6 +216,7 @@ enum Item{
   Glob{gl: Global},
   Module{m: Module},
   Use{us: UseItem},
+  Macro{m: Macro},
 }
 
 func impl_first_line(imp: Impl*): i32{
@@ -270,6 +271,9 @@ impl Item{
       },
       Item::Use(us) => {
         return 0;
+      },
+      Item::Macro(m) => {
+        return m.line;
       },
     }
   }
@@ -459,6 +463,19 @@ struct Param: Node{
   type: Type;
   is_self: bool;
   is_deref: bool;
+}
+
+//`macro name(p1: Expr, p2: Expr){ ... }` (slice 1: only `Expr` parameters,
+//i.e. syntax slots substituted per call site). See expand_user_macro.
+struct Macro: Node{
+  name: String;
+  params: List<MacroParam>;
+  body: Block;
+}
+
+struct MacroParam: Node{
+  name: String;
+  type: Option<Type>;
 }
 
 impl Method{

@@ -1,8 +1,11 @@
  
-//full macro support 
-asd!(5, "test");
-macro asd{
-}
+//user macros slice 1 landed: `macro name(p: Expr){...}` + `name!(...)`, where
+//an `Expr` parameter is a syntax slot (body copied per call site, references
+//replaced by a copy of the argument). Statement + expression position,
+//unit-local.
+//still open: value/typed parameters, token streams (resolver/macros.x stub),
+//macros defined in another unit (`use`/imports), hygiene (a body local can
+//collide with a name at the call site; x has no shadowing at all)
 
 //closures
 let f = (a: i32, b: str): i32=>{
@@ -18,7 +21,8 @@ print("method is {::TraitName}", m);
 
 //match expr complex: match inside match (phi-node testing)
 
-//panic macro
+//panic macro: `panic!(..)` itself is a builtin; what is still missing is a
+//user macro with a *value* parameter (typed params, see above)
 macro panic(e: Expr, s: String){
 }
 

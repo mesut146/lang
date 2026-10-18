@@ -392,8 +392,10 @@ Lesson: error paths need the same termination scrutiny as main paths;
 a fail-test pins each newly loud error.
 
 Todo probes (v1.15, re-probed 2026-10-18 on the mangle-fix compiler):
-macro/panic-macro still absent (no `macro` keyword: `invalid top level
-decl: 'macro'`); |args| lambdas work, `=>` closures and true capture don't
+macro: slice 1 landed 2026-10-18 (`macro name(p: Expr){...}` + `name!(...)`,
+`Expr` syntax slots, statement + expression position, unit-local; value/typed
+parameters and token streams still open); |args| lambdas work, `=>` closures
+and true capture don't
 (`(a: i32): i32 => {` parses as a tuple expression and dies on `:`);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it
 reliable on a type that also implements Display); match-in-match works

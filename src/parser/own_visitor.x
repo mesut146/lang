@@ -112,10 +112,17 @@ impl OwnVisitor{
         if(mc.name.eq("drop") && mc.scope.is_some() && mc.args.empty()){
             self.own.note_explicit_drop(mc.scope.get());
         }
-        if(Resolver::is_format(mc)){
-            let info = self.get_resolver().format_map.get(&expr.id).unwrap();
+        let resolver = self.get_resolver();
+        //`format!` and user macros are expanded into a block kept in
+        //format_map; walking it is what tracks moves/drops inside the
+        //expansion (a twice-used macro argument that moves is diagnosed as a
+        //use-after-move) and drops the expansion's own locals.
+        if(Resolver::is_format(mc) || resolver.macros.contains(&mc.name)){
+            let info = resolver.format_map.get(&expr.id).unwrap();
             self.visit_block(&info.block);
-            self.do_move(info.block.return_expr.get());
+            if(info.block.return_expr.is_some()){
+                self.do_move(info.block.return_expr.get());
+            }
             return;
         }
         let rt = self.get_resolver().visit(expr);
