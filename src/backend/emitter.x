@@ -176,7 +176,7 @@ impl Emitter{
     resolver.resolve_all();
  
     self.ll = Option::new(LLVMInfo::new(name));
-    self.di = Option::new(DebugInfo::new(self.config.debug, path, self.ll.get()));
+    self.di = Option::new(DebugInfo::new(self.config.debug, self.config.display_path(path).str(), self.ll.get()));
 
     self.createProtos();
     self.init_globals(self.config);
@@ -408,7 +408,7 @@ impl Emitter{
     let m = *self.curMethod.get();
     if(self.config.stack_trace && !self.is_frame_call(m)){
       let pretty = printMethod(m);
-      let str = format("enter_frame(\"{} {}:{}\");", pretty, m.path, m.line);
+      let str = format("enter_frame(\"{} {}:{}\");", pretty, self.config.display_path(m.path.str()), m.line);
       let stmt = parse_stmt(str, &self.get_resolver().unit, m.line);
       AllocHelper::new(self).visit(&stmt);
       self.visit(&stmt);

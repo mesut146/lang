@@ -316,6 +316,85 @@ impl Path{
     }
     return format("{}/{}", path, name);
   }
+
+  //Lexically normalize a path for recording/display: drops `.` and empty
+  //segments, collapses `dir/..` and duplicate slashes (`bin/../src/x.x` ->
+  //`src/x.x`). Purely textual -- the filesystem is never touched, so through
+  //a symlinked directory the result can differ from what the OS resolves.
+  //Callers keep the original spelling for opening files.
+  func normalize(path: str): String{
+    let abs = path.starts_with("/");
+    let parts = List<String>::new();
+    let start = 0;
+    while(start <= path.len()){
+      let end = path.indexOf("/", start);
+      if(end == -1){
+        end = path.len();
+      }
+      if(end > start){
+        let seg = path.substr(start, end);
+        if(seg.eq(".")){
+          //drop
+        }else if(!seg.eq("..")){
+          parts.add(seg.owned());
+        }else if(!parts.empty() && !parts.get(parts.len() - 1).eq("..")){
+          parts.remove(parts.len() - 1);
+        }else if(!abs){
+          //a relative path keeps leading `..`: it is not resolvable here
+          parts.add(seg.owned());
+        }
+        //an absolute path drops `..` at the root (`/..` is `/`)
+      }
+      start = end + 1;
+    }
+    let out = Fmt::new();
+    if(abs){
+      out.print("/");
+    }
+    for(let i = 0;i < parts.len();++i){
+      if(i > 0){
+        out.print("/");
+      }
+      out.print(parts.get(i).str());
+    }
+    let res = out.unwrap();
+    if(res.len() == 0){
+      return ".".str();
+    }
+    return res;
+  }
+
+  //`normalize` + the `-remap-path-prefix OLD=NEW` mappings, first match wins:
+  //a build can keep machine-specific directories out of objects, diagnostics
+  //and DWARF. Specs are validated by the CLI parser (non-empty OLD, has `=`).
+  func display_path(path: str, remaps: List<String>*): String{
+    let norm = Path::normalize(path);
+    let remapped = Path::remap_prefix(norm.str(), remaps);
+    if(remapped.is_some()){
+      return remapped.unwrap();
+    }
+    return norm;
+  }
+
+  //First `-remap-path-prefix OLD=NEW` whose OLD matches `path`, as NEW + rest.
+  func remap_prefix(path: str, remaps: List<String>*): Option<String>{
+    for(let i = 0;i < remaps.len();++i){
+      let spec = remaps.get(i).str();
+      let eq = spec.indexOf("=");
+      let old = spec.substr(0, eq);
+      let new = spec.substr(eq + 1, spec.len());
+      if(!path.starts_with(old)){
+        continue;
+      }
+      let rest = path.substr(old.len(), path.len());
+      //only a whole path component is a prefix (`/a/b` does not match `/a/bc`)
+      if(!rest.empty() && rest.get(0) != '/'){
+        continue;
+      }
+      return Option::new(format("{}{}", new, rest));
+    }
+    return Option<String>::new();
+  }
 }
 
 //mod env{

@@ -83,6 +83,9 @@ struct CompilerConfig{
   opt_level: Option<String>;
   stack_trace: bool;
   inline_rvo: bool;
+  //`-remap-path-prefix OLD=NEW` specs, applied when a path is recorded in an
+  //object, a diagnostic or DWARF (see Path::display_path).
+  remaps: List<String>;
 }
 impl CompilerConfig{
   func new(): CompilerConfig{
@@ -110,7 +113,17 @@ impl CompilerConfig{
       opt_level: Option<String>::new(),
       stack_trace: false,
       inline_rvo: false,
+      remaps: List<String>::new(),
     };
+  }
+  func add_remap(self, spec: String){
+    self.remaps.add(spec);
+  }
+  //Every path the compiler records (assert/panic literals, diagnostics, DWARF
+  //file names) goes through here: lexical normalization + `-remap-path-prefix`.
+  //Resolution and the .o cache keep using the original spelling.
+  func display_path(self, path: str): String{
+    return Path::display_path(path, &self.remaps);
   }
 }
 
@@ -156,6 +169,7 @@ impl Compiler{
     }
     File::create_dir(config.out_dir.str())?;
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+    ctx.remaps = config.remaps.clone();
     for inc_dir in &config.src_dirs{
       ctx.add_path(inc_dir.str());
     }
@@ -192,6 +206,7 @@ impl Compiler{
         continue;
       }
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.remaps = config.remaps.clone();
       ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get(j).str());
@@ -209,6 +224,7 @@ impl Compiler{
       //rem output to trigger recompiling
       File::remove_file(get_out_file(file.str(), config.out_dir.str()).str())?;
       let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+      ctx.remaps = config.remaps.clone();
       ctx.verbose_all = config.verbose_all;
       for(let j = 0;j < config.src_dirs.len();++j){
         ctx.add_path(config.src_dirs.get(j).str());
@@ -287,6 +303,7 @@ impl Compiler{
     let args = arg as CompileArgs*;
     let config = args.config;
     let ctx = Context::new(config.out_dir.clone(), config.std_path.clone());
+    ctx.remaps = config.remaps.clone();
     for dir in &config.src_dirs{
       ctx.add_path(dir.str());
     }
@@ -297,6 +314,12 @@ impl Compiler{
     for inc_dir in &args.config.src_dirs{
         cmd.append(" -i ");
         cmd.append(inc_dir);
+    }
+    //The child records the same paths (assert/panic literals, diagnostics), so
+    //it must trim them identically: forward every remap spec.
+    for remap in &args.config.remaps{
+        cmd.append(" -remap-path-prefix ");
+        cmd.append(remap);
     }
     if(config.opt_level.is_some()){
       cmd.append(" ");

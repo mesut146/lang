@@ -461,7 +461,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         //optimized print, no heap alloc, no fmt
         //printf("..")
         if (Resolver::is_panic(mc)) {
-            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str), r);
             let tmp = normalize_quotes(msg.str());
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
@@ -572,7 +572,7 @@ func generate_format(node: Expr*, mc: Call*, r: Resolver*) {
         r.visit_block(block);
     }else if(Resolver::is_panic(mc)){
         //.."<method:line>".print();
-        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
+        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new(), r);
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
         block.list.add(pos_info_st);
         //..f.buf.print();
@@ -623,7 +623,7 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         //optimized print, no heap alloc, no fmt
         //printf("..")
         if (Resolver::is_panic(mc)) {
-            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str));
+            let msg = make_panic_messsage(line, *r.curMethod.get(), Option::new(fmt_str), r);
             let tmp = normalize_quotes(msg.str());
             msg = tmp;
             block.list.add(parse_stmt(format("printf(\"{}\");", msg), &r.unit, line));
@@ -733,7 +733,7 @@ func generate_format(node: Expr*, mc: MacroCall*, r: Resolver*) {
         r.visit_block(block);
     }else if(Resolver::is_panic(mc)){
         //.."<method:line>".print();
-        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new());
+        let pos_info = make_panic_messsage(line, *r.curMethod.get(), Option<str>::new(), r);
         let pos_info_st = parse_stmt(format("\"{}\".print();", &pos_info), &r.unit, line);
         block.list.add(pos_info_st);
         //..f.buf.print();
@@ -780,9 +780,9 @@ func normalize_quotes(s: str): String{
 }
 
 
-func make_panic_messsage(line: i32, method: Method*, s: Option<str>): String {
+func make_panic_messsage(line: i32, method: Method*, s: Option<str>, r: Resolver*): String {
     let message = Fmt::new("panic ".str());
-    message.print(&method.path);
+    message.print(r.ctx.display_path(method.path.str()));
     message.print(":");
     message.print(&line);
     message.print(" ");
@@ -812,7 +812,7 @@ func generate_assert(node: Expr*, mc: Call*, r: Resolver*){
     let method_sig = printMethod(r.curMethod.unwrap());
     //let str = format("if(!({:?})){\nprintf(\"{}:{}\nassertion `{}` failed in {}\n\");exit(1);\n}", arg, r.curMethod.unwrap().path, node.line, arg_norm, method_sig);
     let fm = Fmt::new(format("if(!({:?})){{\n", arg));
-    fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.curMethod.unwrap().path, node.line, arg_norm, method_sig));
+    fm.print(format("printf(\"{}:{}\nassertion `{}` failed in {}\n\");", r.ctx.display_path(r.curMethod.unwrap().path.str()), node.line, arg_norm, method_sig));
     if(std::getenv("XTERMUX").is_none() && std::getenv("XBACKTRACE").is_some()){
       fm.print(format!("let __bta{}_buf = [0 as u64; 64];\n", node.id));
       fm.print(format!("let __bta{}_n = backtrace(__bta{}_buf.ptr(), 64);\n", node.id, node.id));

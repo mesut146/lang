@@ -102,6 +102,17 @@ func handle_c(cmd: CmdArgs*){
     let dir: String = cmd.get_val("-i").unwrap();
     config.add_dir(dir);
   }
+  //repeatable: -remap-path-prefix OLD=NEW. Replaces a source path prefix
+  //before it is recorded (assert/panic literals, diagnostics, DWARF), so a
+  //build directory can be kept out of the output.
+  while(cmd.has_any("-remap-path-prefix")){
+    let spec: String = cmd.get_val("-remap-path-prefix").unwrap();
+    if(spec.str().indexOf("=") < 1){
+      print("invalid -remap-path-prefix '{}': expected OLD=NEW\n", &spec);
+      exit(1);
+    }
+    config.add_remap(spec);
+  }
   if(cmd.has_any("-stdpath")){
     let std_path = cmd.get_val2("-stdpath");
     config.add_dir(std_path.clone());
@@ -191,6 +202,7 @@ func print_usage(){
   print("  c [-o name] [-out dir] [-stdpath dir] [-i dir]\n");
   print("    [-O0/-O1/-O2/-O3] [-nolink] [-static] [-shared] [-g]\n");
   print("    [-cache] [-cache-ro] [-inc] [-trace] [-flags '...']\n");
+  print("    [-remap-path-prefix OLD=NEW]\n");
   print("    [-std] [-target x86_64|aarch64|android] <file.x|dir>\n");
   print("  -v, --version\n");
   print("  -h, --help\n");

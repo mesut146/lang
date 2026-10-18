@@ -53,6 +53,9 @@ struct Context{
   //dir otherwise, on the resolve hot path). Search paths are fixed
   //after setup, so no invalidation is needed.
   path_cache: HashMap<String, String>;
+  //`-remap-path-prefix OLD=NEW` specs (see Path::display_path); set by the
+  //compiler from CompilerConfig before any unit is resolved.
+  remaps: List<String>;
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
@@ -72,8 +75,15 @@ impl Context{
        verbose_all: false,
        prog: prog,
        path_cache: HashMap<String, String>::new(),
+       remaps: List<String>::new(),
     };
     return res;
+  }
+  //Paths recorded in generated code or printed in diagnostics go through here
+  //(lexical normalization + `-remap-path-prefix`); resolution keeps the
+  //original spelling so symlinked directories still open.
+  func display_path(self, path: str): String{
+    return Path::display_path(path, &self.remaps);
   }
 }
 //No manual Drop: derived glue frees the maps and paths (all structural
@@ -1142,9 +1152,9 @@ impl Resolver{
   func print_line_ctx(self, line: i32, msg: str){
     if(self.curMethod.is_some()){
       let str: String = printMethod(self.curMethod.unwrap());
-      print("{}:{} {}\n", self.curMethod.unwrap().path, line, str);
+      print("{}:{} {}\n", self.ctx.display_path(self.curMethod.unwrap().path.str()), line, str);
     }else{
-      print("{}:{}\n", self.unit.path, line);
+      print("{}:{}\n", self.ctx.display_path(self.unit.path.str()), line);
     }
     //get_line();
     print("{}\n", msg);

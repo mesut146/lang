@@ -247,6 +247,60 @@ inc_all(){
   run "$out_dir/inc_j/incremental_test" || exit 1
 }
 
+#Source paths recorded in the output: `assert`/`panic` bake the unit path into
+#the object, diagnostics print it and -g puts it in DWARF. They must be
+#lexically normalized (`bin/../src/x.x` must not ship) and remappable with
+#-remap-path-prefix, so release artifacts do not leak the build directory
+#(doc/todo "trim debug paths?"). Resolution/codegen keep the original
+#spelling (a symlinked dir with `..` must still open), so only the recorded
+#strings are checked here.
+path_all(){
+  d=$out_dir/path_all
+  rm -rf $d
+  mkdir -p $d
+  #absolute (and free of any `bin/..` in $out_dir), so the recorded path is the
+  #build directory the leak is about
+  d=$(readlink -f $d)
+  mkdir -p $d/src $d/bin
+  printf 'func main(){\n    assert(1 == 2);\n}\n' > $d/src/prog.x
+  printf 'func main(){\n    panic("boom");\n}\n' > $d/src/pan.x
+  printf 'func main(){\n    let a: i32 = "s";\n}\n' > $d/src/bad.x
+  #1) lexical normalization: the `dir/../src` spelling collapses
+  run "$compiler c -nolink -out $d/norm -stdpath $stdpath $d/bin/../src/prog.x" || exit 1
+  if strings $d/norm/prog.o | grep -q 'bin/\.\./src'; then
+    echo "PATH-UNNORMALIZED (assert literal): $d/bin/../src/prog.x"; exit 1
+  fi
+  strings $d/norm/prog.o | grep -qF "$d/src/prog.x" \
+    || { echo "PATH-MISSING (assert literal): $d/norm/prog.o"; exit 1; }
+  #2) same for the panic literal
+  run "$compiler c -nolink -out $d/pan -stdpath $stdpath $d/bin/../src/pan.x" || exit 1
+  strings $d/pan/pan.o | grep -qF "$d/src/pan.x" \
+    || { echo "PATH-MISSING (panic literal): $d/pan/pan.o"; exit 1; }
+  #3) diagnostics print the normalized path
+  "$compiler" c -nolink -out $d/diag -stdpath $stdpath $d/bin/../src/bad.x > $d/diag.log 2>&1
+  grep -qF "$d/src/bad.x" $d/diag.log \
+    || { echo "PATH-MISSING (diagnostic)"; cat $d/diag.log; exit 1; }
+  #the diagnostic line is `path:line method()`; the "compiling <file>" log line
+  #deliberately echoes the path as given, so match on path:line only
+  if grep -E 'bin/\.\./src.*bad\.x:[0-9]+' $d/diag.log; then
+    echo "PATH-UNNORMALIZED (diagnostic)"; cat $d/diag.log; exit 1
+  fi
+  #4) -remap-path-prefix drops the build directory from the object
+  run "$compiler c -nolink -out $d/remap -remap-path-prefix $d=. -stdpath $stdpath $d/src/prog.x" || exit 1
+  if strings $d/remap/prog.o | grep -qF "$d/src/prog.x"; then
+    echo "PATH-NOT-REMAPPED (assert literal): $d/remap/prog.o"; exit 1
+  fi
+  strings $d/remap/prog.o | grep -qF "./src/prog.x" \
+    || { echo "PATH-MISSING (remap target): $d/remap/prog.o"; exit 1; }
+  #5) -g DWARF carries the same trimmed name
+  run "$compiler c -nolink -g -out $d/dbg -remap-path-prefix $d=. -stdpath $stdpath $d/src/prog.x" || exit 1
+  readelf --debug-dump=info $d/dbg/prog.o > $d/dbg.txt
+  if grep -qF "$d/src/prog.x" $d/dbg.txt; then
+    echo "PATH-NOT-REMAPPED (-g DWARF)"; exit 1
+  fi
+  echo "path: pass"
+}
+
 if [ -z "$pat" ]; then
   normal
 elif [ "$pat" == "std" ]; then
@@ -261,6 +315,8 @@ elif [ "$pat" == "vararg" ]; then
   vararg_all
 elif [ "$pat" == "inc" ]; then
   inc_all
+elif [ "$pat" == "path" ]; then
+  path_all
 elif [ "$pat" == "fmt" ]; then
   fmt_all
 elif [ "$pat" == "opt" ]; then
@@ -276,6 +332,7 @@ elif [ "$pat" == "all" ]; then
   leak_all
   vararg_all
   inc_all
+  path_all
   opt_all
 elif [ ! -z "$pat" ]; then
   normal_regex $pat

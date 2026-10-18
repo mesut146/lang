@@ -1,9 +1,10 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `3105e7f` (owns `681a8cc` array places, place
+Date: 2026-10-18. Main: `c0cb456` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
-`3105e7f`) + custom printer `{::Trait}`, trait-aware method mangling and the
-`bin/build.sh` two-stage link fix (this branch). v1.17 released at
+`3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
+`bin/build.sh` two-stage link fix, delegate-derive closed) + source path
+normalization / `-remap-path-prefix` (this branch). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -25,7 +26,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 681a8cc)
+## What's in the tree (main = c0cb456)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -440,6 +441,59 @@ Ownership only — no Rust-like borrows:
   stage2-built; the "two bootstrap rounds" argument (e.g. for valgrind
   leaks) now actually holds.
 
+- Paths recorded in the output are normalized and remappable (2026-10-18,
+  doc/todo "trim debug paths?"): every `assert`/`panic` literal, diagnostic
+  line and DWARF file name carried the unit path *as given*, so a release
+  shipped `bin/../src/ast/ast.x:1044` and a build from an absolute path baked
+  that absolute path (plus, from the C++ bridge, 19
+  `/tmp/usr/lib/llvm-19/include/...` LLVM-header strings from LLVM's own
+  asserts). Two mechanisms, both purely string-level:
+  `Path::normalize` (std/fs.x) drops `.`/empty segments, collapses `dir/..`
+  and duplicate slashes, and never touches the filesystem; `-remap-path-prefix
+  OLD=NEW` (repeatable, Rust-style, first match wins, whole path component
+  only) is applied on top by `Path::display_path(path, remaps)`.
+  `CompilerConfig::remaps`/`display_path` hold the specs and `Context::remaps`
+  is copied from the config at all four `Context::new` sites, so the resolver
+  can trim what it prints. Applied at the record/print sites only: the assert
+  literal and `make_panic_messsage` (assert/panic/`assert!`-style messages) in
+  derive.x, `print_line_ctx` in resolver.x, the DWARF `createFile` name in
+  emitter.x, and the `-trace` `enter_frame("sig path:line")` string.
+  Deliberately *not* trimmed: everything resolution/codegen needs -- import
+  resolution, `File::resolve`, cache keys, output `.o` names and the external
+  `*_static_init` symbol name (`mangle_unit(path)`; trimming it could make two
+  distinct units collide after a remap) -- because a lexical `dir/..` collapse
+  can differ from what the OS resolves through a symlinked directory; only the
+  recorded/printed spelling is our business.
+  `-j` worker children build their own command line, so `make_compile_job`
+  forwards every `-remap-path-prefix` (otherwise parallel and serial objects
+  would embed different paths; verified byte-identical).
+  Bridge: `cpp_bridge/x.sh` passes `-ffile-prefix-map=$inc_dir=/usr/include`
+  (and `$dir=cpp_bridge`) behind a one-line compile probe, since gcc<8 lacks
+  the flag; a fresh `libbridge.a` has zero `/tmp/...` include paths and 19
+  `/usr/include/llvm/...` ones.
+  Test: new `path` gate in bin/test.sh (`path` pattern, part of `all`) -- it
+  compiles from a `<dir>/../src/prog.x` spelling and checks the assert literal,
+  the panic literal and the diagnostic line, then does the same object under
+  `-remap-path-prefix $d=.` plus a `-g` DWARF check with `readelf`. Pre-fix
+  red: the pre-fix compiler's object carries
+  `.../path_all/bin/../src/prog.x:2` (verified against a pre-batch binary).
+  The `-trace` `enter_frame` string is trimmed too but cannot be gated:
+  `-trace` panics in codegen (`mapType2 str`) identically pre- and post-fix
+  (pre-existing, needs its own batch).
+  Effect on the artifact: the pre-fix binary and the stage built *by* it carry
+  748 `bin/../src` strings; the next stage (compiled by that one) carries 0 and
+  swaps all 19 LLVM include paths for `/usr/include/...`.
+  ABI note: no mangling change, but the *content* changes (string literals), so
+  the usual fixpoint shifts one stage: B (built by the pre-fix compiler) still
+  embeds `bin/../src` + old LLVM include paths, C (built by B) does not, hence
+  B != C by construction while C == D is byte-identical. Checked exactly that
+  way: `cmp` C vs D clean; `nm` symbol lists of B and C identical (6706
+  symbols, no ABI drift); the `.rodata` string-literal *sets* (extracted with
+  `objcopy --only-section=.rodata`) are identical modulo the two path
+  spellings -- 2321 entries each; full suite green on the fixpoint binary
+  (`normal pass=79 xpass=0`, fmt/path/opt pass, leak self-skips -- no valgrind
+  here).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -556,6 +610,13 @@ Compile gaps (pre-existing, not yet fixed):
    link the new symbols. `bin/build.sh` had a latent variant of this: the
    two bootstrap stages shared one `flags` string, so stage2 linked stage1's
    archives (mixed ABI). Fixed 2026-10-18.
+   A change that only rewrites *embedded strings* (paths, see the
+   `-remap-path-prefix` entry above) shifts the fixpoint one stage further:
+   B (built by the pre-fix compiler) still carries the old strings, C (built
+   by B) carries the new ones -- so require C == D byte-identical instead,
+   and show the drift is only strings (`nm` B vs C equal, `strings` diff B vs
+   C only path spellings). Same for any change to what the compiler bakes
+   into its own output.
 
 ## Environment gotchas
 

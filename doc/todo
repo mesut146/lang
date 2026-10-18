@@ -1,6 +1,4 @@
-
-//trim debug paths?
-
+ 
 //full macro support 
 asd!(5, "test");
 macro asd{
