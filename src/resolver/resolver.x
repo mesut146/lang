@@ -544,6 +544,21 @@ impl Resolver{
     }
     return false;
   }
+  //true when `name` is bound by a *local* scope (parameter, let, match/if-let
+  //binding, loop variable, lambda parameter), ignoring the unit's globals in
+  //scopes[0] (pushed by init()). A macro body's free name that hits a global is
+  //the ordinary case and still resolves at the call site; hitting a local is a
+  //capture (expand_user_macro's guard).
+  func has_live_local(self, name: String*): bool{
+    let i = 1;
+    while(i < self.scopes.len()){
+      if(self.scopes.get(i).find(name).is_some()){
+        return true;
+      }
+      i += 1;
+    }
+    return false;
+  }
   func addScope(self, name: String, type: RType, id: i32, kind: VarKind, line: i32){
     for scope in &self.scopes{
       if(scope.find(&name).is_some()){

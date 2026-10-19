@@ -44,9 +44,12 @@ name!(arg1, arg2, arg3);//statement or expression position
 //macro may use `t`, `i` or `res` whatever the caller has in scope, and a
 //substituted argument cannot be captured by a body local of the same name (a
 //body local may even reuse a parameter's name: from its declaration on the name
-//is the local, before it the parameter). Two limits: a name the body never
-//declares still resolves at the call site (macro-level capture, unchanged), and
-//a nested binder's spelling keeps its fresh name for the rest of the body (no
+//is the local, before it the parameter). A name the body never declares (and
+//that is not a parameter) is a *free* name: it resolves at the call site, like
+//before, but if the caller has a local of that spelling the expansion is an
+//error ("resolves to a local at this call site; pass it as a parameter") --
+//reading caller state must be explicit (tests/fail/macro_capture_local.x). A
+//nested binder's spelling keeps its fresh name for the rest of the body (no
 //scope restore), so keep inner binder names distinct from outer uses.
 //A body ending in an expression makes the macro an expression of the inferred
 //type (`macro square(x: Expr){ x * x }`), otherwise it is void.
@@ -58,7 +61,12 @@ name!(arg1, arg2, arg3);//statement or expression position
 //in, including a module of an imported unit. One `macro name` per unit,
 //parameter names must be unique and the builtin names
 //(`format`/`print`/`panic`/`debug_member`) are reserved.
-//Still open: definition-site resolution of body names (the capture above).
+//Still open: full definition-site resolution of free body names -- a name the
+//macro's own unit declares but the caller also has (a global, a function, or a
+//unit-level item of a same-named import) still resolves at the call site. The
+//caller-*local* half is closed above. Name visibility is unaffected: the
+//expansion still runs with the caller's imports plus the defining unit's
+//(extra_imports).
 //Code-generation macros have their own design note now: doc/codegen_macros.txt
 //(declarative list parameters + `$( ... )*` repetition; no CTFE, no token-tree
 //matcher; item position and fragment kinds phased behind it). The unused

@@ -32,20 +32,25 @@ struct AstCopier{
     //per-declaration counter so one body may declare the same spelling twice
     rename_id: i32;
     rename_seq: i32;
+    //macro expansion: bare names that are neither body-declared nor a
+    //parameter. The resolver checks them against the call site: such a name
+    //would otherwise capture a caller local (definition-site guard in
+    //expand_user_macro).
+    free_names: List<String>;
     //last_id: i32*;
 }
 
 impl AstCopier{
     func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
     }
     func new(type_map: HashMap<String, Type>*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
     }
     //macro expansion: same as new(), but `expr_map` names are substituted with
     //their argument and `rename_map` names are renamed.
     func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>, rename_map: HashMap<String, String>): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
     }
 
     //hygienic rename of one name a macro body declares: the fresh spelling is
@@ -405,6 +410,9 @@ impl AstCopier{
                 if(renamed.is_some()){
                     return Expr::Name{.id, renamed.unwrap().clone()};
                 }
+                //neither declared in the body nor a parameter: a free name,
+                //resolved at the call site (see expand_user_macro's guard)
+                self.free_names.add(name.clone());
             }
         }
         match node{

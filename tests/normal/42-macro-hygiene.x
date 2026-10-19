@@ -56,8 +56,12 @@ macro param_local(v: i32){
     assert(v == 1);
 }
 
-//the other direction is *not* hygienic: a name the body never declares still
-//resolves at the call site (that is how doc/todo's macro-level capture works)
+//a name the body never declares (and that is not a parameter) is a free name:
+//it resolves at the call site, so a module-level name is the ordinary case -- a
+//caller *local* of that spelling would be a capture and is rejected
+//(tests/fail/macro_capture_local.x)
+static outer = 5;
+
 macro use_outer(){
     assert(outer == 5);
 }
@@ -114,7 +118,6 @@ func main(){
     with_match!(E::A{1});
     assert(n == 100);
 
-    //a body name that is not declared catches the call site's variable
-    let outer = 5;
+    //a free body name that only exists at module level still resolves
     use_outer!();
 }

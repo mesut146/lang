@@ -6,8 +6,12 @@
 //+ expression position; the names the body declares are alpha-renamed per call
 //site; lookup follows the module rules (`m::name!(...)`, `use m;` /
 //`use m::{name}`, top-level macros of imported units).
-//still open: a body name that is never declared still resolves at the call site
-//(definition-site resolution), and code-generation macros -- doc/
+//free body names (never declared, not a parameter) resolve at the call site; a
+//caller *local* of that spelling is now an error instead of a capture
+//(2026-10-19), still open is the other half of definition-site resolution: a
+//module-level name that the macro's unit declares but the caller also has
+//(global/function/same-named import) still resolves at the call site.
+//code-generation macros -- doc/
 //codegen_macros.txt is the design note now: declarative list parameters +
 //`$( ... )*` repetition (no CTFE, no token-tree matcher), with item position
 //and fragment kinds phased behind it. doc/token_macros.txt keeps the state of

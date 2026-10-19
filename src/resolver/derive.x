@@ -698,8 +698,10 @@ func is_expr_param(prm: MacroParam*): bool{
 //  alpha-renamed per call site, so a macro may use `t`, `i` or `res` without
 //  colliding with the caller's variables, and a substituted argument cannot be
 //  captured by a body local of the same name. A body name that is *not*
-//  declared still resolves at the call site (that capture is unchanged); a
-//  nested binder's spelling keeps its fresh name to the end of the body.
+//  declared (and is not a parameter) is a free name: it resolves at the call
+//  site, but a live caller local of that spelling is an error (see the guard
+//  below) instead of a silent capture; a nested binder's spelling keeps its
+//  fresh name to the end of the body.
 //AstCopier re-issues node ids, so two calls of one macro -- and two uses of one
 //argument -- never share nodes. The block is then resolved like any other
 //generated code and the emitter picks it up through format_map, the same
@@ -743,6 +745,16 @@ func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*)
     }
     if(mac.body.return_expr.is_some()){
         info.block.return_expr.set(copier.visit(mac.body.return_expr.get()));
+    }
+    //Definition-site guard: a free body name is resolved at the call site (the
+    //copy is visited in the caller's scopes). If the caller happens to have a
+    //local of that name, the body would silently read it -- x has no shadowing
+    //and the spelling matches, so there is no diagnostic anywhere else. Such a
+    //read has to be explicit: pass it as a parameter.
+    for free in &copier.free_names{
+        if(r.has_live_local(free)){
+            r.err(node, format("macro {} body name '{}' resolves to a local at this call site; pass it as a parameter or declare it in the body", mac.name, *free));
+        }
     }
     r.newScope();
     r.macro_depth += 1;

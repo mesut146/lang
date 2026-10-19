@@ -1039,6 +1039,36 @@ Ownership only — no Rust-like borrows:
     drift. README quick start no longer exports `LD`/`AR` (and uses the v1.18
     toolchain in its example); doc/macros.txt notes the search order.
 
+- Macro free-name capture: the caller-local half of definition-site resolution
+  (2026-10-19). The hygiene work renames the names a body *declares*, but a body
+  name that is neither declared nor a parameter was resolved at the call site
+  with no diagnostic, so a body could silently read a caller local
+  (`tests/normal/42-macro-hygiene.x` used to assert exactly that:
+  `let outer = 5; use_outer!();`).
+  - `AstCopier` now records every free `Expr::Name` it copies (while not inside
+    a substituted argument) in `free_names`; `expand_user_macro` rejects a free
+    name that `has_live_local` reports as bound by a local scope at the call
+    site: "macro m body name 'v' resolves to a local at this call site; pass it
+    as a parameter or declare it in the body". `has_live_local` deliberately
+    skips `scopes[0]` (the unit's globals, pushed by `init()`): a free name
+    hitting a *global* is the ordinary case and keeps resolving at the call
+    site, which is what made a first version over-reject
+    `tests/normal/41-macro-value-params.x` (its body reads the global `calls`).
+  - Tests: `tests/fail/macro_capture_local.x` (pre-fix it compiled and printed
+    the caller's `v`; the harness now reports "FAIL (compiled, expected
+    failure)", post-fix the message above), and 42-macro-hygiene moved its
+    capture case to a module-level `static outer` so the unchanged half stays
+    covered. `tests/normal/40-user-macro.x` gained a free name that is a
+    top-level function.
+  - Residual (still open, recorded in doc/todo/doc/macros.txt): a free name
+    that the macro's unit declares but the caller also has (a global, a
+    function, or a same-named import) still resolves at the caller -- full
+    definition-site resolution needs a per-subtree resolution context (body =
+    defining unit, substituted arguments = call site), which is a resolver
+    change of its own.
+  - Suite green (`normal pass=98 xpass=0`, all gates); triangle C == D
+    byte-identical, B != C only in the known StateType::clone drift.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
