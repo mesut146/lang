@@ -829,7 +829,7 @@ Ownership only — no Rust-like borrows:
     in a plain `-stdpath` build (the prelude archive is not linked; the same
     applies to `.clone()` on a primitive);
   - a method call on a unit-variant literal (`Kind::Empty.clone()`) reports
-    "get_alloc() not set"; binding it first works.
+    "get_alloc() not set"; binding it first works (fixed by the entry below).
   doc/token_macros.txt section 3 and doc/todo now list these.
 
 - Compiler crash: a generic over a drop type (2026-10-19). `init` visits
@@ -861,6 +861,38 @@ Ownership only — no Rust-like borrows:
   not this fix), C == D byte-identical, full suite green (`normal pass=95
   xpass=0`, fmt/trace/path/opt pass, own green incl. the new test, leak
   self-skips).
+
+- A method on a unit-variant value (2026-10-19). `Kind::Empty.clone()` -- any
+  method call whose receiver is a unit-variant literal -- did not compile.
+  Three stacked bugs, all about "an Expr::Type that is a value":
+  - AllocHelper skipped *every* `Expr::Type` call scope. That is right for a
+    type path (`M::A::method`, `Trait::method(x)`, `m::f()`), which is not a
+    runtime value, but a unit variant is one: it never got an alloc and the
+    emitter died with `get_alloc() not set`. It now asks `is_unit_variant`
+    (alloc_helper.x: the scope resolves to a decl that is an enum, its name is
+    one of the variants, and the variant has no fields) and visits value
+    scopes normally.
+  - `eval_operand` had no operand for an `Expr::Type` at all (it is a type
+    path most of the time). For a unit variant it now returns the temporary
+    that `visit` built (`simple_enum`) -- the next error was otherwise
+    `eval_operand Kind::Empty`.
+  - `debug_call` printed every type-scoped call as `scope::name(...)`, static
+    or not. `assert` builds its message by printing the condition and parsing
+    it back (`generate_assert`), so `assert(Kind::Empty.is_empty())` became a
+    *static* call and resolution failed with `arg size mismatched 0 vs 1`. The
+    printer now prints `::` only when `is_static` is set; a value receiver
+    keeps its dot.
+  Tests: `tests/normal/45-variant-receiver.x` (unit-variant receiver for a
+  derived clone and for a user method -- the latter through `assert` -- plus a
+  payload-variant receiver and a static call/module call as guards). Pre-fix
+  red: `method Kind::Empty::is_empty() not found from candidates / arg size
+  mismatched 0 vs 1` (resolution; the emission-stage `get_alloc()` is what it
+  would hit next).
+  Triangle: no generated code changes for the compiler itself; C == D
+  byte-identical, `nm` sets identical, and B != C only in the known
+  `StateType__Clone__clone_StateType$P` size drift from the Clone-generator
+  entry (0xe8 vs 0xdd). Suite green (`normal pass=96 xpass=0`,
+  fmt/trace/path/opt pass, leak self-skips).
 
 ## Known open holes (documented, not yet solved)
 

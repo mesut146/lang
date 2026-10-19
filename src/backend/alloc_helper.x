@@ -248,10 +248,13 @@ impl AllocHelper{
     if(call.scope.is_some()){
       //type scopes (M::A::method) are not runtime values: visiting them
       //allocs the as-written (possibly generic) type instead of doing
-      //nothing. Value scopes still visit normally.
+      //nothing. Value scopes still visit normally -- including a *unit enum
+      //variant*, which is an Expr::Type with a scope (`Kind::Empty.clone()`)
+      //but a runtime value whose address the emitter takes: skipping it left
+      //the literal without an alloc ("get_alloc() not set").
       let is_ty = false;
       if let Expr::Type(ty) = call.scope.get(){
-        is_ty = true;
+        is_ty = !is_unit_variant(self.c, ty);
       }
       if(!is_ty){
         self.visit(call.scope.get());
@@ -408,4 +411,40 @@ impl AllocHelper{
       },
     }
   }
+}
+
+//`Kind::Empty` prints like a type path but evaluates to the variant *value*,
+//while a real type scope (`M::A::method`, `E::Variant::static_fn`) is not a
+//runtime value. True when `ty` is the path of a field-less variant of the enum
+//its scope resolves to, i.e. an Expr::Type the emitter must treat as a value
+//(see the call-scope case in AllocHelper::visit_call).
+func is_unit_variant(c: Emitter*, ty: Type*): bool{
+  if(!ty.is_simple()){
+    return false;
+  }
+  let smp = ty.as_simple();
+  if(smp.scope.is_none()){
+    return false;
+  }
+  let resolver = c.get_resolver();
+  let scp = smp.scope.get();
+  let rt = resolver.visit_type(scp);
+  if(!rt.desc.kind.is_decl()){
+    //a module (`m::f()`), a trait (`Trait::method(x)`), a method value, ...
+    return false;
+  }
+  let decl = resolver.get_decl(&rt);
+  if(decl.is_none()){
+    return false;
+  }
+  let d = decl.unwrap();
+  if(!d.is_enum()){
+    return false;
+  }
+  for v in d.get_variants(){
+    if(v.name.eq(&smp.name)){
+      return v.fields.empty();
+    }
+  }
+  return false;
 }

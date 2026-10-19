@@ -763,6 +763,11 @@ impl Emitter{
         if(rt.type.is_lambda()){
             return val;
         }
+        //a unit variant (`Kind::Empty`) is a runtime value, not a type path:
+        //visit above built its temporary (simple_enum), which is the operand
+        if(is_unit_variant(self, type)){
+            return val;
+        }
       },
       Expr::IfLet(il) => {
         return val;

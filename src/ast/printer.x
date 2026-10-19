@@ -1382,7 +1382,16 @@ func debug_call(self: Call*, f: Fmt*, comments: List<Comment>*){
       let scp: Expr* = self.scope.get();
       if let Expr::Type(t)=scp{
         t.debug(f);
-        f.print("::");
+        //`::` is only for a static call. A unit enum variant is an Expr::Type
+        //but a runtime value (`Kind::Empty.clone()`): printing it with `::`
+        //made the re-parsed text (assert builds its message by printing the
+        //condition and parsing it back) a static call, which then failed to
+        //find the method ("arg size mismatched 0 vs 1").
+        if(self.is_static){
+          f.print("::");
+        }else{
+          f.print(".");
+        }
       }else{
         debug_expr(scp, f, comments);
         f.print(".");
