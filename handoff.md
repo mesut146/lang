@@ -15,8 +15,9 @@ generic instantiations met before the derives `d686482`, method calls on
 unit-variant values `01ac0e2`, `#derive(Display)` `3e4d3ae`, the std archive linked
 by default `dea55e6`, the user-codegen design note
 `1e6904a`, and the two `-j` pool fixes `fc2ed48`).
-v1.17 released at
-`92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
+v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
+aarch64 and termux toolchains built, tested and published). Next release v1.19
+bootstraps from v1.18. Releases: v1.11 -- v1.18.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
