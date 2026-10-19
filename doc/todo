@@ -6,8 +6,13 @@
 //+ expression position; the names the body declares are alpha-renamed per call
 //site; lookup follows the module rules (`m::name!(...)`, `use m;` /
 //`use m::{name}`, top-level macros of imported units).
-//still open: token streams (resolver/macros.x stub) and a body name that is
-//never declared still resolving at the call site (definition-site resolution)
+//still open: a body name that is never declared still resolves at the call site
+//(definition-site resolution), and code-generation macros -- for those see
+//doc/token_macros.txt: the TokenStream/#derive_macro stub in resolver/macros.x
+//is unused, the live derive generators are in derive.x, and the document lists
+//the real remaining gaps (Clone on plain-value fields, no #derive(Display)) plus
+//the two decisions (compile-time evaluation; token streams as input or output)
+//that have to be made before any of it is written.
 
 //module members of another unit: after `import dep`, `dep`-side `m::T` /
 //`m::f()` reports "a module's members are only visible in the unit that

@@ -805,10 +805,15 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   `macro name(p: Expr, n: i32){...}` + `name!(...)`, statement and expression
   position, macro-level hygiene for the names the body declares, module rules
   (`m::name!(...)`, `use m;` / `use m::{name}`, top-level macros of imported
-  units). Still open: token streams (resolver/macros.x stub) and definition-site
-  resolution of a body name that is never declared (it still captures the call
-  site); `print!`/`format!`/`panic!`/`assert!` remain builtins handled in the
-  format/derive path, and their names are reserved.
+  units). Still open: definition-site resolution of a body name that is never
+  declared (it still captures the call site); `print!`/`format!`/`panic!`/
+  `assert!` remain builtins handled in the format/derive path, and their names
+  are reserved. Code generation (token streams / `#derive_macro`) is a
+  *proposal* with no consumer: doc/token_macros.txt records why the
+  resolver/macros.x stub is unused (the live derive generators are in
+  derive.x), the two decisions it needs (compile-time evaluation; token
+  streams as input or output), and the real gaps it found instead -- Clone on
+  plain-value fields (`str`, `bool`) and no `#derive(Display)`.
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

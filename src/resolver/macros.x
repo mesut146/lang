@@ -1,7 +1,7 @@
 import ast/ast
 import ast/parser
 
-//#derive_macro(Clone)
+//#derive_macro(Clone) -- UNUSED stub, see doc/token_macros.txt (live derive generators: derive.x)
 func derive_clone(it: Item): TokenStream{
     
     panic("todo");

@@ -1,0 +1,187 @@
+token-stream macros and #derive_macro: design note
+STATUS: proposal, written 2026-10-19 on main 6ca6ca6. Nothing in here is
+implemented and nothing should be coded from it before the decisions in
+section 4 are made and the questions in section 7 answered. It exists because
+"token streams" is the last macro item in doc/todo and the shape of
+resolver/macros.x is easy to misread as live.
+
+1. Short answer: there is no consumer today
+------------------------------------------
+Every code-generation job the stub was sketched for is already done in
+src/resolver/derive.x, with the AST + parse_stmt(format(...)) style:
+
+  #derive(Clone)  -> generate_clone (derive.x:69)
+  #derive(Debug)  -> generate_debug (derive.x:304)
+  #derive(Drop)   -> automatic (generate_drop / DropHelper)
+  `format!`-style -> the format/derive path (derive.x, parse_expr/parse_stmt)
+
+Verified end to end on main (std linked, -flags $LIB_STD): `#derive(Debug)`
+on a struct, a generic struct, an enum with payloads and on nested structs
+all print through `{:?}` (`P{x: 1, y: s}`, `Box2<i32>{v: 7}`, `E::A{x: 1,
+y: z}`, `E::B`), and `#derive(Clone)` works for structs whose fields all have
+a Clone impl. So `TokenStream` (ast.x:13) and resolver/macros.x are UTTERLY
+UNUSED today: the only references to TokenStream are its own definition and
+the stub, and the stub's `derive_clone`/`derive_debug` are dead code
+(derive_macro is not a recognised attribute; "#proc_macro" is accepted and
+ignored, resolver.x:1026).
+
+2. What the stub was for
+------------------------
+resolver/macros.x sketches a *different* implementation strategy for the same
+derives: a compile-time function over the AST that assembles tokens
+
+    func derive_debug(it: Item): TokenStream{ res.add("impl"); ... }
+
+and then parses them (`//parse_ts(ts);`, macros.x:44, unimplemented). The
+appeal is that the generator reads like the code it emits, instead of
+building Impl/Method/Block nodes by hand. The live generators get most of
+that benefit already by building *bodies* as strings via
+parse_stmt/parse_expr (parser.unit is bound to the unit, the fragment's line
+is the decl's line), which is exactly "generate source, not memory"
+(doc/ownership.txt:35). What strings do NOT do yet is *item-level*
+generation: there is no tokens->items entry point (`parse_ts`), only
+parse_stmt/parse_expr.
+
+3. Gaps that actually exist in this area (found while writing this)
+-------------------------------------------------------------------
+None of these need token streams; they are generator bugs/gaps in the
+existing style. Each is a small, user-visible slice:
+
+  a) `#derive(Clone)` is broken for field types without a Clone impl.
+     std has Clone only for i8/u8/i16/u16/i32/u32/i64/u64 and String
+     (ops.x:50..85, string.x:154), but generate_clone emits
+     `let __f = f.clone();` for every field (except pointers, which are
+     special-cased). Verified: `struct S{ s: str; }` + `#derive(Clone)` ->
+     "no such method str::clone(str)"; `struct I{ i: i32; b: bool; }` ->
+     "no such method bool::clone(bool)". Fields that are plain values
+     (primitives, `str`, pointers) should be *copied*, not method-called.
+  b) no `#derive(Display)`: `{}` on a struct is a resolve error ("no such
+     method Display::fmt(P*, Fmt*)") unless the type has a hand-written
+     Display. If a default dump is wanted, it is generate_debug's shape with
+     `fmt` instead of `debug` (ops.x:91/94: Debug has `debug`, Display has
+     `fmt`).
+  c) the custom printer `{::Trait}` calls `Trait::fmt(x, f)` for *any* named
+     trait, so `{::Debug}` does not work with std's Debug (whose method is
+     `debug`): verified "no such method Debug::fmt(P*, Fmt*)". `{::Trait}` is
+     for user traits with a `fmt`; std Debug is reached through `{:?}`.
+     Documented, not a bug -- but easy to trip over next to (b).
+  d) tuple variants are unreachable: Variant::is_tuple is never set (the
+     assignment in parser.x:595 is commented out), so the tuple arms of
+     generate_debug are dead and `C(i32, bool)` does not parse (the doc's
+     `A(a: i32, b: str)` variant syntax is not what is implemented -- see the
+     `impl E::A` item in doc/todo).
+  e) `#derive(Debug = Trait)` delegation panics ("derive expr ...",
+     handle_attr's match in resolver.x:1032); that was closed as not planned
+     (doc/delegate trait, handoff "Known open holes").
+
+4. The two decisions this note is about
+---------------------------------------
+(D1) Compile-time evaluation: does the *user* write the generator, or the
+compiler?
+     - User-authored generators mean evaluating user x code during
+       compilation (CTFE): the compiler would need to run a function of the
+       program it is compiling, before the program exists. There is no
+       interpreter for x in the compiler and bootstrapping one is a project
+       of its own (values, drops, panics, module resolution, a compile-time
+       sandbox...). Recommendation: NOT now, and not as the first shape of
+       this feature.
+     - Compiler-internal generators (`#derive_macro(Name)` dispatching to
+       functions in resolver/macros.x) need no evaluation at all: the
+       functions are ordinary compiler code, compiled with the compiler. This
+       is what the stub assumes.
+(D2) Token streams: input, output, or neither?
+     - As *output* (a generator builds tokens, the compiler parses them into
+       items/stmts/exprs and splices) the only new machinery is tokens->AST
+       (`parse_ts`) plus line/span attribution. It changes how a *builtin*
+       generator is written, not what users can do.
+     - As *input* (a user macro parameter that receives raw tokens:
+       `macro m(t: TokenStream){...}`) it is only useful together with CTFE
+       (D1-user), or with a declarative matcher (option C below).
+
+5. Options, costs, what each unlocks
+------------------------------------
+A. Status quo + fix the generators (no new language surface)
+   Do (a)/(b) from section 3 in the existing style. Cheap, testable with the
+   current gates, no risk to the macro semantics that landed in slices 1-3b.
+   Unlocks: usable Clone for common structs, an opt-in default Display. Does
+   not unlock user-authored code generation at all.
+B. Compiler-internal `#derive_macro(Name)` over TokenStream (the stub's shape)
+   Work: TokenStream -> items (`parse_ts`, reusing Parser::from_string/
+   Parser::from_tokens), span/line attribution to the decl, error attribution
+   (a syntax error inside generated code must name the decl), hygiene of the
+   generated names (the current generators already emit `self`, `f` and
+   `__field` locals and rely on parse_stmt; a token path must decide the same
+   freshening rule), and the splice point (`unit.items.add_list`, as
+   handle_attr does; generated items then go through the normal init/visit
+   passes and the emitter's ownership walk).
+   Unlocks: item-level generators that are painful to assemble as AST (a
+   derive that emits several impls, or many methods). Nothing user-visible
+   that option A cannot do.
+C. User-authored code generation, declarative (no CTFE)
+   A `macro` whose parameter is a *list* of syntax slots with a repetition
+   form (Rust-like `$( ... ),*` plus `$name` substitution), i.e. a matcher
+   and expander in the resolver, not an evaluator. This is the only route to
+   "user macros that generate code" without an interpreter.
+   Work: the matcher (fragment kinds: expr / stmt / item / ident / type),
+   slice 1-3b's hygiene machinery growing a well-defined scope for `$name`
+   substitutions, expansion-depth and error reporting, and a decision about
+   what a token parameter *is* in a language whose macro parameters are typed
+   today. This is a language design change and needs its own note first.
+   Recommendation: not now; if user code generation is wanted later, do this
+   instead of CTFE -- it is strictly smaller and keeps errors static.
+
+6. Recommendation
+-----------------
+1. Do NOT build option B yet: with #derive(Clone)/Debug/Drop already wired,
+   the stub has no consumer, so `parse_ts` + `#derive_macro` would be
+   plumbing nobody calls. Keep the stub (it records the intent) but mark it
+   as unused (done in this change).
+2. If more derive coverage is wanted, take option A: fix Clone's field
+   handling (3a) and, if a default struct dump is wanted, add
+   `#derive(Display)` (3b). Both are small, both have a pre-fix red test.
+3. Leave option C as a language decision with a separate design note. Revisit
+   option B only when a concrete generator needs item-level generation and the
+   AST assembly is demonstrably worse.
+
+7. Questions for the maintainer (answer before any coding)
+----------------------------------------------------------
+Q1 `#derive(Clone)`: copy plain-value fields (fix) or require Clone impls for
+   every field type (document)? The fix matches how x treats primitives
+   everywhere else.
+Q2 Is a default `#derive(Display)` (a `P{x: 1, y: s}` dump) wanted, or is
+   Display always hand-written?
+Q3 Is user-authored code generation (option C) a goal at all? If not, this
+   doc is closed with the section-6 fixes and `#derive_macro` can be deleted
+   instead of kept as a stub.
+Q4 If option C is a goal: which shape -- typed list parameters with a
+   repetition form, or a full matcher? (Separate note either way.)
+
+8. Notes for whoever implements B or C
+--------------------------------------
+- Hygiene: slices 1-3b alpha-rename the names a macro *body declares*
+  (AstCopier hygienic mode) and bind value parameters once at the top of the
+  expansion. Generated-by-tokens code has no names until it is parsed, so the
+  rule must be applied *after* parsing, on the generated AST: either run the
+  same renaming over the spliced items, or require the generator to emit
+  fresh names (the stub's `derive_debug` emits `self`/`f`/`__{field}` and
+  relies on the field names being distinct -- it would collide with a field
+  literally named `__x`; the live generate_debug has the same caveat).
+- Module lookup: spliced items/statements belong to the unit they are spliced
+  into, so names resolve there (plus that unit's imports) -- the same rule
+  macro expansions follow (`extra_imports` pulls in a foreign macro's unit
+  imports). A generator must not assume the *defining* module of the macro.
+- Ownership: expansions are walked because the emitter emits the recorded
+  block and the owner visitor now reaches `Expr::MacroCall` (own_visitor.x
+  visit_macrocall, 2026-10-19). Generated *items* are ordinary items: the
+  emitter's per-expression hooks analyse their bodies, and `end_scope_if`'s
+  else re-analysis sees them like any other code. Verify with drops on
+  (tests/own, drop_enabled=1) before trusting a new generator: a generator
+  that moves values in an else branch has the same leak trap this note's
+  sibling fix closed.
+- Spans: parse_stmt/parse_expr set the fragment's line to the decl's line
+  (Parser::from_string(input, line)). A tokens->items entry point must do the
+  same or diagnostics in generated code point at line 0.
+- Bootstrapping: anything added here runs inside the compiler, so the strict
+  triangle applies (B == C) even for what looks like a docs-only generator
+  change -- generator *output* is compiled into user programs, generator
+  *code* is compiled into the compiler.

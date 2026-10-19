@@ -58,8 +58,11 @@ name!(arg1, arg2, arg3);//statement or expression position
 //in, including a module of an imported unit. One `macro name` per unit,
 //parameter names must be unique and the builtin names
 //(`format`/`print`/`panic`/`debug_member`) are reserved.
-//Still open: token-stream macros (resolver/macros.x + TokenStream) and
-//definition-site resolution of body names (the capture above). The narrow
+//Still open: definition-site resolution of body names (the capture above).
+//Code-generation macros (token streams / #derive_macro) are a proposal, not a
+//plan: there is no consumer for them today and the two decisions they need are
+//in doc/token_macros.txt, which also lists the real derive gaps
+//(#derive(Clone) on plain-value fields, no #derive(Display)). The narrow
 //`use m::{name}` list form round-trips through the formatter (tests/fmt/macro.x).
 
 
