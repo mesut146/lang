@@ -47,6 +47,10 @@ $TC/bin/x c -o hello -out ./out -stdpath $TC/src hello.x
 ```
 
 Notes:
+- the standard library is linked by default: the toolchain's `lib/std.a` when
+  `-stdpath` points inside a toolchain, otherwise it is built from
+  `<stdpath>/std` once per `-out` dir (needs `ar`). `-nostd` gets the bare link
+  line, so `String` and the primitive `Clone` impls are not available.
 - `x -h` lists commands and `c` flags; `x -v` prints the version.
 - On Termux, extract with `unzip` (in `pkg install unzip`): GUI extractors on
   Android can drop unix permission bits, leaving `bin/x` non-executable;

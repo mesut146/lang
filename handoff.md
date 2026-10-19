@@ -923,6 +923,39 @@ Ownership only — no Rust-like borrows:
   doc/token_macros.txt section 3b now records it as fixed; the one derive-area
   gap left there is a plain build not linking the std archive.
 
+- Plain builds link the standard library (2026-10-19). `x c prog.x` produced
+  `undefined reference to String__new_str` (and the primitive `Clone` impls,
+  `String__drop`, ...) unless the caller passed the archive through `-flags`;
+  the README quick start has no `-flags`, so it only worked for programs that
+  avoided std. The `-std` flag existed but was undocumented in the quick start
+  and *wrong* with `-stdpath`: it called `build_std(std_path, ...)`, i.e. it
+  compiled `<stdpath>` itself (with `-stdpath src` that is the whole compiler,
+  which died inside `str::check_all` -- unrelated crash, but it showed the
+  path was never exercised).
+  - std now links by default; `-nostd` restores the bare link line. `-std` is
+    still accepted as a no-op.
+  - `-stdpath <dir>`: if `<dir>/../lib/std.a` exists (the toolchain layout,
+    `<toolchain>/{src/std, lib/std.a}`) it is linked, so no `ar` is needed and
+    nothing is rebuilt. Otherwise `<dir>/std` is built into the `-out` dir and
+    linked; the build is cached there, so only the first compile per out dir
+    pays (~4s). `-nolink` never builds it.
+  - without `-stdpath` (installed `bin/x`): `<toolchain>/lib/std.a` when
+    present. A bare compiler binary (build/.../stage1) has no toolchain tree,
+    so it links nothing -- unchanged, and its std imports would not resolve
+    either.
+  Tests: tests/normal/46-std-link.x (String, `String::clone`, `i32::clone`, a
+  `#derive(Clone)` over a String field) -- a plain `-stdpath src` compile with
+  no `-flags`. Pre-fix red: `undefined reference to String__new_str`.
+  Verified by hand (no harness test): `-nostd` gives the old link error;
+  a toolchain layout (`src/std` + `lib/std.a`) links without `AR`; the second
+  compile in one out dir takes 0.24s (cache).
+  Triangle: the compiler itself is built with `-flags` that already contain
+  its std archive, so the extra auto link is the same archive twice (harmless;
+  the first compile per out dir is a cache hit because bin/build_std.sh
+  already built it there). C == D byte-identical; B != C only in the known
+  StateType::clone drift. Suite green (`normal pass=97 xpass=0`).
+  README quick-start note and doc/macros.txt `-nostd` entry updated.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see

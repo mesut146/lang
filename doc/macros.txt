@@ -80,8 +80,8 @@ name!(arg1, arg2, arg3);//statement or expression position
 -flags <flags> //sent to linker LD
 -name <name>
 -i <dir>
--stdpath <dir>
--std
+-stdpath <dir> //dir containing std/ (the std archive links by default)
+-nostd //skip the std archive (bare linker line)
 -inc //incremental recompile (witness of moved sources)
 -g //debug info (DWARF)
 -trace //frame instrumentation (std/rt.x call_stack, print_frame())

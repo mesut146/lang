@@ -8,12 +8,11 @@
 //structs alike. Owners are unchanged: a drop-typed field still goes through
 //clone().
 //
-//NB: this is a plain -stdpath test (the normal gate does not link the std
-//archive, and String + the primitive Clone impls live there), so the owned
-//field uses a local #drop type, the generic parameter a local plain type, and
-//the assertions only touch fields x can compare: there is no `==` on str
-//("string op not supported yet"), so the `str` fields below are covered by the
-//fact that the generated body compiles at all.
+//NB: the owned field uses a local #drop type and the generic parameter a local
+//plain type, so this stays independent of std; the assertions only touch fields
+//x can compare: there is no `==` on str ("string op not supported yet"), so the
+//`str` fields below are covered by the fact that the generated body compiles at
+//all.
 
 #derive(Clone)
 struct Plain{

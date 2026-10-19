@@ -67,6 +67,9 @@ func handle_c(cmd: CmdArgs*){
   let link_static = cmd.consume_any("-static");
   let link_shared = cmd.consume_any("-shared");
   let flags = cmd.get_val_or("-flags", "".str());
+  //The standard library is linked by default; -nostd gets the old bare link
+  //line. -std is still accepted (it used to be required) and does nothing.
+  let link_std = !cmd.consume_any("-nostd");
   let name: Option<String> = cmd.get_val("-name");
   let out_name: Option<String> = cmd.get_val("-o");
   let jobs = cmd.get_val("-j");
@@ -117,10 +120,22 @@ func handle_c(cmd: CmdArgs*){
     let std_path = cmd.get_val2("-stdpath");
     config.add_dir(std_path.clone());
     config.set_std(std_path.clone());
-    if(cmd.consume_any("-std")){
-      let lib = build_std(std_path.str(), out_dir.str());
-      flags.append(" ");
-      flags.append(lib.str());
+    cmd.consume_any("-std");
+    //The standard library is linked by default. A toolchain ships
+    //<dir>/{src/std, lib/std.a}, so `-stdpath <dir>/src` gets the prebuilt
+    //archive (no ar needed); a source tree has none, and <stdpath>/std is
+    //built into the out dir instead (cached there, so only the first compile
+    //per out dir pays). -nolink needs no archive at all.
+    if(link_std && !compile_only){
+      let prebuilt = format("{}/../lib/std.a", std_path);
+      if(File::exists(prebuilt.str())){
+        flags.append(" ");
+        flags.append(prebuilt.str());
+      }else{
+        let lib = build_std(format("{}/std", std_path).str(), out_dir.str(), true);
+        flags.append(" ");
+        flags.append(lib.str());
+      }
     }
   }else{
     //in <toolchain_dir>/{bin/x, src/std, lib/std.a}
@@ -129,8 +144,15 @@ func handle_c(cmd: CmdArgs*){
     let std_dir = format("{}/src", tool_dir);
     config.add_dir(std_dir.clone());
     config.set_std(std_dir);
-    if(cmd.consume_any("-std")){
-      flags.append(format("{}/lib/std.a", tool_dir));
+    cmd.consume_any("-std");
+    if(link_std && !compile_only){
+      let prebuilt = format("{}/lib/std.a", tool_dir);
+      //a toolchain ships lib/std.a next to bin/x; a bare compiler binary
+      //(build/.../stage1) has none, so there is nothing to link
+      if(File::exists(prebuilt.str())){
+        flags.append(" ");
+        flags.append(prebuilt.str());
+      }
     }
   }
   if(cmd.has_any("-target")){
@@ -203,7 +225,7 @@ func print_usage(){
   print("    [-O0/-O1/-O2/-O3] [-nolink] [-static] [-shared] [-g]\n");
   print("    [-cache] [-cache-ro] [-inc] [-trace] [-flags '...']\n");
   print("    [-remap-path-prefix OLD=NEW]\n");
-  print("    [-std] [-target x86_64|aarch64|android] <file.x|dir>\n");
+  print("    [-nostd] [-target x86_64|aarch64|android] <file.x|dir>\n");
   print("  -v, --version\n");
   print("  -h, --help\n");
 }
