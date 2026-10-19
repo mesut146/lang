@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-19. Main: `dea55e6` (owns `681a8cc` array places, place
+Date: 2026-10-19. Main: `1e6904a` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -12,8 +12,8 @@ panic for a module of another unit), and the ownership expansion walk
 `6ca6ca6`: the else-path re-analysis reaches `Expr::MacroCall` expansions, and
 the Clone derive copying plain-value fields `b16ebee`, drop methods for
 generic instantiations met before the derives `d686482`, method calls on
-unit-variant values `01ac0e2`, `#derive(Display)` `3e4d3ae`, and the std archive
-linked by default `dea55e6`).
+unit-variant values `01ac0e2`, `#derive(Display)` `3e4d3ae`, the std archive linked
+by default `dea55e6`, and the user-codegen design note `1e6904a`).
 v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
@@ -36,7 +36,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = dea55e6)
+## What's in the tree (main = 1e6904a)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
