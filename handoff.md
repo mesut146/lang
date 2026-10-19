@@ -1,14 +1,14 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-18. Main: `de51789` (owns `681a8cc` array places, place
+Date: 2026-10-19. Main: `36b8bb4` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
 normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
-user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934` and
-macro hygiene `de51789`) + scoped macro calls and `use` for macros, plus the
-module/`use` fixes (multi-form printing, diagnostic instead of the `get_decl`
-panic) on this branch. v1.17 released at
+user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934`, macro
+hygiene `de51789`, scoped macro calls and `use` `9cf94a4`, and the module/`use`
+fixes `36b8bb4`: multi-form printing, a diagnostic instead of the `get_decl`
+panic for a module of another unit). v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -30,7 +30,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = de51789)
+## What's in the tree (main = 36b8bb4)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
