@@ -1,14 +1,16 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-19. Main: `36b8bb4` (owns `681a8cc` array places, place
+Date: 2026-10-19. Main: `d05c709` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
 normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
 user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934`, macro
-hygiene `de51789`, scoped macro calls and `use` `9cf94a4`, and the module/`use`
-fixes `36b8bb4`: multi-form printing, a diagnostic instead of the `get_decl`
-panic for a module of another unit). v1.17 released at
+hygiene `de51789`, scoped macro calls and `use` `9cf94a4`, the module/`use`
+fixes `36b8bb4` (multi-form printing, a diagnostic instead of the `get_decl`
+panic for a module of another unit), and the ownership expansion walk
+`d05c709`: the else-path re-analysis reaches `Expr::MacroCall` expansions).
+v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -30,7 +32,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 36b8bb4)
+## What's in the tree (main = d05c709)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -708,15 +710,10 @@ Ownership only — no Rust-like borrows:
   `tests/fmt/macro.x`+`.expected` print a scoped call and a `use` too.
   Pre-fix red: main's compiler rejects all of them with "must be called
   unqualified".
-  Observed while validating -- pre-existing, not that batch: the two module
-  bugs below (the `use m::{name}` printing loss and the `get_decl` panic for a
-  module of an imported unit) are fixed in the next entry; what stays open is
-  - the ownership visitor's macro branch sits in the `Call*` overload while user
-    macro calls parse as `Expr::MacroCall`, so it never sees them. Moves and
-    drops inside an expansion still work (the emitter emits the format_map block
-    and the ownership engine follows it): verified with a drop-tracker probe (a
-    body local drops like a block local) and with slice 1's
-    `tests/fail/macro_double_move.x`.
+  Observed while validating -- pre-existing, not that batch: all three are
+  closed by the entries below (the `use m::{name}` printing loss and the
+  `get_decl` panic by the module/`use` fixes; the ownership visitor's macro
+  branch by the expansion-walk entry), so nothing from that list is still open.
   Triangle: no ABI or content change for non-macro programs, B == C
   byte-identical; full suite green (`normal pass=92 xpass=0` = 79 + 3 normal +
   10 fail, fmt/trace/path/opt pass, leak self-skips).
@@ -759,6 +756,39 @@ Ownership only — no Rust-like borrows:
   compiler), B == C byte-identical; full suite green (`normal pass=94
   xpass=0` = slice 3b's 92 + the two new fail tests, fmt/trace/path/opt pass,
   leak self-skips). README/dev docs for the rule live in doc/modules.txt.
+
+- Ownership: the else-path re-analysis reaches macro expansions (2026-10-19).
+  The last item on slice 3b's observed list, and not inert after all: the
+  ownership visitor that `Own::end_scope_if` runs over an *else* body
+  (`OwnVisitor`, src/parser/own_visitor.x) dispatched only
+  `Expr::Call`/`Obj`/`Infix`, and the parser makes an `Expr::MacroCall` for
+  every `name!(...)` (user macros and the bang builtins alike), so the
+  re-analysis never walked an expansion block.
+  - the visible consequence is at the join, not inside the expansion (the
+    emitter's own walk of the block was always right, which is why the slice 3b
+    probe saw "drops inside an expansion work"): `end_scope_if` decides whether
+    the *then* path must drop a value the *else* path moved, from the state the
+    re-analysis recorded for the else scope. With the move invisible, that drop
+    was skipped and the then path leaked the value -- silently, since leaks are
+    the safe direction (`tests/own/31macro_else.x`: `branch(true)` reported 0
+    drops where the plain `send(a)` spelling drops 1, `check_ids(1)` failed
+    `0 != 1`).
+  - fix: `visit_expr` gained an `Expr::MacroCall` arm (`visit_macrocall`) that
+    walks the block the resolver kept in `format_map` and moves the block's
+    return expression, exactly like the `Call*` branch does for the
+    Call-shaped builtins. That branch's `resolver.macros.contains(&mc.name)`
+    disjunct is gone with its misleading comment: it was how user macro calls
+    were *meant* to arrive, and they never do -- it now keys on the recorded
+    block, so `format(...)`/`std::print_type`/`std::env` (Call nodes with a
+    block) are still walked and a Call named like a macro can no longer reach an
+    `.unwrap()` on a missing entry.
+  Tests: `tests/own/31macro_else.x` (drop-tracker: the then path drops what the
+  else moved through the macro; the else path drops once, in `send`). Pre-fix
+  red: the test aborts with `assert_eq(i32, i32) assertion failed: 0!= 1` on
+  main's compiler (the leak), so the own gate exits 1.
+  Triangle: no ABI or content change, B == C byte-identical; full suite green
+  (`normal pass=94 xpass=0`, fmt/trace/path/opt pass, own green incl. the new
+  test, leak self-skips). doc/ownership.txt notes the walk.
 
 ## Known open holes (documented, not yet solved)
 

@@ -395,8 +395,11 @@ Todo probes (v1.15, re-probed 2026-10-18 on the mangle-fix compiler):
 macro: slices 1-3 landed 2026-10-18 (`macro name(p: Expr, n: i32){...}` +
 `name!(...)`: `Expr` syntax slots and typed value parameters, statement +
 expression position, body-declared names alpha-renamed per call site, lookup
-following the module rules incl. `m::name!` and `use`; token streams and
-definition-site resolution of body names still open);
+following the module rules incl. `m::name!` and `use`); the ownership side of
+an expansion is walked from `Expr::MacroCall` too (own_visitor.x
+`visit_macrocall`, 2026-10-19: `end_scope_if`'s else re-analysis needs it or the
+then path leaks what the else moved through a macro, tests/own/31macro_else.x);
+token streams and definition-site resolution of body names still open);
 |args| lambdas work, `=>` closures and true capture don't
 (`(a: i32): i32 => {` parses as a tuple expression and dies on `:`);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it

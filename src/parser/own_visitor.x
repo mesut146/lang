@@ -86,6 +86,9 @@ impl OwnVisitor{
             Expr::Call(call)=>{
                 self.visit_call(expr, call);
             },
+            Expr::MacroCall(mc)=>{
+                self.visit_macrocall(expr, mc);
+            },
             Expr::Obj(type, args)=>{
                 self.visit_obj(expr, type, args);
             },
@@ -113,18 +116,17 @@ impl OwnVisitor{
             self.own.note_explicit_drop(mc.scope.get());
         }
         let resolver = self.get_resolver();
-        //`format!` and user macros are expanded into a block kept in
-        //format_map; walking it is what tracks moves/drops inside the
-        //expansion (a twice-used macro argument that moves is diagnosed as a
-        //use-after-move) and drops the expansion's own locals.
-        //NB: user macro calls parse as Expr::MacroCall (see visit_expr above),
-        //so this Call* branch does not see them; movement and drops inside an
-        //expansion are still handled (the emitter emits the block and the
-        //ownership engine follows it -- a body local drops like a block local,
-        //and a twice-used moving argument is diagnosed, see
-        //tests/fail/macro_double_move.x).
-        if(Resolver::is_format(mc) || resolver.macros.contains(&mc.name)){
-            let info = resolver.format_map.get(&expr.id).unwrap();
+        //A block the resolver recorded for this *Call* node (`format(...)`,
+        //std::print_type, std::env) is what the emitter expands at the call
+        //site, so walking it is what tracks moves/drops inside it. Bang forms
+        //never get here: the parser makes an Expr::MacroCall for every
+        //`name!(...)` (see visit_macrocall below), which is why this no longer
+        //needs a macro-name test -- matching a Call's name against the unit's
+        //macros was how user macro calls were *meant* to arrive, and they never
+        //do.
+        let finfo_opt = resolver.format_map.get(&expr.id);
+        if(finfo_opt.is_some()){
+            let info = finfo_opt.unwrap();
             self.visit_block(&info.block);
             if(info.block.return_expr.is_some()){
                 self.do_move(info.block.return_expr.get());
@@ -162,6 +164,29 @@ impl OwnVisitor{
         //mirror of the backend hook: else-path re-analysis must see the
         //same marks or arm merges disagree.
         self.own.consume_alias_args(mc, target, expr.line);
+    }
+
+    //Every `name!(...)` parses as an Expr::MacroCall (see the parser), so this
+    //is where a macro's expansion is reached. The resolver keeps that
+    //expansion in format_map keyed by the call's node id and the emitter emits
+    //the block at the call site; walking it here is what mirrors the movement
+    //and drops inside the expansion. The else-path re-analysis depends on it:
+    //when an *else* branch moves an outer value through a macro,
+    //Own::end_scope_if only drops that value on the then path because the
+    //else scope records the move (before this arm existed the then path
+    //silently leaked it, see tests/own/31macro_else.x).
+    func visit_macrocall(self, expr: Expr*, mc: MacroCall*){
+        let resolver = self.get_resolver();
+        let info_opt = resolver.format_map.get(&expr.id);
+        if(info_opt.is_none()){
+            //a builtin with nothing recorded (ptr::deref! and friends)
+            return;
+        }
+        let info = info_opt.unwrap();
+        self.visit_block(&info.block);
+        if(info.block.return_expr.is_some()){
+            self.do_move(info.block.return_expr.get());
+        }
     }
 
     func visit_obj(self, expr: Expr*, type: Type*, args: List<Entry>*){
