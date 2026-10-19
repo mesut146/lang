@@ -245,6 +245,17 @@ inc_all(){
   #so the children actually run.
   run "$compiler c -cache -j 4 -out $out_dir/inc_j -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
   run "$out_dir/inc_j/incremental_test" || exit 1
+  #-j stress: 40 independent modules through the parallel path with the
+  #allocator's own checks on. A finishing worker used to start the next queued
+  #job itself, appending to Worker::threads while join() removed from it:
+  #concurrent realloc aborted here ("corrupted size vs. prev_size"), and at
+  #other timings the worker's completion node was lost and join() spun forever.
+  stress=$out_dir/stress_src
+  rm -rf $stress && mkdir -p $stress
+  for i in $(seq 1 40); do
+    printf 'func s%s(): i32{\n    return %s;\n}\n' $i $i > $stress/s$i.x
+  done
+  run "MALLOC_CHECK_=3 $compiler c -nolink -cache -j 4 -out $out_dir/stress_out -stdpath $stdpath -i $testd $stress" || exit 1
 }
 
 #-trace frame instrumentation (std/rt.x call_stack): the emitter synthesizes

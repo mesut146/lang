@@ -990,6 +990,32 @@ Ownership only — no Rust-like borrows:
   (verified by rebuilding with the same host and `cmp`), so the suite result
   from the previous commit carries over.
 
+- Parallel compile pool: two long-standing bugs fixed (2026-10-19), found by
+  the v1.18 release dry run (the full suite hung ~45 minutes in the inc gate's
+  `-j` step). Both are in the path handed off as "done" by doc/worker.txt.
+  - `Worker.threads` was appended from *worker* threads: worker_bridge pulled
+    the next queued job itself and called `Worker::add_arg` (which appends to
+    `threads`) while the owner removed from it in `join()`. Two concurrent
+    `List::add` reallocs on one buffer: 40 modules through `-j 4` abort 10/10
+    with "corrupted size vs. prev_size"; at other timings a completion node is
+    lost and `join()` polls `infos` forever (the observed hang). Fix: workers
+    never start jobs -- `worker_bridge` retires SELF and returns, and `join()`
+    (the owner) hands queued jobs to fresh workers, then stops only when both
+    `infos` and `todo` are empty. Owner-only spawn makes the documented
+    invariant true again.
+  - `CompileArgs.idx` was `&idx` of a *loop-local* `Mutex` in the enqueue loop.
+    A job runs later in a worker thread, so `args.idx.lock()` locked a mutex in
+    a dead stack frame whose bytes the next call reused -- locking that garbage
+    waits forever, which is the flaky hang (the stuck workers sit exactly
+    between the cmd build and the "compiling" print). The field was dead
+    (incremented, never read) and is gone.
+  - Regression: the inc gate compiles 40 generated modules through `-j 4` under
+    `MALLOC_CHECK_=3`. Pre-fix it fails 3/3 with the abort; post-fix 20/20
+    standalone stress runs, 8/8 inc gates, and the full suite
+    (`normal pass=97 xpass=0`) are clean. Triangle: C == D byte-identical,
+    B != C only in the known StateType::clone drift. doc/worker.txt records
+    both bugs and the fix.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see

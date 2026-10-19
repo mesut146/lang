@@ -62,3 +62,43 @@ related, done
   leak without per-T glue). drop2 is complete (innards + shell + type).
 - LinkedList::remove drops bypassed vals; with Any payloads that is now
   safe (no panic), leaking only heap-owning innards.
+
+follow-up: two more bugs in the same path (2026-10-19)
+------------------------------------------------------
+The redesign above assumed `Worker.threads` needs no mutex because only the
+owner touches it -- but worker_bridge, after finishing a job, pulled the next
+queued job itself and called Worker::add_arg, which appends to `threads`. So a
+finishing worker did touch it, concurrently with join()'s remove(0):
+
+- heap corruption: 40 modules through `-j 4` abort deterministically (10/10)
+  after a dozen jobs with "corrupted size vs. prev_size"
+  (malloc_consolidate(): invalid chunk size under MALLOC_CHECK_=3) -- two
+  concurrent List::add reallocs (plus a remove(0)) on the same buffer.
+- the lost-node variant shows up as a hang: a worker's completion node could be
+  dropped, so join() polled `infos` forever with nothing left to run (a
+  ~45-minute hang of the full suite during the v1.18 dry run, and a rare hang
+  of the inc gate).
+
+Fix: workers never start jobs. worker_bridge runs its job, retires SELF and
+returns. join() (the owner) hands queued jobs to fresh workers while slots are
+free, waits for `infos` to empty, joins the retained handles, and stops only
+when both `infos` and `todo` are empty -- a job stays queued whenever every
+worker was busy when it was enqueued, and nothing else picks it up now. The
+"only the owner touches threads" invariant is true again and is stated in the
+struct comment. (An earlier attempt to write this broke liveness exactly there:
+the exit test checked `infos` only, so queued jobs were never started and the
+link failed with undefined references.)
+
+The second bug is unrelated to the pool's design. CompileArgs carried
+`idx: Mutex<i32>*`, initialized with the address of a *loop-local* `let idx =
+Mutex::new(0)` in compiler.x's enqueue loop. Jobs run later, in a worker
+thread, so `args.idx.lock()` took a pthread mutex living in a dead stack frame
+whose bytes the next call reused: locking that garbage either succeeded by luck
+or waited forever -- a worker blocked with no output, which is the flaky hang.
+The field was dead anyway (incremented, never read) and was removed together
+with the two lock/unlock pairs in the verbose prints.
+
+Regression: bin/test.sh's inc gate now compiles 40 generated modules through
+`-j 4` with MALLOC_CHECK_=3, so the allocator makes the corruption loud instead
+of it aborting later. Pre-fix the gate fails 3/3 (abort); post-fix 20/20
+standalone stress runs and 8/8 inc gates are clean.

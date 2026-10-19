@@ -273,13 +273,11 @@ impl Compiler{
       if(File::is_dir(file.str()) || !name.ends_with(".x")) {
         continue;
       }
-      let idx = Mutex::new(0);
       let args = CompileArgs{
         file: file.clone(),
         config: &config,
         cache: &cache,
         compiled: &compiled,
-        idx: &idx,
         len: list.len() as i32,
       };
       worker.add_arg_heap(Compiler::make_compile_job, args, release_compile_args);
@@ -337,10 +335,7 @@ impl Compiler{
     cmd.append(" ");
     cmd.append(&args.file);
     if(ctx.verbose){
-      let idx = args.idx.lock();
       print("compiling {}\n", config.trim_by_root(args.file.str()));
-      *idx = *idx + 1;
-      args.idx.unlock();
     }
     //read_close drains the child's stdout before closing: pclose closes the
     //read end *before* waiting for the child, so an undrained child that
@@ -353,11 +348,9 @@ impl Compiler{
       exit(1);
     }
     if(ctx.verbose){
-      let idx = args.idx.lock();
       let compiled = args.compiled.lock();
       print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
       args.compiled.unlock();
-      args.idx.unlock();
     }
     let compiled = args.compiled.lock();
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
@@ -432,7 +425,6 @@ struct CompileArgs{
   config: CompilerConfig*;
   cache: Cache*;
   compiled: Mutex<List<String>>*;
-  idx: Mutex<i32>*;
   len: i32;
 }
 

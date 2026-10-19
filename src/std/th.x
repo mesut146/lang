@@ -117,8 +117,12 @@ struct Worker{
   todo: Mutex<List<Job>>;
   //join handles retained here (NOT in the self-removing infos nodes):
   //join() joins every thread before returning, so no thread can still
-  //hold a mutex when the Worker drops. Only the owning thread touches
-  //this list (workers touch infos/todo), so no mutex needed for it.
+  //hold a mutex when the Worker drops. Only the *owner* spawns: workers
+  //never pull a queued job (join() does), so this list is only touched by
+  //the thread that owns the Worker and needs no mutex. (It used to be
+  //appended by finishing workers, which raced with join()'s remove(0):
+  //concurrent realloc -> "corrupted size vs. prev_size", or a lost handle
+  //and a hung join.)
   threads: List<Thread>;
 }
 struct WorkerBridgeInfo{
@@ -138,7 +142,6 @@ func worker_bridge(arg: c_void*){
   let worker = info.worker;
   //lock
   let infos = worker.infos.lock();
-  let todo = worker.todo.lock(); 
   if(xxx) print("finished\n");
   //remove SELF, never a peer: peers may still run their jobs, and with
   //auto-drops a removed node is freed immediately, so freeing another
@@ -158,17 +161,11 @@ func worker_bridge(arg: c_void*){
       cur = cur.next.get().get();
       i+=1;
   }
-  if(xxx) print("todo {} wc={}\n", todo.len(), infos.len());
-  while(!todo.empty() && infos.len() < worker.thread_cnt){
-      let job = todo.remove(todo.len() - 1);
-      worker.todo.unlock();
-      worker.infos.unlock();
-      worker.add_arg(job.fp, job.arg);
-      infos = worker.infos.lock();
-      todo  = worker.todo.lock();
-  }
-  worker.todo.unlock();
+  if(xxx) print("todo {} wc={}\n", worker.get_todo(), infos.len());
   worker.infos.unlock();
+  //A worker never starts the next job itself: spawning from here would
+  //append to Worker::threads (see the note there), which only the owner may
+  //touch. join() hands queued jobs to fresh workers instead.
 }
   
 impl Worker{
@@ -241,12 +238,27 @@ impl Worker{
   }
 
   func join(self){
-      //drain + join until quiescent: a finishing thread can pull from
-      //todo and spawn while we join (its node appears after we looked),
-      //so a single pass can miss stragglers. Spawns are finite (each
-      //consumes a todo entry), so this terminates.
+      //drain + join until quiescent. This is the only place that starts a
+      //worker, so Worker::threads stays owner-only; the loop is still needed
+      //because each spawn may leave more queued work.
       while(true){
+          //hand queued jobs to fresh workers. Lock order is the one add_arg
+          //uses: infos first, then todo.
           let infos = self.infos.lock();
+          let todo = self.todo.lock();
+          while(!todo.empty() && infos.len() < self.thread_cnt){
+              let job = todo.remove(todo.len() - 1);
+              self.todo.unlock();
+              self.infos.unlock();
+              self.add_arg(job.fp, job.arg);
+              infos = self.infos.lock();
+              todo  = self.todo.lock();
+          }
+          self.todo.unlock();
+          self.infos.unlock();
+          //wait for the running workers: a node disappears as its worker
+          //retires (worker_bridge), so an empty list means every job is done.
+          infos = self.infos.lock();
           while(!infos.empty()){
               //infos.last().get().th.get().join();
               self.infos.unlock();
@@ -262,10 +274,16 @@ impl Worker{
               let th = self.threads.remove(0);
               th.join();
           }
+          //Only done when nothing is queued either: a job stays in todo
+          //whenever every worker happened to be busy when it was enqueued,
+          //and workers never pick work up themselves.
           let infos2 = self.infos.lock();
-          let quiet = infos2.empty();
+          let no_workers = infos2.empty();
           self.infos.unlock();
-          if(quiet){
+          let todo2 = self.todo.lock();
+          let no_jobs = todo2.empty();
+          self.todo.unlock();
+          if(no_workers && no_jobs){
               break;
           }
       }
