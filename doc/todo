@@ -7,13 +7,12 @@
 //site; lookup follows the module rules (`m::name!(...)`, `use m;` /
 //`use m::{name}`, top-level macros of imported units).
 //still open: a body name that is never declared still resolves at the call site
-//(definition-site resolution), and code-generation macros -- for those see
-//doc/token_macros.txt: the TokenStream/#derive_macro stub in resolver/macros.x
-//is unused, the live derive generators are in derive.x, and the document lists
-//the derive gap that remains (a plain build not linking the std archive; see
-//its section 3) plus the two decisions (compile-time
-//evaluation; token streams as input or output) that have to be made before any
-//of it is written.
+//(definition-site resolution), and code-generation macros -- doc/
+//codegen_macros.txt is the design note now: declarative list parameters +
+//`$( ... )*` repetition (no CTFE, no token-tree matcher), with item position
+//and fragment kinds phased behind it. doc/token_macros.txt keeps the state of
+//the unused TokenStream/#derive_macro stub, and the live derive generators are
+//in derive.x.
 
 //module members of another unit: after `import dep`, `dep`-side `m::T` /
 //`m::f()` reports "a module's members are only visible in the unit that

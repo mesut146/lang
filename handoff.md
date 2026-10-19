@@ -957,6 +957,39 @@ Ownership only — no Rust-like borrows:
   StateType::clone drift. Suite green (`normal pass=97 xpass=0`).
   README quick-start note and doc/macros.txt `-nostd` entry updated.
 
+- User code generation: design note (2026-10-19). doc/codegen_macros.txt answers
+  Q3/Q4 of doc/token_macros.txt (whether user code generation is a goal, and in
+  which shape). It records what slices 1-3b already give (statement and
+  expression position, `Expr` syntax slots, value parameters, per-call-site
+  hygiene, nesting to depth 64) and the two verified missing pieces: no
+  repetition over an argument list, and no item position (`m!();` between items
+  is "invalid top level decl: ... 'm'", and an item inside a body is a parse
+  error).
+  - recommendation: declarative shape C1 -- a `T...` rest parameter (last, one
+    per macro) with `$( body )*` / `$( body ),*` in the body and `$name` for the
+    current element. No CTFE, no token-tree matcher. Zipping is via tuples of
+    expressions; joined name/type lists are phase C.
+  - phased: A list + repetition (statement/expression position, Expr elements);
+    B item position (`Item::MacroCall`, a body element parsed as an item when it
+    starts with an item keyword, expansion before init so generated items go
+    through the normal attr/derive pass, line = call site, no item hygiene);
+    C `Ident` fragments (cheap, from name expressions) and only later `Type`
+    fragments, which need parser support at the call site (`List<i32>` parses as
+    a comparison, `[i32; 2]` as an array literal).
+  - out of scope, with reasons: CTFE (no interpreter inside the compiler), a
+    token-tree matcher (replaces the typed-slot model instead of extending it),
+    and text-level codegen as the *user* surface -- it cannot substitute AST (so
+    no hygiene, no static errors) and it round-trips through the printer, which
+    is exactly the assert bug fixed in 01ac0e2 (`Kind::Empty.clone()` printed as
+    `Kind::Empty::clone()`, re-parsed as a static call).
+  - each slice has a test plan; compiler changes carry the strict triangle,
+    generated *user* code needs its own gate.
+  Docs: doc/token_macros.txt sections 6/7 point at it (Q3/Q4 answered), doc/todo
+  and doc/macros.txt updated, the resolver/macros.x stub marker points at it.
+  No code change: the one-line comment edit keeps the compiler byte-identical
+  (verified by rebuilding with the same host and `cmp`), so the suite result
+  from the previous commit carries over.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -978,11 +1011,11 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   are reserved. Code generation (token streams / `#derive_macro`) is a
   *proposal* with no consumer: doc/token_macros.txt records why the
   resolver/macros.x stub is unused (the live derive generators are in
-  derive.x), the two decisions it needs (compile-time evaluation; token
-  streams as input or output), and the derive gaps it found instead (Clone's
-  field handling and the generic-over-a-drop-type crash, both fixed in the
-  entries above and `#derive(Display)` below; a plain build does not link the
-  std archive -- see that entry's "observed" list).
+  derive.x) and which of its gaps were closed (Clone's field handling, the
+  generic-over-a-drop-type crash, `#derive(Display)`, the std archive link --
+  see the entries above). For *user*-authored code generation the design note
+  is now doc/codegen_macros.txt (declarative list parameters + `$( ... )*`
+  repetition; item position and fragment kinds phased behind it).
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

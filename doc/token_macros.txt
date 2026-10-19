@@ -160,9 +160,12 @@ C. User-authored code generation, declarative (no CTFE)
 2. If more derive coverage is wanted, take option A. Clone's field handling
    was done on 2026-10-19 (3a); `#derive(Display)` (3b) is still open and
    still small, and both have a pre-fix red test.
-3. Leave option C as a language decision with a separate design note. Revisit
-   option B only when a concrete generator needs item-level generation and the
-   AST assembly is demonstrably worse.
+3. Option C has its own note now: doc/codegen_macros.txt (2026-10-19)
+   recommends the declarative shape C1 (list parameters + `$( ... )*`
+   repetition, no CTFE, no token-tree matcher) and phases item position and
+   fragment kinds behind it. Q3/Q4 below are answered there. Revisit option B
+   only when a concrete generator needs item-level generation and the AST
+   assembly is demonstrably worse.
 
 7. Questions for the maintainer (answer before any coding)
 ----------------------------------------------------------
@@ -171,11 +174,14 @@ Q1 `#derive(Clone)`: copy plain-value fields (fix) or require Clone impls for
    everywhere else.
 Q2 Is a default `#derive(Display)` (a `P{x: 1, y: s}` dump) wanted, or is
    Display always hand-written?
-Q3 Is user-authored code generation (option C) a goal at all? If not, this
-   doc is closed with the section-6 fixes and `#derive_macro` can be deleted
-   instead of kept as a stub.
+Q3 Is user-authored code generation (option C) a goal at all? ANSWERED
+   2026-10-19: yes as a language decision, in the declarative C1 shape; see
+   doc/codegen_macros.txt. The compiler-internal `#derive_macro` stub still
+   has no consumer.
 Q4 If option C is a goal: which shape -- typed list parameters with a
-   repetition form, or a full matcher? (Separate note either way.)
+   repetition form, or a full matcher? ANSWERED in doc/codegen_macros.txt:
+   typed list parameters + `$( ... )*`; a full token-tree matcher is deferred,
+   CTFE is out of scope.
 
 8. Notes for whoever implements B or C
 --------------------------------------

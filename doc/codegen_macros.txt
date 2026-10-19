@@ -1,0 +1,192 @@
+user-authored code generation: design note (option C)
+STATUS: proposal, written 2026-10-19 on main dea55e6. Nothing here is
+implemented and nothing should be coded from it before the questions in
+section 8 are answered. It answers Q3/Q4 of doc/token_macros.txt ("is user
+code generation a goal, and in which shape") and is the separate note that
+document asked for. Read it first for the derive-generator state, the two
+decisions (D1 CTFE, D2 token streams) and the implementation notes in its
+section 8; this note only covers the *user-facing* surface.
+
+1. What is asked, and what already exists
+-----------------------------------------
+User macros landed in slices 1-3b (doc/macros.txt, tests/normal/40..43):
+a body is copied per call site, `Expr` parameters are syntax slots, every
+other declared type is a value parameter bound once, the names a body
+declares are alpha-renamed per call site, lookup follows the module rules
+(`m::name!`, `use`), nesting is allowed (MAX_MACRO_DEPTH = 64, derive.x:674),
+and a body ending in an expression makes the macro an expression of the
+inferred type. Verified on main:
+  - statement and expression position work, including multi-statement bodies;
+  - an expansion is its own scope (`swap!`'s `t` is invisible outside);
+  - a macro body may call another macro;
+  - a *body* may not contain an item: `func f(){}` inside `macro m(){...}` is
+    a parse error ("... was expecting TokenType::LPAREN", parser.x:107),
+    because a body is a Block (statements + trailing expression);
+  - a *call* may not stand between items: `m!();` at top level is
+    "invalid top level decl: Token{... value: 'm' ...}" (parser.x:275),
+    because a call is Expr::MacroCall only.
+So two things are missing for code generation: *repetition* over an argument
+list, and an *item* expansion point. Everything else (hygiene, value
+parameters, nesting, positions inside code) is already there and should not
+be re-designed here.
+
+2. The three shapes, priced
+---------------------------
+C1 declarative: list parameters + a repetition form in the body, matched and
+   expanded by the resolver; no evaluation. Errors stay static, hygiene rides
+   on the existing AstCopier, and the expansion is ordinary AST, so the
+   ownership walk, module lookup and diagnostics work unchanged.
+C2 macro_rules-style matcher: patterns over token trees with recursion. It
+   replaces the typed-syntax-slot model instead of extending it (a matcher
+   needs token input, i.e. D2-input, which doc/token_macros.txt ties to
+   CTFE or to a matcher), and it is strictly bigger than C1. Not now.
+C3 CTFE: user-written x functions that return items/tokens. Needs an
+   interpreter for x inside the compiler (values, drops, panics, module
+   resolution, a sandbox) -- a project of its own; doc/token_macros.txt D1
+   already recommends against it as the first shape. Still out of scope.
+Recommendation: C1 only. C2 can be reconsidered if C1's repetition turns out
+to be too weak in practice; C3 should stay closed.
+
+3. C1 surface
+-------------
+3.1 A list parameter is the *rest* of the call
+    macro check_all(xs: Expr...) {
+        $( assert(xs); )*
+    }
+    check_all!(a, b, c);      // assert(a); assert(b); assert(c);
+    check_all!();             // nothing
+  - `T...` in a macro parameter list marks the rest parameter. It must be the
+    last parameter (otherwise: "list parameter must be last") and there is at
+    most one per macro in phase A (error otherwise).
+  - phase A only allows `Expr` elements: the call is already parsed as a
+    comma-separated expression list (MacroCall.args), so nothing changes in
+    the parser at the call site. A zero-element call is legal.
+  - the list parameter's name is only meaningful as `$name` inside a
+    repetition; a bare `name` is an error ("list parameter `xs` must be used
+    as `$xs` inside `$( ... )*`"), so the two parameter kinds cannot be
+    confused.
+3.2 Repetition in the body
+    $( <body> )*      emit <body> once per element, concatenated
+    $( <body> ),*     ... with `,` between iterations
+  - one repetition level (phase A): a `$(` inside `$(` is an error with a
+    clear message. Nesting still happens through macros calling macros.
+  - an empty list expands to nothing, so a repeated statement disappears.
+  - the separator is written in the body (the call side is always `,`), and
+    `;` / nothing cover statement emission; `,*` covers expression lists
+    inside a call or an initializer.
+3.3 `$name` inside the repetition
+  `$xs` is the current element (an expression), substituted like an `Expr`
+  parameter: same AST, same hygiene (the element keeps the caller's names and
+  cannot be captured by a body local). Substitution happens after the body is
+  copied, exactly where `Expr` parameters are substituted today
+  (expand_user_macro's AstCopier), so `$xs` never becomes a name at all.
+3.4 Zipping (why one list is enough for now)
+  Two parallel lists would need a zip rule. A list of tuples covers it for
+  *expressions*:
+    macro set_all(pairs: Expr...) { $( let $pairs = 0; )* }   // $pairs is a tuple
+  and the body can reach `$pairs.0` / `$pairs.1` through the normal tuple
+  access. For names and types that is not enough (see 5.2), which is phase C's
+  job; phase A/B do not pretend to cover it.
+
+4. Item position (phase B)
+--------------------------
+A code-generation macro is only interesting if it can emit items (impls,
+funcs, structs). Proposed, smallest form:
+  - the call is allowed between items: `impl_for!(Point, Rect);`
+    (a new Item variant, `Item::MacroCall`, parsed by parse_item; the call's
+    arguments are the same expression list, so `Point` is an Expr::Name);
+  - an item macro's body may contain items. A body element is parsed as an
+    item when it starts with an item keyword (`func`, `struct`, `enum`,
+    `impl`, `trait`, `mod`, `extern`, `use`, `macro`), otherwise as a
+    statement; expansion in item position requires every element to be an
+    item (a statement there is an error, and vice versa in statement
+    position, so a body is never silently half-used). This is unambiguous
+    because those keywords cannot start a statement in x.
+  - expansion of items happens while the unit is being collected, *before*
+    init visits the items, and the generated items go through the normal
+    init/attr/derive pass (that ordering is exactly what the 2026-10-19
+    pending_drops entry in handoff.md is about: derives are appended at the
+    end of init, so anything that instantiates declared types earlier must
+    defer). Depth-limited by the same MAX_MACRO_DEPTH.
+  - generated items get the *call site's* line (parser line argument), so a
+    panic or a type error inside generated code points at the macro call.
+  - item names are not renamed: items live at unit scope and uniqueness is
+    the user's responsibility (a duplicate is the ordinary duplicate-decl
+    error). Hygiene here is deliberately absent; hiding it would make
+    generated APIs unpredictable.
+  - `use` inside generated items follows the unit's rules (same as
+    expression expansions: the expansion belongs to the unit it is spliced
+    into, plus that unit's imports -- extra_imports already does this for
+    foreign macros).
+
+5. Fragments (phase C, only if needed)
+--------------------------------------
+5.1 `Ident` fragments can be recovered without parser work: the argument must
+    be Expr::Name (otherwise "argument 2 of `m` must be a name"). This is what
+    `impl_for!(Point, Rect)` needs, and it is cheap enough to fold into B.
+5.2 `Type` fragments are the hard ones: `i32` parses as a type expression, but
+    `List<i32>` parses as a comparison (`<` infix) and `[i32; 2]` as an array
+    literal, so a *type* argument list needs the parser to know the parameter
+    kinds, i.e. the parser must see the macro declaration (or a `type!`
+    wrapper). Do not start here; if field-list codegen is wanted, the honest
+    options are (a) a `Type` fragment with parser support at the call site,
+    or (b) declare the data as a normal struct and use a compiler-internal
+    derive (the derive.x route, which has full AST access).
+5.3 `Stmt` fragments are cheap (parse_stmt) but only matter for macros that
+    pass code blocks around; defer until a real use case exists.
+
+6. Explicitly out of scope
+--------------------------
+- CTFE (C3), token-tree matchers (C2), `macro_rules!`-style recursion,
+  pattern matching on tokens, `#derive_macro` for users.
+- Text-level codegen as the *user* surface. It is what derive.x does
+  internally (parse_stmt/parse_expr on formatted source, derive.x:932-943)
+  and it is fine there, but it cannot substitute AST (so it loses hygiene and
+  static errors) and it round-trips through the printer: on 2026-10-19 the
+  assert builtin printed `Kind::Empty.clone()` as `Kind::Empty::clone()` and
+  the re-parse turned it into a static call ("arg size mismatched 0 vs 1",
+  fixed in 01ac0e2). A user-facing string codegen would inherit that class of
+  bug; a substitution-based macro does not.
+- Compiler-internal generators (derive.x) are NOT rewritten in C1. They need
+  item-level output and full AST access; item-macro expansion (B) reuses their
+  splice point, not the other way round.
+
+7. Tests and gates per slice
+----------------------------
+A (list + repetition, statement/expression):
+  tests/normal: one/many/zero elements, `,*` separator inside a call,
+  repeated body declaring a local (fresh name per iteration), `$name` used
+  twice, a nested macro inside a repetition.
+  tests/fail: list parameter not last; `$name` outside a repetition; bare
+  list name; nested `$(`; a list-parameter macro called with a non-expression
+  (only reachable through a fragment kind).
+B (item position): tests/fmt round-trip of an item macro call; tests/normal
+  generating an impl/func per name (Ident rest); tests/fail for a statement
+  in an item body and an item in a statement body; drops on (tests/own) when
+  generated code moves values.
+C: only with a concrete case; a Type-fragment failure test belongs in
+  tests/fail (the message must name the parameter and the argument).
+Every slice changes compiler code, so the strict triangle applies (C == D,
+and B != C only where the compiler's own expansions differ). Generated *user*
+code is not part of the compiler; a change in expansion output alone cannot
+show up in B/C, so user-code changes need their own gate (the tests above).
+
+8. Questions for the maintainer (answer before coding)
+------------------------------------------------------
+Q1 Confirm C1 (declarative list + repetition) and drop C2/C3 from the plan.
+   Recommended: yes.
+Q2 One list parameter per macro; zipping only via tuples in phase A.
+   Recommended: yes (two lists need a zip rule that buys little today).
+Q3 Repetition syntax `$( body )` with an optional separator (`*` / `,*` /
+   `;*`) and `$name` for the element, requiring a new `$` token.
+   Recommended: yes.
+Q4 Item position as in section 4 (Item::MacroCall, mixed body parsed by item
+   keyword, expansion before init, line = call site, no item hygiene).
+   Recommended: yes, as phase B, after A lands.
+Q5 Ident fragments in B (name-expression check), Type fragments only later
+   with parser support. Recommended: yes.
+Q6 Should a macro be allowed to see the *whole* remaining list as one value
+   (e.g. `xs` as a list) in addition to repeating over it?
+   Recommended: no until a use case exists.
+Q7 Is an item macro allowed inside a `mod`? (Section 4 implies yes: it is the
+   same item position.) Recommended: yes, same rules.
