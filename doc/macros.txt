@@ -68,7 +68,9 @@ name!(arg1, arg2, arg3);//statement or expression position
 
 
 #env
- target_triple, LD=clang-19, TRACE
+ target_triple, LD=clang-19, AR=ar, TRACE
+ //LD/AR pin the linker/archiver; unset, they are searched for on PATH
+ //(clang++-19, clang++, g++, gcc, c++ / ar, llvm-ar)
 
 #cmd config
 -cache //use cache

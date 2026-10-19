@@ -40,13 +40,15 @@ currently x86_64, aarch64, and Termux-AArch64). Each one carries the
 compiler, the C++ bridge library, LLVM, and the standard library sources:
 
 ```sh
-TC=./x-toolchain-1.05-x86_64
-export AR=x86_64-linux-gnu-ar LD=g++
+TC=./x-toolchain-1.18-x86_64
 $TC/bin/x c -o hello -out ./out -stdpath $TC/src hello.x
 ./out/hello
 ```
 
 Notes:
+- the linker and the archiver are searched for on `PATH` (`clang++-19`,
+  `clang++`, `g++`, `gcc`, `c++` / `ar`, `llvm-ar`). Export `LD`/`AR` only to
+  pin a specific one.
 - the standard library is linked by default: the toolchain's `lib/std.a` when
   `-stdpath` points inside a toolchain, otherwise it is built from
   `<stdpath>/std` once per `-out` dir (needs `ar`). `-nostd` gets the bare link

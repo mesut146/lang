@@ -235,6 +235,19 @@ vararg_all(){
   run "$out_dir/vararg.bin" || exit 1
 }
 
+#tool discovery with LD and AR unset: the compiler must find a linker and an
+#archiver itself. Both candidate probes used to run the tool with no arguments,
+#which always exits non-zero (clang: "no input files"; ar: usage), so a build
+#without LD/AR exported panicked ("can't find linker" / "can't find AR").
+tools_all(){
+  run "env -u LD -u AR $compiler c -o selfind -out $out_dir -stdpath $stdpath $testd/normal/01-var.x" || exit 1
+  run "$out_dir/selfind" || exit 1
+  #-static builds a library through ar (needs AR); the plain compile above also
+  #needs ar whenever the std archive has to be built from source.
+  run "env -u LD -u AR $compiler c -static -o selflib -out $out_dir -stdpath $stdpath $testd/normal/01-var.x" || exit 1
+  run "test -f $out_dir/selflib" || exit 1
+}
+
 #multi-file import resolution (tests/incremental_test/*.x, single main)
 inc_all(){
   run "$compiler c -out $out_dir -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
@@ -364,6 +377,8 @@ elif [ "$pat" == "vararg" ]; then
   vararg_all
 elif [ "$pat" == "inc" ]; then
   inc_all
+elif [ "$pat" == "tools" ]; then
+  tools_all
 elif [ "$pat" == "path" ]; then
   path_all
 elif [ "$pat" == "trace" ]; then
@@ -384,6 +399,7 @@ elif [ "$pat" == "all" ]; then
   leak_all
   vararg_all
   inc_all
+  tools_all
   path_all
   opt_all
 elif [ ! -z "$pat" ]; then

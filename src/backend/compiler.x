@@ -19,15 +19,24 @@ import parser/incremental
 import backend/emitter
 
 
+//True when `cmd` is on PATH, asked through the shell (popen): running the
+//tool itself with no arguments is not a probe, since a compiler/archiver
+//without input exits non-zero (clang: "no input files"; ar: usage). The old
+//candidates were run that way, so neither fallback ever matched and a build
+//without LD/AR set panicked with "can't find linker" / "can't find AR".
+func which(cmd: str): bool{
+  let res = Process::run(format("command -v {} >/dev/null 2>&1", cmd).str()).read_close();
+  return res.is_ok();
+}
+
 func get_linker(): str{
   let opt = std::getenv("LD");
   if(opt.is_some()){
     return opt.unwrap();
   }
-  let arr = ["clang++-19", "clang++", "g++", "gcc"];
+  let arr = ["clang++-19", "clang++", "g++", "gcc", "c++"];
   for ld in &arr[0..arr.len()]{
-    let res = Process::run(*ld).read_close();
-    if(res.is_ok()){
+    if(which(*ld)){
       return *ld;
     }
   }
@@ -39,10 +48,9 @@ func get_ar(): str{
   if(opt.is_some()){
     return opt.unwrap();
   }
-  let arr = ["ar"];
+  let arr = ["ar", "llvm-ar"];
   for ld in &arr[0..arr.len()]{
-    let res = Process::run(*ld).read_close();
-    if(res.is_ok()){
+    if(which(*ld)){
       return *ld;
     }
   }

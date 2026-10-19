@@ -1018,6 +1018,26 @@ Ownership only — no Rust-like borrows:
     B != C only in the known StateType::clone drift. doc/worker.txt records
     both bugs and the fix.
 
+- Linker/archiver discovery (2026-10-19). `get_linker()`/`get_ar()` probed
+  candidates by *running* them with no arguments and treating a non-zero exit
+  as "not found" -- but a compiler or archiver with no input always exits
+  non-zero (clang: "no input files"; `ar`: usage), so neither fallback ever
+  matched and a build without `LD`/`AR` exported panicked ("can't find linker" /
+  "can't find AR"). The README told users to export both, which is why it
+  survived; the fallback is what the panic message implies should work.
+  - both now ask the shell (`command -v <tool> >/dev/null 2>&1`, via popen) and
+    the candidate lists gained `c++` (linker) and `llvm-ar` (archiver), so a
+    system with only clang or only gcc, and a Termux install without binutils,
+    are covered.
+  - Regression: a new `tools` gate in bin/test.sh compiles a program and a
+    `-static` library with `env -u LD -u AR` (the plain compile also needs `ar`
+    whenever the std archive is built from source; `-static` pins the archiver
+    case). Pre-fix red: the gate fails with "can't find AR". Post-fix green;
+    the full suite passes (`normal pass=97 xpass=0`).
+  - Triangle: C == D byte-identical, B != C only in the known StateType::clone
+    drift. README quick start no longer exports `LD`/`AR` (and uses the v1.18
+    toolchain in its example); doc/macros.txt notes the search order.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
