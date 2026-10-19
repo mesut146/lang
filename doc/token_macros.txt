@@ -56,15 +56,18 @@ existing style. Each is a small, user-visible slice:
      type is a primitive, `str` or a slice, or -- in a non-generic
      declaration -- any type with no drop glue; owners (String, a #drop
      struct, a non-primitive field of a generic declaration) still go through
-     clone(). Test: tests/normal/44-derive-clone.x. Three neighbouring gaps
-     turned up while writing that test and are NOT fixed (all pre-existing,
-     all reproducible on the pre-fix compiler; see the handoff entry):
-     a generic instantiated with a drop-type parameter panics in
-     DropHelper::find_drop_impl ("no drop method for Wrapper<Owner>"); a
-     generic instantiated with a std type (`W<String>`) does not link in a
-     plain -stdpath build (nor does `.clone()` on a primitive, which is what
-     forced the local #drop type in the test); and a method call on a
-     unit-variant literal (`Kind::Empty.clone()`) reports "get_alloc() not
+     clone(). Test: tests/normal/44-derive-clone.x.
+     The generic-over-a-drop-type panic that test ran into ("no drop method
+     for Wrapper<Owner>", a *compiler* crash: init instantiates declared types
+     before it appends the derives, so the template's generated Drop impl was
+     missing) is also FIXED 2026-10-19: resolver.x keeps such instantiations in
+     `pending_drops` and retries them at the end of init; test
+     tests/own/32generic_drop.x.
+     Two gaps found there remain (pre-existing, reproducible on the pre-fix
+     compiler): a generic instantiated with a *std* type (`W<String>`) does not
+     link in a plain -stdpath build (nor does `.clone()` on a primitive, which
+     is what forced the local #drop type in the 44 test), and a method call on
+     a unit-variant literal (`Kind::Empty.clone()`) reports "get_alloc() not
      set".
   b) no `#derive(Display)`: `{}` on a struct is a resolve error ("no such
      method Display::fmt(P*, Fmt*)") unless the type has a hand-written

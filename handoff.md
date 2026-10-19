@@ -831,6 +831,36 @@ Ownership only — no Rust-like borrows:
     "get_alloc() not set"; binding it first works.
   doc/token_macros.txt section 3 and doc/todo now list these.
 
+- Compiler crash: a generic over a drop type (2026-10-19). `init` visits
+  declared types (`init_type_items`) *before* it generates the derives and
+  appends them to `unit.items`. So when a *field* instantiates a generic whose
+  parameter is a drop type -- `struct Outer{ b: Box2<A>; }` -- `add_used_decl`
+  -> `handle_drop_method` reached `DropHelper::find_drop_impl` while the
+  template's generated `Drop` impl did not exist yet, and panicked: `no drop
+  method for Box2<A>`. The compiler died on ordinary code (a 12-line file
+  reproduces it); it turned up while writing the 44-derive-clone test, which
+  had to avoid the shape.
+  - fix: `handle_drop_method` asks `DropHelper::has_drop_impl` first. When the
+    impl is not there yet it records the instantiation in the new
+    `Resolver::pending_drops` (dedup by type) and returns; the end of `init`
+    retries each recorded instantiation once the derives are appended.
+    Instances met after `init` -- the common case, `let x = Box2<A>{...}` in a
+    body -- are unaffected and still generate eagerly, as do foreign units
+    (their resolver's init has completed).
+  Tests: `tests/own/32generic_drop.x` (drop-tracker: `Outer{b: Box2<A>}` drops
+  its field exactly once). Pre-fix red: the *compiler* panics, so the case was
+  not expressible at all. `tests/normal/44-derive-clone.x` got the cloned
+  `Wrapper<Owner>` field shape back (the original trigger).
+  Triangle: the change is behaviour-neutral except where the old code panicked,
+  and the drift between B and C is the *known* one from the entry above: the
+  compiler's own `StateType` derives Clone, so B (new sources compiled by the
+  pre-fix compiler) still carries the old generated body. Verified: `nm`
+  defined-symbol sets identical, exactly one symbol differs in size
+  (`StateType__Clone__clone_StateType$P`, 0xe8 vs 0xdd -- the generator change,
+  not this fix), C == D byte-identical, full suite green (`normal pass=95
+  xpass=0`, fmt/trace/path/opt pass, own green incl. the new test, leak
+  self-skips).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -854,8 +884,9 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   resolver/macros.x stub is unused (the live derive generators are in
   derive.x), the two decisions it needs (compile-time evaluation; token
   streams as input or output), and the derive gaps it found instead (Clone's
-  field handling, fixed in the entry above; no `#derive(Display)`; a generic
-  over a drop type has no Drop impl, see that entry's "observed" list).
+  field handling and the generic-over-a-drop-type crash, both fixed in the
+  entries above; no `#derive(Display)`; a plain build does not link the std
+  archive -- see that entry's "observed" list).
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

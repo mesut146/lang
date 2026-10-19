@@ -67,6 +67,14 @@ struct Deep{
     w: Wrapper<P2>;
 }
 
+//a drop-typed generic instantiation as a field: it owns, so the derived impl
+//goes through clone() (this shape used to crash the resolver, see
+//tests/own/32generic_drop.x)
+#derive(Clone)
+struct DeepDrop{
+    w: Wrapper<Owner>;
+}
+
 func main(){
     let p = Plain{b: true, s: "abc", n: 1, f: 1.5, arr: [1, 2], tup: (3, "t")};
     let p2 = p.clone();
@@ -122,6 +130,10 @@ func main(){
     let d = Deep{w: Wrapper<P2>{v: P2{n: 1}, n: 4, b: false}};
     let d2 = d.clone();
     assert(d2.w.v.n == 1 && d2.w.n == 4 && !d2.w.b);
+
+    let dd = DeepDrop{w: Wrapper<Owner>{v: Owner{name: "dd", n: 11}, n: 12, b: true}};
+    let dd2 = dd.clone();
+    assert(dd2.w.v.n == 11 && dd2.w.n == 12 && dd2.w.b);
 
     print("derive clone done\n");
 }

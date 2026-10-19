@@ -274,6 +274,17 @@ Valgrind ledger (Oct 2026, v3.22, x86_64):
   i32); }`) overflowed the stack in `DropHelper::is_drop_type` --
   pre-existing; closed by the cyclic-type entry below.
 
+- Drop methods for generic instantiations (2026-10-19): `init` visits
+  declared types before it appends the derives, so instantiating a generic
+  over a drop type in a *field* (`struct Outer{ b: Box2<A>; }`) called
+  `handle_drop_method` while the template's generated `Drop` impl was still
+  missing -- `DropHelper::find_drop_impl` panicked ("no drop method for
+  Box2<A>") and the compiler died on ordinary code. `handle_drop_method` now
+  checks `DropHelper::has_drop_impl` first, records the instantiation in the
+  new `Resolver::pending_drops`, and `init` retries those once the derives are
+  appended (instances met later, and foreign units, still generate eagerly).
+  Regression: tests/own/32generic_drop.x (the field drops exactly once).
+
 - Array elements as places (2026-10-18, same branch): three holes, one
   shape. (1) `arr[i] = v` never dropped the old element: `drop_lhs` only
   knew struct fields, so an index place fell through as an untracked
