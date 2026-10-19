@@ -290,11 +290,20 @@ impl Parser{
         let pnode = self.node();
         let pname = self.name();
         let ptype = Option<Type>::new();
+        let plist = false;
         if(self.is(TokenType::COLON)){
           self.pop();
           ptype = Option::new(self.parse_type());
+          //`xs: Expr...`: the rest parameter (validated when the macro expands).
+          //`...` lexes as DOTDOT + DOT (the pair the extern vararg form also
+          //consumes, see the param parsing below)
+          if(self.is(TokenType::DOTDOT) && self.peek(1).is(TokenType::DOT)){
+            self.pop();
+            self.pop();
+            plist = true;
+          }
         }
-        params.add(MacroParam{.pnode, name: pname, type: ptype});
+        params.add(MacroParam{.pnode, name: pname, type: ptype, list: plist});
         if(self.is(TokenType::COMMA)){
           self.pop();
         }
@@ -802,7 +811,7 @@ func parse_block(self): Block{
   }
 
   func is_stmt(self): bool{
-    return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::IF) || self.is(TokenType::LBRACE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK);
+    return self.is(TokenType::LET) || self.is(TokenType::RETURN) || self.is(TokenType::WHILE) || self.is(TokenType::IF) || self.is(TokenType::LBRACE) || self.is(TokenType::FOR) || self.is(TokenType::CONTINUE) || self.is(TokenType::BREAK) || (self.is(TokenType::DOLLAR) && self.peek(1).is(TokenType::LPAREN));
   }
 
   func parse_body(self): Body{
@@ -908,6 +917,17 @@ func parse_block(self): Block{
       self.pop();
       self.consume(TokenType::SEMI);
       return Stmt::Break{.id};
+    }else if(self.is(TokenType::DOLLAR) && self.peek(1).is(TokenType::LPAREN)){
+      //$( <statements> )*  -- one copy of the statements per list element
+      self.pop();//$
+      self.consume(TokenType::LPAREN);
+      let b = Block::new(self.peek().line, self.peek().line);
+      while(!self.is(TokenType::RPAREN)){
+        b.list.add(self.parse_stmt());
+      }
+      self.consume(TokenType::RPAREN);
+      self.consume(TokenType::STAR);
+      return Stmt::Repeat{.id, Repeat{body: b}};
     }else{
       let e = self.parse_expr();
       if(!e.is_body()){
@@ -1232,6 +1252,14 @@ impl Parser{
   func prim(self, allow_obj: bool): Expr{
     let tok = self.peek();
     let n = self.node();
+    if(self.is(TokenType::DOLLAR)){
+      //$name: the current list element inside a repetition (slice A). Kept as
+      //an Expr::Name whose text starts with '$' so the printer round-trips it;
+      //AstCopier resolves it while expanding the repetition.
+      self.pop();
+      let nm = self.name();
+      return Expr::Name{.n, format!("${}", nm)};
+    }
     if(isLit(self.peek())){
       return self.parseLit();
     }

@@ -1070,6 +1070,50 @@ Ownership only — no Rust-like borrows:
   - Suite green (`normal pass=98 xpass=0`, all gates); triangle C == D
     byte-identical, B != C only in the known StateType::clone drift.
 
+- User codegen, phase A: list parameter + statement repetition (2026-10-19).
+  `doc/codegen_macros.txt` proposed C1 (declarative, no CTFE, no token-tree
+  matcher); this is its first slice.
+  - syntax: `macro m(xs: Expr...){ $( <statements> )* }` and `$xs` for the
+    current element. `...` needs no new lexer entry: like the extern vararg
+    form it lexes as DOTDOT + DOT (parser.x's param parsing consumes the same
+    pair). `$` is TokenType::DOLLAR; `$name` stays an `Expr::Name` whose text
+    starts with `$`, so the printer/printer round-trip and the copier's
+    substitution need no new Expr kind (adding one would have touched every
+    Expr match).
+  - AST: `MacroParam.list`, `struct Repeat{body: Block}`, `Stmt::Repeat`.
+    Parsing: `is_stmt` includes `$(`, so a repetition is a statement; a
+    repetition inside `{ ... }`/`if`/`while` reaches it through
+    `AstCopier::visit_stmts` (the copier's Block arm now goes through it).
+  - expansion: `expand_user_macro` validates the list parameter (last, at most
+    one, `Expr`), binds `fixed` parameters as before, and hands the elements to
+    the copier (`repeat_param`/`repeat_elems`). `AstCopier::expand_repeat`
+    copies the body once per element with `$xs` bound in `expr_map`; copying
+    per iteration is what gives per-iteration hygiene (each iteration's `let t`
+    is alpha-renamed again). Nested `$(` is an error; the copier collects
+    those messages in `errors` (it has no resolver) and `expand_user_macro`
+    reports them at the call site.
+  - errors, all at the call site: "list parameter must be last", "more than
+    one list parameter", "list parameter must be an Expr", "expects at least N
+    args", "'$x' is only valid inside $( ... )*", "'$x' is not a list
+    parameter", "list parameter 'xs' must be used as '$xs' inside $( ... )*",
+    "nested $( ... )* is not supported". A `Stmt::Repeat` that somehow survives
+    copying is a resolver error ("$( ... )* is only valid inside a macro body");
+    the backend's two Stmt matches and the formatter have no-op/print arms.
+  - tests: `tests/normal/47-macro-repeat.x` (one/many/zero elements, element in
+    an expression and as a macro argument, per-iteration locals, repetition in
+    an `if`, fixed parameter before the list, expression macro) and four
+    `tests/fail/macro_repeat_*.x` (not last, `$` outside a repetition, bare
+    list name, nested). Pre-fix red: the old lexer rejects `$` ("unexpected
+    char: '$'") and 47 fails to parse. `tests/fmt/macro.x` gained a repetition
+    and a list parameter (canonical form `$(stmt;)*`, `xs: Expr...`), macro.expected
+    regenerated and idempotent.
+  - suite green (`normal pass=103 xpass=0`, fmt/trace/path/opt, leak self-skips);
+    triangle C == D byte-identical, B != C only in the known StateType::clone
+    drift.
+  - deferred (recorded in doc/codegen_macros.txt): separator + expression
+    position (`$( <expr> ),*` needs a new Expr kind), item position (phase B),
+    fragment kinds (C).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see

@@ -94,6 +94,7 @@ enum TokenType {
     RBRACE,
     ARROW,//=>
     HASH,
+    DOLLAR,//$
     //NEW,
 }
 

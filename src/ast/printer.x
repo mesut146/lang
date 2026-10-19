@@ -338,6 +338,9 @@ func stmt_line(st: Stmt*): i32{
         Stmt::ForEach(fe) => {
             return fe.rhs.line;
         },
+        Stmt::Repeat(r) => {
+            return r.body.line;
+        },
         Stmt::Continue => {
             return 0;
         },
@@ -774,6 +777,9 @@ impl Debug for MacroParam{
       f.print(": ");
       self.type.get().debug(f);
     }
+    if(self.list){
+      f.print("...");
+    }
   }
 }
 
@@ -950,6 +956,13 @@ func debug_stmt(self: Stmt*, f: Fmt*, comments: List<Comment>*){
         f.print(" in ");
         debug_expr(&fe.rhs, f, comments);
         debug_block(&fe.body, f, comments);
+      },
+      Stmt::Repeat(r) => {
+        f.print("$(");
+        for(let i = 0;i < r.body.list.len();++i){
+          debug_stmt(r.body.list.get(i), f, comments);
+        }
+        f.print(")*");
       }
     }
 }

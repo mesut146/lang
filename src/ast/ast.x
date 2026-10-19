@@ -476,6 +476,9 @@ struct Macro: Node{
 struct MacroParam: Node{
   name: String;
   type: Option<Type>;
+  //`name: T...` -- the rest parameter: it takes every remaining call argument
+  //(comma-separated) and is only usable inside `$( ... )*` (as `$name`).
+  list: bool;
 }
 
 impl Method{
@@ -921,7 +924,14 @@ struct IfLet{
   else_stmt: Ptr<Body>;
 }
 
+//`$( body )*`: emit the body once per element of a list parameter. Expanded
+//while copying a macro body (AstCopier); it never reaches the resolver.
+struct Repeat{
+  body: Block;
+}
+
 enum Stmt: Node{
+    Repeat{e: Repeat},
     Var{ve: VarExpr},
     Expr{e: Expr},
     Ret{e: Option<Expr>},

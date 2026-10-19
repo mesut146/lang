@@ -708,8 +708,33 @@ func is_expr_param(prm: MacroParam*): bool{
 //channel the builtin macros use. A trailing expression in the body makes the
 //macro an expression macro of the inferred result type.
 func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*): RType{
-    if(call.args.len() != mac.params.len()){
+    //a list parameter (`xs: Expr...`) takes every remaining argument; it must
+    //be the last parameter and there can be only one
+    let list_cnt = 0;
+    for(let i = 0;i < mac.params.len();++i){
+        let prm = mac.params.get(i);
+        if(prm.list){
+            list_cnt += 1;
+            if(i + 1 != mac.params.len()){
+                r.err(node, format("macro {} list parameter must be last", mac.name));
+            }
+            if(!is_expr_param(prm)){
+                r.err(node, format("macro {} list parameter must be an Expr", mac.name));
+            }
+        }
+    }
+    if(list_cnt > 1){
+        r.err(node, format("macro {} has more than one list parameter", mac.name));
+    }
+    let fixed = mac.params.len();
+    if(list_cnt > 0){
+        fixed -= 1;
+    }
+    if(list_cnt == 0 && call.args.len() != mac.params.len()){
         r.err(node, format!("macro {} expects {} args, got {}", mac.name, mac.params.len(), call.args.len()));
+    }
+    if(list_cnt > 0 && call.args.len() < fixed){
+        r.err(node, format!("macro {} expects at least {} args, got {}", mac.name, fixed, call.args.len()));
     }
     if(r.macro_depth >= MAX_MACRO_DEPTH){
         r.err(node, format!("macro expansion too deep (recursive macro {})", mac.name));
@@ -717,7 +742,7 @@ func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*)
     let args = HashMap<String, Expr*>::new();
     let renames = HashMap<String, String>::new();
     let info = FormatInfo::new(node.line);
-    for(let i = 0;i < call.args.len();++i){
+    for(let i = 0;i < fixed;++i){
         let prm = mac.params.get(i);
         if(is_expr_param(prm)){
             args.add(prm.name.clone(), call.args.get(i));
@@ -740,11 +765,25 @@ func expand_user_macro(node: Expr*, call: MacroCall*, mac: Macro*, r: Resolver*)
     //hygienic: names the body declares are alpha-renamed per call site
     copier.hygienic = true;
     copier.rename_id = node.id;
-    for st in &mac.body.list{
-        info.block.list.add(copier.visit(st));
+    if(list_cnt > 0){
+        //`$( ... )*` fills in `$xs` per element while the body is copied
+        let elems = List<Expr*>::new();
+        for(let i = fixed;i < call.args.len();++i){
+            elems.add(call.args.get(i));
+        }
+        copier.repeat_param = Option::new(mac.params.get(fixed).name.clone());
+        copier.repeat_elems = elems;
     }
+    //visit_stmts splices `$( ... )*` (a repetition cannot stay a statement:
+    //it expands to one copy of its body per element)
+    copier.visit_stmts(&mac.body.list, &info.block.list);
     if(mac.body.return_expr.is_some()){
         info.block.return_expr.set(copier.visit(mac.body.return_expr.get()));
+    }
+    //problems the copier could not report itself (bad `$name`, nested
+    //repetition, bare list parameter)
+    for e in &copier.errors{
+        r.err(node, e.clone());
     }
     //Definition-site guard: a free body name is resolved at the call site (the
     //copy is visited in the caller's scopes). If the caller happens to have a

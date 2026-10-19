@@ -95,6 +95,7 @@ func make_ops(): HashMap<str, TokenType>{
   map.add("++", TokenType::PLUSPLUS);
   map.add("--", TokenType::MINUSMINUS);
   map.add("..", TokenType::DOTDOT);
+  map.add("$", TokenType::DOLLAR);
   map.add("=>", TokenType::ARROW);
   return map;
 }

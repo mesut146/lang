@@ -16,6 +16,16 @@ macro bump(e: Expr, by: i32){
     e = e + by;
 }
 
+macro each(vals: Expr...){
+    $(print("v={}\n", $vals);)*
+}
+
+macro checked(xs: Expr...){
+    if(true){
+        $(assert($xs > 0);)*
+    }
+}
+
 mod m{
 macro scaled(e: Expr){
     e = e * 2;

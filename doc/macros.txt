@@ -53,6 +53,18 @@ name!(arg1, arg2, arg3);//statement or expression position
 //scope restore), so keep inner binder names distinct from outer uses.
 //A body ending in an expression makes the macro an expression of the inferred
 //type (`macro square(x: Expr){ x * x }`), otherwise it is void.
+//slice 4 (2026-10-19, doc/codegen_macros.txt phase A): a *list* parameter
+//`macro m(xs: Expr...)`: it must be the last parameter (one per macro), takes
+//every remaining argument (zero or more, so `m!()` is legal) and is not a
+//value: inside `$( <statements> )*` the current element is `$xs`, and any
+//other use of the bare name is an error ("list parameter 'xs' must be used as
+//'$xs' inside $( ... )*"). The repetition emits its statement list once per
+//element, in place (also inside a nested block), and the body is copied again
+//per iteration, so per-iteration hygiene is the same alpha-rename as above
+//(two iterations may each declare `t`). One level only: `$(` inside `$(` is
+//an error, and `$name` outside a repetition is an error
+//(tests/fail/macro_repeat_*.x). Only statement-position repetition exists so
+//far; `$( <expr> ),*` in an argument or initializer list is the next slice.
 //Lookup follows the same rules as any other name: a bare `name!` reaches
 //top-level macros of this unit and, through `use` prefixes (every `mod` is
 //registered as one, as for types), the macros of its modules -- `use m;` or

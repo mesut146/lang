@@ -37,20 +37,30 @@ struct AstCopier{
     //would otherwise capture a caller local (definition-site guard in
     //expand_user_macro).
     free_names: List<String>;
+    //macro expansion, `$( ... )*`: the list parameter's name (`xs` in
+    //`macro m(xs: Expr...)`) and the argument expression for each element.
+    //While expanding, `$xs` looks up `$xs` in expr_map; the bare spelling is
+    //an error.
+    repeat_param: Option<String>;
+    repeat_elems: List<Expr*>;
+    in_repeat: bool;
+    //problems found while copying that need the resolver's diagnostics (the
+    //copier has no unit): bad `$name`, nested repetitions, ...
+    errors: List<String>;
     //last_id: i32*;
 }
 
 impl AstCopier{
     func new(type_map: HashMap<String, Type>*, unit: Unit*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new(), repeat_param: Option<String>::new(), repeat_elems: List<Expr*>::new(), in_repeat: false, errors: List<String>::new()};
     }
     func new(type_map: HashMap<String, Type>*): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option<Unit*>::new(), expr_map: HashMap<String, Expr*>::new(), rename_map: HashMap<String, String>::new(), in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new(), repeat_param: Option<String>::new(), repeat_elems: List<Expr*>::new(), in_repeat: false, errors: List<String>::new()};
     }
     //macro expansion: same as new(), but `expr_map` names are substituted with
     //their argument and `rename_map` names are renamed.
     func new(type_map: HashMap<String, Type>*, unit: Unit*, expr_map: HashMap<String, Expr*>, rename_map: HashMap<String, String>): AstCopier{
-        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new()};
+        return AstCopier{type_map: type_map, unit: Option::new(unit), expr_map: expr_map, rename_map: rename_map, in_arg: false, local_renames: HashMap<String, String>::new(), hygienic: false, rename_id: 0, rename_seq: 0, free_names: List<String>::new(), repeat_param: Option<String>::new(), repeat_elems: List<Expr*>::new(), in_repeat: false, errors: List<String>::new()};
     }
 
     //hygienic rename of one name a macro body declares: the fresh spelling is
@@ -295,9 +305,43 @@ impl AstCopier{
 
     func visit(self, node: Block*): Block{
         let res = Block::new(node.line, node.end_line);
-        self.visit_list(&node.list, &res.list);
+        self.visit_stmts(&node.list, &res.list);
         res.return_expr = self.visit_opt(&node.return_expr);
         return res;
+    }
+    //statements, splicing `$( ... )*` into one copy of its body per element
+    func visit_stmts(self, src: List<Stmt>*, dst: List<Stmt>*){
+        for(let i = 0;i < src.size();++i){
+            let st = src.get(i);
+            if let Stmt::Repeat(r) = st{
+                self.expand_repeat(r, dst);
+            }else{
+                dst.add(self.visit(st));
+            }
+        }
+    }
+    func expand_repeat(self, r: Repeat*, dst: List<Stmt>*){
+        if(self.repeat_param.is_none()){
+            self.errors.add("$( ... )* is only valid inside a macro with a list parameter".str());
+            return;
+        }
+        if(self.in_repeat){
+            self.errors.add("nested $( ... )* is not supported".str());
+            return;
+        }
+        //one copy of the body per element. Copying the body again per iteration
+        //is what makes the iteration hygienic: a declaration inside it is
+        //alpha-renamed again, so `let t` in two iterations is two bindings.
+        self.in_repeat = true;
+        let key = format!("${}", self.repeat_param.get());
+        for(let i = 0;i < self.repeat_elems.size();++i){
+            let elem = self.repeat_elems.get(i);
+            self.expr_map.add(key.clone(), *elem);
+            //visit_stmts, not visit: a nested repetition must reach the
+            //in_repeat check above instead of surviving as a statement
+            self.visit_stmts(&r.body.list, dst);
+        }
+        self.in_repeat = false;
     }
     
     func visit(self, node: Fragment*): Fragment{
@@ -337,6 +381,7 @@ impl AstCopier{
     func visit(self, node: Stmt*): Stmt{
         let id = self.node(node as Node*);
         match node{
+            Stmt::Repeat(r) => return Stmt::Repeat{.id, Repeat{body: self.visit(&r.body)}},
             Stmt::Break => return Stmt::Break{.id},
             Stmt::Continue => return Stmt::Continue{.id},
             Stmt::Var(ve) => return Stmt::Var{.id, self.visit(ve)},
@@ -409,6 +454,26 @@ impl AstCopier{
                 let renamed = self.rename_map.get(name);
                 if(renamed.is_some()){
                     return Expr::Name{.id, renamed.unwrap().clone()};
+                }
+                //`$xs`: the current element of the repetition being expanded
+                if(name.str().starts_with("$")){
+                    let elem = self.expr_map.get(name);
+                    if(elem.is_some()){
+                        self.in_arg = true;
+                        let res = self.visit(*elem.unwrap());
+                        self.in_arg = false;
+                        return res;
+                    }
+                    if(self.repeat_param.is_none()){
+                        self.errors.add(format("'{}' is only valid inside $( ... )*", name));
+                    }else{
+                        self.errors.add(format("'{}' is not a list parameter", name));
+                    }
+                    return Expr::Name{.id, name.clone()};
+                }
+                //a list parameter is only usable as `$name` inside the repetition
+                if(self.repeat_param.is_some() && name.eq(self.repeat_param.get())){
+                    self.errors.add(format("list parameter '{}' must be used as '${}' inside $( ... )*", name, name));
                 }
                 //neither declared in the body nor a parameter: a free name,
                 //resolved at the call site (see expand_user_macro's guard)

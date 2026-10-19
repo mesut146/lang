@@ -1,11 +1,16 @@
 user-authored code generation: design note (option C)
-STATUS: proposal, written 2026-10-19 on main dea55e6. Nothing here is
-implemented and nothing should be coded from it before the questions in
-section 8 are answered. It answers Q3/Q4 of doc/token_macros.txt ("is user
-code generation a goal, and in which shape") and is the separate note that
-document asked for. Read it first for the derive-generator state, the two
-decisions (D1 CTFE, D2 token streams) and the implementation notes in its
-section 8; this note only covers the *user-facing* surface.
+STATUS: proposal, written 2026-10-19 on main dea55e6. Phase A (list
+parameter + statement-position repetition) landed on 2026-10-19:
+`xs: Expr...`, `$( <statements> )*`, `$name` for the element, one
+repetition level, zero-element calls, per-iteration hygiene. Still not
+implemented: the separator form and expression position (`$( <expr> ),*` in
+an argument/initializer list), item position (phase B), fragment kinds
+(phase C). Q1-Q3/Q6-Q7 are answered below; Q4/Q5 stay phase B decisions.
+It answers Q3/Q4 of doc/token_macros.txt ("is user code generation a goal,
+and in which shape") and is the separate note that document asked for. Read
+it first for the derive-generator state, the two decisions (D1 CTFE, D2
+token streams) and the implementation notes in its section 8; this note only
+covers the *user-facing* surface.
 
 1. What is asked, and what already exists
 -----------------------------------------
@@ -69,11 +74,18 @@ to be too weak in practice; C3 should stay closed.
     $( <body> )*      emit <body> once per element, concatenated
     $( <body> ),*     ... with `,` between iterations
   - one repetition level (phase A): a `$(` inside `$(` is an error with a
-    clear message. Nesting still happens through macros calling macros.
+    clear message ("nested $( ... )* is not supported"). Nesting still
+    happens through macros calling macros.
   - an empty list expands to nothing, so a repeated statement disappears.
-  - the separator is written in the body (the call side is always `,`), and
-    `;` / nothing cover statement emission; `,*` covers expression lists
-    inside a call or an initializer.
+  - landed form: `$( <statements> )*` only -- a *statement* list, spliced in
+    place (also inside a nested block). The separator variant is not
+    implemented yet: the call side is always `,`, and a repeated statement
+    disappears or concatenates. Expression position (`$( <expr> ),*` inside
+    a call or an initializer) is the next slice; it needs a new Expr kind
+    instead of a Stmt one.
+  - the repetition's body is copied once per element, so a declaration
+    inside it is alpha-renamed per iteration: two iterations may each have
+    their own `t` (tests/normal/47-macro-repeat.x's each_local).
 3.3 `$name` inside the repetition
   `$xs` is the current element (an expression), substituted like an `Expr`
   parameter: same AST, same hygiene (the element keeps the caller's names and
@@ -153,13 +165,21 @@ funcs, structs). Proposed, smallest form:
 
 7. Tests and gates per slice
 ----------------------------
-A (list + repetition, statement/expression):
-  tests/normal: one/many/zero elements, `,*` separator inside a call,
-  repeated body declaring a local (fresh name per iteration), `$name` used
-  twice, a nested macro inside a repetition.
-  tests/fail: list parameter not last; `$name` outside a repetition; bare
-  list name; nested `$(`; a list-parameter macro called with a non-expression
-  (only reachable through a fragment kind).
+A (list + repetition) -- LANDED for statement position (2026-10-19):
+  tests/normal/47-macro-repeat.x: one/many/zero elements, `$name` used in
+  both an expression and a nested macro call, repeated body declaring locals
+  (fresh name per iteration), a repetition inside an `if` block, a fixed
+  parameter before the list, and an expression macro whose repetition is a
+  statement list before the trailing expression.
+  tests/fail: macro_repeat_notlast.x (list parameter not last),
+  macro_repeat_dollar.x (`$name` outside a repetition),
+  macro_repeat_bare.x (bare list name inside the repetition),
+  macro_repeat_nested.x (nested `$(`).
+  Pre-fix red: the old compiler rejects `$` at lex time ("unexpected char:
+  '$'"), so the normal test fails and every fail test reports the wrong
+  message.
+  Deferred: `$( <expr> ),*` (expression position + separator), a
+  list-parameter macro called with a non-expression (needs fragment kinds).
 B (item position): tests/fmt round-trip of an item macro call; tests/normal
   generating an impl/func per name (Ident rest); tests/fail for a statement
   in an item body and an item in a statement body; drops on (tests/own) when
@@ -179,7 +199,11 @@ Q2 One list parameter per macro; zipping only via tuples in phase A.
    Recommended: yes (two lists need a zip rule that buys little today).
 Q3 Repetition syntax `$( body )` with an optional separator (`*` / `,*` /
    `;*`) and `$name` for the element, requiring a new `$` token.
-   Recommended: yes.
+   Answered: yes, and landed for statement position. `$` is TokenType::DOLLAR;
+   `$( ... )*` is Stmt::Repeat, expanded by AstCopier::visit_stmts. `$name`
+   stays an Expr::Name whose text starts with `$` (the printer round-trips it,
+   the copier substitutes it), so no new Expr kind was needed. The separator
+   and expression position still need one.
 Q4 Item position as in section 4 (Item::MacroCall, mixed body parsed by item
    keyword, expansion before init, line = call site, no item hygiene).
    Recommended: yes, as phase B, after A lands.

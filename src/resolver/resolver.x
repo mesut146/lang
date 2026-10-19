@@ -4022,10 +4022,15 @@ impl Resolver{
       print("visit stmt {:?}\n", node);
     }
     match node{
+      Stmt::Repeat(r) => {
+        //expanded away while copying a macro body; one reaching here is a
+        //repetition outside a macro
+        self.err(node, "$( ... )* is only valid inside a macro body");
+      },
       Stmt::Expr(e) => {
         let tmp = self.visit(e);
         if(is_result_type(&tmp.type)){
-          self.err(node, format("Result type not handled, {:?}", node));
+          self.err(node, format!("Result type not handled, {:?}", node));
         }
       },
       Stmt::Ret(e) => {

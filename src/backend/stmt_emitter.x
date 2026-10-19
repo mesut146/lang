@@ -20,6 +20,8 @@ impl Emitter{
     func visit(self, node: Stmt*){
       self.di.get().loc(node.line, node.pos);
       match node{
+        //spliced while a macro body is copied: never reaches the emitter
+        Stmt::Repeat(r) => {},
         Stmt::Ret(e) => self.visit_ret(node, e),
         Stmt::Var(ve) => self.visit_var(ve),
         Stmt::Expr(e) => self.visit(e);,

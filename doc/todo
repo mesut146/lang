@@ -12,9 +12,11 @@
 //module-level name that the macro's unit declares but the caller also has
 //(global/function/same-named import) still resolves at the call site.
 //code-generation macros -- doc/
-//codegen_macros.txt is the design note now: declarative list parameters +
-//`$( ... )*` repetition (no CTFE, no token-tree matcher), with item position
-//and fragment kinds phased behind it. doc/token_macros.txt keeps the state of
+//codegen_macros.txt is the design note: declarative list parameters +
+//`$( ... )*` repetition (no CTFE, no token-tree matcher). Phase A landed
+//2026-10-19 for *statement* position (`xs: Expr...`, `$( ... )*`, `$xs`,
+//tests/normal/47-macro-repeat.x); still open: the separator + expression
+//position (`$( ... ),*`), item position (phase B) and fragment kinds (C). doc/token_macros.txt keeps the state of
 //the unused TokenStream/#derive_macro stub, and the live derive generators are
 //in derive.x.
 

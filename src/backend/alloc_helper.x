@@ -105,6 +105,10 @@ impl AllocHelper{
   }
   func visit(self, node: Stmt*){
     match node{
+      Stmt::Repeat(r)=>{
+        //spliced while the macro body is copied; never reaches the backend
+        return;
+      },
       Stmt::Var(ve)=>{
         self.visit(ve);
         return;
