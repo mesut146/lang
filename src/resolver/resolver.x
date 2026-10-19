@@ -1047,6 +1047,11 @@ impl Resolver{
             Expr::Name(name) => name.str(),
             _ => panic("derive expr {:?}", arg)
           };
+          //a hand-written printer impl wins over its derive (see
+          //has_trait_impl); the other derives keep their current behaviour
+          if((arg_str.eq("Debug") || arg_str.eq("Display")) && has_trait_impl(self, decl, arg_str)){
+            continue;
+          }
           let imp = generate_derive(self, decl, &self.unit, arg_str);
           newItems.add(Item::Impl{imp});
         }
@@ -3242,7 +3247,18 @@ impl Resolver{
       self.handle_print_type(node, call);
       return RType::new("str");
     }
-    if(Utils::is_call(call, "std", "debug") || Utils::is_call(call, "std", "debug2")){
+    //std::debug/std::debug2 (and their Display twins) expand here. The derive
+    //generators use them for a field whose type is not known yet (a generic
+    //declaration's type parameter) and to print pointers as hex instead of
+    //looking for an impl.
+    let std_dbg = Utils::is_call(call, "std", "debug") || Utils::is_call(call, "std", "debug2");
+    let std_dsp = Utils::is_call(call, "std", "display") || Utils::is_call(call, "std", "display2");
+    if(std_dbg || std_dsp){
+      let target: String = "Debug::debug".str();
+      if(std_dsp){
+        target = "Display::fmt".str();
+      }
+      let force_hex = call.name.eq("debug2") || call.name.eq("display2");
       assert(call.type_args.len() == 0);
       assert(call.args.len() == 2);
       let src = call.args.get(0);
@@ -3253,17 +3269,12 @@ impl Resolver{
       assert(rt2.type.eq("Fmt*"));
       let info = FormatInfo::new(node.line);
       let elem = &rt1.type;
-      if(elem.is_pointer()){
-        let inner = elem.elem();
-        if(inner.is_pointer() || call.name.eq("debug2")){
-          //print hex based address
-          info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
-        }else{
-          info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
-        }
+      if(elem.is_pointer() && (elem.elem().is_pointer() || force_hex)){
+        //print hex based address
+        info.block.list.add(parse_stmt(format("i64::debug_hex({:?} as u64, f);", src), &self.unit, node.line));
       }else{
         //todo take ref of it?
-        info.block.list.add(parse_stmt(format("Debug::debug({:?}, {:?});", src, fmt), &self.unit, node.line));
+        info.block.list.add(parse_stmt(format("{}({:?}, {:?});", target, src, fmt), &self.unit, node.line));
       }
       self.visit_block(&info.block);
       self.format_map.add(node.id, info);

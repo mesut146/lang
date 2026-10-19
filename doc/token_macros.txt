@@ -73,11 +73,14 @@ existing style. Each is a small, user-visible slice:
      compiler): a generic instantiated with a *std* type (`W<String>`) does not
      link in a plain -stdpath build (nor does `.clone()` on a primitive, which
      is what forced the local #drop type in the 44 test).
-  b) no `#derive(Display)`: `{}` on a struct is a resolve error ("no such
-     method Display::fmt(P*, Fmt*)") unless the type has a hand-written
-     Display. If a default dump is wanted, it is generate_debug's shape with
-     `fmt` instead of `debug` (ops.x:91/94: Debug has `debug`, Display has
-     `fmt`).
+  b) `#derive(Display)`: FIXED 2026-10-19. `{}` on a struct used to be a
+     resolve error ("no such method Display::fmt(P*, Fmt*)") unless the type
+     had a hand-written Display. generate_printer is now the shared body of
+     #derive(Debug) and #derive(Display) (same dump shape, `fmt` instead of
+     `debug`; a generic field goes through the new std::display/std::display2
+     helpers, the twins of std::debug/std::debug2). A hand-written Display
+     (or Debug) makes that derive step aside (has_trait_impl) instead of
+     registering a competing impl. Test: tests/std_test/14_display_test.x.
   c) the custom printer `{::Trait}` calls `Trait::fmt(x, f)` for *any* named
      trait, so `{::Debug}` does not work with std's Debug (whose method is
      `debug`): verified "no such method Debug::fmt(P*, Fmt*)". `{::Trait}` is

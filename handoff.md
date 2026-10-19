@@ -895,6 +895,34 @@ Ownership only — no Rust-like borrows:
   entry (0xe8 vs 0xdd). Suite green (`normal pass=96 xpass=0`,
   fmt/trace/path/opt pass, leak self-skips).
 
+- #derive(Display) (2026-10-19). `{}` on a struct was a resolve error ("no such
+  method Display::fmt(P*, Fmt*)") unless the type had a hand-written Display.
+  `#derive(Display)` now generates one:
+  - generate_printer is the shared body of #derive(Debug) and #derive(Display)
+    (generate_debug/generate_display are thin wrappers): the same dump shape --
+    `Type{field: value}`, `Type::Variant(...)` / `Type::Variant{field: ...}` --
+    with `fmt` instead of `debug` and Display::fmt instead of Debug::debug.
+    Pointer fields still print as hex (i64::debug_hex), like Debug.
+  - a generic declaration's field type is not known when the impl is generated,
+    so it goes through new std::display / std::display2 builtins -- the twins of
+    std::debug/std::debug2 (expanded in visit_call, emitter mirrors it).
+  - a hand-written Display *or* Debug makes that derive step aside
+    (has_trait_impl): the explicit impl is the user's choice, and two impls for
+    one type would make method lookup depend on candidate order. (Previously
+    both were registered and the manual one happened to win.)
+  Tests: tests/std_test/14_display_test.x (struct, nested struct field, all
+  three enum variant shapes, a generic instantiation, a pointer field, `{}`
+  through Fmt directly, and a hand-written Display next to the derive).
+  Pre-fix red: `generate_derive decl: A der: 'Display'`.
+  Triangle: the compiler itself derives Debug only, and the generated body text
+  is unchanged by the refactor (the std Debug test still passes), so the only
+  B != C drift is the known StateType::clone one; C == D byte-identical, `nm`
+  size-by-name identical for B/C. Suite green on B and on the fixpoint
+  (`normal pass=96 xpass=0`, std gate includes the new test, fmt/trace/path/opt
+  pass, leak self-skips).
+  doc/token_macros.txt section 3b now records it as fixed; the one derive-area
+  gap left there is a plain build not linking the std archive.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -919,8 +947,8 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   derive.x), the two decisions it needs (compile-time evaluation; token
   streams as input or output), and the derive gaps it found instead (Clone's
   field handling and the generic-over-a-drop-type crash, both fixed in the
-  entries above; no `#derive(Display)`; a plain build does not link the std
-  archive -- see that entry's "observed" list).
+  entries above and `#derive(Display)` below; a plain build does not link the
+  std archive -- see that entry's "observed" list).
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

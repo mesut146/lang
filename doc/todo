@@ -10,8 +10,8 @@
 //(definition-site resolution), and code-generation macros -- for those see
 //doc/token_macros.txt: the TokenStream/#derive_macro stub in resolver/macros.x
 //is unused, the live derive generators are in derive.x, and the document lists
-//the derive gaps that remain (no #derive(Display); a plain build not linking
-//the std archive; see its section 3) plus the two decisions (compile-time
+//the derive gap that remains (a plain build not linking the std archive; see
+//its section 3) plus the two decisions (compile-time
 //evaluation; token streams as input or output) that have to be made before any
 //of it is written.
 

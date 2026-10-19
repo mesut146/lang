@@ -29,9 +29,37 @@ func make_impl(decl: Decl*, trait_name: str): Impl{
     return Impl{info: info, methods: List<Method>::new()};
 }
 
+//True when this unit already has a hand-written impl of `trait_name` for
+//`decl` (`impl Display for A{...}`). A derive then steps aside: the explicit
+//impl is the user's choice, and registering a second impl for the same type
+//would make method lookup depend on candidate order.
+func has_trait_impl(r: Resolver*, decl: Decl*, trait_name: str): bool{
+    for(let i = 0;i < r.unit.items.len();++i){
+        let it: Item* = r.unit.items.get(i);
+        if(!(it is Item::Impl)){
+            continue;
+        }
+        let imp: Impl* = it.as_impl();
+        let tr = &imp.info.trait_name;
+        if(tr.is_none() || !tr.get().is_simple()){
+            continue;
+        }
+        if(!tr.get().name().eq(trait_name)){
+            continue;
+        }
+        if(imp.info.type.is_simple() && imp.info.type.name().eq(decl.type.name())){
+            return true;
+        }
+    }
+    return false;
+}
+
 func generate_derive(r: Resolver*, decl: Decl*, unit: Unit*, name: str): Impl{
     if(name.eq("Debug")){
         return generate_debug(decl, unit);
+    }
+    if(name.eq("Display")){
+        return generate_display(decl, unit);
     }
     if(name.eq("Drop")){
         return generate_drop(decl, unit);
@@ -326,13 +354,26 @@ func augment_manual_drop(r: Resolver*, decl: Decl*, unit: Unit*){
     }
 }
 
+//The shared body of #derive(Debug) and #derive(Display): both dump a value
+//as Type{field: value} / Type::Variant(field, ...) through the trait's
+//printer (Debug::debug / Display::fmt). #derive(Display) is an opt-in default
+//dump for `{}`; handle_attr skips it when the unit already has a hand-written
+//Display (has_trait_impl), so an explicit impl is never competed with.
 func generate_debug(decl: Decl*, unit: Unit*): Impl{
-    let imp = make_impl(decl, "Debug");
+    return generate_printer(decl, unit, "Debug", "debug", "Debug::debug", "std::debug", "std::debug2");
+}
+
+func generate_display(decl: Decl*, unit: Unit*): Impl{
+    return generate_printer(decl, unit, "Display", "fmt", "Display::fmt", "std::display", "std::display2");
+}
+
+func generate_printer(decl: Decl*, unit: Unit*, trait_name: str, method_name: str, call_path: str, generic_helper: str, generic_helper2: str): Impl{
+    let imp = make_impl(decl, trait_name);
     let line = decl.line;
-    let m = Method::new(unit.node(line), "debug".str(), Type::new("void"), unit.path.clone());
+    let m = Method::new(unit.node(line), method_name.str(), Type::new("void"), unit.path.clone());
     m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone().toPtr(), true, false});
     m.params.add(Param{.unit.node(line), "f".str(), Type::new("Fmt").toPtr(), false, false});
-    m.parent = Parent::Impl{make_info(decl, "Debug")};
+    m.parent = Parent::Impl{make_info(decl, trait_name)};
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);
     match decl{
@@ -371,11 +412,11 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                             then.list.add(parse_stmt(format("i64::debug_hex({} as u64, f);", fd.name.get()), unit, line));
                         }else{
                             if(decl.is_generic){
-                                then.list.add(parse_stmt(format("std::debug({}, f);", fd.name.get()), unit, line));
+                                then.list.add(parse_stmt(format("{}({}, f);", generic_helper, fd.name.get()), unit, line));
                             }else{
                                 //{fd.name}.debug(f);
                                 //already ptr from if let arg
-                                then.list.add(parse_stmt(format("Debug::debug({}, f);", fd.name.get()), unit, line));
+                                then.list.add(parse_stmt(format("{}({}, f);", call_path, fd.name.get()), unit, line));
                             }
                         }
                     }
@@ -424,10 +465,10 @@ func generate_debug(decl: Decl*, unit: Unit*): Impl{
                     body.list.add(parse_stmt(format("i64::debug_hex(self.{} as u64, f);", fd.name.get()), unit, line));
                 }else{
                     if(decl.is_generic){
-                        body.list.add(parse_stmt(format("std::debug2(self.{}, f);", fd.name.get()), unit, line));
+                        body.list.add(parse_stmt(format("{}(self.{}, f);", generic_helper2, fd.name.get()), unit, line));
                     }else{
                         //self.{fd.name}.debug(f);
-                        body.list.add(parse_stmt(format("Debug::debug(&self.{}, f);", fd.name.get()), unit, line));
+                        body.list.add(parse_stmt(format("{}(&self.{}, f);", call_path, fd.name.get()), unit, line));
                     }
                 }
             }

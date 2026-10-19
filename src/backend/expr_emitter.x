@@ -1010,7 +1010,8 @@ impl Emitter{
         }
         return ptr::null<Value>();
       }
-      if(Utils::is_call(mc, "std", "debug") || Utils::is_call(mc, "std", "debug2")){
+      if(Utils::is_call(mc, "std", "debug") || Utils::is_call(mc, "std", "debug2")
+        || Utils::is_call(mc, "std", "display") || Utils::is_call(mc, "std", "display2")){
         let info = resolver.format_map.get(&expr.id).unwrap();
         self.visit_block(&info.block);
         return ptr::null<Value>();
