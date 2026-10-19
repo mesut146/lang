@@ -3802,6 +3802,12 @@ impl Resolver{
   
   func visit_nc(self, node: Expr*): RType{
     match node{
+      Expr::Repeat(r) => {
+        //the copier splices these into a list; a single-expression position
+        //has no list to expand into
+        self.err(node, "$( ... )* is only valid as an element of a list (arguments, array/tuple elements)");
+        return RType::new("void");
+      },
       Expr::Lit(lit) => {
         return self.visit_lit(node, lit);
       },

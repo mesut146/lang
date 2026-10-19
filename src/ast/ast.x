@@ -929,6 +929,14 @@ struct IfLet{
 struct Repeat{
   body: Block;
 }
+//`$( <exprs> )<sep>*` in an expression list (arguments, array/tuple elements):
+//the elements of the enclosing list are repeated once per list element. `sep`
+//is only spelling (`","` in `$( ... ),*`); the enclosing list supplies the
+//actual commas. Expanded by AstCopier; it never reaches the resolver.
+struct RepeatExpr{
+  body: List<Expr>;
+  sep: String;
+}
 
 enum Stmt: Node{
     Repeat{e: Repeat},
@@ -1059,6 +1067,7 @@ enum Expr: Node{
   Lambda{val: Lambda},
   Ques{e: Box<Expr>},
   Tuple{elems: List<Expr>},
+  Repeat{e: RepeatExpr},
 }
 impl Expr{
   func print(self): String{

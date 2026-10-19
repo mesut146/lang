@@ -1115,6 +1115,35 @@ Ownership only — no Rust-like borrows:
     position (`$( <expr> ),*` needs a new Expr kind), item position (phase B),
     fragment kinds (C).
 
+- User codegen phase A, expression position (2026-10-19, follows the list
+  parameter + statement repetition entry): `$( <exprs> ),*` as an element of an
+  *expression list* -- call/macro-call arguments, array elements, tuple
+  elements.
+  - AST: `struct RepeatExpr{body: List<Expr>; sep: String}` and
+    `Expr::Repeat`. `sep` is spelling only (the enclosing list supplies the
+    commas); it exists so the formatter round-trips `,$`-style input.
+  - parser: `prim` accepts `$( <exprs> )<sep>*`, where `<exprs>` is
+    `exprList(RPAREN)` and `<sep>` is an optional `,`. So
+    `($( $xs ),*, 99)` is a tuple: elements then 99; `($( $xs ),*)` is a
+    *parenthesized* repetition (the `,` belongs to the repetition), and a
+    single-value position is rejected.
+  - copier: `visit_exprs`/`visit_expr_list` flatten `Expr::Repeat` (one copy of
+    the body per element, `$xs` bound, per-iteration hygiene as in the
+    statement form) and are used for Call args, MacroCall args, Array elements
+    and Tuple elements. `Expr::Repeat` reaching a single value is a copier
+    error; the resolver's `visit_nc` and the backend have unreachable/error
+    arms.
+  - tests: `tests/normal/48-macro-repeat-expr.x` (array literal, nested macro
+    call argument list, tuple with a tail element, element used twice),
+    `tests/fail/macro_repeat_value.x`, and tests/fmt/macro.x formats
+    `[$($xs),*]` (expected regenerated, idempotent). Pre-fix red: the older
+    parser stops at "expected name got '('" and 48 fails to parse.
+  - suite green (`normal pass=105 xpass=0`, fmt/trace/path/opt, leak
+    self-skips); triangle C == D byte-identical, B != C only in the known
+    StateType::clone drift.
+  - still open for codegen: item position (phase B), fragment kinds (C),
+    non-`Expr` list elements, struct-literal entries.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see

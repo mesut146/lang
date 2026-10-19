@@ -1,11 +1,12 @@
 user-authored code generation: design note (option C)
-STATUS: proposal, written 2026-10-19 on main dea55e6. Phase A (list
-parameter + statement-position repetition) landed on 2026-10-19:
-`xs: Expr...`, `$( <statements> )*`, `$name` for the element, one
-repetition level, zero-element calls, per-iteration hygiene. Still not
-implemented: the separator form and expression position (`$( <expr> ),*` in
-an argument/initializer list), item position (phase B), fragment kinds
-(phase C). Q1-Q3/Q6-Q7 are answered below; Q4/Q5 stay phase B decisions.
+STATUS: proposal, written 2026-10-19 on main dea55e6. Phase A landed on
+2026-10-19 in two slices: list parameter + statement repetition, then
+expression position (`$( <exprs> ),*` in argument/array/tuple element
+lists). `xs: Expr...`, `$xs` for the element, one repetition level,
+zero-element calls, per-iteration hygiene. Still not implemented: item
+position (phase B), fragment kinds (phase C), list element types other than
+`Expr` (B/C), and struct-literal entries (`P{ ... }` is an Entry list, not an
+Expr list). Q1-Q3/Q6-Q7 are answered below; Q4/Q5 stay phase B decisions.
 It answers Q3/Q4 of doc/token_macros.txt ("is user code generation a goal,
 and in which shape") and is the separate note that document asked for. Read
 it first for the derive-generator state, the two decisions (D1 CTFE, D2
@@ -77,12 +78,15 @@ to be too weak in practice; C3 should stay closed.
     clear message ("nested $( ... )* is not supported"). Nesting still
     happens through macros calling macros.
   - an empty list expands to nothing, so a repeated statement disappears.
-  - landed form: `$( <statements> )*` only -- a *statement* list, spliced in
-    place (also inside a nested block). The separator variant is not
-    implemented yet: the call side is always `,`, and a repeated statement
-    disappears or concatenates. Expression position (`$( <expr> ),*` inside
-    a call or an initializer) is the next slice; it needs a new Expr kind
-    instead of a Stmt one.
+  - landed forms: `$( <statements> )*` (a *statement* list, spliced in place,
+    also inside a nested block) and `$( <exprs> )<sep>*` as an element of an
+    *expression list* (`Expr::Repeat`): call/macro-call arguments, array
+    elements, tuple elements. `sep` is spelling only -- the enclosing list
+    supplies the commas -- so the list's own separator follows the
+    repetition: `( $( $xs ),*, 99 )` is the elements plus `99`, while
+    `( $( $xs ),* )` is a *parenthesized* repetition, not a tuple.
+    Expression-position repetition in a single-value position is an error
+    ("only valid as an element of a list").
   - the repetition's body is copied once per element, so a declaration
     inside it is alpha-renamed per iteration: two iterations may each have
     their own `t` (tests/normal/47-macro-repeat.x's each_local).
@@ -178,8 +182,12 @@ A (list + repetition) -- LANDED for statement position (2026-10-19):
   Pre-fix red: the old compiler rejects `$` at lex time ("unexpected char:
   '$'"), so the normal test fails and every fail test reports the wrong
   message.
-  Deferred: `$( <expr> ),*` (expression position + separator), a
-  list-parameter macro called with a non-expression (needs fragment kinds).
+  Also landed (same day): tests/normal/48-macro-repeat-expr.x (array literal,
+  nested macro call, tuple with a tail element, element used twice) and
+  tests/fail/macro_repeat_value.x (expression repetition in a single-value
+  position); tests/fmt/macro.x formats `[$($xs),*]`.
+  Deferred: a list-parameter macro called with a non-expression (needs
+  fragment kinds), struct-literal entries, item position (B).
 B (item position): tests/fmt round-trip of an item macro call; tests/normal
   generating an impl/func per name (Ident rest); tests/fail for a statement
   in an item body and an item in a statement body; drops on (tests/own) when

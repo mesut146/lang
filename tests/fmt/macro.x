@@ -26,6 +26,11 @@ macro checked(xs: Expr...){
   }
 }
 
+macro as_array(xs: Expr...){
+    let a = [ $( $xs ),* ];
+    assert(a.len() > 0);
+}
+
 mod   m{
     macro  scaled(e: Expr){
         e = e * 2;

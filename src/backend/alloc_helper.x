@@ -273,6 +273,8 @@ impl AllocHelper{
   func visit(self, node: Expr*): Option<Value*>{
     let res = Option<Value*>::new();
     match node{
+      //spliced into a list while a macro body is copied; unreachable here
+      Expr::Repeat(r) => return res,
       Expr::Name(name) => return res,
       Expr::Par(e) => return self.visit(e.get()),
       Expr::Block(blk) => return self.visit(blk.get()),

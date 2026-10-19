@@ -1136,6 +1136,19 @@ func debug_expr(self: Expr*, f: Fmt*, comments: List<Comment>*){
         debug_expr(e.get(), f, comments);
         f.print(")");
       },
+      Expr::Repeat(r) => {
+        if(print_cst) f.print("Expr::Repeat{");
+        f.print("$(");
+        for(let i = 0;i < r.body.len();++i){
+          if(i > 0) f.print(", ");
+          debug_expr(r.body.get(i), f, comments);
+        }
+        f.print(")");
+        if(!r.sep.empty()){
+          f.print(&r.sep);
+        }
+        f.print("*");
+      },
       Expr::Tuple(elems) => {
         if(print_cst) f.print("Expr::Tuple{");
         f.print("(");

@@ -721,6 +721,10 @@ impl Emitter{
         //every variant to appear in the match.
         std::unreachable!();
       },
+      Expr::Repeat(r) => {
+        //dead: spliced into a list while the macro body is copied
+        std::unreachable!();
+      },
       Expr::Unary(op, e) => {
         return val;
       },

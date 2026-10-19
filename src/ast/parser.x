@@ -1253,6 +1253,20 @@ impl Parser{
     let tok = self.peek();
     let n = self.node();
     if(self.is(TokenType::DOLLAR)){
+      if(self.peek(1).is(TokenType::LPAREN)){
+        //$( <exprs> )<sep>*  -- repeat the elements, in an expression list
+        self.pop();//$
+        self.consume(TokenType::LPAREN);
+        let body = self.exprList(TokenType::RPAREN);
+        self.consume(TokenType::RPAREN);
+        let sep = String::new();
+        if(self.is(TokenType::COMMA)){
+          self.pop();
+          sep = String::new(",");
+        }
+        self.consume(TokenType::STAR);
+        return Expr::Repeat{.n, RepeatExpr{body: body, sep: sep}};
+      }
       //$name: the current list element inside a repetition (slice A). Kept as
       //an Expr::Name whose text starts with '$' so the printer round-trips it;
       //AstCopier resolves it while expanding the repetition.

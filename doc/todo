@@ -14,9 +14,10 @@
 //code-generation macros -- doc/
 //codegen_macros.txt is the design note: declarative list parameters +
 //`$( ... )*` repetition (no CTFE, no token-tree matcher). Phase A landed
-//2026-10-19 for *statement* position (`xs: Expr...`, `$( ... )*`, `$xs`,
-//tests/normal/47-macro-repeat.x); still open: the separator + expression
-//position (`$( ... ),*`), item position (phase B) and fragment kinds (C). doc/token_macros.txt keeps the state of
+//2026-10-19 in both positions (`xs: Expr...`, `$xs`, `$( stmts )*`,
+//`$( exprs ),*`, tests/normal/47-macro-repeat.x and 48-macro-repeat-expr.x);
+//still open: item position (phase B), fragment kinds (C), non-Expr list
+//elements, struct-literal entries. doc/token_macros.txt keeps the state of
 //the unused TokenStream/#derive_macro stub, and the live derive generators are
 //in derive.x.
 

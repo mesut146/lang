@@ -63,8 +63,12 @@ name!(arg1, arg2, arg3);//statement or expression position
 //per iteration, so per-iteration hygiene is the same alpha-rename as above
 //(two iterations may each declare `t`). One level only: `$(` inside `$(` is
 //an error, and `$name` outside a repetition is an error
-//(tests/fail/macro_repeat_*.x). Only statement-position repetition exists so
-//far; `$( <expr> ),*` in an argument or initializer list is the next slice.
+//(tests/fail/macro_repeat_*.x). In an *expression list* (call arguments, array
+//elements, tuple elements) the repetition is `$( <exprs> ),*`: the elements are
+//repeated per list element and the enclosing list supplies the commas, so the
+//list's own separator follows the repetition -- `($( $xs ),*, 99)` is the
+//elements plus 99, `($( $xs ),*)` is a parenthesized repetition. A
+//single-value position is an error ("only valid as an element of a list").
 //Lookup follows the same rules as any other name: a bare `name!` reaches
 //top-level macros of this unit and, through `use` prefixes (every `mod` is
 //registered as one, as for types), the macros of its modules -- `use m;` or

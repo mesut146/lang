@@ -320,6 +320,41 @@ impl AstCopier{
             }
         }
     }
+    //expression lists (arguments, array/tuple elements), splicing
+    //`$( <exprs> )<sep>*` into one copy of its elements per list element
+    func visit_expr_list(self, src: List<Expr>*): List<Expr>{
+        let res = List<Expr>::new();
+        self.visit_exprs(src, &res);
+        return res;
+    }
+    func visit_exprs(self, src: List<Expr>*, dst: List<Expr>*){
+        for(let i = 0;i < src.size();++i){
+            let e = src.get(i);
+            if let Expr::Repeat(r) = e{
+                self.expand_repeat_expr(r, dst);
+            }else{
+                dst.add(self.visit(e));
+            }
+        }
+    }
+    func expand_repeat_expr(self, r: RepeatExpr*, dst: List<Expr>*){
+        if(self.repeat_param.is_none()){
+            self.errors.add("$( ... )* is only valid inside a macro with a list parameter".str());
+            return;
+        }
+        if(self.in_repeat){
+            self.errors.add("nested $( ... )* is not supported".str());
+            return;
+        }
+        self.in_repeat = true;
+        let key = format!("${}", self.repeat_param.get());
+        for(let i = 0;i < self.repeat_elems.size();++i){
+            let elem = self.repeat_elems.get(i);
+            self.expr_map.add(key.clone(), *elem);
+            self.visit_exprs(&r.body, dst);
+        }
+        self.in_repeat = false;
+    }
     func expand_repeat(self, r: Repeat*, dst: List<Stmt>*){
         if(self.repeat_param.is_none()){
             self.errors.add("$( ... )* is only valid inside a macro with a list parameter".str());
@@ -496,7 +531,7 @@ impl AstCopier{
             Expr::Obj(type, args) => return Expr::Obj{.id, self.visit(type), self.visit_list(args)},
             Expr::As(e, type) => return Expr::As{.id,  self.visit_box(e), self.visit(type)},
             Expr::Is(e, rhs) => return Expr::Is{.id, self.visit_box(e), self.visit_box(rhs)},
-            Expr::Array(list, size) => return Expr::Array{.id, self.visit_list(list), self.visit_opt(size)},
+            Expr::Array(list, size) => return Expr::Array{.id, self.visit_expr_list(list), self.visit_opt(size)},
             Expr::ArrAccess(aa) => return Expr::ArrAccess{.id, ArrAccess{
                 arr: self.visit_box(&aa.arr),
                 idx: self.visit_box(&aa.idx),
@@ -512,7 +547,13 @@ impl AstCopier{
                 cases: self.visit_list(&m.get().cases)
             })},
             Expr::Ques(bx) => return Expr::Ques{.id, self.visit_box(bx)},
-            Expr::Tuple(elems) => return Expr::Tuple{.id, self.visit_list(elems)},
+            Expr::Tuple(elems) => return Expr::Tuple{.id, self.visit_expr_list(elems)},
+            Expr::Repeat(r) => {
+                //the list visitors splice these; one reaching a single value
+                //expression has nowhere to expand into
+                self.errors.add("$( ... )* is only valid as an element of a list (arguments, array/tuple elements)".str());
+                return Expr::Repeat{.id, RepeatExpr{body: self.visit_expr_list(&r.body), sep: r.sep.clone()}};
+            },
         }
     }
     func visit(self, node: LambdaParam*): LambdaParam{
@@ -568,7 +609,7 @@ impl AstCopier{
             scope: scope, 
             name: name,
             type_args: self.visit_list(&node.type_args), 
-            args: self.visit_list(&node.args), 
+            args: self.visit_expr_list(&node.args), 
             is_static: node.is_static
         };
     }
@@ -577,7 +618,7 @@ impl AstCopier{
       return MacroCall{
         scope: self.visit_opt(&node.scope),
         name: node.name.clone(),
-        args: self.visit_list(&node.args)
+        args: self.visit_expr_list(&node.args)
       };
     }
 }

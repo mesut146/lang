@@ -46,6 +46,9 @@ impl Emitter{
       let ll = self.ll.get();
       self.di.get().loc(node.line, node.pos);
       match node{
+        //spliced into a list while the macro body is copied; the resolver
+        //already rejects one that reaches a value position
+        Expr::Repeat(r) => return self.nullptr(),
         Expr::Call(mc) => return self.visit_call(node, mc),
         Expr::MacroCall(mc) => return self.visit_macrocall(node, mc),
         Expr::ArrAccess(aa) => return self.visit_array_access(node, aa, true),
