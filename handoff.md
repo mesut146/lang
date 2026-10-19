@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-19. Main: `fc2ed48` (owns `681a8cc` array places, place
+Date: 2026-10-19. Main: `86a6cca` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -14,7 +14,8 @@ the Clone derive copying plain-value fields `b16ebee`, drop methods for
 generic instantiations met before the derives `d686482`, method calls on
 unit-variant values `01ac0e2`, `#derive(Display)` `3e4d3ae`, the std archive linked
 by default `dea55e6`, the user-codegen design note
-`1e6904a`, and the two `-j` pool fixes `fc2ed48`).
+`1e6904a`, the two `-j` pool fixes
+`fc2ed48`, and linker/archiver discovery on PATH `86a6cca`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published). Next release v1.19
 bootstraps from v1.18. Releases: v1.11 -- v1.18.
@@ -38,7 +39,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = fc2ed48)
+## What's in the tree (main = 86a6cca)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
