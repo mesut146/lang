@@ -790,6 +790,46 @@ Ownership only — no Rust-like borrows:
   (`normal pass=94 xpass=0`, fmt/trace/path/opt pass, own green incl. the new
   test, leak self-skips). doc/ownership.txt notes the walk.
 
+- Derive: `#derive(Clone)` copies plain values, clones owners (2026-10-19).
+  `generate_clone` called `.clone()` on every non-pointer field, so a struct
+  with a `bool`, `str`, `f64`, array, tuple or plain nested-struct field did
+  not compile at all: std has Clone impls only for i8..u64 and String, and a
+  value has no `clone` method.
+  - `is_clone_copy(decl, helper, type)` (derive.x) decides per field: copy
+    when the type is a primitive, `str` or a slice (views never own), or when
+    the declaration is not generic and the type has no drop glue
+    (`DropHelper::is_drop_type`). Everything else -- String and friends, a
+    #drop struct, a non-primitive field of a *generic* declaration -- keeps
+    `Clone::clone`. The generic case is the careful one: a type parameter (or
+    a type built from one) may own and `DropHelper` cannot decide an
+    unresolved parameter, so those never take the copy path.
+  - the enum arm's copy case is a deref (`let __x = *x;`): its payload
+    bindings are pointers, which is also why the pre-existing pointer case
+    emits `*name` in the returned literal.
+  Tests: `tests/normal/44-derive-clone.x` (plain struct + nested + #drop owner
+  + enum with unit/payload/owned variants + generic; plain `-stdpath`, so the
+  owner is a local #drop type and the `str` fields are covered by the
+  generated body compiling -- x has no `==` on str and the normal gate does
+  not link the std archive). Pre-fix red: `no such method bool::clone(bool)`
+  at `Plain::clone`.
+  Triangle: this changes *generated* code, and the compiler derives Clone on
+  its own `LambdaCallInfo` (resolver.x:105), so B (new sources compiled by the
+  pre-fix compiler) carries the old generated body and cannot equal C.
+  Verified instead: B != C, C == D byte-identical, `nm`/defined-symbol sets
+  identical for B/C/D, and the full suite green *on the fixpoint* C
+  (`normal pass=95 xpass=0`, fmt/trace/path/opt pass, leak self-skips).
+  Observed while validating (all pre-existing, reproducible on the pre-fix
+  compiler, none of them about Clone's field rule):
+  - a *generic* instantiated with a drop-type parameter (`Wrapper<Owner>`)
+    panics in `DropHelper::find_drop_impl` -- "no drop method for
+    Wrapper<Owner>": the per-instantiation Drop impl is not generated;
+  - a generic instantiated with a *std* type (`Wrapper<String>`) does not link
+    in a plain `-stdpath` build (the prelude archive is not linked; the same
+    applies to `.clone()` on a primitive);
+  - a method call on a unit-variant literal (`Kind::Empty.clone()`) reports
+    "get_alloc() not set"; binding it first works.
+  doc/token_macros.txt section 3 and doc/todo now list these.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -812,8 +852,9 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   *proposal* with no consumer: doc/token_macros.txt records why the
   resolver/macros.x stub is unused (the live derive generators are in
   derive.x), the two decisions it needs (compile-time evaluation; token
-  streams as input or output), and the real gaps it found instead -- Clone on
-  plain-value fields (`str`, `bool`) and no `#derive(Display)`.
+  streams as input or output), and the derive gaps it found instead (Clone's
+  field handling, fixed in the entry above; no `#derive(Display)`; a generic
+  over a drop type has no Drop impl, see that entry's "observed" list).
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

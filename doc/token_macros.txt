@@ -47,14 +47,25 @@ parse_stmt/parse_expr.
 None of these need token streams; they are generator bugs/gaps in the
 existing style. Each is a small, user-visible slice:
 
-  a) `#derive(Clone)` is broken for field types without a Clone impl.
-     std has Clone only for i8/u8/i16/u16/i32/u32/i64/u64 and String
-     (ops.x:50..85, string.x:154), but generate_clone emits
-     `let __f = f.clone();` for every field (except pointers, which are
-     special-cased). Verified: `struct S{ s: str; }` + `#derive(Clone)` ->
-     "no such method str::clone(str)"; `struct I{ i: i32; b: bool; }` ->
-     "no such method bool::clone(bool)". Fields that are plain values
-     (primitives, `str`, pointers) should be *copied*, not method-called.
+  a) `#derive(Clone)`: FIXED 2026-10-19 (commit after 6ca6ca6). The generator
+     used to emit `let __f = f.clone();` for every non-pointer field, and std
+     has Clone only for i8/u8/i16/u16/i32/u32/i64/u64 and String
+     (ops.x:50..85, string.x:154), so `struct S{ s: str; }` failed with "no
+     such method str::clone(str)" and a `bool` field with
+     "bool::clone(bool)". Now `is_clone_copy` (derive.x) copies a field whose
+     type is a primitive, `str` or a slice, or -- in a non-generic
+     declaration -- any type with no drop glue; owners (String, a #drop
+     struct, a non-primitive field of a generic declaration) still go through
+     clone(). Test: tests/normal/44-derive-clone.x. Three neighbouring gaps
+     turned up while writing that test and are NOT fixed (all pre-existing,
+     all reproducible on the pre-fix compiler; see the handoff entry):
+     a generic instantiated with a drop-type parameter panics in
+     DropHelper::find_drop_impl ("no drop method for Wrapper<Owner>"); a
+     generic instantiated with a std type (`W<String>`) does not link in a
+     plain -stdpath build (nor does `.clone()` on a primitive, which is what
+     forced the local #drop type in the test); and a method call on a
+     unit-variant literal (`Kind::Empty.clone()`) reports "get_alloc() not
+     set".
   b) no `#derive(Display)`: `{}` on a struct is a resolve error ("no such
      method Display::fmt(P*, Fmt*)") unless the type has a hand-written
      Display. If a default dump is wanted, it is generate_debug's shape with
@@ -136,9 +147,9 @@ C. User-authored code generation, declarative (no CTFE)
    the stub has no consumer, so `parse_ts` + `#derive_macro` would be
    plumbing nobody calls. Keep the stub (it records the intent) but mark it
    as unused (done in this change).
-2. If more derive coverage is wanted, take option A: fix Clone's field
-   handling (3a) and, if a default struct dump is wanted, add
-   `#derive(Display)` (3b). Both are small, both have a pre-fix red test.
+2. If more derive coverage is wanted, take option A. Clone's field handling
+   was done on 2026-10-19 (3a); `#derive(Display)` (3b) is still open and
+   still small, and both have a pre-fix red test.
 3. Leave option C as a language decision with a separate design note. Revisit
    option B only when a concrete generator needs item-level generation and the
    AST assembly is demonstrably worse.

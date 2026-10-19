@@ -37,7 +37,7 @@ func generate_derive(r: Resolver*, decl: Decl*, unit: Unit*, name: str): Impl{
         return generate_drop(decl, unit);
     }
     if(name.eq("Clone")){
-        return generate_clone(decl, unit);
+        return generate_clone(r, decl, unit);
     }
     if(name.eq("Drop")){
         r.err(decl.line, "drop is auto impl");
@@ -66,8 +66,29 @@ func make_impl_m(m: Method*, decl: Decl*, trait_name: str): Impl{
     return make_impl(decl, trait_name);
 }
 
-func generate_clone(decl: Decl*, unit: Unit*): Impl{
+//A field that is a plain value is *copied* instead of cloned: primitives
+//(bool, i8..u64, f32/f64), `str` and slices (views, they never own), and --
+//when the declaration is not generic -- any type with no drop glue (a struct of
+//values is itself a value in x, so its bytes can be copied). Only owners need
+//Clone::clone: String and friends, a #drop struct, and in a *generic*
+//declaration a type parameter or a type built from one (the instantiation
+//decides whether it owns, so those stay on clone()).
+//Pre-fix: every non-pointer field went through `.clone()`, and std has Clone
+//impls only for i8..u64 and String, so `struct S{ s: str; }` + #derive(Clone)
+//did not compile ("no such method str::clone(str)").
+func is_clone_copy(decl: Decl*, helper: DropHelper*, type: Type*): bool{
+    if(type.is_prim() || type.is_str() || type.is_slice()){
+        return true;
+    }
+    if(decl.is_generic){
+        return false;
+    }
+    return !helper.is_drop_type(type);
+}
+
+func generate_clone(r: Resolver*, decl: Decl*, unit: Unit*): Impl{
     let line = decl.line;
+    let helper = DropHelper::new(r);
     let body = Block::new(decl.line, decl.line);
     if(decl.base.is_some()){
         body.list.add(parse_stmt(format("Clone::clone(self as {:?}*);", decl.base.get()), unit, decl.line));
@@ -80,6 +101,10 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
                     if(fd.type.is_pointer()){
                         //then.list.add(parse_stmt(format("printf(\"{}=%p *=%d\\n\", *&fd.name);", &fd.name, &fd.name, &fd.name), unit, line));
                         //then.list.add(parse_stmt(format("let __{} = {};", &fd.name, &fd.name), unit, line));
+                    }else if(is_clone_copy(decl, &helper, &fd.type)){
+                        //plain value: the if-let binding is a pointer to the
+                        //payload, so deref-copy it
+                        then.list.add(parse_stmt(format("let __{} = *{};", fd.name.get(), fd.name.get()), unit, line));
                     }else{
                         then.list.add(parse_stmt(format("let __{} = {}.clone();", fd.name.get(), fd.name.get()), unit, line));
                     }
@@ -135,8 +160,8 @@ func generate_clone(decl: Decl*, unit: Unit*): Impl{
         },
         Decl::Struct(fields)=>{
             for fd in fields{
-                if(fd.type.is_pointer()){
-                    //let <name> = self.<name>;
+                if(fd.type.is_pointer() || is_clone_copy(decl, &helper, &fd.type)){
+                    //let <name> = self.<name>;  (pointer or plain value: a copy)
                     let clone_stmt = parse_stmt(format("let {} = self.{};", fd.name.get(), fd.name.get()), unit, line);
                     body.list.add(clone_stmt);
                 }else{

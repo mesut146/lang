@@ -10,9 +10,10 @@
 //(definition-site resolution), and code-generation macros -- for those see
 //doc/token_macros.txt: the TokenStream/#derive_macro stub in resolver/macros.x
 //is unused, the live derive generators are in derive.x, and the document lists
-//the real remaining gaps (Clone on plain-value fields, no #derive(Display)) plus
-//the two decisions (compile-time evaluation; token streams as input or output)
-//that have to be made before any of it is written.
+//the derive gaps that remain (no #derive(Display); a generic over a drop type
+//has no Drop impl; see its section 3) plus the two decisions (compile-time
+//evaluation; token streams as input or output) that have to be made before any
+//of it is written.
 
 //module members of another unit: after `import dep`, `dep`-side `m::T` /
 //`m::f()` reports "a module's members are only visible in the unit that
