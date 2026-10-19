@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-19. Main: `d05c709` (owns `681a8cc` array places, place
+Date: 2026-10-19. Main: `6ca6ca6` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -9,7 +9,7 @@ user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934`, macro
 hygiene `de51789`, scoped macro calls and `use` `9cf94a4`, the module/`use`
 fixes `36b8bb4` (multi-form printing, a diagnostic instead of the `get_decl`
 panic for a module of another unit), and the ownership expansion walk
-`d05c709`: the else-path re-analysis reaches `Expr::MacroCall` expansions).
+`6ca6ca6`: the else-path re-analysis reaches `Expr::MacroCall` expansions).
 v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
@@ -32,7 +32,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = d05c709)
+## What's in the tree (main = 6ca6ca6)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
