@@ -9,6 +9,13 @@
 //still open: token streams (resolver/macros.x stub) and a body name that is
 //never declared still resolving at the call site (definition-site resolution)
 
+//module members of another unit: after `import dep`, `dep`-side `m::T` /
+//`m::f()` reports "a module's members are only visible in the unit that
+//declares them" (doc/modules.txt). A member's own type is leaf-only (`S`, not
+//`m::S`) and its declaration lives in the other unit, so making it work needs
+//the member type qualified plus emitter support for the foreign decl; it used
+//to panic in get_decl. Scoped cross-unit *macro* calls already work.
+
 //closures
 let f = (a: i32, b: str): i32=>{
 };

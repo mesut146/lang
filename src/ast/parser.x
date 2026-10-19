@@ -322,6 +322,7 @@ impl Parser{
     if(self.is(TokenType::COLON2, TokenType::LBRACE)){
       self.consume(TokenType::COLON2);
       self.consume(TokenType::LBRACE);
+      has_multiple = true;
       list.add(self.name());
       while (self.is(TokenType::COMMA)) {
         self.pop();

@@ -6,8 +6,9 @@ use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
 normalization / `-remap-path-prefix`, `-trace` codegen + `-j` flag forwarding,
 user-defined macros slice 1 `67f3962`/docs `28e2b07`, slice 2 `331e934` and
-macro hygiene `de51789`) + scoped macro calls and `use` for macros (this
-branch). v1.17 released at
+macro hygiene `de51789`) + scoped macro calls and `use` for macros, plus the
+module/`use` fixes (multi-form printing, diagnostic instead of the `get_decl`
+panic) on this branch. v1.17 released at
 `92e3875`; next release v1.18 bootstraps from v1.17. Releases: v1.11 -- v1.17.
 
 ## Design contract (user-approved, do not relitigate without asking)
@@ -707,13 +708,9 @@ Ownership only — no Rust-like borrows:
   `tests/fmt/macro.x`+`.expected` print a scoped call and a `use` too.
   Pre-fix red: main's compiler rejects all of them with "must be called
   unqualified".
-  Observed while validating -- pre-existing, not this batch, and noted rather
-  than fixed:
-  - printing a `use m::{name}` list loses the list (it comes out as `use m;`),
-    so the narrow form cannot round-trip through the formatter yet;
-  - `inner::h()` on a module of an *imported* unit panics in `get_decl`
-    (`Desc{kind: Module}`) for a function, i.e. that path is not implemented;
-    macros resolve there now precisely because the lookup is resolver-side;
+  Observed while validating -- pre-existing, not that batch: the two module
+  bugs below (the `use m::{name}` printing loss and the `get_decl` panic for a
+  module of an imported unit) are fixed in the next entry; what stays open is
   - the ownership visitor's macro branch sits in the `Call*` overload while user
     macro calls parse as `Expr::MacroCall`, so it never sees them. Moves and
     drops inside an expansion still work (the emitter emits the format_map block
@@ -723,6 +720,45 @@ Ownership only — no Rust-like borrows:
   Triangle: no ABI or content change for non-macro programs, B == C
   byte-identical; full suite green (`normal pass=92 xpass=0` = 79 + 3 normal +
   10 fail, fmt/trace/path/opt pass, leak self-skips).
+
+- Module and `use` fixes (2026-10-19). The two module bugs the slice 3b
+  validation had observed, both fixed:
+  - `use m::{name}` prints its list again. `parse_use` never set
+    `UseItem.has_multiple`, and the printer (and `find_use_alias`'s multi-form
+    branch) read exactly that flag, so the formatter dropped the `{...}` and
+    emitted `use m;` -- the narrow form could not round-trip. The parser now
+    sets it where it parses the list. Resolution is unchanged: `find_use_alias`
+    canonicalizes `A` to `m::A`, which is the path the use-prefix scan took
+    anyway (`tests/normal/33-use.x` covers the multi form).
+  - a module *of another unit* gets a diagnostic instead of a panic.
+    `find_imports` probes imported units by leaf name and passed whatever it
+    found on to `get_decl`, including a `Desc{kind: RtKind::Module}` -- and
+    `get_decl` has no module case, so `inner::h()` or `m::S{...}` against an
+    imported unit died with `get_decl() m=Desc{kind: RtKind::Module, ...}`. A
+    module hit is now returned as it is (that RType is what the member lookup
+    in `visit_type_str0` already walks through `get_module`), and the two
+    places that can still meet a foreign module -- that member lookup and a
+    static call scope -- report `... is a module of another unit (<path>): a
+    module's members are only visible in the unit that declares them`. Module
+    members of the *same* unit keep working (`m::a()`, `m::S{...}`), and macros
+    are unaffected (their lookup is resolver-side, so a scoped call into an
+    imported unit's module does work). `visit_type` also surfaces the
+    resolver's own message (`self.err` with the error's line) instead of the
+    bare `visit_type failed for T` panic, so an unknown type now reads
+    `couldn't find type: T` and the new message arrives intact.
+  Tests: `tests/fmt/macro.x` uses the multi form (`use m::{scaled};`), so its
+  checked-in `.expected` is the round-trip; `tests/fail/foreign_mod_type.x`
+  (`let s: m::S = m::S{a: 1}`) and `tests/fail/foreign_mod_call.x`
+  (`m::helper()`) share a new helper unit `tests/helpers/mod_owner.x` -- the
+  fail gate compiles with `-i tests` now, and since the gates glob
+  `tests/<dir>/*.x`, the helper's own directory keeps it out of the test set.
+  Pre-fix red: main's compiler panics in `get_decl` for both fail tests (so the
+  gate reports the wrong error) and the formatter prints `use m;`
+  (FMT-DIFF against the new expected).
+  Triangle: no ABI or content change (no layout/string baked into the
+  compiler), B == C byte-identical; full suite green (`normal pass=94
+  xpass=0` = slice 3b's 92 + the two new fail tests, fmt/trace/path/opt pass,
+  leak self-skips). README/dev docs for the rule live in doc/modules.txt.
 
 ## Known open holes (documented, not yet solved)
 
@@ -735,9 +771,14 @@ bounded to a variable wholly reassigned after the first move. Remaining
 deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
 `extern`/unsafe aliases (no body to check). Open: language features
 (doc/todo), verified 2026-10-18 (details in doc/ownership.txt):
-- no user-defined macros: `macro asd{}` dies in the parser ("invalid top
-  level decl: 'macro'"). `print!`/`format!`/`panic!`/`assert!` are builtins
-  handled in the format/derive path, not a macro system.
+- user-defined macros: LANDED in slices 1--3b (see the entries above);
+  `macro name(p: Expr, n: i32){...}` + `name!(...)`, statement and expression
+  position, macro-level hygiene for the names the body declares, module rules
+  (`m::name!(...)`, `use m;` / `use m::{name}`, top-level macros of imported
+  units). Still open: token streams (resolver/macros.x stub) and definition-site
+  resolution of a body name that is never declared (it still captures the call
+  site); `print!`/`format!`/`panic!`/`assert!` remain builtins handled in the
+  format/derive path, and their names are reserved.
 - no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
   `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
   outer local (tests/normal/23-lambda.x has the failing capture case

@@ -1966,7 +1966,14 @@ impl Resolver{
   func visit_type(self, node: Type*): RType{
     let tmp = self.visit_type0(node);
     if(tmp.is_err()){
-      panic("visit_type failed for {:?}\n", node);
+      //Surface the resolver's own message (file:line + what actually went
+      //wrong: unknown type, bad type arguments, a module of another unit, ...)
+      //instead of a bare "visit_type failed for T" panic.
+      let e: Error = tmp.unwrap_err();
+      self.err(e.line, e.msg);
+      //unreachable: err exits. The return keeps the ownership pass happy
+      //about tmp after the move above.
+      return RType::new("void");
     }
     return tmp.unwrap();
   }
@@ -2150,6 +2157,17 @@ impl Resolver{
           //member lookup inside a module (struct/enum/nested mod):
           //find `name` among the module's items and describe it the
           //same way init_item does, so get_decl/get_method keep working.
+          //
+          //A module of *another* unit resolves (find_imports), but its members
+          //cannot be used from here: a member's own type is leaf-only (`S`, not
+          //`m::S`) and its declaration lives in the other unit, so anything
+          //that needs the declaration again (add_used_decl, the emitter) has
+          //nothing to work with -- that used to panic in get_decl/mapType2.
+          //Report it instead. (A macro is different: its expansion is resolved
+          //here, which is why scoped cross-unit macro calls do work.)
+          if(!scope.desc.path.eq(&self.unit.path)){
+            return Result<RType, Error>::err(Error{format("{:?} is a module of another unit ({}): a module's members are only visible in the unit that declares them", node, self.ctx.display_path(scope.desc.path.str())), node.line});
+          }
           let md = self.get_module(&scope);
           if(md.is_none()){
             return Result<RType, Error>::err(Error{format("scope is not module {:?}", node), node.line});
@@ -2364,6 +2382,13 @@ impl Resolver{
       let cached = resolver.typeMap.get(&type.name);
       if (cached.is_some()) {
         let res: RType = cached.unwrap().clone();
+        //A `mod` of another unit resolves to its own RType: the caller walks
+        //its members through get_module (see visit_type_str0's module branch),
+        //and get_decl cannot describe a module -- it used to panic here, so
+        //`m::S`/`m::f()` on an imported unit's module crashed the compiler.
+        if(res.desc.kind.is_module()){
+          return Option::new(res);
+        }
         let decl = self.get_decl(&res);
         if (decl.is_some() && !decl.unwrap().is_generic) {
           self.addType(str.clone(), res.clone());
@@ -3305,6 +3330,19 @@ impl Resolver{
       }
     }
     let sig = Signature::new(call, self);
+    //A static call scoped to a `mod`: this unit's modules resolve their
+    //functions in MethodResolver (collect_static's module walk), but another
+    //unit's module cannot be entered from here -- its members are only
+    //visible in the unit that declares them (see visit_type_str0's module
+    //branch). Say so instead of the misleading "no such method" that the
+    //lookup would report, and instead of the get_decl panic (rt.desc was
+    //RtKind::Module) this used to hit while resolving the scope.
+    if(call.is_static && sig.scope.is_some()){
+      let scp = sig.scope.get();
+      if(scp.desc.kind.is_module() && !scp.desc.path.eq(&self.unit.path)){
+        self.err(node, format("{:?}::{:?} is in a module of another unit ({}): a module's members are only visible in the unit that declares them", scp.type, call.name, self.ctx.display_path(scp.desc.path.str())));
+      }
+    }
     if(call.scope.is_some() && !call.is_static){
       let scp = sig.args.get(0);
       if(scp.is_dpointer()){

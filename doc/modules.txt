@@ -20,9 +20,15 @@ mod N{
 
 //use forms: alias, multi, scope prefix. locals always win.
 use M::A;       //bare A means M::A
-use M::{A, B};  //same, several at once
+use M::{A, B};  //same, several at once (printed back as written)
 use N;          //bare X tries N::X
 //struct A{...} here would shadow the alias; M::A stays reachable.
+
+//a module's members are only visible in the unit that declares them: from an
+//imported unit, `m::T` / `m::f()` reports "a module's members are only
+//visible in the unit that declares them". That is a current limit (doc/todo),
+//not a rule of the language -- a scoped *macro* call into an imported unit's
+//module does work, because a macro expands where it is called.
 
 //generic members instantiate on use; literals infer from entries:
 mod G{

@@ -22,9 +22,7 @@ mod   m{
     }
 }
 
-use m;
-
-//the multi form `use m::{scaled};` prints as `use m;` today (see handoff)
+use m::{scaled};
 
 func main(){
     let a = 1;

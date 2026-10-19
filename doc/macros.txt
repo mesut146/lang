@@ -58,9 +58,9 @@ name!(arg1, arg2, arg3);//statement or expression position
 //in, including a module of an imported unit. One `macro name` per unit,
 //parameter names must be unique and the builtin names
 //(`format`/`print`/`panic`/`debug_member`) are reserved.
-//Still open: token-stream macros (resolver/macros.x + TokenStream), printing a
-//`use m::{name}` list (it comes out as `use m;`), and definition-site
-//resolution of body names (the capture above).
+//Still open: token-stream macros (resolver/macros.x + TokenStream) and
+//definition-site resolution of body names (the capture above). The narrow
+//`use m::{name}` list form round-trips through the formatter (tests/fmt/macro.x).
 
 
 #env
