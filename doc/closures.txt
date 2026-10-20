@@ -1,0 +1,159 @@
+closures (capture for `| ... |` lambdas): design note
+STATUS: proposal, written 2026-10-20 on main 1fbd553. Nothing implemented.
+Decision already taken (user, 2026-10-20): the `(a: i32): i32 => { ... }` form
+is abandoned -- it parses as a tuple expression and dies on `:`. The syntax we
+keep is the existing lambda, `|a: i32|: i32{ ... }` / `||: void{ ... }`, which
+parses and works today as a non-capturing function pointer. What is missing is
+normal capture: reading an enclosing local inside the body.
+
+0. What exists today (verified on 1fbd553)
+------------------------------------------
+- `Expr::Lambda{params, return_type, body}` (ast.x:1091); the resolver turns a
+  lambda into a generated method `__lambda_<line>_<n>` (resolver.x visit_lambda
+  around 3930) and records it in `Resolver::lambdas`.
+- a lambda *value* is a bare function pointer: the emitter returns
+  `proto.val` (expr_emitter.x:111-117), and calling a lambda-typed value is an
+  indirect call (`rt.lambda_call`, expr_emitter.x visit_lambda_call).
+- `LambdaType{return_type, params, captured}` (ast.x:544) already has a
+  `captured` list, and `make_proto(LambdaType*)` already appends those types to
+  the function signature (compiler_helper.x:283). Nothing ever fills the list:
+  visit_lambda's loop over "params beyond the declared ones" errors
+  "captured params not supported yet" and appends the type. That is a vestige
+  of a half-design: extra *arguments* on a plain function pointer cannot work,
+  because the caller does not have the values.
+- compatibility rejects captured lambdas outright: method_resolver.x:544
+  `panic("lambda has captured")`, :981 `"has captured"`.
+- tests/normal/23-lambda.x has the intended feature commented out (`capture()`
+  and `lambda2()` with nested lambdas).
+
+1. Why the function-pointer value cannot carry captures
+------------------------------------------------------
+A value of type `Lambda{params, return, captured}` is a single pointer to
+code. Captured data has to be supplied by *someone* at the call. The three
+candidates:
+  (a) extra trailing arguments of the generated function -- the call site has
+      no way to know them (this is exactly why `captured` sits unused);
+  (b) a global slot -- no reentrancy, no nesting, wrong for two lambdas;
+  (c) the value also carries the data: a closure object.
+Only (c) works, so a capturing lambda's *value representation* has to change.
+
+2. Two representations
+----------------------
+R1 heap closure object: the value is a pointer to
+       struct __Closure_<line>_<n>{ fn: <function pointer>, <captured fields> }
+   A call loads `fn` from the object and passes the object pointer as a hidden
+   trailing argument; the generated method takes `__env: __Closure_N*` and its
+   body reads captured names as `(*__env).name`. Escaping is the same as any
+   owning value today: the object is heap-allocated and freed by the closure's
+   generated drop.
+R2 by-value struct: the closure object is a value (no heap), copied like any
+   struct. Cheaper and no free, but passing a lambda to a generic
+   (`take<T>(fp, ..)`) copies the object (fine for plain fields, a move/copy
+   question for owners) and a lambda stored in a struct field grows the field
+   by the captured fields -- layout depends on the lambda, which is exactly the
+   thing a function-pointer type hides today.
+Recommendation: R1. It keeps the current "a lambda value is one pointer" shape,
+matches `Box`-style ownership the project already has, and makes copies of the
+value share the closure (which is what a captured-by-value closure means).
+
+3. Capture semantics the design still has to settle
+---------------------------------------------------
+3.1 By value or by reference?
+   By value: the creation site copies (plain values) or moves (owners) the
+   captured values into the object. Reads and writes inside the lambda touch
+   the copy, so a `x += 1` in the body does not change the caller's `x`.
+   By reference (`[&]`-style): the object stores a pointer to the outer local.
+   That is dangling as soon as the enclosing function returns, and x has no
+   lifetimes; it is only sound if the closure cannot escape the frame, which
+   the type system cannot express today.
+   The commented-out test is ambiguous here: `capture()` asserts both
+   `x == 55` inside the lambda after `x += 1` (value semantics) and
+   `x == 56` in the caller after the call (reference semantics).
+   Recommendation: by value only. The commented-out test would be rewritten to
+   the by-value expectations.
+3.2 Which types may be captured?
+   Phase A: plain values -- integers, bool, floats, and aggregates of plain
+   values. Nothing to drop, so the closure object only has to be freed.
+   Phase B: owners (`String`, `List<T>`, user `Drop` types): capture *moves*
+   the value into the object (the ownership pass must treat the creation site
+   as a move), and the closure's generated drop drops the captured fields.
+3.3 What is capturable at all?
+   Enclosing *locals* (including parameters) of the function that creates the
+   lambda, and locals of an enclosing lambda (nested lambdas, cf. `lambda2()`).
+   Globals are not captured: a bare global name resolves as it does today.
+   `self` inside a method: phase B (it is an ordinary value, same rules).
+3.4 Is a capturing lambda still assignable to a plain function type?
+   Today `Type::Function` and `Type::Lambda` are distinct and capture is
+   rejected in the compatibility checks. Recommendation: keep them distinct --
+   a `func(..)` value stays a bare pointer, so only a non-capturing lambda can
+   satisfy it.
+3.5 Ownership and escape
+   The closure object is a normal owning value: captured owners move in at
+   creation, the object is dropped when the closure value dies. Nothing else in
+   the ownership model changes (no borrow tracking: capturing a `str`/slice
+   copies the borrowed view, exactly as storing one in a struct does today).
+
+4. What has to change (implementation sketch)
+---------------------------------------------
+- resolver.visit_lambda: after the declared params are in scope, walk the cloned
+  body for free `Expr::Name` uses. A name bound in an enclosing *function*
+  scope (not a global, not a lambda param) becomes a captured entry
+  (name, type). Rewrite the body: `x` -> `(*__env).x` (Unary deref of the env
+  param, then Access). The generated method gains a trailing
+  `__env: __Closure_N*` param; `lt.captured` gets the types in field order.
+- a synthetic `struct __Closure_<line>_<n>` per capturing lambda, built the way
+  derive.x builds its synthetic impls (AST + visit), with `fn` first and the
+  captured fields after it.
+- creation site (emitter): allocate the object, store the generated method's
+  pointer and the captured values (the values are moved; the ownership walk
+  needs to see that), yield the pointer.
+- call site (visit_lambda_call): if `lt.captured` is non-empty, load `fn` from
+  the object and pass the object pointer as the last argument. This also has to
+  work when the lambda is reached through a type parameter
+  (`take<T>(fp, ..)`: T is instantiated with the lambda type, so `captured` is
+  known there too).
+- drop: generated `Drop` for the closure struct (free the object; phase B also
+  drops captured owners).
+- method_resolver: drop the two `captured` rejections once the call path and
+  the compatibility rules above are in place.
+
+5. Phasing
+----------
+A. Capture *plain* values by value; R1 object; call and drop of the object; no
+   owners, no `self`. This is already useful (`for` callback style,
+   `BTree`-style comparisons) and stays out of the drop/ownership machinery.
+B. Owning captures (move in, drop out), `self` capture, nested-lambda capture
+   chains (an inner creation site reads `(*__env).x` of the outer).
+C. Only if a case appears: by-reference capture with a confinement rule.
+
+6. Questions
+------------
+Q1 R1 (heap closure object, hidden trailing argument) vs R2 (by-value struct).
+   Recommended: R1.
+Q2 By value only for now? Recommended: yes; by-reference needs lifetimes.
+   (The commented-out `capture()` test would be updated to by-value.)
+Q3 Phase A plain values only, owners in phase B? Recommended: yes.
+Q4 Allow capturing `self` (phase B)? Recommended: yes, same rules as a value.
+Q5 Keep `Type::Function` (bare pointer) and `Type::Lambda` (closure) distinct,
+   i.e. a capturing lambda is not assignable to `func(..)`? Recommended: yes.
+Q6 Confirm the ownership rule: capturing an owner moves it at the creation
+   site, and moving/using it afterwards is a use-after-move. Recommended: yes
+   (it is the same rule as passing it by value to a call).
+
+7. Tests and gates per slice
+----------------------------
+A. tests/normal: a lambda reading one enclosing local (and one writing its own
+   copy without touching the caller); two lambdas capturing different values;
+   a capturing lambda passed to a generic `take<T>`; a capturing lambda stored
+   in a struct/local and called later; a nested lambda capturing through the
+   outer one. tests/fail: capturing an owning value ("capturing an owning value
+   is not supported yet", phase A); a capture whose name is also a global
+   (must stay a global, not become a field).
+B. tests/own: captured owner is dropped exactly once (the closure's drop);
+   after capture, using the variable is a use-after-move
+   (tests/fail/dead_closure_capture.x); two closures capturing the same owner
+   is a move error.
+Every slice changes compiler code, so the strict triangle applies (C == D,
+B != C only in the known StateType::clone drift). A capturing lambda that is
+never called must still drop its captured owners exactly once (valgrind gate
+when available).

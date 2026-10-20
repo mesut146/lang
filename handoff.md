@@ -1145,6 +1145,30 @@ Ownership only — no Rust-like borrows:
   - still open for codegen: item position (phase B), fragment kinds (C),
     non-`Expr` list elements, struct-literal entries.
 
+- Docs pass + closure decision (2026-10-20). No compiler changes.
+  - corrected the stale "`tests/normal` links no std" note: since `dea55e6`
+    std links by default, so the runner's plain `c -o .. -stdpath src` builds
+    and links `<out>/std.a` (`tests/normal/46-std-link.x` uses `String::new` in
+    that form). The old text had already misled a batch.
+  - re-checked the open-items list on the current compiler: nested `match`
+    works (the `doc/todo` line is gone); partial turbofish
+    `to_list<i32>(&l)` still fails with "type arg size mismatched" (the item is
+    about the *omitted tail* of the type-argument list; `to_list<i32, i32>`
+    works); `impl E::A`, integer match patterns and `=>` closures are
+    unchanged.
+  - `=>` closures are abandoned (user, 2026-10-20): `(a: i32): i32 => { .. }`
+    parses as a tuple and dies on `:`. The lambda form we keep is
+    `|a: i32|: i32{ .. }`, which parses and works -- what it cannot do is read
+    an enclosing local ("captured params not supported yet").
+  - new design note `doc/closures.txt`: why a bare function pointer cannot
+    carry captures, R1 (heap closure object + hidden trailing argument) vs R2
+    (by-value struct), by-value vs by-reference capture, plain vs owning
+    captures, an implementation sketch, phasing A/B/C and six questions
+    (Q1-Q6). Nothing is implemented; the note says so.
+  - `doc/todo` now points at the note (and keeps the partial-turbofish
+    clarification); `doc/ownership.txt`'s todo probe says capture is the open
+    part.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -1230,17 +1254,14 @@ Compile gaps (pre-existing, not yet fixed):
   elements alike (`tests/fail/dead_elem_*.x`, `dead_field_*.x`); the
   whole-place write stays legal (the revive), and `reinit_places` keeps
   a loop that reassigns the whole var (std/hashmap's rehash) green.
-- Not a compiler bug, but a harness constraint worth knowing: the
-  `tests/normal` runner compiles with `-stdpath src` and no `-std`, so
-  no std lib is linked -- only generic std code monomorphised into the
-  user object resolves. A test that references a non-generic std symbol
-  fails to link: `print("x {}\n", 1)` -> `Fmt__new`; `import std/string`
-  + `String::new` -> `String__new`; any `List<T>` use ->
-  `Fmt__drop_Fmt` (`List<T>::get_malloc`'s `panic("invalid size
-  {}", ..)`). The `std_all` path passes `-flags $LIB_STD` and is
-  unaffected. So a `tests/normal` regression must stick to builtins +
-  monomorphised generics (as tests/normal/39-foreach-continue.x does: a
-  slice loop via `import std/it`, literal print).
+- Harness note (corrected 2026-10-20): `tests/normal` used to compile with
+  `-stdpath src` and no std archive, so only std code monomorphised into the
+  user object resolved and a non-generic std symbol failed to link. Since std
+  links by default (`dea55e6`) the runner's plain `c -o ... -stdpath src`
+  builds and links `<out>/std.a`, so a normal regression may use non-generic
+  std symbols -- `tests/normal/46-std-link.x` uses `String::new` in exactly
+  that form. `-nostd` still restores the bare link line. The earlier text was
+  left over from before `dea55e6` and misled a batch.
 
 ## Validation protocol (mandatory before merging to main)
 

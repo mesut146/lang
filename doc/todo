@@ -28,14 +28,13 @@
 //the member type qualified plus emitter support for the foreign decl; it used
 //to panic in get_decl. Scoped cross-unit *macro* calls already work.
 
-//closures
-let f = (a: i32, b: str): i32=>{
-};
-let f = ()=>5;
-f();
+//closures: the `|a: i32|: i32{ .. }` lambda form parses and works (passed to a
+//generic, called indirectly, `||` nullary). The `(a: i32): i32 => { .. }` form
+//is abandoned (user, 2026-10-20). The missing feature is normal capture: a
+//lambda body cannot read an enclosing local (`captured params not supported
+//yet`, resolver.x visit_lambda). Design note doc/closures.txt; nothing
+//implemented.
 
-
-//match expr complex: match inside match (phi-node testing)
 
 //panic macro: a user macro with a value parameter now works, but `panic` is a
 //reserved builtin macro name; the shape is e.g. `macro my_panic(e: Expr, s: str)`
@@ -43,4 +42,9 @@ f();
 
 func to_list<E, T>(it: T): List<E>
 call like to_list<i32>(..) should work
+//2026-10-20 verified: still open, and it is about *partial* type arguments --
+//`to_list<i32>(&l)` is "to_list(IT) type arg size mismatched", while
+//`to_list<i32, i32>(&l)` resolves and runs. Needs inference for the omitted
+//tail of the type-argument list. (Nested `match` was re-checked the same day
+//and works, so that todo line is gone.)
 
