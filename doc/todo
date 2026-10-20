@@ -64,3 +64,20 @@ call like to_list<i32>(..) should work
 //corrupted struct/`Result`), not the worker or the cache. Until it is found,
 //bin/build_module.sh pins backend to -O0 (see handoff.md batch 8); a user
 //compiling with -O2 could hit the same codegen path.
+
+//backend at -O2 (2026-10-20): an -O2 build of src/backend crashes
+//nondeterministically in `Compiler::compile_dir`, right after "build library".
+//The sret pointer handed to `compile_dir_thread` comes out as garbage (0xa;
+//gdb at +0x30 sees it valid in one run and 0xa in another), valgrind reports
+//the resulting 8-byte invalid write at 0x1a, and the callee's epilogue restores
+//rbx/r12-r15 correctly -- so something corrupts the caller's frame or register
+//save area earlier, layout-dependently. Two "all -O2" builds of the same tree
+//(identical compiler logic, byte-identical products, only embedded source paths
+//differ) disagree on whether they crash, and one of them passes the full suite
+//and is valgrind-clean (src/lsp and src/std under memcheck). That makes it
+//latent memory corruption exposed by -O2 of backend, not a deterministic
+//codegen error. bin/build_module.sh pins backend to -O0 until it is
+//root-caused; std/ast/resolver at -O2 have been stable (suite green
+//repeatedly, valgrind-clean). Next step: bisect inside compile_dir_thread
+//(Worker join / cache merge / link) with a hardware watchpoint on the saved
+//rbx slot, or find what writes 0xa there.

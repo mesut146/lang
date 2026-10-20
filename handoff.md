@@ -1184,12 +1184,14 @@ Ownership only — no Rust-like borrows:
   backend) at -O0 while only `main` was optimized -- and the front end is where
   a user's compile spends most of its time.
   `bin/build_module.sh` now applies `$XOPT` to the library builds too, with
-  `backend` pinned to -O0 for now: a backend built at -O2 *miscompiles* -- the
-  compiler segfaults at the end of `compile_dir` (a 16-byte store through a
-  garbage pointer, right after the archive step; std/ast/resolver at -O2 are
-  fine). That is an x codegen bug at -O2, not a build-flag problem, and is
-  recorded in doc/todo; it is also why the whole compiler cannot simply switch
-  to -O2 today.
+  `backend` pinned to -O0: an -O2 backend crashes nondeterministically in
+  `compile_dir` (a corrupted sret pointer reaches `compile_dir_thread`; valgrind
+  turns it into an 8-byte invalid write at 0x1a right after "build library").
+  Two "all -O2" builds whose products are byte-identical disagree on whether
+  they crash, and one passes the full suite and is valgrind-clean, so this is
+  latent memory corruption that -O2 of backend exposes rather than a
+  deterministic codegen error. doc/todo has the evidence and the next step;
+  std/ast/resolver at -O2 have been stable.
   Measured (module set, `-j` default, same machine): 41.2s -> 35.7s (-13.3%)
   for the user-facing compile of std/ast/resolver/backend. One-time cost: the
   toolchain build runs LLVM's -O2 on three more libraries (~+15s here).

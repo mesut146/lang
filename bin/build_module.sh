@@ -27,8 +27,9 @@ JOBS="-j $($dir/jobs.sh)"
 #XOPT=-O2, but it used to reach only the final src/parser compile, so a released
 #compiler ran its whole front end (std/ast/resolver/backend) unoptimized while
 #users spend most of a compile there. Front-end libraries now take the level.
-#`backend` is pinned to -O0: a backend built at -O2 miscompiles (segfaults in
-#compile_dir right after the archive step; see doc/todo, "backend at -O2").
+#`backend` is pinned to -O0: an -O2 backend crashes nondeterministically in
+#compile_dir (corrupted sret pointer; see doc/todo, "backend at -O2"). Do not
+#unpin it before that is root-caused.
 #The cache keys on XOPT via cache_env.sh, so switching levels cannot reuse
 #foreign objects.
 opt="$XOPT"
