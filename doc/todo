@@ -28,12 +28,16 @@
 //the member type qualified plus emitter support for the foreign decl; it used
 //to panic in get_decl. Scoped cross-unit *macro* calls already work.
 
-//closures: the `|a: i32|: i32{ .. }` lambda form parses and works (passed to a
-//generic, called indirectly, `||` nullary). The `(a: i32): i32 => { .. }` form
-//is abandoned (user, 2026-10-20). The missing feature is normal capture: a
-//lambda body cannot read an enclosing local (`captured params not supported
-//yet`, resolver.x visit_lambda). Design note doc/closures.txt; nothing
-//implemented.
+//closures: `|a: i32|: i32{ .. }` and `||` lambdas work, including capture
+//(phase A, 2026-10-20): a body may read an enclosing local or parameter *by
+//value*; the value is a heap closure object and its drop frees it
+//(tests/normal/49-closure-capture.x, design note doc/closures.txt section 8).
+//The `(a: i32): i32 => { .. }` form is abandoned (user, 2026-10-20).
+//Still open: capturing an owning value ("capturing an owning value is not
+//supported yet"), capture through a nested lambda ("capturing through a lambda
+//is not supported yet"), `self` capture, by-reference capture, and the
+//pre-existing crash when a lambda *returns* a struct (the method uses the sret
+//ABI, the lambda-call prototype returns by value).
 
 
 //panic macro: a user macro with a value parameter now works, but `panic` is a

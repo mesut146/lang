@@ -1,13 +1,15 @@
 closures (capture for `| ... |` lambdas): design note
-STATUS: proposal, written 2026-10-20 on main 1fbd553. Nothing implemented.
+STATUS: phase A implemented 2026-10-20 (see section 8); sections 1-7 are the
+design as proposed and were answered before coding (Q1 R1, Q2 by value, Q3
+plain values first). Phases B and C are still open.
 Decision already taken (user, 2026-10-20): the `(a: i32): i32 => { ... }` form
 is abandoned -- it parses as a tuple expression and dies on `:`. The syntax we
 keep is the existing lambda, `|a: i32|: i32{ ... }` / `||: void{ ... }`, which
 parses and works today as a non-capturing function pointer. What is missing is
 normal capture: reading an enclosing local inside the body.
 
-0. What exists today (verified on 1fbd553)
-------------------------------------------
+0. What existed before phase A (verified on 1fbd553)
+----------------------------------------------------
 - `Expr::Lambda{params, return_type, body}` (ast.x:1091); the resolver turns a
   lambda into a generated method `__lambda_<line>_<n>` (resolver.x visit_lambda
   around 3930) and records it in `Resolver::lambdas`.
@@ -16,15 +18,18 @@ normal capture: reading an enclosing local inside the body.
   indirect call (`rt.lambda_call`, expr_emitter.x visit_lambda_call).
 - `LambdaType{return_type, params, captured}` (ast.x:544) already has a
   `captured` list, and `make_proto(LambdaType*)` already appends those types to
-  the function signature (compiler_helper.x:283). Nothing ever fills the list:
-  visit_lambda's loop over "params beyond the declared ones" errors
-  "captured params not supported yet" and appends the type. That is a vestige
+  the function signature (compiler_helper.x:283). Nothing filled the list:
+  visit_lambda's loop over "params beyond the declared ones" errored
+  "captured params not supported yet" and appended the type. That was a vestige
   of a half-design: extra *arguments* on a plain function pointer cannot work,
-  because the caller does not have the values.
+  because the caller does not have the values. (Phase A keeps the extra
+  arguments and supplies them from the closure object.)
 - compatibility rejects captured lambdas outright: method_resolver.x:544
   `panic("lambda has captured")`, :981 `"has captured"`.
 - tests/normal/23-lambda.x has the intended feature commented out (`capture()`
-  and `lambda2()` with nested lambdas).
+  and `lambda2()` with nested lambdas); its assertions mix by-value and
+  by-reference expectations, so `tests/normal/49-closure-capture.x` (phase A)
+  supersedes it rather than uncommenting it.
 
 1. Why the function-pointer value cannot carry captures
 ------------------------------------------------------
@@ -122,6 +127,7 @@ value share the closure (which is what a captured-by-value closure means).
 A. Capture *plain* values by value; R1 object; call and drop of the object; no
    owners, no `self`. This is already useful (`for` callback style,
    `BTree`-style comparisons) and stays out of the drop/ownership machinery.
+   LANDED 2026-10-20 -- see section 8.
 B. Owning captures (move in, drop out), `self` capture, nested-lambda capture
    chains (an inner creation site reads `(*__env).x` of the outer).
 C. Only if a case appears: by-reference capture with a confinement rule.
@@ -142,13 +148,15 @@ Q6 Confirm the ownership rule: capturing an owner moves it at the creation
 
 7. Tests and gates per slice
 ----------------------------
-A. tests/normal: a lambda reading one enclosing local (and one writing its own
-   copy without touching the caller); two lambdas capturing different values;
-   a capturing lambda passed to a generic `take<T>`; a capturing lambda stored
-   in a struct/local and called later; a nested lambda capturing through the
-   outer one. tests/fail: capturing an owning value ("capturing an owning value
-   is not supported yet", phase A); a capture whose name is also a global
-   (must stay a global, not become a field).
+A. tests/normal/49-closure-capture.x covers: by-value capture (a plain type
+   stays usable at the caller, writes in the body touch the copy), two closures
+   with different captures, a moved closure, a closure passed to a generic
+   `apply<T>`, an aggregate (struct) capture, a captured parameter, a global
+   that must stay a global (read at call time), and one closure created and
+   dropped per loop iteration. tests/fail/closure_capture_owning.x and
+   tests/fail/closure_capture_nested.x pin the two phase-A errors.
+   Not covered on purpose: a closure stored in a struct field or a List (its
+   type cannot be spelled in source yet).
 B. tests/own: captured owner is dropped exactly once (the closure's drop);
    after capture, using the variable is a use-after-move
    (tests/fail/dead_closure_capture.x); two closures capturing the same owner
@@ -157,3 +165,51 @@ Every slice changes compiler code, so the strict triangle applies (C == D,
 B != C only in the known StateType::clone drift). A capturing lambda that is
 never called must still drop its captured owners exactly once (valgrind gate
 when available).
+
+8. What phase A actually does (landed 2026-10-20)
+-------------------------------------------------
+- resolver (visit_lambda / visit_name_opt): an outer *local or parameter*
+  reference inside a lambda becomes an extra trailing parameter of the
+  generated method (the code already did this), its type is recorded in
+  `LambdaType.captured`, and the creation-site read is kept as a synthesized
+  `Expr::Name` in `Resolver::lambda_caps` -- resolved after `inLambda.pop()`
+  and before `dropScope()`, so it binds the enclosing local instead of
+  capturing itself, with a fresh node id from `unit.node(line)` (`Node::new`
+  with one argument takes it as the *id*: using the line made every read share
+  one cache slot, and the emitter then copied the first capture's width into
+  every field -- use `visit_cached`, never re-`getType`, at emit time).
+  Globals are skipped (a global is read at call time).
+  A nested lambda capture and an owning capture are loud errors.
+- `LambdaType::debug` prints `func2(..) => T+[caps]` so two closures with
+  different capture sets never share a mangled instantiation.
+- layout: `closure_payload_type(lt)` is the tuple
+  `(fn, cap1, ...)`: field 0 is the generated function, whose LLVM signature is
+  the declared params followed by the captured values (exactly what
+  `make_proto(LambdaType*)` builds). A tuple type gives the struct layout and
+  the backend's struct cache for free; no synthetic decl is needed.
+- creation (`Expr::Lambda`): `malloc(sizeof payload)`, store `fn`, copy each
+  captured value (`getSize`/`copy`), yield the block pointer as the value.
+- call (`visit_lambda_call`): the value *is* the payload pointer; load `fn`
+  from field 0, append the captured fields (struct fields by address -- the
+  method ABI passes structs as pointers -- plain fields loaded), call.
+- drop (`drop_force`): a capturing lambda is a drop type
+  (`DropHelper::is_drop_type` / `is_drop_rt`) and its drop loads the object
+  pointer out of the place and `free`s it. Phase A captures plain values only,
+  so there is nothing to drop inside the object.
+- `make_proto(LambdaType*)` now mirrors the method ABI for struct parameters
+  (a pointer instead of by value), which also fixes struct parameters of plain
+  lambdas. `free` is declared lazily and reuses a `free` the unit already
+  resolved: declaring it eagerly in `Emitter::init` took the name first and
+  left std's own `free` calls as an undefined `free.1` at link time.
+- Gates: full suite green (`normal pass=108` plus fmt/opt/std/own/fail), the
+  tree rebuilt by its own output is byte-identical, and the known
+  `StateType::clone` drift is unchanged (no codegen change there).
+
+Known holes left (not phase A's job):
+- a lambda that *returns* a struct segfaults (method ABI is sret, the
+  lambda-call prototype returns by value) -- pre-existing, reproducible on the
+  released compiler too, recorded in handoff.md;
+- a capturing lambda is still rejected where a bare function pointer
+  (`func(..)`) is expected, by design (Q5);
+- phase B: owning captures (move in, drop out), `self` capture, nested
+  closures; phase C: by-reference capture (needs a confinement rule).

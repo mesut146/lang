@@ -612,6 +612,29 @@ impl Emitter{
       }
       return;
     }
+    if let Type::Lambda(ltb) = &rt.type{
+      if(ltb.get().captured.empty()){
+        return;
+      }
+      //A capturing lambda owns its heap closure object. Phase A captures only
+      //plain values, so freeing the object is the whole drop (phase B drops
+      //the captured owners first); see doc/closures.txt. `ptr` is the place of
+      //the value, so load the object pointer out of it.
+      //Reuse a `free` that the unit already resolved (std/libc declares it),
+      //otherwise declare it. Declaring it eagerly in init would take the name
+      //first and push the library's own `free` to `free.1` (link error).
+      let protos = self.protos.get();
+      let ll = self.ll.get();
+      let fk = String::new("free");
+      if(protos.funcMap.get(&fk).is_none()){
+        protos.funcMap.add(fk.clone(), make_free(ll));
+      }
+      let fproto = protos.funcMap.get(&fk).unwrap();
+      let obj = ll.loadPtr(ptr.ptr as Value*);
+      let args = [obj];
+      CreateCall(ll.builder, fproto.val, args.ptr(), 1);
+      return;
+    }
     let proto = self.get_drop_proto(rt);
     let args = [ptr.ptr as Value*];
     let ll = self.ll.get();

@@ -411,9 +411,11 @@ an expansion is walked from `Expr::MacroCall` too (own_visitor.x
 `visit_macrocall`, 2026-10-19: `end_scope_if`'s else re-analysis needs it or the
 then path leaks what the else moved through a macro, tests/own/31macro_else.x);
 token streams and definition-site resolution of body names still open);
-|args| lambdas work; the `=>` closure form is abandoned (user, 2026-10-20);
-true capture is still open -- a lambda body reading an enclosing local errors
-"captured params not supported yet" (design note: doc/closures.txt);
+|args| lambdas work, and since 2026-10-20 they capture: a body may read an
+enclosing local/parameter by value, the value is a heap closure object freed by
+its drop (phase A; doc/closures.txt section 8). Still open: owning captures
+(move in, drop out), nested captures, by-reference capture. The `=>` closure
+form is abandoned (user, 2026-10-20);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it
 reliable on a type that also implements Display); match-in-match works
 (phi nodes fine), int-match rejected cleanly (`match expr is not enum:

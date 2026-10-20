@@ -105,6 +105,36 @@ func make_malloc(ll: LLVMInfo*): FunctionInfo{
   setCallingConv(f);
   return FunctionInfo{f, ft};
 }
+func make_free(ll: LLVMInfo*): FunctionInfo{
+  let args = [ll.intPtr(8)];
+  let ft = make_ft(getVoidTy(ll.builder), args.ptr(), 1, false);
+  let lin = ext();
+  let f = make_func(ft, lin, "free".ptr(), ll.module);
+  setCallingConv(f);
+  return FunctionInfo{f, ft};
+}
+
+//The heap object of a capturing lambda (doc/closures.txt, phase A): field 0 is
+//the generated function -- whose LLVM signature takes the declared params and
+//then the captured values, matching make_proto(LambdaType*) -- and fields 1..n
+//are the captured values. A tuple gives the layout and the backend's struct
+//caching for free; a closure *value* is a pointer to one of these.
+func closure_payload_type(lt: LambdaType*): Type{
+  let types = List<Type>::new();
+  let fparams = List<Type>::new();
+  for p in &lt.params{
+    fparams.add(p.clone());
+  }
+  for c in &lt.captured{
+    fparams.add(c.clone());
+  }
+  let ft = FunctionType{return_type: lt.return_type.get().clone(), params: fparams};
+  types.add(Type::Function{.Node::new(-1, -1), type: Box::new(ft)});
+  for cap in &lt.captured{
+    types.add(cap.clone());
+  }
+  return Type::Tuple{.Node::new(-1, -1), type: TupleType{types: types}};
+}
 
 func getTypes(items: List<Item>*, list: List<Decl*>*){
     for (let i = 0;i < items.len();++i) {
@@ -279,11 +309,23 @@ impl Emitter{
   func make_proto(self, ft: LambdaType*): llvm_Type*{
     let ret = self.mapType(ft.return_type.get());
     let args = List<llvm_Type*>::new();
+    //mirror the method ABI used for the generated lambda function
+    //(make_proto(Method*)): a struct parameter is passed as a pointer.
     for prm in &ft.params{
-      args.add(self.mapType(prm));
+      let pt = self.mapType(prm);
+      if(is_struct(prm)){
+        args.add(getPointerTo(pt) as llvm_Type*);
+      }else{
+        args.add(pt);
+      }
     }
     for prm in &ft.captured{
-      args.add(self.mapType(prm));
+      let pt = self.mapType(prm);
+      if(is_struct(prm)){
+        args.add(getPointerTo(pt) as llvm_Type*);
+      }else{
+        args.add(pt);
+      }
     }
     let res = make_ft(ret, args.ptr(), args.len() as i32, false);
     return res as llvm_Type*;

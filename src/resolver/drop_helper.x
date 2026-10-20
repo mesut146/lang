@@ -34,6 +34,10 @@ impl DropHelper{
   }
   func is_drop_type(self, type: Type*): bool{
     if (type.is_str() || type.is_slice()) return false;
+    if(type is Type::Lambda){
+      //a capturing lambda owns its heap closure object
+      return !type.get_lambda().captured.empty();
+    }
     if (!is_struct(type)) return false;
     if (type.is_array()) {
         let elem = type.elem();
@@ -61,6 +65,9 @@ impl DropHelper{
   //return path (x has no defer).
   func is_drop_rt(self, rt: RType*): bool{
     match &rt.type{
+      Type::Lambda(bx)=>{
+        return !bx.get().captured.empty();
+      },
       Type::Array(elem, size)=>{
         return self.is_drop_type(elem.get());
       },

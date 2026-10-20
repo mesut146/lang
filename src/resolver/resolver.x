@@ -204,6 +204,9 @@ struct Resolver{
   pending_drops: List<RType>;
   block_map: HashMap<i32, Block*>;//todo use desc
   lambdas: HashMap<i32, Method>;
+  //per capturing lambda, the expressions that read the captured values at the
+  //creation site (emitted into the closure object; names, in method param order)
+  lambda_caps: HashMap<i32, List<Expr>>;
   inLambda: Stack<i32>;
   extra_imports: List<ImportStmt>;
   in_global_rhs: bool;
@@ -270,6 +273,7 @@ impl Resolver{
       pending_drops: List<RType>::new(),
       block_map: HashMap<i32, Block*>::new(),
       lambdas: HashMap<i32, Method>::new(),
+      lambda_caps: HashMap<i32, List<Expr>>::new(),
       inLambda: Stack<i32>::new(),
       extra_imports: List<ImportStmt>::new(),
       in_global_rhs: false,
@@ -3670,8 +3674,16 @@ impl Resolver{
       let res = self.visit_type(vh.get_type());
       res.vh = Option::new(vh.clone());
       if(!self.inLambda.empty()){
-        if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
-          //reference to outer variable
+        if(vh.kind is VarKind::GLOBAL){
+          //a global is not captured: the body reads it when it runs, like any
+          //other function (copying it into the closure would freeze the value
+          //at creation time).
+        }else if(vh.inLambda == -1 || *self.inLambda.top() != vh.inLambda){
+          //reference to outer variable: it becomes an extra parameter of the
+          //generated method, supplied from the closure object at the call
+          if(self.inLambda.len() > 1){
+            self.err(node, "capturing through a lambda is not supported yet");
+          }
           let m = self.lambdas.get(self.inLambda.top()).unwrap();
           let has = false;
           for prm in &m.params{
@@ -3962,13 +3974,34 @@ impl Resolver{
          }
       }
     
-      //res.vh.set();
+      //a lambda that reads enclosing locals is a closure: each such name is an
+      //extra parameter of the generated method (added by visit_name_opt), and
+      //the values are copied into a heap object at the creation site (the
+      //emitter's Expr::Lambda arm reads `lambda_caps`).
       for(let i = plen;i < mptr.params.len();i += 1){
           let prm = mptr.params.get(i);
-          self.err(expr, format("captured params not supported yet '{}'", prm.line));
           lt.captured.add(prm.type.clone());
-          let c_id = Node::new(expr.line);
-          //res.vh.get().captures.add(Expr::Name{.c_id, prm.name.clone()});
+      }
+      let helper = DropHelper::new(self);
+      for cap in &lt.captured{
+          if(helper.is_drop_type(cap)){
+              self.err(expr, "capturing an owning value is not supported yet");
+          }
+      }
+      self.inLambda.pop();
+      //resolve the capture reads *outside* the lambda: they name enclosing
+      //locals, and resolving them inside would try to capture them again.
+      let caps = List<Expr>::new();
+      for(let i = plen;i < mptr.params.len();i += 1){
+          let prm = mptr.params.get(i);
+          //a fresh node id: Node::new(line) would take `line` as the *id*, so
+          //every capture read would share one cache slot (and one type).
+          let e = Expr::Name{.self.unit.node(expr.line), val: prm.name.clone()};
+          self.visit(&e);
+          caps.add(e);
+      }
+      if(!caps.empty()){
+          self.lambda_caps.add(expr.id, caps);
       }
       let id = Node::new(-1, expr.line);
       let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
@@ -3981,7 +4014,6 @@ impl Resolver{
       res.method_desc = Option::new(desc);
       //print("lambda={:?}\n", mptr);
       lambdaCnt += 1;
-      self.inLambda.pop();
       self.dropScope();
       //ret.drop();
       return res;

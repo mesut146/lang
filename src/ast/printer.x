@@ -886,6 +886,14 @@ impl Debug for LambdaType{  func debug(self, f: Fmt*){
         f.print(" => ");
         self.return_type.get().debug(f);
     }
+    //a capturing lambda's value is a heap closure object, so the captured
+    //types are part of the type (and of its mangled name: two closures with
+    //different captures must not share a generic instantiation).
+    if(!self.captured.empty()){
+        f.print("+[");
+        join(f, &self.captured, ", ");
+        f.print("]");
+    }
   }
 }
 

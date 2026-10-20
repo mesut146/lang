@@ -1169,6 +1169,43 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Capturing lambdas, phase A (2026-10-20). A `|...|` lambda may now read an
+  enclosing local. The resolver already turned such a reference into an extra
+  parameter of the generated method (`VarHolder.inLambda` /
+  `visit_name_opt`) and then errored "captured params not supported yet"; it
+  now records the types in `LambdaType.captured` and the creation-site reads in
+  `Resolver::lambda_caps` (resolved *outside* the lambda scope, so they do not
+  try to capture themselves, and with fresh node ids: `Node::new(line)` takes
+  the line as the *id*, so every read shared one cache slot and the first
+  capture's width was copied for every field -- found by a bool+str+f32 shape,
+  now pinned in the test). The emitter takes their cached type
+  (`visit_cached`) instead of re-visiting the name at emit time, where the
+  resolver is no longer in the enclosing scope. A capturing lambda's value is a heap closure
+  object `{ fn, captured... }` (`closure_payload_type`; a tuple type, so the
+  backend's tuple struct cache supplies the layout): `Expr::Lambda` mallocs it
+  and copies the captured values in, `visit_lambda_call` loads `fn` from field
+  0 and appends the captured fields as arguments, and `drop_force` frees the
+  object (`DropHelper::is_drop_type`/`is_drop_rt` treat a capturing lambda as a
+  drop type). Globals are not captured (the body reads them when it runs).
+  `make_proto(LambdaType*)` now mirrors the method ABI for struct parameters
+  (pointer), which also fixes struct parameters of plain lambdas. `free` is
+  declared lazily and reuses a `free` the unit already resolved: declaring it
+  eagerly in `init` stole the name and left std's own calls as `free.1`
+  (undefined symbol). Semantics are capture-by-value (Q1/Q2/Q3 in
+  `doc/closures.txt`): a plain captured value stays usable at the caller, and
+  writes in the body touch the closure's copy.
+  Tests: `tests/normal/49-closure-capture.x` (by value, two closures, move,
+  generic pass-through, aggregate capture, global not captured, per-iteration
+  drop, parameter capture), `tests/fail/closure_capture_owning.x`,
+  `tests/fail/closure_capture_nested.x`. Full suite green (normal pass=108,
+  fmt, opt, std, own, fail); the tree rebuilt by its own output is
+  byte-identical (`build/m27_out` -> `build/m28_out`).
+  Still open: phase B (owning captures, nested lambdas, `self`) and
+  by-reference capture.
+  Found while testing (pre-existing, not caused here): a lambda that *returns*
+  a struct segfaults -- the generated method uses the sret ABI while the
+  lambda-call prototype returns the struct by value. See open holes.
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see
@@ -1223,6 +1260,15 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
 
 Compile gaps (pre-existing, not yet fixed):
+- A lambda that *returns* a struct segfaults at run time (found 2026-10-20
+  while testing closures; reproducible with the released compiler). The
+  generated method uses the method ABI, which returns a struct through an sret
+  pointer (`make_proto(Method*)`), while the lambda-call prototype
+  (`make_proto(LambdaType*)`) returns the struct by value, so the callee writes
+  through an argument the caller did not pass. Struct *parameters* were fixed
+  in the closures batch (the same prototype now mirrors the method ABI); the
+  sret case needs the RVO path in `visit_lambda_call`. A capturing lambda has
+  the same hole (it is the same call path).
 - (fixed 2026-10-18) A *self-referential* aggregate field (`struct S{
   t: (S, i32); }`) overflowed the stack inside
   `DropHelper::is_drop_type`/`is_drop_decl` -- SIGSEGV during

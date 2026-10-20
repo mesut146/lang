@@ -112,8 +112,43 @@ impl Emitter{
             let r = self.get_resolver();
             let m = r.lambdas.get(&node.id).unwrap();
             let proto = self.protos.get().get_func(m);
-            
-            return proto.val as Value*;
+            let lrt = r.visit_cached(node);
+            let lt0 = Option<LambdaType*>::none();
+            if let Type::Lambda(bx) = &lrt.type{
+              lt0.set(bx.get());
+            }
+            if(lt0.is_none()){
+              return proto.val as Value*;
+            }
+            let lt = lt0.unwrap();
+            if(lt.captured.empty()){
+              return proto.val as Value*;
+            }
+            //a capturing lambda: build the heap closure object { fn, cap... }.
+            //The value is the object pointer; calls load `fn` from it and pass
+            //the captured values (see visit_lambda_call).
+            let ll2 = self.ll.get();
+            let payload = closure_payload_type(lt);
+            let pty = self.mapType(&payload);
+            let size = self.getSize(&payload) / 8;
+            let proto_m = self.protos.get().libc("malloc");
+            let sz = ll2.makeInt(size, 64);
+            let margs = [sz];
+            let blk = CreateCall(ll2.builder, proto_m.val, margs.ptr(), 1);
+            let fnp = CreateStructGEP(ll2.builder, pty, blk, 0);
+            CreateStore(ll2.builder, proto.val as Value*, fnp);
+            let caps = r.lambda_caps.get(&node.id).unwrap();
+            for(let i = 0;i < caps.len();++i){
+              let cap = caps.get(i);
+              //the capture read was resolved by visit_lambda; re-visiting it
+              //here would resolve the name against whatever scope the resolver
+              //happened to be in at emit time (and copy the wrong width).
+              let crt = r.visit_cached(cap);
+              let dst = CreateStructGEP(ll2.builder, pty, blk, i + 1);
+              let src = self.visit(cap);
+              self.copy(dst, src, &crt.type);
+            }
+            return blk;
         },
         Expr::Ques(bx) => {
           let r = self.get_resolver();
@@ -1188,7 +1223,26 @@ impl Emitter{
       let ft = ft0.unwrap();
       let proto = self.make_proto(ft);
       let args = self.emit_call_args(mc, &ft.params);
-      let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
+      let fnval = val;
+      if(!ft.captured.empty()){
+        //a capturing lambda's value is its heap closure object: load the
+        //generated function from field 0 and pass the captured values next
+        //(their order matches the method's extra params and make_proto).
+        let payload = closure_payload_type(ft);
+        let pty = self.mapType(&payload);
+        let fnp = CreateStructGEP(ll.builder, pty, val, 0);
+        fnval = ll.loadPtr(fnp);
+        for(let i = 0;i < ft.captured.len();++i){
+          let ct = ft.captured.get(i);
+          let fp = CreateStructGEP(ll.builder, pty, val, i + 1);
+          if(is_struct(ct)){
+            args.add(fp);
+          }else{
+            args.add(CreateLoad(ll.builder, self.mapType(ct), fp));
+          }
+        }
+      }
+      let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, fnval, args.ptr(), args.len() as i32);
       return res;
     }
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
