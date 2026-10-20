@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-20. Main: `8d71526` (owns `681a8cc` array places, place
+Date: 2026-10-20. Main: `f574496` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -18,8 +18,10 @@ by default `dea55e6`, the user-codegen design note
 `fc2ed48`, linker/archiver discovery on PATH
 `86a6cca`, the macro free-name capture guard `63d6c55`, and user codegen
 phase A (list parameter + repetition, both positions)
-`ce2e35c`/`cb670a9`, the closures design note `1574277`, and capturing
-lambdas (closures phase A: by value, plain values) `8d71526`).
+`ce2e35c`/`cb670a9`, the closures design note `1574277`, capturing
+lambdas (closures phase A: by value, plain values) `8d71526`, the typed
+float-literal fix `74ffd58`, and the LSP build + `lsp` test gate
+`00b6f94`/`f574496`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published). Next release v1.19
 bootstraps from v1.18. Releases: v1.11 -- v1.18.
@@ -43,7 +45,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 8d71526)
+## What's in the tree (main = f574496)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -1179,10 +1181,14 @@ Ownership only — no Rust-like borrows:
   runnable alone as `bin/test.sh <compiler> lsp`: it reuses this run's std
   archive, builds ast on demand and compiles *and links* `src/lsp` with
   `-norun`, so a missing import or a non-exhaustive `match` fails the suite.
-  Verified the step exits 1 on the pre-fix source and 0 after. Suite green
-  (`normal pass=110`, fmt, lsp, opt, std, own, fail). The compiler is
-  untouched by this batch, so the float-literal batch's C == D still holds.
-  README's tool/test lines updated.
+  Verified the step exits 1 on the pre-fix source and 0 after. The first CI run
+  of the gate failed on the packaged toolchain: `src/lsp` is not shipped in
+  `x-toolchain-*`, so the step compiles it from the checkout
+  (`$dir/../src/lsp`, like the formatter) while still taking std/ast from
+  `$out_dir`; re-checked against a simulated packaged toolchain (bin/x + a src
+  tree without `lsp`). Suite green (`normal pass=110`, fmt, lsp, opt, std, own,
+  fail). The compiler is untouched by this batch, so the float-literal batch's
+  C == D still holds. README's tool/test lines updated.
 
 - Typed float literals (2026-10-20). `let k: f64 = 2.5;`,
   `take(1.5)` for a `f64` parameter, a `f64` struct field and a negative float
