@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-20. Main: `f9ef66c` (owns `681a8cc` array places, place
+Date: 2026-10-20. Main: `04ae052` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -25,8 +25,9 @@ float-literal fix `74ffd58`, the LSP build + `lsp` test gate
 deterministic link order `22d22a2`, the type-lookup/copy speedups `4f5c345`,
 geometric `List` growth `e687d07`, the memoized impl lookup `adde952`,
 memoized generated-method signatures `11e72f2`, the drop/is_str/append
-cleanups `56bb6e4`, dead-linkonce elimination before codegen `8a7c2d7`, and
-the -O2 front-end library build `f9ef66c`).
+cleanups `56bb6e4`, dead-linkonce elimination before codegen `8a7c2d7`, the
+-O2 front-end library build `f9ef66c`, and the record of the -O2 backend
+corruption `04ae052`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published). Next release v1.19
 bootstraps from v1.18. Releases: v1.11 -- v1.18.
@@ -50,7 +51,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = f9ef66c)
+## What's in the tree (main = 04ae052)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
