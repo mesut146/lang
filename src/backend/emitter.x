@@ -211,6 +211,16 @@ impl Emitter{
     
     if(self.config.opt_level.is_some()){
       self.ll.get().optimize_module_newpm(self.config.opt_level.get());
+    }else{
+      //No -O, but still drop unreferenced linkonce definitions. A unit emits
+      //a linkonce body for every generic instantiation and every drop/clone
+      //glue method it instantiates (a large file: ~1700 of ~1900 functions),
+      //and emitting an object for all of those whose only purpose is to be
+      //available to *other* units is pure codegen work. Linkonce means a unit
+      //that uses one emits its own copy, so discarding the unused ones here is
+      //exactly the contract the linker relies on (and it makes the emitted
+      //object smaller too).
+      self.ll.get().optimize_pipeline("globaldce");
     }
     self.ll.get().emit_module(llvm_file.str());
     if(!self.config.llvm_only){

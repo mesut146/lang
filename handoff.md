@@ -1176,6 +1176,32 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 7: drop unreferenced linkonce bodies before codegen (2026-10-20).
+  A unit emits a `linkonce` body for every generic instantiation it uses and for
+  the drop/clone/debug glue it generates -- in `resolver.x` that is 1698 of
+  1897 functions. Those bodies exist so that whoever references them can link
+  them; a unit that does not reference one still ran full ISel + object
+  emission for it. `Emitter::compile` now runs the `globaldce` pipeline (the
+  new-PM text pipeline, via the new `LLVMInfo::optimize_pipeline`) when no `-O`
+  is given; with `-O` the level's pipeline already contains it. Discarding an
+  unreferenced `linkonce` body is exactly the contract the linker relies on:
+  every referencing unit emits its own copy, so a live one is never dropped
+  (`nm` symbol sets stay equal, the 30 entries that disappear are undefined
+  references to bodies another object provides).
+  Measured: resolver module `-j 1` 28.2s -> 25.7s (-9%); the parallel module set
+  (std/ast/resolver/backend, `-j` default) 44.0s -> 41.1s (-6.5%). Side effect:
+  a stage1 built from the tree is 4.27MB -> 3.21MB, because the same dead bodies
+  are no longer in the objects the linker reads.
+  Against the 146s serial baseline from before batch 1 the build is now ~3.5x
+  faster (41s, parallel).
+  Guard: `tests/normal/54-generic-link.x` (instantiations reached only through
+  helpers); the real coverage for this change is the multi-unit link path -- a
+  live definition dropped by mistake fails the link in every test that links
+  `std.a`, not silently.
+  Suite green (`normal pass=114`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`); the tree rebuilt by its own output is byte-identical
+  (m55 == m56).
+
 - Compiler speed, batch 6: small hot-path cleanups (2026-10-20).
   Four independent, behavior-preserving items:
   1. Drop-ness is memoized per unit (`Resolver::drop_type_cache`, keyed on the

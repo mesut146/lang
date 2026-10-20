@@ -343,6 +343,16 @@ impl LLVMInfo{
     }
   }
 
+  //Run an explicit new-pipeline-manager pipeline (e.g. "globaldce").
+  //optimize_module_newpm only maps -O levels; this is for the no--O path.
+  func optimize_pipeline(self, pipeline: str){
+    let pipe_c = pipeline.cstr();
+    let error: i8* = Module_optimize(self.module, pipe_c.ptr(), self.tm);
+    if(error as u64 != 0){
+      panic("cant run pipeline {:?}, err: {:?}", pipeline, CStr::new(error));
+    }
+  }
+
   func emit_module(self, file: str){
       let file_c = file.cstr();
       let error: i8* = Module_emit(self.module, file_c.ptr());
