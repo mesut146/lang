@@ -38,6 +38,10 @@
 //is not supported yet"), `self` capture, by-reference capture, and the
 //pre-existing crash when a lambda *returns* a struct (the method uses the sret
 //ABI, the lambda-call prototype returns by value).
+//typed float literal panics the compiler: `let k: f64 = 2.5;` ->
+//"invalid digit '.' at pos 1" (the autocast-literal branch in
+//MethodResolver::is_compatible parses every literal text as i64; `: f32`
+//works, and `2.5 as f64` / an integer value work around it).
 
 
 //panic macro: a user macro with a value parameter now works, but `panic` is a

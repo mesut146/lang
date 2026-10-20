@@ -1233,10 +1233,12 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   see the entries above). For *user*-authored code generation the design note
   is now doc/codegen_macros.txt (declarative list parameters + `$( ... )*`
   repetition; item position and fragment kinds phased behind it).
-- no `=>` closures and no capture: `|a: i32|: i32{ .. }` works,
-  `(a: i32): i32 => { .. }` does not parse, and a lambda cannot read an
-  outer local (tests/normal/23-lambda.x has the failing capture case
-  commented out).
+- closures: `|a: i32|: i32{ .. }` / `||` lambdas work, and since 2026-10-20
+  they capture (phase A: enclosing locals/parameters, by value, plain values
+  only -- `tests/normal/49-closure-capture.x`, `doc/closures.txt` section 8).
+  The `(a: i32): i32 => { .. }` form is abandoned (user, 2026-10-20). Still
+  open: owning captures, capture through an inner lambda, `self`, and
+  by-reference capture (phase B/C in the note).
 - `match` is enum-only: nested match is fine, an integer pattern is
   rejected cleanly (`match expr is not enum: i32`).
 - `?` (doc/throw.txt) works and is used across std/fs.x; turbofish calls
@@ -1261,6 +1263,16 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
 
 Compile gaps (pre-existing, not yet fixed):
+- A *typed float literal* panics the compiler: `let k: f64 = 2.5;` aborts with
+  `unwrap on empty Result, err='invalid digit '.' at pos 1'` (found
+  2026-10-20). The literal-coercion path in `MethodResolver::is_compatible`
+  (method_resolver.x, the `arg_val.is_some()` "autocast literal" branch) runs
+  the *integer* range check `i64::parse(v.str()).unwrap()` for every literal,
+  so the text of a float literal is parsed as an integer. `let k: f32 = 2.5;`
+  works (arg and target are equal, so the branch is skipped), and
+  `let k: f64 = 2.5 as f64;` / `let k: f64 = 2;` work around it. A float
+  literal should skip the integer check (a float target is compatible, an
+  integer target should be a clean error, not a panic).
 - A lambda that *returns* a struct segfaults at run time (found 2026-10-20
   while testing closures; reproducible with the released compiler). The
   generated method uses the method ABI, which returns a struct through an sret
