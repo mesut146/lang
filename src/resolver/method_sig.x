@@ -186,6 +186,8 @@ impl Signature{
         if(m.self.is_some()){
             res.args.add(m.self.get().type.clone());
         }
+        //loop-invariant: a copier per parameter allocated its maps/lists for
+        //every parameter of every candidate signature
         let copier = AstCopier::new(map);
         for(let i = 0;i < m.params.len();++i){
             let prm = m.params.get(i);

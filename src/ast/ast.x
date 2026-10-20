@@ -646,7 +646,16 @@ impl Type{
     return false;
   }
   func is_str(self): bool{
-    return self.eq("str");
+    //same answer as eq("str"), without printing: eq()'s fast path only covers
+    //bare names, so a pointer/slice/generic receiver fell back to print() --
+    //and is_str sits in the drop analysis and the emitter's hot paths.
+    if let Type::Simple(smp) = self{
+      if(smp.scope.is_some() || !smp.args.empty()){
+        return false;
+      }
+      return smp.name.eq("str");
+    }
+    return false;
   }
   func eq(self, s: str): bool{
     //fast path: bare `Name` prints as itself; scoped/generic types

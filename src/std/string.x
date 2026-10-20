@@ -102,9 +102,24 @@ impl String{
     }
     
     func append(self, s: String*): String*{
-        for(let i = 0;i < s.len();++i){
-            self.append(s.get(i));
+        //same grow-once + memcpy as the str overload; a byte at a time through
+        //arr.add() re-checked capacity for every byte (and format!/display
+        //builders are mostly this call)
+        if(s.ptr() as u64 == self.ptr() as u64){
+          //appending a string to itself: the grow below may move the source
+          for(let i = 0;i < s.len();++i){
+              self.append(s.get(i));
+          }
+          return self;
         }
+        let n = s.len() as i64;
+        if(n == 0){
+          return self;
+        }
+        self.arr.reserve(n);
+        let dst: u8* = ptr::get!(self.arr.ptr, self.arr.count);
+        memcpy(dst as i8*, s.ptr() as i8*, n);
+        self.arr.count += n;
         return self;
     }
     func append(self, s: String): String*{

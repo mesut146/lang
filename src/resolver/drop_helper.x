@@ -51,14 +51,22 @@ impl DropHelper{
     let type = &rt.type;
     if (type.is_str() || type.is_slice()) return false;
     if (!is_struct(type)) return false;
-    //See `active`: the type is already being expanded, so it is a cycle.
     let key = type.print();
+    //Drop-ness is structural (decl fields, base, drop flag), so it is stable
+    //for a unit: memoize it. This is queried for every expression the resolver
+    //and the emitter look at, and each miss walked the whole field graph.
+    let hit = self.r.drop_type_cache.get(&key);
+    if(hit.is_some()){
+      return *hit.unwrap();
+    }
+    //See `active`: the type is already being expanded, so it is a cycle.
     if(self.active.get(&key).is_some()){
       return false;
     }
     self.active.add(key.clone(), true);
     let res = self.is_drop_rt(rt);
     self.active.remove(&key);
+    self.r.drop_type_cache.add(key, res);
     return res;
   }
   //Body of is_drop_type(RType*), split out so `active` is removed on every

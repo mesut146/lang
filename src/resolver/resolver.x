@@ -232,6 +232,9 @@ struct Resolver{
   //generated method (name#index) -> its resolved parameter types; see
   //MethodResolver::gen_args_for
   gen_args: HashMap<String, List<Type>>;
+  //type print -> does a value of this type need drop glue; see
+  //DropHelper::is_drop_type. Structural and per unit, so a memo is safe.
+  drop_type_cache: HashMap<String, bool>;
   //`use` aliases: bare name -> canonical type (use M::A / M::{A, B}).
   //Checked after the type cache (locals always win) but before use_items
   //prefixes. Targets resolve lazily on first use.
@@ -295,6 +298,7 @@ impl Resolver{
       impl_cache: HashMap<String, List<ImplHit>>::new(),
       gen_cache: HashMap<String, Desc>::new(),
       gen_args: HashMap<String, List<Type>>::new(),
+      drop_type_cache: HashMap<String, bool>::new(),
       macros: HashMap<String, Macro*>::new(),
       macro_scopes: HashMap<String, Type>::new(),
       macro_depth: 0,

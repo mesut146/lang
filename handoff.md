@@ -1175,6 +1175,32 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 6: small hot-path cleanups (2026-10-20).
+  Four independent, behavior-preserving items:
+  1. Drop-ness is memoized per unit (`Resolver::drop_type_cache`, keyed on the
+     type print). `is_drop_type` walked the whole field graph for every
+     expression the resolver and the emitter looked at, and the code already
+     carried a `todo cache drop types`. The `active` recursion guard still
+     short-circuits cycles and only stable answers are stored.
+  2. `Type::is_str` compares the simple name directly. It went through
+     `eq("str")`, whose fast path only covers bare names, so pointer, slice and
+     generic receivers fell back to printing the whole type.
+  3. `Signature::new` builds its `AstCopier` once instead of once per
+     parameter (it allocated its maps/lists for every parameter of every
+     candidate signature).
+  4. `String::append(String*)` is grow-once + memcpy like the `str` overload;
+     it appended a byte at a time through the capacity-checked path.
+     Self-append keeps the old loop, because growing may move the source.
+  Measured: the parallel module set (std/ast/resolver/backend, `-j` default)
+  44.1s -> 42.0s (~4%). Deliberately small: `emit_object` is now ~29% of a
+  large file's compile and the emitter ~41% inclusive, so what is left is
+  mostly LLVM codegen -- further resolver memoization is into diminishing
+  returns. Guard test: `tests/normal/53-drop-memo.x` (drop through two field
+  levels, counted through a pointer, twice).
+  Suite green (`normal pass=113`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`); the tree rebuilt by its own output is byte-identical
+  (m52 == m53).
+
 - Compiler speed, batch 5: memoized generated-method signatures (2026-10-20).
   `MethodResolver::generateMethod` has a fast path keyed on (method, receiver,
   inferred types), but on every miss it re-checked the instance cache by
