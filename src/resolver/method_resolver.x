@@ -1085,6 +1085,16 @@ impl MethodResolver{
         if (arg_val.is_some()) {
             //autocast literal
             let v: String* = arg_val.get();
+            if (arg.is_float()) {
+                //A float literal's text is not an integer: the range check
+                //below parses it with i64::parse, which panicked on '2.5' (so
+                //`let k: f64 = 2.5;` aborted the compiler). A float target
+                //takes it; an integer target is a clean error.
+                if (target.is_float()) {
+                    return Option<String>::new();
+                }
+                return Option::new(format!("{} is a float literal, not {:?}", v.str(), target));
+            }
             if (v.get(0) == '-') {
                 if (isUnsigned(target)) {
                     return Option::new(format("{} is signed but {:?} is unsigned", v.str(), target));

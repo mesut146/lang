@@ -1170,6 +1170,18 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Typed float literals (2026-10-20). `let k: f64 = 2.5;`,
+  `take(1.5)` for a `f64` parameter, a `f64` struct field and a negative float
+  literal now compile. The literal-coercion branch of
+  `MethodResolver::is_compatible` runs `i64::parse(<literal text>)` for the
+  range check, which panicked on the text of a float literal; it now handles a
+  float argument before that: a float target is compatible, any other target
+  reports `2.5 is a float literal, not i32` (instead of aborting).
+  Tests: `tests/normal/50-float-literal-cast.x` (pre-fix: the panic above, on
+  the released compiler too), `tests/fail/float_literal_as_int.x`. Suite green
+  (`normal pass=110`), C == D byte-identical (`build/m29_out` ->
+  `build/m30_out`).
+
 - Capturing lambdas, phase A (2026-10-20). A `|...|` lambda may now read an
   enclosing local. The resolver already turned such a reference into an extra
   parameter of the generated method (`VarHolder.inLambda` /
@@ -1263,16 +1275,17 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
 
 Compile gaps (pre-existing, not yet fixed):
-- A *typed float literal* panics the compiler: `let k: f64 = 2.5;` aborts with
-  `unwrap on empty Result, err='invalid digit '.' at pos 1'` (found
-  2026-10-20). The literal-coercion path in `MethodResolver::is_compatible`
-  (method_resolver.x, the `arg_val.is_some()` "autocast literal" branch) runs
-  the *integer* range check `i64::parse(v.str()).unwrap()` for every literal,
-  so the text of a float literal is parsed as an integer. `let k: f32 = 2.5;`
-  works (arg and target are equal, so the branch is skipped), and
-  `let k: f64 = 2.5 as f64;` / `let k: f64 = 2;` work around it. A float
-  literal should skip the integer check (a float target is compatible, an
-  integer target should be a clean error, not a panic).
+- (fixed 2026-10-20) A *typed float literal* panicked the compiler:
+  `let k: f64 = 2.5;` aborted with
+  `unwrap on empty Result, err='invalid digit '.' at pos 1'`. The
+  literal-coercion path in `MethodResolver::is_compatible` (method_resolver.x,
+  the `arg_val.is_some()` "autocast literal" branch) ran the *integer* range
+  check `i64::parse(v.str()).unwrap()` for every literal, so a float literal's
+  text was parsed as an integer. `let k: f32 = 2.5;` worked (arg and target are
+  equal there, so the branch is skipped), as did `2.5 as f64` and
+  `let k: f64 = 2;`. The branch now takes a float argument first: a float
+  target is compatible, an integer target is a clean
+  `2.5 is a float literal, not i32`. See the entry above.
 - A lambda that *returns* a struct segfaults at run time (found 2026-10-20
   while testing closures; reproducible with the released compiler). The
   generated method uses the method ABI, which returns a struct through an sret
