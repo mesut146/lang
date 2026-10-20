@@ -352,8 +352,8 @@ impl LLVMInfo{
   }
 
   func emit_obj(self, file: str){
-      verifyModule(self.module);
-
+      //emit_object (cpp_bridge) verifies the module itself; verifying here too
+      //walked every instruction a second time per object.
       let file_c = file.cstr();
       let err = ptr::null<i8>();
       emit_object(self.module, file_c.ptr(), self.tm);

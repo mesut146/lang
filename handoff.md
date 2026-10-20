@@ -1174,6 +1174,39 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 4: memoized impl lookup and a single module verify (2026-10-20).
+  A member call re-scanned the calling unit's item list *and* the item list of
+  every imported unit on every call site, then rebuilt
+  `Signature::make_inferred` once per import on the way down.
+  1. `MethodResolver::get_impl` memoizes the unscoped scan in
+     `Resolver::impl_cache`, keyed on what the scan compares (the erased type
+     name, or the full print when the receiver is scoped, e.g. `M::A`), per
+     unit. Items are fixed after parse, so one scan per (unit, receiver type)
+     is enough; trait searches keep the plain path.
+     Caught mid-batch: keying every receiver on the bare name made `M::A` and
+     `N::A` share an entry -- `tests/normal/32-module-dup.x` failed, which is
+     exactly the aliasing it was written for. The key now carries the scope and
+     `tests/normal/51-impl-lookup-scope.x` pins the scoped-vs-top-level case.
+  2. `Signature::make_inferred` (resolves the receiver's decl and prints each
+     type parameter) is computed once per `collect_member` and passed through
+     the per-import recursion instead of being rebuilt for every import.
+  3. `LLVMInfo::emit_obj` verified the module and then `emit_object`
+     (cpp_bridge) verified it again; the x-side call is gone, so each object is
+     verified once.
+
+  Measured: resolver module `-j 1` 35.3s -> 31.1s (-12%); the parallel module set
+  (std/ast/resolver/backend, `-j` default) 55.4s -> 50.1s (-10%). Against the
+  146s serial baseline from before batch 1 the build is now ~2.9x faster.
+  Profile after (resolver.x alone): `MethodResolver::handle` 24.6% (was 30%),
+  `collect`/`collect_member` 12.7% (was ~19%), `generateMethod` 13.8%
+  (unchanged: mostly genuine instantiation), emitter 32.7% with `emit_object`
+  22.7%, type clones ~8%, `String` clones ~9%. Next: the `generateMethod` miss
+  path (it rebuilds a `Signature` per already-generated method to compare),
+  `Desc`/type-name string clones, and the LLVM side.
+  Suite green (`normal pass=111`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`); the tree rebuilt by its own output is byte-identical
+  (m43 == m44).
+
 - Compiler speed, batch 3: geometric `List` growth (2026-10-20).
   `List<T>::expand` grew the buffer by **10 elements** per reallocation, so
   building an n-element list copied O(n^2/10) elements. The lexer's token list

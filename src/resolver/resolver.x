@@ -220,6 +220,11 @@ struct Resolver{
   resolvers_cache_cur_valid: bool;
   resolvers_cache_extra: i64;
   resolvers_cache_method: String;
+  //erased type print -> the impls in this unit that match it (the memo behind
+  //MethodResolver::get_impl's unit scan). A call site re-scanned this unit and
+  //then every import's unit for each call; items are fixed after parse, so an
+  //entry stays valid for the unit's lifetime.
+  impl_cache: HashMap<String, List<ImplHit>>;
   //memoized generic instantiations: exact (method, scope, inferred-types)
   //key -> Desc of the generated method. Avoids the O(n) scan over prior
   //instantiations in generateMethod (O(n^2) total for hot generics).
@@ -284,6 +289,7 @@ impl Resolver{
       resolvers_cache_cur_valid: false,
       resolvers_cache_extra: 0,
       resolvers_cache_method: "".str(),
+      impl_cache: HashMap<String, List<ImplHit>>::new(),
       gen_cache: HashMap<String, Desc>::new(),
       macros: HashMap<String, Macro*>::new(),
       macro_scopes: HashMap<String, Type>::new(),

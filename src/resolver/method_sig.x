@@ -66,6 +66,16 @@ struct ImplHit{
   scope: Option<Type>;
 }
 
+impl Clone for ImplHit{
+  func clone(self): ImplHit{
+    let scope = Option<Type>::new();
+    if(self.scope.is_some()){
+      scope.set(self.scope.get().clone());
+    }
+    return ImplHit{imp: self.imp, idx: self.idx, scope: scope};
+  }
+}
+
 impl Signature{
     func new(name: String): Signature{
         return Signature{

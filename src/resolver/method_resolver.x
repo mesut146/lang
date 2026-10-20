@@ -28,7 +28,8 @@ impl MethodResolver{
         let list = List<Signature>::new();
         if(sig.mc.unwrap().scope.is_some()){
             let scope_type = sig.scope.get().type.deref_ptr();
-            let r = self.collect_member(sig, scope_type, &list, true, self.r);
+            let map = Signature::make_inferred(sig, scope_type);
+            let r = self.collect_member(sig, scope_type, &list, true, self.r, &map);
             if(r.is_err()){
                 return Result<List<Signature>, String>::err(r.unwrap_err());
             }
@@ -39,7 +40,8 @@ impl MethodResolver{
             if(self.r.curMethod.is_some()){
                 let cur = self.r.curMethod.unwrap();
                 if let Parent::Impl(info)=&cur.parent{
-                    let r = self.collect_member(sig, &info.type, &list, false, self.r);
+                    let map = Signature::make_inferred(sig, &info.type);
+                    let r = self.collect_member(sig, &info.type, &list, false, self.r, &map);
                     if(r.is_err()){
                         return Result<List<Signature>, String>::err(r.unwrap_err());
                     }
@@ -172,9 +174,40 @@ impl MethodResolver{
         if(sig.scope.is_some() && sig.scope.get().is_trait()){
             let actual: Type* = sig.args.get(0).deref_ptr();
             return get_impl(self.r, actual, Option::new(&sig.scope.get().type));
-        }else{
-            return get_impl(self.r, scope_type, Option<Type*>::new());
         }
+        //Memoize the unscoped search on the key the scan compares against, the
+        //erased type print. Every call site used to walk this unit's item list
+        //and then every import's item list; the items are fixed after parse, so
+        //one scan per (unit, receiver type) is enough. Trait searches stay on
+        //the plain path (they key on a trait type, not the receiver).
+        //The key must mirror what the scan matches on: unscoped searches
+        //compare erased names (one impl set per type name, args ignored),
+        //while scoped ones compare the full print -- keying both on the bare
+        //name made M::A and N::A share an entry (see tests/normal/32-module-dup)
+        let key = scope_type.print();
+        if(scope_type.is_simple() && scope_type.as_simple().scope.is_none()){
+            key = print_erased(scope_type);
+        }
+        let cached = self.r.impl_cache.get(&key);
+        if(cached.is_some()){
+            let src = cached.unwrap();
+            let hit_list = List<ImplHit>::new(src.len());
+            for(let i = 0;i < src.len();++i){
+                hit_list.add(src.get(i).clone());
+            }
+            return Result<List<ImplHit>, String>::ok(hit_list);
+        }
+        let res = get_impl(self.r, scope_type, Option<Type*>::new());
+        if(!res.is_ok()){
+            return res;
+        }
+        let found = res.unwrap();
+        let store = List<ImplHit>::new(found.len());
+        for(let i = 0;i < found.len();++i){
+            store.add(found.get(i).clone());
+        }
+        self.r.impl_cache.add(key, store);
+        return Result<List<ImplHit>, String>::ok(found);
     }
 
     func collect_module_funcs(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, origin: Resolver*){
@@ -234,7 +267,11 @@ impl MethodResolver{
         }
     }
 
-    func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool, origin: Resolver*): Result<i32, String>{
+    //`map` is Signature::make_inferred(sig, scope_type), hoisted out of the
+    //per-import recursion: it depends only on the signature and the receiver
+    //type, but used to be rebuilt once for this unit and once for every
+    //import's collect_member.
+    func collect_member(self, sig: Signature*, scope_type: Type*, list: List<Signature>*, use_imports: bool, origin: Resolver*, map: HashMap<String, Type>*): Result<i32, String>{
         let imp_list0 = self.get_impl(sig, scope_type);
         if(imp_list0.is_err()){
             return Result<i32, String>::err(imp_list0.unwrap_err());
@@ -242,7 +279,6 @@ impl MethodResolver{
         let imp_list: List<ImplHit> = imp_list0.unwrap();
         //todo make this take real resolver
 
-        let map = Signature::make_inferred(sig, scope_type);
         for(let i = 0;i < imp_list.len();++i){
             let hit: ImplHit* = imp_list.get(i);
             let imp: Impl* = hit.imp;
@@ -268,7 +304,7 @@ impl MethodResolver{
                 }
                 let scp_args = scope_type.get_args();
                 if(scp_args.empty()){
-                  let sig2 = Signature::new(m, &map, desc, self.r, origin);
+                  let sig2 = Signature::new(m, map, desc, self.r, origin);
                   if(hit.scope.is_some()){
                     //unscoped nested impl header (impl A in mod M): qualify
                     //its types (A) to the call scope (M::A) so check_args
@@ -301,7 +337,7 @@ impl MethodResolver{
                     let ta = m.type_params.get(k);
                     typeMap.add(ta.name().clone(), scp_args.get(k).clone());
                   }
-                  let sig2 = Signature::new(m, &map, desc, self.r, origin);
+                  let sig2 = Signature::new(m, map, desc, self.r, origin);
                   for (let k = 0;k < sig2.args.len();++k) {
                     let arg = sig2.args.get(k);
                     let ac = AstCopier::new(&typeMap);
@@ -318,7 +354,7 @@ impl MethodResolver{
             let resolver = *arr.get(i);
             resolver.init();
             let mr = MethodResolver::new(resolver);
-            let err = mr.collect_member(sig, scope_type, list, false, origin);
+            let err = mr.collect_member(sig, scope_type, list, false, origin, map);
             if (err.is_err()) {
                 return Result<i32, String>::err(err.unwrap_err());
             }
