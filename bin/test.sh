@@ -116,6 +116,24 @@ std_all(){
   done
 }
 
+lsp_all(){
+  #Compile-only gate: `src/lsp` is built by no other step and rotted twice
+  #without anyone noticing (a missing `std/io` import for `CmdArgs`, then the
+  #`Item::Macro` variant that `overlay`'s match did not cover). It reuses the
+  #std archive from this run and builds ast on demand (`-cache` makes it a
+  #few seconds when std/ast are warm).
+  if [ ! -f "$out_dir/std_out/std.a" ]; then
+    $dir/build_std.sh $compiler $out_dir || exit 1
+    rm -f $dir/tmp.txt
+  fi
+  if [ ! -f "$out_dir/ast_out/ast.a" ]; then
+    $dir/build_ast.sh $compiler $out_dir || exit 1
+    rm -f $dir/tmp.txt
+  fi
+  run "$compiler c -norun -cache -out $out_dir -stdpath $stdpath -i $stdpath -name lsp -flags '$out_dir/ast_out/ast.a $out_dir/std_out/std.a' $stdpath/lsp" || exit 1
+  echo "lsp: pass"
+}
+
 std_regex(){
   $dir/build_std.sh $compiler $out_dir || exit 1
   LIB_STD=$(cat "$dir/tmp.txt") && rm -rf $dir/tmp.txt
@@ -383,6 +401,8 @@ elif [ "$pat" == "path" ]; then
   path_all
 elif [ "$pat" == "trace" ]; then
   trace_all
+elif [ "$pat" == "lsp" ]; then
+  lsp_all
 elif [ "$pat" == "fmt" ]; then
   fmt_all
 elif [ "$pat" == "opt" ]; then
@@ -395,6 +415,7 @@ elif [ "$pat" == "all" ]; then
   debug_all
   trace_all
   std_all
+  lsp_all
   own_all
   leak_all
   vararg_all

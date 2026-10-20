@@ -1,4 +1,5 @@
 import std/fs
+import std/io
 import std/result
 
 import ast/ast
@@ -59,7 +60,9 @@ func overlay(cmd: CmdArgs*){
             Const(val)=>{},
             Glob(gl)=>{},
             Module(m)=>{},
-            Use(us)=>{}
+            Use(us)=>{},
+            //user-defined macros are not part of the overlay dump yet
+            Macro(m)=>{}
         }
     }
 }

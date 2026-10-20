@@ -71,7 +71,7 @@ Requirements: Linux x86_64, `g++`/`clang++`, `ar`, and LLVM 19
 ```sh
 bin/stage1.sh <host-toolchain-dir> <version>   # bootstrap with a previous x
 bin/stage2.sh ./build/stage1 <version>         # self-compile → build/stage2
-bin/test.sh ./build/stage2                     # test suite (54 tests + std/fail sets)
+bin/test.sh ./build/stage2                     # test suite (normal/fail/std/own/fmt/lsp/opt/tools/...)
 bin/make_toolchain.sh build/stage2_out/stage2 <out> <version> [-zip]
 ```
 
@@ -85,7 +85,9 @@ module invalidates its dependents automatically.
   ```sh
   ./build/fmt_out/fmt hello.x hello_fmt.x   # build via bin/build_formatter.sh
   ```
-- **LSP** — `src/lsp` (see `bin/build_lsp.sh`).
+- **LSP** — `src/lsp` (see `bin/build_lsp.sh`); the suite compiles it as
+  `bin/test.sh <toolchain> lsp` (included in `all`), since it is not part of
+  any other build.
 - **Debug info** — `x c -g …`; set `XBACKTRACE=1` for native backtraces
   on assertion failures.
 

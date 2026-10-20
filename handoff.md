@@ -1170,6 +1170,20 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- The LSP builds again, and `all` gates it (2026-10-20). `src/lsp` had rotted
+  in two ways: `main.x` used `CmdArgs` without `import std/io`, and the
+  `match` in `overlay` over `unit.items` did not cover the `Item::Macro`
+  variant added with user macros. Both are fixed (the new arm is a no-op:
+  macros are not part of the overlay dump yet); `bin/build_lsp.sh` itself was
+  fine. `bin/test.sh` gained a compile-only `lsp_all` step, in `all` and
+  runnable alone as `bin/test.sh <compiler> lsp`: it reuses this run's std
+  archive, builds ast on demand and compiles *and links* `src/lsp` with
+  `-norun`, so a missing import or a non-exhaustive `match` fails the suite.
+  Verified the step exits 1 on the pre-fix source and 0 after. Suite green
+  (`normal pass=110`, fmt, lsp, opt, std, own, fail). The compiler is
+  untouched by this batch, so the float-literal batch's C == D still holds.
+  README's tool/test lines updated.
+
 - Typed float literals (2026-10-20). `let k: f64 = 2.5;`,
   `take(1.5)` for a `f64` parameter, a `f64` struct field and a negative float
   literal now compile. The literal-coercion branch of
