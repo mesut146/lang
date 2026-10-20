@@ -1174,6 +1174,32 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 5: memoized generated-method signatures (2026-10-20).
+  `MethodResolver::generateMethod` has a fast path keyed on (method, receiver,
+  inferred types), but on every miss it re-checked the instance cache by
+  rebuilding a full `Signature` -- resolving and cloning every parameter type
+  -- for *each already-generated method of that name*, then comparing. That is
+  O(instances^2) type resolutions per generic method (a big file instantiates
+  `List`, `HashMap`, `Option` and friends at many types), and it was 11% of the
+  resolver profile on its own.
+  The resolved parameter list of a generated method is now memoized in
+  `Resolver::gen_args`, keyed by (method name, index into
+  `generated_methods[name]`), and the scan compares against that directly
+  (`is_same_gen`); `handle`'s candidate loop keeps a thin `is_same(sig, sig2)`
+  wrapper. Hash nodes are individually allocated, so the cached entry's address
+  is stable and the scan never copies the parameter list.
+  Measured: resolver module `-j 1` 31.6s -> 28.5s (-10%); the parallel module
+  set (std/ast/resolver/backend, `-j` default) 51.0s -> 44.3s (-13%). Against
+  the 146s serial baseline from before batch 1 the build is now ~3.3x faster.
+  Profile after (resolver.x alone): emitter 38.6% inclusive with `emit_object`
+  28.3% (now the largest single item), `String` clones 10.3%, method resolution
+  13.7% (it was 30% before batch 4). Guard test:
+  `tests/normal/52-generic-instantiation.x` (one generic method at several
+  types, both through `List` and a plain `func`).
+  Suite green (`normal pass=112`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`); the tree rebuilt by its own output is byte-identical
+  (m46 == m47).
+
 - Compiler speed, batch 4: memoized impl lookup and a single module verify (2026-10-20).
   A member call re-scanned the calling unit's item list *and* the item list of
   every imported unit on every call site, then rebuilt

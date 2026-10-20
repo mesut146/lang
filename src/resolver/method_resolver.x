@@ -714,8 +714,8 @@ impl MethodResolver{
         if(arr_opt.is_some()){
             let i = 0;
             for gm in arr_opt.unwrap(){
-                let sig2 = Signature::new(gm.get(), Desc::new(), self.r, self.r);
-                let sig_res: SigResult = self.is_same(sig, &sig2);
+                let args = self.gen_args_for(&m.name, i, gm.get());
+                let sig_res: SigResult = self.is_same_gen(sig, gm.get(), args);
                 let is_err = sig_res is SigResult::Err;
                 if(!is_err){
                     let desc = Desc{
@@ -843,9 +843,34 @@ impl MethodResolver{
         return SigResult::Exact;
     }
 
+    //Resolved parameter types of a generated method, memoized by (method name,
+    //index in generated_methods[name]). The compatibility scan in
+    //generateMethod runs on every gen_cache miss and used to rebuild a
+    //Signature -- resolving every parameter type and cloning each -- for every
+    //already-generated method of that name.
+    func gen_args_for(self, name: String*, idx: i32, m: Method*): List<Type>*{
+        let key = format!("{}#{}", name, idx);
+        let hit = self.r.gen_args.get(&key);
+        if(hit.is_some()){
+            return hit.unwrap();
+        }
+        let sig2 = Signature::new(m, Desc::new(), self.r, self.r);
+        let store = List<Type>::new(sig2.args.len());
+        for(let k = 0;k < sig2.args.len();++k){
+            store.add(sig2.args.get(k).clone());
+        }
+        self.r.gen_args.add(key.clone(), store);
+        //hash nodes are individually allocated, so the entry stays put
+        return self.r.gen_args.get(&key).unwrap();
+    }
+
+    //candidate signature from collect()
     func is_same(self, sig: Signature*, sig2: Signature*): SigResult{
+        return self.is_same_gen(sig, sig2.m.unwrap(), &sig2.args);
+    }
+
+    func is_same_gen(self, sig: Signature*, m: Method*, args: List<Type>*): SigResult{
         let mc = sig.mc.unwrap();
-        let m = sig2.m.unwrap();
         if(!mc.name.eq(&m.name)){
             return SigResult::Err{"not possible".str()};
         }
@@ -866,10 +891,10 @@ impl MethodResolver{
             }
         }
         if(!(m.parent is Parent::Impl)){
-            return self.check_args(sig, sig2);
+            return self.check_args(sig, m, args);
         }
         if(mc.scope.is_none()){//static sibling
-            return self.check_args(sig, sig2);
+            return self.check_args(sig, m, args);
         }
         let imp: ImplInfo* = m.parent.as_impl();
         let ty = &imp.type;
@@ -878,28 +903,27 @@ impl MethodResolver{
         if(tmp is SigResult::Err){
             return tmp;
         }
-        return self.check_args(sig, sig2);
+        return self.check_args(sig, m, args);
         
     }
 
-    func check_args(self, sig: Signature*, sig2: Signature*): SigResult{
+    func check_args(self, sig: Signature*, method: Method*, args: List<Type>*): SigResult{
         let mc = sig.mc.unwrap();
-        let method = *sig2.m.get();
         if (method.self.is_some() && !mc.scope.is_some()) {
             return SigResult::Err{"member method called without scope".str()};
         }
-        if (sig.args.len() != sig2.args.len()){
-            if(!method.is_vararg || method.is_vararg && sig.args.len() < sig2.args.len() ){
-                return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), sig2.args.len())};
+        if (sig.args.len() != args.len()){
+            if(!method.is_vararg || method.is_vararg && sig.args.len() < args.len() ){
+                return SigResult::Err{format("arg size mismatched {} vs {}", sig.args.len(), args.len())};
             }
         }
         let typeParams = get_type_params(method);
         let all_exact = true;
       
-        for (let i = 0; i < sig2.args.len(); ++i) {
+        for (let i = 0; i < args.len(); ++i) {
             let t1: Type = sig.args.get(i).clone();
             let t1p: Type* = sig.args.get(i);
-            let t2: Type* = sig2.args.get(i);
+            let t2: Type* = args.get(i);
             if(i == 0 && method.self.is_some()){
                 if (t2.is_pointer()) {
                     if (!t1.is_pointer()) {

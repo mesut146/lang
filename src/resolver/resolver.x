@@ -229,6 +229,9 @@ struct Resolver{
   //key -> Desc of the generated method. Avoids the O(n) scan over prior
   //instantiations in generateMethod (O(n^2) total for hot generics).
   gen_cache: HashMap<String, Desc>;
+  //generated method (name#index) -> its resolved parameter types; see
+  //MethodResolver::gen_args_for
+  gen_args: HashMap<String, List<Type>>;
   //`use` aliases: bare name -> canonical type (use M::A / M::{A, B}).
   //Checked after the type cache (locals always win) but before use_items
   //prefixes. Targets resolve lazily on first use.
@@ -291,6 +294,7 @@ impl Resolver{
       resolvers_cache_method: "".str(),
       impl_cache: HashMap<String, List<ImplHit>>::new(),
       gen_cache: HashMap<String, Desc>::new(),
+      gen_args: HashMap<String, List<Type>>::new(),
       macros: HashMap<String, Macro*>::new(),
       macro_scopes: HashMap<String, Type>::new(),
       macro_depth: 0,
