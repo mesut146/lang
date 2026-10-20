@@ -1174,6 +1174,22 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 3: geometric `List` growth (2026-10-20).
+  `List<T>::expand` grew the buffer by **10 elements** per reallocation, so
+  building an n-element list copied O(n^2/10) elements. The lexer's token list
+  is exactly that shape, and `String` is a `List<u8>`, so lexing, printing and
+  every `append` paid it; the profile had `List<Token>::add`/`expand` 15.5%
+  inclusive with `String::Clone` 12.1% and `List<u8>::Clone` 11.7% on top
+  (each growth moved every element's String too). `expand` now doubles (min 10)
+  and `reserve` still allocates exactly what a bulk caller asks for.
+  Measured: resolver module `-j 1` 49.2s -> 34.1s (-31%); the parallel module
+  set (std/ast/resolver/backend, `-j` default) 73.5s -> 55.0s (-25%). Against
+  the serial baseline before batch 1 (146s) the build is now 2.65x faster.
+  Correctness: full suite green (`normal pass=110`, fmt, lsp, opt, std, own,
+  fail, `default-jobs: pass`) and the tree rebuilt by its own output is
+  byte-identical (m38 == m39). Memory: capacity is at most 2x the live size,
+  which is the usual doubling trade-off (it was count+10 before).
+
 - Compiler speed, batch 2: cheap type lookup and cheap type copies (2026-10-20).
   Two hot-path fixes, both measured against the batch-1 compiler (same tree,
   `-j 1`, cold resolver module): 65.0s -> 49.3s (-24%); the parallel module set

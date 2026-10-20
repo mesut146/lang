@@ -60,7 +60,15 @@ impl<T> List<T>{
     if(self.count < self.cap){
       return;
     }
-    let tmp = List<T>::get_malloc(self.cap + 10);
+    //Geometric growth. Growing by 10 copied the whole buffer every tenth add,
+    //which is quadratic: the lexer's token list alone was ~15% of a large
+    //file's compile time (and it copies every Token's String with it).
+    //`reserve` (below) still allocates exactly what a bulk caller asks for.
+    let new_cap = self.cap * 2;
+    if(new_cap < 10){
+      new_cap = 10;
+    }
+    let tmp = List<T>::get_malloc(new_cap);
     for(let i = 0;i < self.count;++i){
       let old: T = ptr::deref!(self.get(i));
       ptr::copy!(tmp, i, old);
@@ -68,7 +76,7 @@ impl<T> List<T>{
     }
     free(self.ptr as i8*);
     self.ptr = tmp;
-    self.cap = self.cap + 10;
+    self.cap = new_cap;
   }
 
   //ensure room for `extra` more elems (expand() only guarantees one).
