@@ -30,6 +30,32 @@ func get_version(): str{
   return std::env!("version").unwrap_or("1.00");
 }
 
+//Default worker count for a directory compile: online CPUs from
+///proc/cpuinfo, capped at 8 -- each worker is a full compilation (parser +
+//resolver + emitter + LLVM module), so a 64-core host should not start 64 of
+//them. Falls back to 4 when /proc is unavailable, and never returns 0.
+func cpu_count(): i32{
+    let res = File::read_string("/proc/cpuinfo");
+    if(res.is_err()){
+        return 4;
+    }
+    let txt = res.unwrap();
+    let lines = txt.split("\n");
+    let n = 0;
+    for line in &lines{
+        if(line.starts_with("processor")){
+            ++n;
+        }
+    }
+    if(n > 8){
+        n = 8;
+    }
+    if(n < 1){
+        n = 4;
+    }
+    return n;
+}
+
 func build_std(std_dir: str, out_dir: str): String{
   return build_std(std_dir, out_dir, true);
 }
@@ -188,6 +214,12 @@ func handle_c(cmd: CmdArgs*){
   };
   config.set_file(path.str());
   config.set_out(out_dir.clone());
+  //A directory is compiled one file at a time, so run several files at once
+  //by default. `-j N` still decides N explicitly and `-j 1` forces the serial
+  //path; single-file compiles are unaffected (there is nothing to overlap).
+  if(jobs.is_none() && File::is_dir(config.file.str())){
+    config.set_jobs(cpu_count());
+  }
   if(link_static){
     if(out_name.is_none()){
       out_name.set(format("{}.a", name2));

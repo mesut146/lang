@@ -106,7 +106,7 @@ bridge_lib=$dir/../cpp_bridge/build/libbridge.a
   flags="$flags -lstdc++"
   #todo use toolchain's std dir?
   
-  cmd="$compiler c -norun -cache $XOPT -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+  cmd="$compiler c -norun -cache -j $($dir/jobs.sh) $XOPT -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
   if [ ! -z "$XDEBUG" ]; then
     cmd="$cmd -g"
   fi

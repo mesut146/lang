@@ -283,6 +283,15 @@ inc_all(){
   #job itself, appending to Worker::threads while join() removed from it:
   #concurrent realloc aborted here ("corrupted size vs. prev_size"), and at
   #other timings the worker's completion node was lost and join() spun forever.
+  #the default worker count (directory compiles are parallel unless -j is
+  #given) must not change the output: the same directory built with no -j and
+  #with -j 1 has to be byte identical. Both paths sort the object list before
+  #linking, otherwise the parallel one links in completion order.
+  run "$compiler c -cache -out $out_dir/inc_def -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
+  run "$compiler c -cache -j 1 -out $out_dir/inc_ser -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
+  cmp $out_dir/inc_def/incremental_test $out_dir/inc_ser/incremental_test || \
+    { echo "DEFAULT-JOBS: the default output differs from -j 1"; exit 1; }
+  echo "default-jobs: pass"
   stress=$out_dir/stress_src
   rm -rf $stress && mkdir -p $stress
   for i in $(seq 1 40); do

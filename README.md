@@ -76,7 +76,10 @@ bin/make_toolchain.sh build/stage2_out/stage2 <out> <version> [-zip]
 ```
 
 Builds use a per-module object cache (`-cache`); editing a header-like
-module invalidates its dependents automatically.
+module invalidates its dependents automatically. A directory compile runs
+several files at once by default (CPU count capped at 8): pass `-j N` to
+choose, or `-j 1` for the serial path. The bootstrap scripts take the same
+default from `bin/jobs.sh` (`XJOBS` overrides, `XJOBS=1` is serial).
 
 ## Tools
 

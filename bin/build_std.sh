@@ -18,10 +18,9 @@ out_dir=$build/${name}_out
 mkdir -p $out_dir
 $dir/cache_env.sh $out_dir
 
-# XJOBS=N enables parallel per-file compilation (-j)
-if [ ! -z "$XJOBS" ]; then
-  JOBS="-j $XJOBS"
-fi
+# Parallel per-file compilation by default (bin/jobs.sh: CPU count capped at
+# 8); XJOBS overrides it, XJOBS=1 forces the serial path.
+JOBS="-j $($dir/jobs.sh)"
 
 cmd="$compiler c -static -cache $JOBS -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/std"
 eval $cmd

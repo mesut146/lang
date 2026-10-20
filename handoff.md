@@ -1172,7 +1172,41 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
-- The LSP builds again, and `all` gates it (2026-10-20). `src/lsp` had rotted
+- Compiler speed, batch 1: parallel builds by default (2026-10-20).
+  Measurements first (4 cores, cold, module builds through the scripts):
+  std 3.8s, ast 19.1s, resolver 51.0s, backend 71.8s (146s). A sampling
+  profile (bin/sprof.sh) of the resolver module says the time is spread thin:
+  resolver `visit*` 66% inclusive, of that `visit_type*` 32% and `visit_call`
+  30%; `MethodResolver::*` 35%; deep `Type` clones (`Type::Clone` /
+  `AstCopier::clone<Type>`) 29%; type-clone-adjacent `RType::Clone` 15%;
+  resolver construction for imports (`Resolver::new`, `create_resolver`,
+  `get_resolvers`, `find_imports`) 24%; parser 21%; emitter 28% with 12% inside
+  LLVM object emission. No single hotspot above ~2% self, so the wins are
+  structural (fewer clones, cached import resolvers), not one bad function.
+  This batch takes the structural-free win: directory compiles are parallel by
+  default (`cpu_count()` in parser/main.x, online CPUs from /proc/cpuinfo
+  capped at 8; `-j N` explicit, `-j 1` serial, single-file compiles
+  unaffected), and `bin/jobs.sh` gives the bootstrap scripts the same default
+  (`XJOBS` overrides, including the final `src/parser` compile in
+  stage1/stage2, so a self-build is parallel even when the host toolchain
+  predates this default). Result: 146 -> 97s for the module builds (1.5x) and
+  84.8 -> 40.1s for a 10-file directory compile (2.1x).
+  Required a determinism fix: the sequential path linked in `read_dir` order
+  and the parallel path in completion order, so binaries differed in function
+  layout (a pre-existing `-j` bug, not introduced here; `nm` symbol sets were
+  equal). Both paths now sort the object list before linking. The inc gate adds
+  the guard: the same directory built with no `-j` and with `-j 1` must be byte
+  identical (`default-jobs: pass`). Consequence for the triangle: the first
+  build after this batch differs from its predecessor in layout only (C != D
+  once, m31 vs m32, symbol sets identical); from then on it is stable --
+  m32 == m33 byte identical.
+  Next candidates, in profile order: (a) share initialized resolvers for
+  imported units across the files of one compile (24%), (b) cut the deep
+  `Type` clones on `visit_type` cache hits (29%), (c) cache method signatures
+  per receiver type (35% in MethodResolver). Each needs its own batch and
+  measurement; doc/worker.txt has the parallel-build details.
+
+- The LSP builds again, and `all` gates it (2026-10-20)., and `all` gates it (2026-10-20). `src/lsp` had rotted
   in two ways: `main.x` used `CmdArgs` without `import std/io`, and the
   `match` in `overlay` over `unit.items` did not cover the `Item::Macro`
   variant added with user macros. Both are fixed (the new arm is a no-op:

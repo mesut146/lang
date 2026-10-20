@@ -102,3 +102,30 @@ Regression: bin/test.sh's inc gate now compiles 40 generated modules through
 `-j 4` with MALLOC_CHECK_=3, so the allocator makes the corruption loud instead
 of it aborting later. Pre-fix the gate fails 3/3 (abort); post-fix 20/20
 standalone stress runs and 8/8 inc gates are clean.
+
+default worker count (2026-10-20)
+---------------------------------
+A directory compile (`x c -out ... src/dir/`) now runs the per-file jobs in
+parallel by default: the compiler picks the online CPU count from
+`/proc/cpuinfo`, capped at 8. Each worker is a full compilation (parser +
+resolver + emitter + one LLVM module), so the cap keeps memory bounded on a
+many-core host. `-j N` still decides N explicitly and `-j 1` forces the old
+serial path; single-file compiles are unaffected (nothing to overlap).
+
+The bootstrap/CI scripts take the same default from `bin/jobs.sh` (`XJOBS`
+overrides it, `XJOBS=1` is serial), including the final `src/parser` compile in
+`bin/stage1.sh`/`stage2.sh`, so a self-build is parallel even when the host
+toolchain predates the compiler-side default.
+
+Link order had to become deterministic first: the sequential path collected
+objects in `read_dir` order and the parallel one in completion order, so the
+same sources linked to binaries with a different function layout (and
+`-j 1` vs `-j N` disagreed byte for byte). Both paths now sort the object list
+before `config.link`, and the inc gate asserts that the default and `-j 1`
+outputs are byte identical.
+
+Measured on 4 cores (cold, module builds through the scripts): std 3.8->4.0s,
+ast 19.1->12.9s, resolver 51.0->39.3s, backend 71.8->41.0s (146->97s, 1.5x).
+A 10-file directory compile goes 84.8->40.1s (2.1x). The remainder is
+Amdahl -- `resolver.x` is a single 4.4k-line file -- and per-file speed, see
+the profile in handoff.md.

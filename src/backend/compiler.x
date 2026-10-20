@@ -190,6 +190,11 @@ impl Compiler{
     }
     let obj = cmp.compile(config.file.str());
     compiled.add(obj);
+    //deterministic link/archive order: the sequential path collects in read_dir
+    //order and the parallel one in completion order, so sort both. Otherwise
+    //the same sources produce binaries with different function layout (and
+    //`-j 1` and `-j N` disagree byte for byte).
+    compiled.sort();
     let res = config.link(&compiled);
     return res;
   }
@@ -302,6 +307,7 @@ impl Compiler{
     }
     cache.write_cache();
     let comp = compiled.unwrap();
+    comp.sort();
     return config.link(&comp);
   }
 
