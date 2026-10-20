@@ -777,8 +777,71 @@ impl Type{
 }
 impl Clone for Type{
   func clone(self): Type{
-    return AstCopier::clone(self);
+    return clone_type(self);
   }
+}
+
+//Direct deep copy of a type. `Type::clone` used to go through AstCopier,
+//which allocates a HashMap plus seven more containers per call; the copier's
+//type_map is always empty for a plain clone, so this is the same result at a
+//fraction of the cost. Type clones happen on every cache hit in the resolver's
+//type lookup (and for every macro/derive copy), so this is hot.
+func clone_type(t: Type*): Type{
+  match t{
+    Type::Pointer(bx) => {
+      return Type::Pointer{.Node::new(-1, t.line), type: Box::new(clone_type(bx.get()))};
+    },
+    Type::Array(bx, size) => {
+      return Type::Array{.Node::new(-1, t.line), type: Box::new(clone_type(bx.get())), size: *size};
+    },
+    Type::Slice(bx) => {
+      return Type::Slice{.Node::new(-1, t.line), type: Box::new(clone_type(bx.get()))};
+    },
+    Type::Function(bx) => {
+      let ft = FunctionType{
+        return_type: clone_type(&bx.get().return_type),
+        params: clone_type_list(&bx.get().params),
+      };
+      return Type::Function{.Node::new(-1, t.line), type: Box::new(ft)};
+    },
+    Type::Lambda(bx) => {
+      let ret = Option<Type>::new();
+      if(bx.get().return_type.is_some()){
+        ret.set(clone_type(bx.get().return_type.get()));
+      }
+      let lt = LambdaType{
+        return_type: ret,
+        params: clone_type_list(&bx.get().params),
+        captured: clone_type_list(&bx.get().captured),
+      };
+      return Type::Lambda{.Node::new(-1, t.line), type: Box::new(lt)};
+    },
+    Type::Simple(smp) => {
+      return clone_simple(smp).into(t.line);
+    },
+    Type::Tuple(tt) => {
+      return Type::Tuple{.Node::new(-1, t.line), type: TupleType{types: clone_type_list(&tt.types)}};
+    }
+  }
+}
+
+func clone_type_list(l: List<Type>*): List<Type>{
+  let res = List<Type>::new(l.len());
+  for t in l{
+    res.add(clone_type(t));
+  }
+  return res;
+}
+
+func clone_simple(s: Simple*): Simple{
+  let res = Simple::new(s.name.clone());
+  if(s.scope.is_some()){
+    res.scope = Ptr::new(clone_type(s.scope.get()));
+  }
+  for ta in &s.args{
+    res.args.add(clone_type(ta));
+  }
+  return res;
 }
 impl Eq for Type{
   func eq(self, other: Type*): bool{

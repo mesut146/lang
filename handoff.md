@@ -1173,6 +1173,32 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 2: cheap type lookup and cheap type copies (2026-10-20).
+  Two hot-path fixes, both measured against the batch-1 compiler (same tree,
+  `-j 1`, cold resolver module): 65.0s -> 49.3s (-24%); the parallel module set
+  (std/ast/resolver/backend, `-j` default) 97.8s -> 73.1s (-25%), so against
+  the original serial 146s the whole build is now 2.0x faster.
+  1. `Type::clone` went through `AstCopier`, which allocates a HashMap plus
+     seven more containers per call; the copier's `type_map` is always empty
+     for a plain clone. `Type::clone` is now `clone_type`/`clone_simple`
+     (direct recursive copy, same ids/line as before). Type clones are what a
+     `visit_type` cache hit returns, so this was the single biggest cost
+     (29% inclusive before, 10% after).
+  2. `get_resolvers` keyed its memo on `curMethod.path`, but only a *generic*
+     method adds its unit's imports transitively, so the cache missed once per
+     method and re-ran the import list build plus a `realpath`/`is_file` per
+     import on every rebuild. The key now includes the method only when it is
+     generic (18.4% inclusive after, was 24.2%).
+  Profile after (resolver.x alone): `visit_type*` 32% -> 14%, `Type` clone
+  29% -> 10%, `MethodResolver::*` 31%, resolver construction 18%, parser 18%,
+  emitter inclusive 47% with 18% in LLVM object emission (this file is 4.4k
+  lines, so codegen is now a large share). Next candidates: a
+  per-(receiver type, method) signature cache in `MethodResolver` (31%), then
+  the per-file import resolver setup (18%) and the LLVM/emitter side.
+  Suite green (`normal pass=110`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`); the tree rebuilt by its own output is byte-identical
+  (m35 == m36).
+
 - Compiler speed, batch 1: parallel builds by default (2026-10-20).
   Measurements first (4 cores, cold, module builds through the scripts):
   std 3.8s, ast 19.1s, resolver 51.0s, backend 71.8s (146s). A sampling

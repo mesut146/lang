@@ -672,8 +672,12 @@ impl Resolver{
     //hot path: imports are fixed during resolve except for extra_imports
     //growth and curMethod changes, so memoize the resolver list.
     //Both include_cur variants are cached separately.
+    //Only a *generic* method adds its unit's imports transitively (see the
+    //`type_params` branch below), so keying on every method's path made the
+    //cache miss once per method and re-stat/re-realpath each import on the
+    //rebuild. Everything else about the list is fixed for the unit.
     let cur_method = "".str();
-    if(self.curMethod.is_some()){
+    if(self.curMethod.is_some() && !self.curMethod.unwrap_ptr().type_params.empty()){
       cur_method = self.curMethod.unwrap_ptr().path.clone();
     }
     let key_ok = self.resolvers_cache_extra == self.extra_imports.len()
