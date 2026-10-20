@@ -23,7 +23,19 @@ $dir/cache_env.sh $out_dir
 # 8); XJOBS overrides it, XJOBS=1 forces the serial path.
 JOBS="-j $($dir/jobs.sh)"
 
-cmd="$compiler c -static -cache $JOBS -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $XLIBSRC"
+#Optimization level. The release build (bin/build.sh, stage1/stage2.sh) passes
+#XOPT=-O2, but it used to reach only the final src/parser compile, so a released
+#compiler ran its whole front end (std/ast/resolver/backend) unoptimized while
+#users spend most of a compile there. Front-end libraries now take the level.
+#`backend` is pinned to -O0: a backend built at -O2 miscompiles (segfaults in
+#compile_dir right after the archive step; see doc/todo, "backend at -O2").
+#The cache keys on XOPT via cache_env.sh, so switching levels cannot reuse
+#foreign objects.
+opt="$XOPT"
+if [ "$name" = "backend" ]; then
+  opt=""
+fi
+cmd="$compiler c -static -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $XLIBSRC"
 eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"

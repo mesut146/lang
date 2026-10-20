@@ -1176,6 +1176,30 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 8: the shipped compiler was built half-unoptimized (2026-10-20).
+  `bin/build.sh` passed `$XOPT` (CI sets `-O2`) only to the final `src/parser`
+  compile: `build_std.sh`/`build_ast.sh`/`build_resolver.sh`/`build_module.sh`
+  never saw it, so every release ran its whole front end (std/ast/resolver/
+  backend) at -O0 while only `main` was optimized -- and the front end is where
+  a user's compile spends most of its time.
+  `bin/build_module.sh` now applies `$XOPT` to the library builds too, with
+  `backend` pinned to -O0 for now: a backend built at -O2 *miscompiles* -- the
+  compiler segfaults at the end of `compile_dir` (a 16-byte store through a
+  garbage pointer, right after the archive step; std/ast/resolver at -O2 are
+  fine). That is an x codegen bug at -O2, not a build-flag problem, and is
+  recorded in doc/todo; it is also why the whole compiler cannot simply switch
+  to -O2 today.
+  Measured (module set, `-j` default, same machine): 41.2s -> 35.7s (-13.3%)
+  for the user-facing compile of std/ast/resolver/backend. One-time cost: the
+  toolchain build runs LLVM's -O2 on three more libraries (~+15s here).
+  Correctness: a program built by the all--O0 compiler, by the old
+  (parser-only -O2) one and by the new one is byte-identical; suite green
+  (`normal pass=114`, fmt, lsp, opt, std, own, fail, `default-jobs: pass`);
+  the tree rebuilt by its own output is byte-identical (m63 == m64).
+  PGO is *not* part of this: it needs a compiler that understands a profile
+  (the bootstrap host v1.18 cannot), llvm-profdata and the compiler-rt profile
+  runtime locally, and would buy less than this did for far more CI machinery.
+
 - Compiler speed, batch 7: drop unreferenced linkonce bodies before codegen (2026-10-20).
   A unit emits a `linkonce` body for every generic instantiation it uses and for
   the drop/clone/debug glue it generates -- in `resolver.x` that is 1698 of

@@ -55,3 +55,12 @@ call like to_list<i32>(..) should work
 //tail of the type-argument list. (Nested `match` was re-checked the same day
 //and works, so that todo line is gone.)
 
+//backend at -O2 miscompiles (2026-10-20): building src/backend with -O2 (the
+//rest of the compiler is fine) makes the resulting compiler segfault at the
+//end of `compile_dir`, right after "build library" -- gdb shows a 16-byte
+//store through a garbage pointer (rbx=0xa) in the return path that builds the
+//`Result<String, CompilerError>`. It reproduces with -j 1 and without -j, and
+//with -O2 on backend alone, so it is generated code failing under -O2 (a
+//corrupted struct/`Result`), not the worker or the cache. Until it is found,
+//bin/build_module.sh pins backend to -O0 (see handoff.md batch 8); a user
+//compiling with -O2 could hit the same codegen path.
