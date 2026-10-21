@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-21. Main: `2118e6f` (owns `681a8cc` array places, place
+Date: 2026-10-21. Main: `d094828` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -30,8 +30,8 @@ cleanups `56bb6e4`, dead-linkonce elimination before codegen `8a7c2d7`, the
 corruption `04ae052`, the resolver name-shadowing fix `d640a2b` that explains
 it, the String/List hot-path batch `7e4201f`, the lazy-List/reserve batch
 `f48aaaa`, the std node rename `ba6af50` that keeps the bootstrap able to
-build it, the import/hash/cmp batch `23d1132`, and `#[inline]` support
-`2118e6f`).
+build it, the import/hash/cmp batch `23d1132`, `#[inline]` support
+`2118e6f`, and the lambda/function-pointer struct-return ABI fix `d094828`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 v1.19 released at `6381a27` (tag `v1.19`, CI run 39586272340 green: all three
