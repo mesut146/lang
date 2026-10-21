@@ -33,8 +33,12 @@ it, the String/List hot-path batch `7e4201f`, the lazy-List/reserve batch
 build it, the import/hash/cmp batch `23d1132`, and `#[inline]` support
 `2118e6f`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
-aarch64 and termux toolchains built, tested and published). Next release v1.19
-bootstraps from v1.18. Releases: v1.11 -- v1.18.
+aarch64 and termux toolchains built, tested and published).
+v1.19 released at `6381a27` (tag `v1.19`, CI run 39586272340 green: all three
+toolchains built from the v1.18 bootstrap, tested and published). The published
+x86_64 artifact reports `x version 1.19` and compiles+runs the guards added in
+this cycle (`57-string-bytes`, `59-str-cmp-hash`, `60-inline-attr`). Next
+release v1.20 bootstraps from v1.19. Releases: v1.11 -- v1.19.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
