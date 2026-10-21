@@ -184,12 +184,23 @@ impl str{
     func cmp(self, s: str): i32{
       //lengths first (also preserves the trailing-NUL semantics of
       //real_len), then a single memcmp instead of per-byte checked loads.
-      let ll = self.real_len();
-      let rl = s.real_len();
+      //real_len is inlined here: cmp is the busiest comparison in the
+      //compiler (~20M calls for a large file) and each call made two more
+      //out-of-line calls just to look at the last byte.
+      let lp = self.ptr();
+      let rp = s.ptr();
+      let ll = self.len();
+      let rl = s.len();
+      if(ll > 0 && ptr::deref!(ptr::get!(lp, ll - 1)) == 0){
+        ll = ll - 1;
+      }
+      if(rl > 0 && ptr::deref!(ptr::get!(rp, rl - 1)) == 0){
+        rl = rl - 1;
+      }
       if(ll < rl) return -1;
       if(ll > rl) return 1;
       if(ll == 0) return 0;
-      let r = memcmp(self.ptr() as i8*, s.ptr() as i8*, ll as u64);
+      let r = memcmp(lp as i8*, rp as i8*, ll as u64);
       if(r < 0) return -1;
       if(r > 0) return 1;
       return 0;

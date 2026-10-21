@@ -2499,7 +2499,17 @@ impl Resolver{
         return Option::new(res);
       }
       let decl = self.get_decl(&res);
-      if(!type.args.empty() && decl.is_some()){
+      if(type.args.empty()){
+        //plain use: the first import that owns the name wins, exactly as
+        //before -- keep that path one-step, most lookups have no args and
+        //should not scan every import of the unit.
+        if(decl.is_some() && !decl.unwrap().is_generic){
+          self.addType(str.clone(), res.clone());
+          self.add_used_decl(decl.unwrap());
+        }
+        return Option::new(res);
+      }
+      if(decl.is_some()){
         let d = decl.unwrap();
         if(d.is_generic && d.type.get_args().len() == type.args.len()){
           return Option::new(res);

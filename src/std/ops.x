@@ -270,13 +270,16 @@ impl Hash for i64{
 impl Hash for str{
   func hash(self): i64{
     let x: i64 = 0;
-    let m: i64 = 1i64 << 31;
     //pointer walk: `self.get(i)` was a call plus a bounds check per byte, and
-    //hash is the top entry point of every map/set lookup in the compiler
+    //hash is the top entry point of every map/set lookup in the compiler.
+    //`x % (1 << 31)` is a 64-bit division, and since the mask keeps x in
+    //[0, 1<<31) the operands are never negative, so the modulo is an AND.
+    //Same value, no idiv per byte.
+    let mask: i64 = (1i64 << 31) - 1;
     let p = self.ptr();
     let n = self.len();
     for(let i = 0;i < n;++i){
-      x = (x * 31 + ptr::deref!(ptr::get!(p, i))) % m;
+      x = (x * 31 + ptr::deref!(ptr::get!(p, i))) & mask;
     }
     //print("hash {}={:?}\n", self, x);
     return x;

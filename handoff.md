@@ -1181,6 +1181,45 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 12: import lookup, hash and cmp (2026-10-21).
+  Three changes, all value-preserving:
+  1. `Resolver::find_imports` scans every import only when the use has type
+     arguments. A plain lookup (no args) takes the first import that owns the
+     name and returns, exactly as before the shadowing fix: the scan-all loop
+     d640a2b introduced ran for *every* type lookup and showed up as ~2.5% on
+     the module set. The generic-arity preference is unchanged.
+  2. `str::hash` computed `x % (1 << 31)` per byte, a 64-bit division, and at
+     -O0 nothing folds the constant. The mask keeps x in [0, 1<<31) and the
+     multiply-add of two non-negative values cannot go negative, so the
+     operands are never negative and the modulo is an AND. Same values, no
+     idiv; hash is the entry point of every map/set lookup.
+  3. `str::cmp` inlines the trailing-NUL trim: one `len()` and one raw
+     last-byte load instead of two `real_len()` calls. cmp is the busiest
+     comparison in the compiler (~20M calls for a single resolver file, mostly
+     from map probes).
+  Measured (module set, interleaved rounds): 24.1/24.4s -> 23.3/23.3s, ~-3.5%.
+  The item-by-item pairs taken while developing: find_imports 24.07 -> 23.46
+  (-2.5%), hash+cmp 23.9 -> 22.7 (-4.5%).
+  Rejected in the same session, with numbers, so nobody re-does them:
+  - `dce` in the -O0 pipeline (to delete the loads the emitter leaves behind
+    for skipped `Drop::drop` calls): 22.60 -> 22.58, i.e. nothing. The cost of
+    `List<u8>::drop_elems` is the loop itself, not the dead load.
+  - Dropping the backend `-O0` pin: backend at -O2 is worth -2.3%
+    (23.21 -> 22.80) and is *safe* now that std's node types are renamed (a
+    stage1 built by the v1.18 bootstrap with an -O2 backend emits the correct
+    `[24 x i8]` and passes the suite), but the pin is a guard against the
+    bootstrap, not against the current compiler: the release path still builds
+    with v1.18. Revisit when the shipped bootstrap contains the resolver fix.
+    Note for then: linkonce helpers (`List`/`String`/`str`) are emitted by
+    every module that uses them, so the linker can keep the backend's -O0 copy
+    of a helper that std/ast/resolver compiled at -O2 -- the pin therefore
+    de-optimizes shared helpers too, which is why it is worth more than the
+    backend module's own 1/3 share suggests.
+  Correctness: suite green (`normal pass=118`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`), C == D byte-identical, and
+  `tests/normal/59-str-cmp-hash.x` pins cmp's trailing-NUL/length ordering,
+  eq, hash consistency and a 2000-key map round-trip.
+
 - Compiler speed, batch 11: lazy lists and geometric reserve (2026-10-21).
   callgrind on a single-file compile (`src/resolver/resolver.x`, which includes
   the std build) put the allocation cluster at ~11% of instructions
