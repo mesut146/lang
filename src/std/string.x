@@ -31,7 +31,6 @@ impl String{
     func new(s: str): String{
       let res = String::new(s.len());
       res.append(s);
-      res.str().check_all();
       return res;
     }
     
@@ -55,12 +54,12 @@ impl String{
 
     func new(arr: [u8]): String{
      let ptr = arr.ptr();
-     let len = arr.len();
+     let len = arr.len() as i64;
      let s = String::new(len);
-     for(let i = 0;i < len;++i){
-       s.append(arr[i]);
+     if(len > 0){
+       memcpy(s.ptr() as i8*, ptr as i8*, len as u64);
+       s.arr.count = len;
      }
-     s.str().check_all();
      return s;
     }      
 
@@ -77,11 +76,13 @@ impl String{
     }
 
     func str(self): str{
-        return str{self.slice()};
+        //`self.slice()` went through two calls (slice -> len -> arr.slice) and
+        //this is on every eq/hash/print path; the buffer already is the slice.
+        return str{self.arr.ptr[0..self.arr.count]};
     }
 
     func slice(self): [u8]{
-      return self.arr.slice(0, self.len());
+      return self.arr.ptr[0..self.arr.count];
     }
 
     func ptr(self): i8*{
@@ -168,7 +169,14 @@ impl String{
 
 impl Clone for String{
   func clone(self): String{
-    return String{self.arr.clone()};
+    //byte-wise List::clone cost a Clone::clone + a checked add per byte
+    let n = self.arr.count;
+    let res = String::new(n);
+    if(n > 0){
+      memcpy(res.ptr() as i8*, self.ptr() as i8*, n as u64);
+      res.arr.count = n;
+    }
+    return res;
   }
 }
 

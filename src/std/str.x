@@ -77,24 +77,6 @@ impl str{
       return self.indexOf(s, pos) == pos;
     }
 
-    func is_valid(self, c: i8){
-      if(c == 0) return;
-      if(c >= '0' && c <= '9') return;
-      if(c >= 'a' && c <= 'z') return;
-      if(c >= 'A' && c <= 'Z') return;
-      let arr = ['"', '\'', '\n','\r','\t', ' ', '{', '}', '(',')','=','*','+','-','/',':',';','!','%',',','.','^','$','&','|','[',']','?','\\','_','<','>','~','#', '`'];
-      for(let i = 0;i < arr.len();++i){
-        if(arr[i] == c) return;
-      }
-      panic("str::is_valid ({})='{}'\nbuf={}", c as i32, c, self);
-    }
-
-    func check_all(self){
-      for(let i = 0;i < self.len();++i){
-        self.is_valid(self.buf[i]);
-      }
-    }
-
     func indexOf(self, ch: i32, off: i32): i32{
       self.check(off);
       let i = off;

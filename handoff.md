@@ -1179,6 +1179,43 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 10: String/List hot paths (2026-10-21).
+  Re-profiled after batch 8 (the front end is -O2 now). The sampler in
+  `bin/sprof.sh` is no longer usable: it calls `backtrace()` from a SIGPROF
+  handler, which is not async-signal-safe and now makes the -O2 compiler fail
+  on `src/resolver/progress.x`. Used `perf` instead (`apt install
+  linux-tools-generic`; the wrapper `/usr/bin/perf` wants a matching
+  linux-tools-<kernel> package that does not exist for 6.6.157, so call
+  `/usr/lib/linux-tools/*/perf` directly). With `perf record -F 499 -g
+  --call-graph dwarf` the profile is dominated by `String`/`str`/`List<u8>`
+  plumbing: every byte access was a chain of out-of-line calls.
+  Five changes, all in std:
+  1. `List<T>::get` inlines its bounds check (`check` was a separate call:
+     `List<u8>::check` 4.3% + `List<u8>::get` 3.2% self).
+  2. `List<T>::add` returns the slot pointer directly instead of
+     `self.get(count-1)` (a second checked lookup per add).
+  3. `List<T>::drop_elems` walks the buffer with a pointer: one call per
+     element (its drop glue) instead of `len` + `get_internal` + deref.
+  4. `str::hash` walks the buffer with a pointer (`self.get(i)` was a call
+     plus a bounds check per byte; hash is the entry point of every map/set
+     lookup in the compiler).
+  5. `String::str`/`slice` build the slice straight from the buffer (they
+     went through `slice` -> `len` -> `arr.slice`), `String::clone` and
+     `String::new([u8])` are one `memcpy` instead of a `Clone::clone` +
+     checked `add` per byte.
+  Also removed `str::check_all`/`is_valid`: `String::new(str)` validated every
+  byte against a debug whitelist that *panicked* on `@` and on any non-ASCII
+  byte (`String::new("@")` aborted; the parser hit it on a source comment),
+  and it scanned every byte of every `String::new(str)`.
+  Measured (module set, `-j` default, same machine, two rounds): 36.5s ->
+  32.8s (-10%). Per module: std 2.28s -> 2.27s, ast 6.4s -> 6.0s, resolver
+  14.8s -> 13.5s, backend 13.1s -> 11.0s. Against the 146s serial baseline
+  from before batch 1 that is ~4.45x.
+  Correctness: suite green (`normal pass=116`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`), the tree rebuilt by its own output is byte-identical
+  (C == D), and `tests/normal/57-string-bytes.x` covers the removed validator
+  (it panics on the previous compiler).
+
 - Resolver bug: a plain `Node` shadowed `Node<T>`; that was the -O2 backend crash (2026-10-21).
   The crash that made batch 8 pin `backend` to -O0 was not a codegen bug: one
   struct had two different layouts in the same program. `std/llist` declares

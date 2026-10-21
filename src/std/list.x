@@ -132,7 +132,8 @@ impl<T> List<T>{
     ptr::copy!(self.ptr, self.count, e);
     std::no_drop(e);//add this to prevent dropping e
     ++self.count;
-    return self.get(self.count - 1);
+    //`self.get(self.count - 1)` re-checked bounds through two calls
+    return ptr::get!(self.ptr, self.count - 1);
   }
 
   func add(self, val: T, pos: i32){
@@ -194,7 +195,12 @@ impl<T> List<T>{
   }
 
   func get(self, pos: i64): T*{
-    self.check(pos);
+    //the check is inlined: a call to check() per index showed up as ~4% of a
+    //compile, and every byte loop in String/str goes through here
+    if(pos < 0 || pos >= self.count){
+      printf("index %d out of bounds (%d, %d)\n", pos, 0, self.count);
+      exit(1);
+    }
     return ptr::get!(self.ptr, pos);
   }
 
@@ -321,9 +327,10 @@ impl<T> Drop for List<T>{
   }
 
   func drop_elems(self){
-    for(let i = 0;i < self.len();++i){
-      let ep = self.get_internal(i);
-      Drop::drop(ep);
+    //one call per element (the element's drop glue) instead of len+get_internal
+    let p = self.ptr;
+    for(let i = 0;i < self.count;++i){
+      Drop::drop(ptr::deref!(ptr::get!(p, i)));
     }
   }
 }

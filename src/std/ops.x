@@ -271,8 +271,12 @@ impl Hash for str{
   func hash(self): i64{
     let x: i64 = 0;
     let m: i64 = 1i64 << 31;
-    for(let i = 0;i < self.len();++i){
-      x = (x * 31 + self.get(i)) % m;
+    //pointer walk: `self.get(i)` was a call plus a bounds check per byte, and
+    //hash is the top entry point of every map/set lookup in the compiler
+    let p = self.ptr();
+    let n = self.len();
+    for(let i = 0;i < n;++i){
+      x = (x * 31 + ptr::deref!(ptr::get!(p, i))) % m;
     }
     //print("hash {}={:?}\n", self, x);
     return x;
