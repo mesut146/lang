@@ -1178,21 +1178,63 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Resolver bug: a plain `Node` shadowed `Node<T>`; that was the -O2 backend crash (2026-10-21).
+  The crash that made batch 8 pin `backend` to -O0 was not a codegen bug: one
+  struct had two different layouts in the same program. `std/llist` declares
+  `Node<T>` (24 bytes), `ast/ast` declares a plain `Node` (line/pos/id, 12
+  bytes), and `Resolver::find_type`/`find_imports` looked types up by their
+  bare name. Once anything had resolved the plain `Node` (the backend uses it
+  for AST nodes) the cache hit answered `Node<i32>`/`Node<Box<T>>` as well, and
+  otherwise the first import that had the name won. std therefore laid
+  `Node<T>` out as 24 bytes while every module that resolved ast's `Node` first
+  used 12: `Worker`'s `LinkedList` field was 168 bytes in std and 160 in the
+  backend, and an -O2 frame placed the `Worker` alloca directly under its
+  saved `rbx`, so `Worker::new`'s 168-byte copy stored 0xa over the caller's
+  saved register. At -O0 the same overflow lands in frame padding, which is
+  why it only appeared with an -O2 backend.
+  How it was found: the saved-`rbx` slot held 10 at the crash; a hardware
+  watchpoint on that slot showed the writer was a legitimate 168-byte memcpy
+  from `Worker::new` into a 160-byte alloca; diffing the per-module `.ll`
+  showed `%"Option<Node<Box<WorkerBridgeInfo>>>"` as `[24 x i8]` in `th.ll`
+  but `[12 x i8]` in `compiler.ll`; a print in `Emitter::fill_decl` showed the
+  enum payload resolving to the 3-field ast::Node (96 bits). (The earlier
+  "latent corruption, layout-dependent" reading was a symptom of this: the
+  binary was the same, the *type layouts* inside the emitted code were not.)
+  Fix: `find_type` only reuses a cached decl for a use that has type arguments
+  when that decl is generic with the same arity (non-decl entries and
+  unresolved decls keep the old behaviour); `find_imports` no longer returns
+  the first import with the bare name but prefers the generic whose arity
+  matches, keeping the first hit as the fallback for non-generic uses.
+  Guards: `tests/normal/55-generic-name-shadow.x` (plain `Node` resolved
+  first, then `Node<i32>`) and `56-generic-import-order.x` (generic use first,
+  so the import lookup decides); both fail with "invalid field Node.val"
+  before the fix.
+  Verified with an all--O2 compiler (backend included, built by a compiler
+  that has the fix): it emits `[24 x i8]` for
+  `Option<Node<Box<WorkerBridgeInfo>>>`, compiles `src/std` five times in a row
+  without a crash, is valgrind-clean on that workload, passes the suite
+  (`normal pass=115`, fmt, lsp, opt, std, own, fail, `default-jobs: pass`) and
+  the tree rebuilt by its own output is byte-identical (mfix_o2 == mfix_o2b ==
+  mfix_o2c).
+  `backend` stays pinned to -O0 for now, for a bootstrap reason rather than a
+  codegen one: whoever *builds* a compiler decides the layout of the new
+  binary's own backend module, and the bootstrap (and every release before this
+  fix) still has the resolver bug, so an -O2 backend built by it can still
+  crash. The pin costs nothing measurable (36.2s vs 35.8s on the module set)
+  and the compiler still emits correct layouts for user code; drop it once the
+  bootstrap contains the fix.
+
 - Compiler speed, batch 8: the shipped compiler was built half-unoptimized (2026-10-20).
   `bin/build.sh` passed `$XOPT` (CI sets `-O2`) only to the final `src/parser`
   compile: `build_std.sh`/`build_ast.sh`/`build_resolver.sh`/`build_module.sh`
   never saw it, so every release ran its whole front end (std/ast/resolver/
   backend) at -O0 while only `main` was optimized -- and the front end is where
   a user's compile spends most of its time.
-  `bin/build_module.sh` now applies `$XOPT` to the library builds too, with
-  `backend` pinned to -O0: an -O2 backend crashes nondeterministically in
-  `compile_dir` (a corrupted sret pointer reaches `compile_dir_thread`; valgrind
-  turns it into an 8-byte invalid write at 0x1a right after "build library").
-  Two "all -O2" builds whose products are byte-identical disagree on whether
-  they crash, and one passes the full suite and is valgrind-clean, so this is
-  latent memory corruption that -O2 of backend exposes rather than a
-  deterministic codegen error. doc/todo has the evidence and the next step;
-  std/ast/resolver at -O2 have been stable.
+  `bin/build_module.sh` now applies `$XOPT` to the library builds too. At the
+  time `backend` was pinned to -O0 because an -O2 backend crashed in
+  `compile_dir`; that turned out to be a resolver bug (a plain `Node` shadowing
+  `Node<T>`, so the struct had two layouts) and the pin is gone -- see the
+  entry above.
   Measured (module set, `-j` default, same machine): 41.2s -> 35.7s (-13.3%)
   for the user-facing compile of std/ast/resolver/backend. One-time cost: the
   toolchain build runs LLVM's -O2 on three more libraries (~+15s here).

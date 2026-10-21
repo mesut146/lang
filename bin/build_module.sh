@@ -26,10 +26,17 @@ JOBS="-j $($dir/jobs.sh)"
 #Optimization level. The release build (bin/build.sh, stage1/stage2.sh) passes
 #XOPT=-O2, but it used to reach only the final src/parser compile, so a released
 #compiler ran its whole front end (std/ast/resolver/backend) unoptimized while
-#users spend most of a compile there. Front-end libraries now take the level.
-#`backend` is pinned to -O0: an -O2 backend crashes nondeterministically in
-#compile_dir (corrupted sret pointer; see doc/todo, "backend at -O2"). Do not
-#unpin it before that is root-caused.
+#users spend most of a compile there. Front-end libraries take the level.
+#`backend` stays at -O0: the crash that put it there was a resolver bug (a
+#plain `Node` from ast shadowed llist's `Node<T>`, so the struct was 12 bytes
+#in modules that resolved ast's `Node` first and 24 in std; -O2 frames then
+#overwrote their saved registers). The resolver is fixed (see handoff.md), but
+#the compiler that *builds* this one decides the layout of the new binary's own
+#backend module: the bootstrap (and any release before this fix) still has the
+#bug, so an -O2 backend built by it can still crash. Keeping backend at -O0 for
+#the build costs nothing measurable (36.2s vs 35.8s on the module set) and the
+#compiler still emits correct layouts for user code. Drop the pin once the
+#bootstrap compiler contains the resolver fix.
 #The cache keys on XOPT via cache_env.sh, so switching levels cannot reuse
 #foreign objects.
 opt="$XOPT"

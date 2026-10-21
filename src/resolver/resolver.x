@@ -2376,7 +2376,31 @@ impl Resolver{
     let opt = self.typeMap.get(name);
     if (opt.is_some()) {
       let rt: RType* = opt.unwrap();
-      return Result<RType, Error>::ok(rt.clone());
+      //The cache is keyed by the bare name, so a plain `Node` resolved
+      //earlier (ast declares a non-generic one; the backend uses it for
+      //AST nodes) used to satisfy `Node<Box<T>>` as well, giving the
+      //generic instantiation ast::Node's 12-byte layout instead of
+      //llist's 24. A use with type arguments may only reuse a cached
+      //decl that is generic with the same arity; otherwise fall through
+      //to the import lookup, which prefers the exact generic.
+      let usable = simple.args.empty();
+      if(!usable){
+        if(!rt.is_decl()){
+          //traits, aliases, modules: nothing to compare against the args
+          usable = true;
+        }else{
+          let d = self.get_decl(rt);
+          if(d.is_none()){
+            usable = true;
+          }else{
+            let dd = d.unwrap();
+            usable = dd.is_generic && dd.type.get_args().len() == simple.args.len();
+          }
+        }
+      }
+      if(usable){
+        return Result<RType, Error>::ok(rt.clone());
+      }
     }
     let imp_result: Option<RType> = self.find_imports(simple, name);
     if(imp_result.is_none()){
@@ -2449,26 +2473,50 @@ impl Resolver{
 
   func find_imports(self, type: Simple*, str: String*): Option<RType>{
     let arr = self.get_resolvers();
+    //`Node<Box<T>>` must pick the generic `Node<T>` even when another import
+    //also has a `Node` (ast declares a non-generic one): taking the first
+    //import that has the name made the layout of `Node<T>` depend on import
+    //order -- std laid it out as 24 bytes while a file importing ast first
+    //used ast::Node's 12, so the two sides of a call disagreed about the
+    //struct and -O2 frames overwrote their saved registers. Keep the first
+    //hit as the fallback (unchanged behaviour for non-generic uses) but let
+    //an exact generic arity win.
+    let first: Option<RType> = Option<RType>::new();
+    let first_decl: Option<Decl*> = Option<Decl*>::new();
     for (let i = 0;i < arr.len();++i) {
       let resolver: Resolver* = *arr.get(i);
       resolver.init();
       let cached = resolver.typeMap.get(&type.name);
-      if (cached.is_some()) {
-        let res: RType = cached.unwrap().clone();
-        //A `mod` of another unit resolves to its own RType: the caller walks
-        //its members through get_module (see visit_type_str0's module branch),
-        //and get_decl cannot describe a module -- it used to panic here, so
-        //`m::S`/`m::f()` on an imported unit's module crashed the compiler.
-        if(res.desc.kind.is_module()){
-          return Option::new(res);
-        }
-        let decl = self.get_decl(&res);
-        if (decl.is_some() && !decl.unwrap().is_generic) {
-          self.addType(str.clone(), res.clone());
-          self.add_used_decl(decl.unwrap());
-        }
+      if (cached.is_none()) {
+        continue;
+      }
+      let res: RType = cached.unwrap().clone();
+      //A `mod` of another unit resolves to its own RType: the caller walks
+      //its members through get_module (see visit_type_str0's module branch),
+      //and get_decl cannot describe a module -- it used to panic here, so
+      //`m::S`/`m::f()` on an imported unit's module crashed the compiler.
+      if(res.desc.kind.is_module()){
         return Option::new(res);
       }
+      let decl = self.get_decl(&res);
+      if(!type.args.empty() && decl.is_some()){
+        let d = decl.unwrap();
+        if(d.is_generic && d.type.get_args().len() == type.args.len()){
+          return Option::new(res);
+        }
+      }
+      if(first.is_none()){
+        first = Option::new(res);
+        first_decl = decl;
+      }
+    }
+    if(first.is_some()){
+      let res = first.unwrap();
+      if(first_decl.is_some() && !first_decl.unwrap().is_generic){
+        self.addType(str.clone(), res.clone());
+        self.add_used_decl(first_decl.unwrap());
+      }
+      return Option::new(res);
     }
     return Option<RType>::new();
   }
