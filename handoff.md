@@ -1205,17 +1205,22 @@ Ownership only — no Rust-like borrows:
   unresolved decls keep the old behaviour); `find_imports` no longer returns
   the first import with the bare name but prefers the generic whose arity
   matches, keeping the first hit as the fallback for non-generic uses.
-  Guards: `tests/normal/55-generic-name-shadow.x` (plain `Node` resolved
-  first, then `Node<i32>`) and `56-generic-import-order.x` (generic use first,
-  so the import lookup decides); both fail with "invalid field Node.val"
-  before the fix.
+  Guard: `tests/normal/55-generic-name-shadow.x` resolves a plain local
+  `Node` first and then uses `Node<i32>` (it fails with "invalid field
+  Node.val" before the fix, and also with the v1.18 toolchain). The
+  import-order half (ast's `Node` vs llist's `Node<T>`, no plain use first)
+  cannot be a suite test: the packaged toolchain ships only `src/std`, so a
+  test cannot import `ast/ast`; it is covered by the compiler's own build,
+  whose backend module imports ast and uses llist's `Node<T>` (the layout
+  check below).
   Verified with an all--O2 compiler (backend included, built by a compiler
   that has the fix): it emits `[24 x i8]` for
   `Option<Node<Box<WorkerBridgeInfo>>>`, compiles `src/std` five times in a row
   without a crash, is valgrind-clean on that workload, passes the suite
-  (`normal pass=115`, fmt, lsp, opt, std, own, fail, `default-jobs: pass`) and
-  the tree rebuilt by its own output is byte-identical (mfix_o2 == mfix_o2b ==
-  mfix_o2c).
+  (`normal pass=115`, fmt, lsp, opt, std, own, fail, `default-jobs: pass`,
+  also with a packaged toolchain built by the v1.18 bootstrap, which is the
+  path CI uses) and the tree rebuilt by its own output is byte-identical
+  (mfix_o2 == mfix_o2b == mfix_o2c).
   `backend` stays pinned to -O0 for now, for a bootstrap reason rather than a
   codegen one: whoever *builds* a compiler decides the layout of the new
   binary's own backend module, and the bootstrap (and every release before this

@@ -1,13 +1,21 @@
-import ast/ast
+//A plain `Node` must not satisfy a generic `Node<i32>` use. Types used to be
+//looked up by their bare name, so any non-generic `Node` that had been
+//resolved (a local one, or ast's, which the compiler's own modules import)
+//answered `Node<i32>` as well: the instantiation then had that type's layout
+//(ast::Node is 12 bytes, llist's Node<T> is 24) while std used 24, so the two
+//sides of a call disagreed about the struct's size and an -O2 frame wrote over
+//its caller's saved registers -- the crash that had been blamed on -O2 codegen
+//(doc/todo, "backend at -O2").
 import std/llist
 import std/io
 
+struct Node{
+  line: i32;
+  pos: i32;
+  id: i32;
+}
+
 func main(){
-  //`Node` (ast's non-generic one) is resolved first, so the resolver caches a
-  //plain `Node` under its bare name. `Node<i32>` must still resolve to
-  //llist's `Node<T>` (24-byte layout) instead of reusing ast::Node (12
-  //bytes): the two sides of a call then disagreed about the struct's size and
-  //an -O2 backend wrote over its caller's saved registers (doc/todo).
   let a: Node = Node{line: 1, pos: 2, id: 3};
   assert(a.id == 3);
   let n = Node<i32>::new(7);
