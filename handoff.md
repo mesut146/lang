@@ -1181,6 +1181,45 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- `#[inline]` support (2026-10-21). Attributes already existed and were
+  already parsed on functions (`Parser::parse_attrs`, generic `#[name]` /
+  `#[name(args)]`, and `AstCopier::visit(Method*)` copies them, so generic
+  instantiations keep them); only decl attributes were validated, so
+  `#[inline]` parsed and did nothing. Now:
+  - `cpp_bridge`: `Function_add_attr` maps `alwaysinline`/`noinline` to the
+    enum attributes and anything else to a string attribute. That mapping
+    matters: `addFnAttr("alwaysinline")` produces a *string* attribute, which
+    prints identically (`attributes #0 = { "alwaysinline" }`) but the
+    always-inliner keys on `Attribute::AlwaysInline` and ignores it -- the
+    first build did exactly that and inlined nothing.
+  - `Emitter::genCode` marks the definition `alwaysinline` when the method has
+    `#[inline]`, and `Emitter::compile` runs `always-inline,globaldce` in the
+    no--O path. The pass is only run when a body in the module actually
+    carries the attribute (`Emitter::inline_used`): running it unconditionally
+    cost 1-3% of a -O0 module build for nothing.
+  - `#[inline(never)]` is one line away if wanted (`noinline` is mapped).
+  Measured: neutral when unused (23.20/23.37s vs 23.26/22.99s on the module
+  set), and `tests/normal/60-inline-attr.x` covers plain, generic and method
+  `#[inline]` (and shows the calls disappear from the IR).
+  It is deliberately *not* used in std, because it does not pay there, and the
+  numbers are worth keeping:
+  - Annotating a first tranche (`List::get/len/size/empty/ptr/new/in_index`,
+    `str::len/ptr/get/empty/real_len`, `String::len/empty/str/ptr`,
+    `Option::new/is_some/is_none/get`) made -O0 module builds ~1.5% *slower*
+    (23.3/23.8 -> 24.0/24.1) and moved no runtime: a 300k-element
+    `List<i64>` add+get loop 38ms -> 39ms, and a 4M-iteration loop calling two
+    `#[inline]` helpers 58ms -> 57ms, although the calls did disappear.
+  - Reason: at -O0 LLVM does not promote allocas (no mem2reg), so an inlined
+    two-instruction body turns into a handful of stack slots/loads/stores
+    instead of a call and a ret. Inlining only pays once the -O0 path runs
+    mem2reg/instcombine/dce -- that "-O0.5" pipeline is the real lever (see
+    doc/todo), not the attribute.
+  - Cross-module: only *generic* instantiations get a linkonce body in every
+    module, so a non-generic helper compiled once in std (`str::len`,
+    `String::len`, ...) cannot be inlined into other units at all -- not with
+    `#[inline]` and not at -O2. Making that work means emitting a re-resolved
+    copy per importing unit, the way generic instantiation does.
+
 - Compiler speed, batch 12: import lookup, hash and cmp (2026-10-21).
   Three changes, all value-preserving:
   1. `Resolver::find_imports` scans every import only when the use has type

@@ -175,6 +175,7 @@ extern{
     func Argument_setname(a: Argument*, name: i8*);
     func Argument_setsret(ctx: LLVMContext*, a: Argument*, ty: llvm_Type*): i32;
     func setCallingConv(f: Function*);
+    func Function_add_attr(f: Function*, name: i8*);
     func Function_print(f: Function*);
     func verifyFunction(f: Function*): bool;
     
@@ -341,6 +342,14 @@ impl LLVMInfo{
     if(error as u64 != 0){
       panic("cant run -O pipeline {:?}, err: {:?}", level, CStr::new(error));
     }
+  }
+
+  //Mark a definition as always-inlinable. `#[inline]` in the source lands
+  //here (see Emitter::genCode); the -O0 pipeline runs `always-inline` so the
+  //attribute is honoured in builds that do no other optimization.
+  func add_fn_attr(self, f: Function*, attr: str){
+    let a = attr.cstr();
+    Function_add_attr(f, a.ptr());
   }
 
   //Run an explicit new-pipeline-manager pipeline (e.g. "globaldce").

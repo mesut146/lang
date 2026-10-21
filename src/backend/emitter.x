@@ -47,6 +47,9 @@ struct Emitter{
   string_map: HashMap<String, Value*>;
   config: CompilerConfig*;
   cache: Cache*;
+  //set when any emitted body carries `#[inline]`: only then is the
+  //always-inline pass worth running (it walks every function in the module)
+  inline_used: bool;
 }
 impl Emitter{
   func new(ctx: Context, config: CompilerConfig*, cache: Cache*): Emitter{
@@ -65,6 +68,7 @@ impl Emitter{
       string_map: HashMap<String, Value*>::new(),
       config: config,
       cache: cache,
+      inline_used: false,
     };
   }
 }
@@ -220,7 +224,15 @@ impl Emitter{
       //that uses one emits its own copy, so discarding the unused ones here is
       //exactly the contract the linker relies on (and it makes the emitted
       //object smaller too).
-      self.ll.get().optimize_pipeline("globaldce");
+      //`always-inline` first (honours `#[inline]`, which nothing else would
+      //in a no--O build), then drop the bodies that became unreferenced. The
+      //pass walks every function in the module, so only pay for it when a
+      //body actually carries the attribute.
+      if(self.inline_used){
+        self.ll.get().optimize_pipeline("always-inline,globaldce");
+      }else{
+        self.ll.get().optimize_pipeline("globaldce");
+      }
     }
     self.ll.get().emit_module(llvm_file.str());
     if(!self.config.llvm_only){
@@ -450,6 +462,16 @@ impl Emitter{
     self.curMethod = Option<Method*>::new(m);
     self.own = Option::new(Own::new(self, m));
     let proto = self.protos.get().get_func(m);
+    if(m.attr.has_attr("inline")){
+      //`#[inline]` means "inline this even when the build does no other
+      //optimization": the -O0 pipeline runs LLVM's always-inliner, which
+      //inlines exactly the functions carrying this attribute. At -O2 the
+      //normal inliner would usually do it anyway; the attribute makes it
+      //unconditional. Small std helpers (List::get, str::len, ...) are the
+      //call sites this exists for.
+      self.ll.get().add_fn_attr(proto.val, "alwaysinline");
+      self.inline_used = true;
+    }
     self.protos.get().cur = Option::new(proto.val);
     self.NamedValues.clear();
     let ll = self.ll.get();

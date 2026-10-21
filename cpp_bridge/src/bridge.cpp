@@ -404,6 +404,20 @@ void setCallingConv(llvm::Function *f) {
   f->setCallingConv(llvm::CallingConv::C);
 }
 
+//Set a function attribute by name. The inliner-related ones must be added as
+//enum attributes: a *string* attribute "alwaysinline" prints the same way but
+//the always-inliner keys on Attribute::AlwaysInline and would ignore it.
+void Function_add_attr(llvm::Function *f, const char *name) {
+  llvm::StringRef n(name);
+  if (n == "alwaysinline") {
+    f->addFnAttr(llvm::Attribute::AlwaysInline);
+  } else if (n == "noinline") {
+    f->addFnAttr(llvm::Attribute::NoInline);
+  } else {
+    f->addFnAttr(n);
+  }
+}
+
 int ext() { return llvm::Function::ExternalLinkage; }
 int odr() { return llvm::Function::LinkOnceODRLinkage; }
 int internal() { return llvm::Function::InternalLinkage; }
