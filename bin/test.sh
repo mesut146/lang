@@ -268,6 +268,42 @@ tools_all(){
   run "test -f $out_dir/selflib" || exit 1
 }
 
+#build flags: every front-end module must be compiled with $XOPT. `backend`
+#used to be pinned to -O0 as a workaround for the resolver name-shadowing bug
+#(fixed in d640a2b, shipped in v1.19): the pin kept unoptimized dead code in
+#the shipped compiler (backend.a 1.1M instead of 0.6M) and cost ~2% of user
+#compile time on a front-end-bound workload. A stub compiler records the
+#command line of each module build, so a re-introduced exemption fails here
+#instead of silently slowing the shipped compiler down.
+buildflags_all(){
+  mkdir -p "$out_dir"
+  stub=$out_dir/fake_compiler
+  log=$out_dir/buildflags.log
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s"\nexit 0\n' "$log" > "$stub"
+  chmod +x "$stub"
+  for level in "-O2" ""; do
+    rm -f "$log"
+    for name in std ast resolver backend; do
+      XLIBNAME=$name XLIBSRC=$testd/../src/$name XOPT="$level" XJOBS=1 \
+        $dir/build_module.sh "$stub" "$out_dir/buildflags" >/dev/null || exit 1
+      rm -f $dir/tmp.txt
+    done
+    if [ -z "$level" ]; then
+      n=$(grep -c -- "-O2" "$log")
+      if [ "$n" != "0" ]; then
+        echo "buildflags: -O2 used with an empty XOPT"; cat "$log"; exit 1
+      fi
+    else
+      n=$(grep -c -- "$level" "$log")
+      if [ "$n" != "4" ]; then
+        echo "buildflags: $n/4 modules built with $level"; cat "$log"; exit 1
+      fi
+    fi
+    rm -rf "$out_dir/buildflags"
+  done
+  echo "buildflags: pass"
+}
+
 #multi-file import resolution (tests/incremental_test/*.x, single main)
 inc_all(){
   run "$compiler c -out $out_dir -stdpath $stdpath -i $testd $testd/incremental_test" || exit 1
@@ -408,6 +444,8 @@ elif [ "$pat" == "inc" ]; then
   inc_all
 elif [ "$pat" == "tools" ]; then
   tools_all
+elif [ "$pat" == "buildflags" ]; then
+  buildflags_all
 elif [ "$pat" == "path" ]; then
   path_all
 elif [ "$pat" == "trace" ]; then
@@ -432,6 +470,7 @@ elif [ "$pat" == "all" ]; then
   vararg_all
   inc_all
   tools_all
+  buildflags_all
   path_all
   opt_all
 elif [ ! -z "$pat" ]; then

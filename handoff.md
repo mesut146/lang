@@ -1186,6 +1186,42 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 14: the backend `-O0` pin is gone (2026-10-21).
+  `bin/build_module.sh` exempted `backend` from `$XOPT` since batch 8. The
+  reason was never codegen: the crash that put it there was the resolver
+  name-shadowing bug (`d640a2b`), and whoever *builds* a compiler decides the
+  layout of the new binary's own backend module, so a bootstrap with the bug
+  could still produce a crashing -O2 backend. That fix shipped in v1.19 and the
+  release path bootstraps from the previous release tag, so the precondition the
+  comment asked for ("drop the pin once the bootstrap contains the resolver
+  fix") now holds; bootstrapping from a pre-v1.19 compiler is no longer
+  supported (the comment in the script says so).
+  Measured on the module set (std/ast/resolver/backend, `XJOBS=1`, `XOPT=""` so
+  the workload is front-end bound and the only difference is the host
+  compiler; three interleaved rounds): 45.45/46.08/45.62s with the pin vs
+  44.49/44.93/44.95s without -- every paired round faster, -2.1% on the best
+  round. The batch-12 note guessed -2.3%; that was the same order, and the
+  effect is smaller on codegen-bound work: a std module build at -O2 is
+  2099 -> 2074ms and at -O0 2090 -> 2083ms, i.e. inside the noise, because
+  most of that time is in LLVM/the C++ bridge, not in x code. So the honest
+  summary is "~2% on a compile whose time is the front end, ~0-1% on one
+  dominated by LLVM".
+  The pin also de-optimized shared helpers: linkonce `List`/`String`/`str`
+  bodies are emitted per module, and the linker kept the backend's -O0 copy.
+  Removing it halves `backend.a` (1,119,120 -> 593,486 bytes, the -O0 build
+  keeps dead bodies that -O2's globaldce drops) and shrinks `stage1`
+  (2,445,872 -> 2,079,728, -15%). Cost: the toolchain build compiles one more
+  module at -O2 (~+2s here, 37s -> 39s for a dev build).
+  Guard: `bin/test.sh buildflags` (part of `all`) runs `build_module.sh` for
+  all four modules against a stub compiler that records its command line and
+  asserts every one carries `$XOPT` (and none carries -O2 when `XOPT` is
+  empty). Re-adding the pin fails it with "buildflags: 3/4 modules built with
+  -O2".
+  Correctness: suite green (`normal pass=120`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`, `buildflags: pass`), C == D byte-identical with the
+  backend at -O2 in both stages, and the new stage compiles+runs
+  `61-lambda-struct-return`.
+
 - Lambda (and function-pointer) calls that return a struct (2026-10-21). This
   was the one known hole that *crashed* instead of erroring: the compiler
   generates a method for a lambda body and that method uses the method ABI --
