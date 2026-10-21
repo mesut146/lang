@@ -218,7 +218,63 @@ opt_all(){
     run "$compiler c -O2 -norun -o $base -out $opt_out -stdpath $stdpath \"$f\"" || exit 1
     run "$opt_out/$base" || exit 1
   done
+  #std_test/06 reads into a local array and hands it to strcmp: with a 5-byte
+  #array the comparison ran one byte past the buffer and only passed while the
+  #-O0 stack layout left that byte zero (it failed at -O2 with 127/128). Run it
+  #optimized so the terminator cannot silently regress.
+  run "$compiler c -O2 -out $opt_out -stdpath $stdpath -i $testd $testd/std_test/06_libc-test.x" || exit 1
+  run "$opt_out/06_libc-test.x" || exit 1
   echo "opt: pass"
+}
+
+#no--O pipeline ("-O0.5"): the emitter writes every local as an alloca plus
+#loads/stores, so a default (-O0) build used to run its hot loops out of the
+#stack (a 200M-iteration local loop: 431ms at -O0, 88ms once the allocas are
+#promoted) and `#[inline]` bought nothing, because an inlined body's allocas
+#stayed on the stack too. The no--O pipeline now runs `globaldce,mem2reg,dce`
+#(`globaldce,always-inline,mem2reg,dce,globaldce` when a body carries
+#`#[inline]`). This pins both halves on the emitted IR: after the pipeline a
+#plain `i64` local must have no alloca left, and an `#[inline]` helper must be
+#inlined *and* its dropped body gone.
+pipeline_all(){
+  mkdir -p $out_dir
+  src=$out_dir/pipeline_src.x
+  cat > $src <<'XEOF'
+import std/io
+
+#[inline]
+func twice(x: i64): i64{
+  return x * 2;
+}
+
+func sum(n: i64): i64{
+  let s: i64 = 0;
+  let i: i64 = 0;
+  while(i < n){
+    s = s + twice(i);
+    i = i + 1;
+  }
+  return s;
+}
+
+func main(){
+  assert(sum(10) == 90);
+  print("pipeline ok\n");
+}
+XEOF
+  rm -rf $out_dir/pipeline
+  run "$compiler c -norun -out $out_dir/pipeline -stdpath $stdpath -i $testd $src" || exit 1
+  ir=$out_dir/pipeline/pipeline_src.ll
+  n=$(grep -c "alloca i64" "$ir")
+  if [ "$n" != "0" ]; then
+    echo "pipeline: $n i64 allocas left in the IR (mem2reg did not run?)"; exit 1
+  fi
+  if grep -q "define .*@twice(" "$ir"; then
+    echo "pipeline: #[inline] body still defined (always-inline/globaldce did not run?)"; exit 1
+  fi
+  run "$compiler c -out $out_dir/pipeline -stdpath $stdpath -i $testd $src" || exit 1
+  run "$out_dir/pipeline/pipeline_src.x" || exit 1
+  echo "pipeline: pass"
 }
 
 #valgrind leak gate: raw malloc leaks the drop-count tracker cannot see
@@ -446,6 +502,8 @@ elif [ "$pat" == "tools" ]; then
   tools_all
 elif [ "$pat" == "buildflags" ]; then
   buildflags_all
+elif [ "$pat" == "pipeline" ]; then
+  pipeline_all
 elif [ "$pat" == "path" ]; then
   path_all
 elif [ "$pat" == "trace" ]; then
@@ -471,6 +529,7 @@ elif [ "$pat" == "all" ]; then
   inc_all
   tools_all
   buildflags_all
+  pipeline_all
   path_all
   opt_all
 elif [ ! -z "$pat" ]; then

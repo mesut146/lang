@@ -15,7 +15,11 @@ func read_write(){
   let s = "hello";
   fwrite(s.ptr(), 1, 5, fp);
   seek_test(fp, 5);
-  let buf = [0i8; 5];
+  //strcmp needs a NUL-terminated left operand: `[0i8; 5]` has no terminator,
+  //so the comparison reads buf[5] -- one byte past the array. That byte used
+  //to be zero by luck of the -O0 stack layout; at -O2 (and under the new
+  //no--O pipeline) it is not, so this asserted 127/128 instead of 0.
+  let buf = [0i8; 6];
   let read_cnt = fread(buf.ptr(), 1, 5, fp);
   assert(read_cnt == 5);
   print("strcmp(buf.ptr(), s.ptr())={}\n", strcmp(buf.ptr(), s.ptr()));

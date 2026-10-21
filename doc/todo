@@ -73,12 +73,11 @@ call like to_list<i32>(..) should work
 //3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per
 //   compile, half of `str::hash`'s instructions).
 
-//"-O0.5" codegen pipeline (2026-10-21, measured)//"-O0.5" codegen pipeline (2026-10-21, measured): the default (no -O) pipeline
-//is `globaldce` only, and that is why `#[inline]` buys nothing there: without
-//mem2reg the inlined bodies' allocas are not promoted, so removing a call to a
-//two-instruction helper replaces it with several stack loads/stores (a 4M
-//iteration loop over two inlined helpers: 58ms -> 57ms, and a 300k List
-//add/get loop 38ms -> 39ms). A cheap middle pipeline -- mem2reg + instcombine
-//+ dce (+ always-inline when `#[inline]` is used) -- would make both inlining
-//and -O0 output in general worth something. Needs a compile-time budget check:
-//the -O1 pipeline was too expensive, these three passes may not be.
+//"-O0.5" codegen pipeline (2026-10-21, measured)//"-O0.5" codegen pipeline: landed 2026-10-21 as `globaldce,mem2reg,dce`
+//(+`always-inline` when `#[inline]` is used). A 200M-iteration local loop went
+//431ms -> 88ms, the compile-time cost was nil (2222 vs 2218ms on a 25-file
+//module set), and `bin/test.sh pipeline` pins it on the emitted IR. See
+//handoff.md for the numbers. Still open: `instcombine` cannot be dropped into
+//a textual pipeline (it aborts: "Instruction Combining did not reach a
+//fixpoint after 1 iterations"), so a later step could add it through a proper
+//pass-builder pipeline and check whether the extra folding pays.

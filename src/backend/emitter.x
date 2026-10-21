@@ -228,10 +228,19 @@ impl Emitter{
       //in a no--O build), then drop the bodies that became unreferenced. The
       //pass walks every function in the module, so only pay for it when a
       //body actually carries the attribute.
+      //-O0.5: the emitter writes every local as an alloca + load/store (that
+      //is what makes -O0 output slow, and what made `#[inline]` pointless: an
+      //inlined body's allocas stayed on the stack). mem2reg promotes them to
+      //SSA registers and deletes the loads/stores it replaces, dce drops what
+      //is left. globaldce runs first so only live functions pay for promotion,
+      //and again at the end to drop the bodies that inlining made unreferenced.
+      //`instcombine` is deliberately absent: bare `instcombine` in a textual
+      //pipeline aborts ("did not reach a fixpoint after 1 iterations"), and
+      //mem2reg+dce already carry the win (handoff.md, batch 15).
       if(self.inline_used){
-        self.ll.get().optimize_pipeline("always-inline,globaldce");
+        self.ll.get().optimize_pipeline("globaldce,always-inline,mem2reg,dce,globaldce");
       }else{
-        self.ll.get().optimize_pipeline("globaldce");
+        self.ll.get().optimize_pipeline("globaldce,mem2reg,dce");
       }
     }
     self.ll.get().emit_module(llvm_file.str());

@@ -1188,6 +1188,50 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Codegen, batch 15: the no-`-O` pipeline is "-O0.5" (2026-10-21). The
+  emitter writes every local as an alloca plus load/store, so at -O0 a hot loop
+  ran out of the stack: a 200M-iteration loop over two locals took 431ms, and
+  `#[inline]` bought nothing because an inlined body's allocas stayed on the
+  stack as well (the batch-13 measurement: 58 -> 57ms). The default pipeline is
+  now `globaldce,mem2reg,dce` -- `globaldce,always-inline,mem2reg,dce,globaldce`
+  when a body carries `#[inline]` -- with globaldce first so only live
+  functions pay for promotion and last so the bodies inlining made
+  unreferenced are dropped.
+  Measured, same compiler for both sides (so the only difference is the
+  pipeline it applies): the 200M local loop 431ms -> 88ms (-80%); a 300k
+  `List` add/get loop 11ms -> 9ms; the `#[inline]` helper loop 12ms -> 11ms
+  (its inner work is a call to a 2-instruction helper, so mem2reg is most of
+  what is left). IR of a two-local loop: 7 allocas / 6 loads / 8 stores ->
+  4 / 0 / 3 (the remaining allocas are aggregates mem2reg cannot promote).
+  Cost: nothing measurable on a 25-file module set at default -O
+  (2222 vs 2218ms best of three interleaved rounds) -- mem2reg+dce on live
+  functions is small next to LLVM's codegen.
+  `instcombine` is deliberately *not* in the pipeline: a bare `instcombine` in
+  a textual pipeline aborts with "Instruction Combining did not reach a
+  fixpoint after 1 iterations" (it is meant to be iterated by the standard
+  builders). mem2reg already deletes the loads/stores it promotes, and dce
+  cleans up what is left, so the three passes buy the win without it.
+  A default build (`devbuild.sh` with no `XOPT`, i.e. what a developer gets
+  without -O2) now produces an -O0.5 compiler: 3.01MB vs 2.08MB for the -O2
+  one, suite green, and its own output rebuilds byte-identically.
+  Found while validating (pre-existing, not caused here):
+  `tests/std_test/06_libc-test.x` read 5 bytes into `[0i8; 5]` and handed the
+  array to `strcmp`, which then compared the byte *past* the array -- it only
+  passed while the -O0 stack layout happened to leave that byte zero. The old
+  compiler at -O2 fails it too (127/128 instead of 0), i.e. the suite never
+  covered an optimized build of that test. Fixed: the buffer is 6 bytes and
+  the 6th stays NUL from the zero-init; `opt_all` now compiles and runs that
+  test at -O2 so the terminator cannot regress.
+  Guard: `bin/test.sh pipeline` (part of `all`) compiles a program at the
+  default level and checks the emitted IR -- no `alloca i64` left (mem2reg
+  ran) and no `define ...@twice(` (always-inline inlined it and globaldce
+  dropped it) -- then runs it. Red on the previous compiler ("5 i64 allocas
+  left in the IR").
+  Correctness: suite green with the -O0.5 compiler (`normal pass=120`, fmt,
+  lsp, opt, std, own, fail, `default-jobs: pass`, `buildflags: pass`,
+  `pipeline: pass`) and with a compiler whose own modules were built at the
+  default level; C == D byte-identical in both build flavours.
+
 - Profile: where a compile's time goes now (2026-10-21). First profile taken
   after the backend pin came off, i.e. of a compiler with the same shape CI
   ships (every front-end module and `main` at -O2). Method: callgrind with
