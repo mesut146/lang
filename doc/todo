@@ -72,8 +72,14 @@ call like to_list<i32>(..) should work
 //   model); a design change, needs a decision.
 //3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per
 //   compile, half of `str::hash`'s instructions).
+//`#[inline]` in std (2026-10-21): now on `List::get`/`get_internal` and
+//`Option::get`/`is_some`/`is_none`, worth -5% on a 2M-append String scan at
+//default -O with no compile cost (handoff.md, batch 16). Non-generic helpers
+//(`str::len`, `String::len`) cannot inline across units because std is a
+//separate archive, so annotating them buys nothing for user code. Not tried:
+//`List::add`, `HashMap::get` -- larger bodies, measure first.
 
-//"-O0.5" codegen pipeline (2026-10-21, measured)//"-O0.5" codegen pipeline: landed 2026-10-21 as `globaldce,mem2reg,dce`
+//"-O0.5" codegen pipeline: landed 2026-10-21 as `globaldce,mem2reg,dce`
 //(+`always-inline` when `#[inline]` is used). A 200M-iteration local loop went
 //431ms -> 88ms, the compile-time cost was nil (2222 vs 2218ms on a 25-file
 //module set), and `bin/test.sh pipeline` pins it on the emitted IR. See

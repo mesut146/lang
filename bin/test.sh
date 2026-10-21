@@ -274,6 +274,48 @@ XEOF
   fi
   run "$compiler c -out $out_dir/pipeline -stdpath $stdpath -i $testd $src" || exit 1
   run "$out_dir/pipeline/pipeline_src.x" || exit 1
+  #the same pipeline is what makes `#[inline]` on std helpers pay: the generic
+  #instantiation is emitted per module with alwaysinline, so the always-inliner
+  #can put it into the caller and globaldce then drops the body. `List::get`
+  #carries the attribute (src/std/list.x); without it the user loop keeps the
+  #call (a 2M-append String scan: 87ms -> 81ms with it, see handoff.md).
+  isrc=$out_dir/inline_src.x
+  cat > $isrc <<'XEOF'
+import std/io
+import std/list
+
+func total(n: i64): i64{
+  let l = List<i64>::new();
+  let i: i64 = 0;
+  while(i < n){
+    l.add(i);
+    i = i + 1;
+  }
+  let s: i64 = 0;
+  let j: i64 = 0;
+  while(j < n){
+    s = s + *l.get(j);
+    j = j + 1;
+  }
+  return s;
+}
+
+func main(){
+  assert(total(10) == 45);
+  print("inline ok\n");
+}
+XEOF
+  rm -rf $out_dir/inline
+  run "$compiler c -norun -out $out_dir/inline -stdpath $stdpath -i $testd $isrc" || exit 1
+  iir=$out_dir/inline/inline_src.ll
+  if grep -q 'define .*@"List\$LTi64\$GT__get_List' "$iir"; then
+    echo "pipeline: List<i64>::get body still defined (#[inline] not honoured?)"; exit 1
+  fi
+  if grep -q 'call .*@"List\$LTi64\$GT__get_List' "$iir"; then
+    echo "pipeline: List<i64>::get still called after the pipeline"; exit 1
+  fi
+  run "$compiler c -out $out_dir/inline -stdpath $stdpath -i $testd $isrc" || exit 1
+  run "$out_dir/inline/inline_src.x" || exit 1
   echo "pipeline: pass"
 }
 

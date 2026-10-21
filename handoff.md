@@ -1188,6 +1188,36 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Codegen, batch 16: `#[inline]` in std pays now (2026-10-21). Batch 13
+  measured `#[inline]` on std helpers as a loss (-1.5% at -O0, no runtime gain)
+  and deliberately left std unannotated; batch 15's mem2reg changed that
+  premise: an inlined body's allocas are promoted now, so inlining no longer
+  just moves stack traffic around.
+  `#[inline]` now sits on the small hot generic helpers: `List::get`,
+  `List::get_internal`, `Option::get`, `Option::is_some`, `Option::is_none`.
+  Generic instantiations are emitted per module with `alwaysinline`, so the
+  always-inliner can put them into the caller and globaldce drops the body --
+  which is why the annotated build is not bigger (b5: 68,112 -> 67,856 bytes).
+  Measured on default (-O0.5) builds, same compiler for both sides and only
+  src/std differing (eight interleaved rounds): a 2M-append `String` plus a
+  4M-byte index scan 87ms -> 81-83ms (-5%); a 3M `List` add/get loop 88 -> 87ms
+  (nothing: the bounds check and pointer arithmetic dominate, the call was
+  not the cost). IR of the user module: `List<i64>::get` was called at the
+  loop and is inlined into it (the callee body is gone, the inlined label
+  `...get_List$LTi64$GT$P_i64.exit` remains).
+  Compile-time cost: none measurable (module set at default -O: 2081 vs
+  2067ms best of four interleaved rounds; the new compiler compiling that same
+  set is 2045 vs 2075ms, i.e. ~1% faster). Non-generic std helpers
+  (`str::len`, `String::len`) still cannot inline across units -- they live in
+  std.a and only linkonce generic bodies travel -- so the attribute is only
+  worth putting on generics.
+  Guard: `bin/test.sh pipeline` now compiles a second program at the default
+  level and asserts its IR has neither a `define` nor a `call` for
+  `List<i64>::get` (red without the attributes: "body still defined").
+  Correctness: compiler rebuilt from the annotated std, suite green
+  (`normal pass=120`, fmt, lsp, opt, std, own, fail, `default-jobs: pass`,
+  `buildflags: pass`, `pipeline: pass`), C == D byte-identical.
+
 - Codegen, batch 15: the no-`-O` pipeline is "-O0.5" (2026-10-21). The
   emitter writes every local as an alloca plus load/store, so at -O0 a hot loop
   ran out of the stack: a 200M-iteration loop over two locals took 431ms, and

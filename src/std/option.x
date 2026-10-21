@@ -26,6 +26,9 @@ impl<T> Option<T>{
     panic("unwrap on None");
   }
 
+  //`#[inline]`: same reason as `List::get` -- a two-line body on the hot path
+  //of every `?`/`unwrap`-style call, inlined at any -O level.
+  #[inline]
   func get(self): T*{
     if let Option<T>::Some(val) = self{
       return val;
@@ -41,10 +44,12 @@ impl<T> Option<T>{
     panic("invalid usage");
   }
 
+  #[inline]
   func is_some(self): bool{
     return !self.is_none();
   }
 
+  #[inline]
   func is_none(self): bool{
     if let Option<T>::None = self{
       return true;

@@ -203,10 +203,16 @@ impl<T> List<T>{
       return old;
   }
 
+  #[inline]
   func get_internal(self, pos: i64): T{
     return ptr::deref!(self.get(pos));
   }
 
+  //`#[inline]`: every byte loop in String/str indexes through here, the body
+  //is three lines, and the no--O pipeline's always-inliner can only inline it
+  //when it carries the attribute. It pays now that batch 15 promotes the
+  //inlined body's allocas (-5% on a 2M-append String scan, see handoff.md).
+  #[inline]
   func get(self, pos: i64): T*{
     //the check is inlined: a call to check() per index showed up as ~4% of a
     //compile, and every byte loop in String/str goes through here
