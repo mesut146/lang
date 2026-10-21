@@ -163,21 +163,22 @@ impl str{
     }
     
     func eq(self, s: str): bool{
-      if(self.empty()){
-        return s.empty();
-      }
+      //cmp answers 0 for two empties as well; the empty() checks were two more
+      //calls on the hottest comparison path
       return self.cmp(s) == 0;
     }
 
     func real_len(self): i32{
-      //empty: nothing to strip, and get(-1) would read before the buffer
-      if(self.empty()){
+      //one len() and one raw last-byte load: this used to be empty()+get()+len()
+      //(three out-of-line calls) and cmp() calls it twice
+      let n = self.len();
+      if(n == 0){
         return 0;
       }
-      if(self.get(self.len() - 1) == 0){
-        return self.len() - 1;
+      if(ptr::deref!(ptr::get!(self.ptr(), n - 1)) == 0){
+        return n - 1;
       }
-      return self.len();
+      return n;
     }
 
     func cmp(self, s: str): i32{

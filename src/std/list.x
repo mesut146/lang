@@ -11,7 +11,11 @@ struct List<T>{
 
 impl<T> List<T>{
   func new(): List<T>{
-    return List<T>::new(10);
+    //no allocation until something is added: an empty String/List is very
+    //common (every temporary and every `String::new()`), and eagerly
+    //allocating 10 elements made malloc/free ~11% of a compile. `expand`
+    //handles cap 0 (it grows to 10) and free(null) is a no-op.
+    return List<T>{ptr: ptr::null<T>(), count: 0, cap: 0};
   }
 
   func get_malloc(size: i64): T*{
@@ -27,6 +31,9 @@ impl<T> List<T>{
   }
 
   func new(cap: i64): List<T>{
+    if(cap <= 0){
+      return List<T>{ptr: ptr::null<T>(), count: 0, cap: 0};
+    }
     let ptr = List<T>::get_malloc(cap);
     return List<T>{ptr: ptr, count: 0, cap: cap};
   }
@@ -70,7 +77,7 @@ impl<T> List<T>{
     }
     let tmp = List<T>::get_malloc(new_cap);
     for(let i = 0;i < self.count;++i){
-      let old: T = ptr::deref!(self.get(i));
+      let old: T = ptr::deref!(ptr::get!(self.ptr, i));
       ptr::copy!(tmp, i, old);
       std::no_drop(old);
     }
@@ -85,15 +92,21 @@ impl<T> List<T>{
     if(need <= self.cap){
       return;
     }
-    let tmp = List<T>::get_malloc(need + 10);
+    //geometric growth, like expand(): `need + 10` reallocated (and recopied
+    //the whole buffer) every ~10 bytes when a String grew by repeated appends
+    let cap = self.cap * 2;
+    if(cap < need + 10){
+      cap = need + 10;
+    }
+    let tmp = List<T>::get_malloc(cap);
     for(let i = 0;i < self.count;++i){
-      let old: T = ptr::deref!(self.get(i));
+      let old: T = ptr::deref!(ptr::get!(self.ptr, i));
       ptr::copy!(tmp, i, old);
       std::no_drop(old);
     }
     free(self.ptr as i8*);
     self.ptr = tmp;
-    self.cap = need + 10;
+    self.cap = cap;
   }
 
   func in_index(self, pos: i64): bool{

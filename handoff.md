@@ -1179,6 +1179,36 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 11: lazy lists and geometric reserve (2026-10-21).
+  callgrind on a single-file compile (`src/resolver/resolver.x`, which includes
+  the std build) put the allocation cluster at ~11% of instructions
+  (`_int_free` 3.56, `_int_malloc` 2.79, `malloc` 2.72, `free` 1.74,
+  `malloc_consolidate` 0.52), with `List<u8>::reserve` 2.55 and the
+  `str::real_len`/`empty`/`len`/`cmp` chain ~6.4 (all tiny out-of-line calls).
+  Three changes, all in std:
+  1. `List<T>::new()` no longer allocates: it returns a null buffer with cap 0
+     (`new(cap)` skips the allocation for cap <= 0 too). `expand` already grew
+     a cap-0 list to 10 and `free(null)` is a no-op, so an empty String/List is
+     now free; they are extremely common (every temporary, every
+     `String::new()`).
+  2. `List<T>::reserve` grows geometrically instead of `need + 10`: a String
+     built by repeated small appends recopied its whole buffer every ~10 bytes
+     (quadratic). The copy loops in `expand`/`reserve` also read through
+     `ptr::get!` instead of the checked `get`.
+  3. `str::real_len` is one `len()` plus one raw last-byte load (it was
+     `empty`+`get`+`len`, three calls, and `cmp` calls it twice), and
+     `str::eq` is just `cmp(s) == 0` (the two `empty()` calls it did first are
+     implied).
+  Measured (module set, `-j` default, two rounds): 32.8s -> 28.6s (-12.9%).
+  Per module: std 2.27s -> 2.11s, ast 6.0s -> 5.1s, resolver 13.5s -> 12.0s,
+  backend 11.0s -> 9.3s. Against the 146s serial baseline from before batch 1
+  that is ~5.1x.
+  Correctness: suite green (`normal pass=117`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`), the tree rebuilt by its own output is byte-identical
+  (C == D), and `tests/normal/58-empty-and-growth.x` pins the empty-value
+  behaviour (len/eq/print/clone on an empty String and List) and 1000 small
+  appends plus 1000 adds.
+
 - Compiler speed, batch 10: String/List hot paths (2026-10-21).
   Re-profiled after batch 8 (the front end is -O2 now). The sampler in
   `bin/sprof.sh` is no longer usable: it calls `backtrace()` from a SIGPROF
