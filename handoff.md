@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-21. Main: `7e4201f` (owns `681a8cc` array places, place
+Date: 2026-10-21. Main: `ba6af50` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -28,7 +28,9 @@ memoized generated-method signatures `11e72f2`, the drop/is_str/append
 cleanups `56bb6e4`, dead-linkonce elimination before codegen `8a7c2d7`, the
 -O2 front-end library build `f9ef66c`, the record of the -O2 backend
 corruption `04ae052`, the resolver name-shadowing fix `d640a2b` that explains
-it, and the String/List hot-path batch `7e4201f`).
+it, the String/List hot-path batch `7e4201f`, the lazy-List/reserve batch
+`f48aaaa`, and the std node rename `ba6af50` that keeps the bootstrap able to
+build it).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published). Next release v1.19
 bootstraps from v1.18. Releases: v1.11 -- v1.18.
@@ -52,7 +54,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 7e4201f)
+## What's in the tree (main = ba6af50)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
@@ -1202,7 +1204,10 @@ Ownership only — no Rust-like borrows:
   Measured (module set, `-j` default, two rounds): 32.8s -> 28.6s (-12.9%).
   Per module: std 2.27s -> 2.11s, ast 6.0s -> 5.1s, resolver 13.5s -> 12.0s,
   backend 11.0s -> 9.3s. Against the 146s serial baseline from before batch 1
-  that is ~5.1x.
+  that is ~5.1x. A re-measure on an idle machine after the node rename gave
+  24.2s (std 1.87, ast 4.6, resolver 9.9, backend 7.6); the 28.6s above was
+  taken while /home was nearly full, so the *delta* is the reliable number,
+  the absolute one drifted with the machine.
   Correctness: suite green (`normal pass=117`, fmt, lsp, opt, std, own, fail,
   `default-jobs: pass`), the tree rebuilt by its own output is byte-identical
   (C == D), and `tests/normal/58-empty-and-growth.x` pins the empty-value
