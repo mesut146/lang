@@ -245,8 +245,11 @@ impl AllocHelper{
       }
     }
     let res = Option<Value*>::new();
-    if(rt.is_method() && is_struct(&rt.type)){
-      //non-internal method
+    if(is_struct(&rt.type)){
+      //a struct-typed call result is a destination the callee writes through
+      //(sret). Not just methods: a lambda or function-pointer call returning a
+      //struct needs one too, or the emitter's get_alloc() has nothing to hand
+      //the hidden return pointer.
       res = Option::new(self.alloc_ty(&rt.type, node));
     }
     if(call.scope.is_some()){

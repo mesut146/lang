@@ -298,19 +298,43 @@ impl Emitter{
     return ptr;
   }
   func make_proto(self, ft: FunctionType*): llvm_Type*{
-    let ret = self.mapType(&ft.return_type);
+    let ll = self.ll.get();
+    let ret_ty = self.mapType(&ft.return_type);
     let args = List<llvm_Type*>::new();
-    for prm in &ft.params{
-      args.add(self.mapType(prm));
+    //same method ABI as a lambda value (see make_proto(LambdaType*)): a
+    //function pointer always points at a method, so a struct parameter is a
+    //pointer and a struct return is the hidden destination pointer.
+    let ret = ret_ty;
+    if(is_struct(&ft.return_type)){
+      args.add(getPointerTo(ret_ty) as llvm_Type*);
+      ret = getVoidTy(ll.builder);
     }
-    let res = make_ft(ret, args.ptr(), ft.params.len() as i32, false);
+    for prm in &ft.params{
+      let pt = self.mapType(prm);
+      if(is_struct(prm)){
+        args.add(getPointerTo(pt) as llvm_Type*);
+      }else{
+        args.add(pt);
+      }
+    }
+    let res = make_ft(ret, args.ptr(), args.len() as i32, false);
     return res as llvm_Type*;
   }
   func make_proto(self, ft: LambdaType*): llvm_Type*{
-    let ret = self.mapType(ft.return_type.get());
+    let ll = self.ll.get();
+    let ret_ty = self.mapType(ft.return_type.get());
     let args = List<llvm_Type*>::new();
     //mirror the method ABI used for the generated lambda function
-    //(make_proto(Method*)): a struct parameter is passed as a pointer.
+    //(make_proto(Method*)): a struct parameter is passed as a pointer, and a
+    //struct *return* is the hidden destination pointer in arg 0 with a void
+    //result. Missing the return half made the call site read the (void)
+    //result as the struct itself: `let f = |x: i32|: P{ ... }; f(1)` jumped
+    //through the caller's stack and segfaulted.
+    let ret = ret_ty;
+    if(is_struct(ft.return_type.get())){
+      args.add(getPointerTo(ret_ty) as llvm_Type*);
+      ret = getVoidTy(ll.builder);
+    }
     for prm in &ft.params{
       let pt = self.mapType(prm);
       if(is_struct(prm)){

@@ -1186,6 +1186,36 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Lambda (and function-pointer) calls that return a struct (2026-10-21). This
+  was the one known hole that *crashed* instead of erroring: the compiler
+  generates a method for a lambda body and that method uses the method ABI --
+  a struct result is written through a hidden destination pointer in arg 0 and
+  the function returns void -- while the lambda-call prototype
+  (`make_proto(LambdaType*)`) still returned the struct by value. The callee
+  wrote through an argument the caller never passed, and the caller read the
+  void result as the struct: `let f = |x: i32|: P{ ... }; f(1)` segfaulted.
+  Struct *parameters* had already been fixed the same way; the return half was
+  missing. Four parts:
+  1. `make_proto(LambdaType*)` mirrors the method ABI for the return too
+     (hidden pointer arg 0, void result).
+  2. `make_proto(FunctionType*)` does the same -- a function pointer always
+     points at a method -- and also gained the struct-parameter pointer
+     conversion it never had.
+  3. `visit_lambda_call`/`visit_fp_call` allocate the destination, pass it as
+     arg 0 and return that pointer (the convention `visit_call2` already uses
+     for direct calls), registering it with `own.add_obj` so the temporary is
+     dropped exactly once.
+  4. `AllocHelper::visit_call` allocates a destination for *any* struct-typed
+     call result, not only for `rt.is_method()`: a lambda/fp call had none and
+     the emitter's `get_alloc()` panicked ("get_alloc() not set") on the way
+     there.
+  `tests/normal/61-lambda-struct-return.x` covers a plain lambda, a capturing
+  one, a lambda passed through a generic `apply<T>`, a function pointer, an
+  owning `String` field (allocate/move/drop of the temporary) and a loop. It is
+  red on the previous compiler (the minimal case segfaults; the fuller test
+  trips the LLVM verifier on `llvm.memcpy.p0.s_Ps.i64`). Suite green
+  (`normal pass=120`), C == D byte-identical.
+
 - `#[inline]` support (2026-10-21). Attributes already existed and were
   already parsed on functions (`Parser::parse_attrs`, generic `#[name]` /
   `#[name(args)]`, and `AstCopier::visit(Method*)` copies them, so generic
@@ -1748,15 +1778,14 @@ Compile gaps (pre-existing, not yet fixed):
   `let k: f64 = 2;`. The branch now takes a float argument first: a float
   target is compatible, an integer target is a clean
   `2.5 is a float literal, not i32`. See the entry above.
-- A lambda that *returns* a struct segfaults at run time (found 2026-10-20
-  while testing closures; reproducible with the released compiler). The
-  generated method uses the method ABI, which returns a struct through an sret
-  pointer (`make_proto(Method*)`), while the lambda-call prototype
-  (`make_proto(LambdaType*)`) returns the struct by value, so the callee writes
-  through an argument the caller did not pass. Struct *parameters* were fixed
-  in the closures batch (the same prototype now mirrors the method ABI); the
-  sret case needs the RVO path in `visit_lambda_call`. A capturing lambda has
-  the same hole (it is the same call path).
+- (fixed 2026-10-21) A lambda that *returns* a struct segfaulted at run time.
+  The generated method uses the method ABI (struct result through a hidden sret
+  pointer), while the lambda-call prototype returned the struct by value.
+  `make_proto(LambdaType*)`/`make_proto(FunctionType*)` now mirror the method
+  ABI for the return as well, `visit_lambda_call`/`visit_fp_call` pass the
+  destination pointer and return it, and the alloc pass gives every
+  struct-typed call result a destination. See the entry above;
+  `tests/normal/61-lambda-struct-return.x`.
 - (fixed 2026-10-18) A *self-referential* aggregate field (`struct S{
   t: (S, i32); }`) overflowed the stack inside
   `DropHelper::is_drop_type`/`is_drop_decl` -- SIGSEGV during

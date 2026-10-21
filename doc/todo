@@ -35,9 +35,10 @@
 //The `(a: i32): i32 => { .. }` form is abandoned (user, 2026-10-20).
 //Still open: capturing an owning value ("capturing an owning value is not
 //supported yet"), capture through a nested lambda ("capturing through a lambda
-//is not supported yet"), `self` capture, by-reference capture, and the
-//pre-existing crash when a lambda *returns* a struct (the method uses the sret
-//ABI, the lambda-call prototype returns by value).
+//is not supported yet"), `self` capture and by-reference capture.
+//(fixed 2026-10-21) a lambda that *returns* a struct used to crash: the method
+//uses the sret ABI while the lambda-call prototype returned the struct by
+//value. tests/normal/61-lambda-struct-return.x.
 //typed float literals are fixed (2026-10-20): `let k: f64 = 2.5;` and a f64
 //call argument/field work; a float literal into an integer type is a clean
 //"2.5 is a float literal, not i32" (tests/normal/50-float-literal-cast.x).

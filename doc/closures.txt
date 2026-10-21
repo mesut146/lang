@@ -206,9 +206,11 @@ when available).
   `StateType::clone` drift is unchanged (no codegen change there).
 
 Known holes left (not phase A's job):
-- a lambda that *returns* a struct segfaults (method ABI is sret, the
-  lambda-call prototype returns by value) -- pre-existing, reproducible on the
-  released compiler too, recorded in handoff.md;
+- (fixed 2026-10-21) a lambda that *returns* a struct segfaulted: the method
+  ABI is sret while the lambda-call prototype returned the struct by value.
+  Both prototypes now mirror the method ABI and the call site passes the
+  destination pointer; tests/normal/61-lambda-struct-return.x. Function
+  pointers (`func(..) => T`) had the same hole and are fixed with it;
 - a capturing lambda is still rejected where a bare function pointer
   (`func(..)`) is expected, by design (Q5);
 - phase B: owning captures (move in, drop out), `self` capture, nested

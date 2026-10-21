@@ -1206,8 +1206,19 @@ impl Emitter{
       let val = self.visit_name(expr, &mc.name, false);
       val = ll.loadPtr(val);
       let proto = self.make_proto(ft);
+      //a struct result comes back through a hidden destination pointer (arg 0,
+      //void result), exactly as visit_call2 does for a direct method call
+      let ptr_ret = Option<Value*>::new();
+      if(is_struct(&ft.return_type)){
+        ptr_ret = Option::new(self.get_alloc(expr));
+        self.own.get().add_obj(expr, LLVMPtr::new(ptr_ret.unwrap()), &ft.return_type);
+      }
       let args = self.emit_call_args(mc, &ft.params);
+      if(ptr_ret.is_some()){
+        args.add(ptr_ret.unwrap(), 0);
+      }
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, val, args.ptr(), args.len() as i32);
+      if(ptr_ret.is_some()) return ptr_ret.unwrap();
       return res;
     }
     func visit_lambda_call(self, expr: Expr*, mc: Call*, rt: RType*): Value*{
@@ -1222,7 +1233,17 @@ impl Emitter{
       }
       let ft = ft0.unwrap();
       let proto = self.make_proto(ft);
+      //struct result: hidden destination pointer in arg 0, void result (see
+      //make_proto(LambdaType*)); the pointer *is* the value here
+      let ptr_ret = Option<Value*>::new();
+      if(is_struct(ft.return_type.get())){
+        ptr_ret = Option::new(self.get_alloc(expr));
+        self.own.get().add_obj(expr, LLVMPtr::new(ptr_ret.unwrap()), ft.return_type.get());
+      }
       let args = self.emit_call_args(mc, &ft.params);
+      if(ptr_ret.is_some()){
+        args.add(ptr_ret.unwrap(), 0);
+      }
       let fnval = val;
       if(!ft.captured.empty()){
         //a capturing lambda's value is its heap closure object: load the
@@ -1243,6 +1264,7 @@ impl Emitter{
         }
       }
       let res = CreateCall_ft(ll.builder, proto as llvm_FunctionType*, fnval, args.ptr(), args.len() as i32);
+      if(ptr_ret.is_some()) return ptr_ret.unwrap();
       return res;
     }
     func visit_call2(self, expr: Expr*, mc: Call*): Value*{
