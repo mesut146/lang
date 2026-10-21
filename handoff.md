@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-21. Main: `23d1132` (owns `681a8cc` array places, place
+Date: 2026-10-21. Main: `2118e6f` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -30,7 +30,8 @@ cleanups `56bb6e4`, dead-linkonce elimination before codegen `8a7c2d7`, the
 corruption `04ae052`, the resolver name-shadowing fix `d640a2b` that explains
 it, the String/List hot-path batch `7e4201f`, the lazy-List/reserve batch
 `f48aaaa`, the std node rename `ba6af50` that keeps the bootstrap able to
-build it, and the import/hash/cmp batch `23d1132`).
+build it, the import/hash/cmp batch `23d1132`, and `#[inline]` support
+`2118e6f`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published). Next release v1.19
 bootstraps from v1.18. Releases: v1.11 -- v1.18.
@@ -54,7 +55,7 @@ Ownership only — no Rust-like borrows:
 - `Box<T>` carries `#drop`; `*boxed` follows the same heal rule.
 - `move_ptr_field` flag and `check_ptr_field` left untouched (legacy).
 
-## What's in the tree (main = 23d1132)
+## What's in the tree (main = 2118e6f)
 
 - Drops on by default; auto-drop owns all locals (`src/parser/ownership.x`,
   `own_*.x`, backend emitters).
