@@ -1187,6 +1187,72 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Profile: where a compile's time goes now (2026-10-21). First profile taken
+  after the backend pin came off, i.e. of a compiler with the same shape CI
+  ships (every front-end module and `main` at -O2). Method: callgrind with
+  `--cache-sim=yes --branch-sim=yes` on `stage1 c -static -O2 -j 1 -name std
+  src/std` (25 files, 2.10s warm, 3.80G instructions), cycle model
+  `Ir/3 + 12*D1mr + 200*DLmr + 15*Bcm` (kcachegrind's shape); the model matters
+  because the instruction split lies about LLVM: LLVM is 55.3% of Ir but 41.5%
+  of the modelled cycles, libc is 17.5% of Ir but 38.3% of the cycles.
+  Split (cycle model / Ir):
+    LLVM 41.5% / 55.3%;  libc 38.3% / 17.5%;  x std helpers 11.9% / 20.5%;
+    ld.so startup 4.6%;  parser 1.3% / 2.8%;  lexer 0.9% / 1.6%;
+    resolver 0.2%;  emitter 0.1%.
+  libc is `_int_malloc` 11.1%, `memcpy` 11.1%, `_int_free` 6.8%, `malloc` 6.3%,
+  `memcmp` 1.6%, `memset` 0.5%. The front end's *own* code is small; its cost
+  sits in the std containers it calls: `str::cmp` 4.7% (69.2M Ir, 1.31M calls,
+  all through `str::eq`), `str::hash` 3.4% (55.7M), `RType::clone` 1.2%,
+  `Parser::expr_level` 1.3%, `Lexer::next0` 0.9%.
+  Allocation traffic per 25-file compile: 1.2M `List<u8>` buffer allocations
+  (933k `new(cap)`, 129k growth reallocs, 193k `reserve`s) and 1.2M frees.
+  698k of those allocations are `String::clone` (callers: `clone_simple`
+  175k+52k, `Desc::clone` 139k, `Type::print` 89k, `Parser::gen_part` 36k,
+  `VarHolder::clone` 27k), 234k are `String::new(str)`, and the emitter's
+  formatting does 523k `Fmt::print(str)` -> 759k `String::append(str)` ->
+  759k `List::reserve`. The lexer's keyword map alone is 487k
+  `HashMap<str,TokenType>::get` probes, each hashing the token text (26.4M of
+  the 55.7M `str::hash` instructions).
+  Fixed costs, measured separately: process startup is ~25ms
+  (`_dl_relocate_object` is 4.6% of the cycle model -- libLLVM.so is huge); a
+  trivial file with an already-built `std.a` is ~120ms end to end, so ~1/5 of
+  a small compile is startup; the 25-file module set is 2.10s (~84ms/file).
+  Two candidate micro-fixes were implemented and measured here, and both were
+  reverted -- the lesson is that instruction-level savings in the front end do
+  not reach the wall clock:
+  - `drop_elems` passing the element *address* (`ptr::get!(p, i)`) instead of a
+    dereferenced copy: drop takes `*self` anyway, and dropping the copy removes
+    the load that stops LLVM from deleting the loop for trivial `T`. It does
+    delete it -- 62.2M Ir (1.6% of Ir, `List<u8>::drop_elems` vanishes from the
+    profile) -- but the clock does not move (2075 -> 2104ms, 4 interleaved
+    rounds, i.e. noise): 52 cheap instructions per dropped list is ~0.3% of
+    cycles.
+  - `Fmt::new()` reserving 32 bytes up front (a mangled name is several
+    appends from cap 0): 1,214,877 -> 1,181,550 `List<u8>` allocations
+    (-2.7%), 3.795G -> 3.782G Ir (-0.35%), wall clock unchanged (2085 vs
+    2102ms best round). Most Fmts are short enough that the geometric growth
+    from 10 already costs one allocation, and the long mangled names exceed 32
+    anyway.
+  So the allocation *count* is not where the time is: malloc/free cost is in
+  the pattern (cache misses on metadata, `_int_malloc`/`_int_free` traversal),
+  and the modelled 38% libc share needs a structural change, not a shave.
+  What that leaves, in order:
+  1. Fewer clones/allocations structurally: `String::clone` is 698k
+     allocations per 25-file compile, and `Type::print` (89k of them) returns
+     an owned String on the mangling path where appending into the caller's
+     buffer would do; `clone_simple`/`Desc::clone` clone per lookup.
+  2. A front-end arena for short-lived strings (malloc+free+memcpy = 38% of
+     the model): a design decision, since the compiler is long-lived and
+     compiles modules in process.
+  3. LLVM is the other 41.5%, and the front end controls only how much IR it
+     hands over: the "-O0.5" pipeline (doc/todo) is the user-facing lever
+     there (better default output, and `#[inline]` starts paying), while
+     asking for fewer passes on the *library* build only trades release-build
+     time against the shipped compiler's own speed.
+  Still on the table but small by this profile: keyword lookup without a
+  `HashMap<str,TokenType>` (487k probes/compile, 26.4M of the 55.7M
+  `str::hash` instructions) and `str::eq`'s 1.31M calls.
+
 - Compiler speed, batch 14: the backend `-O0` pin is gone (2026-10-21).
   `bin/build_module.sh` exempted `backend` from `$XOPT` since batch 8. The
   reason was never codegen: the crash that put it there was the resolver

@@ -56,7 +56,24 @@ call like to_list<i32>(..) should work
 //tail of the type-argument list. (Nested `match` was re-checked the same day
 //and works, so that todo line is gone.)
 
-//"-O0.5" codegen pipeline (2026-10-21, measured): the default (no -O) pipeline
+//compile-time profile (2026-10-21, after the -O0 pin came off; numbers in
+//handoff.md): 41.5% LLVM, 38.3% libc (malloc/free/memcpy), 11.9% x std helpers
+//on a 25-file -O2 module compile. The front end's cost is allocation churn and
+//str hashing/comparison, not parser/resolver logic. Concrete, unstarted:
+//Instruction-level shaving in std does not reach the wall clock (measured, see
+//handoff.md): dropping the per-element loop in `List::drop_elems` (1.6% of Ir)
+//and reserving 32 bytes in `Fmt::new` (-33k of 1.2M allocations) both left the
+//time unchanged. What is left, in order:
+//1. fewer clones/allocations structurally: `String::clone` is 698k allocations
+//   per 25-file compile; `Type::print` (89k) returns an owned String on the
+//   mangling path where appending into the caller's buffer would do;
+//   `clone_simple`/`Desc::clone` clone per lookup.
+//2. front-end arena for short-lived strings (malloc+free+memcpy = 38% of the
+//   model); a design change, needs a decision.
+//3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per
+//   compile, half of `str::hash`'s instructions).
+
+//"-O0.5" codegen pipeline (2026-10-21, measured)//"-O0.5" codegen pipeline (2026-10-21, measured): the default (no -O) pipeline
 //is `globaldce` only, and that is why `#[inline]` buys nothing there: without
 //mem2reg the inlined bodies' allocas are not promoted, so removing a call to a
 //two-instruction helper replaces it with several stack loads/stores (a 4M
