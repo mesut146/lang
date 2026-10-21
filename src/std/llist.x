@@ -1,27 +1,27 @@
 //#derive(Debug)
 struct LinkedList<T>{
-    head: Option<Node<T>>;
+    head: Option<LNode<T>>;
 }
 
 //#derive(Debug)
-struct Node<T>{
+struct LNode<T>{
     val: T;
-    next: Option<Box<Node<T>>>;
+    next: Option<Box<LNode<T>>>;
 }
 
-impl<T> Node<T>{
-    func new(val: T): Node<T>{
-        return Node<T>{val, Option<Box<Node<T>>>::new()};
+impl<T> LNode<T>{
+    func new(val: T): LNode<T>{
+        return LNode<T>{val, Option<Box<LNode<T>>>::new()};
     }
     
-    func new(val: T, next: Node<T>): Node<T>{
-        return Node<T>{val, Option::new(Box::new(next))};
+    func new(val: T, next: LNode<T>): LNode<T>{
+        return LNode<T>{val, Option::new(Box::new(next))};
     }
 }
 
 impl<T> LinkedList<T>{
     func new(): LinkedList<T>{
-        return LinkedList<T>{head: Option<Node<T>>::new()};
+        return LinkedList<T>{head: Option<LNode<T>>::new()};
     }
     
     func len(self): i32{
@@ -68,9 +68,9 @@ impl<T> LinkedList<T>{
                 //None behind, so every temp drops only what remains; the
                 //old head's val still drops exactly once via its temp.
                 let nx = self.head.take().unwrap().next.take().unwrap().unwrap();
-                self.head = Option<Node<T>>::new(nx);
+                self.head = Option<LNode<T>>::new(nx);
             }else{
-                self.head = Option<Node<T>>::new();
+                self.head = Option<LNode<T>>::new();
             }
             return;
         }
@@ -99,21 +99,21 @@ impl<T> LinkedList<T>{
     
     func add(self, val: T): T*{
         if(self.head.is_none()){
-            self.head.set(Node::new(val));
+            self.head.set(LNode::new(val));
             return &self.head.get().val;
         }
         let last = self.head.get();
         while(last.next.is_some()){
             last = last.next.get().get();
         }
-        last.next.set(Box::new(Node::new(val)));
+        last.next.set(Box::new(LNode::new(val)));
         //&last.next.get().get().val
         let bx = last.next.get();
         return &bx.get().val;
     }
     
     func clear(self){
-        self.head = Option<Node<T>>::new();
+        self.head = Option<LNode<T>>::new();
     }
     
     func indexOf(self, val: T*): i32{
@@ -133,7 +133,7 @@ impl<T> LinkedList<T>{
     }
 }
 
-impl<T> Debug for Node<T>{
+impl<T> Debug for LNode<T>{
     func debug(self, f: Fmt*){
         self.val.debug(f);
         if(self.next.is_some()){
@@ -152,7 +152,7 @@ impl<T> Debug for LinkedList<T>{
     }
 }
 
-impl<T> Display for Node<T>{
+impl<T> Display for LNode<T>{
     func fmt(self, f: Fmt*){
         Debug::debug(self, f);
     }

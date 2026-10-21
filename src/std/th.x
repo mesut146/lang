@@ -150,7 +150,7 @@ func worker_bridge(arg: c_void*){
   //drops were off and remove() leaked. after this point `info` and `cur`
   //dangle: only `worker` (copied above) and fresh locks are used below.
   let i = 0;
-  let cur: Node<Box<WorkerBridgeInfo>>* = infos.head.get();
+  let cur: LNode<Box<WorkerBridgeInfo>>* = infos.head.get();
   while(true){
       if(cur.val.get().th.get().id == info.th.get().id){
           infos.remove(i);

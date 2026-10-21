@@ -1,21 +1,21 @@
 //sorted set
 struct Set<T>{
-    head: Option<Node<T>>;
+    head: Option<SetNode<T>>;
     count: i32;
 }
-struct Node<T>{
+struct SetNode<T>{
     val: T;
-    next: Ptr<Node<T>>;
+    next: Ptr<SetNode<T>>;
 }
-impl<T> Node<T>{
-    func new(val: T): Node<T>{
-        return Node<T>{val: val, next: Ptr<Node<T>>::new()};
+impl<T> SetNode<T>{
+    func new(val: T): SetNode<T>{
+        return SetNode<T>{val: val, next: Ptr<SetNode<T>>::new()};
     }
 }
 
 impl<T> Set<T>{
     func new(): Set<T>{
-        return Set<T>{head: Option<Node<T>>::new(), count: 0};
+        return Set<T>{head: Option<SetNode<T>>::new(), count: 0};
     }
     func len(self): i64{
         return self.count;
@@ -23,10 +23,10 @@ impl<T> Set<T>{
     func add(self, e: T){
         if(self.len() == 0){
             ++self.count;
-            self.head.set(Node<T>::new(e));
+            self.head.set(SetNode<T>::new(e));
             return;
         }
-        let cur: Node<T>* = self.head.get();
+        let cur: SetNode<T>* = self.head.get();
         for(let i = 0;i < self.len();++i){
             let cmp = Compare::compare(&e, &cur.val);
             if(cmp == 0){
@@ -37,13 +37,13 @@ impl<T> Set<T>{
                 continue;
             }
             if(i == 0){
-                /*let old: Node<T> = self.head.unwrap();
-                let node = Node<T>::new(e);
+                /*let old: SetNode<T> = self.head.unwrap();
+                let node = SetNode<T>::new(e);
                 node.next = Ptr::new(old);
                 self.head = Option::new(node);*/
             }else{
                 //let cur_tmp = prev.next.unwrap();
-                //let new_node = Node<T>::new(e, cur_tmp);
+                //let new_node = SetNode<T>::new(e, cur_tmp);
                 //prev.next = Ptr::new(new_node);
             }
 
@@ -61,7 +61,7 @@ impl<T> Debug for Set<T>{
         f.print("Set{len: ");
         f.print(&self.count);
         f.print(", elems: ");
-        let cur: Node<T>* = self.head.get();
+        let cur: SetNode<T>* = self.head.get();
         for(let i = 0;i < self.len();++i){
             if(i > 0){
                 f.print(", ");

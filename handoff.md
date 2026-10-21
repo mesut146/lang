@@ -1208,6 +1208,19 @@ Ownership only — no Rust-like borrows:
   (C == D), and `tests/normal/58-empty-and-growth.x` pins the empty-value
   behaviour (len/eq/print/clone on an empty String and List) and 1000 small
   appends plus 1000 adds.
+  The first CI run of this batch died in the *bootstrap* stage: stage1 (built
+  by the v1.18 toolchain, which still has the bare-name resolver bug) segfaulted
+  in `List<Thread>::add` while building std for stage2. With the lazy `List` the
+  stale layout finally mattered: stage1's own backend module still lays
+  `Worker` out as 160 bytes (llist's `Node<T>` resolving to ast's plain `Node`)
+  while std writes 168, so `Worker::threads.cap` landed outside the alloca and
+  held garbage. Fixed by renaming std's internal node types -- llist
+  `Node<T>` -> `LNode<T>`, set `Node<T>` -> `SetNode<T>` -- which removes the
+  collision for any compiler, old or new (the two std node types also collided
+  with each other, both arity 1, which the resolver fix cannot disambiguate).
+  Re-verified through the real bootstrap: v1.18 -> stage1 (now emits
+  `[24 x i8]` for `Option<LNode<...>>`, compiles std) -> stage2, suite green,
+  C == D.
 
 - Compiler speed, batch 10: String/List hot paths (2026-10-21).
   Re-profiled after batch 8 (the front end is -O2 now). The sampler in
