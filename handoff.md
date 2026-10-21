@@ -1219,6 +1219,13 @@ Ownership only — no Rust-like borrows:
   `default-jobs: pass`), C == D byte-identical, and
   `tests/normal/59-str-cmp-hash.x` pins cmp's trailing-NUL/length ordering,
   eq, hash consistency and a 2000-key map round-trip.
+  One investigation worth not repeating: when a compile is pointed at `src/std`
+  itself (`-stdpath src`, no prebuilt `std.a`), the compiler first builds the
+  std *library* on demand, in-process, at -O0 and without forwarding `-O`, and
+  those are the `.ll` files and markers you then see for `src/std/*.x`. That is
+  the intended fallback path (the release prebuilds `std.a` at -O2 via
+  build_module.sh), not `-O2` being dropped: `-O2` does reach module builds,
+  and serial (`-j 0`) and parallel (`-j N`) builds agree.
 
 - Compiler speed, batch 11: lazy lists and geometric reserve (2026-10-21).
   callgrind on a single-file compile (`src/resolver/resolver.x`, which includes
