@@ -70,12 +70,14 @@ Notes:
 
 3. The `Clone` question (deferred, facts first)
 -----------------------------------------------
-`trait Clone{ func clone(self): Self; }` (src/std/ops.x:46) is by value, and
-the derived clone calls it with a *pointer* to the field
-(`Clone::clone(self as X*)`, src/resolver/derive.x:122). So a share-on-clone
-`Rc` would have to (a) suppress the drop of the moved-in handle
-(`std::no_drop`, as `Box::new` does for its argument) and (b) rely on the
-pointer-to-value conversion at the derive site not consuming the original.
+`trait Clone{ func clone(self): Self; }` (src/std/ops.x:46) takes the receiver
+by value, and no `Clone` impl in std takes `*self`. The derived clone emits
+`.clone()` on every owning field (src/resolver/derive.x:137; the base field at
+:122 goes through `Clone::clone(self as X*)`), i.e. the receiver is a field
+*value* moved into the call. So a share-on-clone `Rc` would have to suppress
+the drop of that moved-in handle (`std::no_drop`, as `Box::new` does for its
+argument) and still leave the containing struct's field valid -- which is
+exactly what needs the experiment.
 
 Whether that is expressible cleanly needs a small x-level experiment
 (`#derive(Clone)` on `struct S{ r: Rc<i32>; }` with a share `Clone`). Until
