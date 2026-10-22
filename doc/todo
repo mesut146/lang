@@ -71,13 +71,26 @@ call like to_list<i32>(..) should work
 //   are gone (batch 18: Fmt::str moves its buffer out, Fmt::print has a
 //   String* overload); `Simple.name`'s 228k are gone too (batch 19: a `str`
 //   into a process-lifetime name pool, so a type copy no longer allocates,
-//   -6.4% on the -O2 self-build). Left: ~56k mallocs per compile, one per new
-//   name-only type -- a chunked pool would remove them but needs a lock
-//   because units compile on in-process threads; and the RType-copy pattern
-//   itself, which wants interned/shared types (rustc's `Ty<'tcx>`) rather
-//   than a field change.
-//2. front-end arena for short-lived strings (malloc+free+memcpy = 38% of the
-//   model); a design change, needs a decision.
+//   -6.4% on the -O2 self-build); the lexer's per-token String is gone too
+//   (batch 20: `Token.value` is a `str` into the source buffer, and `next0`
+//   probes the operator map with a one-char slice -- 292k allocations, -3.6%
+//   on the std set, -8.8% on `src/backend`, -5.8% on the self-build).
+//   Re-baselined 2026-10-22 with `bin/mcnt.{c,py}` (allocation counts, cold
+//   std compile, wiped out dir): 1.69M -> 1.39M allocations per 25-file
+//   compile, `List<u8>` buffers 831k -> 536k. The top remaining sites are the
+//   type-copy traffic -- `List<Type>` buffers 66k, `Simple::new` 45k,
+//   `clone_type` 44k, `VarHolder::clone` 27k -- plus ~56k mallocs, one per new
+//   name-only type from the intern pool (a chunked pool would remove them but
+//   needs a lock because units compile on in-process threads). The RType-copy
+//   pattern itself wants interned/shared types (rustc's `Ty<'tcx>`) rather
+//   than another field change: design note in doc/types_interning.txt (stage 1
+//   interns `Simple`, stage 2 turns AST type fields into ids and keys the
+//   generated-method memo on them, stage 3 memoises mangles).
+//2. front-end arena for short-lived strings: still the structural option for
+//   the 536k remaining `List<u8>` buffers (malloc+free+memcpy was 38% of the
+//   modelled cycles); a design decision, needs a call. Cheaper first: the
+//   remaining `str::owned` in `Parser::prim`/`MethodResolver::get_impl` and
+//   `String::clone` in `Parser::gen_part`, seen in the sampled stacks.
 //3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per
 //   compile, half of `str::hash`'s instructions).
 //`#[inline]` in std (2026-10-21): now on `List::get`/`get_internal` and

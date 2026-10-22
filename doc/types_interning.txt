@@ -1,0 +1,233 @@
+interned types (hash-consed `Type`): design note
+STATUS: not implemented. Proposal written 2026-10-22, after the batch 20
+allocation re-baseline made type traffic the top non-string cost. Sections 0-4
+are the analysis, 5-7 the staged plan, 8-9 the open questions and the gate.
+
+0. Where the types are today
+----------------------------
+`enum Type: Node` (src/ast/ast.x:598) is a by-value tree, embedded in every
+AST node that has a type:
+
+    enum Type: Node{
+      Simple{type: Simple},
+      Pointer{type: Box<Type>},
+      Array{type: Box<Type>, size: i32},
+      Slice{type: Box<Type>},
+      Function{type: Box<FunctionType>},
+      Lambda{type: Box<LambdaType>},
+      Tuple{type: TupleType},
+    }
+    struct Simple{ scope: Ptr<Type>; name: str; args: List<Type>; }  // :524
+
+So `Decl.type`, `Param.type`, `Method.type`, `Signature`, `Item`, every typed
+`Expr`, and `RType.type` (resolver.x:378) each own a full copy of the tree.
+`Simple.name` is already an interned slice (batch 19, ast.x:540); nothing else
+is shared.
+
+Three things are paid per copy:
+
+- `clone_type` (ast.x:854) walks the tree, `Box::new`-ing every Pointer/Array/
+  Slice and building a `List<Type>` for every Simple with arguments.
+  Measured on a 25-file std compile: 275,209 calls, 228,354 of them Simple
+  (83%); after batch 20 the allocation sites are still `List<Type>` 66,477
+  (4.8% of all allocations), `Simple::new` 45,420 + 7,210, `clone_type`
+  43,666, `VarHolder::clone` 27,248 (`Option<VarHolder>::clone` 23,597).
+  `RType::clone` (resolver.x:423) is 115,973 calls and deep-copies the type.
+  There is a hand-written fast path for exactly this reason: `clone_type`
+  exists because the generic `.clone()` allocates a HashMap per node (ast.x:850).
+- `eq_value` (ast.x:923) is structural recursion, ending in `str::eq` of the
+  names and on the args, for every overload check and inference step. The
+  comment there says the old print-and-compare round trip dominated profiles.
+- `mangleType` (ast.x utils.x:189) walks the tree into a `Fmt` to build symbol
+  names *and string keys*: `MethodResolver::gen_key` (method_resolver.x:639)
+  mangles a method + its inferred map and the generated-method memo is keyed by
+  that String. That is where the ~72k remaining `Fmt` buffer allocations come
+  from, plus the `str::hash`/`str::cmp` on the key.
+
+Second-order: the resolver's substitution maps are `HashMap<String, Type>`
+(resolver.x:2468 `make_type_map`, method_sig.x:133/159, method_resolver.x:522
+`infer`), so every instantiation copies types *into* a map and out again.
+
+1. What interning changes
+-------------------------
+Hash-consing: one canonical object per distinct type; AST fields hold a handle
+instead of the tree. Construction goes through `intern()`; an equal type
+already present returns the existing handle.
+
+    operation        today                              interned
+    ---------------  ---------------------------------  -------------------------
+    copy a type      deep copy, Boxes + List<Type>      copy one id
+    equality         recursive eq_value + str::eq       id_a == id_b
+    hash             mangle/print to a String, hash it  hash the id
+    memory           one tree per occurrence            one node per distinct type
+    mangle/print     rebuilt per use                    once per node, cached
+
+The last row is the part worth more than the allocation count: with ids,
+`gen_key`'s memo is an integer-keyed map and the mangle-to-String path leaves
+the hot loop entirely, together with the `str::hash`/`str::cmp` traffic on
+those keys (the pre-batch-17 profile had `str::cmp` 4.7% / `str::hash` 3.4% of
+instructions, a large part of it type-keyed lookups).
+
+2. Why this codebase fits
+-------------------------
+- Types are already *logically immutable* after construction: `Simple.scope`
+  and `args` are only written in `Simple::new`, and generic instantiation
+  *creates* a new type rather than mutating one. That is the precondition for
+  hash-consing.
+- The mutable part lives outside the type: `RType{value, vh, desc,
+  method_desc, fp_info, lambda_call}` (resolver.x:378) is resolver metadata and
+  must stay out of the interned node. Intern the structural type only.
+- Type traffic is the last big structural item: after batch 20 the profile is
+  1.39M allocations, of which 536k are string buffers (the next arena/cleanup
+  target) and ~180k are type construction/copy.
+- `-cache` keys on sources and stores `.ll`/`.o`, so interned ids never have to
+  be serialised or survive a process.
+
+3. Sketch
+---------
+    struct TypeCtx{
+      nodes: List<TypeNode>;            // arena, append-only
+      map: HashMap<TypeKey, TypeId>;    // structural key -> canonical id
+    }
+    struct TypeId{ idx: i32 }           // 4 bytes, pass-by-value
+
+    enum TypeNode{
+      Simple{scope: TypeId, name: str, args: List<TypeId>},
+      Pointer{to: TypeId},
+      Array{to: TypeId, size: i32},
+      Slice{to: TypeId},
+      Function{ret: TypeId, params: List<TypeId>},
+      Lambda{ret: Option<TypeId>, params: List<TypeId>},
+      Tuple{types: List<TypeId>},
+    }
+    func intern(ctx, node): TypeId       // args interned first, then lookup/insert
+    func eq(a, b): bool { return a.idx == b.idx }
+
+`Type` in AST fields becomes `TypeId` (or a tiny wrapper -- see 6, diagnostics).
+`mangleType` becomes a walk over ids; cache the produced String on the node.
+`Simple` disappears as a struct, or becomes an accessor over the node.
+
+4. Ownership and lifetime: the real problem
+-------------------------------------------
+The name pool (batch 19) is a process-lifetime static because a compiler
+process runs one compile. A type arena cannot be a static with the same
+argument, because **the parser builds types too and the LSP parses many
+documents in one process** (src/lsp): a global arena grows per keystroke.
+
+So the interner needs an owner: a `TypeCtx` living in the session/compiler and
+passed to the parser, resolver and backend (or a thread-local with a reset per
+unit/document, which is the same thing with worse visibility). That threading
+is the invasive half of the diff -- much more than the hash table.
+
+Cost of getting it wrong is a leak, not a crash (leaks are the safe direction
+in this codebase), but an LSP editing a large file would leak a type graph per
+re-parse.
+
+5. Threads
+----------
+Units compile on in-process threads (see the `-j` pool in bin/build_module.sh
+and the batch 19 note), so a single interning table is on a hot path under a
+lock. Options, in order of preference:
+
+  (a) per-unit `TypeCtx` -- no sharing while compiling, no locks at all, but
+      loses cross-unit sharing (most type traffic is within one unit anyway)
+      and ids are unit-local (fine, they are never persisted);
+  (b) sharded table (N buckets by hash) in one ctx, one mutex per shard;
+  (c) thread-local arenas + a merge/dedup pass, only if (a)+(b) measure badly.
+
+The generated-method memo and the mangled-name cache *are* cross-unit in
+practice (the resolver runs per unit too, so per-unit is still fine). Decide
+(a) vs (b) by measuring how many types are shared across units; a quick counter
+in the parser would answer it.
+
+6. What must not change
+-----------------------
+- **Mangled names**: they become symbol names. Interning changes where the
+  string comes from, not what it says: `mangleType`'s recursion order and
+  spelling stay byte-identical. The suite plus the A == B fixpoint check the
+  symbols; a dedicated guard should pin the mangling of a generic struct,
+  pointer/array/slice/tuple, function and lambda type (see 9).
+- **Diagnostics**: types currently carry `Node{id, line, pos}` and errors print
+  the type's line. Two structurally equal types from different lines would
+  share a node, so one line wins (the first seen). Decide: accept first-seen
+  line, or keep a `line` only in a non-interned wrapper at the use site.
+- **Node ids**: nothing may key a cache on a per-occurrence type node id after
+  interning, because equal types now share one. `Type::toPtr` (ast.x:638)
+  mints a fresh `Node` per pointer type -- pointer types must be canonically
+  interned as well, or `Pointer{i32}` would produce a new id per call.
+- **`RType`**: stays a by-value struct with a `TypeId` inside; `RType::clone`
+  gets cheaper for free (no type copy) but must not try to share the metadata.
+
+7. Staged plan
+--------------
+Stage 1 -- intern `Simple` only (contained, most of the win).
+  `Type::Simple` holds a `SimpleId`/`Simple*` into a table keyed by
+  `(scope, name, args)`; `clone_type` on a simple copies a handle; `eq_value`
+  on two simples is an id compare; `Simple::new` interns instead of building a
+  fresh node (the name is already interned, so the key compare is cheap).
+  Touches: ast.x (`Simple`, `Type::Simple`, `clone_type`, `clone_simple`,
+  `eq_value`, `toPtr`), plus call sites that construct `Simple` directly.
+  Expect: 83% of `clone_type` calls become pointer copies, `List<Type>` and
+  `Simple::new` allocation sites drop out; the remaining compound types still
+  deep-copy.
+Stage 2 -- intern all variants; AST fields become `TypeId`; substitution maps
+  and the generated-method memo key on ids (`HashMap<TypeId, Type>` /
+  `HashMap<ReturnPlusParams, ...>`), `gen_key` goes away.
+Stage 3 -- memoise per-node derived data: mangled name, printed form,
+  size/alignment, and the resolved `RType`.
+
+8. Expected gain, calibrated
+----------------------------
+Reference points from the same series: batch 17 removed 139k String clones and
+bought -3.2% on the std set / -8.4% on `src/backend`; batch 20 removed 294k
+allocations for -3.3% / -8.8%. Type traffic is ~180k allocations plus the
+string keys, so stage 1 alone should land in the -2..-4% range on std and more
+on the type-heavy `src/backend`; stage 2 adds the key-hashing win (a few tenths
+per lookup, hard to predict without the profile). The honest case for the work
+is not only the percentage: it makes inference/memoisation cheap enough to
+extend, which is where the next round of wins would come from.
+
+What this does *not* fix: LLVM (41.5% of the cycle model), the 536k remaining
+string buffers, or the parser/resolver logic itself.
+
+9. Cheaper alternatives to measure first
+----------------------------------------
+- Memoise the mangled string on `Simple` (a `String` field set on first
+  mangle): removes most of the 72k `Fmt` allocations without any ownership
+  surgery. Cheapest experiment of the lot; do it before stage 1 and keep it if
+  it holds.
+- Key the generated-method memo on the already-interned *name* pointer (or its
+  hash) instead of rebuilding a mangled String.
+- `RType`: make its `type` a `Ptr<Type>` for the clone-heavy paths only, before
+  the full id conversion.
+- `VarHolder::clone` (27k allocations): plain data, worth a look independently
+  of types.
+
+10. Measurement protocol
+------------------------
+- Allocations: `bin/mcnt.c` on a cold 25-file std compile (wiped out dir, see
+  the header comment in bin/mcnt.c); the numbers above are its output for
+  1,391,364 allocations, `List<Type>` 66,477 / `Simple` 52,630 / `clone_type`
+  43,666.
+- Wall clock: interleaved A/B, wiped out dirs, medians (the batch 17-20
+  method; 3-5 rounds, best and median reported).
+- Gates: full suite with `MALLOC_CHECK_=3`, `normal pass=...`; A == B
+  byte-identical (no mangling change expected: if A != B, the change rewrote
+  symbol names and the fixpoint has to be shown stage by stage as in the
+  validation protocol);
+- Guard test (new `tests/normal/`): build the same type two ways (literal,
+  through a generic instantiation, through a `Type::toPtr`, through a cloned
+  decl), assert they mangle identically and that method resolution picks the
+  same impl; plus one pointer/array/slice/tuple/function/lambda shape each, so
+  a lips-of-canonicalisation bug fails loudly instead of picking a different
+  instantiation.
+
+11. Open questions (need an answer before coding)
+------------------------------------------------
+Q1  Stage 1 only (Simple), or straight to ids for every variant?
+Q2  Interner owner: a `TypeCtx` in the session (explicit parameter) or a
+    thread-local with a per-unit/document reset?
+Q3  Threads: per-unit ctx (no locks) or one sharded ctx?
+Q4  Diagnostics: accept the first-seen line for equal types?
+Q5  Do types keep any per-occurrence identity (`Node.id`) at all, or does
+    everything key on the interned id?
