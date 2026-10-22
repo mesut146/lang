@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-22. Main: `b1dbc53` (owns `681a8cc` array places, place
+Date: 2026-10-22. Main: `d0d3375` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -35,9 +35,18 @@ build it, the import/hash/cmp batch `23d1132`, `#[inline]` support
 dropped backend `-O0` pin `20010a2`, the post-pin compile profile `d338598`,
 the "-O0.5" default pipeline `fc71f94`, and `#[inline]` on the hot generic
 std helpers `fb1cc71`, the borrowed `Desc.path` `b26d47d`, the `Fmt`
-print/str copies `fae3949`, and the interned type names `b1dbc53`).
+print/str copies `fae3949`, the interned type names `b1dbc53`, and the CI
+LLVM cache `d0d3375`).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
+CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
+downloading the LLVM 19 debs into `build/tmp` when the ubuntu mirror was slow
+(28.7MB at 95KB/s, 47.5MB at 158KB/s; the build itself was 60s, run
+39768192290). `bin/build.sh`/`bin/termux.sh` now wipe `build` but keep
+`build/tmp`, and the workflow caches it (`llvm19-$os-$hash(llvm.sh,apt.sh)`,
+172MB compressed): a rerun restored it in 1.5s and the job went 12m04s ->
+2m17s (run 39771898890). The docker jobs are unchanged (they install LLVM
+inside the image, where the Dockerfile drops the copied `build/`).
 v1.19 released at `6381a27` (tag `v1.19`, CI run 39586272340 green: all three
 toolchains built from the v1.18 bootstrap, tested and published). The published
 x86_64 artifact reports `x version 1.19` and compiles+runs the guards added in
