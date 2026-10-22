@@ -219,7 +219,7 @@ string buffers, or the parser/resolver logic itself.
   through a generic instantiation, through a `Type::toPtr`, through a cloned
   decl), assert they mangle identically and that method resolution picks the
   same impl; plus one pointer/array/slice/tuple/function/lambda shape each, so
-  a lips-of-canonicalisation bug fails loudly instead of picking a different
+  a loss-of-canonicalisation bug fails loudly instead of picking a different
   instantiation.
 
 11. Open questions (need an answer before coding)
