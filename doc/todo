@@ -69,9 +69,10 @@ call like to_list<i32>(..) should work
 //   (139k clones gone, -3.2% on the std module set, -8.4% on the
 //   resolver-heavy `src/backend` -- handoff.md batch 17). Remaining:
 //   `clone_simple`/`Simple.name` (226k clones: the name is an owned String in
-//   a struct copied on every RType clone) and `Type::print` (89k, owned String
-//   on the mangling path); the RType-copy pattern itself needs a pointer /
-//   interning design rather than a field change.
+//   a struct copied on every RType clone) is left; `Type::print`'s 89k are
+//   gone (batch 18: Fmt::str moves its buffer out, Fmt::print has a String*
+//   overload); the RType-copy pattern itself needs a pointer / interning
+//   design rather than a field change.
 //2. front-end arena for short-lived strings (malloc+free+memcpy = 38% of the
 //   model); a design change, needs a decision.
 //3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per

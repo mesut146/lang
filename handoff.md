@@ -1189,6 +1189,31 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 18: type printing no longer copies the String
+  (2026-10-22). `Type::print()` is `Fmt::str(self)`, and that path is the
+  mangling/lookup key (89k `String::clone` calls per 25-file compile). Two
+  shapes were responsible, both in `Fmt`:
+  1. `Fmt::str<T>` returned `f.buf.clone()` -- a full copy of everything it had
+     just built, on every call. It now moves the buffer out through `unwrap`
+     (the move-out-and-suppress-drop helper `Fmt` users already call by hand).
+  2. `Fmt::print` had only a by-value `String` overload, so `f.print(&field)`
+     -- what every Debug impl writes, e.g. `Debug for Simple` printing
+     `self.name` -- bound to the generic `print<T>(node: T*)` and went through
+     `Debug::debug(node, ..)`, whose `self: String` is by value: the field was
+     deep-copied just to print it. A non-generic `print(self, s: String*)`
+     overload appends the slice instead.
+  Measured, same compiler both sides and only these two changes differing
+  (interleaved, serial): the 25-file std module set at default -O
+  2152 -> 2040ms best of four (-5.2%; medians 2169 -> 2071, -4.5%; every round
+  faster); the mangling-heavy `src/backend` 14,814 -> 13,591ms (-8.3%).
+  Guard: `tests/normal/62-fmt-string-print.x` pins the text of both paths (the
+  by-value `print(String)` path, the `String*` field path through a derived
+  Debug, and the empty/String-null-buffer case); its output was compared before
+  and after the change and is identical.
+  Correctness: suite green (`normal pass=121`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`, `buildflags: pass`, `pipeline: pass`), C == D
+  byte-identical.
+
 - Compiler speed, batch 17: `Desc.path` is a borrowed slice (2026-10-22).
   Every RType copy clones its `Desc`, and `Desc.path` was an owned `String`, so
   a type lookup copied a *path* -- 138,734 of the 697,836 `String::clone` calls

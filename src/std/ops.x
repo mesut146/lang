@@ -125,6 +125,14 @@ impl Fmt{
   func print(self, s: String){
     self.buf.append(&s);
   }
+  //A non-generic `String*` overload: `print(&field)` (what every Debug impl
+  //does) otherwise binds to the generic `print<T>(node: T*)`, which calls
+  //`Debug::debug(node, ...)` -- and that takes `self: String` by value, so the
+  //field was deep-copied just to print it. Printing a type name went through
+  //this on every mangling/lookup key (89k allocations per 25-file compile).
+  func print(self, s: String*){
+    self.buf.append(s.str());
+  }
   func print<T>(self, node: T*){
     Debug::debug(node, self);
   }
@@ -132,8 +140,11 @@ impl Fmt{
   func str<T>(node: T*): String{
     let f = Fmt::new();
     Debug::debug(node, &f);
-    let res = f.buf.clone();
-    return res;
+    //move the built buffer out: `f.buf.clone()` copied the whole result (a
+    //fresh allocation per `Type::print()`, which is the mangling/lookup key
+    //path). `unwrap` is the same move-out-and-suppress-drop that Fmt users
+    //already do by hand.
+    return f.unwrap();
   }
 }
 
