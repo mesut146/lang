@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-22. Main: `1621c2a` (owns `681a8cc` array places, place
+Date: 2026-10-22. Main: `17b02f7` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -53,6 +53,15 @@ toolchains built from the v1.18 bootstrap, tested and published). The published
 x86_64 artifact reports `x version 1.19` and compiles+runs the guards added in
 this cycle (`57-string-bytes`, `59-str-cmp-hash`, `60-inline-attr`). Next
 release v1.20 bootstraps from v1.19. Releases: v1.11 -- v1.19.
+v1.20 released at `17b02f7` (tag `v1.20`, CI run 39797060258 green: all three
+toolchains built from the v1.19 bootstrap, tested and published). The tag log
+confirms "building 1.20 from bootstrap 1.19" and `normal pass=123`, and the
+cached LLVM install kept the x86_64 job at 1m59s (the whole run 5m01s). The
+published x86_64 artifact reports `x version 1.20` and compiles+runs the guards
+added in this cycle (`61-lambda-struct-return`, `62-fmt-string-print`,
+`63-type-name-intern`, `64-lexer-token-text`, plus `33-custom-printer` against
+the packaged std). Next release v1.21 bootstraps from v1.20. Releases:
+v1.11 -- v1.20.
 
 ## Design contract (user-approved, do not relitigate without asking)
 
