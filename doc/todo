@@ -1,4 +1,12 @@
  
+//std: reference-counted shared ownership (Rc, later Arc) -- design note in
+//doc/rc.txt. One heap cell {count, payload}; sharing is explicit via
+//`share(*self)` (v1 has no Clone impl, so a derive over a struct with an Rc
+//field fails loudly instead of silently aliasing); the payload is dropped
+//exactly once, at the last handle; cycles leak (no Weak in v1). Pure std code,
+//no compiler change; `Arc` waits on an atomics decision (libatomic externs +
+//-latomic vs a pthread mutex in the cell).
+
 //user macros slice 3 landed: `macro name(p: Expr, n: i32){...}` + `name!(...)`
 //-- an `Expr` parameter is a syntax slot (each reference is replaced by a copy
 //of the argument, the body is copied per call site), any other declared type is

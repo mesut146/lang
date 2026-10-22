@@ -1,0 +1,189 @@
+reference-counted shared ownership (`Rc` / `Arc`): design note
+STATUS: not implemented. Proposal only (2026-10-22). Intended as a std
+feature, on its own track: it is *not* the fix for the compiler's type copies
+(that is interning, see doc/types_interning.txt, section 2). Sections 1-8 are
+the design, 9-10 the test plan and the open questions.
+
+0. What std has today
+---------------------
+- `Box<T>` (src/std/box.x): `#drop`, one owner, `unwrap` moves the payload out
+  and frees the cell, `Drop` = `Drop::drop(self.unwrap())`, and `Clone` is a
+  *deep* copy (`Box<T>::new(Clone::clone(self.val))`, box.x:51).
+- `Ptr<T>`: an optional `Box<T>` (nullable owned pointer).
+- `RawPtr<T>`: a `free`-on-drop wrapper for C pointers.
+- `Mutex<T>` (src/std/th.x): `pthread_mutex_t` + the value inline, `lock()`
+  returns `T*`, `unlock()`, and a `Drop` that destroys the mutex.
+- `Thread`/`Worker`: pthread-backed, and user programs use them (20_worker).
+- Nothing shares ownership: every value has exactly one owner, and `Clone`
+  means "independent deep copy" everywhere it exists.
+- There are no atomics anywhere in std or the compiler (no `__atomic_*`, no
+  `Atomic*` types). pthread is already bound directly, which is the precedent
+  for adding a second low-level dependency if needed.
+
+1. Semantics
+------------
+`Rc<T>` (reference counted) is a handle to a heap cell holding `{count, T}`;
+all handles are equal owners, and the last one to drop destroys the payload and
+frees the cell. Consequences:
+
+- Shared payloads must be treated as immutable *by convention*. x has no
+  borrow checker and `get()` has to return a `T*`, so two handles can mutate the
+  same `T`. If mutation is needed, put a `Mutex<T>` in the cell
+  (`Rc<Mutex<T>>`), which is the idiom the language can actually enforce.
+- Pass-by-value moves a handle, so sharing is always explicit (`share()`,
+  section 2). That is deliberate: no hidden copy on assignment.
+- Cycles leak. The design contract says leaks are the safe direction, so this
+  is acceptable; `Weak` is the upgrade path (section 10, Q5).
+- The payload is dropped exactly once, at the last drop -- the "compiler
+  manages frees, every owned buffer freed exactly once" rule holds.
+
+2. API (v1)
+-----------
+    struct RcInner<T>{ count: i64; val: T; }
+    struct Rc<T>{ ptr: RcInner<T>*; }
+
+    impl<T> Rc<T>{
+      func new(val: T): Rc<T>            // count = 1, cell from malloc<RcInner<T>>
+      func share(*self): Rc<T>           // +1, returns a new owner
+      func get(self): T*                 // read-only by convention
+      func count(self): i64              // strong count (debug/tests)
+      func unwrap(*self): T              // panic unless count == 1
+      func try_unwrap(*self): Option<T>  // None unless count == 1
+    }
+    impl<T> Drop for Rc<T>{ ... }        // -1; at 0 drop payload and free cell
+
+Notes:
+
+- `share` takes `*self` (a borrow, like `Box::unwrap(*self)`), not `self`: a
+  by-value receiver would move the caller's handle, and `let b = a.share()`
+  would then lose `a`.
+- **v1 deliberately has no `Clone` impl.** If `Rc` implemented `Clone` as a
+  refcount bump, `#derive(Clone)` on a struct with an `Rc` field would silently
+  alias instead of copying -- the opposite of what `Clone` means everywhere
+  else in std. With no `Clone` impl, such a derive fails to compile (loud) and
+  the user writes `share()`. Section 3 is the decision to revisit later.
+- `unwrap`/`try_unwrap` exist because moving the payload out without a copy is
+  the common way to end a shared lifetime; they are the `Rc::unwrap` analogue
+  of `Box::unwrap`, and must not free the cell twice.
+- A `#derive(Debug)`-style impl (count + payload) is nice-to-have; `Debug for
+  Rc<T>` should print the count so cycle/leak debugging is possible.
+
+3. The `Clone` question (deferred, facts first)
+-----------------------------------------------
+`trait Clone{ func clone(self): Self; }` (src/std/ops.x:46) is by value, and
+the derived clone calls it with a *pointer* to the field
+(`Clone::clone(self as X*)`, src/resolver/derive.x:122). So a share-on-clone
+`Rc` would have to (a) suppress the drop of the moved-in handle
+(`std::no_drop`, as `Box::new` does for its argument) and (b) rely on the
+pointer-to-value conversion at the derive site not consuming the original.
+
+Whether that is expressible cleanly needs a small x-level experiment
+(`#derive(Clone)` on `struct S{ r: Rc<i32>; }` with a share `Clone`). Until
+then v1 stays as in section 2. If we adopt share-on-clone later, it is a
+language-level precedent ("Clone never aliased before") and must be documented
+in std's docs, not just in this note.
+
+4. Threads: `Rc` vs `Arc`, and the atomics we do not have
+--------------------------------------------------------
+`Rc` with a plain `i64` count is single-thread only. The type system has no
+`Send`/`Sync`, so an `Rc` smuggled into another thread is a *silent* race --
+this must be a loud comment in the std docs and in the type's doc block, not a
+footnote.
+
+For cross-thread sharing we need `Arc` (atomic count). std has no atomics at
+all. Options:
+
+  (a) libatomic symbols declared as externs:
+      `extern func __atomic_fetch_add_8(p: i64*, v: i64, order: i32): i64;`
+      (+ `__atomic_load_8`/`__atomic_store_8`/`__atomic_sub_fetch_8`).
+      libatomic exports these; they are real symbols, so this is pure x. Cost:
+      the link line for user programs needs `-latomic` (a compiler/backend
+      change, and every program inherits it), and the memory orderings
+      (`__ATOMIC_RELAXED/ACQUIRE/RELEASE`) become magic numbers in std.
+  (b) a C shim compiled into the std archive -- a new build product and a new
+      way for user programs to link C (bigger change than (a)).
+  (c) a pthread mutex inside the cell, counting under the lock. No new
+      dependency (Mutex already does exactly this), correct, but every
+      share/drop takes a lock -- fine for a first `Arc`, poor for a hot path.
+
+Recommendation: ship `Rc` first (v1, single-thread, documented), then `Arc`
+with (a) as the target and (c) as the stepping stone if the `-latomic` link
+change is unwanted. Do not ship a non-atomic type under a name that suggests
+it is thread-safe.
+
+5. Layout, allocation, drop glue
+--------------------------------
+- One allocation per shared value: `malloc<RcInner<T>>(1)`, count `i64`,
+  payload inline. Alignment comes from malloc; no tagging.
+- `Drop for Rc<T>`: decrement; at zero, `Drop::drop(payload)` then
+  `free(cell)`. Model it on `Box` (box.x:60): the payload drop must go through
+  `Drop::drop`, not a raw free, so a `String`/`List`/nested `Rc` inside is
+  destroyed correctly.
+- `unwrap(*self)`: move the payload out, `free(cell)`, `std::no_drop(self)`; if
+  `count != 1` it panics rather than returning a second owned copy.
+- `share(*self)`: `count += 1; return Rc{self.ptr};` -- `self` stays owned and
+  valid; this is why the receiver is `*self`.
+
+6. Ownership-analyzer interactions
+----------------------------------
+- `Rc` needs the `#drop` attribute (like `Box<T>`, box.x:2) so the analyzer
+  knows a handle owns a heap cell and that `Rc` values are not plain data.
+- The B2 rule ("a manual Drop body that names `self` suppresses derived field
+  frees") matters: `Drop for Rc<T>` touches `self.ptr` only, so the payload is
+  not a field the analyzer would free automatically -- exactly like `Box`,
+  where the cell is freed by hand in `unwrap`. The derived-free machinery must
+  not also drop `ptr`.
+- `share(*self)` returns a new owned handle without consuming `self`. Check
+  that the analyzer treats the returned struct as a fresh owned value (it does
+  for `Box::new`, which returns a new box around a moved-in payload).
+- Moving an `Rc` (pass by value) must not drop the source; that is the
+  ordinary move rule, but this is the first std type whose *copy* is a
+  refcount operation, so a test that moves a handle and then drops both ends
+  is required (section 9).
+
+7. Failure modes
+----------------
+- Cycles: leak (accepted). `Rc<T>` holding `Rc<T>` is the user's problem;
+  `Weak` would solve it and is out of v1.
+- Underflow: dropping a handle twice (a moved-from value) corrupts the count.
+  Prefer `panic("rc count underflow")` over `abort`, and rely on the ownership
+  rules + tests to catch moves.
+- `get()` after the last owner dropped: use-after-free, same class as
+  `Ptr`/`Box` misuse. Documented, not detectable.
+- Count overflow: not reachable in practice; saturating/panic choice is a
+  one-liner (pick panic, silently wrapping to 0 would free early).
+
+8. Implementation checklist
+---------------------------
+- `src/std/rc.x` (`Rc` v1; `arc.x` or the same file for `Arc` later), plus a
+  line in the std docs/README if std types are listed there.
+- No compiler change for v1: `Rc` is ordinary x code in std.a (`#drop`,
+  `Drop`, `malloc`/`free`). `Arc` needs the atomics decision (section 4).
+- Guards:
+  * `tests/normal/` API test: create, share to 3 owners, drop in different
+    orders, `count()`, `unwrap` of a unique handle, `try_unwrap` of a shared
+    one is `None`, payload mutation through `Rc<Mutex<T>>`.
+  * `tests/own/` drop-count test using `tests/own/common` (`A`/`B` trackers,
+    `check_ids`): the payload must be dropped exactly once, at the last
+    handle, whichever order the handles die in; a handle moved into a struct
+    field and out again drops once.
+  * `tests/leak/` is the natural home for a cell-leak case but valgrind is not
+    installed in this environment; the own-tracker test is the real gate.
+  * `MALLOC_CHECK_=3` on the suite (already the x86_64 gate).
+- Release note: a new std type (user-facing), not a compiler change; A == B is
+  unaffected by pure std additions.
+
+9. Open questions
+-----------------
+Q1  Name: `Rc`/`Arc` (familiar) or a neutral `Shared<T>`? `Rc` suggests
+    single-thread and `Arc` atomic, which is exactly the distinction we need.
+Q2  Do we ever implement `Clone` for `Rc`, or keep `share()` as the only
+    sharing operation? (section 3)
+Q3  `get()` returns `T*` -- accept "immutable by convention" or provide only
+    `Rc<Mutex<T>>`-style access helpers?
+Q4  `Arc`: libatomic externs + `-latomic` on every user program, or the
+    mutex-in-cell version first?
+Q5  `Weak<T>` now or never? (Cycles leak without it; the design contract
+    tolerates that.)
+Q6  Where do the docs live: a header comment in `rc.x` only, or a section in
+    doc/? std currently has no per-type docs, so `rc.x` may be enough.
