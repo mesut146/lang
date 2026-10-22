@@ -644,7 +644,7 @@ impl Resolver{
         }
       }
       //`use m::{name}`: the alias canonicalizes to the macro's full path
-      let alias = self.find_use_alias(name);
+      let alias = self.find_use_alias(name.str());
       if(alias.is_some()){
         let canon = alias.unwrap();
         let smp = canon.as_simple();
@@ -955,10 +955,10 @@ impl Resolver{
         let j = 0;
         for it2 in &md.items{
           if(scope.is_some()){
-            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            let scope2 = Option::new(Type::new(scope.get().clone(), md.name.str()));
             self.init_type_item(it2, j, &scope2);
           }else{
-            let scope2 = Option::new(Type::new(md.name.clone()));
+            let scope2 = Option::new(Type::new(md.name.str()));
             self.init_type_item(it2, j, &scope2);
           }
           j += 1;
@@ -983,7 +983,7 @@ impl Resolver{
         let desc = Desc{RtKind::Decl, self.unit.path.str(), idx, Option<Type>::new()};
         if(scope.is_some()){
           let qname = format("{:?}::{:?}", scope.get(), decl.type.name());
-          let ty = Type::new(scope.get().clone(), decl.type.name().clone());
+          let ty = Type::new(scope.get().clone(), decl.type.name());
           let res = RType::new(ty);
           desc.scope.set(scope.get().clone());
           res.desc = desc;
@@ -991,13 +991,13 @@ impl Resolver{
         }else{
           let res = RType::new(decl.type.clone());
           res.desc = desc;
-          self.addType(decl.type.name().clone(), res);
+          self.addType(decl.type.name().owned(), res);
         }
       },
       Item::Trait(tr) => {
         let res = RType::new(tr.type.clone());
         res.desc = Desc{RtKind::Trait, self.unit.path.str(), idx, Option<Type>::new()};
-        self.addType(tr.type.name().clone(), res);
+        self.addType(tr.type.name().owned(), res);
       },
       Item::Impl(imp) => {
         //pass
@@ -1024,11 +1024,11 @@ impl Resolver{
         for it2 in &md.items{
           let scope2 = Option::new(merge_scope(scope, md.name.clone()));
           if(scope.is_some()){
-            //let scope2 = Option::new(Type::new(scope.get().clone(), md.name.clone()));
+            //let scope2 = Option::new(Type::new(scope.get().clone(), md.name.str()));
             self.init_item(it2, j, &scope2);
             //scope2.drop();
           }else{
-            //let scope2 = Option::new(Type::new(md.name.clone()));
+            //let scope2 = Option::new(Type::new(md.name.str()));
             self.init_item(it2, j, &scope2);
             //scope2.drop();
           }
@@ -2078,10 +2078,10 @@ impl Resolver{
 
   //scan unit items (incl. modules) for a `use` aliasing name.
   //Returns the canonical type (owned) or None.
-  func find_use_alias(self, name: String*): Option<Type>{
+  func find_use_alias(self, name: str): Option<Type>{
     return self.find_use_alias_in(&self.unit.items, name);
   }
-  func find_use_alias_in(self, items: List<Item>*, name: String*): Option<Type>{
+  func find_use_alias_in(self, items: List<Item>*, name: str): Option<Type>{
     for(let i = 0;i < items.len();++i){
       let it = items.get(i);
       if let Item::Use(uit) = it{
@@ -2139,7 +2139,7 @@ impl Resolver{
     if(node.is_simple()){
       let smp = node.as_simple();
       if(smp.scope.is_none()){
-        let found = self.find_use_alias(&smp.name);
+        let found = self.find_use_alias(smp.name);
         if(found.is_some()){
           //unwrap moves; nothing of found remains to drop.
           let canon = found.unwrap();
@@ -2254,7 +2254,7 @@ impl Resolver{
           for(let i = 0;i < mdu.items.len();++i){
             let item = mdu.items.get(i);
             if let Item::Decl(decl) = item{
-              if(decl.type.name().eq(simple.name.str())){
+              if(decl.type.name().eq(simple.name)){
                 //generic member with concrete args: instantiate like
                 //visit_type2 does, keeping the module scope on the
                 //generated type so it cannot collide with a top-level
@@ -2266,7 +2266,7 @@ impl Resolver{
                   let map = make_type_map(simple, decl);
                   let copier = AstCopier::new(&map, &self.unit);
                   let decl0 = copier.visit(decl);
-                  let gnm = decl0.type.name().clone();
+                  let gnm = decl0.type.name();
                   let gargs = decl0.type.get_args().clone();
                   let gscp = simple.scope.get().clone();
                   let nsmp = Simple::new(gscp, gnm);
@@ -2286,7 +2286,7 @@ impl Resolver{
               }
             }
             if let Item::Module(nmd) = item{
-              if(nmd.name.eq(simple.name.str())){
+              if(nmd.name.eq(simple.name)){
                 let res = RType::new(nmd.name.str());
                 res.desc = Desc{RtKind::Module, scope.desc.path, i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
@@ -2309,7 +2309,7 @@ impl Resolver{
           self.addType(str.clone(), res.clone());
           return Result<RType, Error>::ok(res);
         }
-        findVariant(decl, &simple.name);
+        findVariant(decl, simple.name);
         //the pattern's type is its scope's (enum) type: generic-root
         //(Option<T>) or already-instantiated (Option<i32>). The old code
         //re-derived this via the decl's own spelling, which is never
@@ -2339,7 +2339,7 @@ impl Resolver{
     for hit in &arr{
       let i = 0;
       for m in &hit.imp.methods{
-        if(m.name.eq(&simp.name)){
+        if(m.name.eq(simp.name)){
           let desc = Desc{
             kind: RtKind::MethodImpl{i},
             path: m.path.str(),
@@ -2377,8 +2377,8 @@ impl Resolver{
   }
 
   func find_type(self, node: Type*, simple: Simple*): Result<RType, Error>{
-    let name = &simple.name;
-    let opt = self.typeMap.get(name);
+    let name = simple.name;
+    let opt = self.typeMap.get_str(name);
     if (opt.is_some()) {
       let rt: RType* = opt.unwrap();
       //The cache is keyed by the bare name, so a plain `Node` resolved
@@ -2471,12 +2471,12 @@ impl Resolver{
     for(let i = 0;i < type.args.len();++i){
       let arg = type.args.get(i);
       let prm = params.get(i);
-      map.add(prm.name().clone(), arg.clone());
+      map.add(prm.name().owned(), arg.clone());
     }
     return map;
   }
 
-  func find_imports(self, type: Simple*, str: String*): Option<RType>{
+  func find_imports(self, type: Simple*, str: str): Option<RType>{
     let arr = self.get_resolvers();
     //`Node<Box<T>>` must pick the generic `Node<T>` even when another import
     //also has a `Node` (ast declares a non-generic one): taking the first
@@ -2491,7 +2491,7 @@ impl Resolver{
     for (let i = 0;i < arr.len();++i) {
       let resolver: Resolver* = *arr.get(i);
       resolver.init();
-      let cached = resolver.typeMap.get(&type.name);
+      let cached = resolver.typeMap.get_str(type.name);
       if (cached.is_none()) {
         continue;
       }
@@ -2509,7 +2509,7 @@ impl Resolver{
         //before -- keep that path one-step, most lookups have no args and
         //should not scan every import of the unit.
         if(decl.is_some() && !decl.unwrap().is_generic){
-          self.addType(str.clone(), res.clone());
+          self.addType(str.owned(), res.clone());
           self.add_used_decl(decl.unwrap());
         }
         return Option::new(res);
@@ -2528,7 +2528,7 @@ impl Resolver{
     if(first.is_some()){
       let res = first.unwrap();
       if(first_decl.is_some() && !first_decl.unwrap().is_generic){
-        self.addType(str.clone(), res.clone());
+        self.addType(str.owned(), res.clone());
         self.add_used_decl(first_decl.unwrap());
       }
       return Option::new(res);
@@ -2536,7 +2536,7 @@ impl Resolver{
     return Option<RType>::new();
   }
   
-  func findVariant(decl: Decl*, name: String*): i32{
+  func findVariant(decl: Decl*, name: str): i32{
     let variants = decl.get_variants();
     for(let i=0;i<variants.len();++i){
       let v = variants.get(i);
@@ -2651,7 +2651,7 @@ impl Resolver{
         let idx = findVariant(decl, type0.name());
         let variant = variants.get(idx);
         fields0 = Option::new(&variant.fields);
-        type_opt = Option::new(Type::new(decl.type.clone(), variant.name.clone()));
+        type_opt = Option::new(Type::new(decl.type.clone(), variant.name.str()));
         if (decl.is_generic) {
             //infer from entries, like structs (Some{val: x} -> Option<i32>).
             //Zero-arg literals (None) cannot infer: inferStruct reports a
@@ -2663,7 +2663,7 @@ impl Resolver{
             let inferred: Type = self.inferStruct(node, &decl.type, &scp, hasNamed, &variant.fields, args);
             res = self.visit_type(&inferred);
             let gen_decl = self.get_decl(&res).unwrap();
-            let gen_idx = Resolver::findVariant(gen_decl, &variant.name);
+            let gen_idx = Resolver::findVariant(gen_decl, variant.name.str());
             fields0 = Option::new(&gen_decl.get_variants().get(gen_idx).fields);
         }
       },
@@ -2745,7 +2745,7 @@ impl Resolver{
         let target_type = &fields.get(i).type;
         MethodResolver::infer(&arg_type.type, target_type, &inferMap, type_params)?;
     }
-    let res = Simple::new(type.name().clone());
+    let res = Simple::new(type.name());
     //preserve module scope (M::Wrapper<T> infers M::Wrapper<i32>, not
     //bare), but never self-scope: for Option::Some the pattern scope is
     //the enum itself, and the inferred type is already that enum.
@@ -2757,7 +2757,7 @@ impl Resolver{
     }
     for (let i = 0;i < type_params.len();++i) {
         let tp = type_params.get(i);
-        let opt = inferMap.get(tp.name());
+        let opt = inferMap.get_str(tp.name());
         if (opt.is_none()) {
             self.err(node, format("can't infer type parameter: {:?}", tp));
         }
@@ -2860,9 +2860,9 @@ impl Resolver{
       self.err(expr, "node case");
     }
     let decl = decl_opt.unwrap();
-    let not_covered = List<String>::new();
+    let not_covered = List<str>::new();
     for ev in decl.get_variants(){
-      not_covered.add(ev.name.clone());
+      not_covered.add(ev.name.str());
     }
     let res = Option<RType>::new();
     let has_none = false;
@@ -2885,7 +2885,7 @@ impl Resolver{
             self.err(expr, format("invalid variant {}", smp.name));
           }
           not_covered.remove(idx);
-          let index = Resolver::findVariant(decl, &smp.name);
+          let index = Resolver::findVariant(decl, smp.name);
           let variant = decl.get_variants().get(index);
           if(args.len() != variant.fields.len()){
               self.err(case.line, format("variant field count doesn't match got: {} expected: {} variant: {}", args.len(), variant.fields.len(), variant.name));
@@ -4509,9 +4509,9 @@ impl Resolver{
         match item{
           Item::Module(md)=>{
             let scope2 = if(scope.is_some()){
-              Option::new(Type::new(scope.get().clone(), md.name.clone()))
+              Option::new(Type::new(scope.get().clone(), md.name.str()))
             }else{
-              Option::new(Type::new(md.name.clone()))
+              Option::new(Type::new(md.name.str()))
             };
             return self.list_impl(&md.items, type, tr, scope);
           },

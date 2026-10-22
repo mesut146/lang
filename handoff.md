@@ -1190,6 +1190,49 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 19: type names are interned slices, not Strings
+  (2026-10-22). `Simple.name` was an owned `String` inside a struct that is
+  deep-copied on every type clone: 228,354 `clone_simple` calls per 25-file
+  compile, 93% of the names 8 bytes or shorter (995 KB of name bytes in total,
+  4.4 B average) -- a third of the compiler's 698k `String::clone` calls, each
+  one malloc+memcpy+free of a 4-byte payload. `Simple.name` is now a `str` into
+  a process-lifetime name pool (`intern_name`, written on construction):
+  * `clone_simple`/`Clone for Simple` copy the 16-byte slice; `clone_simple`
+    builds the struct directly, so it never re-interns.
+  * `Simple::new`/`Type::new` keep their `String` overloads (delegating) and
+    gain `str` overloads, so `Type::new("void")` and friends no longer build a
+    String at all; literal call sites bind to the `str` form.
+  * `Type::name()` returns `str` (it used to hand out `String*`); the sites that
+    need an owned copy use `.owned()` (HashMap keys, `BaseDecl.name`, parser
+    calls/macro names).
+  * construction sites that cloned a Decl/ModDecl/variant name just to pass it
+    to `Type::new`/`Simple::new` (`md.name.clone()`, 8 places) now pass `.str()`:
+    the pool copies it immediately, so the temporary was pure waste.
+  * `HashMap::get_str` probes a `HashMap<String, _>` with a slice instead of
+    building an owned key (`s.owned()` per call); `contains_str` added on top.
+    `String::hash` is `str::hash` of the same bytes, so the probe matches.
+  Measured, same compiler both sides, interleaved and serial, medians: the
+  25-file std module set at default -O 2151 -> 2088ms (-3.0%, best rounds -3.5%);
+  the mangling-heavy `src/backend` 14,973 -> 12,929ms (-13.6%, best -14.3%; the
+  name-clone sweep at the construction sites was worth another -8.4% on top of
+  the field change alone); the full `-O2` self-build (devbuild: std, ast,
+  resolver, backend, parser) 37,598 -> 35,203ms (-6.4%).
+  The pool is never freed on purpose: a name must outlive every type that refers
+  to it, i.e. the whole compilation, and a compiler process compiles once (the
+  LSP only parses, so it interns just the names in each document). ~56k mallocs
+  per compile remain, one per newly constructed name-only type; a chunked arena
+  would remove them but needs a lock (units compile on in-process threads), so
+  it is left for later.
+  Guard: `tests/normal/63-type-name-intern.x` pins the paths that read a name
+  back -- one `Slot<T>` instantiation per element type with distinct method
+  bodies, generic functions, nested instantiations, enum-variant lookup by name,
+  derive output -- so a dangling or aliasing slice fails loudly instead of
+  silently merging two mangled symbols. Its output is identical on the old and
+  new compiler.
+  Correctness: suite green (`normal pass=122`, fmt, trace, lsp, opt, std, own,
+  fail, `default-jobs`, `buildflags`, `pipeline`, `path`), C == D
+  byte-identical.
+
 - Compiler speed, batch 18: type printing no longer copies the String
   (2026-10-22). `Type::print()` is `Fmt::str(self)`, and that path is the
   mangling/lookup key (89k `String::clone` calls per 25-file compile). Two

@@ -169,7 +169,7 @@ func generate_clone(r: Resolver*, decl: Decl*, unit: Unit*): Impl{
 
                 let self_id = unit.node(line);
                 let block_id = unit.node(line);
-                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+                let vt = Simple::new(decl.type.clone(), ev.name.str()).into(decl.line);
                 let is = IfLet{
                     type: vt,
                     args: List<ArgBind>::new(),
@@ -252,7 +252,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
         Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
-                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(decl.line);
+                let vt = Simple::new(decl.type.clone(), ev.name.str()).into(decl.line);
                 let then = Block::new(line, line);
 
                 for(let j = 0;j < ev.fields.len();++j){
@@ -380,7 +380,7 @@ func generate_printer(decl: Decl*, unit: Unit*, trait_name: str, method_name: st
         Decl::Enum(variants)=>{
             for(let i = 0;i < variants.len();++i){
                 let ev = variants.get(i);
-                let vt = Simple::new(decl.type.clone(), ev.name.clone()).into(line);
+                let vt = Simple::new(decl.type.clone(), ev.name.str()).into(line);
                 let then = Block::new(line, line);
 
                 //f.print({decl.type}::{ev.name})

@@ -156,11 +156,36 @@ impl<K, V> HashMap<K, V>{
         return self.insert(key, value);
     }
 
+    //Look up a `HashMap<String, V>` by a slice. String::hash is
+    //str::hash of the same bytes, so the probe needs no owned key: the old
+    //body built one per call (`s.owned()`), and the compiler's type-name
+    //lookups go through here.
     func get_str(self, s: str): Option<V*>{
         assert(std::print_type<K>().eq("String"));
-        let key_str = s.owned();
-        let res = self.get(&key_str);
-        return res;
+        let hash = s.hash();
+        let idx = self.get_index(hash);
+        let opt: Option<HashNode<K, V>>* = self.buckets.get(idx);
+        if(opt.is_none()){
+            return Option<V*>::new();
+        }
+        let node: HashNode<K, V>* = opt.get();
+        if(node.key.eq(s)){
+            return Option::new(&node.value);
+        }
+        if(node.next.is_none()){
+            return Option<V*>::new();
+        }
+        while(node.next.is_some()){
+            node = node.next.get();
+            if(node.key.eq(s)){
+                return Option::new(&node.value);
+            }
+        }
+        return Option<V*>::new();
+    }
+
+    func contains_str(self, s: str): bool{
+        return self.get_str(s).is_some();
     }
 
     func get(self, key: K*): Option<V*> {

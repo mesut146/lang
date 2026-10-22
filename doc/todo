@@ -67,12 +67,15 @@ call like to_list<i32>(..) should work
 //1. fewer clones/allocations structurally: `String::clone` is 698k allocations
 //   per 25-file compile. Done 2026-10-22: `Desc.path` is a borrowed `str`
 //   (139k clones gone, -3.2% on the std module set, -8.4% on the
-//   resolver-heavy `src/backend` -- handoff.md batch 17). Remaining:
-//   `clone_simple`/`Simple.name` (226k clones: the name is an owned String in
-//   a struct copied on every RType clone) is left; `Type::print`'s 89k are
-//   gone (batch 18: Fmt::str moves its buffer out, Fmt::print has a String*
-//   overload); the RType-copy pattern itself needs a pointer / interning
-//   design rather than a field change.
+//   resolver-heavy `src/backend` -- handoff.md batch 17); `Type::print`'s 89k
+//   are gone (batch 18: Fmt::str moves its buffer out, Fmt::print has a
+//   String* overload); `Simple.name`'s 228k are gone too (batch 19: a `str`
+//   into a process-lifetime name pool, so a type copy no longer allocates,
+//   -6.4% on the -O2 self-build). Left: ~56k mallocs per compile, one per new
+//   name-only type -- a chunked pool would remove them but needs a lock
+//   because units compile on in-process threads; and the RType-copy pattern
+//   itself, which wants interned/shared types (rustc's `Ty<'tcx>`) rather
+//   than a field change.
 //2. front-end arena for short-lived strings (malloc+free+memcpy = 38% of the
 //   model); a design change, needs a decision.
 //3. small: keyword lookup without `HashMap<str,TokenType>` (487k probes per

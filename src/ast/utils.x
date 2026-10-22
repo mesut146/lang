@@ -159,8 +159,8 @@ func common_infix(l: Type*, r: Type*): Type*{
   if(!l.is_prim() || !r.is_prim()){
     return l;
   }
-  let lb = prim_size(l.name().str()).unwrap();
-  let rb = prim_size(r.name().str()).unwrap();
+  let lb = prim_size(l.name()).unwrap();
+  let rb = prim_size(r.name()).unwrap();
   if(rb > lb){
     return r;
   }

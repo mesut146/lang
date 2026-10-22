@@ -61,7 +61,7 @@ impl MethodResolver{
     
     func print_erased(type: Type*): String{
       if(type.is_simple()){
-        return type.name().clone();
+        return type.name().owned();
       }
       return type.print();
     }
@@ -163,7 +163,7 @@ impl MethodResolver{
         for(let k = 0;k < items.len();++k){
           let top = items.get(k);
           if let Item::Module(md) = top{
-            scan_mod_items(&md.items, Type::new(md.name.clone()), &full, tr, &list);
+            scan_mod_items(&md.items, Type::new(md.name.str()), &full, tr, &list);
           }
         }
       }
@@ -224,7 +224,7 @@ impl MethodResolver{
                 return;
             }
             let smp = cur.as_simple();
-            segs.add(smp.name.clone());
+            segs.add(smp.name.owned());
             if(!smp.scope.is_some()){
                 break;
             }
@@ -312,9 +312,9 @@ impl MethodResolver{
                     let st = scope_type.as_simple();
                     if(st.scope.is_some() && imp.info.type.is_simple()
                         && imp.info.type.as_simple().scope.is_none()
-                        && st.name.eq(imp.info.type.name().str())){
+                        && st.name.eq(imp.info.type.name())){
                       let qmap = HashMap<String, Type>::new();
-                      qmap.add(imp.info.type.name().clone(), scope_type.clone());
+                      qmap.add(imp.info.type.name().owned(), scope_type.clone());
                       let ac = AstCopier::new(&qmap);
                       for (let k = 0;k < sig2.args.len();++k) {
                         let arg = sig2.args.get(k);
@@ -335,7 +335,7 @@ impl MethodResolver{
                   let typeMap = HashMap<String, Type>::new();
                   for(let k = 0;k < m.type_params.len();++k){
                     let ta = m.type_params.get(k);
-                    typeMap.add(ta.name().clone(), scp_args.get(k).clone());
+                    typeMap.add(ta.name().owned(), scp_args.get(k).clone());
                   }
                   let sig2 = Signature::new(m, map, desc, self.r, origin);
                   for (let k = 0;k < sig2.args.len();++k) {
@@ -470,7 +470,7 @@ impl MethodResolver{
                         self.r.err(expr, format("type args size mismatch {} vs {}", scope_args.len(), type_params.len()));
                     }
                     for (let i = 0; i < scope_args.size(); ++i) {
-                        inferred_map.add(type_params.get(i).name().clone(), scope_args.get(i).clone());
+                        inferred_map.add(type_params.get(i).name().owned(), scope_args.get(i).clone());
                     }
                     //todo check type args if they compat with inferred ones
                 }
@@ -479,7 +479,7 @@ impl MethodResolver{
         if (!mc.type_args.empty()) {
             //place specified type args in order
             for (let i = 0; i < mc.type_args.size(); ++i) {
-                inferred_map.add(type_params.get(i).name().clone(), self.r.getType(mc.type_args.get(i)));
+                inferred_map.add(type_params.get(i).name().owned(), self.r.getType(mc.type_args.get(i)));
             }
         }
         //infer from args
@@ -502,7 +502,7 @@ impl MethodResolver{
         }
         for (let i = 0;i < type_params.len();++i) {
             let tp = type_params.get(i);
-            if (!inferred_map.contains(tp.name())) {
+            if (!inferred_map.contains_str(tp.name())) {
                 let msg = format("{:?}\ncan't infer type parameter: {:?}", sig, tp);
                 self.r.err(expr, msg);
             }
@@ -521,10 +521,10 @@ impl MethodResolver{
 
     func infer(arg: Type*, prm: Type*, inferred: HashMap<String, Type>*, type_params: List<Type>*): Result<i32, String>{
         if(prm.is_simple() && type_params.contains(prm)){
-            if(!inferred.contains(prm.name())){
-                inferred.add(prm.name().clone(), arg.clone());
+            if(!inferred.contains_str(prm.name())){
+                inferred.add(prm.name().owned(), arg.clone());
             }else{
-                let inf = inferred.get(prm.name()).unwrap();
+                let inf = inferred.get_str(prm.name()).unwrap();
                 let cmp = is_compatible(arg, inf);
                 if(/*!inf.eq(arg)*/ cmp.is_some()){
                     let err = format("inferred type not compatible later {:?} vs {:?} but {:?}={:?}", arg, prm, prm, inf);
@@ -684,7 +684,7 @@ impl MethodResolver{
             f.print("#");
             f.print(tp.name());
             f.print("=");
-            let hit = map.get(tp.name());
+            let hit = map.get_str(tp.name());
             if(hit.is_some()){
                 f.print(hit.unwrap());
             }
@@ -803,7 +803,7 @@ impl MethodResolver{
         if (scope_rt.is_trait()) {
             let real_scope = sig.args.get(0).deref_ptr();
             if(info.trait_name.is_some()){
-                if(!info.trait_name.get().name().eq(type1.name().str())){
+                if(!info.trait_name.get().name().eq(type1.name())){
                     return SigResult::Err{"not same trait".str()};
                 }
                 return SigResult::Exact;
@@ -836,7 +836,7 @@ impl MethodResolver{
             }
             return SigResult::Err{"not same impl: not generic".str()};
         }
-        if (!type1.name().eq(type2.name().str())) {
+        if (!type1.name().eq(type2.name())) {
             return SigResult::Err{"not same impl name".str()};
             //return self.check_args(sig, sig2);
         }
@@ -1172,7 +1172,7 @@ impl MethodResolver{
             return Option::new("arg is signed but target is unsigned".str());
         }
         // auto cast to larger size
-        if (allow_cast && prim_size(arg.name().str()).unwrap() <= prim_size(target.name().str()).unwrap()){
+        if (allow_cast && prim_size(arg.name()).unwrap() <= prim_size(target.name()).unwrap()){
             return Option<String>::new();
         }
         else {
@@ -1202,7 +1202,7 @@ func scan_mod_items(items: List<Item>*, prefix: Type, full: String*, tr: Option<
     for(let i = 0;i < items.len();++i){
         let item = items.get(i);
         if let Item::Module(md) = item{
-            let deeper = Type::new(prefix.clone(), md.name.clone());
+            let deeper = Type::new(prefix.clone(), md.name.str());
             scan_mod_items(&md.items, deeper, full, tr, list);
             continue;
         }

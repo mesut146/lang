@@ -225,10 +225,11 @@ impl AstCopier{
                 return Type::Lambda{.id, Box::new(lt)};
             },
             Type::Simple(smp) => {
-                if(self.type_map.contains(&smp.name)){
-                    return self.type_map.get(&smp.name).unwrap().clone();
+                let hit = self.type_map.get_str(smp.name);
+                if(hit.is_some()){
+                    return hit.unwrap().clone();
                 }
-                let res = Simple::new(smp.name.clone());
+                let res = Simple::new(smp.name);
                 if (smp.scope.is_some()) {
                     res.scope = Ptr::new(self.visit(smp.scope.get()));
                 }

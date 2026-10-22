@@ -382,7 +382,7 @@ impl Parser{
       //Generic headers keep theirs (args must be preserved; generic
       //nested members are a known gap).
       if(scope.is_some() && t1.is_simple() && t1.as_simple().scope.is_none() && t1.get_args().empty()){
-        let nm = t1.name().clone();
+        let nm = t1.name();
         let scp = scope.get().clone();
         t1 = Type::new(scp, nm);
       }
@@ -526,7 +526,7 @@ impl Parser{
       base = Option<Type>::Some{self.parse_type()};
     }
     let path0 = self.lexer.path.clone();
-    let name = type.name().clone();
+    let name = type.name().owned();
     let based = BaseDecl{line, path0, type, name, is_generic, base, attr, Option<QPath>::new()};
     let fields = List<FieldDecl>::new();
     if(self.is(TokenType::SEMI)){
@@ -590,7 +590,7 @@ impl Parser{
     }
     self.consume(TokenType::RBRACE);
     let path = self.lexer.path.clone();
-    let name = type.name().clone();
+    let name = type.name().owned();
     return Decl::Enum{.BaseDecl{line, path, type, name, is_generic, base, attr, Option<QPath>::new()}, variants: variants};
   }
   
@@ -650,7 +650,7 @@ impl Parser{
         let part = self.gen_part(check_closing);
         if let Type::Simple(smp) = &part{
           let id = self.node();
-          let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name.clone(), smp.args.clone()}};
+          let tmp = Type::Simple{.id, Simple{Ptr::new(res), smp.name, smp.args.clone()}};
           res = tmp;
         }
       }
@@ -1322,10 +1322,10 @@ impl Parser{
           if(smp.scope.is_some()){
             let scp = Expr::Type{.n, smp.scope.get().clone()};
             let is_static = true;
-            let res = self.call(scp, smp.name.clone(), is_static, smp.args.clone());
+            let res = self.call(scp, smp.name.owned(), is_static, smp.args.clone());
             return res;
           }else{
-            let res = self.call(smp.name.clone(), smp.args.clone());
+            let res = self.call(smp.name.owned(), smp.args.clone());
             return res;
           }
         }else{
@@ -1346,7 +1346,7 @@ impl Parser{
           self.consume(TokenType::LPAREN);
           let args = self.exprList(TokenType::RPAREN);
           self.consume(TokenType::RPAREN);
-          let res = Expr::MacroCall{.n, MacroCall{scope: scp, name: smp.name.clone(), args: args}};
+          let res = Expr::MacroCall{.n, MacroCall{scope: scp, name: smp.name.owned(), args: args}};
           return res;
         }else{
           self.err(format("macro scope is invalid '{:?}'", ty));
@@ -1354,7 +1354,7 @@ impl Parser{
       }else{
         if let Type::Simple(smp) = &ty{
           if(smp.scope.is_none() && smp.args.empty()){
-            let name = smp.name.clone();
+            let name = smp.name.owned();
             //smp.drop();
             return Expr::Name{.n, name};
           }else{

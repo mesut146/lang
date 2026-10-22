@@ -451,7 +451,7 @@ func is_unit_variant(c: Emitter*, ty: Type*): bool{
     return false;
   }
   for v in d.get_variants(){
-    if(v.name.eq(&smp.name)){
+    if(v.name.eq(smp.name)){
       return v.fields.empty();
     }
   }

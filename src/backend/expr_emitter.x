@@ -181,7 +181,7 @@ impl Emitter{
 
     func get_variant_index_match(lhs_ty: Type*, decl: Decl*): i32{
       let idx = 0;
-      let name: String* = lhs_ty.name();
+      let name: str = lhs_ty.name();
       for ev in decl.get_variants(){
         if(ev.name.eq(name)){
           return idx;
@@ -693,7 +693,7 @@ impl Emitter{
       let ll = self.ll.get();
       let smp = type.as_simple();
       let decl = self.get_resolver().get_decl(smp.scope.get()).unwrap();
-      let index = Resolver::findVariant(decl, &smp.name);
+      let index = Resolver::findVariant(decl, smp.name);
       if(decl.is_repr()){
         let at = decl.attr.find("repr").unwrap().args.get(0).print();
         let desc = decl.get_variants().get(index).disc.unwrap();

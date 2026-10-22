@@ -28,7 +28,7 @@ func visit_type(node: Type*){
     if(find_type.is_none()) return;
     match node{
         Type::Simple(smp) => {
-            if(find_type.get().eq(smp.name.str())){
+            if(find_type.get().eq(smp.name)){
                 print("visit_type {:?}\n", node);
             }
         },
