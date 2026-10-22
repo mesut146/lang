@@ -258,7 +258,7 @@ impl MethodResolver{
                 if(m.is_generic) continue;
                 let desc = Desc{
                     kind: RtKind::Method,
-                    path: m.path.clone(),
+                    path: m.path.str(),
                     idx: i,
                     scope: Option::new(scope_type.clone()),
                 };
@@ -294,7 +294,7 @@ impl MethodResolver{
                 }
                 let desc = Desc{
                     kind: RtKind::MethodImpl{j},
-                    path: m.path.clone(),
+                    path: m.path.str(),
                     idx: hit.idx,
                     scope: desc_scope,
                 };
@@ -369,7 +369,7 @@ impl MethodResolver{
         if (m.name.eq(name)) {
             let desc = Desc{
                 kind: kind,
-                path: m.path.clone(),
+                path: m.path.str(),
                 idx: idx,
                 scope: Option<Type>::new(),
             };
@@ -720,7 +720,7 @@ impl MethodResolver{
                 if(!is_err){
                     let desc = Desc{
                         kind: RtKind::MethodGen{m.name.clone()},
-                        path: self.r.unit.path.clone(),
+                        path: self.r.unit.path.str(),
                         idx: i,
                         scope: Option<Type>::new(),
                     };
@@ -739,7 +739,7 @@ impl MethodResolver{
         }
         let desc = Desc{
             kind: RtKind::MethodGen{m.name.clone()},
-            path: self.r.unit.path.clone(),
+            path: self.r.unit.path.str(),
             idx: arr_opt.unwrap().len() as i32,
             scope: Option<Type>::new(),
         };

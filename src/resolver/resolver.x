@@ -346,7 +346,12 @@ impl Clone for RtKind{
 #derive(Debug)
 struct Desc{
   kind: RtKind;
-  path: String;
+  //A slice view of the unit/method path `String`, which the AST owns for the
+  //whole compile (the slice points at that String's heap buffer, which is
+  //never reallocated or moved). Cloning a Desc is on every RType copy, and
+  //copying the path there was the largest String::clone source after the type
+  //names: 139k allocations per 25-file compile.
+  path: str;
   idx: i32;
   scope: Option<Type>;
 }
@@ -354,7 +359,7 @@ impl Desc{
   func new(): Desc{
     return Desc{
       kind: RtKind::None,
-      path: "".str(),
+      path: "",
       idx: -1,
       scope: Option<Type>::new(),
     };
@@ -362,7 +367,7 @@ impl Desc{
   func clone(self): Desc{
     return Desc{
       kind: self.kind.clone(),
-      path: self.path.clone(),
+      path: self.path,
       idx: self.idx,
       scope: self.scope.clone(),
     };
@@ -975,7 +980,7 @@ impl Resolver{
     match it{
       Item::Decl(decl) => {
         //todo module item
-        let desc = Desc{RtKind::Decl, self.unit.path.clone(), idx, Option<Type>::new()};
+        let desc = Desc{RtKind::Decl, self.unit.path.str(), idx, Option<Type>::new()};
         if(scope.is_some()){
           let qname = format("{:?}::{:?}", scope.get(), decl.type.name());
           let ty = Type::new(scope.get().clone(), decl.type.name().clone());
@@ -991,7 +996,7 @@ impl Resolver{
       },
       Item::Trait(tr) => {
         let res = RType::new(tr.type.clone());
-        res.desc = Desc{RtKind::Trait, self.unit.path.clone(), idx, Option<Type>::new()};
+        res.desc = Desc{RtKind::Trait, self.unit.path.str(), idx, Option<Type>::new()};
         self.addType(tr.type.name().clone(), res);
       },
       Item::Impl(imp) => {
@@ -1013,7 +1018,7 @@ impl Resolver{
         }else{
           Option<Type>::new()
         };
-        res.desc = Desc{RtKind::Module, self.unit.path.clone(), idx, scp};
+        res.desc = Desc{RtKind::Module, self.unit.path.str(), idx, scp};
         self.addType(md.name.clone(), res.clone());
         let j = 0;
         for it2 in &md.items{
@@ -1402,7 +1407,7 @@ impl Resolver{
       return self.get_decl(rt.type.deref_ptr());
     }
     if(rt.desc.kind is RtKind::Decl){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let resolver = self.ctx.create_resolver(rt.desc.path);
       let unit = &resolver.unit;
       if(rt.desc.scope.is_some()){
         let scope = self.visit_type(rt.desc.scope.get());
@@ -1422,7 +1427,7 @@ impl Resolver{
       panic("get_decl() failed {:?}={:?}", rt.type, rt.desc);
     }
     if(rt.desc.kind is RtKind::DeclGen){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let resolver = self.ctx.create_resolver(rt.desc.path);
       if(resolver.generated_decl.in_index(rt.desc.idx)){
         let decl = resolver.generated_decl.get(rt.desc.idx).get();
         if(!decl.type.eq(rt.type.deref_ptr())){
@@ -1439,7 +1444,7 @@ impl Resolver{
   }
   func get_trait(self, rt: RType*): Option<Trait*>{
     if(rt.desc.kind is RtKind::Trait){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let resolver = self.ctx.create_resolver(rt.desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(rt.desc.idx);
       if let Item::Trait(tr) = item{
@@ -1473,7 +1478,7 @@ impl Resolver{
         }
         return Option<Method*>::new();
       }
-      let resolver = self.ctx.create_resolver(&desc.path);
+      let resolver = self.ctx.create_resolver(desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
       if let Item::Method(m) = item{
@@ -1481,7 +1486,7 @@ impl Resolver{
       }
     }
     if let RtKind::MethodImpl(idx2) = &desc.kind{
-      let resolver = self.ctx.create_resolver(&desc.path);
+      let resolver = self.ctx.create_resolver(desc.path);
       let unit = &resolver.unit;
       let xmod = std::getenv("XMOD").is_some();
       //Nested impls (found via module recursion) are indexed within
@@ -1519,13 +1524,13 @@ impl Resolver{
       }
     }
     if let RtKind::MethodGen(name) = &desc.kind{
-      let resolver = self.ctx.create_resolver(&desc.path);
+      let resolver = self.ctx.create_resolver(desc.path);
       let arr = resolver.generated_methods.get(name).unwrap();
       let m = arr.get(desc.idx);
       return Option::new(m.get());
     }
     if let RtKind::MethodExtern(idx2) = &desc.kind{
-      let resolver = self.ctx.create_resolver(&desc.path);
+      let resolver = self.ctx.create_resolver(desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(desc.idx);
       if let Item::Extern(items) = item{
@@ -1540,7 +1545,7 @@ impl Resolver{
 
   func get_const(self, rt: RType*): Const*{
     if(rt.desc.kind is RtKind::Const){
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let resolver = self.ctx.create_resolver(rt.desc.path);
       let item = resolver.unit.items.get(rt.desc.idx);
       if let Item::Const(c) = item{
         return c;
@@ -1568,7 +1573,7 @@ impl Resolver{
         }
         return Option<Module*>::new();
       }
-      let resolver = self.ctx.create_resolver(&rt.desc.path);
+      let resolver = self.ctx.create_resolver(rt.desc.path);
       let unit = &resolver.unit;
       let item = unit.items.get(rt.desc.idx);
       if let Item::Module(m) = item{
@@ -2238,8 +2243,8 @@ impl Resolver{
           //nothing to work with -- that used to panic in get_decl/mapType2.
           //Report it instead. (A macro is different: its expansion is resolved
           //here, which is why scoped cross-unit macro calls do work.)
-          if(!scope.desc.path.eq(&self.unit.path)){
-            return Result<RType, Error>::err(Error{format("{:?} is a module of another unit ({}): a module's members are only visible in the unit that declares them", node, self.ctx.display_path(scope.desc.path.str())), node.line});
+          if(!scope.desc.path.eq(self.unit.path.str())){
+            return Result<RType, Error>::err(Error{format("{:?} is a module of another unit ({}): a module's members are only visible in the unit that declares them", node, self.ctx.display_path(scope.desc.path)), node.line});
           }
           let md = self.get_module(&scope);
           if(md.is_none()){
@@ -2275,7 +2280,7 @@ impl Resolver{
                   return Result<RType, Error>::ok(gres);
                 }
                 let res = RType::new(decl.type.clone());
-                res.desc = Desc{RtKind::Decl, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
+                res.desc = Desc{RtKind::Decl, scope.desc.path, i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
                 return Result<RType, Error>::ok(res);
               }
@@ -2283,7 +2288,7 @@ impl Resolver{
             if let Item::Module(nmd) = item{
               if(nmd.name.eq(simple.name.str())){
                 let res = RType::new(nmd.name.str());
-                res.desc = Desc{RtKind::Module, scope.desc.path.clone(), i, Option::new(simple.scope.get().clone())};
+                res.desc = Desc{RtKind::Module, scope.desc.path, i, Option::new(simple.scope.get().clone())};
                 self.addType(str.clone(), res.clone());
                 return Result<RType, Error>::ok(res);
               }
@@ -2337,7 +2342,7 @@ impl Resolver{
         if(m.name.eq(&simp.name)){
           let desc = Desc{
             kind: RtKind::MethodImpl{i},
-            path: m.path.clone(),
+            path: m.path.str(),
             idx: hit.idx,
             scope: Option<Type>::new(),
           };
@@ -2454,7 +2459,7 @@ impl Resolver{
     let res = self.generated_decl.add(Box::new(decl)).get();
     let rt = RType::new(res.type.clone());
     let idx = self.generated_decl.len() - 1;
-    rt.desc = Desc{RtKind::DeclGen, self.unit.path.clone(), idx as i32, Option<Type>::new()};
+    rt.desc = Desc{RtKind::DeclGen, self.unit.path.str(), idx as i32, Option<Type>::new()};
     //print("add_generated {}={}\n", res.type, rt.desc);
     self.addType(res.type.print(), rt);
     return res;
@@ -3476,8 +3481,8 @@ impl Resolver{
     //RtKind::Module) this used to hit while resolving the scope.
     if(call.is_static && sig.scope.is_some()){
       let scp = sig.scope.get();
-      if(scp.desc.kind.is_module() && !scp.desc.path.eq(&self.unit.path)){
-        self.err(node, format("{:?}::{:?} is in a module of another unit ({}): a module's members are only visible in the unit that declares them", scp.type, call.name, self.ctx.display_path(scp.desc.path.str())));
+      if(scp.desc.kind.is_module() && !scp.desc.path.eq(self.unit.path.str())){
+        self.err(node, format("{:?}::{:?} is in a module of another unit ({}): a module's members are only visible in the unit that declares them", scp.type, call.name, self.ctx.display_path(scp.desc.path)));
       }
     }
     if(call.scope.is_some() && !call.is_static){
@@ -3725,7 +3730,7 @@ impl Resolver{
           let rt = self.visit(&rhs2);
           rt.desc = Desc{
             kind: RtKind::Const,
-            path: self.unit.path.clone(),
+            path: self.unit.path.str(),
             idx: i,
             scope: Option<Type>::new(),
           };
@@ -3834,7 +3839,7 @@ impl Resolver{
           if(m.name.eq(name)){
             let desc = Desc{
               kind: RtKind::Method,
-              path: m.path.clone(),
+              path: m.path.str(),
               idx: j,
               scope: Option<Type>::new(),
             };
@@ -4083,7 +4088,7 @@ impl Resolver{
       let res = RType::new(Type::Lambda{.id, type: Box::new(lt)});
       let desc = Desc{
         RtKind::Lambda{expr.id},
-        self.unit.path.clone(),
+        self.unit.path.str(),
         -1,
         Option<Type>::new()
       };

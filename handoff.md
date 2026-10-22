@@ -1189,6 +1189,39 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 17: `Desc.path` is a borrowed slice (2026-10-22).
+  Every RType copy clones its `Desc`, and `Desc.path` was an owned `String`, so
+  a type lookup copied a *path* -- 138,734 of the 697,836 `String::clone` calls
+  per 25-file compile, the second largest source after the type names.
+  `Desc.path` is now a `str`: a slice of the unit's (or method's) path
+  `String`, which the AST owns for the whole compile. The slice points at that
+  String's heap buffer, which is never reallocated or reassigned
+  (`Unit::new(lexer.path.clone())` is the only writer, and resolvers are boxed
+  in the Context for the compile's lifetime), so moving a `Unit` or a `Resolver`
+  does not matter. Cloning a `Desc` now copies 16 bytes and no allocation.
+  The ripple was small because the plumbing already existed:
+  `Context::create_resolver(path: str)` was there (the 9 call sites just pass
+  the slice instead of `&desc.path`), comparisons use `str::eq`, and
+  diagnostics pass the slice straight to `display_path(str)`. `Desc::new()`
+  uses the empty literal (`path: ""`, a `str`), not `"".str()`.
+  Measured, same compiler for both sides and only this change differing
+  (interleaved rounds, serial): the 25-file std module set at default -O
+  2150 -> 2081ms (-3.2%, every one of four rounds faster); the resolver-heavy
+  `src/backend` 15,014 -> 13,743ms (-8.4%) -- the win scales with how much type
+  resolution a unit does, which is where the clones were.
+  Guard: `tests/fail/foreign_mod_call.x` and `foreign_mod_type.x` now assert
+  the *declaring unit's path* in the diagnostic text
+  (`is in a module of another unit (tests/helpers/mod_owner.x)`), which is
+  printed from the borrowed path -- a stale slice fails the suite instead of
+  only producing a wrong message.
+  Correctness: suite green (`normal pass=120`, fmt, lsp, opt, std, own, fail,
+  `default-jobs: pass`, `buildflags: pass`, `pipeline: pass`), C == D
+  byte-identical. (valgrind was not available this session; the borrowed
+  buffer is heap-backed and never freed before the Context dies.)
+  Remaining in this vein: `Simple.name` (a `String` cloned 226k times per
+  25-file compile, see doc/todo) and the RType-copy pattern itself, which needs
+  a pointer/interning design rather than a field change.
+
 - Codegen, batch 16: `#[inline]` in std pays now (2026-10-21). Batch 13
   measured `#[inline]` on std helpers as a loss (-1.5% at -O0, no runtime gain)
   and deliberately left std unannotated; batch 15's mem2reg changed that
