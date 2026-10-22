@@ -34,8 +34,12 @@ out_dir=$build/${name}_out
 mkdir -p $out_dir
 $dir/cache_env.sh $out_dir
 
-#todo
-rm -rf $build
+#wipe the build tree but keep the host LLVM install in build/tmp: it is a
+#~76MB apt download (llvm.sh skips the fetch when the .debs are already
+#there), the CI restores it from a cache, and nothing in the build writes
+#into it.
+mkdir -p $build
+find $build -mindepth 1 -maxdepth 1 ! -name tmp -exec rm -rf {} +
 export XTMP=$build/tmp
 XCROSS=$XCROSS $dir/apt.sh
 XCROSS=$XCROSS $dir/llvm.sh

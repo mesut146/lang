@@ -32,8 +32,10 @@ if [ ! -d "$target_tool" ]; then
   echo "provide target_tool dir with Termux libLLVM (e.g. x-toolchain-1.00-termux-aarch64)" && exit 1
 fi
 
-# wipe build AFTER resolving vars, BEFORE creating out_dir
-rm -rf $build
+# wipe build AFTER resolving vars, BEFORE creating out_dir. Keep build/tmp
+# (the LLVM install): see bin/build.sh.
+mkdir -p $build
+find $build -mindepth 1 -maxdepth 1 ! -name tmp -exec rm -rf {} +
 export XTMP=$build/tmp
 out_dir=$build/${name}_out
 mkdir -p $out_dir

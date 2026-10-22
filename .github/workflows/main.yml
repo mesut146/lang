@@ -58,6 +58,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      #The LLVM 19 dev packages are a ~76MB apt download into build/tmp that
+      #bin/build.sh keeps across its wipe, so caching that directory takes the
+      #fetch off the critical path. Without it a slow ubuntu mirror turned the
+      #build step into an 11-minute wait (2026-10-22: 28.7MB at 95KB/s, 47.5MB
+      #at 158KB/s; the build itself was 60s). restore-keys falls back to an
+      #older cache when bin/llvm.sh changes: a stale LLVM 19 is fine, fetching
+      #it again is not. The docker jobs (aarch64/termux) install LLVM inside
+      #the image, so only this job uses the cache.
+      - name: "cache LLVM"
+        uses: actions/cache@v4
+        with:
+          path: build/tmp
+          key: llvm19-${{ runner.os }}-${{ hashFiles('bin/llvm.sh', 'bin/apt.sh') }}
+          restore-keys: |
+            llvm19-${{ runner.os }}-
+
       - name: build-x86_64
         id: build_x86_64
         run: |
