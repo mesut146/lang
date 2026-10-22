@@ -10,21 +10,35 @@ import ast/lexer
 
 //static print_drops = false;
 
+//A TokenStream outlives the Lexer that produced its tokens, so it owns a
+//copy of every token's text (`bufs`): Token.value is only a slice, and
+//List growth moves the String header but never its heap buffer, so the
+//slices stay valid for as long as the stream does.
 struct TokenStream{
   tokens: List<Token>;
+  bufs: List<String>;
 }
 impl TokenStream{
   func new(): TokenStream{
-    return TokenStream{tokens: List<Token>::new()};
+    return TokenStream{tokens: List<Token>::new(), bufs: List<String>::new()};
   }
   func add(self, tok: Token){
+    let owned = tok.value.owned();
+    let view = owned.str();
+    self.bufs.add(owned);
+    tok.value = view;
     self.tokens.add(tok);
   }
   func add(self, tt: TokenType, val: str){
-    self.tokens.add(Token::new(tt, val));
+    let owned = val.owned();
+    let view = owned.str();
+    self.bufs.add(owned);
+    self.tokens.add(Token::new(tt, view));
   }
   func add(self, tt: TokenType, val: String){
-    self.tokens.add(Token::new(tt, val));
+    let view = val.str();
+    self.bufs.add(val);
+    self.tokens.add(Token::new(tt, view));
   }
   func add(self, val: str){
     self.add(val.owned());
@@ -35,7 +49,7 @@ impl TokenStream{
     while(true){
       let tok = lexer.next();
       if(tok.is(TokenType::EOF_)) break;
-      self.tokens.add(tok);
+      self.add(tok);
     }
   }
 }

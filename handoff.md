@@ -1199,6 +1199,49 @@ Ownership only — no Rust-like borrows:
     clarification); `doc/ownership.txt`'s todo probe says capture is the open
     part.
 
+- Compiler speed, batch 20: token text is a slice, not a String (2026-10-22).
+  A re-baseline with the new `bin/mcnt.c` profiler (allocation counts, not
+  cycles; cold 25-file std compile, wiped out dir -- a warm `-cache` dir
+  compiles in a third of the time with a thirtieth of the allocations) put the
+  lexer at the top of the list: `Token::new(tt, str)` copied every token's text
+  into an owned `String` (read_ident 85k + read_op 106k allocations) and
+  `Lexer::next0` built a one-char `String` just to probe the operator map
+  (101k) -- 292k of a compile's 1.69M allocations, a third of its 831k
+  `List<u8>` buffers. `Token.value` is a `str` slice now:
+  * the slice points into the `Lexer`'s `buf`; the `Parser` owns the lexer and
+    keeps its tokens, so it stays valid for the whole parse. A string/char
+    literal whose escapes are rewritten is not a slice of `buf`, so the lexer
+    keeps the unescaped bytes in a new `scratch: List<String>` (a `List` grows
+    by moving the `String` headers, never their heap buffers) and hands out a
+    view taken before the move into the list.
+  * `next0` probes `lexer_ops` with `self.str(pos, pos+1)`, no allocation,
+    instead of `String::new()` + `append(c)` + `.str()`.
+  * the parser copies only where the text outlives the lexer: `Param` names,
+    `Expr::Access` tuple indices, the formatter's `Comment` texts and `popv()`
+    use `.owned()`; `is_val`/`consume_ident` compare slices directly and
+    `i32::parse(tok.value)` takes the slice (array sizes, enum discriminants).
+  * `TokenStream` (the unused `#derive_macro` stub) outlives its lexer by
+    construction, so it owns a copy per token in a new `bufs: List<String>`
+    and stores slices into those.
+  Measured on the same host compiler, interleaved, wiped out dirs: the 25-file
+  std module set 2165 -> 2094ms median (best 2146 -> 2068, -3.6%); `src/backend`
+  16,581 -> 15,120ms (-8.8%); the full -O2 self-build (devbuild) 36,852 ->
+  34,482ms best (-5.8%). Allocation counts from `bin/mcnt.py` on the same
+  workload: 1,685,334 -> 1,391,364 (-17.4%), `List<u8>` buffers 830,942 ->
+  536,125. What is left, by the same profiler: `List<Type>` buffers 66k,
+  `Simple::new` 45k, `clone_type` 44k, `VarHolder::clone` 27k -- i.e. the
+  type-copy traffic that wants interned types, not another field change.
+  Guard: `tests/normal/64-lexer-token-text.x` pins every lexer path that hands
+  text to the parser -- identifiers with digits/underscores glued to operators,
+  multi-char operators, hex/underscored/float/suffixed/signed numbers, char
+  literals and two escaped string literals (scratch growth), comments between
+  tokens, enum discriminants, array sizes, parameter names -- and its output is
+  identical on the old and new compiler.
+  Correctness: suite green (`normal pass=123`, fmt, trace, lsp, opt, std, own,
+  fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
+  self-skips, no valgrind here), A == B byte-identical (A built by the pre-fix
+  main compiler, B built by A; A != the pre-fix compiler).
+
 - Compiler speed, batch 19: type names are interned slices, not Strings
   (2026-10-22). `Simple.name` was an owned `String` inside a struct that is
   deep-copied on every type clone: 228,354 `clone_simple` calls per 25-file

@@ -39,7 +39,7 @@ impl Parser{
         break;
       }
       else if (t.is(TokenType::COMMENT)){
-        self.comments.add(Comment{t.line, t.value.clone()});
+        self.comments.add(Comment{t.line, t.value.owned()});
         continue;
       }
       self.tokens.add(t);
@@ -94,7 +94,7 @@ impl Parser{
   }
   
   func popv(self): String{
-    return self.pop().value.clone();
+    return self.pop().value.owned();
   }
     
   func consume(self, tt: TokenType): Token*{
@@ -503,7 +503,7 @@ impl Parser{
     let name = self.pop();
     self.consume(TokenType::COLON);
     let type = self.parse_type();
-    return Param{.id, name: name.value.clone(), type: type, is_self: false, is_deref: false};
+    return Param{.id, name: name.value.owned(), type: type, is_self: false, is_deref: false};
   }
 
   func scope_merge(scope: Option<Type>*, type: Type): Type{
@@ -623,7 +623,7 @@ impl Parser{
     if(self.is(TokenType::EQ)){
       self.consume(TokenType::EQ);
       let tok = self.consume(TokenType::INTEGER_LIT);
-      disc = Option<i32>::new(i32::parse(tok.value.str())?);
+      disc = Option<i32>::new(i32::parse(tok.value)?);
     }
     return Variant{name, fields, is_tuple, disc, line};
   }
@@ -638,7 +638,7 @@ impl Parser{
         let size = self.consume(TokenType::INTEGER_LIT);
         self.consume(TokenType::RBRACKET);
         let bx: Box<Type> = Box::new(elem_type);
-        return Type::Array{.id, bx,  i32::parse(size.value.str()).unwrap()};
+        return Type::Array{.id, bx,  i32::parse(size.value).unwrap()};
       }else{
         self.consume(TokenType::RBRACKET);
         return Type::Slice{.id, Box::new(elem_type)};
@@ -1304,7 +1304,7 @@ impl Parser{
       if(self.is(TokenType::SEMI)){
           self.consume(TokenType::SEMI);
           let s = self.consume(TokenType::INTEGER_LIT);
-          sz = Option::new(i32::parse(s.value.str()).unwrap());
+          sz = Option::new(i32::parse(s.value).unwrap());
       }
       self.consume(TokenType::RBRACKET);
       return Expr::Array{.n, arr, sz};
@@ -1415,7 +1415,7 @@ impl Parser{
           //tuple index
           let idx = self.pop();
           let n = self.node();
-          res = Expr::Access{.n, Box::new(res), idx.value.clone()}; 
+          res = Expr::Access{.n, Box::new(res), idx.value.owned()}; 
         }else{
           let nm = self.name();
           if(self.is(TokenType::LPAREN)){

@@ -99,7 +99,14 @@ enum TokenType {
 }
 
 struct Token {
-    value: String;
+    //A slice of the source the token was lexed from, not an owned buffer:
+    //one heap allocation per token was ~35% of a compile's allocations.
+    //The slice points into its Lexer's `buf` (or `scratch`, for a string
+    //literal that had escapes rewritten), so it is valid for as long as
+    //that Lexer lives -- the Parser owns it and keeps its tokens. Anything
+    //that stores token text beyond the parse (AST names, the formatter's
+    //comments, TokenStream) must copy with `.owned()`.
+    value: str;
     type: TokenType;
     start: i32;
     end: i32;
@@ -108,15 +115,11 @@ struct Token {
 
 impl Token{
     func new(tt: TokenType): Token{
-      return Token::new(tt, String::new());
+      return Token{"", tt, 0, 0, 0};
     }
 
-    func new(tt: TokenType, val: String): Token{
-        return Token{val, tt, 0, 0, 0};
-    }
-    
     func new(tt: TokenType, val: str): Token{
-        return Token{String::new(val), tt, 0, 0, 0};
+        return Token{val, tt, 0, 0, 0};
     }
 
    func is(self, tt: TokenType): bool {
@@ -142,7 +145,7 @@ impl Debug for Token{
         self.line.debug(f);
         f.print(", ");
         f.print("value: '");
-        f.print(&self.value);
+        f.print(self.value);
         f.print("', ");
         f.print("type: ");
         self.type.debug(f);

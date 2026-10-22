@@ -106,6 +106,11 @@ struct Lexer{
   pos: i32;
   line: i32;
   single_line: i32;//macro code is single lined
+  //Unescaped string/char literal text: Token.value is a slice, and the
+  //unescaped bytes are not a slice of `buf`, so they live here for as
+  //long as the lexer (List growth moves the String headers, not their
+  //buffers, so the slices stay valid).
+  scratch: List<String>;
 }
 
 impl i8{
@@ -128,10 +133,10 @@ impl i8{
 impl Lexer{
   func from_path(path: String): Lexer{
     let s = File::read_string(path.str())?;
-    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1};
+    return Lexer{path: path, buf: s, pos: 0, line: 1, single_line: -1, scratch: List<String>::new()};
   }
   func from_string(path: String, buf: String, line: i32): Lexer{
-    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line};
+    return Lexer{path: path, buf: buf, pos: 0, line: 1, single_line: line, scratch: List<String>::new()};
   }
   
   func peek(self): i8{
@@ -294,10 +299,11 @@ impl Lexer{
     if (c == '\'' || c == '"') {
         return self.read_string();
     }
-    let os = String::new();
-    os.append(c);
-    let oss = os.str();
-    if(lexer_ops.get(&oss).is_some()){
+    //Does this char start an operator? Probe the map with a one-char slice
+    //instead of building a String for it: this used to be two allocations
+    //per operator/punctuation token.
+    let one = self.str(self.pos, self.pos + 1);
+    if(lexer_ops.get(&one).is_some()){
       return self.read_op();
     }
     let err = String::new();
@@ -355,7 +361,12 @@ impl Lexer{
             self.pos += 1;
         } else if (c == open) {
             //s.append(c);
-            return Result<Token, String>::ok(Token::new(kind, str));
+            //Token.value is a slice: take the view before moving the buffer
+            //into the lexer's scratch (List growth moves the String header,
+            //never its heap buffer).
+            let view = str.str();
+            self.scratch.add(str);
+            return Result<Token, String>::ok(Token::new(kind, view));
         } else {
           str.append(c);
         }
