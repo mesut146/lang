@@ -417,8 +417,11 @@ freed by its drop (phase A 2026-10-20, doc/closures.txt section 8). Since
 dropped exactly once, a captured parameter is marked `Param.is_captured` (the
 method borrows the object's field: no drop, and moving/writing it is an
 error), plain captures nest through an outer closure, and `self` is captured
-like any value. Still open: by-reference/`mut` capture, an owning capture
-through a nested lambda, and a spelling for a closure's type. The `=>` closure
+like any value. An owning capture of a value declared outside the enclosing
+loop is rejected (the move would repeat per iteration; the same shape through a
+plain call argument is still undiagnosed -- see handoff's open holes). Still
+open: by-reference/`mut` capture, an owning capture through a nested lambda,
+and a spelling for a closure's type. The `=>` closure
 form is abandoned (user, 2026-10-20);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it
 reliable on a type that also implements Display); match-in-match works

@@ -223,5 +223,70 @@ Known holes left (not phase A's job):
   pointers (`func(..) => T`) had the same hole and are fixed with it;
 - a capturing lambda is still rejected where a bare function pointer
   (`func(..)`) is expected, by design (Q5);
-- phase B: owning captures (move in, drop out), `self` capture, nested
-  closures; phase C: by-reference capture (needs a confinement rule).
+- phase B landed 2026-10-23: owning captures (move in, drop out), `self`
+  capture, nested plain captures; an owning capture through a nested lambda
+  and phase C (by-reference / `mut`) stay open. See section 9.
+
+9. What phase B actually does (landed 2026-10-23)
+-------------------------------------------------
+- resolver: `visit_lambda` no longer rejects owning captures. A capture
+  parameter is marked `Param.is_captured`, with a *fresh* node id per capture
+  (the method line was the id, so two captured owners of one lambda shared a
+  slot in the ownership engine's `var_map`). `visit_name_opt` still adds the
+  parameter on demand and no longer errors on `inLambda.len() > 1`: a nested
+  plain capture is threaded through the outer closure.
+- creation site (`Emitter`, `Expr::Lambda`): the value is copied into the
+  object as in phase A and the ownership engine is told it was a *move*
+  (`Own::do_move(cap)`), so a later read is "use after move" and a second
+  closure is the same error. `OwnVisitor` mirrors the move when it
+  re-analyzes an else branch, so arm merges agree. Plain captures are
+  unaffected (`do_move` is a no-op for non-drop types).
+- the generated method *borrows* the object's fields:
+  * `Own::drop_var` skips a captured variable -- the object owns it and drops
+    it once, however many calls run.
+  * `Own::do_move`/`Own::do_assign` reject moving or writing a captured value
+    ("cannot move out of a captured value", "cannot assign to a captured
+    value"): the field is the only owner and the method may run many times.
+  * a captured *struct* parameter is not copied into a local in `store_prm`:
+    the method's storage aliases the object's field. A bitwise copy shares the
+    inner heap buffers, so a mutating method on the copy (`List::add`,
+    `String::append`) would reallocate/free them behind the object's back and
+    the closure's drop then freed freed memory -- a segfault, pinned by the
+    mutation case in tests/normal/65. Consequence: a mutating call in the body
+    changes the closure's value and persists across calls, while a *primitive*
+    capture stays a per-call copy (phase A semantics).
+- drop: `Emitter::drop_force` (Type::Lambda arm) drops the captured drop-typed
+  fields in place (same recursion as a tuple) and then frees the object. A
+  closure that is never called still drops its owners.
+- `self` is captured like any other value (it is already an ordinary
+  parameter in the resolver's scope): a plain receiver is copied, an owning
+  receiver moves into the closure (tests/own/33, `Wrap::value`).
+- nested closures: the inner creation site reads the outer lambda's captured
+  parameter; `visit_name_opt` adds it to the outer method on demand and the
+  outer closure drops it. Plain values are a bitwise copy, so this is sound.
+  An *owning* value cannot cross that boundary -- there is no Clone bound to
+  make a real second owner -- and stays an error.
+- two compiler bugs the nested work exposed are fixed with it:
+  * `visit_lambda` held a `Method*` into `Resolver::lambdas` across the body
+    visit; registering an inner lambda rehashed the map, so the outer wrote its
+    own body (and read its params) through a dangling pointer. The map is
+    `HashMap<i32, Box<Method>>` now (a `Method*` is stable) and the body visit
+    re-fetches it anyway.
+  * `resolve_all` walked `lambdas` with a `for` while a body visit inserted
+    into it (invalid cursor) and never resolved a nested clone's body. It walks
+    a worklist of ids and picks up the entries the visits add.
+  * a lambda call with a wrong argument count indexed the declared parameter
+    list out of its end (a `List` panic, "index 0 out of bounds (0, 0)"): it
+    now reports "arg count do not match" like the function-pointer path.
+
+Known limits (phase C or later):
+- by-reference capture and `mut` capture (needs a confinement rule).
+- capturing an owner that is declared *outside* the enclosing loop is an
+  error: the creation site is a move, and it would run (and hand out the same
+  allocation) once per iteration. An owner declared in the loop body is fine.
+- owning capture through a nested lambda (above).
+- a closure's type still cannot be spelled in source, so a closure cannot be a
+  struct field, a list element or a return value; it can be bound to a local,
+  moved and passed to a generic.
+- capturing a deref `self` stores a pointer: no lifetimes, so the pointee must
+  outlive the closure (the same rule as storing a pointer anywhere).

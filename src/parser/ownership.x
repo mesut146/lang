@@ -809,6 +809,40 @@ impl Own{
         self.get_resolver().err(arg, "returns_alias argument must be a borrow of a named place");
     }
     //move rhs
+    //Would moving this place be repeated by the next iteration of a loop?
+    //True when the place is declared *outside* the innermost enclosing
+    //while/for. The move is emitted once, but it runs per iteration: the
+    //second iteration hands out freed memory. (Plain call-argument moves have
+    //the same hole today and are not diagnosed; the closure creation site
+    //checks it because an owner capture is a move the feature just added.)
+    func move_repeats_in_loop(self, expr: Expr*): bool{
+        let rhs = Rhs::new(expr, self);
+        let sid = -1;
+        if let Rhs::VAR(v) = &rhs{
+            sid = v.scope;
+        }
+        if let Rhs::FIELD(scp, _) = &rhs{
+            sid = scp.scope;
+        }
+        if let Rhs::INDEX(scp, _) = &rhs{
+            sid = scp.scope;
+        }
+        if(sid == -1){
+            return false;
+        }
+        let cur = self.cur_scope;
+        while(cur != -1){
+            let sc = self.get_scope(cur);
+            if(sc.id == sid){
+                return false;
+            }
+            if(sc.kind is ScopeType::WHILE || sc.kind is ScopeType::FOR){
+                return true;
+            }
+            cur = sc.parent;
+        }
+        return false;
+    }
     //Is this place (or a field/element of it) a captured value of the
     //lambda method being emitted? See Param.is_captured.
     func is_captured_rhs(self, rhs: Rhs*): bool{

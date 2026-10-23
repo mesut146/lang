@@ -2105,10 +2105,19 @@ Ownership only — no Rust-like borrows:
     `tests/own/33closure_owning.x` (dropped exactly once: called, never
     called, through a generic, per iteration, struct field, owning `self`);
     and six fail tests (use after move x2, move out of a capture, write to a
-    capture, owner through a nested lambda, wrong lambda arity). The two phase
-    A fail tests (`closure_capture_owning`, `closure_capture_nested`) are gone:
-    both shapes work now, and `tests/normal/49`'s header points at phase B.
-  * suite green (`normal pass=128 xpass=0`, fmt, trace, lsp, opt, std, own,
+    capture, owner through a nested lambda, wrong lambda arity, owning capture
+    of a value declared outside a loop). The two phase A fail tests
+    (`closure_capture_owning`, `closure_capture_nested`) are gone: both shapes
+    work now, and `tests/normal/49`'s header points at phase B.
+  * loop guard: the creation site emits *one* move but it runs per iteration,
+    so capturing an owner declared outside the enclosing `while`/`for` is a
+    compile error ("capturing an owning value declared outside the loop: the
+    move would repeat on every iteration"). Capturing an owner declared in the
+    body stays fine (the last block of the guard creates one closure per
+    iteration). The general shape is a pre-existing hole and is now in the
+    open-holes list: `send(s)` in a loop of a value declared outside it
+    compiles and double-frees at run time on v1.20 too.
+  * suite green (`normal pass=129 xpass=0`, fmt, trace, lsp, opt, std, own,
     fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
     self-skips, no valgrind here). Triangle: A (built by the v1.20 compiler) ==
     B == C == D -- the `stage1` binary and all 145 `.o`/8 `.a` outputs are
@@ -2118,6 +2127,17 @@ Ownership only — no Rust-like borrows:
     closure's type (so it can be a struct field / list element / return value).
 
 ## Known open holes (documented, not yet solved)
+
+Move inside a loop body, unguarded (found 2026-10-23 while testing closures):
+`let s = String::new(..); for (..){ send(s); }` compiles -- on v1.20 as well --
+and aborts with a double free at run time, because the move is emitted once but
+runs every iteration and the loop state does not carry the move to the next
+iteration. The closure creation site now rejects it for *captures* ("capturing
+an owning value declared outside the loop"), but a call argument, a return or a
+reassignment of an outer drop value inside a loop is still undiagnosed. The fix
+belongs in `Own::do_move` (reject a move of a non-loop-local place while inside
+a WHILE/FOR scope), with care for the legal `if(done){ take(p); break; }`
+shape; triage the std tree before enabling it.
 
 Ownership residuals: place use-after-move is closed as of this batch (see
 doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow
