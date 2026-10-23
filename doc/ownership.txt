@@ -411,10 +411,14 @@ an expansion is walked from `Expr::MacroCall` too (own_visitor.x
 `visit_macrocall`, 2026-10-19: `end_scope_if`'s else re-analysis needs it or the
 then path leaks what the else moved through a macro, tests/own/31macro_else.x);
 token streams and definition-site resolution of body names still open);
-|args| lambdas work, and since 2026-10-20 they capture: a body may read an
-enclosing local/parameter by value, the value is a heap closure object freed by
-its drop (phase A; doc/closures.txt section 8). Still open: owning captures
-(move in, drop out), nested captures, by-reference capture. The `=>` closure
+|args| lambdas work and capture by value: the value is a heap closure object
+freed by its drop (phase A 2026-10-20, doc/closures.txt section 8). Since
+2026-10-23 (phase B, section 9) an owning capture moves into the object and is
+dropped exactly once, a captured parameter is marked `Param.is_captured` (the
+method borrows the object's field: no drop, and moving/writing it is an
+error), plain captures nest through an outer closure, and `self` is captured
+like any value. Still open: by-reference/`mut` capture, an owning capture
+through a nested lambda, and a spelling for a closure's type. The `=>` closure
 form is abandoned (user, 2026-10-20);
 custom {::T} printer DONE (landed, plus the mangle fix that makes it
 reliable on a type that also implements Display); match-in-match works
