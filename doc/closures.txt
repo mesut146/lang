@@ -1,7 +1,8 @@
 closures (capture for `| ... |` lambdas): design note
-STATUS: phase A implemented 2026-10-20 (see section 8); sections 1-7 are the
-design as proposed and were answered before coding (Q1 R1, Q2 by value, Q3
-plain values first). Phases B and C are still open.
+STATUS: phase A implemented 2026-10-20 (section 8), phase B 2026-10-23
+(section 9): owning captures, nested plain captures and `self` work. Sections
+1-7 are the design as proposed and were answered before coding (Q1 R1, Q2 by
+value, Q3 plain values first). Phase C (by-reference / `mut` capture) is open.
 Decision already taken (user, 2026-10-20): the `(a: i32): i32 => { ... }` form
 is abandoned -- it parses as a tuple expression and dies on `:`. The syntax we
 keep is the existing lambda, `|a: i32|: i32{ ... }` / `||: void{ ... }`, which
@@ -130,6 +131,8 @@ A. Capture *plain* values by value; R1 object; call and drop of the object; no
    LANDED 2026-10-20 -- see section 8.
 B. Owning captures (move in, drop out), `self` capture, nested-lambda capture
    chains (an inner creation site reads `(*__env).x` of the outer).
+   LANDED 2026-10-23 -- see section 9. An owning capture *through* a nested
+   lambda is still an error (no Clone bound for the second owner).
 C. Only if a case appears: by-reference capture with a confinement rule.
 
 6. Questions
@@ -157,10 +160,17 @@ A. tests/normal/49-closure-capture.x covers: by-value capture (a plain type
    tests/fail/closure_capture_nested.x pin the two phase-A errors.
    Not covered on purpose: a closure stored in a struct field or a List (its
    type cannot be spelled in source yet).
-B. tests/own: captured owner is dropped exactly once (the closure's drop);
-   after capture, using the variable is a use-after-move
-   (tests/fail/dead_closure_capture.x); two closures capturing the same owner
-   is a move error.
+B. tests/normal/65-closure-owning-capture.x: String/List/struct-with-owner
+   captures, a mutating call on a captured List, two owners in one closure,
+   capture through a generic parameter, capture of an owning parameter,
+   nested closures (outer capture and outer parameter), `self`, per-iteration
+   closures. tests/own/33closure_owning.x: the captured owner is dropped
+   exactly once (called, never called, through a generic, per iteration,
+   struct field, owning `self`). tests/fail: use after move
+   (closure_capture_after_move, closure_capture_twice), move out of a capture
+   (closure_move_out_of_capture), write to a capture (closure_assign_capture),
+   owner through a nested lambda (closure_capture_nested_owning), wrong lambda
+   arity (closure_call_arity).
 Every slice changes compiler code, so the strict triangle applies (C == D,
 B != C only in the known StateType::clone drift). A capturing lambda that is
 never called must still drop its captured owners exactly once (valgrind gate

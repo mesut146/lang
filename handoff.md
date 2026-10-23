@@ -2054,6 +2054,67 @@ Ownership only — no Rust-like borrows:
   a struct segfaults -- the generated method uses the sret ABI while the
   lambda-call prototype returns the struct by value. See open holes.
 
+- Closures, phase B: owning captures, nested plain captures, `self`
+  (2026-10-23). The design note's phase B (`doc/closures.txt` section 9). An
+  owning value now *moves* into the closure object at the creation site and is
+  dropped by the object exactly once; the generated method only borrows the
+  object's fields, so it neither drops them at return nor lets the body move or
+  write them.
+  * resolver: the "capturing an owning value is not supported yet" gate is
+    gone. A capture parameter carries `Param.is_captured` and a *fresh* node id
+    (the method line was the id, so two captured owners of one closure shared
+    one slot in the ownership engine's `var_map`). The
+    "capturing through a lambda" error is gone for plain values: the inner
+    creation site reads the outer lambda's captured parameter and
+    `visit_name_opt` threads it into the outer method.
+  * creation site: the emitter copies the value into the object as before and
+    tells the ownership engine it was a move (`Own::do_move(cap)`), so a later
+    read is "use after move" and a second closure is the same error;
+    `OwnVisitor` mirrors the move when it re-analyzes an else branch.
+  * the generated method borrows the object's fields: `Own::drop_var` skips
+    captured variables, `do_move`/`do_assign` reject "cannot move out of a
+    captured value" / "cannot assign to a captured value", and a captured
+    *struct* parameter aliases the object's field instead of being copied into
+    a local. The copy mattered: a bitwise copy shares the inner heap buffers,
+    so `List::add` on it reallocated/freed behind the object's back and the
+    closure's drop then freed freed memory (a segfault, pinned by the mutation
+    case in the guard). Primitive captures stay per-call copies, as in phase A.
+  * drop: the `Type::Lambda` arm of `drop_force` drops the captured drop-typed
+    fields in place (the tuple recursion), then frees the object. A closure
+    that is never called still drops its owners.
+  * `self` is captured like any other value: a plain receiver is copied, an
+    owning receiver moves into the closure (`tests/own/33`, `Wrap::value`).
+    An owning value captured *through* a nested lambda stays an error: there is
+    no Clone bound to make a real second owner.
+  * three compiler bugs the nested work exposed, fixed with it:
+    `visit_lambda` held a `Method*` into `Resolver::lambdas` across the body
+    visit and registering an inner lambda rehashed the map, so the outer wrote
+    its own body (and read its params) through a dangling pointer -- the map is
+    `HashMap<i32, Box<Method>>` now and the body visit re-fetches it anyway;
+    `resolve_all` iterated `lambdas` while a body visit inserted into it and
+    never resolved a nested clone's body (it walks a worklist of ids now); and
+    a lambda call with a wrong argument count indexed the declared parameter
+    list out of its end (a bare `List` panic, "index 0 out of bounds") instead
+    of reporting "arg count do not match" like the function-pointer path.
+  * tests: `tests/normal/65-closure-owning-capture.x` (String/List/
+    struct-with-owner captures, a mutating call on a captured List, two owners
+    in one closure, capture through a generic parameter, an owning parameter,
+    nested closures, `self`, per-iteration closures);
+    `tests/own/33closure_owning.x` (dropped exactly once: called, never
+    called, through a generic, per iteration, struct field, owning `self`);
+    and six fail tests (use after move x2, move out of a capture, write to a
+    capture, owner through a nested lambda, wrong lambda arity). The two phase
+    A fail tests (`closure_capture_owning`, `closure_capture_nested`) are gone:
+    both shapes work now, and `tests/normal/49`'s header points at phase B.
+  * suite green (`normal pass=128 xpass=0`, fmt, trace, lsp, opt, std, own,
+    fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
+    self-skips, no valgrind here). Triangle: A (built by the v1.20 compiler) ==
+    B == C == D -- the `stage1` binary and all 145 `.o`/8 `.a` outputs are
+    byte-identical, the only `diff -r` lines are `log.txt` timings.
+  * still open: by-reference and `mut` capture (phase C, needs a confinement
+    rule), an owning capture through a nested lambda, and a spelling for a
+    closure's type (so it can be a struct field / list element / return value).
+
 ## Known open holes (documented, not yet solved)
 
 Ownership residuals: place use-after-move is closed as of this batch (see

@@ -208,7 +208,7 @@ impl Emitter{
       }
     }
     for p in &resolver.lambdas{
-        self.genCode(p.b);
+        self.genCode(p.b.get());
     }
     
     let llvm_file = format("{}/{}.ll", &self.ctx.out_dir, trimExtenstion(name));
@@ -432,7 +432,7 @@ impl Emitter{
         p.make_proto(*pr.b);
     }
     for pair in &r.lambdas{
-        p.make_proto(pair.b);
+        p.make_proto(pair.b.get());
     }
   }
   
@@ -544,7 +544,17 @@ impl Emitter{
   func store_prm(self, prm: Param*, f: Function*, argIdx: i32){
     let ptr = *self.NamedValues.get(&prm.name).unwrap();
     let val = Function_getArg(f, argIdx) as Value*;
-    if(is_struct(&prm.type)){
+    if(is_struct(&prm.type) && prm.is_captured){
+      //A captured struct is not copied into a local: its address *is* the
+      //closure object's field, and the body works on that. A bitwise copy
+      //would share the inner buffers anyway, and a mutating method call
+      //(List::add, String::append) on the copy would reallocate/free them
+      //behind the object's back: the object's field then dangles and the
+      //closure's drop frees freed memory. Aliasing keeps one owner (the
+      //object) and makes the mutation land in the closure's value.
+      self.NamedValues.add(prm.name.clone(), val);
+      self.own.get().add_prm(prm, LLVMPtr::new(val));
+    }else if(is_struct(&prm.type)){
       self.copy(ptr, val, &prm.type);
     }else{
       CreateStore(self.ll.get().builder, val, ptr);
@@ -657,10 +667,9 @@ impl Emitter{
       if(ltb.get().captured.empty()){
         return;
       }
-      //A capturing lambda owns its heap closure object. Phase A captures only
-      //plain values, so freeing the object is the whole drop (phase B drops
-      //the captured owners first); see doc/closures.txt. `ptr` is the place of
-      //the value, so load the object pointer out of it.
+      //A capturing lambda owns its heap closure object: drop the captured
+      //owners it holds, then free it. `ptr` is the place of the value, so load
+      //the object pointer out of it first.
       //Reuse a `free` that the unit already resolved (std/libc declares it),
       //otherwise declare it. Declaring it eagerly in init would take the name
       //first and push the library's own `free` to `free.1` (link error).
@@ -672,6 +681,17 @@ impl Emitter{
       }
       let fproto = protos.funcMap.get(&fk).unwrap();
       let obj = ll.loadPtr(ptr.ptr as Value*);
+      let payload = closure_payload_type(ltb.get());
+      let pty = self.mapType(&payload);
+      for(let i = 0;i < ltb.get().captured.len();++i){
+        let ct = ltb.get().captured.get(i);
+        if(!helper.is_drop_type(ct)){
+          continue;
+        }
+        let crt = self.get_resolver().visit_type(ct);
+        let fp = CreateStructGEP(ll.builder, pty, obj, i + 1);
+        self.drop_force(&crt, LLVMPtr::new(fp), line, rhs);
+      }
       let args = [obj];
       CreateCall(ll.builder, fproto.val, args.ptr(), 1);
       return;

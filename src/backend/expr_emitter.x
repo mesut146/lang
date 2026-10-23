@@ -110,7 +110,7 @@ impl Emitter{
         },
         Expr::Lambda(le) => {
             let r = self.get_resolver();
-            let m = r.lambdas.get(&node.id).unwrap();
+            let m = r.lambdas.get(&node.id).unwrap().get();
             let proto = self.protos.get().get_func(m);
             let lrt = r.visit_cached(node);
             let lt0 = Option<LambdaType*>::none();
@@ -147,6 +147,11 @@ impl Emitter{
               let dst = CreateStructGEP(ll2.builder, pty, blk, i + 1);
               let src = self.visit(cap);
               self.copy(dst, src, &crt.type);
+              //an owner moves into the object: the caller keeps no handle, so
+              //the place is dead from here on (a later read is a use after
+              //move, a second closure is the same error). do_move is a no-op
+              //for plain values.
+              self.own.get().do_move(cap);
             }
             return blk;
         },

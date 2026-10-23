@@ -37,6 +37,10 @@ struct Variable {
     line: i32;
     scope: i32;
     is_self: bool;
+    //a captured parameter of a generated lambda method: borrowed from the
+    //closure object, so it is never dropped here and cannot be moved out
+    //(see Param.is_captured and doc/closures.txt section 9).
+    is_captured: bool;
 }
 impl Variable{
     func clone(self): Variable{
@@ -47,7 +51,8 @@ impl Variable{
             id: self.id,
             line: self.line,
             scope: self.scope,
-            is_self: self.is_self
+            is_self: self.is_self,
+            is_captured: self.is_captured
         };
     }
 }

@@ -477,6 +477,10 @@ struct Param: Node{
   type: Type;
   is_self: bool;
   is_deref: bool;
+  //A captured value of a generated lambda method: the *closure object* owns
+  //it, so this method must neither drop it at return nor let the body move it
+  //out. See doc/closures.txt section 9.
+  is_captured: bool;
 }
 
 //`macro name(p1: Expr, p2: Expr){ ... }` (slice 1: only `Expr` parameters,

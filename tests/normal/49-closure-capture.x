@@ -4,10 +4,11 @@
 //closure_payload_type in compiler_helper.x) and handed to the generated method
 //as extra arguments on every call; the value itself is the object pointer and
 //the closure's drop frees it.
-//Phase A captures plain values only (integers, bools, floats and aggregates of
-//them); capturing an owning value and capturing through an inner lambda are
-//loud errors (tests/fail/closure_capture_owning.x,
-//tests/fail/closure_capture_nested.x).
+//Phase A captured plain values only (integers, bools, floats and aggregates of
+//them); owning captures, nested captures and `self` are phase B, covered by
+//tests/normal/65-closure-owning-capture.x and tests/own/33closure_owning.x
+//(the errors left are use after move, moving/assigning a captured value, and
+//capturing an owner *through* a lambda: tests/fail/closure_*.x).
 //
 //Pre-fix red: "captured params not supported yet" (resolver.x visit_lambda).
 

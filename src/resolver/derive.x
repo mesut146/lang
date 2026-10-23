@@ -227,7 +227,8 @@ func generate_clone(r: Resolver*, decl: Decl*, unit: Unit*): Impl{
         name: "self".str(),
         type: decl.type.clone().toPtr(),
         is_self: true,
-        is_deref: false
+        is_deref: false,
+        is_captured: false
     };
     m.self = Option::new(prm);
     m.parent = Parent::Impl{make_info(decl, "Clone")};
@@ -301,7 +302,7 @@ func generate_drop(decl: Decl*, unit: Unit*): Impl{
     }
     let m = Method::new(unit.node(line), "drop".str(), Type::new("void"));
     m.is_generic = decl.is_generic;
-    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone(), true, true});
+    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone(), true, true, false});
     m.parent = Parent::Impl{make_info(decl, "Drop")};
     m.path = unit.path.clone();
     m.body = Option::new(body);
@@ -371,8 +372,8 @@ func generate_printer(decl: Decl*, unit: Unit*, trait_name: str, method_name: st
     let imp = make_impl(decl, trait_name);
     let line = decl.line;
     let m = Method::new(unit.node(line), method_name.str(), Type::new("void"), unit.path.clone());
-    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone().toPtr(), true, false});
-    m.params.add(Param{.unit.node(line), "f".str(), Type::new("Fmt").toPtr(), false, false});
+    m.self = Option::new(Param{.unit.node(line), "self".str(), decl.type.clone().toPtr(), true, false, false});
+    m.params.add(Param{.unit.node(line), "f".str(), Type::new("Fmt").toPtr(), false, false, false});
     m.parent = Parent::Impl{make_info(decl, trait_name)};
     m.is_generic = decl.is_generic;
     let body = Block::new(line, line);

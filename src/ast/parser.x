@@ -456,7 +456,7 @@ impl Parser{
         if(!is_deref){
           self_ty = self_ty.toPtr();
         }
-        selfp = Option::new(Param{.id, self_name, self_ty, true, is_deref});
+        selfp = Option::new(Param{.id, self_name, self_ty, true, is_deref, false});
       }
       while (self.is(TokenType::COMMA)) {
           self.consume(TokenType::COMMA);
@@ -503,7 +503,7 @@ impl Parser{
     let name = self.pop();
     self.consume(TokenType::COLON);
     let type = self.parse_type();
-    return Param{.id, name: name.value.owned(), type: type, is_self: false, is_deref: false};
+    return Param{.id, name: name.value.owned(), type: type, is_self: false, is_deref: false, is_captured: false};
   }
 
   func scope_merge(scope: Option<Type>*, type: Type): Type{

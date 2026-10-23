@@ -36,14 +36,18 @@
 //the member type qualified plus emitter support for the foreign decl; it used
 //to panic in get_decl. Scoped cross-unit *macro* calls already work.
 
-//closures: `|a: i32|: i32{ .. }` and `||` lambdas work, including capture
-//(phase A, 2026-10-20): a body may read an enclosing local or parameter *by
-//value*; the value is a heap closure object and its drop frees it
-//(tests/normal/49-closure-capture.x, design note doc/closures.txt section 8).
-//The `(a: i32): i32 => { .. }` form is abandoned (user, 2026-10-20).
-//Still open: capturing an owning value ("capturing an owning value is not
-//supported yet"), capture through a nested lambda ("capturing through a lambda
-//is not supported yet"), `self` capture and by-reference capture.
+//closures: `|a: i32|: i32{ .. }` and `||` lambdas work, including capture.
+//Phase A (2026-10-20): plain values, by value (tests/normal/49, doc section
+//8). Phase B (2026-10-23): owning captures move into the closure object and
+//are dropped with it, `self` is captured like any value, nested *plain*
+//captures are threaded through the outer closure
+//(tests/normal/65-closure-owning-capture.x, tests/own/33closure_owning.x,
+//doc/closures.txt section 9). The `(a: i32): i32 => { .. }` form is abandoned
+//(user, 2026-10-20).
+//Still open: by-reference and `mut` capture (phase C, needs a confinement
+//rule); an owning capture *through* a nested lambda ("capturing an owning
+//value through a lambda is not supported yet"); a spelling for a closure's
+//type (so it can be a field/list element/return value).
 //(fixed 2026-10-21) a lambda that *returns* a struct used to crash: the method
 //uses the sret ABI while the lambda-call prototype returned the struct by
 //value. tests/normal/61-lambda-struct-return.x.

@@ -92,6 +92,18 @@ impl OwnVisitor{
             Expr::Obj(type, args)=>{
                 self.visit_obj(expr, type, args);
             },
+            Expr::Lambda(_)=>{
+                //the creation site moves the captured owners into the closure
+                //object (the emitter's Expr::Lambda arm); mirror that here so
+                //the else-path re-analysis sees the same marks.
+                let caps = self.get_resolver().lambda_caps.get(&expr.id);
+                if(caps.is_some()){
+                    let list = caps.unwrap();
+                    for cap in list{
+                        self.do_move(cap);
+                    }
+                }
+            },
             Expr::Infix(op, l, r)=>{
                 if(op.eq("=")){
                     self.visit_expr(r.get());

@@ -203,7 +203,11 @@ struct Resolver{
   //not exist yet and find_drop_impl would panic. Retried at the end of init.
   pending_drops: List<RType>;
   block_map: HashMap<i32, Block*>;//todo use desc
-  lambdas: HashMap<i32, Method>;
+  //boxed: a lambda body may hold a nested lambda, whose visit inserts into
+  //this map; a value map would move the Method under a live `Method*` (the
+  //one `visit_method` is walking) and the outer method corrupted its own
+  //type/body mid-visit.
+  lambdas: HashMap<i32, Box<Method>>;
   //per capturing lambda, the expressions that read the captured values at the
   //creation site (emitted into the closure object; names, in method param order)
   lambda_caps: HashMap<i32, List<Expr>>;
@@ -283,7 +287,7 @@ impl Resolver{
       drop_map: HashMap<String, Desc>::new(),
       pending_drops: List<RType>::new(),
       block_map: HashMap<i32, Block*>::new(),
-      lambdas: HashMap<i32, Method>::new(),
+      lambdas: HashMap<i32, Box<Method>>::new(),
       lambda_caps: HashMap<i32, List<Expr>>::new(),
       inLambda: Stack<i32>::new(),
       extra_imports: List<ImportStmt>::new(),
@@ -849,8 +853,34 @@ impl Resolver{
         self.visit_method(gm.get());
       }
     }*/
+    //Resolve every lambda method body. A lambda body may itself hold a
+    //lambda: visiting it registers another method (the clone in *this* body is
+    //a distinct node, so it gets its own method), and that one needs its body
+    //resolved too. So walk a worklist rather than the map: mutating a map
+    //while iterating it invalidates the cursor, and a fixed snapshot left the
+    //nested clone unresolved (its body then had no types under its node ids,
+    //so emission re-resolved `w` in an empty scope: "unknown identifier").
+    let lambda_ids = List<i32>::new();
     for lm in &self.lambdas{
-        self.visit_method(lm.b);
+        lambda_ids.add(lm.a.clone());
+    }
+    let li = 0;
+    while(li < lambda_ids.len()){
+        let lid: i32 = *lambda_ids.get(li);
+        li += 1;
+        self.visit_method(self.lambdas.get(&lid).unwrap().get());
+        for lm in &self.lambdas{
+            let known = false;
+            for kid in &lambda_ids{
+                if(*kid == *lm.a){
+                    known = true;
+                    break;
+                }
+            }
+            if(!known){
+                lambda_ids.add(lm.a.clone());
+            }
+        }
     }
     let t4 = gettime();
     if(xprof){
@@ -3247,6 +3277,12 @@ impl Resolver{
         //clone: bx copies the temp's bytes and both drop, so the temp
         //must own independently (fp still drops the original below).
         if let Type::Lambda(bx)=fp.get().type.clone(){
+          //same arity check the function-pointer branch does: a mismatch used
+          //to walk off the end of the declared params list below (a `List`
+          //index panic that printed a bare "index 0 out of bounds").
+          if(call.args.len() != bx.get().params.len()){
+            self.err(node, format("arg count do not match {} vs {}", call.args.len(), bx.get().params.len()));
+          }
           let ret = bx.get().return_type.get();
           let res = self.visit_type(ret);
           res.lambda_call.set(LambdaCallInfo::new(fp.get().type.clone()));
@@ -3763,9 +3799,17 @@ impl Resolver{
           //reference to outer variable: it becomes an extra parameter of the
           //generated method, supplied from the closure object at the call
           if(self.inLambda.len() > 1){
-            self.err(node, "capturing through a lambda is not supported yet");
+            //capture through a lambda: the value is read at the *inner*
+            //creation site, which is inside the outer lambda's body -- so the
+            //outer lambda captures it too and the inner closure copies the
+            //outer's copy. That is sound for plain values (a bitwise copy).
+            //An owning value cannot be copied twice, and there is no Clone
+            //bound to ask for; see doc/closures.txt section 9.
+            if(DropHelper::new(self).is_drop_type(&res.type)){
+              self.err(node, "capturing an owning value through a lambda is not supported yet");
+            }
           }
-          let m = self.lambdas.get(self.inLambda.top()).unwrap();
+          let m = self.lambdas.get(self.inLambda.top()).unwrap().get();
           let has = false;
           for prm in &m.params{
               if(prm.name.eq(&vh.name)){
@@ -3774,7 +3818,11 @@ impl Resolver{
               }
           }
           if(!has){
-              m.params.add(Param{.Node::new(m.line), vh.name.clone(), res.type.clone(), false, false});
+              //a fresh id per capture: Node::new(m.line) would take the line as
+              //the *id*, so every capture of one lambda would share an id and
+              //the ownership engine (var_map is keyed by it) could not tell two
+              //captured owners apart.
+              m.params.add(Param{.self.unit.node(m.line), vh.name.clone(), res.type.clone(), false, false, true});
           }
         }
       }
@@ -4029,52 +4077,58 @@ impl Resolver{
       let lt = LambdaType{return_type: Option::new(ret.unwrap()), params: List<Type>::new(), captured: List<Type>::new()};
       for prm in &node.params{
           let rt = self.visit_type(prm.type.get());
-          method.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false});
+          method.params.add(Param{.Node::new(expr.line), prm.name.clone(), rt.type.clone(), false, false, false});
           lt.params.add(rt.type.clone());
           self.addScope(prm.name.clone(), rt, prm.id, VarKind::PARAM, expr.line);
       }
       self.inLambda.push(expr.id);
-      self.lambdas.add(expr.id, method);
+      self.lambdas.add(expr.id, Box::new(method));
       
-      let mptr = self.lambdas.get(&expr.id).unwrap();
+      let mptr = self.lambdas.get(&expr.id).unwrap().get();
       let plen = mptr.params.len();
       match (node.body.get()){
           LambdaBody::Expr(ex)=>{
               self.visit(ex);
+              //The body may register inner lambdas, and a `lambdas` insert can
+              //rehash the map: a pointer held across the visit dangles (this
+              //crashed on nested closures, where the outer body holds an inner
+              //lambda). Re-fetch after the visit.
+              let mb = self.lambdas.get(&expr.id).unwrap().get();
               if let Expr::Block(b)=ex{
-                  mptr.body = Option::new(AstCopier::clone(b.get(), &self.unit));
+                  mb.body = Option::new(AstCopier::clone(b.get(), &self.unit));
               }else{
-                  mptr.body = Option::new(Block::new(expr.line, expr.line));
-                  mptr.body.get().list.add(Stmt::Expr{.Node::new(expr.line), AstCopier::clone(ex, &self.unit)});
+                  mb.body = Option::new(Block::new(expr.line, expr.line));
+                  mb.body.get().list.add(Stmt::Expr{.Node::new(expr.line), AstCopier::clone(ex, &self.unit)});
               }
           },
           LambdaBody::Stmt(st)=>{
-              mptr.body = Option::new(Block::new(expr.line, expr.line));
+              let mb = self.lambdas.get(&expr.id).unwrap().get();
+              mb.body = Option::new(Block::new(expr.line, expr.line));
               self.visit(st);
-              mptr.body.get().list.add(AstCopier::clone(st, &self.unit));
+              self.lambdas.get(&expr.id).unwrap().get().body.get().list.add(AstCopier::clone(st, &self.unit));
          }
       }
     
       //a lambda that reads enclosing locals is a closure: each such name is an
       //extra parameter of the generated method (added by visit_name_opt), and
-      //the values are copied into a heap object at the creation site (the
-      //emitter's Expr::Lambda arm reads `lambda_caps`).
-      for(let i = plen;i < mptr.params.len();i += 1){
-          let prm = mptr.params.get(i);
+      //the values are moved/copied into a heap object at the creation site
+      //(the emitter's Expr::Lambda arm reads `lambda_caps`).
+      let mptr2 = self.lambdas.get(&expr.id).unwrap().get();
+      for(let i = plen;i < mptr2.params.len();i += 1){
+          let prm = mptr2.params.get(i);
           lt.captured.add(prm.type.clone());
       }
-      let helper = DropHelper::new(self);
-      for cap in &lt.captured{
-          if(helper.is_drop_type(cap)){
-              self.err(expr, "capturing an owning value is not supported yet");
-          }
-      }
+      //Owning captures (phase B): the closure object owns the captured
+      //values. The creation site moves them in (the emitter marks that move
+      //in the ownership engine), the object drops them when the closure dies,
+      //and the generated method -- which only borrows the object's fields --
+      //neither drops nor moves them out (Param.is_captured).
       self.inLambda.pop();
       //resolve the capture reads *outside* the lambda: they name enclosing
       //locals, and resolving them inside would try to capture them again.
       let caps = List<Expr>::new();
-      for(let i = plen;i < mptr.params.len();i += 1){
-          let prm = mptr.params.get(i);
+      for(let i = plen;i < mptr2.params.len();i += 1){
+          let prm = mptr2.params.get(i);
           //a fresh node id: Node::new(line) would take `line` as the *id*, so
           //every capture read would share one cache slot (and one type).
           let e = Expr::Name{.self.unit.node(expr.line), val: prm.name.clone()};
@@ -4120,7 +4174,7 @@ impl Resolver{
   func check_return(self, type: Type*, line: i32){
     let expected_type = Option<Type*>::none();
     if(!self.inLambda.empty()){
-        expected_type = Option::new(&self.lambdas.get(self.inLambda.top()).unwrap().type);
+        expected_type = Option::new(&self.lambdas.get(self.inLambda.top()).unwrap().get().type);
     }else{
         expected_type = Option::new(&self.curMethod.unwrap().type);
     }

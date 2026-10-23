@@ -255,7 +255,8 @@ impl AstCopier{
             name: p.name.clone(),
             type: self.visit(&p.type),
             is_self: p.is_self,
-            is_deref: p.is_deref};
+            is_deref: p.is_deref,
+            is_captured: p.is_captured};
     }
 
     func visit(self, p: Parent*): Parent{

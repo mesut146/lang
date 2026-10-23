@@ -396,7 +396,7 @@ impl AllocHelper{
       },
       Expr::Lambda(le) => {
           let r = self.get_resolver();
-          let m = r.lambdas.get(&node.id).unwrap();
+          let m = r.lambdas.get(&node.id).unwrap().get();
           let ty = r.getType(node);
           res.set(self.alloc_ty(&ty, node));
           return res;

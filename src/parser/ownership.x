@@ -229,7 +229,8 @@ impl Own{
             id: p.id,
             line: p.line,
             scope: self.get_scope().id,
-            is_self: p.is_self
+            is_self: p.is_self,
+            is_captured: p.is_captured
         };
         self.get_scope().vars.add(p.id);
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
@@ -247,7 +248,8 @@ impl Own{
             id: f.id,
             line: f.line,
             scope: self.get_scope().id,
-            is_self: false
+            is_self: false,
+            is_captured: false
         };
         self.get_scope().vars.add(var.id);
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
@@ -266,7 +268,8 @@ impl Own{
             id: arg.id,
             line: arg.line,
             scope: self.get_scope().id,
-            is_self: false
+            is_self: false,
+            is_captured: false
         };
         self.get_scope().vars.add(var.id);
         self.get_scope().state_map.add(Rhs::new(var.clone()), StateType::NONE);
@@ -667,6 +670,13 @@ impl Own{
             print("do_move {:?}\n", &mv);
         }
         let rhs = Rhs::new(expr, self);
+        //A captured value lives in the closure object and the method that
+        //borrows it may run many times: moving it out would hand the same
+        //allocation to the callee on the first call and leave a stale field
+        //for the drop. See doc/closures.txt section 9.
+        if(self.is_captured_rhs(&rhs)){
+            self.get_resolver().err(expr, "cannot move out of a captured value");
+        }
         //Any place rooted at an index (`arr[i]`, `arr[i].f`, `p[i].a`) is
         //movable only when it *is* a tracked element place: a constant index
         //into a local array (Rhs::INDEX, see Rhs::new). Everything else has
@@ -799,11 +809,32 @@ impl Own{
         self.get_resolver().err(arg, "returns_alias argument must be a borrow of a named place");
     }
     //move rhs
+    //Is this place (or a field/element of it) a captured value of the
+    //lambda method being emitted? See Param.is_captured.
+    func is_captured_rhs(self, rhs: Rhs*): bool{
+        if let Rhs::VAR(v) = rhs{
+            return v.is_captured;
+        }
+        if let Rhs::FIELD(scp, _) = rhs{
+            return scp.is_captured;
+        }
+        if let Rhs::INDEX(scp, _) = rhs{
+            return scp.is_captured;
+        }
+        return false;
+    }
     func do_assign(self, lhs: Expr*, rhs: Expr*){
         let scope = self.get_scope();
         let rt = self.get_type(rhs);
         if(!self.is_drop_type(&rt.type)){
             return;
+        }
+        let lhs_rhs = Rhs::new(lhs, self);
+        if(self.is_captured_rhs(&lhs_rhs)){
+            //the borrowed field is not dropped here, so a write would leak the
+            //new value (and the old one would still be dropped by the
+            //object). No `mut` capture in v1; see doc/closures.txt.
+            self.get_resolver().err(lhs, "cannot assign to a captured value");
         }
         if(verbose){
             let mv = Move{Option::new(Moved::new(lhs, self)), Moved::new(rhs, self), lhs.line};
@@ -1512,6 +1543,13 @@ impl Own{
     }
     func drop_var(self, var: Variable*, scope: VarScope*, line: i32){
         if(var.is_self && is_drop_method(self.method)){
+            return;
+        }
+        if(var.is_captured){
+            //a captured parameter of a generated lambda method borrows the
+            //closure object's field; the object owns it and drops it when the
+            //closure dies (Emitter::drop_force). Dropping here would free it
+            //on every call, and the object would free it again.
             return;
         }
         if(var.type.is_pointer()){
