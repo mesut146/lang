@@ -17,7 +17,13 @@ permissions:
 
 jobs:
   build-x86_64:
-    runs-on: ubuntu-latest
+    #ubuntu-latest moved to 26.04 (2026-10-24): bin/apt.sh installs `libxml2`
+    #(noble, libxml2.so.2), which no longer has an installation candidate
+    #there, so the bootstrapping toolchain cannot load libLLVM ("libxml2.so.2:
+    #cannot open shared object file"). Pin this job to the image the scripts
+    #and the llvm-19 debs target; the other jobs build in their own chroots
+    #and were green on 26.04.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
