@@ -283,7 +283,10 @@ Known limits (phase C or later):
 - by-reference capture and `mut` capture (needs a confinement rule).
 - capturing an owner that is declared *outside* the enclosing loop is an
   error: the creation site is a move, and it would run (and hand out the same
-  allocation) once per iteration. An owner declared in the loop body is fine.
+  allocation) once per iteration. This is the general loop-move rule (not a
+  closure special case): doc/ownership.txt, "Moves inside a loop body", also
+  covers a plain call-argument move, a `continue` path and a `break` path.
+  An owner declared in the loop body is fine.
 - owning capture through a nested lambda (above).
 - a closure's type still cannot be spelled in source, so a closure cannot be a
   struct field, a list element or a return value; it can be bound to a local,

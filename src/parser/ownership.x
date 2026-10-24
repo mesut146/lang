@@ -156,6 +156,9 @@ impl Own{
         //copy parent states
         for pair in &parent.state_map{
             scope.state_map.add(pair.a.clone(), pair.b.clone());
+            if((kind is ScopeType::WHILE || kind is ScopeType::FOR) && pair.b.is_moved()){
+                scope.pre_moved.add(Fmt::str(pair.a), true);
+            }
         }
         scope.parent = parent.id;
         let id = scope.id;      
@@ -809,39 +812,65 @@ impl Own{
         self.get_resolver().err(arg, "returns_alias argument must be a borrow of a named place");
     }
     //move rhs
-    //Would moving this place be repeated by the next iteration of a loop?
-    //True when the place is declared *outside* the innermost enclosing
-    //while/for. The move is emitted once, but it runs per iteration: the
-    //second iteration hands out freed memory. (Plain call-argument moves have
-    //the same hole today and are not diagnosed; the closure creation site
-    //checks it because an owner capture is a move the feature just added.)
-    func move_repeats_in_loop(self, expr: Expr*): bool{
-        let rhs = Rhs::new(expr, self);
-        let sid = -1;
-        if let Rhs::VAR(v) = &rhs{
-            sid = v.scope;
-        }
-        if let Rhs::FIELD(scp, _) = &rhs{
-            sid = scp.scope;
-        }
-        if let Rhs::INDEX(scp, _) = &rhs{
-            sid = scp.scope;
-        }
-        if(sid == -1){
-            return false;
-        }
-        let cur = self.cur_scope;
-        while(cur != -1){
-            let sc = self.get_scope(cur);
-            if(sc.id == sid){
-                return false;
+    //A loop body's merged state is the state that reaches the back-edge. A
+    //move of a place declared *outside* the loop is emitted once but runs on
+    //every iteration, so the next iteration would use the moved value (a
+    //double free at run time: `let s = String::new(..); while(c){ send(s); }`
+    //did that on v1.20). Report it here, at the line of the move.
+    //Places that were already moved when the loop was entered are skipped:
+    //using one inside the body already errored as a use after move (and a
+    //for-each's consumed collection is exactly that shape, unused in the
+    //body).
+    func check_loop_moves(self, scope: VarScope*){
+        let outers: List<Droppable> = self.get_outer_vars(scope);
+        for dr in &outers{
+            if let Droppable::OBJ(obj)=dr{
+                continue;
             }
-            if(sc.kind is ScopeType::WHILE || sc.kind is ScopeType::FOR){
-                return true;
+            let var = dr.as_var();
+            if(var.scope == scope.id){
+                //declared in the loop body: a fresh value each iteration
+                continue;
             }
-            cur = sc.parent;
+            let rhs = Rhs::new(var.clone());
+            //A whole-var write *in this body* leaves the var live even if a
+            //*field* of it was moved after the write (std/hashmap's rehash
+            //reassigns `node` from `node.next` and then hands its fields to
+            //insert). `scope.assigned` only holds writes made in this scope,
+            //so an inherited ASSIGNED (a write before the loop) does not
+            //excuse a field moved in the body. The field marks stay either
+            //way, so reading one before the next write still errors.
+            let aopt = scope.assigned.get(&Fmt::str(&rhs));
+            if(aopt.is_some() && *aopt.unwrap() >= scope.line){
+                continue;
+            }
+            //Only a move made *in this body* is this loop's problem: a place
+            //that arrived moved (or partially moved) was moved before the loop
+            //and the next iteration does not use it again (if it did, the read
+            //would already be a use after move).
+            let mline = -1;
+            for pair in &scope.state_map{
+                if(mline != -1){
+                    continue;
+                }
+                if(!(pair.b is StateType::MOVED)){
+                    continue;
+                }
+                if(self.place_root_id(pair.a) != var.id){
+                    continue;
+                }
+                if(scope.pre_moved.contains(&Fmt::str(pair.a))){
+                    continue;
+                }
+                if let StateType::MOVED(l) = pair.b{
+                    mline = *l;
+                }
+            }
+            if(mline == -1){
+                continue;
+            }
+            self.get_resolver().err(mline, format("`{}` is moved inside a loop; the next iteration would use it after the move", var.name));
         }
-        return false;
     }
     //Is this place (or a field/element of it) a captured value of the
     //lambda method being emitted? See Param.is_captured.
@@ -883,6 +912,7 @@ impl Own{
             self.note_reinit(&lhs_place.unwrap(), scope);
         }
         self.update_state(lhs, &rt_lhs, StateType::ASSIGNED, scope);
+        scope.assigned.add(Fmt::str(&lhs_rhs), lhs.line);
     }
 
     func update_state(self, expr: Expr*, rt: RType*, kind: StateType, scope: VarScope*){
@@ -1200,17 +1230,156 @@ impl Own{
         }
     }
 
-    func do_continue(self, line: i32){
-        //drop vars & objs until the loop
+    //drop vars & objs until the loop (shared by break and continue)
+    func do_jump_drops(self, line: i32){
         let scope = self.get_scope();
         let drops = self.get_outer_vars_loop(scope);
         for dr in &drops{
             self.drop_any(dr, scope, line);
         }
     }
+    //the innermost enclosing while/for of `scope`, if any
+    func enclosing_loop(self, scope: VarScope*): Option<VarScope*>{
+        let cur = scope.parent;
+        while(cur != -1){
+            let sc = self.get_scope(cur);
+            if(sc.kind is ScopeType::WHILE || sc.kind is ScopeType::FOR){
+                return Option::new(sc);
+            }
+            cur = sc.parent;
+        }
+        return Option<VarScope*>::new();
+    }
+    //is `inner` the loop scope `outer` or one of its descendants? A place
+    //declared inside the loop body is fresh (or dead) each iteration.
+    func scope_within(self, inner: i32, outer: i32): bool{
+        let cur = inner;
+        while(cur != -1){
+            if(cur == outer){
+                return true;
+            }
+            let sc = self.get_scope(cur);
+            cur = sc.parent;
+        }
+        return false;
+    }
+    //the id of the variable a place is rooted at (-1 for a temporary)
+    func place_root_id(self, rhs: Rhs*): i32{
+        if let Rhs::VAR(v) = rhs{
+            return v.id;
+        }
+        if let Rhs::FIELD(scp, _) = rhs{
+            return scp.id;
+        }
+        if let Rhs::INDEX(scp, _) = rhs{
+            return scp.id;
+        }
+        return -1;
+    }
+    //the scope a place's variable was declared in (-1 for a temporary)
+    func rhs_var_scope(self, rhs: Rhs*): i32{
+        if let Rhs::VAR(v) = rhs{
+            return v.scope;
+        }
+        if let Rhs::FIELD(scp, _) = rhs{
+            return scp.scope;
+        }
+        if let Rhs::INDEX(scp, _) = rhs{
+            return scp.scope;
+        }
+        return -1;
+    }
+    //the variable a place is rooted at, for diagnostics (the Rhs Debug form
+    //prints the whole Variable struct)
+    func rhs_var_name(self, rhs: Rhs*): String{
+        if let Rhs::VAR(v) = rhs{
+            return v.name.clone();
+        }
+        if let Rhs::FIELD(scp, _) = rhs{
+            return scp.name.clone();
+        }
+        if let Rhs::INDEX(scp, _) = rhs{
+            return scp.name.clone();
+        }
+        return "?".str();
+    }
+    //record a moved place on a loop's jump-path list (dedupe by Rhs key)
+    func note_loop_jump(self, list: List<LoopMove>*, rhs: Rhs*, line: i32){
+        let key = Fmt::str(rhs);
+        for pm in list{
+            if(pm.key.eq(&key)){
+                return;
+            }
+        }
+        list.add(LoopMove{key: key, name: self.rhs_var_name(rhs), line: line});
+    }
+    func do_continue(self, line: i32){
+        //A `continue` reaches the loop's back-edge, so what it moved is part
+        //of what the next iteration starts with. It is not the fall-through
+        //state (the body may always `return` after it), so record it on the
+        //loop and report it there unconditionally.
+        let scope = self.get_scope();
+        let loop = self.enclosing_loop(scope);
+        if(loop.is_some() && scope.id != loop.unwrap().id){
+            let lp = loop.unwrap();
+            for pair in &scope.state_map{
+                if(!pair.b.is_moved()){
+                    continue;
+                }
+                let vs = self.rhs_var_scope(pair.a);
+                if(vs == -1 || self.scope_within(vs, lp.id)){
+                    continue;
+                }
+                let lpst = lp.state_map.get(pair.a);
+                if(lpst.is_some() && lpst.unwrap().is_moved()){
+                    //moved straight-line in the body too: check_loop_moves
+                    //reports the back-edge already
+                    continue;
+                }
+                let ml = scope.line;
+                if let StateType::MOVED(l)=pair.b{
+                    ml = *l;
+                }
+                self.note_loop_jump(&lp.cont_moved, pair.a, ml);
+            }
+        }
+        self.do_jump_drops(line);
+    }
     
     func do_break(self, line: i32){
-        self.do_continue(line);
+        //A `break` leaves the loop: what it moved does not reach the
+        //back-edge, but the code *after* the loop must not drop it either.
+        //x has no drop flags, so remember the places and let the loop's end
+        //report the ambiguity (a straight-line move before the break is
+        //already in the loop scope's own state and drops correctly after).
+        let scope = self.get_scope();
+        let loop = self.enclosing_loop(scope);
+        if(loop.is_some()){
+            let lp = loop.unwrap();
+            if(scope.id != lp.id){
+                for pair in &scope.state_map{
+                    if(!pair.b.is_moved()){
+                        continue;
+                    }
+                    let vs = self.rhs_var_scope(pair.a);
+                    if(vs == -1 || self.scope_within(vs, lp.id)){
+                        //temporary or loop-local: nothing is dropped after
+                        continue;
+                    }
+                    let lpst = lp.state_map.get(pair.a);
+                    if(lpst.is_some() && lpst.unwrap().is_moved()){
+                        //already gone on the fall-through path too
+                        continue;
+                    }
+                    let ml = scope.line;
+                    if let StateType::MOVED(l)=pair.b{
+                        ml = *l;
+                    }
+                    self.note_loop_jump(&lp.break_moved, pair.a, ml);
+                }
+            }
+        }
+        self.do_jump_drops(line);
     }
 
     func check_ptr_field(self, scope: VarScope*, line: i32){
@@ -1223,6 +1392,31 @@ impl Own{
     func end_scope(self, line: i32){
         let scope = self.get_scope();
         //assert(scope.kind is ScopeType::ELSE || scope.kind is ScopeType::IF);
+        //A loop body that moves an outer drop value and can reach the
+        //back-edge is a use after move on the next iteration (see
+        //check_loop_moves). A body that always leaves the loop (break,
+        //return, panic) is fine: the move then happens at most once.
+        if(scope.kind is ScopeType::WHILE || scope.kind is ScopeType::FOR){
+            if(!scope.exit.always_leaves_loop()){
+                self.check_loop_moves(scope);
+            }
+            //A `continue` path reaches the back-edge even when the body's
+            //fall-through path always leaves (a `return` after an if).
+            for pm in &scope.cont_moved{
+                if(scope.pre_moved.contains(&pm.key)){
+                    continue;
+                }
+                self.get_resolver().err(pm.line, format("`{}` is moved on a path that continues the loop; the next iteration would use it after the move", pm.name));
+            }
+            //a place moved on a `break` path (and not on the fall-through)
+            //would need a drop decision x cannot make without flags
+            for pm in &scope.break_moved{
+                if(scope.pre_moved.contains(&pm.key)){
+                    continue;
+                }
+                self.get_resolver().err(pm.line, format("`{}` is moved on a path that breaks out of the loop; x cannot tell whether to drop it after the loop", pm.name));
+            }
+        }
         if(scope.exit.is_jump()){
             //has own drop, just update state
             self.check_ptr_moves(scope, line);

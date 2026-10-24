@@ -2115,9 +2115,8 @@ Ownership only — no Rust-like borrows:
     compile error ("capturing an owning value declared outside the loop: the
     move would repeat on every iteration"). Capturing an owner declared in the
     body stays fine (the last block of the guard creates one closure per
-    iteration). The general shape is a pre-existing hole and is now in the
-    open-holes list: `send(s)` in a loop of a value declared outside it
-    compiles and double-frees at run time on v1.20 too.
+    iteration). (Generalised 2026-10-24 to every move in a loop body -- see the
+    "Moves inside a loop body" entry; the closure-specific guard is gone.)
   * suite green (`normal pass=129 xpass=0`, fmt, trace, lsp, opt, std, own,
     fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
     self-skips, no valgrind here). Triangle: A (built by the v1.20 compiler) ==
@@ -2127,18 +2126,88 @@ Ownership only — no Rust-like borrows:
     rule), an owning capture through a nested lambda, and a spelling for a
     closure's type (so it can be a struct field / list element / return value).
 
+- Moves inside a loop body (2026-10-24). The hole the phase B closure guard
+  found, generalised: a move is emitted once but runs on every iteration, so
+  `let s = String::new(..); while(c){ send(s); }` double-freed on v1.20 too,
+  and the closure guard was only a special case of it. The rule now lives in
+  the ownership engine at the end of a WHILE/FOR scope (`Own::end_scope`,
+  `Own::check_loop_moves`) and covers every move:
+  * back-edge: the loop scope's merged state is what the next iteration
+    starts from, so a place declared *outside* the body that is moved there
+    reports "is moved inside a loop; the next iteration would use it after
+    the move" at the move's line (a field/element place counts, and the
+    rollup through `get_state` is not used -- a fresh move is looked up in
+    the loop scope's own state map so a partial move from before the loop
+    does not trip it).
+  * `continue`: `Own::do_continue` records the moves made on that path on the
+    loop scope (`VarScope.cont_moved`) and `end_scope` reports them even when
+    the body's fall-through path always leaves (`if(x){ take(p); continue; }
+    ... return;`): "is moved on a path that continues the loop".
+  * `break`: `Own::do_break` records them (`VarScope.break_moved`) and
+    `end_scope` rejects the shape. After the loop the value is gone on the
+    break path but still owned if the loop never ran or took another path,
+    and x has no drop flags, so the drop is undecidable -- the same call as
+    an else-only move: "is moved on a path that breaks out of the loop; x
+    cannot tell whether to drop it after the loop". A move before an
+    unconditional `break` (`while(c){ send(x); break; }`) is fine: it lands
+    in the loop scope's own state and propagates to the parent, which is why
+    only a nested (conditional) break path needs the note.
+  Not reported, all sound: a place declared in the loop body (fresh per
+  iteration), a body that always leaves the loop at the top level
+  (`Exit::always_leaves_loop`, new in exit.x: break/return/panic/exitcall/
+  unreachable, recursing through if/else and match arms; `continue` is a jump
+  but *not* a loop exit), a place that already arrived moved -- a for-each's
+  consumed collection is that shape and re-using it would already be "use
+  after move" -- and a place wholly assigned *in the body* before a field of
+  it was moved (std/hashmap's `rehash`: `node = node.next...;
+  self.insert(node.key, ...)`; without this the std tree stopped compiling).
+  That last one needs the write's scope: `VarScope.assigned` records
+  whole-var writes per scope (set in `do_assign`), so an ASSIGNED inherited
+  from before the loop does not excuse a field moved in the body --
+  `h = mk(); while(c){ take(h.s); }` is rejected (pre-fix it double-freed).
+  Field marks survive a whole-var write (the 30loopreinit rule), so reading a
+  moved field after the loop still errors.
+  * the phase B closure guard is gone (its `move_repeats_in_loop` and the
+    creation-site check): the capture's move is caught by the general rule
+    with the same line, so `tests/fail/closure_capture_loop.x` now expects
+    "is moved inside a loop".
+  * tests: `tests/fail/loop_move_outer.x` (back-edge),
+    `loop_move_outer_field.x` (a field move, with a whole-var write *before*
+    the loop so the assigned-scope rule is pinned), `loop_move_continue.x`,
+    `loop_move_break.x`; `tests/own/34loop_move.x` is the allowed side and
+    checks drop-exactly-once (move+break, move+return, move+reinit per
+    iteration, including the last value's drop at function end).
+  * found while building this, still open (see open holes): a `for`-each over
+    a borrowed `HashMap` whose body has an `if let` chain and a `break`
+    emitted a basic block without a terminator (`iflet_next_<line>`); LLVM's
+    AlwaysInliner segfaulted on it at -O2 and -O0 reported the bad IR.
+    Worked around in the new code (a helper returns a place's root id, the
+    scan uses a sentinel instead of `break`), not fixed in the emitter.
+  * suite green (`normal pass=133 xpass=0`, fmt, trace, lsp, opt, std, own,
+    fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
+    self-skips, no valgrind here). Triangle: A (built by the v1.20 compiler)
+    == B == C == D -- `stage1` and all 145 `.o`/8 `.a` outputs are
+    byte-identical; the only `diff -r` lines are `link.sh` (out-dir paths)
+    and `log.txt` timings.
+
 ## Known open holes (documented, not yet solved)
 
-Move inside a loop body, unguarded (found 2026-10-23 while testing closures):
-`let s = String::new(..); for (..){ send(s); }` compiles -- on v1.20 as well --
-and aborts with a double free at run time, because the move is emitted once but
-runs every iteration and the loop state does not carry the move to the next
-iteration. The closure creation site now rejects it for *captures* ("capturing
-an owning value declared outside the loop"), but a call argument, a return or a
-reassignment of an outer drop value inside a loop is still undiagnosed. The fix
-belongs in `Own::do_move` (reject a move of a non-loop-local place while inside
-a WHILE/FOR scope), with care for the legal `if(done){ take(p); break; }`
-shape; triage the std tree before enabling it.
+Moves inside a loop body: CLOSED 2026-10-24 (see the entry above). Reported
+at the move's line for the back-edge, a `continue` path and a `break` path;
+the allowed shapes are pinned by tests/own/34loop_move.x. Residual (sound, but
+a rejection a user may hit): a `break` path that moves an outer value is
+rejected outright because x has no drop flags, even when the loop provably
+runs once -- restructure to move before an unconditional `break`, or reinit
+the place in the body.
+
+Emitter bug: a block without a terminator (found 2026-10-24 while writing the
+loop check; pre-existing, v1.20 reports it at -O0 as "Basic Block in function
+'X' does not have terminator!" in `iflet_next_<line>` and segfaults inside
+LLVM's AlwaysInliner at -O2). Reproduced shape: a `for`-each over a borrowed
+`HashMap` whose body runs an `if let` chain and then `break`s (exactly the
+first cut of `Own::check_loop_moves`). Not fixed: the emitter still needs a
+look, the workaround there was to make the helper return a value and use a
+sentinel instead of `break`.
 
 Ownership residuals: place use-after-move is closed as of this batch (see
 doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow

@@ -44,6 +44,10 @@
 //(tests/normal/65-closure-owning-capture.x, tests/own/33closure_owning.x,
 //doc/closures.txt section 9). The `(a: i32): i32 => { .. }` form is abandoned
 //(user, 2026-10-20).
+//A loop-body move of an outside value is rejected (2026-10-24, the general
+//rule in doc/ownership.txt "Moves inside a loop body": back-edge,
+//`continue` path, `break` path), which also covers the closure creation
+//site; tests/fail/loop_move_*.x, tests/own/34loop_move.x.
 //Still open: by-reference and `mut` capture (phase C, needs a confinement
 //rule); an owning capture *through* a nested lambda ("capturing an owning
 //value through a lambda is not supported yet"); a spelling for a closure's

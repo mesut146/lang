@@ -82,6 +82,13 @@ struct PtrMove{
     place: String;
     line: i32;
 }
+//a place moved on a loop's break/continue path: `key` is the Rhs key (dedupe,
+//matches pre_moved), `name` is the variable for the diagnostic
+struct LoopMove{
+    key: String;
+    name: String;
+    line: i32;
+}
 struct VarScope{
     kind: ScopeType;
     id: i32;
@@ -95,6 +102,23 @@ struct VarScope{
     state_map: HashMap<Rhs, StateType>; //var_id -> StateType
     pending_parent: HashMap<i32, StateType>; //var_id -> StateType
     ptr_left: List<PtrMove>;
+    //loop scopes only: the places already moved when the loop was entered.
+    //A loop body that moves an *outer* place is diagnosed at the back-edge
+    //(see Own::check_loop_moves); a place that arrived moved is not this
+    //loop's move (using it here already errored as a use after move).
+    pre_moved: Map<String, bool>;
+    //loop scopes only: places moved on a `break` path inside the body. They
+    //are gone after the loop on *that* path but still owned on any path that
+    //falls through or never enters, so the post-loop drop is ambiguous -- see
+    //Own::check_loop_moves.
+    break_moved: List<LoopMove>;
+    //loop scopes only: places moved on a `continue` path. That path reaches
+    //the back-edge, so the next iteration uses a moved value.
+    cont_moved: List<LoopMove>;
+    //whole-var writes made in this scope: place key -> line. Only writes that
+    //happen inside a loop body matter (they make the back-edge partial-move
+    //rollup stale, see Own::check_loop_moves).
+    assigned: Map<String, i32>;
 }
 impl VarScope{
     func new(kind: ScopeType, line: i32, exit: Exit): VarScope{
@@ -110,7 +134,11 @@ impl VarScope{
             is_empty: false,
             state_map: HashMap<Rhs, StateType>::new(),
             pending_parent: HashMap<i32, StateType>::new(),
-            ptr_left: List<PtrMove>::new()
+            ptr_left: List<PtrMove>::new(),
+            pre_moved: Map<String, bool>::new(),
+            break_moved: List<LoopMove>::new(),
+            cont_moved: List<LoopMove>::new(),
+            assigned: Map<String, i32>::new()
         };
         return scope;
     }

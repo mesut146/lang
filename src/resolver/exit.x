@@ -95,6 +95,25 @@ impl Exit{
         if(!self.cases.empty()) return self.is_exit2();
         return false;
     }
+    //Does this exit definitely leave the *loop*? `continue` is a jump but it
+    //goes back to the head, so it does not.
+    func always_leaves_loop(self): bool{
+        if(self.kind is ExitType::BREAK || self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::EXITCALL || self.kind is ExitType::UNREACHABLE){
+            return true;
+        }
+        if(self.if_kind.is_some() && self.else_kind.is_some()){
+            return self.if_kind.get().always_leaves_loop() && self.else_kind.get().always_leaves_loop();
+        }
+        if(!self.cases.empty()){
+            for cs in &self.cases{
+                if(!cs.always_leaves_loop()){
+                    return false;
+                }
+            }
+            return true;
+        }
+        return false;
+    }
     func is_jump(self): bool{
         if (self.kind is ExitType::RETURN || self.kind is ExitType::PANIC || self.kind is ExitType::BREAK || self.kind is ExitType::CONTINE || self.kind is ExitType::EXITCALL || self.kind is ExitType::UNREACHABLE) return true;
         if (self.if_kind.is_some() && self.else_kind.is_some()) return self.if_kind.get().is_jump() && self.else_kind.get().is_jump();

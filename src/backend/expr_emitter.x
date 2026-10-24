@@ -151,10 +151,6 @@ impl Emitter{
               //the place is dead from here on (a later read is a use after
               //move, a second closure is the same error). do_move is a no-op
               //for plain values.
-              if(self.own.get().is_drop_type(&crt.type)
-                 && self.own.get().move_repeats_in_loop(cap)){
-                self.get_resolver().err(cap, "capturing an owning value declared outside the loop: the move would repeat on every iteration");
-              }
               self.own.get().do_move(cap);
             }
             return blk;
