@@ -26,7 +26,11 @@ JOBS="-j $($dir/jobs.sh)"
 #bin/build_module.sh does (the release build sets XOPT=-O2). Without this the
 #shipped std/ast/resolver ran the default pipeline while the backend was -O2.
 opt="$XOPT"
-cmd="$compiler c -static -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/std"
+#-nostd: this is an archive build, nothing is linked, so the implicit std
+#archive must not be built on the side (older bootstrap compilers still do it
+#for -static, which is why this stays in the command line and not only in
+#handle_c).
+cmd="$compiler c -static -nostd -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/std"
 eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling std"

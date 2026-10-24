@@ -39,7 +39,10 @@ JOBS="-j $($dir/jobs.sh)"
 #The cache keys on XOPT via cache_env.sh, so switching levels cannot reuse
 #foreign objects.
 opt="$XOPT"
-cmd="$compiler c -static -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $XLIBSRC"
+#-nostd: an archive build links nothing, so the implicit std archive must not
+#be built on the side (see handle_c; older bootstrap compilers still do it
+#for -static).
+cmd="$compiler c -static -nostd -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $XLIBSRC"
 eval $cmd
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"

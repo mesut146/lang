@@ -2219,7 +2219,11 @@ Ownership only — no Rust-like borrows:
     Scripts add `-nostd` to the final parser/lib link (they carry the archive
     in `-flags`): bin/{build,stage1,stage2,termux,termux_native,bt,
     build_formatter,build_lsp,build_tests}.sh, build/devbuild.sh and test.sh's
-    lsp build.
+    lsp build, and to the four `-static` module builds
+    (build_std/build_ast/build_resolver/build_module) -- those link nothing,
+    and the flag also stops a *pre-fix bootstrap* compiler (whose implicit
+    build is still there) from compiling std on the side, so the first
+    bootstrap after this commit already pays once.
     Ordering note: with the implicit build gone, `$LIB_STD` must come *after*
     the module archives (the module objects reference std symbols, and a
     single-pass archive scan only pulls from a library listed later). The
@@ -2251,11 +2255,12 @@ Ownership only — no Rust-like borrows:
   (23 std); on a phone that is the bulk of the wall time.
   Suite green (`normal pass=133 xpass=0`, fmt, trace, lsp, opt, std, own,
   fail, default-jobs, buildflags, pipeline, path; leak self-skips). Triangle:
-  A (built by the v1.20 compiler) != B by construction -- v1.20 still runs the
-  implicit std build, so A's `std.a` holds default-pipeline objects (272KB)
-  while B/C/D hold -O2 ones (217KB) -- and B == C == D byte-identical
-  (`stage1` and every `.o`/`.a`; only `link.sh` paths and `log.txt` timings
-  differ).
+  A (built by the v1.20 compiler, with these scripts) == B == C == D --
+  `stage1` and every `.o`/`.a` byte-identical; only `link.sh` paths,
+  `log.txt` timings and the `.cache_flags`/`cache.txt` metadata differ. With
+  `-nostd` in the module scripts the v1.20 bootstrap already produces the
+  -O2 std objects (217KB) instead of the 272KB default-pipeline archive it
+  used to archive through the cache race.
 
 ## Known open holes (documented, not yet solved)
 
