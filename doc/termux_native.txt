@@ -12,6 +12,12 @@ On device, first time:
   #   unzip tool.zip
 Then (takes a while, keep the phone cool):
   ./bin/termux_native.sh x-toolchain-<ver>-termux-aarch64 <new-ver>
+Expected: std is compiled once (23 files, `[1/23]`..`[23/23]`), then each
+module only its own files, then the parser -- an archive build per step.
+It used to compile std again for every module and once more for the parser
+link (the implicit std build ran for -static/-shared too, see handoff);
+the scripts now pass `-nostd` because they already carry the archive in
+`-flags`.
 Optional:
   XJOBS=$(nproc) ./bin/termux_native.sh ...   # parallel lib builds
 

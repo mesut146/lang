@@ -147,6 +147,24 @@ func has_main(unit: Unit*): bool{
   return false;
 }
 
+//number of compilable units in a src dir listing (the .x files, not the dirs
+//or stray files a read_dir returns) -- the progress counters' denominator
+func count_sources(list: List<String>*, src_dir: String*): i32{
+  let n = 0;
+  for(let i = 0;i < list.len();++i){
+    let name = list.get(i).str();
+    if(!name.ends_with(".x")){
+      continue;
+    }
+    let file: String = format("{}/{}", src_dir, name);
+    if(File::is_dir(file.str())){
+      continue;
+    }
+    n += 1;
+  }
+  return n;
+}
+
 func get_out_file(path: str, out_dir: str): String{
   let name = getName(path);
   let res = format("{}/{}.o", out_dir, trimExtenstion(name));
@@ -210,6 +228,11 @@ impl Compiler{
     let inc = Incremental::new(config.incremental_enabled, config.out_dir.str(), config.file.clone());
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
+    //progress counts the .x files only: `i` is a position in the raw listing,
+    //so numbering by it started at 3 and skipped numbers on a dir with
+    //non-.x entries (and disagreed with the -j "compiled [n/N]" counter).
+    let total = count_sources(&list, src_dir);
+    let done = 0;
     let compiled = List<String>::new();
     for(let i = 0;i < list.len();++i){
       let name = list.get(i).str();
@@ -225,8 +248,9 @@ impl Compiler{
         ctx.add_path(config.src_dirs.get(j).str());
       }
       let cmp = Emitter::new(ctx, &config, &cache);
+      done += 1;
       if(cmp.ctx.verbose){
-        print("compiling [{}/{}] {}\n", i + 1, list.len(), config.trim_by_root(file.str()));
+        print("compiling [{}/{}] {}\n", done, total, config.trim_by_root(file.str()));
       }
       let obj = cmp.compile(file.str());
       compiled.add(obj);
@@ -278,6 +302,7 @@ impl Compiler{
     std::setenv("XCACHE_RO", "1");
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
+    let total = count_sources(&list, src_dir);
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
@@ -291,7 +316,7 @@ impl Compiler{
         config: &config,
         cache: &cache,
         compiled: &compiled,
-        len: list.len() as i32,
+        len: total,
       };
       worker.add_arg_heap(Compiler::make_compile_job, args, release_compile_args);
     }

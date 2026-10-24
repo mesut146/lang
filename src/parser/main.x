@@ -61,9 +61,19 @@ func build_std(std_dir: str, out_dir: str): String{
 }
 
 func build_std(std_dir: str, out_dir: str, use_cache: bool): String{
+  return build_std(std_dir, out_dir, use_cache, 0);
+}
+
+func build_std(std_dir: str, out_dir: str, use_cache: bool, jobs: i32): String{
   let src_dir = Path::parent(std_dir);
   let config = CompilerConfig::new(src_dir.str());
   config.use_cache = use_cache;
+  if(jobs > 0){
+    //the archive is built file by file: overlap them like the caller does
+    //(a directory build multiplies this: each std file used to be compiled
+    //serially on the side before the real build started)
+    config.set_jobs(jobs);
+  }
   config
     .set_file(std_dir)
     .set_out(out_dir)
@@ -151,14 +161,18 @@ func handle_c(cmd: CmdArgs*){
     //<dir>/{src/std, lib/std.a}, so `-stdpath <dir>/src` gets the prebuilt
     //archive (no ar needed); a source tree has none, and <stdpath>/std is
     //built into the out dir instead (cached there, so only the first compile
-    //per out dir pays). -nolink needs no archive at all.
-    if(link_std && !compile_only){
+    //per out dir pays). -nolink needs no archive at all, and neither do
+    //-static/-shared: their `flags` are never used (only a binary link reads
+    //them), so building std there compiled the whole library a second time
+    //for nothing -- on Termux several times per bootstrap (once per module
+    //plus once for the parser).
+    if(link_std && !compile_only && !link_static && !link_shared){
       let prebuilt = format("{}/../lib/std.a", std_path);
       if(File::exists(prebuilt.str())){
         flags.append(" ");
         flags.append(prebuilt.str());
       }else{
-        let lib = build_std(format("{}/std", std_path).str(), out_dir.str(), true);
+        let lib = build_std(format("{}/std", std_path).str(), out_dir.str(), true, config.jobs);
         flags.append(" ");
         flags.append(lib.str());
       }
@@ -171,7 +185,7 @@ func handle_c(cmd: CmdArgs*){
     config.add_dir(std_dir.clone());
     config.set_std(std_dir);
     cmd.consume_any("-std");
-    if(link_std && !compile_only){
+    if(link_std && !compile_only && !link_static && !link_shared){
       let prebuilt = format("{}/lib/std.a", tool_dir);
       //a toolchain ships lib/std.a next to bin/x; a bare compiler binary
       //(build/.../stage1) has none, so there is nothing to link

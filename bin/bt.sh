@@ -51,14 +51,14 @@ fi
 
 flags="$bridge_lib"
 #flags="$flags $out_dir/std.a"
-flags="$flags $LIB_STD"
 flags="$flags $LIB_AST"
 flags="$flags $LIB_RESOLVER"
+flags="$flags $LIB_STD"
 flags="$flags $llvm_lib"
 flags="$flags -lstdc++"
 
 #todo use toolchain's std dir?
-cmd="$compiler c -norun -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+cmd="$compiler c -norun -nostd -cache -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
 # cmd="$cmd -j 1"
 # cmd="$cmd -O2"
 eval $cmd

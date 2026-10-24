@@ -23,7 +23,11 @@ $dir/cache_env.sh $out_dir
 # 8); XJOBS overrides it, XJOBS=1 forces the serial path.
 JOBS="-j $($dir/jobs.sh)"
 
-$compiler c -static -cache $JOBS -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/resolver
+#Optimization level: the front-end libraries take the caller's $XOPT like
+#bin/build_module.sh does (the release build sets XOPT=-O2). Without this the
+#shipped std/ast/resolver ran the default pipeline while the backend was -O2.
+opt="$XOPT"
+$compiler c -static -cache $JOBS $opt -out $out_dir -stdpath $dir/../src -i $dir/../src -name $name $dir/../src/resolver
 if [ ! "$?" -eq "0" ]; then
   echo "error while compiling $name"
   exit 1

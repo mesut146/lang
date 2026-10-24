@@ -101,6 +101,8 @@ build(){
   flags="$flags $LIB_AST"
   flags="$flags $LIB_RESOLVER"
   flags="$flags $LIB_BACKEND"
+  #std last: the module archives reference std symbols, and a single-pass
+  #archive scan only pulls them in from a library that comes after them
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
@@ -112,7 +114,7 @@ build(){
   flags="$flags -lstdc++"
   #todo use toolchain's std dir?
   
-  cmd="$compiler c -norun -cache $XOPT -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
+  cmd="$compiler c -norun -nostd -cache $XOPT -stdpath $dir/../src -i $dir/../src -out $out_dir -flags '$flags' -name $name $dir/../src/parser"
   if [ ! -z "$XDEBUG" ]; then
     cmd="$cmd -g"
   fi

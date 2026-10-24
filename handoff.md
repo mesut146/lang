@@ -2202,6 +2202,59 @@ Ownership only — no Rust-like borrows:
     byte-identical; the only `diff -r` lines are `link.sh` (out-dir paths)
     and `log.txt` timings.
 
+- Build: std was compiled once per module (and once more per link) (2026-10-24).
+  Reported from a Termux bootstrap: the log showed the std sources compiled
+  ~5-6 times before the compiler was built, and the progress numbers started
+  at 3 and skipped. Two separate causes, both fixed:
+  * the implicit std archive build in `handle_c` ran for `-static`/`-shared`
+    too, although `flags` (the only consumer of that archive) is used by a
+    *binary* link alone. So every module build compiled std once for nothing
+    and then its own files, and the final parser link compiled std a third
+    time (stage1/termux scripts already pass the std archive in `-flags`).
+    The build is now skipped unless the link type is a binary, and
+    `build_std` honours the caller's `-j` count (it was always sequential),
+    so a source-tree build overlaps the std files like everything else.
+    Scripts add `-nostd` to the final parser/lib link (they carry the archive
+    in `-flags`): bin/{build,stage1,stage2,termux,termux_native,bt,
+    build_formatter,build_lsp,build_tests}.sh, build/devbuild.sh and test.sh's
+    lsp build.
+    Ordering note: with the implicit build gone, `$LIB_STD` must come *after*
+    the module archives (the module objects reference std symbols, and a
+    single-pass archive scan only pulls from a library listed later). The
+    flags blocks are reordered with a comment; without this the parser link
+    fails with `undefined reference to Worker__add_arg_...` -- the trailing
+    archive the implicit build used to append was hiding the order bug.
+  * the progress counter in `compile_dir` numbered raw directory entries
+    (`i + 1` of the `read_dir` listing, so "." and ".." shifted it: the first
+    line said `[3/25]` for 23 files) and the `-j` path's denominator was
+    `list.len()` too. `count_sources` counts the `.x` files once and both
+    paths use it; the serial path numbers its own counter.
+  Measured on x86_64 (same sources, v1.20 binary vs this one):
+  `bin/build_std.sh` with XOPT=-O2 went from 46 "compiling" lines / 2 archive
+  builds / 1.9s to 23 / 1 / 2.0s (the old 1.9s is not 23 compiles of work:
+  the second pass was all cache hits), and the ast module with no -O from 30
+  compiles / 7.6s to 7 / 3.1s. Two things fell out of this:
+  * the old archive was 272KB but this one is 217KB for the same sources: the
+    implicit std build ran *first* with the default pipeline, and the module
+    build (which does get -O2) then found those objects cache-fresh ("the
+    cache keys on sources only", bin/cache_env.sh) and archived them. So on a
+    cold out dir `-O2` never took effect for std -- the same class as the
+    earlier build_module.sh fix that left the front end unoptimized.
+  * `bin/build_std.sh`/`build_ast.sh`/`build_resolver.sh` never passed
+    `$XOPT` at all (only `build_module.sh` did), so the *release* pipeline
+    shipped std/ast/resolver at the default pipeline next to an -O2 backend.
+    They take `opt="$XOPT"` now, same as the backend; release builds pay for
+    it once and every user compile gets the faster front end.
+  The full bootstrap drops from ~174 file compiles (115 of them std) to 59
+  (23 std); on a phone that is the bulk of the wall time.
+  Suite green (`normal pass=133 xpass=0`, fmt, trace, lsp, opt, std, own,
+  fail, default-jobs, buildflags, pipeline, path; leak self-skips). Triangle:
+  A (built by the v1.20 compiler) != B by construction -- v1.20 still runs the
+  implicit std build, so A's `std.a` holds default-pipeline objects (272KB)
+  while B/C/D hold -O2 ones (217KB) -- and B == C == D byte-identical
+  (`stage1` and every `.o`/`.a`; only `link.sh` paths and `log.txt` timings
+  differ).
+
 ## Known open holes (documented, not yet solved)
 
 Moves inside a loop body: CLOSED 2026-10-24 (see the entry above). Reported

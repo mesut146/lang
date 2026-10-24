@@ -132,7 +132,7 @@ lsp_all(){
   fi
   #the LSP sources come from the checkout, not from $stdpath: the packaged
   #toolchain ships src/{std,ast} but not src/lsp (the formatter does the same).
-  run "$compiler c -norun -cache -out $out_dir -stdpath $stdpath -i $stdpath -i $dir/../src -name lsp -flags '$out_dir/ast_out/ast.a $out_dir/std_out/std.a' $dir/../src/lsp" || exit 1
+  run "$compiler c -norun -nostd -cache -out $out_dir -stdpath $stdpath -i $stdpath -i $dir/../src -name lsp -flags '$out_dir/ast_out/ast.a $out_dir/std_out/std.a' $dir/../src/lsp" || exit 1
   echo "lsp: pass"
 }
 

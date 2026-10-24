@@ -87,12 +87,14 @@ fi
   flags="$flags $LIB_AST"
   flags="$flags $LIB_RESOLVER"
   flags="$flags $LIB_BACKEND"
+  #std last: the module archives reference std symbols, and a single-pass
+  #archive scan only pulls them in from a library that comes after them
   flags="$flags $LIB_STD"
   flags="$flags $bridge_lib"
   flags="$flags $LIBLLVM"
   flags="$flags $STDCPP"
   dirr=$(realpath $dir)
-  cmd="$compiler c -norun -cache $XOPT -stdpath $dirr/../src -i $dirr/../src -out $out_dir -flags '$flags' -name $name $dirr/../src/parser"
+  cmd="$compiler c -norun -nostd -cache $XOPT -stdpath $dirr/../src -i $dirr/../src -out $out_dir -flags '$flags' -name $name $dirr/../src/parser"
   if [ ! -z "$XDEBUG" ]; then
     cmd="$cmd -g"
   fi
