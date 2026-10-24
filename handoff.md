@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-23. Main: `a9da014` (owns `681a8cc` array places, place
+Date: 2026-10-24. Main: `65b3047` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -38,9 +38,11 @@ std helpers `fb1cc71`, the borrowed `Desc.path` `b26d47d`, the `Fmt`
 print/str copies `fae3949`, the interned type names `b1dbc53`, the CI
 LLVM cache `d0d3375`, the lexer token slices `1621c2a` (plus the
 allocation profiler `af5b383` these two batches were picked with), the tracked
-session dumps are gone (`96a2998`, plus a `ses_*.json` ignore), and closures
+session dumps are gone (`96a2998`, plus a `ses_*.json` ignore), closures
 phase B `a9da014` (owning captures, nested plain captures, `self`, and the
-loop guard).
+loop guard), and the general loop-move rule `65b3047` (a move of a place
+declared outside a while/for body is rejected: back-edge, `continue` path,
+`break` path; the closure guard is folded into it).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
