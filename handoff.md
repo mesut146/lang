@@ -40,9 +40,10 @@ LLVM cache `d0d3375`, the lexer token slices `1621c2a` (plus the
 allocation profiler `af5b383` these two batches were picked with), the tracked
 session dumps are gone (`96a2998`, plus a `ses_*.json` ignore), closures
 phase B `a9da014` (owning captures, nested plain captures, `self`, and the
-loop guard), and the general loop-move rule `65b3047` (a move of a place
+loop guard), the general loop-move rule `65b3047` (a move of a place
 declared outside a while/for body is rejected: back-edge, `continue` path,
-`break` path; the closure guard is folded into it).
+`break` path; the closure guard is folded into it), and the x86_64 CI runner
+pin `2e65dd8`.
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -53,6 +54,15 @@ downloading the LLVM 19 debs into `build/tmp` when the ubuntu mirror was slow
 172MB compressed): a rerun restored it in 1.5s and the job went 12m04s ->
 2m17s (run 39771898890). The docker jobs are unchanged (they install LLVM
 inside the image, where the Dockerfile drops the copied `build/`).
+CI note (2026-10-24): the ubuntu-latest label moved to 26.04 (run 40075930704
+failed in 33s). `bin/apt.sh` installs the noble `libxml2` (libxml2.so.2) and
+26.04 has no candidate for that name, so the bootstrapping toolchain could not
+load its bundled libLLVM ("x-toolchain-1.20-x86_64/bin/x: error while loading
+shared libraries: libxml2.so.2"). `build-x86_64` is pinned to `ubuntu-24.04`,
+the image the apt scripts and the llvm-19 debs target; aarch64 and termux
+build in their own chroots and were green on 26.04, so they stay on
+`ubuntu-latest`. Rerun 40076271773: x86_64 1m49s, all three jobs green
+(`normal: pass=133 xpass=0`).
 v1.19 released at `6381a27` (tag `v1.19`, CI run 39586272340 green: all three
 toolchains built from the v1.18 bootstrap, tested and published). The published
 x86_64 artifact reports `x version 1.19` and compiles+runs the guards added in
