@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-24. Main: `3362fd1` (owns `681a8cc` array places, place
+Date: 2026-10-24. Main: `HEADMAIN` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -2236,6 +2236,11 @@ Ownership only — no Rust-like borrows:
     line said `[3/25]` for 23 files) and the `-j` path's denominator was
     `list.len()` too. `count_sources` counts the `.x` files once and both
     paths use it; the serial path numbers its own counter.
+  * the `-j` path printed *two* lines per file (`compiling <file>` from the
+    parent before the job ran, `compiled [n/N] <file>` when it finished). Only
+    the dispatch line survives, now with the counter (`compiling [n/N]`), so
+    output is one line per file like the serial path (the numbers arrive in
+    completion order because the workers run concurrently).
   Measured on x86_64 (same sources, v1.20 binary vs this one):
   `bin/build_std.sh` with XOPT=-O2 went from 46 "compiling" lines / 2 archive
   builds / 1.9s to 23 / 1 / 2.0s (the old 1.9s is not 23 compiles of work:

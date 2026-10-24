@@ -303,6 +303,7 @@ impl Compiler{
     let src_dir = &config.file;
     let list: List<String> = File::read_dir(src_dir.str()).unwrap();
     let total = count_sources(&list, src_dir);
+    let idx = 0;
     let compiled = Mutex::new(List<String>::new());
     let worker = Worker::new(config.jobs);
     for(let i = 0;i < list.len();++i){
@@ -311,11 +312,13 @@ impl Compiler{
       if(File::is_dir(file.str()) || !name.ends_with(".x")) {
         continue;
       }
+      idx += 1;
       let args = CompileArgs{
         file: file.clone(),
         config: &config,
         cache: &cache,
         compiled: &compiled,
+        idx: idx,
         len: total,
       };
       worker.add_arg_heap(Compiler::make_compile_job, args, release_compile_args);
@@ -374,7 +377,10 @@ impl Compiler{
     cmd.append(" ");
     cmd.append(&args.file);
     if(ctx.verbose){
-      print("compiling {}\n", config.trim_by_root(args.file.str()));
+      //one line per file: the completion line this used to pair with is gone
+      //(both printed for every file), and the child's own "compiling" goes
+      //into the pipe read_close drains.
+      print("compiling [{}/{}] {}\n", args.idx, args.len, config.trim_by_root(args.file.str()));
     }
     //read_close drains the child's stdout before closing: pclose closes the
     //read end *before* waiting for the child, so an undrained child that
@@ -385,11 +391,6 @@ impl Compiler{
       //fail fast: panicking here would strand the worker pool and hang join()
       print("failed to compile {}\n", args.file);
       exit(1);
-    }
-    if(ctx.verbose){
-      let compiled = args.compiled.lock();
-      print("compiled [{}/{}] {}\n", compiled.len() + 1, args.len, config.trim_by_root(args.file.str()));
-      args.compiled.unlock();
     }
     let compiled = args.compiled.lock();
     compiled.add(format("{}", get_out_file(args.file.str(), config.out_dir.str())));
@@ -464,7 +465,8 @@ struct CompileArgs{
   config: CompilerConfig*;
   cache: Cache*;
   compiled: Mutex<List<String>>*;
-  len: i32;
+  idx: i32;   //1-based dispatch order, for the progress line
+  len: i32;   //total .x files in the dir
 }
 
 //Drop glue for a boxed CompileArgs job arg. Any auto-drop is type-erased
