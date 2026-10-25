@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-24. Main: `d0d0e67` (owns `681a8cc` array places, place
+Date: 2026-10-25. Main: `bd87efe` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -46,7 +46,10 @@ declared outside a while/for body is rejected: back-edge, `continue` path,
 `2e65dd8`, and the build-time fix `416adad` + `3362fd1` (std is compiled once
 per build, not once per module plus once per link; the module scripts pass
 `-nostd` so a pre-fix bootstrap benefits too; front-end libraries take $XOPT;
-the progress counter counts .x files and prints one line per file).
+the progress counter counts .x files and prints one line per file), and the
+for-each loop-scope exit fix `bd87efe` (a body whose real last statement
+jumps no longer emits its scope drops after the terminator; closes the
+`iflet_next_<line>` verifier error).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2197,7 +2200,8 @@ Ownership only — no Rust-like borrows:
     emitted a basic block without a terminator (`iflet_next_<line>`); LLVM's
     AlwaysInliner segfaulted on it at -O2 and -O0 reported the bad IR.
     Worked around in the new code (a helper returns a place's root id, the
-    scan uses a sentinel instead of `break`), not fixed in the emitter.
+    scan uses a sentinel instead of `break`), not fixed in the emitter at the
+    time; fixed in the emitter on 2026-10-25 (see that entry).
   * suite green (`normal pass=133 xpass=0`, fmt, trace, lsp, opt, std, own,
     fail, `default-jobs`, `buildflags`, `pipeline`, `path`; the leak gate
     self-skips, no valgrind here). Triangle: A (built by the v1.20 compiler)
@@ -2268,6 +2272,43 @@ Ownership only — no Rust-like borrows:
   -O2 std objects (217KB) instead of the 272KB default-pipeline archive it
   used to archive through the cache race.
 
+- Emitter: a for-each body's real exit ends the loop scope (2026-10-25, on
+  `fix-foreach-body-exit`): the "basic block without a terminator" hole
+  recorded under the loop-move entry is closed. Cause: the for-each desugar
+  appends `std::internal_block!(id)` to the `while(true)` body, and Exit reads
+  that opaque call as NONE, so `Own::end_scope` saw a falling-through body and
+  emitted the loop scope's end-of-scope drops *after* the body's own
+  terminator. Two symptoms, one cause:
+  * invalid IR when the body left a live temp/var in the loop scope: at -O0
+    LLVM rejected the module ("Basic Block in function 'X' does not have
+    terminator!", `label %iflet_next_<line>`) and at -O2 LLVM 19 segfaulted
+    inside the AlwaysInliner. Reproduced with the original shape (a `for`-each
+    over a borrowed `HashMap` whose body runs an `if let` chain and then
+    `break`s -- the first cut of `Own::check_loop_moves`) and minimized to
+    `for z in l{ let w = format("{}", z); continue; }`.
+  * a false positive in the new loop-move rule: `scope.exit` said the
+    back-edge was reachable, so `for x in it{ send(a); break; }` was rejected
+    as a repeated move even though every path leaves the loop.
+  Fix: `visit_while`/`visit_for` resolve the body exit through the block map
+  (`Emitter::body_exit`, which sees through the placeholder) and hand it to a
+  new `Own::add_scope(kind, Body*, Exit)` overload. A loop body whose real
+  last statement jumps now takes the same `end_scope` path as
+  `while(c){ ..; break; }`: the jump's own drops are the only ones emitted
+  (`do_jump_drops` covers the loop scope) and `always_leaves_loop()` sees the
+  break. Bodies that end in an `if` without `else` keep the normal path, so
+  the fall-through drops are still emitted there. No change to the plain
+  `while`/`for` shapes (`Exit::get_exit_type` already saw their terminator).
+  Tests: `tests/normal/66-foreach-break-drop.x` (break and continue as the
+  body's last statement with a live String temp -- `-O0` verifier error and
+  `-O2` segfault on the pre-fix compiler, both green now) and
+  `tests/own/34loop_move.x` `move_then_break_foreach` (an allowed move+break
+  through a for-each; errored pre-fix). Suite green (`normal pass=134
+  xpass=0`; fmt, trace, lsp, opt, std, own, fail, default-jobs, buildflags,
+  pipeline and path pass; leak self-skips, no valgrind here). Triangle:
+  A (built by the v1.20 compiler) == B == C == D -- `stage1` sha256
+  `e72a1d33…` and every `.o`/`.a` byte-identical; `diff -r` names only
+  `link.sh` paths, `log.txt` timings and the `cache.*` metadata.
+
 ## Known open holes (documented, not yet solved)
 
 Moves inside a loop body: CLOSED 2026-10-24 (see the entry above). Reported
@@ -2278,14 +2319,16 @@ rejected outright because x has no drop flags, even when the loop provably
 runs once -- restructure to move before an unconditional `break`, or reinit
 the place in the body.
 
-Emitter bug: a block without a terminator (found 2026-10-24 while writing the
-loop check; pre-existing, v1.20 reports it at -O0 as "Basic Block in function
-'X' does not have terminator!" in `iflet_next_<line>` and segfaults inside
-LLVM's AlwaysInliner at -O2). Reproduced shape: a `for`-each over a borrowed
-`HashMap` whose body runs an `if let` chain and then `break`s (exactly the
-first cut of `Own::check_loop_moves`). Not fixed: the emitter still needs a
-look, the workaround there was to make the helper return a value and use a
-sentinel instead of `break`.
+Emitter bug: a block without a terminator: CLOSED 2026-10-25 (see that
+entry). The shape is a `for`-each body whose real last statement jumps
+(`break` / `continue` / `return`): the desugar's trailing
+`std::internal_block!` hid the exit from `Exit`, so the loop scope emitted its
+end-of-scope drops after the body's own terminator ("Basic Block in function
+'X' does not have terminator!" in `iflet_next_<line>` at -O0, an AlwaysInliner
+segfault at -O2) and `check_loop_moves` saw a reachable back-edge. The emitter
+now hands the resolved exit (`Emitter::body_exit`) to `Own::add_scope`.
+Pinned by `tests/normal/66-foreach-break-drop.x` and the
+`move_then_break_foreach` case in `tests/own/34loop_move.x`.
 
 Ownership residuals: place use-after-move is closed as of this batch (see
 doc/ownership.txt ledger: `check_place` + `reinit_places`). One narrow
