@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-25. Main: `bd87efe` (owns `681a8cc` array places, place
+Date: 2026-10-25. Main: `bc80210` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -46,10 +46,12 @@ declared outside a while/for body is rejected: back-edge, `continue` path,
 `2e65dd8`, and the build-time fix `416adad` + `3362fd1` (std is compiled once
 per build, not once per module plus once per link; the module scripts pass
 `-nostd` so a pre-fix bootstrap benefits too; front-end libraries take $XOPT;
-the progress counter counts .x files and prints one line per file), and the
+the progress counter counts .x files and prints one line per file), the
 for-each loop-scope exit fix `bd87efe` (a body whose real last statement
 jumps no longer emits its scope drops after the terminator; closes the
-`iflet_next_<line>` verifier error).
+`iflet_next_<line>` verifier error), and the panic-path default `bc80210`
+(panic messages show a path relative to the compiler's cwd instead of the
+checkout; assert/diagnostic/DWARF paths unchanged).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2309,6 +2311,55 @@ Ownership only — no Rust-like borrows:
   `e72a1d33…` and every `.o`/`.a` byte-identical; `diff -r` names only
   `link.sh` paths, `log.txt` timings and the `cache.*` metadata.
 
+- Panic messages are relative to the compiler's cwd (2026-10-25, on
+  `fix-panic-paths`): the last "`//trim debug paths?`" hole is closed. A panic
+  literal was built from `Context::display_path` alone: normalization and
+  `-remap-path-prefix` existed, but a build handed absolute paths baked them,
+  so a compiler built from an absolute tree printed
+  `panic /home/.../src/ast/parser.x:119 Parser::err(..)`. Panic text prints at
+  run time, long after the compiler exits, so this has to be decided at record
+  time. `Context` now keeps the compiler's working directory
+  (`current_dir()` once per process; empty when getcwd fails) and a new
+  `Context::panic_path` applies `Path::strip_dir` on top of `display_path`:
+  * `Path::strip_dir` (std/fs.x) is lexical: it drops the dir only at a whole
+    path component (`/a/b` does not strip `/a/bc`), keeps the rest without its
+    leading `/` (`/home/u/proj/src/a.x` + `/home/u/proj` -> `src/a.x`), keeps
+    the remainder relative for the root (`/a/b` + `/` -> `a/b`), leaves a
+    relative or unrelated absolute path alone, and turns dir == path into `.`.
+  * precedence: an explicit `-remap-path-prefix` matches first (its result no
+    longer starts with the cwd, so the strip is a no-op), then a unit path that
+    was already relative is shown as given, then the cwd strip.
+  * scope: panic literals only. Assert literals, diagnostics (`print_line_ctx`)
+    and DWARF keep `display_path` -- editors and log parsers consume those
+    paths, and the `path` gate pins their absolute/remapped spellings.
+    `make_panic_messsage` (derive.x) serves both the one-arg and the formatted
+    panic forms, so both get it.
+  Effect: `x c /abs/proj/src/main.x` from `/abs/proj` panics as
+  `src/main.x:2 main()`, and a source-tree std panic reads
+  `src/std/option.x:26 Option<i32>::unwrap(*self)` instead of the checkout
+  path (verified by running both). A shipped toolchain's `lib/std.a` was
+  already built with relative paths by the release scripts, so user builds are
+  unaffected.
+  Tests: the `path` gate now runs the `pan.x` compile from the build dir and
+  requires `src/pan.x` in the object with no absolute form (pre-fix:
+  `PATH-ABSOLUTE`, verified on the pre-fix compiler), plus a remap-wins case
+  (`-remap-path-prefix $d=.` -> `./src/pan.x`); new
+  `tests/std_test/35-path-strip-dir.x` pins the strip edge cases. Suite green
+  on the final binary (`normal pass=134 xpass=0`; fmt, trace, lsp, opt, std,
+  own, fail, default-jobs, buildflags, pipeline and path pass; leak
+  self-skips, no valgrind here). Triangle: this changes only what strings the
+  compiler bakes, so B (built by the pre-fix compiler) still carries the old
+  absolute literals -- B has 690 `panic /home/...` strings and C none (690
+  `panic src/...` instead, same count), `nm --defined-only` B == C (3466
+  symbols), the meaningful `strings` delta is those 690 pairs (the rest is
+  `strings` byte noise from the shifted `.rodata`), and C == D byte-identical
+  (`stage1` `7fd062c5…`, every `.o`/`.a`; `diff -r` names only `link.sh`,
+  `log.txt` and `cache.*`). A (v1.20) != B by construction, since A cannot
+  bake the new relative form.
+  Caveat: the .o cache keys on sources/mtime only, so an out dir built from a
+  different cwd can reuse objects with the old panic spelling -- the same
+  class as the `-remap-path-prefix`/opt-level hazard above; use a fresh dir.
+
 ## Known open holes (documented, not yet solved)
 
 Moves inside a loop body: CLOSED 2026-10-24 (see the entry above). Reported
@@ -2364,9 +2415,10 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   rejected cleanly (`match expr is not enum: i32`).
 - `?` (doc/throw.txt) works and is used across std/fs.x; turbofish calls
   work (`conv<i32, i32>(5)`).
-- `impl E::A{ .. }` (impl on an enum variant, doc/enum_var_type) fails with
-  `invalid field E*.x`; the doc's `A(a: i32, b: str)` variant syntax is not
-  what is implemented (variants are comma-separated with `{}` fields).
+- `impl E::A{ .. }` (impl on an enum variant, doc/enum_var_type): not planned
+  (user, 2026-10-25). It fails with `invalid field E*.x`, and the doc's
+  `A(a: i32, b: str)` variant syntax is not what is implemented (variants are
+  comma-separated with `{}` fields).
 - `#derive(Debug = SomeTrait)` delegation (doc/delegate trait): CLOSED, not
   planned (user, 2026-10-18). It would generate exactly the 4-line
   `impl Debug for P{ func debug(self, f){ Trait::m(self, f); } }` that can
@@ -2380,8 +2432,12 @@ deliberate silent no-ops: bare `ptr::deref!` of an untracked place, and
   `#derive(Hex)` deriving a *user* printer trait with the standard field
   dump, so `{::Hex}` works on every opted-in type without hand-written
   formatters. Today it still panics "derive expr Debug = MyDebugTrait".
-- `//trim debug paths?`: panic messages embed absolute source paths
-  (`/home/.../src/ast/parser.x:119 -- Parser::err`); nothing trims them.
+- `//trim debug paths?`: CLOSED 2026-10-25 (see that entry). Panic messages
+  now show a path relative to the compiler's working directory
+  (`src/ast/parser.x:119`), so a toolchain built from an absolute tree no
+  longer bakes `/home/...` into every std panic. Assert literals, diagnostics
+  and DWARF keep the given/normalized path (remappable with
+  `-remap-path-prefix`).
 
 Compile gaps (pre-existing, not yet fixed):
 - (fixed 2026-10-20) A *typed float literal* panicked the compiler:
