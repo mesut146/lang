@@ -994,7 +994,7 @@ func normalize_quotes(s: str): String{
 
 func make_panic_messsage(line: i32, method: Method*, s: Option<str>, r: Resolver*): String {
     let message = Fmt::new("panic ".str());
-    message.print(r.ctx.display_path(method.path.str()));
+    message.print(r.ctx.panic_path(method.path.str()));
     message.print(":");
     message.print(&line);
     message.print(" ");

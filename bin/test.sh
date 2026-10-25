@@ -476,9 +476,12 @@ trace_all(){
 #the object, diagnostics print it and -g puts it in DWARF. They must be
 #lexically normalized (`bin/../src/x.x` must not ship) and remappable with
 #-remap-path-prefix, so release artifacts do not leak the build directory
-#(doc/todo "trim debug paths?"). Resolution/codegen keep the original
-#spelling (a symlinked dir with `..` must still open), so only the recorded
-#strings are checked here.
+#(doc/todo "trim debug paths?"). A *panic* literal is also made relative to
+#the compiler's working directory by default: it prints at run time, and a
+#toolchain built from an absolute tree used to bake `/home/.../src/...` into
+#every std panic. Resolution/codegen keep the original spelling (a symlinked
+#dir with `..` must still open), so only the recorded strings are checked
+#here.
 path_all(){
   d=$out_dir/path_all
   rm -rf $d
@@ -497,9 +500,22 @@ path_all(){
   fi
   strings $d/norm/prog.o | grep -qF "$d/src/prog.x" \
     || { echo "PATH-MISSING (assert literal): $d/norm/prog.o"; exit 1; }
-  #2) same for the panic literal
-  run "$compiler c -nolink -out $d/pan -stdpath $stdpath $d/bin/../src/pan.x" || exit 1
-  strings $d/pan/pan.o | grep -qF "$d/src/pan.x" \
+  #2) the panic literal: lexically normalized, and relative to the compiler's
+  #working directory. Panic text is printed at run time, so a build used to
+  #bake the checkout's absolute path into every std/parser panic. Run from $d
+  #so the expected spelling is fixed (the compiler strips its cwd).
+  cabs=$(readlink -f "$compiler")
+  sdabs=$(readlink -f "$stdpath")
+  ( cd $d && "$cabs" c -nolink -out $d/pan -stdpath $sdabs $d/bin/../src/pan.x ) \
+    || { echo "panic compile failed"; exit 1; }
+  if strings $d/pan/pan.o | grep -q 'bin/\.\./src'; then
+    echo "PATH-UNNORMALIZED (panic literal): $d/bin/../src/pan.x"; exit 1
+  fi
+  if strings $d/pan/pan.o | grep -qF "$d/src/pan.x"; then
+    echo "PATH-ABSOLUTE (panic literal is not relative to the compiler cwd)"
+    exit 1
+  fi
+  strings $d/pan/pan.o | grep -qF "src/pan.x" \
     || { echo "PATH-MISSING (panic literal): $d/pan/pan.o"; exit 1; }
   #3) diagnostics print the normalized path
   "$compiler" c -nolink -out $d/diag -stdpath $stdpath $d/bin/../src/bad.x > $d/diag.log 2>&1
@@ -523,6 +539,14 @@ path_all(){
   if grep -qF "$d/src/prog.x" $d/dbg.txt; then
     echo "PATH-NOT-REMAPPED (-g DWARF)"; exit 1
   fi
+  #6) -remap-path-prefix still wins over the cwd-relative panic default
+  ( cd $d && "$cabs" c -nolink -out $d/panmap -remap-path-prefix $d=. -stdpath $sdabs $d/src/pan.x ) \
+    || { echo "panic remap compile failed"; exit 1; }
+  if strings $d/panmap/pan.o | grep -qF "$d/src/pan.x"; then
+    echo "PATH-NOT-REMAPPED (panic literal): $d/panmap/pan.o"; exit 1
+  fi
+  strings $d/panmap/pan.o | grep -qF "./src/pan.x" \
+    || { echo "PATH-MISSING (panic remap target): $d/panmap/pan.o"; exit 1; }
   echo "path: pass"
 }
 

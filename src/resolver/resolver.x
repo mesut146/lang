@@ -56,6 +56,9 @@ struct Context{
   //`-remap-path-prefix OLD=NEW` specs (see Path::display_path); set by the
   //compiler from CompilerConfig before any unit is resolved.
   remaps: List<String>;
+  //The compiler's working directory: a panic message shows a path relative to
+  //it (see Context::panic_path).
+  cwd: String;
 }
 impl Context{
   func new(out_dir: String, std_path: Option<String>): Context{
@@ -65,6 +68,11 @@ impl Context{
       pre.add(arr[i].str());
     }
     let prog = Progress::new(out_dir.str());
+    let cwd = "".str();
+    let cwdr = current_dir();
+    if(cwdr.is_ok()){
+      cwd = cwdr.unwrap();
+    }
     let res = Context{
        map: HashMap<String, Box<Resolver>>::new(),
        prelude: pre,
@@ -76,6 +84,7 @@ impl Context{
        prog: prog,
        path_cache: HashMap<String, String>::new(),
        remaps: List<String>::new(),
+       cwd: cwd,
     };
     return res;
   }
@@ -84,6 +93,16 @@ impl Context{
   //original spelling so symlinked directories still open.
   func display_path(self, path: str): String{
     return Path::display_path(path, &self.remaps);
+  }
+  //The path a panic message carries. A panic prints at run time, far from the
+  //compile, so lead with a path relative to the directory the compiler ran in
+  //instead of the checkout: a toolchain built from an absolute tree used to
+  //bake `/home/.../src/ast/parser.x` into every std panic. An explicit
+  //`-remap-path-prefix` wins (its result no longer starts with the cwd), and
+  //a unit path that was already relative is shown as given.
+  func panic_path(self, path: str): String{
+    let shown = self.display_path(path);
+    return Path::strip_dir(shown.str(), self.cwd.str());
   }
 }
 //No manual Drop: derived glue frees the maps and paths (all structural

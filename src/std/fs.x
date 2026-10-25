@@ -395,6 +395,30 @@ impl Path{
     }
     return Option<String>::new();
   }
+
+  //Drop `dir` from `path` when `path` is inside it, at a whole-component
+  //boundary (`/a/b` is not a prefix of `/a/bc`), and keep the rest without
+  //its leading `/`: with `dir=/home/u/proj`, `/home/u/proj/src/a.x` reads
+  //`src/a.x`. `dir` empty, a relative `path` or a path outside `dir` is
+  //returned unchanged. Purely lexical: no filesystem access, no symlinks.
+  func strip_dir(path: str, dir: str): String{
+    if(dir.empty() || !path.starts_with(dir)){
+      return path.owned();
+    }
+    let rest = path.substr(dir.len(), path.len());
+    if(rest.empty()){
+      return ".".str();
+    }
+    if(rest.get(0) != '/'){
+      if(dir.get(dir.len() - 1) == '/'){
+        //`dir` ended with the separator (the root): the rest is already relative
+        return rest.owned();
+      }
+      //a component boundary: `/a/b` is not a prefix of `/a/bc`
+      return path.owned();
+    }
+    return rest.substr(1, rest.len()).owned();
+  }
 }
 
 //mod env{
