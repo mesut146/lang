@@ -112,7 +112,8 @@ impl Emitter{
       SetInsertPoint(ll.builder, then);
       self.loops.add(LoopInfo{condbb, next});
       self.di.get().new_scope(body.line());
-      self.own.get().add_scope(ScopeType::WHILE, body);
+      //see through the for-each desugar's trailing internal_block! placeholder
+      self.own.get().add_scope(ScopeType::WHILE, body, self.body_exit(body));
       self.visit_body(body);
       self.own.get().end_scope(Utils::get_end_line(body));
       self.di.get().exit_scope();
@@ -151,7 +152,8 @@ impl Emitter{
       }
       SetInsertPoint(ll.builder, then);
       self.loops.add(LoopInfo{updatebb, next});
-      self.own.get().add_scope(ScopeType::FOR, node.body.get());
+      //same as visit_while: the body's real exit decides the scope drops
+      self.own.get().add_scope(ScopeType::FOR, node.body.get(), self.body_exit(node.body.get()));
       self.visit_body(node.body.get());
       self.own.get().end_scope(Utils::get_end_line(node.body.get()));
       //self.di.get().exit_scope();

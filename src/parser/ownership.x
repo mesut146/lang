@@ -173,6 +173,15 @@ impl Own{
         let exit = Exit::get_exit_type(stmt);
         return self.add_scope(kind, stmt.line(), exit, false);
     }
+    //A desugared for-each body ends with the opaque `std::internal_block!`
+    //placeholder, so Exit reads it as falling through even when the real
+    //block ends with break/continue/return. The emitter resolves the real
+    //exit through the block map; record that one, else end_scope emits the
+    //scope-end drops into the already terminated block (invalid IR) and
+    //check_loop_moves reports a break-only move as repeated.
+    func add_scope(self, kind: ScopeType, stmt: Body*, exit: Exit): i32{
+        return self.add_scope(kind, stmt.line(), exit, false);
+    }
     func add_scope(self, kind: ScopeType, stmt: Stmt*): i32{
         let exit = Exit::get_exit_type(stmt);
         return self.add_scope(kind, stmt.line, exit, false);
