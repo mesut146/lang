@@ -2399,10 +2399,14 @@ Ownership only — no Rust-like borrows:
   Measured here with the v1.20 toolchains: the whole arm64 path (image build,
   bootstrap, zip, `docker save`) succeeds and produces the same 50MB toolchain
   zip; the termux path succeeds from the cached image with the NDK on a
-  bind-mounted dir (39MB zip); `docker save` is 274MB/46s and `docker load`
-  15.5s (the image is 3.8GB on disk but only compressed layers travel).
-  Expected in CI: a cache hit replaces the ~90s environment build with the
-  ~15s load and drops the LLVM fetch; the first run pays the save once.
+  bind-mounted dir (39MB zip); `docker save` is 274MB/46s locally and
+  `docker load` 15.5s (the image is 3.8GB on disk but only compressed layers
+  travel). CI, cold cache (run 40320129298, the caches did not exist yet):
+  termux 4m35s -> 2m22s, arm64 3m20s -> 3m06s, x86_64 1m56s; the post steps
+  saved `cross-image` in 3.6s and `llvm19-termux` in 3.4s (the image build
+  itself exports its apt-only layer in 15.7s, vs 112s for the NDK layer
+  before). The warm run should drop the image build for the ~15s load and the
+  LLVM fetch for a cache restore.
   Note: the container runs as root, so what it writes into the checkout
   (`build/`, the zip) is root-owned; later steps only read it, and a local run
   needs `sudo rm -rf` to clean up.
