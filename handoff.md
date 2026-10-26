@@ -1,6 +1,6 @@
 # Handoff — x language toolchain (ownership focus)
 
-Date: 2026-10-25. Main: `bc80210` (owns `681a8cc` array places, place
+Date: 2026-10-26. Main: `f86f9d0` (owns `681a8cc` array places, place
 use-after-move `163359c`/docs `f478e0e`, cyclic-type fix `8b6190b`/docs
 `3105e7f`, custom printer `{::Trait}`, trait-aware method mangling, the
 `bin/build.sh` two-stage link fix, delegate-derive closed, source path
@@ -49,9 +49,12 @@ per build, not once per module plus once per link; the module scripts pass
 the progress counter counts .x files and prints one line per file), the
 for-each loop-scope exit fix `bd87efe` (a body whose real last statement
 jumps no longer emits its scope drops after the terminator; closes the
-`iflet_next_<line>` verifier error), and the panic-path default `bc80210`
+`iflet_next_<line>` verifier error), the panic-path default `bc80210`
 (panic messages show a path relative to the compiler's cwd instead of the
-checkout; assert/diagnostic/DWARF paths unchanged).
+checkout; assert/diagnostic/DWARF paths unchanged), and the CI cross-image
+cache `f86f9d0` (the docker images hold only the environment and are cached;
+the checkout is bind-mounted, so the NDK and the tree are no longer exported
+as layers every run).
 v1.18 released at `8a03e72` (tag `v1.18`, CI run 39289319650 green: x86_64,
 aarch64 and termux toolchains built, tested and published).
 CI note (2026-10-22): the x86_64 job spent 10 of its 12 minutes in `apt`
@@ -2359,6 +2362,50 @@ Ownership only — no Rust-like borrows:
   Caveat: the .o cache keys on sources/mtime only, so an out dir built from a
   different cwd can reuse objects with the old panic spelling -- the same
   class as the `-remap-path-prefix`/opt-level hazard above; use a fresh dir.
+
+- CI: the cross images hold only the environment, and are cached (2026-10-26,
+  on `ci-cross-image-cache`): the termux job's 4m35s (run 40200791495) was
+  mostly docker plumbing around a ~40s build. `bin/Dockerfile` ran
+  `COPY . /home/lang`, so the checkout, both downloaded toolchains and the
+  ~2.5GB Android NDK became one layer, and `docker_termux.sh` did
+  `docker builder prune -f`, `docker rmi -f cross` and
+  `docker build --no-cache --pull` on every run -- so docker re-exported
+  (112s) and unpacked (17s) those layers, and the container then ran
+  `apt_cross.sh` again (a second apt pass plus a 42MB LLVM deb fetch) before
+  compiling.
+  * `bin/Dockerfile` is environment-only: it copies just `bin/apt_cross.sh`
+    (the per-Dockerfile `bin/Dockerfile.dockerignore` keeps the build context
+    at ~1.6kB) and runs it once. `ENV XENV_READY=1` makes the later call from
+    `termux.sh` skip the package install. The NDK is deliberately not in the
+    image: it is arch-independent, only termux needs it, and its zip downloads
+    fast, so `apt_cross.sh` still fetches it into the checkout per run
+    (`NDK_ROOT` overrides the location; both scripts default to
+    `<repo>/android-ndk-r27c`, the old spelling).
+  * `bin/docker.sh` and `bin/docker_termux.sh` bind-mount the checkout
+    (`docker run -v $root:/home/lang -w /home/lang`) instead of relying on a
+    baked copy, drop the prune/rmi/`--no-cache`/`--pull` calls, reuse an
+    existing `cross` image, and write `cross-image.tar` when `XSAVE_IMAGE=1`
+    (chmod 644: docker writes it 0600 as root and the cache step reads it as
+    the runner). The zip lands in the mounted checkout, so the `docker cp` is
+    gone. Both jobs share the one image (debian:sid + the arm64 packages); a
+    toolchain named outside the checkout is copied in and referenced relative
+    to the mount.
+  * the workflow caches `cross-image.tar` (key: `bin/Dockerfile`,
+    `bin/apt_cross.sh`, `bin/Dockerfile.dockerignore`) for both jobs and
+    `build/tmp` per arch (`llvm19-arm64-*`, `llvm19-termux-*`), so `llvm.sh`
+    stops re-downloading the LLVM debs/headers. A cold-cache run saves the
+    image at the end of the job; the two jobs race on the same key and the
+    loser's save is dropped (harmless).
+  Measured here with the v1.20 toolchains: the whole arm64 path (image build,
+  bootstrap, zip, `docker save`) succeeds and produces the same 50MB toolchain
+  zip; the termux path succeeds from the cached image with the NDK on a
+  bind-mounted dir (39MB zip); `docker save` is 274MB/46s and `docker load`
+  15.5s (the image is 3.8GB on disk but only compressed layers travel).
+  Expected in CI: a cache hit replaces the ~90s environment build with the
+  ~15s load and drops the LLVM fetch; the first run pays the save once.
+  Note: the container runs as root, so what it writes into the checkout
+  (`build/`, the zip) is root-owned; later steps only read it, and a local run
+  needs `sudo rm -rf` to clean up.
 
 ## Known open holes (documented, not yet solved)
 
